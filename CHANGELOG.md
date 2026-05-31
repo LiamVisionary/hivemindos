@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-01 01:23:47 WITA - Checkpoint Late Dashboard Updates
+
+- Status: Committed
+- Areas changed: Dashboard connected-app state, embedded integrations layout, changelog
+- Summary: Checkpoint the late dashboard state additions for connected app badges/completion notifications and the embedded integrations panel layout adjustment so the worktree is clean before starting the next native architecture pass.
+- Verification: `git diff --check -- src/app/integrations/integrations.module.css src/features/dashboard/DashboardApp.tsx CHANGELOG.md`.
+- Intended commit message: `Checkpoint late dashboard updates`
+
 ## 2026-06-01 01:20:43 WITA - Further Slim Tauri Native Resources
 
 - Status: Uncommitted

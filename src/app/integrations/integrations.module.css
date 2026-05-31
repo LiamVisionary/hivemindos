@@ -8,7 +8,9 @@
 }
 
 .embedded {
-  min-height: auto;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
   background: transparent;
   padding: 0;
 }

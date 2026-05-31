@@ -746,6 +746,12 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
   const [fleetSnapshots, setFleetSnapshots] = useState<Record<string, AgentSnapshot>>({});
   const [fleetCheckedAt, setFleetCheckedAt] = useState<number | null>(null);
   const [fleetDiscoveryLoading, setFleetDiscoveryLoading] = useState(true);
+  const [fleetHostedApps, setFleetHostedApps] = useState<FleetHostedApp[]>([]);
+  const [appCompletionNotifications, setAppCompletionNotifications] = useState<DashboardAppCompletionNotification[]>([]);
+  const previousConnectedAppBadgesRef = useRef<{ initialized: boolean; badges: Map<string, ReturnType<typeof activeConnectedAppBadges>[number]> }>({
+    initialized: false,
+    badges: new Map(),
+  });
   const [tailscaleDevices, setTailscaleDevices] = useState<TailscaleDevice[]>([]);
   const [tailscaleStatus, setTailscaleStatus] = useState("Checking Tailnet...");
   const [hivemindLinkStatus, setHivemindLinkStatus] = useState<HivemindLinkClientStatus | null>(null);
@@ -1743,10 +1749,22 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
     return () => controller.abort();
   }, [activeView, agents, hydrated, refreshFleetSnapshots, sharedVault.controlRoomPath]);
   useVisibilityAwarePolling({
-    enabled: hydrated && (activeView === "agents" || activeView === "chat"),
+    enabled: hydrated,
     intervalMs: activeView === "agents" ? 30_000 : 45_000,
     hiddenIntervalMs: 5 * 60_000,
     task: pollFleetSnapshot,
+  });
+  const refreshFleetHostedApps = useCallback(async (signal: AbortSignal) => {
+    const response = await fetch("/api/fleet/apps", { cache: "no-store", signal }).catch(() => null);
+    const data = await response?.json().catch(() => null) as { apps?: FleetHostedApp[] } | null;
+    if (!response?.ok || !data?.apps) return;
+    setFleetHostedApps(data.apps);
+  }, []);
+  useVisibilityAwarePolling({
+    enabled: hydrated,
+    intervalMs: activeView === "agents" ? 30_000 : 45_000,
+    hiddenIntervalMs: 5 * 60_000,
+    task: refreshFleetHostedApps,
   });
   useEffect(() => {
     const timer = window.setTimeout(() => {
