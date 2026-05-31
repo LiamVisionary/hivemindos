@@ -128,7 +128,7 @@ HivemindOS includes an opt-in rewards loop for normal agent usage:
 4. Available Honey can be exchanged for HIVE.
 5. HIVE can be used to fund Bankr LLM credits for future agent compute.
 
-Honey is the in-app reward meter. HIVE is the Bankr-launched token behind the reward economy. The official ledger is the source of truth, so editing the frontend display does not mint spendable HIVE. Rewards are capped by the official HIVE reward pool, which is funded from the configured share of creator fees, and observed runtime usage is deduped and capped server-side.
+Honey is the in-app reward meter. HIVE is the Bankr-launched token behind the reward economy. The official ledger is the source of truth, so editing the frontend display does not mint spendable HIVE. Rewards are capped by the official HIVE reward pool, which is funded from 5% of creator fees, and observed runtime usage is deduped and capped server-side.
 
 Privacy stays local-first. Honey rewards are disabled by default; you enable them from the Wallets view. When enabled, HivemindOS sends usage metadata such as workspace id, agent id, token count, model label, timestamp, source, and event id. Prompts, responses, files, wallet keys, and machine details are not sent to the Honey ledger.
 

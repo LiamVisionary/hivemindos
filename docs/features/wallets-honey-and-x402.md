@@ -60,6 +60,13 @@ HivemindOS stores local wallet key material under `~/.hivemindos/wallet-vault`. 
 
 ## Honey Paths
 
+Reward pool math:
+
+- Bankr Doppler launches use a 1.2% swap fee.
+- The creator receives 57% of that fee.
+- HivemindOS allocates 5% of the creator share to the official Honey/HIVE reward pool.
+- The pool therefore receives at most 0.0342% of trading volume value, and Honey grants are clipped by remaining pool capacity.
+
 Local observation:
 
 - The dashboard reads supported runtime usage.

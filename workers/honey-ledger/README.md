@@ -16,13 +16,13 @@ It never receives prompts, responses, vault paths, local file paths, machine nam
 
 ## Reward Pool Math
 
-Bankr Doppler launches use a 1.2% swap fee. The creator receives 57% of that fee. HivemindOS allocates 10% of the creator share to the official Honey/HIVE reward pool:
+Bankr Doppler launches use a 1.2% swap fee. The creator receives 57% of that fee. HivemindOS allocates 5% of the creator share to the official Honey/HIVE reward pool:
 
 ```text
-0.012 * 0.57 * 0.10 = 0.000684
+0.012 * 0.57 * 0.05 = 0.000342
 ```
 
-That means the reward pool receives at most 0.0684% of trading volume value. Example: $48,150,000 of volume creates a $32,934.60 reward-pool budget. If HIVE is worth $0.01, that is 3,293,460 HIVE in the cumulative pool.
+That means the reward pool receives at most 0.0342% of trading volume value. Example: $48,150,000 of volume creates a $16,467.30 reward-pool budget. If HIVE is worth $0.01, that is 1,646,730 HIVE in the cumulative pool.
 
 The ledger tracks the pool in micro-HIVE. Usage receipts mint Honey as a HIVE-denominated entitlement, but each receipt is clipped by the remaining pool. Therefore cumulative Honey emitted and HIVE exchanged cannot exceed the cumulative reward pool recorded in Cloudflare D1.
 

@@ -209,6 +209,8 @@ Routes:
 | `POST /claim-bankr-hive` | Official Honey claim that sends HIVE from the worker-held Bankr treasury, then spends Honey after a tx hash |
 | `POST /pool-events` | Admin reward-pool funding events |
 
+Pool math: Bankr Doppler swap fee `1.2%` * creator share `57%` * Honey allocation `5%` = `0.0342%` of trading volume value.
+
 ### Compute Gateway
 
 Location: `workers/compute-gateway`

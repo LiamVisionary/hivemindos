@@ -49,7 +49,7 @@ type RewardPoolState = {
 const MICRO = 1_000_000;
 const SWAP_FEE_BPS = 120;
 const CREATOR_SHARE_BPS = 5700;
-const HONEY_POOL_SHARE_BPS = 1000;
+const HONEY_POOL_SHARE_BPS = 500;
 const REWARD_POOL_SHARE_OF_VOLUME = (SWAP_FEE_BPS / 10_000) * (CREATOR_SHARE_BPS / 10_000) * (HONEY_POOL_SHARE_BPS / 10_000);
 const BANKR_API_URL = "https://api.bankr.bot";
 

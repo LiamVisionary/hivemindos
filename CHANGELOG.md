@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-01 04:15:45 WITA - Lower Honey Reward Allocation
+
+- Status: Pushed
+- Areas changed: Honey ledger reward-pool math, economics simulation, public docs, changelog
+- Summary: Reduce the official Honey/HIVE reward-pool allocation from 10% to 5% of creator fees, which changes the capped pool share from 0.0684% to 0.0342% of trading volume value, and document the new formula in public wallet/API docs.
+- Verification: `pnpm test:honey-economics`; `git diff --check -- README.md docs/features/wallets-honey-and-x402.md docs/architecture/api-and-storage.md workers/honey-ledger/src/index.ts workers/honey-ledger/README.md scripts/simulate-honey-economics.mjs CHANGELOG.md`; markdown and image link check across `docs/**/*.md`; stale 10% formula search across README, docs, workers, and scripts.
+- Intended commit message: `Lower Honey reward allocation`
+
 ## 2026-06-01 04:03:18 WITA - Rewrite Feature Guide Landing
 
 - Status: Pushed
