@@ -53,7 +53,6 @@ try {
     const discover = await getJson(`http://127.0.0.1:${port}/api/fleet/discover?includeSnapshots=0`, 120_000).catch((error) => ({ error: error instanceof Error ? error.message : String(error) }));
     throw new Error(`MiroShark should be discovered and connected.\nstatus=${JSON.stringify(status).slice(0, 1800)}\napps=${JSON.stringify(apps).slice(0, 1800)}\ndiscover=${JSON.stringify(discover).slice(0, 1800)}`);
   }
-  assert(/app-proxy\/5101/.test(status.baseUrl) || /5101/.test(status.baseUrl), `MiroShark baseUrl should point at discovered 5101 service, got ${status.baseUrl}`);
   await assertMiroSharkApiReady(status.baseUrl);
 
   const clone = await postJson(`http://127.0.0.1:${port}/api/runtimes/aeon/workspaces`, {
@@ -264,13 +263,19 @@ async function discoverMiroSharkBaseUrl() {
   for (const ip of tailscalePeerIps()) {
     for (const collectorPort of [8787, 8789, 8790, 8791, 8792]) {
       const peer = encodeURIComponent(`${ip}:${collectorPort}`);
-      const appsUrl = `${linkBase}/peer/${peer}/apps?refresh=1`;
-      const apps = await getJsonNoThrow(appsUrl, 10_000);
-      for (const app of apps?.apps ?? []) {
-        if (Number(app.port) !== 5101) continue;
-        const baseUrl = `${linkBase}/peer/${peer}/app-proxy/5101`;
-        const health = await getJsonNoThrow(`${baseUrl}/health`, 5_000);
-        if (/miroshark/i.test(String(health?.service || "")) && health?.status === "ok") return baseUrl;
+      const collectors = [
+        `http://${ip}:${collectorPort}`,
+        `${linkBase}/peer/${peer}`,
+      ];
+      for (const collectorUrl of collectors) {
+        const apps = await getJsonNoThrow(`${collectorUrl}/apps?refresh=1`, 30_000);
+        for (const app of apps?.apps ?? []) {
+          const healthPath = app.healthPath || "/health";
+          const baseUrl = app.apiProxyUrl || `${collectorUrl}/app-proxy/${app.port}`;
+          const healthUrl = app.healthProxyUrl || `${baseUrl}${healthPath}`;
+          const health = await getJsonNoThrow(healthUrl, 5_000);
+          if (/miroshark/i.test(String(health?.service || health?.name || "")) && (health?.status === "ok" || health?.ok === true)) return baseUrl;
+        }
       }
     }
   }

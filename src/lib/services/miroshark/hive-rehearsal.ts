@@ -209,6 +209,17 @@ async function startSimulation(input: {
   });
 }
 
+async function simulationIsRunning(baseUrl: string, simulationId: string) {
+  const payload = await fetchJson(`${baseUrl}/api/simulation/${simulationId}/run-status`);
+  const text = JSON.stringify(payload).toLowerCase();
+  return /"runner_status"\s*:\s*"running"|"_running"\s*:\s*true|"status"\s*:\s*"running"/.test(text);
+}
+
+function isAlreadyRunningStartError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /current status:\s*running|already running/i.test(message);
+}
+
 function shouldPrepareBeforeStart(error: unknown) {
   return /call \/prepare endpoint first|simulation not ready/i.test(error instanceof Error ? error.message : String(error));
 }
@@ -479,12 +490,19 @@ export async function runAeonMiroSharkRehearsal(input: RehearsalRequest, identit
       platform,
       rounds,
     };
-    try {
-      await startSimulation(startInput);
-    } catch (error) {
-      if (!shouldPrepareBeforeStart(error)) throw error;
-      await prepareSimulation(status.baseUrl, simulationId);
-      await startSimulation(startInput);
+    if (!await simulationIsRunning(status.baseUrl, simulationId)) {
+      try {
+        await startSimulation(startInput);
+      } catch (error) {
+        if (isAlreadyRunningStartError(error)) {
+          // MiroShark can report "not ready" while also keeping the runner alive.
+        } else if (shouldPrepareBeforeStart(error)) {
+          await prepareSimulation(status.baseUrl, simulationId);
+          await startSimulation(startInput);
+        } else {
+          throw error;
+        }
+      }
     }
   }
 

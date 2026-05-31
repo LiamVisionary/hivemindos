@@ -3,7 +3,14 @@
 import { useState, type Dispatch, type ElementType, type ReactNode, type SetStateAction } from "react";
 import type { AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import type { KanbanBoard } from "@/lib/types/kanban";
+import type { FleetActiveApp } from "@/components/fleet/fleet-data";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
+
+export type DashboardAppCompletionNotification = {
+  id: string;
+  app: FleetActiveApp;
+  message: string;
+};
 
 type DashboardHeaderProps = {
   Image: ElementType;
@@ -16,6 +23,7 @@ type DashboardHeaderProps = {
   isWorkView: (view: DashboardView) => boolean;
   kanbanBoard?: KanbanBoard | null;
   navItems: Array<{ id: DashboardView; label: string; detail: string }>;
+  appCompletionNotification?: DashboardAppCompletionNotification | null;
   notificationClass: (...names: string[]) => string;
   notificationSummary?: AgentNotificationSummary | null;
   setActiveView: Dispatch<SetStateAction<DashboardView>>;
@@ -35,6 +43,7 @@ export function DashboardHeader(props: DashboardHeaderProps) {
     isWorkView,
     kanbanBoard,
     navItems,
+    appCompletionNotification,
     notificationClass,
     notificationSummary,
     setActiveView,
@@ -183,8 +192,33 @@ export function DashboardHeader(props: DashboardHeaderProps) {
               })}
           </nav>
         </div>
+        {appCompletionNotification ? (
+          <DashboardAppCompletionToast key={appCompletionNotification.id} notification={appCompletionNotification} />
+        ) : null}
       </header>
     </TooltipProvider>
+  );
+}
+
+function DashboardAppCompletionToast({ notification }: { notification: DashboardAppCompletionNotification }) {
+  const [brokenIcon, setBrokenIcon] = useState(false);
+  const iconUrl = notification.app.iconUrl;
+
+  return (
+    <div className="dashboardAppNotification" role="status" aria-live="polite">
+      <span className="dashboardAppNotificationIcon" aria-hidden="true">
+        {iconUrl && !brokenIcon ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={iconUrl} alt="" onError={() => setBrokenIcon(true)} />
+        ) : (
+          <span>{notification.app.initials}</span>
+        )}
+      </span>
+      <span className="dashboardAppNotificationText">
+        <strong>{notification.app.name}</strong>
+        <span>{notification.message}</span>
+      </span>
+    </div>
   );
 }
 

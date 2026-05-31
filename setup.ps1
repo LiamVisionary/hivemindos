@@ -344,10 +344,15 @@ $synthesisFolder = if ($env:NEXT_PUBLIC_OBSIDIAN_SYNTHESIS_FOLDER) { $env:NEXT_P
 $brainServicesFolder = if ($env:NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER) { $env:NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER } else { "Operations/Brain Services" }
 foreach ($folder in @(
   "Intake",
+  "Intake/Sources",
   "Memory",
+  "Memory/Book Notes",
+  "Memory/Decision Journal",
+  "Memory/Meetings",
   "Projects",
   "Operations",
   "Skills",
+  "Templates/HivemindOS",
   "Archive",
   "$synthesisFolder/raw",
   "$synthesisFolder/wiki/.drafts",

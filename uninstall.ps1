@@ -206,6 +206,14 @@ if (Ask-YesNo "Remove seeded self-writing vault workflow templates from Operatio
   Ok "Removed $foundationWorkflows"
 }
 
+if (Ask-YesNo "Remove seeded AI-ready shared-brain contract, templates, and Obsidian service notes?" $false) {
+  Remove-Item (Join-Path $vaultPath "Operations\AI-Ready Vault Contract.md") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $vaultPath (Join-Path $brainServicesFolder "Obsidian Plugin Pack.md")) -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $vaultPath (Join-Path $brainServicesFolder "Obsidian CLI.md")) -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $vaultPath "Templates\HivemindOS") -Recurse -Force -ErrorAction SilentlyContinue
+  Ok "Removed seeded AI-ready shared-brain files"
+}
+
 if (Ask-YesNo "Remove HivemindOS app cache/build/dependencies from this checkout?" $true) {
   foreach ($path in @(".next", ".setup-cache", "node_modules")) {
     if (Test-Path $path) { Remove-Item $path -Recurse -Force }
@@ -239,11 +247,17 @@ if (Ask-YesNo "Remove empty canonical HivemindOS vault folders created by setup?
     "Archive/Processed Requests",
     "Archive",
     "Projects",
+    "Templates/HivemindOS",
+    "Templates",
     "Memory/Distillations",
     "Memory/Imported Sources",
+    "Memory/Meetings",
     "Memory/Weekly Reviews",
+    "Memory/Decision Journal",
     "Memory/Daily Briefings",
+    "Memory/Book Notes",
     "Memory",
+    "Intake/Sources",
     "Intake/Requests",
     "Intake"
   ) | ForEach-Object { Remove-EmptyVaultFolder $_ }

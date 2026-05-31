@@ -16,7 +16,7 @@
 
 .workspace:has(.chat) {
   grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
-  min-height: calc(100vh - 132px);
+  min-height: 0;
 }
 
 .workspace:has(.chat) .settings {
@@ -569,7 +569,7 @@ details[open] > summary .treeDisclosure::before {
 .chat {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 132px);
+  min-height: 0;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 8px;
@@ -579,7 +579,7 @@ details[open] > summary .treeDisclosure::before {
 }
 
 .chat:has(.messages.empty) {
-  min-height: calc(100vh - 132px);
+  min-height: 0;
 }
 
 .chatHeader {
@@ -2531,12 +2531,12 @@ details[open] > summary .treeDisclosure::before {
 .workspace:has(.chat) {
   align-items: stretch;
   gap: 14px;
-  height: calc(100vh - 104px);
-  min-height: calc(100vh - 104px);
+  height: 100%;
+  min-height: 0;
 }
 
 .workspace:has(.chat) .settings {
-  height: calc(100vh - 104px);
+  height: 100%;
   overflow: auto;
 }
 

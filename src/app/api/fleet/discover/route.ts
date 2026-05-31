@@ -93,12 +93,12 @@ type CollectorEnvSync = {
 };
 
 const QUEEN_RUNTIME_PRIORITY: AgentRuntime[] = ["hermes", "openclaw", "openai-compatible", "aeon"];
-const FOREGROUND_COLLECTOR_FETCH_TIMEOUT_MS = 800;
+const FOREGROUND_COLLECTOR_FETCH_TIMEOUT_MS = 2_500;
 const BACKGROUND_COLLECTOR_FETCH_TIMEOUT_MS = 8_000;
 const SNAPSHOT_FETCH_TIMEOUT_MS = 4_000;
 const DISCOVERY_CACHE_MS = 15_000;
 const DISCOVERY_REQUEST_TIMEOUT_MS = 12_000;
-const DISCOVERY_CACHE_VERSION = "v2";
+const DISCOVERY_CACHE_VERSION = "v3";
 const TAILSCALE_STATUS_TIMEOUT_MS = 6_000;
 const TAILSCALE_LOCAL_API_TIMEOUT_MS = 2_000;
 const TAILSCALE_CLI_CANDIDATES = [
@@ -540,10 +540,10 @@ async function readDiscovery(includeSnapshots: boolean, options: DiscoveryProbeO
       const probeOptions = device.self
         ? { ...options, collectorTimeoutMs: Math.max(options.collectorTimeoutMs, 4_000) }
         : options;
-      for (const collectorUrl of collectorUrlCandidates(device)) {
-        probe = await probeCollector(device, collectorUrl, probeOptions).catch(() => null);
-        if (probe) break;
-      }
+      const probeResults = await Promise.all(
+        collectorUrlCandidates(device).map((collectorUrl) => probeCollector(device, collectorUrl, probeOptions).catch(() => null)),
+      );
+      probe = probeResults.find((result): result is CollectorProbeResult => Boolean(result)) ?? null;
     } catch {
       probe = null;
     }

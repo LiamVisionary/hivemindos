@@ -69,6 +69,13 @@ const excludedHostedAppPorts = new Set(
     .map((value) => Number(value.trim()))
     .filter((value) => Number.isInteger(value) && value > 0),
 );
+const knownServiceSignatures = [
+  {
+    displayName: "MiroShark",
+    serviceKind: "miroshark",
+    matches: /miroshark/i,
+  },
+];
 let hermesApiProcess = null;
 let hermesApiStartPromise = null;
 let skillAutoSyncConfig = null;
@@ -588,6 +595,11 @@ function serviceStatusFromHealth(payload) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function knownServiceFromHealth(payload, rawText = "") {
+  const haystack = `${serviceNameFromHealth(payload, "")} ${rawText}`;
+  return knownServiceSignatures.find((signature) => signature.matches.test(haystack)) || null;
+}
+
 async function probeServiceHealth(listener, scheme) {
   const baseUrl = `${scheme}://${listenerUrlHost(listener.host)}:${listener.port}`;
   const healthPath = "/health";
@@ -605,12 +617,12 @@ async function probeServiceHealth(listener, scheme) {
   const fallback = `${listener.process} API on ${listener.port}`;
   const name = serviceNameFromHealth(payload, fallback);
   const status = serviceStatusFromHealth(payload);
-  const isMiroShark = /miroshark/i.test(`${name} ${text}`);
-  const serviceKind = isMiroShark ? "miroshark" : "api";
+  const knownService = knownServiceFromHealth(payload, text);
+  const serviceKind = knownService?.serviceKind || "api";
   return {
     ok: response.ok,
     id: sha256Hex(`${hostname()}:${listener.port}:${listener.process}:${listener.pid}:${serviceKind}`).slice(0, 16),
-    name: isMiroShark ? "MiroShark" : titleFromHtml("", name),
+    name: knownService?.displayName || titleFromHtml("", name),
     description: status ? `API service · ${status}` : `API service · HTTP ${response.status}`,
     statusCode: response.status,
     contentType,

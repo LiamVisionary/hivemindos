@@ -17,6 +17,15 @@ Capabilities:
 - Record note access events.
 - Build a graph of notes and access history.
 - Store Kanban board state, notifications, scheduled runs, wallet records, shared skills, and brain-service notes.
+- Seed an AI-ready vault contract, durable note templates, optional Obsidian CLI/plugin-pack status notes, and disabled foundation workflows for common shared-brain routines.
+
+Seeded structure:
+
+- `Operations/AI-Ready Vault Contract.md` explains the shared brain routing and write policy.
+- `Templates/HivemindOS/` contains durable templates for daily briefings, weekly reviews, meetings, research sources, decisions, projects, book notes, distillations, and AI outputs.
+- `Operations/Brain Services/Obsidian CLI.md` records detected CLI status when setup runs.
+- `Operations/Brain Services/Obsidian Plugin Pack.md` lists optional manual Obsidian plugins for templates, tasks, Dataview, retrieval, calendar, Kanban, and Git.
+- `Operations/Automations/Foundation Workflows/` contains disabled workflow schedules for context synthesis, intake processing, meeting processing, research ingestion, vault health checks, decision review, argument building, book notes, feedback-loop capture, project updates, weekly synthesis, connection finding, and distillation.
 
 ## Brain Graph And GBrain
 
@@ -59,6 +68,7 @@ Capabilities:
 - `src/lib/services/obsidian/brain-graph.ts`
 - `src/lib/services/obsidian/brain-skills.ts`
 - `src/lib/services/brain/gbrain.ts`
+- `src/lib/services/chat/shared-vault-context.ts`
 - `src/app/api/obsidian/**`
 - `src/app/api/brain/gbrain/**`
 - `src/features/dashboard/views/VaultPanel.tsx`

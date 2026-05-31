@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-05-31T12:43:38.796091+00:00",
+  "created_at": "2026-05-31T16:57:50.095798+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
@@ -36,6 +36,41 @@
       "target_path": "src/lib/services/phone/call-gateway.ts",
       "reuse_type": "adapted_code",
       "note": "gateway voice config, device status, and ring-now endpoint usage"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-os",
+      "source_path": "scripts/seed-vault-foundation.mjs",
+      "target_path": "scripts/seed-vault-foundation.mjs",
+      "reuse_type": "adapted_code",
+      "note": "extended existing disabled foundation workflow and vault scaffold seeder"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-os",
+      "source_path": "setup.sh",
+      "target_path": "setup.sh",
+      "reuse_type": "adapted_code",
+      "note": "mirrored existing shared vault folder initialization style"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-os",
+      "source_path": "setup.ps1",
+      "target_path": "setup.ps1",
+      "reuse_type": "adapted_code",
+      "note": "mirrored existing Windows shared vault folder initialization style"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-os",
+      "source_path": "uninstall.sh",
+      "target_path": "uninstall.sh",
+      "reuse_type": "adapted_code",
+      "note": "mirrored setup uninstall prompt pattern for generated vault files"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-os",
+      "source_path": "src/app/api/chat/agent-runtime/route.ts",
+      "target_path": "src/lib/services/chat/shared-vault-context.ts",
+      "reuse_type": "adapted_code",
+      "note": "extracted existing shared vault prompt builder and extended it with AI-ready vault guidance"
     }
   ]
 }

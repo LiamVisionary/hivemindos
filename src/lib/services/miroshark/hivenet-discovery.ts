@@ -63,7 +63,7 @@ function healthUrlForApp(app: FleetHostedApp, baseUrl: string) {
 
 function looksLikeMiroSharkApp(app: FleetHostedApp) {
   const haystack = `${app.name || ""} ${app.sourceName || ""} ${app.serviceKind || ""}`.toLowerCase();
-  return haystack.includes("miroshark") || Number(app.port) === 5101;
+  return haystack.includes("miroshark");
 }
 
 async function mirosharkHealthOk(healthUrl: string) {

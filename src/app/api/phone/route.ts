@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { mkdir, readdir, readFile, unlink, writeFile } from "fs/promises";
 import { join, resolve, sep } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
-import { readGatewayVoiceConfig, readGatewayVoiceDeviceStatus, ringAgentCall, ringStoredPrompt } from "@/lib/services/phone/call-gateway";
+import { readGatewayVoiceConfig, readGatewayVoiceDeviceStatus, ringAgentCall, ringStoredPrompt, startAgentDashboardCall } from "@/lib/services/phone/call-gateway";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -345,6 +345,13 @@ export async function POST(request: NextRequest) {
       const agent = body.agent && typeof body.agent === "object" ? body.agent : {};
       const machine = body.machine && typeof body.machine === "object" ? body.machine : undefined;
       const result = await ringAgentCall({ agent, machine });
+      return NextResponse.json(result, { status: result.ok ? 200 : 502 });
+    }
+
+    if (body.action === "dashboard-agent-call") {
+      const agent = body.agent && typeof body.agent === "object" ? body.agent : {};
+      const machine = body.machine && typeof body.machine === "object" ? body.machine : undefined;
+      const result = await startAgentDashboardCall({ agent, machine });
       return NextResponse.json(result, { status: result.ok ? 200 : 502 });
     }
 

@@ -2653,3 +2653,461 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
    url: https://github.com/LiamVisionary/language-learning-app
    note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
    LiamVisionary/language-learning-app TypeScript
+## 2026-05-31T14:01:04.972344+00:00 - local-search
+
+- Request: Feed AEON agent identity and context into voice call briefing; inspect aaronjmars/aeon agent setup and adapt context/greeting
+- Source: local-index
+- Query: `Feed AEON agent identity and context into voice call briefing; inspect aaronjmars/aeon agent setup and adapt context/greeting`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=14.79 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+2. score=6.70 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+3. score=6.70 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+4. score=4.04 LiamVisionary/chatterbox [repo-summary]
+   url: https://github.com/LiamVisionary/chatterbox
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox.md
+   LiamVisionary/chatterbox SoTA open-source TTS Voice/TTS
+5. score=4.04 LiamVisionary/claude-watch [repo-summary]
+   url: https://github.com/LiamVisionary/claude-watch
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
+6. score=0.70 LiamVisionary/ai-companion-website [repo-summary]
+   url: https://github.com/LiamVisionary/ai-companion-website
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
+7. score=0.70 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+
+## 2026-05-31T14:01:08.600290+00:00 - public-search
+
+- Request: Feed AEON agent identity and context into voice call briefing; inspect aaronjmars/aeon agent setup and adapt context/greeting
+- Source: public-github
+- Query: `Feed AEON agent identity and context into voice call briefing; inspect aaronjmars/aeon agent setup and adapt context/greeting`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T14:01:08.725011+00:00 - prebuild-gate
+
+- Request: Feed AEON agent identity and context into voice call briefing; inspect aaronjmars/aeon agent setup and adapt context/greeting
+- Source: public-github
+- Query: `Feed AEON agent identity and context into voice call briefing; inspect aaronjmars/aeon agent setup and adapt context/greeting`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
+cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+## 2026-05-31T14:07:22.362622+00:00 - triage
+
+- Request: Feed AEON agent identity and context into voice call briefing
+- Source: public-github
+- Selected backbone: aaronjmars/aeon
+
+### Candidates
+- aaronjmars/aeon
+  - Decision: selected
+  - Reason: canonical AEON identity, aeon.yml skill config, skills.json catalog, memory and A2A agent-card context
+  - Path: `README.md,CLAUDE.md,aeon.yml,dashboard/lib/config.ts,dashboard/lib/types.ts,a2a-server/src/index.ts`
+- Sfedfcv/redesigned-pancake
+  - Decision: rejected
+  - Reason: unrelated GitHub docs mirror candidate from broad search; no AEON agent context paths
+- tdw419/prompt_generator
+  - Decision: rejected
+  - Reason: generic prompt compiler; lower fit than canonical AEON repository
+## 2026-05-31T14:07:34.200329+00:00 - assimilation-manifest
+
+- Request: Feed AEON agent identity and context into voice call briefing.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: aaronjmars/aeon:CLAUDE.md => src/lib/services/phone/call-gateway.ts, aaronjmars/aeon:README.md => src/lib/services/phone/call-gateway.ts, aaronjmars/aeon:aeon.yml => src/lib/services/phone/call-gateway.ts, aaronjmars/aeon:dashboard/lib/config.ts => src/lib/services/phone/call-gateway.ts, aaronjmars/aeon:dashboard/lib/types.ts => src/lib/services/phone/call-gateway.ts, aaronjmars/aeon:a2a-server/src/index.ts => src/lib/services/phone/call-gateway.ts
+- Verification: Wrote ASSIMILATION.json with 6 entries and custom_code_assessment=balanced.
+## 2026-05-31T14:47:54.932410+00:00 - rejection
+
+- Request: Add a MiroShark demo badge and pill toast animation in Fleet graph
+- Source: public-github
+
+### Candidates
+- ahmedoher/css3
+  - Decision: rejected
+  - Reason: public search returned a generic CSS dump with no extractable React toast component or compatible animation module
+## 2026-05-31T14:47:54.986502+00:00 - implementation
+
+- Request: Add a MiroShark demo badge and pill toast animation in Fleet graph
+- Source: local-repo
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: existing FleetView toast pattern and CSS module animation tokens were the compatible implementation surface
+  - Path: `src/components/fleet/FleetView.tsx,src/components/fleet/fleet-tokens.module.css`
+## 2026-05-31T16:49:35.676117+00:00 - local-search
+
+- Request: Remove Fleet MiroShark demo mode and implement real active app completion notification toast in existing React dashboard
+- Source: local-index
+- Query: `Remove Fleet MiroShark demo mode and implement real active app completion notification toast in existing React dashboard`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=9.08 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+2. score=6.91 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+3. score=6.91 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+4. score=6.16 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+5. score=3.83 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+6. score=3.64 LiamVisionary/exercise-db [repo-summary]
+   url: https://github.com/LiamVisionary/exercise-db
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
+7. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+8. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+
+## 2026-05-31T16:49:38.124763+00:00 - public-search
+
+- Request: Remove Fleet MiroShark demo mode and implement real active app completion notification toast in existing React dashboard
+- Source: public-github
+- Query: `Remove Fleet MiroShark demo mode and implement real active app completion notification toast in existing React dashboard`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T16:49:38.195112+00:00 - prebuild-gate
+
+- Request: Remove Fleet MiroShark demo mode and implement real active app completion notification toast in existing React dashboard
+- Source: public-github
+- Query: `Remove Fleet MiroShark demo mode and implement real active app completion notification toast in existing React dashboard`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
+cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+
+## 2026-05-31T16:49:46.537441+00:00 - local-search
+
+- Request: React dashboard toast snackbar notification system active job completion badge transitions
+- Source: local-index
+- Query: `React dashboard toast snackbar notification system active job completion badge transitions`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=8.21 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+2. score=6.56 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+3. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+4. score=3.83 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+
+## 2026-05-31T16:49:48.874551+00:00 - public-search
+
+- Request: React dashboard toast snackbar notification system active job completion badge transitions
+- Source: public-github
+- Query: `React dashboard toast snackbar notification system active job completion badge transitions`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T16:49:48.926047+00:00 - prebuild-gate
+
+- Request: React dashboard toast snackbar notification system active job completion badge transitions
+- Source: public-github
+- Query: `React dashboard toast snackbar notification system active job completion badge transitions`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
+cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+
+## 2026-05-31T16:50:47.657242+00:00 - triage
+
+- Request: Improve HivemindOS shared brain initialization from Obsidian agent workflow ideas
+- Source: user-supplied-local-repo
+- Selected backbone: LiamVisionary/hivemind-os
+
+### Candidates
+- LiamVisionary/hivemind-os
+  - Decision: selected
+  - Reason: pinned local project already contains setup.sh, setup.ps1, seed-vault-foundation.mjs, GBrain service notes, and shared vault runtime context to extend directly
+  - Path: `setup.sh,scripts/seed-vault-foundation.mjs,setup.ps1,src/app/api/chat/agent-runtime/route.ts`
+## 2026-05-31T16:52:18.973845+00:00 - triage
+
+- Request: Remove Fleet MiroShark demo mode and implement real active app completion notification toast in existing React dashboard
+- Source: local-and-public-search
+
+### Candidates
+- local notification/Fleet components
+  - Decision: selected
+  - Reason: existing Fleet active-app badge and pill toast code directly covered the tiny app-specific transition; no external code safely useful
+- public GitHub search
+  - Decision: rejected
+  - Reason: two broadened prebuild searches returned zero relevant public candidates and unrelated local mobile/sign-in templates
+## 2026-05-31T16:57:50.141312+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemind-os:scripts/seed-vault-foundation.mjs => scripts/seed-vault-foundation.mjs, LiamVisionary/hivemind-os:setup.sh => setup.sh, LiamVisionary/hivemind-os:setup.ps1 => setup.ps1, LiamVisionary/hivemind-os:uninstall.sh => uninstall.sh, LiamVisionary/hivemind-os:src/app/api/chat/agent-runtime/route.ts => src/lib/services/chat/shared-vault-context.ts
+- Verification: Wrote ASSIMILATION.json with 5 entries and custom_code_assessment=balanced.
+## 2026-05-31T17:06:46.933370+00:00 - local-search
+
+- Request: Generalize Fleet connected app badge completion snackbar notification queue for React dashboard
+- Source: local-index
+- Query: `Generalize Fleet connected app badge completion snackbar notification queue for React dashboard`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=13.19 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+2. score=6.56 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+3. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+4. score=3.64 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+5. score=3.48 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+6. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
+   url: https://github.com/LiamVisionary/ami-ai-companion-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   LiamVisionary/ami-ai-companion-app TypeScript
+7. score=0.44 LiamVisionary/language-learning-app [repo-summary]
+   url: https://github.com/LiamVisionary/language-learning-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   LiamVisionary/language-learning-app TypeScript
+8. score=0.44 LiamVisionary/rdmorganiser_rdmo__fork__7cde0431 [repo-summary]
+   url: https://github.com/LiamVisionary/rdmorganiser_rdmo__fork__7cde0431
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-rdmorganiser_rdmo__fork__7cde0431.md
+   LiamVisionary/rdmorganiser_rdmo__fork__7cde0431
+
+## 2026-05-31T17:06:50.959923+00:00 - prebuild-gate
+
+- Request: Generalize Fleet connected app badge completion snackbar notification queue for React dashboard
+- Source: public-github
+- Query: `Generalize Fleet connected app badge completion snackbar notification queue for React dashboard`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-05-31T17:07:04.463131+00:00 - rejection
+
+- Request: Generalize Fleet connected app badge completion snackbar notification queue for React dashboard
+- Source: public-github
+
+### Candidates
+- Sfedfcv/redesigned-pancake
+  - Decision: rejected
+  - Reason: unrelated GitHub/docs content, not a reusable React notification implementation for this Fleet view
+- Rohan1030/NOTIFICATION-SYSTEM
+  - Decision: rejected
+  - Reason: backend/system-design notification stack is far broader than the local in-view Fleet snackbar transition
+- local Fleet badge/toast code
+  - Decision: selected
+  - Reason: existing app-specific badge and pill notification surfaces are the concrete reusable code path
+## 2026-05-31T17:12:47.498784+00:00 - local-search
+
+- Request: HivemindOS hivenet app discovery service health signature registry without modifying third party apps
+- Source: local-index
+- Query: `HivemindOS hivenet app discovery service health signature registry without modifying third party apps`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=4.04 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+2. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
+   url: https://github.com/LiamVisionary/ami-ai-companion-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   LiamVisionary/ami-ai-companion-app TypeScript
+3. score=0.44 LiamVisionary/language-learning-app [repo-summary]
+   url: https://github.com/LiamVisionary/language-learning-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   LiamVisionary/language-learning-app TypeScript
+4. score=0.35 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+
+## 2026-05-31T17:12:56.479536+00:00 - prebuild-gate
+
+- Request: HivemindOS hivenet app discovery service health signature registry without modifying third party apps
+- Source: public-github
+- Query: `HivemindOS hivenet app discovery service health signature registry without modifying third party apps`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-05-31T17:13:46.047357+00:00 - triage
+
+- Request: Move MiroShark hivenet app discovery logic into HivemindOS without requiring third-party app repo changes
+- Source: local-and-public-search
+
+### Candidates
+- hivemind-os app collector and fleet apps API
+  - Decision: selected
+  - Reason: existing collector /apps, /app-proxy, and health probing are the correct local implementation surface
+  - Path: `scripts/agent-telemetry-collector.mjs,src/app/api/fleet/apps/route.ts`
+- Sfedfcv/redesigned-pancake
+  - Decision: rejected
+  - Reason: unrelated GitHub docs content from broad public search, no reusable service discovery code
+- Rastaman4e/-1
+  - Decision: rejected
+  - Reason: unrelated terms/service repository, no compatible app discovery source
+- NestieGuilas/Marketing-Platform-
+  - Decision: rejected
+  - Reason: unrelated policy text repository, no compatible app discovery source
+## 2026-05-31T17:18:12.330354+00:00 - local-search
+
+- Request: Move connected app completion toast from Fleet view to dashboard shell header React notification layer
+- Source: local-index
+- Query: `Move connected app completion toast from Fleet view to dashboard shell header React notification layer`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=8.64 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+2. score=6.56 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+3. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+4. score=4.04 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+5. score=3.48 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+6. score=0.44 LiamVisionary/ai-headshot-generator [repo-summary]
+   url: https://github.com/LiamVisionary/ai-headshot-generator
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   LiamVisionary/ai-headshot-generator TypeScript
+7. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
+   url: https://github.com/LiamVisionary/ami-ai-companion-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   LiamVisionary/ami-ai-companion-app TypeScript
+8. score=0.44 LiamVisionary/fantom-survivor-testnet [repo-summary]
+   url: https://github.com/LiamVisionary/fantom-survivor-testnet
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-fantom-survivor-testnet.md
+   LiamVisionary/fantom-survivor-testnet
+
+## 2026-05-31T17:18:15.004675+00:00 - public-search
+
+- Request: Move connected app completion toast from Fleet view to dashboard shell header React notification layer
+- Source: public-github
+- Query: `Move connected app completion toast from Fleet view to dashboard shell header React notification layer`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T17:18:16.225388+00:00 - prebuild-gate
+
+- Request: Move connected app completion toast from Fleet view to dashboard shell header React notification layer
+- Source: public-github
+- Query: `Move connected app completion toast from Fleet view to dashboard shell header React notification layer`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
+cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+
+## 2026-05-31T17:18:31.210959+00:00 - local-search
+
+- Request: React app shell global toast notification layer dashboard active app completion
+- Source: local-index
+- Query: `React app shell global toast notification layer dashboard active app completion`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=9.08 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+2. score=6.56 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+3. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+4. score=3.48 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+5. score=0.88 LiamVisionary/ami-ai-companion-app [repo-summary]
+   url: https://github.com/LiamVisionary/ami-ai-companion-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   LiamVisionary/ami-ai-companion-app TypeScript
+6. score=0.88 LiamVisionary/language-learning-app [repo-summary]
+   url: https://github.com/LiamVisionary/language-learning-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   LiamVisionary/language-learning-app TypeScript
+
+## 2026-05-31T17:18:33.639297+00:00 - public-search
+
+- Request: React app shell global toast notification layer dashboard active app completion
+- Source: public-github
+- Query: `React app shell global toast notification layer dashboard active app completion`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T17:18:33.791689+00:00 - prebuild-gate
+
+- Request: React app shell global toast notification layer dashboard active app completion
+- Source: public-github
+- Query: `React app shell global toast notification layer dashboard active app completion`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
+cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+
+## 2026-05-31T17:18:49.628899+00:00 - rejection
+
+- Request: Move connected app completion toast from Fleet view to dashboard shell header React notification layer
+- Source: local-and-public-search
+
+### Candidates
+- local Fleet/Dashboard shell code
+  - Decision: selected
+  - Reason: existing active-app badge path and dashboard shell are the concrete reusable source; no external code copied
+- public GitHub searches
+  - Decision: rejected
+  - Reason: two searches returned zero relevant public candidates and unrelated mobile/template repos

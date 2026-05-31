@@ -11,7 +11,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -160,6 +160,26 @@ function pruneNativeOnlyResources() {
   }
 }
 
+function collectFiles(root, predicate, files = []) {
+  if (!existsSync(root)) {
+    return files;
+  }
+
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const entryPath = join(root, entry.name);
+    if (entry.isDirectory()) {
+      collectFiles(entryPath, predicate, files);
+      continue;
+    }
+
+    if (entry.isFile() && predicate(entryPath)) {
+      files.push(entryPath);
+    }
+  }
+
+  return files;
+}
+
 function prunePnpmPackages(prefixes) {
   const pnpmDir = join(serverResourceDir, "node_modules", ".pnpm");
   if (!existsSync(pnpmDir)) {
@@ -171,6 +191,10 @@ function prunePnpmPackages(prefixes) {
       rmSync(join(pnpmDir, entry), { force: true, recursive: true });
     }
   }
+}
+
+function pruneMaterializedPnpmStore() {
+  rmSync(join(serverResourceDir, "node_modules", ".pnpm"), { force: true, recursive: true });
 }
 
 function removeNestedNodePackage(root, packageName) {
@@ -219,6 +243,29 @@ function pruneImageOptimizerRuntime() {
     "node_modules/.pnpm/node_modules/@img/sharp-libvips-darwin-arm64",
   ]) {
     rmSync(join(serverResourceDir, path), { force: true, recursive: true });
+  }
+}
+
+function optimizePackagedPngAssets() {
+  const versionResult = spawnSync("oxipng", ["--version"], {
+    cwd: projectRoot,
+    encoding: "utf8",
+  });
+  if (versionResult.status !== 0) {
+    return;
+  }
+
+  const pngFiles = collectFiles(join(serverResourceDir, "public"), (filePath) => extname(filePath).toLowerCase() === ".png");
+  if (pngFiles.length === 0) {
+    return;
+  }
+
+  const result = spawnSync("oxipng", ["--strip", "safe", "-o", "4", ...pngFiles], {
+    cwd: projectRoot,
+    stdio: "inherit",
+  });
+  if (result.status !== 0) {
+    throw new Error(`oxipng failed with exit code ${result.status ?? 1}`);
   }
 }
 
@@ -317,6 +364,8 @@ materializeResourceSymlinks(serverResourceDir);
 copyRequiredRuntimePackages();
 pruneImageOptimizerRuntime();
 pruneNativeOnlyResources();
+pruneMaterializedPnpmStore();
+optimizePackagedPngAssets();
 copyNodeBinary();
 
 console.log(`Prepared Tauri Next server resources in ${basename(resourcesDir)}/`);

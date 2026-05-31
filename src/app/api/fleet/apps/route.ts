@@ -11,7 +11,6 @@ const ICON_PROBE_TIMEOUT_MS = 900;
 const SERVICE_SIGNATURE_TIMEOUT_MS = 2_500;
 const HIVEMIND_LINK_APP_TIMEOUT_MS = 4_000;
 const TAILSCALE_STATUS_TIMEOUT_MS = 3_000;
-const MIROSHARK_PORT = 5101;
 const HIVEMIND_LINK_COLLECTOR_PORTS = [8787, 8789, 8790, 8791, 8792];
 const TAILSCALE_CLI_CANDIDATES = [
   "/usr/local/bin/tailscale",
@@ -91,6 +90,34 @@ type ServiceSignature = {
   healthUrl: string;
   apiBaseUrl: string;
 };
+
+type ServiceHealthPayload = {
+  service?: string;
+  name?: string;
+  app?: string;
+  application?: string;
+  status?: string;
+  state?: string;
+  ok?: boolean;
+};
+
+type KnownServiceSignature = {
+  displayName: string;
+  serviceKind: string;
+  defaultPorts: number[];
+  healthPaths: string[];
+  matches: RegExp;
+};
+
+const KNOWN_SERVICE_SIGNATURES: KnownServiceSignature[] = [
+  {
+    displayName: "MiroShark",
+    serviceKind: "miroshark",
+    defaultPorts: [5101],
+    healthPaths: ["/health"],
+    matches: /miroshark/i,
+  },
+];
 
 type AppsPayload = {
   ok: true;
@@ -388,9 +415,36 @@ function appDescription(kind: AppKind, machineName: string) {
 
 function shouldProbeHealthSignature(name: string, app: CollectorApp) {
   if (app.serviceKind || app.healthPath) return true;
-  if (Number(app.port) === 5101) return true;
+  if (KNOWN_SERVICE_SIGNATURES.some((signature) => signature.defaultPorts.includes(Number(app.port)))) return true;
   const value = `${name} ${app.description || ""} ${app.process || ""} ${app.server || ""}`.toLowerCase();
   return value.includes("404") || value.includes("not found") || value.includes("backend") || value.includes("api");
+}
+
+function healthServiceName(payload: ServiceHealthPayload | null) {
+  const value = payload?.service || payload?.name || payload?.app || payload?.application;
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function healthStatus(payload: ServiceHealthPayload | null) {
+  const value = payload?.status || payload?.state || payload?.ok;
+  if (typeof value === "boolean") return value ? "ok" : "error";
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function knownServiceFromHealth(payload: ServiceHealthPayload | null) {
+  const haystack = `${healthServiceName(payload)} ${JSON.stringify(payload ?? {})}`;
+  return KNOWN_SERVICE_SIGNATURES.find((signature) => signature.matches.test(haystack)) ?? null;
+}
+
+function healthPathsForApp(app: CollectorApp) {
+  const paths = [
+    app.healthPath,
+    ...KNOWN_SERVICE_SIGNATURES
+      .filter((signature) => signature.defaultPorts.includes(Number(app.port)))
+      .flatMap((signature) => signature.healthPaths),
+    "/health",
+  ].filter((path): path is string => Boolean(path));
+  return [...new Set(paths.map(normalizePath))];
 }
 
 async function probeHealthSignature(input: {
@@ -403,29 +457,33 @@ async function probeHealthSignature(input: {
   if (!shouldProbeHealthSignature(input.name, input.app)) return null;
   const apiBaseUrl = input.apiProxyUrl || input.proxyUrl.replace(/\/+$/, "");
   if (!apiBaseUrl) return null;
-  const healthPath = input.app.healthPath || "/health";
-  const healthUrl = input.healthProxyUrl || `${apiBaseUrl}${normalizePath(healthPath)}`;
-  try {
-    const response = await fetch(healthUrl, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(SERVICE_SIGNATURE_TIMEOUT_MS),
-    });
-    const payload = await response.json().catch(() => null) as { service?: string; name?: string; status?: string; ok?: boolean } | null;
-    const service = String(payload?.service || payload?.name || "");
-    const status = String(payload?.status || (payload?.ok === true ? "ok" : ""));
-    if (!response.ok || !service) return null;
-    const isMiroShark = /miroshark/i.test(service);
-    return {
-      name: isMiroShark ? "MiroShark" : service,
-      description: status ? `API service · ${status}` : `API service · HTTP ${response.status}`,
-      serviceKind: isMiroShark ? "miroshark" : "api",
-      healthPath,
-      healthUrl,
-      apiBaseUrl,
-    };
-  } catch {
-    return null;
+  const healthPaths = input.healthProxyUrl ? [new URL(input.healthProxyUrl).pathname] : healthPathsForApp(input.app);
+  for (const healthPath of healthPaths) {
+    const healthUrl = input.healthProxyUrl || `${apiBaseUrl}${normalizePath(healthPath)}`;
+    try {
+      const response = await fetch(healthUrl, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(SERVICE_SIGNATURE_TIMEOUT_MS),
+      });
+      const payload = await response.json().catch(() => null) as ServiceHealthPayload | null;
+      const service = healthServiceName(payload);
+      const status = healthStatus(payload);
+      const known = knownServiceFromHealth(payload);
+      if (!response.ok || (!service && !known)) continue;
+      const name = known?.displayName || service;
+      return {
+        name,
+        description: status ? `API service · ${status}` : `API service · HTTP ${response.status}`,
+        serviceKind: known?.serviceKind || "api",
+        healthPath,
+        healthUrl,
+        apiBaseUrl,
+      };
+    } catch {
+      continue;
+    }
   }
+  return null;
 }
 
 async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUrl: string): Promise<HostedApp | null> {
@@ -478,6 +536,89 @@ async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUr
   };
 }
 
+function hostedAppFromHealth(input: {
+  collectorUrl: string;
+  healthUrl: string;
+  ip: string;
+  port: number;
+  machineName?: string;
+  health: ServiceHealthPayload;
+}): HostedApp | null {
+  const known = knownServiceFromHealth(input.health);
+  const service = healthServiceName(input.health);
+  if (!known && !service) return null;
+  const name = known?.displayName || service;
+  const serviceKind = known?.serviceKind || "api";
+  const machineName = normalizeMachineName(input.machineName || `${name} host ${input.ip}`);
+  const kind = appKind(name);
+  const apiBaseUrl = input.healthUrl.replace(/\/health\/?$/i, "");
+  return {
+    id: `${input.ip}:${input.port}:${name}`,
+    name,
+    sourceName: name,
+    description: healthStatus(input.health) ? `API service · ${healthStatus(input.health)}` : "API service · ok",
+    kind,
+    theme: appTheme(kind),
+    initials: appInitials(name),
+    iconUrl: brandFallbackIconUrl(name) || undefined,
+    machineName,
+    machineHost: input.ip,
+    local: false,
+    online: true,
+    interactive: false,
+    serviceKind,
+    scheme: "http",
+    port: input.port,
+    path: "/",
+    openUrl: `${input.collectorUrl}/app-proxy/${input.port}/`,
+    apiBaseUrl,
+    healthUrl: input.healthUrl,
+  };
+}
+
+async function toKnownServiceHostedApp(app: CollectorApp, machine: FleetMachine, collectorUrl: string): Promise<HostedApp | null> {
+  const hosted = await toHostedApp(app, machine, collectorUrl);
+  if (hosted) return hosted;
+  const port = Number(app.port);
+  const proxyUrl = rewriteCollectorUrl(app.proxyUrl, collectorUrl);
+  const directServiceUrl = serviceUrl(app, machine);
+  const openUrl = proxyUrl || directServiceUrl;
+  if (!openUrl || !Number.isInteger(port)) return null;
+  const apiBaseUrl = openUrl.replace(/\/+$/, "");
+  for (const healthPath of healthPathsForApp(app)) {
+    const healthUrl = `${apiBaseUrl}${healthPath}`;
+    const health = await fetchJsonOrNull<ServiceHealthPayload>(healthUrl, SERVICE_SIGNATURE_TIMEOUT_MS);
+    const known = knownServiceFromHealth(health);
+    if (!health || !known) continue;
+    const machineName = normalizeMachineName(machine.device?.name || machine.collectorHost || machine.device?.ip || "Unknown machine");
+    const kind = appKind(known.displayName);
+    const local = isLocalMachine(machine);
+    return {
+      id: `${local ? "local" : machineOpenHost(machine)}:${port}:${app.id || known.displayName}`,
+      name: known.displayName,
+      sourceName: app.name?.trim() || "",
+      description: healthStatus(health) ? `API service · ${healthStatus(health)}` : "API service · ok",
+      kind,
+      theme: appTheme(kind),
+      initials: appInitials(known.displayName),
+      iconUrl: brandFallbackIconUrl(known.displayName) || undefined,
+      machineName,
+      machineHost: machineOpenHost(machine),
+      local,
+      online: machine.device?.online !== false,
+      interactive: false,
+      serviceKind: known.serviceKind,
+      scheme: app.scheme === "https" ? "https" : "http",
+      port,
+      path: normalizePath(app.path),
+      openUrl,
+      apiBaseUrl,
+      healthUrl,
+    };
+  }
+  return null;
+}
+
 function dedupeVisibleApps(apps: HostedApp[]) {
   const byNameAndMachine = new Map<string, HostedApp>();
   const score = (app: HostedApp) => (
@@ -502,6 +643,19 @@ function dedupeVisibleApps(apps: HostedApp[]) {
     }
   }
   return [...byNameAndMachine.values()];
+}
+
+async function healthyCachedKnownServiceApps() {
+  const cached = appsCache?.payload.apps.filter((app) => app.serviceKind && app.healthUrl) ?? [];
+  const checks = await Promise.all(cached.map(async (app) => {
+    const health = await fetchJsonOrNull<ServiceHealthPayload>(
+      app.healthUrl ?? "",
+      SERVICE_SIGNATURE_TIMEOUT_MS,
+    );
+    const known = knownServiceFromHealth(health);
+    return known && known.serviceKind === app.serviceKind ? app : null;
+  }));
+  return checks.filter((app): app is HostedApp => Boolean(app));
 }
 
 async function fetchJson<T>(url: string, timeoutMs = COLLECTOR_TIMEOUT_MS): Promise<T> {
@@ -571,25 +725,61 @@ function discoveredPeerIps(machines: FleetMachine[]) {
     .filter((value) => /^\d+\.\d+\.\d+\.\d+$/.test(value));
 }
 
-async function readPeerMiroSharkApps(forceRefresh: boolean, machines: FleetMachine[]): Promise<{ name: string; collector: string; apps: HostedApp[]; error?: string }[]> {
+async function probeKnownServiceHealthApps(machines: FleetMachine[]): Promise<{ name: string; collector: string; apps: HostedApp[] }[]> {
+  const candidates = machines.flatMap((machine) => {
+    const ip = machine.device?.ip?.trim();
+    if (!ip || !/^\d+\.\d+\.\d+\.\d+$/.test(ip) || machine.device?.self) return [];
+    const collectorUrls = [
+      normalizeBaseUrl(machine.device?.collectorUrl),
+      ...HIVEMIND_LINK_COLLECTOR_PORTS.map((port) => `http://${ip}:${port}`),
+    ].filter(Boolean);
+    return [...new Set(collectorUrls)].flatMap((collectorUrl) => (
+      KNOWN_SERVICE_SIGNATURES.flatMap((signature) => (
+        signature.defaultPorts.flatMap((port) => (
+          signature.healthPaths.map(async (healthPath) => {
+            const healthUrl = `${collectorUrl}/app-proxy/${port}${normalizePath(healthPath)}`;
+            const health = await fetchJsonOrNull<ServiceHealthPayload>(healthUrl, SERVICE_SIGNATURE_TIMEOUT_MS);
+            if (!health || !knownServiceFromHealth(health)) return null;
+            const app = hostedAppFromHealth({
+              collectorUrl,
+              healthUrl,
+              ip,
+              port,
+              machineName: machine.device?.name,
+              health,
+            });
+            return app ? { name: machine.device?.name ?? ip, collector: "tailnet-health", apps: [app] } : null;
+          })
+        ))
+      ))
+    ));
+  });
+  return (await Promise.all(candidates)).filter((result): result is { name: string; collector: string; apps: HostedApp[] } => Boolean(result));
+}
+
+async function readPeerKnownServiceApps(forceRefresh: boolean, machines: FleetMachine[]): Promise<{ name: string; collector: string; apps: HostedApp[]; error?: string }[]> {
   const peers = [...new Set([...discoveredPeerIps(machines), ...await tailscalePeerIps()])];
   const probes = peers.flatMap((ip) => (
     HIVEMIND_LINK_COLLECTOR_PORTS.flatMap((collectorPort) => peerCollectorUrls(ip, collectorPort).map(async ({ collectorUrl, collector }) => {
       const payload = await fetchJsonOrNull<{ apps?: CollectorApp[] }>(collectorAppsUrl(collectorUrl, forceRefresh));
-      const mirosharkApps = (payload?.apps ?? []).filter((app) => Number(app.port) === MIROSHARK_PORT);
-      if (mirosharkApps.length === 0) return null;
+      const serviceApps = (payload?.apps ?? []).filter((app) => (
+        KNOWN_SERVICE_SIGNATURES.some((signature) => signature.defaultPorts.includes(Number(app.port)))
+        || app.healthPath
+        || app.serviceKind
+      ));
+      if (serviceApps.length === 0) return null;
       const machine: FleetMachine = {
         collector: "ready",
         collectorHost: ip,
         device: {
           self: false,
-          name: `MiroShark host ${ip}`,
+          name: `Hivenet app host ${ip}`,
           ip,
           online: true,
           collectorUrl,
         },
       };
-      const apps = await Promise.all(mirosharkApps.map((app) => toHostedApp(app, machine, collectorUrl)));
+      const apps = await Promise.all(serviceApps.map((app) => toKnownServiceHostedApp(app, machine, collectorUrl)));
       const visibleApps = apps.filter((app): app is HostedApp => Boolean(app));
       return visibleApps.length > 0 ? { name: machine.device?.name ?? ip, collector, apps: visibleApps } : null;
     }))
@@ -639,18 +829,26 @@ async function readApps(request: NextRequest): Promise<AppsPayload> {
     }
   }));
 
-  const linkResults = results.some((result) => result.apps.some((app) => /miroshark/i.test(app.name) || app.port === MIROSHARK_PORT))
+  const linkResults = results.some((result) => result.apps.some((app) => app.serviceKind && app.healthUrl))
     ? []
-    : await readPeerMiroSharkApps(forceRefresh, machines);
+    : await readPeerKnownServiceApps(forceRefresh, machines);
 
-  const allResults = [...results, ...linkResults];
-  const apps = dedupeVisibleApps(allResults.flatMap((result) => result.apps))
+  const allResults = [
+    ...results,
+    ...linkResults,
+    ...await probeKnownServiceHealthApps(machines),
+  ];
+  let apps = dedupeVisibleApps(allResults.flatMap((result) => result.apps))
     .sort((left, right) => Number(right.local) - Number(left.local) || left.machineName.localeCompare(right.machineName) || left.port - right.port);
+  if (!apps.some((app) => app.serviceKind && app.healthUrl)) {
+    apps = dedupeVisibleApps([...apps, ...await healthyCachedKnownServiceApps()])
+      .sort((left, right) => Number(right.local) - Number(left.local) || left.machineName.localeCompare(right.machineName) || left.port - right.port);
+  }
   const machineResults = allResults.map((result) => ({
     name: result.name,
     collector: result.collector,
     appCount: result.apps.length,
-    error: result.error,
+    error: "error" in result && typeof result.error === "string" ? result.error : undefined,
   }));
   if (fleetError) {
     machineResults.unshift({
@@ -664,7 +862,7 @@ async function readApps(request: NextRequest): Promise<AppsPayload> {
   return {
     ok: true,
     checkedAt: new Date().toISOString(),
-    source: fleet.source || (fleetError ? "peer-miroshark-fallback" : "fleet-discover"),
+    source: fleet.source || (fleetError ? "peer-service-fallback" : "fleet-discover"),
     apps,
     machines: machineResults,
   };

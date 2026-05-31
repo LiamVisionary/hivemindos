@@ -225,6 +225,7 @@ export function MachineCluster({
                 else if (agent) onSelectAgent(machine, agent);
               }}
             >
+              {!isMachine && agent?.activeApp ? <ActiveAppBadge app={agent.activeApp} /> : null}
               <div
                 className={`grid justify-items-center text-center ${!isMachine ? styles.graphAgentCellContent : ""}`}
                 style={{
@@ -264,7 +265,6 @@ export function MachineCluster({
                 )}
               </div>
             </HexTile>
-            {!isMachine && agent?.activeApp ? <ActiveAppBadge app={agent.activeApp} /> : null}
           </div>
         );
       })}

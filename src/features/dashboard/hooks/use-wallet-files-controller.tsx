@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo } from "react";
 export function useWalletFilesController(props: any) {
   const { buildAgentPaymentPrompt, createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, displayAgents, duplicateAgentDraft, agents, honeyLedgerEnabled, normalizeMoney, openAgentCreationModal, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, selectedAgent, selectedAgentId, setAgents, setDuplicateAgentDraft, setHoneyLedgerEnabled, setHoneyTreasury, setMaintenanceBusy, setMaintenanceMessage, setMaintenanceReport, setMessagesByAgent, setMoneyClawLoadingEnvName, setMoneyClawStatusByEnvName, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setRuntimeFileRoots, setRuntimeFileStatus, setRuntimeFiles, setRuntimeUsage, setRuntimeUsageLoading, setSelectedAgentId, setSharedVault, setWalletActionsByAgent, setWalletVaultBackupBusy, setWalletVaultBackupMessage, setWalletVaultBackupStatus, setWalletsByAgent, sharedVault, updateAgentProfile, walletActionsByAgent, walletsByAgent } = props;
   const deleteFetchTimeoutMs = 20_000;
+  const duplicateFetchTimeoutMs = 180_000;
   function updateSharedVault(patch: Partial<SharedVaultConfig>) {
     setSharedVault((current) => ({ ...current, ...patch }));
   }
@@ -535,35 +536,109 @@ export function useWalletFilesController(props: any) {
     });
   }
 
-  function duplicateAgent() {
+  function copyDuplicatedChats(sourceId: string, nextId: string) {
+    setMessagesByAgent((current) => {
+      const additions: Record<string, ChatMessage[]> = {};
+      for (const [key, messages] of Object.entries(current)) {
+        if (key === sourceId) {
+          additions[nextId] = messages.map((message) => ({ ...message }));
+        } else if (key.startsWith(`${sourceId}::`)) {
+          additions[`${nextId}${key.slice(sourceId.length)}`] = messages.map((message) => ({ ...message }));
+        }
+      }
+      return Object.keys(additions).length ? { ...current, ...additions } : current;
+    });
+  }
+
+  function attachDuplicatedAgent(source: AgentProfile, next: AgentProfile) {
+    const enriched = {
+      ...next,
+      sessionKey: undefined,
+      agentEnv: duplicateAgentDraft?.copyEnv ? { ...(source.agentEnv ?? {}) } : undefined,
+      memoryForkedFromAgentId: duplicateAgentDraft?.copyMemories ? source.id : undefined,
+    };
+    setAgents((current) => [...current, enriched]);
+    setSelectedAgentId(enriched.id);
+    if (duplicateAgentDraft?.copyChats) {
+      copyDuplicatedChats(source.id, enriched.id);
+    }
+    return enriched;
+  }
+
+  async function createAeonDuplicateGitHubRepo(source: AgentProfile, duplicate: AgentProfile) {
+    try {
+      const response = await fetch("/api/runtimes/aeon/github-repos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          agent: duplicate,
+          name: duplicate.aeonRepoName || duplicate.name || `${source.aeonRepoName || source.name}-copy`,
+          description: `AEON Agent workspace duplicated from ${source.aeonRepo || source.name}.`,
+          visibility: "private",
+          autoIncrement: true,
+        }),
+      });
+      const data = await response.json().catch(() => null) as { ok?: boolean; repo?: string; branch?: string; pushError?: string; error?: string } | null;
+      if (!response.ok || data?.ok === false || !data?.repo) {
+        throw new Error(data?.error || "Could not create the duplicate GitHub repo.");
+      }
+      const patch = { aeonRepo: data.repo, aeonBranch: data.branch || duplicate.aeonBranch || "main", aeonMode: "github" as const };
+      updateAgentProfile(duplicate.id, patch);
+      if (data.pushError) {
+        console.warn(`Created ${data.repo}, but the background AEON push did not complete: ${data.pushError}`);
+      }
+    } catch (error) {
+      console.warn(error instanceof Error ? error.message : "Could not push duplicated AEON agent to GitHub.");
+    }
+  }
+
+  async function duplicateAeonAgent(source: AgentProfile) {
+    const response = await fetch("/api/runtimes/aeon/workspaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "duplicate",
+        agent: source,
+        name: `${source.aeonRepoName || source.name || "AEON"} Copy`,
+      }),
+      signal: AbortSignal.timeout(duplicateFetchTimeoutMs),
+    });
+    const data = await response.json().catch(() => null) as { ok?: boolean; agent?: AgentProfile; error?: string } | null;
+    if (!response.ok || data?.ok === false || !data?.agent) {
+      throw new Error(data?.error || "Could not duplicate the AEON workspace.");
+    }
+    const duplicate = attachDuplicatedAgent(source, {
+      ...source,
+      ...data.agent,
+      name: `${source.name} Copy`,
+      aeonRepo: "",
+      aeonMode: "local",
+    });
+    if (source.aeonRepo?.trim()) {
+      void createAeonDuplicateGitHubRepo(source, duplicate);
+    }
+  }
+
+  async function duplicateAgent() {
     if (!duplicateAgentDraft) return;
     const source = displayAgents.find((agent) => agent.id === duplicateAgentDraft.agentId) ?? selectedAgent;
     if (!source) return;
+    if (source.runtime === "aeon") {
+      try {
+        await duplicateAeonAgent(source);
+        setDuplicateAgentDraft(null);
+      } catch (error) {
+        alert(error instanceof Error ? error.message : "Could not duplicate this AEON agent.");
+      }
+      return;
+    }
     const nextId = `${source.runtime}-${Date.now()}`;
-    const next = {
+    attachDuplicatedAgent(source, {
       ...source,
-      // eslint-disable-next-line react-hooks/purity
       id: nextId,
       name: `${source.name} Copy`,
-      sessionKey: undefined,
-      agentEnv: duplicateAgentDraft.copyEnv ? { ...(source.agentEnv ?? {}) } : undefined,
-      memoryForkedFromAgentId: duplicateAgentDraft.copyMemories ? source.id : undefined,
-    };
-    setAgents((current) => [...current, next]);
-    setSelectedAgentId(next.id);
-    if (duplicateAgentDraft.copyChats) {
-      setMessagesByAgent((current) => {
-        const additions: Record<string, ChatMessage[]> = {};
-        for (const [key, messages] of Object.entries(current)) {
-          if (key === source.id) {
-            additions[nextId] = messages.map((message) => ({ ...message }));
-          } else if (key.startsWith(`${source.id}::`)) {
-            additions[`${nextId}${key.slice(source.id.length)}`] = messages.map((message) => ({ ...message }));
-          }
-        }
-        return Object.keys(additions).length ? { ...current, ...additions } : current;
-      });
-    }
+    });
     setDuplicateAgentDraft(null);
   }
 

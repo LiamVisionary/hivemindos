@@ -1452,11 +1452,16 @@ brain_services_folder="${NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER:-Operations/
 
 mkdir -p \
   "$shared_vault_path/Intake" \
+  "$shared_vault_path/Intake/Sources" \
   "$shared_vault_path/Memory" \
+  "$shared_vault_path/Memory/Book Notes" \
+  "$shared_vault_path/Memory/Decision Journal" \
+  "$shared_vault_path/Memory/Meetings" \
   "$shared_vault_path/Projects" \
   "$shared_vault_path/Operations" \
   "$shared_vault_path/Agents" \
   "$shared_vault_path/Skills" \
+  "$shared_vault_path/Templates/HivemindOS" \
   "$shared_vault_path/$synthesis_folder/raw" \
   "$shared_vault_path/$synthesis_folder/wiki/.drafts" \
   "$shared_vault_path/$synthesis_folder/wiki/sources" \

@@ -96,6 +96,34 @@ function resultHasDashboardVoice(data: AgentPhoneCallResult | null) {
   return Boolean(call?.livekitUrl && call.dashboardToken);
 }
 
+function normalizedAgentName(value?: string) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function hasAeonCallContext(agent: AgentProfile) {
+  return Boolean(agent.aeonRepo || agent.aeonRepoName || agent.aeonLocalPath || agent.localDataDir || agent.a2aUrl);
+}
+
+function findCallProfile(input: {
+  fleetAgent: FleetPanelAgent;
+  machine: FleetPanelMachine;
+  profiles: AgentProfile[];
+}) {
+  const { fleetAgent, machine, profiles } = input;
+  const byExactId = profiles.find((item) => item.id === fleetAgent.id || item.agentId === fleetAgent.id);
+  if (byExactId) return byExactId;
+
+  const fleetName = normalizedAgentName(fleetAgent.name);
+  const byName = profiles.find((item) => normalizedAgentName(item.name) === fleetName || normalizedAgentName(item.agentId) === fleetName);
+  if (byName) return byName;
+
+  if (fleetAgent.runtime.trim().toLowerCase() !== "aeon") return undefined;
+  const contextualAeons = profiles.filter((item) => item.runtime === "aeon" && hasAeonCallContext(item));
+  const onSameMachine = contextualAeons.filter((item) => !item.machineName || item.machineName === machine.name);
+  if (onSameMachine.length === 1) return onSameMachine[0];
+  return contextualAeons.length === 1 ? contextualAeons[0] : undefined;
+}
+
 export function AgentsPanel(props: AgentsPanelProps) {
   const {
     Button,
@@ -150,21 +178,36 @@ export function AgentsPanel(props: AgentsPanelProps) {
     livekit?: AgentCallLiveKit;
   } | null>(null);
 
-  const callAgentOnPhone = useCallback(async (machine: FleetPanelMachine, fleetAgent: FleetPanelAgent): Promise<AgentPhoneCallResult> => {
-    const profile = displayAgents.find((item) => item.id === fleetAgent.id)
-      ?? agents.find((item) => item.id === fleetAgent.id)
-      ?? machineGroups.flatMap((group) => group.agents).find((item) => item.id === fleetAgent.id);
+  const callAgentOnDashboard = useCallback(async (machine: FleetPanelMachine, fleetAgent: FleetPanelAgent): Promise<AgentPhoneCallResult> => {
+    const profile = findCallProfile({
+      fleetAgent,
+      machine,
+      profiles: [
+        ...displayAgents,
+        ...agents,
+        ...machineGroups.flatMap((group) => group.agents),
+      ],
+    });
     const response = await fetch("/api/phone", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action: "ring-agent",
+        action: "dashboard-agent-call",
         agent: {
           id: profile?.id ?? fleetAgent.id,
           name: profile?.name ?? fleetAgent.name,
           runtime: profile?.runtime ?? fleetAgent.runtime,
           role: fleetAgent.role,
           task: fleetAgent.task,
+          skillProfilePrompt: profile?.skillProfilePrompt,
+          preferredSkillSlugs: profile?.preferredSkillSlugs,
+          aeonRepo: profile?.aeonRepo,
+          aeonRepoName: profile?.aeonRepoName,
+          aeonBranch: profile?.aeonBranch,
+          aeonLocalPath: profile?.aeonLocalPath,
+          aeonMode: profile?.aeonMode,
+          a2aUrl: profile?.a2aUrl,
+          localDataDir: profile?.localDataDir,
         },
         machine: {
           id: machine.id,
@@ -185,23 +228,16 @@ export function AgentsPanel(props: AgentsPanelProps) {
   const openAgentPhoneCall = useCallback(async (machine: FleetPanelMachine, fleetAgent: FleetPanelAgent) => {
     setAgentCallSession({ machine, agent: fleetAgent, phase: "ringing" });
     try {
-      const result = await callAgentOnPhone(machine, fleetAgent);
+      const result = await callAgentOnDashboard(machine, fleetAgent);
       const call = result.result?.call;
       const livekit: AgentCallLiveKit | undefined = call?.livekitUrl && call.dashboardToken
         ? { serverUrl: call.livekitUrl, token: call.dashboardToken, ...(call.room ? { room: call.room } : {}) }
         : undefined;
       if (livekit) {
-        const notice = result.error ? "Phone push did not complete, but dashboard audio joined the agent room." : undefined;
-        setAgentCallSession((current) => current?.agent.id === fleetAgent.id ? { ...current, livekit, notice, phase: "answered" } : current);
+        const notice = result.error ? "Dashboard audio joined the agent room, but setup reported a warning." : undefined;
+        setAgentCallSession((current) => current?.agent.id === fleetAgent.id ? { ...current, livekit, notice, phase: "ringing" } : current);
       } else {
-        window.setTimeout(() => {
-          setAgentCallSession((current) => current?.agent.id === fleetAgent.id ? { ...current, phase: "answered" } : current);
-        }, 620);
-      }
-      if (call?.voiceReady === true && !livekit) {
-        window.setTimeout(() => {
-          setAgentCallSession((current) => current?.agent.id === fleetAgent.id ? { ...current, phase: "talking" } : current);
-        }, 3200);
+        throw new Error("The gateway did not return a dashboard audio room.");
       }
     } catch (error) {
       setAgentCallSession({
@@ -211,7 +247,7 @@ export function AgentsPanel(props: AgentsPanelProps) {
         error: error instanceof Error ? error.message : "Could not start the call.",
       });
     }
-  }, [callAgentOnPhone]);
+  }, [callAgentOnDashboard]);
 
   return (
     <>
@@ -263,53 +299,55 @@ export function AgentsPanel(props: AgentsPanelProps) {
               />
             </div>
           ) : null}
-          <FleetView
-            machines={fleetViewData.machines}
-            tasks={fleetViewData.tasks}
-            alerts={fleetViewData.alerts}
-            ticker={fleetViewData.ticker}
-            edges={fleetViewData.edges}
-            loading={fleetDiscoveryLoading}
-            checkedLabel={fleetCheckedAt ? `Scanned ${formatRelativeTime(fleetCheckedAt)}` : "Fleet scan pending"}
-            tailnetLabel={tailscaleStatus}
-            mastheadMode="mobile"
-            onAddAgent={(machine) => {
-              const group = machineGroups.find((item) => item.key === machine.id);
-              if (group) addAgentToMachine(group);
-            }}
-            onAddMachine={openMachineInitModal}
-            updateStatusByMachine={fleetUpdateStatusByMachine}
-            updateDetailByMachine={fleetUpdateDetailByMachine}
-            onUpdateMachine={(machine) => {
-              const group = machineGroups.find((item) => item.key === machine.id);
-              if (group) void runMachineUpdate(group);
-            }}
-            onDismissAlert={(alert) => {
-              if (alert.id.startsWith("notification-")) {
-                markNotificationRead(alert.id.slice("notification-".length));
-              }
-            }}
-            onRenameMachine={renameMachine}
-            onOpenChat={(_, agent) => startAgentChat(agent.id, { fresh: true })}
-            onOpenTaskChat={(_, agent, chat) => startAgentWorkChat(agent.id, chat?.id ?? chat?.task ?? agent.task)}
-            onCallAgent={openAgentPhoneCall}
-            onOpenWallet={(_, agent) => {
-              setSelectedAgentId(agent.id);
-              setActiveView("wallet");
-            }}
-            onEditSettings={(_, agent) => {
-              setSelectedAgentId(agent.id);
-              setAgentRenameDraft(agent.name);
-              setAgentRenameEditing(false);
-              setAgentRuntimeFolderEditing(false);
-              setAgentRuntimeFolderStatus("");
-              setAgentRuntimeAdvancedOpen(false);
-              setAgentSettingsPanel("role");
-              setAgentRoleModalId(agent.id);
-            }}
-            onDuplicate={(_, agent) => requestDuplicateAgent(agent.id)}
-          onRemove={(_, agent, depth, onProgress) => deleteAgent(agent.id, depth ? { aeonDeleteDepth: depth, onProgress } : undefined)}
-        />
+          <div className={`${fleetClass("fleetViewport")} fleetViewportShell`}>
+            <FleetView
+              machines={fleetViewData.machines}
+              tasks={fleetViewData.tasks}
+              alerts={fleetViewData.alerts}
+              ticker={fleetViewData.ticker}
+              edges={fleetViewData.edges}
+              loading={fleetDiscoveryLoading}
+              checkedLabel={fleetCheckedAt ? `Scanned ${formatRelativeTime(fleetCheckedAt)}` : "Fleet scan pending"}
+              tailnetLabel={tailscaleStatus}
+              mastheadMode="mobile"
+              onAddAgent={(machine) => {
+                const group = machineGroups.find((item) => item.key === machine.id);
+                if (group) addAgentToMachine(group);
+              }}
+              onAddMachine={openMachineInitModal}
+              updateStatusByMachine={fleetUpdateStatusByMachine}
+              updateDetailByMachine={fleetUpdateDetailByMachine}
+              onUpdateMachine={(machine) => {
+                const group = machineGroups.find((item) => item.key === machine.id);
+                if (group) void runMachineUpdate(group);
+              }}
+              onDismissAlert={(alert) => {
+                if (alert.id.startsWith("notification-")) {
+                  markNotificationRead(alert.id.slice("notification-".length));
+                }
+              }}
+              onRenameMachine={renameMachine}
+              onOpenChat={(_, agent) => startAgentChat(agent.id, { fresh: true })}
+              onOpenTaskChat={(_, agent, chat) => startAgentWorkChat(agent.id, chat?.id ?? chat?.task ?? agent.task)}
+              onCallAgent={openAgentPhoneCall}
+              onOpenWallet={(_, agent) => {
+                setSelectedAgentId(agent.id);
+                setActiveView("wallet");
+              }}
+              onEditSettings={(_, agent) => {
+                setSelectedAgentId(agent.id);
+                setAgentRenameDraft(agent.name);
+                setAgentRenameEditing(false);
+                setAgentRuntimeFolderEditing(false);
+                setAgentRuntimeFolderStatus("");
+                setAgentRuntimeAdvancedOpen(false);
+                setAgentSettingsPanel("role");
+                setAgentRoleModalId(agent.id);
+              }}
+              onDuplicate={(_, agent) => requestDuplicateAgent(agent.id)}
+              onRemove={(_, agent, depth, onProgress) => deleteAgent(agent.id, depth ? { aeonDeleteDepth: depth, onProgress } : undefined)}
+            />
+          </div>
           {agentCallSession ? (
             <AgentCallModal
               machine={agentCallSession.machine}
@@ -319,13 +357,11 @@ export function AgentsPanel(props: AgentsPanelProps) {
               notice={agentCallSession.notice}
               livekit={agentCallSession.livekit}
               onVoiceConnected={() => {
-                window.setTimeout(() => {
-                  setAgentCallSession((current) => (
-                    current?.agent.id === agentCallSession.agent.id && current.phase === "answered"
-                      ? { ...current, phase: "talking" }
-                      : current
-                  ));
-                }, 900);
+                setAgentCallSession((current) => (
+                  current?.agent.id === agentCallSession.agent.id && current.phase === "ringing"
+                    ? { ...current, phase: "talking" }
+                    : current
+                ));
               }}
               onClose={() => setAgentCallSession(null)}
             />

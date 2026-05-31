@@ -3,6 +3,190 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-01 01:20:43 WITA - Further Slim Tauri Native Resources
+
+- Status: Uncommitted
+- Areas changed: Tauri packaged resource pruning, copied PNG asset optimization, changelog
+- Summary: Remove the now-redundant materialized `.pnpm` backing store from packaged native `node_modules` after symlink materialization, and losslessly optimize copied native PNG assets with `oxipng` when available so the native bundle shrinks without changing source assets or browser behavior.
+- Verification: Temporarily removed `.pnpm` from generated native resources and confirmed the packaged Next server still served `/` with HTTP 200; `node --check scripts/tauri-build.mjs && pnpm exec eslint scripts/tauri-build.mjs scripts/tauri-next-dev.mjs --max-warnings=999`; `pnpm tauri:prepare`; `oxipng` processed 32 copied PNG files and saved 600 KiB; generated native resources shrank from `163M` to `143M`; direct packaged-server smoke served `/`, `/animations/Honey%20bee.lottie`, and `/icons/generated/honey-pot.png` with HTTP 200 on throwaway port `5099`; `pnpm tauri:build`; final bundle sizes were `148M` for `HivemindOS.app` and `49M` for `HivemindOS_0.1.0_aarch64.dmg`; bundled app check confirmed the `.pnpm` store and sharp/libvips packages are absent; launched the rebuilt `.app` binary and confirmed it stayed alive after the 12-second startup smoke window.
+- Intended commit message: `Further slim Tauri native resources`
+
+## 2026-06-01 01:16:14 WITA - Move App Signatures Into Hivemind
+
+- Status: Uncommitted
+- Areas changed: Fleet apps API, local telemetry collector app discovery, MiroShark hivenet discovery, AEON/MiroShark E2E harness, assimilation logs, changelog
+- Summary: Replace MiroShark-specific app discovery fallbacks with a Hivemind-owned service signature registry that probes collector `/app-proxy/<port>/health` and labels recognized API services without requiring the third-party app to expose a Hivemind-shaped root page or any repo changes.
+- Verification: `pnpm exec eslint src/app/api/fleet/apps/route.ts src/lib/services/miroshark/hivenet-discovery.ts --max-warnings=0`; `node --check scripts/agent-telemetry-collector.mjs && node --check scripts/test-aeon-miroshark-e2e.mjs`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `curl -sS --max-time 45 'http://127.0.0.1:5020/api/fleet/apps?refresh=1'` returned MiroShark as `serviceKind:"miroshark"` with `interactive:false`, `apiBaseUrl:"http://100.84.93.114:8787/app-proxy/5101"`, and health under the collector proxy; `curl -sS --max-time 45 'http://127.0.0.1:5020/api/miroshark/status?refresh=1'` returned `phase:"connected"` through the same hivenet app; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- src/app/api/fleet/apps/route.ts scripts/agent-telemetry-collector.mjs src/lib/services/miroshark/hivenet-discovery.ts scripts/test-aeon-miroshark-e2e.mjs CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`.
+- Intended commit message: `Move app signatures into Hivemind`
+
+## 2026-06-01 01:07:13 WITA - Generalize Fleet App Completion Notifications
+
+- Status: Uncommitted
+- Areas changed: Fleet active app completion watcher, Fleet graph notification queue, assimilation logs, changelog
+- Summary: Replace the MiroShark-only completion watcher with a generic connected-app badge snapshot diff so any real active app badge, such as MiroShark or Zimage, can show its own icon/name notification after the badge disappears while Fleet is open.
+- Verification: `pnpm exec eslint src/components/fleet/FleetView.tsx src/components/fleet/machine-cluster.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl src/components/fleet/FleetView.tsx src/components/fleet/fleet-tokens.module.css src/components/fleet/machine-cluster.tsx`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `rg -n "MiroShark|miroshark|activeMiro|Miro" src/components/fleet/FleetView.tsx src/components/fleet/fleet-tokens.module.css` returned no Fleet-view app-specific watcher strings; in-app browser reload on `http://127.0.0.1:5020/?view=agents` sampled the idle state and observed no active app badges and no completion notification without a real connected-app transition.
+- Intended commit message: `Generalize fleet app completion notifications`
+
+## 2026-06-01 00:54:50 WITA - Seed AI-Ready Shared Brain Foundation
+
+- Status: Uncommitted
+- Areas changed: Shared Obsidian vault initialization, foundation workflow seeder, setup/uninstall mirrors, runtime shared-vault context helper, Brain docs, assimilation logs
+- Summary: Seed a stronger first-run shared brain with an AI-ready vault contract, durable note templates, optional Obsidian CLI/plugin-pack service notes, additional disabled foundation workflows for meetings, research, vault health, decisions, arguments, book notes, and feedback-loop capture, plus runtime guidance that keeps raw intake, generated synthesis, and durable memory separated.
+- Verification: `node --check scripts/seed-vault-foundation.mjs`; `node scripts/test-gbrain-foundation.mjs`; temp-vault seeding smoke test confirmed `Operations/AI-Ready Vault Contract.md`, `Templates/HivemindOS/meeting.md`, Obsidian CLI/plugin-pack service notes, and 13 foundation schedule files; `pnpm exec eslint scripts/seed-vault-foundation.mjs scripts/test-gbrain-foundation.mjs src/app/api/chat/agent-runtime/route.ts src/lib/services/chat/shared-vault-context.ts src/lib/types/agent-runtime.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- scripts/seed-vault-foundation.mjs setup.sh setup.ps1 uninstall.sh uninstall.ps1 src/app/api/chat/agent-runtime/route.ts src/lib/services/chat/shared-vault-context.ts src/lib/types/agent-runtime.ts README.md docs/features/brain-vault-and-skills.md scripts/test-gbrain-foundation.mjs CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl ASSIMILATION.json`; `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files including `src/app/fleet.module.css`, `scripts/agent-telemetry-collector.mjs`, generated `.next-tauri`/`src-tauri` copies, and legacy `src/app/api/chat/agent-runtime/route.ts` (reduced to 1754 lines by extracting the shared-vault context helper, but still over the 1500-line threshold).
+- Intended commit message: `Seed AI-ready shared brain foundation`
+
+## 2026-06-01 00:50:16 WITA - Replace MiroShark Demo With Real Completion Toast
+
+- Status: Uncommitted
+- Areas changed: Fleet active app badge lifecycle, Fleet graph notification toast, assimilation logs, changelog
+- Summary: Remove the forced MiroShark demo badge/toast path so badges only come from real active app matching, then show the pill notification only when a real visible MiroShark badge transitions from active to finished while the Fleet view is mounted.
+- Verification: `pnpm exec eslint src/components/fleet/FleetView.tsx src/components/fleet/machine-cluster.tsx --max-warnings=999`; `pnpm exec eslint src/components/fleet/fleet-tokens.module.css src/components/fleet/FleetView.tsx --max-warnings=999` reported only the expected CSS-file ignored warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl src/components/fleet/FleetView.tsx src/components/fleet/fleet-tokens.module.css src/components/fleet/machine-cluster.tsx`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; in-app browser reload on `http://127.0.0.1:5020/?view=agents` sampled 4 seconds after open and observed no `MiroShark is active` badge and no Fleet app notification without a real active MiroShark task; `curl -sS --max-time 20 'http://127.0.0.1:5020/api/fleet/apps?refresh=1'` confirmed the real hosted MiroShark app is online, so the absence of a badge is coming from the active-task gate rather than demo mode.
+- Intended commit message: `Replace MiroShark demo with real completion toast`
+
+## 2026-05-31 22:53:57 WITA - Keep Fleet App Badge Visible On Hover
+
+- Status: Uncommitted
+- Areas changed: Fleet graph app badge layering, MiroShark demo badge target, changelog
+- Summary: Move active app badges inside the hovered hex tile stack, keep the agent icon/name layer above the badge, and restore the demo target to the exact `Aeon on This Mac` cell so the forced MiroShark badge does not appear on every Aeon-like agent.
+- Verification: `pnpm exec eslint src/components/fleet/FleetView.tsx src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- CHANGELOG.md src/components/fleet/FleetView.tsx src/components/fleet/machine-cluster.tsx src/components/fleet/fleet-tokens.module.css`; in-app browser reload on `http://127.0.0.1:5020/?view=agents` sampled the demo window and observed exactly one `MiroShark is active` badge, on `Aeon on This Mac`, with the badge inside the hex stack (`badgeZ: 1`) below the agent icon/name layer (`contentZ: 2`).
+- Intended commit message: `Keep fleet app badge visible on hover`
+
+## 2026-05-31 22:48:57 WITA - Fix Demo Completion Copy
+
+- Status: Uncommitted
+- Areas changed: AEON repo deliverables badge layering, Fleet MiroShark demo snackbar copy, changelog
+- Summary: Keep the AEON repo badge as the `x new deliverables` count while rendering it above the hovered cell, and move the `Simulation completed!` copy to the MiroShark demo snackbar.
+- Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/components/fleet/FleetView.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/components/fleet/FleetView.tsx CHANGELOG.md`; browser verification on `http://127.0.0.1:5020/?view=aeon` confirmed the badge text is `6 new deliverables`, the AEON page no longer shows `Simulation completed!`, and the hovered cell z-index stays below the badge (`20` vs `40`); `rg -n "Demo badge dismissed|Simulation completed!|new deliverable" src/components/fleet/FleetView.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx` confirmed the Fleet demo snackbar owns `Simulation completed!` while the AEON badge owns the deliverables count.
+- Intended commit message: `Fix demo completion copy`
+
+## 2026-05-31 22:48:39 WITA - Make Voice Calls Answer Directly
+
+- Status: Uncommitted
+- Areas changed: Claw Code Mobile voice worker prompt, installed Claw voice worker runtime, AEON call briefing
+- Summary: Make the AEON call greeting first-turn-only, treat the call briefing as private context instead of a script to read aloud, and remove the automatic AEON status-update instruction so follow-up questions like "How did my most recent MiroShark simulation go?" get a direct answer without reintroducing the agent or reciting setup/status preambles.
+- Verification: Restarted `com.hivemindos.claw-voice-worker` to PID 94427 and confirmed its status endpoint returns `OK`; source and installed worker files both contain the first-turn-only/private-context prompt; `pnpm exec eslint src/lib/services/phone/call-gateway.ts`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/lib/services/phone/call-gateway.ts CHANGELOG.md`; `git -C /Users/liam/Documents/code/projects/claw-code-mobile-private diff --check -- backend/src/voice/callAgentWorker.ts`.
+- Intended commit message: `Make voice calls answer directly`
+
+## 2026-05-31 22:41:13 WITA - Stabilize AEON Call Identity
+
+- Status: Uncommitted
+- Areas changed: Fleet AEON call profile matching, AEON call MiroShark context filtering, installed Claw voice worker runtime
+- Summary: Restarted the Claw LiveKit voice worker so it loads the patched AEON greeting parser, matched thin Fleet collector AEON rows to richer dashboard AEON profiles before starting calls, and let local AEON calls include recent MiroShark archive context even when the collector row lacks an `aeonRepo` field.
+- Verification: `launchctl kickstart -k gui/$(id -u)/com.hivemindos.claw-voice-worker` restarted the worker from PID 45514 to PID 50833 on port 8385; installed worker file now contains `openingLineForBriefing` and `eagerness: "high"`; Fleet discovery confirmed the collector AEON row only supplies `runtime: "aeon"` and `agentId: "aeon-on-this-mac"` with no AEON repo/path fields; `pnpm exec eslint src/features/dashboard/views/AgentsPanel.tsx src/lib/services/phone/call-gateway.ts`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
+- Intended commit message: `Stabilize AEON call identity`
+
+## 2026-05-31 22:39:14 WITA - Add MiroShark Badge Demo Toast
+
+- Status: Uncommitted
+- Areas changed: Fleet view demo badge timing, Fleet graph snackbar styling, changelog
+- Summary: On Fleet view open, briefly inject a demo MiroShark app badge into the `Aeon on This Mac` agent cell for 2 seconds, then dismiss it and show a pill-shaped MiroShark snackbar at the top of the Fleet graph container for 3 seconds with a circular left-aligned icon, text on the right, and entrance/exit animation.
+- Verification: `pnpm exec eslint src/components/fleet/FleetView.tsx src/components/fleet/fleet-data.ts src/components/fleet/active-apps.ts --max-warnings=999`; `pnpm exec eslint src/components/fleet/fleet-tokens.module.css src/components/fleet/FleetView.tsx --max-warnings=999` reported only the existing CSS-file ignored warning; `git diff --check -- CHANGELOG.md src/components/fleet/FleetView.tsx src/components/fleet/fleet-tokens.module.css src/components/fleet/fleet-data.ts src/components/fleet/active-apps.ts src/features/dashboard/hooks/use-dashboard-derived-state.tsx`; in-app browser reload on `http://127.0.0.1:5020/?view=agents` sampled the demo sequence and observed `Aeon on This Mac · MiroShark active`, no Queen Bee MiroShark title, the badge clearing after roughly 2 seconds, the snackbar inside the graph frame at `stageRect.y + 14px`, and the snackbar dismissing after roughly 3 seconds.
+- Intended commit message: `Add MiroShark badge demo toast`
+
+## 2026-05-31 22:24:07 WITA - Add MiroShark Artifacts To AEON Calls
+
+- Status: Uncommitted
+- Areas changed: AEON phone/dashboard call briefing context, changelog
+- Summary: Include recent repo-matched MiroShark deliverables from the shared Obsidian vault in AEON call briefings so the voice agent can answer questions about runs that are already visible in the AEON repo deliverables view. The context now includes the simulation id, saved time, status, visible-post count, scenario, AEON verdict, next action, post excerpts, and archive folder for the latest matching runs.
+- Verification: Confirmed the latest shared-vault MiroShark artifact `sim_22ae1e1dc532` has `aeon_repository: aaronjmars/aeon`, 3 visible posts, the shared-vault routing scenario, an AEON verdict, and post excerpts; `pnpm exec eslint src/lib/services/phone/call-gateway.ts`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
+- Intended commit message: `Add MiroShark artifacts to AEON calls`
+
+## 2026-05-31 22:17:58 WITA - Route Dashboard Agent Calls In-App
+
+- Status: Uncommitted
+- Areas changed: Fleet dashboard call action, phone gateway helper/API, agent call modal readiness styling, Claw Code Mobile voice worker
+- Summary: Start Fleet agent calls through the gateway's in-app LiveKit endpoint instead of the phone-ring endpoint so connecting from the Mac does not also VoIP-ring the iPhone. Keep the ringing UI visible until dashboard audio has an active remote track, raise the live caption bubble above the modal chrome, honor AEON `[greeting]` briefings in the call worker, and make realtime turn detection more eager to reduce perceived response delay.
+- Verification: `pnpm exec eslint src/lib/services/phone/call-gateway.ts src/app/api/phone/route.ts src/features/dashboard/views/AgentsPanel.tsx src/components/fleet/agent-call-modal.tsx src/components/fleet/fleet-tokens.module.css` passed for TS/TSX files with the expected CSS ignored warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; endpoint search confirmed Fleet dashboard calls post `dashboard-agent-call` while Calls settings test calls still post `ring-agent`; `git diff --check -- src/lib/services/phone/call-gateway.ts src/app/api/phone/route.ts src/features/dashboard/views/AgentsPanel.tsx src/components/fleet/agent-call-modal.tsx src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; `git -C /Users/liam/Documents/code/projects/claw-code-mobile-private diff --check -- backend/src/voice/callAgentWorker.ts`; `npm run build` in `claw-code-mobile-private/backend` remains blocked by pre-existing NodeNext explicit-extension, missing type, and implicit-any TypeScript errors unrelated to the call worker change.
+- Intended commit message: `Route dashboard agent calls in-app`
+
+## 2026-05-31 22:13:21 WITA - Fix AEON Agent Duplicate
+
+- Status: Uncommitted
+- Areas changed: AEON workspace API, dashboard duplicate-agent controller, changelog
+- Summary: Make the roster duplicate action create a real local AEON workspace copy instead of only cloning the browser profile. GitHub-backed AEON duplicates now start from the copied local workspace, create a new private GitHub repo in the background, push the duplicate there, and patch the duplicated agent to the new repo when it completes.
+- Verification: `curl -sS --max-time 30 -X POST http://127.0.0.1:5020/api/runtimes/aeon/workspaces` against a throwaway `/tmp` AEON workspace with `action:"duplicate"` returned a new local AEON agent rooted at the copied folder and verified copied `aeon.yml`/`skills.json`; `pnpm exec eslint src/app/api/runtimes/aeon/workspaces/route.ts src/features/dashboard/hooks/use-wallet-files-controller.tsx --max-warnings=999` passed with pre-existing warnings in `use-wallet-files-controller.tsx`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/app/api/runtimes/aeon/workspaces/route.ts src/features/dashboard/hooks/use-wallet-files-controller.tsx CHANGELOG.md`.
+- Intended commit message: `Fix AEON agent duplicate`
+
+## 2026-05-31 22:09:13 WITA - Feed AEON Context Into Calls
+
+- Status: Uncommitted
+- Areas changed: Phone call gateway briefing builder, Fleet agent call payload, Calls settings test-call payload, assimilation logs
+- Summary: Enrich AEON phone calls so the realtime caller assumes the called agent is AEON rather than a generic HivemindOS agent. AEON calls now start with the required greeting `I'm Aeon, variation {agentName}.`, include repository/mode/branch/local workspace/A2A context, summarize bounded local AEON context from `CLAUDE.md`, `memory/MEMORY.md`, `aeon.yml`, `skills.json`, and optional `soul/` files, and receive AEON profile fields from both Fleet call buttons and the Calls tab test-call action.
+- Verification: Audited selected `aaronjmars/aeon` source paths with `audit_candidate_repo.py --path README.md --path dashboard/lib/config.ts --path dashboard/lib/types.ts --path aeon.yml --path a2a-server/src/index.ts` (no high findings; one reviewed medium child-process import in the A2A server); isolated TypeScript compile of `src/lib/services/phone/call-gateway.ts` to `/tmp/hive-call-test` confirmed an AEON payload contains the exact greeting, AEON config, AEON skill catalog context, `pr-review`, and AEON memory excerpt without ringing the phone; `pnpm exec eslint src/lib/services/phone/call-gateway.ts src/features/dashboard/views/AgentsPanel.tsx src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx src/app/api/phone/route.ts src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/dashboard-storage.ts src/features/dashboard/hooks/use-agent-controller.tsx` passed with existing warnings in dashboard storage, agent controller, and AgentSettingsModal; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- src/lib/services/phone/call-gateway.ts src/features/dashboard/views/AgentsPanel.tsx src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`.
+- Intended commit message: `Feed AEON context into calls`
+
+## 2026-05-31 22:08:16 WITA - Polish AEON Deliverable Cards
+
+- Status: Uncommitted
+- Areas changed: AEON deliverables card presentation, changelog
+- Summary: Replace raw path/JSON-heavy deliverable card bodies with human titles, purpose summaries, readable excerpts only when useful, compact artifact facts, and an enabled Chat button for demo visibility while leaving the actual chat handoff unwired.
+- Verification: `pnpm exec eslint src/features/dashboard/views/AeonDeliverablesPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonDeliverablesPanel.tsx CHANGELOG.md`; browser verification on `http://127.0.0.1:5020/?view=aeon` showed 6 polished deliverable cards with enabled Chat buttons, no raw vault paths, no raw JSON blobs, and no posts-table residue (`/tmp/aeon-deliverables-polished-cards.png`).
+- Intended commit message: `Polish AEON deliverable cards`
+
+## 2026-05-31 22:01:38 WITA - Gate Fleet App Badges To Active Tasks
+
+- Status: Uncommitted
+- Areas changed: Fleet active app badge matching, changelog
+- Summary: Restore the MiroShark swarm/X-post simulation alias, but apply app badge matching only to tasks whose status is active and whose raw `updatedAt` timestamp is fresh, while ignoring historical recent chat/task entries so hours- or days-old completed work cannot badge an agent even when its title is still displayed.
+- Verification: `pnpm exec eslint src/components/fleet/active-apps.ts src/components/fleet/fleet-data.ts --max-warnings=999`; `pnpm exec eslint src/features/dashboard/hooks/use-dashboard-derived-state.tsx --max-warnings=999` passed with existing hook dependency warnings only; `git diff --check -- CHANGELOG.md src/components/fleet/active-apps.ts src/components/fleet/fleet-data.ts src/features/dashboard/hooks/use-dashboard-derived-state.tsx`; in-app browser reload on `http://127.0.0.1:5020/?view=agents` showed `badgeCount: 0` while stale MiroShark-related rows such as `Hermes :: Bee Swarm Takeover X Posts`, Queen Bee, and Henry Matisse remained visible, confirming stale swarm/X-post work no longer badges agents.
+- Intended commit message: `Gate fleet app badges to active tasks`
+
+## 2026-05-31 21:59:26 WITA - Refine AEON Deliverables Actions
+
+- Status: Uncommitted
+- Areas changed: AEON repo deliverables badge, AEON deliverables card actions, changelog
+- Summary: Move the `x new deliverables` badge to the top outside edge of each AEON repo cell and add a disabled Chat action slot to every deliverable card so the future agent-chat-with-artifact handoff can be wired after UI testing.
+- Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/AeonDeliverablesPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/AeonDeliverablesPanel.tsx CHANGELOG.md`; browser verification on `http://127.0.0.1:5020/?view=aeon` showed the `6 new deliverables` badge outside the top edge of the AEON repo cell and 6 disabled card-level Chat buttons in the Deliverables view (`/tmp/aeon-deliverables-refined.png`).
+- Intended commit message: `Refine AEON deliverables actions`
+
+## 2026-05-31 21:57:36 WITA - Remove Broad MiroShark Badge Alias
+
+- Status: Uncommitted
+- Areas changed: Fleet active app badge matching, changelog
+- Summary: Remove the broad swarm/simulation/X-post alias from MiroShark badge matching so agents are only badged when their active work explicitly names the discovered app or collector source.
+- Verification: `pnpm exec eslint src/components/fleet/active-apps.ts --max-warnings=999`; `git diff --check -- CHANGELOG.md src/components/fleet/active-apps.ts`; in-app browser reload on `http://127.0.0.1:5020/?view=agents` showed `badgeCount: 0` while Queen Bee, Henry Matisse, and Aeon cells remained visible and the active dispatch task was `Hermes :: Bee Swarm Takeover X Posts`, confirming the broad MiroShark alias no longer badges adjacent swarm/X-post work.
+- Intended commit message: `Remove broad MiroShark badge alias`
+
+## 2026-05-31 21:56:59 WITA - Add AEON Deliverables View
+
+- Status: Uncommitted
+- Areas changed: AEON deliverables API, AEON repo/detail UI, Fleet apps API type narrowing, changelog
+- Summary: Discover AEON deliverables from the shared Obsidian vault and local AEON output folders, show `x new deliverables` badges over AEON repo cells, add a Deliverables tab before Settings with a count badge, and render artifact cards with Open, Finder, Download, and Download to Machine actions backed by a machine selector modal.
+- Verification: `curl -sS --max-time 20 -X POST 'http://127.0.0.1:5020/api/runtimes/aeon/deliverables'` returned 66 total deliverables and 6 recent vault artifacts for `aaronjmars/aeon`, including the AEON verdict and MiroShark run/post artifacts; browser verification on `http://127.0.0.1:5020/?view=aeon` showed `6 NEW DELIVERABLES` on the AEON repo card, the Deliverables tab with a `6` badge before Settings, artifact cards, and the transfer modal (`/tmp/aeon-deliverables-fleet-seeded.png`, `/tmp/aeon-deliverables-detail-seeded.png`, `/tmp/aeon-deliverables-transfer-modal.png`); `pnpm exec eslint src/app/api/fleet/apps/route.ts src/app/api/runtimes/aeon/deliverables/route.ts src/features/dashboard/views/AeonDeliverablesPanel.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
+- Intended commit message: `Add AEON deliverables UI`
+
+## 2026-05-31 21:54:40 WITA - Adjust Fleet App Badge Layering
+
+- Status: Uncommitted
+- Areas changed: Fleet graph badge styling, changelog
+- Summary: Move the active app badge slightly higher and farther right in agent hex cells, and place it below the agent icon/text layer while keeping it above the hex cell surface.
+- Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `pnpm exec eslint src/components/fleet/fleet-tokens.module.css src/components/fleet/machine-cluster.tsx --max-warnings=999` reported only the existing CSS-file ignored warning; `git diff --check -- src/components/fleet/fleet-tokens.module.css`.
+- Intended commit message: `Adjust fleet app badge layering`
+
+## 2026-05-31 21:46:34 WITA - Stabilize Link Collector Discovery
+
+- Status: Uncommitted
+- Areas changed: Fleet discovery API, Fleet network issue modal, changelog
+- Summary: Treat Hivemind Link's private collector-port fallback as normal by showing remote health-check commands that read `~/.hivemindos/collector.env` instead of assuming localhost port 8787, and increase the foreground collector probe timeout so healthy remote bridges are less likely to flicker back to `not-installed` during normal roster refreshes.
+- Verification: `pnpm exec eslint src/app/api/fleet/discover/route.ts src/features/dashboard/dashboard-display-helpers.tsx --max-warnings=999` passed with one existing unused helper warning in Fleet discovery; `git diff --check -- src/app/api/fleet/discover/route.ts src/features/dashboard/dashboard-display-helpers.tsx CHANGELOG.md`; repeated fresh Fleet discovery showed This Mac and `hivemindos-liams-macbook-pro-1` ready while `hivemindos-ubuntu-8gb-hel1-2` remained unreachable; direct Tailnet checks confirmed `100.84.93.114:8787` returns health/agents, while `tailscale ping 100.96.125.3` and ports 8787-8793 on `100.96.125.3` time out from this dashboard.
+- Intended commit message: `Stabilize Link collector discovery`
+
+## 2026-05-31 21:41:19 WITA - Verify Live MiroShark Fleet Badge
+
+- Status: Uncommitted
+- Areas changed: Fleet graph app badge matching, Fleet apps API MiroShark discovery fallback, changelog
+- Summary: Let active task status drive app badge matching even when the hex has not been promoted to the working tone yet, add a narrow MiroShark simulation/swarm surface matcher, and make the Fleet apps API recover live MiroShark through discovered Tailnet peer IPs plus direct `/app-proxy/5101/health` probes when local Hivemind Link or collector app scans are transient.
+- Verification: `curl -sS --max-time 45 'http://127.0.0.1:5020/api/fleet/apps?refresh=1'` returned live remote `MiroShark` with `/icons/miroshark.png` and `http://100.84.93.114:8787/app-proxy/5101/health`; `curl -sS --max-time 10 'http://100.84.93.114:8787/app-proxy/5101/health'` returned `{"service":"MiroShark Backend","status":"ok"}`; Playwright loaded `http://127.0.0.1:5020/?view=agents` in the in-app browser and confirmed the current visible active task is now a screenshot-analysis Hermes task, so no live MiroShark badge should be shown in that exact state; earlier isolated browser verification with an active Aeon task titled `Running MiroShark hivenet rehearsal` observed `badgeCount: 1`, `badgeHasImage: 1`, and title `Aeon on This Mac · MiroShark active`; `pnpm exec eslint src/app/api/fleet/apps/route.ts src/components/fleet/active-apps.ts src/components/fleet/FleetView.tsx src/components/fleet/machine-cluster.tsx src/components/fleet/fleet-data.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md src/app/api/fleet/apps/route.ts src/components/fleet/active-apps.ts src/components/fleet/FleetView.tsx src/components/fleet/machine-cluster.tsx src/components/fleet/fleet-data.ts src/components/fleet/fleet-tokens.module.css`; `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files including `src/app/fleet.module.css`, `scripts/agent-telemetry-collector.mjs`, and generated `.next-tauri`/`src-tauri` copies.
+- Intended commit message: `Verify live MiroShark fleet badge`
+
+## 2026-05-31 21:38:44 WITA - Complete AEON MiroShark E2E
+
+- Status: Uncommitted
+- Areas changed: AEON MiroShark E2E harness, Fleet apps API, AEON MiroShark hive rehearsal workflow, shared vault deliverables
+- Summary: Make the AEON/MiroShark E2E discover remote MiroShark through either the direct tailnet collector or Hivemind Link, propagate forced app refreshes to collector `/apps` reads, protect the apps cache from stale background scans, preserve healthy cached MiroShark service cards, and let existing running MiroShark simulations snapshot/archive instead of hanging on another forced start/prepare cycle.
+- Verification: `HIVE_AEON_MIROSHARK_E2E_PEERS=100.84.93.114 HIVE_AEON_MIROSHARK_E2E_SIMULATION_ID=sim_22ae1e1dc532 node scripts/test-aeon-miroshark-e2e.mjs` passed, cloning AEON through the in-app workspace route and writing `/Users/liam/Documents/Obsidian/hivemindos-vault/Projects/HivemindOS/MiroShark Simulations/runs/2026/2026-05-31/sim_22ae1e1dc532/run.md` plus `/Users/liam/Documents/Obsidian/hivemindos-vault/Projects/HivemindOS/MiroShark Simulations/runs/2026/2026-05-31/sim_22ae1e1dc532/aeon-rehearsal.md`; the verdict file reports `status: complete` and 3 visible posts captured; `curl -sS --max-time 45 'http://127.0.0.1:5020/api/fleet/apps?refresh=1'` returned remote MiroShark from `http://100.84.93.114:8787/app-proxy/5101`; `node --check scripts/test-aeon-miroshark-e2e.mjs`; `pnpm exec eslint scripts/test-aeon-miroshark-e2e.mjs src/app/api/fleet/apps/route.ts src/app/api/miroshark/status/route.ts src/lib/services/miroshark/hivenet-discovery.ts src/lib/services/miroshark/companion-client.ts src/lib/services/miroshark/hive-rehearsal.ts src/app/api/runtimes/aeon/hive/miroshark/route.ts src/app/api/runtimes/aeon/workspaces/route.ts src/features/fleet/fleet-identity.ts --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
+- Intended commit message: `Complete AEON MiroShark E2E`
+
 ## 2026-05-31 21:13:12 WITA - Clarify Remote Bridge Repair Scope
 
 - Status: Pushed

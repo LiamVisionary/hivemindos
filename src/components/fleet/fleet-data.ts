@@ -36,6 +36,7 @@ export interface FleetAgent {
   balance: "healthy" | "low_compute" | "dead" | "off";
   task: string;
   currentTaskId?: string;
+  currentTaskUpdatedAt?: number;
   activeApp?: FleetActiveApp;
   activityStatus?: FleetAgentActivityStatus;
   since: string;      // formatted e.g. "2m", "5h"

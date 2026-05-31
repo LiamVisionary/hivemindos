@@ -237,7 +237,7 @@ export const DEFAULT_SHARED_VAULT: SharedVaultConfig = {
     skillpackLocation: process.env.NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION ?? "Skills/GBrain",
   },
   controlRoomPath: process.env.NEXT_PUBLIC_HERMES_CONTROL_ROOM_PATH ?? "~/agent-control-room",
-  instructions: "Use this vault as the shared memory and handoff space for all local agents. Read AGENTS.md before durable edits. Treat GBrain as the optional retrieval/graph brain service, Synthesis as the reviewed synthesis layer, and Operations as machine-readable HivemindOS state.",
+  instructions: "Use this vault as the shared memory and handoff space for all local agents. Read AGENTS.md and Operations/AI-Ready Vault Contract.md before durable edits. Treat GBrain as the optional retrieval/graph brain service, Synthesis as the reviewed synthesis layer, and Operations as machine-readable HivemindOS state.",
 };
 
 export const KNOWN_AGENT_RUNTIMES: KnownAgentRuntime[] = ["openclaw", "hermes", "aeon", "openai-compatible"];

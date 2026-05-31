@@ -363,10 +363,10 @@ export function AgentCallModal({ agent, machine, phase, error, notice, livekit, 
   const ringingMessage = ringingStep % 2 === 0 ? `Calling ${agent.name}` : "Creating agent room";
 
   React.useEffect(() => {
-    if (dashboardVoice.status !== "connected" || voiceConnectedCalled.current) return;
+    if (dashboardVoice.status !== "connected" || !dashboardVoice.remoteAudioActive || voiceConnectedCalled.current) return;
     voiceConnectedCalled.current = true;
     onVoiceConnected?.();
-  }, [dashboardVoice.status, onVoiceConnected]);
+  }, [dashboardVoice.remoteAudioActive, dashboardVoice.status, onVoiceConnected]);
 
   React.useEffect(() => {
     if (!isRinging) return undefined;

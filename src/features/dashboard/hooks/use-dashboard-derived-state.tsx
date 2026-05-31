@@ -527,6 +527,7 @@ export function useDashboardDerivedState(props: any) {
               ? cleanActivityTitle(primaryWork.title)
               : snapshot?.summary || "Idle · waiting for the next handoff",
             currentTaskId: primaryWork?.id,
+            currentTaskUpdatedAt: primaryWork?.updatedAt,
             activityStatus,
             since: primaryWork?.updatedAt ? formatRelativeTime(primaryWork.updatedAt) : snapshot?.checkedAt ? formatRelativeTime(snapshot.checkedAt) : "—",
             recentChats,

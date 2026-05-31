@@ -41,12 +41,14 @@ import fleetStyles from "@/components/fleet/fleet-tokens.module.css";
 import { SchedulerView, type SchedulerJob, type SchedulerRunState } from "@/components/scheduler";
 import { Button } from "@/components/ui/button";
 import { CreateFolderRepoModal, type CreateFolderRepoValue } from "@/features/dashboard/views/shared/CreateFolderRepoModal";
+import { AeonDeliverablesPanel } from "@/features/dashboard/views/AeonDeliverablesPanel";
 import { InlineRenameControl } from "@/features/dashboard/views/shared/InlineRenameControl";
 import type { AgentSettingsPanel } from "@/features/dashboard/agent-settings-types";
 import type { BrainSkillInventory, BrainSkillSummary, DashboardView, LinkedDirectory, MachineGroup } from "@/features/dashboard/dashboard-types";
 import { groupSkills, runtimeSkillToGroupable, type GroupableSkill } from "@/features/dashboard/skill-grouping";
 import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { KanbanMachineTarget } from "@/lib/types/kanban";
+import type { AeonDeliverable } from "@/app/api/runtimes/aeon/deliverables/route";
 import type { RuntimeAnalytics, RuntimeMemorySnapshot, RuntimeRepoSyncStatus, RuntimeRun, RuntimeRunLog, RuntimeSchedule, RuntimeSecretStatus, RuntimeSkill } from "@/lib/services/runtime-adapters/types";
 
 type AeonStatus = {
@@ -221,7 +223,7 @@ function readCachedGithubReady() {
 }
 
 type AeonFleetHexTone = "default" | "active" | "honey";
-type AeonDetailView = "overview" | "work" | "activity" | "settings";
+type AeonDetailView = "overview" | "work" | "activity" | "deliverables" | "settings";
 
 const AEON_FLEET_HEX_W = 292;
 const AEON_FLEET_HEX_H = 252;
@@ -612,6 +614,12 @@ function aeonMachineCollectorUrl(machine: MachineGroup) {
   return machine.collectorUrl;
 }
 
+function isNewAeonDeliverable(deliverable: AeonDeliverable) {
+  const updatedAt = Date.parse(deliverable.updatedAt);
+  if (!Number.isFinite(updatedAt)) return false;
+  return Date.now() - updatedAt < 7 * 24 * 60 * 60 * 1000;
+}
+
 export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId, setAgents, sharedVault, machineGroups = [], chooseDirectoryForMachine, setActiveView, setSelectedAgentId, setAgentRoleModalId, setAgentSettingsPanel, updateAgentProfile, schedulerJobs = [], schedulerRunStates = {}, onSchedulerOpen, onSchedulerToggleJob, onSchedulerRunJob, onSchedulerEditJob, onSchedulerNewJob }: AeonAutopilotPanelProps) {
   const aeonAgents = useMemo(() => {
     const byWorkspace = new Map<string, AgentProfile>();
@@ -639,6 +647,10 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
   const [schedules, setSchedules] = useState<RuntimeSchedule[]>([]);
   const [runs, setRuns] = useState<RuntimeRun[]>([]);
   const [outputs, setOutputs] = useState<AeonOutput[]>([]);
+  const [deliverablesByAgent, setDeliverablesByAgent] = useState<Record<string, AeonDeliverable[]>>({});
+  const [deliverablesLoading, setDeliverablesLoading] = useState(false);
+  const [deliverablesStatus, setDeliverablesStatus] = useState("");
+  const [selectedTransferDeliverable, setSelectedTransferDeliverable] = useState<AeonDeliverable | null>(null);
   const [analytics, setAnalytics] = useState<RuntimeAnalytics | null>(null);
   const [memory, setMemory] = useState<RuntimeMemorySnapshot | null>(null);
   const [secrets, setSecrets] = useState<RuntimeSecretStatus | null>(null);
@@ -750,6 +762,26 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     }, 2200);
   }, []);
 
+  const refreshDeliverablesForAgent = useCallback(async (agent: AgentProfile, options: { quiet?: boolean } = {}) => {
+    if (!options.quiet) {
+      setDeliverablesLoading(true);
+      setDeliverablesStatus("");
+    }
+    try {
+      const data = await postJson<{ deliverables?: AeonDeliverable[] }>("/api/runtimes/aeon/deliverables", {
+        action: "list",
+        agent,
+        vaultPath: sharedVault.vaultPath,
+      });
+      setDeliverablesByAgent((current) => ({ ...current, [agent.id]: data.deliverables ?? [] }));
+      if (!options.quiet) setDeliverablesStatus("");
+    } catch (error) {
+      if (!options.quiet) setDeliverablesStatus(error instanceof Error ? error.message : "Could not load AEON deliverables.");
+    } finally {
+      if (!options.quiet) setDeliverablesLoading(false);
+    }
+  }, [sharedVault.vaultPath]);
+
   useEffect(() => () => {
     if (actionSuccessTimerRef.current) {
       window.clearTimeout(actionSuccessTimerRef.current);
@@ -812,6 +844,9 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
       track(postJson<{ schedules?: RuntimeSchedule[] }>("/api/runtimes/aeon/schedules", body), (data) => setSchedules(data.schedules ?? [])),
       track(postJson<{ runs?: RuntimeRun[] }>("/api/runtimes/aeon/runs", body), (data) => setRuns(data.runs ?? [])),
       track(postJson<{ outputs?: AeonOutput[] }>("/api/runtimes/aeon/outputs", body), (data) => setOutputs(data.outputs ?? [])),
+      track(postJson<{ deliverables?: AeonDeliverable[] }>("/api/runtimes/aeon/deliverables", { ...vaultBody, action: "list" }), (data) => {
+        setDeliverablesByAgent((current) => ({ ...current, [agent.id]: data.deliverables ?? [] }));
+      }),
       track(postJson<{ analytics?: RuntimeAnalytics }>("/api/runtimes/aeon/analytics", vaultBody), (data) => setAnalytics(data.analytics ?? null)),
       track(postJson<{ memory?: RuntimeMemorySnapshot }>("/api/runtimes/aeon/memory", body), (data) => setMemory(data.memory ?? null)),
       track(postJson<{ secrets?: RuntimeSecretStatus }>("/api/runtimes/aeon/secrets/status", vaultBody), (data) => {
@@ -884,7 +919,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
       const handle = window.setTimeout(() => {
         setAeonSchedulerOpen(false);
         setPanelMode("detail");
-        setDetailView(tab === "work" || tab === "activity" || tab === "settings" ? tab : "overview");
+        setDetailView(tab === "work" || tab === "activity" || tab === "deliverables" || tab === "settings" ? tab : "overview");
         if (fromGithubOAuth) {
           setMessage("GitHub connected. GH_GLOBAL is available to AEON from shared env.");
           void refreshFastSecretsRef.current();
@@ -919,6 +954,16 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     }, 0);
     return () => window.clearTimeout(handle);
   }, [activeView, panelMode, refresh, refreshFastSecrets]);
+
+  useEffect(() => {
+    if (activeView !== "aeon" || aeonAgents.length === 0) return;
+    const handle = window.setTimeout(() => {
+      for (const agent of aeonAgents) {
+        void refreshDeliverablesForAgent(agent, { quiet: true });
+      }
+    }, 0);
+    return () => window.clearTimeout(handle);
+  }, [activeView, aeonAgents, refreshDeliverablesForAgent]);
 
   function upsertAeonWorkspaceAgent(agent: AgentProfile, options: { openDetail?: boolean } = {}) {
     let selectedId = agent.id;
@@ -1464,6 +1509,9 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
   const a2aSkillCount = skills.filter((skill) => skill.source === "aeon-a2a").length;
   const scheduledSkillCount = visibleSkills.filter((skill) => Boolean(skill.runtimeSchedule)).length;
   const localAeonSkillCount = status?.status?.localSkillCount ?? 0;
+  const selectedDeliverables = deliverablesByAgent[selectedAgent.id] ?? [];
+  const selectedNewDeliverables = selectedDeliverables.filter(isNewAeonDeliverable);
+  const selectedDeliverableCount = selectedNewDeliverables.length;
   const githubRepo = status?.status?.repo || selectedAgent.aeonRepo || "";
   const githubSecret = secrets?.keys?.find((secret) => secret.key === "GH_GLOBAL");
   const githubSecretReady = Boolean(githubSecret?.isSet || githubSecret?.availableInSharedEnv || githubSecret?.availableLocally);
@@ -1504,6 +1552,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     { id: "overview", label: "Overview", detail: "Status and next actions" },
     { id: "work", label: "Work", detail: "Skills and automation" },
     { id: "activity", label: "Activity", detail: "Runs and outputs" },
+    { id: "deliverables", label: "Deliverables", detail: "Artifacts and handoff" },
     { id: "settings", label: "Settings", detail: "Repo, keys, memory" },
   ];
   const openGithubConnectionSettings = () => {
@@ -1520,6 +1569,58 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
       name: current.name || selectedRepoName.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase(),
     }));
     void loadGithubRepos();
+  };
+  const deliverableTarget = (deliverable: AeonDeliverable) => deliverable.path || deliverable.url || "";
+  const openDeliverable = async (deliverable: AeonDeliverable, action: "open" | "reveal") => {
+    setDeliverablesStatus("");
+    try {
+      const response = await fetch("/api/kanban/deliverable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, path: deliverable.path, url: deliverable.url }),
+      });
+      const data = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || !data?.ok) throw new Error(data?.error || "Could not open deliverable.");
+    } catch (error) {
+      setDeliverablesStatus(error instanceof Error ? error.message : "Could not open deliverable.");
+    }
+  };
+  const downloadDeliverable = async (deliverable: AeonDeliverable) => {
+    setActionBusy(`download:${deliverable.id}`);
+    setDeliverablesStatus("");
+    try {
+      const data = await postJson<{ path?: string; downloaded?: boolean }>("/api/runtimes/aeon/deliverables", {
+        action: "download",
+        agent: selectedAgent,
+        vaultPath: sharedVault.vaultPath,
+        path: deliverableTarget(deliverable),
+      });
+      setDeliverablesStatus(data.downloaded ? `Downloaded to ${data.path}` : `Already on this machine: ${data.path}`);
+      await refreshDeliverablesForAgent(selectedAgent);
+    } catch (error) {
+      setDeliverablesStatus(error instanceof Error ? error.message : "Could not download deliverable.");
+    } finally {
+      setActionBusy("");
+    }
+  };
+  const sendDeliverableToMachine = async (deliverable: AeonDeliverable, machine: KanbanMachineTarget) => {
+    setActionBusy(`send:${deliverable.id}:${machine.key}`);
+    setDeliverablesStatus("");
+    try {
+      await postJson("/api/runtimes/aeon/deliverables", {
+        action: "send",
+        agent: selectedAgent,
+        vaultPath: sharedVault.vaultPath,
+        path: deliverableTarget(deliverable),
+        targetMachine: machine,
+      });
+      setDeliverablesStatus(`Queued ${deliverable.title} for ${machine.name}.`);
+      setSelectedTransferDeliverable(null);
+    } catch (error) {
+      setDeliverablesStatus(error instanceof Error ? error.message : "Could not send deliverable to that machine.");
+    } finally {
+      setActionBusy("");
+    }
   };
   const openAeonRepoCreateChoice = () => {
     setCreateRepoChoiceOpen(true);
@@ -1769,7 +1870,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
 
   if (panelMode === "fleet") {
     return (
-      <section className={`${fleetStyles.root} grid gap-4`}>
+      <section className={`${fleetStyles.root} tabPanel grid gap-4`}>
         <div className="relative overflow-hidden rounded-lg border border-[rgba(148,163,184,0.16)] bg-[linear-gradient(135deg,rgba(10,14,21,0.94),rgba(18,28,35,0.88)_45%,rgba(16,20,29,0.92))] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
           <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(94,234,212,0.65),transparent)]" />
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2168,31 +2269,45 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
           {aeonAgents.map((agent, agentIndex) => {
             const gitBacked = Boolean(agent.aeonRepo?.trim());
             const repoName = aeonRepoDisplayName(agent);
+            const deliverableCount = (deliverablesByAgent[agent.id] ?? []).filter(isNewAeonDeliverable).length;
+            const cellPosition = aeonFleetHexPosition(agentIndex + 1, aeonFleetColumns);
             return (
-              <AeonFleetHex
-                key={agent.id}
-                width={AEON_FLEET_HEX_W}
-                height={AEON_FLEET_HEX_H}
-                tone="default"
-                role="listitem"
-                tabIndex={0}
-                aria-label={`Open AEON repo ${repoName}`}
-                data-aeon-fleet-hex="repo"
-                className="absolute z-10 cursor-pointer hover:scale-[1.025] focus:outline-none focus-visible:drop-shadow-[0_0_18px_rgba(94,234,212,0.42)]"
-                style={{
-                  position: "absolute",
-                  left: aeonFleetHexPosition(agentIndex + 1, aeonFleetColumns).x,
-                  top: aeonFleetHexPosition(agentIndex + 1, aeonFleetColumns).y,
-                }}
-                onClick={() => {
-                  setSelectedAgentId(agent.id);
-                  setPanelMode("detail");
-                }}
-                onKeyDown={activateFleetCard(() => {
-                  setSelectedAgentId(agent.id);
-                  setPanelMode("detail");
-                })}
-              >
+              <div key={agent.id}>
+                {deliverableCount > 0 ? (
+                  <span
+                    className="pointer-events-none absolute -translate-x-1/2 rounded-full border border-[rgba(94,234,212,0.64)] bg-[rgba(5,8,13,0.98)] px-3.5 py-1.5 text-[10px] font-black uppercase leading-none text-[var(--accent-strong)] shadow-[0_0_30px_rgba(45,212,191,0.32),0_12px_28px_rgba(0,0,0,0.34)]"
+                    style={{
+                      left: cellPosition.x + AEON_FLEET_HEX_W / 2,
+                      top: cellPosition.y - 12,
+                      zIndex: 9999,
+                    }}
+                  >
+                    {deliverableCount} new deliverable{deliverableCount === 1 ? "" : "s"}
+                  </span>
+                ) : null}
+                <AeonFleetHex
+                  width={AEON_FLEET_HEX_W}
+                  height={AEON_FLEET_HEX_H}
+                  tone="default"
+                  role="listitem"
+                  tabIndex={0}
+                  aria-label={`Open AEON repo ${repoName}`}
+                  data-aeon-fleet-hex="repo"
+                  className="absolute z-10 cursor-pointer hover:scale-[1.025] focus:outline-none focus-visible:drop-shadow-[0_0_18px_rgba(94,234,212,0.42)]"
+                  style={{
+                    position: "absolute",
+                    left: cellPosition.x,
+                    top: cellPosition.y,
+                  }}
+                  onClick={() => {
+                    setSelectedAgentId(agent.id);
+                    setPanelMode("detail");
+                  }}
+                  onKeyDown={activateFleetCard(() => {
+                    setSelectedAgentId(agent.id);
+                    setPanelMode("detail");
+                  })}
+                >
                 <span data-aeon-fleet-content="repo" className="grid w-[62%] max-w-[176px] justify-items-center gap-1.5 text-center [line-height:normal]">
                   <span className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded border border-[rgba(94,234,212,0.28)] bg-[rgba(20,184,166,0.08)] p-0.5 shadow-[0_8px_22px_rgba(0,0,0,0.26)]">
                     <Image src={agent.aeonLogoUrl || "/icons/runtimes/aeon.png?v=20260526-runtime-icons-2"} alt="" aria-hidden="true" fill sizes="44px" className="object-cover" unoptimized />
@@ -2226,9 +2341,10 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
                   <span className="flex flex-wrap justify-center gap-1 text-[9px] font-semibold leading-3 text-[var(--muted)]">
                     <span className="rounded border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.62)] px-1.5 py-0.5">{agent.useSharedVault === false ? "Private" : "Brain"}</span>
                     <span className="rounded border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.62)] px-1.5 py-0.5">{agent.aeonBranch || "main"}</span>
+                    </span>
                   </span>
-                </span>
-              </AeonFleetHex>
+                </AeonFleetHex>
+              </div>
             );
           })}
         </div>
@@ -2239,7 +2355,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
   if (aeonSchedulerOpen) {
     const aeonJobCount = schedulerJobs.filter((job) => job.runtime.trim().toLowerCase() === "aeon").length;
     return (
-      <section className={`${fleetStyles.root} grid gap-4`}>
+      <section className={`${fleetStyles.root} tabPanel grid gap-4`}>
         <div className="relative overflow-hidden rounded-lg border border-[rgba(148,163,184,0.16)] bg-[linear-gradient(135deg,rgba(10,14,21,0.94),rgba(18,28,35,0.88)_45%,rgba(16,20,29,0.92))] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
           <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(94,234,212,0.65),transparent)]" />
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2261,7 +2377,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
             </div>
           </div>
         </div>
-        <div className="flex min-h-[760px] flex-col overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[rgba(5,8,13,0.72)]">
+        <div className="flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[rgba(5,8,13,0.72)]">
           <SchedulerView
             jobs={schedulerJobs}
             runStates={schedulerRunStates}
@@ -2277,7 +2393,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
   }
 
   return (
-    <section className={`grid gap-4 ${detailView === "settings" ? "xl:grid-cols-2 xl:items-start" : ""}`}>
+    <section className={`tabPanel grid gap-4 ${detailView === "settings" ? "xl:grid-cols-2 xl:items-start" : ""}`}>
       <div className={`relative overflow-hidden rounded-lg border border-[rgba(148,163,184,0.16)] bg-[linear-gradient(135deg,rgba(10,14,21,0.94),rgba(18,28,35,0.88)_45%,rgba(16,20,29,0.92))] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24)] ${detailView === "settings" ? "xl:col-span-2" : ""}`}>
         <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(94,234,212,0.65),transparent)]" />
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2320,6 +2436,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
               <span className="rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(10,14,21,0.52)] px-2 py-1">{skills.length} ready skills</span>
               <span className="rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(10,14,21,0.52)] px-2 py-1">{runs.length} runs checked</span>
               <span className="rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(10,14,21,0.52)] px-2 py-1">{outputs.length} outputs</span>
+              <span className="rounded-md border border-[rgba(94,234,212,0.22)] bg-[rgba(20,184,166,0.08)] px-2 py-1 text-[var(--accent-strong)]">{selectedDeliverableCount} deliverables</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -2341,15 +2458,21 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
         ) : null}
       </div>
 
-      <div className={`grid gap-2 rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(10,14,21,0.52)] p-2 sm:grid-cols-4 ${detailView === "settings" ? "xl:col-span-2" : ""}`}>
+      <div className={`grid gap-2 rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(10,14,21,0.52)] p-2 sm:grid-cols-5 ${detailView === "settings" ? "xl:col-span-2" : ""}`}>
         {detailTabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
+            data-aeon-detail-tab={tab.id}
             className={`grid gap-1 rounded-md px-3 py-2 text-left transition ${detailView === tab.id ? "border border-[rgba(94,234,212,0.34)] bg-[rgba(20,184,166,0.15)] text-[var(--accent-strong)]" : "border border-transparent text-[var(--muted)] hover:bg-[rgba(148,163,184,0.08)] hover:text-[var(--foreground)]"}`}
             onClick={() => setDetailView(tab.id)}
           >
-            <span className="text-sm font-bold">{tab.label}</span>
+            <span className="flex items-center gap-2 text-sm font-bold">
+              {tab.label}
+              {tab.id === "deliverables" && selectedDeliverableCount > 0 ? (
+                <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full border border-[rgba(94,234,212,0.34)] bg-[rgba(20,184,166,0.16)] px-1.5 text-[10px] leading-none text-[var(--accent-strong)]">{selectedDeliverableCount}</span>
+              ) : null}
+            </span>
             <span className="text-[11px] leading-4">{tab.detail}</span>
           </button>
         ))}
@@ -3195,7 +3318,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
         </section>
       </div>
 
-      <div className={detailView === "activity" ? "grid gap-3 xl:grid-cols-2" : detailView === "settings" ? "contents" : "hidden"}>
+      <div className={detailView === "activity" || detailView === "deliverables" ? "grid gap-3 xl:grid-cols-2" : detailView === "settings" ? "contents" : "hidden"}>
         <section className={`${detailView === "activity" ? "" : "hidden"} rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(16,20,29,0.78)] p-4`}>
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -3273,6 +3396,24 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
             {!outputs.length ? <EmptyState icon={<FileText aria-hidden="true" />} text="No Aeon output files returned yet." /> : null}
           </div>
         </section>
+
+        <div className={detailView === "deliverables" ? "xl:col-span-2" : "hidden"}>
+          <AeonDeliverablesPanel
+            deliverables={selectedNewDeliverables}
+            loading={deliverablesLoading}
+            actionBusy={actionBusy}
+            machines={aeonRepoMachines}
+            status={deliverablesStatus}
+            selectedTransfer={selectedTransferDeliverable}
+            onRefresh={() => void refreshDeliverablesForAgent(selectedAgent)}
+            onOpen={(deliverable) => void openDeliverable(deliverable, "open")}
+            onReveal={(deliverable) => void openDeliverable(deliverable, "reveal")}
+            onDownload={(deliverable) => void downloadDeliverable(deliverable)}
+            onOpenTransfer={setSelectedTransferDeliverable}
+            onCloseTransfer={() => setSelectedTransferDeliverable(null)}
+            onSendToMachine={(deliverable, machine) => void sendDeliverableToMachine(deliverable, machine)}
+          />
+        </div>
 
         <section className={`${detailView === "settings" ? "" : "hidden"} rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(16,20,29,0.78)] p-4`}>
           <div className="flex items-center justify-between gap-3">

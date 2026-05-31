@@ -1,6 +1,7 @@
 import { constants } from "node:fs";
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
+import { delimiter } from "node:path";
 import { dirname, isAbsolute, join, sep } from "node:path";
 
 const DEFAULTS = {
@@ -53,6 +54,358 @@ async function writeIfMissing(path, content) {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${content.trim()}\n`, "utf8");
   return true;
+}
+
+async function findExecutable(candidates) {
+  const pathDirs = (process.env.PATH || "").split(delimiter).filter(Boolean);
+  const expanded = candidates.flatMap((candidate) => {
+    if (!candidate) return [];
+    if (isAbsolute(candidate) || candidate.includes("/") || candidate.includes("\\")) return [expandHome(candidate)];
+    return pathDirs.map((dir) => join(dir, candidate));
+  });
+  for (const candidate of expanded) {
+    try {
+      await access(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // Keep probing; this is an optional status note.
+    }
+  }
+  return "";
+}
+
+function vaultContract(folders) {
+  return `# AI-Ready Vault Contract
+
+This vault is the shared brain for HivemindOS agents. It should stay useful to humans in Obsidian and predictable for agents, search, Dataview, Tasks, GBrain, and other retrieval tools.
+
+## Routing
+
+| Layer | Use |
+| --- | --- |
+| Intake | Raw captures, URLs, meeting dumps, unsorted requests, and source material. |
+| Synthesis | Drafts, connection reports, research summaries, reviewed analysis, and generated outputs. |
+| Memory | Durable daily briefings, weekly reviews, decisions, meetings, book notes, imported sources, and distillations. |
+| Projects | Project overviews, status deltas, plans, decisions, and reusable project context. |
+| Operations | Machine-readable HivemindOS state: automations, work board, notifications, access logs, and brain-service status. |
+| Skills | Reusable agent procedures. Read \`Skills/README.md\` first, then the relevant \`Skills/<slug>/SKILL.md\`. |
+| Archive | Preserved inactive or processed material. |
+
+## Note Contract
+
+- Use one of the templates in \`Templates/HivemindOS/\` for durable notes whenever practical.
+- Include \`type\`, \`status\`, \`created\`, and source/project fields when the template provides them.
+- Keep raw imported material separate from reviewed synthesis.
+- Promote useful synthesis into Memory or Projects only after it has sources and a clear reuse case.
+- Link sources with wikilinks or relative vault paths.
+- Tag generated agent outputs with \`ai-generated\` in frontmatter or body metadata.
+- Do not store provider secrets, private keys, bearer tokens, or unredacted sensitive data in the vault.
+
+## Agent Write Policy
+
+- Read \`AGENTS.md\`, \`Shared Context.md\`, and this contract before durable edits.
+- Prefer appending dated status deltas over rewriting project history.
+- Never silently delete notes. Archive or create explicit conflict copies when needed.
+- Summarize automation writes in \`${folders.scheduledFolder}/Foundation Workflows/OPERATIONS-LOG.md\` or in the scheduled run note.
+- Treat \`${folders.kanbanFolder}\` and \`${folders.scheduledFolder}\` as operational state, not permanent knowledge.`;
+}
+
+function templatesReadme() {
+  return `# HivemindOS Templates
+
+AI-ready note templates for the shared brain.
+
+Use these as starting points for durable notes so humans, agents, Dataview, Tasks, and retrieval services see consistent metadata.
+
+Recommended mapping:
+
+- Daily briefing -> \`Memory/Daily Briefings/YYYY-MM-DD.md\`
+- Weekly review -> \`Memory/Weekly Reviews/YYYY-MM-DD.md\`
+- Meeting -> \`Memory/Meetings/YYYY-MM-DD-topic.md\`
+- Research source -> \`Memory/Imported Sources/YYYY-MM-DD-topic.md\`
+- Decision -> \`Memory/Decision Journal/YYYY-MM-DD-topic.md\` or a project folder
+- Book note -> \`Memory/Book Notes/title.md\`
+- Project -> \`Projects/<project>/overview.md\`
+- Distillation -> \`Memory/Distillations/YYYY-MM-DD-topic.md\`
+- AI output -> \`Synthesis/wiki/synthesis/YYYY-MM-DD-topic.md\``;
+}
+
+function templateMarkdown(kind) {
+  const templates = {
+    "daily-briefing": `---
+type: daily-briefing
+status: active
+created: YYYY-MM-DD
+review_after:
+tags:
+  - daily-briefing
+---
+
+# Daily Briefing - YYYY-MM-DD
+
+## Focus
+
+## Before Noon
+
+## Risks
+
+## Open Loops
+
+## Suggested First Move
+
+## Sources`,
+    "weekly-review": `---
+type: weekly-review
+status: active
+created: YYYY-MM-DD
+week:
+tags:
+  - weekly-review
+---
+
+# Weekly Review - YYYY-MM-DD
+
+## Moved Forward
+
+## Stalled
+
+## Patterns
+
+## Top 3 Next Week
+
+## Decisions To Make
+
+## Sources`,
+    meeting: `---
+type: meeting
+status: draft
+created: YYYY-MM-DD
+project:
+attendees:
+decisions:
+tags:
+  - meeting
+---
+
+# Meeting - Topic
+
+## Raw Notes
+
+## Decisions
+
+## Action Items
+
+- [ ] Task - owner - due YYYY-MM-DD
+
+## Follow-Up
+
+## Links`,
+    "research-source": `---
+type: research-source
+status: captured
+created: YYYY-MM-DD
+source_url:
+source_type:
+author:
+project:
+confidence:
+tags:
+  - research
+---
+
+# Research Source - Topic
+
+## Source
+
+## Summary
+
+## Key Claims
+
+## Useful For
+
+## Contradictions Or Tensions
+
+## Follow-Up Questions`,
+    decision: `---
+type: decision
+status: proposed
+created: YYYY-MM-DD
+project:
+decision_date:
+owner:
+outcome_review:
+tags:
+  - decision
+---
+
+# Decision - Topic
+
+## Context
+
+## Options
+
+## Decision
+
+## Expected Outcome
+
+## Risks
+
+## Review Notes`,
+    project: `---
+type: project
+status: active
+created: YYYY-MM-DD
+owner:
+priority:
+tags:
+  - project
+---
+
+# Project - Name
+
+## Goal
+
+## Current Status
+
+## Constraints
+
+## Milestones
+
+## Decisions
+
+## Open Questions
+
+## Related Notes`,
+    "book-note": `---
+type: book-note
+status: captured
+created: YYYY-MM-DD
+author:
+source:
+tags:
+  - book-note
+---
+
+# Book - Title
+
+## Core Ideas
+
+## Highlights
+
+## Connections
+
+## Actions
+
+## Questions`,
+    distillation: `---
+type: distillation
+status: reviewed
+created: YYYY-MM-DD
+topic:
+confidence:
+source_notes:
+tags:
+  - distillation
+---
+
+# Distillation - Topic
+
+## Insight
+
+## Evidence
+
+## When To Reuse
+
+## Limits
+
+## Source Trail`,
+    "ai-output": `---
+type: ai-output
+status: draft
+created: YYYY-MM-DD
+generator:
+project:
+source_notes:
+tags:
+  - ai-generated
+---
+
+# AI Output - Topic
+
+## Prompt Or Request
+
+## Output
+
+## Source Notes
+
+## Human Review
+
+## Next Action`,
+  };
+  return templates[kind];
+}
+
+function obsidianPluginPack() {
+  return `---
+type: brain-service
+service: obsidian-plugin-pack
+enabled: false
+installMode: manual
+---
+
+# Obsidian Plugin Pack
+
+Recommended optional plugins for a stronger HivemindOS shared brain. Install manually from Obsidian's Community Plugins browser after reviewing each plugin's privacy and sync behavior.
+
+## Core Structure
+
+- Templater: create new notes from the AI-ready templates.
+- Dataview: query notes by frontmatter such as type, project, status, and review_after.
+- Tasks: collect tasks from meetings, decisions, and project notes.
+- Periodic Notes: create daily, weekly, monthly, and quarterly notes with templates.
+- Calendar: navigate daily notes and timelines.
+- Kanban: view markdown boards when you want Obsidian-native boards alongside HivemindOS work-board state.
+
+## Retrieval And AI
+
+- Smart Connections: semantic search and chat over the vault.
+- Copilot: in-Obsidian chat over local vault context.
+
+## Safety And History
+
+- Obsidian Git: commit vault changes on a schedule when that fits your sync model.
+
+## HivemindOS Policy
+
+- Do not put API keys or model secrets in plugin notes.
+- Keep generated outputs tagged with ai-generated.
+- Let HivemindOS own machine-readable operational state under Operations unless a plugin is explicitly configured to write there.`;
+}
+
+function obsidianCliNote(cliPath) {
+  return `---
+type: brain-service
+service: obsidian-cli
+enabled: ${cliPath ? "true" : "false"}
+installMode: optional
+cliPath: ${JSON.stringify(cliPath || "obsidian")}
+---
+
+# Obsidian CLI
+
+Optional official Obsidian CLI surface for opening, searching, and managing the desktop vault from agent workflows.
+
+## Status
+
+- Detected path: \`${cliPath || "not detected"}\`
+- Preferred command: \`${cliPath || "obsidian"}\`
+
+## HivemindOS Usage
+
+- Prefer exact vault-relative paths for note reads and writes.
+- Use filesystem reads for conservative read-only inspection when the desktop CLI is unavailable.
+- Use the CLI for desktop-aware actions such as opening notes, workspace navigation, plugin/runtime administration, and Sync status when explicitly requested.
+- Keep destructive Sync, Publish, plugin, and workspace operations behind explicit user intent.`;
 }
 
 function workflowPrompt(workflow, folders) {
@@ -170,7 +523,14 @@ Recommended rollout:
 3. Connection Finder
 4. Weekly Synthesis
 5. Project Auto-Updater
-6. Knowledge Distillation Engine`;
+6. Meeting Processor
+7. Research Ingestion
+8. Vault Health Check
+9. Decision Journal Review
+10. Argument Builder
+11. Book Notes Processor
+12. Feedback Loop Capture
+13. Knowledge Distillation Engine`;
 }
 
 function operationLog() {
@@ -305,19 +665,151 @@ const workflows = [
     ],
     outputStandard: "One distilled insight per note. Include source links, claims, open questions, and when to reuse the distillation.",
   },
+  {
+    slug: "meeting-processor",
+    name: "Meeting Processor",
+    every: "every 4 hours",
+    skills: ["vault-synthesis", "kanban-orchestrator"],
+    paths: ["Intake", "Memory/Meetings", "Projects", folders.kanbanFolder],
+    intent: "Turn raw meeting dumps into structured notes, decisions, tasks, and project links without discarding the original notes.",
+    read: [
+      "`Intake/` notes tagged meeting or whose filename starts with `MEETING-`",
+      "`Projects/` notes named by the meeting or detected from attendees/topics",
+      `open work-board tasks in \`${folders.kanbanFolder}\` when readable`,
+    ],
+    write: [
+      "`Memory/Meetings/YYYY-MM-DD-<topic>.md`",
+      "`Memory/Decision Journal/` only for explicit decisions",
+      "`Intake/Requests/` only for follow-up work that needs routing",
+    ],
+    outputStandard: "Sections: Summary, Decisions, Action Items, Risks, Project Links, Source. Preserve raw source links and assign owners/dates only when present.",
+  },
+  {
+    slug: "research-ingestion",
+    name: "Research Ingestion",
+    every: "every 3 hours",
+    skills: ["vault-synthesis", "gbrain/query"],
+    paths: ["Intake", "Memory/Imported Sources", folders.synthesisFolder, "Projects"],
+    intent: "Convert captured URLs, transcripts, PDFs, and pasted source notes into source-linked summaries and follow-up questions.",
+    read: [
+      "`Intake/` notes tagged research or whose filename starts with `SOURCE-`, `URL-`, `PDF-`, or `TRANSCRIPT-`",
+      "`Memory/Imported Sources/` related sources",
+      "`Projects/` active project context when the source names a project",
+    ],
+    write: [
+      "`Memory/Imported Sources/YYYY-MM-DD-<topic>.md`",
+      `\`${folders.synthesisFolder}/wiki/sources/YYYY-MM-DD-<topic>.md\` when a richer source trail is useful`,
+      "`Intake/Requests/` for contradictions or follow-up research that needs review",
+    ],
+    outputStandard: "Include source metadata, concise summary, key claims, contradictions with existing notes, project relevance, and unanswered questions.",
+  },
+  {
+    slug: "vault-health-check",
+    name: "Vault Health Check",
+    every: "monthly first Monday 09:00",
+    skills: ["vault-synthesis", "vault-linker"],
+    paths: ["Intake", "Memory", "Projects", "Skills", folders.synthesisFolder],
+    intent: "Audit the shared brain for stale projects, orphan notes, inconsistent metadata, and notes that need human review.",
+    read: [
+      "recent and stale notes across `Intake/`, `Memory/`, `Projects/`, `Skills/`, and generated synthesis",
+      "frontmatter fields such as type, status, project, review_after, and tags",
+      "wikilinks and backlinks when available",
+    ],
+    write: [
+      `\`${folders.synthesisFolder}/wiki/synthesis/Vault-Health-YYYY-MM-DD.md\``,
+      "`Intake/Requests/` only for maintenance tasks that need human approval",
+    ],
+    outputStandard: "Report stale projects, orphan notes, missing metadata, inconsistent tags, risky generated notes, and a prioritized maintenance checklist. Do not mutate source notes.",
+  },
+  {
+    slug: "decision-journal-review",
+    name: "Decision Journal Review",
+    every: "monthly first Friday 16:00",
+    skills: ["journal-synthesis", "vault-synthesis"],
+    paths: ["Memory/Decision Journal", "Projects", "Memory/Weekly Reviews"],
+    intent: "Review decisions whose outcome window has arrived and summarize accuracy, bias, and lessons for future choices.",
+    read: [
+      "`Memory/Decision Journal/` notes with outcome_review due or missing review notes",
+      "`Projects/` and `Memory/Weekly Reviews/` entries that show outcomes",
+    ],
+    write: [
+      "`Memory/Decision Journal/YYYY-MM-DD-<topic>.md` only by appending a Review Notes section",
+      "`Memory/Distillations/YYYY-MM-DD-decision-patterns.md` when durable lessons emerge",
+    ],
+    outputStandard: "Sections: Decision, Expected, Actual, What Was Missed, Pattern, Future Rule. Append instead of rewriting the original decision.",
+  },
+  {
+    slug: "argument-builder",
+    name: "Argument Builder",
+    every: "manual",
+    skills: ["vault-synthesis", "gbrain/query"],
+    paths: ["Intake/Requests", "Memory", "Projects", folders.synthesisFolder],
+    intent: "Build an evidence-backed outline for a thesis, proposal, article, pitch, or presentation request.",
+    read: [
+      "`Intake/Requests/` notes whose filenames start with `ARGUMENT-`, `THESIS-`, `PROPOSAL-`, or `PITCH-`",
+      "supporting evidence across `Memory/`, `Projects/`, and reviewed synthesis",
+    ],
+    write: [
+      `\`${folders.synthesisFolder}/wiki/.drafts/YYYY-MM-DD-<topic>-argument.md\``,
+    ],
+    outputStandard: "State the thesis, strongest evidence, counterpoints, missing proof, suggested structure, and source links. Mark weak evidence clearly.",
+  },
+  {
+    slug: "book-notes-processor",
+    name: "Book Notes Processor",
+    every: "weekly Saturday 11:00",
+    skills: ["vault-synthesis", "gbrain/query"],
+    paths: ["Intake", "Memory/Book Notes", "Memory/Distillations", "Projects"],
+    intent: "Turn book highlights or reading notes into reusable ideas connected to active projects and durable memory.",
+    read: [
+      "`Intake/` notes tagged book or whose filename starts with `BOOK-`",
+      "`Memory/Book Notes/` existing notes by the same author/topic",
+      "`Projects/` active project notes that could use the ideas",
+    ],
+    write: [
+      "`Memory/Book Notes/<title>.md`",
+      "`Memory/Distillations/YYYY-MM-DD-<topic>.md` for reusable ideas",
+    ],
+    outputStandard: "Sections: Core Ideas, Connections, Project Uses, Actions, Further Reading. Separate the author's claim from Liam's application.",
+  },
+  {
+    slug: "feedback-loop-capture",
+    name: "Feedback Loop Capture",
+    every: "daily 21:00",
+    skills: ["vault-synthesis"],
+    paths: [folders.synthesisFolder, "Memory", "Projects", "Shared Context.md"],
+    intent: "Review generated agent outputs and preserve only useful human-reviewed synthesis or project context.",
+    read: [
+      `agent outputs tagged ai-generated under \`${folders.synthesisFolder}/\``,
+      "`Projects/` notes that received generated drafts",
+      "`Shared Context.md` for current priorities",
+    ],
+    write: [
+      "`Memory/Distillations/YYYY-MM-DD-<topic>.md` only for durable insights",
+      "`Projects/<project>/overview.md` only by appending dated project-relevant deltas",
+      `\`${folders.synthesisFolder}/wiki/synthesis/AI-Outputs-YYYY-MM-DD.md\` for review summaries`,
+    ],
+    outputStandard: "Classify outputs as Keep, Revise, Archive, or Ignore. Explain why, link sources, and avoid reinforcing low-confidence generated claims.",
+  },
 ];
 
 await mkdir(vaultPath, { recursive: true });
 await Promise.all([
   "Intake",
   "Intake/Requests",
+  "Intake/Sources",
   "Memory",
+  "Memory/Book Notes",
   "Memory/Daily Briefings",
+  "Memory/Decision Journal",
   "Memory/Weekly Reviews",
+  "Memory/Meetings",
   "Memory/Imported Sources",
   "Memory/Distillations",
   "Projects",
   "Operations",
+  "Templates",
+  "Templates/HivemindOS",
   folders.scheduledFolder,
   join(folders.scheduledFolder, WORKFLOW_ROOT),
   folders.kanbanFolder,
@@ -334,6 +826,19 @@ await Promise.all([
   "Archive/Processed Requests",
 ].map((folder) => mkdir(join(vaultPath, folder), { recursive: true })));
 
+const obsidianCliPath = await findExecutable([
+  process.env.OBSIDIAN_CLI_PATH,
+  "~/.local/bin/obsidian",
+  "obsidian",
+]);
+
+await writeIfMissing(join(vaultPath, "Operations", "AI-Ready Vault Contract.md"), vaultContract(folders));
+await writeIfMissing(join(vaultPath, "Templates", "HivemindOS", "README.md"), templatesReadme());
+for (const template of ["daily-briefing", "weekly-review", "meeting", "research-source", "decision", "project", "book-note", "distillation", "ai-output"]) {
+  await writeIfMissing(join(vaultPath, "Templates", "HivemindOS", `${template}.md`), templateMarkdown(template));
+}
+await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Obsidian Plugin Pack.md"), obsidianPluginPack());
+await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Obsidian CLI.md"), obsidianCliNote(obsidianCliPath));
 await writeIfMissing(join(vaultPath, folders.scheduledFolder, WORKFLOW_ROOT, "README.md"), workflowReadme(folders));
 await writeIfMissing(join(vaultPath, folders.scheduledFolder, WORKFLOW_ROOT, "OPERATIONS-LOG.md"), operationLog());
 

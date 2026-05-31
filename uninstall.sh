@@ -344,6 +344,14 @@ if ask "Remove seeded self-writing vault workflow templates from Operations/Auto
   ok "Removed $vault_path/$scheduled_folder/Foundation Workflows"
 fi
 
+if ask "Remove seeded AI-ready shared-brain contract, templates, and Obsidian service notes?" "no"; then
+  rm -f "$vault_path/Operations/AI-Ready Vault Contract.md"
+  rm -f "$vault_path/$brain_services_folder/Obsidian Plugin Pack.md"
+  rm -f "$vault_path/$brain_services_folder/Obsidian CLI.md"
+  rm -rf "$vault_path/Templates/HivemindOS"
+  ok "Removed seeded AI-ready shared-brain files"
+fi
+
 if ask "Remove the shared Skills shelf created in the Obsidian vault?" "no"; then
   rm -rf "$vault_path/Skills"
   ok "Removed $vault_path/Skills"
@@ -369,11 +377,17 @@ if ask "Remove empty canonical HivemindOS vault folders created by setup?" "no";
     "$vault_path/Archive" \
     "$vault_path/Agents" \
     "$vault_path/Projects" \
+    "$vault_path/Templates/HivemindOS" \
+    "$vault_path/Templates" \
     "$vault_path/Memory/Distillations" \
     "$vault_path/Memory/Imported Sources" \
+    "$vault_path/Memory/Meetings" \
     "$vault_path/Memory/Weekly Reviews" \
+    "$vault_path/Memory/Decision Journal" \
     "$vault_path/Memory/Daily Briefings" \
+    "$vault_path/Memory/Book Notes" \
     "$vault_path/Memory" \
+    "$vault_path/Intake/Sources" \
     "$vault_path/Intake/Requests" \
     "$vault_path/Intake"; do
     if rmdir "$dir" 2>/dev/null; then

@@ -236,6 +236,7 @@ The Brain workspace can hold:
 - agent inboxes
 - shared context
 - handoff notes
+- AI-ready note templates and vault-writing conventions
 - targeted file-transfer envelopes
 - memory files
 - Kanban board state
@@ -243,6 +244,8 @@ The Brain workspace can hold:
 - runtime instructions
 
 HivemindOS can auto-detect common local Obsidian vault locations, validate an explicit vault path, and fall back to local Kanban storage at `~/.hivemindos/kanban` if the vault is unavailable.
+
+Setup also seeds a first-run shared-brain foundation: an AI-ready vault contract under `Operations/`, reusable note templates under `Templates/HivemindOS/`, optional Obsidian CLI and plugin-pack status notes under `Operations/Brain Services/`, and disabled workflow schedules for morning context, meetings, research ingestion, weekly review, vault health checks, decision review, project updates, argument building, book notes, feedback-loop capture, and durable knowledge distillation.
 
 For multi-machine sharing, the built-in path pairs Syncthing over Tailscale so trusted machines each keep a local copy of the same vault. No Obsidian Sync subscription is required. If you already use Obsidian Sync, iCloud Drive, Dropbox, Git, or another provider, select that external sync owner in Brain so HivemindOS does not auto-pair Syncthing on top of it. When setup finds another Syncthing-capable collector and the Brain setting allows HivemindOS Syncthing, it can pair the shared vault and write/read a small test note to verify that sync is actually flowing.
 

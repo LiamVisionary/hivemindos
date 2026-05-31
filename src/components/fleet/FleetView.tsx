@@ -5,7 +5,6 @@ import * as React from "react";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BeeIcon } from "./bee-icon";
-import { applyActiveAppBadges, type FleetHostedApp } from "./active-apps";
 import { HexTile } from "./hex-tile";
 import { ListView } from "./list-view";
 import { MapView } from "./map-view";
@@ -102,7 +101,6 @@ export function FleetView({
   const [addToast, setAddToast] = React.useState<string | null>(null);
   const [dismissedAlertIds, setDismissedAlertIds] = React.useState<Set<string>>(() => new Set());
   const [selectedAlert, setSelectedAlert] = React.useState<FleetAlert | null>(null);
-  const [hostedApps, setHostedApps] = React.useState<FleetHostedApp[]>([]);
   const [settledFleet, setSettledFleet] = React.useState<SettledFleetViewData>({
     machines: [],
     tasks: [],
@@ -131,10 +129,6 @@ export function FleetView({
   const displayAlerts = loading && !settledFleet.hasValue ? [] : loading ? settledFleet.alerts : alerts;
   const displayTicker = loading && !settledFleet.hasValue ? [] : loading ? settledFleet.ticker : ticker;
   const displayEdges = loading && !settledFleet.hasValue ? [] : loading ? settledFleet.edges : edges;
-  const displayMachinesWithApps = React.useMemo(
-    () => applyActiveAppBadges(displayMachines, hostedApps),
-    [displayMachines, hostedApps],
-  );
   const initialLoading = loading && displayMachines.length === 0;
   const refreshing = loading && !initialLoading;
   const showMasthead = mastheadMode !== "none";
@@ -149,26 +143,6 @@ export function FleetView({
     const t = setTimeout(() => setAddToast(null), 2200);
     return () => clearTimeout(t);
   }, [addToast]);
-
-  React.useEffect(() => {
-    if (displayMachines.length === 0) return;
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 8_000);
-    void fetch("/api/fleet/apps", { cache: "no-store", signal: controller.signal })
-      .then((response) => response.ok ? response.json() : null)
-      .then((data: { apps?: FleetHostedApp[] } | null) => {
-        if (!data?.apps) return;
-        setHostedApps(data.apps);
-      })
-      .catch(() => {
-        // The apps route is opportunistic for the graph badge; Fleet should still render without it.
-      })
-      .finally(() => window.clearTimeout(timeout));
-    return () => {
-      controller.abort();
-      window.clearTimeout(timeout);
-    };
-  }, [displayMachines.length, checkedLabel]);
 
   const selectedMachineId = selected && displayMachines.some((machine) => machine.id === selected)
     ? selected
@@ -203,8 +177,8 @@ export function FleetView({
     void onCallAgent?.(machine, agent);
   }, [onCallAgent]);
 
-  const totalAgents = displayMachinesWithApps.reduce((n, m) => n + m.agents.length, 0);
-  const working = displayMachinesWithApps.reduce(
+  const totalAgents = displayMachines.reduce((n, m) => n + m.agents.length, 0);
+  const working = displayMachines.reduce(
     (n, m) => n + m.agents.filter((a) => a.state === "working").length,
     0,
   );
@@ -316,7 +290,7 @@ export function FleetView({
                 </span>
               </h1>
               <div className="flex" style={{ gap: 18, paddingBottom: 6 }}>
-                <BigStat n={displayMachinesWithApps.length} label="machines" />
+                <BigStat n={displayMachines.length} label="machines" />
                 <BigStat n={totalAgents} label="agents" />
                 <BigStat n={working} label="working" tone="cyan" />
                 <BigStat
@@ -353,7 +327,7 @@ export function FleetView({
                   selected={selectedMachineId}
                   selectedAgentId={selectedAgentId}
                   expanded={expanded}
-                  machines={displayMachinesWithApps}
+                  machines={displayMachines}
                   onSelectMachine={handleSelectMachine}
                   onSelectAgent={handleSelectAgent}
                   onToggleExpand={toggleExpand}
@@ -479,7 +453,7 @@ export function FleetView({
                 <NetworkGraph
                   selected={selectedMachineId}
                   selectedAgentId={selectedAgentId}
-                  machines={displayMachinesWithApps}
+                  machines={displayMachines}
                   edges={displayEdges}
                   onSelectMachine={handleSelectMachine}
                   onSelectAgent={handleSelectAgent}
@@ -491,7 +465,7 @@ export function FleetView({
                 <MapView
                   selected={selectedMachineId}
                   selectedAgentId={selectedAgentId}
-                  machines={displayMachinesWithApps}
+                  machines={displayMachines}
                   edges={displayEdges}
                   onSelectMachine={handleSelectMachine}
                   onSelectAgent={handleSelectAgent}
@@ -503,7 +477,7 @@ export function FleetView({
                 <ListView
                   selected={selectedMachineId}
                   selectedAgentId={selectedAgentId}
-                  machines={displayMachinesWithApps}
+                  machines={displayMachines}
                   onSelectMachine={handleSelectMachine}
                   onSelectAgent={handleSelectAgent}
                   onAddAgent={handleAddAgent}
@@ -569,7 +543,7 @@ export function FleetView({
               </div>
               {initialLoading ? (
                 <FleetDispatchLoading />
-              ) : displayMachinesWithApps.flatMap((m) =>
+              ) : displayMachines.flatMap((m) =>
                 m.agents
                   .filter((a) => a.state === "working" || a.state === "failed")
                   .map((a) => ({ ...a, host: m.name, _m: m })),

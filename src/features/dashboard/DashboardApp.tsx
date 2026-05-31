@@ -121,6 +121,7 @@ import type { CellMenuItem } from "@/components/cells/CellMenu";
 import type { AgentTaskRow } from "@/components/cells/AgentTaskList";
 import type { SetupStep } from "@/components/cells/SetupCell";
 import type { FleetAgentChat, FleetAlert, FleetMachine, FleetTask } from "@/components/fleet";
+import { activeConnectedAppBadges, applyActiveAppBadges, type FleetHostedApp } from "@/components/fleet/active-apps";
 import type { SchedulerJob, SchedulerRunPhase, SchedulerRunState } from "@/components/scheduler";
 import type { NewTaskPayload } from "@/components/task-modal";
 import type { SwarmAgent, SwarmDecision, SwarmMarket, SwarmRun, SwarmSocialPost, SwarmTemplate, TemplateId } from "@/components/swarm";
@@ -344,7 +345,7 @@ import { useKanbanTaskController } from "@/features/dashboard/hooks/use-kanban-t
 import { useKanbanDispatchController } from "@/features/dashboard/hooks/use-kanban-dispatch-controller";
 import { useStatusChatInputController } from "@/features/dashboard/hooks/use-status-chat-input-controller";
 import { useAgentSettingsController } from "@/features/dashboard/hooks/use-agent-settings-controller";
-import { DashboardHeader } from "@/features/dashboard/views/DashboardHeader";
+import { DashboardHeader, type DashboardAppCompletionNotification } from "@/features/dashboard/views/DashboardHeader";
 const kanbanClass = createStyleClass(kanbanStyles);
 const fleetClass = createStyleClass(fleetStyles);
 const chatClass = createStyleClass(chatStyles);

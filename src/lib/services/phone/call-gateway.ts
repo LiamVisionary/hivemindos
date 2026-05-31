@@ -1,3 +1,8 @@
+import { readFile } from "fs/promises";
+import { homedir } from "os";
+import { isAbsolute, join, relative, resolve } from "path";
+import { listArchivedMiroSharkRuns } from "@/lib/services/miroshark/archive";
+
 const GATEWAY_PORTS = [5000, 5001, 5002];
 
 export type GatewayCallPayload = {
@@ -15,6 +20,11 @@ export type GatewayCallResult = {
   error?: string;
 };
 
+type GatewayJsonObject = Record<string, unknown>;
+
+const RECENT_MIROSHARK_RUN_LIMIT = 2;
+const MIROSHARK_RUN_SCAN_LIMIT = 12;
+
 export type AgentCallIdentity = {
   id?: string;
   name?: string;
@@ -22,6 +32,15 @@ export type AgentCallIdentity = {
   role?: string;
   task?: string;
   voiceProviderId?: string;
+  skillProfilePrompt?: string;
+  preferredSkillSlugs?: string[];
+  aeonRepo?: string;
+  aeonRepoName?: string;
+  aeonBranch?: string;
+  aeonLocalPath?: string;
+  aeonMode?: string;
+  a2aUrl?: string;
+  localDataDir?: string;
 };
 
 export type AgentCallMachine = {
@@ -55,12 +74,251 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export function buildAgentCallPayload(input: AgentCallInput): GatewayCallPayload {
+function cleanList(value: unknown) {
+  return Array.isArray(value) ? value.map(clean).filter(Boolean) : [];
+}
+
+function expandHome(value: string) {
+  if (value === "~") return homedir();
+  if (value.startsWith("~/")) return join(homedir(), value.slice(2));
+  return value;
+}
+
+function safeLocalPath(root: string, relativePath: string) {
+  const base = resolve(expandHome(root));
+  const target = resolve(base, relativePath);
+  const diff = relative(base, target);
+  if (!diff || diff.startsWith("..") || isAbsolute(diff)) return null;
+  return target;
+}
+
+async function readBoundedAeonFile(root: string, relativePath: string, maxChars: number, options?: { sanitize?: boolean }) {
+  const path = safeLocalPath(root, relativePath);
+  if (!path) return "";
+  const raw = await readFile(path, "utf8").catch(() => "");
+  return options?.sanitize === false ? raw.trim().slice(0, maxChars) : sanitizeContextText(raw, maxChars);
+}
+
+function sanitizeContextText(raw: string, maxChars: number) {
+  return raw
+    .split(/\r?\n/)
+    .filter((line) => !/(api[_-]?key|token|secret|password|authorization|bearer|private key)/i.test(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, maxChars);
+}
+
+function frontmatterValue(content: string, key: string) {
+  const match = content.match(new RegExp(`^${key}:\\s*(.+?)\\s*$`, "m"));
+  return match?.[1]?.replace(/^["']|["']$/g, "").trim();
+}
+
+function normalizeRepo(value?: string) {
+  return String(value || "")
+    .replace(/^git@github\.com:/i, "")
+    .replace(/^https?:\/\/github\.com\//i, "")
+    .replace(/\.git$/i, "")
+    .replace(/\/+$/g, "")
+    .toLowerCase();
+}
+
+function normalizeName(value?: string) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function aeonRepositoryMatches(agent: AgentCallIdentity, repository: string) {
+  const deliverableRepo = normalizeRepo(repository);
+  const agentRepo = normalizeRepo(agent.aeonRepo);
+  if (agentRepo && (agentRepo === deliverableRepo || agentRepo.endsWith(`/${deliverableRepo.split("/").pop()}`))) return true;
+  const agentName = normalizeName(agent.aeonRepoName || agent.name);
+  const repoName = normalizeName(deliverableRepo.split("/").pop() || deliverableRepo);
+  return Boolean(agentName && repoName && (agentName === repoName || agentName.includes(repoName)));
+}
+
+function hasAeonRepositoryIdentity(agent: AgentCallIdentity) {
+  return Boolean(clean(agent.aeonRepo) || clean(agent.aeonRepoName));
+}
+
+function archiveChildPath(archivePath: string, folder: string, file: string) {
+  const archive = resolve(archivePath);
+  const target = resolve(archive, folder, file);
+  const diff = relative(archive, target);
+  if (!diff || diff.startsWith("..") || isAbsolute(diff)) return null;
+  return target;
+}
+
+function sectionText(markdown: string, heading: string) {
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = markdown.match(new RegExp(`^## ${escapedHeading}\\s*\\n+([\\s\\S]*?)(?=\\n## |$)`, "m"));
+  return sanitizeContextText(match?.[1] ?? "", 500);
+}
+
+function unescapeMarkdownCell(value: string) {
+  return value.replace(/\\\|/g, "|").replace(/<br\s*\/?>/gi, " ").trim();
+}
+
+function extractMiroSharkPostTexts(postsMarkdown: string) {
+  return postsMarkdown
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("|") && !/^\|\s*-+/.test(line) && !/^\|\s*Post\s*\|/i.test(line))
+    .map((line) => line.split(/(?<!\\)\|/).map((part) => part.trim()))
+    .map((columns) => unescapeMarkdownCell(columns[4] || ""))
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+async function readRecentMiroSharkContext(agent: AgentCallIdentity) {
+  const archive = await listArchivedMiroSharkRuns().catch(() => null);
+  if (!archive) return [];
+  const recentRuns: string[] = [];
+  for (const summary of archive.runs.slice(0, MIROSHARK_RUN_SCAN_LIMIT)) {
+    const rehearsalPath = archiveChildPath(archive.archivePath, summary.folder, "aeon-rehearsal.md");
+    const postsPath = archiveChildPath(archive.archivePath, summary.folder, "posts.md");
+    if (!rehearsalPath || !postsPath) continue;
+    const [rehearsal, postsMarkdown] = await Promise.all([
+      readFile(rehearsalPath, "utf8").catch(() => ""),
+      readFile(postsPath, "utf8").catch(() => ""),
+    ]);
+    const repository = frontmatterValue(rehearsal, "aeon_repository");
+    if (repository && hasAeonRepositoryIdentity(agent) && !aeonRepositoryMatches(agent, repository)) continue;
+    const scenario = sectionText(rehearsal, "Scenario") || sanitizeContextText(summary.scenario || "", 500);
+    const verdict = sectionText(rehearsal, "Verdict");
+    const nextAction = sectionText(rehearsal, "Next Action");
+    const postTexts = extractMiroSharkPostTexts(postsMarkdown)
+      .map((post, index) => `${index + 1}. ${sanitizeContextText(post, 300)}`)
+      .join("\n");
+    recentRuns.push([
+      `MiroShark run ${summary.simulationId} saved ${summary.savedAt}.`,
+      summary.status ? `Status: ${summary.status}.` : "",
+      typeof summary.postCount === "number" ? `Visible posts: ${summary.postCount}.` : "",
+      scenario ? `Scenario: ${scenario}` : "",
+      verdict ? `AEON verdict: ${verdict}` : "",
+      nextAction ? `Next action: ${nextAction}` : "",
+      postTexts ? `Post excerpts:\n${postTexts}` : "",
+      `Archive folder: ${summary.folder}.`,
+    ].filter(Boolean).join("\n"));
+    if (recentRuns.length >= RECENT_MIROSHARK_RUN_LIMIT) break;
+  }
+  return recentRuns.length
+    ? [
+      "Recent MiroShark deliverables from the shared vault. If Liam asks about recent MiroShark runs, use these details and do not say you lack access:\n\n" +
+      recentRuns.join("\n\n"),
+    ]
+    : [];
+}
+
+function inlineFields(raw: string) {
+  const fields: Record<string, string | boolean> = {};
+  for (const part of raw.split(",")) {
+    const match = part.match(/^\s*([A-Za-z0-9_-]+):\s*(.*?)\s*$/);
+    if (!match) continue;
+    const value = match[2].replace(/^["']|["']$/g, "").trim();
+    fields[match[1]] = value === "true" ? true : value === "false" ? false : value;
+  }
+  return fields;
+}
+
+function summarizeAeonConfig(raw: string) {
+  const model = raw.match(/^model:\s*["']?([^"'\n#]+)["']?/m)?.[1]?.trim();
+  const enabledSkills: string[] = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const inline = line.match(/^  ([A-Za-z0-9_-]+):\s*\{(.+?)\}/);
+    if (!inline) continue;
+    const fields = inlineFields(inline[2]);
+    if (fields.enabled === true) {
+      const parts = [inline[1]];
+      if (typeof fields.var === "string" && fields.var) parts.push(`var=${fields.var}`);
+      if (typeof fields.schedule === "string" && fields.schedule) parts.push(`schedule=${fields.schedule}`);
+      enabledSkills.push(parts.join(" "));
+    }
+  }
+  return [
+    model ? `Default model: ${model}.` : "",
+    enabledSkills.length ? `Enabled skills: ${enabledSkills.slice(0, 8).join("; ")}${enabledSkills.length > 8 ? `; +${enabledSkills.length - 8} more` : ""}.` : "No enabled scheduled skills found in aeon.yml.",
+  ].filter(Boolean).join(" ");
+}
+
+function summarizeSkillsJson(raw: string, preferredSlugs: string[]) {
+  try {
+    const parsed = JSON.parse(raw) as { skills?: Array<{ slug?: string; name?: string; description?: string; category?: string }> };
+    if (!Array.isArray(parsed.skills)) return "";
+    const preferred = new Set(preferredSlugs);
+    const matching = parsed.skills.filter((skill) => skill.slug && (preferred.size === 0 || preferred.has(skill.slug))).slice(0, 8);
+    const selected = matching.length ? matching : parsed.skills.slice(0, 8);
+    return selected
+      .map((skill) => [skill.slug, skill.category, skill.description].filter(Boolean).join(" - "))
+      .filter(Boolean)
+      .join("\n");
+  } catch {
+    return "";
+  }
+}
+
+async function readAeonContext(agent: AgentCallIdentity) {
+  const root = clean(agent.aeonLocalPath) || clean(agent.localDataDir);
+  if (!root) return [];
+  const preferredSkillSlugs = cleanList(agent.preferredSkillSlugs);
+  const [claude, memory, aeonConfigRaw, skillsJson, soul, style, mirosharkContext] = await Promise.all([
+    readBoundedAeonFile(root, "CLAUDE.md", 900),
+    readBoundedAeonFile(root, "memory/MEMORY.md", 900),
+    readBoundedAeonFile(root, "aeon.yml", 8_000, { sanitize: false }),
+    readBoundedAeonFile(root, "skills.json", 300_000, { sanitize: false }),
+    readBoundedAeonFile(root, "soul/SOUL.md", 700),
+    readBoundedAeonFile(root, "soul/STYLE.md", 700),
+    readRecentMiroSharkContext(agent),
+  ]);
+  const aeonConfig = summarizeAeonConfig(aeonConfigRaw);
+  const skillSummary = summarizeSkillsJson(skillsJson, preferredSkillSlugs);
+  return [
+    aeonConfig ? `AEON config: ${aeonConfig}` : "",
+    skillSummary ? `AEON skill catalog context:\n${skillSummary}` : "",
+    claude ? `AEON agent instructions excerpt:\n${claude}` : "",
+    memory ? `AEON memory index excerpt:\n${memory}` : "",
+    soul ? `AEON soul excerpt:\n${soul}` : "",
+    style ? `AEON style excerpt:\n${style}` : "",
+    ...mirosharkContext,
+  ].filter(Boolean);
+}
+
+async function buildAeonCallBriefing(input: AgentCallInput) {
+  const agentName = clean(input.agent.name) || "Aeon";
+  const machineName = clean(input.machine?.name);
+  const task = clean(input.agent.task);
+  const repo = clean(input.agent.aeonRepo);
+  const repoName = clean(input.agent.aeonRepoName);
+  const branch = clean(input.agent.aeonBranch);
+  const mode = clean(input.agent.aeonMode);
+  const a2aUrl = clean(input.agent.a2aUrl);
+  const localPath = clean(input.agent.aeonLocalPath) || clean(input.agent.localDataDir);
+  const preferredSkillSlugs = cleanList(input.agent.preferredSkillSlugs);
+  const aeonContext = await readAeonContext(input.agent);
+  return [
+    `[greeting] Start the call with exactly: "I'm Aeon, variation ${agentName}."`,
+    "You are AEON, an autonomous background agent, not a generic HivemindOS phone caller.",
+    "Answer as this AEON variation. Be concise, aware of your repo, skills, memory, and current work.",
+    "AEON context model: identity comes from CLAUDE.md; persistent context comes from memory/MEMORY.md, memory/topics, logs, and issues; available work comes from aeon.yml schedules/chains and skills.json.",
+    repo || repoName ? `Repository: ${[repoName, repo].filter(Boolean).join(" / ")}.` : "",
+    branch ? `Branch: ${branch}.` : "",
+    mode ? `Mode: ${mode}.` : "",
+    a2aUrl ? `A2A endpoint: ${a2aUrl}.` : "",
+    localPath ? `Local AEON workspace: ${localPath}.` : "",
+    machineName ? `Host machine: ${machineName}.` : "",
+    preferredSkillSlugs.length ? `Preferred Hivemind skills: ${preferredSkillSlugs.join(", ")}.` : "",
+    clean(input.agent.skillProfilePrompt) ? `Hivemind profile prompt: ${clean(input.agent.skillProfilePrompt)}` : "",
+    task ? `Current work: ${task}.` : "",
+    ...aeonContext,
+    "Conversation rule: use this context to answer Liam's questions directly. Do not volunteer a status update, digest plan, or configuration checklist unless Liam asks for status, setup, or next steps.",
+  ].filter(Boolean).join("\n\n");
+}
+
+export async function buildAgentCallPayload(input: AgentCallInput): Promise<GatewayCallPayload> {
   const agentName = clean(input.agent.name) || "Hivemind Agent";
   const runtime = clean(input.agent.runtime);
   const role = clean(input.agent.role);
   const task = clean(input.agent.task);
   const machineName = clean(input.machine?.name);
+  const isAeon = runtime.toLowerCase() === "aeon";
   const context = [
     `You are ${agentName}, calling Liam from HivemindOS.`,
     runtime || role ? `Agent context: ${[runtime, role].filter(Boolean).join(" / ")}.` : "",
@@ -71,7 +329,7 @@ export function buildAgentCallPayload(input: AgentCallInput): GatewayCallPayload
 
   return {
     title: agentName,
-    briefing: context,
+    briefing: isAeon ? await buildAeonCallBriefing(input) : context,
     returnAfterRoomReady: true,
     voiceProviderId: clean(input.agent.voiceProviderId) || undefined,
   };
@@ -119,6 +377,41 @@ export async function ringGatewayCall(payload: GatewayCallPayload): Promise<Gate
   });
 }
 
+function asGatewayObject(value: unknown): GatewayJsonObject {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as GatewayJsonObject : {};
+}
+
+export async function startAgentDashboardCall(input: AgentCallInput): Promise<GatewayCallResult> {
+  const payload = await buildAgentCallPayload(input);
+  const response = await gatewayJson("/voice/calls/inapp", {
+    method: "POST",
+    body: JSON.stringify({
+      briefing: payload.briefing,
+      voiceProviderId: payload.voiceProviderId,
+    }),
+  });
+  if (!response.ok) return response;
+  const result = asGatewayObject(response.result);
+  const livekitUrl = clean(result.livekitUrl);
+  const room = clean(result.room);
+  const token = clean(result.token);
+  return {
+    ...response,
+    result: {
+      ok: true,
+      call: {
+        id: room || `dashboard_${Date.now()}`,
+        callerName: payload.title,
+        voiceReady: Boolean(livekitUrl && token),
+        livekitUrl,
+        room,
+        dashboardToken: token,
+      },
+      voice: result.voice,
+    },
+  };
+}
+
 export async function readGatewayVoiceConfig(): Promise<GatewayCallResult> {
   return gatewayJson("/voice/config", { method: "GET" });
 }
@@ -131,6 +424,6 @@ export function ringStoredPrompt(scriptId: string) {
   return ringGatewayCall({ scriptId });
 }
 
-export function ringAgentCall(input: AgentCallInput) {
-  return ringGatewayCall(buildAgentCallPayload(input));
+export async function ringAgentCall(input: AgentCallInput) {
+  return ringGatewayCall(await buildAgentCallPayload(input));
 }

@@ -836,7 +836,8 @@
   --kb-honey: #f2b705;
   --kb-honey-2: #ffd45a;
   --kb-honey-3: #fff6cf;
-  min-height: min(1040px, calc(100vh - 86px));
+  height: 100%;
+  min-height: 0;
   border: 1px solid rgba(94, 234, 212, 0.12);
   border-radius: 2px;
   background:
@@ -854,7 +855,8 @@
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 18px;
-  min-height: min(1040px, calc(100vh - 86px));
+  height: 100%;
+  min-height: 0;
   padding: 0 20px 26px;
 }
 
@@ -1152,6 +1154,7 @@
   grid-auto-columns: 350px;
   grid-template-columns: none;
   gap: 18px;
+  height: 100%;
   min-height: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -1207,7 +1210,7 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
-  min-height: 670px;
+  min-height: 0;
   border: 1px solid rgba(var(--lane-accent-rgb), 0.2);
   border-radius: 8px;
   background:
@@ -1512,7 +1515,7 @@
   position: sticky;
   top: 16px;
   align-self: start;
-  max-height: calc(100vh - 128px);
+  max-height: 100%;
   overflow: auto;
   border: 1px solid rgba(255, 212, 90, 0.48);
   border-radius: 8px;

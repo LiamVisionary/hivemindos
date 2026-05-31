@@ -14,7 +14,7 @@ export function SchedulerPanel(props: any) {
   const modalSkillOptions = activeView === "aeon" ? (aeonSkillOptions ?? []) : sharedSkillOptions;
   return (<>
       {activeView === "scheduler" ? (
-      <section className="flex min-h-[760px] flex-col overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[rgba(5,8,13,0.72)]">
+      <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[rgba(5,8,13,0.72)]">
         <SchedulerView
           jobs={schedulerJobs}
           runStates={schedulerRunStates}

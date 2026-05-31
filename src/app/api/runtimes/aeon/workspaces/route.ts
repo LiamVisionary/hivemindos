@@ -315,10 +315,10 @@ async function assertSafeLocalWorkspaceRoot(root: string) {
   if (!hasAeonFile) throw new Error("Refusing to delete a folder that does not look like an AEON workspace.");
 }
 
-async function agentForWorkspace(input: { root: string; name?: string; repo?: string; mode?: AgentProfile["aeonMode"]; collectorUrl?: string; machineName?: string }): Promise<AgentProfile> {
+async function agentForWorkspace(input: { root: string; name?: string; repo?: string; mode?: AgentProfile["aeonMode"]; collectorUrl?: string; machineName?: string; readGitRemote?: boolean }): Promise<AgentProfile> {
   const collectorUrl = normalizeCollectorUrl(input.collectorUrl);
   const remoteWorkspace = Boolean(collectorUrl && !isLocalCollectorUrl(collectorUrl));
-  const remote = input.repo || (remoteWorkspace ? "" : await gitRemote(input.root));
+  const remote = input.repo ?? (remoteWorkspace || input.readGitRemote === false ? "" : await gitRemote(input.root));
   const repoFullName = repoFullNameFromUrl(remote);
   const repoName = slug(input.name || (remote ? repoNameFromUrl(remote) : basename(input.root)) || "AEON Workspace", "AEON Workspace");
   return {
@@ -409,6 +409,14 @@ export async function POST(request: NextRequest) {
       }
       await rm(root, { recursive: true, force: true });
       return NextResponse.json({ ok: true, action, root: displayPath(root), deleted: true, message: "Deleted the local AEON workspace." });
+    } else if (action === "duplicate") {
+      const sourceRoot = resolve(expandHome(body.path?.trim() || workspaceRootFromAgent(body.agent)));
+      await assertSafeLocalWorkspaceRoot(sourceRoot);
+      const sourceName = body.agent?.aeonRepoName || body.agent?.name || basename(sourceRoot) || "aeon-workspace";
+      const folderName = body.name?.trim() || `${sourceName}-copy`;
+      root = await availableLocalWorkspaceRoot(folderName, dirname(sourceRoot));
+      await duplicateDir(sourceRoot, root);
+      await ensureAeonWorkspace(root);
     } else if (action === "initialize") {
       const createUnique = body.unique === true || body.unique === "true";
       root = body.path
@@ -454,7 +462,15 @@ export async function POST(request: NextRequest) {
     }
     const requestedName = body.name?.trim();
     const actualName = (body.unique === true || body.unique === "true") && root ? basename(root) : requestedName;
-    const agent = await agentForWorkspace({ root, repo, name: actualName, mode: action === "clone" ? "github" : undefined, collectorUrl, machineName: body.machineName });
+    const agent = await agentForWorkspace({
+      root,
+      repo: action === "duplicate" ? "" : repo,
+      name: actualName,
+      mode: action === "clone" ? "github" : action === "duplicate" ? "local" : undefined,
+      collectorUrl,
+      machineName: body.machineName,
+      readGitRemote: action !== "duplicate",
+    });
     if (agent.aeonRepo) await registerAeonEnvSyncRepo(agent.aeonRepo, `workspace:${action}`).catch(() => undefined);
     const readme = remoteWorkspace ? "" : await readFile(join(root, "README.md"), "utf8").catch(() => "");
     return NextResponse.json({ ok: true, agent, root: displayPath(root), readme: readme.slice(0, 1200) });
