@@ -13,12 +13,6 @@ description: Local-first agent fleet control room documentation.
       <a href="architecture/">Trace the architecture</a>
     </div>
   </div>
-  <div class="topology" aria-label="HivemindOS system topology">
-    <div class="topologyNode">Dashboard / API facade</div>
-    <div class="topologyNode">Local collector + runtime homes</div>
-    <div class="topologyNode">Tailnet fleet telemetry</div>
-    <div class="topologyNode">Shared Obsidian brain</div>
-  </div>
 </section>
 
 <ul class="statusStrip">

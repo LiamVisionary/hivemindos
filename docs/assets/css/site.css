@@ -399,52 +399,6 @@ a:hover {
   color: var(--charcoal);
 }
 
-.topology {
-  position: relative;
-  display: grid;
-  gap: 12px;
-  border: 1px solid var(--charcoal);
-  background:
-    linear-gradient(135deg, rgba(10, 143, 166, 0.14), transparent 40%),
-    #fcfaf4;
-  padding: 16px;
-  box-shadow: 10px 10px 0 rgba(10, 143, 166, 0.14);
-}
-
-.topology::before {
-  content: "";
-  position: absolute;
-  inset: 22px;
-  border: 1px dashed rgba(30, 39, 36, 0.22);
-  pointer-events: none;
-}
-
-.topologyNode {
-  position: relative;
-  z-index: 1;
-  border: 1px solid var(--line-strong);
-  background: rgba(255, 253, 248, 0.9);
-  color: var(--charcoal);
-  font-family: var(--mono);
-  font-size: 0.8rem;
-  font-weight: 800;
-  padding: 12px;
-}
-
-.topologyNode:nth-child(2) {
-  margin-left: 34px;
-}
-
-.topologyNode:nth-child(3) {
-  margin-left: 68px;
-  border-color: rgba(10, 143, 166, 0.55);
-}
-
-.topologyNode:nth-child(4) {
-  margin-left: 28px;
-  border-color: rgba(39, 134, 95, 0.5);
-}
-
 .docGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -533,12 +487,6 @@ a:hover {
   }
 }
 
-@media (min-width: 1420px) {
-  .heroPanel {
-    grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
-  }
-}
-
 @media (max-width: 720px) {
   body {
     font-size: 16px;
@@ -560,12 +508,5 @@ a:hover {
   .docGrid,
   .heroPanel {
     grid-template-columns: 1fr;
-  }
-
-  .topologyNode,
-  .topologyNode:nth-child(2),
-  .topologyNode:nth-child(3),
-  .topologyNode:nth-child(4) {
-    margin-left: 0;
   }
 }

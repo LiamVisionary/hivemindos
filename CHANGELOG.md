@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-01 01:58:07 WITA - Remove Docs Hero Topology
+
+- Status: Pushed
+- Areas changed: GitHub Pages docs homepage, docs styling, changelog
+- Summary: Remove the homepage hero topology diagram and its unused CSS so the public docs open with only the intro copy and primary actions.
+- Verification: `rg -n "topology|topologyNode|Dashboard / API facade|Tailnet fleet telemetry" docs/index.md docs/assets/css/site.css` returned no matches; `git diff --check -- docs/index.md docs/assets/css/site.css CHANGELOG.md`; published Pages smoke check after push confirmed the homepage no longer includes `Dashboard / API facade` or `topology`.
+- Intended commit message: `Remove docs hero topology`
+
 ## 2026-06-01 01:22:45 WITA - Polish GitHub Pages Docs
 
 - Status: Pushed
