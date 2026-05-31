@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-01 03:25:00 WITA - Correct Imagegen Diagram Semantics
+
+- Status: Pushed
+- Areas changed: GitHub Pages diagrams atlas, generated image assets, brain/wallet docs, Syntho docs terminology, changelog
+- Summary: Regenerate the wallet/token, brain/vault, and Fleet/Tailnet imagegen plates with clearer semantics; split wallet, UsePod, and Honey/Bankr HIVE into separate lanes; add the env-vault-path lane to the Obsidian vault plate; fix the Fleet topology plate spelling; and rename public Synto references to Syntho while preserving the internal `synto` API/CLI slug.
+- Verification: `git diff --check -- docs CHANGELOG.md src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/VaultPanel.tsx src/features/dashboard/views/brain-services-ui.tsx src/lib/types/agent-runtime.ts src/lib/services/brain/synto.ts src/app/api/brain/synto scripts/test-gbrain-foundation.mjs setup.sh setup.ps1 uninstall.sh uninstall.ps1`; markdown and HTML image link check across `docs/**/*.md`; generated asset size check for all seven diagram JPEGs; `node scripts/test-gbrain-foundation.mjs`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `pnpm exec eslint src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/VaultPanel.tsx src/lib/types/agent-runtime.ts scripts/test-gbrain-foundation.mjs --max-warnings=999` passed with existing DashboardApp warnings only.
+- Intended commit message: `Correct imagegen diagram semantics`
+
 ## 2026-06-01 02:56:37 WITA - Add Imagegen Infographic Plates
 
 - Status: Pushed

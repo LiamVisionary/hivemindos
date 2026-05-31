@@ -19,16 +19,16 @@ description: Visual atlas for HivemindOS architecture, wallets, runtimes, fleet,
 
 <div class="imagePlateGrid">
   <figure class="imagePlate">
-    <img src="assets/img/diagrams/wallet-token-rails.jpg" alt="Generated wallet and token rails infographic showing agent wallet, Base and Solana, USDC, UsePod, x402, Honey, and Bankr HIVE.">
-    <figcaption>Wallets, token rails, prepaid inference, Honey, Bankr HIVE, and x402.</figcaption>
+    <img src="assets/img/diagrams/wallet-token-rails.jpg" alt="Generated wallet and token rails infographic with separate lanes for x402 paid APIs, UsePod prepaid runtime deposits, and Honey to Bankr HIVE claims.">
+    <figcaption>Wallet rails are three separate paths: wallet to x402, wallet to UsePod prepaid runtime, and runtime usage to Honey to Bankr HIVE claim.</figcaption>
   </figure>
   <figure class="imagePlate">
     <img src="assets/img/diagrams/fleet-tailnet-topology.jpg" alt="Generated fleet and Tailnet topology infographic showing dashboard, local collector, Tailnet or Link, remote collectors, apps, and runtimes.">
-    <figcaption>Fleet, collectors, Tailnet/Link reachability, app proxies, and runtimes.</figcaption>
+    <figcaption>Dashboard to local collector, then private Tailnet reachability out to remote collectors, machine health, apps, and runtimes.</figcaption>
   </figure>
   <figure class="imagePlate">
-    <img src="assets/img/diagrams/brain-services-vault.jpg" alt="Generated brain services and shared vault infographic showing Obsidian Vault, Skills, GBrain, Synto, Trading Brain, and Synthesis.">
-    <figcaption>Obsidian vault, shared skills, GBrain, Synto, Trading Brain, and Synthesis.</figcaption>
+    <img src="assets/img/diagrams/brain-services-vault.jpg" alt="Generated brain services and shared vault infographic showing ENV vault path, Obsidian Vault, Skills, GBrain, Syntho, Trading Brain, and Synthesis Folder.">
+    <figcaption>ENV vault path into Obsidian, shared skills, GBrain retrieval, Syntho reviewed output, Trading Brain, and the Synthesis folder.</figcaption>
   </figure>
   <figure class="imagePlate">
     <img src="assets/img/diagrams/workboard-scheduler-loop.jpg" alt="Generated workboard and scheduler loop infographic showing Ideas, Ready, Working, Done, Scheduler, Deliverables, and History.">
@@ -54,7 +54,7 @@ description: Visual atlas for HivemindOS architecture, wallets, runtimes, fleet,
   <a href="#honey-hive-flow">Honey And HIVE Flow <span>Observed usage, Honey ledger, Bankr claim path.</span></a>
   <a href="#workboard-lifecycle">Workboard Lifecycle <span>Ideas, assignment, runs, deliverables, history.</span></a>
   <a href="#scheduler-loop">Scheduler Loop <span>Shared schedules, runtime actions, skills, run phases.</span></a>
-  <a href="#brain-services">Brain Services <span>Obsidian, skills, GBrain, Synto, trading brain.</span></a>
+  <a href="#brain-services">Brain Services <span>Obsidian, skills, GBrain, Syntho, trading brain.</span></a>
   <a href="#native-bridge">Native Bridge <span>Tauri-first local actions with browser fallbacks.</span></a>
   <a href="#phone-voice">Phone And Voice <span>Gateway, pairing, ring-agent, dashboard calls.</span></a>
   <a href="#aeon-github">AEON GitHub Path <span>OAuth, repo setup, Actions, OIDC brain access.</span></a>
@@ -96,7 +96,7 @@ flowchart LR
   <section class="infoTile"><b>01</b><strong>Fleet</strong><span>Discovers machines, collectors, app badges, health, and hivenet services.</span></section>
   <section class="infoTile"><b>02</b><strong>Agents</strong><span>Profiles bind runtime, model, env, wallet, vault, machine, and call context.</span></section>
   <section class="infoTile"><b>03</b><strong>Work</strong><span>Kanban, scheduler, swarm, history, note intake, and deliverables.</span></section>
-  <section class="infoTile"><b>04</b><strong>Brain</strong><span>Obsidian memory, graph, shared skills, GBrain, Synto, trading brain.</span></section>
+  <section class="infoTile"><b>04</b><strong>Brain</strong><span>Obsidian memory, graph, shared skills, GBrain, Syntho, trading brain.</span></section>
   <section class="infoTile"><b>05</b><strong>Wallets</strong><span>Base/Solana, USDC, UsePod deposits, MoneyClaw, Honey, HIVE, x402.</span></section>
   <section class="infoTile"><b>06</b><strong>Native</strong><span>Tauri status, local folder actions, deliverable opening, packaged server.</span></section>
 </div>
@@ -222,10 +222,12 @@ flowchart TB
   Graph --> Dashboard["Brain Services cockpit"]
   Skills --> RuntimeSkills["Runtime skill sync"]
   Dashboard --> GBrain["GBrain import / embed / dream / query"]
-  Dashboard --> Synto["Synto Synthesis pipeline"]
+  Dashboard --> EnvPath["NEXT_PUBLIC_OBSIDIAN_VAULT_PATH"]
+  EnvPath --> Vault
+  Dashboard --> Syntho["Syntho reviewed-memory pipeline"]
   Dashboard --> Trading["Trading brain status"]
-  Synto --> Synthesis["Synthesis folder"]
-  Synto --> SourcePolicy["Source access policy: deny by default"]
+  Syntho --> Synthesis["Synthesis folder"]
+  Syntho --> SourcePolicy["Source access policy: deny by default"]
   GBrain --> Query["Graph memory query"]
 ```
 

@@ -27,13 +27,13 @@ Seeded structure:
 - `Operations/Brain Services/Obsidian Plugin Pack.md` lists optional manual Obsidian plugins for templates, tasks, Dataview, retrieval, calendar, Kanban, and Git.
 - `Operations/Automations/Foundation Workflows/` contains disabled workflow schedules for context synthesis, intake processing, meeting processing, research ingestion, vault health checks, decision review, argument building, book notes, feedback-loop capture, project updates, weekly synthesis, connection finding, and distillation.
 
-## Brain Graph, GBrain, Synto, And Trading Brain
+## Brain Graph, GBrain, Syntho, And Trading Brain
 
 How it works:
 
 - Brain graph generation is in `src/lib/services/obsidian/brain-graph.ts`.
 - GBrain actions are in `src/lib/services/brain/gbrain.ts`.
-- Synto actions are in `src/lib/services/brain/synto.ts`.
+- Syntho actions are in `src/lib/services/brain/synto.ts`; the internal API slug and installed CLI command remain `synto`.
 - Trading-brain install/status lives in `src/lib/services/brain/trading-brain.ts`.
 - API routes live under `/api/brain/gbrain/*`, `/api/brain/synto/*`, `/api/brain/trading-brain/*`, and `/api/obsidian/graph`.
 
@@ -44,17 +44,17 @@ Capabilities:
 - Install or connect GBrain.
 - Import the vault into GBrain.
 - Embed, dream, and query through configured GBrain commands.
-- Install or connect Synto.
-- Initialize the `Synthesis` folder as a Synto vault.
-- Run Synto pipeline, maintain, compare, eval, doctor, query, and pack export commands.
-- Record the Synto MCP command and source-access policy in the brain-service note.
-- Keep Synto raw-source MCP access denied by default unless the user explicitly changes the source-access policy.
+- Install or connect Syntho.
+- Initialize the `Synthesis` folder as a Syntho vault.
+- Run Syntho pipeline, maintain, compare, eval, doctor, query, and pack export commands.
+- Record the Syntho MCP command and source-access policy in the brain-service note.
+- Keep Syntho raw-source MCP access denied by default unless the user explicitly changes the source-access policy.
 - Attach trading-brain status to selected runtimes where configured.
 - Write service notes back into the vault.
 
-### Synto Model
+### Syntho Model
 
-Synto is treated as an optional reviewed-memory compiler for the `Synthesis` folder, not as a replacement for the raw vault. HivemindOS tracks:
+Syntho is treated as an optional reviewed-memory compiler for the `Synthesis` folder, not as a replacement for the raw vault. HivemindOS tracks:
 
 - CLI path and install mode.
 - `synto.toml` and `.synto/state.db` initialization state.
@@ -62,7 +62,7 @@ Synto is treated as an optional reviewed-memory compiler for the `Synthesis` fol
 - MCP mode, MCP command, exposed tool names, and source-access mode.
 - Compare model, confidence threshold, and whether high-confidence changes can be auto-approved.
 
-The dashboard writes these settings into `Operations/Brain Services/Synto.md` and mirrors them into shared-vault config so other agents can see the intended policy.
+The dashboard writes these settings into `Operations/Brain Services/Syntho.md` and mirrors them into shared-vault config so other agents can see the intended policy.
 
 ## Shared Skills
 

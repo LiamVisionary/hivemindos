@@ -65,7 +65,7 @@ The codebase now spans more than the original Fleet, Work, Brain, Chat, and Wall
 - My Apps: hivenet app and API-service discovery with icon proxying, health checks, service-kind signatures, OpenAPI/Hivemind route catalogs, route copy actions, and safe open links.
 - AEON: repository/workspace management, local clone/link flows, GitHub-backed duplicates, scheduler handoff, brain access, and deliverable discovery/download/transfer.
 - Swarm: MiroShark template-driven simulations, scenario helpers, archive loading, X/polymarket/reddit-style outputs, run intelligence, publish actions, and analysis-agent selection.
-- Brain Services: Obsidian graph, shared skills, GBrain, Synto, trading-brain install/status, service notes, Synthesis-folder configuration, and source-access policy controls.
+- Brain Services: Obsidian graph, shared skills, GBrain, Syntho, trading-brain install/status, service notes, Synthesis-folder configuration, and source-access policy controls.
 - Wallets, Tokens, and Usage: per-agent wallets, Base/Solana token rails, MoneyClaw key validation, UsePod prepaid status, x402 smoke tests, encrypted wallet-vault backup/restore, Honey observation, and Bankr HIVE claims.
 - Work History and Maintenance: dynamic changelog history, note-to-Kanban intake, bulk task triage, process/heap memory telemetry, and conservative local repair actions.
 - Native Desktop: a Tauri shell that can read desktop status directly and use native local folder browsing/creation while preserving the browser API fallbacks.

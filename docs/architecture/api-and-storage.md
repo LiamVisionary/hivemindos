@@ -11,7 +11,7 @@ All routes below are served by the Next.js app under `src/app/api`.
 | `/api/agents/*` | Agent status checks, runtime agent creation/deletion, folder browsing |
 | `/api/app/version` | App version and checkout metadata |
 | `/api/brain/gbrain/*` | GBrain status, install, connect, import, embed, dream, and query |
-| `/api/brain/synto/*` | Synto status, install, connect, init, run, maintain, compare, eval, doctor, pack export, and query |
+| `/api/brain/synto/*` | Syntho status, install, connect, init, run, maintain, compare, eval, doctor, pack export, and query |
 | `/api/brain/trading-brain/*` | Trading brain status and install |
 | `/api/chat/*` | Agent chat, runtime chat stream, session reads, chat folder persistence |
 | `/api/control-room/status` | Control-room path and setup status checks |
@@ -176,8 +176,8 @@ Default folders and files are configured in `DEFAULT_SHARED_VAULT` in `src/lib/t
 | `Operations/Work Board` | Kanban board state |
 | `Operations/Agent Notifications` | Notification records and settings |
 | `Operations/Automations` | Scheduled schedules and run records |
-| `Operations/Brain Services` | GBrain/Synto/trading-brain service notes |
-| `Synthesis` | Reviewed synthesis layer and optional Synto vault |
+| `Operations/Brain Services` | GBrain/Syntho/trading-brain service notes |
+| `Synthesis` | Reviewed synthesis layer and optional Syntho vault |
 | `Skills/README.md` | Shared skill index |
 | `Skills/<slug>/SKILL.md` | Shared skill definitions |
 

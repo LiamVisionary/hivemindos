@@ -60,7 +60,7 @@ The dashboard route is `src/app/page.tsx`. It accepts `view` and `vaultPanel` qu
 - `src/features/dashboard/hooks/use-kanban-dispatch-controller.tsx`: agent dispatch, runtime session polling, completion handling, and stalled work detection.
 - `src/features/dashboard/hooks/use-scheduler-controller.tsx`: shared schedules and runtime schedule actions.
 - `src/features/dashboard/hooks/use-agent-controller.tsx`: runtime integrations, agent creation, runtime sessions, and agent settings.
-- `src/features/dashboard/hooks/use-miroshark-brain-controller.tsx`: MiroShark, Obsidian graph, shared skills, recent directories, GBrain/Synto-adjacent vault context, and shared notifications.
+- `src/features/dashboard/hooks/use-miroshark-brain-controller.tsx`: MiroShark, Obsidian graph, shared skills, recent directories, GBrain/Syntho-adjacent vault context, and shared notifications.
 - `src/features/dashboard/hooks/use-wallet-files-controller.tsx`: wallets, Honey, runtime usage, MoneyClaw, x402, maintenance, and runtime files.
 - `src/features/dashboard/hooks/use-status-chat-input-controller.tsx`: chat sending, setup/status helpers, Obsidian access, and sync actions.
 - `src/features/dashboard/hooks/use-chat-tree-controller.tsx`: chat folder tree, runtime session hydration, directory context, and folder creation.
@@ -83,7 +83,7 @@ The app uses Next.js route handlers under `src/app/api`. They form the dashboard
 - OpenClaw runtime support is kept inside the generic runtime and chat layers rather than standalone product routes.
 - `/api/miroshark/*`: companion status, install/start, swarm templates/runs, analysis.
 - `/api/wallet/*`: local wallet creation, balances, sends, MoneyClaw, backups, x402 calls.
-- `/api/brain/*`: GBrain, Synto, and trading-brain status/install/query actions.
+- `/api/brain/*`: GBrain, Syntho, and trading-brain status/install/query actions.
 - `/api/env`, `/api/runtime-files`, `/api/maintenance`, `/api/memory-telemetry`, `/api/telemetry/events`, `/api/work-history`: local utility surfaces.
 
 See [API And Storage Reference](api-and-storage.md) for route grouping details.
@@ -152,7 +152,7 @@ Important storage locations:
 
 - Browser `localStorage`: UI preferences, local agent config, cached dashboard state, chat history snippets, and user-selected settings.
 - `~/.hivemindos`: install id, shared env, collector env, Kanban fallback, runtime agent registry, wallet vault, Honey ledger cache, runtime run cache, skill auto-sync config.
-- Obsidian vault: shared brain, Kanban board files, notifications, scheduled-run files, wallet ledger notes, recent directories, shared skills, machine aliases, graph access logs, GBrain and Synto service notes.
+- Obsidian vault: shared brain, Kanban board files, notifications, scheduled-run files, wallet ledger notes, recent directories, shared skills, machine aliases, graph access logs, GBrain and Syntho service notes.
 - Runtime homes: Hermes, OpenClaw, Aeon, and local OpenAI-compatible server config/state.
 - Cloudflare D1: optional official Honey ledger and compute gateway accounting.
 

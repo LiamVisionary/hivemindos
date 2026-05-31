@@ -12,7 +12,7 @@ For a faster spatial read, start with the [Diagrams And Maps](../diagrams.md) at
 
 ## Shared Brain
 
-- [Brain, Vault, And Skills](brain-vault-and-skills.md): Obsidian vault, brain graph, shared skills, GBrain, Synto, trading brain, note intake, Synthesis, and sync ownership.
+- [Brain, Vault, And Skills](brain-vault-and-skills.md): Obsidian vault, brain graph, shared skills, GBrain, Syntho, trading brain, note intake, Synthesis, and sync ownership.
 - [Env, Files, Notifications, And Maintenance](env-files-notifications-maintenance.md): env sync, runtime files, notifications, memory telemetry, and repair checks.
 
 ## Integrations And Economy
@@ -41,7 +41,7 @@ flowchart TD
   Work --> History["Work history"]
   Vault["Brain and vault"] --> Skills["Shared skills"]
   Vault --> GBrain["GBrain"]
-  Vault --> Synto["Synto / Synthesis"]
+  Vault --> Syntho["Syntho / Synthesis"]
   Vault --> Notifications["Notifications"]
   Vault --> Env["Shared env"]
   Runtimes --> OpenClaw["OpenClaw"]
