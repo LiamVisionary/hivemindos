@@ -33,7 +33,7 @@ description: Local-first agent fleet control room documentation.
   </section>
   <section class="docCard">
     <h3>Diagrams And Maps</h3>
-    <p>Use the visual atlas for system flowcharts, wallet/token diagrams, trust boundaries, scheduler loops, runtime maps, and storage infographics.</p>
+    <p>Use the visual atlas for generated infographic plates, system flowcharts, wallet/token diagrams, trust boundaries, scheduler loops, runtime maps, and storage maps.</p>
     <a href="diagrams.html">Open visual atlas</a>
   </section>
   <section class="docCard">

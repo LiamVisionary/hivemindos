@@ -453,6 +453,42 @@ a:hover {
   margin-bottom: 12px;
 }
 
+.imagePlate,
+.imagePlateGrid {
+  margin: 1.4rem 0;
+}
+
+.imagePlate {
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 10px;
+}
+
+.imagePlate img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid rgba(30, 39, 36, 0.1);
+}
+
+.imagePlate figcaption {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.45;
+  margin-top: 10px;
+}
+
+.imagePlateHero {
+  box-shadow: 10px 10px 0 rgba(30, 39, 36, 0.08);
+}
+
+.imagePlateGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .heroPanel {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -626,7 +662,8 @@ a:hover {
   .heroPanel,
   .diagramIndex,
   .signalGrid,
-  .infographicGrid {
+  .infographicGrid,
+  .imagePlateGrid {
     grid-template-columns: 1fr;
   }
 

@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-01 02:56:37 WITA - Add Imagegen Infographic Plates
+
+- Status: Pushed
+- Areas changed: GitHub Pages diagrams atlas, generated image assets, docs styling, homepage copy, changelog
+- Summary: Generate and embed seven raster infographic plates with the imagegen skill for the visual atlas, covering the overall HivemindOS map, wallet/token rails, Fleet/Tailnet topology, Brain Services/shared vault, Workboard/Scheduler loop, Security/trust boundaries, and AEON/native desktop.
+- Verification: `git diff --check -- docs CHANGELOG.md`; markdown and HTML image link check across `docs/**/*.md`; docs text file-size check confirmed the largest docs text file is `docs/assets/css/site.css` at 674 lines; generated asset check confirmed seven JPEG plates under `docs/assets/img/diagrams`. `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files outside this docs change.
+- Intended commit message: `Add imagegen infographic plates`
+
 ## 2026-06-01 02:32:48 WITA - Add Visual Diagrams Atlas
 
 - Status: Pushed

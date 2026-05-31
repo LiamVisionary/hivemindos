@@ -7,8 +7,44 @@ description: Visual atlas for HivemindOS architecture, wallets, runtimes, fleet,
 
 <section class="atlasHero">
   <strong>A visual atlas for the local-first agent control room.</strong>
-  <p>These diagrams compress the main product and engineering surfaces into fast operator maps: what talks to what, where state lives, which rails move money or tokens, and where trust boundaries sit.</p>
+  <p>These generated plates and diagrams compress the main product and engineering surfaces into fast operator maps: what talks to what, where state lives, which rails move money or tokens, and where trust boundaries sit.</p>
 </section>
+
+## Generated Infographic Plates
+
+<figure class="imagePlate imagePlateHero">
+  <img src="assets/img/diagrams/visual-atlas.jpg" alt="Generated HivemindOS visual atlas infographic showing Fleet, Agents, Brain, Work, Wallets, and Native around the dashboard.">
+  <figcaption>Generated overview plate for the full HivemindOS visual atlas.</figcaption>
+</figure>
+
+<div class="imagePlateGrid">
+  <figure class="imagePlate">
+    <img src="assets/img/diagrams/wallet-token-rails.jpg" alt="Generated wallet and token rails infographic showing agent wallet, Base and Solana, USDC, UsePod, x402, Honey, and Bankr HIVE.">
+    <figcaption>Wallets, token rails, prepaid inference, Honey, Bankr HIVE, and x402.</figcaption>
+  </figure>
+  <figure class="imagePlate">
+    <img src="assets/img/diagrams/fleet-tailnet-topology.jpg" alt="Generated fleet and Tailnet topology infographic showing dashboard, local collector, Tailnet or Link, remote collectors, apps, and runtimes.">
+    <figcaption>Fleet, collectors, Tailnet/Link reachability, app proxies, and runtimes.</figcaption>
+  </figure>
+  <figure class="imagePlate">
+    <img src="assets/img/diagrams/brain-services-vault.jpg" alt="Generated brain services and shared vault infographic showing Obsidian Vault, Skills, GBrain, Synto, Trading Brain, and Synthesis.">
+    <figcaption>Obsidian vault, shared skills, GBrain, Synto, Trading Brain, and Synthesis.</figcaption>
+  </figure>
+  <figure class="imagePlate">
+    <img src="assets/img/diagrams/workboard-scheduler-loop.jpg" alt="Generated workboard and scheduler loop infographic showing Ideas, Ready, Working, Done, Scheduler, Deliverables, and History.">
+    <figcaption>Workboard lanes, scheduler loop, deliverables, and history.</figcaption>
+  </figure>
+  <figure class="imagePlate">
+    <img src="assets/img/diagrams/security-trust-boundaries.jpg" alt="Generated security and trust boundaries infographic showing Public Docs, Browser, Local API, Private Vault, Wallet Keys, Tailnet, and Workers.">
+    <figcaption>Security boundaries across public docs, local APIs, wallet keys, Tailnet, and workers.</figcaption>
+  </figure>
+  <figure class="imagePlate">
+    <img src="assets/img/diagrams/aeon-native-desktop.jpg" alt="Generated AEON and native desktop infographic showing Tauri, Local Files, AEON Repo, GitHub Actions, Deliverables, and Shared Vault.">
+    <figcaption>AEON, Tauri native bridge, local files, GitHub Actions, deliverables, and shared vault.</figcaption>
+  </figure>
+</div>
+
+## Rendered System Maps
 
 <div class="diagramIndex">
   <a href="#control-room-map">Control Room Map <span>Dashboard, APIs, collectors, runtimes, vault, workers.</span></a>
