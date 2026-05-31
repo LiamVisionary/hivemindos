@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-01 02:32:48 WITA - Add Visual Diagrams Atlas
+
+- Status: Pushed
+- Areas changed: GitHub Pages diagrams atlas, Mermaid rendering, docs navigation, homepage cards, docs styling, changelog
+- Summary: Add a dedicated diagrams and maps page with Mermaid flowcharts, sequence diagrams, state diagrams, and infographic cards for fleet topology, runtimes, wallets/tokens, Honey/HIVE, workboard, scheduler, brain services, native bridge, phone, AEON GitHub, MiroShark/Swarm, storage, API surfaces, and security boundaries.
+- Verification: `git diff --check -- docs CHANGELOG.md`; markdown link check across `docs/**/*.md`; docs file-size check confirmed the largest docs file is `docs/assets/css/site.css` at 637 lines; `rg -c '^```mermaid$' docs/diagrams.md` found 15 diagrams. `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files outside this docs change.
+- Intended commit message: `Add visual diagrams atlas`
+
 ## 2026-06-01 02:26:30 WITA - Promote Wallets And Tokens Docs
 
 - Status: Pushed

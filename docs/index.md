@@ -32,6 +32,11 @@ description: Local-first agent fleet control room documentation.
     <a href="features/">Open features</a>
   </section>
   <section class="docCard">
+    <h3>Diagrams And Maps</h3>
+    <p>Use the visual atlas for system flowcharts, wallet/token diagrams, trust boundaries, scheduler loops, runtime maps, and storage infographics.</p>
+    <a href="diagrams.html">Open visual atlas</a>
+  </section>
+  <section class="docCard">
     <h3>Wallets And Tokens</h3>
     <p>Follow agent wallets, Base/Solana token handling, UsePod prepaid deposits, MoneyClaw keys, Honey rewards, Bankr HIVE claims, and x402 payments.</p>
     <a href="features/wallets-honey-and-x402.html">Open wallet docs</a>

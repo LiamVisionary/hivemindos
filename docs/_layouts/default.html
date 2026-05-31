@@ -22,6 +22,7 @@
       </a>
       <div class="topLinks">
         <a href="{{ '/features/' | relative_url }}">Features</a>
+        <a href="{{ '/diagrams.html' | relative_url }}">Diagrams</a>
         <a href="{{ '/architecture/' | relative_url }}">Architecture</a>
         <a href="{{ '/product/' | relative_url }}">Product</a>
         <a href="{{ '/integrations/' | relative_url }}">Integrations</a>
@@ -39,6 +40,7 @@
           <h2>Start</h2>
           <a href="{{ '/' | relative_url }}">Overview</a>
           <a href="{{ '/features/' | relative_url }}">Feature guide</a>
+          <a href="{{ '/diagrams.html' | relative_url }}">Diagrams and maps</a>
           <a href="{{ '/architecture/' | relative_url }}">Architecture</a>
           <a href="{{ '/native-app.html' | relative_url }}">Native app</a>
         </section>
@@ -82,5 +84,43 @@
     <span>HivemindOS documentation</span>
     <a href="https://github.com/LiamVisionary/hivemindos">GitHub</a>
   </footer>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    const mermaidBlocks = document.querySelectorAll("code.language-mermaid");
+    mermaidBlocks.forEach((code, index) => {
+      const diagram = document.createElement("div");
+      diagram.className = "mermaid";
+      diagram.id = `mermaid-${index}`;
+      diagram.textContent = code.textContent;
+      const wrapper = code.closest(".highlighter-rouge") || code.closest("pre") || code;
+      wrapper.replaceWith(diagram);
+    });
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        background: "#fffdf8",
+        primaryColor: "#f8f3e8",
+        primaryTextColor: "#141716",
+        primaryBorderColor: "#1e2724",
+        lineColor: "#5f6d67",
+        secondaryColor: "#e6f3f0",
+        tertiaryColor: "#f7ead8",
+        fontFamily: "Avenir, Avenir Next, Gill Sans, Corbel, Trebuchet MS, sans-serif"
+      }
+    });
+
+    for (const node of document.querySelectorAll(".mermaid")) {
+      try {
+        await mermaid.run({ nodes: [node] });
+      } catch (error) {
+        node.classList.add("mermaidError");
+        node.textContent = `Diagram render failed: ${error instanceof Error ? error.message : "unknown error"}`;
+      }
+    }
+  </script>
 </body>
 </html>

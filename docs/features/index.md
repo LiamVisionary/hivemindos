@@ -2,6 +2,8 @@
 
 HivemindOS has a lot of surface area, so features are split into focused pages instead of one long reference file. Each page explains what the feature does, how it works internally, and what capabilities it exposes.
 
+For a faster spatial read, start with the [Diagrams And Maps](../diagrams.md) atlas.
+
 ## Core Control Room
 
 - [Fleet](fleet.md): machine discovery, health, collector snapshots, updates, provisioning helpers, app discovery, and hivenet API route catalogs.

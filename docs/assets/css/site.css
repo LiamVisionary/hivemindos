@@ -336,6 +336,123 @@ a:hover {
   padding-left: 18px;
 }
 
+.mermaid {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(135deg, rgba(10, 143, 166, 0.06), transparent 38%),
+    linear-gradient(315deg, rgba(184, 115, 25, 0.08), transparent 42%),
+    #fffdf8;
+  margin: 1.4rem 0;
+  padding: 18px;
+}
+
+.mermaid svg {
+  display: block;
+  min-width: 680px;
+  max-width: none !important;
+}
+
+.mermaidError {
+  border-color: #b45309;
+  background: #fff7ed;
+  color: #7c2d12;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+}
+
+.atlasHero {
+  border: 1px solid var(--charcoal);
+  background:
+    linear-gradient(90deg, rgba(30, 39, 36, 0.08) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(30, 39, 36, 0.06) 1px, transparent 1px),
+    #fffdf8;
+  background-size: 26px 26px;
+  margin: 24px 0;
+  padding: clamp(18px, 4vw, 34px);
+}
+
+.atlasHero strong {
+  display: block;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: clamp(1.45rem, 3vw, 2.15rem);
+  line-height: 1.16;
+}
+
+.atlasHero p {
+  margin-bottom: 0;
+}
+
+.diagramIndex,
+.signalGrid,
+.infographicGrid {
+  display: grid;
+  gap: 12px;
+  margin: 1.4rem 0;
+}
+
+.diagramIndex {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.signalGrid,
+.infographicGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.diagramIndex a,
+.signalCard,
+.infoTile {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--charcoal-2);
+  padding: 14px;
+  text-decoration: none;
+}
+
+.diagramIndex a {
+  display: block;
+  font-weight: 900;
+}
+
+.diagramIndex a span,
+.signalCard span,
+.infoTile span {
+  display: block;
+  color: var(--quiet);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.signalCard strong,
+.infoTile strong {
+  display: block;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.infoTile {
+  min-height: 132px;
+}
+
+.infoTile b {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--charcoal);
+  background: var(--charcoal);
+  color: #fffdf8;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  margin-bottom: 12px;
+}
+
 .heroPanel {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -506,7 +623,14 @@ a:hover {
 
   .sideNav,
   .docGrid,
-  .heroPanel {
+  .heroPanel,
+  .diagramIndex,
+  .signalGrid,
+  .infographicGrid {
     grid-template-columns: 1fr;
+  }
+
+  .mermaid {
+    padding: 12px;
   }
 }
