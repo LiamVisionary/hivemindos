@@ -1,0 +1,571 @@
+:root {
+  color-scheme: light;
+  --ink: #141716;
+  --muted: #58635f;
+  --quiet: #73807b;
+  --paper: #f6f3ec;
+  --paper-strong: #fffdf8;
+  --line: #d8d2c4;
+  --line-strong: #bbb3a3;
+  --panel: #ffffff;
+  --charcoal: #1e2724;
+  --charcoal-2: #2f3b37;
+  --cyan: #0a8fa6;
+  --green: #27865f;
+  --amber: #b87319;
+  --code-bg: #ece7dc;
+  --shadow: 0 18px 48px rgba(31, 39, 36, 0.12);
+  --mono: "SFMono-Regular", "Cascadia Code", "Liberation Mono", Menlo, monospace;
+  --sans: Avenir, "Avenir Next", "Gill Sans", Corbel, "Trebuchet MS", sans-serif;
+  --serif: Charter, "Bitstream Charter", "Sitka Text", Cambria, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--paper);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    linear-gradient(90deg, rgba(20, 23, 22, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(20, 23, 22, 0.035) 1px, transparent 1px),
+    var(--paper);
+  background-size: 36px 36px;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+a {
+  color: var(--cyan);
+  text-decoration-color: rgba(10, 143, 166, 0.35);
+  text-underline-offset: 0.18em;
+}
+
+a:hover {
+  color: #066777;
+  text-decoration-color: currentColor;
+}
+
+.skipLink {
+  position: absolute;
+  left: 16px;
+  top: -80px;
+  z-index: 20;
+  background: var(--charcoal);
+  color: #fff;
+  padding: 10px 14px;
+}
+
+.skipLink:focus {
+  top: 12px;
+}
+
+.siteHeader {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid rgba(20, 23, 22, 0.12);
+  background: rgba(246, 243, 236, 0.92);
+  backdrop-filter: blur(16px);
+}
+
+.topNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 14px clamp(18px, 4vw, 44px);
+}
+
+.brandMark {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.brandGlyph {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid var(--charcoal);
+  background: var(--charcoal);
+  color: #f7efe1;
+  font-family: var(--serif);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.brandMark strong,
+.brandMark small {
+  display: block;
+  line-height: 1.05;
+}
+
+.brandMark strong {
+  font-family: var(--serif);
+  font-size: 1.08rem;
+}
+
+.brandMark small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.topLinks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.topLinks a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  border: 1px solid transparent;
+  color: var(--charcoal-2);
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 0 10px;
+  text-decoration: none;
+}
+
+.topLinks a:hover,
+.topLinks .previewLink {
+  border-color: var(--line-strong);
+  background: rgba(255, 253, 248, 0.72);
+}
+
+.docFrame {
+  display: grid;
+  grid-template-columns: minmax(230px, 292px) minmax(0, 1fr);
+  gap: clamp(24px, 4vw, 56px);
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: clamp(22px, 4vw, 46px);
+}
+
+.docSidebar {
+  align-self: start;
+  position: sticky;
+  top: 86px;
+  max-height: calc(100vh - 110px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 248, 0.72);
+  box-shadow: 8px 8px 0 rgba(30, 39, 36, 0.08);
+}
+
+.sidebarKicker {
+  border-bottom: 1px solid var(--line);
+  color: var(--quiet);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  padding: 14px 16px;
+  text-transform: uppercase;
+}
+
+.sideNav {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.sideNav section {
+  display: grid;
+  gap: 2px;
+  padding: 6px 0 12px;
+}
+
+.sideNav h2 {
+  margin: 0 0 4px;
+  color: var(--amber);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.sideNav a {
+  display: block;
+  border-left: 3px solid transparent;
+  color: var(--charcoal-2);
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.35;
+  padding: 7px 8px 7px 10px;
+  text-decoration: none;
+}
+
+.sideNav a:hover {
+  border-left-color: var(--cyan);
+  background: #fff;
+  color: var(--ink);
+}
+
+.docMain {
+  min-width: 0;
+}
+
+.docContent {
+  max-width: 940px;
+  min-height: 70vh;
+  border: 1px solid var(--line);
+  background: var(--paper-strong);
+  box-shadow: var(--shadow);
+  padding: clamp(28px, 5vw, 64px);
+}
+
+.docContent > :first-child {
+  margin-top: 0;
+}
+
+.docContent h1,
+.docContent h2,
+.docContent h3,
+.docContent h4 {
+  color: var(--ink);
+  line-height: 1.12;
+}
+
+.docContent h1 {
+  max-width: 16ch;
+  margin-bottom: 0.35em;
+  font-family: var(--serif);
+  font-size: clamp(2.35rem, 5vw, 4.4rem);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.docContent h2 {
+  margin-top: 2.1em;
+  border-top: 1px solid var(--line);
+  padding-top: 0.82em;
+  font-family: var(--serif);
+  font-size: clamp(1.55rem, 3vw, 2.45rem);
+}
+
+.docContent h3 {
+  margin-top: 1.7em;
+  font-size: 1.22rem;
+  font-weight: 900;
+}
+
+.docContent p,
+.docContent li {
+  color: var(--charcoal-2);
+}
+
+.docContent p {
+  max-width: 76ch;
+}
+
+.docContent ul,
+.docContent ol {
+  padding-left: 1.35rem;
+}
+
+.docContent li + li {
+  margin-top: 0.35em;
+}
+
+.docContent code {
+  border: 1px solid rgba(30, 39, 36, 0.08);
+  background: var(--code-bg);
+  color: #26322e;
+  font-family: var(--mono);
+  font-size: 0.88em;
+  padding: 0.13em 0.32em;
+}
+
+.docContent pre {
+  overflow: auto;
+  border: 1px solid #26322e;
+  background: #121816;
+  color: #eef5ef;
+  padding: 18px;
+}
+
+.docContent pre code {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.docContent table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 1.4rem 0;
+}
+
+.docContent th,
+.docContent td {
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  vertical-align: top;
+}
+
+.docContent th {
+  background: #ece7dc;
+  color: var(--ink);
+  text-align: left;
+}
+
+.docContent blockquote {
+  border-left: 4px solid var(--green);
+  margin-left: 0;
+  padding-left: 18px;
+}
+
+.heroPanel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(24px, 5vw, 54px);
+  align-items: start;
+  margin: -12px 0 30px;
+}
+
+.heroPanel h1 {
+  max-width: 13ch;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 18px;
+  color: var(--amber);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.eyebrow::before {
+  content: "";
+  width: 34px;
+  height: 2px;
+  background: currentColor;
+}
+
+.lede {
+  color: var(--charcoal-2);
+  font-family: var(--serif);
+  font-size: clamp(1.22rem, 2.4vw, 1.62rem);
+  line-height: 1.42;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.actionRow a,
+.docCard a {
+  align-items: center;
+  border: 1px solid var(--charcoal);
+  background: var(--charcoal);
+  color: #fffdf8;
+  display: inline-flex;
+  font-weight: 900;
+  min-height: 42px;
+  padding: 0 14px;
+  text-decoration: none;
+}
+
+.actionRow a + a {
+  background: transparent;
+  color: var(--charcoal);
+}
+
+.topology {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--charcoal);
+  background:
+    linear-gradient(135deg, rgba(10, 143, 166, 0.14), transparent 40%),
+    #fcfaf4;
+  padding: 16px;
+  box-shadow: 10px 10px 0 rgba(10, 143, 166, 0.14);
+}
+
+.topology::before {
+  content: "";
+  position: absolute;
+  inset: 22px;
+  border: 1px dashed rgba(30, 39, 36, 0.22);
+  pointer-events: none;
+}
+
+.topologyNode {
+  position: relative;
+  z-index: 1;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 253, 248, 0.9);
+  color: var(--charcoal);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 800;
+  padding: 12px;
+}
+
+.topologyNode:nth-child(2) {
+  margin-left: 34px;
+}
+
+.topologyNode:nth-child(3) {
+  margin-left: 68px;
+  border-color: rgba(10, 143, 166, 0.55);
+}
+
+.topologyNode:nth-child(4) {
+  margin-left: 28px;
+  border-color: rgba(39, 134, 95, 0.5);
+}
+
+.docGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 28px 0 14px;
+}
+
+.docCard {
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 18px;
+}
+
+.docCard h3 {
+  margin: 0 0 8px;
+}
+
+.docCard p {
+  margin-bottom: 16px;
+}
+
+.statusStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 28px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.statusStrip li {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 7px 10px;
+}
+
+.siteFooter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 1480px;
+  margin: 0 auto;
+  border-top: 1px solid var(--line);
+  color: var(--quiet);
+  font-size: 0.9rem;
+  padding: 24px clamp(18px, 4vw, 44px) 42px;
+}
+
+.siteFooter a {
+  font-weight: 800;
+}
+
+@media (max-width: 980px) {
+  .siteHeader {
+    position: static;
+  }
+
+  .topNav {
+    display: grid;
+    align-items: stretch;
+  }
+
+  .topLinks {
+    justify-content: flex-start;
+  }
+
+  .docFrame {
+    grid-template-columns: 1fr;
+  }
+
+  .docMain {
+    order: -1;
+  }
+
+  .docSidebar {
+    position: static;
+    max-height: none;
+  }
+
+  .sideNav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1420px) {
+  .heroPanel {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  }
+}
+
+@media (max-width: 720px) {
+  body {
+    font-size: 16px;
+  }
+
+  .docFrame {
+    padding: 14px;
+  }
+
+  .docContent {
+    padding: 24px 18px;
+  }
+
+  .docContent h1 {
+    font-size: clamp(2.05rem, 10vw, 2.9rem);
+  }
+
+  .sideNav,
+  .docGrid,
+  .heroPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .topologyNode,
+  .topologyNode:nth-child(2),
+  .topologyNode:nth-child(3),
+  .topologyNode:nth-child(4) {
+    margin-left: 0;
+  }
+}

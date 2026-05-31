@@ -1,30 +1,57 @@
-# HivemindOS Documentation
+---
+title: HivemindOS Documentation
+description: Local-first agent fleet control room documentation.
+---
 
-HivemindOS is a local-first control room for agent fleets. It connects local and Tailnet-reachable machines, gives agents a shared Obsidian brain, bridges multiple agent runtimes, manages background work, and adds optional wallet, Honey, HIVE, simulation, and integration surfaces.
+<section class="heroPanel">
+  <div>
+    <p class="eyebrow">Local-first fleet manual</p>
+    <h1>HivemindOS Documentation</h1>
+    <p class="lede">A compact operator map for agent fleets: local machines, Tailnet collectors, shared Obsidian memory, runtime adapters, background work, wallets, Honey, HIVE, simulations, and integration surfaces.</p>
+    <div class="actionRow">
+      <a href="features/">Read the feature guide</a>
+      <a href="architecture/">Trace the architecture</a>
+    </div>
+  </div>
+  <div class="topology" aria-label="HivemindOS system topology">
+    <div class="topologyNode">Dashboard / API facade</div>
+    <div class="topologyNode">Local collector + runtime homes</div>
+    <div class="topologyNode">Tailnet fleet telemetry</div>
+    <div class="topologyNode">Shared Obsidian brain</div>
+  </div>
+</section>
 
-This documentation set is organized so it can be published directly from the `docs/` folder with GitHub Pages.
+<ul class="statusStrip">
+  <li>GitHub Pages ready</li>
+  <li>Private Tailnet posture</li>
+  <li>Next.js 16 / React 19</li>
+  <li>Collector-first fleet model</li>
+</ul>
 
 ## Start Here
 
-- [Docs Preview](preview.html): local and GitHub Pages-style preview shell for the organized docs.
-- [Architecture](architecture/index.md): system map, process boundaries, data flow, storage, runtime adapters, and deployment shape.
-- [Feature Guide](features/index.md): organized feature pages covering what each product area does, how it works, and what capabilities it exposes.
-- [API And Storage Reference](architecture/api-and-storage.md): route groups, collector endpoints, local files, Obsidian folders, workers, and verification commands.
-- [Syncing And Tailscale Architecture](architecture/syncing-and-tailscale.md): shared brain sync ownership, HivemindOS Syncthing, and rsync repair.
-- [Tailscale Fleet Telemetry](architecture/tailscale-fleet-telemetry.md): remote collector model and Tailnet security posture.
-
-## Runtime And Integration Guides
-
-- [Integrations](integrations/index.md)
-- [MiroShark](integrations/miroshark/index.md)
-- [Runtimes](runtimes/index.md)
-- [Hermes Local Setup](runtimes/hermes/local-setup.md)
-
-## Product And UI Guidance
-
-- [Product And UI](product/index.md)
-- [Design Philosophy](product/design-philosophy.md)
-- [UI Rules](product/ui-rules.md)
+<div class="docGrid">
+  <section class="docCard">
+    <h3>Feature Guide</h3>
+    <p>Tour the product surface by domain: Fleet, agents, chat, work, scheduler, brain, env, files, notifications, MiroShark, wallets, Honey, HIVE, and x402.</p>
+    <a href="features/">Open features</a>
+  </section>
+  <section class="docCard">
+    <h3>Architecture</h3>
+    <p>Follow the process boundaries, route groups, collector responsibilities, storage model, and safety-sensitive networking paths.</p>
+    <a href="architecture/">Open architecture</a>
+  </section>
+  <section class="docCard">
+    <h3>Runtime Guides</h3>
+    <p>Review runtime-specific setup and behavior for Hermes, AEON, and the adapter layer that keeps runtime surfaces consistent.</p>
+    <a href="runtimes/">Open runtimes</a>
+  </section>
+  <section class="docCard">
+    <h3>Product Guidance</h3>
+    <p>Keep the control room coherent with the design philosophy and UI rules that shape HivemindOS workflows.</p>
+    <a href="product/">Open product docs</a>
+  </section>
+</div>
 
 ## Repository Overview
 

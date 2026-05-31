@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-01 01:22:45 WITA - Polish GitHub Pages Docs
+
+- Status: Pushed
+- Areas changed: GitHub Pages docs layout, docs homepage, docs styling, changelog
+- Summary: Replace the default Minima Pages link dump with a custom HivemindOS docs shell, grouped navigation, styled Markdown content, and a purpose-built homepage for the public docs.
+- Verification: `git diff --check -- docs/_config.yml docs/index.md docs/_layouts/default.html docs/assets/css/site.css CHANGELOG.md`; temporary static preview served from `/tmp/hivemindos-pages-preview` on `127.0.0.1:5023`; in-app browser desktop check confirmed no horizontal overflow at 1280px; in-app browser mobile check at 390px confirmed no horizontal overflow and content appears before the sidebar; local Jekyll build was not available because the repo has no Gemfile and the system has no `jekyll` or `github-pages` gem installed; `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files such as `.next-tauri/**`, `src/app/fleet.module.css`, `scripts/agent-telemetry-collector.mjs`, `src/features/dashboard/views/AeonAutopilotPanel.tsx`, and `src/features/dashboard/DashboardApp.tsx`.
+- Intended commit message: `Polish GitHub Pages docs`
+
 ## 2026-06-01 01:23:47 WITA - Checkpoint Late Dashboard Updates
 
 - Status: Committed
