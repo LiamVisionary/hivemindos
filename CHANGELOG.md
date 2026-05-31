@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-01 02:10:32 WITA - Refresh Public Docs From Code Audit
+
+- Status: Pushed
+- Areas changed: GitHub Pages docs overview, architecture docs, API/storage reference, feature docs, native app docs, docs navigation, changelog
+- Summary: Audit the current local codebase and expand the public docs to cover My Apps/API service catalogs, Synto and brain services, native Tauri filesystem/status bridges, richer Fleet/Swarm/Scheduler/AEON/Phone surfaces, and the current dashboard architecture.
+- Verification: `git diff --check -- docs CHANGELOG.md`; markdown link check across `docs/**/*.md`; stale-doc search for removed topology and old API route names; docs file-size check confirmed all docs files are under 1500 lines. `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files outside this docs change.
+- Intended commit message: `Refresh public docs from code audit`
+
 ## 2026-06-01 01:58:07 WITA - Remove Docs Hero Topology
 
 - Status: Pushed

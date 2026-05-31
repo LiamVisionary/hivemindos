@@ -17,10 +17,11 @@ HivemindOS is built around five design constraints:
 | Layer | Primary files | Responsibility |
 |---|---|---|
 | Dashboard shell | `src/app/page.tsx`, `src/features/dashboard/DashboardApp.tsx` | Server-side view selection, client dashboard state, polling, navigation, and feature orchestration |
-| Dashboard views | `src/features/dashboard/views/**`, `src/components/**` | Fleet, Work/Kanban, Brain/Vault, Chat, Wallet, More, Scheduler, Swarm, Notifications, Memory, Files, Env |
-| API facade | `src/app/api/**/route.ts` | Local HTTP boundary for dashboard actions, runtime calls, fleet polling, vault access, wallets, Honey, MiroShark, and maintenance |
+| Dashboard views | `src/features/dashboard/views/**`, `src/components/**` | Fleet, My Apps, Work/Kanban, Scheduler, Swarm, Brain/Vault, Chat, Wallet, Phone, AEON, More, Notifications, Memory, Files, Env |
+| API facade | `src/app/api/**/route.ts` | Local HTTP boundary for dashboard actions, runtime calls, fleet polling, app discovery, vault access, wallets, Honey, phone calls, MiroShark, and maintenance |
 | Runtime adapters | `src/lib/services/runtime-adapters/**` | Common runtime interface for status, skills, schedules, runs, outputs, sessions, env sync, integrations, and model selection |
 | Local services | `src/lib/services/**` | File-backed state, Obsidian services, telemetry, wallets, brain services, runtime utilities, integrations |
+| Native bridge | `src/lib/native/**`, `src-tauri/src/lib.rs` | Tauri-only desktop status, local directory listing/creation/display, and native folder picker fallbacks |
 | Collector | `scripts/agent-telemetry-collector.mjs` | Small Node HTTP service on each machine for health, snapshots, runtime chat/session bridges, env sync, skills, directories, Syncthing, and E2E hooks |
 | Setup scripts | `setup.sh`, `setup.ps1`, `uninstall.sh`, `uninstall.ps1`, `scripts/install-telemetry-collector.sh` | Installation, collector/Link service registration, helper CLI installation, uninstall mirror |
 | Workers | `workers/honey-ledger`, `workers/compute-gateway` | Optional Cloudflare D1-backed Honey ledger and trusted OpenAI-compatible compute gateway |
@@ -30,6 +31,8 @@ HivemindOS is built around five design constraints:
 ```mermaid
 flowchart TD
   Browser["Browser dashboard"] --> Next["Next.js app on port 5020"]
+  Tauri["Tauri desktop shell"] --> Next
+  Tauri --> Native["Native commands"]
   Next --> Api["/api routes"]
   Api --> Adapter["Runtime adapter registry"]
   Adapter --> Hermes["Hermes adapter"]
@@ -41,6 +44,7 @@ flowchart TD
   Collector --> RuntimeProcesses["Runtime CLIs / gateways / APIs"]
   Api --> Vault["Obsidian vault"]
   Api --> AppHome["~/.hivemindos"]
+  Native --> LocalPicker["Local folder picker / filesystem"]
 ```
 
 The dashboard talks to local App Router APIs. Those APIs either perform local filesystem work directly, call the runtime adapter registry, or proxy to a local or remote collector. The collector is intentionally small and machine-local: it reads runtime state, exposes selected actions, and reports capabilities.
@@ -49,33 +53,37 @@ The dashboard talks to local App Router APIs. Those APIs either perform local fi
 
 The dashboard route is `src/app/page.tsx`. It accepts `view` and `vaultPanel` query parameters and renders `DashboardApp` with any server-prefetched work history needed for the History view.
 
-`DashboardApp` is the main client orchestrator. It owns persisted local UI state, fleet polling, runtime availability, env state, wallets, chat state, scheduler state, MiroShark state, brain state, and feature wiring. Much of the behavior is delegated into focused hooks and view components:
+`DashboardApp` is the main client orchestrator. It owns persisted local UI state, fleet polling, runtime availability, env state, wallets, chat state, scheduler state, MiroShark/Swarm state, brain services, AEON state, app version/status, and feature wiring. Much of the behavior is delegated into focused hooks and view components:
 
 - `src/features/dashboard/hooks/use-dashboard-polling-effects.tsx`: repeated polling for fleet, Kanban, and MiroShark state.
 - `src/features/dashboard/hooks/use-kanban-task-controller.tsx`: board CRUD, task state changes, review/undo, and git status checks.
 - `src/features/dashboard/hooks/use-kanban-dispatch-controller.tsx`: agent dispatch, runtime session polling, completion handling, and stalled work detection.
 - `src/features/dashboard/hooks/use-scheduler-controller.tsx`: shared schedules and runtime schedule actions.
 - `src/features/dashboard/hooks/use-agent-controller.tsx`: runtime integrations, agent creation, runtime sessions, and agent settings.
-- `src/features/dashboard/hooks/use-miroshark-brain-controller.tsx`: MiroShark, Obsidian graph, shared skills, recent directories, GBrain, and shared notifications.
+- `src/features/dashboard/hooks/use-miroshark-brain-controller.tsx`: MiroShark, Obsidian graph, shared skills, recent directories, GBrain/Synto-adjacent vault context, and shared notifications.
 - `src/features/dashboard/hooks/use-wallet-files-controller.tsx`: wallets, Honey, runtime usage, MoneyClaw, x402, maintenance, and runtime files.
 - `src/features/dashboard/hooks/use-status-chat-input-controller.tsx`: chat sending, setup/status helpers, Obsidian access, and sync actions.
+- `src/features/dashboard/hooks/use-chat-tree-controller.tsx`: chat folder tree, runtime session hydration, directory context, and folder creation.
+- `src/features/dashboard/hooks/use-fleet-notifications-controller.tsx`: app version refresh, machine setup/init, notification storage, note intake, and fleet update coordination.
 
-The active top-level navigation currently exposes Fleet, Work, Brain, Chat, Wallet, and More. More links to maintenance, memory telemetry, runtime files, notifications, env, integrations, and related utility views.
+The active top-level navigation exposes Fleet, Work, Brain, Chat, Wallet, and More. Work owns Kanban, Scheduler, Swarm, and History. More links to Integrations, My Apps, Phone, AEON, maintenance, memory telemetry, runtime files, notifications, env, and related utility views.
 
 ## API Facade
 
 The app uses Next.js route handlers under `src/app/api`. They form the dashboard's local trust boundary. Major route families are:
 
 - `/api/fleet/*`: machine discovery, snapshots, updates, provisioning helpers.
+- `/api/fleet/apps` and `/api/fleet/app-icon`: hivenet app/service discovery, icon proxying, health checks, and API route catalogs.
 - `/api/runtimes/*`: runtime status, integrations, skills, schedules, runs, outputs, env sync, sessions, availability.
 - `/api/chat/*`: runtime chat bridge, session reads, and chat folders.
 - `/api/kanban`: file-backed board CRUD, task moves, claims, completions, comments, events.
 - `/api/obsidian/*`: vault status, open/access notes, sync, graph, skills, wallets, machine aliases, recent directories.
 - `/api/scheduler/*`: shared schedule import, runtime actions, skill actions, folder browsing.
+- `/api/phone`: phone gateway pairing/status, scheduled phone rings, and dashboard agent-call starts.
 - OpenClaw runtime support is kept inside the generic runtime and chat layers rather than standalone product routes.
 - `/api/miroshark/*`: companion status, install/start, swarm templates/runs, analysis.
 - `/api/wallet/*`: local wallet creation, balances, sends, MoneyClaw, backups, x402 calls.
-- `/api/brain/*`: GBrain and trading-brain status/install/query actions.
+- `/api/brain/*`: GBrain, Synto, and trading-brain status/install/query actions.
 - `/api/env`, `/api/runtime-files`, `/api/maintenance`, `/api/memory-telemetry`, `/api/telemetry/events`, `/api/work-history`: local utility surfaces.
 
 See [API And Storage Reference](api-and-storage.md) for route grouping details.
@@ -95,6 +103,17 @@ Known runtimes:
 
 Adapters let the dashboard ask a runtime for status, skills, schedules, runs, outputs, env sync, sessions, and model options without hard-coding every feature path into the UI. OpenClaw is intentionally limited to the generic Hivemind runtime bridge here.
 
+## Native Desktop Bridge
+
+The browser and desktop app share the same Next.js UI. The Tauri shell adds a narrow native command surface instead of forking views:
+
+- `desktop_status`: returns build commit, branch, dirty flag, runtime phase, native host, and native server port.
+- `list_local_directories`: lists local directories for This Mac without routing through the collector.
+- `create_local_folder`: creates a local child folder after cleaning the requested name.
+- `display_local_path`: normalizes expanded home paths for display.
+
+Frontend adapters live in `src/lib/native/desktop-status.ts` and `src/lib/native/filesystem.ts`. Browser users keep using the existing API routes; desktop users can call native commands first and fall back to the API path when the target is remote or when native access is unavailable.
+
 ## Collector Architecture
 
 `scripts/agent-telemetry-collector.mjs` is the machine-local collector. It defaults to `AGENT_TELEMETRY_PORT=8787` and `AGENT_TELEMETRY_HOST=0.0.0.0`, though Link mode binds the collector privately and exposes it through the Hivemind Link sidecar.
@@ -106,6 +125,7 @@ Collector responsibilities include:
 - `/agents`: local runtime agent inventory and creation/deletion.
 - `/env`: read/import shared or runtime-specific env through `hive-env-add`.
 - `/directories`: safe directory browsing for target selection.
+- `/apps` and `/app-proxy/<port>`: local app/service discovery and proxying for hivenet launchers.
 - `/skills` and `/skills/auto-sync`: skill inventory and provider auto-sync.
 - `/runtime-*` surfaces: runtime integrations, sessions, chat bridge, schedules, runs, outputs, env sync.
 - `/syncthing/*`: Syncthing status/pairing support for shared vault sync.
@@ -132,7 +152,7 @@ Important storage locations:
 
 - Browser `localStorage`: UI preferences, local agent config, cached dashboard state, chat history snippets, and user-selected settings.
 - `~/.hivemindos`: install id, shared env, collector env, Kanban fallback, runtime agent registry, wallet vault, Honey ledger cache, runtime run cache, skill auto-sync config.
-- Obsidian vault: shared brain, Kanban board files, notifications, scheduled-run files, wallet ledger notes, recent directories, shared skills, machine aliases, graph access logs, GBrain service notes.
+- Obsidian vault: shared brain, Kanban board files, notifications, scheduled-run files, wallet ledger notes, recent directories, shared skills, machine aliases, graph access logs, GBrain and Synto service notes.
 - Runtime homes: Hermes, OpenClaw, Aeon, and local OpenAI-compatible server config/state.
 - Cloudflare D1: optional official Honey ledger and compute gateway accounting.
 
@@ -188,7 +208,9 @@ pnpm test:kanban
 pnpm test:dashboard-nav
 pnpm test:fleet-local
 pnpm test:gbrain-foundation
+pnpm test:aeon-brain
 pnpm test:honey-economics
+node scripts/check-file-sizes.mjs
 ```
 
 Real fleet E2E suites require suitable Tailnet machines and runtime setup:

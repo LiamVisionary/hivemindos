@@ -27,21 +27,42 @@ Seeded structure:
 - `Operations/Brain Services/Obsidian Plugin Pack.md` lists optional manual Obsidian plugins for templates, tasks, Dataview, retrieval, calendar, Kanban, and Git.
 - `Operations/Automations/Foundation Workflows/` contains disabled workflow schedules for context synthesis, intake processing, meeting processing, research ingestion, vault health checks, decision review, argument building, book notes, feedback-loop capture, project updates, weekly synthesis, connection finding, and distillation.
 
-## Brain Graph And GBrain
+## Brain Graph, GBrain, Synto, And Trading Brain
 
 How it works:
 
 - Brain graph generation is in `src/lib/services/obsidian/brain-graph.ts`.
 - GBrain actions are in `src/lib/services/brain/gbrain.ts`.
-- API routes live under `/api/brain/gbrain/*` and `/api/obsidian/graph`.
+- Synto actions are in `src/lib/services/brain/synto.ts`.
+- Trading-brain install/status lives in `src/lib/services/brain/trading-brain.ts`.
+- API routes live under `/api/brain/gbrain/*`, `/api/brain/synto/*`, `/api/brain/trading-brain/*`, and `/api/obsidian/graph`.
 
 Capabilities:
 
 - Build a graph from markdown notes and access logs.
+- Show a Brain Services cockpit with service health summaries, primary actions, advanced settings, structured run output, and repair guidance when local prerequisites are missing.
 - Install or connect GBrain.
 - Import the vault into GBrain.
 - Embed, dream, and query through configured GBrain commands.
+- Install or connect Synto.
+- Initialize the `Synthesis` folder as a Synto vault.
+- Run Synto pipeline, maintain, compare, eval, doctor, query, and pack export commands.
+- Record the Synto MCP command and source-access policy in the brain-service note.
+- Keep Synto raw-source MCP access denied by default unless the user explicitly changes the source-access policy.
+- Attach trading-brain status to selected runtimes where configured.
 - Write service notes back into the vault.
+
+### Synto Model
+
+Synto is treated as an optional reviewed-memory compiler for the `Synthesis` folder, not as a replacement for the raw vault. HivemindOS tracks:
+
+- CLI path and install mode.
+- `synto.toml` and `.synto/state.db` initialization state.
+- Counts for raw files, drafts, articles, sources, queries, synthesis notes, and exported pack files.
+- MCP mode, MCP command, exposed tool names, and source-access mode.
+- Compare model, confidence threshold, and whether high-confidence changes can be auto-approved.
+
+The dashboard writes these settings into `Operations/Brain Services/Synto.md` and mirrors them into shared-vault config so other agents can see the intended policy.
 
 ## Shared Skills
 
@@ -68,9 +89,13 @@ Capabilities:
 - `src/lib/services/obsidian/brain-graph.ts`
 - `src/lib/services/obsidian/brain-skills.ts`
 - `src/lib/services/brain/gbrain.ts`
+- `src/lib/services/brain/synto.ts`
+- `src/lib/services/brain/trading-brain.ts`
 - `src/lib/services/chat/shared-vault-context.ts`
 - `src/app/api/obsidian/**`
 - `src/app/api/brain/gbrain/**`
+- `src/app/api/brain/synto/**`
+- `src/app/api/brain/trading-brain/**`
 - `src/features/dashboard/views/VaultPanel.tsx`
 - `src/features/dashboard/hooks/use-miroshark-brain-controller.tsx`
 

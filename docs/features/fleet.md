@@ -1,14 +1,16 @@
 # Fleet
 
-Fleet is the machine-first control room. It shows local and Tailnet-reachable machines, runtimes, agents, health signals, version drift, setup gaps, and update actions.
+Fleet is the machine-first control room. It shows local and Tailnet-reachable machines, runtimes, agents, health signals, version drift, setup gaps, update actions, active app badges, and hivenet app/API services.
 
 ## How It Works
 
 - The dashboard polls `/api/fleet/discover` and `/api/fleet/snapshot`.
+- The My Apps surface polls `/api/fleet/apps` and proxies icons through `/api/fleet/app-icon`.
 - Discovery reads local collector settings, Tailscale/Link state, and reachable collector health.
 - Snapshots merge local profiles, remote collector reports, runtime status, tasks, alerts, and capability flags.
 - Machine identity helpers in `src/features/fleet/fleet-identity.ts` keep local, Link, Tailscale, and remote machine labels stable.
 - Collector data comes from `scripts/agent-telemetry-collector.mjs`, usually through Tailscale or Hivemind Link.
+- Connected-app notifications are coordinated by `use-fleet-notifications-controller.tsx`, active app matching in `src/components/fleet/active-apps.ts`, and app details in `MyAppsPanel.tsx`.
 
 ## Capabilities
 
@@ -19,13 +21,33 @@ Fleet is the machine-first control room. It shows local and Tailnet-reachable ma
 - Machine provisioning helpers, including Hetzner-related setup routes.
 - Directory browsing on capable collectors.
 - Duplicate-machine handling across Link, Tailscale, loopback, and collector reports.
+- My Apps launcher for discovered interactive apps and API services.
+- API-service detail cards with health URL, base URL, service kind, route catalog source, grouped endpoints, route copy actions, and safe GET open links.
+- Known-service fallback catalogs when a service lacks OpenAPI but HivemindOS can identify it, currently including MiroShark.
+- Active-app badges in Fleet cells and header-level completion notifications that survive route changes.
+
+## My Apps And Route Catalogs
+
+My Apps treats remote services as first-class hivenet resources:
+
+- Interactive apps get launch cards with icons, machine labels, online state, and local/remote markers.
+- API services are marked non-interactive and show health/base URLs instead of pretending they are browser apps.
+- OpenAPI and Swagger documents are discovered automatically from common paths.
+- Hivemind-owned signatures can recognize services from `/health` payloads or known ports and attach route catalogs.
+- MiroShark's catalog includes template routes, simulation lifecycle, run-data exports, graph endpoints, observability endpoints, settings, and MCP status.
+
+This keeps API-only companions visible without requiring those companions to expose a marketing page or Hivemind-shaped UI.
 
 ## Main Code Paths
 
 - `src/app/api/fleet/discover/route.ts`
 - `src/app/api/fleet/snapshot/route.ts`
 - `src/app/api/fleet/update/route.ts`
+- `src/app/api/fleet/apps/route.ts`
+- `src/app/api/fleet/app-icon/route.ts`
 - `src/app/api/tailscale/devices/route.ts`
+- `src/features/dashboard/views/MyAppsPanel.tsx`
+- `src/components/fleet/active-apps.ts`
 - `src/features/fleet/fleet-identity.ts`
 - `src/components/fleet/**`
 - `scripts/agent-telemetry-collector.mjs`

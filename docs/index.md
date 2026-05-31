@@ -19,6 +19,7 @@ description: Local-first agent fleet control room documentation.
   <li>GitHub Pages ready</li>
   <li>Private Tailnet posture</li>
   <li>Next.js 16 / React 19</li>
+  <li>Tauri desktop target</li>
   <li>Collector-first fleet model</li>
 </ul>
 
@@ -47,9 +48,20 @@ description: Local-first agent fleet control room documentation.
   </section>
 </div>
 
+## Current Surface
+
+The codebase now spans more than the original Fleet, Work, Brain, Chat, and Wallet shell. The current dashboard also includes:
+
+- My Apps: hivenet app and API-service discovery with icon proxying, health checks, service-kind signatures, OpenAPI/Hivemind route catalogs, route copy actions, and safe open links.
+- AEON: repository/workspace management, local clone/link flows, GitHub-backed duplicates, scheduler handoff, brain access, and deliverable discovery/download/transfer.
+- Swarm: MiroShark template-driven simulations, scenario helpers, archive loading, X/polymarket/reddit-style outputs, run intelligence, publish actions, and analysis-agent selection.
+- Brain Services: Obsidian graph, shared skills, GBrain, Synto, trading-brain install/status, service notes, Synthesis-folder configuration, and source-access policy controls.
+- Native Desktop: a Tauri shell that can read desktop status directly and use native local folder browsing/creation while preserving the browser API fallbacks.
+- Phone: gateway-backed phone pairing, scheduled/ring-agent calls, dashboard LiveKit calls, AEON call context, and mobile push readiness checks.
+
 ## Repository Overview
 
-The app is a Next.js 16 / React 19 project using the App Router. The primary dashboard lives in `src/features/dashboard`, server routes live under `src/app/api`, runtime-specific logic lives under `src/lib/services`, and optional Cloudflare Workers live under `workers/`.
+The app is a Next.js 16 / React 19 project using the App Router. The primary dashboard lives in `src/features/dashboard`, route handlers live under `src/app/api`, runtime-specific logic lives under `src/lib/services`, native desktop adapters live under `src/lib/native` and `src-tauri`, and optional Cloudflare Workers live under `workers/`.
 
 Core commands:
 
@@ -81,11 +93,14 @@ flowchart LR
 
 ## Current Audit Snapshot
 
-This documentation reflects a code audit of the repository on 2026-05-27 WITA. The main code paths checked were:
+This documentation reflects a code audit of the repository on 2026-06-01 WITA. The main code paths checked were:
 
 - Dashboard shell and views: `src/app/page.tsx`, `src/features/dashboard/**`, `src/components/**`
 - API facade: `src/app/api/**`
 - Runtime adapters: `src/lib/services/runtime-adapters/**`
-- Shared state services: `src/lib/services/kanban/**`, `src/lib/services/obsidian/**`
+- Shared state services: `src/lib/services/kanban/**`, `src/lib/services/obsidian/**`, `src/lib/services/brain/**`
+- Native desktop bridge: `src/lib/native/**`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/default.json`
+- Fleet/app discovery: `src/app/api/fleet/**`, `src/features/dashboard/views/MyAppsPanel.tsx`, `src/components/fleet/**`
+- Scheduler, Swarm, AEON, Phone, and Integrations views: `src/features/dashboard/views/**`, `src/components/scheduler/**`, `src/components/swarm/**`
 - Collector and setup scripts: `scripts/agent-telemetry-collector.mjs`, `setup.sh`, `uninstall.sh`
 - Workers: `workers/honey-ledger`, `workers/compute-gateway`

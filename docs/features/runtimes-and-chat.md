@@ -1,6 +1,6 @@
 # Agents, Runtimes, And Chat
 
-Agents are local profiles that point at a runtime, gateway URL, token, model/provider settings, shared vault settings, and optional collector metadata. Chat bridges the dashboard to supported runtimes while preserving machine, runtime, agent, and session context.
+Agents are local profiles that point at a runtime, gateway URL, token, model/provider settings, shared vault settings, optional collector metadata, wallet settings, and phone-call context. Chat bridges the dashboard to supported runtimes while preserving machine, runtime, agent, directory, and session context.
 
 ## Runtime Model
 
@@ -28,6 +28,7 @@ Known runtimes are defined in `src/lib/types/agent-runtime.ts`:
 - Runtime stream events are normalized by `src/lib/services/runtime-stream-events.ts`.
 - The collector bridges Hermes and other local runtime sessions when a remote machine owns the agent.
 - Chat history and folders are cached in browser storage and supported by `/api/chat/folders`.
+- Chat folder creation and linked directory context use the same machine-aware directory helper as Kanban and Scheduler: native local folder picker in Tauri, Hivemind Link/collector directory browsing for remote machines, and API fallback in the browser.
 
 ### Collector And Link URLs
 
@@ -60,14 +61,30 @@ rewritten to the collector port. The healthy path keeps `/peer/...` on
 - Send-to-Kanban from chat messages.
 - Agent prompts for clarification, approval, secrets, or sudo-style decisions.
 - Agent role, worker class, preferred skills, and per-agent env values.
+- Dashboard agent calls that start through `/api/phone` using the gateway's in-app voice path instead of ringing the phone.
+- Scheduled/ring-agent calls that can ring the paired mobile device when explicitly triggered.
+- AEON call briefings with repository, branch, workspace, A2A, memory, skills, and recent MiroShark deliverable context.
+
+## Phone And Voice Bridge
+
+Phone support is split between a settings surface and action routes:
+
+- `src/features/dashboard/views/PhonePanel.tsx` manages saved prompts, scheduled call rows, device status, and ring actions.
+- `src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx` exposes pairing and test-call controls in agent settings.
+- `/api/phone` reads gateway voice config/device status, starts `ring-agent` calls, starts `dashboard-agent-call` calls, rings stored prompts, and checks mobile push readiness.
+- `src/lib/services/phone/call-gateway.ts` builds private call briefings, including AEON-specific identity and recent artifact context.
 
 ## Main Code Paths
 
 - `src/lib/types/agent-runtime.ts`
 - `src/lib/services/runtime-adapters/**`
 - `src/lib/services/runtime-integrations.ts`
+- `src/lib/services/phone/call-gateway.ts`
+- `src/lib/native/filesystem.ts`
 - `src/app/api/runtimes/**`
 - `src/app/api/chat/**`
+- `src/app/api/phone/route.ts`
 - `src/features/dashboard/hooks/use-agent-controller.tsx`
 - `src/features/dashboard/hooks/use-status-chat-input-controller.tsx`
 - `src/features/dashboard/hooks/use-chat-tree-controller.tsx`
+- `src/features/dashboard/views/PhonePanel.tsx`

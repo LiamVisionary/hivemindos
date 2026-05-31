@@ -31,17 +31,20 @@ Capabilities:
 - Preserve agent sessions on cards.
 - Store attachments, linked directories, target machines, comments, events, run records, child links, and deliverables.
 - Extract local paths and URLs from completed output into deliverables.
+- Roll completed child deliverables into parent handoff tasks while filtering planning/source artifacts.
 - Open or reveal deliverables through `/api/kanban/deliverable`.
 - Import tasks from notes through `/api/note-intake`.
+- Use machine-aware directory picking for linked folders: native picker for This Mac in desktop builds, collector directory browsing for remote machines, and API fallback in the browser.
 
 ## Scheduler
 
 How it works:
 
 - Shared schedule files are stored through `src/lib/services/obsidian/scheduled-runs.ts`.
-- Runtime schedule APIs are exposed through `/api/runtimes/[runtime]/schedules` and `/api/runtimes/[runtime]/schedules/action`.
+- Runtime schedule APIs are exposed through `/api/runtimes/[runtime]/schedules` and `/api/scheduler/runtime-action`.
 - Scheduler UI behavior lives in `src/features/dashboard/hooks/use-scheduler-controller.tsx`.
 - Skill-backed actions use `/api/scheduler/skill-action`.
+- Local folder browsing can use the Tauri native filesystem bridge through `src/lib/native/filesystem.ts` before falling back to `/api/scheduler/browse-folder`.
 
 Capabilities:
 
@@ -50,6 +53,18 @@ Capabilities:
 - Track past scheduled runs in the shared vault.
 - Browse folders and attach runtime or skill context.
 - Route scheduled prompts through supported agents.
+- Expand or collapse long schedule descriptions without silently truncating them.
+- Show run-state phases such as assigned, thinking, executing, wrapping, and done.
+- Create new jobs from the scheduler rail and use cadence templates for cron, interval, daily, weekday, and market/session-like schedules.
+
+## AEON Deliverables And Scheduled Work
+
+AEON work now has a stronger handoff loop:
+
+- `/api/runtimes/aeon/deliverables` discovers recent artifacts from the shared vault and local AEON output folders.
+- AEON repo cards can show new deliverable counts.
+- The Deliverables tab renders artifact cards with readable titles, excerpts, facts, open/download actions, and download-to-machine flows.
+- Scheduler controls can be embedded in AEON context so scheduled background work and repo deliverables stay connected.
 
 ## Main Code Paths
 
@@ -62,3 +77,7 @@ Capabilities:
 - `src/features/dashboard/hooks/use-kanban-dispatch-controller.tsx`
 - `src/features/dashboard/hooks/use-scheduler-controller.tsx`
 - `src/components/scheduler/**`
+- `src/features/dashboard/views/AeonAutopilotPanel.tsx`
+- `src/features/dashboard/views/AeonDeliverablesPanel.tsx`
+- `src/app/api/runtimes/aeon/deliverables/route.ts`
+- `src/lib/native/filesystem.ts`
