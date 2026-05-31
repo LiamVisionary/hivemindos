@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-01 04:03:18 WITA - Rewrite Feature Guide Landing
+
+- Status: Pushed
+- Areas changed: GitHub Pages feature guide, changelog
+- Summary: Replace the bare feature-link index with an operator-oriented guide that explains the main product loops, groups feature areas into scan-friendly cards, and keeps the Mermaid feature map as supporting navigation.
+- Verification: `git diff --check -- docs/features/index.md CHANGELOG.md`; markdown and image link check across `docs/**/*.md`; docs text file-size check confirmed the largest docs text file remains `docs/assets/css/site.css` at 674 lines.
+- Intended commit message: `Rewrite feature guide landing`
+
 ## 2026-06-01 03:45:45 WITA - Embed Diagram Plates In Topic Docs
 
 - Status: Pushed
