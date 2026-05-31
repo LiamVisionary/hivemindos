@@ -5,6 +5,7 @@
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
 import { useCallback, useEffect, useState } from "react";
+import { runtimeChatFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
 
 export function useStatusChatInputController(props: any) {
@@ -948,15 +949,7 @@ export function useStatusChatInputController(props: any) {
     let recoveredAssistantText = "";
     let latestSessionSummary = "";
     const seenSessionMessageKeys = new Set<string>();
-    const runtimeLabel = selectedAgent.runtime === "openai-compatible"
-      ? "OpenAI-compatible"
-      : selectedAgent.runtime === "openclaw"
-        ? "OpenClaw"
-        : selectedAgent.runtime === "aeon"
-          ? "AEON"
-          : selectedAgent.runtime === "hermes"
-            ? "Hermes"
-            : selectedAgent.runtime || "runtime";
+    const runtimeLabel = runtimeChatFeature(selectedAgent.runtime).label || selectedAgent.runtime || "runtime";
 
     const ingestRuntimeSession = (session: any) => {
       if (!session || typeof session !== "object") return;

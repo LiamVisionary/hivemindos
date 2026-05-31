@@ -21,6 +21,27 @@ export type UsePodRuntimeConfig = {
   headers: Record<string, string>;
 };
 
+export type UsePodModel = {
+  id: string;
+  name?: string;
+};
+
+export type UsePodCheckStatus = "ready" | "missing-token" | "needs-funding" | "cap-too-low" | "provider-unavailable" | "error";
+
+export type UsePodCheckResult = {
+  ok: boolean;
+  status: UsePodCheckStatus;
+  message: string;
+  tokenEnvName: string;
+  depositAddress: string;
+  modelCount: number;
+  models: UsePodModel[];
+  balanceRemaining: string;
+  route: string;
+  checkedAt: string;
+  httpStatus?: number;
+};
+
 const HIVE_ENV_FILE = join(homedir(), ".hivemindos", ".env");
 const HERMES_ENV_FILE = join(homedir(), ".hermes", ".env");
 const USEPOD_API_BASE = "https://api.usepod.ai";
@@ -56,6 +77,59 @@ function cleanMicrounits(value: unknown) {
   return String(Math.round(numeric));
 }
 
+function messageForUsePodError(status: UsePodCheckStatus, detail = "") {
+  if (status === "missing-token") return detail || "Save a UsePod token before checking models.";
+  if (status === "needs-funding") return detail || "UsePod is reachable, but the token needs USDC funding before inference.";
+  if (status === "cap-too-low") return detail || "UsePod rejected the request under the current price caps.";
+  if (status === "provider-unavailable") return detail || "UsePod is reachable, but no route was available for this check.";
+  return detail || "UsePod could not be checked right now.";
+}
+
+function categorizeUsePodError(status: number, detail: string): UsePodCheckStatus {
+  const text = detail.toLowerCase();
+  if (status === 401 || status === 403) return "missing-token";
+  if (status === 402 || text.includes("fund") || text.includes("balance") || text.includes("deposit")) return "needs-funding";
+  if (status === 409 || status === 429 || text.includes("price") || text.includes("cap") || text.includes("ceiling")) return "cap-too-low";
+  if (status >= 500 || text.includes("route") || text.includes("provider") || text.includes("capacity")) return "provider-unavailable";
+  return "error";
+}
+
+function extractUsePodModels(data: unknown): UsePodModel[] {
+  if (!data || typeof data !== "object") return [];
+  const record = data as Record<string, unknown>;
+  const items = Array.isArray(record.data)
+    ? record.data
+    : Array.isArray(record.models)
+      ? record.models
+      : [];
+  const models: UsePodModel[] = [];
+  for (const item of items) {
+    if (typeof item === "string" && item.trim()) {
+      models.push({ id: item.trim() });
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const source = item as Record<string, unknown>;
+    const id = typeof source.id === "string" ? source.id.trim() : "";
+    if (!id) continue;
+    const name = typeof source.name === "string" && source.name.trim() ? source.name.trim() : undefined;
+    models.push({ id, name });
+  }
+  return models;
+}
+
+function extractErrorMessage(data: unknown, fallback: string) {
+  if (!data || typeof data !== "object") return fallback;
+  const record = data as Record<string, unknown>;
+  if (typeof record.error === "string" && record.error.trim()) return record.error.trim();
+  if (record.error && typeof record.error === "object") {
+    const nested = record.error as Record<string, unknown>;
+    if (typeof nested.message === "string" && nested.message.trim()) return nested.message.trim();
+  }
+  if (typeof record.message === "string" && record.message.trim()) return record.message.trim();
+  return fallback;
+}
+
 export function isUsePodProfile(profile: Pick<AgentProfile, "provider">) {
   return profile.provider?.trim().toLowerCase() === "usepod";
 }
@@ -73,6 +147,10 @@ export async function readUsePodEnvValue(key: string) {
     if (value) return value;
   }
   return "";
+}
+
+export async function readUsePodDepositAddress(profile?: Pick<AgentProfile, "usePod">) {
+  return profile?.usePod?.depositAddress?.trim() || await readUsePodEnvValue(USEPOD_DEPOSIT_ENV);
 }
 
 export async function resolveUsePodRuntimeConfig(profile: AgentProfile): Promise<UsePodRuntimeConfig | null> {
@@ -122,6 +200,191 @@ export async function registerUsePodToken(): Promise<UsePodRegistration> {
   const depositAddress = firstString(data, ["depositAddress", "deposit_address", "address", "usdcDepositAddress", "usdc_deposit_address"]);
   if (!token || !depositAddress) throw new Error("UsePod did not return both a token and a USDC deposit address.");
   return { token, depositAddress, raw: data };
+}
+
+async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckResult> {
+  const checkedAt = new Date().toISOString();
+  let config: UsePodRuntimeConfig | null = null;
+  try {
+    config = await resolveUsePodRuntimeConfig({ ...profile, provider: "usepod" });
+  } catch (error) {
+    return {
+      ok: false,
+      status: "missing-token",
+      message: error instanceof Error ? error.message : "UsePod token is missing.",
+      tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
+      depositAddress: await readUsePodDepositAddress(profile),
+      modelCount: 0,
+      models: [],
+      balanceRemaining: "",
+      route: "",
+      checkedAt,
+    };
+  }
+  if (!config) {
+    return {
+      ok: false,
+      status: "missing-token",
+      message: "UsePod token is missing.",
+      tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
+      depositAddress: await readUsePodDepositAddress(profile),
+      modelCount: 0,
+      models: [],
+      balanceRemaining: "",
+      route: "",
+      checkedAt,
+    };
+  }
+  const response = await fetch(`${config.baseUrl}${config.statusPath}`, {
+    method: "GET",
+    headers: config.headers,
+    cache: "no-store",
+    signal: AbortSignal.timeout(12_000),
+  });
+  const headers = summarizeUsePodResponseHeaders(response.headers);
+  const data = await response.json().catch(async () => ({ error: await response.text().catch(() => "") })) as unknown;
+  const models = extractUsePodModels(data);
+  if (!response.ok) {
+    const detail = extractErrorMessage(data, `UsePod returned HTTP ${response.status}.`);
+    const status = categorizeUsePodError(response.status, detail);
+    return {
+      ok: false,
+      status,
+      message: messageForUsePodError(status, detail),
+      tokenEnvName: config.tokenEnvName,
+      depositAddress: await readUsePodDepositAddress(profile),
+      modelCount: 0,
+      models: [],
+      balanceRemaining: headers?.balanceRemaining ?? "",
+      route: headers?.route ?? "",
+      checkedAt,
+      httpStatus: response.status,
+    };
+  }
+  return {
+    ok: true,
+    status: "ready",
+    message: models.length ? `UsePod returned ${models.length} model${models.length === 1 ? "" : "s"}.` : "UsePod is reachable, but no models were returned.",
+    tokenEnvName: config.tokenEnvName,
+    depositAddress: await readUsePodDepositAddress(profile),
+    modelCount: models.length,
+    models,
+    balanceRemaining: headers?.balanceRemaining ?? profile.usePod?.lastBalanceRemaining ?? "",
+    route: headers?.route ?? profile.usePod?.lastRoute ?? "",
+    checkedAt,
+    httpStatus: response.status,
+  };
+}
+
+export async function checkUsePodModels(profile: AgentProfile): Promise<UsePodCheckResult> {
+  try {
+    return await requestUsePodModels(profile);
+  } catch (error) {
+    return {
+      ok: false,
+      status: "provider-unavailable",
+      message: error instanceof Error ? error.message : "UsePod model check failed.",
+      tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
+      depositAddress: await readUsePodDepositAddress(profile),
+      modelCount: 0,
+      models: [],
+      balanceRemaining: profile.usePod?.lastBalanceRemaining ?? "",
+      route: profile.usePod?.lastRoute ?? "",
+      checkedAt: new Date().toISOString(),
+    };
+  }
+}
+
+export async function testUsePodChat(profile: AgentProfile, model: string): Promise<UsePodCheckResult> {
+  const checkedAt = new Date().toISOString();
+  let config: UsePodRuntimeConfig | null = null;
+  try {
+    config = await resolveUsePodRuntimeConfig({ ...profile, provider: "usepod" });
+  } catch (error) {
+    return {
+      ok: false,
+      status: "missing-token",
+      message: error instanceof Error ? error.message : "UsePod token is missing.",
+      tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
+      depositAddress: await readUsePodDepositAddress(profile),
+      modelCount: 0,
+      models: [],
+      balanceRemaining: "",
+      route: "",
+      checkedAt,
+    };
+  }
+  if (!config) {
+    return {
+      ok: false,
+      status: "missing-token",
+      message: "UsePod token is missing.",
+      tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
+      depositAddress: await readUsePodDepositAddress(profile),
+      modelCount: 0,
+      models: [],
+      balanceRemaining: "",
+      route: "",
+      checkedAt,
+    };
+  }
+  const selectedModel = model.trim() || profile.model?.trim();
+  if (!selectedModel) {
+    const models = await checkUsePodModels(profile);
+    return {
+      ...models,
+      ok: false,
+      status: models.ok ? "error" : models.status,
+      message: models.ok ? "Choose a UsePod model before running a chat test." : models.message,
+    };
+  }
+  const response = await fetch(`${config.baseUrl}${config.chatPath}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...config.headers,
+    },
+    body: JSON.stringify({
+      model: selectedModel,
+      messages: [{ role: "user", content: "Reply with ok." }],
+      stream: false,
+      max_tokens: 2,
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(20_000),
+  });
+  const headers = summarizeUsePodResponseHeaders(response.headers);
+  const data = await response.json().catch(async () => ({ error: await response.text().catch(() => "") })) as unknown;
+  if (!response.ok) {
+    const detail = extractErrorMessage(data, `UsePod returned HTTP ${response.status}.`);
+    const status = categorizeUsePodError(response.status, detail);
+    return {
+      ok: false,
+      status,
+      message: messageForUsePodError(status, detail),
+      tokenEnvName: config.tokenEnvName,
+      depositAddress: await readUsePodDepositAddress(profile),
+      modelCount: 0,
+      models: [],
+      balanceRemaining: headers?.balanceRemaining ?? "",
+      route: headers?.route ?? "",
+      checkedAt,
+      httpStatus: response.status,
+    };
+  }
+  return {
+    ok: true,
+    status: "ready",
+    message: `UsePod completed a tiny test request with ${selectedModel}.`,
+    tokenEnvName: config.tokenEnvName,
+    depositAddress: await readUsePodDepositAddress(profile),
+    modelCount: 0,
+    models: [],
+    balanceRemaining: headers?.balanceRemaining ?? profile.usePod?.lastBalanceRemaining ?? "",
+    route: headers?.route ?? profile.usePod?.lastRoute ?? "",
+    checkedAt,
+    httpStatus: response.status,
+  };
 }
 
 async function writeHiveEnvValue(key: string, value: string, args: string[]) {

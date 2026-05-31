@@ -9,6 +9,8 @@ import { AgentCallsSettingsPanel } from "./AgentCallsSettingsPanel";
 import { GuidedProviderSetup } from "./GuidedProviderSetup";
 import { GuidedUsePodSetup } from "./GuidedUsePodSetup";
 import { InlineRenameControl } from "@/features/dashboard/views/shared/InlineRenameControl";
+import type { AgentRuntime } from "@/lib/types/agent-runtime";
+import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 
 export function AgentSettingsModal(props: any) {
   const { BEE_WORKER_PRESET_LIST, BrainCircuit, Button, Check, ChevronRight, Copy, Cpu, Eye, FolderOpen, HERMES_UPDATE_INTEGRATION_KEYS, Image, KanbanSquare, LoaderCircle, MessageSquare, Minus, Pencil, PlugZap, Plus, RUNTIME_LABELS, RefreshCcw, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Upload, addHermesModelFromDraft, agentCreateDraft, agentCreateMachine, agentRenameDraft, agentRenameEditing, agentRuntimeAdvancedOpen, agentRuntimeFolderBrowsing, agentRuntimeFolderEditing, agentRuntimeFolderStatus, agentSettingsCustomWorker, agentSettingsCustomWorkers, agentSettingsDescription, agentSettingsIntegrationTarget, agentSettingsPanel, agentSettingsPreferredSkills, agentSettingsProvider, agentSettingsRuntime, agentSettingsSelectedCustomWorkerId, agentSettingsSkillProfile, agentSettingsTitle, agentSettingsWorkerClass, agentSettingsWorkerImage, agentSettingsWorkerLabel, agentSettingsWorkerPreset, agentWorkerClassView, applyCustomWorkerClass, beeRoleIconPath, browseAgentRuntimeFolder, closeAgentSettingsModal, createAgentFromModal, customWorkerDraft, customWorkerImageError, customWorkerImageInputRef, customWorkerSkillSearch, filteredCustomWorkerSkills, fleetClass, hermesUpdateRequired, openAgentSkillBrowser, openCustomWorkerClassCreator, providerIconPath, providerIconRenderMode, refreshRuntimeIntegrations, removeAgentPreferredSkill, roleModalAgent, runRuntimeIntegrationAction, runtimeAvailability, runtimeBackgroundPrompt, runtimeCapabilities, runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode, runtimeIntegrationBusy, runtimeIntegrationMessage, runtimeIntegrationStatus, runtimeModelDraft, runtimeModelProviders, runtimeModelSelection, runtimeModelSetupMode, runtimeSessionQuery, runtimeSessionResults, runtimeSetupDefinition, runtimeSetupKey, runtimeUpdateConfirmKey, searchRuntimeSessionsForAgent, selectAgentWorkerClass, selectCustomWorkerClass, selectedRuntimeModelId, selectedRuntimeModels, selectedRuntimeProvider, setActiveView, setAgentCreateDraft, setAgentRenameDraft, setAgentRenameEditing, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setAgentWorkerClassView, setCustomWorkerDraft, setCustomWorkerSkillSearch, setRuntimeBackgroundPrompt, setRuntimeModelDraft, setRuntimeModelSetupMode, setRuntimeSessionQuery, setRuntimeSetupKey, setRuntimeUpdateConfirmKey, sharedVault, startAgentChat, toggleCustomWorkerSkill, updateAgentProfile, updateAgentRuntimeModel, updateAgentSkillProfile, uploadCustomWorkerImage, workerCapabilityBadges } = props;
@@ -33,16 +35,10 @@ export function AgentSettingsModal(props: any) {
     if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, adaptiveOpenRouter: next }));
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { adaptiveOpenRouter: next });
   };
-  const updateUsePod = (patch: Record<string, unknown>) => {
-    const next = { ...usePodConfig, ...patch };
-    if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, usePod: next }));
-    else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { usePod: next });
-  };
   const applyUsePodProfile = async (patch: Record<string, unknown>) => {
     if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
     await refreshRuntimeIntegrations({ ...(agentSettingsIntegrationTarget ?? {}), ...patch });
-    setRuntimeModelSetupMode(null);
   };
   const openAeonGithubOauth = () => {
     if (aeonOauthConnecting) return;
@@ -60,20 +56,13 @@ export function AgentSettingsModal(props: any) {
     const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
     const aeonWorkerPreset = BEE_WORKER_PRESET_LIST.find((preset) => preset.id === "ops");
     const runtimeProvider = runtimeModelProviders.find((provider) => provider.slug === currentProvider);
-    const provider = runtime === "hermes"
-      ? sameRuntime ? currentProvider || "openai-codex" : "openai-codex"
-      : runtime === "openclaw"
-        ? sameRuntime && runtimeProvider ? currentProvider : ""
-        : runtime === "openai-compatible"
-          ? sameRuntime ? currentProvider || "lm-studio" : "lm-studio"
-          : "";
-    const model = runtime === "hermes"
-      ? sameRuntime ? currentModel || "" : ""
-      : runtime === "openclaw"
-        ? sameRuntime && runtimeProvider ? currentModel || runtimeProvider.models[0]?.id || "" : ""
-        : runtime === "openai-compatible"
-          ? sameRuntime ? currentModel || "" : ""
-          : "";
+    const runtimeSettings = runtimeSettingsFeature(runtime);
+    const provider = sameRuntime
+      ? currentProvider || runtimeSettings.defaultProvider || ""
+      : runtimeSettings.defaultProvider || "";
+    const model = sameRuntime && runtimeProvider
+      ? currentModel || runtimeProvider.models[0]?.id || runtimeSettings.defaultModel || ""
+      : sameRuntime ? currentModel || runtimeSettings.defaultModel || "" : runtimeSettings.defaultModel || "";
     if (agentCreateMachine) {
       setAgentCreateDraft((current) => ({
         ...current,
@@ -83,7 +72,7 @@ export function AgentSettingsModal(props: any) {
         name: current.name.trim() && current.name !== `${RUNTIME_LABELS[current.runtime] ?? current.runtime} on ${agentCreateMachine.name}`
           ? current.name
           : `${RUNTIME_LABELS[runtime] ?? runtime} on ${agentCreateMachine.name}`,
-        ...(runtime === "aeon" && aeonWorkerPreset ? {
+        ...(runtimeSettings.kind === "autopilot" && aeonWorkerPreset ? {
           workerClass: aeonWorkerPreset.id,
           skillProfilePrompt: aeonWorkerPreset.taskProfile,
           preferredSkillSlugs: aeonWorkerPreset.skillSlugs,
@@ -99,8 +88,8 @@ export function AgentSettingsModal(props: any) {
         runtime,
         provider,
         model,
-        ...(runtime === "aeon" ? {
-          agentId: roleModalAgent.agentId || "local-aeon",
+        ...(runtimeSettings.kind === "autopilot" ? {
+          agentId: roleModalAgent.agentId || runtimeSettings.defaultAgentId || "",
           localDataDir: roleModalAgent.localDataDir || "~/.aeon",
           aeonLocalPath: roleModalAgent.aeonLocalPath || roleModalAgent.localDataDir || "~/.aeon",
           aeonBranch: roleModalAgent.aeonBranch || "main",
@@ -108,6 +97,46 @@ export function AgentSettingsModal(props: any) {
           a2aUrl: roleModalAgent.a2aUrl || "http://127.0.0.1:41241",
         } : {}),
       });
+    }
+  };
+
+  const selectUsePodRuntime = () => {
+    const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
+    const nextUsePod = {
+      tokenEnvName: usePodConfig.tokenEnvName || "USEPOD_TOKEN",
+      depositAddress: usePodConfig.depositAddress || "",
+      maxPriceInputMicrounits: usePodConfig.maxPriceInputMicrounits || "2000",
+      maxPriceOutputMicrounits: usePodConfig.maxPriceOutputMicrounits || "8000",
+      spendPreset: usePodConfig.spendPreset || "balanced",
+      lastBalanceRemaining: usePodConfig.lastBalanceRemaining || "",
+      lastRoute: usePodConfig.lastRoute || "",
+      lastCheckedAt: usePodConfig.lastCheckedAt || "",
+      lastTestStatus: usePodConfig.lastTestStatus || "",
+      lastModelCount: usePodConfig.lastModelCount,
+    };
+    const patch = {
+      runtime: "openai-compatible",
+      provider: "usepod",
+      model: currentModel || "gpt-5.5",
+      gatewayUrl: "https://api.usepod.ai",
+      chatPath: "/v1/chat/completions",
+      statusPath: "/v1/models",
+      usePod: nextUsePod,
+    };
+    if (agentCreateMachine) {
+      setAgentCreateDraft((current) => ({
+        ...current,
+        ...patch,
+        name: current.name.trim() && current.name !== `${RUNTIME_LABELS[current.runtime] ?? current.runtime} on ${agentCreateMachine.name}`
+          ? current.name
+          : `UsePod on ${agentCreateMachine.name}`,
+      }));
+      setRuntimeModelSetupMode("provider");
+      return;
+    }
+    if (roleModalAgent) {
+      updateAgentProfile(roleModalAgent.id, patch);
+      setRuntimeModelSetupMode("provider");
     }
   };
 
@@ -128,20 +157,21 @@ export function AgentSettingsModal(props: any) {
   const agentSettingsWorkerSubtitle = (agentSettingsCustomWorker?.label || agentSettingsWorkerPreset?.label || agentSettingsWorkerLabel || "")
     .replace(/\s+bee$/i, "")
     .trim();
+  const selectedRuntimeSettings = runtimeSettingsFeature(agentSettingsRuntime);
   const modelSelectableRuntime = Boolean(runtimeCapabilities(agentSettingsIntegrationTarget ?? roleModalAgent)?.modelSelection);
-  const runtimeModelPanelAvailable = agentSettingsRuntime !== "aeon" && (runtimeModelProviders.length > 0
+  const runtimeModelPanelAvailable = selectedRuntimeSettings.modelSource === "runtime" && (runtimeModelProviders.length > 0
     || modelSelectableRuntime
     || runtimeIntegrationBusy === "status"
     || Boolean(runtimeIntegrationMessage));
-  const runtimeCanAddModels = agentSettingsRuntime === "hermes";
-  const runtimeCanAddUsePod = agentSettingsRuntime === "openai-compatible";
+  const runtimeCanAddModels = Boolean(selectedRuntimeSettings.canAddModels);
+  const runtimeCanAddUsePod = Boolean(selectedRuntimeSettings.canUsePod);
   const aeonAvailability = runtimeAvailability?.aeon;
   const aeonDetected = agentSettingsRuntime === "aeon" && aeonAvailability?.installed === true;
   const aeonNeedsSetup = agentSettingsRuntime === "aeon" && !aeonDetected;
-  const isAeonSettings = agentSettingsRuntime === "aeon";
-  const hideRuntimeSection = !agentCreateMachine && agentSettingsRuntime === "aeon";
+  const isAutopilotSettings = selectedRuntimeSettings.kind === "autopilot";
+  const hideRuntimeSection = !agentCreateMachine && Boolean(selectedRuntimeSettings.hidesRuntimeSelectorWhenEditing);
   const runtimeFolderValue = roleModalAgent
-    ? isAeonSettings
+    ? isAutopilotSettings
       ? roleModalAgent.aeonLocalPath || roleModalAgent.localDataDir || ""
       : roleModalAgent.localDataDir || ""
     : "";
@@ -166,12 +196,8 @@ export function AgentSettingsModal(props: any) {
       ? "Talks to a running AEON A2A gateway."
       : "Reads the local AEON repo folder on this machine.";
   const agentSettingsPanels = agentCreateMachine
-    ? agentSettingsRuntime === "aeon"
-      ? (["role", "connection", "memory", "calls"] as const)
-      : (["role", "memory", "calls", "security"] as const)
-    : isAeonSettings
-      ? (["connection", "memory", "calls"] as const)
-      : (["role", "memory", "tools", "calls", "security"] as const);
+    ? selectedRuntimeSettings.createPanels
+    : selectedRuntimeSettings.editPanels;
   const activeAgentSettingsPanel = (agentSettingsPanels as readonly string[]).includes(agentSettingsPanel)
     ? agentSettingsPanel
     : agentSettingsPanels[0];
@@ -265,11 +291,12 @@ export function AgentSettingsModal(props: any) {
                   <div className={fleetClass("agentSettingsField", "agentRuntimeSelectField")}>
                     <span>Runtime</span>
                     <div className={fleetClass("agentRuntimeSegments")} role="group" aria-label="Runtime">
-                      {Object.entries(RUNTIME_LABELS).map(([runtime, label]) => {
+	                      {Object.entries(RUNTIME_LABELS).map(([runtime, label]) => {
+                        const runtimeSettings = runtimeSettingsFeature(runtime as AgentRuntime);
                         const selected = runtime === (agentCreateMachine ? agentCreateDraft.runtime : roleModalAgent?.runtime ?? "hermes");
                         const unavailable = runtimeAvailability?.[runtime]?.installed === false;
-                        const selectableUnavailable = unavailable && runtime !== "aeon";
-                        const title = runtime === "aeon" && unavailable ? "Aeon needs setup. Select it to create a background Autopilot profile." : unavailable ? `${label} is not installed.` : runtimeAvailability?.[runtime]?.detail;
+                        const selectableUnavailable = unavailable && runtimeSettings.kind !== "autopilot";
+                        const title = runtimeSettings.kind === "autopilot" && unavailable ? `${label} needs setup. Select it to create a background profile.` : unavailable ? `${label} is not installed.` : runtimeAvailability?.[runtime]?.detail;
                         return (
                           <span className={fleetClass("runtimeSegmentShell")} key={runtime} title={title}>
                             <button
@@ -282,16 +309,30 @@ export function AgentSettingsModal(props: any) {
                             >
                               {renderRuntimeMark(runtime, label)}
                               <strong>{label}</strong>
-                              {runtime === "aeon" ? <small className={fleetClass("runtimeSegmentSubcopy")}>{unavailable ? "Needs setup" : "Autopilot"}</small> : null}
+                              {runtimeSettings.runtimeSegmentSubcopy ? <small className={fleetClass("runtimeSegmentSubcopy")}>{unavailable ? runtimeSettings.unavailableSubcopy || "Needs setup" : runtimeSettings.runtimeSegmentSubcopy}</small> : null}
                             </button>
-                            {unavailable ? <span id={`runtime-${runtime}-unavailable`} className="sr-only">{runtime === "aeon" ? "Aeon needs setup." : `${label} is not installed.`}</span> : null}
+                            {unavailable ? <span id={`runtime-${runtime}-unavailable`} className="sr-only">{runtimeSettings.kind === "autopilot" ? `${label} needs setup.` : `${label} is not installed.`}</span> : null}
                           </span>
                         );
                       })}
+                      <span className={fleetClass("runtimeSegmentShell")} title="UsePod runs through its hosted OpenAI-compatible proxy and does not need a local OpenAI server.">
+                        <button
+                          type="button"
+                          aria-pressed={agentSettingsRuntime === "openai-compatible" && usePodSelected}
+                          className={agentSettingsRuntime === "openai-compatible" && usePodSelected ? fleetClass("selectedRuntimeSegment") : ""}
+                          onClick={selectUsePodRuntime}
+                        >
+                          <span className={fleetClass("runtimeIconMark")} aria-hidden="true">
+                            <PlugZap aria-hidden="true" />
+                          </span>
+                          <strong>UsePod</strong>
+                          <small className={fleetClass("runtimeSegmentSubcopy")}>Hosted proxy</small>
+                        </button>
+                      </span>
                     </div>
                   </div>
                 ) : null}
-                {!hideRuntimeSection && agentSettingsRuntime === "aeon" ? (
+                {!hideRuntimeSection && isAutopilotSettings ? (
                   <div className={fleetClass("agentRuntimeAeonPanel")}>
                     <div className={fleetClass("agentRuntimeAeonHeader")}>
                       {renderRuntimeMark("aeon", "Aeon")}
@@ -331,6 +372,18 @@ export function AgentSettingsModal(props: any) {
                   </div>
                 ) : !hideRuntimeSection && runtimeModelPanelAvailable ? (
                   <div className={fleetClass("agentRuntimeModelPanel")}>
+                    {usePodSelected ? (
+                      <div className={fleetClass("agentRuntimeModelSetup", "agentRuntimeModelSetupProvider")}>
+                        <GuidedUsePodSetup
+                          agent={agentSettingsIntegrationTarget}
+                          busy={runtimeIntegrationBusy}
+                          fleetClass={fleetClass}
+                          onCancel={closeAgentSettingsModal}
+                          onComplete={applyUsePodProfile}
+                        />
+                      </div>
+                    ) : (
+                      <>
                     <div className={fleetClass("agentRuntimeCardGroup")}>
                       <div className={fleetClass("agentRuntimeGroupHeader")}>
                         <span>Provider</span>
@@ -503,38 +556,6 @@ export function AgentSettingsModal(props: any) {
                         </div>
                       </details>
                     ) : null}
-                    {usePodSelected ? (
-                      <details className={fleetClass("adaptiveAdvanced")}>
-                        <summary>
-                          <span>UsePod spend caps</span>
-                          <small>{usePodConfig.depositAddress ? "Deposit ready" : "Env token"}</small>
-                        </summary>
-                        <div className={fleetClass("adaptiveAdvancedGrid")}>
-                          <label className={fleetClass("agentSettingsField")}>
-                            <span>Input cap</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="1000"
-                              value={usePodConfig.maxPriceInputMicrounits || ""}
-                              onChange={(event) => updateUsePod({ maxPriceInputMicrounits: event.target.value })}
-                              placeholder="USDC microunits per 1M"
-                            />
-                          </label>
-                          <label className={fleetClass("agentSettingsField")}>
-                            <span>Output cap</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="1000"
-                              value={usePodConfig.maxPriceOutputMicrounits || ""}
-                              onChange={(event) => updateUsePod({ maxPriceOutputMicrounits: event.target.value })}
-                              placeholder="USDC microunits per 1M"
-                            />
-                          </label>
-                        </div>
-                      </details>
-                    ) : null}
                     {(runtimeCanAddModels || runtimeCanAddUsePod) && runtimeModelSetupMode ? (
                       <div
                         className={fleetClass(
@@ -613,6 +634,8 @@ export function AgentSettingsModal(props: any) {
                         )}
                       </div>
                     ) : null}
+                      </>
+                    )}
                   </div>
                 ) : null}
                 {!hideRuntimeSection && !agentCreateMachine && roleModalAgent ? (
@@ -654,7 +677,7 @@ export function AgentSettingsModal(props: any) {
                     </label>
                   </div>
                 ) : null}
-                {!isAeonSettings ? (
+                {!isAutopilotSettings ? (
                 <div className={fleetClass("agentSettingsField", "agentWorkerClassPicker")}>
                   <span>Worker class</span>
                   {agentWorkerClassView === "presets" ? (
@@ -822,7 +845,7 @@ export function AgentSettingsModal(props: any) {
               </div>
             ) : null}
 
-            {activeAgentSettingsPanel === "connection" && isAeonSettings ? (
+            {activeAgentSettingsPanel === "connection" && isAutopilotSettings ? (
               <div className={fleetClass("agentSettingsGrid", "agentMemoryPanel")}>
                 <div className={fleetClass("aeonConnectionPanel")}>
                     <div className={fleetClass("aeonConnectionHeader")}>
@@ -944,7 +967,7 @@ export function AgentSettingsModal(props: any) {
                     <p>{sharedVault.enabled ? `Shared brain: ${sharedVault.vaultPath || "auto-detected vault"}. Memory, Kanban, notifications, and HivemindOS context are shared from there.` : "Shared brain is off. Turn it on from the Vault view to give agents one common memory space."}</p>
                   </div>
                 ) : null}
-                {agentCreateMachine && isAeonSettings ? (
+                {agentCreateMachine && isAutopilotSettings ? (
                   <label className={fleetClass("agentSettingsField")}>
                     <span>AEON repo folder</span>
                     <input
@@ -957,9 +980,9 @@ export function AgentSettingsModal(props: any) {
 	                {!agentCreateMachine && roleModalAgent ? (
 	                  <div className={fleetClass("agentMemoryFolderRow")}>
 	                    <div>
-	                      <span>{isAeonSettings ? "AEON repo folder" : "Runtime folder"}</span>
-	                      <strong>{runtimeFolderValue.trim() || "Managed by runtime"}</strong>
-	                      <p>{isAeonSettings ? "This is the local AEON repo that the dashboard reads and mirrors into Obsidian." : roleModalAgent.useSharedVault !== false ? "Only change this if this agent needs a custom local workspace." : "Used as this agent's local memory and workspace folder."}</p>
+		                      <span>{isAutopilotSettings ? "AEON repo folder" : "Runtime folder"}</span>
+		                      <strong>{runtimeFolderValue.trim() || "Managed by runtime"}</strong>
+		                      <p>{isAutopilotSettings ? "This is the local AEON repo that the dashboard reads and mirrors into Obsidian." : roleModalAgent.useSharedVault !== false ? "Only change this if this agent needs a custom local workspace." : "Used as this agent's local memory and workspace folder."}</p>
 	                    </div>
                     <div className={fleetClass("agentMemoryFolderActions")}>
                       <button type="button" aria-label="Browse for runtime folder" onClick={() => void browseAgentRuntimeFolder()} disabled={agentRuntimeFolderBrowsing}>
@@ -973,17 +996,17 @@ export function AgentSettingsModal(props: any) {
                 ) : null}
 	                {agentRuntimeFolderEditing && roleModalAgent ? (
 	                  <label className={fleetClass("agentSettingsField", "agentMemoryPathEditor")}>
-	                    <span>{isAeonSettings ? "AEON repo path" : "Runtime folder path"}</span>
+		                    <span>{isAutopilotSettings ? "AEON repo path" : "Runtime folder path"}</span>
 	                    <div>
 	                      <input
 	                        value={runtimeFolderValue}
 	                        onChange={(event) => {
-	                          updateAgentProfile(roleModalAgent.id, isAeonSettings
+		                          updateAgentProfile(roleModalAgent.id, isAutopilotSettings
 	                            ? { aeonLocalPath: event.target.value, localDataDir: event.target.value }
 	                            : { localDataDir: event.target.value });
 	                          setAgentRuntimeFolderStatus("");
 	                        }}
-	                        placeholder={isAeonSettings ? "~/.aeon or ~/my-aeon-repo" : "Leave blank to use the runtime default"}
+		                        placeholder={isAutopilotSettings ? "~/.aeon or ~/my-aeon-repo" : "Leave blank to use the runtime default"}
 	                      />
                       <button type="button" aria-label="Done editing runtime folder path" onClick={() => setAgentRuntimeFolderEditing(false)}>
                         <Check aria-hidden="true" />
@@ -1264,7 +1287,7 @@ export function AgentSettingsModal(props: any) {
             <div className={fleetClass("setupModalActions")}>
               <Button type="button" disabled={runtimeIntegrationBusy === "create-agent"} onClick={agentCreateMachine ? () => void createAgentFromModal() : closeAgentSettingsModal}>
                 <Check aria-hidden="true" />
-                {agentCreateMachine ? runtimeIntegrationBusy === "create-agent" ? "Creating..." : agentCreateDraft.runtime === "aeon" ? "Connect Autopilot" : "Add agent" : "Done"}
+                {agentCreateMachine ? runtimeIntegrationBusy === "create-agent" ? "Creating..." : runtimeSettingsFeature(agentCreateDraft.runtime).createActionLabel || "Add agent" : "Done"}
               </Button>
               {agentCreateMachine && runtimeIntegrationMessage ? <p className={fleetClass("agentRuntimeToolStatus")}>{runtimeIntegrationMessage}</p> : null}
             </div>

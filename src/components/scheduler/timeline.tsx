@@ -32,6 +32,11 @@ const TRACK_PAD_TOP = 22;
 const TRACK_PAD_BOTTOM = 14;
 const MAX_RECURRING_PINS = 64;
 const MIN_RECURRING_INTERVAL_MINUTES = 6 * 60;
+const CANVAS_HEIGHT_BY_RANGE: Record<TimelineRange, number> = {
+  "24h": 1248,
+  week: 1560,
+  month: 1680,
+};
 
 function PausedGlyph() {
   return (
@@ -211,11 +216,12 @@ export function Timeline({ jobs, selectedId, range = "24h", onSelect }: Timeline
   }
   const maxCols = Math.max(colLastT.length, 1);
   const railWidth = JOB_GUTTER + maxCols * COL_W + (maxCols - 1) * COL_GAP;
+  const canvasHeight = CANVAS_HEIGHT_BY_RANGE[range];
 
   return (
     <div className="relative grid overflow-hidden rounded-2xl"
       style={{
-        gridTemplateColumns: "64px 1fr", minHeight: 540, height: "100%",
+        gridTemplateColumns: "64px 1fr", height: canvasHeight, minHeight: canvasHeight,
         border: "1px solid rgba(148,163,184,0.16)",
         background: "var(--panel-grad)",
         backdropFilter: "blur(10px) saturate(140%)",

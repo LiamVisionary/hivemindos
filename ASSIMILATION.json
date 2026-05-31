@@ -1,76 +1,83 @@
 {
-  "created_at": "2026-05-31T16:57:50.095798+00:00",
+  "created_at": "2026-05-31T17:38:09.080351+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
-      "source_repo": "LiamVisionary/claw-code-mobile-private",
-      "source_path": "store/agentCallSettings.ts",
-      "target_path": "src/lib/types/agent-runtime.ts",
-      "reuse_type": "adapted_code",
-      "note": "per-agent call preference shape and defaults"
+      "source_repo": "/tmp/synto-inspect",
+      "source_path": "src/synto/cli.py",
+      "target_path": "src/lib/services/brain/synto.ts",
+      "reuse_type": "translated_code",
+      "note": "translated Synto CLI commands for init, run, maintain, compare, eval, doctor, pack, and query into HivemindOS service actions"
     },
     {
-      "source_repo": "LiamVisionary/claw-code-mobile-private",
-      "source_path": "store/voiceProviders.ts",
-      "target_path": "src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx",
-      "reuse_type": "adapted_code",
-      "note": "dynamic voice provider model and runtime labels"
+      "source_repo": "/tmp/synto-inspect",
+      "source_path": "src/synto/serve.py",
+      "target_path": "src/lib/services/brain/synto.ts",
+      "reuse_type": "translated_code",
+      "note": "translated Synto MCP tool catalog and stdio serve command into service status metadata"
     },
     {
-      "source_repo": "LiamVisionary/claw-code-mobile-private",
-      "source_path": "components/settings/AgentCallsTab.tsx",
-      "target_path": "src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx",
-      "reuse_type": "adapted_code",
-      "note": "simplified calls settings controls"
+      "source_repo": "/tmp/synto-inspect",
+      "source_path": "src/synto/config.py",
+      "target_path": "src/lib/services/brain/synto.ts",
+      "reuse_type": "translated_code",
+      "note": "translated Synto MCP source-access mode options into dashboard-backed config patching"
     },
     {
-      "source_repo": "LiamVisionary/claw-code-mobile-private",
-      "source_path": "components/settings/SettingsFormContext.tsx",
-      "target_path": "src/app/api/phone/route.ts",
-      "reuse_type": "adapted_code",
-      "note": "safe gateway voice config and device status reads"
+      "source_repo": "/tmp/synto-inspect",
+      "source_path": "README.md",
+      "target_path": "docs/features/brain-vault-and-skills.md",
+      "reuse_type": "config_adapted",
+      "note": "adapted Synto feature surface and install semantics into HivemindOS brain-service docs"
     },
     {
-      "source_repo": "LiamVisionary/claw-code-mobile-private",
-      "source_path": "backend/src/routes/voice.ts",
-      "target_path": "src/lib/services/phone/call-gateway.ts",
+      "source_repo": "tashfeenahmed/freellmapi",
+      "source_path": "server/src/providers/openai-compat.ts",
+      "target_path": "src/lib/services/usepod.ts",
       "reuse_type": "adapted_code",
-      "note": "gateway voice config, device status, and ring-now endpoint usage"
+      "note": "OpenAI-compatible /models validation, timeout, extra-header, and error categorization flow adapted for UsePod readiness and model discovery checks"
     },
     {
-      "source_repo": "LiamVisionary/hivemind-os",
-      "source_path": "scripts/seed-vault-foundation.mjs",
-      "target_path": "scripts/seed-vault-foundation.mjs",
-      "reuse_type": "adapted_code",
-      "note": "extended existing disabled foundation workflow and vault scaffold seeder"
+      "source_repo": "tashfeenahmed/freellmapi",
+      "source_path": "server/src/__tests__/providers/openai-compat.test.ts",
+      "target_path": "src/app/api/usepod/status/route.ts",
+      "reuse_type": "test_adapted",
+      "note": "Validated-key and custom-header request expectations adapted into a server-only status/test endpoint that keeps UsePod tokens out of the client"
     },
     {
-      "source_repo": "LiamVisionary/hivemind-os",
-      "source_path": "setup.sh",
-      "target_path": "setup.sh",
-      "reuse_type": "adapted_code",
-      "note": "mirrored existing shared vault folder initialization style"
+      "source_repo": "Sortis-AI/usepod-agent",
+      "source_path": "agent.example.toml",
+      "target_path": "src/features/dashboard/views/chat/AgentSettingsModal.tsx",
+      "reuse_type": "config_adapted",
+      "note": "Provider hosting identity, backend, pricing, limits, and observability concepts adapted into a gated Earn with UsePod checklist"
     },
     {
-      "source_repo": "LiamVisionary/hivemind-os",
-      "source_path": "setup.ps1",
-      "target_path": "setup.ps1",
-      "reuse_type": "adapted_code",
-      "note": "mirrored existing Windows shared vault folder initialization style"
+      "source_repo": "Sortis-AI/usepod-agent",
+      "source_path": "install/README.md",
+      "target_path": "docs/integrations/usepod.md",
+      "reuse_type": "config_adapted",
+      "note": "Manual provider-hosting setup guidance retained while explicitly excluding pipe-to-shell automation"
     },
     {
-      "source_repo": "LiamVisionary/hivemind-os",
-      "source_path": "uninstall.sh",
-      "target_path": "uninstall.sh",
-      "reuse_type": "adapted_code",
-      "note": "mirrored setup uninstall prompt pattern for generated vault files"
+      "source_repo": "/Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives",
+      "source_path": "packages/react/collapsible/src/collapsible.tsx",
+      "target_path": "src/features/dashboard/brain-modules.tsx",
+      "reuse_type": "translated_code",
+      "note": "translated the accessible trigger/content disclosure structure into native BrainModule details sections for advanced actions, settings, and command transcripts"
     },
     {
-      "source_repo": "LiamVisionary/hivemind-os",
-      "source_path": "src/app/api/chat/agent-runtime/route.ts",
-      "target_path": "src/lib/services/chat/shared-vault-context.ts",
-      "reuse_type": "adapted_code",
-      "note": "extracted existing shared vault prompt builder and extended it with AI-ready vault guidance"
+      "source_repo": "/Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives",
+      "source_path": "packages/react/tabs/src/tabs.tsx",
+      "target_path": "src/features/dashboard/views/VaultPanel.tsx",
+      "reuse_type": "translated_code",
+      "note": "translated the Radix Tabs trigger/content accessibility contract into native segmented Brain Services pills with role=tablist, role=tab, aria-selected, aria-controls, and tabpanel IDs"
+    },
+    {
+      "source_repo": "/Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives",
+      "source_path": "packages/react/tabs/src/tabs.tsx",
+      "target_path": "src/features/dashboard/views/brain-services-ui.tsx",
+      "reuse_type": "translated_code",
+      "note": "kept the extracted segmented Brain Services navigation aligned with the Radix tab trigger/content accessibility contract"
     }
   ]
 }

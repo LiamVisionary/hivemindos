@@ -2,13 +2,17 @@
 // @ts-nocheck
 "use client";
 
-/* eslint-disable react-hooks/immutability, react-hooks/purity */
+/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 
 import { BrainModule } from "@/features/dashboard/brain-modules";
 import { useEffect, useRef, useState } from "react";
+import { BrainServiceOverview, BrainServiceRunResult, BrainServiceSegmentedNav, BrainServiceSettingsDeck } from "./brain-services-ui";
+import brainServiceStyles from "./brain-services.module.css";
+import { SectionModeHeader } from "./WorkSectionHeader";
 
 export function VaultPanel(props: any) {
-  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, Clock3, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, Image, KeyRound, LoaderCircle, MemoryCell, Network, PlugZap, RefreshCcw, Repeat2, Sparkles, activeView, brainGraph, brainGraphEdgePath, brainGraphLoading, brainGraphStats, brainGraphStatus, brainLayout, brainNodePoints, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, openSkillBrowser, pairSyncthingVaultSync, queryGbrainFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshRuntimeFileRoots, refreshTradingBrainStatus, runGbrainAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, selectedBrainTargetIds, setActiveView, setGbrainQuery, setSkillBrowserSearch, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, splitBrainLabel, startBrainPan, syncBrainSkillsToAeon, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus, visibleBrainNodes, walletClass } = props;
+  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, Clock3, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, Image, KeyRound, LoaderCircle, MemoryCell, Network, PlugZap, RefreshCcw, Repeat2, Sparkles, activeView, brainGraph, brainGraphEdgePath, brainGraphLoading, brainGraphStats, brainGraphStatus, brainLayout, brainNodePoints, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, openSkillBrowser, pairSyncthingVaultSync, queryGbrainFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, selectedBrainTargetIds, setBrainPan, setGbrainQuery, setSkillBrowserSearch, setSyntoQuery, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, splitBrainLabel, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus, visibleBrainNodes } = props;
+  const brainClass = (...classes) => classes.map((className) => brainServiceStyles[className] || vaultClass(className)).filter(Boolean).join(" ");
   const gbrainMetric = (keys: string[]) => {
     const stats = gbrainStatus?.stats ?? {};
     for (const key of keys) {
@@ -20,7 +24,9 @@ export function VaultPanel(props: any) {
   const gbrainKeys = gbrainStatus?.keyStatus ?? {};
   const gbrainRecommendations = gbrainStatus?.features?.recommendations ?? [];
   const [brainModuleSuccess, setBrainModuleSuccess] = useState<Record<string, boolean>>({});
+  const [brainServiceSection, setBrainServiceSection] = useState("overview");
   const previousGbrainBusyRef = useRef("");
+  const previousSyntoBusyRef = useRef("");
   const previousTradingBrainBusyRef = useRef("");
   const tradingCounts = tradingBrainStatus?.counts ?? {};
   const tradingBrainConfiguredFiles = tradingBrainStatus?.files?.filter((file) => file.exists).length ?? 0;
@@ -57,6 +63,17 @@ export function VaultPanel(props: any) {
     }
   }, [gbrainBusy, gbrainStatus?.installed]);
   useEffect(() => {
+    const previousBusy = previousSyntoBusyRef.current;
+    previousSyntoBusyRef.current = syntoBusy;
+    if ((previousBusy === "install" || previousBusy === "connect") && !syntoBusy && syntoStatus?.installed) {
+      setBrainModuleSuccess((current) => ({ ...current, synto: true }));
+      const timer = window.setTimeout(() => {
+        setBrainModuleSuccess((current) => ({ ...current, synto: false }));
+      }, 2000);
+      return () => window.clearTimeout(timer);
+    }
+  }, [syntoBusy, syntoStatus?.installed]);
+  useEffect(() => {
     const previousBusy = previousTradingBrainBusyRef.current;
     previousTradingBrainBusyRef.current = tradingBrainBusy;
     if (previousBusy === "install" && !tradingBrainBusy && tradingBrainStatus?.installed) {
@@ -78,6 +95,15 @@ export function VaultPanel(props: any) {
     : gbrainFailedInstallMessage.includes("ENOENT") || gbrainFailedInstallMessage.includes("Could not run the configured GBrain CLI")
       ? "GBrain CLI was not found. Use Install GBrain, or set the CLI path before connecting an existing install."
       : gbrainFailedInstallMessage;
+  const syntoStatusNote = syntoStatus?.error?.includes("ENOENT") || syntoStatus?.error?.includes("not found")
+    ? "Syntho CLI is not available on this machine yet."
+    : syntoStatus?.error ?? "";
+  const syntoFailedInstallMessage = !syntoStatus?.installed && !syntoBusy && syntoActionStatus && !syntoActionStatus.includes("ready to install")
+    ? syntoActionStatus
+    : "";
+  const syntoInstallFailureLabel = syntoFailedInstallMessage.includes("ENOENT") || syntoFailedInstallMessage.includes("Could not run the configured Syntho CLI")
+    ? "Syntho CLI was not found. Use Install Syntho, or connect an existing install after making it available on PATH."
+    : syntoFailedInstallMessage;
   const tradingBrainFailedInstallMessage = !tradingBrainStatus?.installed && !tradingBrainBusy && tradingBrainActionStatus && !tradingBrainActionStatus.includes("ready to install")
     ? tradingBrainActionStatus
     : "";
@@ -88,6 +114,15 @@ export function VaultPanel(props: any) {
       : gbrainStatus?.installed
         ? "installed"
         : gbrainInstallFailureLabel
+          ? "failed"
+          : "install";
+  const syntoInstallState = brainModuleSuccess.synto
+    ? "success"
+    : syntoBusy === "install" || syntoBusy === "connect"
+      ? "installing"
+      : syntoStatus?.installed
+        ? "installed"
+        : syntoInstallFailureLabel
           ? "failed"
           : "install";
   const tradingBrainInstallState = brainModuleSuccess["trading-brain"]
@@ -101,8 +136,14 @@ export function VaultPanel(props: any) {
           : "install";
   const brainServiceFooterStatus = [
     tradingBrainStatus?.installed || tradingBrainBusy === "install" ? tradingBrainActionStatus : "",
+    syntoStatus?.installed || syntoBusy === "install" || syntoBusy === "connect" ? syntoActionStatus : "",
     gbrainStatus?.installed || gbrainBusy === "install" || gbrainBusy === "connect" ? gbrainActionStatus : "",
   ].find(Boolean) || "";
+  const syntoOutputHints = `${syntoActionStatus}\n${syntoQueryResult}`;
+  const syntoNeedsModelSetup = /ollama|model/i.test(syntoOutputHints) && /missing|not running|not found|failed|error/i.test(syntoOutputHints);
+  const syntoModuleEnabled = sharedVault.synto.enabled || Boolean(syntoStatus?.installed);
+  const gbrainModuleEnabled = sharedVault.gbrain.enabled || Boolean(gbrainStatus?.installed);
+  const tradingBrainModuleEnabled = Boolean(sharedVault.tradingBrainEnabled || tradingBrainStatus?.installed);
   const brainModules = [
     new BrainModule({
       id: "gbrain",
@@ -151,6 +192,13 @@ export function VaultPanel(props: any) {
         <>Anthropic {gbrainKeys.ANTHROPIC_API_KEY ? "ready" : "optional"}</>,
         sharedVault.gbrain.searchMode,
       ],
+      primaryAction: {
+        key: "think",
+        label: "Ask GBrain",
+        disabled: Boolean(gbrainBusy) || !gbrainStatus?.installed || !gbrainQuery.trim(),
+        icon: gbrainBusy === "query" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <BrainCircuit aria-hidden="true" />,
+        onClick: () => void queryGbrainFromDashboard(),
+      },
       actions: [
         {
           key: "import",
@@ -175,9 +223,9 @@ export function VaultPanel(props: any) {
         },
       ],
       body: (
-        <div className={vaultClass("gbrainQueryBox")}>
+        <div className={brainClass("gbrainQueryBox")}>
           <label>
-            <span>Ask GBrain</span>
+            <span>Question</span>
             <textarea
               value={gbrainQuery}
               onChange={(event) => setGbrainQuery(event.target.value)}
@@ -185,11 +233,247 @@ export function VaultPanel(props: any) {
               placeholder="What changed across active projects this week?"
             />
           </label>
-          <Button type="button" size="sm" variant="secondary" disabled={Boolean(gbrainBusy) || !gbrainStatus?.installed} onClick={() => void queryGbrainFromDashboard()}>
-            {gbrainBusy === "query" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <BrainCircuit aria-hidden="true" />}
-            Think
-          </Button>
-          {gbrainQueryResult ? <pre>{gbrainQueryResult}</pre> : null}
+        </div>
+      ),
+      result: gbrainQueryResult || gbrainActionStatus ? <BrainServiceRunResult label="GBrain result" output={gbrainQueryResult} status={gbrainActionStatus} /> : null,
+      settings: (
+        <div className={brainClass("brainServiceSettings")}>
+          <label className={brainClass("brainServiceToggle")}>
+            <input
+              type="checkbox"
+              checked={sharedVault.gbrain.enabled}
+              onChange={(event) => updateSharedVault({ gbrain: { ...sharedVault.gbrain, enabled: event.target.checked } })}
+            />
+            {sharedVault.gbrain.enabled ? "GBrain integration enabled" : "GBrain integration disabled"}
+          </label>
+          <label>
+            Search mode
+            <select
+              value={sharedVault.gbrain.searchMode}
+              onChange={(event) => updateSharedVault({ gbrain: { ...sharedVault.gbrain, searchMode: event.target.value } })}
+            >
+              <option value="conservative">Conservative</option>
+              <option value="balanced">Balanced</option>
+              <option value="tokenmax">Tokenmax</option>
+            </select>
+          </label>
+          <label>
+            Provider policy
+            <select
+              value={sharedVault.gbrain.providerPolicy}
+              onChange={(event) => updateSharedVault({ gbrain: { ...sharedVault.gbrain, providerPolicy: event.target.value } })}
+            >
+              <option value="balanced-cloud">Balanced cloud</option>
+              <option value="local-first">Local first</option>
+              <option value="max-quality">Max quality</option>
+            </select>
+          </label>
+          <label>
+            MCP mode
+            <select
+              value={sharedVault.gbrain.mcpMode}
+              onChange={(event) => updateSharedVault({ gbrain: { ...sharedVault.gbrain, mcpMode: event.target.value } })}
+            >
+              <option value="stdio">stdio</option>
+              <option value="http">HTTP</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </label>
+        </div>
+      ),
+    }),
+    new BrainModule({
+      id: "synto",
+      name: "Syntho",
+      icon: <FileText aria-hidden="true" />,
+      statusLabel: syntoInstallState === "installed" ? syntoStatus?.initialized ? "Initialized" : "Installed" : syntoInstallState === "installing" ? "Installing" : "Optional",
+      statusTone: syntoStatus?.installed && syntoStatus?.initialized ? "live" : "idle",
+      active: syntoStatus?.installed,
+      title: "Compiled wiki, agent packs, and MCP",
+      description: "Install or connect Syntho when you want the Synthesis folder to become a reviewed wiki with drafts, maintain/eval checks, pack export, and MCP access.",
+      install: {
+        state: syntoInstallState,
+        buttonLabel: "Install Syntho",
+        disabled: Boolean(syntoBusy) || !sharedVault.enabled,
+        failureLabel: syntoInstallFailureLabel,
+        icon: syntoBusy === "install" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />,
+        installingLabel: syntoBusy === "connect" ? "Connecting Syntho runtime" : "Installing Syntho knowledge compiler",
+        onInstall: () => void runSyntoAction("install"),
+        successLabel: "Installed!",
+        features: [
+          <>Ingests source notes from Synthesis/raw into reviewed wiki drafts</>,
+          <>Runs maintain, eval, doctor, and pack export commands from the dashboard</>,
+          <>Exposes published wiki articles and source passages over MCP</>,
+          <>Keeps Syntho state scoped to the Synthesis folder</>,
+        ],
+        secondaryActions: [
+          {
+            key: "connect",
+            label: "Connect existing",
+            disabled: Boolean(syntoBusy) || !sharedVault.enabled,
+            icon: syntoBusy === "connect" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <PlugZap aria-hidden="true" />,
+            onClick: () => void runSyntoAction("connect"),
+          },
+        ],
+      },
+      stats: [
+        { key: "raw", label: "Raw", value: syntoStatus?.counts?.raw ?? "—", icon: <FileText aria-hidden="true" /> },
+        { key: "drafts", label: "Drafts", value: syntoStatus?.counts?.drafts ?? "—", icon: <Eye aria-hidden="true" /> },
+        { key: "articles", label: "Articles", value: syntoStatus?.counts?.articles ?? "—", icon: <GitBranch aria-hidden="true" /> },
+        { key: "mcp", label: "MCP", value: syntoStatus?.mcp?.mode ?? sharedVault.synto.mcpMode, icon: <PlugZap aria-hidden="true" /> },
+      ],
+      badges: [
+        ...(syntoStatusNote ? [syntoStatusNote] : []),
+        syntoStatus?.initialized ? "synto.toml ready" : "Initialize Synthesis",
+        `Source access ${syntoStatus?.mcp?.sourceAccessMode ?? sharedVault.synto.sourceAccessMode}`,
+        `Compare ${sharedVault.synto.compareHeavyModel}`,
+        syntoStatus?.pack?.indexExists ? "Pack index ready" : "Pack pending",
+        sharedVault.synto.autoApprove ? `Auto approve >= ${sharedVault.synto.minConfidence}` : "Human review first",
+      ],
+      primaryAction: {
+        key: "run",
+        label: "Run pipeline",
+        disabled: Boolean(syntoBusy) || !syntoStatus?.initialized,
+        icon: syntoBusy === "run" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Repeat2 aria-hidden="true" />,
+        onClick: () => void runSyntoAction("run"),
+      },
+      quickActions: [
+        {
+          key: "query",
+          label: "Ask Syntho",
+          disabled: Boolean(syntoBusy) || !syntoStatus?.initialized || !syntoQuery.trim(),
+          icon: syntoBusy === "query" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <FileText aria-hidden="true" />,
+          onClick: () => void querySyntoFromDashboard(),
+        },
+      ],
+      actions: [
+        {
+          key: "init",
+          label: syntoStatus?.initialized ? "Repair init" : "Initialize",
+          disabled: Boolean(syntoBusy),
+          icon: syntoBusy === "init" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Check aria-hidden="true" />,
+          onClick: () => void runSyntoAction("init"),
+        },
+        {
+          key: "maintain",
+          label: "Maintain",
+          disabled: Boolean(syntoBusy) || !syntoStatus?.initialized,
+          icon: syntoBusy === "maintain" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />,
+          onClick: () => void runSyntoAction("maintain"),
+        },
+        {
+          key: "compare",
+          label: "Compare",
+          disabled: Boolean(syntoBusy) || !syntoStatus?.initialized,
+          icon: syntoBusy === "compare" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <GitBranch aria-hidden="true" />,
+          onClick: () => void runSyntoAction("compare"),
+        },
+        {
+          key: "eval",
+          label: "Eval",
+          disabled: Boolean(syntoBusy) || !syntoStatus?.initialized,
+          icon: syntoBusy === "eval" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Activity aria-hidden="true" />,
+          onClick: () => void runSyntoAction("eval"),
+        },
+        {
+          key: "pack",
+          label: "Export pack",
+          disabled: Boolean(syntoBusy) || !syntoStatus?.initialized,
+          icon: syntoBusy === "pack" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />,
+          onClick: () => void runSyntoAction("pack"),
+        },
+        {
+          key: "doctor",
+          label: "Doctor",
+          disabled: Boolean(syntoBusy) || !syntoStatus?.initialized,
+          icon: syntoBusy === "doctor" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <CircleAlert aria-hidden="true" />,
+          onClick: () => void runSyntoAction("doctor"),
+        },
+      ],
+      body: (
+        <div className={brainClass("gbrainQueryBox")}>
+          {syntoNeedsModelSetup ? (
+            <div className={brainClass("brainServiceRepairHint")}>
+              <strong>Model backend needs attention</strong>
+              <span>Start Ollama and pull the configured Syntho models before compiling real notes.</span>
+              <code>ollama serve && ollama pull gemma4:e4b && ollama pull qwen2.5:14b && ollama pull nomic-embed-text</code>
+            </div>
+          ) : null}
+          <label>
+            <span>Question</span>
+            <textarea
+              value={syntoQuery}
+              onChange={(event) => setSyntoQuery(event.target.value)}
+              rows={3}
+              placeholder="What does the reviewed wiki say about this project?"
+            />
+          </label>
+        </div>
+      ),
+      result: syntoQueryResult || syntoActionStatus ? <BrainServiceRunResult label="Syntho result" output={syntoQueryResult} status={syntoActionStatus} /> : null,
+      settings: (
+        <div className={brainClass("brainServiceSettings")}>
+          <label className={brainClass("brainServiceToggle")}>
+            <input
+              type="checkbox"
+              checked={sharedVault.synto.enabled}
+              onChange={(event) => updateSharedVault({ synto: { ...sharedVault.synto, enabled: event.target.checked } })}
+            />
+            {sharedVault.synto.enabled ? "Syntho integration enabled" : "Syntho integration disabled"}
+          </label>
+          <label>
+            Source access
+            <select
+              value={sharedVault.synto.sourceAccessMode}
+              onChange={(event) => updateSharedVault({ synto: { ...sharedVault.synto, sourceAccessMode: event.target.value } })}
+            >
+              <option value="deny">Deny raw text</option>
+              <option value="permissive_only">Permissive only</option>
+              <option value="all">All raw text</option>
+            </select>
+          </label>
+          <label>
+            MCP mode
+            <select
+              value={sharedVault.synto.mcpMode}
+              onChange={(event) => updateSharedVault({ synto: { ...sharedVault.synto, mcpMode: event.target.value } })}
+            >
+              <option value="stdio">stdio</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </label>
+          <label>
+            Compare model
+            <select
+              value={sharedVault.synto.compareHeavyModel}
+              onChange={(event) => updateSharedVault({ synto: { ...sharedVault.synto, compareHeavyModel: event.target.value } })}
+            >
+              <option value="llama3.1:8b">llama3.1:8b</option>
+              <option value="qwen2.5:14b">qwen2.5:14b</option>
+              <option value="gemma4:e4b">gemma4:e4b</option>
+              <option value="mistral-nemo:12b">mistral-nemo:12b</option>
+              <option value="deepseek-r1:8b">deepseek-r1:8b</option>
+            </select>
+          </label>
+          <label>
+            Min confidence
+            <input
+              type="number"
+              min="0"
+              max="1"
+              step="0.05"
+              value={sharedVault.synto.minConfidence}
+              onChange={(event) => updateSharedVault({ synto: { ...sharedVault.synto, minConfidence: Number(event.target.value) } })}
+            />
+          </label>
+          <label className={brainClass("brainServiceToggle")}>
+            <input
+              type="checkbox"
+              checked={sharedVault.synto.autoApprove}
+              onChange={(event) => updateSharedVault({ synto: { ...sharedVault.synto, autoApprove: event.target.checked } })}
+            />
+            Auto-approve pipeline drafts at or above the confidence threshold
+          </label>
         </div>
       ),
     }),
@@ -231,6 +515,22 @@ export function VaultPanel(props: any) {
         tradingBrainTotalFiles ? `${tradingBrainConfiguredFiles}/${tradingBrainTotalFiles} files` : "Scaffold pending",
         "Local markdown only",
       ],
+      primaryAction: {
+        key: "check",
+        label: "Check Trading Brain",
+        disabled: Boolean(tradingBrainBusy),
+        icon: tradingBrainBusy === "status" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />,
+        onClick: () => void refreshTradingBrainStatus(),
+      },
+      quickActions: [
+        {
+          key: "all-runtimes",
+          label: tradingBrainAllRuntimeAttached ? "Remove all runtimes" : "Add all runtimes",
+          disabled: !tradingBrainRuntimeCards?.length,
+          icon: tradingBrainAllRuntimeAttached ? <Check aria-hidden="true" /> : <PlugZap aria-hidden="true" />,
+          onClick: () => setTradingBrainForAllRuntimes(!tradingBrainAllRuntimeAttached),
+        },
+      ],
       actions: [
         {
           key: "install",
@@ -239,30 +539,16 @@ export function VaultPanel(props: any) {
           icon: tradingBrainBusy === "install" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : tradingBrainStatus?.installed ? <Check aria-hidden="true" /> : <Download aria-hidden="true" />,
           onClick: () => void installTradingBrainFromDashboard(),
         },
-        {
-          key: "check",
-          label: "Check",
-          disabled: Boolean(tradingBrainBusy),
-          icon: tradingBrainBusy === "status" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />,
-          onClick: () => void refreshTradingBrainStatus(),
-        },
-        {
-          key: "all-runtimes",
-          label: tradingBrainAllRuntimeAttached ? "Remove From All Agent Runtimes" : "Add To All Agent Runtimes",
-          disabled: !tradingBrainRuntimeCards?.length,
-          icon: tradingBrainAllRuntimeAttached ? <Check aria-hidden="true" /> : <PlugZap aria-hidden="true" />,
-          onClick: () => setTradingBrainForAllRuntimes(!tradingBrainAllRuntimeAttached),
-        },
       ],
       body: (
         <>
-          <div className={vaultClass("tradingBrainPillars")}>
+          <div className={brainClass("tradingBrainPillars")}>
             {["Capture", "Performance", "Pre-trade", "Market context", "Emotion"].map((pillar) => <span key={pillar}>{pillar}</span>)}
           </div>
 
-          <div className={vaultClass("tradingRuntimeGrid")}>
+          <div className={brainClass("tradingRuntimeGrid")}>
             {(tradingBrainRuntimeCards ?? []).map((runtimeCard) => (
-              <article key={runtimeCard.id} className={vaultClass("tradingRuntimeCard", runtimeCard.allAttached && "active")}>
+              <article key={runtimeCard.id} className={brainClass("tradingRuntimeCard", runtimeCard.allAttached && "active")}>
                 <div>
                   <strong>{runtimeCard.label}</strong>
                   <span>{runtimeCard.attachedCount}/{runtimeCard.agentCount} attached · {runtimeCard.detail}</span>
@@ -288,7 +574,7 @@ export function VaultPanel(props: any) {
       statusTone: "live",
       variant: "synthesis",
       active: true,
-      title: "Reviewed Synto layer",
+      title: "Reviewed Syntho layer",
       description: "Synthesis is the curated layer for drafts, reviewed wiki articles, source trails, and agent packs. It can read from the same vault surface GBrain indexes.",
       install: {
         state: "installed",
@@ -303,7 +589,64 @@ export function VaultPanel(props: any) {
       badges: ["Manual review default", "Local Ollama preferred", "No vector DB conflict"],
     }),
   ];
-  const vaultPanelHref = (mode: string) => `/?view=vault&vaultPanel=${mode}`;
+  const brainModuleById = new Map(brainModules.map((module) => [module.definition.id, module]));
+  const brainServiceSections = [{ id: "overview", label: "Overview", icon: <Activity aria-hidden="true" /> }, { id: "synto", label: "Syntho", icon: <FileText aria-hidden="true" /> }, ...(gbrainModuleEnabled ? [{ id: "gbrain", label: "GBrain", icon: <BrainCircuit aria-hidden="true" /> }] : []), ...(tradingBrainModuleEnabled ? [{ id: "trading-brain", label: "Trading", icon: <Activity aria-hidden="true" /> }] : []), { id: "synthesis", label: "Synthesis", icon: <Sparkles aria-hidden="true" /> }, { id: "settings", label: "Settings", icon: <KeyRound aria-hidden="true" /> }];
+  useEffect(() => { if (!brainServiceSections.some((section) => section.id === brainServiceSection)) setBrainServiceSection("overview"); }, [brainServiceSection, brainServiceSections]);
+  const brainServiceOverviewCards = [
+    {
+      id: "synto",
+      bullets: ["Turns Synthesis notes into reviewed wiki articles", "Runs maintain, compare, eval, doctor, and pack export", "Serves curated answers and approved sources over MCP"],
+      eyebrow: "Knowledge compiler",
+      title: "Syntho",
+      detail: syntoStatus?.initialized
+        ? `${syntoStatus.counts?.articles ?? 0} reviewed article${(syntoStatus.counts?.articles ?? 0) === 1 ? "" : "s"} ready`
+        : syntoStatus?.installed ? "Installed. Initialize Synthesis to run the pipeline." : "Optional compiler for reviewed wiki articles and packs.",
+      status: syntoStatus?.installed ? syntoStatus.initialized ? "Ready" : "Needs init" : "Optional",
+      tone: syntoStatus?.installed && syntoStatus.initialized ? "live" : "idle",
+      icon: <FileText aria-hidden="true" />,
+      enabled: syntoModuleEnabled,
+      onToggle: (enabled) => updateSharedVault({ synto: { ...sharedVault.synto, enabled } }),
+      action: syntoModuleEnabled ? "Open Syntho" : "Enable Syntho",
+    },
+    {
+      id: "gbrain",
+      bullets: ["Indexes the shared vault for semantic search", "Builds graph-aware answers with source trails", "Adds optional MCP retrieval and dream-cycle synthesis"],
+      eyebrow: "Semantic retrieval",
+      title: "GBrain",
+      detail: gbrainStatus?.installed ? `${gbrainMetric(["notes", "documents", "nodes"])} indexed notes available` : "Optional graph and retrieval layer over the shared vault.",
+      status: gbrainStatus?.installed ? "Ready" : "Optional",
+      tone: gbrainStatus?.installed ? "live" : "idle",
+      icon: <BrainCircuit aria-hidden="true" />,
+      enabled: gbrainModuleEnabled,
+      onToggle: (enabled) => updateSharedVault({ gbrain: { ...sharedVault.gbrain, enabled } }),
+      action: gbrainModuleEnabled ? "Open GBrain" : "Enable GBrain",
+    },
+    {
+      id: "trading-brain",
+      bullets: ["Captures trades in strict Obsidian templates", "Summarizes weekly performance and monthly edge", "Attaches pre-trade intelligence to agent runtimes"],
+      eyebrow: "Domain memory",
+      title: "Trading Brain",
+      detail: tradingBrainStatus?.installed ? `${tradingBrainConfiguredFiles}/${tradingBrainTotalFiles || "?"} scaffold files configured` : "Optional trade capture, edge review, and runtime instruction pack.",
+      status: tradingBrainStatus?.installed ? "Ready" : "Optional",
+      tone: tradingBrainStatus?.installed ? "live" : "idle",
+      icon: <Activity aria-hidden="true" />,
+      enabled: tradingBrainModuleEnabled,
+      onToggle: (enabled) => updateSharedVault({ tradingBrainEnabled: enabled }),
+      action: tradingBrainModuleEnabled ? "Open Trading" : "Enable Trading Brain",
+    },
+    {
+      id: "synthesis",
+      bullets: ["Keeps drafts, review decisions, and source trails together", "Feeds Syntho packs without fighting GBrain retrieval", "Stays local markdown first"],
+      eyebrow: "Curated layer",
+      title: "Synthesis",
+      detail: `${sharedVault.synthesisFolder || DEFAULT_SHARED_VAULT.synthesisFolder} holds drafts, reviewed wiki articles, and exported packs.`,
+      status: "Foundation",
+      tone: "live",
+      icon: <Sparkles aria-hidden="true" />,
+      action: "Open Synthesis",
+    },
+  ];
+  const selectedBrainModule = brainModuleById.get(brainServiceSection);
   const selectVaultPanel = (mode: string) => {
     setVaultPanelMode(mode);
     if (typeof window === "undefined") return;
@@ -312,87 +655,60 @@ export function VaultPanel(props: any) {
     url.searchParams.set("vaultPanel", mode);
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
   };
+  const panBrainGraphWithWheel = (event) => {
+    event.preventDefault();
+    setBrainPan((current) => ({
+      x: current.x + event.deltaX,
+      y: current.y + event.deltaY,
+    }));
+  };
+  const vaultPanelModes = [
+    { id: "hive-vault", label: "Hive Vault" },
+    { id: "shared-skills", label: "Shared Skills" },
+    { id: "brain-services", label: "Brain Services" },
+    { id: "env", label: "Env" },
+    { id: "config", label: "Config" },
+  ];
+  const vaultPanelCopy = {
+    "hive-vault": { title: "Shared Brain", subtitle: "Obsidian memory graph" },
+    "shared-skills": { title: "Shared Skills", subtitle: "Skill shelf and imports" },
+    "brain-services": { title: "Brain Services", subtitle: "Retrieval and synthesis" },
+    env: { title: "Shared Env", subtitle: "Secrets and runtime overlays" },
+    config: { title: "Brain Config", subtitle: "Vault sync and paths" },
+  }[vaultPanelMode] ?? { title: "Shared Brain", subtitle: "Obsidian memory graph" };
   return (<>
       {activeView === "vault" ? (
-      <section className={vaultClass("vaultPanel", "tabPanel")}>
-        <div className={vaultClass("vaultHeader")}>
-          <div className={vaultClass("vaultHeaderMain")}>
-            <p className="eyebrow">Shared brain</p>
-            <h2>One memory, many agents</h2>
-            <p>Connect an Obsidian vault to give your agents a common place for memory, handoffs, and shared project context.</p>
-            <div className={vaultClass("vaultViewSwitch")}>
-              <div className={walletClass("walletSegmented", "vaultSegmented")} role="tablist" aria-label="Vault view mode">
-                {[
-                  ["hive-vault", "Hive Vault"],
-                  ["shared-skills", "Shared Skills"],
-                  ["brain-services", "Brain Services"],
-                  ["config", "Config"],
-                ].map(([mode, label]) => (
-                  <a
-                    key={mode}
-                    href={vaultPanelHref(mode)}
-                    role="tab"
-                    aria-selected={vaultPanelMode === mode}
-                    className={walletClass("walletSegment", "vaultSegment", vaultPanelMode === mode && "walletSegmentActive")}
-                    onPointerDown={(event) => {
-                      if (event.button === 0) selectVaultPanel(mode);
-                    }}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      selectVaultPanel(mode);
-                    }}
-                  >
-                    {label}
-                  </a>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className={vaultClass("vaultHeaderActions")}>
-            <Button type="button" size="sm" variant="secondary" onClick={() => refreshBrainGraph(true)} disabled={brainGraphLoading}>
-              {brainGraphLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
-              {brainGraphLoading ? "Reading graph" : "Refresh graph"}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                setActiveView("files");
-                void refreshRuntimeFileRoots();
-              }}
-            >
-              <FolderOpen aria-hidden="true" />
-              Files
-            </Button>
-          </div>
-        </div>
+      <section className={vaultClass("vaultPanel", "tabPanel", vaultPanelMode === "env" && "vaultPanelCompact")}>
+        <SectionModeHeader
+          activeMode={vaultPanelMode}
+          ariaLabel="Brain view mode"
+          modes={vaultPanelModes}
+          onSelect={selectVaultPanel}
+          title={vaultPanelCopy.title}
+          subtitle={vaultPanelCopy.subtitle}
+          stats={[
+            { value: brainGraphStats.notes, label: "notes", tone: "cyan" },
+            { value: brainGraphStats.links, label: "links", tone: "honey" },
+            { value: sharedBrainSkills.length, label: "skills" },
+            { value: brainSkillImportableCount, label: "ready" },
+          ]}
+        />
 
+        <div className={vaultClass("vaultPanelBody", vaultPanelMode === "hive-vault" && "brainMapBody")}>
         {vaultPanelMode === "hive-vault" ? (
         <div className={vaultClass("brainWorkspace")}>
           <section className={vaultClass("brainGraphPanel")} aria-label="Shared brain graph">
-            <div className={vaultClass("brainGraphStats")}>
-              {[
-                ["Notes", brainGraphStats.notes, <FileText aria-hidden="true" key="notes" />],
-                ["Links", brainGraphStats.links, <GitBranch aria-hidden="true" key="links" />],
-                ["Accessed", brainGraphStats.accessed, <Eye aria-hidden="true" key="accessed" />],
-                ["Recent", brainGraphStats.recent, <Clock3 aria-hidden="true" key="recent" />],
-              ].map(([label, value, icon]) => (
-                <span key={String(label)}>
-                  {icon}
-                  <strong>{value}</strong>
-                  {label}
-                </span>
-              ))}
-            </div>
-            <div className={vaultClass("brainLegend")} aria-label="Brain graph legend">
-              <span><i className={vaultClass("legendNote")} /> Note</span>
-              <span><i className={vaultClass("legendUnresolved")} /> Unresolved link</span>
-              <span><i className={vaultClass("legendSelected")} /> Selected</span>
-              <span><i className={vaultClass("legendTarget")} /> Target</span>
-            </div>
-
-            <div className={vaultClass("brainGraphCanvas")}>
+            <div className={vaultClass("brainGraphCanvas")} onWheel={panBrainGraphWithWheel}>
+              <button
+                type="button"
+                className={vaultClass("brainGraphRefreshButton")}
+                aria-label={brainGraphLoading ? "Refreshing brain graph" : "Refresh brain graph"}
+                title={brainGraphLoading ? "Refreshing brain graph" : "Refresh brain graph"}
+                onClick={() => refreshBrainGraph(true)}
+                disabled={brainGraphLoading}
+              >
+                {brainGraphLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
+              </button>
               {visibleBrainNodes.length ? (
                 <>
                   <svg
@@ -490,7 +806,6 @@ export function VaultPanel(props: any) {
                 </div>
               )}
             </div>
-            <p className={vaultClass("brainStatus")}>{brainGraphStatus || "Graph waits for the shared vault."}</p>
           </section>
 
           <aside className={vaultClass("brainInspector")}>
@@ -777,27 +1092,42 @@ export function VaultPanel(props: any) {
         ) : null}
 
         {vaultPanelMode === "brain-services" ? (
-        <section className={vaultClass("brainServicesPanel")} aria-label="Brain services">
-          <div className={vaultClass("brainSkillsHeader")}>
+        <section className={brainClass("brainServicesPanel")} aria-label="Brain services">
+          <div className={brainClass("brainServicesHero")}>
             <div>
               <p className="eyebrow">Brain services</p>
-              <h3>Retrieval, synthesis, and reviewed memory</h3>
-              <p>GBrain stays optional but first-class: it can index the vault, expose MCP, scaffold its namespaced skills, and run retrieval or dream cycles without taking over the Synthesis layer.</p>
+              <h3>Memory services, one at a time</h3>
+              <p>Keep the shared brain calm: review status at a glance, then open Syntho, GBrain, Trading Brain, or Synthesis only when you need that workflow.</p>
             </div>
-            <div className={vaultClass("brainSkillsActions")}>
-              <Button type="button" size="sm" variant="secondary" onClick={() => { void refreshGbrainStatus(); void refreshTradingBrainStatus(); }} disabled={Boolean(gbrainBusy) || Boolean(tradingBrainBusy)}>
-                {gbrainBusy === "status" || tradingBrainBusy === "status" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
-                {gbrainBusy === "status" || tradingBrainBusy === "status" ? "Checking" : "Refresh"}
+            <div className={brainClass("brainServicesHeroActions")}>
+              <Button type="button" size="sm" variant="secondary" onClick={() => { void refreshGbrainStatus(); void refreshSyntoStatus(); void refreshTradingBrainStatus(); }} disabled={Boolean(gbrainBusy) || Boolean(syntoBusy) || Boolean(tradingBrainBusy)}>
+                {gbrainBusy === "status" || syntoBusy === "status" || tradingBrainBusy === "status" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
+                {gbrainBusy === "status" || syntoBusy === "status" || tradingBrainBusy === "status" ? "Checking" : "Refresh"}
               </Button>
             </div>
           </div>
 
-          <div className={vaultClass("brainServiceGrid")}>
-            {brainModules.map((module) => module.render({ Button, vaultClass }))}
+          <BrainServiceSegmentedNav activeSection={brainServiceSection} brainClass={brainClass} sections={brainServiceSections} setActiveSection={setBrainServiceSection} />
+
+          <div
+            className={brainClass("brainServiceTabPanel")}
+            role="tabpanel"
+            id={`brain-service-panel-${brainServiceSection}`}
+            aria-labelledby={`brain-service-tab-${brainServiceSection}`}
+          >
+            {brainServiceSection === "overview" ? (
+              <BrainServiceOverview Button={Button} brainClass={brainClass} cards={brainServiceOverviewCards} setActiveSection={setBrainServiceSection} />
+            ) : brainServiceSection === "settings" ? (
+              <BrainServiceSettingsDeck brainClass={brainClass} gbrainSettings={brainModuleById.get("gbrain")?.definition.settings} syntoSettings={brainModuleById.get("synto")?.definition.settings} />
+            ) : selectedBrainModule ? (
+              <div className={brainClass("brainServiceGrid")}>
+                {selectedBrainModule.render({ Button, vaultClass: brainClass })}
+              </div>
+            ) : null}
           </div>
 
           {gbrainRecommendations.length ? (
-            <div className={vaultClass("brainServiceRecommendations")}>
+            <div className={brainClass("brainServiceRecommendations")}>
               <strong><CircleAlert aria-hidden="true" /> GBrain recommendations</strong>
               {gbrainRecommendations.slice(0, 4).map((recommendation) => (
                 <span key={recommendation.id}>{recommendation.title} · <code>{recommendation.command}</code></span>
@@ -992,57 +1322,14 @@ export function VaultPanel(props: any) {
                   </label>
                 </div>
                 <div className="rounded-lg border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.45)] p-3">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <strong className="block text-xs text-[var(--foreground)]">GBrain integration</strong>
-                      <small className="text-[var(--muted)]">Optional retrieval, graph, and MCP layer. Secrets stay in env, never in the vault.</small>
+                      <strong className="block text-xs text-[var(--foreground)]">Brain service controls</strong>
+                      <small className="text-[var(--muted)]">GBrain and Syntho runtime settings now live beside their service health and actions.</small>
                     </div>
-                    <label className="flex items-center gap-2 text-xs font-semibold text-[var(--foreground)]">
-                      <input
-                        type="checkbox"
-                        checked={sharedVault.gbrain.enabled}
-                        onChange={(event) => updateSharedVault({ gbrain: { ...sharedVault.gbrain, enabled: event.target.checked } })}
-                      />
-                      {sharedVault.gbrain.enabled ? "Enabled" : "Disabled"}
-                    </label>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-                      Search mode
-                      <select
-                        value={sharedVault.gbrain.searchMode}
-                        onChange={(event) => updateSharedVault({ gbrain: { ...sharedVault.gbrain, searchMode: event.target.value } })}
-                        className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                      >
-                        <option value="conservative">Conservative</option>
-                        <option value="balanced">Balanced</option>
-                        <option value="tokenmax">Tokenmax</option>
-                      </select>
-                    </label>
-                    <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-                      Provider policy
-                      <select
-                        value={sharedVault.gbrain.providerPolicy}
-                        onChange={(event) => updateSharedVault({ gbrain: { ...sharedVault.gbrain, providerPolicy: event.target.value } })}
-                        className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                      >
-                        <option value="balanced-cloud">Balanced cloud</option>
-                        <option value="local-first">Local first</option>
-                        <option value="max-quality">Max quality</option>
-                      </select>
-                    </label>
-                    <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-                      MCP mode
-                      <select
-                        value={sharedVault.gbrain.mcpMode}
-                        onChange={(event) => updateSharedVault({ gbrain: { ...sharedVault.gbrain, mcpMode: event.target.value } })}
-                        className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                      >
-                        <option value="stdio">stdio</option>
-                        <option value="http">HTTP</option>
-                        <option value="disabled">Disabled</option>
-                      </select>
-                    </label>
+                    <Button type="button" size="sm" variant="secondary" onClick={() => setVaultPanelMode("brain-services")}>
+                      Open Brain Services
+                    </Button>
                   </div>
                 </div>
                 <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
@@ -1138,6 +1425,7 @@ export function VaultPanel(props: any) {
           </Cell>
         </div>
         ) : null}
+        </div>
       </section>
       ) : null}
 

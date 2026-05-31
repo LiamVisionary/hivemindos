@@ -2541,6 +2541,10 @@ details[open] > summary .treeDisclosure::before {
 }
 
 .chat {
+  --chat-column-width: 820px;
+  --chat-assistant-width: 760px;
+  --chat-user-width: 620px;
+  --chat-column-gutter: max(24px, calc((100% - var(--chat-column-width)) / 2));
   position: relative;
   isolation: isolate;
   height: 100%;
@@ -2835,7 +2839,7 @@ details[open] > summary .treeDisclosure::before {
 .messages {
   gap: 24px;
   margin: 0 -18px;
-  padding: 32px max(24px, calc((100% - 1180px) / 2)) 190px;
+  padding: 32px var(--chat-column-gutter) 190px;
 }
 
 .messages::before,
@@ -2893,6 +2897,10 @@ details[open] > summary .treeDisclosure::before {
   margin-top: 3px;
   border-radius: 14px;
   font-size: 0.68rem;
+}
+
+.messageBylineAvatar {
+  display: none;
 }
 
 .message.assistant {
@@ -3064,7 +3072,7 @@ details[open] > summary .treeDisclosure::before {
 
 .chatSuggestions {
   justify-content: center;
-  max-width: 1180px;
+  max-width: var(--chat-column-width);
   margin: 0 auto;
   border-top: 0;
   padding: 0 24px 12px;
@@ -3084,12 +3092,13 @@ details[open] > summary .treeDisclosure::before {
   margin: 0 -18px;
   border-top: 0;
   background: transparent;
-  padding: 18px max(24px, calc((100% - 1180px) / 2)) 6px;
+  padding: 18px 24px 6px;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
 
 .chatComposerField {
+  width: 100%;
   border-color: rgba(255, 255, 255, 0.13);
   border-radius: 24px;
   background: rgba(8, 13, 20, 0.34);
@@ -3099,6 +3108,25 @@ details[open] > summary .treeDisclosure::before {
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(34px) saturate(1.55);
   -webkit-backdrop-filter: blur(34px) saturate(1.55);
+}
+
+@media (min-width: 721px) {
+  .chat form {
+    right: auto;
+    left: 50%;
+    width: min(var(--chat-column-width), calc(100% - 48px));
+    margin: 0;
+    padding: 18px 0 6px;
+    transform: translateX(-50%);
+  }
+
+  .messageBody {
+    max-width: min(calc(100% - 50px), var(--chat-assistant-width));
+  }
+
+  .message.user .messageBody {
+    max-width: min(76%, var(--chat-user-width));
+  }
 }
 
 .chatComposerField:focus-within {
@@ -3143,7 +3171,7 @@ details[open] > summary .treeDisclosure::before {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px 16px;
-  max-width: 1180px;
+  max-width: var(--chat-column-width);
   margin: 0 auto;
   color: #64748b;
   padding: 0 8px 14px;
@@ -3617,9 +3645,36 @@ details[open] > summary .treeDisclosure::before {
     padding-bottom: 214px;
   }
 
+  .message {
+    gap: 0;
+  }
+
+  .message.assistant > .messageAvatar {
+    display: none;
+  }
+
   .messageBody,
   .message.user .messageBody {
-    max-width: calc(100% - 52px);
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .assistantByline {
+    align-items: center;
+    gap: 8px;
+  }
+
+  .messageBylineAvatar {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    margin-top: 0;
+    border-radius: 11px;
+    font-size: 0.62rem;
+  }
+
+  .assistantByline small {
+    min-width: 0;
   }
 
   .composerHint {

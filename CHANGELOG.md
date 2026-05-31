@@ -3,6 +3,30 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-01 04:51:10 WITA - Restore Chat Header Backdrop
+
+- Status: Pushed
+- Areas changed: Dashboard topbar global CSS, changelog
+- Summary: Remove the chat-route-only transparent topbar override so the Chat route uses the same dark opaque dashboard header background and honeycomb overlay as the other routes.
+- Verification: `rg -n "chatCommandTopbar|commandTopbar" src/app/globals.css src/features/dashboard/views/DashboardHeader.tsx` confirmed the chat class remains on the header but no longer has a transparent CSS override; `git diff --check -- src/app/globals.css CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `pnpm exec eslint src/app/globals.css --max-warnings=999` returned the existing CSS-file ignored warning with no errors.
+- Intended commit message: `Restore chat header backdrop`
+
+## 2026-06-01 04:23:10 WITA - Require Dashboard API Auth
+
+- Status: Pushed
+- Areas changed: Dashboard API auth middleware, auth session route, dashboard unlock page, sensitive env/wallet/AEON deliverable routes, wallet send approval flow, setup/uninstall auth key handling, dashboard host binding, dashboard auth helper CLI, setup unlock-token onboarding, README quick-start/security notes, API auth regression test
+- Summary: Add fail-closed dashboard API authentication with signed sessions and device-token bearer support, protect sensitive env/wallet/deliverable handlers, require a one-use server approval token before wallet sends can load local wallet secrets, generate dashboard auth keys during setup, bind local dashboard starts to loopback by default, offer to copy the unlock token during setup, add `pnpm dashboard-auth` commands for status/copy/reset/secret rotation, document the unlock flow in the README, and add focused auth regression tests.
+- Verification: `pnpm test:api-auth`; `pnpm test:dashboard-auth`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; targeted `pnpm exec eslint middleware.ts src/lib/utils/server-auth.ts src/app/api/auth/session/route.ts src/app/api/env/route.ts src/app/api/wallet/create/route.ts src/app/api/wallet/send/route.ts src/app/api/runtimes/aeon/deliverables/route.ts src/app/page.tsx src/features/dashboard/hooks/use-wallet-files-controller.tsx scripts/dev-server.mjs scripts/test-dashboard-api-auth.mjs --max-warnings=999` passed with existing wallet-hook warnings only; targeted `pnpm exec eslint scripts/dashboard-auth.mjs scripts/test-dashboard-auth-helper.mjs setup.sh setup.ps1 --max-warnings=999` passed with setup script ignored warnings only; `bash -n setup.sh uninstall.sh scripts/update-hivemindos.sh`; PowerShell parse check skipped because `pwsh` is unavailable; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- middleware.ts src/lib/utils/server-auth.ts src/app/api/auth/session/route.ts src/app/api/env/route.ts src/app/api/wallet/create/route.ts src/app/api/wallet/send/route.ts src/app/api/runtimes/aeon/deliverables/route.ts src/app/page.tsx src/features/dashboard/hooks/use-wallet-files-controller.tsx scripts/dev-server.mjs scripts/update-hivemindos.sh scripts/test-dashboard-api-auth.mjs setup.sh setup.ps1 uninstall.sh uninstall.ps1 package.json CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `git diff --check -- scripts/dashboard-auth.mjs scripts/test-dashboard-auth-helper.mjs setup.sh setup.ps1 package.json CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `git diff --check -- README.md CHANGELOG.md`.
+- Intended commit message: `Require dashboard API auth`
+
+## 2026-06-01 04:27:13 WITA - Improve Mobile Chat Bubble Layout
+
+- Status: Pushed
+- Areas changed: Chat message rendering, mobile chat CSS, changelog
+- Summary: Move the assistant avatar inline beside the agent name on mobile, hide the outside row avatar there, and let mobile message bubbles use the full available row width within the transcript gutters.
+- Verification: `pnpm exec eslint src/features/dashboard/views/ChatPanel.tsx src/app/chat.module.css --max-warnings=999` passed with the existing CSS-module ignored warning and existing `no-img-element` avatar warning; `git diff --check -- src/features/dashboard/views/ChatPanel.tsx src/app/chat.module.css CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`.
+- Intended commit message: `Improve mobile chat bubble layout`
+
 ## 2026-06-01 04:15:45 WITA - Lower Honey Reward Allocation
 
 - Status: Pushed
@@ -10,6 +34,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Summary: Reduce the official Honey/HIVE reward-pool allocation from 10% to 5% of creator fees, which changes the capped pool share from 0.0684% to 0.0342% of trading volume value, and document the new formula in public wallet/API docs.
 - Verification: `pnpm test:honey-economics`; `git diff --check -- README.md docs/features/wallets-honey-and-x402.md docs/architecture/api-and-storage.md workers/honey-ledger/src/index.ts workers/honey-ledger/README.md scripts/simulate-honey-economics.mjs CHANGELOG.md`; markdown and image link check across `docs/**/*.md`; stale 10% formula search across README, docs, workers, and scripts.
 - Intended commit message: `Lower Honey reward allocation`
+
+## 2026-06-01 04:09:22 WITA - Constrain Chat Reading Width
+
+- Status: Pushed
+- Areas changed: Chat transcript and composer layout CSS, changelog
+- Summary: Center the chat transcript/composer on a visibly narrower `820px` desktop column, cap assistant/user message bubbles only above the mobile breakpoint, and center the desktop composer form itself so the input cannot stretch with the full pane.
+- Verification: `git diff --check -- src/app/chat.module.css CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `pnpm exec eslint src/app/chat.module.css --max-warnings=999` returned the existing CSS-module ignored warning with no errors; in-app Browser inspection was blocked by the browser security policy after the auth changes, so this pass was verified statically against the active CSS cascade.
+- Intended commit message: `Constrain chat reading width`
 
 ## 2026-06-01 04:03:18 WITA - Rewrite Feature Guide Landing
 
@@ -19,6 +51,30 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Verification: `git diff --check -- docs/features/index.md CHANGELOG.md`; markdown and image link check across `docs/**/*.md`; docs text file-size check confirmed the largest docs text file remains `docs/assets/css/site.css` at 674 lines.
 - Intended commit message: `Rewrite feature guide landing`
 
+## 2026-06-01 04:01 WITA - Type Runtime Env Surfaces
+
+- Status: Pushed
+- Areas changed: Runtime agent types, dashboard derived env counts, shared env panel, agent settings modal, agent creation defaults, chat status labels, runtime URL strategy, runtime integration status, scheduler runtime ownership, scheduler runtime filter UI
+- Summary: Add a typed runtime feature matrix so UI paths can distinguish profile env overlays, adapter-managed secrets, env management actions, profile defaults, settings panels, model source, default provider/session values, create actions, chat labels, URL handling, integration status details, and dashboard-owned versus runtime-owned schedules. Route AEON agents out of generic agent env overlay editing and into runtime-managed AEON secrets/scheduler surfaces, derive scheduler runtime filter labels from the runtime matrix, and let the add-agent flow consume runtime profile metadata for local folder mirrors and post-create navigation.
+- Verification: `pnpm typecheck`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; targeted `pnpm exec eslint` passed with existing hook/modal warnings only; `git diff --check` passed for touched files; `wc -l` confirmed touched source files stay under 1500 lines; in-app Browser smoke loaded `http://127.0.0.1:5020/?view=vault&vaultPanel=env`, confirmed runtime-managed AEON env and agent overlays render with no console errors, and `http://127.0.0.1:5020/?view=agents` rendered with no console errors; the latest scheduler smoke reached the dashboard auth lock instead of the scheduler UI and reported no browser console errors before auth; `verify_assimilation_manifest.py` passed.
+- Intended commit message: `Type runtime env surfaces`
+
+## 2026-06-01 03:58:31 WITA - Speed Up My Apps Entry
+
+- Status: Pushed
+- Areas changed: My Apps refresh behavior, fleet apps route cache behavior, changelog
+- Summary: Stop forcing a full Tailnet app scan whenever My Apps opens, persist the last app discovery cache under `~/.hivemindos`, return cached app discovery immediately while refreshing stale data in the background, and keep explicit Refresh as the heavy live scan path.
+- Verification: `pnpm exec eslint src/app/api/fleet/apps/route.ts src/features/dashboard/views/MyAppsPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/app/api/fleet/apps/route.ts src/features/dashboard/views/MyAppsPanel.tsx CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl ASSIMILATION.json`; `wc -l` confirmed touched files stay under the 1500-line limit; existing `5020` server smoke showed explicit `/api/fleet/apps?refresh=1` still takes the live scan path at 21235ms, then cached `/api/fleet/apps` returned in 680ms/8ms and follow-up cached reads returned in 125ms/13ms/16ms.
+- Intended commit message: `Speed up My Apps entry`
+
+## 2026-06-01 03:47:53 WITA - Speed Up Native Env Reads
+
+- Status: Pushed
+- Areas changed: Tauri hive env read command, shared env loading flow, AEON fast secret status in Env view, changelog
+- Summary: Replace subprocess-based native env reads with direct local env-file parsing, warm shared env data when the Brain view opens, and keep the Env panel's AEON secret check on the fast local status path. The Next route fallback and all mutation routes remain unchanged.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm exec eslint src/features/dashboard/hooks/use-dashboard-polling-effects.tsx src/features/dashboard/views/UtilityPanels.tsx src/features/dashboard/DashboardApp.tsx --max-warnings=999` passed with existing dashboard warnings only; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- src-tauri/src/env.rs src-tauri/src/lib.rs src/lib/native/hive-env.ts src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-dashboard-polling-effects.tsx src/features/dashboard/views/UtilityPanels.tsx CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `wc -l` confirmed the touched native env and dashboard hook files stay under the 1500-line limit; existing `5020` server smoke returned `/api/env` in 1006ms cold then 209/210ms warm and the Env page shell in 183ms. `cargo fmt --manifest-path src-tauri/Cargo.toml --check` could not run because rustfmt is not installed for the local stable toolchain.
+- Intended commit message: `Speed up native env reads`
+
 ## 2026-06-01 03:45:45 WITA - Embed Diagram Plates In Topic Docs
 
 - Status: Pushed
@@ -26,6 +82,38 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Summary: Embed the generated infographic plates directly into the docs pages where they clarify the topic: homepage overview, Fleet, Tailscale fleet telemetry, Wallets, UsePod, Brain/Vault, Work/Scheduler, Native App, and Architecture trust boundaries.
 - Verification: `git diff --check -- docs CHANGELOG.md`; markdown and HTML image link check across `docs/**/*.md`; figure placement check confirmed image plates in the homepage, Fleet, Tailscale fleet telemetry, Wallets, UsePod, Brain/Vault, Work/Scheduler, Native App, and Architecture docs; docs text file-size check confirmed the largest docs text file remains `docs/assets/css/site.css` at 674 lines.
 - Intended commit message: `Embed diagram plates in topic docs`
+
+## 2026-06-01 03:40:06 WITA - Read Shared Env Natively
+
+- Status: Pushed
+- Areas changed: Tauri read-only hive env command, native env bridge, dashboard shared env refresh, changelog
+- Summary: Read shared and runtime hive-env-add sources through Tauri in desktop builds while preserving the existing Next env route for browser mode and all save/import/restore/sync mutations.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm exec eslint src/lib/native/hive-env.ts src/features/dashboard/DashboardApp.tsx --max-warnings=999` passed with existing DashboardApp warnings only; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- src-tauri/src/env.rs src-tauri/src/lib.rs src/lib/native/hive-env.ts src/features/dashboard/DashboardApp.tsx CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `wc -l` confirmed the new native env files stay under the 1500-line limit. Existing oversized legacy UI files remain outside this native module change.
+- Intended commit message: `Read shared env natively`
+
+## 2026-06-01 03:34:08 WITA - Remove Fleet Styled-JSX Cleanup Path
+
+- Status: Pushed
+- Areas changed: Fleet view animation styles, global dashboard CSS, changelog
+- Summary: Move Fleet keyframe definitions out of a runtime `styled-jsx` tag and into global CSS so route switches do not hit the WebKit `parentNode.removeChild` cleanup crash.
+- Verification: `rg -n "<style jsx|styled-jsx|fleet-fade-up|fleet-toast-in|fleet-scan-sweep" src/components/fleet/FleetView.tsx src/app/globals.css`; `pnpm exec eslint src/components/fleet/FleetView.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/components/fleet/FleetView.tsx src/app/globals.css CHANGELOG.md`; in-app Browser smoke loaded `http://localhost:5020/?view=agents`, confirmed the Fleet view renders with `0` styled-jsx tags and no console errors.
+- Intended commit message: `Remove Fleet styled-jsx cleanup path`
+
+## 2026-06-01 03:31:35 WITA - Read Brain Skills Natively
+
+- Status: Pushed
+- Areas changed: Tauri read-only brain skill inventory command, native brain skills bridge, dashboard brain skill refresh, AEON shared-skill ready check, changelog
+- Summary: Scan the shared Obsidian `Skills/` shelf and local runtime skill folders through Tauri in desktop builds while preserving the existing Next skill APIs for browser mode, remote providers, and all mutation/import flows.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm exec eslint src/lib/native/brain-skills.ts src/features/dashboard/hooks/use-miroshark-brain-controller.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999` passed with existing hook warnings only; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- src-tauri/src/brain.rs src-tauri/src/lib.rs src/lib/native/brain-skills.ts src/features/dashboard/hooks/use-miroshark-brain-controller.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `wc -l` confirmed `src-tauri/src/brain.rs` and touched native bridge files stay under the 1500-line limit. Existing oversized legacy UI files remain outside this native module change.
+- Intended commit message: `Read brain skills natively`
+
+## 2026-06-01 03:26:06 WITA - Move Shared Env Into Brain Route
+
+- Status: Pushed
+- Areas changed: Dashboard Brain segmented navigation, shared env panel routing, More utilities, AEON secret setup navigation, vault panel styling, changelog
+- Summary: Add an Env segment to the Brain route immediately before Config, render the shared env management panel from that Brain segment, remove Shared env from More utilities, and send AEON guided secret setup to Brain > Env.
+- Verification: `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `pnpm exec eslint src/app/page.tsx src/app/vault.module.css src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx src/features/dashboard/hooks/use-dashboard-polling-effects.tsx src/features/dashboard/MorePanel.tsx src/features/dashboard/views/UtilityPanels.tsx src/features/dashboard/views/VaultPanel.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999` passed with existing dashboard warnings and the CSS-file ignored warning; `git diff --check -- src/app/page.tsx src/app/vault.module.css src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx src/features/dashboard/hooks/use-dashboard-polling-effects.tsx src/features/dashboard/MorePanel.tsx src/features/dashboard/views/UtilityPanels.tsx src/features/dashboard/views/VaultPanel.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; in-app Browser smoke loaded `http://127.0.0.1:5020/?view=vault&vaultPanel=env`, confirmed Env is selected before Config, env controls are visible, More no longer shows Shared env, and no console errors were reported. `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized files including generated `.next-tauri/**`, `src/app/fleet.module.css`, `scripts/agent-telemetry-collector.mjs`, `src/features/dashboard/views/AeonAutopilotPanel.tsx`, and `src/features/dashboard/DashboardApp.tsx`.
+- Intended commit message: `Move shared env into brain route`
 
 ## 2026-06-01 03:25:00 WITA - Correct Imagegen Diagram Semantics
 
@@ -35,6 +123,30 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Verification: `git diff --check -- docs CHANGELOG.md src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/VaultPanel.tsx src/features/dashboard/views/brain-services-ui.tsx src/lib/types/agent-runtime.ts src/lib/services/brain/synto.ts src/app/api/brain/synto scripts/test-gbrain-foundation.mjs setup.sh setup.ps1 uninstall.sh uninstall.ps1`; markdown and HTML image link check across `docs/**/*.md`; generated asset size check for all seven diagram JPEGs; `node scripts/test-gbrain-foundation.mjs`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `pnpm exec eslint src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/VaultPanel.tsx src/lib/types/agent-runtime.ts scripts/test-gbrain-foundation.mjs --max-warnings=999` passed with existing DashboardApp warnings only.
 - Intended commit message: `Correct imagegen diagram semantics`
 
+## 2026-06-01 03:24:08 WITA - Center Header App Completion Toast
+
+- Status: Pushed
+- Areas changed: Dashboard header completion toast positioning, changelog
+- Summary: Center the connected-app completion toast horizontally and vertically inside the dashboard header banner instead of anchoring it below the banner edge.
+- Verification: `pnpm exec eslint src/app/globals.css src/features/dashboard/views/DashboardHeader.tsx --max-warnings=999` passed with the expected CSS-file ignored warning; `git diff --check -- CHANGELOG.md src/app/globals.css`. In-app browser CSS inspection was blocked by the browser security policy.
+- Intended commit message: `Center header app completion toast`
+
+## 2026-06-01 03:19:01 WITA - Restore Localhost Preview URLs In Chat
+
+- Status: Pushed
+- Areas changed: Chat response formatting, changelog
+- Summary: Convert agent-redacted HTTP preview hosts of the form `[REDACTED_IP]:<port>` back to `localhost:<port>` when rendering and copying assistant chat responses, so local app preview URLs remain usable without disabling broader output redaction.
+- Verification: `pnpm exec eslint src/features/chat/chat-composer.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/chat/chat-composer.tsx CHANGELOG.md`; direct Node regex smoke confirmed `http:// [ REDACTED_IP ]:3741/templates/law-injury` renders as `http://localhost:3741/templates/law-injury`.
+- Intended commit message: `Restore localhost preview URLs in chat`
+
+## 2026-06-01 03:18:54 WITA - Sync AEON Git And Runs Natively
+
+- Status: Pushed
+- Areas changed: Tauri AEON git/run commands, native git/runs bridge, AEON refresh and repo action flow, changelog
+- Summary: Move local AEON git sync status/pull/push and GitHub Actions run/log reads to Tauri-first commands in desktop builds while keeping the existing Next routes as browser fallback.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm exec eslint src/lib/native/aeon-git.ts src/lib/native/aeon-workspaces.ts src/lib/native/aeon-memory.ts src/lib/native/aeon-schedules.ts src/lib/native/aeon-outputs.ts src/lib/native/aeon-deliverables.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/src/lib.rs src-tauri/src/deliverables.rs src/lib/native/aeon-deliverables.ts src/lib/native/aeon-outputs.ts src/lib/native/aeon-schedules.ts src/lib/native/aeon-memory.ts src/lib/native/aeon-workspaces.ts src/lib/native/aeon-git.ts src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `wc -l` confirmed the touched native module files are under the 1500-line limit.
+- Intended commit message: `Sync AEON git and runs natively`
+
 ## 2026-06-01 02:56:37 WITA - Add Imagegen Infographic Plates
 
 - Status: Pushed
@@ -42,6 +154,22 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Summary: Generate and embed seven raster infographic plates with the imagegen skill for the visual atlas, covering the overall HivemindOS map, wallet/token rails, Fleet/Tailnet topology, Brain Services/shared vault, Workboard/Scheduler loop, Security/trust boundaries, and AEON/native desktop.
 - Verification: `git diff --check -- docs CHANGELOG.md`; markdown and HTML image link check across `docs/**/*.md`; docs text file-size check confirmed the largest docs text file is `docs/assets/css/site.css` at 674 lines; generated asset check confirmed seven JPEG plates under `docs/assets/img/diagrams`. `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files outside this docs change.
 - Intended commit message: `Add imagegen infographic plates`
+
+## 2026-06-01 02:48:35 WITA - Prepare Local AEON Workspaces Natively
+
+- Status: Pushed
+- Areas changed: Tauri AEON workspace command, native workspace bridge, AEON workspace initialize/link flow, changelog
+- Summary: Prepare and link local AEON workspace folders through Tauri in desktop builds while keeping clone, remote workspace, rename, delete, and browser flows on the existing Next workspace route.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm exec eslint src/lib/native/aeon-workspaces.ts src/lib/native/aeon-memory.ts src/lib/native/aeon-schedules.ts src/lib/native/aeon-outputs.ts src/lib/native/aeon-deliverables.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/src/lib.rs src-tauri/src/deliverables.rs src/lib/native/aeon-deliverables.ts src/lib/native/aeon-outputs.ts src/lib/native/aeon-schedules.ts src/lib/native/aeon-memory.ts src/lib/native/aeon-workspaces.ts src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `wc -l` confirmed the touched native module files are under the 1500-line limit.
+- Intended commit message: `Prepare local AEON workspaces natively`
+
+## 2026-06-01 02:32:48 WITA - Simplify UsePod Setup Flow
+
+- Status: Pushed
+- Areas changed: Agent settings UsePod setup UI, UsePod setup styles, changelog
+- Summary: Replace the selected UsePod provider/model/readiness stack with a single guided setup flow that advances from token setup to funding to model selection, leaving spend caps tucked behind an advanced disclosure.
+- Verification: `pnpm exec eslint src/features/dashboard/views/chat/GuidedUsePodSetup.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999` passed with the existing `runtimeModelSelection` warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/views/chat/GuidedUsePodSetup.tsx CHANGELOG.md`; `git diff --no-index --check /dev/null src/features/dashboard/views/chat/UsePodSetup.module.css`; `wc -l` confirmed touched UI files stay under 1500 lines; in-app Browser loaded `http://127.0.0.1:5020/?view=agents`, but fleet discovery stayed scanning so the add-agent modal could not be visually reached in that state.
+- Intended commit message: `Simplify UsePod setup flow`
 
 ## 2026-06-01 02:32:48 WITA - Add Visual Diagrams Atlas
 
@@ -51,6 +179,30 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Verification: `git diff --check -- docs CHANGELOG.md`; markdown link check across `docs/**/*.md`; docs file-size check confirmed the largest docs file is `docs/assets/css/site.css` at 637 lines; `rg -c '^```mermaid$' docs/diagrams.md` found 15 diagrams. `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files outside this docs change.
 - Intended commit message: `Add visual diagrams atlas`
 
+## 2026-06-01 02:35:40 WITA - Read AEON Memory Natively
+
+- Status: Pushed
+- Areas changed: Tauri AEON memory command, native memory bridge, AEON refresh flow, changelog
+- Summary: Load local AEON memory index/topics/logs/issues through Tauri in desktop builds while keeping the existing Next runtime memory route as the browser fallback.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm exec eslint src/lib/native/aeon-memory.ts src/lib/native/aeon-schedules.ts src/lib/native/aeon-outputs.ts src/lib/native/aeon-deliverables.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/src/lib.rs src-tauri/src/deliverables.rs src/lib/native/aeon-deliverables.ts src/lib/native/aeon-outputs.ts src/lib/native/aeon-schedules.ts src/lib/native/aeon-memory.ts src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `wc -l` confirmed the new native module files are under the 1500-line limit.
+- Intended commit message: `Read AEON memory natively`
+
+## 2026-06-01 02:33:18 WITA - List AEON Schedules Natively
+
+- Status: Pushed
+- Areas changed: Tauri AEON schedule command, native schedules bridge, AEON refresh flow, changelog
+- Summary: Read local AEON schedules from `aeon.yml` through Tauri in desktop builds while preserving the existing Next runtime schedule route for browser fallback.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm exec eslint src/lib/native/aeon-schedules.ts src/lib/native/aeon-outputs.ts src/lib/native/aeon-deliverables.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
+- Intended commit message: `List AEON schedules natively`
+
+## 2026-06-01 02:28:57 WITA - List AEON Outputs Natively
+
+- Status: Pushed
+- Areas changed: Tauri AEON output commands, native outputs bridge, AEON activity refresh, changelog
+- Summary: Route local AEON output listing through a Tauri-first command in desktop builds while preserving the generic Next runtime outputs route for browser mode and fallback behavior.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm exec eslint src/lib/native/aeon-outputs.ts src/lib/native/aeon-deliverables.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/src/lib.rs src-tauri/src/deliverables.rs src/lib/native/aeon-deliverables.ts src/lib/native/aeon-outputs.ts src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`.
+- Intended commit message: `List AEON outputs natively`
+
 ## 2026-06-01 02:26:30 WITA - Promote Wallets And Tokens Docs
 
 - Status: Pushed
@@ -59,6 +211,22 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Verification: `git diff --check -- docs CHANGELOG.md`; markdown link check across `docs/**/*.md`; docs file-size check confirmed the largest docs file is `docs/preview.html` at 616 lines; wallet/token prominence search confirmed homepage, sidebar, feature map, and wallet page references. `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files outside this docs change.
 - Intended commit message: `Promote wallets and tokens docs`
 
+## 2026-06-01 02:22:24 WITA - Split UsePod From Local OpenAI
+
+- Status: Pushed
+- Areas changed: Agent settings runtime picker, changelog
+- Summary: Show UsePod as its own runtime tile instead of combining it with Local OpenAI, while still storing it on the OpenAI-compatible runtime internally. Selecting UsePod now applies the UsePod provider defaults and opens the UsePod setup path directly.
+- Verification: `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999` (0 errors, existing warning only).
+- Intended commit message: `Split UsePod from local OpenAI`
+
+## 2026-06-01 02:18:27 WITA - List AEON Deliverables Natively
+
+- Status: Pushed
+- Areas changed: Tauri AEON deliverable commands, native deliverables bridge, AEON deliverables dashboard actions, changelog
+- Summary: Move local AEON deliverable listing, local-file download no-op checks, and shared-vault transfer manifest creation to Tauri-first commands while keeping the existing Next deliverables route as the browser and remote-download fallback.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm exec eslint src/lib/native/aeon-deliverables.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/src/lib.rs src-tauri/src/deliverables.rs src/lib/native/aeon-deliverables.ts src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`.
+- Intended commit message: `List AEON deliverables natively`
+
 ## 2026-06-01 02:19:02 WITA - Add Second-Pass Docs Audit Coverage
 
 - Status: Pushed
@@ -66,6 +234,38 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Summary: Add the second-pass docs gaps from the current code audit, covering UsePod readiness/prepaid UX, GitHub OAuth fallback for AEON, wallet backup/MoneyClaw/Bankr HIVE rails, Kanban note intake and work history, and deeper memory telemetry/maintenance behavior.
 - Verification: `git diff --check -- docs CHANGELOG.md`; markdown link check across `docs/**/*.md`; docs file-size check confirmed the largest docs file is `docs/preview.html` at 616 lines. `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files outside this docs change.
 - Intended commit message: `Add second-pass docs audit coverage`
+
+## 2026-06-01 02:18:53 WITA - Make UsePod Discoverable In Add Agent
+
+- Status: Pushed
+- Areas changed: Agent settings runtime picker, assimilation logs, changelog
+- Summary: Rename the OpenAI-compatible runtime choice to `UsePod / Local OpenAI`, keep it selectable when no local OpenAI server is detected, and default new OpenAI-compatible agents to the UsePod provider/model in that unavailable-local state so the UsePod setup card is reachable from Add Agent.
+- Verification: `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999` (0 errors, existing warning only); in-app Browser reload of `http://127.0.0.1:5020/?view=agents` did not show the add-agent button while fleet discovery was still scanning, so visual click-through could not be completed in that state.
+- Intended commit message: `Make UsePod discoverable in add agent`
+
+## 2026-06-01 02:13:50 WITA - Open Deliverables Through Tauri
+
+- Status: Pushed
+- Areas changed: Tauri native deliverable opener, frontend native filesystem bridge, AEON deliverables actions, changelog
+- Summary: Route local AEON deliverable open/reveal actions through Tauri native commands in desktop builds while keeping the existing Next deliverable API as the browser fallback.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm exec eslint src/lib/native/filesystem.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src-tauri/src/lib.rs src/lib/native/filesystem.ts src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`.
+- Intended commit message: `Open deliverables through Tauri`
+
+## 2026-06-01 02:12:37 WITA - Improve UsePod Setup UX
+
+- Status: Pushed
+- Areas changed: UsePod status/test API, UsePod runtime adapter metadata, agent settings UsePod readiness/setup UI, UsePod spend presets, Wallets UsePod prepaid rail, chat runtime labels, UsePod docs, assimilation logs
+- Summary: Add a server-only UsePod readiness/test endpoint, model discovery from the UsePod `/models` proxy, a readiness card with token/deposit/models/balance/route state, copy/open funding actions, structured spend-cap presets with exact caps in advanced settings, a tiny UsePod test action, persisted last balance/route/model metadata, Wallets tab prepaid rail details, and a gated Earn with UsePod provider-hosting checklist.
+- Verification: `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `pnpm exec eslint src/lib/services/usepod.ts src/app/api/usepod/status/route.ts src/app/api/usepod/register/route.ts src/lib/services/runtime-adapters/openai-compatible.ts src/lib/services/runtime-integrations.ts src/app/api/chat/agent-runtime/route.ts src/features/dashboard/views/chat/GuidedUsePodSetup.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/dashboard-types.ts src/features/dashboard/hooks/use-agent-controller.tsx src/features/dashboard/views/WalletPanel.tsx src/components/wallet/AgentWalletCard.tsx src/lib/types/agent-runtime.ts --max-warnings=999` (0 errors, existing warnings only); `python3 -m json.tool ASSIMILATION.json >/dev/null && python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py`; `curl -sS -X POST http://127.0.0.1:5020/api/usepod/status ...` with a deliberately missing token env returned `status: "missing-token"`; in-app Browser smoke loaded `http://127.0.0.1:5020/?view=agents` and opened the add-agent settings modal without a React crash; `pnpm check-sizes` still fails on pre-existing oversized build/source files including generated `.next-tauri/**`, `src/app/fleet.module.css`, `scripts/agent-telemetry-collector.mjs`, `src/features/dashboard/DashboardApp.tsx`, and `src/app/api/chat/agent-runtime/route.ts`.
+- Intended commit message: `Improve UsePod setup UX`
+
+## 2026-06-01 02:11:10 WITA - Upgrade Brain Services UX
+
+- Status: Pushed
+- Areas changed: Brain Services dashboard UI, segmented service navigation, brain module renderer, frontend-design skill guidance, dashboard loading fallback, vault styling, assimilation logs
+- Summary: Rework Brain Services into a calmer vertical card deck with segmented Overview/Synto/GBrain/Trading/Synthesis/Settings pills, one focused service page at a time, no duplicate health-summary strip, constrained selected-service cards, collapsed default Details/Question sections, centralized settings cards, polished bottom-anchored optional module switches instead of native checkbox ticks, bottom-anchored open actions, hidden GBrain/Trading tabs until enabled or installed, richer module explanation bullets, structured run output panels, prerequisite repair guidance, and a visible loading state for lazy dashboard panels. Replace Synto's accidental use of the full `MemoryCell` shared-brain component with real small icons and persist a Trading Brain enable flag.
+- Verification: `node scripts/test-gbrain-foundation.mjs`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `pnpm exec eslint src/features/dashboard/brain-modules.tsx src/features/dashboard/views/VaultPanel.tsx --max-warnings=999`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- .agents/skills/frontend-design/SKILL.md src/lib/types/agent-runtime.ts src/features/dashboard/views/VaultPanel.tsx src/features/dashboard/views/brain-services-ui.tsx src/features/dashboard/views/brain-services.module.css src/features/dashboard/brain-modules.tsx scripts/test-gbrain-foundation.mjs CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; Playwright against `http://127.0.0.1:5020/?view=vault&vaultPanel=brain-services` confirmed the duplicate health strip is gone (`0` health rows), disabled modules show switches with no enable buttons, native checkboxes are visually hidden, enabling GBrain adds the `GBrain` tab and one `Open GBrain` button, the disabled switch sits at the card bottom (`17px` bottom gap), selected service cards are constrained (`560px` in a `1366px` panel), the Question form is closed and invisible by default, no horizontal overflow, and no console errors. `wc -l` confirmed touched Brain Services files are under the 1500-line limit (`VaultPanel.tsx` 1454, `brain-services-ui.tsx` 173, `brain-services.module.css` 1024, `brain-modules.tsx` 213). `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files outside this change.
+- Intended commit message: `Upgrade Brain Services UX`
 
 ## 2026-06-01 02:10:32 WITA - Refresh Public Docs From Code Audit
 
@@ -83,6 +283,31 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Verification: `rg -n "topology|topologyNode|Dashboard / API facade|Tailnet fleet telemetry" docs/index.md docs/assets/css/site.css` returned no matches; `git diff --check -- docs/index.md docs/assets/css/site.css CHANGELOG.md`; published Pages smoke check after push confirmed the homepage no longer includes `Dashboard / API facade` or `topology`.
 - Intended commit message: `Remove docs hero topology`
 
+## 2026-06-01 01:47:57 WITA - Show API Service Route Catalogs
+
+- Status: Pushed
+- Areas changed: Fleet apps API, My Apps service detail UI, assimilation logs, changelog
+- Summary: Add API route catalogs to hivenet API services by reading OpenAPI/Swagger endpoints when exposed and falling back to Hivemind-owned known-service route metadata, then render grouped route cards with method badges, summaries, copy actions, and safe open links in the My Apps detail view.
+- Verification: `pnpm exec eslint src/app/api/fleet/apps/route.ts src/features/dashboard/views/MyAppsPanel.tsx --max-warnings=0`; `curl -sS --max-time 60 'http://127.0.0.1:5020/api/fleet/apps?refresh=1'` returned MiroShark with `apiRoutesSource:"openapi"` and 80 route entries from `/api/openapi.yaml`, including templates, simulation, graph, and observability endpoints; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- src/app/api/fleet/apps/route.ts src/features/dashboard/views/MyAppsPanel.tsx CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck` is currently blocked by unrelated `src/lib/services/usepod.ts` nullable `config` errors.
+- Intended commit message: `Show API service route catalogs`
+
+## 2026-06-01 01:45:54 WITA - Migrate Local File Routes To Native Fallbacks
+
+- Status: Pushed
+- Areas changed: Tauri filesystem commands, native folder picker, dashboard directory browsing, chat folder creation, scheduler folder browsing, agent folder browsing, package dependencies, assimilation logs, changelog
+- Summary: Move local filesystem-heavy dashboard interactions to a Tauri-first/native-command path while preserving the existing Next API routes as browser and remote-machine fallbacks.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm exec eslint src/lib/native/filesystem.ts src/features/dashboard/hooks/use-miroshark-brain-controller.tsx src/features/dashboard/hooks/use-chat-tree-controller.tsx src/features/dashboard/hooks/use-scheduler-controller.tsx src/features/dashboard/hooks/use-agent-controller.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999` passed with existing hook warnings only; `pnpm exec tsc --noEmit --pretty false --skipLibCheck` passed before later unrelated `src/lib/services/usepod.ts` edits, and the latest rerun is blocked by nullable `config` errors in that file; `pnpm tauri:prepare`; `pnpm tauri:build` produced `149M` `HivemindOS.app` and `49M` DMG; packaged `.app` smoke stayed alive after 12 seconds and the exact child process was cleaned up; `pgrep -fl "hivemindos-node|hivemindos-next/server.js|hivemindos-desktop" || true` returned no leftover native smoke processes; `git diff --check -- package.json pnpm-lock.yaml src/lib/native/filesystem.ts src/lib/native/desktop-status.ts src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/capabilities/default.json src-tauri/build.rs src-tauri/src/lib.rs src/features/dashboard/hooks/use-miroshark-brain-controller.tsx src/features/dashboard/hooks/use-chat-tree-controller.tsx src/features/dashboard/hooks/use-scheduler-controller.tsx src/features/dashboard/hooks/use-agent-controller.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`.
+- Intended commit message: `Migrate local file routes to native fallbacks`
+
+## 2026-06-01 01:35:47 WITA - Add Synto Brain Service
+
+- Status: Pushed
+- Areas changed: Brain service API, shared-vault config, dashboard Brain Services UI, setup/uninstall mirrors, docs, tests, shared vault service note
+- Summary: Add Synto as a first-class optional brain service for the Synthesis folder, with install/connect/init/run/maintain/compare/eval/doctor/pack/query routes, source-access controls that default raw-source MCP access to denied, service-note seeding, and dashboard controls alongside GBrain.
+- Verification: `uv tool install synto`; `synto --version`; `synto init /Users/liam/Documents/Obsidian/hivemindos-vault/Synthesis --existing --non-interactive`; `synto status --vault /Users/liam/Documents/Obsidian/hivemindos-vault/Synthesis`; `synto doctor --vault /Users/liam/Documents/Obsidian/hivemindos-vault/Synthesis --backlog` confirmed `source-access mode: "deny"` and reported Ollama/models still need local setup before running the pipeline; `node scripts/test-gbrain-foundation.mjs`; `node --check scripts/test-gbrain-foundation.mjs && node --check scripts/seed-vault-foundation.mjs`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `pnpm exec eslint src/lib/services/brain/synto.ts src/lib/types/agent-runtime.ts src/features/dashboard/dashboard-storage.ts src/features/dashboard/dashboard-types.ts src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/VaultPanel.tsx scripts/test-gbrain-foundation.mjs --max-warnings=999` passed with existing DashboardApp/dashboard-storage/VaultPanel warnings; `git diff --check -- src/lib/services/brain/synto.ts src/app/api/brain/synto src/lib/types/agent-runtime.ts src/features/dashboard/dashboard-storage.ts src/features/dashboard/dashboard-types.ts src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/VaultPanel.tsx scripts/test-gbrain-foundation.mjs setup.sh setup.ps1 uninstall.sh uninstall.ps1 docs/features/brain-vault-and-skills.md docs/features/index.md docs/architecture/api-and-storage.md docs/architecture/index.md CHANGELOG.md`; in-app browser smoke on `http://127.0.0.1:5020/?view=vault&vaultPanel=brain-services` confirmed the Synto card and install controls render; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files including `src/app/fleet.module.css`, `scripts/agent-telemetry-collector.mjs`, generated `.next-tauri`/`src-tauri` copies, `src/features/dashboard/DashboardApp.tsx`, `src/features/dashboard/views/AeonAutopilotPanel.tsx`, and legacy `src/app/api/chat/agent-runtime/route.ts`; new `src/lib/services/brain/synto.ts` is 545 lines and `src/features/dashboard/views/VaultPanel.tsx` remains under 1500 lines at 1369 lines.
+- Additional verification: `curl -sS http://127.0.0.1:5020/api/brain/synto/status` reports Synto installed, initialized, enabled, and MCP source access `deny`; `curl -sS -X POST http://127.0.0.1:5020/api/brain/synto/compare ...` ran `synto compare --heavy-model llama3.1:8b --sample-n 1` and wrote a manual-review compare report under `Synthesis/.synto/compare`.
+- Intended commit message: `Add Synto brain service`
+
 ## 2026-06-01 01:22:45 WITA - Polish GitHub Pages Docs
 
 - Status: Pushed
@@ -91,9 +316,25 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Verification: `git diff --check -- docs/_config.yml docs/index.md docs/_layouts/default.html docs/assets/css/site.css CHANGELOG.md`; temporary static preview served from `/tmp/hivemindos-pages-preview` on `127.0.0.1:5023`; in-app browser desktop check confirmed no horizontal overflow at 1280px; in-app browser mobile check at 390px confirmed no horizontal overflow and content appears before the sidebar; local Jekyll build was not available because the repo has no Gemfile and the system has no `jekyll` or `github-pages` gem installed; `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files such as `.next-tauri/**`, `src/app/fleet.module.css`, `scripts/agent-telemetry-collector.mjs`, `src/features/dashboard/views/AeonAutopilotPanel.tsx`, and `src/features/dashboard/DashboardApp.tsx`.
 - Intended commit message: `Polish GitHub Pages docs`
 
+## 2026-06-01 01:26:48 WITA - Add Tauri Native Status Bridge
+
+- Status: Pushed
+- Areas changed: Tauri desktop command metadata, frontend native bridge, dashboard version polling, package dependencies, assimilation logs, changelog
+- Summary: Start the next native architecture pass by giving the shared Next UI a Tauri-aware status/version bridge that can call the desktop command directly in native builds while browser users continue using the existing API route fallback.
+- Verification: `pnpm exec eslint src/lib/native/desktop-status.ts --max-warnings=0`; `pnpm exec eslint src/lib/native/desktop-status.ts src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-fleet-notifications-controller.tsx --max-warnings=999` passed with existing DashboardApp warnings; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm tauri:prepare`; `pnpm tauri:build` produced `148M` `HivemindOS.app` and `49M` DMG; packaged `.app` smoke stayed alive after 12 seconds and the exact child process was cleaned up; `git diff --check -- package.json pnpm-lock.yaml src/lib/native/desktop-status.ts src-tauri/build.rs src-tauri/src/lib.rs src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-fleet-notifications-controller.tsx CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`. `cargo fmt --manifest-path src-tauri/Cargo.toml --check` could not run because `rustfmt` is not installed for the local stable toolchain.
+- Intended commit message: `Add Tauri native status bridge`
+
+## 2026-06-01 01:25:29 WITA - Move App Completion Toasts To Header
+
+- Status: Pushed
+- Areas changed: Dashboard header completion toast, Fleet connected-app badge data flow, Fleet snapshot polling, global styles, assimilation logs, changelog
+- Summary: Move connected-app completion notifications out of the Fleet graph and into the dashboard header so completed app tasks can notify from any route, while keeping active app badges in Fleet cells and guarding against app-scan dropouts while the same task is still active.
+- Verification: `pnpm exec eslint src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/DashboardHeader.tsx src/components/fleet/FleetView.tsx src/components/fleet/active-apps.ts src/components/fleet/machine-cluster.tsx --max-warnings=999` passed with existing DashboardApp warnings only; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `pnpm exec eslint src/app/globals.css src/features/dashboard/views/DashboardHeader.tsx src/components/fleet/active-apps.ts src/components/fleet/FleetView.tsx --max-warnings=999` reported only the expected CSS-file ignored warning; `git diff --check -- CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/DashboardHeader.tsx src/components/fleet/FleetView.tsx src/components/fleet/active-apps.ts src/components/fleet/fleet-tokens.module.css src/app/globals.css`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; in-app browser checks on `?view=agents` and `?view=my-apps` observed no fake active-app badge and no header toast without a real connected-app transition.
+- Intended commit message: `Move app completion toasts to header`
+
 ## 2026-06-01 01:23:47 WITA - Checkpoint Late Dashboard Updates
 
-- Status: Committed
+- Status: Pushed
 - Areas changed: Dashboard connected-app state, embedded integrations layout, changelog
 - Summary: Checkpoint the late dashboard state additions for connected app badges/completion notifications and the embedded integrations panel layout adjustment so the worktree is clean before starting the next native architecture pass.
 - Verification: `git diff --check -- src/app/integrations/integrations.module.css src/features/dashboard/DashboardApp.tsx CHANGELOG.md`.
@@ -101,7 +342,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-06-01 01:20:43 WITA - Further Slim Tauri Native Resources
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Tauri packaged resource pruning, copied PNG asset optimization, changelog
 - Summary: Remove the now-redundant materialized `.pnpm` backing store from packaged native `node_modules` after symlink materialization, and losslessly optimize copied native PNG assets with `oxipng` when available so the native bundle shrinks without changing source assets or browser behavior.
 - Verification: Temporarily removed `.pnpm` from generated native resources and confirmed the packaged Next server still served `/` with HTTP 200; `node --check scripts/tauri-build.mjs && pnpm exec eslint scripts/tauri-build.mjs scripts/tauri-next-dev.mjs --max-warnings=999`; `pnpm tauri:prepare`; `oxipng` processed 32 copied PNG files and saved 600 KiB; generated native resources shrank from `163M` to `143M`; direct packaged-server smoke served `/`, `/animations/Honey%20bee.lottie`, and `/icons/generated/honey-pot.png` with HTTP 200 on throwaway port `5099`; `pnpm tauri:build`; final bundle sizes were `148M` for `HivemindOS.app` and `49M` for `HivemindOS_0.1.0_aarch64.dmg`; bundled app check confirmed the `.pnpm` store and sharp/libvips packages are absent; launched the rebuilt `.app` binary and confirmed it stayed alive after the 12-second startup smoke window.
@@ -109,15 +350,15 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-06-01 01:16:14 WITA - Move App Signatures Into Hivemind
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Fleet apps API, local telemetry collector app discovery, MiroShark hivenet discovery, AEON/MiroShark E2E harness, assimilation logs, changelog
-- Summary: Replace MiroShark-specific app discovery fallbacks with a Hivemind-owned service signature registry that probes collector `/app-proxy/<port>/health` and labels recognized API services without requiring the third-party app to expose a Hivemind-shaped root page or any repo changes.
-- Verification: `pnpm exec eslint src/app/api/fleet/apps/route.ts src/lib/services/miroshark/hivenet-discovery.ts --max-warnings=0`; `node --check scripts/agent-telemetry-collector.mjs && node --check scripts/test-aeon-miroshark-e2e.mjs`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `curl -sS --max-time 45 'http://127.0.0.1:5020/api/fleet/apps?refresh=1'` returned MiroShark as `serviceKind:"miroshark"` with `interactive:false`, `apiBaseUrl:"http://100.84.93.114:8787/app-proxy/5101"`, and health under the collector proxy; `curl -sS --max-time 45 'http://127.0.0.1:5020/api/miroshark/status?refresh=1'` returned `phase:"connected"` through the same hivenet app; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- src/app/api/fleet/apps/route.ts scripts/agent-telemetry-collector.mjs src/lib/services/miroshark/hivenet-discovery.ts scripts/test-aeon-miroshark-e2e.mjs CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`.
+- Summary: Replace MiroShark-specific app discovery fallbacks with a Hivemind-owned service signature registry that probes collector `/app-proxy/<port>/health` and labels recognized API services without requiring the third-party app to expose a Hivemind-shaped root page or any repo changes. Harden the AEON/MiroShark E2E harness so it avoids stale IPv6 wildcard dev servers and binds its own temporary Next server to loopback.
+- Verification: `pnpm exec eslint src/app/api/fleet/apps/route.ts src/lib/services/miroshark/hivenet-discovery.ts --max-warnings=0`; `node --check scripts/agent-telemetry-collector.mjs && node --check scripts/test-aeon-miroshark-e2e.mjs`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `curl -sS --max-time 45 'http://127.0.0.1:5020/api/fleet/apps?refresh=1'` returned MiroShark as `serviceKind:"miroshark"` with `interactive:false`, `apiBaseUrl:"http://100.84.93.114:8787/app-proxy/5101"`, and health under the collector proxy; `curl -sS --max-time 45 'http://127.0.0.1:5020/api/miroshark/status?refresh=1'` returned `phase:"connected"` through the same hivenet app; `HIVE_AEON_MIROSHARK_E2E_PEERS=100.84.93.114 HIVE_AEON_MIROSHARK_E2E_SIMULATION_ID=sim_22ae1e1dc532 node scripts/test-aeon-miroshark-e2e.mjs` passed on temporary server `127.0.0.1:5022` and wrote vault artifacts for `2026-06-01/sim_22ae1e1dc532/run.md` plus `aeon-rehearsal.md`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- src/app/api/fleet/apps/route.ts scripts/agent-telemetry-collector.mjs src/lib/services/miroshark/hivenet-discovery.ts scripts/test-aeon-miroshark-e2e.mjs CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`.
 - Intended commit message: `Move app signatures into Hivemind`
 
 ## 2026-06-01 01:07:13 WITA - Generalize Fleet App Completion Notifications
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Fleet active app completion watcher, Fleet graph notification queue, assimilation logs, changelog
 - Summary: Replace the MiroShark-only completion watcher with a generic connected-app badge snapshot diff so any real active app badge, such as MiroShark or Zimage, can show its own icon/name notification after the badge disappears while Fleet is open.
 - Verification: `pnpm exec eslint src/components/fleet/FleetView.tsx src/components/fleet/machine-cluster.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl src/components/fleet/FleetView.tsx src/components/fleet/fleet-tokens.module.css src/components/fleet/machine-cluster.tsx`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `rg -n "MiroShark|miroshark|activeMiro|Miro" src/components/fleet/FleetView.tsx src/components/fleet/fleet-tokens.module.css` returned no Fleet-view app-specific watcher strings; in-app browser reload on `http://127.0.0.1:5020/?view=agents` sampled the idle state and observed no active app badges and no completion notification without a real connected-app transition.
@@ -125,7 +366,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-06-01 00:54:50 WITA - Seed AI-Ready Shared Brain Foundation
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Shared Obsidian vault initialization, foundation workflow seeder, setup/uninstall mirrors, runtime shared-vault context helper, Brain docs, assimilation logs
 - Summary: Seed a stronger first-run shared brain with an AI-ready vault contract, durable note templates, optional Obsidian CLI/plugin-pack service notes, additional disabled foundation workflows for meetings, research, vault health, decisions, arguments, book notes, and feedback-loop capture, plus runtime guidance that keeps raw intake, generated synthesis, and durable memory separated.
 - Verification: `node --check scripts/seed-vault-foundation.mjs`; `node scripts/test-gbrain-foundation.mjs`; temp-vault seeding smoke test confirmed `Operations/AI-Ready Vault Contract.md`, `Templates/HivemindOS/meeting.md`, Obsidian CLI/plugin-pack service notes, and 13 foundation schedule files; `pnpm exec eslint scripts/seed-vault-foundation.mjs scripts/test-gbrain-foundation.mjs src/app/api/chat/agent-runtime/route.ts src/lib/services/chat/shared-vault-context.ts src/lib/types/agent-runtime.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- scripts/seed-vault-foundation.mjs setup.sh setup.ps1 uninstall.sh uninstall.ps1 src/app/api/chat/agent-runtime/route.ts src/lib/services/chat/shared-vault-context.ts src/lib/types/agent-runtime.ts README.md docs/features/brain-vault-and-skills.md scripts/test-gbrain-foundation.mjs CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl ASSIMILATION.json`; `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files including `src/app/fleet.module.css`, `scripts/agent-telemetry-collector.mjs`, generated `.next-tauri`/`src-tauri` copies, and legacy `src/app/api/chat/agent-runtime/route.ts` (reduced to 1754 lines by extracting the shared-vault context helper, but still over the 1500-line threshold).
@@ -133,7 +374,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-06-01 00:50:16 WITA - Replace MiroShark Demo With Real Completion Toast
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Fleet active app badge lifecycle, Fleet graph notification toast, assimilation logs, changelog
 - Summary: Remove the forced MiroShark demo badge/toast path so badges only come from real active app matching, then show the pill notification only when a real visible MiroShark badge transitions from active to finished while the Fleet view is mounted.
 - Verification: `pnpm exec eslint src/components/fleet/FleetView.tsx src/components/fleet/machine-cluster.tsx --max-warnings=999`; `pnpm exec eslint src/components/fleet/fleet-tokens.module.css src/components/fleet/FleetView.tsx --max-warnings=999` reported only the expected CSS-file ignored warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl src/components/fleet/FleetView.tsx src/components/fleet/fleet-tokens.module.css src/components/fleet/machine-cluster.tsx`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; in-app browser reload on `http://127.0.0.1:5020/?view=agents` sampled 4 seconds after open and observed no `MiroShark is active` badge and no Fleet app notification without a real active MiroShark task; `curl -sS --max-time 20 'http://127.0.0.1:5020/api/fleet/apps?refresh=1'` confirmed the real hosted MiroShark app is online, so the absence of a badge is coming from the active-task gate rather than demo mode.
@@ -141,7 +382,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 22:53:57 WITA - Keep Fleet App Badge Visible On Hover
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Fleet graph app badge layering, MiroShark demo badge target, changelog
 - Summary: Move active app badges inside the hovered hex tile stack, keep the agent icon/name layer above the badge, and restore the demo target to the exact `Aeon on This Mac` cell so the forced MiroShark badge does not appear on every Aeon-like agent.
 - Verification: `pnpm exec eslint src/components/fleet/FleetView.tsx src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- CHANGELOG.md src/components/fleet/FleetView.tsx src/components/fleet/machine-cluster.tsx src/components/fleet/fleet-tokens.module.css`; in-app browser reload on `http://127.0.0.1:5020/?view=agents` sampled the demo window and observed exactly one `MiroShark is active` badge, on `Aeon on This Mac`, with the badge inside the hex stack (`badgeZ: 1`) below the agent icon/name layer (`contentZ: 2`).
@@ -149,7 +390,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 22:48:57 WITA - Fix Demo Completion Copy
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo deliverables badge layering, Fleet MiroShark demo snackbar copy, changelog
 - Summary: Keep the AEON repo badge as the `x new deliverables` count while rendering it above the hovered cell, and move the `Simulation completed!` copy to the MiroShark demo snackbar.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/components/fleet/FleetView.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/components/fleet/FleetView.tsx CHANGELOG.md`; browser verification on `http://127.0.0.1:5020/?view=aeon` confirmed the badge text is `6 new deliverables`, the AEON page no longer shows `Simulation completed!`, and the hovered cell z-index stays below the badge (`20` vs `40`); `rg -n "Demo badge dismissed|Simulation completed!|new deliverable" src/components/fleet/FleetView.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx` confirmed the Fleet demo snackbar owns `Simulation completed!` while the AEON badge owns the deliverables count.
@@ -157,7 +398,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 22:48:39 WITA - Make Voice Calls Answer Directly
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Claw Code Mobile voice worker prompt, installed Claw voice worker runtime, AEON call briefing
 - Summary: Make the AEON call greeting first-turn-only, treat the call briefing as private context instead of a script to read aloud, and remove the automatic AEON status-update instruction so follow-up questions like "How did my most recent MiroShark simulation go?" get a direct answer without reintroducing the agent or reciting setup/status preambles.
 - Verification: Restarted `com.hivemindos.claw-voice-worker` to PID 94427 and confirmed its status endpoint returns `OK`; source and installed worker files both contain the first-turn-only/private-context prompt; `pnpm exec eslint src/lib/services/phone/call-gateway.ts`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/lib/services/phone/call-gateway.ts CHANGELOG.md`; `git -C /Users/liam/Documents/code/projects/claw-code-mobile-private diff --check -- backend/src/voice/callAgentWorker.ts`.
@@ -165,7 +406,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 22:41:13 WITA - Stabilize AEON Call Identity
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Fleet AEON call profile matching, AEON call MiroShark context filtering, installed Claw voice worker runtime
 - Summary: Restarted the Claw LiveKit voice worker so it loads the patched AEON greeting parser, matched thin Fleet collector AEON rows to richer dashboard AEON profiles before starting calls, and let local AEON calls include recent MiroShark archive context even when the collector row lacks an `aeonRepo` field.
 - Verification: `launchctl kickstart -k gui/$(id -u)/com.hivemindos.claw-voice-worker` restarted the worker from PID 45514 to PID 50833 on port 8385; installed worker file now contains `openingLineForBriefing` and `eagerness: "high"`; Fleet discovery confirmed the collector AEON row only supplies `runtime: "aeon"` and `agentId: "aeon-on-this-mac"` with no AEON repo/path fields; `pnpm exec eslint src/features/dashboard/views/AgentsPanel.tsx src/lib/services/phone/call-gateway.ts`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -173,7 +414,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 22:39:14 WITA - Add MiroShark Badge Demo Toast
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Fleet view demo badge timing, Fleet graph snackbar styling, changelog
 - Summary: On Fleet view open, briefly inject a demo MiroShark app badge into the `Aeon on This Mac` agent cell for 2 seconds, then dismiss it and show a pill-shaped MiroShark snackbar at the top of the Fleet graph container for 3 seconds with a circular left-aligned icon, text on the right, and entrance/exit animation.
 - Verification: `pnpm exec eslint src/components/fleet/FleetView.tsx src/components/fleet/fleet-data.ts src/components/fleet/active-apps.ts --max-warnings=999`; `pnpm exec eslint src/components/fleet/fleet-tokens.module.css src/components/fleet/FleetView.tsx --max-warnings=999` reported only the existing CSS-file ignored warning; `git diff --check -- CHANGELOG.md src/components/fleet/FleetView.tsx src/components/fleet/fleet-tokens.module.css src/components/fleet/fleet-data.ts src/components/fleet/active-apps.ts src/features/dashboard/hooks/use-dashboard-derived-state.tsx`; in-app browser reload on `http://127.0.0.1:5020/?view=agents` sampled the demo sequence and observed `Aeon on This Mac · MiroShark active`, no Queen Bee MiroShark title, the badge clearing after roughly 2 seconds, the snackbar inside the graph frame at `stageRect.y + 14px`, and the snackbar dismissing after roughly 3 seconds.
@@ -181,7 +422,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 22:24:07 WITA - Add MiroShark Artifacts To AEON Calls
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON phone/dashboard call briefing context, changelog
 - Summary: Include recent repo-matched MiroShark deliverables from the shared Obsidian vault in AEON call briefings so the voice agent can answer questions about runs that are already visible in the AEON repo deliverables view. The context now includes the simulation id, saved time, status, visible-post count, scenario, AEON verdict, next action, post excerpts, and archive folder for the latest matching runs.
 - Verification: Confirmed the latest shared-vault MiroShark artifact `sim_22ae1e1dc532` has `aeon_repository: aaronjmars/aeon`, 3 visible posts, the shared-vault routing scenario, an AEON verdict, and post excerpts; `pnpm exec eslint src/lib/services/phone/call-gateway.ts`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -189,7 +430,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 22:17:58 WITA - Route Dashboard Agent Calls In-App
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Fleet dashboard call action, phone gateway helper/API, agent call modal readiness styling, Claw Code Mobile voice worker
 - Summary: Start Fleet agent calls through the gateway's in-app LiveKit endpoint instead of the phone-ring endpoint so connecting from the Mac does not also VoIP-ring the iPhone. Keep the ringing UI visible until dashboard audio has an active remote track, raise the live caption bubble above the modal chrome, honor AEON `[greeting]` briefings in the call worker, and make realtime turn detection more eager to reduce perceived response delay.
 - Verification: `pnpm exec eslint src/lib/services/phone/call-gateway.ts src/app/api/phone/route.ts src/features/dashboard/views/AgentsPanel.tsx src/components/fleet/agent-call-modal.tsx src/components/fleet/fleet-tokens.module.css` passed for TS/TSX files with the expected CSS ignored warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; endpoint search confirmed Fleet dashboard calls post `dashboard-agent-call` while Calls settings test calls still post `ring-agent`; `git diff --check -- src/lib/services/phone/call-gateway.ts src/app/api/phone/route.ts src/features/dashboard/views/AgentsPanel.tsx src/components/fleet/agent-call-modal.tsx src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; `git -C /Users/liam/Documents/code/projects/claw-code-mobile-private diff --check -- backend/src/voice/callAgentWorker.ts`; `npm run build` in `claw-code-mobile-private/backend` remains blocked by pre-existing NodeNext explicit-extension, missing type, and implicit-any TypeScript errors unrelated to the call worker change.
@@ -197,7 +438,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 22:13:21 WITA - Fix AEON Agent Duplicate
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON workspace API, dashboard duplicate-agent controller, changelog
 - Summary: Make the roster duplicate action create a real local AEON workspace copy instead of only cloning the browser profile. GitHub-backed AEON duplicates now start from the copied local workspace, create a new private GitHub repo in the background, push the duplicate there, and patch the duplicated agent to the new repo when it completes.
 - Verification: `curl -sS --max-time 30 -X POST http://127.0.0.1:5020/api/runtimes/aeon/workspaces` against a throwaway `/tmp` AEON workspace with `action:"duplicate"` returned a new local AEON agent rooted at the copied folder and verified copied `aeon.yml`/`skills.json`; `pnpm exec eslint src/app/api/runtimes/aeon/workspaces/route.ts src/features/dashboard/hooks/use-wallet-files-controller.tsx --max-warnings=999` passed with pre-existing warnings in `use-wallet-files-controller.tsx`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/app/api/runtimes/aeon/workspaces/route.ts src/features/dashboard/hooks/use-wallet-files-controller.tsx CHANGELOG.md`.
@@ -205,7 +446,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 22:09:13 WITA - Feed AEON Context Into Calls
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Phone call gateway briefing builder, Fleet agent call payload, Calls settings test-call payload, assimilation logs
 - Summary: Enrich AEON phone calls so the realtime caller assumes the called agent is AEON rather than a generic HivemindOS agent. AEON calls now start with the required greeting `I'm Aeon, variation {agentName}.`, include repository/mode/branch/local workspace/A2A context, summarize bounded local AEON context from `CLAUDE.md`, `memory/MEMORY.md`, `aeon.yml`, `skills.json`, and optional `soul/` files, and receive AEON profile fields from both Fleet call buttons and the Calls tab test-call action.
 - Verification: Audited selected `aaronjmars/aeon` source paths with `audit_candidate_repo.py --path README.md --path dashboard/lib/config.ts --path dashboard/lib/types.ts --path aeon.yml --path a2a-server/src/index.ts` (no high findings; one reviewed medium child-process import in the A2A server); isolated TypeScript compile of `src/lib/services/phone/call-gateway.ts` to `/tmp/hive-call-test` confirmed an AEON payload contains the exact greeting, AEON config, AEON skill catalog context, `pr-review`, and AEON memory excerpt without ringing the phone; `pnpm exec eslint src/lib/services/phone/call-gateway.ts src/features/dashboard/views/AgentsPanel.tsx src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx src/app/api/phone/route.ts src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/dashboard-storage.ts src/features/dashboard/hooks/use-agent-controller.tsx` passed with existing warnings in dashboard storage, agent controller, and AgentSettingsModal; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; `git diff --check -- src/lib/services/phone/call-gateway.ts src/features/dashboard/views/AgentsPanel.tsx src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`.
@@ -213,7 +454,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 22:08:16 WITA - Polish AEON Deliverable Cards
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON deliverables card presentation, changelog
 - Summary: Replace raw path/JSON-heavy deliverable card bodies with human titles, purpose summaries, readable excerpts only when useful, compact artifact facts, and an enabled Chat button for demo visibility while leaving the actual chat handoff unwired.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonDeliverablesPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonDeliverablesPanel.tsx CHANGELOG.md`; browser verification on `http://127.0.0.1:5020/?view=aeon` showed 6 polished deliverable cards with enabled Chat buttons, no raw vault paths, no raw JSON blobs, and no posts-table residue (`/tmp/aeon-deliverables-polished-cards.png`).
@@ -221,7 +462,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 22:01:38 WITA - Gate Fleet App Badges To Active Tasks
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Fleet active app badge matching, changelog
 - Summary: Restore the MiroShark swarm/X-post simulation alias, but apply app badge matching only to tasks whose status is active and whose raw `updatedAt` timestamp is fresh, while ignoring historical recent chat/task entries so hours- or days-old completed work cannot badge an agent even when its title is still displayed.
 - Verification: `pnpm exec eslint src/components/fleet/active-apps.ts src/components/fleet/fleet-data.ts --max-warnings=999`; `pnpm exec eslint src/features/dashboard/hooks/use-dashboard-derived-state.tsx --max-warnings=999` passed with existing hook dependency warnings only; `git diff --check -- CHANGELOG.md src/components/fleet/active-apps.ts src/components/fleet/fleet-data.ts src/features/dashboard/hooks/use-dashboard-derived-state.tsx`; in-app browser reload on `http://127.0.0.1:5020/?view=agents` showed `badgeCount: 0` while stale MiroShark-related rows such as `Hermes :: Bee Swarm Takeover X Posts`, Queen Bee, and Henry Matisse remained visible, confirming stale swarm/X-post work no longer badges agents.
@@ -229,7 +470,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 21:59:26 WITA - Refine AEON Deliverables Actions
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo deliverables badge, AEON deliverables card actions, changelog
 - Summary: Move the `x new deliverables` badge to the top outside edge of each AEON repo cell and add a disabled Chat action slot to every deliverable card so the future agent-chat-with-artifact handoff can be wired after UI testing.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/AeonDeliverablesPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/AeonDeliverablesPanel.tsx CHANGELOG.md`; browser verification on `http://127.0.0.1:5020/?view=aeon` showed the `6 new deliverables` badge outside the top edge of the AEON repo cell and 6 disabled card-level Chat buttons in the Deliverables view (`/tmp/aeon-deliverables-refined.png`).
@@ -237,7 +478,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 21:57:36 WITA - Remove Broad MiroShark Badge Alias
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Fleet active app badge matching, changelog
 - Summary: Remove the broad swarm/simulation/X-post alias from MiroShark badge matching so agents are only badged when their active work explicitly names the discovered app or collector source.
 - Verification: `pnpm exec eslint src/components/fleet/active-apps.ts --max-warnings=999`; `git diff --check -- CHANGELOG.md src/components/fleet/active-apps.ts`; in-app browser reload on `http://127.0.0.1:5020/?view=agents` showed `badgeCount: 0` while Queen Bee, Henry Matisse, and Aeon cells remained visible and the active dispatch task was `Hermes :: Bee Swarm Takeover X Posts`, confirming the broad MiroShark alias no longer badges adjacent swarm/X-post work.
@@ -245,7 +486,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 21:56:59 WITA - Add AEON Deliverables View
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON deliverables API, AEON repo/detail UI, Fleet apps API type narrowing, changelog
 - Summary: Discover AEON deliverables from the shared Obsidian vault and local AEON output folders, show `x new deliverables` badges over AEON repo cells, add a Deliverables tab before Settings with a count badge, and render artifact cards with Open, Finder, Download, and Download to Machine actions backed by a machine selector modal.
 - Verification: `curl -sS --max-time 20 -X POST 'http://127.0.0.1:5020/api/runtimes/aeon/deliverables'` returned 66 total deliverables and 6 recent vault artifacts for `aaronjmars/aeon`, including the AEON verdict and MiroShark run/post artifacts; browser verification on `http://127.0.0.1:5020/?view=aeon` showed `6 NEW DELIVERABLES` on the AEON repo card, the Deliverables tab with a `6` badge before Settings, artifact cards, and the transfer modal (`/tmp/aeon-deliverables-fleet-seeded.png`, `/tmp/aeon-deliverables-detail-seeded.png`, `/tmp/aeon-deliverables-transfer-modal.png`); `pnpm exec eslint src/app/api/fleet/apps/route.ts src/app/api/runtimes/aeon/deliverables/route.ts src/features/dashboard/views/AeonDeliverablesPanel.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -253,7 +494,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 21:54:40 WITA - Adjust Fleet App Badge Layering
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Fleet graph badge styling, changelog
 - Summary: Move the active app badge slightly higher and farther right in agent hex cells, and place it below the agent icon/text layer while keeping it above the hex cell surface.
 - Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `pnpm exec eslint src/components/fleet/fleet-tokens.module.css src/components/fleet/machine-cluster.tsx --max-warnings=999` reported only the existing CSS-file ignored warning; `git diff --check -- src/components/fleet/fleet-tokens.module.css`.
@@ -261,7 +502,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 21:46:34 WITA - Stabilize Link Collector Discovery
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Fleet discovery API, Fleet network issue modal, changelog
 - Summary: Treat Hivemind Link's private collector-port fallback as normal by showing remote health-check commands that read `~/.hivemindos/collector.env` instead of assuming localhost port 8787, and increase the foreground collector probe timeout so healthy remote bridges are less likely to flicker back to `not-installed` during normal roster refreshes.
 - Verification: `pnpm exec eslint src/app/api/fleet/discover/route.ts src/features/dashboard/dashboard-display-helpers.tsx --max-warnings=999` passed with one existing unused helper warning in Fleet discovery; `git diff --check -- src/app/api/fleet/discover/route.ts src/features/dashboard/dashboard-display-helpers.tsx CHANGELOG.md`; repeated fresh Fleet discovery showed This Mac and `hivemindos-liams-macbook-pro-1` ready while `hivemindos-ubuntu-8gb-hel1-2` remained unreachable; direct Tailnet checks confirmed `100.84.93.114:8787` returns health/agents, while `tailscale ping 100.96.125.3` and ports 8787-8793 on `100.96.125.3` time out from this dashboard.
@@ -269,7 +510,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 21:41:19 WITA - Verify Live MiroShark Fleet Badge
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Fleet graph app badge matching, Fleet apps API MiroShark discovery fallback, changelog
 - Summary: Let active task status drive app badge matching even when the hex has not been promoted to the working tone yet, add a narrow MiroShark simulation/swarm surface matcher, and make the Fleet apps API recover live MiroShark through discovered Tailnet peer IPs plus direct `/app-proxy/5101/health` probes when local Hivemind Link or collector app scans are transient.
 - Verification: `curl -sS --max-time 45 'http://127.0.0.1:5020/api/fleet/apps?refresh=1'` returned live remote `MiroShark` with `/icons/miroshark.png` and `http://100.84.93.114:8787/app-proxy/5101/health`; `curl -sS --max-time 10 'http://100.84.93.114:8787/app-proxy/5101/health'` returned `{"service":"MiroShark Backend","status":"ok"}`; Playwright loaded `http://127.0.0.1:5020/?view=agents` in the in-app browser and confirmed the current visible active task is now a screenshot-analysis Hermes task, so no live MiroShark badge should be shown in that exact state; earlier isolated browser verification with an active Aeon task titled `Running MiroShark hivenet rehearsal` observed `badgeCount: 1`, `badgeHasImage: 1`, and title `Aeon on This Mac · MiroShark active`; `pnpm exec eslint src/app/api/fleet/apps/route.ts src/components/fleet/active-apps.ts src/components/fleet/FleetView.tsx src/components/fleet/machine-cluster.tsx src/components/fleet/fleet-data.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md src/app/api/fleet/apps/route.ts src/components/fleet/active-apps.ts src/components/fleet/FleetView.tsx src/components/fleet/machine-cluster.tsx src/components/fleet/fleet-data.ts src/components/fleet/fleet-tokens.module.css`; `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files including `src/app/fleet.module.css`, `scripts/agent-telemetry-collector.mjs`, and generated `.next-tauri`/`src-tauri` copies.
@@ -277,7 +518,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-31 21:38:44 WITA - Complete AEON MiroShark E2E
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON MiroShark E2E harness, Fleet apps API, AEON MiroShark hive rehearsal workflow, shared vault deliverables
 - Summary: Make the AEON/MiroShark E2E discover remote MiroShark through either the direct tailnet collector or Hivemind Link, propagate forced app refreshes to collector `/apps` reads, protect the apps cache from stale background scans, preserve healthy cached MiroShark service cards, and let existing running MiroShark simulations snapshot/archive instead of hanging on another forced start/prepare cycle.
 - Verification: `HIVE_AEON_MIROSHARK_E2E_PEERS=100.84.93.114 HIVE_AEON_MIROSHARK_E2E_SIMULATION_ID=sim_22ae1e1dc532 node scripts/test-aeon-miroshark-e2e.mjs` passed, cloning AEON through the in-app workspace route and writing `/Users/liam/Documents/Obsidian/hivemindos-vault/Projects/HivemindOS/MiroShark Simulations/runs/2026/2026-05-31/sim_22ae1e1dc532/run.md` plus `/Users/liam/Documents/Obsidian/hivemindos-vault/Projects/HivemindOS/MiroShark Simulations/runs/2026/2026-05-31/sim_22ae1e1dc532/aeon-rehearsal.md`; the verdict file reports `status: complete` and 3 visible posts captured; `curl -sS --max-time 45 'http://127.0.0.1:5020/api/fleet/apps?refresh=1'` returned remote MiroShark from `http://100.84.93.114:8787/app-proxy/5101`; `node --check scripts/test-aeon-miroshark-e2e.mjs`; `pnpm exec eslint scripts/test-aeon-miroshark-e2e.mjs src/app/api/fleet/apps/route.ts src/app/api/miroshark/status/route.ts src/lib/services/miroshark/hivenet-discovery.ts src/lib/services/miroshark/companion-client.ts src/lib/services/miroshark/hive-rehearsal.ts src/app/api/runtimes/aeon/hive/miroshark/route.ts src/app/api/runtimes/aeon/workspaces/route.ts src/features/fleet/fleet-identity.ts --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -629,7 +870,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 23:04:53 WITA - Harden AEON Run And Cleanup Flows
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON run-now GitHub sync, official clone name/path collision handling, AEON workspace cleanup API/UI, changelog
 - Summary: Auto-save and push AEON repo automation files before dispatching a GitHub Actions run, make stale `aeon-2` clone submissions advance to the next `aeon-N` workspace/repo instead of nesting suffixes, and add settings actions to delete only local Git metadata or delete the full local AEON workspace with immediate fleet UI refresh.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/app/api/runtimes/aeon/workspaces/route.ts src/app/api/runtimes/aeon/github-repos/route.ts src/lib/services/runtime-adapters/aeon.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/app/api/runtimes/aeon/workspaces/route.ts src/app/api/runtimes/aeon/github-repos/route.ts src/lib/services/runtime-adapters/aeon.ts CHANGELOG.md`; in-app browser smoke on `http://127.0.0.1:5020/?view=aeon&aeonPanel=detail&aeonTab=settings` confirmed the local cleanup controls render; clone modal smoke confirmed the default name immediately advanced to `aeon-3` when `aeon` and `aeon-2` exist; temp API smoke confirmed `delete-git` removes `.git` and `delete-local` removes the AEON workspace folder.
@@ -637,7 +878,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:54:21 WITA - Portal AEON Repo Choice Modal
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo choice modal, changelog
 - Summary: Render the AEON clone/import choice modal through `document.body` with explicit `100dvh`/`100vw` overlay sizing so page layout height no longer leaves extra bottom space or pushes the modal upward.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`.
@@ -645,7 +886,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:51:57 WITA - Add AEON GitHub One-Step Toggles
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON official clone setup, AEON secret sync flow, changelog
 - Summary: Rename the fork setup control to `GitHub 1-Step Setup`, restore the default-on private GitHub repo option, add a default-on `Inject shared brain secrets` option, and run the existing AEON secret sync automatically after GitHub setup when enabled.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/app/api/runtimes/aeon/github-repos/route.ts src/app/api/runtimes/aeon/workspaces/route.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/app/api/runtimes/aeon/github-repos/route.ts src/app/api/runtimes/aeon/workspaces/route.ts CHANGELOG.md`.
@@ -653,7 +894,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:40:01 WITA - Fork Official AEON Before Clone
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON official clone flow, AEON GitHub repo API, AEON workspace profiles, changelog
 - Summary: Change the official AEON setup path to fork `aaronjmars/aeon` into the user's GitHub by default before cloning, so the local origin and dashboard repo source point at the user's fork immediately. Normalize cloned GitHub remotes into `owner/repo` profile values instead of showing raw clone URLs.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/app/api/runtimes/aeon/github-repos/route.ts src/app/api/runtimes/aeon/workspaces/route.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/app/api/runtimes/aeon/github-repos/route.ts src/app/api/runtimes/aeon/workspaces/route.ts CHANGELOG.md`.
@@ -661,7 +902,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:41:10 WITA - Auto-Increment Official AEON Clone Names
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON official clone flow, AEON workspace API, AEON GitHub repo API, changelog
 - Summary: Prefill Clone official AEON with a collision-free name such as `aeon-2` when local agents or GitHub repos already use `aeon`, allow the workspace clone endpoint to choose a unique sibling folder when requested, and let private GitHub repo creation auto-increment the repo name instead of failing on an existing repo.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/app/api/runtimes/aeon/workspaces/route.ts src/app/api/runtimes/aeon/github-repos/route.ts src/lib/services/runtime-adapters/aeon.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/app/api/runtimes/aeon/workspaces/route.ts src/app/api/runtimes/aeon/github-repos/route.ts src/lib/services/runtime-adapters/aeon.ts CHANGELOG.md`; in-app browser smoke opened Clone official AEON and confirmed the default name/path auto-incremented to `aeon-2` / `~/Documents/aeon-2` with the private repo checkbox checked.
@@ -669,7 +910,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:30:50 WITA - Default Official AEON To Private Repo
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON official clone flow, AEON GitHub secret sync, changelog
 - Summary: Add an on-by-default private GitHub repo toggle to the Clone official AEON configuration, create and link that private repo after cloning when enabled, keep the clone modal open until it can show success or inline errors, and fix key sync so shared `hive-env-add` agent env values are actually eligible for GitHub secret upload. Sync feedback now avoids showing `Success!` when requested keys were skipped for missing values.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/lib/services/runtime-adapters/aeon.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/lib/services/runtime-adapters/aeon.ts CHANGELOG.md`; confirmed `gh secret list -R LiamVisionary/aeon-test` currently returns only `GH_GLOBAL`, so the displayed `1 repo secret` is accurate before the fixed sync runs again; in-app browser smoke on `http://127.0.0.1:5020/?view=aeon` showed the AEON fleet and existing `aeon`/`aeon-test` repo cards still render.
@@ -677,7 +918,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:26:34 WITA - Refine AEON Clone Setup Text
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo choice modal, changelog
 - Summary: Render AEON clone repo names and paths as real inline code elements and restyle the `Will clone` destination as a subtle note instead of an input-like bordered block.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`.
@@ -685,7 +926,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:24:31 WITA - Add Official AEON Clone Setup View
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo choice modal, AEON workspace clone flow, changelog
 - Summary: Make `Clone official AEON` open a simple clone setup view with AEON Agent name and location fields, clone into the chosen path with a loading state, then show an `AEON Agent Created` success view with an `Open agent` action while ensuring the cloned workspace is upserted into the AEON fleet.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`.
@@ -693,7 +934,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:16:27 WITA - Show AEON GitHub Secret Count
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON ready check, runtime secret status, changelog
 - Summary: Add a GitHub secrets row to the AEON Ready Check that shows the total number of secrets currently present in the configured GitHub repo, preserves the count through fast secret refreshes, and updates it after key sync.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/lib/services/runtime-adapters/aeon.ts src/lib/services/runtime-adapters/types.ts src/features/dashboard/dashboard-types.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/lib/services/runtime-adapters/aeon.ts src/lib/services/runtime-adapters/types.ts src/features/dashboard/dashboard-types.ts CHANGELOG.md`; in-app browser on `http://127.0.0.1:5020/?view=aeon&aeonPanel=detail&aeonTab=overview` showed `GitHub secrets` with `1 repo secret`.
@@ -701,7 +942,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:16:28 WITA - Fix AEON Repo Choice Card Span
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo choice modal, changelog
 - Summary: Move the full-width two-column span from the official clone card to the import-existing card so the first two choices sit side by side and the single import choice spans below them.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`.
@@ -709,7 +950,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:14:28 WITA - Make AEON Repo Choice Two Column
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo choice modal, changelog
 - Summary: Change the AEON repo start chooser to a two-column layout with the import-existing card spanning both columns below the clone options.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`.
@@ -717,7 +958,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:12:55 WITA - Route AEON Hex Create Through Choice Modal
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON fleet create card, changelog
 - Summary: Route the hex-grid `New Aeon Agent Repo` card through the three-card clone/import choice modal instead of opening the old local scratch-create form directly.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/shared/CreateFolderRepoModal.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/shared/CreateFolderRepoModal.tsx CHANGELOG.md`.
@@ -725,7 +966,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:11:59 WITA - Show AEON Key Sync Success
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON overview key sync UI, changelog
 - Summary: Keep the step 2 `Sync keys` button from snapping silently back to its default label by showing a short-lived `Success!` state after the GitHub secret sync completes, and refresh fast secret status immediately afterward.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`.
@@ -733,7 +974,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:11:13 WITA - Portal Shared Repo Modal Backdrop
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: shared repo creation modal, changelog
 - Summary: Render the shared create-folder/repo modal through `document.body` and give its overlay a dynamic viewport minimum height so the dim backdrop covers the full visible screen instead of being constrained by AEON page containers.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/shared/CreateFolderRepoModal.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/shared/CreateFolderRepoModal.tsx CHANGELOG.md`.
@@ -741,7 +982,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:07:31 WITA - Replace Blank AEON Create With Clone Choices
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo creation flow, changelog
 - Summary: Replace the scratch-create choice with three side-by-side AEON workspace options: clone a local copy from a GitHub URL, clone the official `aaronjmars/aeon` repo, or import an existing local AEON folder.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`.
@@ -749,7 +990,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:06:33 WITA - Add AEON Repo Creation Choice
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo creation flow, changelog
 - Summary: Add a two-card choice step before the local `Create AEON repo` form so users can choose between creating a fresh local AEON repo and cloning an existing AEON repo from GitHub.
 - Verification: Pending.
@@ -757,7 +998,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:01:51 WITA - Make AEON Repo Picker Cards Vertical
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON GitHub repo picker UI, changelog
 - Summary: Change the AEON GitHub repo picker from full-width horizontal rows to a vertical card grid, with the dashed create card matching the same card footprint and repo actions stacked at the bottom of each card.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`.
@@ -765,7 +1006,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 22:00:47 WITA - Route Streamed Thought Channels
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: agent runtime SSE bridge, changelog
 - Summary: Strip streamed channel control markup such as `<|channel|>thought`/`<channel>thought</channel>` from assistant text, forward thought/analysis/reasoning deltas as `chat.thinking` process events, and preserve final/message deltas in the visible chat bubble.
 - Verification: `pnpm exec eslint src/app/api/chat/agent-runtime/route.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/app/api/chat/agent-runtime/route.ts CHANGELOG.md`.
@@ -773,7 +1014,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 21:59:02 WITA - Add AEON GitHub Repo Picker
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON overview repo setup UI, AEON GitHub repo API, changelog
 - Summary: Replace the Step 2 repo action with a dedicated GitHub repo picker/creator modal that lists repos as vertical cards, starts with a dashed create card, creates GitHub repos from a simple form with collapsed advanced settings, links the selected/created repo to the local AEON git origin, and updates the AEON repo state immediately.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/app/api/runtimes/aeon/github-repos/route.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/app/api/runtimes/aeon/github-repos/route.ts CHANGELOG.md`.
@@ -781,7 +1022,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 21:49:07 WITA - Split AEON GitHub Setup Into Two Steps
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON overview GitHub setup UI, changelog
 - Summary: Replace the single AEON GitHub banner with two modern side-by-side setup columns: step 1 for GitHub OAuth/account access and step 2 for selecting the AEON GitHub repo, with separate connected/configured status and actions.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`.
@@ -789,7 +1030,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 21:44:20 WITA - Return AEON OAuth To Connected Overview
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: GitHub OAuth callback routing, AEON overview GitHub card, changelog
 - Summary: Send successful AEON GitHub OAuth back to the AEON detail overview with a connected flag, refresh the fast GitHub secret status immediately, and show connected/reconnect wording once `GH_GLOBAL` is available.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/lib/services/integrations/github-oauth.ts src/app/api/integrations/github/oauth/callback/route.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/lib/services/integrations/github-oauth.ts src/app/api/integrations/github/oauth/callback/route.ts CHANGELOG.md`.
@@ -797,7 +1038,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 21:40:42 WITA - Keep AEON GitHub OAuth Modal Responsive
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON settings modal, changelog
 - Summary: Keep the AEON settings modal open after pressing `Connect GitHub`, show an immediate connecting spinner state, and navigate to GitHub on the next animation frame so slow route startup no longer looks like the UI disappeared.
 - Verification: `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999` passed with one existing warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/chat/AgentSettingsModal.tsx CHANGELOG.md`.
@@ -805,7 +1046,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 21:39:26 WITA - Allow Localhost Dev Asset Origin
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Next.js development config, changelog
 - Summary: Add `127.0.0.1` to Next.js `allowedDevOrigins` so local OAuth callbacks and localhost/loopback navigation do not trigger blocked dev font/resource requests.
 - Verification: `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- next.config.ts CHANGELOG.md`.
@@ -813,7 +1054,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 21:32:28 WITA - Read GitHub OAuth App Keys From Hive Env
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: GitHub OAuth integration helper, OAuth start and callback routes, changelog
 - Summary: Load GitHub OAuth app client ID, client secret, callback URL, and scopes from the shared `hive-env-add` agent env store as well as the dashboard process env, scrub hidden copy/paste characters from GitHub OAuth credentials, normalize local callback URLs to `127.0.0.1`, and use signed OAuth state instead of host-specific cookies so `localhost`/`127.0.0.1` callback handoffs do not fail.
 - Verification: Confirmed shared env has `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET` present without printing values; masked `curl -I http://localhost:5020/api/integrations/github/oauth/start?source=aeon` returns a GitHub authorize redirect with callback `http://127.0.0.1:5020/api/integrations/github/oauth/callback`; `pnpm exec eslint src/lib/services/integrations/github-oauth.ts src/app/api/integrations/github/oauth/start/route.ts src/app/api/integrations/github/oauth/callback/route.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/lib/services/integrations/github-oauth.ts src/app/api/integrations/github/oauth/start/route.ts src/app/api/integrations/github/oauth/callback/route.ts CHANGELOG.md`.
@@ -821,21 +1062,21 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 21:30:17 WITA - Merge Codex Branches Into Main
 
-- Status: Committed
+- Status: Pushed
 - Areas changed: main branch history, dashboard/vault branch changes, AEON secret status refresh, remote codex branch merge resolution
 - Summary: Merge the active codex dashboard branch into main and record the stale remote dashboard usability branch as integrated while preserving the newer main-side implementation where histories overlapped.
 - Verification: `git fetch --all --prune`; inspected local and remote `codex/*` ahead counts; resolved remote merge conflicts in favor of current main where the remote branch would remove newer work.
 - Intended commit message: `Merge codex branches into main`
 ## 2026-05-30 21:24:32 WITA - Send AEON GitHub Connect Directly To OAuth
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON settings modal, changelog
 - Summary: Stop routing AEON's GitHub connect action through Nango detection and always start the direct GitHub OAuth API flow from the AEON modal.
 - Verification: `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999` passed with one existing warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/chat/AgentSettingsModal.tsx CHANGELOG.md`.
 - Intended commit message: `Send AEON GitHub connect directly to OAuth`
 ## 2026-05-30 21:25:44 WITA - Speed Up AEON GitHub Key Badge
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON secret status API, AEON runtime adapter, AEON overview GitHub badge
 - Summary: Add a fast AEON secret-status path for core shared/local env keys and have the GitHub key badge refresh from it immediately instead of waiting for full AEON inventory and GitHub secret reconciliation.
 - Verification: `curl -X POST /api/runtimes/aeon/secrets/status {"fast":true}` on the running 5020 dev server returned `GH_GLOBAL` available from shared/local env with warm responses around 0.11-0.18s; `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/lib/services/runtime-adapters/aeon.ts src/lib/services/runtime-adapters/types.ts src/app/api/runtimes/[runtime]/secrets/status/route.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check` on the touched code files.
@@ -843,7 +1084,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 21:20:13 WITA - Add Direct GitHub OAuth Fallback For AEON
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON settings modal, GitHub OAuth API routes, integration OAuth helpers, changelog
 - Summary: Make AEON's GitHub connect action use Nango only when the configured host is live, otherwise start a direct GitHub OAuth flow that requests repo/workflow/hook/org/email scopes without `delete_repo` and saves the access token as `GH_GLOBAL` through `hive-env-add`.
 - Verification: `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx src/lib/services/integrations/github-oauth.ts src/app/api/integrations/github/oauth/start/route.ts src/app/api/integrations/github/oauth/callback/route.ts --max-warnings=999` passed with one existing warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/chat/AgentSettingsModal.tsx src/lib/services/integrations/github-oauth.ts src/app/api/integrations/github/oauth/start/route.ts src/app/api/integrations/github/oauth/callback/route.ts CHANGELOG.md`.
@@ -851,7 +1092,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 21:13:34 WITA - Split AEON Connection And Memory Settings
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON agent settings modal, AEON overview modal handoff, dashboard settings panel types, changelog
 - Summary: Add an AEON-only `Connection` settings tab for GitHub/OAuth/A2A mode controls and keep shared Obsidian brain plus AEON repo folder controls in `Memory`.
 - Verification: `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/DashboardApp.tsx src/features/dashboard/agent-settings-types.ts --max-warnings=999` passed with existing warnings; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/DashboardApp.tsx src/features/dashboard/agent-settings-types.ts CHANGELOG.md`.
@@ -859,7 +1100,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 21:08:48 WITA - Reopen Failed Nango Setup
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Nango integrations UI, integrations styling, changelog
 - Summary: Treat saved Nango host configuration separately from live Nango health so partial setup runs reopen the setup flow instead of showing the integrations app grid as ready, and add an explicit setup-incomplete state with retry and refresh actions.
 - Verification: `pnpm exec eslint src/features/integrations/NangoIntegrationsView.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/integrations/NangoIntegrationsView.tsx src/app/integrations/integrations.module.css CHANGELOG.md`; checked the local Nango integration payload shape from `/api/integrations/nango` and confirmed the UI now branches on `health.ok` rather than only saved host configuration.
@@ -867,7 +1108,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 21:08:31 WITA - Prioritize GitHub OAuth In AEON Connection
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON agent settings modal, fleet modal styling, changelog
 - Summary: Put GitHub OAuth first in the AEON GitHub connection state, route it to Integrations/Nango, and move manual repo/branch entry below an `or enter repo manually` divider.
 - Verification: `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999` passed with one existing warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/chat/AgentSettingsModal.tsx src/app/fleet.module.css CHANGELOG.md`.
@@ -875,7 +1116,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 21:04:03 WITA - Preselect GitHub Mode From AEON Power Card
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON overview GitHub card, AEON settings modal handoff, changelog
 - Summary: Make the `Connect GitHub` overview action set the selected AEON profile to GitHub mode before opening the connection modal.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/DashboardApp.tsx --max-warnings=999` passed with existing warnings; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/DashboardApp.tsx CHANGELOG.md`.
@@ -883,7 +1124,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 21:01:16 WITA - Render AEON Local Command Inline Code
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON overview GitHub setup card, changelog
 - Summary: Replace raw markdown backticks around `./aeon` with an actual inline code element in the AEON overview power card.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`.
@@ -891,7 +1132,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:56:32 WITA - Add AEON GitHub Power Card
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON overview GitHub setup card, dashboard AEON panel props, changelog
 - Summary: Add a prominent `Power AEON` card to the overview that explains GitHub Actions as AEON's unattended runner, shows repo/key readiness, and links directly to GitHub connection setup and key sync.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/DashboardApp.tsx --max-warnings=999` passed with existing warnings; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; Playwright smoke confirmed `http://127.0.0.1:5020/` loads without taking over the managed dev server.
@@ -899,7 +1140,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:55:35 WITA - Remove AEON Overview Agent Strip
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON agent dashboard view, changelog
 - Summary: Remove the redundant Agents card strip from the AEON overview because the route already represents AEON agents.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/DashboardApp.tsx --max-warnings=999` passed with existing warnings in `DashboardApp.tsx`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; in-app browser smoke on `http://127.0.0.1:5020/?view=aeon` loaded the AEON route and `rg` confirmed the removed overview Agents block/component no longer exists.
@@ -907,7 +1148,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:50:02 WITA - Simplify AEON Vault Agent Notes
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Obsidian agent profile mirroring, AEON vault README files, changelog
 - Summary: Make `Agents/AEON/<agent>/README.md` the canonical generated AEON note, stop generating duplicate `Notes/README.md` stubs for AEON, and use the label `Agent` instead of `repo/workspace`.
 - Verification: `pnpm exec eslint src/lib/services/obsidian/agent-profiles.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/lib/services/obsidian/agent-profiles.ts CHANGELOG.md`; filesystem checks found no AEON `Notes/README.md` stubs and no remaining `repo/workspace` AEON vault wording.
@@ -915,7 +1156,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:48:21 WITA - Flatten AEON Obsidian Repo Profiles
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Obsidian agent profile mirroring, AEON vault folders, changelog
 - Summary: Mirror AEON profile metadata directly under `Agents/AEON/<repo>/` instead of nesting it under `agents/<agentName>/`, and flatten the existing generated AEON vault folders.
 - Verification: `pnpm exec eslint src/lib/services/obsidian/agent-profiles.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/lib/services/obsidian/agent-profiles.ts CHANGELOG.md`; filesystem check confirmed `Agents/AEON/aeon-test` now contains `README.md`, `profile.json`, and `Notes/` directly with no generated `agents/<name>` child.
@@ -923,7 +1164,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:41:58 WITA - Clarify AEON Repo And Skill Model Labels
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo view labels, AEON skill advanced settings, changelog
 - Summary: Treat AEON detail names as repo/workspace names, show dashboard profile labels separately, and relabel skill model editing as a per-skill override that falls back to the repo default model in `aeon.yml`.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999` passed with one existing warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/app/fleet.module.css CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`.
@@ -931,7 +1172,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:37:03 WITA - Refine AEON Connection Settings UI
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON agent settings modal, fleet modal styling, changelog, assimilation log
 - Summary: Replace the four-field AEON connection block with mode cards that reveal only the relevant details for Local, GitHub, or A2A setup.
 - Verification: `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999` passed with one existing warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/chat/AgentSettingsModal.tsx src/app/fleet.module.css CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; Playwright smoke confirmed `http://127.0.0.1:5020/` loads without taking over the managed dev server.
@@ -947,7 +1188,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:27:07 WITA - Hide Empty Chat Fade Guards
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat empty-state styling, changelog
 - Summary: Disable the transcript scroll fade guard pseudo-elements when the chat is empty so the `No messages yet` area no longer has a dark horizontal strip behind it.
 - Verification: `git diff --check -- src/app/chat.module.css CHANGELOG.md`; isolated Playwright CSS render verified `.messages.empty::before` and `.messages.empty::after` compute to `display: none`, removing the dark empty-state strip while leaving normal transcript fade guards available for non-empty chats.
@@ -955,7 +1196,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:26:40 WITA - Stretch Scheduler Empty State
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: scheduler empty state layout, changelog
 - Summary: Make the scheduler empty-state branch fill the available body row so the route background gradient does not end partway down the viewport.
 - Verification: `pnpm exec eslint src/components/scheduler/SchedulerView.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/components/scheduler/SchedulerView.tsx CHANGELOG.md`; in-app browser layout metrics on `http://localhost:5020/scheduler` confirmed the scheduler root spans the document height.
@@ -963,7 +1204,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:23:44 WITA - Keep Recurring Timeline Pins In One Lane
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: scheduler month timeline recurrence layout, changelog
 - Summary: Keep compact recurring occurrences for the same schedule in the same timeline lane instead of alternating columns in the 30-day view.
 - Verification: `pnpm exec eslint src/components/scheduler/timeline.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/components/scheduler/timeline.tsx CHANGELOG.md`.
@@ -971,7 +1212,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:20:21 WITA - Strip Generic AEON Agent Settings
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON overview agent cards, dashboard agent settings modal, agent runtime folder updates, changelog
 - Summary: Open AEON overview cards directly to Memory settings, hide generic worker/security panels for AEON profiles, and make the folder editor update the AEON repo path that the runtime adapter actually reads.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/hooks/use-agent-controller.tsx --max-warnings=999` passed with existing warnings; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/hooks/use-agent-controller.tsx CHANGELOG.md`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -979,7 +1220,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:19:08 WITA - Add Scheduler Runtime Filter
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: scheduler toolbar filters, changelog
 - Summary: Add centered All/Aeon filter controls to the scheduler timeline toolbar and filter the scheduler list, stats, timeline, and detail pane to Aeon-only schedules when selected.
 - Verification: `pnpm exec eslint src/components/scheduler/SchedulerView.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/components/scheduler/SchedulerView.tsx CHANGELOG.md`; in-app browser smoke on `http://localhost:5020/scheduler` verified the All/Aeon controls render with explicit accessible labels, though the automation viewport is too narrow to click the center rail controls reliably.
@@ -987,7 +1228,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:16:14 WITA - Expand Recurring Scheduler Pins
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: scheduler timeline recurrence rendering, changelog
 - Summary: Expand simple recurring cron schedules such as daily and weekday tasks into repeated occurrence markers across week and month timeline views, while keeping high-frequency schedules compact to avoid flooding the rail.
 - Verification: `pnpm exec eslint src/components/scheduler/timeline.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/components/scheduler/timeline.tsx CHANGELOG.md`; in-app browser month-view smoke on `http://localhost:5020/scheduler` verified daily cron schedules render repeated markers across the 30-day timeline and are no longer shown as runtime-managed-only cards.
@@ -995,7 +1236,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:10:56 WITA - Hide Runtime Setup For AEON Agent Edits
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: dashboard agent settings modal, changelog
 - Summary: Hide the generic runtime selector/setup block when editing an existing AEON agent, leaving only the AEON-relevant Role and Memory settings and removing the misleading `Aeon is not installed` card.
 - Verification: `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999` passed with one existing unused-variable warning; `git diff --check -- src/features/dashboard/views/chat/AgentSettingsModal.tsx CHANGELOG.md`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -1003,7 +1244,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:07:44 WITA - Wire Scheduler Timeline Range Controls
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: scheduler range controls, scheduler timeline, changelog
 - Summary: Make the 24h, week, and month scheduler buttons update selected state, the timeline heading, axis ticks, job placement, and out-of-range runtime-managed list instead of acting as decorative buttons.
 - Verification: `pnpm exec eslint src/components/scheduler/SchedulerView.tsx src/components/scheduler/timeline.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/components/scheduler/SchedulerView.tsx src/components/scheduler/timeline.tsx CHANGELOG.md`; in-app browser smoke on `http://localhost:5020/scheduler` verified 24h/week/month switch active state, headings, and axis labels.
@@ -1011,7 +1252,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:06:01 WITA - Open AEON Agent Cards Into Settings
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON overview agent cards, dashboard agent settings modal, changelog
 - Summary: Add hover/focus affordances to AEON overview agent cards, let selecting a card open that agent in the existing settings modal, and limit AEON settings tabs to Role and Memory.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/DashboardApp.tsx --max-warnings=999` passed with existing warnings; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -1019,7 +1260,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:01:44 WITA - Fix Scheduler Duplicate Bee Options
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: scheduler modal target picker, changelog
 - Summary: Dedupe bee display-name options before opening the scheduler task modal and normalize picker option lists before rendering so duplicate agent names no longer trigger React duplicate-key console errors.
 - Verification: `pnpm exec eslint src/components/task-modal/TaskModal.tsx src/features/dashboard/views/SchedulerPanel.tsx --max-warnings=999` passed with one pre-existing unused eslint-disable warning in `SchedulerPanel.tsx`; `git diff --check -- src/components/task-modal/TaskModal.tsx src/features/dashboard/views/SchedulerPanel.tsx CHANGELOG.md`; `curl -s -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:5020/?view=scheduler'` returned `200`; in-app browser console smoke found no duplicate-key logs, though the Browser connection timed out while waiting for a later scheduler recheck.
@@ -1027,7 +1268,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 20:00:49 WITA - Format Scheduler Detail Body
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: scheduler detail panel, scheduler design tokens, changelog
 - Summary: Render scheduler detail bodies as markdown, normalize inline dash-separated schedule prompts into readable markdown blocks, and show a one-paragraph collapsed preview with an explicit caret expand/collapse control.
 - Verification: `pnpm exec eslint src/components/scheduler/composer.tsx --max-warnings=999`; `git diff --check -- src/components/scheduler/composer.tsx src/components/scheduler/scheduler-tokens.module.css CHANGELOG.md`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `curl -s -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:5020/?view=scheduler'` returned `200`; in-app browser smoke on `http://127.0.0.1:5020/scheduler` verified the markdown description surface renders and short descriptions omit the expand control.
@@ -1035,7 +1276,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:59:05 WITA - Add AEON Overview Agent Cards
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo overview, changelog
 - Summary: Add compact agent profile cards to the AEON repo overview's At a glance section, grouped by the selected AEON repo workspace and showing role, worker class, machine, source mode, and Git online/offline state.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -1043,7 +1284,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:53:37 WITA - Clarify AEON Activity Skill Metric
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo overview metrics, changelog
 - Summary: Rename the recent-activity `Skills` metric to `Skills used` so it is clearly distinct from the header's ready-skill inventory count.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -1051,7 +1292,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:52:00 WITA - Remove AEON Profile Selector
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo detail header, changelog
 - Summary: Remove the redundant `Aeon profile` selector from the AEON repo detail view so switching repositories happens only through the `All AEON Repos` fleet view.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; `rg -n "Aeon profile|AEON profile" src/features/dashboard/views/AeonAutopilotPanel.tsx` returned no matches.
@@ -1059,7 +1300,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:49:11 WITA - Add AEON Repo Rename Control
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: reusable inline rename control, agent settings rename header, AEON Autopilot repo detail header, AEON workspace API, changelog
 - Summary: Extract the agent settings inline rename form into a shared component, use it for both agent names and the AEON repo detail title, and add an AEON workspace rename action that renames the selected repo folder on its machine while updating the dashboard profile.
 - Verification: `pnpm exec eslint src/features/dashboard/views/shared/InlineRenameControl.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx src/app/api/runtimes/aeon/workspaces/route.ts --max-warnings=999` passed with one pre-existing unused-variable warning in `AgentSettingsModal.tsx`; `git diff --check -- src/features/dashboard/views/shared/InlineRenameControl.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx src/app/api/runtimes/aeon/workspaces/route.ts CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `curl -s -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:5020/?view=aeon'` returned `200`; in-app browser smoke loaded `http://127.0.0.1:5020/?view=aeon` with no console errors; temp-folder API smoke renamed `/tmp/aeon-rename-smoke.*/old-repo` to `new-repo` and returned an updated AEON profile; `pnpm exec tsc --noEmit --pretty false --skipLibCheck` is currently blocked by unrelated `src/features/dashboard/views/PhonePanel.tsx` `DashboardView` type errors.
@@ -1067,7 +1308,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:49:11 WITA - Keep AEON Mirror Controls In Memory
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo detail controls, changelog
 - Summary: Remove duplicate Obsidian mirror controls and status rows from AEON files/setup cards so the single mirror toggle lives only in the Memory section.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -1075,7 +1316,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:45:53 WITA - Clarify AEON Repo Source Badges
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo fleet cards, changelog
 - Summary: Replace the ambiguous AEON repo `Local` pill with an explicit source-mode badge and add a separate Git-backed `Online` or local-only `Offline` badge.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -1083,7 +1324,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:40:57 WITA - Replace Native Chat Input Focus Ring
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat composer focus styling, changelog
 - Summary: Remove the browser's default textarea outline from the chat composer and replace it with a subtle app-styled focus border on the composer shell.
 - Verification: `git diff --check -- src/app/chat.module.css CHANGELOG.md`; isolated Playwright focus check with the chat composer CSS verified the focused textarea has `outline-style: none` and the composer field receives the subtle teal focus border/box-shadow; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -1091,7 +1332,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:37:12 WITA - Fix Chat Status Check Feedback
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: runtime status API, runtime URL helper, chat status button, chat status banner, changelog
 - Summary: Use runtime default gateway URLs when an agent profile has an empty gateway URL so Hermes status checks no longer try to fetch relative `/health`, catch adapter status errors as JSON, show a loading state while Check status runs, and add a dismiss button to the status banner.
 - Verification: `pnpm exec eslint src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/DashboardApp.tsx src/app/api/agents/status/route.ts --max-warnings=999` passed with existing warnings; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/lib/types/agent-runtime.ts src/app/api/agents/status/route.ts src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; `curl -sS -X POST 'http://127.0.0.1:5020/api/agents/status' -H 'Content-Type: application/json' --data '{"agent":{"id":"adaptive-agent","name":"AdaptiveAgent","runtime":"hermes","gatewayUrl":"","statusPath":"/health","provider":"openrouter","model":"adaptive"}}'` returned `ok: true` with `url: http://127.0.0.1:8642/health`.
@@ -1099,7 +1340,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:24:01 WITA - Keep Chat Header Actions On Row
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat header layout, chat header action sizing, changelog
 - Summary: Stop the identity picker from spanning the full header grid, keep the status/system controls on the right in the same row at tablet widths, and match the Check status and System button heights.
 - Verification: `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/app/chat.module.css CHANGELOG.md`; `curl -s -o /dev/null -w '%{http_code}\\n' 'http://127.0.0.1:5020/?view=chat'` returned `200`.
@@ -1107,7 +1348,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:23:28 WITA - Match Chat Panel Corner Radius
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat panel styling, changelog
 - Summary: Give the main chat area the same 8px corner radius as the chat history column while preserving the existing mobile full-screen square-corner override.
 - Verification: `git diff --check -- src/app/chat.module.css CHANGELOG.md`; Playwright smoke on `http://127.0.0.1:5020/?view=chat` verified the main chat panel and history column both render with `8px` border radius, no page errors, and the chat honeycomb background remains present.
@@ -1115,7 +1356,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:21:39 WITA - Restore Chat Background Texture
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat panel background, chat route topbar, changelog
 - Summary: Restore the chat panel's original radial wash, honeycomb texture, and shadow while keeping only the chat route's horizontal topbar gradient/overlay hidden.
 - Verification: `git diff --check -- src/app/globals.css src/app/chat.module.css CHANGELOG.md`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; Playwright smoke on `http://127.0.0.1:5020/?view=chat` verified the chat topbar is transparent with its overlay hidden while `.chat::before` has the original radial wash and `.chat::after` has the original honeycomb SVG texture at opacity `0.68`.
@@ -1123,7 +1364,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:21:07 WITA - Keep Chat Header Identity Content Sized
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat header layout, changelog
 - Summary: Change the chat header grid from a full-width identity column to content-sized identity and action columns so the agent picker no longer visually owns the whole row.
 - Verification: `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/app/chat.module.css CHANGELOG.md`; `curl -s -o /dev/null -w '%{http_code}\\n' 'http://127.0.0.1:5020/?view=chat'` returned `200`.
@@ -1131,7 +1372,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:19:48 WITA - Remove Redundant Chat Ready Badge
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat header, changelog
 - Summary: Remove the chat header `Ready` pill now that the identity block already shows the live status.
 - Verification: `pnpm exec eslint src/features/dashboard/views/ChatPanel.tsx --max-warnings=999` passed with the existing Next `<img>` warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/ChatPanel.tsx CHANGELOG.md`
@@ -1139,7 +1380,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:19:08 WITA - Shrink Chat Identity Trigger
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat header identity picker styling, changelog
 - Summary: Make the chat identity dropdown trigger size to its avatar/name/runtime contents instead of spanning the whole header row.
 - Verification: `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/app/chat.module.css CHANGELOG.md`
@@ -1147,7 +1388,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:17:43 WITA - Stabilize Chat Background Paint
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat route topbar, chat panel background, changelog
 - Summary: Replace the transparent chat topbar and chat panel surfaces with solid non-gradient dark backgrounds so the removed gradient slab does not cause flickering over the patterned page background.
 - Verification: `pnpm exec eslint src/features/dashboard/views/DashboardHeader.tsx --max-warnings=999`; `git diff --check -- src/features/dashboard/views/DashboardHeader.tsx src/app/globals.css src/app/chat.module.css CHANGELOG.md`; Playwright smoke on `http://127.0.0.1:5020/?view=chat` reported no page errors and screenshot review showed solid non-gradient chat/topbar surfaces.
@@ -1155,7 +1396,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:17:09 WITA - Remove Chat Identity Button Fill
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat header identity picker styling, changelog
 - Summary: Override the shared chat button fill for the identity picker so the header stays transparent by default and only shows a subtle hover/focus tint.
 - Verification: `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/app/chat.module.css CHANGELOG.md`; `curl -s -o /dev/null -w '%{http_code}\\n' 'http://127.0.0.1:5020/?view=chat'` returned `200`.
@@ -1163,7 +1404,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:14:26 WITA - Make Chat Identity The Agent Picker
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat header, chat machine/agent dropdown, chat styles, changelog
 - Summary: Remove the separate machine picker pill from the chat header and make the main agent avatar/name/runtime identity act as the dropdown trigger, keeping the header more compact while preserving the agent picker.
 - Verification: `pnpm exec eslint src/features/dashboard/views/ChatPanel.tsx --max-warnings=999` passed with the existing Next `<img>` warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/ChatPanel.tsx src/app/chat.module.css CHANGELOG.md`
@@ -1171,7 +1412,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:10:59 WITA - Remove Chat Topbar Gradient Slab
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: dashboard header styling, chat route topbar, chat panel background, changelog
 - Summary: Make the dashboard topbar transparent on the Chat view, suppress its decorative overlay, and flatten the chat panel background so the dark gradient slab no longer sits above or inside the chat.
 - Verification: `pnpm exec eslint src/features/dashboard/views/DashboardHeader.tsx --max-warnings=999`; `git diff --check -- src/features/dashboard/views/DashboardHeader.tsx src/app/globals.css src/app/chat.module.css CHANGELOG.md`; Playwright smoke on `http://127.0.0.1:5020/?view=chat` verified the chat topbar has transparent background/no overlay, the chat panel uses no background image, and screenshot review showed the black gradient slab removed.
@@ -1179,7 +1420,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:11:18 WITA - Prioritize Agent Names In Chat Dropdown
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat machine/agent dropdown, changelog
 - Summary: Swap the chat dropdown row hierarchy so the agent name is the prominent primary label and the machine/connectivity context is shown as secondary detail.
 - Verification: `pnpm exec eslint src/features/dashboard/views/ChatPanel.tsx --max-warnings=999` passed with the existing Next `<img>` warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/ChatPanel.tsx CHANGELOG.md`
@@ -1187,7 +1428,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 19:00:42 WITA - Clarify Saved Chat Agent Connectivity
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: dashboard machine grouping, chat machine/agent dropdown, changelog
 - Summary: Rename the unassigned chat agent bucket from `Not connected yet` to `Saved profiles` and show whether each saved profile has a runtime/bridge chat route or still needs setup, so the dropdown no longer presents missing machine association as a definite connectivity failure.
 - Verification: `pnpm exec eslint src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx --max-warnings=999` passed with existing hook dependency warnings and the existing Next `<img>` warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx CHANGELOG.md`
@@ -1195,7 +1436,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 18:59:48 WITA - Browse Remote Link Directories Remotely
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat directory picker routing, machine directory API, changelog
 - Summary: Decode Hivemind Link `/peer/<tailnet-ip:port>` collector URLs before directory browsing decides whether a target is local, so remote chat machine folder buttons open the in-app remote directory browser instead of the native local picker while runtime chat traffic can keep using the Link proxy.
 - Verification: `curl -sS 'http://127.0.0.1:5020/api/machines/directories?path=~&collectorUrl=http%3A%2F%2F127.0.0.1%3A8788%2Fpeer%2F100.96.125.3%253A8787'` returned remote directory entries for the Ubuntu Link peer; `pnpm exec eslint src/features/dashboard/hooks/use-miroshark-brain-controller.tsx src/app/api/machines/directories/route.ts --max-warnings=999` passed with existing hook warnings; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/hooks/use-miroshark-brain-controller.tsx src/app/api/machines/directories/route.ts CHANGELOG.md`
@@ -1203,7 +1444,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 18:56:01 WITA - Show Agent Icons In Chat Dropdown
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat machine/agent dropdown, chat styles, changelog
 - Summary: Replace the generic laptop icon in the chat machine dropdown with each agent's configured bee/custom icon, falling back to initials when no icon is available.
 - Verification: `pnpm exec eslint src/features/dashboard/views/ChatPanel.tsx --max-warnings=999` passed with the existing Next `<img>` warning for chat avatars; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/ChatPanel.tsx src/app/chat.module.css CHANGELOG.md`
@@ -1211,7 +1452,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 18:54:28 WITA - Keep Machine New Chats Out Of Project Folders
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: dashboard chat history tree, changelog
 - Summary: Make the machine-row New chat action start without a project working directory and render machine-level chat leaves under a separate Machine chats bucket, so they no longer appear inside or collapse with the machine app directory folder.
 - Verification: `pnpm exec eslint src/features/dashboard/hooks/use-chat-tree-controller.tsx --max-warnings=999` passed with existing hook warnings; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/hooks/use-chat-tree-controller.tsx CHANGELOG.md`; in-app browser smoke on `http://127.0.0.1:5020/?view=chat` showed the chat view without a runtime error, though the fresh browser profile had no hydrated machine state for exact row interaction.
@@ -1219,7 +1460,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 18:53:08 WITA - Lift Chat Machine Dropdown Layer
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat context menu layering, changelog
 - Summary: Raise the chat machine/agent dropdown above message content and make its surface opaque so assistant avatars and chat bubbles no longer bleed through the menu.
 - Verification: `pnpm exec eslint src/app/chat.module.css --max-warnings=999` reported the CSS file is ignored by the JS lint config, with no code errors; `git diff --check -- src/app/chat.module.css CHANGELOG.md`
@@ -1227,7 +1468,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 18:49:47 WITA - Clear Completed Chat Writing State
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: dashboard chat reload recovery, active chat run cleanup, changelog
 - Summary: Stop persisted active-run recovery from keeping a chat bubble in `Still writing` once the transcript or runtime session already has an assistant reply, and prune stale active-run records during hydration when the saved transcript is complete.
 - Verification: `pnpm exec eslint src/features/dashboard/DashboardApp.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/DashboardApp.tsx CHANGELOG.md`
@@ -1235,7 +1476,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 18:43:28 WITA - Add Process Tool Icon Badges
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat process panel, chat styles, dashboard icon wiring, changelog
 - Summary: Adapt the Claw Code Mobile tool-step badge pattern for the dashboard process panel by adding tool/action icon tiles, inferred file-target chips, and agent-avatar assistant reply rows so session telemetry reads like useful activity instead of raw log text.
 - Verification: `pnpm exec eslint src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/DashboardApp.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/DashboardApp.tsx src/app/chat.module.css CHANGELOG.md`
@@ -1243,7 +1484,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 18:28:44 WITA - Surface Runtime Session Process Telemetry
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: chat runtime route telemetry, runtime session polling API, dashboard chat process panel, chat reload recovery, runtime session store, changelog
 - Summary: Record raw stream comment/process/text counters in route telemetry, allow the session endpoint to query the latest runtime session by start time or chat key, poll the selected agent's actual runtime session while chat is waiting or after reload, rebuild visible user/assistant messages from the session store when local state was lost, and surface tool/image/file/session activity in the process panel. Add a HivemindOS-observed runtime session ledger for every dashboard chat request so OpenClaw, OpenAI-compatible agents, and non-chat AEON validation failures have recoverable session state instead of depending on Hermes-only collector storage.
 - Verification: `pnpm exec eslint src/lib/services/chat/runtime-session-store.ts src/app/api/chat/agent-runtime/route.ts src/app/api/chat/agent-session/route.ts src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-status-chat-input-controller.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/lib/services/chat/runtime-session-store.ts src/app/api/chat/agent-runtime/route.ts src/app/api/chat/agent-session/route.ts src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-status-chat-input-controller.tsx CHANGELOG.md`
@@ -1251,7 +1492,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 18:11:21 WITA - Document Link Peer Chat Routing
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: README, networking architecture docs, runtimes/chat docs, changelog
 - Summary: Document the difference between local collector URLs and Hivemind Link `/peer/...` URLs, including the rule that remote Link proxy URLs must stay on `127.0.0.1:8788` and should not be rewritten to the active local collector port.
 - Verification: `git diff --check -- README.md docs/architecture/tailscale-fleet-telemetry.md docs/architecture/syncing-and-tailscale.md docs/features/runtimes-and-chat.md CHANGELOG.md`
@@ -1259,7 +1500,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 17:55:56 WITA - Stabilize AEON Mirror Toggle Load State
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON settings mirror toggle, changelog
 - Summary: Prevent the AEON Obsidian mirror toggle from rendering a false off state while status is loading by caching the last known status per AEON repo and showing a neutral checking state for uncached repos.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -1267,7 +1508,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 17:47:52 WITA - Make AEON Obsidian Mirror A Toggle
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON settings mirror controls, changelog
 - Summary: Replace the Start/Stop Obsidian mirror button with a switch-style toggle wherever the AEON mirror controls appear, keeping `Sync once` as the explicit manual action.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -1275,7 +1516,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 17:43:38 WITA - Fix Fleet Machine Cluster Styles
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: fleet machine cluster component, changelog
 - Summary: Import the fleet CSS module used by machine cluster agent cells so the dashboard no longer crashes with `styles is not defined`.
 - Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
@@ -1283,7 +1524,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 17:39:05 WITA - Wrap Fleet Graph Agent Labels
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: fleet graph agent honeycomb labels, fleet token styles, changelog
 - Summary: Keep agent names inside fleet graph honeycomb cells by rendering the full name in a bounded block and allowing long names to wrap within the hex instead of escaping or being shortened.
 - Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/components/fleet/machine-cluster.tsx src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; in-app browser smoke on `http://localhost:5020/` verified `AdaptiveAgent` wraps to two lines inside a 62px fleet graph hex, `Runtime Capability Probe` wraps to three lines, all measured agent labels remain inside their hex bounds, and the page has no horizontal overflow.
@@ -1291,7 +1532,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 17:34:24 WITA - Debounce Chat Transcript Persistence
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: dashboard chat storage, client telemetry, changelog
 - Summary: Debounce local chat transcript persistence and emit chat storage telemetry only when the persisted transcript count changes, preventing streamed chat updates from repeatedly serializing the full transcript and posting noisy telemetry batches.
 - Verification: `pnpm exec eslint src/features/dashboard/DashboardApp.tsx src/features/dashboard/dashboard-storage.ts --max-warnings=999` passed with pre-existing warnings; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/DashboardApp.tsx src/features/dashboard/dashboard-storage.ts CHANGELOG.md`; live dev server on port 5021 returned memory telemetry with heap 422.9 MB, RSS 536.6 MB, and no strong growth signal after recompiling.
@@ -1299,7 +1540,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 17:25:28 WITA - Add AEON Obsidian Folder Mirror
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON Obsidian sync API, AEON dashboard settings, Obsidian agent profile layout, setup/uninstall dependency prompts, changelog
 - Summary: Add a simple Unison-backed bidirectional mirror between each local AEON repo and its shared-vault `Agents/AEON/<repo>/` folder, auto-start the mirror when a local AEON repo is created/cloned/linked, show mirror controls in the main AEON files settings card, and keep per-agent HivemindOS notes under `Agents/AEON/<repo>/agents/<agent>/`.
 - Verification: `pnpm exec eslint src/lib/services/runtime-adapters/aeon-obsidian-sync.ts src/app/api/runtimes/aeon/obsidian-sync/route.ts src/lib/services/obsidian/agent-profiles.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/lib/services/runtime-adapters/aeon-obsidian-sync.ts src/app/api/runtimes/aeon/obsidian-sync/route.ts --max-warnings=999`; `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `bash -n setup.sh && bash -n uninstall.sh`; `git diff --check -- src/lib/services/runtime-adapters/aeon-obsidian-sync.ts src/app/api/runtimes/aeon/obsidian-sync/route.ts src/lib/services/obsidian/agent-profiles.ts src/features/dashboard/views/AeonAutopilotPanel.tsx setup.sh setup.ps1 uninstall.sh uninstall.ps1 CHANGELOG.md`; installed Unison 2.54.0 with Homebrew; temp-folder Unison smoke copied a note with the same ignore arguments used by the app; dev server on port 5021 returned HTTP 200 for `/?view=aeon`; `/api/runtimes/aeon/obsidian-sync` resolved `/Users/liam/.aeon` to `/Users/liam/Documents/Obsidian/hivemindos-vault/Agents/AEON/.aeon`; managed dev server on port 5020 returned HTTP 200 for `/?view=aeon`; started the local `.aeon` mirror with `unison ... -repeat 2` and confirmed running status through the API.
@@ -1307,7 +1548,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 17:15:37 WITA - Document Directory Browsing Pattern
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: project agent instructions, changelog
 - Summary: Add a durable project rule that any new directory browsing UI must reuse the existing machine-aware browsing helpers, using the local native picker for This Mac and the in-app Hivemind Link browser for remote machines.
 - Verification: `git diff --check -- AGENTS.md CHANGELOG.md`; inspected `AGENTS.md` to confirm the rule names `chooseDirectoryForMachine`, `loadMachineDirectories`, local native picker behavior, remote Hivemind Link browser behavior, direct Tailnet collector URLs, and unique machine picker values.
@@ -1315,7 +1556,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 17:10:27 WITA - Pass Remote Tailnet Collectors To AEON Browse
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo creation machine options, changelog
 - Summary: Build AEON repo machine targets with the local collector URL only for This Mac and direct Tailnet collector URLs for remote machines, preventing remote Hivemind Link proxy URLs from being mistaken for local loopback browsers.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/shared/CreateFolderRepoModal.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; source inspection confirmed remote AEON machine options now use `http://<machine.ip>:8787` while This Mac keeps its local collector URL.
@@ -1323,7 +1564,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 17:05:43 WITA - Match AEON Browse To Existing Picker Logic
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo creation browse wiring, dashboard machine picker integration, changelog
 - Summary: Restore AEON repo creation to the app's existing `chooseDirectoryForMachine` path now that the modal resolves the exact selected machine, so This Mac uses the working local folder picker while remote machines still use the in-app Hivemind Link browser.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/shared/CreateFolderRepoModal.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/shared/CreateFolderRepoModal.tsx src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; source scan confirmed AEON now receives and calls `chooseDirectoryForMachine`, matching the existing Kanban/chat browsing logic.
@@ -1331,7 +1572,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 16:58:44 WITA - Resolve AEON Browse Machine From Select
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: reusable create folder/repo modal, AEON repo creation browse action, changelog
 - Summary: Make the Browse and Create actions resolve the selected machine from the actual machine `<select>` element at click time, so a stale React render cannot keep using the previous Ubuntu selection after switching back to This Mac.
 - Verification: `pnpm exec eslint src/features/dashboard/views/shared/CreateFolderRepoModal.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/shared/CreateFolderRepoModal.tsx CHANGELOG.md`; source inspection confirmed Browse and Create now call `currentMachine()`, which reads `machineSelectRef.current.value` before falling back to React state.
@@ -1339,7 +1580,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 16:54:33 WITA - Keep AEON Repo Machine Picker Precise
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: reusable create folder/repo modal, AEON repo creation machine picker, shared machine directory browser guard, changelog
 - Summary: Give the create folder/repo modal unique internal machine option ids, reset the parent path when switching machines, and make directory-browser responses match both machine key and collector URL so Browse cannot reuse or overwrite with the prior remote machine after switching back to This Mac.
 - Verification: `pnpm exec eslint src/features/dashboard/views/shared/CreateFolderRepoModal.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/hooks/use-miroshark-brain-controller.tsx --max-warnings=999` passed with pre-existing hook warnings in `use-miroshark-brain-controller.tsx`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/shared/CreateFolderRepoModal.tsx src/features/dashboard/hooks/use-miroshark-brain-controller.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; source inspection confirmed the modal option value is now unique per machine key plus collector URL and directory responses are ignored unless both machine key and collector URL match the currently open browser.
@@ -1347,7 +1588,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 16:48:44 WITA - Use Remote Directory Browser For AEON Repos
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo creation modal browse flow, dashboard machine directory picker wiring, changelog
 - Summary: Make the AEON repo creation modal use the in-app machine directory browser directly instead of the local-native directory helper, so choosing a remote Hivemind Link machine opens and browses that remote machine's directories.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/shared/CreateFolderRepoModal.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; source scan confirmed the AEON modal now receives `loadMachineDirectories` and calls it directly on Browse, with no `chooseDirectoryForMachine` fallback in the AEON create path; Playwright route-intercept smoke confirmed Browse opens the in-app `Choose directory` dialog and does not call `/api/agents/browse-folder`.
@@ -1355,7 +1596,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 16:44:40 WITA - Rename AEON Repo Back Button
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo detail navigation copy, changelog
 - Summary: Rename the detail back button from `All AEON agents` to `All AEON Repos` so the destination matches the AEON repo fleet view.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; source scan confirmed the visible button label is now `All AEON Repos`.
@@ -1363,7 +1604,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 16:41:29 WITA - Add AEON Repo Creation Modal
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON Fleet create-repo flow, reusable dashboard create-folder/repo modal, AEON workspace API, dashboard machine directory picker wiring, changelog
 - Summary: Replace one-click New AEON repo creation with a reusable modal that lets users name the repo, choose a Hivemind Link machine, type or browse for a parent folder, preview the final path, and initialize the workspace there.
 - Verification: Pending.
@@ -1371,7 +1612,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 16:37:17 WITA - Align AEON Settings Cards Side By Side
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON agent Settings responsive layout, changelog
 - Summary: Let the AEON detail shell become the Settings card grid on wide screens so `AEON files`, `Connection and sync`, `Keys`, and `Memory` use the available two-column space instead of stacking in the left column.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/shared/CreateFolderRepoModal.tsx src/app/api/runtimes/aeon/workspaces/route.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/shared/CreateFolderRepoModal.tsx src/app/api/runtimes/aeon/workspaces/route.ts src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; Playwright route-intercept smoke on `http://localhost:5020/?view=aeon` verified New AEON repo opens the modal, repo name and parent folder update the preview, Create repo posts `{ action: "initialize", name: "Research-Lab", path: "~/Hivemind Repos/Research-Lab", machineName: "This Mac", machineKey: "local", collectorUrl: "http://127.0.0.1" }`, and no horizontal overflow is introduced.
@@ -1379,7 +1620,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 16:30:20 WITA - Create Distinct AEON Local Repos
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON workspace API, AEON Fleet create-repo actions, changelog
 - Summary: Make New AEON repo and Create local repo create a fresh local workspace under `~/.aeon-repos/` instead of reinitializing and opening the existing default `~/.aeon` profile.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/app/api/runtimes/aeon/workspaces/route.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/app/api/runtimes/aeon/workspaces/route.ts CHANGELOG.md`; API smoke confirmed consecutive unique initializes choose `~/.aeon-repos/aeon-workspace` then `~/.aeon-repos/aeon-workspace-2`; Playwright route-intercept smoke confirmed the New AEON repo card posts `{ action: "initialize", unique: "true" }` and links the returned `~/.aeon-repos/aeon-workspace` profile instead of `~/.aeon`.
@@ -1387,7 +1628,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 16:27:25 WITA - Balance AEON Settings Card Width
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON Settings responsive card grid, changelog
 - Summary: Replace the oversized single-column Settings layout with a responsive two-column card grid on wide screens so repo/setup rows keep a readable measure without reintroducing dead empty space.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; desktop Playwright smoke at 2048x900 verified Settings cards render in readable columns around 774px wide, with repo/setup stacked in the first column, keys/memory sharing columns, and no horizontal overflow.
@@ -1395,7 +1636,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 16:21:50 WITA - Tighten AEON Settings And Failure Metric
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo overview metrics, AEON Settings layout, changelog
 - Summary: Keep the failures metric neutral when the failure count is zero, only turning it red when failures are present, and remove settings-only empty grid columns so Settings cards use the available width instead of leaving a dead right side.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; in-app browser smoke on `http://localhost:5020/?view=aeon` confirmed zero failures now renders with the neutral metric treatment and no horizontal overflow; desktop Playwright smoke at 1600x900 confirmed Settings renders the AEON files card at 1560px wide instead of leaving the right half empty, with no horizontal overflow.
@@ -1403,7 +1644,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 16:15:20 WITA - Simplify AEON Repo Detail View
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON repo detail navigation, AEON dashboard section visibility, changelog
 - Summary: Replace the all-at-once AEON repo detail wall with four segmented views: Overview, Work, Activity, and Settings, keeping the first screen focused while moving skills, runs, outputs, keys, memory, and setup behind deliberate tabs.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl ASSIMILATION.json`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py`; in-app browser smoke on `http://localhost:5020/?view=aeon` verified the detail tabs render, Overview only shows activity and readiness, Work shows skills, Activity shows runs/outputs, Settings shows repo sync/setup/keys/memory, no console errors, and no horizontal overflow.
@@ -1411,7 +1652,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 16:06:53 WITA - Keep AEON Repo Tile Content Inside Hexes
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON Fleet repo tile content layout, changelog
 - Summary: Remove the rectangular mini-card from inside AEON repo hexes and compact the repo metadata into the hex safe area so content no longer visually expands beyond the honeycomb cell.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; in-app browser smoke on `http://localhost:5020/?view=aeon` measured populated repo content at 168px wide inside a 292px hex, fully within the hex outer bounds, with no rectangular inset panel, no console errors, and no horizontal overflow.
@@ -1419,7 +1660,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 16:03:52 WITA - Improve AEON Card Legibility
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON Fleet card contrast and metadata treatment, changelog
 - Summary: Replace the low-contrast selected honey fill with a darker AEON profile hex and move profile details into a compact dark inset panel with stronger labels, type weight, and chip contrast.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; in-app browser smoke on `http://localhost:5020/?view=aeon` verified no horizontal overflow, though the automation session only rendered the add card after reload so populated-card contrast was verified by targeted code inspection.
@@ -1427,7 +1668,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 16:00 WITA - Simplify Nango Integrations Setup
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Nango integrations route, integrations CSS module, Nango host setup service, assimilation manifest/log
 - Summary: Replace the dense single integrations screen with a simple multi-view Nango setup flow: welcome, machine host selection, setup method selection, automatic/manual setup validation, and a separate square-card integrations view. Treat collector-proxied Nango as a valid setup result when the direct Tailnet port is closed.
 - Verification: `pnpm typecheck`; `pnpm exec eslint src/features/integrations/NangoIntegrationsView.tsx src/lib/services/integrations/nango-host.ts --max-warnings=0`; `git diff --check -- src/features/integrations/NangoIntegrationsView.tsx src/app/integrations/integrations.module.css src/lib/services/integrations/nango-host.ts CHANGELOG.md`; focused candidate audit for `uixmat/onborda --path src` passed; setup API returned 200 after falling back to the collector app proxy health URL.
@@ -1435,7 +1676,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 15:57:05 WITA - Use Title Case Agents Vault Folder
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Obsidian agent profile mirror, AEON Fleet copy, vault setup/uninstall folder list, changelog
 - Summary: Rename the app-owned agent profile shelf from uppercase `AGENTS/` to Title Case `Agents/` so it matches the vault's root folder convention while still reading legacy `AGENTS/` profile mirrors as a fallback.
 - Verification: `pnpm exec eslint src/lib/services/obsidian/agent-profiles.ts src/app/api/obsidian/agents/route.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `bash -n setup.sh && bash -n uninstall.sh`; `git diff --check -- src/lib/services/obsidian/agent-profiles.ts src/features/dashboard/views/AeonAutopilotPanel.tsx setup.sh uninstall.sh CHANGELOG.md`; temp-vault API smoke verified a legacy `AGENTS/` profile folder is app-renamed to visible `Agents/`, a new AEON profile writes to `Agents/AEON/<repo>/<profile>`, legacy profiles remain readable, and secrets stay omitted; source scan found no remaining user-facing `AGENTS/AEON` copy in app code; in-app browser smoke on `http://localhost:5020/?view=aeon` found no console errors and no horizontal overflow.
@@ -1443,7 +1684,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 15:44:31 WITA - Tessellate AEON Fleet Hexes
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON Fleet honeycomb card layout, changelog
 - Summary: Remove the dashed connector overlay and place AEON fleet hex cards on honeycomb coordinates so neighboring cards share actual polygon edges like the Fleet graph cells.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; in-app browser smoke on `http://localhost:5020/?view=aeon` verified no SVG line connectors, desktop card offsets of 219px/126px between adjacent flat hexes for shared edges, vertical mobile stacking with no horizontal overflow, and intact flat polygon points.
@@ -1451,7 +1692,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 15:58:03 WITA - Compact AEON Fleet Profile Cards
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON Fleet profile dedupe and compact card content, changelog
 - Summary: Collapse duplicate AEON cards that point to the same workspace path, prefer the local saved profile over an older GitHub-mode duplicate, and make card metadata/chips smaller so the details fit inside the connected hex cells.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; vault inspection found one persisted AEON profile at `AGENTS/AEON/.aeon/.aeon/profile.json`; in-app browser smoke on `http://localhost:5020/?view=aeon` verified the duplicate `/Users/liam/.aeon` and `~/.aeon` workspace cards collapse to one AEON profile card plus the add card, with compact metadata and no horizontal overflow.
@@ -1459,7 +1700,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 15:36:13 WITA - Connect AEON Fleet Hexes
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON Fleet card graph connectors, changelog
 - Summary: Add a Fleet graph-style dashed SVG connector layer behind the AEON fleet hex card grid, using the same edge gradient tokens and measuring card centers so connections follow wrapped layouts.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; in-app browser smoke on `http://localhost:5020/?view=aeon` verified three AEON hex cards render with two dashed `url(#aeonFleetEdge)` connector lines, flat card polygons remain intact, and no horizontal overflow on desktop or 390px mobile.
@@ -1467,7 +1708,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 15:17:26 WITA - Flatten AEON Hex Cards
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON Fleet card geometry and compact card content, changelog
 - Summary: Rotate the AEON fleet cards to the flat-top/flat-bottom hex shape, remove the Agents metadata row from repo cards, and compact the icon, labels, and chips so content fits cleanly inside the hex.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; in-app browser smoke on `http://localhost:5020/?view=aeon` verified AEON repo cards use flat-top polygon points, omit the Agents row inside cards, and avoid horizontal overflow on desktop and 390px mobile.
@@ -1475,7 +1716,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 14:53:26 WITA - Hexagon AEON Fleet Cards
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON Fleet card layout, shared fleet hex tile usage, changelog
 - Summary: Change the AEON fleet repo cards and the add AEON agent card to use the same shared hexagon tile component and fleet token styling as the main fleet view.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; in-app browser smoke on `http://localhost:5020/?view=aeon` verified the AEON repo list renders the add card as a 288x333 SVG-polygon hexagon with no horizontal overflow on desktop or 390px mobile.
@@ -1483,7 +1724,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 14:47:32 WITA - Add AEON Repo Workspace Flow
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: AEON Fleet workspace UI, AEON workspace APIs, Obsidian agent profile mirror, changelog
 - Summary: Replace the AEON Fleet add-agent card with a repository/workspace empty state that can initialize, browse, or clone an AEON repo, then link it as an AEON profile and mirror dashboard agent profiles into a root-level Obsidian `AGENTS/` folder with runtime and per-agent note subfolders.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/DashboardApp.tsx src/lib/services/obsidian/agent-profiles.ts src/app/api/obsidian/agents/route.ts src/app/api/runtimes/aeon/workspaces/route.ts src/lib/types/agent-runtime.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; temp-folder API smoke verified `/api/runtimes/aeon/workspaces` initializes AEON files and `/api/obsidian/agents` creates and reads `AGENTS/AEON/<repo>/<profile>` without secrets; Playwright empty-state smoke on `http://localhost:5020/?view=aeon` verified the create/browse/clone repo actions, automatic Obsidian `AGENTS/AEON/<repo>/` copy, no old `Add AEON agent` copy, no console errors, and no horizontal overflow.
@@ -1491,7 +1732,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 14:29:38 WITA - Mask AEON Fleet Card Icons
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Aeon Autopilot fleet card icon treatment, changelog
 - Summary: Make AEON card icons fill their rounded containers with a clipped mask so the image corners match the frame instead of showing a square inset.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`
@@ -1499,7 +1740,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 14:26:29 WITA - Add AEON Icon To Fleet Cards
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Aeon Autopilot fleet cards, changelog
 - Summary: Add the AEON runtime icon to the add-agent card and existing AEON agent cards so the fleet picker feels more branded and less plain.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`
@@ -1507,7 +1748,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 14:22:42 WITA - Stabilize Hivemind Link Identity
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Hivemind Link sidecar, local collector installer, fleet discovery dedupe, Tailnet device dedupe, dashboard machine grouping, changelog
 - Summary: Move Hivemind Link embedded Tailscale state to a hostname-independent path, migrate existing Link state during collector install, rebuild the sidecar when its source changes, and group duplicate Hivemind Link machine entries by physical machine base before falling back to per-collector IDs.
 - Verification: `go test ./cmd/hivemind-linkd`; `bash -n scripts/install-telemetry-collector.sh`; `pnpm exec tsc --noEmit --pretty false`; `git diff --check -- cmd/hivemind-linkd/main.go cmd/hivemind-linkd/main_test.go scripts/install-telemetry-collector.sh src/app/api/fleet/discover/route.ts src/app/api/tailscale/devices/route.ts src/features/dashboard/dashboard-display-helpers.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx CHANGELOG.md`; reran `HIVE_LINK_ENABLED=true ./scripts/install-telemetry-collector.sh`, migrated duplicate Link state to `~/.hivemindos/link/default`, and verified `/api/fleet/discover` now shows only `This Mac` plus the Ubuntu Link machine.
@@ -1515,7 +1756,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 14:16:54 WITA - Add AEON Fleet Cards
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Aeon Autopilot dashboard, AEON agent creation routing, changelog
 - Summary: Make the AEON route open to a wallet-style fleet card grid with a vertical playing-card dotted add-agent card first, let existing AEON cards drill into the full per-agent management surface, and auto-open the management view for a newly created AEON profile after the setup flow completes.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-agent-controller.tsx --max-warnings=999` passed with pre-existing warnings; `pnpm exec next typegen`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-agent-controller.tsx CHANGELOG.md`; in-app browser live reload was blocked by Browser URL policy after the aspect-ratio tweak, so final visual verification used the submitted screenshot plus code inspection of the fixed 5:7 card grid.
@@ -1523,7 +1764,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 14:18:06 WITA - Show Live Chat Process Events
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Chat stream controller, chat derived state, Chat panel, chat CSS, changelog
 - Summary: Capture runtime stream comments, structured status/tool/thinking events, Hermes session attachment, and first assistant-output events into a per-chat process log, render that log beneath the thinking animation in a compact scroll view with a chevron-controlled expanded view, improve the process header contrast, yield between token batches so grouped SSE reads still paint progressively, and preserve Hivemind Link `/peer/...` URLs when canonicalizing local collector ports.
 - Verification: `pnpm exec eslint src/app/api/chat/agent-runtime/route.ts src/features/dashboard/hooks/use-status-chat-input-controller.tsx src/features/dashboard/views/ChatPanel.tsx --max-warnings=999` passed with pre-existing warnings; `pnpm exec eslint src/app/api/chat/agent-runtime/route.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node --check scripts/agent-telemetry-collector.mjs`; `git diff --check -- src/app/chat.module.css src/features/dashboard/hooks/use-status-chat-input-controller.tsx scripts/agent-telemetry-collector.mjs src/app/api/chat/agent-runtime/route.ts CHANGELOG.md`; restarted the local telemetry collector; direct stale-port `/api/chat/agent-runtime` smoke using `telemetryUrl: http://127.0.0.1:8787` routed to the active local collector and streamed token SSE events; direct Emerson smoke through `http://127.0.0.1:8788/peer/100.96.125.3%3A8787` streamed `emerson bridge ok`; in-app browser smoke on `http://localhost:5020/?view=chat` verified the process panel appears under the thinking animation and the `x event` label plus chevron are legible.
@@ -1531,7 +1772,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 14:01:24 WITA - Simplify AEON Autopilot Route
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Aeon Autopilot dashboard copy and layout, changelog
 - Summary: Reframe the AEON route around a single selected AEON profile, replace tech-heavy labels with plain-language automation terms, put file-map and inventory internals behind advanced disclosures, and remove the duplicate skill-card wall while keeping setup, sync, run, pause, output, key, memory, and repository actions available.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md`; in-app browser smoke on `http://localhost:5020/?view=aeon` verified the selected-profile scope copy, `Ready in AEON` and `Skill library` labels, no console errors, and no horizontal overflow.
@@ -1539,7 +1780,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 14:00:20 WITA - Automate AEON Skills From Agent YAML
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Aeon Autopilot skills UI, AEON runtime adapter, changelog
 - Summary: Make the AEON tab show local AEON skill files as the primary inventory and add a direct Automate action that creates a manual/off-duty `aeon.yml` entry from each skill's `agents/openai.yaml` or `agents/aeon.yaml` when present, falling back to the skill description when no agent YAML exists.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/lib/services/runtime-adapters/aeon.ts src/lib/services/runtime-adapters/types.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `POST /api/runtimes/aeon/skills` with a bare AEON profile returned 156 local `aeon-skill-folder` skills from `/Users/liam/.aeon`; throwaway `POST /api/runtimes/aeon/skills/config` with `action: "automate"` created a manual/off-duty `aeon.yml` entry from `skills/browser/agents/openai.yaml`; Playwright smoke on `http://localhost:5020/?view=aeon` verified the `AEON` and `Shared Brain` source tabs, 156 direct `Automate` buttons, no old source-tab labels, no confusing `aeon.yml` empty copy, no console errors, and no horizontal overflow; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/lib/services/runtime-adapters/aeon.ts src/lib/services/runtime-adapters/types.ts CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl ASSIMILATION.json`
@@ -1547,7 +1788,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 13:57:33 WITA - Keep Hermes Chat Streams Alive
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Local telemetry collector Hermes chat bridge, changelog
 - Summary: Emit periodic SSE keepalive comments while the collector waits for Hermes API output, and load `bonjour-service` through its CommonJS default export so the Node 24 collector can restart, preventing long-running Hermes responses from tripping the dashboard chat stall timer after the initial stream-start event.
 - Verification: `node --check scripts/agent-telemetry-collector.mjs`; `pnpm exec eslint scripts/agent-telemetry-collector.mjs --max-warnings=999`; `git diff --check -- scripts/agent-telemetry-collector.mjs CHANGELOG.md`; restarted the local collector with `./scripts/install-telemetry-collector.sh`; `GET http://127.0.0.1:8787/health` returned `ok: true`; direct delayed collector `/chat` smoke emitted `: Hermes API stream still working` keepalive comments every 15 seconds before streaming `delayed ok`.
@@ -1555,7 +1796,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 13:54:40 WITA - Load Lottie Runtime With Chat UI
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Shared Lottie player, changelog
 - Summary: Import the dotLottie React player directly in the shared client Lottie component so chat and fleet bee animations do not wait on a late dynamic-import chunk before rendering.
 - Verification: `pnpm exec eslint src/components/ui/lottie-player.tsx src/features/chat/chat-composer.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/components/ui/lottie-player.tsx CHANGELOG.md`
@@ -1563,7 +1804,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 13:49:44 WITA - Repair Local Collector Chat URL Canonicalization
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Dashboard chat runtime route, changelog
 - Summary: Canonicalize Hermes collector chat URLs that point at this machine's own Tailnet/interface IP back to the loopback collector before dispatching, so persisted local Queen Bee profiles do not fail when the collector is bound to `127.0.0.1`.
 - Verification: `pnpm exec eslint src/app/api/chat/agent-runtime/route.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/app/api/chat/agent-runtime/route.ts CHANGELOG.md`; live `POST /api/chat/agent-runtime` using the stale Queen Bee `telemetryUrl: http://100.81.250.107:8787` no longer failed in 2 ms and telemetry showed dispatch to `http://127.0.0.1:8787/chat` with HTTP 200 and a first stream chunk.
@@ -1571,7 +1812,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 13:24:01 WITA - Flatten AEON Skill Category Browser
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Aeon Autopilot skills UI, changelog
 - Summary: Replace the multi-column category skill browser with one wider skill list, move categories into filter badges above the list, simplify the main source switch to only `AEON` and `Shared Brain`, and make the AEON tab show local AEON skill files even when they are not automated in `aeon.yml`.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/lib/services/runtime-adapters/aeon.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `POST /api/runtimes/aeon/skills` with the local AEON profile returned 156 skills sourced from `aeon-skill-folder`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/lib/services/runtime-adapters/aeon.ts CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl ASSIMILATION.json`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py`; Playwright smoke on `http://localhost:5020/?view=aeon` confirmed the `AEON` and `Shared Brain` switch, AEON local skill rows, Shared Brain automation actions, no console errors, and no horizontal overflow.
@@ -1579,7 +1820,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 13:04:22 WITA - Simplify AEON Skill Automation UI
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Aeon Autopilot skills UI, Scheduler AEON runtime creation path, AEON runtime status metadata, changelog
 - Summary: Replace the AEON Runtime versus Shared Brain split with one Skills list and simple automation states (`Available`, `AEON-ready`, `Manual`, `On duty`, `Paused`), rename conversion to `Automate with AEON`, and make Scheduler-created AEON automations write `aeon.yml` skill config instead of falling back to chat dispatch.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/hooks/use-scheduler-controller.tsx src/lib/services/runtime-adapters/aeon.ts --max-warnings=999` passed with existing scheduler warnings; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/hooks/use-scheduler-controller.tsx src/lib/services/runtime-adapters/aeon.ts CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl ASSIMILATION.json`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py`; Playwright smoke on `http://localhost:5020/?view=aeon` verified the unified skill filters, `Automate with AEON` modal, and no console errors or horizontal overflow; Playwright smoke on `http://localhost:5020/?view=scheduler` verified Scheduler renders with New and Import existing actions and no console errors or horizontal overflow; `POST /api/scheduler/import` with an AEON agent returned `ok: true` with the AEON schedule adapter listed.
@@ -1587,7 +1828,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 12:52:33 WITA - Compact Mobile Chat Suggestions
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Chat mobile suggestion badge CSS, mobile chat header, mobile route toggle, changelog
 - Summary: Make empty-chat suggestion badges more compact on mobile, keep them tucked just above the fixed chat composer, replace the full provider/model header string with a shorter mobile runtime label, shrink the chat history plus route menu controls, and replace the chat-history bubble with a centered sidebar/history icon in a quieter glass button.
 - Verification: `git diff --check -- src/app/chat.module.css src/app/globals.css src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; `pnpm exec eslint src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/DashboardApp.tsx --max-warnings=999` passed with existing warnings; in-app browser smoke on `http://localhost:5020/?view=chat` verified the mobile route toggle measures 32px with no horizontal overflow and the chat history icon is centered with a 0px x/y center delta.
@@ -1595,7 +1836,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 12:45:12 WITA - Add Shared Skill To AEON Conversion
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Aeon Autopilot shared skills UI, AEON skill runtime config flow, changelog
 - Summary: Add a per-shared-skill Convert to AEON action for skills not already in AEON, with a minimalist modal that explains the conversion, uses preset schedule/time/brief/model controls instead of freeform fields, mirrors the skill into AEON, writes the runtime `aeon.yml` config, and clarifies the difference between mirrored AEON skill files and configured runtime skills.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/AeonAutopilotPanel.tsx CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl ASSIMILATION.json`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py`; Playwright smoke on `http://localhost:5020/?view=aeon` opened the Shared Brain tab, found 180 Convert to AEON actions, opened the modal, confirmed schedule/model selectors render, and found no console errors or horizontal overflow.
@@ -1603,7 +1844,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 12:31:26 WITA - Separate Aeon Runtime From Shared Brain Skills
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Aeon runtime skill adapter, Aeon Autopilot skill browser labels, changelog
 - Summary: Make the AEON Runtime tab show only skills configured or runnable by AEON, keep mirrored Shared Brain shelf entries in the Shared Brain tab, and clarify unscheduled/runnable status copy.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/lib/services/runtime-adapters/aeon.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check`; Playwright smoke on `http://localhost:5020/?view=aeon` verified the AEON Runtime section no longer shows `ready to sync` or `Shared brain · off` for shared-brain shelf entries, with no console/page errors.
@@ -1611,7 +1852,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 12:14:50 WITA - Clarify Aeon Skill Tabs And Status
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Aeon Autopilot skill browser labels, shared skill grouping, changelog
 - Summary: Rename the confusing `All Skills` AEON tab to `Shared Brain`, limit that tab to shared-brain skills, and replace `Shared brain · off` style status text with clearer AEON runtime readiness language.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/skill-grouping.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check`; Playwright smoke on `http://localhost:5020/?view=aeon` verified `AEON Runtime` and `Shared Brain` tabs render, `All Skills` is gone, `Shared brain · off` no longer appears, and no console/page errors were emitted.
@@ -1619,7 +1860,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 11:54:28 WITA - Expand Aeon Operations Console
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Aeon Autopilot dashboard, runtime adapter APIs, shared skill inventory, environment variable guidance, changelog
 - Summary: Expand the Aeon surface into an operations console with reusable skill grouping across AEON and shared skills, skill detail controls, run logs, analytics, repo sync, memory browser, folder-based skill import, and missing-secret guidance tied to shared env.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx src/features/dashboard/views/UtilityPanels.tsx src/features/dashboard/skill-grouping.ts src/lib/services/runtime-adapters/aeon.ts 'src/app/api/runtimes/[runtime]/runs/logs/route.ts' 'src/app/api/runtimes/[runtime]/analytics/route.ts' 'src/app/api/runtimes/[runtime]/memory/route.ts' 'src/app/api/runtimes/[runtime]/secrets/status/route.ts' 'src/app/api/runtimes/[runtime]/repo/sync/route.ts' 'src/app/api/runtimes/[runtime]/skills/config/route.ts' --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check`; Playwright smoke on `http://localhost:5020/?view=aeon` verified Skills HQ, AEON/All Skills segmented control, Autonomy Health, Repo Sync, GitHub Actions keys, and Memory sections render with no console/page errors; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py`.
@@ -1627,7 +1868,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 11:24:50 WITA - Make Aeon Selectable In Add Agent
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Add Agent runtime selection, Aeon runtime profile defaults, dashboard agent controller, fleet modal CSS, changelog
 - Summary: Make Aeon selectable from Add Agent as a background Autopilot profile, replace provider/model selection with AEON-specific setup context, default the profile to Ops and `~/.aeon`, and route the user into the AEON Autopilot dashboard.
 - Verification: `pnpm exec eslint src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check`; Playwright smoke on `http://localhost:5020/?view=agents` verified the Add Agent modal enables the AEON tile, shows the Autopilot panel, hides provider/model controls, selects Ops, changes the CTA to `Connect Autopilot`, and closes into the AEON dashboard via `Open Autopilot` with no console errors.
@@ -1635,7 +1876,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 11:18:07 WITA - Add True Multi-Chat Streaming
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Dashboard chat stream controller, dashboard derived chat state, dashboard chat selection/session state, changelog, assimilation log
 - Summary: Track active chat streams by chat storage key so switching away no longer blocks sending in another chat, only the selected chat shows composer/loading busy state, background streams keep writing to their original transcript, and runtime session ids are stored per chat without overwriting the current selection.
 - Verification: `pnpm exec eslint src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx src/features/dashboard/hooks/use-status-chat-input-controller.tsx --max-warnings=999` passed with existing warnings; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; browser smoke on `http://localhost:5020/?view=chat` verified the chat view renders, the composer is enabled, and no console errors are reported; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py`; `git diff --check -- src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx src/features/dashboard/hooks/use-status-chat-input-controller.tsx CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl ASSIMILATION.json`
@@ -1643,7 +1884,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-30 01:44:05 WITA - Consolidate Fleet Header Masthead
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Dashboard header, Fleet view masthead behavior, Fleet dashboard embedding, global header CSS
 - Summary: Collapse the Fleet desktop masthead into one compact topbar row, give every dashboard view the same larger display treatment with a honey-colored final action word or chat agent name, remove the redundant center brain sync line from all headers, and move the date, scan status, and Hivemind Link status into the Fleet graph toolbar beside Live Constellation and the view controls.
 - Verification: `pnpm exec eslint src/features/dashboard/views/DashboardHeader.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx --max-warnings=999` passed with existing hook dependency warnings in `use-dashboard-derived-state.tsx`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/app/globals.css src/components/fleet/FleetView.tsx src/components/fleet/fleet-tokens.module.css src/features/dashboard/views/DashboardHeader.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/AgentsPanel.tsx CHANGELOG.md`; Playwright checks on `http://localhost:5020/` for Fleet, Work, Brain, Chat, Wallets, and More verified `.topbarSignal` is gone, each header phrase remains visible, the nav does not overlap the phrase, and there is no horizontal overflow.
@@ -2549,7 +2790,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-26 07:08:53 EDT - Clarify Dashboard Host Labels On Mobile
 
-- Status: Committed
+- Status: Pushed
 - Areas changed: Fleet machine identity helpers, dashboard derived machine labels, setup modal and machine-target copy, changelog
 - Summary: Keep `self` semantics as the dashboard host while making the visible local-machine label OS-aware for desktop (`This Mac`, `This PC`, or `This computer`) and mobile-aware for remote mobile viewing (`Dashboard Mac`, `Dashboard PC`, or `Dashboard computer`). Reuse the derived machine name in setup/directory target flows instead of hardcoded `This Mac` checks.
 - Verification: `npm exec --yes --package pnpm@8.6.12 -- pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md src/features/fleet/fleet-identity.ts src/features/dashboard/hooks/use-dashboard-derived-state.tsx src/features/dashboard/views/DashboardModals.tsx src/features/dashboard/hooks/use-chat-tree-controller.tsx src/features/dashboard/hooks/use-miroshark-brain-controller.tsx src/features/dashboard/hooks/use-status-chat-input-controller.tsx`; temporary dashboard on port 5021 kept `/api/fleet/discover` self collector ready at `http://127.0.0.1:8792`; browser smoke loaded the Fleet route without console errors.
@@ -2557,7 +2798,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-26 07:01:36 EDT - Read Persisted Collector Port In Fleet APIs
 
-- Status: Committed
+- Status: Pushed
 - Areas changed: Hivemind Link control helpers, Fleet discovery APIs, changelog
 - Summary: Make the dashboard's local Fleet discovery routes read `AGENT_TELEMETRY_PORT` from `~/.hivemindos/collector.env` when process env is missing, so `This Mac` checks the actual moved collector port instead of falling back to stale `127.0.0.1:8787` after Link setup chooses 8792/8793.
 - Verification: `npm exec --yes --package pnpm@8.6.12 -- pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md src/lib/services/hivemind-link-control.ts src/app/api/fleet/discover/route.ts src/app/api/tailscale/devices/route.ts`; temporary dashboard on port 5021 returned `/api/fleet/discover` with `This Mac` collector `ready` at `http://127.0.0.1:8792`; `/api/tailscale/devices` also returned self collector URL `http://127.0.0.1:8792`.
@@ -2565,7 +2806,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-26 06:50:12 EDT - Preserve Link Mode During Updates
 
-- Status: Committed
+- Status: Pushed
 - Areas changed: HivemindOS update command, changelog
 - Summary: Make the update command detect the current `com.hivemindos.linkd.agent` LaunchAgent label, while retaining legacy-label compatibility, so collector restarts stay in Hivemind Link mode after the port-conflict setup migration.
 - Verification: `bash -n scripts/install-telemetry-collector.sh setup.sh uninstall.sh scripts/update-hivemindos.sh`; `./scripts/update-hivemindos.sh --skip-pull --skip-install --skip-build --skip-collector --skip-dashboard`; `./scripts/update-hivemindos.sh --skip-pull --skip-install --skip-build --skip-dashboard`; live checks confirmed local collector health on `127.0.0.1:8792`, Hivemind Link `Running` on `127.0.0.1:8793/status`, and LaunchAgent `com.hivemindos.linkd.agent` registered.
@@ -2573,7 +2814,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-05-26 05:38 EDT - Avoid Link Control Port Conflicts
 
-- Status: Committed
+- Status: Pushed
 - Areas changed: Hivemind Link setup script, Link daemon control listener, Fleet discovery APIs, setup summary, uninstall mirror, changelog
 - Summary: Detect when the default local Link control port is occupied, move the control API to the nearest available localhost port, persist the chosen URL and private collector port for dashboard discovery, use a fresh working LaunchAgent label after the legacy label became stuck in macOS background-task registration, make Fleet discovery honor fallback local collector ports, and make the Link daemon fail fast if its control listener cannot bind.
 - Verification: `bash -n scripts/install-telemetry-collector.sh setup.sh uninstall.sh`; `go test ./cmd/hivemind-linkd`; `./scripts/build-hivemind-linkd.sh`; `pnpm exec tsc --noEmit --pretty false`; `git diff --check -- scripts/install-telemetry-collector.sh setup.sh uninstall.sh cmd/hivemind-linkd/main.go src/app/api/fleet/discover/route.ts src/app/api/tailscale/devices/route.ts CHANGELOG.md`; `./setup.sh --non-interactive --skip-deps --skip-dashboard`; live checks confirmed `com.hivemindos.linkd.agent` is registered/running under launchd, nearest-available scanning chose distinct collector/control ports, Link `/health` returns the service marker, `/status` reports `Running`, `.env.local` persists the chosen `HIVE_LINK_CONTROL_URL` and `AGENT_TELEMETRY_PORT`, and `/api/fleet/discover` reports `This Mac` ready at the chosen local collector port.

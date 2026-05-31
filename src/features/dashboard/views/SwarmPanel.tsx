@@ -1,12 +1,11 @@
 "use client";
 
-/* eslint-disable react-hooks/immutability, react-hooks/purity */
-
 import type { Dispatch, ElementType, SetStateAction } from "react";
 import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
 import type { MiroSharkAnalysisMode } from "@/lib/services/miroshark/run-intelligence";
 import type { SwarmAgent, SwarmDecision, SwarmMarket, SwarmRun, SwarmSocialPost, SwarmTemplate, SwarmTemplateField, TemplateId } from "@/components/swarm/swarm-data";
 import type { DashboardView, MiroSharkRunResult } from "@/features/dashboard/dashboard-types";
+import { WorkSectionHeader } from "./WorkSectionHeader";
 
 type RuntimeModelSelection = {
   provider: string;
@@ -48,6 +47,7 @@ type SwarmPanelProps = {
   runtimeModelSelectionsByRuntime: Partial<Record<AgentRuntime, RuntimeModelSelection>>;
   selectedAgent: AgentProfile | null;
   selectedSwarmRunId: string;
+  setActiveView: Dispatch<SetStateAction<DashboardView>>;
   setMirosharkAnalysisAgentId: Dispatch<SetStateAction<string>>;
   setMirosharkPlatform: Dispatch<SetStateAction<MiroSharkRunResult["platform"]>>;
   setMirosharkRounds: Dispatch<SetStateAction<number>>;
@@ -64,10 +64,27 @@ type SwarmPanelProps = {
 };
 
 export function SwarmPanel(props: SwarmPanelProps) {
-  const { SwarmView, activeView, allMirosharkTemplates, analyzeMirosharkRun, applyMirosharkTemplate, currentSwarmRun, displayAgents, launchMirosharkSwarm, loadMirosharkArchivedRun, mirosharkAnalysisAgentId, mirosharkAnalysisPending, mirosharkAnalysisResult, mirosharkAnalysisStatus, mirosharkArchiveLoading, mirosharkArchiveStatus, mirosharkExperimentPending, mirosharkExperimentStatus, mirosharkHelperPending, mirosharkHelperStatus, mirosharkMissingTemplateFields, mirosharkPlatform, mirosharkProgressLabel, mirosharkRounds, mirosharkRunPending, mirosharkScenario, mirosharkSelectedTemplate, mirosharkSelectedTemplateFields, mirosharkTemplateInputs, runMirosharkExperiment, runMirosharkScenarioHelper, runtimeModelSelectionsByRuntime, selectedAgent, selectedSwarmRunId, setMirosharkAnalysisAgentId, setMirosharkPlatform, setMirosharkRounds, setMirosharkScenario, startNewMirosharkSimulation, swarmAgents, swarmDecisions, swarmMarket, swarmRuns, swarmSocialPosts, swarmStatusLabel, swarmTemplates, updateMirosharkTemplateInput } = props;
+  const { SwarmView, activeView, allMirosharkTemplates, analyzeMirosharkRun, applyMirosharkTemplate, currentSwarmRun, displayAgents, launchMirosharkSwarm, loadMirosharkArchivedRun, mirosharkAnalysisAgentId, mirosharkAnalysisPending, mirosharkAnalysisResult, mirosharkAnalysisStatus, mirosharkArchiveLoading, mirosharkArchiveStatus, mirosharkExperimentPending, mirosharkExperimentStatus, mirosharkHelperPending, mirosharkHelperStatus, mirosharkMissingTemplateFields, mirosharkPlatform, mirosharkProgressLabel, mirosharkRounds, mirosharkRunPending, mirosharkScenario, mirosharkSelectedTemplate, mirosharkSelectedTemplateFields, mirosharkTemplateInputs, runMirosharkExperiment, runMirosharkScenarioHelper, runtimeModelSelectionsByRuntime, selectedAgent, selectedSwarmRunId, setActiveView, setMirosharkAnalysisAgentId, setMirosharkPlatform, setMirosharkRounds, setMirosharkScenario, startNewMirosharkSimulation, swarmAgents, swarmDecisions, swarmMarket, swarmRuns, swarmSocialPosts, swarmStatusLabel, swarmTemplates, updateMirosharkTemplateInput } = props;
+  const selectedRun = swarmRuns.find((run) => run.id === selectedSwarmRunId) ?? currentSwarmRun ?? swarmRuns[0];
   return (<>
       {activeView === "swarm" ? (
-      <section className="h-full min-h-0 overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[rgba(5,8,13,0.72)]">
+      <section
+        className="grid min-h-0 overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[rgba(5,8,13,0.72)]"
+        style={{ height: "100%", gridTemplateRows: "auto minmax(0, 1fr)" }}
+      >
+        <WorkSectionHeader
+          activeView="swarm"
+          onSelect={setActiveView}
+          title="Simulation"
+          subtitle={mirosharkRunPending ? mirosharkProgressLabel || "MiroShark running" : swarmStatusLabel || "MiroShark theater"}
+          stats={[
+            { value: swarmRuns.filter((run) => run.state === "live").length, label: "live", tone: "cyan" },
+            { value: swarmAgents.length, label: "agents", tone: "honey" },
+            { value: selectedRun?.posts ?? 0, label: "posts" },
+            { value: selectedRun?.trades ?? 0, label: "events" },
+          ]}
+        />
+        <div className="min-h-0 overflow-hidden">
         <SwarmView
           runs={swarmRuns}
           agents={swarmAgents}
@@ -122,6 +139,7 @@ export function SwarmPanel(props: SwarmPanelProps) {
           onAnalysisAgentChange={setMirosharkAnalysisAgentId}
           onAnalyzeRun={(run: SwarmRun, mode: MiroSharkAnalysisMode) => void analyzeMirosharkRun(run, mode)}
         />
+        </div>
       </section>
       ) : null}
 

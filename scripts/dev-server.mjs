@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 const args = process.argv.slice(2);
 const nextArgs = [];
 let port = process.env.PORT || "5020";
+let hostname = process.env.HIVEMINDOS_DASHBOARD_HOST || "127.0.0.1";
 const rawBundler = (process.env.HIVEMINDOS_NEXT_DEV_BUNDLER || process.env.NEXT_DEV_BUNDLER || "webpack").trim().toLowerCase();
 
 for (let i = 0; i < args.length; i += 1) {
@@ -22,6 +23,17 @@ for (let i = 0; i < args.length; i += 1) {
 
   if (/^-p\d+$/.test(arg)) {
     port = arg.slice(2);
+    continue;
+  }
+
+  if ((arg === "-H" || arg === "--hostname") && args[i + 1]) {
+    hostname = args[i + 1];
+    i += 1;
+    continue;
+  }
+
+  if (arg.startsWith("--hostname=")) {
+    hostname = arg.slice("--hostname=".length);
     continue;
   }
 
@@ -61,6 +73,8 @@ const commandArgs = [
   ...sourceMapArgs,
   "-p",
   port,
+  "-H",
+  hostname,
   ...nextArgs,
 ];
 

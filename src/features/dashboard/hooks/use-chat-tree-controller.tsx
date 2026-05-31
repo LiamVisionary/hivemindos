@@ -5,6 +5,8 @@
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
 import { useCallback, useEffect, useMemo } from "react";
+import { createNativeLocalFolder } from "@/lib/native/filesystem";
+import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 
 function isAutomationHydratedTranscript(messages: Array<{ content?: string }> = []) {
   const transcript = messages.slice(0, 8).map((message) => message.content ?? "").join("\n");
@@ -30,17 +32,19 @@ export function useChatTreeController(props: any) {
   const { RUNTIME_CAPABILITIES, RUNTIME_DEFAULTS, RUNTIME_KINDS, RUNTIME_LABELS, activeView, agentWorkById, chatCustomFolders, chatDedupeKey, chatFolderDraft, chatMessageStorageKey, chatMessageWindow, chatPreviewDedupeKey, chatSeedMessagesForTask, chooseDirectoryForMachine, createChatLeafKey, displayAgents, findRosterChatTask, runtimeSessionIdFromTask, isChatSidebarTask, isManualAgentChatMessage, logClientTelemetry, machineGroups, messagesByAgent, parentPathFromPath, preferChatTreeItem, recordRecentDirectory, runtimeCan, runtimeSessionForChat, selectedAgent, selectedChatDirectoryPath, selectedChatLeafKey, setActiveView, setChatCustomFolders, setChatFolderDraft, setChatMessageWindow, setMessagesByAgent, setSelectedAgentId, setSelectedChatDirectoryPath, setSelectedChatLeafKey, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setSetupCommandCopied, setSetupMachineKey, setupCollectorCommand, setStatus, setStatusAgentId, taskChatLeafKey, updateAgent, workPriority, workspaceLabelFromPath } = props;
   function switchRuntime(runtime: AgentRuntime) {
     const defaults = RUNTIME_DEFAULTS[runtime];
+    const runtimeSettings = runtimeSettingsFeature(runtime);
+    const autopilotRuntime = runtimeSettings.kind === "autopilot";
     updateAgent({
       runtime,
       gatewayUrl: defaults.gatewayUrl,
       chatPath: defaults.chatPath,
       statusPath: defaults.statusPath,
-      agentId: runtime === "openclaw" ? "main" : selectedAgent?.agentId ?? "",
+      agentId: runtimeSettings.defaultAgentId || selectedAgent?.agentId || "",
       runtimeKind: RUNTIME_KINDS[runtime],
       runtimeCapabilities: RUNTIME_CAPABILITIES[runtime],
-      a2aUrl: runtime === "aeon" ? defaults.gatewayUrl : undefined,
-      aeonBranch: runtime === "aeon" ? "main" : undefined,
-      aeonMode: runtime === "aeon" ? "github" : undefined,
+      a2aUrl: autopilotRuntime ? defaults.gatewayUrl : undefined,
+      aeonBranch: autopilotRuntime ? "main" : undefined,
+      aeonMode: autopilotRuntime ? "github" : undefined,
     });
   }
 
@@ -361,6 +365,29 @@ export function useChatTreeController(props: any) {
       return;
     }
     setChatFolderDraft((current) => ({ ...current, busy: true, error: "" }));
+    const nativeData = await createNativeLocalFolder({ parentPath, name });
+    if (nativeData?.ok && nativeData.path) {
+      const label = nativeData.label || workspaceLabelFromPath(nativeData.path);
+      const nextFolder: ChatCustomFolder = {
+        id: `${machine.key}-${Date.now()}`,
+        machineKey: machine.key,
+        label,
+        path: nativeData.path,
+        agentId: agent.id,
+        createdAt: Date.now(),
+      };
+      setChatCustomFolders((current) => [
+        nextFolder,
+        ...current.filter((folder) => !(folder.machineKey === nextFolder.machineKey && folder.path === nextFolder.path)),
+      ]);
+      closeChatFolderCreator();
+      startAgentChat(agent.id, {
+        fresh: true,
+        workingDirectoryPath: nativeData.path,
+        workingDirectoryLabel: label,
+      });
+      return;
+    }
     const response = await fetch("/api/chat/folders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

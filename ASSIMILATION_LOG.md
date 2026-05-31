@@ -3111,3 +3111,839 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - public GitHub searches
   - Decision: rejected
   - Reason: two searches returned zero relevant public candidates and unrelated mobile/template repos
+## 2026-05-31T17:24:30.410237+00:00 - local-search
+
+- Request: Tauri Next.js desktop app static frontend native command bridge reduce bundled Node runtime
+- Source: local-index
+- Query: `Tauri Next.js desktop app static frontend native command bridge reduce bundled Node runtime`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=7.53 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+2. score=7.09 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+3. score=7.09 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+4. score=6.85 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+5. score=4.04 LiamVisionary/exercise-db [repo-summary]
+   url: https://github.com/LiamVisionary/exercise-db
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
+6. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
+   url: https://github.com/LiamVisionary/ami-ai-companion-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   LiamVisionary/ami-ai-companion-app TypeScript
+7. score=0.44 LiamVisionary/inworld-nodejs-generate-token [repo-summary]
+   url: https://github.com/LiamVisionary/inworld-nodejs-generate-token
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-inworld-nodejs-generate-token.md
+   LiamVisionary/inworld-nodejs-generate-token TypeScript
+8. score=0.44 LiamVisionary/language-learning-app [repo-summary]
+   url: https://github.com/LiamVisionary/language-learning-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   LiamVisionary/language-learning-app TypeScript
+
+## 2026-05-31T17:24:33.888065+00:00 - prebuild-gate
+
+- Request: Tauri Next.js desktop app static frontend native command bridge reduce bundled Node runtime
+- Source: public-github
+- Query: `Tauri Next.js desktop app static frontend native command bridge reduce bundled Node runtime`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-05-31T17:27:12.215302+00:00 - implementation-planning
+
+- Request: Tauri native architecture optimization for HivemindOS Next.js app
+- Source: public-github
+- Query: `Tauri React static frontend invoke commands no backend server; Next.js Tauri desktop app static export tauri commands`
+- Decision: no direct code reuse
+- Reason: Candidate local-dev-studio demonstrates a Tauri invoke API facade, but its Rust command surface is a project-manager app and not reusable for HivemindOS Next API migration. Kept the pattern only: typed invoke wrapper with browser fallback.
+
+### Candidates
+- bftehno-prog/local-dev-studio
+  - Decision: pattern-only
+  - Reason: Tauri invoke facade useful as architecture reference, Windows/local-project domain code not copied
+  - Path: `src/lib/api.ts`
+- sanusanth/c-basic-programs
+  - Decision: rejected
+  - Reason: irrelevant C examples
+- maxaeon/ecommerce
+  - Decision: rejected
+  - Reason: irrelevant ecommerce app
+## 2026-05-31T17:37:54.239503+00:00 - triage
+
+- Request: Integrate kytmanov/synto as a HivemindOS shared-vault brain service
+- Source: user-pinned
+- Selected backbone: /tmp/synto-inspect
+
+### Candidates
+- /tmp/synto-inspect
+  - Decision: selected
+  - Reason: user-pinned Synto CLI and MCP source of truth
+  - Path: `README.md,src/synto/cli.py,src/synto/serve.py,src/synto/config.py`
+## 2026-05-31T17:38:09.121939+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /tmp/synto-inspect:src/synto/cli.py => src/lib/services/brain/synto.ts, /tmp/synto-inspect:src/synto/serve.py => src/lib/services/brain/synto.ts, /tmp/synto-inspect:src/synto/config.py => src/lib/services/brain/synto.ts, /tmp/synto-inspect:README.md => docs/features/brain-vault-and-skills.md
+- Verification: Wrote ASSIMILATION.json with 4 entries and custom_code_assessment=balanced.
+## 2026-05-31T17:46:19.539537+00:00 - local-search
+
+- Request: React app detail API service endpoint route catalog OpenAPI display
+- Source: local-index
+- Query: `React app detail API service endpoint route catalog OpenAPI display`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=8.64 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+2. score=7.17 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+3. score=6.56 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+4. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+5. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
+   url: https://github.com/LiamVisionary/ami-ai-companion-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   LiamVisionary/ami-ai-companion-app TypeScript
+6. score=0.44 LiamVisionary/chatterbox-tts-api-modal-deployed [repo-summary]
+   url: https://github.com/LiamVisionary/chatterbox-tts-api-modal-deployed
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
+   LiamVisionary/chatterbox-tts-api-modal-deployed Python Python
+7. score=0.44 LiamVisionary/language-learning-app [repo-summary]
+   url: https://github.com/LiamVisionary/language-learning-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   LiamVisionary/language-learning-app TypeScript
+
+## 2026-05-31T17:46:23.746629+00:00 - prebuild-gate
+
+- Request: React app detail API service endpoint route catalog OpenAPI display
+- Source: public-github
+- Query: `React app detail API service endpoint route catalog OpenAPI display`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-05-31T17:47:09.301667+00:00 - triage
+
+- Request: Show API route catalogs for hivenet API services in My Apps
+- Source: local-and-public-search
+
+### Candidates
+- hivemind-os Fleet apps API and MyAppsPanel
+  - Decision: selected
+  - Reason: existing local app discovery/detail UI is the correct implementation surface
+  - Path: `src/app/api/fleet/apps/route.ts,src/features/dashboard/views/MyAppsPanel.tsx`
+- Sfedfcv/redesigned-pancake
+  - Decision: rejected
+  - Reason: unrelated GitHub docs content, no reusable API route catalog UI
+- ridabensalem/react-capstone-
+  - Decision: rejected
+  - Reason: generic list/detail demo with no service endpoint catalog logic
+- Kaiserabbas/crypto-currencies
+  - Decision: rejected
+  - Reason: generic API-backed React app, no compatible hivenet service catalog code
+## 2026-05-31T17:51:15.019849+00:00 - implementation
+
+- Request: Migrate filesystem-heavy Next routes to Tauri native commands with browser fallbacks
+- Source: public-github
+- Selected backbone: bftehno-prog/local-dev-studio
+- Assimilated: bftehno-prog/local-dev-studio:src-tauri/src/security/validation.rs validate_project_path => src-tauri/src/lib.rs resolve_existing_directory/clean_folder_name, adapted path validation boundaries for local folder browsing
+- Not assimilated: Project database, process manager, editor read/write commands, and Windows project-launch code were not reused because this pass only needs local directory/folder primitives.
+- Verification: cargo check, eslint, tsc, and tauri build to follow
+## 2026-05-31T17:56:29.989250+00:00 - local-search
+
+- Request: Improve HivemindOS UsePod provider UX with readiness card model discovery balance funding spend presets inline test wallet runtime labels provider hosting wizard
+- Source: local-index
+- Query: `Improve HivemindOS UsePod provider UX with readiness card model discovery balance funding spend presets inline test wallet runtime labels provider hosting wizard`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=4.04 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+2. score=3.35 LiamVisionary/exercise-db [repo-summary]
+   url: https://github.com/LiamVisionary/exercise-db
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
+3. score=3.35 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+4. score=3.35 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+5. score=0.44 LiamVisionary/character-model-maker [repo-summary]
+   url: https://github.com/LiamVisionary/character-model-maker
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-character-model-maker.md
+   LiamVisionary/character-model-maker HTML
+6. score=0.44 LiamVisionary/fantom-survivor-testnet [repo-summary]
+   url: https://github.com/LiamVisionary/fantom-survivor-testnet
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-fantom-survivor-testnet.md
+   LiamVisionary/fantom-survivor-testnet
+7. score=0.35 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+
+## 2026-05-31T17:56:37.990599+00:00 - public-search
+
+- Request: Improve HivemindOS UsePod provider UX with readiness card model discovery balance funding spend presets inline test wallet runtime labels provider hosting wizard
+- Source: public-github
+- Query: `Improve HivemindOS UsePod provider UX with readiness card model discovery balance funding spend presets inline test wallet runtime labels provider hosting wizard`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T17:56:38.536295+00:00 - prebuild-gate
+
+- Request: Improve HivemindOS UsePod provider UX with readiness card model discovery balance funding spend presets inline test wallet runtime labels provider hosting wizard
+- Source: public-github
+- Query: `Improve HivemindOS UsePod provider UX with readiness card model discovery balance funding spend presets inline test wallet runtime labels provider hosting wizard`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
+cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+
+## 2026-05-31T17:56:58.263349+00:00 - public-search
+
+- Request: react ai provider setup wizard model selector status card
+- Source: public-github
+- Query: `react ai provider setup wizard model selector status card`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T17:56:58.676711+00:00 - public-search
+
+- Request: openai compatible models dropdown react settings provider
+- Source: public-github
+- Query: `openai compatible models dropdown react settings provider`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T17:58:37.846981+00:00 - triage
+
+- Request: Improve HivemindOS UsePod provider UX with readiness card model discovery balance funding spend presets inline test wallet runtime labels provider hosting wizard
+- Source: mixed
+- Selected backbone: tashfeenahmed/freellmapi
+- Verification: Initial exact UsePod UX search returned 0 candidates; broadened searches found no reusable provider UX donor, so reuse stays with audited OpenAI-compatible and UsePod-agent paths plus local HivemindOS component patterns.
+
+### Candidates
+- tashfeenahmed/freellmapi
+  - Decision: selected
+  - Reason: Still the best concrete OpenAI-compatible donor for status/model-list request handling
+  - Path: `server/src/providers/openai-compat.ts`
+- Sortis-AI/usepod-agent
+  - Decision: selected_donor
+  - Reason: Pinned UsePod provider-hosting source for gated Earn with UsePod safety checklist and host-mode copy
+  - Path: `agent.example.toml,install/README.md,src/config.rs,src/discovery.rs`
+- johnpolacek/nextjs-scraper-playground
+  - Decision: rejected
+  - Reason: Generic API-route scraper example; not compatible with provider readiness/model selection UX
+- antoniolofiego/Batteries-Included-Next.js
+  - Decision: rejected
+  - Reason: Boilerplate/testing template, no extractable UsePod or provider settings component
+- shahradelahi/next-test-api-routes
+  - Decision: rejected
+  - Reason: Testing helper library only; not useful for product UX implementation
+## 2026-05-31T18:08:13.826640+00:00 - local-search
+
+- Request: Improve React dashboard UX for service health cards collapsible advanced actions command output panels
+- Source: local-index
+- Query: `Improve React dashboard UX for service health cards collapsible advanced actions command output panels`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=12.76 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+2. score=6.56 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+3. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+4. score=4.04 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+5. score=3.64 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+6. score=3.48 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+
+## 2026-05-31T18:08:17.874362+00:00 - prebuild-gate
+
+- Request: Improve React dashboard UX for service health cards collapsible advanced actions command output panels
+- Source: public-github
+- Query: `Improve React dashboard UX for service health cards collapsible advanced actions command output panels`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-05-31T18:08:31.643325+00:00 - rejection
+
+- Request: Improve Brain Services UX
+- Source: public-github
+
+### Candidates
+- chrisneagu/FTC-Skystone-Dark-Angels-Romania-2020
+  - Decision: rejected
+  - Reason: robotics Java SDK, not a React dashboard and no extractable UI paths
+- Sfedfcv/redesigned-pancake
+  - Decision: rejected
+  - Reason: GitHub docs mirror/no coherent React dashboard component source for this task
+- klonnet23/helloy-word
+  - Decision: rejected
+  - Reason: release-note mirror, not dashboard source
+## 2026-05-31T18:12:26.990418+00:00 - assimilation-manifest
+
+- Request: Improve HivemindOS UsePod provider UX with readiness card model discovery balance funding spend presets inline test wallet runtime labels provider hosting wizard
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: tashfeenahmed/freellmapi:server/src/providers/openai-compat.ts => src/lib/services/usepod.ts; tashfeenahmed/freellmapi:server/src/__tests__/providers/openai-compat.test.ts => src/app/api/usepod/status/route.ts; Sortis-AI/usepod-agent:agent.example.toml => src/features/dashboard/views/chat/AgentSettingsModal.tsx; Sortis-AI/usepod-agent:install/README.md => docs/integrations/usepod.md
+- Verification: Updated ASSIMILATION.json with UsePod UX readiness/status and provider-hosting checklist entries.
+## 2026-05-31T18:16:20.688260+00:00 - implementation
+
+- Request: Continue Tauri native migration for local desktop actions
+- Source: local-code
+- Assimilated: src/app/api/kanban/deliverable/route.ts=>src-tauri/src/lib.rs::translated_code::translated open/reveal deliverable behavior from the browser fallback route into a Tauri command while preserving the route
+- Verification: cargo check and targeted eslint passed; tsc result captured separately
+## 2026-05-31T18:17:58.306922+00:00 - implementation
+
+- Request: Upgrade Brain Services UX
+- Source: public-github
+- Selected backbone: radix-ui/primitives
+
+### Candidates
+- radix-ui/primitives
+  - Decision: selected
+  - Reason: audited collapsible source provided the accessible trigger/content disclosure model translated into native details for BrainModule advanced actions/settings/results
+  - Path: `packages/react/collapsible/src/collapsible.tsx`
+- shadcn-ui/ui
+  - Decision: rejected
+  - Reason: candidate clone timed out and a full design-system import would be too large for this surgical dashboard UX change
+- Anubisseth/hive-command
+  - Decision: rejected
+  - Reason: directionally related agent dashboard but zero-star/no license signal and no needed component path selected
+## 2026-05-31T18:18:26.599585+00:00 - implementation
+
+- Request: Make UsePod discoverable from Add Agent when Local OpenAI is unavailable
+- Source: local-code
+- Selected backbone: hivemind-os
+- Assimilated: Local AgentSettingsModal runtime/provider card patterns => src/features/dashboard/views/chat/AgentSettingsModal.tsx
+- Not assimilated: No new public donor needed; this is a small UX bug fix on the already-assimilated UsePod integration.
+- Verification: Pending tsc/eslint/browser smoke.
+## 2026-05-31T18:27:52.990176+00:00 - reuse
+
+- Request: Continue Tauri phase 2 native migration for AEON deliverables
+- Source: local codebase
+- Query: `src/app/api/runtimes/aeon/deliverables/route.ts and existing AEON panel deliverable actions`
+- Decision: reuse existing browser route contract as Tauri command shape
+- Reason: Kept browser and remote HTTP fallback intact while moving local list/download/send work into native commands.
+- Assimilated: Reused AEON panel deliverableTarget/open/download/send control flow with native-first fallback.
+- Not assimilated: Did not replace remote HTTP deliverable download/send behavior; those stay on the Next route.
+- Verification: cargo check --manifest-path src-tauri/Cargo.toml; pnpm exec eslint src/lib/native/aeon-deliverables.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999; pnpm exec tsc --noEmit --pretty false --skipLibCheck; verify_assimilation_manifest.py; git diff --check
+## 2026-05-31T18:30:41.824565+00:00 - reuse
+
+- Request: Continue Tauri phase 2 native migration for AEON outputs
+- Source: local codebase
+- Query: `src/lib/services/runtime-adapters/aeon.ts listOutputs and generic /api/runtimes/[runtime]/outputs route`
+- Decision: reuse existing AEON output adapter contract as Tauri command shape
+- Reason: The adapter output listing is local filesystem work, so desktop can invoke it natively while browser builds keep the generic route.
+- Assimilated: Preserved /api/runtimes/aeon/outputs fallback in the dashboard refresh flow.
+- Not assimilated: Did not migrate remote/nonlocal runtime output providers; those remain on the generic runtime route.
+- Verification: cargo check --manifest-path src-tauri/Cargo.toml; pnpm exec eslint src/lib/native/aeon-outputs.ts src/lib/native/aeon-deliverables.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999; pnpm exec tsc --noEmit --pretty false --skipLibCheck
+## 2026-05-31T18:34:51.847428+00:00 - implementation
+
+- Request: Simplify Brain Services with segmented card navigation
+- Source: public-github
+- Selected backbone: /Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives
+
+### Candidates
+- radix-ui/primitives
+  - Decision: selected
+  - Reason: audited accessible Tabs trigger/content structure for segmented Brain Services navigation
+  - Path: `packages/react/tabs/src/tabs.tsx`
+## 2026-05-31T18:35:23.682073+00:00 - reuse
+
+- Request: Continue Tauri phase 2 native migration for AEON schedules
+- Source: local codebase
+- Query: `src/lib/services/runtime-adapters/aeon.ts schedulesFromConfig and /api/runtimes/aeon/schedules`
+- Decision: reuse existing AEON schedule response contract as Tauri command shape
+- Reason: Schedules are derived from local aeon.yml, so desktop can read them natively without changing browser behavior.
+- Assimilated: Translated schedulesFromConfig fields into list_aeon_schedules: id, runtime, agentId, schedule, every, message, enabled, source, metadata.
+- Not assimilated: Did not migrate schedule mutation/run-now actions; those still use the Next route because they can dispatch work and push GitHub sync.
+- Verification: cargo check --manifest-path src-tauri/Cargo.toml; pnpm exec eslint src/lib/native/aeon-schedules.ts src/lib/native/aeon-outputs.ts src/lib/native/aeon-deliverables.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999; pnpm exec tsc --noEmit --pretty false --skipLibCheck
+## 2026-05-31T18:37:24.122252+00:00 - reuse
+
+- Request: Continue Tauri phase 2 native migration for AEON memory
+- Source: local codebase
+- Query: `src/lib/services/runtime-adapters/aeon.ts getMemory/listMemoryFiles and /api/runtimes/aeon/memory`
+- Decision: reuse existing AEON memory snapshot response contract as Tauri command shape
+- Reason: AEON memory is local filesystem state under the repo, so desktop can read it natively while browser builds keep the generic route.
+- Assimilated: Translated getMemory/listMemoryFiles fields into get_aeon_memory: root, index, topics, logs, issues, slug, title, excerpt, path, updatedAt.
+- Not assimilated: Did not migrate secret status, analytics, or GitHub run history because those depend on shared env, gh CLI, or network checks.
+- Verification: cargo check --manifest-path src-tauri/Cargo.toml; pnpm exec eslint src/lib/native/aeon-memory.ts src/lib/native/aeon-schedules.ts src/lib/native/aeon-outputs.ts src/lib/native/aeon-deliverables.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999; pnpm exec tsc --noEmit --pretty false --skipLibCheck
+## 2026-05-31T18:51:22.764713+00:00 - reuse
+
+- Request: Continue Tauri phase 2 native migration for local AEON workspace preparation
+- Source: local codebase
+- Query: `src/app/api/runtimes/aeon/workspaces/route.ts ensureAeonWorkspace and agentForWorkspace`
+- Decision: reuse existing local workspace initialization/link contract as Tauri command shape
+- Reason: Local initialize/link are filesystem-only and can run in the desktop shell; clone, remote, rename, and delete stay on the Next route for network/destructive behavior.
+- Assimilated: Translated agentForWorkspace profile fields into the native workspace response consumed by the AEON panel.
+- Not assimilated: Did not migrate clone, cache refresh, remote Tailscale workspace, rename, duplicate, delete, repo sync, or Obsidian mirror start.
+- Verification: cargo check --manifest-path src-tauri/Cargo.toml; pnpm exec eslint src/lib/native/aeon-workspaces.ts src/lib/native/aeon-memory.ts src/lib/native/aeon-schedules.ts src/lib/native/aeon-outputs.ts src/lib/native/aeon-deliverables.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999; pnpm exec tsc --noEmit --pretty false --skipLibCheck
+## 2026-05-31T18:52:45.968673+00:00 - implementation
+
+- Request: Improve Brain Services UX with vertical cards, enable toggles, and conditional tabs
+- Source: public-github
+- Selected backbone: /Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives
+
+### Candidates
+- radix-ui/primitives
+  - Decision: continued
+  - Reason: conditional segmented tab behavior keeps the Radix tablist/tabpanel accessibility contract while simplifying optional module visibility
+  - Path: `packages/react/tabs/src/tabs.tsx`
+## 2026-05-31T19:21:51.132514+00:00 - reuse
+
+- Request: Move remaining safe AEON git and run surfaces to Tauri native path
+- Source: local codebase
+- Query: `src/lib/services/runtime-adapters/aeon.ts repoSyncStatus repoSyncAction listRuns getRunLog`
+- Decision: reuse existing git and gh command semantics as Tauri command shape
+- Reason: AEON repo sync and run/log reads already shell out to local git/gh; Tauri can own those desktop process calls while browser mode keeps the Next route.
+- Assimilated: Translated listRuns/getRunLog into list_aeon_runs and get_aeon_run_log with the existing RuntimeRun/RuntimeRunLog fields.
+- Not assimilated: Did not migrate GitHub repo creation, secrets/env sync, Obsidian mirror lifecycle, analytics, or remote/Tailscale workspace actions.
+- Verification: cargo check --manifest-path src-tauri/Cargo.toml; pnpm exec eslint src/lib/native/aeon-git.ts src/lib/native/aeon-workspaces.ts src/lib/native/aeon-memory.ts src/lib/native/aeon-schedules.ts src/lib/native/aeon-outputs.ts src/lib/native/aeon-deliverables.ts src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999; pnpm exec tsc --noEmit --pretty false --skipLibCheck
+## 2026-05-31T19:36:56.797441+00:00 - reuse
+
+- Request: Move read-only Obsidian brain skill inventory to Tauri native path
+- Source: local codebase
+- Query: `src/lib/services/obsidian/brain-skills.ts getBrainSkillInventory getSharedBrainSkills readSharedSkills findSkillFiles skillSummary`
+- Decision: translate read-only shared/local brain skill inventory into Tauri command
+- Reason: Shared Obsidian skills and local runtime skill providers are local filesystem scans/checksums, so Tauri can remove the HTTP/Next route hop in desktop builds while preserving Next mutation and remote-provider routes.
+- Assimilated: Added src/lib/native/brain-skills.ts and wired dashboard refresh + AEON shared-skill ready check to use native first.
+- Not assimilated: Did not migrate imports, GitHub skill install, remote provider collection, auto-sync, reconcile, or write-skill mutations.
+- Verification: cargo check --manifest-path src-tauri/Cargo.toml; pnpm exec eslint src/lib/native/brain-skills.ts src/features/dashboard/hooks/use-miroshark-brain-controller.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=999; pnpm exec tsc --noEmit --pretty false --skipLibCheck
+## 2026-05-31T19:43:26.600000+00:00 - reuse
+
+- Request: Move read-only shared env reads to Tauri native path
+- Source: local codebase
+- Query: `src/app/api/env/route.ts GET readEnvSource readBackupStatus`
+- Decision: translate read-only hive-env-add export/backup status contract into Tauri command
+- Reason: Shared env and runtime env source reads already shell out to local scripts, so desktop can avoid the Next route while browser mode and all mutations stay on the existing API.
+- Assimilated: Added src/lib/native/hive-env.ts and wired dashboard refresh to try hive_env_read before falling back to /api/env.
+- Not assimilated: Did not migrate shared env saves, runtime env saves, import, restore, secret generation, or machine sync because those mutate secrets and should keep the existing audited route path for now.
+- Verification: cargo check --manifest-path src-tauri/Cargo.toml; pnpm exec eslint src/lib/native/hive-env.ts src/features/dashboard/DashboardApp.tsx --max-warnings=999; pnpm exec tsc --noEmit --pretty false --skipLibCheck
+## 2026-05-31T19:52:19.600000+00:00 - reuse
+
+- Request: Speed up Shared Env view reads after native migration
+- Source: local codebase
+- Query: `scripts/hive-env-add parse_env_file shared_env_values export_backup_status and AEON fastSecretStatus`
+- Decision: translate read-only env parsing directly into the Tauri command and use the existing fast AEON secret-status mode from the Env panel
+- Reason: The previous desktop path still spawned Python multiple times and the Env panel also triggered a heavier AEON secret-status read; direct filesystem reads plus fast local secret status remove avoidable process and GitHub/vault work.
+- Assimilated: Ported the hive-env-add read-only source mapping for shared, OpenClaw, Hermes, AEON, local-only-key filtering, backup path/status, and env-file parsing into src-tauri/src/env.rs.
+- Not assimilated: Did not migrate env writes/import/restore/sync or full AEON GitHub secret inventory because those mutation/network paths remain on existing routes.
+- Verification: cargo check --manifest-path src-tauri/Cargo.toml; pnpm exec eslint src/features/dashboard/hooks/use-dashboard-polling-effects.tsx src/features/dashboard/views/UtilityPanels.tsx src/features/dashboard/DashboardApp.tsx --max-warnings=999; pnpm exec tsc --noEmit --pretty false --skipLibCheck
+## 2026-05-31T19:57:19.526251+00:00 - local-search
+
+- Request: Optimize HivemindOS My Apps view app discovery performance with Tauri native local reads and cached browser fallback
+- Source: local-index
+- Query: `Optimize HivemindOS My Apps view app discovery performance with Tauri native local reads and cached browser fallback`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=11.28 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+2. score=11.28 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+3. score=7.53 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+4. score=4.63 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+5. score=4.04 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+6. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+7. score=3.35 LiamVisionary/exercise-db [repo-summary]
+   url: https://github.com/LiamVisionary/exercise-db
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
+8. score=3.35 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+
+## 2026-05-31T19:57:22.664218+00:00 - prebuild-gate
+
+- Request: Optimize HivemindOS My Apps view app discovery performance with Tauri native local reads and cached browser fallback
+- Source: public-github
+- Query: `Optimize HivemindOS My Apps view app discovery performance with Tauri native local reads and cached browser fallback`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-05-31T19:59:06.692508+00:00 - local-search
+
+- Request: TypeScript runtime adapter capability matrix feature registry env settings UI
+- Source: local-index
+- Query: `TypeScript runtime adapter capability matrix feature registry env settings UI`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=2.00 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+2. score=2.00 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+3. score=1.65 LiamVisionary/Ad-Alchemist [repo-summary]
+   url: https://github.com/LiamVisionary/Ad-Alchemist
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-Ad-Alchemist.md
+   LiamVisionary/Ad-Alchemist TypeScript
+4. score=1.65 LiamVisionary/ai-chatbot [repo-summary]
+   url: https://github.com/LiamVisionary/ai-chatbot
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-chatbot.md
+   LiamVisionary/ai-chatbot TypeScript
+5. score=1.65 LiamVisionary/ai-companion-website [repo-summary]
+   url: https://github.com/LiamVisionary/ai-companion-website
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
+6. score=1.65 LiamVisionary/ai-girlfriend-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/ai-girlfriend-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-girlfriend-mobile.md
+   LiamVisionary/ai-girlfriend-mobile TypeScript
+7. score=1.65 LiamVisionary/ai-headshot-generator [repo-summary]
+   url: https://github.com/LiamVisionary/ai-headshot-generator
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   LiamVisionary/ai-headshot-generator TypeScript
+8. score=1.65 LiamVisionary/ami-ai-companion-app [repo-summary]
+   url: https://github.com/LiamVisionary/ami-ai-companion-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   LiamVisionary/ami-ai-companion-app TypeScript
+
+## 2026-05-31T19:59:27.245888+00:00 - triage
+
+- Request: Introduce typed runtime feature definitions for HivemindOS agent env/settings extensibility
+- Source: public-github
+- Decision: local-backbone
+- Selected backbone: HivemindOS runtime-adapters registry
+- Note: Initial prebuild search failed while appending an oversized log entry after returning only generic local TypeScript repos; exact public retry returned no useful donor. Proceeding by adapting the existing HivemindOS RuntimeAdapter registry as the pinned local backbone.
+
+### Candidates
+- BabyJ723/blast-ON
+  - Decision: rejected
+  - Reason: search result is unrelated to TypeScript runtime feature registries and has no extractable code for this internal architecture change
+## 2026-05-31T20:01:12.390551+00:00 - triage
+
+- Request: Speed up HivemindOS My Apps view entry and fleet app discovery cache
+- Source: local-and-public-search
+- Selected backbone: hivemind-os fleet apps route
+
+### Candidates
+- hivemind-os src/app/api/fleet/apps/route.ts and src/features/dashboard/views/MyAppsPanel.tsx
+  - Decision: selected
+  - Reason: existing route cache and My Apps refresh path are the concrete reusable source for this repo-specific performance fix
+  - Path: `src/app/api/fleet/apps/route.ts,src/features/dashboard/views/MyAppsPanel.tsx`
+- klonnet23/helloy-word
+  - Decision: rejected
+  - Reason: public search result is unrelated scraped release text and no reusable app discovery/cache implementation
+- rramatchandran/big-o-performance-java
+  - Decision: rejected
+  - Reason: generic performance demo, no compatible Tailnet app discovery or stale cache route code
+- michealbalogun/Horizon-dashboard
+  - Decision: rejected
+  - Reason: OpenStack Horizon codebase is unrelated to HivemindOS app discovery and too broad for this targeted cache fix
+## 2026-05-31T20:03:16.826686+00:00 - implementation
+
+- Request: Introduce typed runtime feature definitions for HivemindOS agent env/settings extensibility
+- Source: local-codebase
+- Decision: implemented
+- Selected backbone: HivemindOS runtime-adapters registry
+- Assimilated: Existing RuntimeAdapter/RuntimeCapabilities registry shape extended with typed runtime env feature declarations in src/lib/types/agent-runtime.ts; Shared Env panel now reads env behavior through that registry.
+- Not assimilated: No external GitHub code reused; public search returned no relevant reusable donor for this internal architecture slice.
+- Verification: pnpm typecheck; pnpm exec tsc --noEmit --pretty false --skipLibCheck; targeted eslint with existing warnings; git diff --check; in-app Browser smoke; verify_assimilation_manifest.py
+## 2026-05-31T20:09:36.937381+00:00 - implementation
+
+- Request: Constrain HivemindOS chat messages and composer to readable widths
+- Source: local-codebase
+- Selected backbone: HivemindOS chat module CSS
+- Assimilated: Reused existing CSS module chat layout tokens and adjusted only the active transcript/composer width rules in src/app/chat.module.css.
+- Not assimilated: No external code needed; this is a repo-specific spacing/readability adjustment.
+- Verification: Pending CSS diff and browser smoke.
+
+### Candidates
+- src/app/chat.module.css
+  - Decision: selected
+  - Reason: existing chat transcript, message bubble, composer, suggestion, and hint layout rules are the concrete source for this surgical UI change
+  - Path: `src/app/chat.module.css`
+## 2026-05-31T20:10:05.054433+00:00 - continuation
+
+- Request: Continue migrating HivemindOS runtime behavior to typed runtime definitions
+- Source: local-codebase
+- Decision: local-backbone
+- Selected backbone: HivemindOS RUNTIME_DEFINITIONS and RuntimeAdapter registry
+- Note: Continuation of internal architecture migration; no new external donor needed because the prior public search found no useful repo and the local runtime registry is the active backbone.
+## 2026-05-31T20:12:38.865217+00:00 - verification
+
+- Request: Constrain HivemindOS chat messages and composer to readable widths
+- Source: local-codebase
+- Selected backbone: HivemindOS chat module CSS
+- Assimilated: Reused and tuned existing chat.module.css transcript/composer rules.
+- Verification: git diff --check passed; eslint CSS module command returned ignored warning with no errors; in-app Browser smoke on 5020 showed no console errors and measured composer ~976px, user bubble ~714px, assistant bubble under 860px.
+
+### Candidates
+- src/app/chat.module.css
+  - Decision: selected
+  - Reason: active chat transcript and composer CSS rules verified in existing app
+  - Path: `src/app/chat.module.css`
+## 2026-05-31T20:14:33.092699+00:00 - implementation
+
+- Request: Continue migrating HivemindOS runtime behavior to typed runtime definitions
+- Source: local-codebase
+- Decision: implemented
+- Selected backbone: HivemindOS RUNTIME_DEFINITIONS and RuntimeAdapter registry
+- Assimilated: Extended src/lib/types/agent-runtime.ts runtime definitions with settings and chat facets; wired AgentSettingsModal panels/defaults/model source/create labels, chat slash-command policy, runtime chat labels, and agent creation defaults to the matrix.
+- Not assimilated: No external GitHub code reused; no useful donor found for this internal architecture migration.
+- Verification: pnpm exec tsc --noEmit --pretty false --skipLibCheck; targeted eslint warnings-only; git diff --check; browser smoke for agents/env routes
+## 2026-05-31T20:15:21.910941+00:00 - adjustment
+
+- Request: Continue migrating HivemindOS runtime behavior to typed runtime definitions
+- Source: local-codebase
+- Decision: scoped
+- Selected backbone: HivemindOS RUNTIME_DEFINITIONS and RuntimeAdapter registry
+- Assimilated: Kept migration to runtime definitions, env UI, settings modal/defaults, agent creation defaults, chat display labels.
+- Not assimilated: Deferred chat runtime route slash-command migration because src/app/api/chat/agent-runtime/route.ts is an oversized legacy file over the 1500-line project limit and should be handled in a focused extraction slice.
+## 2026-05-31T20:18:23.272628+00:00 - continuation
+
+- Request: Continue migrating HivemindOS runtime behavior to typed runtime definitions
+- Source: local-codebase
+- Decision: local-backbone
+- Selected backbone: HivemindOS RUNTIME_DEFINITIONS and RuntimeAdapter registry
+- Note: Continuing with scheduler feature metadata as the next local runtime-definition migration slice; no external donor needed.
+## 2026-05-31T20:21:20.470236+00:00 - implementation
+
+- Request: Fix HivemindOS chat input width and keep mobile chat bubbles unconstrained
+- Source: local-codebase
+- Selected backbone: HivemindOS chat module CSS
+- Assimilated: Reused existing chat.module.css desktop and mobile breakpoint structure; moved bubble caps into a desktop-only media query and added a desktop composer max-width directly to the composer field.
+- Not assimilated: No external code needed for this follow-up spacing fix.
+- Verification: In-app Browser confirmed mobile composer max-width none and desktop-rule composer max-width 1040px; final diff checks pending.
+
+### Candidates
+- src/app/chat.module.css
+  - Decision: selected
+  - Reason: existing chat transcript, message bubble, composer, and mobile breakpoint rules adjusted surgically
+  - Path: `src/app/chat.module.css`
+## 2026-05-31T20:21:31.809172+00:00 - triage
+
+- Request: Fix HivemindOS source-level API authorization gap
+- Source: pinned-local
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: user supplied current local checkout; route auth and setup scripts must follow existing project conventions
+  - Path: `src/app/api,src/lib/utils,setup.sh,setup.ps1,scripts`
+## 2026-05-31T20:21:35.326445+00:00 - implementation
+
+- Request: Continue migrating HivemindOS runtime behavior to typed runtime definitions
+- Source: local-codebase
+- Decision: implemented
+- Selected backbone: HivemindOS RUNTIME_DEFINITIONS and RuntimeAdapter registry
+- Assimilated: Extended runtime definitions with scheduler ownership metadata; scheduler creation now asks runtimeSchedulerFeature for external runtime source instead of checking agent.runtime directly for AEON scheduling ownership.
+- Verification: pnpm exec tsc --noEmit --pretty false --skipLibCheck; targeted eslint warnings-only; git diff --check; wc -l under 1500 for touched files; browser smoke for scheduler route
+## 2026-05-31T20:21:48.814848+00:00 - verification
+
+- Request: Fix HivemindOS chat input width and keep mobile chat bubbles unconstrained
+- Source: local-codebase
+- Selected backbone: HivemindOS chat module CSS
+- Assimilated: Existing chat.module.css rules only.
+- Verification: git diff --check passed; eslint CSS module command returned ignored warning with no errors; in-app Browser confirmed mobile composer max-width none and desktop-rule composer max-width 1040px.
+
+### Candidates
+- src/app/chat.module.css
+  - Decision: selected
+  - Reason: follow-up spacing fix verified against mobile and desktop-rule computed styles
+  - Path: `src/app/chat.module.css`
+## 2026-05-31T20:23:53.818449+00:00 - continuation
+
+- Request: Continue migrating HivemindOS runtime behavior to typed runtime definitions
+- Source: local-codebase
+- Decision: local-backbone
+- Selected backbone: HivemindOS RUNTIME_DEFINITIONS and RuntimeAdapter registry
+- Note: Continuing with scheduler UI runtime filter metadata as a safe small-file migration slice.
+## 2026-05-31T20:25:00.115913+00:00 - implementation
+
+- Request: Actually constrain HivemindOS chat composer width and gutters
+- Source: local-codebase
+- Selected backbone: HivemindOS chat module CSS
+- Assimilated: Reused existing chat form/composer layout and corrected the active gutter math: form padding now compensates for margin 0 -18px and the composer field has its own max-width.
+- Not assimilated: No external code needed for this cascade-specific CSS fix.
+- Verification: Browser computed styles showed the form margin offset caused a ~6px composer edge; final static checks pending.
+
+### Candidates
+- src/app/chat.module.css
+  - Decision: selected
+  - Reason: existing chat form negative-margin and composer rules were the source of the width issue
+  - Path: `src/app/chat.module.css`
+## 2026-05-31T20:27:16+00:00 - implementation
+
+- Request: Continue migrating HivemindOS runtime behavior to typed runtime definitions
+- Source: local-codebase
+- Decision: implemented
+- Selected backbone: HivemindOS RUNTIME_DEFINITIONS and RuntimeAdapter registry
+- Assimilated: Added runtime-owned schedule filter helpers in the runtime matrix, made SchedulerView derive default runtime filter chips and locked-runtime copy from those helpers instead of hardcoding Aeon, and moved the shared Env panel's runtime management button metadata into the env feature definition.
+- Not assimilated: No external donor code; this slice reused the existing scheduler component and local runtime registry.
+- Verification: pnpm exec tsc --noEmit --pretty false --skipLibCheck; targeted eslint warnings-only; git diff --check; jsonl parse check; verify_assimilation_manifest.py; browser smoke reached the dashboard auth lock with no console errors before auth.
+## 2026-05-31T20:27:55.651790+00:00 - implementation
+
+- Request: Improve HivemindOS mobile chat bubble width and inline assistant avatar
+- Source: local-codebase
+- Selected backbone: HivemindOS ChatPanel and chat CSS
+- Assimilated: Reused renderAgentAvatar inside the assistant byline and adjusted existing mobile chat.module.css rules to hide the outside avatar and make message bodies full width.
+- Not assimilated: No external code needed for this mobile-only layout correction.
+- Verification: eslint passed with existing warnings; final diff check pending.
+
+### Candidates
+- src/features/dashboard/views/ChatPanel.tsx and src/app/chat.module.css
+  - Decision: selected
+  - Reason: existing avatar renderer and mobile chat message rules reused for a surgical mobile layout fix
+  - Path: `src/features/dashboard/views/ChatPanel.tsx,src/app/chat.module.css`
+## 2026-05-31T20:28:20.518994+00:00 - verification
+
+- Request: Improve HivemindOS mobile chat bubble width and inline assistant avatar
+- Source: local-codebase
+- Selected backbone: HivemindOS ChatPanel and chat CSS
+- Assimilated: Reused renderAgentAvatar inside assistant byline and existing mobile CSS breakpoints.
+- Verification: git diff --check passed; targeted eslint passed with existing CSS ignored and no-img-element warnings only.
+
+### Candidates
+- src/features/dashboard/views/ChatPanel.tsx and src/app/chat.module.css
+  - Decision: selected
+  - Reason: existing mobile chat layout rules verified by lint and diff checks
+  - Path: `src/features/dashboard/views/ChatPanel.tsx,src/app/chat.module.css`
+## 2026-05-31T20:32:34.793216+00:00 - verification
+
+- Request: Fix HivemindOS source-level API authorization gap
+- Source: pinned-local
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: implemented using existing Next App Router route/middleware conventions and setup/uninstall surfaces
+  - Path: `middleware.ts,src/lib/utils/server-auth.ts,src/app/api,setup.sh,setup.ps1`
+## 2026-05-31T20:40:09.746387+00:00 - triage
+
+- Request: Improve dashboard auth onboarding token copy instructions
+- Source: pinned-local
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: follow existing setup/uninstall/changelog patterns for dashboard auth onboarding
+  - Path: `setup.sh,setup.ps1,CHANGELOG.md`
+## 2026-05-31T20:45:52+00:00 - implementation
+
+- Request: Continue migrating HivemindOS runtime behavior to typed runtime definitions
+- Source: local-codebase
+- Decision: implemented
+- Selected backbone: HivemindOS RUNTIME_DEFINITIONS and RuntimeAdapter registry
+- Assimilated: Added runtime profile metadata for default local folders, Bee role defaults, AEON repo/A2A defaults, runtime-folder mirror fields, and post-create navigation. Updated createAgentProfile and the add-agent controller to consume profile metadata instead of runtime-name ternaries, moved OpenClaw base-only URL handling into the chat runtime feature, and moved Hermes update-detail handling into integration runtime metadata.
+- Not assimilated: No external donor code; this continued the local runtime registry backbone.
+- Verification: pnpm exec tsc --noEmit --pretty false --skipLibCheck; targeted eslint warnings-only; git diff --check; jsonl parse check; verify_assimilation_manifest.py.
+## 2026-05-31T20:42:55.966551+00:00 - triage
+
+- Request: Add dashboard auth reset and copy helper
+- Source: pinned-local
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: add a local Node helper matching existing scripts/package/setup conventions
+  - Path: `scripts,package.json,setup.sh,setup.ps1,CHANGELOG.md`
+## 2026-05-31T20:48:30.681825+00:00 - implementation
+
+- Request: Narrow HivemindOS chat and composer further
+- Source: local-codebase
+- Selected backbone: HivemindOS chat module CSS
+- Assimilated: Reused the existing chat.module.css layout; reduced the desktop column to 820px and centered the desktop form itself with width min(column, viewport - gutters).
+- Not assimilated: No external code needed for this CSS-only correction.
+- Verification: Browser verification blocked by browser security policy; final static checks pending.
+
+### Candidates
+- src/app/chat.module.css
+  - Decision: selected
+  - Reason: existing chat form/message layout rules adjusted to center a narrower desktop column
+  - Path: `src/app/chat.module.css`
+## 2026-05-31T20:48:58.197441+00:00 - verification
+
+- Request: Narrow HivemindOS chat and composer further
+- Source: local-codebase
+- Selected backbone: HivemindOS chat module CSS
+- Assimilated: Existing chat.module.css layout only.
+- Verification: git diff --check passed; CSS eslint command returned existing ignored-file warning with no errors; browser verification blocked by browser security policy.
+
+### Candidates
+- src/app/chat.module.css
+  - Decision: selected
+  - Reason: static checks passed for narrower 820px desktop chat column
+  - Path: `src/app/chat.module.css`
+## 2026-05-31T20:51:26.806142+00:00 - implementation
+
+- Request: Restore dark opaque dashboard header on chat route
+- Source: local-codebase
+- Selected backbone: HivemindOS DashboardHeader and global topbar CSS
+- Assimilated: Reused the existing commandTopbar dark background and honeycomb overlay by removing the chat-specific transparent background/disabled pseudo-element override.
+- Not assimilated: No external code needed for this route-specific CSS fix.
+- Verification: Pending static checks.
+
+### Candidates
+- src/features/dashboard/views/DashboardHeader.tsx and src/app/globals.css
+  - Decision: selected
+  - Reason: existing commandTopbar background was already correct; chatCommandTopbar override caused the regression
+  - Path: `src/app/globals.css`
+## 2026-05-31T20:52:01.861316+00:00 - verification
+
+- Request: Restore dark opaque dashboard header on chat route
+- Source: local-codebase
+- Selected backbone: HivemindOS DashboardHeader and global topbar CSS
+- Assimilated: Existing commandTopbar styling reused by removing chat-specific override.
+- Verification: rg confirmed chatCommandTopbar has no remaining CSS override; git diff --check passed; CSS eslint command returned existing ignored-file warning with no errors.
+
+### Candidates
+- src/app/globals.css
+  - Decision: selected
+  - Reason: chat topbar override removed and static checks passed
+  - Path: `src/app/globals.css`

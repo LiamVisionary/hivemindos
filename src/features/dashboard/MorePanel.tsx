@@ -1,4 +1,4 @@
-import { Activity, AppWindow, Bell, Bot, FolderOpen, KeyRound, PhoneCall, PlugZap, ShieldCheck } from "lucide-react";
+import { Activity, AppWindow, Bell, Bot, FolderOpen, PhoneCall, PlugZap, ShieldCheck } from "lucide-react";
 
 import fleetStyles from "@/app/fleet.module.css";
 import { createStyleClass } from "@/features/dashboard/style-classes";
@@ -8,8 +8,8 @@ const fleetClass = createStyleClass(fleetStyles);
 type MorePanelTarget = "integrations" | "env" | "maintenance" | "files" | "notifications" | "memory" | "my-apps" | "phone" | "aeon";
 
 export type MorePanelProps = {
-  sharedEnvCount: number;
-  agentSpecificEnvCount: number;
+  sharedEnvCount?: number;
+  agentSpecificEnvCount?: number;
   maintenanceOk?: boolean;
   runtimeFileRootCount: number;
   notificationUnread: number;
@@ -20,8 +20,6 @@ export type MorePanelProps = {
 };
 
 export function MorePanel({
-  sharedEnvCount,
-  agentSpecificEnvCount,
   maintenanceOk,
   runtimeFileRootCount,
   notificationUnread,
@@ -44,13 +42,6 @@ export function MorePanel({
       eyebrow: "Nango host",
       title: "Integrations",
       body: "Choose the always-on machine for shared external API access.",
-    },
-    {
-      id: "env" as const,
-      icon: <KeyRound aria-hidden="true" />,
-      eyebrow: `${sharedEnvCount} shared · ${agentSpecificEnvCount} agent`,
-      title: "Shared env",
-      body: "View hive-env-add variables and per-agent overlays.",
     },
     {
       id: "maintenance" as const,

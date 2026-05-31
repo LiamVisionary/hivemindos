@@ -1424,6 +1424,21 @@ set_env_local() {
   fi
 }
 
+env_local_value() {
+  local key="$1"
+  local env_file="$ROOT/.env.local"
+  [[ -f "$env_file" ]] || return 0
+  awk -v key="$key" -F= '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$env_file"
+}
+
+random_dashboard_secret() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 32
+    return
+  fi
+  node -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))'
+}
+
 set_env_local "NEXT_PUBLIC_TAILNET_SYNC_ENABLED" "$tailnet_sync_enabled"
 set_env_local "HIVE_ENV_TAILNET_SYNC" "$env_tailnet_sync_enabled"
 set_env_local "HIVE_ENV_TAILNET_USER" "$(id -un 2>/dev/null || printf "%s" "${USER:-}")"
@@ -1439,6 +1454,15 @@ set_env_local "NEXT_PUBLIC_OBSIDIAN_SYNTHESIS_FOLDER" "${NEXT_PUBLIC_OBSIDIAN_SY
 set_env_local "NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER" "${NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER:-Operations/Brain Services}"
 set_env_local "NEXT_PUBLIC_GBRAIN_CLI_PATH" "${NEXT_PUBLIC_GBRAIN_CLI_PATH:-gbrain}"
 set_env_local "NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION" "${NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION:-Skills/GBrain}"
+set_env_local "NEXT_PUBLIC_SYNTO_CLI_PATH" "${NEXT_PUBLIC_SYNTO_CLI_PATH:-synto}"
+set_env_local "NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL" "${NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL:-llama3.1:8b}"
+
+dashboard_auth_secret="${HIVEMINDOS_DASHBOARD_AUTH_SECRET:-$(env_local_value HIVEMINDOS_DASHBOARD_AUTH_SECRET)}"
+dashboard_device_token="${HIVEMINDOS_DASHBOARD_DEVICE_TOKEN:-$(env_local_value HIVEMINDOS_DASHBOARD_DEVICE_TOKEN)}"
+dashboard_auth_secret="${dashboard_auth_secret:-$(random_dashboard_secret)}"
+dashboard_device_token="${dashboard_device_token:-$(random_dashboard_secret)}"
+set_env_local "HIVEMINDOS_DASHBOARD_AUTH_SECRET" "$dashboard_auth_secret"
+set_env_local "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN" "$dashboard_device_token"
 
 shared_vault_path="${NEXT_PUBLIC_OBSIDIAN_VAULT_PATH:-$HOME/Documents/Obsidian/hivemindos-vault}"
 if [[ "$shared_vault_path" == "~/"* ]]; then
@@ -1494,7 +1518,7 @@ if [[ ! -f "$shared_vault_path/$synthesis_folder/README.md" ]]; then
   cat > "$shared_vault_path/$synthesis_folder/README.md" <<'EOF'
 # Synthesis
 
-Synto-powered reviewed knowledge layer for raw inputs, drafts, wiki articles, source trails, queries, synthesis notes, and agent packs.
+Syntho-powered reviewed knowledge layer for raw inputs, drafts, wiki articles, source trails, queries, synthesis notes, and agent packs.
 EOF
 fi
 
@@ -1502,7 +1526,7 @@ if [[ ! -f "$shared_vault_path/$brain_services_folder/README.md" ]]; then
   cat > "$shared_vault_path/$brain_services_folder/README.md" <<'EOF'
 # Brain Services
 
-Status notes for optional HivemindOS brain services. GBrain can be connected from the dashboard without storing provider secrets in the vault.
+Status notes for optional HivemindOS brain services. GBrain and Syntho can be connected from the dashboard without storing provider secrets in the vault.
 EOF
 fi
 
@@ -1522,6 +1546,28 @@ mcpMode: stdio
 # GBrain
 
 Optional HivemindOS retrieval, graph, MCP, and dream-cycle service. Install or connect it from the dashboard when ready.
+
+No provider secrets are stored in this note.
+EOF
+fi
+
+if [[ ! -f "$shared_vault_path/$brain_services_folder/Syntho.md" ]]; then
+  cat > "$shared_vault_path/$brain_services_folder/Syntho.md" <<'EOF'
+---
+type: brain-service
+service: synto
+enabled: false
+installMode: optional
+mcpMode: stdio
+sourceAccessMode: deny
+compareHeavyModel: llama3.1:8b
+autoApprove: false
+minConfidence: 0.8
+---
+
+# Syntho
+
+Optional HivemindOS compiled-wiki, pack, and MCP service for the Synthesis layer. Install or connect it from the dashboard when ready. Raw-source MCP tools default to denied until source licenses are configured.
 
 No provider secrets are stored in this note.
 EOF
@@ -1610,14 +1656,19 @@ else
   ok "Dashboard built"
 fi
 
+dashboard_host="${HIVEMINDOS_DASHBOARD_HOST:-127.0.0.1}"
+if [[ "$network_mode" == "system-tailscale" && -n "$tailscale_ip" ]]; then
+  dashboard_host="${HIVEMINDOS_DASHBOARD_HOST:-0.0.0.0}"
+fi
+
 start_dashboard() {
   info "Starting dashboard dev server on port $PORT"
   mkdir -p "$ROOT/.next"
   refresh_tool_paths
   if command -v pnpm >/dev/null 2>&1; then
-    nohup ./scripts/run-with-memory-limit.sh --limit-mb 5000 -- pnpm exec next dev --webpack -p "$PORT" > "$ROOT/.next/hivemindos.log" 2>&1 &
+    nohup ./scripts/run-with-memory-limit.sh --limit-mb 5000 -- pnpm exec next dev --webpack -p "$PORT" -H "$dashboard_host" > "$ROOT/.next/hivemindos.log" 2>&1 &
   else
-    nohup ./scripts/run-with-memory-limit.sh --limit-mb 5000 -- corepack pnpm exec next dev --webpack -p "$PORT" > "$ROOT/.next/hivemindos.log" 2>&1 &
+    nohup ./scripts/run-with-memory-limit.sh --limit-mb 5000 -- corepack pnpm exec next dev --webpack -p "$PORT" -H "$dashboard_host" > "$ROOT/.next/hivemindos.log" 2>&1 &
   fi
   sleep 2
 }
@@ -1639,6 +1690,48 @@ open_dashboard_if_requested() {
     return 0
   fi
   ok "Opened dashboard: $url"
+}
+
+copy_dashboard_token_if_requested() {
+  local env_file="$ROOT/.env.local"
+  local token=""
+  [[ -f "$env_file" ]] || return 0
+  token="$(awk -F= '$1 == "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN" { sub(/^[^=]*=/, ""); print; exit }' "$env_file")"
+  [[ -n "$token" ]] || return 0
+
+  if [[ "$(uname -s)" == "Darwin" && -n "$(command -v pbcopy 2>/dev/null || true)" ]]; then
+    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
+      printf "%s" "$token" | pbcopy
+      ok "Copied dashboard unlock token to clipboard"
+    fi
+    return 0
+  fi
+
+  if [[ -n "$(command -v wl-copy 2>/dev/null || true)" ]]; then
+    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
+      printf "%s" "$token" | wl-copy
+      ok "Copied dashboard unlock token to clipboard"
+    fi
+    return 0
+  fi
+
+  if [[ -n "$(command -v xclip 2>/dev/null || true)" ]]; then
+    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
+      printf "%s" "$token" | xclip -selection clipboard
+      ok "Copied dashboard unlock token to clipboard"
+    fi
+    return 0
+  fi
+
+  if [[ -n "$(command -v xsel 2>/dev/null || true)" ]]; then
+    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
+      printf "%s" "$token" | xsel --clipboard --input
+      ok "Copied dashboard unlock token to clipboard"
+    fi
+    return 0
+  fi
+
+  warn "No clipboard command found; use the copy command printed below."
 }
 
 dashboard_openable="false"
@@ -1676,7 +1769,7 @@ if [[ -f "$HOME/.hivemindos/collector.env" ]]; then
   link_control_url="${HIVE_LINK_CONTROL_URL:-$link_control_url}"
 fi
 
-if [[ -n "$tailscale_ip" ]]; then
+if [[ -n "$tailscale_ip" && "$dashboard_host" != "127.0.0.1" && "$dashboard_host" != "localhost" ]]; then
   network_url="http://$tailscale_ip:$PORT"
   collector_url="http://$tailscale_ip:$COLLECTOR_PORT"
 fi
@@ -1689,6 +1782,10 @@ echo "  $local_url"
 if [[ -n "$network_url" ]]; then
   echo "  $network_url"
 fi
+echo "  Unlock token: stored in .env.local as HIVEMINDOS_DASHBOARD_DEVICE_TOKEN"
+echo "  Copy token later: pnpm dashboard-auth copy-token"
+echo "  Reset lost token: pnpm dashboard-auth reset-token"
+copy_dashboard_token_if_requested
 echo
 echo "Collector:"
 if [[ -n "$collector_url" ]]; then

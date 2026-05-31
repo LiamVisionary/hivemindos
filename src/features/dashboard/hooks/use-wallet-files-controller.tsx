@@ -459,16 +459,41 @@ export function useWalletFilesController(props: any) {
     const wallet = walletsByAgent[agentId] ?? createDefaultAgentWallet(agentId);
     const action = walletActionsByAgent[agentId] ?? {};
     const amount = Number(action.sendAmount);
-    updateWalletAction(agentId, { busy: true, error: "", message: "Sending USDC..." });
-    const response = await fetch("/api/wallet/send", {
+    updateWalletAction(agentId, { busy: true, error: "", message: "Creating payment approval..." });
+    const approvalResponse = await fetch("/api/wallet/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        action: "approve",
         agentId,
         toAddress: action.sendTo,
         amountUsd: amount,
         maxPaymentUsd: wallet.maxPaymentUsd,
         confirmation: action.confirmation,
+      }),
+    }).catch(() => null);
+    const approvalData = await approvalResponse?.json().catch(() => null) as {
+      ok?: boolean;
+      approvalToken?: string;
+      error?: string;
+    } | null;
+    if (!approvalResponse?.ok || !approvalData?.ok || !approvalData.approvalToken) {
+      updateWalletAction(agentId, { busy: false, error: approvalData?.error ?? "Could not create payment approval.", message: "" });
+      return;
+    }
+
+    updateWalletAction(agentId, { busy: true, error: "", message: "Sending USDC..." });
+    const response = await fetch("/api/wallet/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "send",
+        agentId,
+        toAddress: action.sendTo,
+        amountUsd: amount,
+        maxPaymentUsd: wallet.maxPaymentUsd,
+        confirmation: action.confirmation,
+        approvalToken: approvalData.approvalToken,
       }),
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as {

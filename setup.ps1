@@ -266,6 +266,28 @@ function Open-DashboardIfRequested($Url) {
   }
 }
 
+function Get-DashboardDeviceToken {
+  $envFile = Join-Path $Root ".env.local"
+  if (-not (Test-Path $envFile)) { return "" }
+  foreach ($line in Get-Content $envFile -ErrorAction SilentlyContinue) {
+    if ($line -match "^HIVEMINDOS_DASHBOARD_DEVICE_TOKEN=(.*)$") { return $Matches[1] }
+  }
+  return ""
+}
+
+function Copy-DashboardTokenIfRequested {
+  $token = Get-DashboardDeviceToken
+  if (-not $token) { return }
+  if (-not (Get-Command Set-Clipboard -ErrorAction SilentlyContinue)) {
+    Warn "Set-Clipboard is unavailable; use the copy command printed below."
+    return
+  }
+  if (Ask-YesNo "Copy the dashboard unlock token to your clipboard now?" $true) {
+    Set-Clipboard -Value $token
+    Ok "Copied dashboard unlock token to clipboard"
+  }
+}
+
 function Set-EnvLocal($Key, $Value) {
   $envFile = Join-Path $Root ".env.local"
   if (-not (Test-Path $envFile)) { New-Item -ItemType File -Path $envFile | Out-Null }
@@ -282,6 +304,21 @@ function Set-EnvLocal($Key, $Value) {
   if (-not $replaced) { $next += "$Key=$Value" }
   if (($lines -join "`n") -eq ($next -join "`n")) { return }
   Set-Content -Path $envFile -Value $next
+}
+
+function Get-EnvLocal($Key) {
+  $envFile = Join-Path $Root ".env.local"
+  if (-not (Test-Path $envFile)) { return "" }
+  foreach ($line in Get-Content $envFile -ErrorAction SilentlyContinue) {
+    if ($line -match "^$([regex]::Escape($Key))=(.*)$") { return $Matches[1] }
+  }
+  return ""
+}
+
+function New-DashboardSecret {
+  $bytes = New-Object byte[] 32
+  [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+  return ([BitConverter]::ToString($bytes)).Replace("-", "").ToLowerInvariant()
 }
 
 function Get-HashForFiles($Files) {
@@ -332,6 +369,14 @@ Set-EnvLocal "NEXT_PUBLIC_OBSIDIAN_SYNTHESIS_FOLDER" $(if ($env:NEXT_PUBLIC_OBSI
 Set-EnvLocal "NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER" $(if ($env:NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER) { $env:NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER } else { "Operations/Brain Services" })
 Set-EnvLocal "NEXT_PUBLIC_GBRAIN_CLI_PATH" $(if ($env:NEXT_PUBLIC_GBRAIN_CLI_PATH) { $env:NEXT_PUBLIC_GBRAIN_CLI_PATH } else { "gbrain" })
 Set-EnvLocal "NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION" $(if ($env:NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION) { $env:NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION } else { "Skills/GBrain" })
+Set-EnvLocal "NEXT_PUBLIC_SYNTO_CLI_PATH" $(if ($env:NEXT_PUBLIC_SYNTO_CLI_PATH) { $env:NEXT_PUBLIC_SYNTO_CLI_PATH } else { "synto" })
+Set-EnvLocal "NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL" $(if ($env:NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL) { $env:NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL } else { "llama3.1:8b" })
+$dashboardAuthSecret = if ($env:HIVEMINDOS_DASHBOARD_AUTH_SECRET) { $env:HIVEMINDOS_DASHBOARD_AUTH_SECRET } else { Get-EnvLocal "HIVEMINDOS_DASHBOARD_AUTH_SECRET" }
+$dashboardDeviceToken = if ($env:HIVEMINDOS_DASHBOARD_DEVICE_TOKEN) { $env:HIVEMINDOS_DASHBOARD_DEVICE_TOKEN } else { Get-EnvLocal "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN" }
+if (-not $dashboardAuthSecret) { $dashboardAuthSecret = New-DashboardSecret }
+if (-not $dashboardDeviceToken) { $dashboardDeviceToken = New-DashboardSecret }
+Set-EnvLocal "HIVEMINDOS_DASHBOARD_AUTH_SECRET" $dashboardAuthSecret
+Set-EnvLocal "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN" $dashboardDeviceToken
 
 $vaultPath = if ($env:NEXT_PUBLIC_OBSIDIAN_VAULT_PATH) { $env:NEXT_PUBLIC_OBSIDIAN_VAULT_PATH } else { Join-Path ([Environment]::GetFolderPath("UserProfile")) "Documents\Obsidian\hivemindos-vault" }
 if ($vaultPath.StartsWith('~\') -or $vaultPath.StartsWith('~/')) {
@@ -427,14 +472,17 @@ if (-not (Test-Path (Join-Path $vaultPath "$scheduledFolder/README.md"))) {
   Set-Content -Path (Join-Path $vaultPath "$scheduledFolder/README.md") -Value "# Automations`n`nShared schedule definitions and run history for HivemindOS agents.`n`n- ``<device>/<schedule>/schedule.md`` stores each schedule snapshot.`n- ``run0001-<agent>-<timestamp>.md`` files store execution history."
 }
 if (-not (Test-Path (Join-Path $vaultPath "$synthesisFolder/README.md"))) {
-  Set-Content -Path (Join-Path $vaultPath "$synthesisFolder/README.md") -Value "# Synthesis`n`nSynto-powered reviewed knowledge layer for raw inputs, drafts, wiki articles, source trails, queries, synthesis notes, and agent packs."
+  Set-Content -Path (Join-Path $vaultPath "$synthesisFolder/README.md") -Value "# Synthesis`n`nSyntho-powered reviewed knowledge layer for raw inputs, drafts, wiki articles, source trails, queries, synthesis notes, and agent packs."
 }
 if (-not (Test-Path (Join-Path $vaultPath "$brainServicesFolder/README.md"))) {
-  Set-Content -Path (Join-Path $vaultPath "$brainServicesFolder/README.md") -Value "# Brain Services`n`nStatus notes for optional HivemindOS brain services. GBrain can be connected from the dashboard without storing provider secrets in the vault."
+  Set-Content -Path (Join-Path $vaultPath "$brainServicesFolder/README.md") -Value "# Brain Services`n`nStatus notes for optional HivemindOS brain services. GBrain and Syntho can be connected from the dashboard without storing provider secrets in the vault."
 }
 Set-EnvLocal "NEXT_PUBLIC_HIVE_GBRAIN_SURFACE_ENABLED" "true"
 if (-not (Test-Path (Join-Path $vaultPath "$brainServicesFolder/GBrain.md"))) {
   Set-Content -Path (Join-Path $vaultPath "$brainServicesFolder/GBrain.md") -Value "---`ntype: brain-service`nservice: gbrain`nenabled: false`ninstallMode: optional`nsearchMode: balanced`nproviderPolicy: balanced-cloud`nmcpMode: stdio`n---`n`n# GBrain`n`nOptional HivemindOS retrieval, graph, MCP, and dream-cycle service. Install or connect it from the dashboard when ready.`n`nNo provider secrets are stored in this note."
+}
+if (-not (Test-Path (Join-Path $vaultPath "$brainServicesFolder/Syntho.md"))) {
+  Set-Content -Path (Join-Path $vaultPath "$brainServicesFolder/Syntho.md") -Value "---`ntype: brain-service`nservice: synto`nenabled: false`ninstallMode: optional`nmcpMode: stdio`nsourceAccessMode: deny`ncompareHeavyModel: llama3.1:8b`nautoApprove: false`nminConfidence: 0.8`n---`n`n# Syntho`n`nOptional HivemindOS compiled-wiki, pack, and MCP service for the Synthesis layer. Install or connect it from the dashboard when ready. Raw-source MCP tools default to denied until source licenses are configured.`n`nNo provider secrets are stored in this note."
 }
 
 & node (Join-Path $Root "scripts\seed-vault-foundation.mjs") `
@@ -489,9 +537,9 @@ if ($SkipDashboard) {
     $stderrPath = Join-Path $Root ".next\hivemindos-windows.err.log"
     Refresh-Path
     if (Test-Command pnpm) {
-      Start-Process -FilePath "pnpm" -ArgumentList @("exec", "next", "dev", "--webpack", "-p", "$Port") -WorkingDirectory $Root -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -WindowStyle Hidden
+      Start-Process -FilePath "pnpm" -ArgumentList @("exec", "next", "dev", "--webpack", "-p", "$Port", "-H", "127.0.0.1") -WorkingDirectory $Root -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -WindowStyle Hidden
     } else {
-      Start-Process -FilePath "corepack" -ArgumentList @("pnpm", "exec", "next", "dev", "--webpack", "-p", "$Port") -WorkingDirectory $Root -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -WindowStyle Hidden
+      Start-Process -FilePath "corepack" -ArgumentList @("pnpm", "exec", "next", "dev", "--webpack", "-p", "$Port", "-H", "127.0.0.1") -WorkingDirectory $Root -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -WindowStyle Hidden
     }
     $dashboardOpenable = $true
   }
@@ -502,6 +550,10 @@ Ok "Ready"
 Write-Host ""
 Write-Host "Dashboard:"
 Write-Host "  http://localhost:$Port"
+Write-Host "  Unlock token: stored in .env.local as HIVEMINDOS_DASHBOARD_DEVICE_TOKEN"
+Write-Host "  Copy token later: pnpm dashboard-auth copy-token"
+Write-Host "  Reset lost token: pnpm dashboard-auth reset-token"
+Copy-DashboardTokenIfRequested
 Write-Host ""
 Write-Host "Collector:"
 Write-Host "  http://localhost:$CollectorPort"

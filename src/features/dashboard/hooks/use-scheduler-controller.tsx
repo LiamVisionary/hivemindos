@@ -5,6 +5,8 @@
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
 import { useCallback, useEffect, useMemo } from "react";
+import { openNativeDirectory } from "@/lib/native/filesystem";
+import { runtimeSchedulerFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
 
 export function useSchedulerController(props: any) {
@@ -305,6 +307,8 @@ export function useSchedulerController(props: any) {
     const agent = displayAgents.find((item) => item.id === scheduleDraft.agentId) ?? selectedAgent;
     if (!agent) return;
     const now = Date.now();
+    const schedulerFeature = runtimeSchedulerFeature(agent.runtime);
+    const externalRuntime = schedulerFeature.kind === "external-runtime" ? schedulerFeature.externalSource : undefined;
     const steps = scheduleDraft.mode === "steps"
       ? scheduleDraft.steps.filter((step) => step.text.trim())
       : [];
@@ -332,8 +336,8 @@ export function useSchedulerController(props: any) {
       updatedAt: now,
       lastRunAt: editedSchedule?.lastRunAt,
       nextRunAt: editedSchedule?.nextRunAt,
-      externalSource: agent.runtime === "aeon" ? "aeon" : editedSchedule?.externalSource,
-      externalJobId: agent.runtime === "aeon" ? (scheduleDraft.skills[0] || editedSchedule?.externalJobId) : editedSchedule?.externalJobId,
+      externalSource: externalRuntime ?? editedSchedule?.externalSource,
+      externalJobId: externalRuntime ? (scheduleDraft.skills[0] || editedSchedule?.externalJobId) : editedSchedule?.externalJobId,
       lastStatus: editedSchedule?.lastStatus,
       lastSummary: editedSchedule?.lastSummary,
       usePastRuns: scheduleDraft.usePastRuns,
@@ -341,7 +345,7 @@ export function useSchedulerController(props: any) {
       sharedSchedulePath: editedSchedule?.sharedSchedulePath,
       sharedRunFolder: editedSchedule?.sharedRunFolder,
     };
-    if (agent.runtime === "aeon") {
+    if (externalRuntime === "aeon") {
       const configured = await configureAeonSchedule(agent, next);
       if (!configured) return;
       next.externalSource = "aeon";
@@ -1357,6 +1361,8 @@ export function useSchedulerController(props: any) {
         ?? displayAgents[0]);
     if (!agent) return "No agent is configured to run this automation.";
     const now = Date.now();
+    const schedulerFeature = runtimeSchedulerFeature(agent.runtime);
+    const externalRuntime = schedulerFeature.kind === "external-runtime" ? schedulerFeature.externalSource : undefined;
     const skills = task.attachments.filter((item) => item.kind === "skill").map((item) => item.label);
     const paths = task.attachments.filter((item) => item.kind === "path").map((item) => item.label);
     const steps = task.mode === "steps"
@@ -1387,8 +1393,8 @@ export function useSchedulerController(props: any) {
       createdAt: editedSchedule?.createdAt ?? now,
       updatedAt: now,
       lastRunAt: editedSchedule?.lastRunAt,
-      externalSource: agent.runtime === "aeon" ? "aeon" : editedSchedule?.externalSource,
-      externalJobId: agent.runtime === "aeon" ? (skills[0] || editedSchedule?.externalJobId) : editedSchedule?.externalJobId,
+      externalSource: externalRuntime ?? editedSchedule?.externalSource,
+      externalJobId: externalRuntime ? (skills[0] || editedSchedule?.externalJobId) : editedSchedule?.externalJobId,
       lastStatus: editedSchedule?.lastStatus,
       lastSummary: editedSchedule?.lastSummary,
       usePastRuns: task.usePastRuns,
@@ -1396,7 +1402,7 @@ export function useSchedulerController(props: any) {
       sharedSchedulePath: editedSchedule?.sharedSchedulePath,
       sharedRunFolder: editedSchedule?.sharedRunFolder,
     };
-    if (agent.runtime === "aeon") {
+    if (externalRuntime === "aeon") {
       const configured = await configureAeonSchedule(agent, next);
       if (!configured || "error" in configured) {
         return configured?.error || `Could not arm this AEON automation on ${agent.name}.`;
@@ -1416,6 +1422,12 @@ export function useSchedulerController(props: any) {
 
   const browseSchedulerFolder = useCallback(async () => {
     const currentPath = scheduleDraft.paths.find((path) => path.trim()) ?? sharedVault.vaultPath ?? "";
+    const nativeResult = await openNativeDirectory({
+      currentPath,
+      prompt: "Choose a folder to attach to this scheduled task:",
+    });
+    if (nativeResult?.path) return nativeResult.path;
+    if (nativeResult?.cancelled) return null;
     const response = await fetch("/api/scheduler/browse-folder", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

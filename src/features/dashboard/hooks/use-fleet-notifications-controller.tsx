@@ -3,6 +3,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { getNativeAppVersion } from "@/lib/native/desktop-status";
 
 export function useFleetNotificationsController(props: any) {
   const { DEFAULT_SHARED_VAULT, addKanbanStorageParams, appVersion, hydrated, isCollectorAutoUpdateable, kanbanAssigneeFilter, kanbanBoardSlug, kanbanIncludeArchived, kanbanSearch, kanbanTenantFilter, cleanActivityTitle, localDashboardHasUnpublishedChanges, machineInitDraft, machineInitToken, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineVersionCopy, mergeDiscoveredMachines, mergeSnapshotRecord, noteIntakeAutoInFlightRef, notifications, setAppVersion, setCopiedUpdateDetailKey, setDiscoveredMachines, setFleetSnapshots, setKanbanAssignees, setKanbanBoard, setKanbanBoards, setKanbanError, setKanbanStorage, setKanbanTenants, setActiveView, setSelectedKanbanTaskId, setMachineInitCopiedKey, setMachineInitOpen, setMachineInitStatus, setMachineInitToken, setMachineInitTokenStatus, setNoteIntakePending, setNoteIntakePreview, setNoteIntakeStatus, setNotificationCursor, setNotificationSummary, setNotifications, setNotificationsStatus, setTasks, setUpdateStatusByMachine, sharedVault, summarizeHermesAuthError, updateStatusByMachine } = props;
@@ -82,6 +83,11 @@ export function useFleetNotificationsController(props: any) {
   }
 
   async function refreshAppVersionNow() {
+    const nativeVersion = await getNativeAppVersion();
+    if (nativeVersion?.commit) {
+      setAppVersion(nativeVersion);
+      return;
+    }
     const response = await fetch("/api/app/version", { cache: "no-store" }).catch(() => null);
     const data = await response?.json().catch(() => null) as AppVersion | null;
     if (data?.commit) setAppVersion(data);

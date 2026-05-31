@@ -659,22 +659,6 @@ export function FleetView({
           </div>
         ) : null}
 
-        <style jsx global>{`
-          @keyframes fleet-fade-up {
-            from { opacity: 0; transform: translateY(6px); }
-            to   { opacity: 1; transform: translateY(0); }
-          }
-          @keyframes fleet-toast-in {
-            from { opacity: 0; transform: translate(-50%, 10px); }
-            to   { opacity: 1; transform: translate(-50%, 0); }
-          }
-          @keyframes fleet-scan-sweep {
-            0%   { transform: translateX(-120%); opacity: 0; }
-            20%  { opacity: 1; }
-            80%  { opacity: 1; }
-            100% { transform: translateX(310%); opacity: 0; }
-          }
-        `}</style>
       </div>
     </TooltipProvider>
   );

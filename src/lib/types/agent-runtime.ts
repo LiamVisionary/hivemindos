@@ -23,6 +23,115 @@ export interface RuntimeCapabilities {
   modelSelection?: boolean;
 }
 
+export type RuntimeEnvFeature =
+  | {
+      kind: "agent-overlay";
+      label: string;
+      description: string;
+      storage: "profile.agentEnv";
+    }
+  | {
+      kind: "github-secrets";
+      label: string;
+      description: string;
+      localSources: Array<{ label: string; path: string }>;
+      syncAction: "runtime.syncEnv";
+      statusAction: "runtime.getSecretStatus";
+      manageAction?: { label: string; view: string };
+    }
+  | {
+      kind: "local-dotenv";
+      label: string;
+      description: string;
+      localSources: Array<{ label: string; path: string }>;
+    }
+  | {
+      kind: "none";
+      label: string;
+      description: string;
+    };
+
+export type RuntimeDefinition = {
+  runtime: KnownAgentRuntime;
+  label: string;
+  kind: AgentRuntimeKind;
+  defaults: Pick<AgentProfile, "gatewayUrl" | "chatPath" | "statusPath">;
+  capabilities: RuntimeCapabilities;
+  env: RuntimeEnvFeature;
+  settings: RuntimeSettingsFeature;
+  chat: RuntimeChatFeature;
+  scheduler: RuntimeSchedulerFeature;
+  profile: RuntimeProfileFeature;
+  integration: RuntimeIntegrationFeature;
+};
+
+export type RuntimeSettingsPanelId = "role" | "connection" | "memory" | "tools" | "calls" | "security";
+
+export type RuntimeSettingsFeature = {
+  kind: "standard" | "autopilot";
+  createPanels: RuntimeSettingsPanelId[];
+  editPanels: RuntimeSettingsPanelId[];
+  hidesRuntimeSelectorWhenEditing?: boolean;
+  modelSource: "runtime" | "skill";
+  canAddModels?: boolean;
+  canUsePod?: boolean;
+  runtimeSegmentSubcopy?: string;
+  unavailableSubcopy?: string;
+  createActionLabel?: string;
+  defaultProvider?: string;
+  defaultModel?: string;
+  defaultAgentId?: string;
+};
+
+export type RuntimeChatFeature = {
+  kind: "interactive" | "gateway" | "background";
+  label: string;
+  slashCommandPolicy?: "leading-slash-bypasses-system-context" | "none";
+  urlStrategy?: "append-path" | "base-only";
+};
+
+export type RuntimeSchedulerFeature =
+  | {
+      kind: "dashboard";
+    }
+  | {
+      kind: "external-runtime";
+      externalSource: KnownAgentRuntime;
+      configAction: "runtime.updateSkillConfig";
+      primarySkillRequired?: boolean;
+    };
+
+export type RuntimeProfileFeature = {
+  firstAgentLocalDataDir?: string;
+  runtimeFolderMirrors?: Array<"aeonLocalPath">;
+  defaultBeeRole?: BeeAgentRole;
+  firstAgentBeeRole?: BeeAgentRole;
+  defaultWorkerClass?: BeeWorkerClass;
+  firstAgentWorkerClass?: BeeWorkerClass;
+  postCreateAction?: {
+    view: string;
+    sessionStorageAgentIdKey?: string;
+  };
+  aeonDefaults?: {
+    repoEnvVar: string;
+    localPathEnvVar: string;
+    localPathFallback: string;
+    branch: string;
+    mode: NonNullable<AgentProfile["aeonMode"]>;
+    a2aUrl: "gatewayUrl";
+    a2aUrlFallback: string;
+  };
+};
+
+export type RuntimeIntegrationFeature = {
+  updateRequirementDetail?: "hermes";
+};
+
+export type RuntimeScheduleFilterOption = {
+  value: AgentRuntime;
+  label: string;
+};
+
 export type BeeAgentRole = "queen" | "worker" | "observer" | "human";
 export type BeeWorkerClass = "general" | "planner" | "code" | "vision" | "writer" | "research" | "artist" | "ops" | "qa";
 export type AdaptiveOpenRouterUseCase = "auto" | "coding" | "writing" | "vision" | "image" | "research" | "tool-use";
@@ -37,8 +146,12 @@ export interface UsePodAgentConfig {
   depositAddress?: string;
   maxPriceInputMicrounits?: string;
   maxPriceOutputMicrounits?: string;
+  spendPreset?: "cheapest" | "balanced" | "fast" | "none" | "custom";
   lastBalanceRemaining?: string;
   lastRoute?: string;
+  lastCheckedAt?: string;
+  lastTestStatus?: string;
+  lastModelCount?: number;
 }
 
 export type AgentVoiceRuntime = "openai-realtime" | "grok-voice" | "gemini-live" | (string & {});
@@ -170,6 +283,7 @@ export interface SharedVaultConfig {
   brainServicesFolder: string;
   noteTaskImportFolders: string;
   noteTaskImportEnabled: boolean;
+  tradingBrainEnabled: boolean;
   skillAutoSyncAll: boolean;
   skillAutoSync: Record<string, {
     autoImport: boolean;
@@ -178,6 +292,7 @@ export interface SharedVaultConfig {
     allowDelete: boolean;
   }>;
   gbrain: GBrainConfig;
+  synto: SyntoConfig;
   controlRoomPath: string;
   instructions: string;
 }
@@ -201,6 +316,21 @@ export interface GBrainConfig {
   skillpackLocation: string;
 }
 
+export type SyntoInstallMode = "optional" | "uv-tool" | "pip-user" | "existing";
+export type SyntoMcpMode = "stdio" | "disabled";
+export type SyntoSourceAccessMode = "permissive_only" | "all" | "deny";
+
+export interface SyntoConfig {
+  enabled: boolean;
+  installMode: SyntoInstallMode;
+  cliPath: string;
+  mcpMode: SyntoMcpMode;
+  sourceAccessMode: SyntoSourceAccessMode;
+  compareHeavyModel: string;
+  autoApprove: boolean;
+  minConfidence: number;
+}
+
 const DEFAULT_SYNCTHING_AUTO_PAIR_ENABLED = process.env.NEXT_PUBLIC_TAILNET_SYNC_ENABLED === "true";
 
 export const DEFAULT_SHARED_VAULT: SharedVaultConfig = {
@@ -221,6 +351,7 @@ export const DEFAULT_SHARED_VAULT: SharedVaultConfig = {
   brainServicesFolder: process.env.NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER ?? "Operations/Brain Services",
   noteTaskImportFolders: "Projects\nIntake\nMemory",
   noteTaskImportEnabled: false,
+  tradingBrainEnabled: false,
   skillAutoSyncAll: false,
   skillAutoSync: {},
   gbrain: {
@@ -236,92 +367,337 @@ export const DEFAULT_SHARED_VAULT: SharedVaultConfig = {
     providerPolicy: "balanced-cloud",
     skillpackLocation: process.env.NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION ?? "Skills/GBrain",
   },
+  synto: {
+    enabled: false,
+    installMode: "optional",
+    cliPath: process.env.NEXT_PUBLIC_SYNTO_CLI_PATH ?? "synto",
+    mcpMode: "stdio",
+    sourceAccessMode: "deny",
+    compareHeavyModel: process.env.NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL ?? "llama3.1:8b",
+    autoApprove: false,
+    minConfidence: 0.8,
+  },
   controlRoomPath: process.env.NEXT_PUBLIC_HERMES_CONTROL_ROOM_PATH ?? "~/agent-control-room",
-  instructions: "Use this vault as the shared memory and handoff space for all local agents. Read AGENTS.md and Operations/AI-Ready Vault Contract.md before durable edits. Treat GBrain as the optional retrieval/graph brain service, Synthesis as the reviewed synthesis layer, and Operations as machine-readable HivemindOS state.",
+  instructions: "Use this vault as the shared memory and handoff space for all local agents. Read AGENTS.md and Operations/AI-Ready Vault Contract.md before durable edits. Treat GBrain as the optional retrieval/graph brain service, Syntho as the optional compiled-wiki/MCP service for Synthesis, and Operations as machine-readable HivemindOS state.",
 };
 
 export const KNOWN_AGENT_RUNTIMES: KnownAgentRuntime[] = ["openclaw", "hermes", "aeon", "openai-compatible"];
 
-export const RUNTIME_LABELS: Record<string, string> = {
-  openclaw: "OpenClaw",
-  hermes: "Hermes",
-  aeon: "Aeon",
-  "openai-compatible": "Local OpenAI",
+const DEFAULT_RUNTIME_ENV_FEATURE: RuntimeEnvFeature = {
+  kind: "agent-overlay",
+  label: "Agent overlay",
+  description: "This runtime accepts per-agent environment overlays saved on the dashboard profile.",
+  storage: "profile.agentEnv",
 };
 
-export const RUNTIME_DEFAULTS: Record<string, Pick<AgentProfile, "gatewayUrl" | "chatPath" | "statusPath">> = {
+const DEFAULT_RUNTIME_SETTINGS_FEATURE: RuntimeSettingsFeature = {
+  kind: "standard",
+  createPanels: ["role", "memory", "calls", "security"],
+  editPanels: ["role", "memory", "tools", "calls", "security"],
+  modelSource: "runtime",
+};
+
+const DEFAULT_RUNTIME_SCHEDULER_FEATURE: RuntimeSchedulerFeature = {
+  kind: "dashboard",
+};
+
+const DEFAULT_RUNTIME_PROFILE_FEATURE: RuntimeProfileFeature = {
+  defaultBeeRole: "worker",
+  defaultWorkerClass: "general",
+};
+
+const DEFAULT_RUNTIME_INTEGRATION_FEATURE: RuntimeIntegrationFeature = {};
+
+export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> = {
   openclaw: {
-    gatewayUrl: "ws://127.0.0.1:18789",
-    chatPath: "",
-    statusPath: "",
+    runtime: "openclaw",
+    label: "OpenClaw",
+    kind: "gateway",
+    defaults: {
+      gatewayUrl: "ws://127.0.0.1:18789",
+      chatPath: "",
+      statusPath: "",
+    },
+    capabilities: {
+      status: true,
+      chat: true,
+      modelSelection: true,
+    },
+    env: DEFAULT_RUNTIME_ENV_FEATURE,
+    settings: {
+      ...DEFAULT_RUNTIME_SETTINGS_FEATURE,
+      defaultAgentId: "main",
+    },
+    chat: {
+      kind: "gateway",
+      label: "OpenClaw",
+      urlStrategy: "base-only",
+    },
+    scheduler: DEFAULT_RUNTIME_SCHEDULER_FEATURE,
+    profile: {
+      ...DEFAULT_RUNTIME_PROFILE_FEATURE,
+      firstAgentBeeRole: "queen",
+    },
+    integration: DEFAULT_RUNTIME_INTEGRATION_FEATURE,
   },
   hermes: {
-    gatewayUrl: process.env.NEXT_PUBLIC_HERMES_BASE_URL ?? "http://127.0.0.1:8642",
-    chatPath: "/chat",
-    statusPath: "/health",
+    runtime: "hermes",
+    label: "Hermes",
+    kind: "interactive",
+    defaults: {
+      gatewayUrl: process.env.NEXT_PUBLIC_HERMES_BASE_URL ?? "http://127.0.0.1:8642",
+      chatPath: "/chat",
+      statusPath: "/health",
+    },
+    capabilities: {
+      status: true,
+      chat: true,
+      runs: true,
+      memory: true,
+      sessionSearch: true,
+      backgroundTasks: true,
+      xSearch: true,
+      socialPosting: false,
+      videoGeneration: true,
+      codexRuntime: true,
+      kanbanDecompose: true,
+      setup: true,
+      walletTools: true,
+      modelSelection: true,
+    },
+    env: DEFAULT_RUNTIME_ENV_FEATURE,
+    settings: {
+      ...DEFAULT_RUNTIME_SETTINGS_FEATURE,
+      canAddModels: true,
+      defaultProvider: "openai-codex",
+    },
+    chat: {
+      kind: "interactive",
+      label: "Hermes",
+      slashCommandPolicy: "leading-slash-bypasses-system-context",
+    },
+    scheduler: DEFAULT_RUNTIME_SCHEDULER_FEATURE,
+    profile: {
+      ...DEFAULT_RUNTIME_PROFILE_FEATURE,
+      firstAgentLocalDataDir: "~/.hermes",
+    },
+    integration: {
+      updateRequirementDetail: "hermes",
+    },
   },
   aeon: {
-    gatewayUrl: process.env.NEXT_PUBLIC_AEON_A2A_URL ?? process.env.NEXT_PUBLIC_AEON_BASE_URL ?? "http://127.0.0.1:41241",
-    chatPath: "",
-    statusPath: "/health",
+    runtime: "aeon",
+    label: "Aeon",
+    kind: "background",
+    defaults: {
+      gatewayUrl: process.env.NEXT_PUBLIC_AEON_A2A_URL ?? process.env.NEXT_PUBLIC_AEON_BASE_URL ?? "http://127.0.0.1:41241",
+      chatPath: "",
+      statusPath: "/health",
+    },
+    capabilities: {
+      status: true,
+      skills: true,
+      schedules: true,
+      runs: true,
+      outputs: true,
+      memory: true,
+      backgroundTasks: true,
+      notifications: true,
+      setup: true,
+    },
+    env: {
+      kind: "github-secrets",
+      label: "AEON repo secrets",
+      description: "AEON secrets live in local AEON .env files and are synced to the agent's GitHub repo secrets for Actions runs.",
+      localSources: [
+        { label: "AEON home", path: "~/.aeon/.env" },
+        { label: "AEON workspace", path: "<aeonLocalPath>/.env" },
+      ],
+      syncAction: "runtime.syncEnv",
+      statusAction: "runtime.getSecretStatus",
+      manageAction: { label: "Open AEON secrets", view: "aeon" },
+    },
+    settings: {
+      kind: "autopilot",
+      createPanels: ["role", "connection", "memory", "calls"],
+      editPanels: ["connection", "memory", "calls"],
+      hidesRuntimeSelectorWhenEditing: true,
+      modelSource: "skill",
+      runtimeSegmentSubcopy: "Autopilot",
+      unavailableSubcopy: "Needs setup",
+      createActionLabel: "Connect Autopilot",
+      defaultAgentId: "local-aeon",
+    },
+    chat: {
+      kind: "background",
+      label: "AEON",
+    },
+    scheduler: {
+      kind: "external-runtime",
+      externalSource: "aeon",
+      configAction: "runtime.updateSkillConfig",
+      primarySkillRequired: true,
+    },
+    profile: {
+      ...DEFAULT_RUNTIME_PROFILE_FEATURE,
+      runtimeFolderMirrors: ["aeonLocalPath"],
+      postCreateAction: {
+        view: "aeon",
+        sessionStorageAgentIdKey: "hivemindos.aeon.openDetailAgentId",
+      },
+      aeonDefaults: {
+        repoEnvVar: "NEXT_PUBLIC_AEON_REPO",
+        localPathEnvVar: "NEXT_PUBLIC_AEON_LOCAL_PATH",
+        localPathFallback: "~/.aeon",
+        branch: "main",
+        mode: "github",
+        a2aUrl: "gatewayUrl",
+        a2aUrlFallback: "http://127.0.0.1:41241",
+      },
+    },
+    integration: DEFAULT_RUNTIME_INTEGRATION_FEATURE,
   },
   "openai-compatible": {
-    gatewayUrl: process.env.NEXT_PUBLIC_LOCAL_OPENAI_BASE_URL ?? "http://127.0.0.1:1234",
-    chatPath: "/v1/chat/completions",
-    statusPath: "/v1/models",
+    runtime: "openai-compatible",
+    label: "Local OpenAI",
+    kind: "interactive",
+    defaults: {
+      gatewayUrl: process.env.NEXT_PUBLIC_LOCAL_OPENAI_BASE_URL ?? "http://127.0.0.1:1234",
+      chatPath: "/v1/chat/completions",
+      statusPath: "/v1/models",
+    },
+    capabilities: {
+      status: true,
+      chat: true,
+      modelSelection: true,
+    },
+    env: DEFAULT_RUNTIME_ENV_FEATURE,
+    settings: {
+      ...DEFAULT_RUNTIME_SETTINGS_FEATURE,
+      canUsePod: true,
+      defaultProvider: "lm-studio",
+      defaultModel: process.env.NEXT_PUBLIC_LOCAL_OPENAI_MODEL ?? "",
+    },
+    chat: {
+      kind: "interactive",
+      label: "OpenAI-compatible",
+    },
+    scheduler: DEFAULT_RUNTIME_SCHEDULER_FEATURE,
+    profile: DEFAULT_RUNTIME_PROFILE_FEATURE,
+    integration: DEFAULT_RUNTIME_INTEGRATION_FEATURE,
   },
 };
 
-export const RUNTIME_CAPABILITIES: Record<string, RuntimeCapabilities> = {
-  openclaw: {
-    status: true,
-    chat: true,
-    modelSelection: true,
-  },
-  hermes: {
-    status: true,
-    chat: true,
-    runs: true,
-    memory: true,
-    sessionSearch: true,
-    backgroundTasks: true,
-    xSearch: true,
-    socialPosting: false,
-    videoGeneration: true,
-    codexRuntime: true,
-    kanbanDecompose: true,
-    setup: true,
-    walletTools: true,
-    modelSelection: true,
-  },
-  aeon: {
-    status: true,
-    skills: true,
-    schedules: true,
-    runs: true,
-    outputs: true,
-    memory: true,
-    backgroundTasks: true,
-    notifications: true,
-    setup: true,
-  },
-  "openai-compatible": {
-    status: true,
-    chat: true,
-    modelSelection: true,
-  },
-};
+export const RUNTIME_LABELS: Record<string, string> = Object.fromEntries(
+  Object.entries(RUNTIME_DEFINITIONS).map(([runtime, definition]) => [runtime, definition.label]),
+);
 
-export const RUNTIME_KINDS: Record<string, AgentRuntimeKind> = {
-  openclaw: "gateway",
-  hermes: "interactive",
-  aeon: "background",
-  "openai-compatible": "interactive",
-};
+export const RUNTIME_DEFAULTS: Record<string, Pick<AgentProfile, "gatewayUrl" | "chatPath" | "statusPath">> = Object.fromEntries(
+  Object.entries(RUNTIME_DEFINITIONS).map(([runtime, definition]) => [runtime, definition.defaults]),
+);
+
+export const RUNTIME_CAPABILITIES: Record<string, RuntimeCapabilities> = Object.fromEntries(
+  Object.entries(RUNTIME_DEFINITIONS).map(([runtime, definition]) => [runtime, definition.capabilities]),
+);
+
+export const RUNTIME_ENV_FEATURES: Record<string, RuntimeEnvFeature> = Object.fromEntries(
+  Object.entries(RUNTIME_DEFINITIONS).map(([runtime, definition]) => [runtime, definition.env]),
+);
+
+export const RUNTIME_SETTINGS_FEATURES: Record<string, RuntimeSettingsFeature> = Object.fromEntries(
+  Object.entries(RUNTIME_DEFINITIONS).map(([runtime, definition]) => [runtime, definition.settings]),
+);
+
+export const RUNTIME_CHAT_FEATURES: Record<string, RuntimeChatFeature> = Object.fromEntries(
+  Object.entries(RUNTIME_DEFINITIONS).map(([runtime, definition]) => [runtime, definition.chat]),
+);
+
+export const RUNTIME_SCHEDULER_FEATURES: Record<string, RuntimeSchedulerFeature> = Object.fromEntries(
+  Object.entries(RUNTIME_DEFINITIONS).map(([runtime, definition]) => [runtime, definition.scheduler]),
+);
+
+export const RUNTIME_PROFILE_FEATURES: Record<string, RuntimeProfileFeature> = Object.fromEntries(
+  Object.entries(RUNTIME_DEFINITIONS).map(([runtime, definition]) => [runtime, definition.profile]),
+);
+
+export const RUNTIME_INTEGRATION_FEATURES: Record<string, RuntimeIntegrationFeature> = Object.fromEntries(
+  Object.entries(RUNTIME_DEFINITIONS).map(([runtime, definition]) => [runtime, definition.integration]),
+);
+
+export const RUNTIME_KINDS: Record<string, AgentRuntimeKind> = Object.fromEntries(
+  Object.entries(RUNTIME_DEFINITIONS).map(([runtime, definition]) => [runtime, definition.kind]),
+);
+
+export function runtimeDisplayLabel(runtime: AgentRuntime) {
+  return RUNTIME_LABELS[runtime] ?? runtime;
+}
+
+export function runtimeEnvFeature(runtime: AgentRuntime): RuntimeEnvFeature {
+  return RUNTIME_ENV_FEATURES[runtime] ?? DEFAULT_RUNTIME_ENV_FEATURE;
+}
+
+export function runtimeSettingsFeature(runtime: AgentRuntime): RuntimeSettingsFeature {
+  return RUNTIME_SETTINGS_FEATURES[runtime] ?? DEFAULT_RUNTIME_SETTINGS_FEATURE;
+}
+
+export function runtimeChatFeature(runtime: AgentRuntime): RuntimeChatFeature {
+  return RUNTIME_CHAT_FEATURES[runtime] ?? {
+    kind: "interactive",
+    label: runtimeDisplayLabel(runtime),
+    slashCommandPolicy: "none",
+  };
+}
+
+export function runtimeSchedulerFeature(runtime: AgentRuntime): RuntimeSchedulerFeature {
+  return RUNTIME_SCHEDULER_FEATURES[runtime] ?? DEFAULT_RUNTIME_SCHEDULER_FEATURE;
+}
+
+export function runtimeProfileFeature(runtime: AgentRuntime): RuntimeProfileFeature {
+  return RUNTIME_PROFILE_FEATURES[runtime] ?? DEFAULT_RUNTIME_PROFILE_FEATURE;
+}
+
+export function runtimeIntegrationFeature(runtime: AgentRuntime): RuntimeIntegrationFeature {
+  return RUNTIME_INTEGRATION_FEATURES[runtime] ?? DEFAULT_RUNTIME_INTEGRATION_FEATURE;
+}
+
+export function runtimeLocalDataDirPatch(runtime: AgentRuntime, path: string): Partial<AgentProfile> {
+  const patch: Partial<Pick<AgentProfile, "localDataDir" | "aeonLocalPath">> = { localDataDir: path };
+  for (const field of runtimeProfileFeature(runtime).runtimeFolderMirrors ?? []) {
+    patch[field] = path;
+  }
+  return patch;
+}
+
+export function runtimePostCreateAction(runtime: AgentRuntime) {
+  return runtimeProfileFeature(runtime).postCreateAction;
+}
+
+export function runtimeOwnsSchedules(runtime: AgentRuntime) {
+  return runtimeSchedulerFeature(runtime).kind === "external-runtime";
+}
+
+export function runtimeScheduleFilterOptions(): RuntimeScheduleFilterOption[] {
+  return Object.keys(RUNTIME_DEFINITIONS)
+    .filter((runtime) => runtimeOwnsSchedules(runtime))
+    .map((runtime) => ({ value: runtime, label: runtimeDisplayLabel(runtime) }));
+}
+
+export function runtimeUsesAgentEnvOverlay(runtime: AgentRuntime) {
+  return runtimeEnvFeature(runtime).kind === "agent-overlay";
+}
 
 export function createAgentProfile(runtime: AgentRuntime, index = 1): AgentProfile {
   const defaults = RUNTIME_DEFAULTS[runtime] ?? RUNTIME_DEFAULTS["openai-compatible"];
   const label = RUNTIME_LABELS[runtime] ?? runtime;
+  const settings = runtimeSettingsFeature(runtime);
+  const profile = runtimeProfileFeature(runtime);
+  const aeonDefaults = profile.aeonDefaults;
+  const beeRole = index === 1
+    ? profile.firstAgentBeeRole ?? profile.defaultBeeRole ?? "worker"
+    : profile.defaultBeeRole ?? "worker";
+  const workerClass = index === 1
+    ? profile.firstAgentWorkerClass ?? profile.defaultWorkerClass ?? "general"
+    : profile.defaultWorkerClass ?? "general";
   return {
     id: `${runtime}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: `${label} Agent ${index}`,
@@ -329,28 +705,28 @@ export function createAgentProfile(runtime: AgentRuntime, index = 1): AgentProfi
     gatewayUrl: defaults.gatewayUrl,
     chatPath: defaults.chatPath,
     statusPath: defaults.statusPath,
-    agentId: runtime === "openclaw" ? "main" : "",
-    provider: runtime === "hermes" ? "openai-codex" : runtime === "openai-compatible" ? "lm-studio" : "",
-    model: runtime === "openai-compatible" ? process.env.NEXT_PUBLIC_LOCAL_OPENAI_MODEL ?? "" : "",
-    localDataDir: runtime === "hermes" && index === 1 ? "~/.hermes" : "",
+    agentId: settings.defaultAgentId ?? "",
+    provider: settings.defaultProvider ?? "",
+    model: settings.defaultModel ?? "",
+    localDataDir: index === 1 ? profile.firstAgentLocalDataDir ?? "" : "",
     machineName: "local",
     telemetryUrl: "",
     useSharedVault: true,
     runtimeKind: RUNTIME_KINDS[runtime] ?? "interactive",
     runtimeCapabilities: RUNTIME_CAPABILITIES[runtime] ?? { chat: true },
-    aeonRepo: runtime === "aeon" ? process.env.NEXT_PUBLIC_AEON_REPO ?? "" : undefined,
-    aeonBranch: runtime === "aeon" ? "main" : undefined,
-    aeonLocalPath: runtime === "aeon" ? process.env.NEXT_PUBLIC_AEON_LOCAL_PATH ?? "" : undefined,
-    a2aUrl: runtime === "aeon" ? defaults.gatewayUrl : undefined,
-    aeonMode: runtime === "aeon" ? "github" : undefined,
-    beeRole: runtime === "openclaw" && index === 1 ? "queen" : "worker",
-    workerClass: runtime === "openclaw" && index === 1 ? "general" : "general",
+    aeonRepo: aeonDefaults ? process.env[aeonDefaults.repoEnvVar] ?? "" : undefined,
+    aeonBranch: aeonDefaults?.branch,
+    aeonLocalPath: aeonDefaults ? process.env[aeonDefaults.localPathEnvVar] ?? aeonDefaults.localPathFallback : undefined,
+    a2aUrl: aeonDefaults?.a2aUrl === "gatewayUrl" ? defaults.gatewayUrl || aeonDefaults.a2aUrlFallback : undefined,
+    aeonMode: aeonDefaults?.mode,
+    beeRole,
+    workerClass,
     calls: buildAgentCallPreferences(),
   };
 }
 
 export function getRuntimeUrl(profile: AgentProfile, path?: string): string {
-  if (profile.runtime === "openclaw") return profile.gatewayUrl;
+  if (runtimeChatFeature(profile.runtime).urlStrategy === "base-only") return profile.gatewayUrl;
   if (path && /^https?:\/\//i.test(path)) return path;
   const defaults = RUNTIME_DEFAULTS[profile.runtime] ?? RUNTIME_DEFAULTS.hermes;
   const base = (profile.gatewayUrl?.trim() || defaults.gatewayUrl || "").replace(/\/+$/, "");

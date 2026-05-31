@@ -160,7 +160,7 @@ start_dashboard() {
   if [[ "${NEXT_DEV_MAX_OLD_SPACE_MB:-1536}" != "0" && " $node_options " != *" --max-old-space-size="* ]]; then
     node_options="${node_options:+$node_options }--max-old-space-size=${NEXT_DEV_MAX_OLD_SPACE_MB:-1536}"
   fi
-  NODE_OPTIONS="$node_options" nohup "$ROOT/scripts/run-with-memory-limit.sh" --limit-mb 5000 -- "${pnpm_cmd[@]}" exec next dev "$bundler_flag" "${source_map_args[@]}" -p "$PORT" > "$ROOT/.next/hivemindos.log" 2>&1 &
+  NODE_OPTIONS="$node_options" nohup "$ROOT/scripts/run-with-memory-limit.sh" --limit-mb 5000 -- "${pnpm_cmd[@]}" exec next dev "$bundler_flag" "${source_map_args[@]}" -p "$PORT" -H "${HIVEMINDOS_DASHBOARD_HOST:-127.0.0.1}" > "$ROOT/.next/hivemindos.log" 2>&1 &
   sleep 2
 }
 

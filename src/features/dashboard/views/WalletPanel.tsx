@@ -298,6 +298,7 @@ export function WalletPanel(props: WalletPanelProps) {
               <AgentWalletCard
                 agentName={selectedAgent.name}
                 machineName={selectedAgent.machineName}
+                agentUsePod={selectedAgent.usePod}
                 wallet={selectedWallet}
                 survival={selectedWalletSnapshot}
                 honeyReward={selectedHoneyReward}

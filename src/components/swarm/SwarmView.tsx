@@ -12,9 +12,7 @@ import {
 import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
 import { RUNTIME_LABELS } from "@/lib/types/agent-runtime";
 
-import { BeeIcon } from "./bee-icon";
 import { Composer } from "./composer";
-import { HexTile } from "./hex-tile";
 import { HeadlinesPanel, MarketPanel, SocialPanel } from "./feeds";
 import {
   XThreadView, RedditView, PolymarketView, ResearchView, OpsView, MiroSharkIntegrationView,
@@ -145,10 +143,6 @@ export function SwarmView({
       ? requestedSelectedId
       : runs[0]?.id ?? "";
   const run = selectedId ? runs.find((r) => r.id === selectedId) ?? runs[0] ?? null : null;
-  const today = new Date().toLocaleDateString("en-US", {
-    weekday: "long", month: "short", day: "numeric", year: "numeric",
-  });
-
   const handleSelectRun = React.useCallback((id: string) => {
     setInternalSelectedId(id);
     const r = runs.find((x) => x.id === id);
@@ -172,9 +166,6 @@ export function SwarmView({
   }, [onLaunch, template, templates]);
 
   const activeTemplate = run?.template ?? template;
-  const liveCount = runs.filter((r) => r.state === "live").length;
-  const totalPosts = run?.posts ?? 0;
-  const totalTrades = run?.trades ?? 0;
   const isLoading = loading || runPending;
 
   return (
@@ -185,7 +176,7 @@ export function SwarmView({
           width: "100%", height: "100%",
           background: "var(--background)", color: "var(--foreground)",
           fontFamily: "var(--f-display), system-ui, sans-serif",
-          display: "grid", gridTemplateRows: "auto 1fr",
+          display: "grid", gridTemplateRows: "minmax(0, 1fr)",
         }}>
         {/* Backdrop wash */}
         <div aria-hidden className="absolute inset-0 pointer-events-none" style={{
@@ -202,50 +193,6 @@ export function SwarmView({
           </defs>
           <rect width="100%" height="100%" fill="url(#swarmBgHex)" />
         </svg>
-
-        {/* ===== MASTHEAD ===== */}
-        <header className="relative z-10"
-          style={{ padding: "22px 32px 16px", borderBottom: "1px solid rgba(148,163,184,0.16)" }}>
-          <div className="grid items-center" style={{ gridTemplateColumns: "auto 1fr auto", gap: 24 }}>
-            <div className="flex items-center" style={{ gap: 14 }}>
-              <HexTile size={42} tone="honey"><BeeIcon role="queen" size={26} /></HexTile>
-              <div>
-                <div className={styles.monoCap} style={{ color: "var(--hex-honey-border)" }}>
-                  Hivemind Dispatch · Swarm Theater
-                </div>
-                <div className="font-bold" style={{
-                  fontFamily: "var(--f-display)", fontSize: 18, letterSpacing: -0.2,
-                }}>MiroShark · simulations</div>
-              </div>
-            </div>
-            <div className="text-center uppercase" style={{
-              fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--muted)", letterSpacing: 0.1,
-            }}>
-              {today} · miroshark · <span style={{ color: "var(--hex-active-border)" }}>
-                {isLoading ? loadingLabel : statusLabel}
-              </span>
-            </div>
-            <div />
-          </div>
-
-          <div className="mt-4 grid items-end" style={{ gridTemplateColumns: "1fr auto", gap: 24 }}>
-            <h1 className="m-0 font-bold" style={{
-              fontFamily: "var(--f-display)", fontSize: "clamp(40px, 5vw, 64px)",
-              lineHeight: 0.95, letterSpacing: -2.2,
-            }}>
-              A world,{" "}
-              <span style={{ fontStyle: "italic", color: "var(--hex-honey-border)", fontWeight: 500 }}>
-                simulated.
-              </span>
-            </h1>
-            <div className="flex" style={{ gap: 18, paddingBottom: 6 }}>
-              <BigStat n={liveCount} label="live" tone="cyan" />
-              <BigStat n={agents.length} label="agents in arena" tone="honey" />
-              <BigStat n={totalPosts} label="posts this round" />
-              <BigStat n={totalTrades} label="events this round" />
-            </div>
-          </div>
-        </header>
 
         {/* ===== BODY ===== */}
         <div className="relative z-10 grid" style={{

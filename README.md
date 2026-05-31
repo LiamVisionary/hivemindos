@@ -91,6 +91,16 @@ Then open the dashboard printed by setup, usually:
 http://localhost:5020
 ```
 
+The dashboard is protected by a local device unlock token because its API can read env values, manage runtime config, and perform wallet actions. Setup stores the token in `.env.local` as `HIVEMINDOS_DASHBOARD_DEVICE_TOKEN`, offers to copy it to your clipboard, and prints the recovery commands:
+
+```bash
+pnpm dashboard-auth copy-token
+pnpm dashboard-auth reset-token
+pnpm dashboard-auth rotate-secret
+```
+
+Use `copy-token` when you need to paste the token into the unlock screen again. Use `reset-token` if the token is lost, then restart the dashboard so it reloads `.env.local`. Use `rotate-secret` when you also want to invalidate existing browser sessions after restart.
+
 Setup checks Node.js and pnpm/Corepack, installs dependencies, installs `hive-env-add`, installs the lightweight machine monitor where supported, starts the dashboard when possible, and can open the dashboard for you. Production dashboard builds are skipped by default; use `./setup.sh --build` when you explicitly want one. On macOS/Linux use `setup.sh`; on native Windows use `setup.ps1`.
 
 To remove HivemindOS later, run the matching uninstaller. It asks one prompt at a time before removing services, generated files, `hive-env-add`, shared-skill agent hints, or optional apps such as Tailscale, Syncthing, pnpm, GnuPG, and Obsidian:
@@ -281,6 +291,7 @@ Use `./setup.sh --system-tailscale` only when you want the older full Tailnet se
 ## Private By Default
 
 - The machine monitor is read-only by default.
+- The dashboard API requires a signed local session or device token before non-public routes can read secrets, mutate config, or touch wallet actions.
 - Remote machines should stay private to Tailscale or Hivemind Link.
 - In Hivemind Link mode, the collector binds to localhost and the `hivemind-linkd` sidecar is the only Tailnet-facing entry point.
 - Chat requests pass through a local agent security proxy before reaching runtimes.

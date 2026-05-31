@@ -322,6 +322,69 @@
   gap: 8px;
 }
 
+.usePodRail {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(94, 234, 212, 0.18);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(45, 212, 191, 0.08), rgba(8, 11, 17, 0.32)),
+    rgba(255, 255, 255, 0.03);
+  padding: 12px;
+}
+
+.usePodRailHeader {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.usePodRailHeader strong {
+  display: block;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.usePodRailHeader span,
+.usePodRailHeader small,
+.usePodRailGrid span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.usePodRailHeader small {
+  border: 1px solid rgba(94, 234, 212, 0.18);
+  border-radius: 999px;
+  background: rgba(45, 212, 191, 0.08);
+  padding: 4px 7px;
+}
+
+.usePodRailGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.usePodRailGrid > div {
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 10px;
+  background: rgba(8, 11, 17, 0.38);
+  padding: 8px;
+}
+
+.usePodRailGrid strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
 .railItem {
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr);
@@ -1063,5 +1126,9 @@ button.railItem:active {
 
   .railGrid {
     grid-template-columns: 1fr;
+  }
+
+  .usePodRailGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

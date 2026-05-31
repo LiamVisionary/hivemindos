@@ -39,6 +39,7 @@ type UseDashboardPollingEffectsProps = {
   hiveEnvLoading: boolean;
   refreshHiveEnv: () => void | Promise<void>;
   agentWorkerClassView: AgentWorkerClassView;
+  vaultPanelMode: "hive-vault" | "shared-skills" | "brain-services" | "env" | "config";
   refreshNotifications: (options?: { append?: boolean }) => void | Promise<void>;
   mirosharkRun: MiroSharkRunResult | null;
   mirosharkPosts: { count: number };
@@ -85,6 +86,7 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
     hiveEnvLoading,
     refreshHiveEnv,
     agentWorkerClassView,
+    vaultPanelMode,
     refreshNotifications,
     mirosharkRun,
     mirosharkPosts,
@@ -183,12 +185,13 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
   }, [activeView, hydrated]);
 
   useEffect(() => {
-    if (!hydrated || activeView !== "env" || hiveEnv || hiveEnvLoading) return;
+    const envVisibleOrNearby = activeView === "env" || activeView === "vault";
+    if (!hydrated || !envVisibleOrNearby || hiveEnv || hiveEnvLoading) return;
     const timer = window.setTimeout(() => {
       void refreshHiveEnv();
-    }, 0);
+    }, vaultPanelMode === "env" ? 0 : 250);
     return () => window.clearTimeout(timer);
-  }, [activeView, hiveEnv, hiveEnvLoading, hydrated, refreshHiveEnv]);
+  }, [activeView, hiveEnv, hiveEnvLoading, hydrated, refreshHiveEnv, vaultPanelMode]);
 
   useEffect(() => {
     if (!hydrated || agentWorkerClassView !== "create" || brainSkills || brainSkillsLoading) return;

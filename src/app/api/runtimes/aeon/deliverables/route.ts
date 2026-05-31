@@ -6,6 +6,7 @@ import { homedir, hostname } from "node:os";
 import { NextRequest, NextResponse } from "next/server";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { KanbanMachineTarget } from "@/lib/types/kanban";
+import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,6 +55,9 @@ const DELIVERABLE_FILENAMES = new Set([
 ]);
 
 export async function POST(request: NextRequest) {
+  const unauthorized = await requireAuth(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const body = await request.json().catch(() => ({})) as AeonDeliverableBody;
     const action: AeonDeliverableAction = body.action === "download" || body.action === "send" ? body.action : "list";

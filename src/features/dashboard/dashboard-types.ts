@@ -2,6 +2,7 @@ import type { AgentProfile, AgentRuntime, RuntimeCapabilities, SharedVaultConfig
 import type { AgentNotification, AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import type { KanbanBoard, KanbanLinkedDirectory, KanbanMachineTarget, KanbanTask, KanbanTaskAttachment } from "@/lib/types/kanban";
 import type { GBrainStatus } from "@/lib/services/brain/gbrain";
+import type { SyntoStatus } from "@/lib/services/brain/synto";
 import type { TradingBrainStatus } from "@/lib/services/brain/trading-brain";
 
 export type GatewayStatus = {
@@ -43,6 +44,18 @@ export type RuntimeIntegrationStatus = {
       isUserDefined?: boolean;
       source?: string;
     }>;
+  };
+  providerStatus?: {
+    usePod?: {
+      tokenEnvName?: string;
+      depositAddress?: string;
+      balanceRemaining?: string;
+      route?: string;
+      checkedAt?: string;
+      status?: string;
+      message?: string;
+      modelCount?: number;
+    };
   };
 };
 
@@ -195,6 +208,7 @@ export type StoredSharedVaultConfig = Partial<SharedVaultConfig> & {
 };
 
 export type DashboardGBrainStatus = GBrainStatus;
+export type DashboardSyntoStatus = SyntoStatus;
 export type DashboardTradingBrainStatus = TradingBrainStatus;
 
 export type ChatMessage = {

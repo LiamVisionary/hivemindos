@@ -13,7 +13,10 @@ export type FleetHostedApp = FleetActiveApp & {
 export type FleetActiveAppBadgeSnapshot = {
   key: string;
   app: FleetActiveApp;
+  machineId: string;
+  agentId: string;
   agentName: string;
+  taskKey: string;
 };
 
 const ACTIVE_APP_TASK_FRESH_MS = 30 * 60 * 1000;
@@ -98,7 +101,8 @@ export function activeConnectedAppBadges(machines: FleetMachine[]): FleetActiveA
     machine.agents.flatMap((agent) => {
       const app = agent.activeApp;
       if (!app) return [];
-      return [{ key: `${machine.id}:${agent.id}:${app.id}`, app, agentName: agent.name }];
+      const taskKey = agent.currentTaskId || agent.task || "";
+      return [{ key: `${machine.id}:${agent.id}:${app.id}`, app, machineId: machine.id, agentId: agent.id, agentName: agent.name, taskKey }];
     })
   ));
 }

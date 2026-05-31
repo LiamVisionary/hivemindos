@@ -1,5 +1,5 @@
 import type { AgentProfile } from "@/lib/types/agent-runtime";
-import { isUsePodProfile, resolveUsePodRuntimeConfig } from "@/lib/services/usepod";
+import { checkUsePodModels, isUsePodProfile, resolveUsePodRuntimeConfig } from "@/lib/services/usepod";
 import type { RuntimeAdapter } from "./types";
 
 type OpenAIModelList = {
@@ -60,14 +60,16 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
     model: process.env.NEXT_PUBLIC_LOCAL_OPENAI_MODEL ?? "",
   },
   async getStatus(profile) {
-    const usePodConfig = await resolveUsePodRuntimeConfig(profile);
+    const usePodStatus = isUsePodProfile(profile) ? await checkUsePodModels(profile) : null;
+    const usePodConfig = !usePodStatus ? await resolveUsePodRuntimeConfig(profile) : null;
     const runtimeProfile = usePodConfig
       ? { ...profile, gatewayUrl: usePodConfig.baseUrl, statusPath: usePodConfig.statusPath, token: "" }
       : profile;
-    const data = await fetchModels(runtimeProfile);
-    const models = (data.data ?? [])
-      .map((model) => model.id)
-      .filter((model): model is string => Boolean(model));
+    const models = usePodStatus
+      ? usePodStatus.models.map((model) => model.id)
+      : (await fetchModels(runtimeProfile)).data
+        ?.map((model) => model.id)
+        .filter((model): model is string => Boolean(model)) ?? [];
     const providerName = isUsePodProfile(profile)
       ? "UsePod"
       : profile.provider === "ollama"
@@ -83,6 +85,18 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
       baseUrl: cleanBaseUrl(runtimeProfile),
       chatPath: runtimeProfile.chatPath || "/v1/chat/completions",
       models,
+      providerStatus: usePodStatus ? {
+        usePod: {
+          tokenEnvName: usePodStatus.tokenEnvName,
+          depositAddress: usePodStatus.depositAddress,
+          balanceRemaining: usePodStatus.balanceRemaining,
+          route: usePodStatus.route,
+          checkedAt: usePodStatus.checkedAt,
+          status: usePodStatus.status,
+          message: usePodStatus.message,
+          modelCount: usePodStatus.modelCount,
+        },
+      } : undefined,
       modelSelection: {
         provider: profile.provider || "openai-compatible",
         model: profile.model || models[0] || "",

@@ -3,8 +3,10 @@
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
 import type { Dispatch, SetStateAction } from "react";
+import { openNativeDirectory } from "@/lib/native/filesystem";
 import type { BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
+import { runtimeIntegrationFeature, runtimeLocalDataDirPatch, runtimePostCreateAction, runtimeProfileFeature, runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 import type { AgentCreateDraft, AgentSettingsPanel, AgentWorkerClassView, RuntimeModelDraft, RuntimeModelSetupMode } from "@/features/dashboard/agent-settings-types";
 import type { DashboardView, DiscoveredMachine, MachineGroup, RuntimeEnvSyncResponse, RuntimeIntegrationStatus, RuntimeModelSelection, RuntimeSessionSearchResult, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
 
@@ -145,24 +147,27 @@ export function useAgentController(props: UseAgentControllerProps) {
     setAgentSettingsPanel("role");
     setAgentCreateMachineKey(machine.key);
     const baseAgent = createAgentProfile(runtime, runtimeCount(agents, runtime) + 1);
+    const runtimeSettings = runtimeSettingsFeature(runtime);
+    const runtimeProfile = runtimeProfileFeature(runtime);
+    const autopilotDefaults = runtimeProfile.aeonDefaults;
     setAgentCreateDraft({
       name,
       runtime,
-      provider: runtime === "hermes" ? "openai-codex" : runtime === "openai-compatible" ? "lm-studio" : "",
-      model: "",
+      provider: runtimeSettings.defaultProvider || "",
+      model: runtimeSettings.defaultModel || "",
       calls: baseAgent.calls,
-      workerClass: "general",
+      workerClass: baseAgent.workerClass ?? "general",
       customWorkerClass: undefined,
       customWorkerClasses: [],
       selectedCustomWorkerClassId: undefined,
       skillProfilePrompt: beeWorkerPreset("general").taskProfile,
       preferredSkillSlugs: beeWorkerPreset("general").skillSlugs,
       useSharedVault: true,
-      aeonLocalPath: runtime === "aeon" ? "~/.aeon" : undefined,
-      aeonRepo: runtime === "aeon" ? "" : undefined,
-      aeonBranch: runtime === "aeon" ? "main" : undefined,
-      aeonMode: runtime === "aeon" ? "github" : undefined,
-      a2aUrl: runtime === "aeon" ? "http://127.0.0.1:41241" : undefined,
+      aeonLocalPath: autopilotDefaults ? baseAgent.aeonLocalPath || autopilotDefaults.localPathFallback : undefined,
+      aeonRepo: autopilotDefaults ? baseAgent.aeonRepo || "" : undefined,
+      aeonBranch: autopilotDefaults ? baseAgent.aeonBranch || autopilotDefaults.branch : undefined,
+      aeonMode: autopilotDefaults ? baseAgent.aeonMode || autopilotDefaults.mode : undefined,
+      a2aUrl: autopilotDefaults ? baseAgent.a2aUrl || autopilotDefaults.a2aUrlFallback : undefined,
     });
   }
 
@@ -189,6 +194,16 @@ export function useAgentController(props: UseAgentControllerProps) {
     setAgentRuntimeFolderBrowsing(true);
     setAgentRuntimeFolderStatus("");
     try {
+      const nativeResult = await openNativeDirectory({
+        currentPath: roleModalAgent.localDataDir,
+        prompt: "Choose this agent's runtime folder:",
+      });
+      if (nativeResult?.path) {
+        updateAgentProfile(roleModalAgent.id, runtimeLocalDataDirPatch(roleModalAgent.runtime, nativeResult.path));
+        setAgentRuntimeFolderEditing(false);
+        return;
+      }
+      if (nativeResult?.cancelled) return;
       const response = await fetch("/api/agents/browse-folder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -196,9 +211,7 @@ export function useAgentController(props: UseAgentControllerProps) {
       });
       const data = await response.json().catch(() => null) as { path?: string; cancelled?: boolean; error?: string } | null;
       if (data?.path) {
-        updateAgentProfile(roleModalAgent.id, roleModalAgent.runtime === "aeon"
-          ? { localDataDir: data.path, aeonLocalPath: data.path }
-          : { localDataDir: data.path });
+        updateAgentProfile(roleModalAgent.id, runtimeLocalDataDirPatch(roleModalAgent.runtime, data.path));
         setAgentRuntimeFolderEditing(false);
       } else if (!data?.cancelled) {
         setAgentRuntimeFolderEditing(true);
@@ -236,7 +249,21 @@ export function useAgentController(props: UseAgentControllerProps) {
         [data.status!.runtime]: data.status!.modelSelection,
       }));
     }
-    if (data.status.runtime === "hermes") {
+    const usePodStatus = data.status.providerStatus?.usePod;
+    if (agent.id && agent.provider === "usepod" && usePodStatus) {
+      updateAgentProfile(agent.id, {
+        usePod: {
+          ...(agent.usePod ?? {}),
+          depositAddress: usePodStatus.depositAddress || agent.usePod?.depositAddress || "",
+          lastBalanceRemaining: usePodStatus.balanceRemaining || agent.usePod?.lastBalanceRemaining || "",
+          lastRoute: usePodStatus.route || agent.usePod?.lastRoute || "",
+          lastCheckedAt: usePodStatus.checkedAt || agent.usePod?.lastCheckedAt || "",
+          lastTestStatus: usePodStatus.status || agent.usePod?.lastTestStatus || "",
+          lastModelCount: usePodStatus.modelCount ?? agent.usePod?.lastModelCount,
+        },
+      });
+    }
+    if (runtimeIntegrationFeature(data.status.runtime).updateRequirementDetail === "hermes") {
       setHermesUpdateRequiredDetail(hermesUpdateDetail(data.status));
     }
   }
@@ -279,25 +306,31 @@ export function useAgentController(props: UseAgentControllerProps) {
   async function createAgentFromModal() {
     if (!agentCreateMachine?.collectorUrl) return;
     const runtime = agentCreateDraft.runtime;
+    const runtimeSettings = runtimeSettingsFeature(runtime);
+    const runtimeProfile = runtimeProfileFeature(runtime);
+    const autopilotDefaults = runtimeProfile.aeonDefaults;
+    const autopilotRuntime = runtimeSettings.kind === "autopilot";
     const baseAgent = createAgentProfile(runtime, runtimeCount(agents, runtime) + 1);
+    const autopilotLocalPath = autopilotDefaults ? agentCreateDraft.aeonLocalPath || autopilotDefaults.localPathFallback : "";
+    const autopilotGatewayUrl = autopilotDefaults ? agentCreateDraft.a2aUrl || baseAgent.a2aUrl || autopilotDefaults.a2aUrlFallback : baseAgent.gatewayUrl;
     const draft: AgentProfile = {
       ...baseAgent,
       name: agentCreateDraft.name.trim() || `${RUNTIME_LABELS[runtime] ?? runtime} on ${agentCreateMachine.name}`,
       telemetryUrl: agentCreateMachine.collectorUrl,
       machineName: agentCreateMachine.name,
-      agentId: runtime === "openclaw" ? "main" : runtime === "aeon" ? "local-aeon" : "",
+      agentId: runtimeSettings.defaultAgentId || "",
       provider: agentCreateDraft.provider,
       model: agentCreateDraft.model,
       adaptiveOpenRouter: agentCreateDraft.adaptiveOpenRouter,
       usePod: agentCreateDraft.usePod,
       calls: agentCreateDraft.calls,
-      localDataDir: runtime === "aeon" ? agentCreateDraft.aeonLocalPath || "~/.aeon" : "",
-      aeonLocalPath: runtime === "aeon" ? agentCreateDraft.aeonLocalPath || "~/.aeon" : undefined,
-      aeonRepo: runtime === "aeon" ? agentCreateDraft.aeonRepo || "" : undefined,
-      aeonBranch: runtime === "aeon" ? agentCreateDraft.aeonBranch || "main" : undefined,
-      aeonMode: runtime === "aeon" ? agentCreateDraft.aeonMode || "github" : undefined,
-      a2aUrl: runtime === "aeon" ? agentCreateDraft.a2aUrl || "http://127.0.0.1:41241" : undefined,
-      gatewayUrl: runtime === "aeon" ? agentCreateDraft.a2aUrl || "http://127.0.0.1:41241" : baseAgent.gatewayUrl,
+      localDataDir: autopilotRuntime ? autopilotLocalPath : "",
+      aeonLocalPath: autopilotRuntime ? autopilotLocalPath : undefined,
+      aeonRepo: autopilotRuntime ? agentCreateDraft.aeonRepo || baseAgent.aeonRepo || "" : undefined,
+      aeonBranch: autopilotRuntime ? agentCreateDraft.aeonBranch || autopilotDefaults?.branch : undefined,
+      aeonMode: autopilotRuntime ? agentCreateDraft.aeonMode || autopilotDefaults?.mode : undefined,
+      a2aUrl: autopilotRuntime ? autopilotGatewayUrl : undefined,
+      gatewayUrl: autopilotRuntime ? autopilotGatewayUrl : baseAgent.gatewayUrl,
       beeRole: "worker",
       workerClass: agentCreateDraft.workerClass,
       customWorkerClass: agentCreateDraft.customWorkerClass,
@@ -342,9 +375,12 @@ export function useAgentController(props: UseAgentControllerProps) {
     )));
     setSelectedAgentId(next.id);
     closeAgentSettingsModal();
-    if (runtime === "aeon") {
-      window.sessionStorage.setItem("hivemindos.aeon.openDetailAgentId", next.id);
-      setActiveView("aeon");
+    const postCreateAction = runtimePostCreateAction(runtime);
+    if (postCreateAction) {
+      if (postCreateAction.sessionStorageAgentIdKey) {
+        window.sessionStorage.setItem(postCreateAction.sessionStorageAgentIdKey, next.id);
+      }
+      setActiveView(postCreateAction.view as DashboardView);
     }
   }
 

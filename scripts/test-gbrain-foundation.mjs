@@ -16,7 +16,11 @@ for (const token of [
   'kanbanFolder: process.env.NEXT_PUBLIC_OBSIDIAN_KANBAN_FOLDER ?? "Operations/Work Board"',
   'synthesisFolder: process.env.NEXT_PUBLIC_OBSIDIAN_SYNTHESIS_FOLDER ?? "Synthesis"',
   'brainServicesFolder: process.env.NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER ?? "Operations/Brain Services"',
+  "tradingBrainEnabled: false",
   'skillpackLocation: process.env.NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION ?? "Skills/GBrain"',
+  'cliPath: process.env.NEXT_PUBLIC_SYNTO_CLI_PATH ?? "synto"',
+  'compareHeavyModel: process.env.NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL ?? "llama3.1:8b"',
+  'sourceAccessMode: "deny"',
   'providerPolicy: "balanced-cloud"',
   'searchMode: "balanced"',
   'enabled: false',
@@ -32,12 +36,16 @@ for (const token of [
   '"Team/Shared Context.md"',
   '"HivemindOS/Shared Context.md"',
   'gbrain: { ...DEFAULT_SHARED_VAULT.gbrain, ...(storedVault.gbrain ?? {}) }',
+  'synto: { ...DEFAULT_SHARED_VAULT.synto, ...(storedVault.synto ?? {}) }',
 ]) {
   assert.ok(storage.includes(token), `dashboard storage migration missing ${token}`);
 }
 
 for (const route of ["status", "install", "connect", "import", "embed", "dream", "query"]) {
   assert.ok(existsSync(join(root, `src/app/api/brain/gbrain/${route}/route.ts`)), `missing GBrain API route: ${route}`);
+}
+for (const route of ["status", "install", "connect", "init", "run", "maintain", "compare", "eval", "doctor", "pack", "query"]) {
+  assert.ok(existsSync(join(root, `src/app/api/brain/synto/${route}/route.ts`)), `missing Syntho API route: ${route}`);
 }
 
 const gbrainService = read("src/lib/services/brain/gbrain.ts");
@@ -56,15 +64,44 @@ for (const token of [
 }
 assert.ok(!gbrainService.includes("exec("), "GBrain service should use execFile instead of shell exec");
 
+const syntoService = read("src/lib/services/brain/synto.ts");
+for (const token of [
+  "execFile",
+  '["init", root, "--existing", "--non-interactive"]',
+  '["maintain", "--vault", root, input.fix ? "--fix" : "--dry-run"]',
+  '["compare", "--vault", root, "--format", "both"]',
+  '["eval", "--json", "--vault", root]',
+  '["pack", "export", "--target", "agents", "--out", out, "--vault", root]',
+  "synto serve --vault <synthesis-folder>",
+  "sourceAccessMode",
+  "No provider secrets are stored in this note.",
+]) {
+  assert.ok(syntoService.includes(token), `Syntho service missing ${token}`);
+}
+assert.ok(!syntoService.includes("exec("), "Syntho service should use execFile instead of shell exec");
+
 has("src/lib/services/obsidian/brain-skills.ts", "function namespacedSharedSlug", "namespaced shared skill resolver");
 has("src/lib/services/obsidian/brain-skills.ts", 'relativeDir.map((part) => sanitizeSlug(part)).join("/")', "nested GBrain skill namespace");
 has("src/lib/services/obsidian/scheduled-runs.ts", "safeVaultFolder", "nested scheduled folder support");
 has("src/lib/services/obsidian/brain-graph.ts", "DEFAULT_SHARED_VAULT.brainServicesFolder", "new brain access log path");
-has("src/features/dashboard/views/VaultPanel.tsx", '["brain-services", "Brain Services"]', "Brain Services dashboard tab");
-has("src/features/dashboard/views/VaultPanel.tsx", "vaultPanelHref", "Vault panel native link fallback");
+has("src/features/dashboard/views/VaultPanel.tsx", '{ id: "brain-services", label: "Brain Services" }', "Brain Services dashboard tab");
+has("src/features/dashboard/views/VaultPanel.tsx", "selectVaultPanel", "Vault panel native link fallback");
 has("src/features/dashboard/views/VaultPanel.tsx", "Install GBrain", "GBrain install action");
+has("src/features/dashboard/views/VaultPanel.tsx", "Install Syntho", "Syntho install action");
+has("src/features/dashboard/views/VaultPanel.tsx", "Run pipeline", "Syntho pipeline action");
+has("src/features/dashboard/views/VaultPanel.tsx", "Compare model", "Syntho compare model control");
+has("src/features/dashboard/views/VaultPanel.tsx", "brainServiceSections", "Brain Services segmented section navigation");
+has("src/features/dashboard/views/VaultPanel.tsx", "brainServiceOverviewCards", "Brain Services overview card deck");
+has("src/features/dashboard/views/VaultPanel.tsx", "tradingBrainEnabled", "Trading Brain enable toggle");
+has("src/features/dashboard/views/VaultPanel.tsx", "Model backend needs attention", "Syntho model repair guidance");
+has("src/features/dashboard/brain-modules.tsx", "Advanced actions", "Brain module advanced disclosure");
+has("src/features/dashboard/brain-modules.tsx", "brainServicePrimaryActions", "Brain module primary actions");
+has("src/features/dashboard/DashboardApp.tsx", "Loading Brain Services", "Vault panel loading fallback");
+has("src/features/dashboard/views/brain-services.module.css", "brainServiceSegmented", "Brain Services segmented pill styling");
+has("src/features/dashboard/views/brain-services.module.css", "brainServiceOverviewGrid", "Brain Services overview card grid");
 has("src/features/dashboard/views/VaultPanel.tsx", "Synthesis is the curated layer", "Synthesis service card");
 has("src/features/dashboard/DashboardApp.tsx", "/api/brain/gbrain/status", "GBrain status API call");
+has("src/features/dashboard/DashboardApp.tsx", "/api/brain/synto/status", "Syntho status API call");
 has("src/app/page.tsx", "vaultPanel", "Vault panel deep link query");
 has("src/features/dashboard/DashboardApp.tsx", "schedulerVaultAutoSyncKeyRef", "Automations vault auto-sync guard");
 has("src/features/dashboard/DashboardApp.tsx", 'activeView !== "scheduler"', "Automations view auto-sync condition");
@@ -119,7 +156,10 @@ for (const [path, content] of [["setup.sh", setupSh], ["setup.ps1", setupPs]]) {
     "Operations/Brain Services",
     "Templates/HivemindOS",
     'NEXT_PUBLIC_HIVE_GBRAIN_SURFACE_ENABLED" "true"',
+    "NEXT_PUBLIC_SYNTO_CLI_PATH",
+    "NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL",
     "GBrain.md",
+    "Syntho.md",
     "seed-vault-foundation.mjs",
   ]) {
     assert.ok(content.includes(token), `${path} missing setup surface ${token}`);
@@ -128,8 +168,11 @@ for (const [path, content] of [["setup.sh", setupSh], ["setup.ps1", setupPs]]) {
 }
 for (const [path, content] of [["uninstall.sh", uninstallSh], ["uninstall.ps1", uninstallPs]]) {
   for (const token of [
-    "Remove optional GBrain config keys from .env.local?",
+    "Remove optional GBrain and Syntho config keys from .env.local?",
     "Remove optional GBrain service note from the Obsidian vault?",
+    "Remove optional Syntho service note from the Obsidian vault?",
+    "Uninstall global Syntho CLI installed by uv?",
+    "Remove optional Syntho runtime files from the Synthesis folder?",
     "Remove namespaced GBrain skillpack from the shared Skills shelf?",
     "Remove local GBrain data directory",
     "Remove seeded self-writing vault workflow templates from Operations/Automations?",

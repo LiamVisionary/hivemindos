@@ -1,10 +1,38 @@
 .vaultPanel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 8px;
   background: rgba(16, 20, 29, 0.78);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.24);
   padding: 20px 22px 22px;
-  margin-bottom: 16px;
+  margin-bottom: 0;
+}
+
+.vaultPanel > [data-work-section-header="true"] {
+  margin: -20px -22px 18px;
+}
+
+.vaultPanelBody {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+.brainMapBody {
+  overflow: hidden;
+}
+
+.vaultPanelCompact {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
 }
 
 .vaultHeader {
@@ -53,7 +81,10 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 0.36fr);
   gap: 14px;
+  height: 100%;
+  min-height: 100%;
   margin: 0;
+  overflow: hidden;
 }
 
 .brainGraphPanel,
@@ -67,6 +98,9 @@
 }
 
 .brainGraphPanel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -152,7 +186,9 @@
 
 .brainGraphCanvas {
   position: relative;
-  min-height: 620px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   background:
     linear-gradient(rgba(94, 234, 212, 0.045) 1px, transparent 1px),
     linear-gradient(90deg, rgba(94, 234, 212, 0.045) 1px, transparent 1px),
@@ -164,7 +200,8 @@
 .brainGraphCanvas svg {
   display: block;
   width: 100%;
-  min-height: 620px;
+  height: 100%;
+  min-height: 0;
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -179,6 +216,49 @@
 .brainGraphCanvas svg:active,
 .brainGraphCanvas svg.dragging {
   cursor: grabbing;
+}
+
+.brainGraphRefreshButton {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 4;
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(94, 234, 212, 0.32);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, rgba(8, 13, 22, 0.92), rgba(12, 30, 34, 0.82)),
+    rgba(3, 7, 18, 0.82);
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.34),
+    0 0 0 1px rgba(255, 212, 90, 0.08),
+    0 0 22px rgba(45, 212, 191, 0.12);
+  color: var(--accent-strong);
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.brainGraphRefreshButton:hover:not(:disabled),
+.brainGraphRefreshButton:focus-visible {
+  border-color: rgba(94, 234, 212, 0.62);
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.2), rgba(8, 13, 22, 0.9)),
+    rgba(3, 7, 18, 0.9);
+  color: #ccfbf1;
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.brainGraphRefreshButton:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.brainGraphRefreshButton svg {
+  width: 17px;
+  height: 17px;
 }
 
 .brainLoader {
@@ -1025,7 +1105,12 @@
   display: grid;
   align-content: start;
   gap: 13px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 14px;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 
 .brainInspectorHeader {
@@ -1237,522 +1322,6 @@
   font-size: 12px;
 }
 
-.brainServicesPanel {
-  display: grid;
-  gap: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 8px;
-  background: rgba(8, 12, 20, 0.68);
-  padding: 18px;
-}
-
-.brainServiceGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.brainServiceCard {
-  display: grid;
-  align-content: start;
-  gap: 14px;
-  min-width: 0;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 8px;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.82), rgba(10, 14, 21, 0.78));
-  padding: 16px;
-}
-
-.brainServiceCard.installView {
-  position: relative;
-  min-height: 420px;
-  overflow: hidden;
-  background:
-    linear-gradient(135deg, rgba(20, 184, 166, 0.16), transparent 34%),
-    linear-gradient(315deg, rgba(56, 189, 248, 0.13), transparent 38%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(7, 11, 18, 0.86));
-}
-
-.brainServiceCard.installView::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
-  background-size: 34px 34px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.72), transparent);
-}
-
-.brainServiceCard.installView > * {
-  position: relative;
-  z-index: 1;
-}
-
-.brainServiceCard.active {
-  border-color: rgba(45, 212, 191, 0.35);
-}
-
-.brainServiceCard.synthesis {
-  border-color: rgba(234, 179, 8, 0.24);
-}
-
-.brainServiceCard.trading {
-  border-color: rgba(56, 189, 248, 0.26);
-}
-
-.brainServiceTopline,
-.brainServiceActions,
-.brainServiceBadges {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.brainServiceTopline {
-  justify-content: space-between;
-}
-
-.brainServiceTopline span,
-.brainServiceRecommendations strong {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-  color: var(--foreground);
-}
-
-.brainServiceTopline svg,
-.brainServiceRecommendations svg {
-  width: 15px;
-  height: 15px;
-}
-
-.brainServiceCard h4 {
-  margin: 0;
-  color: var(--foreground);
-  font-size: 18px;
-  line-height: 1.2;
-}
-
-.brainServiceCard p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.55;
-}
-
-.brainModuleInstallContent {
-  display: grid;
-  align-self: stretch;
-  gap: 16px;
-  min-height: 230px;
-}
-
-.brainModuleFeatureList {
-  display: grid;
-  gap: 9px;
-}
-
-.brainModuleFeatureList span {
-  position: relative;
-  min-width: 0;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 8px;
-  background: rgba(2, 6, 23, 0.34);
-  color: var(--foreground);
-  padding: 10px 10px 10px 30px;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.brainModuleFeatureList span::before {
-  content: "";
-  position: absolute;
-  top: 15px;
-  left: 12px;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #2dd4bf;
-  box-shadow: 0 0 16px rgba(45, 212, 191, 0.7);
-}
-
-.brainModuleInstallFailure {
-  border: 1px solid rgba(248, 113, 113, 0.32);
-  border-radius: 8px;
-  background: rgba(127, 29, 29, 0.2);
-  color: #fecaca;
-  padding: 12px;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.45;
-}
-
-.brainModuleInstallActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 10px;
-  margin-top: auto;
-}
-
-.brainModuleInstallActions button {
-  min-height: 50px;
-  justify-content: center;
-  border-color: rgba(45, 212, 191, 0.34) !important;
-  color: var(--foreground) !important;
-  font-size: 13px !important;
-  font-weight: 900 !important;
-  line-height: 1.2 !important;
-  letter-spacing: 0 !important;
-}
-
-.brainModuleInstallActions button svg {
-  width: 17px;
-  height: 17px;
-  flex: 0 0 auto;
-}
-
-.brainModuleInstallButton {
-  flex: 1 1 220px;
-  border-color: rgba(45, 212, 191, 0.4) !important;
-  background: linear-gradient(135deg, rgba(20, 184, 166, 0.34), rgba(56, 189, 248, 0.2)) !important;
-}
-
-.brainModuleInstallActions button:not(.brainModuleInstallButton) {
-  flex: 0 1 250px;
-  background: linear-gradient(135deg, rgba(20, 184, 166, 0.18), rgba(15, 23, 42, 0.3)) !important;
-}
-
-.brainModuleInstalling,
-.brainModuleSuccess {
-  display: grid;
-  place-items: center;
-  align-self: stretch;
-  gap: 16px;
-  min-height: 270px;
-  text-align: center;
-}
-
-.brainModuleSuccess {
-  animation: brainModuleSuccessFade 2s ease-in-out both;
-}
-
-.brainModuleInstalling strong,
-.brainModuleSuccess strong {
-  color: var(--foreground);
-  font-size: 22px;
-  line-height: 1.15;
-}
-
-.brainModuleInstallOrbit {
-  position: relative;
-  width: 112px;
-  height: 112px;
-  border: 1px solid rgba(45, 212, 191, 0.3);
-  border-radius: 999px;
-  background:
-    radial-gradient(circle, rgba(45, 212, 191, 0.26), transparent 44%),
-    rgba(2, 6, 23, 0.36);
-  animation: brainModulePulse 1.6s ease-in-out infinite;
-}
-
-.brainModuleInstallOrbit::before,
-.brainModuleInstallOrbit::after,
-.brainModuleInstallOrbit span {
-  content: "";
-  position: absolute;
-  inset: 16px;
-  border: 1px solid rgba(56, 189, 248, 0.34);
-  border-radius: 999px;
-  animation: brainModuleSpin 2.4s linear infinite;
-}
-
-.brainModuleInstallOrbit::after {
-  inset: 28px;
-  border-color: rgba(234, 179, 8, 0.32);
-  animation-duration: 1.7s;
-  animation-direction: reverse;
-}
-
-.brainModuleInstallOrbit span {
-  inset: 5px;
-  border-color: transparent;
-  border-top-color: rgba(45, 212, 191, 0.9);
-}
-
-.brainModuleCheckmark {
-  display: grid;
-  place-items: center;
-  width: 116px;
-  height: 116px;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(45, 212, 191, 0.26), rgba(15, 23, 42, 0.5));
-  box-shadow: 0 0 42px rgba(45, 212, 191, 0.24);
-  animation: brainModuleSuccessPop 520ms cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
-}
-
-.brainModuleCheckmark svg {
-  width: 84px;
-  height: 84px;
-}
-
-.brainModuleCheckmark circle {
-  fill: rgba(20, 184, 166, 0.16);
-  stroke: rgba(45, 212, 191, 0.85);
-  stroke-width: 3;
-  stroke-dasharray: 170;
-  stroke-dashoffset: 170;
-  animation: brainModuleDraw 680ms ease-out 80ms forwards;
-}
-
-.brainModuleCheckmark path {
-  fill: none;
-  stroke: #ccfbf1;
-  stroke-width: 5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 48;
-  stroke-dashoffset: 48;
-  animation: brainModuleDraw 560ms ease-out 420ms forwards;
-}
-
-@keyframes brainModuleSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes brainModulePulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 rgba(45, 212, 191, 0);
-    transform: scale(0.96);
-  }
-  50% {
-    box-shadow: 0 0 52px rgba(45, 212, 191, 0.24);
-    transform: scale(1);
-  }
-}
-
-@keyframes brainModuleDraw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes brainModuleSuccessPop {
-  0% {
-    opacity: 0;
-    transform: scale(0.72);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes brainModuleSuccessFade {
-  0% {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  18%,
-  78% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .brainModuleInstallOrbit,
-  .brainModuleInstallOrbit::before,
-  .brainModuleInstallOrbit::after,
-  .brainModuleInstallOrbit span,
-  .brainModuleSuccess,
-  .brainModuleCheckmark,
-  .brainModuleCheckmark circle,
-  .brainModuleCheckmark path {
-    animation-duration: 1ms;
-    animation-iteration-count: 1;
-  }
-}
-
-.serviceBadgeLive,
-.serviceBadgeIdle,
-.brainServiceBadges span {
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.7);
-  color: var(--muted);
-  padding: 5px 8px;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.tradingBrainPillars {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.tradingBrainPillars span {
-  border: 1px solid rgba(56, 189, 248, 0.18);
-  border-radius: 999px;
-  background: rgba(14, 116, 144, 0.16);
-  color: #bae6fd;
-  padding: 5px 8px;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.tradingRuntimeGrid {
-  display: grid;
-  gap: 8px;
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
-  padding-top: 12px;
-}
-
-.tradingRuntimeCard {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 8px;
-  background: rgba(2, 6, 23, 0.38);
-  padding: 10px;
-}
-
-.tradingRuntimeCard.active {
-  border-color: rgba(45, 212, 191, 0.34);
-  background: rgba(20, 184, 166, 0.1);
-}
-
-.tradingRuntimeCard div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.tradingRuntimeCard strong {
-  color: var(--foreground);
-  font-size: 12px;
-}
-
-.tradingRuntimeCard span {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.35;
-}
-
-.serviceBadgeLive {
-  border-color: rgba(45, 212, 191, 0.34);
-  color: #99f6e4;
-}
-
-.serviceBadgeIdle {
-  border-color: rgba(234, 179, 8, 0.28);
-  color: #fde68a;
-}
-
-.brainServiceStats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.brainServiceStats span {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 8px;
-  background: rgba(2, 6, 23, 0.45);
-  color: var(--muted);
-  padding: 10px;
-  font-size: 11px;
-}
-
-.brainServiceStats svg {
-  width: 15px;
-  height: 15px;
-  color: #99f6e4;
-}
-
-.brainServiceStats strong {
-  min-width: 0;
-  color: var(--foreground);
-  font-size: 14px;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-
-.gbrainQueryBox {
-  display: grid;
-  gap: 10px;
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
-  padding-top: 12px;
-}
-
-.gbrainQueryBox label {
-  display: grid;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.gbrainQueryBox textarea {
-  width: 100%;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 7px;
-  background: rgba(2, 6, 23, 0.58);
-  color: var(--foreground);
-  padding: 10px;
-  resize: vertical;
-}
-
-.gbrainQueryBox pre {
-  max-height: 260px;
-  margin: 0;
-  overflow: auto;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 7px;
-  background: rgba(2, 6, 23, 0.68);
-  color: var(--foreground);
-  padding: 12px;
-  white-space: pre-wrap;
-  font-size: 12px;
-}
-
-.brainServiceRecommendations {
-  display: grid;
-  gap: 8px;
-  border: 1px solid rgba(234, 179, 8, 0.2);
-  border-radius: 8px;
-  background: rgba(113, 63, 18, 0.18);
-  padding: 12px;
-}
-
-.brainServiceRecommendations span {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.brainServiceRecommendations code {
-  color: #fde68a;
-}
-
 
 .vaultGrid input,
 .vaultInstructions textarea {
@@ -1789,6 +1358,10 @@
     grid-template-columns: 1fr;
   }
 
+  .brainServiceHealthGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .brainSkillsLoadingPanel {
     grid-template-columns: 1fr;
     min-height: 560px;
@@ -1817,6 +1390,10 @@
 
   .brainServiceStats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brainServiceSettings {
+    grid-template-columns: 1fr;
   }
 
   .tradingRuntimeCard {
@@ -1859,6 +1436,14 @@
 
   .skillLoadingCopy h3 {
     font-size: 20px;
+  }
+
+  .brainServiceHealthGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .brainServicesPanel {
+    padding: 12px;
   }
 }
 

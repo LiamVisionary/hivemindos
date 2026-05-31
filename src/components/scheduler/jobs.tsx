@@ -12,6 +12,7 @@ interface JobsProps {
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
   onNewJob?: () => void;
+  controls?: React.ReactNode;
 }
 
 const STATUS_TONE = {
@@ -97,12 +98,12 @@ function JobCard({ job, selected, onSelect, onToggle }: {
   );
 }
 
-export function Jobs({ jobs, selectedId, onSelect, onToggle, onNewJob }: JobsProps) {
+export function Jobs({ jobs, selectedId, onSelect, onToggle, onNewJob, controls }: JobsProps) {
   const enabled = jobs.filter((j) => j.enabled).length;
   return (
     <aside className="flex flex-col overflow-hidden"
       style={{
-        gap: 14, padding: "20px 18px",
+        gap: 14, height: "100%", minHeight: 0, padding: "20px 18px",
         borderRight: "1px solid rgba(148,163,184,0.16)",
         background: "var(--panel-bg-soft)",
       }}>
@@ -116,8 +117,21 @@ export function Jobs({ jobs, selectedId, onSelect, onToggle, onNewJob }: JobsPro
             {enabled}/{jobs.length} active
           </span>
         </div>
+        {controls ? <div className={styles.schedulerInlineControls}>{controls}</div> : null}
       </div>
-      <div className="flex flex-col overflow-auto" style={{ flex: 1, minHeight: 0, gap: 8 }}>
+      <div
+        className="flex flex-col"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          gap: 8,
+          overflowX: "hidden",
+          overflowY: "auto",
+          overscrollBehavior: "contain",
+          paddingRight: 4,
+          WebkitOverflowScrolling: "touch",
+        }}
+      >
         <button onClick={onNewJob} aria-label="Schedule new task"
           className="grid place-items-center cursor-pointer text-center"
           style={{

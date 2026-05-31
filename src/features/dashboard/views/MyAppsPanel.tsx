@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ExternalLink, LoaderCircle, Maximize2, Minimize2, RefreshCcw, Sparkles } from "lucide-react";
+import { ArrowLeft, Copy, ExternalLink, LoaderCircle, Maximize2, Minimize2, RefreshCcw, Route, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 
@@ -26,6 +26,17 @@ type HostedApp = {
   openUrl: string;
   apiBaseUrl?: string;
   healthUrl?: string;
+  apiRoutes?: ApiServiceRoute[];
+  apiRoutesSource?: "openapi" | "hivemind";
+};
+
+type ApiServiceRoute = {
+  method: string;
+  path: string;
+  url: string;
+  category: string;
+  summary?: string;
+  source?: "openapi" | "hivemind";
 };
 
 type FleetAppsPayload = {
@@ -139,12 +150,33 @@ function appLaunchUrl(app: HostedApp) {
   }
 }
 
+function routeGroups(routes: ApiServiceRoute[]) {
+  const groups = new Map<string, ApiServiceRoute[]>();
+  for (const route of routes) {
+    const category = route.category || "API";
+    groups.set(category, [...(groups.get(category) ?? []), route]);
+  }
+  return [...groups.entries()];
+}
+
+function canOpenRoute(route: ApiServiceRoute) {
+  return route.method.toUpperCase() === "GET" && !/[{}]/.test(route.path);
+}
+
+function routeTone(method: string) {
+  const normalized = method.toUpperCase();
+  if (normalized === "GET") return "border-[rgba(94,234,212,0.32)] bg-[rgba(20,184,166,0.10)] text-[var(--accent-strong)]";
+  if (normalized === "POST") return "border-[rgba(250,204,21,0.28)] bg-[rgba(250,204,21,0.10)] text-[#fde68a]";
+  return "border-[rgba(148,163,184,0.24)] bg-[rgba(148,163,184,0.10)] text-[var(--muted)]";
+}
+
 export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAppsPanelProps) {
   const [payload, setPayload] = useState<FleetAppsPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [liveAppExpanded, setLiveAppExpanded] = useState(false);
+  const [copiedRouteKey, setCopiedRouteKey] = useState("");
   const previousActiveViewRef = useRef<DashboardView | null>(null);
 
   const refresh = useCallback(async (force = false) => {
@@ -169,7 +201,7 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
     const enteredMyApps = previousActiveView !== "my-apps";
     if (!enteredMyApps && payload) return undefined;
     const timer = window.setTimeout(() => {
-      void refresh(enteredMyApps);
+      void refresh(false);
     }, 0);
     return () => window.clearTimeout(timer);
   }, [activeView, loading, payload, refresh]);
@@ -191,10 +223,18 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
   const readyMachines = payload?.machines?.filter((machine) => machine.collector === "ready").length ?? 0;
   const reportingMachines = payload?.machines?.filter((machine) => machine.appCount > 0).length ?? 0;
 
+  const copyRoute = async (route: ApiServiceRoute) => {
+    await navigator.clipboard.writeText(route.url || route.path).catch(() => undefined);
+    setCopiedRouteKey(`${route.method}:${route.path}`);
+    window.setTimeout(() => setCopiedRouteKey(""), 1400);
+  };
+
   if (selectedApp) {
     const isComfy = /comfy/i.test(selectedApp.name);
     const launchUrl = appLaunchUrl(selectedApp);
     const serviceUrl = selectedApp.healthUrl || selectedApp.apiBaseUrl || launchUrl;
+    const apiRoutes = selectedApp.apiRoutes ?? [];
+    const apiRouteGroups = routeGroups(apiRoutes);
     return (
       <section className={fleetClass("taskPanel", "tabPanel")}>
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -250,6 +290,16 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
                   <span className="font-bold">Service endpoint</span>
                   <code className="break-all rounded border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.44)] px-2 py-1 text-xs text-[var(--muted)]">{selectedApp.apiBaseUrl || selectedApp.openUrl}</code>
                   {selectedApp.healthUrl ? <code className="break-all rounded border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.44)] px-2 py-1 text-xs text-[var(--muted)]">{selectedApp.healthUrl}</code> : null}
+                  {apiRoutes.length > 0 ? (
+                    <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-full border border-[rgba(94,234,212,0.24)] px-2 py-0.5 font-bold text-[var(--accent-strong)]">
+                        {apiRoutes.length} routes
+                      </span>
+                      <span className="rounded-full border border-[rgba(148,163,184,0.18)] px-2 py-0.5 text-[var(--muted)]">
+                        {selectedApp.apiRoutesSource === "openapi" ? "OpenAPI" : "Hivemind catalog"}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               {isComfy ? (
@@ -289,16 +339,82 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
               />
             </div>
           ) : (
-            <div className="grid min-h-[360px] content-center gap-4 rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.48)] p-6 text-center">
-              <div className="mx-auto grid h-20 w-20 place-items-center rounded-[22px] border border-[rgba(94,234,212,0.24)] bg-[rgba(20,184,166,0.10)] text-2xl font-black text-[var(--accent-strong)]">
-                API
+            <div className="min-h-[360px] rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.48)] p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="grid h-10 w-10 place-items-center rounded-md border border-[rgba(94,234,212,0.22)] bg-[rgba(20,184,166,0.10)] text-[var(--accent-strong)]">
+                      <Route aria-hidden="true" className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <h3 className="m-0 text-lg font-black text-[var(--foreground)]">API routes</h3>
+                      <p className="m-0 text-xs font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
+                        {apiRoutes.length > 0 ? `${apiRoutes.length} discovered endpoints` : "No catalog published"}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+                    {apiRoutes.length > 0
+                      ? "Routes are discovered from the service API catalog when available, with Hivemind-owned fallbacks for known hivenet services."
+                      : "This API is reachable, but HivemindOS has not found a route catalog for it yet."}
+                  </p>
+                </div>
+                {selectedApp.apiRoutesSource ? (
+                  <span className="rounded-full border border-[rgba(148,163,184,0.18)] px-3 py-1 text-xs font-black uppercase text-[var(--muted)]">
+                    {selectedApp.apiRoutesSource === "openapi" ? "OpenAPI" : "Hivemind catalog"}
+                  </span>
+                ) : null}
               </div>
-              <div>
-                <h3 className="m-0 text-lg font-black text-[var(--foreground)]">Service endpoint</h3>
-                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-                  API services stay in the hivenet registry for agents and integrations, without forcing them into an embedded browser frame.
-                </p>
-              </div>
+
+              {apiRouteGroups.length > 0 ? (
+                <div className="mt-5 grid gap-4">
+                  {apiRouteGroups.map(([category, routes]) => (
+                    <section key={category} className="grid gap-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <h4 className="m-0 text-sm font-black text-[var(--foreground)]">{category}</h4>
+                        <span className="text-xs font-bold text-[var(--muted)]">{routes.length}</span>
+                      </div>
+                      <div className="grid gap-2">
+                        {routes.map((route) => {
+                          const key = `${route.method}:${route.path}`;
+                          const openable = canOpenRoute(route);
+                          return (
+                            <article key={key} className="grid gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.28)] p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className={`rounded border px-2 py-0.5 text-[10px] font-black ${routeTone(route.method)}`}>{route.method.toUpperCase()}</span>
+                                  <code className="break-all text-xs font-bold text-[var(--foreground)]">{route.path}</code>
+                                </div>
+                                {route.summary ? <p className="m-0 mt-2 text-xs leading-5 text-[var(--muted)]">{route.summary}</p> : null}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  className="h-8 px-2 text-xs"
+                                  onClick={() => void copyRoute(route)}
+                                >
+                                  <Copy aria-hidden="true" className="h-3.5 w-3.5" />
+                                  {copiedRouteKey === key ? "Copied" : "Copy"}
+                                </Button>
+                                {openable ? (
+                                  <Button type="button" size="sm" variant="secondary" className="h-8 px-2 text-xs" asChild>
+                                    <a href={route.url} target="_blank" rel="noreferrer">
+                                      <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />
+                                      Open
+                                    </a>
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              ) : null}
             </div>
           )}
         </div>

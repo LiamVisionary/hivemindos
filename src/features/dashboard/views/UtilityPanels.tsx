@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
 import type { AgentProfile, AgentRuntime, SharedVaultConfig } from "@/lib/types/agent-runtime";
+import { runtimeEnvFeature, runtimeUsesAgentEnvOverlay } from "@/lib/types/agent-runtime";
 import type { AgentNotification, AgentNotificationSettings, AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import type { MemoryTelemetryPayload } from "@/lib/types/memory-telemetry";
 import type { AgentEnvCardProps, EnvValueRowProps } from "@/features/env/env-components";
@@ -143,21 +144,31 @@ type UtilityPanelsProps = {
   toggleEnvValue: (key: string) => void;
   updateNotificationSettings: (settings: Partial<AgentNotificationSettings>) => void | Promise<void>;
   vaultClass: ClassNameBuilder;
+  vaultPanelMode?: "hive-vault" | "shared-skills" | "brain-services" | "env" | "config";
   walletClass: ClassNameBuilder;
 };
 
 export function UtilityPanels(props: UtilityPanelsProps) {
-  const { AgentEnvCard, Activity, Button, Check, ChevronDown, ChevronLeft, Download, EnvValueRow, FileText, FileUp, FolderOpen, LoaderCircle, MorePanel, NotificationsPanel, Pencil, Plus, RefreshCcw, RotateCcw, ShieldCheck, Sparkles, URL, Upload, activeView, addAgentEnvValue, addSharedEnvValue, agentEnvDrafts, agentSpecificEnvCount, displayAgents, fleetClass, formatRelativeTime, generateSharedEnvSecret, hiveEnvLoading, hiveEnvRestoring, hiveEnvSavingKey, hiveEnvStatus, hiveEnvSyncing, importSharedEnvEntries, listRuntimeFiles, maintenanceBusy, maintenanceMessage, maintenanceReport, markAllNotificationsRead, markNotificationRead, memoryTelemetry, memoryTelemetryLoading, notificationCursor, notificationGroups, notificationSummary, notifications, notificationsLoading, notificationsStatus, openRuntimeFile, promoteRuntimeEnvValue, refreshHiveEnv, refreshMaintenanceReport, refreshMemoryTelemetry, refreshNotifications, refreshRuntimeFileRoots, renderAgentKey, restoreSharedEnvBackup, revealedEnvValues, runMaintenanceAction, runtimeEnvSources, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, runtimeFileStatus, runtimeFiles, runtimeModelSelectionsByRuntime, saveAgentEnvValue, saveRuntimeFile, saveSharedEnvValue, selectedRuntimeEnvSource, setActiveView, setAgentEnvDrafts, setHiveEnvRuntimeSourceId, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setSharedEnvAddMenuOpen, setSharedEnvDraft, setSharedEnvEditable, setSharedEnvImportOpen, setSharedEnvImportText, sharedBackupStatus, sharedEnvAddMenuOpen, sharedEnvCount, sharedEnvDraft, sharedEnvEditable, sharedEnvImport, sharedEnvImportChangedCount, sharedEnvImportDiff, sharedEnvImportNewCount, sharedEnvImportOpen, sharedEnvImportSameCount, sharedEnvImportText, sharedEnvImporting, sharedEnvSource, sharedVault, syncSharedEnvMachines, toggleEnvValue, updateNotificationSettings, vaultClass, walletClass } = props;
+  const { AgentEnvCard, Activity, Button, Check, ChevronDown, ChevronLeft, Download, EnvValueRow, FileText, FileUp, FolderOpen, LoaderCircle, MorePanel, NotificationsPanel, Pencil, Plus, RefreshCcw, RotateCcw, ShieldCheck, Sparkles, URL, Upload, activeView, addAgentEnvValue, addSharedEnvValue, agentEnvDrafts, agentSpecificEnvCount, displayAgents, fleetClass, formatRelativeTime, generateSharedEnvSecret, hiveEnvLoading, hiveEnvRestoring, hiveEnvSavingKey, hiveEnvStatus, hiveEnvSyncing, importSharedEnvEntries, listRuntimeFiles, maintenanceBusy, maintenanceMessage, maintenanceReport, markAllNotificationsRead, markNotificationRead, memoryTelemetry, memoryTelemetryLoading, notificationCursor, notificationGroups, notificationSummary, notifications, notificationsLoading, notificationsStatus, openRuntimeFile, promoteRuntimeEnvValue, refreshHiveEnv, refreshMaintenanceReport, refreshMemoryTelemetry, refreshNotifications, refreshRuntimeFileRoots, renderAgentKey, restoreSharedEnvBackup, revealedEnvValues, runMaintenanceAction, runtimeEnvSources, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, runtimeFileStatus, runtimeFiles, runtimeModelSelectionsByRuntime, saveAgentEnvValue, saveRuntimeFile, saveSharedEnvValue, selectedRuntimeEnvSource, setActiveView, setAgentEnvDrafts, setHiveEnvRuntimeSourceId, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setSharedEnvAddMenuOpen, setSharedEnvDraft, setSharedEnvEditable, setSharedEnvImportOpen, setSharedEnvImportText, sharedBackupStatus, sharedEnvAddMenuOpen, sharedEnvCount, sharedEnvDraft, sharedEnvEditable, sharedEnvImport, sharedEnvImportChangedCount, sharedEnvImportDiff, sharedEnvImportNewCount, sharedEnvImportOpen, sharedEnvImportSameCount, sharedEnvImportText, sharedEnvImporting, sharedEnvSource, sharedVault, syncSharedEnvMachines, toggleEnvValue, updateNotificationSettings, vaultClass, vaultPanelMode, walletClass } = props;
   const portalTarget = typeof document === "undefined" ? null : document.body;
   const aeonAgent = useMemo(() => displayAgents.find((agent) => agent.runtime === "aeon") ?? null, [displayAgents]);
+  const agentEnvOverlayAgents = useMemo(
+    () => displayAgents.filter((agent) => runtimeUsesAgentEnvOverlay(agent.runtime)),
+    [displayAgents],
+  );
+  const runtimeManagedEnvAgents = useMemo(
+    () => displayAgents.filter((agent) => !runtimeUsesAgentEnvOverlay(agent.runtime) && runtimeEnvFeature(agent.runtime).kind !== "none"),
+    [displayAgents],
+  );
+  const envPanelVisible = activeView === "env" || (activeView === "vault" && vaultPanelMode === "env");
   const [aeonSecretStatus, setAeonSecretStatus] = useState<RuntimeSecretStatus | null>(null);
   useEffect(() => {
-    if (activeView !== "env" || !aeonAgent) return;
+    if (!envPanelVisible || !aeonAgent) return;
     let cancelled = false;
     fetch("/api/runtimes/aeon/secrets/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agent: aeonAgent, vaultPath: sharedVault.vaultPath }),
+      body: JSON.stringify({ agent: aeonAgent, vaultPath: sharedVault.vaultPath, fast: true }),
     })
       .then((response) => response.ok ? response.json() : null)
       .then((data) => {
@@ -167,13 +178,11 @@ export function UtilityPanels(props: UtilityPanelsProps) {
     return () => {
       cancelled = true;
     };
-  }, [activeView, aeonAgent, sharedVault.vaultPath]);
+  }, [aeonAgent, envPanelVisible, sharedVault.vaultPath]);
   const missingAeonSecrets = (aeonSecretStatus?.keys ?? []).filter((secret) => !secret.isSet);
   return (<>
       {activeView === "more" ? (
         <MorePanel
-          sharedEnvCount={sharedEnvCount}
-          agentSpecificEnvCount={agentSpecificEnvCount}
           maintenanceOk={maintenanceReport?.ok}
           runtimeFileRootCount={runtimeFileRoots.length}
           notificationUnread={notificationSummary?.unread ?? 0}
@@ -183,7 +192,6 @@ export function UtilityPanels(props: UtilityPanelsProps) {
           onNavigate={(target) => {
             setActiveView(target);
             if (target === "integrations") return;
-            if (target === "env") void refreshHiveEnv();
             if (target === "maintenance") void refreshMaintenanceReport();
             if (target === "memory") void refreshMemoryTelemetry();
             if (target === "files") void refreshRuntimeFileRoots();
@@ -198,7 +206,7 @@ export function UtilityPanels(props: UtilityPanelsProps) {
         formatRelativeTime={formatRelativeTime}
       />
 
-      {activeView === "env" ? (
+      {envPanelVisible ? (
       <section className={fleetClass("taskPanel", "tabPanel")}>
         <div className={fleetClass("taskPanelHeader")}>
           <div>
@@ -553,6 +561,57 @@ export function UtilityPanels(props: UtilityPanelsProps) {
             )}
           </section>
 
+          {runtimeManagedEnvAgents.length ? (
+            <section className="grid gap-3">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="eyebrow">Runtime-managed env</p>
+                  <h3 className="m-0 text-base font-bold">Secrets handled by adapter</h3>
+                </div>
+                <span className="rounded-full border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.55)] px-3 py-1 text-xs font-bold text-[var(--muted)]">
+                  {runtimeManagedEnvAgents.length} agent{runtimeManagedEnvAgents.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              <div className="grid gap-3 xl:grid-cols-2">
+	                {runtimeManagedEnvAgents.map((agent, agentIndex) => {
+	                  const feature = runtimeEnvFeature(agent.runtime);
+	                  const manageAction = "manageAction" in feature ? feature.manageAction : undefined;
+	                  const renderKey = renderAgentKey(agent, agentIndex);
+	                  return (
+                    <article key={renderKey} className="grid gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="eyebrow">{feature.label}</p>
+                          <h4 className="m-0 text-sm font-bold text-[var(--foreground)]">{agent.name}</h4>
+                        </div>
+                        <span className="rounded-full border border-[rgba(94,234,212,0.20)] bg-[rgba(20,184,166,0.08)] px-3 py-1 text-xs font-bold text-[var(--accent-strong)]">
+                          {agent.runtime}
+                        </span>
+                      </div>
+                      <p className="m-0 text-xs leading-5 text-[var(--muted)]">{feature.description}</p>
+                      {"localSources" in feature && feature.localSources.length ? (
+                        <div className="grid gap-1">
+                          {feature.localSources.map((source) => (
+                            <div key={`${agent.id}:${source.path}`} className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-[rgba(148,163,184,0.12)] bg-[rgba(2,6,23,0.36)] px-3 py-2">
+                              <span className="text-xs text-[var(--muted)]">{source.label}</span>
+                              <code className="break-all text-xs text-[var(--foreground)]">{source.path}</code>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+	                      {manageAction ? (
+	                        <Button type="button" size="sm" variant="secondary" className="w-fit" onClick={() => setActiveView(manageAction.view as DashboardView)}>
+	                          <ShieldCheck aria-hidden="true" />
+	                          {manageAction.label}
+	                        </Button>
+	                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
           <section className="grid gap-3">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
@@ -564,7 +623,7 @@ export function UtilityPanels(props: UtilityPanelsProps) {
               </span>
             </div>
             <div className="grid gap-3 xl:grid-cols-2">
-              {displayAgents.map((agent, agentIndex) => {
+              {agentEnvOverlayAgents.map((agent, agentIndex) => {
                 const renderKey = renderAgentKey(agent, agentIndex);
                 const draft = agentEnvDrafts[agent.id] ?? { key: "", value: "" };
                 const entries = Object.entries(agent.agentEnv ?? {}).sort(([left], [right]) => left.localeCompare(right));
@@ -585,6 +644,11 @@ export function UtilityPanels(props: UtilityPanelsProps) {
                   />
                 );
               })}
+              {!agentEnvOverlayAgents.length ? (
+                <p className="m-0 rounded-md border border-dashed border-[rgba(148,163,184,0.18)] p-3 text-xs text-[var(--muted)]">
+                  No runtime currently exposes profile env overlays.
+                </p>
+              ) : null}
             </div>
           </section>
         </div>

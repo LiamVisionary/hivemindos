@@ -300,19 +300,49 @@ if ask "Remove Aeon skill folders mirrored from the shared Skills shelf by Hivem
   fi
 fi
 
-if ask "Remove optional GBrain config keys from .env.local?" "no"; then
+if ask "Remove optional GBrain and Syntho config keys from .env.local?" "no"; then
   env_file="$ROOT/.env.local"
   if [[ -f "$env_file" ]]; then
     tmp_file="$(mktemp)"
-    grep -Ev '^(NEXT_PUBLIC_GBRAIN_|NEXT_PUBLIC_HIVE_GBRAIN_SURFACE_ENABLED=)' "$env_file" > "$tmp_file" || true
+    grep -Ev '^(NEXT_PUBLIC_GBRAIN_|NEXT_PUBLIC_SYNTO_|NEXT_PUBLIC_HIVE_GBRAIN_SURFACE_ENABLED=)' "$env_file" > "$tmp_file" || true
     mv "$tmp_file" "$env_file"
-    ok "Removed optional GBrain config keys from .env.local"
+    ok "Removed optional GBrain and Syntho config keys from .env.local"
+  fi
+fi
+
+if ask "Remove dashboard auth secret and device token from .env.local?" "no"; then
+  env_file="$ROOT/.env.local"
+  if [[ -f "$env_file" ]]; then
+    tmp_file="$(mktemp)"
+    grep -Ev '^(HIVEMINDOS_DASHBOARD_AUTH_SECRET|HIVEMINDOS_DASHBOARD_DEVICE_TOKEN)=' "$env_file" > "$tmp_file" || true
+    mv "$tmp_file" "$env_file"
+    ok "Removed dashboard auth keys from .env.local"
   fi
 fi
 
 if ask "Remove optional GBrain service note from the Obsidian vault?" "no"; then
   rm -f "$vault_path/$brain_services_folder/GBrain.md"
   ok "Removed $vault_path/$brain_services_folder/GBrain.md"
+fi
+
+if ask "Remove optional Syntho service note from the Obsidian vault?" "no"; then
+  rm -f "$vault_path/$brain_services_folder/Syntho.md" "$vault_path/$brain_services_folder/Synto.md"
+  ok "Removed $vault_path/$brain_services_folder/Syntho.md and any legacy Synto.md"
+fi
+
+if ask "Uninstall global Syntho CLI installed by uv?" "no"; then
+  if command -v uv >/dev/null 2>&1; then
+    uv tool uninstall synto >/dev/null 2>&1 || true
+    ok "Requested uv tool removal for synto"
+  else
+    warn "uv is unavailable; skipped global Syntho CLI removal"
+  fi
+fi
+
+if ask "Remove optional Syntho runtime files from the Synthesis folder?" "no"; then
+  rm -rf "$vault_path/$synthesis_folder/.synto"
+  rm -f "$vault_path/$synthesis_folder/synto.toml" "$vault_path/$synthesis_folder/vault-schema.md"
+  ok "Removed optional Syntho runtime files from $vault_path/$synthesis_folder"
 fi
 
 if ask "Remove namespaced GBrain skillpack from the shared Skills shelf?" "no"; then

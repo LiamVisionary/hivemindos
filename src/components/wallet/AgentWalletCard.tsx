@@ -28,6 +28,7 @@ import type {
   AgentWalletConfig,
   HoneyAgentReward,
 } from "@/lib/types/agent-wallet";
+import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { cn } from "@/lib/utils/cn";
 import { getDisplayWalletBalanceUsd } from "@/lib/utils/agent-wallet";
 
@@ -60,6 +61,7 @@ type MoneyClawSaveOptions = { shareWithAllAgents: boolean };
 export type AgentWalletCardProps = {
   agentName: string;
   machineName?: string;
+  agentUsePod?: AgentProfile["usePod"];
   wallet: AgentWalletConfig;
   survival: AgentSurvivalSnapshot;
   honeyReward: HoneyAgentReward | null;
@@ -131,6 +133,7 @@ function moneyClawBalanceLabel(status?: MoneyClawStatus | null) {
 export function AgentWalletCard({
   agentName,
   machineName,
+  agentUsePod,
   wallet,
   survival,
   honeyReward,
@@ -166,9 +169,13 @@ export function AgentWalletCard({
   const cryptoRailState: RailState = wallet.walletAddress || wallet.vaultAddress ? "ready" : "setup";
   const x402RailState: RailState = cryptoRailState === "ready" ? "ready" : "setup";
   const tradingRailState: RailState = "setup";
-  const primaryRailReady = cardRailState === "ready" && cryptoRailState === "ready";
   const moneyClawBalance = moneyClawBalanceLabel(moneyClawStatus);
   const usePodRail = wallet.provider === "usepod";
+  const usePodDepositAddress = agentUsePod?.depositAddress || wallet.walletAddress;
+  const primaryRailReady = usePodRail ? Boolean(usePodDepositAddress) : cardRailState === "ready" && cryptoRailState === "ready";
+  const usePodBalance = agentUsePod?.lastBalanceRemaining || "";
+  const usePodRoute = agentUsePod?.lastRoute || "";
+  const usePodModelCount = agentUsePod?.lastModelCount;
 
   const saveMoneyClawKey = async () => {
     const key = moneyClawKeyDraft.trim();
@@ -201,9 +208,10 @@ export function AgentWalletCard({
   const toggleSheet = (next: Sheet) => setSheet((current) => (current === next ? null : next));
 
   const handleCopyAddress = async () => {
-    if (!wallet.walletAddress) return;
+    const address = usePodRail ? usePodDepositAddress : wallet.walletAddress;
+    if (!address) return;
     try {
-      await navigator.clipboard.writeText(wallet.walletAddress);
+      await navigator.clipboard.writeText(address);
     } catch {
       /* ignore — clipboard may be unavailable */
     }
@@ -286,8 +294,10 @@ export function AgentWalletCard({
       <section className={styles.railStack} aria-label="Agent payment rail setup">
         <div className={styles.railStackHeader}>
           <div>
-            <strong>Core rails</strong>
-            <span>{primaryRailReady ? "Card and crypto are ready for bounded spending." : "Initialize once, then top up only when needed."}</span>
+            <strong>{usePodRail ? "Payment rails" : "Core rails"}</strong>
+            <span>{usePodRail
+              ? primaryRailReady ? "UsePod deposit details are available for prepaid inference." : "Register UsePod from agent settings before funding."
+              : primaryRailReady ? "Card and crypto are ready for bounded spending." : "Initialize once, then top up only when needed."}</span>
           </div>
         </div>
         <div className={styles.railGrid}>
@@ -325,6 +335,42 @@ export function AgentWalletCard({
           </div>
         </div>
       </section>
+
+      {usePodRail ? (
+        <section className={styles.usePodRail} aria-label="UsePod prepaid rail">
+          <div className={styles.usePodRailHeader}>
+            <div>
+              <strong>UsePod prepaid</strong>
+              <span>{agentUsePod?.tokenEnvName || "USEPOD_TOKEN"}</span>
+            </div>
+            <small>{agentUsePod?.lastTestStatus || "not checked"}</small>
+          </div>
+          <div className={styles.usePodRailGrid}>
+            <div>
+              <span>Deposit</span>
+              <strong>{usePodDepositAddress ? shortenAddress(usePodDepositAddress) : "Pending"}</strong>
+            </div>
+            <div>
+              <span>Balance</span>
+              <strong>{usePodBalance || "After test"}</strong>
+            </div>
+            <div>
+              <span>Route</span>
+              <strong>{usePodRoute || "Unknown"}</strong>
+            </div>
+            <div>
+              <span>Models</span>
+              <strong>{typeof usePodModelCount === "number" ? usePodModelCount : "Check"}</strong>
+            </div>
+          </div>
+          {usePodDepositAddress ? (
+            <button type="button" className={styles.sheetCopy} onClick={() => void navigator.clipboard.writeText(usePodDepositAddress).catch(() => undefined)}>
+              <Copy aria-hidden="true" width={14} height={14} />
+              Copy UsePod deposit
+            </button>
+          ) : null}
+        </section>
+      ) : null}
 
       {sheet === "send" ? (
         <div className={styles.sheet}>
@@ -381,37 +427,41 @@ export function AgentWalletCard({
             Receive {wallet.tokenSymbol || "USDC"}
             <CloseIconButton size="sm" onClick={() => setSheet(null)} aria-label="Close receive sheet" />
           </div>
-          {wallet.walletAddress ? (
+          {(usePodRail ? usePodDepositAddress : wallet.walletAddress) ? (
             <>
               <p className={styles.sheetHelp}>
-                Send {wallet.tokenSymbol || "USDC"} on {networkLabel(wallet.network)} to this address.
+                {usePodRail ? "Send Solana USDC to the UsePod token deposit address." : `Send ${wallet.tokenSymbol || "USDC"} on ${networkLabel(wallet.network)} to this address.`}
               </p>
               <div className={styles.sheetAddress}>
-                <strong>Deposit address</strong>
-                {wallet.walletAddress}
+                <strong>{usePodRail ? "UsePod deposit address" : "Deposit address"}</strong>
+                {usePodRail ? usePodDepositAddress : wallet.walletAddress}
               </div>
               <button type="button" className={styles.sheetCopy} onClick={handleCopyAddress}>
                 <Copy aria-hidden="true" width={14} height={14} />
                 Copy address
               </button>
-              <div className={styles.sheetButtons}>
-                <Button type="button" size="sm" variant="secondary" disabled={walletAction.busy} onClick={onRefreshBalance}>
-                  <RefreshCcw aria-hidden="true" />
-                  Refresh balance
-                </Button>
-              </div>
+              {!usePodRail ? (
+                <div className={styles.sheetButtons}>
+                  <Button type="button" size="sm" variant="secondary" disabled={walletAction.busy} onClick={onRefreshBalance}>
+                    <RefreshCcw aria-hidden="true" />
+                    Refresh balance
+                  </Button>
+                </div>
+              ) : null}
             </>
           ) : (
             <>
               <p className={styles.sheetHelp}>
-                No deposit address yet. Create a local throwaway wallet, then top it up with a small test amount.
+                {usePodRail ? "No UsePod deposit address yet. Register UsePod from agent settings first." : "No deposit address yet. Create a local throwaway wallet, then top it up with a small test amount."}
               </p>
-              <div className={styles.sheetButtons}>
-                <Button type="button" size="sm" variant="secondary" disabled={walletAction.busy} onClick={onCreateLocalWallet}>
-                  <WalletCards aria-hidden="true" />
-                  Create wallet
-                </Button>
-              </div>
+              {!usePodRail ? (
+                <div className={styles.sheetButtons}>
+                  <Button type="button" size="sm" variant="secondary" disabled={walletAction.busy} onClick={onCreateLocalWallet}>
+                    <WalletCards aria-hidden="true" />
+                    Create wallet
+                  </Button>
+                </div>
+              ) : null}
             </>
           )}
           {walletAction.message ? <p className={styles.sheetStatus} data-tone="ok">{walletAction.message}</p> : null}

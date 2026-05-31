@@ -39,6 +39,18 @@ export type RuntimeIntegrationStatus = {
   }>;
   diagnostics: string[];
   modelSelection?: RuntimeModelSelection;
+  providerStatus?: {
+    usePod?: {
+      tokenEnvName?: string;
+      depositAddress?: string;
+      balanceRemaining?: string;
+      route?: string;
+      checkedAt?: string;
+      status?: string;
+      message?: string;
+      modelCount?: number;
+    };
+  };
 };
 
 export type RuntimeSessionSearchResult = {
@@ -68,12 +80,16 @@ export async function getRuntimeIntegrationStatus(runtime: AgentRuntime, agent?:
   const capabilities = { ...(RUNTIME_CAPABILITIES[runtime] ?? adapter?.capabilities ?? {}), ...(agent?.runtimeCapabilities ?? {}) };
   if (runtime !== "hermes") {
     let modelSelection: RuntimeModelSelection | undefined;
+    let providerStatus: RuntimeIntegrationStatus["providerStatus"] | undefined;
     const diagnostics: string[] = [];
     if (adapter?.getStatus && agent) {
       try {
         const status = await adapter.getStatus(agent, {});
         if (status && typeof status === "object" && "modelSelection" in status) {
           modelSelection = (status as { modelSelection?: RuntimeModelSelection }).modelSelection;
+        }
+        if (status && typeof status === "object" && "providerStatus" in status) {
+          providerStatus = (status as { providerStatus?: RuntimeIntegrationStatus["providerStatus"] }).providerStatus;
         }
       } catch (error) {
         diagnostics.push(error instanceof Error ? error.message : `${adapter.label} status check failed.`);
@@ -83,6 +99,7 @@ export async function getRuntimeIntegrationStatus(runtime: AgentRuntime, agent?:
       runtime,
       capabilities,
       modelSelection,
+      providerStatus,
       integrations: integrationDefaults(capabilities),
       diagnostics,
     };

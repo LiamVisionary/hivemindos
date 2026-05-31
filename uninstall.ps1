@@ -160,12 +160,21 @@ if (Ask-YesNo "Remove copied karpathy-guidelines skill from local agent skill fo
   }
 }
 
-if (Ask-YesNo "Remove optional GBrain config keys from .env.local?" $false) {
+if (Ask-YesNo "Remove optional GBrain and Syntho config keys from .env.local?" $false) {
   $envLocal = Join-Path $Root ".env.local"
   if (Test-Path $envLocal) {
-    $next = Get-Content $envLocal | Where-Object { $_ -notmatch '^(NEXT_PUBLIC_GBRAIN_|NEXT_PUBLIC_HIVE_GBRAIN_SURFACE_ENABLED=)' }
+    $next = Get-Content $envLocal | Where-Object { $_ -notmatch '^(NEXT_PUBLIC_GBRAIN_|NEXT_PUBLIC_SYNTO_|NEXT_PUBLIC_HIVE_GBRAIN_SURFACE_ENABLED=)' }
     Set-Content -Path $envLocal -Value $next
-    Ok "Removed optional GBrain config keys from .env.local"
+    Ok "Removed optional GBrain and Syntho config keys from .env.local"
+  }
+}
+
+if (Ask-YesNo "Remove dashboard auth secret and device token from .env.local?" $false) {
+  $envLocal = Join-Path $Root ".env.local"
+  if (Test-Path $envLocal) {
+    $next = Get-Content $envLocal | Where-Object { $_ -notmatch '^(HIVEMINDOS_DASHBOARD_AUTH_SECRET|HIVEMINDOS_DASHBOARD_DEVICE_TOKEN)=' }
+    Set-Content -Path $envLocal -Value $next
+    Ok "Removed dashboard auth keys from .env.local"
   }
 }
 
@@ -173,6 +182,31 @@ if (Ask-YesNo "Remove optional GBrain service note from the Obsidian vault?" $fa
   $gbrainServiceNote = Join-Path $vaultPath (Join-Path $brainServicesFolder "GBrain.md")
   Remove-Item $gbrainServiceNote -Force -ErrorAction SilentlyContinue
   Ok "Removed $gbrainServiceNote"
+}
+
+if (Ask-YesNo "Remove optional Syntho service note from the Obsidian vault?" $false) {
+  $syntoServiceNote = Join-Path $vaultPath (Join-Path $brainServicesFolder "Syntho.md")
+  $legacySyntoServiceNote = Join-Path $vaultPath (Join-Path $brainServicesFolder "Synto.md")
+  Remove-Item $syntoServiceNote -Force -ErrorAction SilentlyContinue
+  Remove-Item $legacySyntoServiceNote -Force -ErrorAction SilentlyContinue
+  Ok "Removed $syntoServiceNote"
+}
+
+if (Ask-YesNo "Uninstall global Syntho CLI installed by uv?" $false) {
+  if (Get-Command uv -ErrorAction SilentlyContinue) {
+    & uv tool uninstall synto | Out-Null
+    Ok "Requested uv tool removal for synto"
+  } else {
+    Warn "uv is unavailable; skipped global Syntho CLI removal"
+  }
+}
+
+if (Ask-YesNo "Remove optional Syntho runtime files from the Synthesis folder?" $false) {
+  $syntoRoot = Join-Path $vaultPath $synthesisFolder
+  Remove-Item (Join-Path $syntoRoot ".synto") -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $syntoRoot "synto.toml") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $syntoRoot "vault-schema.md") -Force -ErrorAction SilentlyContinue
+  Ok "Removed optional Syntho runtime files from $syntoRoot"
 }
 
 if (Ask-YesNo "Remove namespaced GBrain skillpack from the shared Skills shelf?" $false) {

@@ -317,8 +317,15 @@ export function normalizeAssistantChatText(value: string) {
     .trim();
 }
 
+export function restoreRedactedLocalhostPreviewUrls(value: string) {
+  return value.replace(
+    /http:\/\/\s*\[\s*REDACTED[_\s-]*IP\s*\]\s*:(\d{2,5})(?=[/\s`'")\]}]|$)/gi,
+    "http://localhost:$1",
+  );
+}
+
 export function chatDisplayContent(message: ChatMessage) {
-  return message.role === "assistant" ? normalizeAssistantChatText(message.content) : message.content;
+  return message.role === "assistant" ? restoreRedactedLocalhostPreviewUrls(normalizeAssistantChatText(message.content)) : message.content;
 }
 
 export function attachmentSummary(attachments: ChatAttachment[]) {

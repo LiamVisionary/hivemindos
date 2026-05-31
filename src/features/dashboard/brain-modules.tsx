@@ -43,8 +43,12 @@ export type BrainModuleDefinition = {
   install?: BrainModuleInstallDefinition;
   stats?: BrainModuleStat[];
   badges?: ReactNode[];
+  primaryAction?: BrainModuleAction;
+  quickActions?: BrainModuleAction[];
   actions?: BrainModuleAction[];
   body?: ReactNode;
+  settings?: ReactNode;
+  result?: ReactNode;
   footer?: ReactNode;
 };
 
@@ -131,23 +135,40 @@ export class BrainModule {
           </div>
         ) : null}
 
-        {showInstalledView && brainModule.stats?.length ? (
-          <div className={vaultClass("brainServiceStats")}>
-            {brainModule.stats.map((stat) => (
-              <span key={stat.key}>{stat.icon}<strong>{stat.value}</strong>{stat.label}</span>
-            ))}
-          </div>
+        {showInstalledView && (brainModule.stats?.length || brainModule.badges?.length) ? (
+          <details className={vaultClass("brainServiceDisclosure")}>
+            <summary>Details</summary>
+            {brainModule.stats?.length ? (
+              <div className={vaultClass("brainServiceStats")}>
+                {brainModule.stats.map((stat) => (
+                  <span key={stat.key}>{stat.icon}<strong>{stat.value}</strong>{stat.label}</span>
+                ))}
+              </div>
+            ) : null}
+            {brainModule.badges?.length ? (
+              <div className={vaultClass("brainServiceBadges")}>
+                {brainModule.badges.map((badge, index) => <span key={index}>{badge}</span>)}
+              </div>
+            ) : null}
+          </details>
         ) : null}
 
-        {showInstalledView && brainModule.badges?.length ? (
-          <div className={vaultClass("brainServiceBadges")}>
-            {brainModule.badges.map((badge, index) => <span key={index}>{badge}</span>)}
-          </div>
-        ) : null}
-
-        {showInstalledView && brainModule.actions?.length ? (
-          <div className={vaultClass("brainServiceActions")}>
-            {brainModule.actions.map((action) => (
+        {showInstalledView && (brainModule.primaryAction || brainModule.quickActions?.length) ? (
+          <div className={vaultClass("brainServicePrimaryActions")}>
+            {brainModule.primaryAction ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className={vaultClass("brainServicePrimaryButton")}
+                disabled={brainModule.primaryAction.disabled}
+                onClick={brainModule.primaryAction.onClick}
+              >
+                {brainModule.primaryAction.icon}
+                {brainModule.primaryAction.label}
+              </Button>
+            ) : null}
+            {brainModule.quickActions?.map((action) => (
               <Button
                 key={action.key}
                 type="button"
@@ -163,7 +184,37 @@ export class BrainModule {
           </div>
         ) : null}
 
-        {showInstalledView ? brainModule.body : null}
+        {showInstalledView && brainModule.body ? (
+          <details className={vaultClass("brainServiceDisclosure")}>
+            <summary>Question</summary>
+            {brainModule.body}
+          </details>
+        ) : null}
+        {showInstalledView && brainModule.result ? (
+          <div className={vaultClass("brainServiceResult")}>
+            {brainModule.result}
+          </div>
+        ) : null}
+        {showInstalledView && brainModule.actions?.length ? (
+          <details className={vaultClass("brainServiceDisclosure")}>
+            <summary>Advanced actions</summary>
+            <div className={vaultClass("brainServiceActions")}>
+              {brainModule.actions.map((action) => (
+                <Button
+                  key={action.key}
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={action.disabled}
+                  onClick={action.onClick}
+                >
+                  {action.icon}
+                  {action.label}
+                </Button>
+              ))}
+            </div>
+          </details>
+        ) : null}
         {showInstalledView ? brainModule.footer : null}
       </article>
     );

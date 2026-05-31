@@ -191,14 +191,6 @@ a {
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
 }
 
-.chatCommandTopbar {
-  background: transparent;
-}
-
-.chatCommandTopbar::before {
-  display: none;
-}
-
 .commandTopbar::before {
   position: absolute;
   inset: 0;
@@ -213,7 +205,7 @@ a {
 .dashboardAppNotification {
   position: absolute;
   left: 50%;
-  top: calc(100% - 8px);
+  top: 50%;
   z-index: 80;
   display: flex;
   max-width: min(380px, calc(100vw - 32px));
@@ -231,7 +223,7 @@ a {
     0 0 34px rgba(45, 212, 191, 0.22);
   color: var(--foreground);
   pointer-events: none;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   animation: dashboard-app-notification 3s cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
 }
 
@@ -286,23 +278,64 @@ a {
 @keyframes dashboard-app-notification {
   0% {
     opacity: 0;
-    transform: translateX(-50%) translateY(-16px) scale(0.86);
+    transform: translate(-50%, calc(-50% - 14px)) scale(0.86);
     filter: blur(6px);
   }
   12% {
     opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1.04);
+    transform: translate(-50%, -50%) scale(1.04);
     filter: blur(0);
   }
   20%, 78% {
     opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
+    transform: translate(-50%, -50%) scale(1);
     filter: blur(0);
   }
   100% {
     opacity: 0;
-    transform: translateX(-50%) translateY(-12px) scale(0.9);
+    transform: translate(-50%, calc(-50% - 10px)) scale(0.9);
     filter: blur(5px);
+  }
+}
+
+@keyframes fleet-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fleet-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes fleet-scan-sweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-120%);
+  }
+
+  20%,
+  80% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(310%);
   }
 }
 
@@ -778,7 +811,7 @@ h1 {
   }
 
   .dashboardAppNotification {
-    top: calc(100% - 4px);
+    top: 50%;
     max-width: calc(100vw - 20px);
   }
 

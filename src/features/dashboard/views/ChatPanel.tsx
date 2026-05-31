@@ -765,6 +765,7 @@ export function ChatPanel(props: any) {
                       {message.role === "user" ? <span className={chatClass("messageRole")}>You</span> : null}
                       {message.role === "assistant" ? (
                         <div className={chatClass("assistantByline")}>
+                          {renderAgentAvatar("messageBylineAvatar")}
                           <span>{selectedAgent.name}</span>
                           <small>{runtimeIdentity}</small>
                         </div>

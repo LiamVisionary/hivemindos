@@ -20,7 +20,7 @@ const discoveredMiroSharkBaseUrl = await discoverMiroSharkBaseUrl();
 const existingSimulationId = process.env.HIVE_AEON_MIROSHARK_E2E_SIMULATION_ID?.trim();
 const scenario = `AEON MiroShark hivenet e2e ${new Date().toISOString()}: users debate whether HivemindOS should route AEON verdicts and MiroShark simulation artifacts into the shared vault.`;
 
-const server = spawn("pnpm", ["dev", "--port", String(port)], {
+const server = spawn("pnpm", ["dev", "--port", String(port), "--hostname", "127.0.0.1"], {
   cwd: projectRoot,
   stdio: ["ignore", "pipe", "pipe"],
   detached: true,
@@ -189,18 +189,38 @@ function postJsonViaHttp(url, body, headers = {}, timeoutMs = 120_000) {
 
 async function freePort(start) {
   for (let port = start; port < start + 100; port += 1) {
-    if (await canListen(port)) return port;
+    if (await canListenOnAllLoopbacks(port)) return port;
   }
   throw new Error(`No free port found from ${start}.`);
 }
 
-function canListen(port) {
-  return new Promise((resolve) => {
+async function canListenOnAllLoopbacks(port) {
+  const hosts = ["127.0.0.1", "0.0.0.0", "::1", "::"];
+  const servers = [];
+  try {
+    for (const host of hosts) {
+      const server = await listenForPortCheck(port, host);
+      servers.push(server);
+    }
+    return true;
+  } catch {
+    return false;
+  } finally {
+    await Promise.all(servers.map((server) => closeServer(server)));
+  }
+}
+
+function listenForPortCheck(port, host) {
+  return new Promise((resolve, reject) => {
     const server = net.createServer();
-    server.once("error", () => resolve(false));
-    server.once("listening", () => server.close(() => resolve(true)));
-    server.listen(port, "127.0.0.1");
+    server.once("error", reject);
+    server.once("listening", () => resolve(server));
+    server.listen({ port, host, ipv6Only: host === "::" || host === "::1" });
   });
+}
+
+function closeServer(server) {
+  return new Promise((resolve) => server.close(resolve));
 }
 
 function repoIdentity(repoUrl) {

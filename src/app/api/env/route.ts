@@ -1,6 +1,7 @@
 import { execFile, spawn } from "child_process";
 import { join } from "path";
 import { promisify } from "util";
+import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
 
@@ -271,11 +272,16 @@ function syncSharedEnvMachines() {
   });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = await requireAuth(request);
+  if (unauthorized) return unauthorized;
   return Response.json(await readEnvPayload());
 }
 
 export async function POST(request: Request) {
+  const unauthorized = await requireAuth(request);
+  if (unauthorized) return unauthorized;
+
   const body = await request.json().catch(() => ({})) as EnvUpdateBody;
 
   if (body.action === "restoreBackup") {

@@ -5,6 +5,7 @@
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
 import { useCallback, useEffect, useMemo } from "react";
+import { runtimeUsesAgentEnvOverlay } from "@/lib/types/agent-runtime";
 
 export function useDashboardDerivedState(props: any) {
   const { RUNTIME_LABELS, activeView, agentAliasMap, agentCreateDraft, agentCreateMachineKey, agentRoleModalId, agentSettingsPanel, agents, beeRoleLabel, brainGraph, brainGraphLayout, brainSkills, chatAutoScrollRef, chatDisplayContent, chatMessageStorageKey, chatMessageWindow, chatProcessByKey, chatStreamingByKey, cleanActivityTitle, collectorKey, createAgentProfile, createDefaultAgentWallet, dedupeAgents, discoveredMachines, displayMachineName, fleetAgentState, fleetMachineLocation, fleetMetric, fleetSnapshots, fleetVersionState, formatRelativeTime, getHoneyAgentRewards, getSurvivalSnapshot, groupKanbanTasks, groupNotifications, hermesUpdateRequiredDetail, hiveEnv, hiveEnvRuntimeSourceId, honeyTreasury, hydrated, inferCurrentTask, inferLatestAgentMessage, isChatSidebarTask, isLoopbackCollector, isManualAgentChatMessage, isMeaningfulActive, isMobileMachineOs, isStarterPlaceholder, isVisibleFleetMachine, isWorkView, kanbanAssignees, kanbanBoard, kanbanBoardScrollRef, kanbanError, kanbanIncludeArchived, kanbanLoading, kanbanTaskAssigneeAgent, machineIdentityFromParts, machineNameAliases, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineNetworkIssue, maintenanceReport, messagesByAgent, messagesScrollRef, mirosharkAnalysisAgentId, mirosharkStatus, moneyClawLoadingEnvName, moneyClawStatusByEnvName, normalizeAgentProfile, notificationActorMeta, notificationDisplayBody, notificationDisplayTitle, notificationSourceLabel, notificationSummary, notifications, parseEnvImportText, quickAddMachineTargets, refreshMoneyClawStatus, refreshRuntimeIntegrations, refreshSharedSchedulesFromVault, runtimeCan, runtimeCount, runtimeFileRoots, runtimeUsage, schedulerSkillSearch, schedules, selectedAgentId, selectedBrainNodeId, selectedChatLeafKey, selectedChatPreview, selectedKanbanTaskId, selectedKanbanTaskIds, setKanbanBoardScrollState, setMachineNameAliases, setScheduleDraft, setupMachineKey, sharedEnvImportText, sharedVault, skillBrowserSearch, skillBrowserSkills, tailscaleDevices, tailscaleStatus, tasks, updateStatusByMachine, walletExpanded, walletsByAgent, workPriority } = props;
@@ -829,7 +830,9 @@ export function useDashboardDerivedState(props: any) {
     };
   }, [activeView, kanbanIncludeArchived, kanbanViewColumns.length, selectedKanbanTaskId, updateKanbanBoardScrollState]);
 
-  const agentSpecificEnvCount = displayAgents.reduce((sum, agent) => sum + Object.keys(agent.agentEnv ?? {}).length, 0);
+  const agentSpecificEnvCount = displayAgents
+    .filter((agent) => runtimeUsesAgentEnvOverlay(agent.runtime))
+    .reduce((sum, agent) => sum + Object.keys(agent.agentEnv ?? {}).length, 0);
   const sharedEnvSource = hiveEnv?.sharedSource ?? null;
   const runtimeEnvSources = hiveEnv?.runtimeSources ?? [];
   const selectedRuntimeEnvSource = runtimeEnvSources.find((source) => source.id === hiveEnvRuntimeSourceId) ?? runtimeEnvSources[0] ?? null;
@@ -873,7 +876,9 @@ export function useDashboardDerivedState(props: any) {
     {
       id: "vault" as const,
       label: "Brain",
-      detail: sharedVault.enabled ? "enabled" : "off",
+      detail: activeView === "vault"
+        ? `${sharedEnvCount} env · ${brainSkillImportableCount} ready`
+        : sharedVault.enabled ? "enabled" : "off",
     },
     {
       id: "integrations" as const,
@@ -911,9 +916,9 @@ export function useDashboardDerivedState(props: any) {
         ? `${notificationSummary.unread} alerts`
         : maintenanceReport?.ok === false
           ? "repairs available"
-          : `${sharedEnvCount + agentSpecificEnvCount + unsharedRuntimeEnvCount} env vars`,
+          : "utilities",
     },
-  ], [activeView, agentSpecificEnvCount, kanbanBoard?.tasks.length, maintenanceReport?.ok, mirosharkStatus?.ok, notificationSummary, runtimeUsage?.totals, schedules, selectedAgent?.name, sharedEnvCount, sharedVault.enabled, unsharedRuntimeEnvCount, visibleAgentCount, walletStats.critical, walletStats.enabled]);
+  ], [activeView, brainSkillImportableCount, kanbanBoard?.tasks.length, maintenanceReport?.ok, mirosharkStatus?.ok, notificationSummary, runtimeUsage?.totals, schedules, selectedAgent?.name, sharedEnvCount, sharedVault.enabled, visibleAgentCount, walletStats.critical, walletStats.enabled]);
 
   const activeNavItem = navItems.find((item) => (
     item.id === activeView

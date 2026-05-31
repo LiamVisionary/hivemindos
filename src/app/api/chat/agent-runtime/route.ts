@@ -194,6 +194,7 @@ function buildWalletToolContext(wallet?: AgentWalletConfig): string {
 }
 
 function buildAgentProfileContext(profile: AgentProfile): string {
+  const usePod = isUsePodProfile(profile) ? profile.usePod : undefined;
   const lines = [
     "Agent profile context:",
     `- Name: ${profile.name || profile.id}`,
@@ -202,6 +203,7 @@ function buildAgentProfileContext(profile: AgentProfile): string {
     profile.beeRole ? `- Bee role: ${profile.beeRole}` : "",
     profile.workerClass ? `- Worker class: ${profile.workerClass}` : "",
     profile.provider || profile.model ? `- Preferred model: ${[profile.provider, profile.model].filter(Boolean).join("/")}` : "",
+    usePod ? `- UsePod rail: prepaid marketplace inference${usePod.spendPreset ? `, ${usePod.spendPreset} spend caps` : ""}${usePod.lastBalanceRemaining ? `, last balance ${usePod.lastBalanceRemaining}` : ""}` : "",
     profile.skillProfilePrompt?.trim() ? `- Role instructions: ${profile.skillProfilePrompt.trim()}` : "",
     profile.preferredSkillSlugs?.length ? `- Preferred skills: ${profile.preferredSkillSlugs.join(", ")}` : "",
     "- HivemindOS chat bridge: do not use terminal-only interactive clarification prompts. If a question is unavoidable, emit or return a concise question with explicit choices so the dashboard can render it, otherwise make a reasonable assumption and continue.",
@@ -1186,6 +1188,17 @@ async function streamOpenAICompatibleRuntime(
   }
 
   const adaptiveOpenRouter = isAdaptiveOpenRouterProfile(runtimeProfile) || (isOpenRouterProvider(runtimeProfile) && Boolean(runtimeProfile.adaptiveOpenRouter));
+  if (usePodEnabled) {
+    const capLabel = [
+      profile.usePod?.maxPriceInputMicrounits ? `input cap ${profile.usePod.maxPriceInputMicrounits}` : "",
+      profile.usePod?.maxPriceOutputMicrounits ? `output cap ${profile.usePod.maxPriceOutputMicrounits}` : "",
+    ].filter(Boolean).join(", ");
+    await appendRuntimeChatSessionEvent(
+      runtimeSessionId,
+      "UsePod request",
+      `UsePod · ${openAICompatibleModel(runtimeProfile)}${capLabel ? ` · ${capLabel}` : ""}`,
+    ).catch(() => undefined);
+  }
   const modelMessagesFor = (candidateModel: string) => {
     const candidateProfile = profileWithResolvedModel(runtimeProfile, candidateModel);
     const context = [

@@ -5,6 +5,8 @@
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
 import { useCallback, useEffect, useMemo } from "react";
+import { getNativeBrainSkillInventory } from "@/lib/native/brain-skills";
+import { listNativeLocalDirectories, openNativeDirectory } from "@/lib/native/filesystem";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
 
 function isLoopbackDirectoryCollector(collectorUrl?: string) {
@@ -433,6 +435,26 @@ export function useMirosharkBrainController(props: any) {
       error: "",
       onChoose,
     }));
+    const nativeData = await listNativeLocalDirectories({
+      path,
+      collectorUrl: directoryMachine.collectorUrl,
+    });
+    if (nativeData?.path) {
+      setMachineDirectoryBrowser((current) => {
+        if (!current || !sameMachineTarget(current.machine, directoryMachine)) return current;
+        return {
+          ...current,
+          path: nativeData.path,
+          parentPath: nativeData.parentPath,
+          directories: Array.isArray(nativeData.directories) ? nativeData.directories : [],
+          selectedDirectory: null,
+          loading: false,
+          error: "",
+          onChoose,
+        };
+      });
+      return;
+    }
     const params = new URLSearchParams({ path });
     if (directoryMachine.collectorUrl) params.set("collectorUrl", directoryMachine.collectorUrl);
     const response = await fetch(`/api/machines/directories?${params.toString()}`).catch(() => null);
@@ -470,6 +492,24 @@ export function useMirosharkBrainController(props: any) {
     const isLocalMachine = isLoopbackCollector(directoryMachine.collectorUrl)
       || (false);
     if (isLocalMachine) {
+      const nativeResult = await openNativeDirectory({
+        currentPath: "~",
+        prompt: "Choose a chat working directory:",
+      });
+      const nativePath = nativeResult?.path?.trim();
+      if (nativePath) {
+        const name = nativePath.replace(/\/+$/, "").split("/").filter(Boolean).at(-1) || nativePath;
+        onChoose({
+          id: `${nativePath}-${crypto.randomUUID()}`,
+          name,
+          path: nativePath,
+          machineName: directoryMachine.name,
+          machineKey: directoryMachine.key,
+          lastUsedAt: Date.now(),
+        });
+        return;
+      }
+      if (nativeResult?.cancelled) return;
       const response = await fetch("/api/agents/browse-folder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -519,10 +559,11 @@ export function useMirosharkBrainController(props: any) {
     setBrainSkillsLoading(true);
     const params = new URLSearchParams();
     if (sharedVault.vaultPath.trim()) params.set("vaultPath", sharedVault.vaultPath.trim());
-    const response = await fetch(`/api/obsidian/skills?${params.toString()}`, { cache: "no-store" }).catch(() => null);
-    const data = await response?.json().catch(() => null) as BrainSkillInventory | null;
+    const nativeData = await getNativeBrainSkillInventory({ vaultPath: sharedVault.vaultPath.trim() || undefined });
+    const response = nativeData ? null : await fetch(`/api/obsidian/skills?${params.toString()}`, { cache: "no-store" }).catch(() => null);
+    const data = nativeData ?? await response?.json().catch(() => null) as BrainSkillInventory | null;
     setBrainSkillsLoading(false);
-    if (!response?.ok || !data?.ok) {
+    if ((!nativeData && !response?.ok) || !data?.ok) {
       setBrainSkillsStatus(data?.error ?? "Could not read skill inventory.");
       return;
     }

@@ -8,8 +8,10 @@ import type { DashboardView } from "@/features/dashboard/dashboard-types";
 
 export type DashboardAppCompletionNotification = {
   id: string;
-  app: FleetActiveApp;
+  app?: FleetActiveApp;
+  initials?: string;
   message: string;
+  title?: string;
 };
 
 type DashboardHeaderProps = {
@@ -202,7 +204,9 @@ export function DashboardHeader(props: DashboardHeaderProps) {
 
 function DashboardAppCompletionToast({ notification }: { notification: DashboardAppCompletionNotification }) {
   const [brokenIcon, setBrokenIcon] = useState(false);
-  const iconUrl = notification.app.iconUrl;
+  const iconUrl = notification.app?.iconUrl;
+  const initials = notification.app?.initials ?? notification.initials ?? "HM";
+  const title = notification.app?.name ?? notification.title ?? "HivemindOS";
 
   return (
     <div className="dashboardAppNotification" role="status" aria-live="polite">
@@ -211,11 +215,11 @@ function DashboardAppCompletionToast({ notification }: { notification: Dashboard
           // eslint-disable-next-line @next/next/no-img-element
           <img src={iconUrl} alt="" onError={() => setBrokenIcon(true)} />
         ) : (
-          <span>{notification.app.initials}</span>
+          <span>{initials}</span>
         )}
       </span>
       <span className="dashboardAppNotificationText">
-        <strong>{notification.app.name}</strong>
+        <strong>{title}</strong>
         <span>{notification.message}</span>
       </span>
     </div>

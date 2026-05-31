@@ -276,6 +276,7 @@ export function parseStoredVault(): SharedVaultConfig {
       synthesisFolder: storedSynthesisFolder || DEFAULT_SHARED_VAULT.synthesisFolder,
       brainServicesFolder: migratedBrainServicesFolder || DEFAULT_SHARED_VAULT.brainServicesFolder,
       gbrain: { ...DEFAULT_SHARED_VAULT.gbrain, ...(storedVault.gbrain ?? {}) },
+      synto: { ...DEFAULT_SHARED_VAULT.synto, ...(storedVault.synto ?? {}) },
     };
   } catch {
     return DEFAULT_SHARED_VAULT;

@@ -425,7 +425,7 @@ HivemindOS mapping:
 - Memory: durable notes, daily briefings, weekly reviews, imported sources, and distilled knowledge.
 - Projects: project dossiers, decisions, overview notes, and status material.
 - Operations: automations, work-board state, agent notifications, wallet notes, and brain-service status.
-- Synthesis: Synto/GBrain-assisted drafts, connection reports, reviewed wiki notes, and agent packs.
+- Synthesis: Syntho/GBrain-assisted drafts, connection reports, reviewed wiki notes, and agent packs.
 - Archive: inactive or superseded material.
 
 Hard rules:

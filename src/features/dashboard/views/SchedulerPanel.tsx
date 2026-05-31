@@ -2,35 +2,69 @@
 // @ts-nocheck
 "use client";
 
-/* eslint-disable react-hooks/immutability, react-hooks/purity */
-
 import { CloseIconButton } from "@/components/ui/close-icon-button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { WorkSectionHeader } from "./WorkSectionHeader";
 
 export function SchedulerPanel(props: any) {
-  const { AlignLeft, Button, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Link, List, LoaderCircle, Paperclip, Pencil, Plus, Puzzle, RUNTIME_LABELS, Repeat2, SCHEDULER_MODEL_OPTIONS, SCHEDULE_PRESETS, SchedulerView, Search, Send, Sparkles, TaskModal, Trash2, activeView, addSchedulePath, addSchedulerStep, addSchedulerStepPath, browseSchedulerFolder, createSchedule, displayAgents, editSchedule, editingScheduleId, filteredSchedulerSkills, findScheduleForJob, fleetClass, importExistingSchedules, isSchedulerFilePath, machineGroups, openSkillBrowser, pickSchedulerFiles, pickSchedulerFolder, refreshSharedSchedulesFromVault, removeSchedule, removeSchedulePath, removeScheduleSkill, removeSchedulerStep, removeSchedulerStepPath, renderAgentKey, resetScheduleDraft, runScheduleNow, saveScheduleFromModal, scheduleDraft, scheduleImportStatus, scheduleImporting, schedulerAttachMenu, schedulerDraftOpen, schedulerJobs, schedulerModalInitial, schedulerPathDraft, schedulerPathKind, schedulerRunStates, schedulerSelectedStep, schedulerSkillSearch, schedules, selectedAgent, setScheduleDraft, setScheduleImportStatus, setSchedulerAttachMenu, setSchedulerDraftOpen, setSchedulerPathDraft, setSchedulerPathKind, setSchedulerSelectedStep, setSchedulerSkillSearch, sharedSkillOptions, aeonSkillOptions, toggleSchedule, toggleScheduleSkill, toggleSchedulerStepMode, toggleSchedulerStepSkill, updateSchedulerStep, updateSchedulerStepModel, vaultClass } = props;
+  const { AlignLeft, Button, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Link, List, LoaderCircle, Paperclip, Pencil, Plus, Puzzle, RUNTIME_LABELS, Repeat2, SCHEDULER_MODEL_OPTIONS, SCHEDULE_PRESETS, SchedulerView, Search, Send, Sparkles, TaskModal, Trash2, activeView, addSchedulePath, addSchedulerStep, addSchedulerStepPath, browseSchedulerFolder, createSchedule, displayAgents, editSchedule, editingScheduleId, filteredSchedulerSkills, findScheduleForJob, fleetClass, importExistingSchedules, isSchedulerFilePath, machineGroups, openSkillBrowser, pickSchedulerFiles, pickSchedulerFolder, refreshSharedSchedulesFromVault, removeSchedule, removeSchedulePath, removeScheduleSkill, removeSchedulerStep, removeSchedulerStepPath, renderAgentKey, resetScheduleDraft, runScheduleNow, saveScheduleFromModal, scheduleDraft, scheduleImportStatus, scheduleImporting, schedulerAttachMenu, schedulerDraftOpen, schedulerJobs, schedulerModalInitial, schedulerPathDraft, schedulerPathKind, schedulerRunStates, schedulerSelectedStep, schedulerSkillSearch, schedules, selectedAgent, setActiveView, setScheduleDraft, setScheduleImportStatus, setSchedulerAttachMenu, setSchedulerDraftOpen, setSchedulerPathDraft, setSchedulerPathKind, setSchedulerSelectedStep, setSchedulerSkillSearch, sharedSkillOptions, aeonSkillOptions, toggleSchedule, toggleScheduleSkill, toggleSchedulerStepMode, toggleSchedulerStepSkill, updateSchedulerStep, updateSchedulerStepModel, vaultClass } = props;
   // AEON automations arm a skill from the AEON runtime inventory, so the modal's skill
   // picker is fed from the runtime skill list in aeon mode (the shared-brain list is the
   // wrong source there and is usually empty).
   const modalSkillOptions = activeView === "aeon" ? (aeonSkillOptions ?? []) : sharedSkillOptions;
   return (<>
       {activeView === "scheduler" ? (
-      <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[rgba(5,8,13,0.72)]">
+      <section
+        className="grid min-h-0 overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[rgba(5,8,13,0.72)]"
+        style={{ height: "100%", gridTemplateRows: "auto minmax(0, 1fr)" }}
+      >
+        <WorkSectionHeader
+          activeView="scheduler"
+          onSelect={setActiveView}
+          title="Automations"
+          subtitle="Runtime schedules"
+          stats={[
+            { value: schedulerJobs.filter((job: any) => job.enabled).length, label: "active", tone: "cyan" },
+            { value: schedulerJobs.filter((job: any) => !job.enabled).length, label: "paused", tone: "honey" },
+            { value: schedulerJobs.filter((job: any) => job.lastRun?.status === "failed").length, label: "failed", tone: "danger" },
+            { value: schedulerJobs.length, label: "total" },
+          ]}
+        />
+        <div className="min-h-0 overflow-hidden">
         <SchedulerView
           jobs={schedulerJobs}
           runStates={schedulerRunStates}
           toolbar={
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" size="sm" variant="secondary" onClick={() => void refreshSharedSchedulesFromVault()}>
-                <Repeat2 aria-hidden="true" />
-                Sync vault
-              </Button>
-              <Button type="button" size="sm" variant="secondary" onClick={() => void importExistingSchedules()} disabled={scheduleImporting}>
-                {scheduleImporting ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <FileUp aria-hidden="true" />}
-                Import existing
-              </Button>
+            <div className="flex w-full flex-wrap items-center justify-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Sync vault schedules"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[rgba(148,163,184,0.20)] bg-[rgba(15,23,42,0.60)] text-[var(--muted)] transition hover:border-[rgba(94,234,212,0.38)] hover:bg-[rgba(20,184,166,0.10)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(94,234,212,0.34)] disabled:cursor-not-allowed disabled:opacity-45 [&_svg]:h-4 [&_svg]:w-4"
+                    onClick={() => void refreshSharedSchedulesFromVault()}
+                  >
+                    <Repeat2 aria-hidden="true" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Sync vault schedules</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={scheduleImporting ? "Importing existing runtime schedules" : "Import existing runtime schedules"}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[rgba(148,163,184,0.20)] bg-[rgba(15,23,42,0.60)] text-[var(--muted)] transition hover:border-[rgba(94,234,212,0.38)] hover:bg-[rgba(20,184,166,0.10)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(94,234,212,0.34)] disabled:cursor-not-allowed disabled:opacity-45 [&_svg]:h-4 [&_svg]:w-4"
+                    onClick={() => void importExistingSchedules()}
+                    disabled={scheduleImporting}
+                  >
+                    {scheduleImporting ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <FileUp aria-hidden="true" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{scheduleImporting ? "Importing existing schedules" : "Import existing schedules"}</TooltipContent>
+              </Tooltip>
             </div>
           }
-          status={scheduleImportStatus ? <p className={fleetClass("schedulerImportStatus")}>{scheduleImportStatus}</p> : null}
           onToggleJob={(job) => void toggleSchedule(job.id)}
           onRunNow={(job) => {
             const schedule = findScheduleForJob(job);
@@ -48,6 +82,7 @@ export function SchedulerPanel(props: any) {
             setScheduleImportStatus("");
           }}
         />
+        </div>
       </section>
       ) : null}
 

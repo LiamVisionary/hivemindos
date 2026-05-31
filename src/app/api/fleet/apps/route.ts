@@ -1,17 +1,34 @@
 import { NextRequest } from "next/server";
 import { execFile } from "child_process";
+import { homedir } from "os";
+import { dirname, join } from "path";
+import { mkdir, readFile, writeFile } from "fs/promises";
 import { promisify } from "util";
 import { hivemindLinkControlUrl } from "@/lib/services/hivemind-link-control";
 
 export const runtime = "nodejs";
 
-const APPS_CACHE_MS = 10_000;
+const APPS_CACHE_MS = 60_000;
+const APPS_STALE_MS = 5 * 60_000;
+const APPS_CACHE_FILE = join(homedir(), ".hivemindos", "fleet-apps-cache.json");
 const COLLECTOR_TIMEOUT_MS = 4_500;
 const ICON_PROBE_TIMEOUT_MS = 900;
 const SERVICE_SIGNATURE_TIMEOUT_MS = 2_500;
 const HIVEMIND_LINK_APP_TIMEOUT_MS = 4_000;
 const TAILSCALE_STATUS_TIMEOUT_MS = 3_000;
 const HIVEMIND_LINK_COLLECTOR_PORTS = [8787, 8789, 8790, 8791, 8792];
+const SERVICE_ROUTE_CATALOG_TIMEOUT_MS = 2_500;
+const SERVICE_ROUTE_LIMIT = 80;
+const OPENAPI_CATALOG_PATHS = [
+  "/openapi.json",
+  "/api/openapi.yaml",
+  "/api/openapi.yml",
+  "/api/openapi.json",
+  "/swagger.json",
+  "/api/swagger.json",
+  "/api/swagger.yaml",
+  "/api/swagger.yml",
+];
 const TAILSCALE_CLI_CANDIDATES = [
   "/usr/local/bin/tailscale",
   "/opt/homebrew/bin/tailscale",
@@ -80,6 +97,8 @@ type HostedApp = {
   openUrl: string;
   apiBaseUrl: string;
   healthUrl?: string;
+  apiRoutes?: ServiceRoute[];
+  apiRoutesSource?: "openapi" | "hivemind";
 };
 
 type ServiceSignature = {
@@ -89,6 +108,22 @@ type ServiceSignature = {
   healthPath: string;
   healthUrl: string;
   apiBaseUrl: string;
+};
+
+type ServiceRoute = {
+  method: string;
+  path: string;
+  url: string;
+  category: string;
+  summary?: string;
+  source: "openapi" | "hivemind";
+};
+
+type ServiceRouteSpec = {
+  method: string;
+  path: string;
+  category: string;
+  summary: string;
 };
 
 type ServiceHealthPayload = {
@@ -107,6 +142,7 @@ type KnownServiceSignature = {
   defaultPorts: number[];
   healthPaths: string[];
   matches: RegExp;
+  routes: ServiceRouteSpec[];
 };
 
 const KNOWN_SERVICE_SIGNATURES: KnownServiceSignature[] = [
@@ -116,6 +152,39 @@ const KNOWN_SERVICE_SIGNATURES: KnownServiceSignature[] = [
     defaultPorts: [5101],
     healthPaths: ["/health"],
     matches: /miroshark/i,
+    routes: [
+      { method: "GET", path: "/health", category: "Core", summary: "Service health signature." },
+      { method: "GET", path: "/api/docs", category: "Core", summary: "Interactive API reference when the service exposes Swagger UI." },
+      { method: "GET", path: "/api/openapi.yaml", category: "Core", summary: "OpenAPI document for the MiroShark HTTP API." },
+      { method: "GET", path: "/api/templates/list", category: "Templates", summary: "List scenario templates." },
+      { method: "GET", path: "/api/templates/capabilities", category: "Templates", summary: "Template platform and feature capabilities." },
+      { method: "GET", path: "/api/templates/{templateId}?enrich=true", category: "Templates", summary: "Template details with enriched metadata." },
+      { method: "GET", path: "/api/simulation/list", category: "Simulations", summary: "List local simulations." },
+      { method: "GET", path: "/api/simulation/history", category: "Simulations", summary: "Recent simulation history." },
+      { method: "GET", path: "/api/simulation/public", category: "Simulations", summary: "Published simulation runs." },
+      { method: "GET", path: "/api/simulation/trending", category: "Simulations", summary: "Trending simulation runs." },
+      { method: "POST", path: "/api/simulation/create", category: "Lifecycle", summary: "Create a simulation from a graph." },
+      { method: "POST", path: "/api/simulation/prepare", category: "Lifecycle", summary: "Prepare agent profiles for a simulation." },
+      { method: "POST", path: "/api/simulation/prepare/status", category: "Lifecycle", summary: "Poll preparation progress." },
+      { method: "POST", path: "/api/simulation/start", category: "Lifecycle", summary: "Start a simulation run." },
+      { method: "POST", path: "/api/simulation/stop", category: "Lifecycle", summary: "Stop a simulation run." },
+      { method: "GET", path: "/api/simulation/{simulationId}/run-status", category: "Run Data", summary: "Current runner status." },
+      { method: "GET", path: "/api/simulation/{simulationId}/posts?platform=twitter&limit=500", category: "Run Data", summary: "Generated social posts." },
+      { method: "GET", path: "/api/simulation/{simulationId}/timeline", category: "Run Data", summary: "Simulation timeline events." },
+      { method: "GET", path: "/api/simulation/{simulationId}/profiles?platform=twitter", category: "Run Data", summary: "Agent profiles." },
+      { method: "GET", path: "/api/simulation/{simulationId}/thread.json", category: "Exports", summary: "Thread export as JSON." },
+      { method: "GET", path: "/api/simulation/{simulationId}/transcript.md", category: "Exports", summary: "Transcript export as Markdown." },
+      { method: "GET", path: "/api/simulation/{simulationId}/share-card.png", category: "Exports", summary: "Share card image." },
+      { method: "POST", path: "/api/graph/ontology/generate", category: "Graph", summary: "Generate graph ontology from source material." },
+      { method: "POST", path: "/api/graph/build", category: "Graph", summary: "Build a Neo4j graph." },
+      { method: "GET", path: "/api/graph/task/{taskId}", category: "Graph", summary: "Poll graph build progress." },
+      { method: "GET", path: "/api/graph/data/{graphId}?limit=100", category: "Graph", summary: "Read graph nodes and edges." },
+      { method: "GET", path: "/api/observability/stats", category: "Observability", summary: "Runtime and LLM usage stats." },
+      { method: "GET", path: "/api/observability/events?limit=30", category: "Observability", summary: "Recent service events." },
+      { method: "GET", path: "/api/observability/llm-calls?limit=20", category: "Observability", summary: "Recent LLM calls." },
+      { method: "GET", path: "/api/settings", category: "Config", summary: "Current MiroShark settings." },
+      { method: "GET", path: "/api/mcp/status", category: "Config", summary: "MCP integration status." },
+    ],
   },
 ];
 
@@ -141,9 +210,33 @@ type TailscaleStatus = {
   Peer?: Record<string, TailscalePeer>;
 };
 
-let appsCache: { checkedAt: number; payload: AppsPayload } | null = null;
+type AppsCacheRecord = { checkedAt: number; payload: AppsPayload };
+
+let appsCache: AppsCacheRecord | null = null;
 let appsInFlight: Promise<AppsPayload> | null = null;
 let appsCacheGeneration = 0;
+
+async function readDiskAppsCache() {
+  try {
+    const parsed = JSON.parse(await readFile(APPS_CACHE_FILE, "utf8")) as Partial<AppsCacheRecord>;
+    if (!parsed || typeof parsed.checkedAt !== "number" || parsed.payload?.ok !== true || !Array.isArray(parsed.payload.apps)) {
+      return null;
+    }
+    return { checkedAt: parsed.checkedAt, payload: parsed.payload };
+  } catch {
+    return null;
+  }
+}
+
+async function writeDiskAppsCache(record: AppsCacheRecord) {
+  await mkdir(dirname(APPS_CACHE_FILE), { recursive: true });
+  await writeFile(APPS_CACHE_FILE, `${JSON.stringify(record)}\n`, { encoding: "utf8", mode: 0o600 });
+}
+
+function rememberAppsPayload(payload: AppsPayload) {
+  appsCache = { checkedAt: Date.now(), payload };
+  void writeDiskAppsCache(appsCache).catch(() => undefined);
+}
 
 type AppKind = "ai" | "creative" | "code" | "dashboard" | "media" | "service" | "app";
 
@@ -208,6 +301,147 @@ function collectorAppsUrl(collectorUrl: string, forceRefresh: boolean) {
 function normalizePath(value?: string) {
   const path = value?.trim() || "/";
   return path.startsWith("/") ? path : `/${path}`;
+}
+
+function routeUrl(apiBaseUrl: string, path: string) {
+  return `${apiBaseUrl.replace(/\/+$/, "")}${normalizePath(path)}`;
+}
+
+function routeCategory(path: string) {
+  const normalized = normalizePath(path);
+  if (normalized === "/health" || normalized.includes("openapi") || normalized.includes("/docs")) return "Core";
+  if (normalized.startsWith("/api/templates")) return "Templates";
+  if (normalized.startsWith("/api/graph")) return "Graph";
+  if (normalized.startsWith("/api/report")) return "Reports";
+  if (normalized.includes("/observability")) return "Observability";
+  if (normalized.includes("/settings") || normalized.includes("/mcp")) return "Config";
+  if (normalized.includes("/simulation/") && /\.(json|jsonl|csv|md|txt|png|gif|svg|ipynb)$/i.test(normalized)) return "Exports";
+  if (normalized.startsWith("/api/simulation")) return "Simulations";
+  return "API";
+}
+
+function knownServiceByKind(serviceKind?: string) {
+  const normalized = serviceKind?.trim().toLowerCase();
+  if (!normalized) return null;
+  return KNOWN_SERVICE_SIGNATURES.find((signature) => signature.serviceKind === normalized) ?? null;
+}
+
+function routeFromSpec(apiBaseUrl: string, spec: ServiceRouteSpec, source: ServiceRoute["source"]): ServiceRoute {
+  const path = normalizePath(spec.path);
+  return {
+    method: spec.method.toUpperCase(),
+    path,
+    url: routeUrl(apiBaseUrl, path),
+    category: spec.category || routeCategory(path),
+    summary: spec.summary,
+    source,
+  };
+}
+
+function dedupeServiceRoutes(routes: ServiceRoute[]) {
+  const seen = new Set<string>();
+  return routes.filter((route) => {
+    const key = `${route.method}:${route.path}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function routeSummary(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as { summary?: unknown; description?: unknown; operationId?: unknown };
+  const text = record.summary || record.description || record.operationId;
+  return typeof text === "string" ? text.trim().split("\n")[0]?.slice(0, 180) : undefined;
+}
+
+function parseOpenApiJsonRoutes(apiBaseUrl: string, payload: unknown): ServiceRoute[] {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+  const paths = (payload as { paths?: unknown }).paths;
+  if (!paths || typeof paths !== "object" || Array.isArray(paths)) return [];
+  const routes: ServiceRoute[] = [];
+  for (const [path, methods] of Object.entries(paths)) {
+    if (!path.startsWith("/") || !methods || typeof methods !== "object" || Array.isArray(methods)) continue;
+    for (const [method, operation] of Object.entries(methods)) {
+      if (!/^(get|post|put|patch|delete)$/i.test(method)) continue;
+      routes.push({
+        method: method.toUpperCase(),
+        path,
+        url: routeUrl(apiBaseUrl, path),
+        category: routeCategory(path),
+        summary: routeSummary(operation),
+        source: "openapi",
+      });
+    }
+  }
+  return dedupeServiceRoutes(routes).slice(0, SERVICE_ROUTE_LIMIT);
+}
+
+function parseOpenApiYamlRoutes(apiBaseUrl: string, text: string): ServiceRoute[] {
+  const routes: ServiceRoute[] = [];
+  let currentPath = "";
+  let currentRouteIndex = -1;
+  for (const line of text.split("\n")) {
+    const pathMatch = line.match(/^ {2}(\/[^:]+):\s*$/);
+    if (pathMatch) {
+      currentPath = pathMatch[1] ?? "";
+      currentRouteIndex = -1;
+      continue;
+    }
+    const methodMatch = line.match(/^ {4}(get|post|put|patch|delete):\s*$/i);
+    if (methodMatch && currentPath) {
+      routes.push({
+        method: methodMatch[1]?.toUpperCase() ?? "GET",
+        path: currentPath,
+        url: routeUrl(apiBaseUrl, currentPath),
+        category: routeCategory(currentPath),
+        source: "openapi",
+      });
+      currentRouteIndex = routes.length - 1;
+      continue;
+    }
+    const summaryMatch = line.match(/^ {6}summary:\s*["']?(.+?)["']?\s*$/);
+    if (summaryMatch && currentRouteIndex >= 0) {
+      routes[currentRouteIndex] = {
+        ...routes[currentRouteIndex],
+        summary: summaryMatch[1]?.trim().slice(0, 180),
+      };
+    }
+  }
+  return dedupeServiceRoutes(routes).slice(0, SERVICE_ROUTE_LIMIT);
+}
+
+async function discoverOpenApiRoutes(apiBaseUrl: string): Promise<ServiceRoute[]> {
+  for (const path of OPENAPI_CATALOG_PATHS) {
+    try {
+      const response = await fetch(routeUrl(apiBaseUrl, path), {
+        cache: "no-store",
+        signal: AbortSignal.timeout(SERVICE_ROUTE_CATALOG_TIMEOUT_MS),
+      });
+      if (!response.ok) continue;
+      const text = await response.text();
+      const trimmed = text.trim();
+      const routes = trimmed.startsWith("{")
+        ? parseOpenApiJsonRoutes(apiBaseUrl, JSON.parse(trimmed))
+        : parseOpenApiYamlRoutes(apiBaseUrl, trimmed);
+      if (routes.length > 0) return routes;
+    } catch {
+      continue;
+    }
+  }
+  return [];
+}
+
+async function serviceRouteCatalog(apiBaseUrl: string, serviceKind?: string): Promise<{ routes: ServiceRoute[]; source: ServiceRoute["source"] } | null> {
+  const openApiRoutes = await discoverOpenApiRoutes(apiBaseUrl);
+  if (openApiRoutes.length > 0) return { routes: openApiRoutes, source: "openapi" };
+
+  const known = knownServiceByKind(serviceKind);
+  if (!known?.routes.length) return null;
+  return {
+    routes: known.routes.map((route) => routeFromSpec(apiBaseUrl, route, "hivemind")),
+    source: "hivemind",
+  };
 }
 
 function dnsHost(value?: string) {
@@ -512,6 +746,7 @@ async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUr
       await discoverDirectAppIcon(openUrl),
     ]) || brandFallbackIconUrl(name) || undefined;
   const apiBaseUrl = signature?.apiBaseUrl || apiProxyUrl || proxyUrl.replace(/\/+$/, "") || appOriginUrl(directServiceUrl);
+  const routes = !interactive ? await serviceRouteCatalog(apiBaseUrl, serviceKind) : null;
   return {
     id: `${local ? "local" : machineOpenHost(machine)}:${port}:${app.id || name}`,
     name,
@@ -533,17 +768,19 @@ async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUr
     openUrl,
     apiBaseUrl,
     healthUrl: signature?.healthUrl || healthProxyUrl || (healthPath ? `${apiBaseUrl}${normalizePath(healthPath)}` : undefined),
+    apiRoutes: routes?.routes,
+    apiRoutesSource: routes?.source,
   };
 }
 
-function hostedAppFromHealth(input: {
+async function hostedAppFromHealth(input: {
   collectorUrl: string;
   healthUrl: string;
   ip: string;
   port: number;
   machineName?: string;
   health: ServiceHealthPayload;
-}): HostedApp | null {
+}): Promise<HostedApp | null> {
   const known = knownServiceFromHealth(input.health);
   const service = healthServiceName(input.health);
   if (!known && !service) return null;
@@ -552,6 +789,7 @@ function hostedAppFromHealth(input: {
   const machineName = normalizeMachineName(input.machineName || `${name} host ${input.ip}`);
   const kind = appKind(name);
   const apiBaseUrl = input.healthUrl.replace(/\/health\/?$/i, "");
+  const routes = await serviceRouteCatalog(apiBaseUrl, serviceKind);
   return {
     id: `${input.ip}:${input.port}:${name}`,
     name,
@@ -573,6 +811,8 @@ function hostedAppFromHealth(input: {
     openUrl: `${input.collectorUrl}/app-proxy/${input.port}/`,
     apiBaseUrl,
     healthUrl: input.healthUrl,
+    apiRoutes: routes?.routes,
+    apiRoutesSource: routes?.source,
   };
 }
 
@@ -593,6 +833,7 @@ async function toKnownServiceHostedApp(app: CollectorApp, machine: FleetMachine,
     const machineName = normalizeMachineName(machine.device?.name || machine.collectorHost || machine.device?.ip || "Unknown machine");
     const kind = appKind(known.displayName);
     const local = isLocalMachine(machine);
+    const routes = await serviceRouteCatalog(apiBaseUrl, known.serviceKind);
     return {
       id: `${local ? "local" : machineOpenHost(machine)}:${port}:${app.id || known.displayName}`,
       name: known.displayName,
@@ -614,6 +855,8 @@ async function toKnownServiceHostedApp(app: CollectorApp, machine: FleetMachine,
       openUrl,
       apiBaseUrl,
       healthUrl,
+      apiRoutes: routes?.routes,
+      apiRoutesSource: routes?.source,
     };
   }
   return null;
@@ -740,7 +983,7 @@ async function probeKnownServiceHealthApps(machines: FleetMachine[]): Promise<{ 
             const healthUrl = `${collectorUrl}/app-proxy/${port}${normalizePath(healthPath)}`;
             const health = await fetchJsonOrNull<ServiceHealthPayload>(healthUrl, SERVICE_SIGNATURE_TIMEOUT_MS);
             if (!health || !knownServiceFromHealth(health)) return null;
-            const app = hostedAppFromHealth({
+            const app = await hostedAppFromHealth({
               collectorUrl,
               healthUrl,
               ip,
@@ -871,15 +1114,36 @@ async function readApps(request: NextRequest): Promise<AppsPayload> {
 export async function GET(request: NextRequest) {
   const now = Date.now();
   const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
+  if (!forceRefresh && !appsCache) {
+    appsCache = await readDiskAppsCache();
+  }
   if (!forceRefresh && appsCache && now - appsCache.checkedAt < APPS_CACHE_MS) {
     return Response.json(appsCache.payload);
+  }
+  if (!forceRefresh && appsCache && now - appsCache.checkedAt < APPS_STALE_MS) {
+    const stalePayload = appsCache.payload;
+    if (!appsInFlight) {
+      const generation = appsCacheGeneration;
+      appsInFlight = readApps(request)
+        .then((payload) => {
+          if (generation === appsCacheGeneration) {
+            rememberAppsPayload(payload);
+          }
+          return payload;
+        })
+        .catch(() => stalePayload)
+        .finally(() => {
+          appsInFlight = null;
+        });
+    }
+    return Response.json(stalePayload);
   }
   if (forceRefresh) {
     appsCacheGeneration += 1;
     const generation = appsCacheGeneration;
     const payload = await readApps(request);
     if (generation === appsCacheGeneration) {
-      appsCache = { checkedAt: Date.now(), payload };
+      rememberAppsPayload(payload);
     }
     return Response.json(payload);
   }
@@ -888,7 +1152,7 @@ export async function GET(request: NextRequest) {
     appsInFlight = readApps(request)
       .then((payload) => {
         if (generation === appsCacheGeneration) {
-          appsCache = { checkedAt: Date.now(), payload };
+          rememberAppsPayload(payload);
         }
         return payload;
       })

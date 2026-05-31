@@ -860,6 +860,11 @@
   padding: 0 20px 26px;
 }
 
+.workBoardShell > [data-work-section-header="true"] {
+  margin-right: -20px;
+  margin-left: -20px;
+}
+
 .workBoardHeader {
   display: flex;
   align-items: flex-start;
@@ -953,8 +958,8 @@
 
 .workBoardHero {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto;
-  gap: 18px;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  gap: 14px;
   align-items: center;
   min-height: 72px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.1);

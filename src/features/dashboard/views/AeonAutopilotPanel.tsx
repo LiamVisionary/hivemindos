@@ -43,6 +43,15 @@ import { Button } from "@/components/ui/button";
 import { CreateFolderRepoModal, type CreateFolderRepoValue } from "@/features/dashboard/views/shared/CreateFolderRepoModal";
 import { AeonDeliverablesPanel } from "@/features/dashboard/views/AeonDeliverablesPanel";
 import { InlineRenameControl } from "@/features/dashboard/views/shared/InlineRenameControl";
+import { SectionModeHeader } from "@/features/dashboard/views/WorkSectionHeader";
+import { getNativeBrainSkillInventory } from "@/lib/native/brain-skills";
+import { downloadNativeAeonDeliverable, listNativeAeonDeliverables, sendNativeAeonDeliverable } from "@/lib/native/aeon-deliverables";
+import { getNativeAeonRunLog, listNativeAeonRuns, nativeAeonRepoSync } from "@/lib/native/aeon-git";
+import { getNativeAeonMemory } from "@/lib/native/aeon-memory";
+import { listNativeAeonOutputs } from "@/lib/native/aeon-outputs";
+import { listNativeAeonSchedules } from "@/lib/native/aeon-schedules";
+import { prepareNativeAeonWorkspace } from "@/lib/native/aeon-workspaces";
+import { openNativeDeliverable, openNativeDirectory } from "@/lib/native/filesystem";
 import type { AgentSettingsPanel } from "@/features/dashboard/agent-settings-types";
 import type { BrainSkillInventory, BrainSkillSummary, DashboardView, LinkedDirectory, MachineGroup } from "@/features/dashboard/dashboard-types";
 import { groupSkills, runtimeSkillToGroupable, type GroupableSkill } from "@/features/dashboard/skill-grouping";
@@ -126,6 +135,7 @@ type AeonAutopilotPanelProps = {
   machineGroups?: MachineGroup[];
   chooseDirectoryForMachine?: (machine: KanbanMachineTarget | null, onChoose: (directory: LinkedDirectory) => void) => void | Promise<void>;
   setActiveView: (view: DashboardView) => void;
+  setVaultPanelMode: (mode: "hive-vault" | "shared-skills" | "brain-services" | "env" | "config") => void;
   setSelectedAgentId: (agentId: string) => void;
   setAgentRoleModalId: (agentId: string) => void;
   setAgentSettingsPanel: Dispatch<SetStateAction<AgentSettingsPanel>>;
@@ -620,7 +630,7 @@ function isNewAeonDeliverable(deliverable: AeonDeliverable) {
   return Date.now() - updatedAt < 7 * 24 * 60 * 60 * 1000;
 }
 
-export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId, setAgents, sharedVault, machineGroups = [], chooseDirectoryForMachine, setActiveView, setSelectedAgentId, setAgentRoleModalId, setAgentSettingsPanel, updateAgentProfile, schedulerJobs = [], schedulerRunStates = {}, onSchedulerOpen, onSchedulerToggleJob, onSchedulerRunJob, onSchedulerEditJob, onSchedulerNewJob }: AeonAutopilotPanelProps) {
+export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId, setAgents, sharedVault, machineGroups = [], chooseDirectoryForMachine, setActiveView, setVaultPanelMode, setSelectedAgentId, setAgentRoleModalId, setAgentSettingsPanel, updateAgentProfile, schedulerJobs = [], schedulerRunStates = {}, onSchedulerOpen, onSchedulerToggleJob, onSchedulerRunJob, onSchedulerEditJob, onSchedulerNewJob }: AeonAutopilotPanelProps) {
   const aeonAgents = useMemo(() => {
     const byWorkspace = new Map<string, AgentProfile>();
     for (const agent of displayAgents.filter((item) => item.runtime === "aeon")) {
@@ -762,17 +772,70 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     }, 2200);
   }, []);
 
+  const loadDeliverablesForAgent = useCallback(async (agent: AgentProfile) => {
+    const nativeData = await listNativeAeonDeliverables({ agent, vaultPath: sharedVault.vaultPath });
+    if (nativeData?.ok) return { deliverables: nativeData.deliverables ?? [] };
+    if (nativeData?.error) throw new Error(nativeData.error);
+    return postJson<{ deliverables?: AeonDeliverable[] }>("/api/runtimes/aeon/deliverables", {
+      action: "list",
+      agent,
+      vaultPath: sharedVault.vaultPath,
+    });
+  }, [sharedVault.vaultPath]);
+
+  const loadOutputsForAgent = useCallback(async (agent: AgentProfile) => {
+    const nativeData = await listNativeAeonOutputs({ agent });
+    if (nativeData?.ok) return { outputs: nativeData.outputs ?? [] };
+    if (nativeData?.error) throw new Error(nativeData.error);
+    return postJson<{ outputs?: AeonOutput[] }>("/api/runtimes/aeon/outputs", { agent });
+  }, []);
+
+  const loadSchedulesForAgent = useCallback(async (agent: AgentProfile) => {
+    const nativeData = await listNativeAeonSchedules({ agent });
+    if (nativeData?.ok) return { schedules: nativeData.schedules ?? [] };
+    if (nativeData?.error) throw new Error(nativeData.error);
+    return postJson<{ schedules?: RuntimeSchedule[] }>("/api/runtimes/aeon/schedules", { agent });
+  }, []);
+
+  const loadMemoryForAgent = useCallback(async (agent: AgentProfile) => {
+    const nativeData = await getNativeAeonMemory({ agent });
+    if (nativeData?.ok) return { memory: nativeData.memory ?? null };
+    if (nativeData?.error) throw new Error(nativeData.error);
+    return postJson<{ memory?: RuntimeMemorySnapshot }>("/api/runtimes/aeon/memory", { agent });
+  }, []);
+
+  const loadRunsForAgent = useCallback(async (agent: AgentProfile) => {
+    const nativeData = await listNativeAeonRuns({ agent });
+    if (nativeData?.ok) return { runs: nativeData.runs ?? [] };
+    if (nativeData?.error) throw new Error(nativeData.error);
+    return postJson<{ runs?: RuntimeRun[] }>("/api/runtimes/aeon/runs", { agent });
+  }, []);
+
+  const loadRepoSyncForAgent = useCallback(async (agent: AgentProfile) => {
+    const nativeData = await nativeAeonRepoSync({ agent, action: "status" });
+    if (nativeData?.ok) return { status: nativeData.status ?? null };
+    if (nativeData?.error) throw new Error(nativeData.error);
+    return postJson<{ status?: RuntimeRepoSyncStatus }>("/api/runtimes/aeon/repo/sync", { agent, action: "status" });
+  }, []);
+
+  const loadSharedBrainSkills = useCallback(async () => {
+    const nativeData = await getNativeBrainSkillInventory({
+      vaultPath: sharedVault.vaultPath || undefined,
+      sharedOnly: true,
+    });
+    if (nativeData?.ok) return nativeData;
+    return fetch(`/api/obsidian/skills?shared=1&vaultPath=${encodeURIComponent(sharedVault.vaultPath || "")}`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .catch(() => null) as Promise<BrainSkillInventory | null>;
+  }, [sharedVault.vaultPath]);
+
   const refreshDeliverablesForAgent = useCallback(async (agent: AgentProfile, options: { quiet?: boolean } = {}) => {
     if (!options.quiet) {
       setDeliverablesLoading(true);
       setDeliverablesStatus("");
     }
     try {
-      const data = await postJson<{ deliverables?: AeonDeliverable[] }>("/api/runtimes/aeon/deliverables", {
-        action: "list",
-        agent,
-        vaultPath: sharedVault.vaultPath,
-      });
+      const data = await loadDeliverablesForAgent(agent);
       setDeliverablesByAgent((current) => ({ ...current, [agent.id]: data.deliverables ?? [] }));
       if (!options.quiet) setDeliverablesStatus("");
     } catch (error) {
@@ -780,7 +843,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     } finally {
       if (!options.quiet) setDeliverablesLoading(false);
     }
-  }, [sharedVault.vaultPath]);
+  }, [loadDeliverablesForAgent]);
 
   useEffect(() => () => {
     if (actionSuccessTimerRef.current) {
@@ -841,20 +904,20 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     await Promise.allSettled([
       track(postJson<AeonStatus>("/api/runtimes/aeon/status", body), (data) => { resolvedRepo = data?.status?.repo || resolvedRepo; setStatus(data); }),
       track(postJson<{ skills?: RuntimeSkill[] }>("/api/runtimes/aeon/skills", vaultBody), (data) => setSkills(data.skills ?? [])),
-      track(postJson<{ schedules?: RuntimeSchedule[] }>("/api/runtimes/aeon/schedules", body), (data) => setSchedules(data.schedules ?? [])),
-      track(postJson<{ runs?: RuntimeRun[] }>("/api/runtimes/aeon/runs", body), (data) => setRuns(data.runs ?? [])),
-      track(postJson<{ outputs?: AeonOutput[] }>("/api/runtimes/aeon/outputs", body), (data) => setOutputs(data.outputs ?? [])),
-      track(postJson<{ deliverables?: AeonDeliverable[] }>("/api/runtimes/aeon/deliverables", { ...vaultBody, action: "list" }), (data) => {
+      track(loadSchedulesForAgent(agent), (data) => setSchedules(data.schedules ?? [])),
+      track(loadRunsForAgent(agent), (data) => setRuns(data.runs ?? [])),
+      track(loadOutputsForAgent(agent), (data) => setOutputs(data.outputs ?? [])),
+      track(loadDeliverablesForAgent(agent), (data) => {
         setDeliverablesByAgent((current) => ({ ...current, [agent.id]: data.deliverables ?? [] }));
       }),
       track(postJson<{ analytics?: RuntimeAnalytics }>("/api/runtimes/aeon/analytics", vaultBody), (data) => setAnalytics(data.analytics ?? null)),
-      track(postJson<{ memory?: RuntimeMemorySnapshot }>("/api/runtimes/aeon/memory", body), (data) => setMemory(data.memory ?? null)),
+      track(loadMemoryForAgent(agent), (data) => setMemory(data.memory ?? null)),
       track(postJson<{ secrets?: RuntimeSecretStatus }>("/api/runtimes/aeon/secrets/status", vaultBody), (data) => {
         const secret = data.secrets?.keys?.find((item) => item.key === "GH_GLOBAL");
         resolvedSecretReady = Boolean(secret?.isSet || secret?.availableInSharedEnv || secret?.availableLocally);
         setSecrets(data.secrets ?? null);
       }),
-      track(postJson<{ status?: RuntimeRepoSyncStatus }>("/api/runtimes/aeon/repo/sync", { ...body, action: "status" }), (data) => setRepoSync(data.status ?? null)),
+      track(loadRepoSyncForAgent(agent), (data) => setRepoSync(data.status ?? null)),
       track(
         postJson<AeonObsidianSyncStatus>("/api/runtimes/aeon/obsidian-sync", { ...vaultBody, action: "status" }).catch((error) => ({
           ok: false,
@@ -867,9 +930,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
       // The Ready Check only reads the shared-brain skill list, so `?shared=1` skips
       // the per-provider directory scan + remote-provider fetch the full inventory runs.
       track(
-        fetch(`/api/obsidian/skills?shared=1&vaultPath=${encodeURIComponent(sharedVault.vaultPath || "")}`, { cache: "no-store" })
-          .then((response) => response.ok ? response.json() : null)
-          .catch(() => null),
+        loadSharedBrainSkills(),
         (next) => { if (next?.ok) setAllSkills(next as BrainSkillInventory); },
       ),
     ]);
@@ -880,7 +941,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     const workspaceKey = aeonWorkspaceKey(agent);
     writeGithubReady(workspaceKey, Boolean(resolvedRepo && resolvedSecretReady));
     setConnectionLoadedKey(workspaceKey);
-  }, [selectedAgent, sharedVault.vaultPath, updateObsidianSync, writeGithubReady]);
+  }, [loadDeliverablesForAgent, loadMemoryForAgent, loadOutputsForAgent, loadRepoSyncForAgent, loadRunsForAgent, loadSchedulesForAgent, loadSharedBrainSkills, selectedAgent, sharedVault.vaultPath, updateObsidianSync, writeGithubReady]);
 
   const refreshFastSecrets = useCallback(async () => {
     try {
@@ -985,10 +1046,14 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     setActionBusy(`workspace:${action}`);
     setMessage("");
     try {
-      const data = await postJson<{ agent?: AgentProfile; root?: string }>("/api/runtimes/aeon/workspaces", {
-        action,
-        ...input,
-      });
+      const nativeData = await prepareNativeAeonWorkspace({ action, ...input });
+      if (nativeData?.error) throw new Error(nativeData.error);
+      const data = nativeData?.ok
+        ? nativeData
+        : await postJson<{ agent?: AgentProfile; root?: string }>("/api/runtimes/aeon/workspaces", {
+          action,
+          ...input,
+        });
       if (!data.agent) throw new Error("AEON workspace was prepared, but no profile was returned.");
       upsertAeonWorkspaceAgent(data.agent, options);
       const mirror = await postJson<AeonObsidianSyncStatus>("/api/runtimes/aeon/obsidian-sync", {
@@ -1093,6 +1158,23 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
       await chooseDirectoryForMachine(machine, onChoose);
       return;
     }
+    const nativeResult = await openNativeDirectory({
+      currentPath: "~/.aeon-repos",
+      prompt: "Choose a parent folder for the new AEON repo:",
+    });
+    const nativePath = nativeResult?.path?.trim();
+    if (nativePath) {
+      onChoose({
+        id: `${nativePath}-${crypto.randomUUID()}`,
+        name: nativePath.replace(/\/+$/, "").split("/").filter(Boolean).at(-1) || nativePath,
+        path: nativePath,
+        machineName: machine.name,
+        machineKey: machine.key,
+        lastUsedAt: Date.now(),
+      });
+      return;
+    }
+    if (nativeResult?.cancelled) return;
     const response = await fetch("/api/agents/browse-folder", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1115,6 +1197,15 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     setActionBusy("workspace:browse");
     setMessage("");
     try {
+      const nativeResult = await openNativeDirectory({
+        currentPath: selectedAgent.aeonLocalPath || selectedAgent.localDataDir || "~",
+        prompt: "Choose an existing AEON repo folder:",
+      });
+      if (nativeResult?.path) {
+        await runWorkspaceAction("link", { path: nativeResult.path });
+        return;
+      }
+      if (nativeResult?.cancelled) return;
       const response = await fetch("/api/agents/browse-folder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1291,7 +1382,11 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     setRunLogLoading(run.id);
     setMessage("");
     try {
-      const data = await postJson<{ log?: RuntimeRunLog }>("/api/runtimes/aeon/runs/logs", { agent: selectedAgent, runId: run.id });
+      const nativeData = await getNativeAeonRunLog({ agent: selectedAgent, runId: run.id });
+      if (nativeData?.error) throw new Error(nativeData.error);
+      const data = nativeData?.ok
+        ? nativeData
+        : await postJson<{ log?: RuntimeRunLog }>("/api/runtimes/aeon/runs/logs", { agent: selectedAgent, runId: run.id });
       setSelectedRunLog(data.log ?? null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load Aeon run logs.");
@@ -1377,7 +1472,11 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     setActionBusy(`repo:${action}`);
     setMessage("");
     try {
-      const data = await postJson<{ status?: RuntimeRepoSyncStatus; message?: string }>("/api/runtimes/aeon/repo/sync", { agent: selectedAgent, action });
+      const nativeData = await nativeAeonRepoSync({ agent: selectedAgent, action });
+      if (nativeData?.error) throw new Error(nativeData.error);
+      const data = nativeData?.ok
+        ? nativeData
+        : await postJson<{ status?: RuntimeRepoSyncStatus; message?: string }>("/api/runtimes/aeon/repo/sync", { agent: selectedAgent, action });
       setRepoSync(data.status ?? null);
       setMessage(data.message || `Aeon repo ${action} complete.`);
       await refresh();
@@ -1574,6 +1673,9 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
   const openDeliverable = async (deliverable: AeonDeliverable, action: "open" | "reveal") => {
     setDeliverablesStatus("");
     try {
+      const nativeResult = await openNativeDeliverable({ action, path: deliverable.path, url: deliverable.url });
+      if (nativeResult?.ok) return;
+      if (nativeResult?.error && !deliverable.url?.trim()) throw new Error(nativeResult.error);
       const response = await fetch("/api/kanban/deliverable", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1589,11 +1691,19 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     setActionBusy(`download:${deliverable.id}`);
     setDeliverablesStatus("");
     try {
+      const target = deliverableTarget(deliverable);
+      const nativeData = await downloadNativeAeonDeliverable({ path: target, url: deliverable.url });
+      if (nativeData?.ok) {
+        setDeliverablesStatus(nativeData.downloaded ? `Downloaded to ${nativeData.path}` : `Already on this machine: ${nativeData.path}`);
+        await refreshDeliverablesForAgent(selectedAgent);
+        return;
+      }
+      if (nativeData?.error && !/^https?:\/\//i.test(target)) throw new Error(nativeData.error);
       const data = await postJson<{ path?: string; downloaded?: boolean }>("/api/runtimes/aeon/deliverables", {
         action: "download",
         agent: selectedAgent,
         vaultPath: sharedVault.vaultPath,
-        path: deliverableTarget(deliverable),
+        path: target,
       });
       setDeliverablesStatus(data.downloaded ? `Downloaded to ${data.path}` : `Already on this machine: ${data.path}`);
       await refreshDeliverablesForAgent(selectedAgent);
@@ -1607,11 +1717,23 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     setActionBusy(`send:${deliverable.id}:${machine.key}`);
     setDeliverablesStatus("");
     try {
+      const target = deliverableTarget(deliverable);
+      const nativeData = await sendNativeAeonDeliverable({
+        path: target,
+        vaultPath: sharedVault.vaultPath,
+        targetMachine: machine,
+      });
+      if (nativeData?.ok) {
+        setDeliverablesStatus(`Queued ${deliverable.title} for ${machine.name}.`);
+        setSelectedTransferDeliverable(null);
+        return;
+      }
+      if (nativeData?.error && !/^https?:\/\//i.test(target)) throw new Error(nativeData.error);
       await postJson("/api/runtimes/aeon/deliverables", {
         action: "send",
         agent: selectedAgent,
         vaultPath: sharedVault.vaultPath,
-        path: deliverableTarget(deliverable),
+        path: target,
         targetMachine: machine,
       });
       setDeliverablesStatus(`Queued ${deliverable.title} for ${machine.name}.`);
@@ -1720,6 +1842,15 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
       });
       return;
     }
+    const nativeResult = await openNativeDirectory({
+      currentPath: officialCloneLocation || "~/Documents",
+      prompt: "Choose where to clone AEON:",
+    });
+    if (nativeResult?.path) {
+      setOfficialCloneLocation(nativeResult.path);
+      return;
+    }
+    if (nativeResult?.cancelled) return;
     const response = await fetch("/api/agents/browse-folder", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1807,7 +1938,9 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
   const completeOfficialCloneTail = async (agent: AgentProfile) => {
     const tasks: Array<Promise<unknown>> = [];
     if (officialCloneFork && officialClonePrivateRepo && agent.aeonRepo) {
-      tasks.push(postJson("/api/runtimes/aeon/repo/sync", { agent, action: "push" }).catch(() => undefined));
+      tasks.push(nativeAeonRepoSync({ agent, action: "push" })
+        .then((result) => result?.ok ? result : postJson("/api/runtimes/aeon/repo/sync", { agent, action: "push" }))
+        .catch(() => undefined));
     }
     if (officialCloneFork && officialCloneInjectSecrets && agent.aeonRepo) {
       tasks.push(syncSecretsForAgent(agent, { quiet: true, all: true }).catch(() => undefined));
@@ -2394,11 +2527,14 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
 
   return (
     <section className={`tabPanel grid gap-4 ${detailView === "settings" ? "xl:grid-cols-2 xl:items-start" : ""}`}>
-      <div className={`relative overflow-hidden rounded-lg border border-[rgba(148,163,184,0.16)] bg-[linear-gradient(135deg,rgba(10,14,21,0.94),rgba(18,28,35,0.88)_45%,rgba(16,20,29,0.92))] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24)] ${detailView === "settings" ? "xl:col-span-2" : ""}`}>
+      <div className={`relative overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[linear-gradient(135deg,rgba(10,14,21,0.94),rgba(18,28,35,0.88)_45%,rgba(16,20,29,0.92))] shadow-[0_18px_60px_rgba(0,0,0,0.24)] ${detailView === "settings" ? "xl:col-span-2" : ""}`}>
         <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(94,234,212,0.65),transparent)]" />
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="grid min-w-0 gap-2">
-            <p className="eyebrow">Aeon Autopilot</p>
+        <SectionModeHeader
+          activeMode={detailView}
+          ariaLabel="AEON detail view"
+          modes={detailTabs.map(({ id, label }) => ({ id, label }))}
+          onSelect={setDetailView}
+          title={
             <InlineRenameControl
               value={selectedRepoName}
               draft={repoRenameDraft}
@@ -2423,23 +2559,21 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
               onSubmit={renameSelectedWorkspace}
               renderDisplay={({ value, editButton }) => (
                 <div className="flex min-w-0 items-center gap-2">
-                  <h2 id="aeon-repo-name" className="m-0 min-w-0 break-words text-xl font-bold leading-tight text-[var(--foreground)] [overflow-wrap:anywhere]">{value}</h2>
+                  <h2 id="aeon-repo-name">{value}</h2>
                   {editButton}
                 </div>
               )}
             />
-            <p className="m-0 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              One AEON workspace. Start with the overview, then switch tabs only when you need work, activity, or setup details.
-            </p>
-            <div className="flex flex-wrap gap-2 text-xs text-[var(--muted)]">
-              <span className="rounded-md border border-[rgba(94,234,212,0.20)] bg-[rgba(20,184,166,0.08)] px-2 py-1 text-[var(--accent-strong)]">{enabledSchedules.length} on duty</span>
-              <span className="rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(10,14,21,0.52)] px-2 py-1">{skills.length} ready skills</span>
-              <span className="rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(10,14,21,0.52)] px-2 py-1">{runs.length} runs checked</span>
-              <span className="rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(10,14,21,0.52)] px-2 py-1">{outputs.length} outputs</span>
-              <span className="rounded-md border border-[rgba(94,234,212,0.22)] bg-[rgba(20,184,166,0.08)] px-2 py-1 text-[var(--accent-strong)]">{selectedDeliverableCount} deliverables</span>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          }
+          subtitle="Aeon Autopilot"
+          stats={[
+            { value: enabledSchedules.length, label: "on duty", tone: "cyan" },
+            { value: skills.length, label: "skills", tone: "honey" },
+            { value: runs.length, label: "runs" },
+            { value: selectedDeliverableCount, label: "handoffs", tone: "cyan" },
+          ]}
+          actions={
+            <>
             <Button type="button" variant="ghost" onClick={() => setPanelMode("fleet")}>
               <ChevronLeft aria-hidden="true" />
               All AEON Agents
@@ -2451,31 +2585,12 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
               {loading ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <RefreshCcw aria-hidden="true" />}
               Refresh
             </Button>
-          </div>
-        </div>
+            </>
+          }
+        />
         {message ? (
-          <p className="mt-4 rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(10,14,21,0.64)] px-3 py-2 text-sm text-[var(--foreground)]">{message}</p>
+          <p className="mx-5 mb-4 rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(10,14,21,0.64)] px-3 py-2 text-sm text-[var(--foreground)]">{message}</p>
         ) : null}
-      </div>
-
-      <div className={`grid gap-2 rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(10,14,21,0.52)] p-2 sm:grid-cols-5 ${detailView === "settings" ? "xl:col-span-2" : ""}`}>
-        {detailTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            data-aeon-detail-tab={tab.id}
-            className={`grid gap-1 rounded-md px-3 py-2 text-left transition ${detailView === tab.id ? "border border-[rgba(94,234,212,0.34)] bg-[rgba(20,184,166,0.15)] text-[var(--accent-strong)]" : "border border-transparent text-[var(--muted)] hover:bg-[rgba(148,163,184,0.08)] hover:text-[var(--foreground)]"}`}
-            onClick={() => setDetailView(tab.id)}
-          >
-            <span className="flex items-center gap-2 text-sm font-bold">
-              {tab.label}
-              {tab.id === "deliverables" && selectedDeliverableCount > 0 ? (
-                <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full border border-[rgba(94,234,212,0.34)] bg-[rgba(20,184,166,0.16)] px-1.5 text-[10px] leading-none text-[var(--accent-strong)]">{selectedDeliverableCount}</span>
-              ) : null}
-            </span>
-            <span className="text-[11px] leading-4">{tab.detail}</span>
-          </button>
-        ))}
       </div>
 
       {convertSkill ? (
@@ -3440,7 +3555,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
                     Copy to AEON
                   </Button>
                 ) : !secret.isSet ? (
-                  <Button type="button" size="sm" variant="ghost" className="mt-3" onClick={() => setActiveView("env")}>
+                  <Button type="button" size="sm" variant="ghost" className="mt-3" onClick={() => { setVaultPanelMode("env"); setActiveView("vault"); }}>
                     <ShieldCheck aria-hidden="true" />
                     Guided setup
                   </Button>

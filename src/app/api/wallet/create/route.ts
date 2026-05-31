@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateWallet } from "@/lib/services/wallet/chain-wallet";
 import { storeWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { refreshWalletVaultBackup } from "@/lib/services/wallet/wallet-vault-backup";
+import { requireAuth } from "@/lib/utils/server-auth";
 
 export async function POST(request: NextRequest) {
+  const unauthorized = await requireAuth(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const body = await request.json().catch(() => ({})) as {
       agentId?: string;
