@@ -12,6 +12,11 @@ HivemindOS is built around five design constraints:
 - Shared brain persistence: durable collaborative state lives in an Obsidian vault when available, with narrow local fallbacks for app continuity.
 - Explicit safety surfaces: env sync, wallet actions, remote update, file access, and paid/API actions are routed through explicit APIs and UI controls.
 
+<figure class="imagePlate">
+  <img src="../assets/img/diagrams/security-trust-boundaries.jpg" alt="Generated security and trust boundaries infographic showing Public Docs, Browser, Local API, Private Vault, Wallet Keys, Tailnet, and Workers.">
+  <figcaption>Architecture boundaries are intentionally uneven: public docs are public, browser/API surfaces are local, vault and wallet material stay private, and Tailnet/Workers are explicit external edges.</figcaption>
+</figure>
+
 ## Main Components
 
 | Layer | Primary files | Responsibility |

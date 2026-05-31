@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-01 03:45:45 WITA - Embed Diagram Plates In Topic Docs
+
+- Status: Pushed
+- Areas changed: GitHub Pages topic docs, generated diagram placement, changelog
+- Summary: Embed the generated infographic plates directly into the docs pages where they clarify the topic: homepage overview, Fleet, Tailscale fleet telemetry, Wallets, UsePod, Brain/Vault, Work/Scheduler, Native App, and Architecture trust boundaries.
+- Verification: `git diff --check -- docs CHANGELOG.md`; markdown and HTML image link check across `docs/**/*.md`; figure placement check confirmed image plates in the homepage, Fleet, Tailscale fleet telemetry, Wallets, UsePod, Brain/Vault, Work/Scheduler, Native App, and Architecture docs; docs text file-size check confirmed the largest docs text file remains `docs/assets/css/site.css` at 674 lines.
+- Intended commit message: `Embed diagram plates in topic docs`
+
 ## 2026-06-01 03:25:00 WITA - Correct Imagegen Diagram Semantics
 
 - Status: Pushed

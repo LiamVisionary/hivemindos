@@ -2,6 +2,11 @@
 
 Wallets let agents hold controlled budgets, token balances, prepaid inference deposits, and paid-request rails. Honey and HIVE provide optional reward and compute loops on top of those wallet/token surfaces.
 
+<figure class="imagePlate">
+  <img src="../assets/img/diagrams/wallet-token-rails.jpg" alt="Generated wallet and token rails infographic with separate lanes for x402 paid APIs, UsePod prepaid runtime deposits, and Honey to Bankr HIVE claims.">
+  <figcaption>Wallets, UsePod prepaid runtime deposits, and Honey/Bankr HIVE claims are separate rails with different trust and funding semantics.</figcaption>
+</figure>
+
 ## How It Works
 
 - Wallet services live in `src/lib/services/wallet`.

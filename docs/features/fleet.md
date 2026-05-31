@@ -2,6 +2,11 @@
 
 Fleet is the machine-first control room. It shows local and Tailnet-reachable machines, runtimes, agents, health signals, version drift, setup gaps, update actions, active app badges, and hivenet app/API services.
 
+<figure class="imagePlate">
+  <img src="../assets/img/diagrams/fleet-tailnet-topology.jpg" alt="Generated Fleet and Tailnet topology infographic showing dashboard, local collector, Tailnet link, remote collectors, machine health, apps, and runtimes.">
+  <figcaption>Fleet reads this Mac through the local collector, then reaches remote collectors over the private Tailnet or Hivemind Link path.</figcaption>
+</figure>
+
 ## How It Works
 
 - The dashboard polls `/api/fleet/discover` and `/api/fleet/snapshot`.

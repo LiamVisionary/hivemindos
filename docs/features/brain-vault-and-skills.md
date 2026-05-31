@@ -2,6 +2,11 @@
 
 Brain/Vault is the shared memory and coordination layer. It is built around a normal Obsidian markdown vault, not a proprietary database.
 
+<figure class="imagePlate">
+  <img src="../assets/img/diagrams/brain-services-vault.jpg" alt="Generated brain services and shared vault infographic showing ENV vault path, Obsidian Vault, Skills, GBrain, Syntho, Trading Brain, and Synthesis Folder.">
+  <figcaption>The vault path anchors the shared brain; GBrain indexes it, Syntho compiles reviewed Synthesis output, and Trading Brain remains an optional service layer.</figcaption>
+</figure>
+
 ## Vault
 
 How it works:

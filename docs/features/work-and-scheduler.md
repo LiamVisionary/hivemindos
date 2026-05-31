@@ -2,6 +2,11 @@
 
 The Work board is a shared Kanban system for human and agent tasks. Scheduler manages background automations and runtime schedules.
 
+<figure class="imagePlate">
+  <img src="../assets/img/diagrams/workboard-scheduler-loop.jpg" alt="Generated workboard and scheduler loop infographic showing Ideas, Ready, Working, Done, Scheduler, Deliverables, and History.">
+  <figcaption>Work moves from capture to assignment to deliverables and history, while Scheduler feeds repeatable background runs into the same shared record.</figcaption>
+</figure>
+
 ## Work Board
 
 How it works:

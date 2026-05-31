@@ -23,6 +23,11 @@ description: Local-first agent fleet control room documentation.
   <li>Collector-first fleet model</li>
 </ul>
 
+<figure class="imagePlate imagePlateHero">
+  <img src="assets/img/diagrams/visual-atlas.jpg" alt="Generated HivemindOS visual atlas infographic showing Fleet, Agents, Brain, Work, Wallets, and Native around the dashboard.">
+  <figcaption>The full control room map: fleet, agents, brain, work, wallets, and native desktop surfaces around the dashboard.</figcaption>
+</figure>
+
 ## Start Here
 
 <div class="docGrid">

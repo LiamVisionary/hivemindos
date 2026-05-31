@@ -3,6 +3,11 @@
 HivemindOS can monitor agents across machines by polling a tiny read-only
 collector over your private Tailscale network.
 
+<figure class="imagePlate">
+  <img src="../assets/img/diagrams/fleet-tailnet-topology.jpg" alt="Generated Fleet and Tailnet topology infographic showing dashboard, local collector, Tailnet link, remote collectors, machine health, apps, and runtimes.">
+  <figcaption>The telemetry collector is the per-machine read surface; Tailnet or Hivemind Link keeps that collector path private between the dashboard and remote machines.</figcaption>
+</figure>
+
 ## How It Works
 
 Each machine that runs agents starts:
