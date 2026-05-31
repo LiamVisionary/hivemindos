@@ -131,6 +131,11 @@ set, the endpoint expects `hivemindos-aeon-brain`. The endpoint uses
 `GITHUB_TOKEN`, `GH_TOKEN`, or `GH_GLOBAL` only to verify private repository
 visibility through GitHub's repository API.
 
+The dashboard can populate `GH_GLOBAL` through the GitHub OAuth fallback routes
+under `/api/integrations/github/oauth/*`. That path is useful when AEON needs
+GitHub Actions, workflow dispatch, issue triggers, repository sync, or private
+repository visibility checks but Nango is not configured.
+
 ## Verification
 
 The local end-to-end test starts a real Next server on port `5021` or higher,

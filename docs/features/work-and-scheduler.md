@@ -25,7 +25,10 @@ Columns:
 
 Capabilities:
 
+- Create and switch named boards.
 - Create, update, move, archive, and delete tasks.
+- Filter by tenant, assignee, search text, and archived state.
+- Bulk move or bulk assign selected cards.
 - Dispatch tasks to agents.
 - Detect stale or no-progress work.
 - Preserve agent sessions on cards.
@@ -35,6 +38,17 @@ Capabilities:
 - Open or reveal deliverables through `/api/kanban/deliverable`.
 - Import tasks from notes through `/api/note-intake`.
 - Use machine-aware directory picking for linked folders: native picker for This Mac in desktop builds, collector directory browsing for remote machines, and API fallback in the browser.
+- Capture quick-add text, files, images, directories, target machine, and voice transcripts directly in each lane.
+- Steer active tasks with comments, attachments, target-lane selection, and interruption/reclaim actions.
+
+## Note Intake And Work History
+
+The Work surface also acts as an audit and intake console:
+
+- `/api/note-intake` scans configured vault folders for unchecked markdown tasks and "Next action" sections, then imports selected items into Ideas.
+- The board settings surface controls note-intake enablement and folder scope through the shared-vault config.
+- `/api/work-history` reads dynamic changelog and repository activity, then supports project filters, text search, paging, and append loading in the History tab.
+- Work History is rendered beside Workboard, Automations, and Simulation so local changes and agent work stay visible without leaving the control room.
 
 ## Scheduler
 
@@ -71,7 +85,10 @@ AEON work now has a stronger handoff loop:
 - `src/app/api/kanban/route.ts`
 - `src/app/api/kanban/deliverable/route.ts`
 - `src/app/api/note-intake/route.ts`
+- `src/app/api/work-history/route.ts`
 - `src/lib/services/kanban/local-kanban-store.ts`
+- `src/lib/services/notes/note-task-intake.ts`
+- `src/lib/services/work-history/dynamic-changelog.ts`
 - `src/features/dashboard/views/KanbanPanel.tsx`
 - `src/features/dashboard/hooks/use-kanban-task-controller.tsx`
 - `src/features/dashboard/hooks/use-kanban-dispatch-controller.tsx`

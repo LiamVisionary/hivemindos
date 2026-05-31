@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-01 02:19:02 WITA - Add Second-Pass Docs Audit Coverage
+
+- Status: Pushed
+- Areas changed: GitHub Pages feature docs, integrations docs, API/storage reference, AEON runtime docs, UsePod docs, changelog
+- Summary: Add the second-pass docs gaps from the current code audit, covering UsePod readiness/prepaid UX, GitHub OAuth fallback for AEON, wallet backup/MoneyClaw/Bankr HIVE rails, Kanban note intake and work history, and deeper memory telemetry/maintenance behavior.
+- Verification: `git diff --check -- docs CHANGELOG.md`; markdown link check across `docs/**/*.md`; docs file-size check confirmed the largest docs file is `docs/preview.html` at 616 lines. `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files outside this docs change.
+- Intended commit message: `Add second-pass docs audit coverage`
+
 ## 2026-06-01 02:10:32 WITA - Refresh Public Docs From Code Audit
 
 - Status: Pushed

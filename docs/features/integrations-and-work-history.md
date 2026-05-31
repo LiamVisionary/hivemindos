@@ -20,6 +20,24 @@ Capabilities:
 - List Nango connections.
 - Start setup on local or capable remote machines.
 
+## GitHub OAuth Fallback
+
+AEON can use a direct GitHub OAuth helper when Nango is not available or when the operator wants a simple account connection for repository automation.
+
+How it works:
+
+- Start route: `/api/integrations/github/oauth/start`.
+- Callback route: `/api/integrations/github/oauth/callback`.
+- Service: `src/lib/services/integrations/github-oauth.ts`.
+- The callback stores the token as `GH_GLOBAL` through `hive-env-add`.
+
+Capabilities:
+
+- Detect missing OAuth app config and return an operator-readable setup page.
+- Use signed OAuth state cookies to guard the callback.
+- Save GitHub access for AEON Actions, workflow dispatch, issue triggers, repo sync, and repository visibility checks.
+- Return to AEON or Integrations depending on the source that started the flow.
+
 ## My Apps
 
 My Apps is the hivenet launcher for interactive apps and API services discovered through Fleet.
@@ -70,6 +88,9 @@ How it works:
 Capabilities:
 
 - List recent work items.
+- Filter by project.
+- Search by text.
+- Page through older entries without reloading the whole dashboard.
 - Link completed work to Kanban, docs, changelog, and runtime activity.
 - Provide a lightweight audit trail of local work.
 
@@ -79,12 +100,15 @@ Capabilities:
 - `src/features/dashboard/views/MyAppsPanel.tsx`
 - `src/features/dashboard/views/PhonePanel.tsx`
 - `src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx`
+- `src/lib/services/integrations/github-oauth.ts`
 - `src/lib/services/integrations/nango-client.ts`
 - `src/lib/services/integrations/nango-host.ts`
 - `src/lib/services/phone/call-gateway.ts`
 - `src/app/api/fleet/apps/route.ts`
 - `src/app/api/fleet/app-icon/route.ts`
 - `src/app/api/phone/route.ts`
+- `src/app/api/integrations/github/oauth/start/route.ts`
+- `src/app/api/integrations/github/oauth/callback/route.ts`
 - `src/app/api/integrations/nango/route.ts`
 - `src/app/api/integrations/nango/setup/route.ts`
 - `src/lib/services/work-history/dynamic-changelog.ts`

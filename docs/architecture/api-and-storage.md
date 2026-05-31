@@ -18,6 +18,7 @@ All routes below are served by the Next.js app under `src/app/api`.
 | `/api/env` | Shared and runtime-specific env listing/import/update through hive-env helpers |
 | `/api/fleet/*` | Fleet discovery, snapshots, updates, app/service discovery, app icons, machine init, and Hetzner setup helpers |
 | `/api/honey-ledger` | Honey ledger reads, local observation submission, exchange actions |
+| `/api/integrations/github/oauth/*` | GitHub OAuth fallback that saves `GH_GLOBAL` for AEON |
 | `/api/integrations/nango/*` | Nango configuration, health, connections, and setup |
 | `/api/kanban` | Board CRUD, task lifecycle, comments, claims, runs, and events |
 | `/api/kanban/deliverable` | Open/reveal completed task deliverables |
@@ -37,7 +38,7 @@ All routes below are served by the Next.js app under `src/app/api`.
 | `/api/syncthing/*` | Syncthing status and HivemindOS vault pairing |
 | `/api/tailscale/devices` | Tailscale and Hivemind Link device discovery |
 | `/api/telemetry/events` | Local telemetry event recording and query |
-| `/api/usepod/register` | UsePod registration helper |
+| `/api/usepod/*` | UsePod registration and readiness/model/balance checks |
 | `/api/wallet/*` | Wallet creation, balance, send, MoneyClaw, backup, and x402 actions |
 | `/api/work-history` | Dynamic work history and changelog summaries |
 | `/api/workspace/git-status` | Workspace git status for task safety checks |
@@ -154,6 +155,7 @@ Important files and folders:
 | `~/.hivemindos/runtime-agents.json` | Local runtime agent registry used by the collector |
 | `~/.hivemindos/runtime-runs` | Runtime run cache/output metadata |
 | `~/.hivemindos/skill-auto-sync.json` | Skill auto-sync provider configuration |
+| `~/.hivemindos/telemetry/memory-samples.jsonl` | Memory telemetry samples used to detect growth trends |
 | `~/.hivemindos/wallet-vault` | Local encrypted wallet secret store |
 | `~/.hivemindos/e2e-file-share` | Temporary real-fleet encrypted file-share test artifacts |
 

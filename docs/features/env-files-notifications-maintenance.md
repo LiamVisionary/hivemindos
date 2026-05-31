@@ -61,12 +61,17 @@ How it works:
 - Memory telemetry service: `src/lib/services/runtime-memory-telemetry.ts`.
 - Maintenance service: `src/lib/services/runtime-maintenance.ts`.
 - Routes: `/api/memory-telemetry` and `/api/maintenance`.
+- Memory samples are appended under `~/.hivemindos/telemetry/memory-samples.jsonl`.
 
 Capabilities:
 
 - Track dashboard RSS, heap, external memory, process growth, and leak suspects.
+- Show V8 heap limit usage, old-space/code-space/large-object-space composition, native buffers, malloced memory, native contexts, and detached contexts.
+- Separate current Next.js memory from the wider dashboard process tree, helper processes, and largest nearby system processes.
+- Flag suspects such as fast RSS growth, V8 heap pressure, old-space dominance, and RSS growth that outpaces JavaScript heap growth.
 - Report maintenance checks.
-- Run targeted repair actions exposed by the maintenance service.
+- Check pnpm, the shared vault path, `~/.hivemindos`, and Hermes background prerequisites.
+- Run targeted repair actions exposed by the maintenance service, including local state creation, pnpm enablement guidance, vault folder creation, and Hermes background repair hooks.
 
 ## Main Code Paths
 

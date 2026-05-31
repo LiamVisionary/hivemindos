@@ -8,6 +8,8 @@ Wallets let agents hold controlled budgets and use payment rails. Honey and HIVE
 - Local wallet vault: `~/.hivemindos/wallet-vault`.
 - Wallet records can be mirrored into the shared vault through `src/lib/services/obsidian/wallet-ledger.ts`.
 - Local Honey ledger/cache is in `src/lib/services/wallet/honey-ledger.ts`.
+- Wallet-vault backup and restore logic is in `src/lib/services/wallet/wallet-vault-backup.ts`.
+- MoneyClaw account checks live in `src/lib/services/wallet/moneyclaw-client.ts`.
 - Official Honey ledger worker lives in `workers/honey-ledger`.
 - Reward compute gateway lives in `workers/compute-gateway`.
 
@@ -21,7 +23,26 @@ Wallets let agents hold controlled budgets and use payment rails. Honey and HIVE
 - Track UsePod prepaid token deposit details and runtime balance/route metadata when UsePod returns it.
 - Execute x402 paid requests through policy-aware helpers.
 - Observe runtime usage and submit privacy-safe Honey metadata.
-- Exchange Honey for HIVE through the configured ledger.
+- Exchange Honey for ledger HIVE, return legacy ledger HIVE back to Honey, or claim Bankr HIVE to a Base receiving address when the Bankr treasury rail is configured.
+
+## Wallet Rails
+
+The Wallets tab treats each agent wallet as a set of payment rails:
+
+- Local Base or Solana wallets hold capped test funds for direct sends and x402 requests.
+- MoneyClaw keys can be saved per agent or shared across agents after the API key is validated.
+- UsePod agents show a prepaid rail with deposit address, last balance, last route, model count, and test status from the runtime metadata.
+- x402 requests use the local wallet policy, max-payment cap, and explicit confirmation text for risky sends.
+
+## Wallet Vault Backup
+
+HivemindOS stores local wallet key material under `~/.hivemindos/wallet-vault`. The backup route keeps that local-first but recoverable:
+
+- `GET /api/wallet/vault-backup` reports whether the vault, key material, encrypted backup, GPG, and recipient are available.
+- `POST /api/wallet/vault-backup` refreshes or restores the encrypted backup.
+- Backup placement prefers `HIVE_WALLET_VAULT_BACKUP_DIR`, then `HIVE_ENV_BACKUP_DIR`, then the configured secure notes folder.
+- Recipients can come from `HIVE_WALLET_GPG_RECIPIENT`, `HIVE_ENV_GPG_RECIPIENT`, or public-key files in the secure folder.
+- Restore requires local GPG and a supported backup format; the route does not silently invent missing key material.
 
 ## Honey Paths
 
@@ -37,10 +58,18 @@ Trusted reward compute:
 - Provider usage is read server-side.
 - Receipts are signed and submitted to `workers/honey-ledger`.
 
+Claiming:
+
+- `POST /api/honey-ledger` with `action: "observe"` samples supported runtime usage and records Honey once per event.
+- `action: "claim-bankr-hive"` transfers claimable HIVE through Bankr when `HIVE_TOKEN_ADDRESS` and `HONEY_REWARD_BANKR_API_KEY` are configured.
+- `action: "return-hive-to-honey"` moves old ledger-only HIVE balances back to Honey so the visible claim rail stays honest.
+
 ## Main Code Paths
 
 - `src/lib/services/wallet/**`
 - `src/lib/services/obsidian/wallet-ledger.ts`
+- `src/app/api/wallet/vault-backup/route.ts`
+- `src/app/api/wallet/moneyclaw/route.ts`
 - `src/app/api/wallet/**`
 - `src/app/api/honey-ledger/route.ts`
 - `src/app/api/runtime-usage/route.ts`

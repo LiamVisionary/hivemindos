@@ -21,6 +21,19 @@ UsePod response metadata is recorded in runtime telemetry when present:
 - `X-Balance-Remaining`
 - `X-Pod-Route`
 
+## Dashboard UX
+
+Agent Settings includes a UsePod readiness card for OpenAI-compatible agents:
+
+- Token env name.
+- Deposit address with copy/open actions.
+- Model discovery from `/models`.
+- Latest observed balance and route.
+- Tiny chat test for checking funded inference.
+- Spend cap presets before exact microunit inputs.
+
+The Wallets tab treats `usepod` as a prepaid rail and shows the same deposit, balance, route, model count, and last test status when the selected agent has UsePod metadata.
+
 ## Spend Controls
 
 UsePod price caps are microunits. HivemindOS maps the agent's UsePod advanced settings to:
@@ -30,9 +43,16 @@ UsePod price caps are microunits. HivemindOS maps the agent's UsePod advanced se
 
 Leave a cap empty to let UsePod route normally. Set both caps for agents that should only use routes under a known per-token ceiling.
 
+The primary presets are:
+
+- Cheapest: strict caps for low-cost exploration.
+- Balanced: default guarded routing.
+- Fast: wider caps for more route availability.
+- No cap: omit price-cap headers.
+
 ## Provider Hosting
 
-Provider hosting is intentionally not automated by HivemindOS setup. The audited `Sortis-AI/usepod-agent` repository shows a Rust provider agent that connects local backends such as vLLM, llama.cpp, LM Studio, Ollama, or BYOK providers to the UsePod coordinator over `wss://api.usepod.ai/provider/connect`.
+Provider hosting is intentionally gated and not automated by HivemindOS setup. The audited `Sortis-AI/usepod-agent` repository shows a Rust provider agent that connects local backends such as vLLM, llama.cpp, LM Studio, Ollama, or BYOK providers to the UsePod coordinator over `wss://api.usepod.ai/provider/connect`.
 
 Before running a provider agent, review:
 
@@ -48,6 +68,7 @@ Do not add pipe-to-shell provider install commands to HivemindOS automation. Pre
 
 - `src/lib/services/usepod.ts`
 - `src/app/api/usepod/register/route.ts`
+- `src/app/api/usepod/status/route.ts`
 - `src/app/api/chat/agent-runtime/route.ts`
 - `src/lib/services/runtime-adapters/openai-compatible.ts`
 - `src/features/dashboard/views/chat/GuidedUsePodSetup.tsx`
