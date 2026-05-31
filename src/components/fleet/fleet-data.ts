@@ -5,12 +5,22 @@
 import type { BeeWorkerClass } from "@/lib/types/agent-runtime";
 
 export type AgentState = "working" | "ready" | "scheduled" | "setup" | "failed";
+export type FleetAgentActivityStatus = "active" | "completed" | "failed" | "unknown";
 
 export interface FleetAgentChat {
   id: string;
   title: string;
   task: string;
   since: string;
+}
+
+export interface FleetActiveApp {
+  id: string;
+  name: string;
+  initials: string;
+  theme: string;
+  iconUrl?: string;
+  openUrl?: string;
 }
 
 export interface FleetAgent {
@@ -25,6 +35,9 @@ export interface FleetAgent {
   wallet: string;     // formatted e.g. "0.42 ETH" or "—"
   balance: "healthy" | "low_compute" | "dead" | "off";
   task: string;
+  currentTaskId?: string;
+  activeApp?: FleetActiveApp;
+  activityStatus?: FleetAgentActivityStatus;
   since: string;      // formatted e.g. "2m", "5h"
   recentChats?: FleetAgentChat[];
 }
@@ -40,6 +53,8 @@ export interface FleetMachineNetworkIssue {
   label: string;
   title: string;
   detail: string;
+  fixAction?: "restart-local-tailnet";
+  fixLabel?: string;
   commands: string[];
 }
 
@@ -137,7 +152,7 @@ export const MACHINES: FleetMachine[] = [
       { id: "b1", name: "MiroShark-sim",     runtime: "MiroShark", state: "working", role: "Simulator", wallet: "—",        balance: "off",         task: "Running market-making sim · epoch 8410 of 12000", since: "23m" },
       { id: "b2", name: "Hermes-research",   runtime: "Hermes",    state: "working", role: "Research",  wallet: "0.12 ETH", balance: "low_compute", task: "Synthesizing the Tavily research dump into an Obsidian brief", since: "1m" },
       { id: "b3", name: "Codex-skill",       runtime: "Codex",     state: "ready",   role: "Skills",    wallet: "0.04 ETH", balance: "healthy",     task: "Idle · last ran skill `index-vault` 14m ago", since: "14m" },
-      { id: "b4", name: "OpenClaw-x",        runtime: "OpenClaw",  state: "failed",  role: "Channels",  wallet: "0.00 ETH", balance: "dead",        task: "Auth handshake failed against X channel — needs re-login", since: "1h" },
+      { id: "b4", name: "OpenClaw-x",        runtime: "OpenClaw",  state: "failed",  role: "Channels",  wallet: "0.00 ETH", balance: "dead",        task: "Auth handshake failed against X channel — needs re-login", activityStatus: "failed", since: "1h" },
     ],
   },
   {

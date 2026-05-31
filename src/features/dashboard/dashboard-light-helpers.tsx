@@ -334,8 +334,20 @@ export function viewIcon(view: DashboardView) {
 
 export function dedupeAgents(configuredAgents: AgentProfile[], autoDiscoveredAgents: AgentProfile[]) {
   const aliases = agentAliasMap(configuredAgents, autoDiscoveredAgents);
-  const configuredKeys = new Set(configuredAgents.map(agentWorkspaceKey));
-  const configured = configuredAgents;
+  const configured = configuredAgents.map((agent) => {
+    const live = autoDiscoveredAgents.find((candidate) => aliases.get(candidate.id) === agent.id);
+    if (!live) return agent;
+    return {
+      ...live,
+      ...agent,
+      telemetryUrl: live.telemetryUrl || agent.telemetryUrl,
+      machineName: live.machineName || agent.machineName,
+      collectorCapabilities: live.collectorCapabilities ?? agent.collectorCapabilities,
+      runtimeKind: live.runtimeKind ?? agent.runtimeKind,
+      runtimeCapabilities: live.runtimeCapabilities ?? agent.runtimeCapabilities,
+    };
+  });
+  const configuredKeys = new Set(configured.map(agentWorkspaceKey));
   return [
     ...configured,
     ...autoDiscoveredAgents.filter((agent, index, list) => {

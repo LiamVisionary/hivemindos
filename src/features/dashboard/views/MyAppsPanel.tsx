@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ExternalLink, LoaderCircle, Maximize2, Minimize2, RefreshCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
@@ -11,7 +11,7 @@ type HostedApp = {
   id: string;
   name: string;
   description: string;
-  kind: "ai" | "creative" | "code" | "dashboard" | "media" | "app";
+  kind: "ai" | "creative" | "code" | "dashboard" | "media" | "service" | "app";
   theme: string;
   initials: string;
   iconUrl?: string;
@@ -20,9 +20,12 @@ type HostedApp = {
   local: boolean;
   online: boolean;
   interactive: boolean;
+  serviceKind?: string;
   scheme: string;
   port: number;
   openUrl: string;
+  apiBaseUrl?: string;
+  healthUrl?: string;
 };
 
 type FleetAppsPayload = {
@@ -95,9 +98,9 @@ function MyAppsLoadingState() {
 
         <div className="text-center">
           <p className="eyebrow">Scanning Tailnet</p>
-          <h3 className="m-0 text-xl font-black text-[var(--foreground)]">Finding interactive apps</h3>
+          <h3 className="m-0 text-xl font-black text-[var(--foreground)]">Finding apps and services</h3>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-            Checking ready machines and sorting the app launcher.
+            Checking ready machines and sorting the hivenet launcher.
           </p>
         </div>
 
@@ -142,12 +145,13 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
   const [status, setStatus] = useState("");
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [liveAppExpanded, setLiveAppExpanded] = useState(false);
+  const previousActiveViewRef = useRef<DashboardView | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (force = false) => {
     setLoading(true);
     setStatus("");
     try {
-      const response = await fetch("/api/fleet/apps", { cache: "no-store" });
+      const response = await fetch(`/api/fleet/apps${force ? "?refresh=1" : ""}`, { cache: "no-store" });
       const data = await response.json() as FleetAppsPayload;
       if (!response.ok || data.ok === false) throw new Error(data.error || `${response.status} ${response.statusText}`);
       setPayload(data);
@@ -159,9 +163,13 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
   }, []);
 
   useEffect(() => {
-    if (activeView !== "my-apps" || payload || loading) return undefined;
+    const previousActiveView = previousActiveViewRef.current;
+    previousActiveViewRef.current = activeView;
+    if (activeView !== "my-apps" || loading) return undefined;
+    const enteredMyApps = previousActiveView !== "my-apps";
+    if (!enteredMyApps && payload) return undefined;
     const timer = window.setTimeout(() => {
-      void refresh();
+      void refresh(enteredMyApps);
     }, 0);
     return () => window.clearTimeout(timer);
   }, [activeView, loading, payload, refresh]);
@@ -186,6 +194,7 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
   if (selectedApp) {
     const isComfy = /comfy/i.test(selectedApp.name);
     const launchUrl = appLaunchUrl(selectedApp);
+    const serviceUrl = selectedApp.healthUrl || selectedApp.apiBaseUrl || launchUrl;
     return (
       <section className={fleetClass("taskPanel", "tabPanel")}>
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -202,14 +211,14 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
             Apps
           </Button>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="secondary" onClick={() => void refresh()} disabled={loading}>
+            <Button type="button" size="sm" variant="secondary" onClick={() => void refresh(true)} disabled={loading}>
               {loading ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <RefreshCcw aria-hidden="true" />}
               Refresh
             </Button>
             <Button type="button" size="sm" asChild>
-              <a href={launchUrl} target="_blank" rel="noreferrer">
+              <a href={selectedApp.interactive ? launchUrl : serviceUrl} target="_blank" rel="noreferrer">
                 <ExternalLink aria-hidden="true" />
-                Open
+                {selectedApp.interactive ? "Open" : "Open service"}
               </a>
             </Button>
           </div>
@@ -232,8 +241,17 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
                 Ready on your Tailnet
               </div>
               <p className="m-0 text-sm leading-6 text-[var(--muted)]">
-                This app is reachable from the private network. Use the embedded workspace here, or open it in a full browser tab when you need more room.
+                {selectedApp.interactive
+                  ? "This app is reachable from the private network. Use the embedded workspace here, or open it in a full browser tab when you need more room."
+                  : "This service is reachable from the private network and can be used by HivemindOS without needing an HTML app shell."}
               </p>
+              {!selectedApp.interactive ? (
+                <div className="grid gap-2 rounded-md border border-[rgba(94,234,212,0.20)] bg-[rgba(20,184,166,0.08)] p-3 text-sm leading-6 text-[var(--foreground)]">
+                  <span className="font-bold">Service endpoint</span>
+                  <code className="break-all rounded border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.44)] px-2 py-1 text-xs text-[var(--muted)]">{selectedApp.apiBaseUrl || selectedApp.openUrl}</code>
+                  {selectedApp.healthUrl ? <code className="break-all rounded border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.44)] px-2 py-1 text-xs text-[var(--muted)]">{selectedApp.healthUrl}</code> : null}
+                </div>
+              ) : null}
               {isComfy ? (
                 <div className="rounded-md border border-[rgba(94,234,212,0.20)] bg-[rgba(20,184,166,0.08)] p-3 text-sm leading-6 text-[var(--foreground)]">
                   ComfyUI exposes its own workflow controls. The embedded workspace below is the safest way to run the current graph from HivemindOS without guessing at your node schema.
@@ -242,33 +260,47 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
             </div>
           </div>
 
-          <div
-            className={
-              liveAppExpanded
-                ? "fixed inset-0 z-[80] overflow-hidden border border-[rgba(148,163,184,0.18)] bg-black"
-                : "min-h-[520px] overflow-hidden rounded-md border border-[rgba(148,163,184,0.18)] bg-black/40"
-            }
-          >
-            <div className="flex items-center justify-between gap-3 border-b border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.86)] px-3 py-2">
-              <span className="text-xs font-bold text-[var(--muted)]">Live app</span>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-8 px-2 text-xs font-bold text-[var(--accent-strong)] hover:bg-[rgba(20,184,166,0.10)]"
-                onClick={() => setLiveAppExpanded((expanded) => !expanded)}
-              >
-                {liveAppExpanded ? <Minimize2 aria-hidden="true" className="h-3 w-3" /> : <Maximize2 aria-hidden="true" className="h-3 w-3" />}
-                {liveAppExpanded ? "Exit full screen" : "Full screen"}
-              </Button>
+          {selectedApp.interactive ? (
+            <div
+              className={
+                liveAppExpanded
+                  ? "fixed inset-0 z-[80] overflow-hidden border border-[rgba(148,163,184,0.18)] bg-black"
+                  : "min-h-[520px] overflow-hidden rounded-md border border-[rgba(148,163,184,0.18)] bg-black/40"
+              }
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.86)] px-3 py-2">
+                <span className="text-xs font-bold text-[var(--muted)]">Live app</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 text-xs font-bold text-[var(--accent-strong)] hover:bg-[rgba(20,184,166,0.10)]"
+                  onClick={() => setLiveAppExpanded((expanded) => !expanded)}
+                >
+                  {liveAppExpanded ? <Minimize2 aria-hidden="true" className="h-3 w-3" /> : <Maximize2 aria-hidden="true" className="h-3 w-3" />}
+                  {liveAppExpanded ? "Exit full screen" : "Full screen"}
+                </Button>
+              </div>
+              <iframe
+                title={selectedApp.name}
+                src={launchUrl}
+                className={liveAppExpanded ? "h-[calc(100dvh-41px)] w-full border-0 bg-white" : "h-[520px] w-full border-0 bg-white"}
+                sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts allow-downloads"
+              />
             </div>
-            <iframe
-              title={selectedApp.name}
-              src={launchUrl}
-              className={liveAppExpanded ? "h-[calc(100dvh-41px)] w-full border-0 bg-white" : "h-[520px] w-full border-0 bg-white"}
-              sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts allow-downloads"
-            />
-          </div>
+          ) : (
+            <div className="grid min-h-[360px] content-center gap-4 rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.48)] p-6 text-center">
+              <div className="mx-auto grid h-20 w-20 place-items-center rounded-[22px] border border-[rgba(94,234,212,0.24)] bg-[rgba(20,184,166,0.10)] text-2xl font-black text-[var(--accent-strong)]">
+                API
+              </div>
+              <div>
+                <h3 className="m-0 text-lg font-black text-[var(--foreground)]">Service endpoint</h3>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
+                  API services stay in the hivenet registry for agents and integrations, without forcing them into an embedded browser frame.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </section>
     );
@@ -279,11 +311,11 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
       <div className={fleetClass("taskPanelHeader")}>
         <div>
           <p className="eyebrow">My Apps</p>
-          <h2>Apps running now</h2>
-          <p>Interactive apps from your private network, cleaned up into a launcher.</p>
+          <h2>Apps and services running now</h2>
+          <p>Private network apps and API services, discovered from live machines.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="secondary" onClick={() => void refresh()} disabled={loading}>
+          <Button type="button" size="sm" variant="secondary" onClick={() => void refresh(true)} disabled={loading}>
             {loading ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <RefreshCcw aria-hidden="true" />}
             Refresh
           </Button>
@@ -293,7 +325,7 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
       {status ? <p className="mt-3 rounded-md border border-[rgba(248,113,113,0.24)] bg-[rgba(127,29,29,0.20)] px-3 py-2 text-xs text-[var(--foreground)]">{status}</p> : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-        <span>{apps.length} apps</span>
+        <span>{apps.length} apps/services</span>
         <span>·</span>
         <span>{reportingMachines}/{readyMachines} machines</span>
         <span>·</span>
@@ -316,6 +348,7 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
             <span className="relative">
               <AppIcon app={app} />
               <span className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-[rgb(10,14,21)] ${app.online ? "bg-emerald-400" : "bg-slate-400"}`} />
+              {!app.interactive ? <span className="absolute -left-2 -top-2 rounded-full border border-[rgba(94,234,212,0.32)] bg-[rgba(10,14,21,0.92)] px-1.5 py-0.5 text-[9px] font-black uppercase text-[var(--accent-strong)]">API</span> : null}
             </span>
             <span className="max-w-[7rem] text-sm font-bold leading-5">{app.name}</span>
           </button>
@@ -324,7 +357,7 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
 
       {!loading && apps.length === 0 ? (
         <div className="mt-4 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4 text-sm text-[var(--muted)]">
-          No interactive apps found yet. Background services and plumbing are hidden from this launcher.
+          No apps or services found yet. Start something on a ready hivenet machine, then refresh.
         </div>
       ) : null}
     </section>

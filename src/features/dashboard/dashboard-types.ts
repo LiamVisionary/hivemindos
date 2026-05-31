@@ -414,6 +414,11 @@ export type TailscaleDevice = {
   relay?: string;
 };
 
+export type TailnetHealth = {
+  state?: "ok" | "peer-traffic-stalled" | "status-unavailable" | "not-running";
+  detail?: string;
+};
+
 export type HivemindLinkClientStatus = {
   ok?: boolean;
   backendState?: string;

@@ -135,7 +135,7 @@ type AeonAutopilotPanelProps = {
   onSchedulerToggleJob?: (job: SchedulerJob) => void;
   onSchedulerRunJob?: (job: SchedulerJob) => void;
   onSchedulerEditJob?: (job: SchedulerJob) => void;
-  onSchedulerNewJob?: () => void;
+  onSchedulerNewJob?: (agentId?: string) => void;
 };
 
 const DEFAULT_AEON_AGENT: AgentProfile = {
@@ -176,6 +176,7 @@ const DEFAULT_SECRET_KEYS = ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "BA
 // Dwell per clone-animation step. Real work runs concurrently (and the heavy network tail
 // is backgrounded), so each step shows for this long and the final step doesn't stall.
 const CLONE_STEP_MS = 1300;
+const OFFICIAL_AEON_REPO_URL = "https://github.com/aaronjmars/aeon.git";
 const delay = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const OBSIDIAN_SYNC_CACHE_PREFIX = "hivemindos.aeon.obsidianSync.";
 
@@ -667,6 +668,8 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
   const [officialCloneFork, setOfficialCloneFork] = useState(true);
   const [officialClonePrivateRepo, setOfficialClonePrivateRepo] = useState(true);
   const [officialCloneInjectSecrets, setOfficialCloneInjectSecrets] = useState(true);
+  const [officialCloneCache, setOfficialCloneCache] = useState(true);
+  const [cloneCacheStatus, setCloneCacheStatus] = useState<{ exists: boolean; behind: number; path?: string } | null>(null);
   const [createdAeonAgentId, setCreatedAeonAgentId] = useState("");
   const [createRepoOpen, setCreateRepoOpen] = useState(false);
   const [githubRepoModalOpen, setGithubRepoModalOpen] = useState(false);
@@ -700,6 +703,14 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
       : obsidianSync.installed === false ? "Unison missing" : "Stopped"
     : "Checking";
   const obsidianMirrorRunning = obsidianSync ? Boolean(obsidianSync.running) : null;
+  const openAeonScheduler = useCallback(() => {
+    setAeonSchedulerOpen(true);
+    onSchedulerOpen?.();
+  }, [onSchedulerOpen]);
+  const createAeonAutomation = useCallback(() => {
+    openAeonScheduler();
+    onSchedulerNewJob?.(selectedAgent.id);
+  }, [onSchedulerNewJob, openAeonScheduler, selectedAgent.id]);
   const updateObsidianSync = useCallback((status: AeonObsidianSyncStatus | null) => {
     setObsidianSyncByKey((current) => {
       if (!status) {
@@ -1518,9 +1529,38 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     setCreatedAeonAgentId("");
     setCloneRepoOpen(false);
   };
+  const checkCloneCacheStatus = async () => {
+    try {
+      const data = await postJson<{ exists?: boolean; behind?: number; path?: string }>("/api/runtimes/aeon/workspaces", {
+        action: "cache-status",
+        repoUrl: OFFICIAL_AEON_REPO_URL,
+      });
+      setCloneCacheStatus({ exists: Boolean(data.exists), behind: data.behind ?? 0, path: data.path });
+    } catch {
+      setCloneCacheStatus(null);
+    }
+  };
+  const updateCloneCache = async () => {
+    setActionBusy("cache-refresh");
+    setMessage("");
+    try {
+      const data = await postJson<{ exists?: boolean; behind?: number; path?: string }>("/api/runtimes/aeon/workspaces", {
+        action: "cache-refresh",
+        repoUrl: OFFICIAL_AEON_REPO_URL,
+      });
+      setCloneCacheStatus({ exists: Boolean(data.exists), behind: data.behind ?? 0, path: data.path });
+      setMessage("Updated the local AEON copy to the latest commit.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not update the local AEON copy.");
+    } finally {
+      setActionBusy("");
+    }
+  };
   const openOfficialCloneView = async () => {
     setCreateRepoChoiceView("official");
     setMessage("");
+    setCloneCacheStatus(null);
+    if (officialCloneCache) void checkCloneCacheStatus();
     const existing = new Set<string>();
     for (const agent of aeonAgents) {
       existing.add(agent.name || "");
@@ -1546,11 +1586,9 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     setOfficialCloneName(nextAeonName(existing, "aeon"));
   };
   const officialClonePath = `${officialCloneLocation.trim().replace(/\/+$/, "") || "~/Documents"}/${officialCloneName.trim().replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "aeon"}`;
-  const officialCloneBusy = actionBusy === "github:fork" || actionBusy === "github:create" || actionBusy === "workspace:clone" || actionBusy === "sync-secrets";
+  const officialCloneBusy = actionBusy === "github:fork" || actionBusy === "github:create" || actionBusy === "workspace:clone" || actionBusy === "sync-secrets" || actionBusy === "cache-refresh";
   const buildCloneSteps = (): { key: string; label: string; Icon: LucideIcon }[] => {
-    // Dev mode duplicates a local preclone instead of cloning over the network (see
-    // workspaces route). Label the step honestly so a demo reads right.
-    const devPreclone = process.env.NODE_ENV !== "production";
+    const fromCache = officialCloneCache && cloneCacheStatus?.exists;
     const steps: { key: string; label: string; Icon: LucideIcon }[] = [
       { key: "init", label: "Initializing AEON workspace", Icon: Sparkles },
       { key: "identity", label: "Provisioning agent identity", Icon: Bot },
@@ -1558,7 +1596,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     if (officialCloneFork && !officialClonePrivateRepo) {
       steps.push({ key: "fork", label: "Forking aaronjmars/aeon to your GitHub", Icon: GitBranch });
     }
-    steps.push({ key: "clone", label: `${devPreclone ? "Precloning" : "Cloning"} AEON into ${officialClonePath}`, Icon: Download });
+    steps.push({ key: "clone", label: `${fromCache ? "Duplicating local AEON copy into" : "Cloning AEON into"} ${officialClonePath}`, Icon: Download });
     steps.push({ key: "mirror", label: "Linking Obsidian vault mirror", Icon: RefreshCcw });
     if (officialCloneFork && officialClonePrivateRepo) {
       steps.push({ key: "repo", label: "Creating private GitHub repo", Icon: GitBranch });
@@ -1592,7 +1630,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
   // The real backend work, run concurrently with the animation. Resolves with the new
   // agent id on success, or a message on failure (never rejects).
   const runOfficialCloneWork = async (): Promise<{ ok: true; agentId: string } | { ok: false; message?: string }> => {
-    let repoUrl = "https://github.com/aaronjmars/aeon.git";
+    let repoUrl = OFFICIAL_AEON_REPO_URL;
     if (officialCloneFork && !officialClonePrivateRepo) {
       setActionBusy("github:fork");
       try {
@@ -1613,6 +1651,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
       path: officialClonePath,
       name: officialCloneName,
       unique: "true",
+      cache: officialCloneCache ? "true" : "false",
     }, { openDetail: false });
     if (!agent) return { ok: false }; // runWorkspaceAction already surfaced the failure message.
     let createdAgent = agent;
@@ -1684,8 +1723,9 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     setCreateRepoChoiceView("cloning");
 
     // Real work runs in the background; the animation paces each step at >= CLONE_STEP_MS so
-    // nothing flashes by or stalls. The work (instant local preclone + parallel secret writes)
-    // finishes well inside the animation window, so only the final step ever waits on it.
+    // nothing flashes by or stalls. The work (local-copy duplicate or network clone, plus the
+    // backgrounded push + secrets) finishes inside the animation window for cached clones, so
+    // only the final step ever waits on it.
     const settled = runOfficialCloneWork().then(
       (value) => ({ value }),
       (error) => ({ value: { ok: false as const, message: error instanceof Error ? error.message : "Could not clone official AEON." } }),
@@ -1887,6 +1927,33 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
                       />
                     </label>
                   </div>
+                  <label className="flex items-start justify-between gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.22)] p-3 text-sm text-[var(--foreground)]">
+                    <span className="grid gap-1">
+                      <span className="font-bold">Keep a local copy for faster future clones</span>
+                      <span className="text-xs leading-5 text-[var(--muted)]">
+                        Stores a duplicate of the cloned repo at <code className="rounded border border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.3)] px-1 py-0.5 text-[var(--foreground)]">~/.hivemindos/aeon-repo-cache</code> so future agents duplicate it locally instead of cloning over the network.
+                        {officialCloneCache && cloneCacheStatus?.exists ? (cloneCacheStatus.behind > 0 ? ` Local copy is ${cloneCacheStatus.behind} commit${cloneCacheStatus.behind === 1 ? "" : "s"} behind upstream.` : " Local copy is up to date.") : ""}
+                      </span>
+                      {officialCloneCache && cloneCacheStatus?.exists && cloneCacheStatus.behind > 0 ? (
+                        <Button type="button" size="sm" variant="secondary" className="mt-1 w-fit" onClick={() => void updateCloneCache()} disabled={officialCloneBusy || actionBusy === "cache-refresh"}>
+                          {actionBusy === "cache-refresh" ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <RefreshCcw aria-hidden="true" />}
+                          {actionBusy === "cache-refresh" ? "Updating..." : `Update local copy before cloning`}
+                        </Button>
+                      ) : null}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={officialCloneCache}
+                      onChange={(event) => {
+                        const next = event.target.checked;
+                        setOfficialCloneCache(next);
+                        if (next) void checkCloneCacheStatus();
+                        else setCloneCacheStatus(null);
+                      }}
+                      disabled={officialCloneBusy}
+                      className="mt-1 h-4 w-4"
+                    />
+                  </label>
                   <div className="flex flex-wrap justify-between gap-2">
                     <Button type="button" variant="ghost" onClick={() => setCreateRepoChoiceView("choice")} disabled={officialCloneBusy}>Back</Button>
                     <Button type="button" onClick={() => void cloneOfficialAeon()} disabled={!officialCloneName.trim() || !officialCloneLocation.trim() || officialCloneBusy}>
@@ -2202,7 +2269,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
             onToggleJob={onSchedulerToggleJob}
             onRunNow={onSchedulerRunJob}
             onEditJob={onSchedulerEditJob}
-            onNewJob={onSchedulerNewJob}
+            onNewJob={createAeonAutomation}
           />
         </div>
       </section>
@@ -2600,14 +2667,14 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
                 <div className="grid gap-3 lg:w-60">
                   <Button
                     type="button"
-                    onClick={() => onSchedulerNewJob?.()}
+                    onClick={createAeonAutomation}
                     className="min-h-12 justify-center bg-[linear-gradient(135deg,rgba(45,212,191,0.26),rgba(20,184,166,0.16))] px-5 text-sm font-bold shadow-[0_0_28px_rgba(45,212,191,0.22)] [&_svg]:size-4"
                   >
                     <Plus aria-hidden="true" />
                     Create automation
                   </Button>
                   {schedules.length ? (
-                    <Button type="button" variant="secondary" className="min-h-10 justify-center" onClick={() => setAeonSchedulerOpen(true)}>
+                    <Button type="button" variant="secondary" className="min-h-10 justify-center" onClick={openAeonScheduler}>
                       <Clock3 aria-hidden="true" />
                       View {schedules.length} automation{schedules.length === 1 ? "" : "s"}
                     </Button>
@@ -2889,7 +2956,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
                 <FileUp aria-hidden="true" />
                 Import skill
               </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={() => { setAeonSchedulerOpen(true); onSchedulerOpen?.(); }}>
+              <Button type="button" size="sm" variant="ghost" onClick={openAeonScheduler}>
                 <Clock3 aria-hidden="true" />
                 Scheduler
               </Button>

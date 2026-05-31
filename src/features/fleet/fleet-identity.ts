@@ -51,18 +51,19 @@ export function isMobileMachineOs(os?: string) {
 }
 
 export function isMacMachineOs(os?: string) {
-  return /^macos$/i.test(os ?? "");
+  return /^(macos|darwin)$/i.test(os ?? "");
 }
 
 export function isVisibleFleetMachine(machine: Pick<FleetMachineIdentity, "name" | "dnsName" | "os">) {
   return isHivemindMachineName(machine.name, machine.dnsName) || isMacMachineOs(machine.os);
 }
 
-export function machineHivemindBase(name?: string, dnsName?: string) {
-  const dnsLabel = dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
-  const normalizedName = normalizeMachineName(name);
-  const normalizedDnsName = normalizeMachineName(dnsLabel);
-  const value = normalizedName.startsWith("hivemindos") ? normalizedName : normalizedDnsName;
+export function machineHivemindBase(name?: string, dnsName?: string, os?: string) {
+  const rawDnsLabel = dnsName?.replace(/\.$/, "").split(".")[0]?.toLowerCase() ?? "";
+  const rawName = name?.toLowerCase() ?? "";
+  const rawValue = normalizeMachineName(rawName).startsWith("hivemindos") ? rawName : rawDnsLabel;
+  const canonicalValue = isMacMachineOs(os) ? rawValue.replace(/-\d+$/, "") : rawValue;
+  const value = normalizeMachineName(canonicalValue);
   if (!value.startsWith("hivemindos")) return "";
   return value.replace(/^hivemindos/, "").replace(/local\d*$/, "");
 }
@@ -75,8 +76,8 @@ export function machinePhysicalBase(name?: string, dnsName?: string) {
 
 export function isLocalLinkDuplicateOfSelf(self: FleetMachineIdentity | undefined, device: FleetMachineIdentity) {
   if (!self || device.self) return false;
-  const deviceBase = machineHivemindBase(device.name, device.dnsName);
-  const selfBase = machineHivemindBase(self.name, self.dnsName);
+  const deviceBase = machineHivemindBase(device.name, device.dnsName, device.os);
+  const selfBase = machineHivemindBase(self.name, self.dnsName, self.os);
   if (selfBase && deviceBase && selfBase === deviceBase) return true;
   const physicalSelfBase = machinePhysicalBase(self.name, self.dnsName);
   const physicalDeviceBase = machinePhysicalBase(device.name, device.dnsName);
@@ -122,11 +123,14 @@ export function machineIdentityFromParts({
   dnsName,
   collectorUrl,
   ip,
+  os,
 }: FleetMachineIdentity) {
   const dnsLabel = dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
   const normalizedDnsName = normalizeMachineName(dnsLabel);
   const normalizedName = normalizeMachineName(name) || normalizedDnsName;
-  if (normalizedName.startsWith("hivemindos")) return normalizedDnsName || normalizedName;
+  if (normalizedName.startsWith("hivemindos")) {
+    return machineHivemindBase(name, dnsName, os) || normalizedDnsName || normalizedName;
+  }
   if (self) return "self";
   return normalizedName || collectorKey(collectorUrl) || ip || "";
 }
@@ -139,8 +143,40 @@ export function normalizeAgentPath(path?: string) {
     .toLowerCase() ?? "";
 }
 
+function agentRoleScope(agent: AgentProfile) {
+  return agent.beeRole === "queen" || /^queen-bee-/i.test(agent.id) ? ":queen" : "";
+}
+
+function normalizedAgentName(value?: string) {
+  return value?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+}
+
+function relaxedAgentIdentity(agent: AgentProfile) {
+  return [
+    agent.runtime,
+    agentRoleScope(agent),
+    normalizeMachineName(agent.machineName),
+    agent.aeonRepo?.trim().toLowerCase() || "",
+    normalizeAgentPath(agent.localDataDir),
+    agent.agentId?.trim().toLowerCase() || "",
+    normalizedAgentName(agent.name),
+  ].join("|");
+}
+
+function uniqueAgentMatch(
+  agent: AgentProfile,
+  autoDiscoveredAgents: AgentProfile[],
+  matches: (candidate: AgentProfile) => boolean,
+) {
+  const candidates = autoDiscoveredAgents.filter((candidate) => candidate.id !== agent.id && matches(candidate));
+  if (candidates.length === 1) return candidates[0];
+  const identities = new Set(candidates.map(relaxedAgentIdentity));
+  if (identities.size === 1) return candidates.find((candidate) => candidate.telemetryUrl?.trim()) ?? candidates[0];
+  return undefined;
+}
+
 export function agentWorkspaceKey(agent: AgentProfile) {
-  const roleScope = agent.beeRole === "queen" || /^queen-bee-/i.test(agent.id) ? ":queen" : "";
+  const roleScope = agentRoleScope(agent);
   const dataDir = normalizeAgentPath(agent.localDataDir);
   if (dataDir) {
     const collector = collectorKey(agent.telemetryUrl) || "unattached";
@@ -168,9 +204,54 @@ export function renderAgentKey(agent: AgentProfile, index: number) {
 }
 
 export function agentAliasTarget(agent: AgentProfile, autoDiscoveredAgents: AgentProfile[]) {
+  const sameId = agent.id ? autoDiscoveredAgents.find((candidate) => candidate.id === agent.id) : undefined;
+  if (sameId) return sameId;
+
   const exactKey = agentWorkspaceKey(agent);
   const exact = autoDiscoveredAgents.find((candidate) => candidate.id !== agent.id && agentWorkspaceKey(candidate) === exactKey);
   if (exact) return exact;
+
+  const roleScope = agentRoleScope(agent);
+  const dataDir = normalizeAgentPath(agent.localDataDir);
+  if (dataDir) {
+    const dataDirMatch = uniqueAgentMatch(agent, autoDiscoveredAgents, (candidate) => (
+      candidate.runtime === agent.runtime
+      && agentRoleScope(candidate) === roleScope
+      && normalizeAgentPath(candidate.localDataDir) === dataDir
+    ));
+    if (dataDirMatch) return dataDirMatch;
+  }
+
+  const aeonRepo = agent.aeonRepo?.trim().toLowerCase();
+  if (agent.runtime === "aeon" && aeonRepo) {
+    const repoMatch = uniqueAgentMatch(agent, autoDiscoveredAgents, (candidate) => (
+      candidate.runtime === "aeon"
+      && agentRoleScope(candidate) === roleScope
+      && candidate.aeonRepo?.trim().toLowerCase() === aeonRepo
+    ));
+    if (repoMatch) return repoMatch;
+  }
+
+  const agentId = agent.agentId?.trim().toLowerCase();
+  const name = normalizedAgentName(agent.name);
+  if (agentId && name) {
+    const idMatch = uniqueAgentMatch(agent, autoDiscoveredAgents, (candidate) => (
+      candidate.runtime === agent.runtime
+      && agentRoleScope(candidate) === roleScope
+      && candidate.agentId?.trim().toLowerCase() === agentId
+      && normalizedAgentName(candidate.name) === name
+    ));
+    if (idMatch) return idMatch;
+  }
+
+  if (name) {
+    return uniqueAgentMatch(agent, autoDiscoveredAgents, (candidate) => (
+      candidate.runtime === agent.runtime
+      && agentRoleScope(candidate) === roleScope
+      && normalizedAgentName(candidate.name) === name
+    ));
+  }
+
   return undefined;
 }
 

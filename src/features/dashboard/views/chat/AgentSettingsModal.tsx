@@ -5,7 +5,9 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
+import { AgentCallsSettingsPanel } from "./AgentCallsSettingsPanel";
 import { GuidedProviderSetup } from "./GuidedProviderSetup";
+import { GuidedUsePodSetup } from "./GuidedUsePodSetup";
 import { InlineRenameControl } from "@/features/dashboard/views/shared/InlineRenameControl";
 
 export function AgentSettingsModal(props: any) {
@@ -13,8 +15,10 @@ export function AgentSettingsModal(props: any) {
   const [aeonOauthConnecting, setAeonOauthConnecting] = useState(false);
   const portalTarget = typeof document === "undefined" ? null : document.body;
   const openRouterSelected = (selectedRuntimeProvider?.slug || agentSettingsProvider) === "openrouter";
+  const usePodSelected = (selectedRuntimeProvider?.slug || agentSettingsProvider) === "usepod";
   const adaptiveSelected = openRouterSelected && selectedRuntimeModelId === "adaptive";
   const adaptiveOpenRouter = agentCreateMachine ? agentCreateDraft.adaptiveOpenRouter ?? {} : roleModalAgent?.adaptiveOpenRouter ?? {};
+  const usePodConfig = agentCreateMachine ? agentCreateDraft.usePod ?? {} : roleModalAgent?.usePod ?? {};
   const adaptiveUseCaseOptions = [
     { value: "auto", label: "Auto" },
     { value: "coding", label: "Coding" },
@@ -28,6 +32,17 @@ export function AgentSettingsModal(props: any) {
     const next = { ...adaptiveOpenRouter, ...patch };
     if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, adaptiveOpenRouter: next }));
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { adaptiveOpenRouter: next });
+  };
+  const updateUsePod = (patch: Record<string, unknown>) => {
+    const next = { ...usePodConfig, ...patch };
+    if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, usePod: next }));
+    else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { usePod: next });
+  };
+  const applyUsePodProfile = async (patch: Record<string, unknown>) => {
+    if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
+    else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
+    await refreshRuntimeIntegrations({ ...(agentSettingsIntegrationTarget ?? {}), ...patch });
+    setRuntimeModelSetupMode(null);
   };
   const openAeonGithubOauth = () => {
     if (aeonOauthConnecting) return;
@@ -119,6 +134,7 @@ export function AgentSettingsModal(props: any) {
     || runtimeIntegrationBusy === "status"
     || Boolean(runtimeIntegrationMessage));
   const runtimeCanAddModels = agentSettingsRuntime === "hermes";
+  const runtimeCanAddUsePod = agentSettingsRuntime === "openai-compatible";
   const aeonAvailability = runtimeAvailability?.aeon;
   const aeonDetected = agentSettingsRuntime === "aeon" && aeonAvailability?.installed === true;
   const aeonNeedsSetup = agentSettingsRuntime === "aeon" && !aeonDetected;
@@ -151,11 +167,11 @@ export function AgentSettingsModal(props: any) {
       : "Reads the local AEON repo folder on this machine.";
   const agentSettingsPanels = agentCreateMachine
     ? agentSettingsRuntime === "aeon"
-      ? (["role", "connection", "memory"] as const)
-      : (["role", "memory", "security"] as const)
+      ? (["role", "connection", "memory", "calls"] as const)
+      : (["role", "memory", "calls", "security"] as const)
     : isAeonSettings
-      ? (["connection", "memory"] as const)
-      : (["role", "memory", "tools", "security"] as const);
+      ? (["connection", "memory", "calls"] as const)
+      : (["role", "memory", "tools", "calls", "security"] as const);
   const activeAgentSettingsPanel = (agentSettingsPanels as readonly string[]).includes(agentSettingsPanel)
     ? agentSettingsPanel
     : agentSettingsPanels[0];
@@ -237,7 +253,7 @@ export function AgentSettingsModal(props: any) {
                     className={activeAgentSettingsPanel === panel ? fleetClass("activeSegment") : ""}
                     onClick={() => setAgentSettingsPanel(panel)}
                   >
-                    {panel === "role" ? "Role" : panel === "connection" ? "Connection" : panel === "memory" ? "Memory" : panel === "tools" ? "Tools" : "Security"}
+                    {panel === "role" ? "Role" : panel === "connection" ? "Connection" : panel === "memory" ? "Memory" : panel === "tools" ? "Tools" : panel === "calls" ? "Calls" : "Security"}
                   </button>
                 ))}
               </div>
@@ -337,6 +353,22 @@ export function AgentSettingsModal(props: any) {
                           >
                             <Plus aria-hidden="true" />
                             <strong>Add provider</strong>
+                          </button>
+                        ) : null}
+                        {runtimeCanAddUsePod ? (
+                          <button
+                            type="button"
+                            className={usePodSelected ? fleetClass("agentRuntimeProviderCard", "selectedRuntimeCard") : fleetClass("agentRuntimeProviderCard")}
+                            aria-pressed={usePodSelected}
+                            onClick={() => setRuntimeModelSetupMode((current) => current === "provider" ? null : "provider")}
+                          >
+                            <span className={fleetClass("providerCardTitle")}>
+                              <span className={fleetClass("runtimeIconMark")} aria-hidden="true">
+                                <PlugZap aria-hidden="true" />
+                              </span>
+                              <strong>UsePod</strong>
+                            </span>
+                            <small>Marketplace inference</small>
                           </button>
                         ) : null}
                         {runtimeModelProviders.map((provider) => {
@@ -471,14 +503,54 @@ export function AgentSettingsModal(props: any) {
                         </div>
                       </details>
                     ) : null}
-                    {runtimeCanAddModels && runtimeModelSetupMode ? (
+                    {usePodSelected ? (
+                      <details className={fleetClass("adaptiveAdvanced")}>
+                        <summary>
+                          <span>UsePod spend caps</span>
+                          <small>{usePodConfig.depositAddress ? "Deposit ready" : "Env token"}</small>
+                        </summary>
+                        <div className={fleetClass("adaptiveAdvancedGrid")}>
+                          <label className={fleetClass("agentSettingsField")}>
+                            <span>Input cap</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1000"
+                              value={usePodConfig.maxPriceInputMicrounits || ""}
+                              onChange={(event) => updateUsePod({ maxPriceInputMicrounits: event.target.value })}
+                              placeholder="USDC microunits per 1M"
+                            />
+                          </label>
+                          <label className={fleetClass("agentSettingsField")}>
+                            <span>Output cap</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1000"
+                              value={usePodConfig.maxPriceOutputMicrounits || ""}
+                              onChange={(event) => updateUsePod({ maxPriceOutputMicrounits: event.target.value })}
+                              placeholder="USDC microunits per 1M"
+                            />
+                          </label>
+                        </div>
+                      </details>
+                    ) : null}
+                    {(runtimeCanAddModels || runtimeCanAddUsePod) && runtimeModelSetupMode ? (
                       <div
                         className={fleetClass(
                           "agentRuntimeModelSetup",
                           runtimeModelSetupMode === "provider" ? "agentRuntimeModelSetupProvider" : "agentRuntimeModelSetupModel",
                         )}
                       >
-                        {runtimeModelSetupMode === "provider" ? (
+                        {runtimeModelSetupMode === "provider" && runtimeCanAddUsePod ? (
+                          <GuidedUsePodSetup
+                            agent={agentSettingsIntegrationTarget}
+                            busy={runtimeIntegrationBusy}
+                            fleetClass={fleetClass}
+                            onCancel={() => setRuntimeModelSetupMode(null)}
+                            onComplete={applyUsePodProfile}
+                          />
+                        ) : runtimeModelSetupMode === "provider" ? (
                           <GuidedProviderSetup
                             agent={agentSettingsIntegrationTarget}
                             busy={runtimeIntegrationBusy}
@@ -921,6 +993,24 @@ export function AgentSettingsModal(props: any) {
                 ) : null}
                 {agentRuntimeFolderStatus ? <p className={fleetClass("agentMemoryStatus")}>{agentRuntimeFolderStatus}</p> : null}
               </div>
+            ) : null}
+
+            {activeAgentSettingsPanel === "calls" ? (
+              <AgentCallsSettingsPanel
+                {...{
+                  Button,
+                  LoaderCircle,
+                  PlugZap,
+                  RefreshCcw,
+                  Send,
+                  agentCreateDraft,
+                  agentCreateMachine,
+                  fleetClass,
+                  roleModalAgent,
+                  setAgentCreateDraft,
+                  updateAgentProfile,
+                }}
+              />
             ) : null}
 
             {activeAgentSettingsPanel === "tools" && roleModalAgent ? (

@@ -59,6 +59,8 @@ const maxSkillFiles = Number(process.env.AGENT_TELEMETRY_MAX_SKILL_FILES || 160)
 const maxSkillFileBytes = Number(process.env.AGENT_TELEMETRY_MAX_SKILL_FILE_BYTES || 5 * 1024 * 1024);
 const skillAutoSyncPollMs = Number(process.env.AGENT_TELEMETRY_SKILL_AUTO_SYNC_POLL_MS || 10_000);
 const skillAutoSyncDebounceMs = Number(process.env.AGENT_TELEMETRY_SKILL_AUTO_SYNC_DEBOUNCE_MS || 2_500);
+const healthCacheMs = Number(process.env.AGENT_TELEMETRY_HEALTH_CACHE_MS || 10_000);
+const appVersionCacheMs = Number(process.env.AGENT_TELEMETRY_VERSION_CACHE_MS || 60_000);
 const hostedAppProbeTimeoutMs = Number(process.env.AGENT_TELEMETRY_APP_PROBE_TIMEOUT_MS || 900);
 const hostedAppScanTimeoutMs = Number(process.env.AGENT_TELEMETRY_APP_SCAN_TIMEOUT_MS || 4_000);
 const excludedHostedAppPorts = new Set(
@@ -76,6 +78,10 @@ let skillAutoSyncInFlight = false;
 const skillAutoSyncWatchers = new Map();
 const skillAutoSyncSignatures = new Map();
 let machineIdPromise = null;
+let healthPayloadCache = null;
+let healthPayloadPromise = null;
+let appVersionCache = null;
+let appVersionPromise = null;
 const hostedAppAssetUrls = new Map();
 
 function expandHome(path) {
@@ -379,6 +385,12 @@ function appProxyUrl(listener, path = "/") {
   return `http://127.0.0.1:${port}/app-proxy/${portValue}${normalizedPath}`;
 }
 
+function appProxyBaseUrl(listener) {
+  const portValue = Number(listener?.port);
+  if (!Number.isInteger(portValue) || portValue < 1 || portValue > 65535) return "";
+  return `http://127.0.0.1:${port}/app-proxy/${portValue}`;
+}
+
 async function fileExists(filePath) {
   return access(filePath, constants.R_OK).then(() => true).catch(() => false);
 }
@@ -563,6 +575,65 @@ async function probeHostedApp(listener, scheme) {
   };
 }
 
+function serviceNameFromHealth(payload, fallback) {
+  if (!payload || typeof payload !== "object") return fallback;
+  const value = payload.service || payload.name || payload.app || payload.application;
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function serviceStatusFromHealth(payload) {
+  if (!payload || typeof payload !== "object") return "";
+  const value = payload.status || payload.state || payload.ok;
+  if (typeof value === "boolean") return value ? "ok" : "error";
+  return typeof value === "string" ? value.trim() : "";
+}
+
+async function probeServiceHealth(listener, scheme) {
+  const baseUrl = `${scheme}://${listenerUrlHost(listener.host)}:${listener.port}`;
+  const healthPath = "/health";
+  const response = await fetch(`${baseUrl}${healthPath}`, {
+    method: "GET",
+    signal: AbortSignal.timeout(hostedAppProbeTimeoutMs),
+  });
+  const contentType = response.headers.get("content-type") || "";
+  const server = response.headers.get("server") || "";
+  const text = await response.text().catch(() => "");
+  let payload = null;
+  if (contentType.includes("json") || text.trim().startsWith("{")) {
+    payload = JSON.parse(text);
+  }
+  const fallback = `${listener.process} API on ${listener.port}`;
+  const name = serviceNameFromHealth(payload, fallback);
+  const status = serviceStatusFromHealth(payload);
+  const isMiroShark = /miroshark/i.test(`${name} ${text}`);
+  const serviceKind = isMiroShark ? "miroshark" : "api";
+  return {
+    ok: response.ok,
+    id: sha256Hex(`${hostname()}:${listener.port}:${listener.process}:${listener.pid}:${serviceKind}`).slice(0, 16),
+    name: isMiroShark ? "MiroShark" : titleFromHtml("", name),
+    description: status ? `API service · ${status}` : `API service · HTTP ${response.status}`,
+    statusCode: response.status,
+    contentType,
+    iconUrl: "",
+    scheme,
+    host: listenerDisplayHost(listener.host),
+    port: listener.port,
+    path: "/",
+    healthPath,
+    healthUrl: `${baseUrl}${healthPath}`,
+    apiBaseUrl: baseUrl,
+    localUrl: baseUrl,
+    proxyUrl: appProxyUrl(listener),
+    apiProxyUrl: appProxyBaseUrl(listener),
+    healthProxyUrl: appProxyUrl(listener, healthPath),
+    process: listener.process,
+    pid: listener.pid,
+    server,
+    interactive: false,
+    serviceKind,
+  };
+}
+
 async function discoverHostedApps() {
   const listeners = await localTcpListeners();
   const byPort = new Map();
@@ -577,7 +648,13 @@ async function discoverHostedApps() {
   const apps = [];
   for (const listener of [...byPort.values()].sort((left, right) => left.port - right.port)) {
     const app = await probeHostedApp(listener, "http")
+      .then(async (rootApp) => {
+        const service = await probeServiceHealth(listener, rootApp.scheme).catch(() => null);
+        return service ? { ...rootApp, ...service, interactive: rootApp.contentType?.includes("text/html") } : rootApp;
+      })
       .catch(() => probeHostedApp(listener, "https"))
+      .catch(() => probeServiceHealth(listener, "http"))
+      .catch(() => probeServiceHealth(listener, "https"))
       .catch(() => null);
     if (app) apps.push(app);
   }
@@ -1021,7 +1098,7 @@ async function execText(cmd, args, fallback = "") {
   return stdout.trim();
 }
 
-async function appVersion() {
+async function readAppVersion() {
   const [commit, branch, dirty, remoteCommit] = await Promise.all([
     execText("git", ["rev-parse", "HEAD"]),
     execText("git", ["rev-parse", "--abbrev-ref", "HEAD"]),
@@ -1039,6 +1116,24 @@ async function appVersion() {
     latestShortCommit: latestCommit.slice(0, 7),
     updateCommand: `cd ${JSON.stringify(appDir)} && git pull --ff-only && pnpm install --frozen-lockfile && ./scripts/install-telemetry-collector.sh`,
   };
+}
+
+async function appVersion(options = {}) {
+  const now = Date.now();
+  if (!options.force && appVersionCache && now - appVersionCache.checkedAt < appVersionCacheMs) {
+    return appVersionCache.value;
+  }
+  if (!options.force && appVersionPromise) return appVersionPromise;
+
+  appVersionPromise = readAppVersion()
+    .then((value) => {
+      appVersionCache = { checkedAt: Date.now(), value };
+      return value;
+    })
+    .finally(() => {
+      appVersionPromise = null;
+    });
+  return appVersionPromise;
 }
 
 function shellQuote(value) {
@@ -2804,6 +2899,59 @@ async function localAgents() {
   return agents;
 }
 
+async function collectorHealthPayload() {
+  const now = Date.now();
+  if (healthPayloadCache && now - healthPayloadCache.checkedAt < healthCacheMs) {
+    return healthPayloadCache.value;
+  }
+  if (healthPayloadPromise) return healthPayloadPromise;
+
+  healthPayloadPromise = (async () => {
+    const [syncthing, envSync, agents, machineId, version] = await Promise.all([
+      syncthingInstalled(),
+      resolveHiveEnvAdd(),
+      localAgents(),
+      stableMachineId(),
+      appVersion(),
+    ]);
+    const runtimes = [...new Set(agents.map((agent) => agent.runtime))];
+    const value = {
+      ok: true,
+      host: hostname(),
+      machineId,
+      collectorStartedAt,
+      collectorStartedAtMs,
+      version,
+      envSync: {
+        ready: envSync.ready,
+        user: currentUsername(),
+        command: envSync.command,
+        error: envSync.error,
+      },
+      capabilities: {
+        chat: runtimes.includes("hermes"),
+        directoryBrowsing: true,
+        envHttpSync: true,
+        nangoSetup: true,
+        runtimes,
+        runtimeIntegrations: true,
+        runtimeAgentCreation: true,
+        hostedApps: true,
+        skillInventory: true,
+        skillAutoSync: true,
+        fileTransfers: true,
+        syncthing: syncthing.installed,
+        defaultSyncPath,
+      },
+    };
+    healthPayloadCache = { checkedAt: Date.now(), value };
+    return value;
+  })().finally(() => {
+    healthPayloadPromise = null;
+  });
+  return healthPayloadPromise;
+}
+
 async function sendHermesChat(body) {
   if (process.env.AGENT_TELEMETRY_CHAT_DISABLED === "1") {
     return { ok: false, status: 403, error: "Collector chat bridge is disabled on this machine." };
@@ -3582,39 +3730,7 @@ const telemetryServer = createServer(async (request, response) => {
     return;
   }
   if (pathname === "/health") {
-    const syncthing = await syncthingInstalled();
-    const envSync = await resolveHiveEnvAdd();
-    const agents = await localAgents();
-    const runtimes = [...new Set(agents.map((agent) => agent.runtime))];
-    jsonResponse(response, 200, {
-      ok: true,
-      host: hostname(),
-      machineId: await stableMachineId(),
-      collectorStartedAt,
-      collectorStartedAtMs,
-      version: await appVersion(),
-      envSync: {
-        ready: envSync.ready,
-        user: currentUsername(),
-        command: envSync.command,
-        error: envSync.error,
-      },
-      capabilities: {
-        chat: runtimes.includes("hermes"),
-        directoryBrowsing: true,
-        envHttpSync: true,
-        nangoSetup: true,
-        runtimes,
-        runtimeIntegrations: true,
-        runtimeAgentCreation: true,
-        hostedApps: true,
-        skillInventory: true,
-        skillAutoSync: true,
-        fileTransfers: true,
-        syncthing: syncthing.installed,
-        defaultSyncPath,
-      },
-    });
+    jsonResponse(response, 200, await collectorHealthPayload());
     return;
   }
   if (pathname.startsWith("/app-assets/") && request.method === "GET") {
@@ -3681,7 +3797,7 @@ const telemetryServer = createServer(async (request, response) => {
     return;
   }
 	  if (pathname === "/update" && request.method === "POST") {
-	    const version = await appVersion();
+	    const version = await appVersion({ force: true });
 	    const command = startUpdate();
     jsonResponse(response, 202, {
       ok: true,

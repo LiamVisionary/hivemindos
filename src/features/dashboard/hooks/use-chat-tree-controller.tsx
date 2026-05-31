@@ -204,9 +204,22 @@ export function useChatTreeController(props: any) {
     const { task, index: taskIndex } = match;
     const leafKey = taskChatLeafKey(agentId, task, taskIndex);
     const runtimeSessionId = runtimeSessionIdFromTask(task);
+    const seedMessages = chatSeedMessagesForTask(task);
+    if (agent && runtimeSessionId && !task.messages?.some((message: ChatMessage) => message.content.trim())) {
+      void (async () => {
+        const hydratedMessages = await hydrateRuntimeSessionChat(agent, runtimeSessionId, leafKey);
+        startAgentChat(agentId, {
+          seedMessages: hydratedMessages?.length ? hydratedMessages : seedMessages,
+          chatLeafKey: leafKey,
+          workingDirectoryPath: task.workingDirectory,
+          runtimeSessionId,
+        });
+      })();
+      return;
+    }
     startAgentChat(agentId, {
       messageLimit: runtimeSessionId ? undefined : 5,
-      seedMessages: chatSeedMessagesForTask(task),
+      seedMessages,
       chatLeafKey: leafKey,
       workingDirectoryPath: task.workingDirectory,
       runtimeSessionId,

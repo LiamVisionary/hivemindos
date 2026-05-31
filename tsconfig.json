@@ -33,10 +33,15 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    ".next-tauri/types/**/*.ts",
+    ".next-tauri/dev/types/**/*.ts",
+    ".next-tauri-build/types/**/*.ts",
+    ".next-tauri-build/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
+    "src-tauri/resources",
     "workers"
   ]
 }

@@ -78,9 +78,17 @@ def main(argv: list[str]) -> int:
         return usage()
 
     child_env: dict[str, str] = {}
+    skipped_nul_keys: list[str] = []
     for env_file in files:
         child_env.update(parse_env_file(env_file))
     child_env.update({key: value for key, value in os.environ.items() if value})
+    for key, value in list(child_env.items()):
+        if "\x00" in key or "\x00" in value:
+            skipped_nul_keys.append(key.replace("\x00", ""))
+            del child_env[key]
+    if skipped_nul_keys:
+        names = ", ".join(sorted(name or "<invalid-key>" for name in skipped_nul_keys))
+        print(f"hive-env-run: skipped env entries containing NUL bytes: {names}", file=sys.stderr)
 
     os.execvpe(args[0], args, child_env)
     return 127

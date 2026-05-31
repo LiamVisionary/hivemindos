@@ -21,7 +21,11 @@ export default function ConnectPhonePage() {
         const data = await res.json();
         const devices: any[] = data?.devices ?? [];
         const self = devices.find((d) => d?.self) ?? devices[0];
-        const host = (self?.dnsName ? String(self.dnsName).replace(/\.$/, "") : "") || self?.ip || "";
+        // Prefer the raw tailnet IP over the MagicDNS name: the companion app's
+        // fetch can't rely on MagicDNS resolving on-device (Tailscale DNS may be
+        // off for the app), but a 100.x tailnet IP always routes over the tunnel.
+        // The name only resolves in some setups; the IP resolves in all of them.
+        const host = self?.ip || (self?.dnsName ? String(self.dnsName).replace(/\.$/, "") : "") || "";
         if (!host) {
           setError("Couldn't determine this machine's tailnet address. Is Tailscale up?");
           return;

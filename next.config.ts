@@ -3,6 +3,8 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 
 const projectRoot = path.join(/*turbopackIgnore: true*/ __dirname);
+const isTauriDev = process.env.HIVEMINDOS_TAURI_DEV === "1";
+const isTauriBuild = process.env.HIVEMINDOS_TAURI_BUILD === "1";
 
 function splitOrigins(value?: string) {
   return (value ?? "")
@@ -35,6 +37,38 @@ function detectedTailnetDevOrigins() {
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  distDir: isTauriDev ? ".next-tauri" : isTauriBuild ? ".next-tauri-build" : ".next",
+  output: isTauriBuild ? "standalone" : undefined,
+  images: isTauriBuild
+    ? {
+        unoptimized: true,
+      }
+    : undefined,
+  outputFileTracingExcludes: isTauriBuild
+    ? {
+        "/*": [
+          "./.git/**/*",
+          "./.next/**/*",
+          "./.next-tauri/**/*",
+          "./artifacts/**/*",
+          "./bin/**/*",
+          "./docs/**/*",
+          "./emoji-atlas-visual-asset/**/*",
+          "./emoji-site/**/*",
+          "./skills/**/*",
+          "./src-tauri/**/*",
+          "./workers/**/*",
+          "./*.md",
+          "./*.log",
+          "./AGENTS.md",
+          "./ASSIMILATION*",
+          "./go.*",
+          "./setup.*",
+          "./uninstall.*",
+          "./tsconfig.tsbuildinfo",
+        ],
+      }
+    : undefined,
   webpack(config, { dev }) {
     if (dev && process.env.NEXT_DEV_SOURCE_MAPS !== "1") {
       config.devtool = false;

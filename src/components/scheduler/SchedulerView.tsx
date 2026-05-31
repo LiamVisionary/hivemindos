@@ -67,7 +67,7 @@ export function SchedulerView({
   return (
     <TooltipProvider delayDuration={120}>
       <div className={`${styles.root} relative overflow-hidden`} style={{
-        width: "100%", flex: "1 1 auto", minHeight: 0,
+        width: "100%", height: "100%", maxHeight: "100dvh", flex: "1 1 auto", minHeight: 0,
         background: "var(--background)", color: "var(--foreground)",
         fontFamily: "var(--f-display), system-ui, sans-serif",
         display: "grid", gridTemplateRows: "auto auto 1fr",
@@ -155,7 +155,7 @@ export function SchedulerView({
 
         {/* BODY */}
         {selected ? <div className="relative z-10 grid" style={{
-          gridTemplateColumns: "300px minmax(0, 1fr) 360px", minHeight: 0,
+          gridTemplateColumns: "300px minmax(0, 1fr) 360px", minHeight: 0, overflow: "hidden",
         }}>
           <Jobs jobs={jobs} selectedId={effectiveSelectedId}
             onSelect={setSelectedId} onToggle={toggleJob} onNewJob={onNewJob} />

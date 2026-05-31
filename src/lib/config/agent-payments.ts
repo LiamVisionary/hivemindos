@@ -19,6 +19,11 @@ export const AGENT_PAYMENT_PROVIDER_COPY = {
     summary: "HTTP-native pay-per-call API/resource payments with wallet-selected requirements.",
     setup: "Configure a Base/Solana wallet and enforce network, scheme, and max-amount payment policies.",
   },
+  usepod: {
+    label: "UsePod prepaid",
+    summary: "Prepaid USDC balance for UsePod inference tokens, funded through the token deposit address.",
+    setup: "Register UsePod from agent settings, keep USEPOD_TOKEN in shared env, and send Solana USDC to the saved deposit address.",
+  },
   manual: {
     label: "Manual ledger",
     summary: "Local survival accounting without an external payment rail connected yet.",

@@ -5,11 +5,12 @@ import * as React from "react";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BeeIcon } from "./bee-icon";
+import { applyActiveAppBadges, type FleetHostedApp } from "./active-apps";
 import { HexTile } from "./hex-tile";
 import { ListView } from "./list-view";
 import { MapView } from "./map-view";
 import { NetworkGraph } from "./network-graph";
-import { Roster, type MachineUpdateButtonDetail, type MachineUpdateButtonStatus } from "./roster";
+import { Roster, type AeonDeleteDepth, type AeonDeleteProgress, type AeonDeleteResult, type MachineUpdateButtonDetail, type MachineUpdateButtonStatus } from "./roster";
 import {
   ALERTS,
   MACHINES,
@@ -25,6 +26,15 @@ import {
 import styles from "./fleet-tokens.module.css";
 
 type ViewMode = "graph" | "map" | "list";
+
+type SettledFleetViewData = {
+  machines: FleetMachine[];
+  tasks: FleetTask[];
+  alerts: FleetAlert[];
+  ticker: string[];
+  edges: Array<[string, string]>;
+  hasValue: boolean;
+};
 
 export interface FleetViewProps {
   machines?: FleetMachine[];
@@ -45,11 +55,18 @@ export interface FleetViewProps {
   onRenameMachine?: (machineId: string, name: string) => void;
   onOpenChat?: (m: FleetMachine, a: FleetAgent) => void;
   onOpenTaskChat?: (m: FleetMachine, a: FleetAgent, chat?: FleetAgentChat) => void;
+  onCallAgent?: (m: FleetMachine, a: FleetAgent) => Promise<void> | void;
   onOpenWallet?: (m: FleetMachine, a: FleetAgent) => void;
   onEditSettings?: (m: FleetMachine, a: FleetAgent) => void;
   onDuplicate?: (m: FleetMachine, a: FleetAgent) => void;
-  onRemove?: (m: FleetMachine, a: FleetAgent) => void;
+  onRemove?: (m: FleetMachine, a: FleetAgent, depth?: AeonDeleteDepth, onProgress?: (progress: AeonDeleteProgress) => void) => void | Promise<AeonDeleteResult | void>;
   onDismissAlert?: (alert: FleetAlert) => void;
+}
+
+function preferredInitialMachineId(machines: FleetMachine[]) {
+  return machines.find((machine) => machine.name === "This Mac" || machine.role === "Primary")?.id
+    ?? machines[0]?.id
+    ?? "";
 }
 
 export function FleetView({
@@ -70,13 +87,14 @@ export function FleetView({
   onRenameMachine,
   onOpenChat,
   onOpenTaskChat,
+  onCallAgent,
   onOpenWallet,
   onEditSettings,
   onDuplicate,
   onRemove,
   onDismissAlert,
 }: FleetViewProps = {}) {
-  const [selected, setSelected] = React.useState<string>(() => machines[0]?.id ?? "");
+  const [selected, setSelected] = React.useState<string>(() => preferredInitialMachineId(machines));
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
   const [view, setView] = React.useState<ViewMode>("graph");
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set(["nimbus"]));
@@ -84,14 +102,47 @@ export function FleetView({
   const [addToast, setAddToast] = React.useState<string | null>(null);
   const [dismissedAlertIds, setDismissedAlertIds] = React.useState<Set<string>>(() => new Set());
   const [selectedAlert, setSelectedAlert] = React.useState<FleetAlert | null>(null);
-  const initialLoading = loading && machines.length === 0;
+  const [hostedApps, setHostedApps] = React.useState<FleetHostedApp[]>([]);
+  const [settledFleet, setSettledFleet] = React.useState<SettledFleetViewData>({
+    machines: [],
+    tasks: [],
+    alerts: [],
+    ticker: [],
+    edges: [],
+    hasValue: false,
+  });
+
+  const incomingAgentCount = machines.reduce((count, machine) => count + machine.agents.length, 0);
+
+  React.useEffect(() => {
+    if (loading) return;
+    if (machines.length === 0 || incomingAgentCount === 0) return;
+    const timer = window.setTimeout(() => {
+      setSettledFleet({ machines, tasks, alerts, ticker, edges, hasValue: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [alerts, edges, incomingAgentCount, loading, machines, tasks, ticker]);
+
+  const displayMachines = React.useMemo(
+    () => loading && !settledFleet.hasValue ? [] : loading ? settledFleet.machines : machines,
+    [loading, machines, settledFleet.hasValue, settledFleet.machines],
+  );
+  const displayTasks = loading && !settledFleet.hasValue ? [] : loading ? settledFleet.tasks : tasks;
+  const displayAlerts = loading && !settledFleet.hasValue ? [] : loading ? settledFleet.alerts : alerts;
+  const displayTicker = loading && !settledFleet.hasValue ? [] : loading ? settledFleet.ticker : ticker;
+  const displayEdges = loading && !settledFleet.hasValue ? [] : loading ? settledFleet.edges : edges;
+  const displayMachinesWithApps = React.useMemo(
+    () => applyActiveAppBadges(displayMachines, hostedApps),
+    [displayMachines, hostedApps],
+  );
+  const initialLoading = loading && displayMachines.length === 0;
   const refreshing = loading && !initialLoading;
   const showMasthead = mastheadMode !== "none";
 
   React.useEffect(() => {
-    const t = setInterval(() => setDispatchIdx((i) => ticker.length ? (i + 1) % ticker.length : 0), 2200);
+    const t = setInterval(() => setDispatchIdx((i) => displayTicker.length ? (i + 1) % displayTicker.length : 0), 2200);
     return () => clearInterval(t);
-  }, [ticker.length]);
+  }, [displayTicker.length]);
 
   React.useEffect(() => {
     if (!addToast) return;
@@ -99,14 +150,34 @@ export function FleetView({
     return () => clearTimeout(t);
   }, [addToast]);
 
-  const selectedMachineId = machines.some((machine) => machine.id === selected)
+  React.useEffect(() => {
+    if (displayMachines.length === 0) return;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8_000);
+    void fetch("/api/fleet/apps", { cache: "no-store", signal: controller.signal })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: { apps?: FleetHostedApp[] } | null) => {
+        if (!data?.apps) return;
+        setHostedApps(data.apps);
+      })
+      .catch(() => {
+        // The apps route is opportunistic for the graph badge; Fleet should still render without it.
+      })
+      .finally(() => window.clearTimeout(timeout));
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [displayMachines.length, checkedLabel]);
+
+  const selectedMachineId = selected && displayMachines.some((machine) => machine.id === selected)
     ? selected
-    : machines[0]?.id ?? "";
+    : preferredInitialMachineId(displayMachines);
 
   const handleSelectMachine = React.useCallback((id: string) => {
     setSelected(id);
     setSelectedAgentId(null);
-    setExpanded(new Set([id]));
+    setExpanded((current) => current.has(id) ? new Set() : new Set([id]));
   }, []);
   const handleSelectAgent = React.useCallback((m: FleetMachine, a: FleetAgent) => {
     setSelected(m.id);
@@ -125,13 +196,19 @@ export function FleetView({
       return new Set([id]);
     });
   }, []);
+  const handleCallAgent = React.useCallback((machine: FleetMachine, agent: FleetAgent) => {
+    setSelected(machine.id);
+    setSelectedAgentId(agent.id);
+    setExpanded(new Set([machine.id]));
+    void onCallAgent?.(machine, agent);
+  }, [onCallAgent]);
 
-  const totalAgents = machines.reduce((n, m) => n + m.agents.length, 0);
-  const working = machines.reduce(
+  const totalAgents = displayMachinesWithApps.reduce((n, m) => n + m.agents.length, 0);
+  const working = displayMachinesWithApps.reduce(
     (n, m) => n + m.agents.filter((a) => a.state === "working").length,
     0,
   );
-  const highPriorityAlerts = alerts
+  const highPriorityAlerts = displayAlerts
     .filter((alert) => (
       !dismissedAlertIds.has(alert.id)
       && (alert.priority === "urgent" || alert.priority === "high" || alert.tone === "danger")
@@ -239,7 +316,7 @@ export function FleetView({
                 </span>
               </h1>
               <div className="flex" style={{ gap: 18, paddingBottom: 6 }}>
-                <BigStat n={machines.length} label="machines" />
+                <BigStat n={displayMachinesWithApps.length} label="machines" />
                 <BigStat n={totalAgents} label="agents" />
                 <BigStat n={working} label="working" tone="cyan" />
                 <BigStat
@@ -276,7 +353,7 @@ export function FleetView({
                   selected={selectedMachineId}
                   selectedAgentId={selectedAgentId}
                   expanded={expanded}
-                  machines={machines}
+                  machines={displayMachinesWithApps}
                   onSelectMachine={handleSelectMachine}
                   onSelectAgent={handleSelectAgent}
                   onToggleExpand={toggleExpand}
@@ -287,6 +364,7 @@ export function FleetView({
                   onRenameMachine={onRenameMachine}
                   onOpenChat={onOpenChat}
                   onOpenTaskChat={onOpenTaskChat}
+                  onCallAgent={handleCallAgent}
                   onOpenWallet={onOpenWallet}
                   onEditSettings={onEditSettings}
                   onDuplicate={onDuplicate}
@@ -401,8 +479,8 @@ export function FleetView({
                 <NetworkGraph
                   selected={selectedMachineId}
                   selectedAgentId={selectedAgentId}
-                  machines={machines}
-                  edges={edges}
+                  machines={displayMachinesWithApps}
+                  edges={displayEdges}
                   onSelectMachine={handleSelectMachine}
                   onSelectAgent={handleSelectAgent}
                   onAddAgent={handleAddAgent}
@@ -413,8 +491,8 @@ export function FleetView({
                 <MapView
                   selected={selectedMachineId}
                   selectedAgentId={selectedAgentId}
-                  machines={machines}
-                  edges={edges}
+                  machines={displayMachinesWithApps}
+                  edges={displayEdges}
                   onSelectMachine={handleSelectMachine}
                   onSelectAgent={handleSelectAgent}
                   onAddAgent={handleAddAgent}
@@ -425,12 +503,13 @@ export function FleetView({
                 <ListView
                   selected={selectedMachineId}
                   selectedAgentId={selectedAgentId}
-                  machines={machines}
+                  machines={displayMachinesWithApps}
                   onSelectMachine={handleSelectMachine}
                   onSelectAgent={handleSelectAgent}
                   onAddAgent={handleAddAgent}
                   onOpenChat={onOpenChat}
                   onOpenTaskChat={onOpenTaskChat}
+                  onCallAgent={handleCallAgent}
                   onOpenWallet={onOpenWallet}
                   onEditSettings={onEditSettings}
                   onDuplicate={onDuplicate}
@@ -439,7 +518,6 @@ export function FleetView({
               )}
               {refreshing ? <FleetScanOverlay /> : null}
             </div>
-
           </section>
 
           {/* RIGHT — dispatch */}
@@ -471,12 +549,12 @@ export function FleetView({
                     animation: "fleet-fade-up 360ms ease",
                   }}
                 >
-                  {initialLoading ? "Discovery is scanning ready machines and agent bridges." : ticker[dispatchIdx] ?? "Fleet telemetry is quiet right now."}
+                  {initialLoading ? "Discovery is scanning ready machines and agent bridges." : displayTicker[dispatchIdx] ?? "Fleet telemetry is quiet right now."}
                 </div>
                 <div className={styles.dispatchMeta} style={{
                   marginTop: 8, fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--muted)",
                 }}>
-                  <span>{String(Math.min(dispatchIdx + 1, ticker.length || 1)).padStart(2, "0")} / {ticker.length || 1}</span>
+                  <span>{String(Math.min(dispatchIdx + 1, displayTicker.length || 1)).padStart(2, "0")} / {displayTicker.length || 1}</span>
                   <span>
                     <span className={`${styles.dot} ${styles.dotLive}`} style={{ color: "var(--accent)" }} />
                     &nbsp; {initialLoading ? "scanning" : "streaming"}
@@ -491,38 +569,42 @@ export function FleetView({
               </div>
               {initialLoading ? (
                 <FleetDispatchLoading />
-              ) : machines.flatMap((m) =>
+              ) : displayMachinesWithApps.flatMap((m) =>
                 m.agents
                   .filter((a) => a.state === "working" || a.state === "failed")
                   .map((a) => ({ ...a, host: m.name, _m: m })),
               )
                 .slice(0, 4)
-                .map((a) => (
-                  <article
-                    key={`${a._m.id}:${a.id}`}
-                    onClick={() => handleSelectAgent(a._m, a)}
-                    className={`${styles.dispatchStoryCard} rounded-xl cursor-pointer`}
-                    style={{
-                      padding: 12,
-                      border: `1px solid ${a.state === "failed" ? "rgba(251,113,133,0.34)" : "rgba(148,163,184,0.16)"}`,
-                      background: "rgba(16,20,29,0.78)",
-                    }}
-                  >
-                    <div className={styles.dispatchStoryHeader} style={{ marginBottom: 6 }}>
-                      <div
-                        className={`${styles.monoCap} ${styles.dispatchStorySource}`}
-                        style={{ color: a.state === "failed" ? "var(--danger)" : "var(--accent-strong)" }}
-                      >
-                        {a.host} · {a.runtime}
+                .map((a) => {
+                  const storyFailed = a.activityStatus === "failed"
+                    && /\b(error|failed|failure|blocked|unavailable|unauthorized|forbidden|timeout|missing|not found|needs|invalid|rejected|login|auth)\b/i.test(a.task);
+                  return (
+                    <article
+                      key={`${a._m.id}:${a.id}`}
+                      onClick={() => handleSelectAgent(a._m, a)}
+                      className={`${styles.dispatchStoryCard} rounded-xl cursor-pointer`}
+                      style={{
+                        padding: 12,
+                        border: `1px solid ${storyFailed ? "rgba(251,113,133,0.34)" : "rgba(148,163,184,0.16)"}`,
+                        background: "rgba(16,20,29,0.78)",
+                      }}
+                    >
+                      <div className={styles.dispatchStoryHeader} style={{ marginBottom: 6 }}>
+                        <div
+                          className={`${styles.monoCap} ${styles.dispatchStorySource}`}
+                          style={{ color: storyFailed ? "var(--danger)" : "var(--accent-strong)" }}
+                        >
+                          {a.host} · {a.runtime}
+                        </div>
+                        <span className={styles.dispatchStoryTime} style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--muted)" }}>{a.since}</span>
                       </div>
-                      <span className={styles.dispatchStoryTime} style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--muted)" }}>{a.since}</span>
-                    </div>
-                    <div className={`${styles.dispatchStoryName} font-semibold`} style={{ fontFamily: "var(--f-display)", fontSize: 14, lineHeight: 1.3, marginBottom: 4 }}>
-                      {a.name}
-                    </div>
-                    <div className={styles.dispatchStoryTask} style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>{a.task}</div>
-                  </article>
-                ))}
+                      <div className={`${styles.dispatchStoryName} font-semibold`} style={{ fontFamily: "var(--f-display)", fontSize: 14, lineHeight: 1.3, marginBottom: 4 }}>
+                        {a.name}
+                      </div>
+                      <div className={styles.dispatchStoryTask} style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>{a.task}</div>
+                    </article>
+                  );
+                })}
             </section>
 
             <section className="mt-auto">
@@ -532,7 +614,7 @@ export function FleetView({
               <div className={styles.dispatchBrief} style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>
                 {initialLoading
                   ? "Queued work and agent status will appear once discovery finishes."
-                  : `${tasks.filter((t) => t.lane === "queue").length} tasks queued · ${tasks.filter((t) => t.state === "scheduled").length} scheduled overnight · brain sync resumes on lattice when wifi stabilizes.`}
+                  : `${displayTasks.filter((t) => t.lane === "queue").length} tasks queued · ${displayTasks.filter((t) => t.state === "scheduled").length} scheduled overnight · brain sync resumes on lattice when wifi stabilizes.`}
               </div>
             </section>
           </aside>

@@ -7,6 +7,7 @@ import { basename, dirname, join, resolve } from "path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { getSharedBrainSkillsCached, syncSharedBrainSkillsToAeon } from "@/lib/services/obsidian/brain-skills";
 import { cachedCall, invalidateCachedCall } from "@/lib/services/async-cache";
+import { registerAeonEnvSyncRepo } from "@/lib/services/runtime-adapters/aeon-env-sync-registry";
 import type {
   RuntimeAdapter,
   RuntimeAnalytics,
@@ -544,6 +545,7 @@ async function syncEnvToGitHubSecrets(
 ) {
   const repo = aeonRepo(profile);
   if (!repo) throw new Error("Configure Aeon Repo before syncing env to GitHub secrets.");
+  await registerAeonEnvSyncRepo(repo, "aeon-env-sync").catch(() => undefined);
   const [localEnv, sharedValues] = await Promise.all([
     aeonEnvValues(profile),
     hiveSharedEnvValues(),
@@ -571,6 +573,10 @@ async function syncEnvToGitHubSecrets(
     }
     if (!values[key]) {
       skipped.push({ key, reason: "No value found in HivemindOS, generic agent, Aeon, repo, or process env stores." });
+      return false;
+    }
+    if (key.includes("\0") || values[key].includes("\0")) {
+      skipped.push({ key: key.replaceAll("\0", ""), reason: "Value contains NUL bytes and cannot be exposed as a runtime environment variable." });
       return false;
     }
     return true;
@@ -832,6 +838,7 @@ async function repoSyncStatus(profile: AgentProfile): Promise<RuntimeRepoSyncSta
   const repo = aeonRepo(profile);
   const branch = aeonBranch(profile);
   if (!root) return { root: "", repo, branch, hasChanges: false, changedFiles: [], behind: 0, ahead: 0 };
+  await execFileAsync("git", ["fetch", "--quiet", "origin", branch], { cwd: root, timeout: 60_000, maxBuffer: 1_000_000 }).catch(() => undefined);
   const status = await execFileAsync("git", ["status", "--porcelain"], { cwd: root, timeout: 12_000, maxBuffer: 1_000_000 }).then(({ stdout }) => stdout).catch(() => "");
   const changedFiles = status.split(/\r?\n/).map((line) => line.slice(3).trim()).filter(Boolean);
   const aheadBehind = await execFileAsync("git", ["rev-list", "--left-right", "--count", `origin/${branch}...HEAD`], { cwd: root, timeout: 12_000, maxBuffer: 1_000_000 })
@@ -850,23 +857,46 @@ async function repoSyncStatus(profile: AgentProfile): Promise<RuntimeRepoSyncSta
   };
 }
 
+async function pullAeonBranch(root: string, branch: string) {
+  await execFileAsync("git", ["fetch", "--quiet", "origin", branch], { cwd: root, timeout: 60_000, maxBuffer: 1_000_000 });
+  await execFileAsync("git", ["pull", "--rebase", "--autostash", "origin", branch], { cwd: root, timeout: 90_000, maxBuffer: 2_000_000 });
+}
+
+async function pushAeonBranch(root: string, branch: string) {
+  try {
+    await execFileAsync("git", ["push", "-u", "origin", branch], { cwd: root, timeout: 90_000, maxBuffer: 2_000_000 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (!/fetch first|non-fast-forward|failed to push some refs|rejected/i.test(message)) throw error;
+    await pullAeonBranch(root, branch);
+    await execFileAsync("git", ["push", "-u", "origin", branch], { cwd: root, timeout: 90_000, maxBuffer: 2_000_000 });
+  }
+}
+
+async function hasStagedChanges(root: string) {
+  const result = await execFileAsync("git", ["diff", "--cached", "--quiet"], { cwd: root, timeout: 12_000, maxBuffer: 200_000 })
+    .then(() => 0)
+    .catch((error: { code?: number } | unknown) => (typeof error === "object" && error && "code" in error ? Number(error.code) : 1));
+  return result === 1;
+}
+
 async function repoSyncAction(profile: AgentProfile, action: "pull" | "push") {
   const root = aeonRoot(profile);
   if (!root) return { ok: false, error: "Configure an Aeon local path before syncing the repo." };
+  const branch = aeonBranch(profile);
   if (action === "pull") {
-    await execFileAsync("git", ["pull", "--ff-only"], { cwd: root, timeout: 60_000, maxBuffer: 2_000_000 });
+    await pullAeonBranch(root, branch);
     return { ok: true, status: await repoSyncStatus(profile), message: "Pulled AEON repo." };
   }
-  const branch = aeonBranch(profile);
   await execFileAsync("git", ["config", "user.name", "aeonframework"], { cwd: root, timeout: 12_000, maxBuffer: 200_000 }).catch(() => undefined);
   await execFileAsync("git", ["config", "user.email", "aeonframework@proton.me"], { cwd: root, timeout: 12_000, maxBuffer: 200_000 }).catch(() => undefined);
   await execFileAsync("git", ["checkout", "-B", branch], { cwd: root, timeout: 30_000, maxBuffer: 1_000_000 }).catch(() => undefined);
+  await pullAeonBranch(root, branch);
   await execFileAsync("git", ["add", "aeon.yml", "skills.json", "skills", "memory"], { cwd: root, timeout: 30_000, maxBuffer: 2_000_000 }).catch(() => undefined);
-  const status = await repoSyncStatus(profile);
-  if (status.hasChanges) {
-    await execFileAsync("git", ["commit", "-m", "Update AEON dashboard configuration"], { cwd: root, timeout: 60_000, maxBuffer: 2_000_000 }).catch(() => undefined);
+  if (await hasStagedChanges(root)) {
+    await execFileAsync("git", ["commit", "-m", "Update AEON dashboard configuration"], { cwd: root, timeout: 60_000, maxBuffer: 2_000_000 });
   }
-  await execFileAsync("git", ["push", "-u", "origin", branch], { cwd: root, timeout: 90_000, maxBuffer: 2_000_000 });
+  await pushAeonBranch(root, branch);
   return { ok: true, status: await repoSyncStatus(profile), message: "Pushed AEON repo." };
 }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { mkdir, readdir, readFile, unlink, writeFile } from "fs/promises";
 import { join, resolve, sep } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
+import { readGatewayVoiceConfig, readGatewayVoiceDeviceStatus, ringAgentCall, ringStoredPrompt } from "@/lib/services/phone/call-gateway";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +17,6 @@ export const dynamic = "force-dynamic";
 //   <spoken instructions / prompt body>
 const PRIMARY_FOLDER = "Operations/Automations/Calls";
 const LEGACY_FOLDER = "Claw/Calls";
-const GATEWAY_PORTS = [5000, 5001, 5002];
 
 type CallPrompt = {
   id: string;
@@ -26,6 +26,79 @@ type CallPrompt = {
   instructions: string;
   path: string;
 };
+
+function safeVoiceConfigPayload(result: Awaited<ReturnType<typeof readGatewayVoiceConfig>>) {
+  if (!result.ok || !result.result || typeof result.result !== "object") return result;
+  const payload = result.result as { config?: Record<string, unknown> };
+  const config = payload.config && typeof payload.config === "object" ? payload.config : {};
+  const voiceProviders = Array.isArray(config.voiceProviders)
+    ? config.voiceProviders
+      .filter((provider) => provider && typeof provider === "object")
+      .map((provider) => {
+        const item = provider as Record<string, unknown>;
+        return {
+          id: typeof item.id === "string" ? item.id : "",
+          provider: typeof item.provider === "string" ? item.provider : "",
+          voice: typeof item.voice === "string" ? item.voice : "",
+        };
+      })
+      .filter((provider) => provider.id && provider.provider && provider.voice)
+    : [];
+  const voiceOptions = voiceProviders.length ? voiceProviders.map((provider) => ({
+    ...provider,
+    source: "configured",
+  })) : [{
+    id: "runtime-default:openai-realtime",
+    provider: "openai-realtime",
+    voice: "Gateway default",
+    source: "runtime-default",
+  }];
+  return {
+    ...result,
+    result: {
+      ok: true,
+      config: {
+        enabled: Boolean(config.enabled),
+        timezone: typeof config.timezone === "string" ? config.timezone : undefined,
+        quietHoursEnabled: Boolean(config.quietHoursEnabled),
+        quietHoursStart: typeof config.quietHoursStart === "string" ? config.quietHoursStart : undefined,
+        quietHoursEnd: typeof config.quietHoursEnd === "string" ? config.quietHoursEnd : undefined,
+        maxCallsPerDay: typeof config.maxCallsPerDay === "number" ? config.maxCallsPerDay : undefined,
+        dailyEnabled: Boolean(config.dailyEnabled),
+        dailyCallTime: typeof config.dailyCallTime === "string" ? config.dailyCallTime : undefined,
+        voiceProviders,
+        voiceOptions,
+      },
+    },
+  };
+}
+
+function safeVoiceDeviceStatusPayload(result: Awaited<ReturnType<typeof readGatewayVoiceDeviceStatus>>) {
+  if (!result.ok || !result.result || typeof result.result !== "object") return result;
+  const payload = result.result as { count?: unknown; device?: Record<string, unknown>; apns?: Record<string, unknown> };
+  const device = payload.device && typeof payload.device === "object" ? payload.device : null;
+  const apns = payload.apns && typeof payload.apns === "object" ? payload.apns : null;
+  const missing = Array.isArray(apns?.missing)
+    ? apns.missing.filter((item): item is string => typeof item === "string")
+    : [];
+  return {
+    ...result,
+    result: {
+      ok: true,
+      count: typeof payload.count === "number" ? payload.count : device ? 1 : 0,
+      device: device ? {
+        platform: typeof device.platform === "string" ? device.platform : undefined,
+        environment: typeof device.environment === "string" ? device.environment : undefined,
+        appVersion: typeof device.appVersion === "string" ? device.appVersion : null,
+        lastSeenAt: typeof device.lastSeenAt === "string" ? device.lastSeenAt : undefined,
+      } : null,
+      apns: apns ? {
+        configured: Boolean(apns.configured),
+        missing,
+      } : { configured: false, missing },
+    },
+  };
+}
 
 // title.toLowerCase(), strip quotes, non-alnum -> "-", trim leading/trailing "-".
 function slugifyTitle(title: string): string {
@@ -149,48 +222,6 @@ async function findPromptFile(vaultPath: string, id: string): Promise<string | n
   return prompts.find((prompt) => prompt.id === slug)?.path ?? null;
 }
 
-async function probeGateway(): Promise<string | null> {
-  for (const gatewayPort of GATEWAY_PORTS) {
-    const base = `http://127.0.0.1:${gatewayPort}`;
-    try {
-      const response = await fetch(`${base}/voice/calls/ring-now`, {
-        method: "OPTIONS",
-        signal: AbortSignal.timeout(1_200),
-      });
-      // Any HTTP response means the port is owned by a live server.
-      if (response) return base;
-    } catch {
-      // Try the next port.
-    }
-  }
-  return null;
-}
-
-async function ringNow(id: string): Promise<{ ok: boolean; gateway?: string; result?: unknown; error?: string }> {
-  const base = await probeGateway();
-  if (!base) {
-    return { ok: false, error: "Gateway not reachable on 127.0.0.1:5000-5002. Start the claw gateway to ring the phone." };
-  }
-  try {
-    const response = await fetch(`${base}/voice/calls/ring-now`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ scriptId: id }),
-      signal: AbortSignal.timeout(15_000),
-    });
-    const result = await response.json().catch(() => null);
-    if (!response.ok) {
-      const message = (result && typeof result === "object" && "error" in result && typeof result.error === "string")
-        ? result.error
-        : `Gateway returned HTTP ${response.status}.`;
-      return { ok: false, gateway: base, result, error: message };
-    }
-    return { ok: true, gateway: base, result };
-  } catch (error) {
-    return { ok: false, gateway: base, error: error instanceof Error ? error.message : "Gateway request failed." };
-  }
-}
-
 async function fetchCollectorJson(collectorBase: string, path: string, init?: RequestInit): Promise<unknown> {
   const response = await fetch(`${collectorBase}${path}`, {
     ...init,
@@ -230,6 +261,17 @@ function errorResponse(error: unknown) {
 export async function GET(request: NextRequest) {
   try {
     const action = request.nextUrl.searchParams.get("action");
+
+    if (action === "voice-config") {
+      const result = await readGatewayVoiceConfig();
+      return NextResponse.json(safeVoiceConfigPayload(result), { status: result.ok ? 200 : 502 });
+    }
+
+    if (action === "device-status") {
+      const result = await readGatewayVoiceDeviceStatus();
+      return NextResponse.json(safeVoiceDeviceStatusPayload(result), { status: result.ok ? 200 : 502 });
+    }
+
     const vaultPath = resolveObsidianVaultPath(request.nextUrl.searchParams.get("vaultPath") ?? undefined);
 
     if (action === "sync-status") {
@@ -295,7 +337,14 @@ export async function POST(request: NextRequest) {
     if (body.action === "ring") {
       const id = String(body.id ?? "").trim();
       if (!id) throw new Error("An id is required.");
-      const result = await ringNow(id);
+      const result = await ringStoredPrompt(id);
+      return NextResponse.json(result, { status: result.ok ? 200 : 502 });
+    }
+
+    if (body.action === "ring-agent") {
+      const agent = body.agent && typeof body.agent === "object" ? body.agent : {};
+      const machine = body.machine && typeof body.machine === "object" ? body.machine : undefined;
+      const result = await ringAgentCall({ agent, machine });
       return NextResponse.json(result, { status: result.ok ? 200 : 502 });
     }
 

@@ -15,6 +15,7 @@ import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
 import { recordHoneyUsage } from "@/lib/services/wallet/honey-ledger";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
 import { normalizeRuntimeStreamEvent, RUNTIME_STREAM_EVENT_TYPES, type RuntimeStreamEvent } from "@/lib/services/runtime-stream-events";
+import { isUsePodProfile, resolveUsePodRuntimeConfig, summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
 import {
   appendRuntimeChatSessionEvent,
   appendRuntimeChatSessionText,
@@ -1188,18 +1189,36 @@ async function streamOpenAICompatibleRuntime(
   if (inputCheck.verdict === "block") {
     return Response.json({ error: inputCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
   }
-  const url = buildOpenAICompatibleUrl(profile);
-  const lockKey = interactiveRuntimeLockKey(profile, url);
+  let runtimeProfile = profile;
+  let usePodHeaders: Record<string, string> = {};
+  const usePodEnabled = isUsePodProfile(profile);
+  try {
+    const usePodConfig = await resolveUsePodRuntimeConfig(profile);
+    if (usePodConfig) {
+      runtimeProfile = {
+        ...profile,
+        gatewayUrl: usePodConfig.baseUrl,
+        chatPath: usePodConfig.chatPath,
+        statusPath: usePodConfig.statusPath,
+        token: "",
+      };
+      usePodHeaders = usePodConfig.headers;
+    }
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "UsePod setup is incomplete." }, { status: 502 });
+  }
+  const url = buildOpenAICompatibleUrl(runtimeProfile);
+  const lockKey = interactiveRuntimeLockKey(runtimeProfile, url);
   if (!reserveInteractiveRuntime(lockKey)) {
-    return Response.json({ error: `${profile.name || profile.runtime} is already running another interactive request at ${url}.` }, { status: 409 });
+    return Response.json({ error: `${runtimeProfile.name || runtimeProfile.runtime} is already running another interactive request at ${url}.` }, { status: 409 });
   }
 
-  const adaptiveOpenRouter = isAdaptiveOpenRouterProfile(profile) || (isOpenRouterProvider(profile) && Boolean(profile.adaptiveOpenRouter));
+  const adaptiveOpenRouter = isAdaptiveOpenRouterProfile(runtimeProfile) || (isOpenRouterProvider(runtimeProfile) && Boolean(runtimeProfile.adaptiveOpenRouter));
   const modelMessagesFor = (candidateModel: string) => {
-    const runtimeProfile = profileWithResolvedModel(profile, candidateModel);
+    const candidateProfile = profileWithResolvedModel(runtimeProfile, candidateModel);
     const context = [
-      buildAgentProfileContext(runtimeProfile),
-      buildAdaptiveOpenRouterResolvedModelContext(profile, candidateModel),
+      buildAgentProfileContext(candidateProfile),
+      buildAdaptiveOpenRouterResolvedModelContext(runtimeProfile, candidateModel),
       buildAgentModeContext(agentMode),
       buildWorkingDirectoryContext(workingDirectory),
       buildVaultContext(sharedVault),
@@ -1209,9 +1228,9 @@ async function streamOpenAICompatibleRuntime(
   };
   let candidateModels: string[];
   try {
-    candidateModels = isAdaptiveOpenRouterProfile(profile)
-      ? await resolveAdaptiveOpenRouterModels(profile, messages)
-      : [openAICompatibleModel(profile)];
+    candidateModels = isAdaptiveOpenRouterProfile(runtimeProfile)
+      ? await resolveAdaptiveOpenRouterModels(runtimeProfile, messages)
+      : [openAICompatibleModel(runtimeProfile)];
   } catch (error) {
     releaseInteractiveRuntime(lockKey);
     return Response.json({ error: error instanceof Error ? error.message : "Adaptive OpenRouter model selection failed." }, { status: 502 });
@@ -1227,10 +1246,11 @@ async function streamOpenAICompatibleRuntime(
     attemptedModels.push(candidateModel);
     const modelMessages = modelMessagesFor(candidateModel);
     recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.fetch.start", {
-      ...telemetryPayloadForProfile(profile),
+      ...telemetryPayloadForProfile(runtimeProfile),
       url,
       model,
       adaptiveOpenRouter,
+      usePod: usePodEnabled,
       messageCount: modelMessages.length,
     });
     try {
@@ -1238,7 +1258,8 @@ async function streamOpenAICompatibleRuntime(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(profile.token ? { Authorization: `Bearer ${profile.token}` } : {}),
+          ...(runtimeProfile.token ? { Authorization: `Bearer ${runtimeProfile.token}` } : {}),
+          ...usePodHeaders,
         },
         body: JSON.stringify({
           model,
@@ -1250,10 +1271,11 @@ async function streamOpenAICompatibleRuntime(
     } catch (error) {
       lastFetchError = error;
       recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.fetch.failed", {
-        ...telemetryPayloadForProfile(profile),
+        ...telemetryPayloadForProfile(runtimeProfile),
         url,
         model,
         adaptiveOpenRouter,
+        usePod: usePodEnabled,
         errorName: error instanceof Error ? error.name : null,
         errorMessage: error instanceof Error ? error.message : String(error),
         attempt: attemptedModels.length,
@@ -1263,19 +1285,20 @@ async function streamOpenAICompatibleRuntime(
       if (adaptiveOpenRouter && attemptedModels.length < candidateModels.length) {
         continue;
       }
-      await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible fetch failed", runtimeFetchError(profile, url, error)).catch(() => undefined);
+      await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible fetch failed", runtimeFetchError(runtimeProfile, url, error)).catch(() => undefined);
       await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
       releaseInteractiveRuntime(lockKey);
-      return Response.json({ error: runtimeFetchError(profile, url, error) }, { status: 502 });
+      return Response.json({ error: runtimeFetchError(runtimeProfile, url, error) }, { status: 502 });
     }
     if (upstream.ok) break;
     lastStatus = upstream.status;
     const errorText = await upstream.text().catch(() => "");
     recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.upstream_error", {
-      ...telemetryPayloadForProfile(profile),
+      ...telemetryPayloadForProfile(runtimeProfile),
       url,
       model,
       adaptiveOpenRouter,
+      usePod: usePodEnabled,
       status: upstream.status,
       bodyPreview: errorText.slice(0, 500),
       attempt: attemptedModels.length,
@@ -1306,6 +1329,22 @@ async function streamOpenAICompatibleRuntime(
         : finalAdaptiveOpenRouterError(lastStatus || 502, attemptedModels) }) + "data: [DONE]\n\n",
       { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } },
     );
+  }
+
+  const usePodResponse = usePodEnabled ? summarizeUsePodResponseHeaders(upstream.headers) : null;
+  if (usePodResponse) {
+    const detail = [
+      usePodResponse.route ? `Route: ${usePodResponse.route}` : "",
+      usePodResponse.balanceRemaining ? `Balance remaining: ${usePodResponse.balanceRemaining}` : "",
+    ].filter(Boolean).join(" · ");
+    recordRuntimeTelemetry(telemetry, "agent_runtime.usepod.response", {
+      ...telemetryPayloadForProfile(runtimeProfile),
+      url,
+      model,
+      route: usePodResponse.route || null,
+      balanceRemaining: usePodResponse.balanceRemaining || null,
+    });
+    await appendRuntimeChatSessionEvent(runtimeSessionId, "UsePod inference metadata", detail).catch(() => undefined);
   }
 
   if (!upstream.body) {

@@ -6,11 +6,13 @@ import { homedir } from "os";
 import { basename, dirname, join, resolve, sep } from "path";
 import { NextRequest, NextResponse } from "next/server";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { registerAeonEnvSyncRepo } from "@/lib/services/runtime-adapters/aeon-env-sync-registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const execFileAsync = promisify(execFile);
+const GIT_CLONE_TIMEOUT_MS = 900_000;
 
 function expandHome(path: string) {
   const trimmed = path.trim();
@@ -85,32 +87,68 @@ async function canRead(path: string) {
   return access(path, constants.R_OK).then(() => true).catch(() => false);
 }
 
-// Dev-only: instead of cloning AEON over the network on every "Clone official AEON",
-// seed a local preclone cache once, then duplicate that folder (instant on APFS via
-// copy-on-write) and re-point origin. Lets a demo run the clone step in ~no time.
-// Force on with AEON_PRECLONE=1, force off with AEON_PRECLONE=0.
-function precloneEnabled() {
-  if (process.env.AEON_PRECLONE === "1") return true;
-  if (process.env.AEON_PRECLONE === "0") return false;
-  return process.env.NODE_ENV !== "production";
+// Optional local repo cache: when enabled, a clone seeds a pristine copy under
+// ~/.hivemindos/aeon-repo-cache/<owner>-<repo>, and future clones duplicate that copy
+// (fast, offline) instead of hitting the network. Lives in the home dir, not the project,
+// so the Next.js dev watcher never sees the ~42MB repo.
+function repoCacheDir(repoUrl: string) {
+  const full = repoFullNameFromUrl(repoUrl) || repoNameFromUrl(repoUrl);
+  const key = slug(full.replace(/[\\/]+/g, "-")) || "aeon";
+  return join(homedir(), ".hivemindos", "aeon-repo-cache", key);
 }
 
-function precloneSourcePath(repo: string) {
-  return join(resolve(expandHome("~/.aeon-repos")), ".preclone", repoNameFromUrl(repo));
+async function duplicateDir(source: string, dest: string) {
+  // cp -R is fast locally (and copy-on-write on APFS), and copies the .git so the new repo
+  // keeps history and can push.
+  await execFileAsync("cp", ["-R", source, dest], { timeout: 120_000, maxBuffer: 2_000_000 });
 }
 
-async function precloneInto(repo: string, root: string) {
-  const source = precloneSourcePath(repo);
-  if (!await canRead(join(source, ".git"))) {
-    // Seed the cache once (the slow network clone), then reuse it for instant copies.
-    await rm(source, { recursive: true, force: true }).catch(() => undefined);
-    await mkdir(dirname(source), { recursive: true });
-    await execFileAsync("git", ["clone", repo, source], { timeout: 120_000, maxBuffer: 2_000_000 });
+async function setOrigin(root: string, repoUrl: string) {
+  await execFileAsync("git", ["remote", "set-url", "origin", repoUrl], { cwd: root, timeout: 20_000, maxBuffer: 500_000 })
+    .catch(() => execFileAsync("git", ["remote", "add", "origin", repoUrl], { cwd: root, timeout: 20_000, maxBuffer: 500_000 }).catch(() => undefined));
+}
+
+async function cacheBranch(cacheDir: string) {
+  const { stdout } = await execFileAsync("git", ["symbolic-ref", "--short", "HEAD"], { cwd: cacheDir, timeout: 10_000, maxBuffer: 200_000 }).catch(() => ({ stdout: "" }));
+  return stdout.trim() || "main";
+}
+
+// How many commits the cached copy is behind its upstream (after fetching). 0 when current.
+async function cacheBehindCount(cacheDir: string) {
+  const branch = await cacheBranch(cacheDir);
+  await execFileAsync("git", ["fetch", "--quiet", "origin", branch], { cwd: cacheDir, timeout: 60_000, maxBuffer: 1_000_000 }).catch(() => undefined);
+  const { stdout } = await execFileAsync("git", ["rev-list", "--count", `${branch}..origin/${branch}`], { cwd: cacheDir, timeout: 15_000, maxBuffer: 200_000 }).catch(() => ({ stdout: "0" }));
+  return { branch, behind: Number.parseInt(stdout.trim(), 10) || 0 };
+}
+
+async function refreshCache(cacheDir: string) {
+  const branch = await cacheBranch(cacheDir);
+  await execFileAsync("git", ["fetch", "--quiet", "origin", branch], { cwd: cacheDir, timeout: 60_000, maxBuffer: 1_000_000 });
+  await execFileAsync("git", ["reset", "--hard", `origin/${branch}`], { cwd: cacheDir, timeout: 30_000, maxBuffer: 500_000 });
+  return { branch, behind: 0 };
+}
+
+// Clone into `root`, optionally backed by the local cache. Returns how the repo was obtained.
+async function cloneIntoRoot(repo: string, root: string, useCache: boolean): Promise<"cache" | "network"> {
+  const cacheDir = repoCacheDir(repo);
+  if (useCache && await canRead(join(cacheDir, ".git"))) {
+    await duplicateDir(cacheDir, root);
+    await setOrigin(root, repo);
+    return "cache";
   }
-  // Duplicate the local repo (APFS clonefile when available) and point origin at the requested repo.
-  await execFileAsync("cp", ["-R", source, root], { timeout: 120_000, maxBuffer: 2_000_000 });
-  await execFileAsync("git", ["remote", "set-url", "origin", repo], { cwd: root, timeout: 20_000, maxBuffer: 500_000 })
-    .catch(() => execFileAsync("git", ["remote", "add", "origin", repo], { cwd: root, timeout: 20_000, maxBuffer: 500_000 }).catch(() => undefined));
+  try {
+    await execFileAsync("git", ["clone", repo, root], { timeout: GIT_CLONE_TIMEOUT_MS, maxBuffer: 2_000_000 });
+  } catch (error) {
+    await rm(root, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
+  if (useCache) {
+    // Seed the cache from this fresh clone for next time.
+    await rm(cacheDir, { recursive: true, force: true }).catch(() => undefined);
+    await mkdir(dirname(cacheDir), { recursive: true });
+    await duplicateDir(root, cacheDir).catch(() => undefined);
+  }
+  return "network";
 }
 
 async function gitRemote(root: string) {
@@ -321,10 +359,23 @@ async function agentForWorkspace(input: { root: string; name?: string; repo?: st
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json() as { action?: string; path?: string; repoUrl?: string; name?: string; unique?: boolean | string; collectorUrl?: string; machineName?: string; machineKey?: string; agent?: AgentProfile };
+    const body = await request.json() as { action?: string; path?: string; repoUrl?: string; name?: string; unique?: boolean | string; cache?: boolean | string; collectorUrl?: string; machineName?: string; machineKey?: string; agent?: AgentProfile };
     const action = body.action || "initialize";
     const collectorUrl = normalizeCollectorUrl(body.collectorUrl || body.agent?.telemetryUrl);
     const remoteWorkspace = Boolean(collectorUrl && !isLocalCollectorUrl(collectorUrl));
+
+    // Local repo cache status/refresh — used by the clone modal to detect an existing copy
+    // and offer to update it before cloning. These don't touch any workspace.
+    if (action === "cache-status" || action === "cache-refresh") {
+      const repoUrl = body.repoUrl?.trim() || "";
+      if (!repoUrl) throw new Error("repoUrl is required for cache operations.");
+      const cacheDir = repoCacheDir(repoUrl);
+      if (!await canRead(join(cacheDir, ".git"))) {
+        return NextResponse.json({ ok: true, action, exists: false, behind: 0, path: displayPath(cacheDir) });
+      }
+      const result = action === "cache-refresh" ? await refreshCache(cacheDir) : await cacheBehindCount(cacheDir);
+      return NextResponse.json({ ok: true, action, exists: true, behind: result.behind, branch: result.branch, path: displayPath(cacheDir) });
+    }
     let root = "";
     let repo = "";
     if (remoteWorkspace) {
@@ -382,11 +433,7 @@ export async function POST(request: NextRequest) {
         : requestedRoot;
       if (!await canRead(root)) {
         await mkdir(dirname(root), { recursive: true });
-        if (precloneEnabled()) {
-          await precloneInto(repo, root);
-        } else {
-          await execFileAsync("git", ["clone", repo, root], { timeout: 120_000, maxBuffer: 2_000_000 });
-        }
+        await cloneIntoRoot(repo, root, body.cache === true || body.cache === "true");
       }
       await ensureAeonWorkspace(root);
     } else if (action === "rename") {
@@ -408,6 +455,7 @@ export async function POST(request: NextRequest) {
     const requestedName = body.name?.trim();
     const actualName = (body.unique === true || body.unique === "true") && root ? basename(root) : requestedName;
     const agent = await agentForWorkspace({ root, repo, name: actualName, mode: action === "clone" ? "github" : undefined, collectorUrl, machineName: body.machineName });
+    if (agent.aeonRepo) await registerAeonEnvSyncRepo(agent.aeonRepo, `workspace:${action}`).catch(() => undefined);
     const readme = remoteWorkspace ? "" : await readFile(join(root, "README.md"), "utf8").catch(() => "");
     return NextResponse.json({ ok: true, agent, root: displayPath(root), readme: readme.slice(0, 1200) });
   } catch (error) {

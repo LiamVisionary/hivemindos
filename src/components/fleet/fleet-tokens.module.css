@@ -77,6 +77,39 @@
 }
 .hexInteractive:active { transform: scale(0.98); }
 
+.graphActiveAppBadge {
+  position: absolute;
+  top: 7px;
+  right: 9px;
+  z-index: 7;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(255, 212, 90, 0.68);
+  border-radius: 8px;
+  background: rgba(8, 12, 19, 0.88);
+  box-shadow:
+    0 0 0 2px rgba(8, 12, 19, 0.72),
+    0 8px 22px rgba(0, 0, 0, 0.34),
+    0 0 16px rgba(255, 212, 90, 0.18);
+  color: var(--foreground);
+  font-family: var(--f-mono);
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
+.graphActiveAppBadge img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 3px;
+}
+
 .hexAdd {
   cursor: pointer;
   background: transparent;
@@ -257,6 +290,332 @@
 
 .rosterTaskPreviewExpanded svg {
   transform: rotate(180deg);
+}
+
+.callModalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 36%, rgba(255, 212, 90, 0.16), transparent 34%),
+    radial-gradient(circle at 48% 54%, rgba(45, 212, 191, 0.13), transparent 38%),
+    rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(18px);
+}
+
+.callModal {
+  position: relative;
+  display: grid;
+  width: min(94vw, 430px);
+  max-height: min(92dvh, 680px);
+  overflow-y: auto;
+  gap: 18px;
+  justify-items: center;
+  padding: 30px 26px 24px;
+  border: 1px solid rgba(255, 212, 90, 0.34);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 212, 90, 0.12), transparent 42%),
+    rgba(10, 16, 28, 0.96);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48), 0 0 44px rgba(45, 212, 191, 0.12);
+  color: var(--foreground);
+}
+
+.callModalClose {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.62);
+  color: var(--muted);
+}
+
+.callAgentIconShell {
+  --call-volume: 0.18;
+  position: relative;
+  display: grid;
+  width: 188px;
+  height: 188px;
+  place-items: center;
+  isolation: isolate;
+}
+
+.callAgentCaption {
+  position: absolute;
+  bottom: calc(100% - 18px);
+  left: 50%;
+  z-index: 3;
+  width: min(340px, 82vw);
+  max-height: 98px;
+  overflow-y: auto;
+  transform: translateX(-50%);
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 212, 90, 0.24);
+  border-radius: 12px;
+  background: rgba(10, 16, 28, 0.92);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34), 0 0 22px rgba(45, 212, 191, 0.12);
+  color: var(--foreground);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.callAgentHalo {
+  position: absolute;
+  inset: calc(20px - (var(--call-volume) * 18px));
+  z-index: -1;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle, rgba(255, 212, 90, 0.24), transparent 64%),
+    radial-gradient(circle, rgba(45, 212, 191, 0.18), transparent 72%);
+  filter: blur(3px);
+  opacity: 0.78;
+  transform: scale(calc(0.92 + (var(--call-volume) * 0.22)));
+  transition: transform 80ms linear, inset 80ms linear;
+}
+
+.callRingOrbit {
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgba(94, 234, 212, 0.34);
+  border-radius: 999px;
+  border-top-color: rgba(255, 212, 90, 0.88);
+  border-right-color: transparent;
+  box-shadow: 0 0 26px rgba(45, 212, 191, 0.14);
+  animation: call-ring-orbit 1.15s linear infinite;
+}
+
+.callAgentIconRinging .callAgentHalo {
+  opacity: 0.42;
+  animation: call-ring-halo 1.35s ease-in-out infinite;
+}
+
+.callAgentOrb {
+  position: relative;
+  display: grid;
+  width: 128px;
+  height: 128px;
+  place-items: center;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255, 212, 90, 0.2), transparent 58%),
+    radial-gradient(circle at 50% 55%, rgba(45, 212, 191, 0.17), transparent 72%);
+  box-shadow:
+    inset 0 0 34px rgba(94, 234, 212, 0.08),
+    0 0 32px rgba(45, 212, 191, 0.12);
+}
+
+.callAgentOrbDanger {
+  background:
+    radial-gradient(circle at 50% 45%, rgba(251, 113, 133, 0.18), transparent 58%),
+    radial-gradient(circle at 50% 55%, rgba(45, 212, 191, 0.1), transparent 72%);
+  box-shadow:
+    inset 0 0 34px rgba(251, 113, 133, 0.08),
+    0 0 32px rgba(251, 113, 133, 0.12);
+}
+
+.callAgentIconAnswered .callAgentOrb {
+  animation: call-answered-pop 860ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.callAgentIconListening .callAgentHalo {
+  animation: call-listening-pulse 1.55s ease-in-out infinite;
+}
+
+.callAgentIconTalking .callAgentOrb {
+  animation: call-agent-talk 620ms cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+  filter: drop-shadow(0 0 22px rgba(45, 212, 191, 0.28));
+}
+
+.callIdentity {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  text-align: center;
+}
+
+.callIdentity h2 {
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--f-display);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.callIdentity p {
+  max-width: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.callWaveform {
+  display: flex;
+  width: min(100%, 310px);
+  height: 96px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.46);
+}
+
+.callWaveform span {
+  width: 5px;
+  min-height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(94, 234, 212, 0.95), rgba(255, 212, 90, 0.72));
+  box-shadow: 0 0 12px rgba(45, 212, 191, 0.18);
+  transition: height 80ms linear;
+}
+
+.callRingingStage {
+  display: grid;
+  width: min(100%, 310px);
+  min-height: 96px;
+  place-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(94, 234, 212, 0.18);
+  border-radius: 14px;
+  background:
+    linear-gradient(90deg, transparent, rgba(45, 212, 191, 0.08), transparent),
+    rgba(15, 23, 42, 0.42);
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.callRingingDots {
+  display: inline-flex;
+  gap: 7px;
+}
+
+.callRingingDots i {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--accent-strong);
+  box-shadow: 0 0 14px rgba(94, 234, 212, 0.5);
+  animation: call-ring-dot 920ms ease-in-out infinite;
+}
+
+.callRingingDots i:nth-child(2) {
+  animation-delay: 130ms;
+}
+
+.callRingingDots i:nth-child(3) {
+  animation-delay: 260ms;
+}
+
+.callTelemetry {
+  display: flex;
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.callTelemetry span {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.42);
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.callTranscript {
+  width: 100%;
+  min-height: 58px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 212, 90, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 212, 90, 0.06);
+  color: var(--foreground);
+  font-family: var(--f-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.callHangupButton {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid rgba(251, 113, 133, 0.44);
+  border-radius: 10px;
+  background: rgba(251, 113, 133, 0.14);
+  color: #fecdd3;
+  cursor: pointer;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.callHangupButton:hover {
+  border-color: rgba(251, 113, 133, 0.68);
+  background: rgba(251, 113, 133, 0.22);
+  color: var(--danger);
+}
+
+@keyframes call-listening-pulse {
+  0%, 100% { opacity: 0.52; transform: scale(calc(0.9 + (var(--call-volume) * 0.18))); }
+  50% { opacity: 0.94; transform: scale(calc(1.02 + (var(--call-volume) * 0.28))); }
+}
+
+@keyframes call-ring-orbit {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes call-ring-halo {
+  0%, 100% { transform: scale(0.84); opacity: 0.32; }
+  50% { transform: scale(1.05); opacity: 0.72; }
+}
+
+@keyframes call-ring-dot {
+  0%, 100% { transform: translateY(0) scale(0.86); opacity: 0.45; }
+  50% { transform: translateY(-5px) scale(1.08); opacity: 1; }
+}
+
+@keyframes call-answered-pop {
+  0% { transform: scale(0.84); filter: drop-shadow(0 0 0 rgba(94, 234, 212, 0)); }
+  55% { transform: scale(1.08); filter: drop-shadow(0 0 28px rgba(94, 234, 212, 0.38)); }
+  100% { transform: scale(1); filter: drop-shadow(0 0 16px rgba(255, 212, 90, 0.22)); }
+}
+
+@keyframes call-agent-talk {
+  0%, 100% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(-7px) scale(1.045); }
+  70% { transform: translateY(2px) scale(0.99); }
 }
 
 .rosterTaskPreviewText {

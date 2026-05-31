@@ -1,4 +1,4 @@
-import type { AdaptiveOpenRouterConfig, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile } from "@/lib/types/agent-runtime";
+import type { AdaptiveOpenRouterConfig, AgentCallPreferences, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile, UsePodAgentConfig } from "@/lib/types/agent-runtime";
 
 export type AgentCreateDraft = {
   name: string;
@@ -6,6 +6,8 @@ export type AgentCreateDraft = {
   provider?: string;
   model?: string;
   adaptiveOpenRouter?: AdaptiveOpenRouterConfig;
+  usePod?: UsePodAgentConfig;
+  calls?: AgentCallPreferences;
   workerClass: BeeWorkerClass;
   customWorkerClass?: CustomWorkerClassProfile;
   customWorkerClasses: CustomWorkerClassProfile[];
@@ -26,7 +28,7 @@ export type RuntimeModelDraft = {
   contextLength: string;
 };
 
-export type AgentSettingsPanel = "role" | "connection" | "memory" | "tools" | "security";
+export type AgentSettingsPanel = "role" | "connection" | "memory" | "tools" | "calls" | "security";
 
 export type AgentWorkerClassView = "presets" | "create";
 

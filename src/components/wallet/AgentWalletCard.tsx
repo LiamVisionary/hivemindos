@@ -21,6 +21,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
+import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
 import type {
   AgentPaymentProvider,
   AgentSurvivalSnapshot,
@@ -167,6 +168,7 @@ export function AgentWalletCard({
   const tradingRailState: RailState = "setup";
   const primaryRailReady = cardRailState === "ready" && cryptoRailState === "ready";
   const moneyClawBalance = moneyClawBalanceLabel(moneyClawStatus);
+  const usePodRail = wallet.provider === "usepod";
 
   const saveMoneyClawKey = async () => {
     const key = moneyClawKeyDraft.trim();
@@ -581,15 +583,15 @@ export function AgentWalletCard({
           </div>
 
           <div className={styles.sheetField}>
-            <label htmlFor="wallet-address">Wallet address</label>
+            <label htmlFor="wallet-address">{usePodRail ? "UsePod deposit address" : "Wallet address"}</label>
             <input
               id="wallet-address"
               value={wallet.walletAddress}
               onChange={(event) => onUpdateWallet({ walletAddress: event.target.value })}
-              placeholder="0x… or Solana address"
+              placeholder={usePodRail ? "Solana USDC deposit address" : "0x… or Solana address"}
             />
             {wallet.walletAddress ? (
-              <p className={styles.sheetHelp}>Deposit: {shortenAddress(wallet.walletAddress)}</p>
+              <p className={styles.sheetHelp}>{usePodRail ? "UsePod token deposit" : "Deposit"}: {shortenAddress(wallet.walletAddress)}</p>
             ) : null}
           </div>
 
@@ -618,12 +620,12 @@ export function AgentWalletCard({
           </div>
 
           <div className={styles.sheetField}>
-            <label htmlFor="wallet-x402">x402 base URL</label>
+            <label htmlFor="wallet-x402">{usePodRail ? "UsePod proxy base URL" : "x402 base URL"}</label>
             <input
               id="wallet-x402"
               value={wallet.x402BaseUrl}
               onChange={(event) => onUpdateWallet({ x402BaseUrl: event.target.value })}
-              placeholder="https://paid-api.example.com"
+              placeholder={usePodRail ? "https://api.usepod.ai/proxy/<token>/v1" : "https://paid-api.example.com"}
             />
           </div>
 
@@ -691,8 +693,7 @@ export function AgentWalletCard({
               <span>{wallet.moneyClawEnvName}</span>
               <input
                 id="moneyclaw-key"
-                type="password"
-                autoComplete="off"
+                {...secretInputProps}
                 value={moneyClawKeyDraft}
                 onChange={(event) => {
                   setMoneyClawKeyDraft(event.target.value);
@@ -700,6 +701,7 @@ export function AgentWalletCard({
                   if (moneyClawSaveState === "saved") setMoneyClawSaveState("idle");
                 }}
                 placeholder="mcl_..."
+                className={maskedSecretValueClass}
               />
             </label>
 

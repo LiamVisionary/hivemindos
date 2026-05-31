@@ -1,4 +1,5 @@
 import { execFile } from "child_process";
+import { readFile, readlink } from "fs/promises";
 import { promisify } from "util";
 import { hivemindLinkControlUrl, localTelemetryCollectorUrl } from "@/lib/services/hivemind-link-control";
 import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
@@ -92,8 +93,19 @@ type CollectorEnvSync = {
 };
 
 const QUEEN_RUNTIME_PRIORITY: AgentRuntime[] = ["hermes", "openclaw", "openai-compatible", "aeon"];
-const COLLECTOR_FETCH_TIMEOUT_MS = 8_000;
+const FOREGROUND_COLLECTOR_FETCH_TIMEOUT_MS = 800;
+const BACKGROUND_COLLECTOR_FETCH_TIMEOUT_MS = 8_000;
+const SNAPSHOT_FETCH_TIMEOUT_MS = 4_000;
 const DISCOVERY_CACHE_MS = 15_000;
+const DISCOVERY_REQUEST_TIMEOUT_MS = 12_000;
+const DISCOVERY_CACHE_VERSION = "v2";
+const TAILSCALE_STATUS_TIMEOUT_MS = 6_000;
+const TAILSCALE_LOCAL_API_TIMEOUT_MS = 2_000;
+const TAILSCALE_CLI_CANDIDATES = [
+  "/usr/local/bin/tailscale",
+  "/opt/homebrew/bin/tailscale",
+  "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+];
 
 type DiscoveredMachine = {
   device: Device;
@@ -121,9 +133,14 @@ type FleetDiscoverPayload = {
 
 const discoveryCache = new Map<string, { checkedAt: number; payload: FleetDiscoverPayload }>();
 const discoveryInFlight = new Map<string, Promise<FleetDiscoverPayload>>();
+const discoveryBackgroundInFlight = new Map<string, Promise<FleetDiscoverPayload>>();
 
 function localCollectorUrl() {
   return localTelemetryCollectorUrl();
+}
+
+function shouldUseTailscaleCliFallback() {
+  return process.platform !== "darwin" || process.env.HIVEMIND_TAILSCALE_CLI_FALLBACK === "1";
 }
 
 function localDevice(): Device {
@@ -176,7 +193,7 @@ function isSameTailscalePeer(left?: TailscalePeer, right?: TailscalePeer) {
 function deviceIdentityKey(device: Device) {
   const dnsName = normalizeName(dnsLabel(device.dnsName));
   const name = normalizeName(device.name) || dnsName;
-  if (name.startsWith("hivemindos")) return dnsName || name;
+  if (name.startsWith("hivemindos")) return hivemindMachineBase(device) || dnsName || name;
   if (device.self) return "self";
   return name || device.ip || device.collectorUrl;
 }
@@ -191,13 +208,15 @@ function isMobileDevice(device: Device) {
 }
 
 function isMacDevice(device: Device) {
-  return /^macos$/i.test(device.os);
+  return /^(macos|darwin)$/i.test(device.os);
 }
 
 function hivemindMachineBase(device: Device) {
-  const normalizedName = normalizeName(device.name);
-  const normalizedDnsName = normalizeName(dnsLabel(device.dnsName));
-  const value = normalizedName.startsWith("hivemindos") ? normalizedName : normalizedDnsName;
+  const rawName = device.name.toLowerCase();
+  const rawDnsName = dnsLabel(device.dnsName).toLowerCase();
+  const rawValue = normalizeName(rawName).startsWith("hivemindos") ? rawName : rawDnsName;
+  const canonicalValue = isMacDevice(device) ? rawValue.replace(/-\d+$/, "") : rawValue;
+  const value = normalizeName(canonicalValue);
   if (!value.startsWith("hivemindos")) return "";
   return value.replace(/^hivemindos/, "").replace(/local\d*$/, "");
 }
@@ -228,6 +247,7 @@ function isStaleSelfDuplicate(self: Device | undefined, device: Device) {
 
 function deviceFreshnessScore(device: Device) {
   return (device.self ? 10_000 : 0)
+    + (isHivemindLinkDevice(device) ? 500 : 0)
     + (device.online ? 1_000 : 0)
     + (device.active ? 100 : 0)
     + (device.lastHandshake && !device.lastHandshake.startsWith("0001-01-01") ? 10 : 0)
@@ -251,15 +271,7 @@ function normalizedMachineId(value?: string) {
   return /^hivemind-machine-[a-f0-9]{32}$/i.test(trimmed) ? trimmed.toLowerCase() : "";
 }
 
-function machinePhysicalIdentityKey(device: Device) {
-  const base = physicalMachineBase(device);
-  if (!base || isMobileDevice(device)) return "";
-  return isHivemindLinkDevice(device) ? `physical:${base}` : "";
-}
-
 function machineIdentityKey(machine: { device: Device; collector: string; machineId?: string }) {
-  const physicalKey = machinePhysicalIdentityKey(machine.device);
-  if (physicalKey) return physicalKey;
   const machineId = machine.collector === "ready" ? normalizedMachineId(machine.machineId) : "";
   return machineId || deviceIdentityKey(machine.device);
 }
@@ -276,7 +288,7 @@ function simplifyDevice(peer: TailscalePeer, self = false, viaLink = false): Dev
     name: self ? "This Mac" : displayNameForPeer(peer, dnsName, ip),
     dnsName,
     os: peer.OS ?? "unknown",
-    online: Boolean(peer.Online),
+    online: self ? true : Boolean(peer.Online),
     ip,
     collectorUrl: self ? localCollectorUrl() : ip ? (viaLink ? linkCollectorUrl(ip) : `http://${ip}:8787`) : "",
     lastSeen: peer.LastSeen,
@@ -302,14 +314,40 @@ async function hivemindLinkStatus(): Promise<HivemindLinkStatus | null> {
   }
 }
 
-async function systemTailscaleSelf(): Promise<TailscalePeer | undefined> {
-  const { stdout } = await execFileAsync("tailscale", ["status", "--json"], {
-    timeout: 5_000,
-    maxBuffer: 1_500_000,
-  }).catch(() => ({ stdout: "" }));
-  if (!stdout) return undefined;
+async function systemTailscaleStatus(options: { allowCliFallback?: boolean } = {}): Promise<TailscaleStatus | undefined> {
+  const localApiStatus = await tailscaleLocalApiStatus();
+  if (localApiStatus) return localApiStatus;
+  if (options.allowCliFallback === false || !shouldUseTailscaleCliFallback()) return undefined;
+
+  for (const command of TAILSCALE_CLI_CANDIDATES) {
+    const { stdout } = await execFileAsync(command, ["status", "--json"], {
+      timeout: TAILSCALE_STATUS_TIMEOUT_MS,
+      maxBuffer: 1_500_000,
+    }).catch(() => ({ stdout: "" }));
+    if (!stdout) continue;
+    try {
+      return JSON.parse(stdout) as TailscaleStatus;
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
+async function tailscaleLocalApiStatus(): Promise<TailscaleStatus | undefined> {
   try {
-    return (JSON.parse(stdout) as TailscaleStatus).Self;
+    const port = (await readlink("/Library/Tailscale/ipnport")).trim();
+    const proof = (await readFile(`/Library/Tailscale/sameuserproof-${port}`, "utf8")).trim();
+    if (!port || !proof) return undefined;
+    const response = await fetch(`http://127.0.0.1:${port}/localapi/v0/status`, {
+      cache: "no-store",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`x:${proof}`).toString("base64")}`,
+      },
+      signal: AbortSignal.timeout(TAILSCALE_LOCAL_API_TIMEOUT_MS),
+    });
+    if (!response.ok) return undefined;
+    return await response.json() as TailscaleStatus;
   } catch {
     return undefined;
   }
@@ -331,47 +369,41 @@ function devicesFromStatus(status: TailscaleStatus | HivemindLinkStatus, viaLink
 async function tailscaleDevices(): Promise<FleetDeviceStatus> {
   const link = await hivemindLinkStatus();
   if (link) {
-    const localSystemSelf = await systemTailscaleSelf();
+    const systemStatus = await systemTailscaleStatus({ allowCliFallback: false });
+    const linkDevices = devicesFromStatus(link, true, systemStatus?.Self);
+    const systemDevices = systemStatus ? devicesFromStatus(systemStatus) : [];
     return {
-      devices: devicesFromStatus(link, true, localSystemSelf),
+      devices: dedupeDevices([...linkDevices, ...systemDevices]),
       link,
-      source: "hivemind-link",
+      source: systemDevices.length > linkDevices.length ? "hivemind-link+tailscale-cli" : "hivemind-link",
     };
   }
 
-  const { stdout } = await execFileAsync("tailscale", ["status", "--json"], {
-    timeout: 5_000,
-    maxBuffer: 1_500_000,
-  }).catch(() => ({ stdout: "" }));
-  if (!stdout) return { devices: [localDevice()], source: "local" };
-  try {
-    return {
-      devices: devicesFromStatus(JSON.parse(stdout) as TailscaleStatus),
-      source: "tailscale-cli",
-    };
-  } catch {
-    return { devices: [localDevice()], source: "local" };
-  }
+  const systemStatus = await systemTailscaleStatus({ allowCliFallback: true });
+  if (!systemStatus) return { devices: [localDevice()], source: "local" };
+  return {
+    devices: devicesFromStatus(systemStatus),
+    source: "tailscale-cli",
+  };
 }
 
-async function fetchJson(url: string, init?: RequestInit) {
+async function fetchJson(url: string, timeoutMs: number, init?: RequestInit) {
   const response = await fetch(url, {
     ...init,
-    signal: AbortSignal.timeout(COLLECTOR_FETCH_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
     cache: "no-store",
   });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
   return response.json() as Promise<Record<string, unknown>>;
 }
 
-async function fetchAgents(url: string, device: Device, capabilities?: CollectorCapabilities) {
+async function fetchAgents(url: string, device: Device, timeoutMs: number) {
   try {
-    const agentData = await fetchJson(url) as { agents?: AgentProfile[] };
+    const agentData = await fetchJson(url, timeoutMs) as { agents?: AgentProfile[] };
     return (agentData.agents ?? []).map((agent) => ({
       ...agent,
       telemetryUrl: device.collectorUrl,
       machineName: device.name,
-      collectorCapabilities: capabilities,
     }));
   } catch {
     return [];
@@ -420,7 +452,82 @@ function shouldIncludeSnapshots(request: Request) {
   return value === "1" || value === "true" || value === "yes";
 }
 
-async function readDiscovery(includeSnapshots: boolean): Promise<FleetDiscoverPayload> {
+function shouldForceFresh(request: Request) {
+  const params = new URL(request.url).searchParams;
+  const value = (params.get("fresh") ?? params.get("force"))?.toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
+type DiscoveryProbeOptions = {
+  collectorTimeoutMs: number;
+  snapshotTimeoutMs: number;
+};
+
+type CollectorProbeResult = {
+  device: Device;
+  agents: AgentProfile[];
+  version?: CollectorVersion;
+  capabilities?: CollectorCapabilities;
+  envSync?: CollectorEnvSync;
+  collectorHost?: string;
+  machineId?: string;
+};
+
+const REMOTE_COLLECTOR_PORT_CANDIDATES = [8787, 8789, 8790, 8791, 8792];
+
+function collectorUrlWithPort(rawUrl: string, port: number) {
+  try {
+    const url = new URL(rawUrl);
+    const peerMatch = url.pathname.match(/^\/peer\/(.+)$/);
+    if (peerMatch) {
+      const target = decodeURIComponent(peerMatch[1] ?? "");
+      const host = target.replace(/:\d+$/, "");
+      url.pathname = `/peer/${encodeURIComponent(`${host}:${port}`)}`;
+      return url.toString().replace(/\/+$/, "");
+    }
+    url.port = String(port);
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+}
+
+function collectorUrlCandidates(device: Device) {
+  const primary = device.collectorUrl?.replace(/\/+$/, "");
+  if (!primary || device.self) return primary ? [primary] : [];
+  return [
+    primary,
+    ...REMOTE_COLLECTOR_PORT_CANDIDATES.map((port) => collectorUrlWithPort(primary, port)),
+  ].filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index);
+}
+
+async function probeCollector(device: Device, collectorUrl: string, options: DiscoveryProbeOptions): Promise<CollectorProbeResult> {
+  const activeDevice = { ...device, collectorUrl };
+  const agentsPromise = fetchAgents(`${collectorUrl}/agents`, activeDevice, options.collectorTimeoutMs);
+  const healthData = await fetchJson(`${collectorUrl}/health`, options.collectorTimeoutMs) as {
+    host?: string;
+    machineId?: string;
+    version?: CollectorVersion;
+    capabilities?: CollectorCapabilities;
+    envSync?: CollectorEnvSync;
+  };
+  const capabilities = healthData.capabilities ?? { chat: false, runtimes: [] };
+  const agents = (await agentsPromise).map((agent) => ({
+    ...agent,
+    collectorCapabilities: capabilities,
+  }));
+  return {
+    device: activeDevice,
+    agents,
+    version: healthData.version,
+    capabilities,
+    envSync: healthData.envSync,
+    collectorHost: healthData.host,
+    machineId: healthData.machineId,
+  };
+}
+
+async function readDiscovery(includeSnapshots: boolean, options: DiscoveryProbeOptions): Promise<FleetDiscoverPayload> {
   const fleetStatus = await tailscaleDevices().catch((): FleetDeviceStatus => ({ devices: [localDevice()], source: "local" }));
   const devices = fleetStatus.devices;
   const discovered = await Promise.all(devices.map(async (device): Promise<DiscoveredMachine> => {
@@ -428,79 +535,66 @@ async function readDiscovery(includeSnapshots: boolean): Promise<FleetDiscoverPa
       return { device, collector: "missing", agents: [], snapshots: [] };
     }
 
-    let agents: AgentProfile[] = [];
-    let version: CollectorVersion | undefined;
-    let capabilities: CollectorCapabilities | undefined;
-    let envSync: CollectorEnvSync | undefined;
-    let collectorHost: string | undefined;
-    let machineId: string | undefined;
+    let probe: CollectorProbeResult | null = null;
     try {
-      const healthData = await fetchJson(`${device.collectorUrl}/health`) as {
-        host?: string;
-        machineId?: string;
-        version?: CollectorVersion;
-        capabilities?: CollectorCapabilities;
-        envSync?: CollectorEnvSync;
-      };
-      collectorHost = healthData.host;
-      machineId = healthData.machineId;
-      version = healthData.version;
-      capabilities = healthData.capabilities ?? { chat: false, runtimes: [] };
-      envSync = healthData.envSync;
-      agents = await fetchAgents(`${device.collectorUrl}/agents`, device, capabilities);
+      const probeOptions = device.self
+        ? { ...options, collectorTimeoutMs: Math.max(options.collectorTimeoutMs, 4_000) }
+        : options;
+      for (const collectorUrl of collectorUrlCandidates(device)) {
+        probe = await probeCollector(device, collectorUrl, probeOptions).catch(() => null);
+        if (probe) break;
+      }
     } catch {
-      return {
-        device,
-        collector: device.online ? "not-installed" : "offline",
-        agents: [],
-        snapshots: [],
-      };
+      probe = null;
+    }
+    if (!probe) {
+      return { device, collector: device.online ? "not-installed" : "offline", agents: [], snapshots: [] };
     }
 
     const visibleAgents = [
-      ...agents,
-      ...[defaultQueenAgent(device, agents, capabilities)].filter((agent): agent is AgentProfile => Boolean(agent)),
+      ...probe.agents,
+      ...[defaultQueenAgent(probe.device, probe.agents, probe.capabilities)].filter((agent): agent is AgentProfile => Boolean(agent)),
     ];
     if (!includeSnapshots) {
       return {
-        device,
+        device: probe.device,
         collector: "ready",
-        collectorHost,
-        machineId,
-        version,
-        capabilities,
-        envSync,
+        collectorHost: probe.collectorHost,
+        machineId: probe.machineId,
+        version: probe.version,
+        capabilities: probe.capabilities,
+        envSync: probe.envSync,
         agents: visibleAgents,
         snapshots: [],
       };
     }
 
     try {
-      const snapshotData = await fetchJson(`${device.collectorUrl}/snapshot`, {
+      const snapshotData = await fetchJson(`${probe.device.collectorUrl}/snapshot`, options.snapshotTimeoutMs, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agents }),
+        body: JSON.stringify({ agents: probe.agents }),
       }) as { snapshots?: unknown[] };
       return {
-        device,
+        device: probe.device,
         collector: "ready",
-        collectorHost,
-        machineId,
-        version,
-        capabilities,
-        envSync,
+        collectorHost: probe.collectorHost,
+        machineId: probe.machineId,
+        version: probe.version,
+        capabilities: probe.capabilities,
+        envSync: probe.envSync,
         agents: visibleAgents,
         snapshots: snapshotData.snapshots ?? [],
       };
     } catch {
       return {
-        device,
+        device: probe.device,
         collector: "ready",
-        collectorHost,
-        machineId,
-        version,
-        capabilities,
-        envSync,
+        collectorHost: probe.collectorHost,
+        machineId: probe.machineId,
+        version: probe.version,
+        capabilities: probe.capabilities,
+        envSync: probe.envSync,
         agents: visibleAgents,
         snapshots: [],
       };
@@ -521,29 +615,79 @@ async function readDiscovery(includeSnapshots: boolean): Promise<FleetDiscoverPa
   };
 }
 
-export async function GET(request: Request) {
-  const includeSnapshots = shouldIncludeSnapshots(request);
-  const cacheKey = includeSnapshots ? "with-snapshots" : "light";
-  const cached = discoveryCache.get(cacheKey);
-  const now = Date.now();
-  if (cached && now - cached.checkedAt < DISCOVERY_CACHE_MS) {
-    return Response.json(cached.payload);
-  }
+function foregroundProbeOptions(includeSnapshots: boolean): DiscoveryProbeOptions {
+  return {
+    collectorTimeoutMs: FOREGROUND_COLLECTOR_FETCH_TIMEOUT_MS,
+    snapshotTimeoutMs: includeSnapshots ? SNAPSHOT_FETCH_TIMEOUT_MS : FOREGROUND_COLLECTOR_FETCH_TIMEOUT_MS,
+  };
+}
 
-  let inFlight = discoveryInFlight.get(cacheKey);
+function backgroundProbeOptions(): DiscoveryProbeOptions {
+  return {
+    collectorTimeoutMs: BACKGROUND_COLLECTOR_FETCH_TIMEOUT_MS,
+    snapshotTimeoutMs: BACKGROUND_COLLECTOR_FETCH_TIMEOUT_MS,
+  };
+}
+
+function refreshDiscovery(
+  cacheKey: string,
+  includeSnapshots: boolean,
+  options: DiscoveryProbeOptions,
+  inFlightMap: Map<string, Promise<FleetDiscoverPayload>>,
+) {
+  let inFlight = inFlightMap.get(cacheKey);
   if (!inFlight) {
-    inFlight = readDiscovery(includeSnapshots)
+    inFlight = withTimeout(readDiscovery(includeSnapshots, options), DISCOVERY_REQUEST_TIMEOUT_MS)
       .then((payload) => {
         discoveryCache.set(cacheKey, { checkedAt: Date.now(), payload });
         return payload;
       })
       .finally(() => {
-        discoveryInFlight.delete(cacheKey);
+        inFlightMap.delete(cacheKey);
       });
-    discoveryInFlight.set(cacheKey, inFlight);
+    inFlightMap.set(cacheKey, inFlight);
+  }
+  return inFlight;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Fleet discovery timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}
+
+function refreshDiscoveryInBackground(cacheKey: string, includeSnapshots: boolean) {
+  void refreshDiscovery(cacheKey, includeSnapshots, backgroundProbeOptions(), discoveryBackgroundInFlight)
+    .catch(() => undefined);
+}
+
+export async function GET(request: Request) {
+  const includeSnapshots = shouldIncludeSnapshots(request);
+  const forceFresh = shouldForceFresh(request);
+  const cacheKey = `${DISCOVERY_CACHE_VERSION}:${includeSnapshots ? "with-snapshots" : "light"}`;
+  const cached = discoveryCache.get(cacheKey);
+  const now = Date.now();
+  if (!forceFresh && cached && now - cached.checkedAt < DISCOVERY_CACHE_MS) {
+    return Response.json(cached.payload);
   }
 
-  return Response.json(await inFlight);
+  if (cached) {
+    try {
+      const payload = await refreshDiscovery(cacheKey, includeSnapshots, foregroundProbeOptions(includeSnapshots), discoveryInFlight);
+      refreshDiscoveryInBackground(cacheKey, includeSnapshots);
+      return Response.json(payload);
+    } catch {
+      refreshDiscoveryInBackground(cacheKey, includeSnapshots);
+      return Response.json(cached.payload);
+    }
+  }
+
+  const payload = await refreshDiscovery(cacheKey, includeSnapshots, foregroundProbeOptions(includeSnapshots), discoveryInFlight);
+  refreshDiscoveryInBackground(cacheKey, includeSnapshots);
+  return Response.json(payload);
 }
 
 function machineScore(machine: {

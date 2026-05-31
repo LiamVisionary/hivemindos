@@ -88,12 +88,12 @@ export function useFleetNotificationsController(props: any) {
   }
 
   async function refreshDiscoveryNow() {
-    const response = await fetch("/api/fleet/discover?includeSnapshots=0", { cache: "no-store" }).catch(() => null);
+    const response = await fetch("/api/fleet/discover?includeSnapshots=0&fresh=1", { cache: "no-store" }).catch(() => null);
     const data = await response?.json().catch(() => null) as {
       machines?: DiscoveredMachine[];
     } | null;
     if (!data?.machines) return;
-    setDiscoveredMachines((current) => mergeDiscoveredMachines(current, data.machines ?? []));
+    setDiscoveredMachines(() => mergeDiscoveredMachines([], data.machines ?? []));
     const discoveredSnapshots = data.machines.flatMap((machine) => machine.snapshots ?? []);
     if (discoveredSnapshots.length > 0) {
       setFleetSnapshots((current) => mergeSnapshotRecord(current, discoveredSnapshots));

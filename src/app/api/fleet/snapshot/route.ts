@@ -8,6 +8,8 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
 import { getRuntimeUrl } from "@/lib/types/agent-runtime";
+import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
+import type { RuntimeRun } from "@/lib/services/runtime-adapters/types";
 
 export const runtime = "nodejs";
 
@@ -72,7 +74,7 @@ function pruneSnapshotCache(now = Date.now()) {
 
 async function pathReadable(path?: string) {
   if (!path) return false;
-  return access(path, constants.R_OK).then(() => true).catch(() => false);
+  return access(resolve(expandHome(path)), constants.R_OK).then(() => true).catch(() => false);
 }
 
 function normalizeCollectorUrl(url: string) {
@@ -138,6 +140,10 @@ function expandHome(path: string) {
 
 function normalize(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function compact(value: unknown, fallback = "No details reported.", maxLength = 900) {
@@ -259,6 +265,50 @@ function tasksFromPayload(agent: AgentProfile, payload: unknown, source: string)
       updatedAt: Date.now(),
     };
   });
+}
+
+function statusFromRuntimeRun(run: RuntimeRun): FleetTaskStatus {
+  if (run.status === "active" || run.status === "queued") return "active";
+  if (run.status === "failed") return "failed";
+  if (run.status === "completed") return "completed";
+  return "unknown";
+}
+
+function titleFromRuntimeRun(run: RuntimeRun) {
+  const name = run.name || "AEON workflow";
+  const skill = name.match(/^skill:\s*(.+)$/i)?.[1]?.trim();
+  const label = skill ? `${titleFromText(skill)} workflow` : name;
+  const titled = label.charAt(0).toUpperCase() + label.slice(1);
+  if (run.status === "failed") return `${titled} failed`;
+  if (run.status === "active" || run.status === "queued") return `${titled} is running`;
+  return titled;
+}
+
+function taskFromRuntimeRun(agent: AgentProfile, run: RuntimeRun): FleetTask {
+  const detail = [
+    `${run.status}${run.conclusion ? ` · ${run.conclusion}` : ""}`,
+    run.url,
+  ].filter(Boolean).join("\n");
+  return {
+    id: `github-actions:${run.id}`,
+    agentId: agent.id,
+    title: titleFromRuntimeRun(run),
+    lastMessage: detail || "GitHub Actions workflow run.",
+    status: statusFromRuntimeRun(run),
+    source: "GitHub Actions",
+    updatedAt: Date.parse(run.updatedAt || run.createdAt || "") || Date.now(),
+  };
+}
+
+async function scanRuntimeRuns(agent: AgentProfile): Promise<{ checked: boolean; tasks: FleetTask[] }> {
+  if (agent.runtime !== "aeon") return { checked: false, tasks: [] };
+  const adapter = getRuntimeAdapter(agent.runtime);
+  if (!adapter?.listRuns) return { checked: false, tasks: [] };
+  const runs = await adapter.listRuns(agent, { agents: [agent] }).catch(() => []);
+  const currentOrLatestFailure = runs
+    .slice(0, 5)
+    .filter((run, index) => run.status === "active" || run.status === "queued" || (index === 0 && run.status === "failed"));
+  return { checked: runs.length > 0, tasks: currentOrLatestFailure.map((run) => taskFromRuntimeRun(agent, run)) };
 }
 
 async function execJson<T>(cmd: string, args: string[], fallback: T): Promise<T> {
@@ -501,16 +551,31 @@ async function checkRuntime(agent: AgentProfile) {
 
 async function processMatches(agent: AgentProfile, includeGenericHermes = false) {
   const { stdout } = await execFileAsync("ps", ["-axo", "pid=,command="], { timeout: 4_000, maxBuffer: 800_000 }).catch(() => ({ stdout: "" }));
-  const needles = [agent.id, agent.agentId, agent.name]
+  const genericNeedles = agent.runtime === "aeon"
+    ? [agent.id, agent.agentId, agent.name].filter((value) => normalize(String(value ?? "")) !== "aeon")
+    : [agent.id, agent.agentId, agent.name];
+  const needles = genericNeedles
     .filter(Boolean)
     .map((value) => normalize(value as string))
     .filter((value) => value.length >= 4 && !["main", "agent"].includes(value));
+  const pathNeedles = agent.runtime === "aeon"
+    ? [agent.aeonLocalPath, agent.localDataDir]
+      .filter(Boolean)
+      .flatMap((path) => {
+        const trimmed = String(path).trim().replace(/\/+$/, "");
+        return trimmed ? [trimmed, resolve(expandHome(trimmed))] : [];
+      })
+    : [];
+  const pathMatchers = [...new Set(pathNeedles)]
+    .map((path) => new RegExp(`${escapeRegExp(path)}(?:$|[\\s/])`));
   return stdout
     .split(/\r?\n/)
     .filter((line) => {
       if (/api\/fleet\/snapshot|next start|codex app-server|rg -i|ps -axo/i.test(line)) return false;
+      if (agent.runtime === "aeon" && /\b(unison|rsync|syncthing)\b/i.test(line)) return false;
       const text = normalize(line);
-      return needles.some((needle) => needle && text.includes(needle))
+      return pathMatchers.some((matcher) => matcher.test(line))
+        || needles.some((needle) => needle && text.includes(needle))
         || (includeGenericHermes && /\/\.hermes\/|\/hermes-agent\/|\/bin\/hermes\b/i.test(line));
     })
     .slice(0, 5);
@@ -525,6 +590,9 @@ function snapshotCacheKey(agents: AgentWithLocal[], sharedVault?: SharedVaultCon
       runtime: agent.runtime,
       gatewayUrl: agent.gatewayUrl,
       statusPath: agent.statusPath,
+      aeonLocalPath: agent.aeonLocalPath,
+      aeonRepo: agent.aeonRepo,
+      aeonBranch: agent.aeonBranch,
       localDataDir: agent.localDataDir,
       telemetryUrl: agent.telemetryUrl,
       agentId: agent.agentId,
@@ -542,7 +610,13 @@ async function readSnapshots(agents: AgentWithLocal[], sharedVault?: SharedVault
 
   const snapshots = await Promise.all(agents.map(async (agent): Promise<AgentSnapshot> => {
     const remoteSnapshot = options.historyOnly ? null : await readRemoteSnapshot(agent);
-    if (remoteSnapshot) return remoteSnapshot;
+    const remoteSnapshotHasActivity = Boolean(
+      remoteSnapshot?.ok
+      || remoteSnapshot?.runtimeReachable
+      || remoteSnapshot?.processRunning
+      || remoteSnapshot?.tasks?.length,
+    );
+    if (remoteSnapshotHasActivity) return remoteSnapshot!;
 
     const checkedAt = Date.now();
     const configuredDataDir = agent.localDataDir
@@ -569,12 +643,13 @@ async function readSnapshots(agents: AgentWithLocal[], sharedVault?: SharedVault
       };
     }
     const hasReadableDataDir = (await Promise.all(dataDirsToScan.map(pathReadable))).some(Boolean);
-    const [runtimeResult, taskBusTasks, dataDirTaskGroups, hermesDbTaskGroups, processes] = await Promise.all([
+    const [runtimeResult, taskBusTasks, dataDirTaskGroups, hermesDbTaskGroups, runtimeRuns, processes] = await Promise.all([
       checkRuntime(agent),
       controlRoomPath ? scanTaskBus(agent, controlRoomPath) : Promise.resolve([]),
       Promise.all(dataDirsToScan.map((dir) => scanAgentDataDir(agent, dir))),
       Promise.all(dataDirsToScan.map((dir) => agent.runtime === "hermes" ? scanHermesStateDb(agent, dir) : Promise.resolve([]))),
-      processMatches(agent, Boolean(hermesHomeDir)),
+      scanRuntimeRuns(agent),
+      agent.runtime === "aeon" ? Promise.resolve([]) : processMatches(agent, Boolean(hermesHomeDir)),
     ]);
     const dataDirTasks = dataDirTaskGroups.flat();
     const hermesDbTasks = hermesDbTaskGroups.flat();
@@ -586,19 +661,22 @@ async function readSnapshots(agents: AgentWithLocal[], sharedVault?: SharedVault
       if (task.source === "runtime-status") return 1;
       return 0;
     };
-    const tasks = [...runtimeTasks, ...hermesDbTasks, ...taskBusTasks, ...dataDirTasks]
+    const tasks = [...runtimeTasks, ...hermesDbTasks, ...taskBusTasks, ...dataDirTasks, ...runtimeRuns.tasks]
       .sort((a, b) => priority(b) - priority(a) || b.updatedAt - a.updatedAt)
       .slice(0, 12);
+    const failedTask = tasks.find((task) => task.status === "failed");
     const sources = [
       runtimeResult.reachable ? "runtime reachable" : "",
+      remoteSnapshot?.error ? "remote agent bridge" : "",
       taskBusTasks.length ? "task bus" : "",
       hermesDbTasks.length ? "Hermes history" : "",
       dataDirTasks.length ? "runtime files" : "",
+      runtimeRuns.checked ? "GitHub Actions" : "",
       processes.length ? "local process" : "",
     ].filter(Boolean);
     return {
       agentId: agent.id,
-      ok: runtimeResult.reachable || processes.length > 0 || tasks.length > 0,
+      ok: runtimeResult.reachable || processes.length > 0 || tasks.length > 0 || runtimeRuns.checked,
       runtimeReachable: runtimeResult.reachable,
       processRunning: processes.length > 0,
       summary: tasks[0]?.title
@@ -606,15 +684,21 @@ async function readSnapshots(agents: AgentWithLocal[], sharedVault?: SharedVault
           ? "Process is running; no current task exposed yet."
           : configuredDataDir && !hasReadableDataDir
             ? `Configured data dir is not available here: ${configuredDataDir}`
-            : "No external activity source exposed a task yet."),
+            : agent.runtime === "aeon"
+              ? "Idle. No current AEON task detected."
+              : "No external activity source exposed a task yet."),
       sources,
       tasks,
       checkedAt,
-      error: runtimeResult.reachable || tasks.length > 0 || processes.length > 0
-        ? undefined
-        : configuredDataDir && !hasReadableDataDir
-          ? `No local runtime files found at ${configuredDataDir}`
-          : runtimeResult.error || undefined,
+      error: configuredDataDir && !hasReadableDataDir
+        ? `No local runtime files found at ${configuredDataDir}`
+        : failedTask
+          ? failedTask.title
+          : runtimeResult.reachable || tasks.length > 0 || processes.length > 0 || runtimeRuns.checked
+            ? undefined
+            : agent.runtime === "aeon" && /endpoint is not listening/i.test(runtimeResult.error)
+              ? undefined
+              : runtimeResult.error || remoteSnapshot?.error || undefined,
     };
   }));
 

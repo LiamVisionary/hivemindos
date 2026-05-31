@@ -144,11 +144,13 @@ export function useAgentController(props: UseAgentControllerProps) {
     setCustomWorkerImageError("");
     setAgentSettingsPanel("role");
     setAgentCreateMachineKey(machine.key);
+    const baseAgent = createAgentProfile(runtime, runtimeCount(agents, runtime) + 1);
     setAgentCreateDraft({
       name,
       runtime,
       provider: runtime === "hermes" ? "openai-codex" : runtime === "openai-compatible" ? "lm-studio" : "",
       model: "",
+      calls: baseAgent.calls,
       workerClass: "general",
       customWorkerClass: undefined,
       customWorkerClasses: [],
@@ -287,6 +289,8 @@ export function useAgentController(props: UseAgentControllerProps) {
       provider: agentCreateDraft.provider,
       model: agentCreateDraft.model,
       adaptiveOpenRouter: agentCreateDraft.adaptiveOpenRouter,
+      usePod: agentCreateDraft.usePod,
+      calls: agentCreateDraft.calls,
       localDataDir: runtime === "aeon" ? agentCreateDraft.aeonLocalPath || "~/.aeon" : "",
       aeonLocalPath: runtime === "aeon" ? agentCreateDraft.aeonLocalPath || "~/.aeon" : undefined,
       aeonRepo: runtime === "aeon" ? agentCreateDraft.aeonRepo || "" : undefined,

@@ -1,4 +1,5 @@
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { isUsePodProfile, resolveUsePodRuntimeConfig } from "@/lib/services/usepod";
 import type { RuntimeAdapter } from "./types";
 
 type OpenAIModelList = {
@@ -26,9 +27,13 @@ function errorMessage(data: OpenAIModelList | null, fallback: string) {
 }
 
 async function fetchModels(profile: AgentProfile): Promise<OpenAIModelList> {
-  const response = await fetch(buildRuntimeUrl(profile, profile.statusPath || "/v1/models"), {
+  const usePodConfig = await resolveUsePodRuntimeConfig(profile);
+  const runtimeProfile = usePodConfig
+    ? { ...profile, gatewayUrl: usePodConfig.baseUrl, statusPath: usePodConfig.statusPath, token: "" }
+    : profile;
+  const response = await fetch(buildRuntimeUrl(runtimeProfile, runtimeProfile.statusPath || "/v1/models"), {
     headers: {
-      ...(profile.token ? { Authorization: `Bearer ${profile.token}` } : {}),
+      ...(runtimeProfile.token ? { Authorization: `Bearer ${runtimeProfile.token}` } : {}),
     },
     cache: "no-store",
     signal: AbortSignal.timeout(8_000),
@@ -55,33 +60,40 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
     model: process.env.NEXT_PUBLIC_LOCAL_OPENAI_MODEL ?? "",
   },
   async getStatus(profile) {
-    const data = await fetchModels(profile);
+    const usePodConfig = await resolveUsePodRuntimeConfig(profile);
+    const runtimeProfile = usePodConfig
+      ? { ...profile, gatewayUrl: usePodConfig.baseUrl, statusPath: usePodConfig.statusPath, token: "" }
+      : profile;
+    const data = await fetchModels(runtimeProfile);
     const models = (data.data ?? [])
       .map((model) => model.id)
       .filter((model): model is string => Boolean(model));
+    const providerName = isUsePodProfile(profile)
+      ? "UsePod"
+      : profile.provider === "ollama"
+        ? "Ollama"
+        : profile.provider === "vllm"
+          ? "vLLM"
+          : profile.provider === "llamacpp"
+            ? "llama.cpp"
+            : profile.provider === "lm-studio"
+              ? "LM Studio"
+              : "OpenAI-compatible";
     return {
-      baseUrl: cleanBaseUrl(profile),
-      chatPath: profile.chatPath || "/v1/chat/completions",
+      baseUrl: cleanBaseUrl(runtimeProfile),
+      chatPath: runtimeProfile.chatPath || "/v1/chat/completions",
       models,
       modelSelection: {
         provider: profile.provider || "openai-compatible",
         model: profile.model || models[0] || "",
         providers: [{
           slug: profile.provider || "openai-compatible",
-          name: profile.provider === "ollama"
-            ? "Ollama"
-            : profile.provider === "vllm"
-              ? "vLLM"
-              : profile.provider === "llamacpp"
-                ? "llama.cpp"
-                : profile.provider === "lm-studio"
-                  ? "LM Studio"
-                  : "OpenAI-compatible",
+          name: providerName,
           models: models.map((id) => ({ id })),
           totalModels: models.length,
           isCurrent: true,
           isUserDefined: true,
-          source: buildRuntimeUrl(profile, profile.statusPath || "/v1/models"),
+          source: buildRuntimeUrl(runtimeProfile, runtimeProfile.statusPath || "/v1/models"),
         }],
       },
     };

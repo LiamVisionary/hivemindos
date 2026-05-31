@@ -84,6 +84,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
       provider: agentCreateDraft.provider,
       model: agentCreateDraft.model,
       adaptiveOpenRouter: agentCreateDraft.adaptiveOpenRouter,
+      usePod: agentCreateDraft.usePod,
       telemetryUrl: agentCreateMachine.collectorUrl,
       machineName: agentCreateMachine.name,
     }

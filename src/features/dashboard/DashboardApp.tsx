@@ -62,7 +62,7 @@ import {
   Users,
   WalletCards,
 } from "lucide-react";
-import type { AdaptiveOpenRouterConfig, AgentProfile, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile, RuntimeCapabilities, SharedVaultConfig } from "@/lib/types/agent-runtime";
+import type { AdaptiveOpenRouterConfig, AgentProfile, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile, RuntimeCapabilities, SharedVaultConfig, UsePodAgentConfig } from "@/lib/types/agent-runtime";
 import type { AgentNotification, AgentNotificationSettings, AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import { createAgentProfile, DEFAULT_SHARED_VAULT, RUNTIME_CAPABILITIES, RUNTIME_DEFAULTS, RUNTIME_KINDS, RUNTIME_LABELS } from "@/lib/types/agent-runtime";
 import type { AgentPaymentProvider, AgentWalletConfig, HoneyTreasuryConfig } from "@/lib/types/agent-wallet";
@@ -612,6 +612,7 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
   const [hydrated, setHydrated] = useState(false);
   const [agents, setAgents] = useState<AgentProfile[]>(seedAgents);
   const agentVaultHydratedRef = useRef(false);
+  const aeonProfilePruneKeyRef = useRef("");
   const [selectedAgentId, setSelectedAgentId] = useState(() => seedAgents()[0]?.id ?? "");
   const [walletExpanded, setWalletExpanded] = useState(false);
   const [text, setText] = useState("");
@@ -770,7 +771,7 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
   const [machineInitTokenStatus, setMachineInitTokenStatus] = useState<MachineInitTokenStatus>({});
   const [agentRoleModalId, setAgentRoleModalId] = useState("");
   const [agentCreateMachineKey, setAgentCreateMachineKey] = useState("");
-  const [agentSettingsPanel, setAgentSettingsPanel] = useState<"role" | "connection" | "memory" | "tools" | "security">("role");
+  const [agentSettingsPanel, setAgentSettingsPanel] = useState<"role" | "connection" | "memory" | "tools" | "calls" | "security">("role");
   const [aeonEnvKeys, setAeonEnvKeys] = useState("ANTHROPIC_API_KEY\nCLAUDE_CODE_OAUTH_TOKEN\nBANKR_LLM_KEY\nGH_GLOBAL");
   const [aeonEnvSyncStatus, setAeonEnvSyncStatus] = useState("");
   const [aeonEnvSyncing, setAeonEnvSyncing] = useState(false);
@@ -780,6 +781,7 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
     provider?: string;
     model?: string;
     adaptiveOpenRouter?: AdaptiveOpenRouterConfig;
+    usePod?: UsePodAgentConfig;
     workerClass: BeeWorkerClass;
     customWorkerClass?: CustomWorkerClassProfile;
     customWorkerClasses: CustomWorkerClassProfile[];
@@ -792,6 +794,7 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
     runtime: "hermes",
     provider: "openai-codex",
     model: "",
+    usePod: undefined,
     workerClass: "general",
     customWorkerClass: undefined,
     customWorkerClasses: [],
@@ -1015,15 +1018,24 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
       backendState?: string;
       authUrl?: string;
       source?: string;
+      tailnetHealth?: {
+        state?: "ok" | "peer-traffic-stalled" | "status-unavailable" | "not-running";
+        detail?: string;
+      };
       devices?: TailscaleDevice[];
       error?: string;
     } | null;
     const devices = data?.devices ?? [];
-    setTailscaleDevices(devices);
-    if (devices.length > 0) {
-      setDiscoveredMachines((current) => mergeDiscoveredMachines(current, devicesToDiscoveredMachines(devices)));
+    const localOnlyStatusFallback = data?.tailnetHealth?.state === "status-unavailable"
+      && devices.length <= 1
+      && devices.every((device) => device.self || device.ip === "127.0.0.1");
+    if (!localOnlyStatusFallback) {
+      setTailscaleDevices(devices);
     }
-    setFleetDiscoveryLoading(false);
+    if (devices.length > 0 && !localOnlyStatusFallback) {
+      setDiscoveredMachines((current) => mergeDiscoveredMachines(current, devicesToDiscoveredMachines(devices)));
+      setFleetDiscoveryLoading(false);
+    }
     if (data?.source === "hivemind-link") {
       applyHivemindLinkStatus({
         ok: data.ok,
@@ -1031,10 +1043,21 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
         authUrl: data.authUrl,
         source: data.source,
       });
+      if (data.tailnetHealth?.state === "peer-traffic-stalled") {
+        setTailscaleStatus("Hivemind Link connected; Tailscale peer traffic stalled");
+      }
       return;
     }
     applyHivemindLinkStatus(null);
-    setTailscaleStatus(data?.ok ? `Tailscale ${data.backendState}` : "Tailscale not configured. Running locally.");
+    if (data?.tailnetHealth?.state === "peer-traffic-stalled") {
+      setTailscaleStatus("Tailscale Running; peer traffic stalled");
+    } else if (data?.tailnetHealth?.state === "status-unavailable") {
+      setTailscaleStatus("Tailscale status unavailable. Running locally.");
+    } else if (data?.tailnetHealth?.state === "not-running") {
+      setTailscaleStatus(`Tailscale ${data.backendState ?? "not running"}`);
+    } else {
+      setTailscaleStatus(data?.ok ? `Tailscale ${data.backendState}` : "Tailscale not configured. Running locally.");
+    }
   }, [applyHivemindLinkStatus]);
   const refreshHoneyLedgerRef = useRef(null);
   const refreshMoneyClawStatusRef = useRef(null);
@@ -1339,6 +1362,62 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
   }, [hydrated, sharedVault.enabled, sharedVault.vaultPath]);
   useEffect(() => {
     if (!hydrated || !sharedVault.enabled || !agentVaultHydratedRef.current) return;
+    const aeonAgents = [
+      ...agents,
+      ...discoveredMachines.flatMap((machine) => machine.agents ?? []).map(normalizeAgentProfile),
+    ].filter((agent, index, list) => agent.runtime === "aeon" && list.findIndex((candidate) => candidate.id === agent.id) === index);
+    if (!aeonAgents.length) {
+      aeonProfilePruneKeyRef.current = "";
+      return;
+    }
+    const pruneKey = JSON.stringify(aeonAgents
+      .map((agent) => [
+        agent.id,
+        agent.aeonRepo ?? "",
+        agent.aeonLocalPath ?? "",
+        agent.localDataDir ?? "",
+        agent.telemetryUrl ?? "",
+      ])
+      .sort()) + `|${sharedVault.vaultPath}`;
+    if (aeonProfilePruneKeyRef.current === pruneKey) return;
+    aeonProfilePruneKeyRef.current = pruneKey;
+    let cancelled = false;
+    void (async () => {
+      const response = await fetch("/api/runtimes/aeon/profiles/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agents: aeonAgents, vaultPath: sharedVault.vaultPath }),
+      }).catch(() => null);
+      const data = await response?.json().catch(() => null) as { ok?: boolean; stale?: Array<{ id?: string }>; recovered?: AgentProfile[] } | null;
+      if (cancelled || !response?.ok || !data?.ok) return;
+      const recoveredAgents = Array.isArray(data.recovered) ? data.recovered.map(normalizeAgentProfile) : [];
+      const recoveredById = new Map(recoveredAgents.map((agent) => [agent.id, agent]));
+      const staleIds = new Set((Array.isArray(data.stale) ? data.stale : []).map((item) => item.id).filter(Boolean));
+      if (recoveredById.size) {
+        setAgents((current) => current.map((agent) => recoveredById.get(agent.id) ?? agent));
+        setDiscoveredMachines((current) => current.map((machine) => ({
+          ...machine,
+          agents: (machine.agents ?? []).map((agent) => recoveredById.get(agent.id) ?? agent),
+        })));
+      }
+      if (!staleIds.size) return;
+      setAgents((current) => current.filter((agent) => !staleIds.has(agent.id)));
+      setDiscoveredMachines((current) => current.map((machine) => ({
+        ...machine,
+        agents: (machine.agents ?? []).filter((agent) => !staleIds.has(agent.id)),
+        snapshots: (machine.snapshots ?? []).filter((snapshot) => !staleIds.has(snapshot.agentId)),
+      })));
+      setFleetSnapshots((current) => Object.fromEntries(
+        Object.entries(current).filter(([agentId]) => !staleIds.has(agentId)),
+      ));
+      setSelectedAgentId((current) => staleIds.has(current) ? "" : current);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [agents, discoveredMachines, hydrated, sharedVault.enabled, sharedVault.vaultPath]);
+  useEffect(() => {
+    if (!hydrated || !sharedVault.enabled || !agentVaultHydratedRef.current) return;
     const handle = window.setTimeout(() => {
       void fetch("/api/obsidian/agents", {
         method: "POST",
@@ -1591,8 +1670,9 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
       document.removeEventListener("keydown", closeChatContextMenuOnEscape);
     };
   }, [chatContextMenu]);
-  const buildSnapshotAgents = useCallback(() => (
-    agents.map((agent) => ({
+  const buildSnapshotAgents = useCallback(() => {
+    const discoveredAgents = discoveredMachines.flatMap((machine) => machine.agents ?? []).map(normalizeAgentProfile);
+    return dedupeAgents(agents, discoveredAgents).map((agent) => ({
         id: agent.id,
         name: agent.name,
         runtime: agent.runtime,
@@ -1605,8 +1685,8 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
         localDataDir: agent.localDataDir,
         machineName: agent.machineName,
         telemetryUrl: agent.telemetryUrl,
-      }))
-  ), [agents]);
+      }));
+  }, [agents, discoveredMachines]);
 
   const refreshFleetSnapshots = useCallback(async (signal: AbortSignal, mode: "full" | "history") => {
       const snapshotAgents = buildSnapshotAgents();
@@ -1703,7 +1783,7 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
   }, [hivemindLinkSignInPolling, refreshTailscaleDevices]);
   const pollFleetDiscovery = useCallback(async (signal: AbortSignal) => {
       setFleetDiscoveryLoading((current) => current || discoveredMachines.length === 0);
-      const response = await fetch("/api/fleet/discover?includeSnapshots=0", {
+      const response = await fetch("/api/fleet/discover?includeSnapshots=0&fresh=1", {
         cache: "no-store",
         signal,
       }).catch(() => null);
@@ -1719,13 +1799,21 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
         applyHivemindLinkStatus(data.hivemindLink);
       }
       const machines = data.machines;
-      setDiscoveredMachines((current) => mergeDiscoveredMachines(current, machines));
+      const statusUnavailableFallback = tailscaleStatus.startsWith("Tailscale status unavailable")
+        && discoveredMachines.length > 1
+        && machines.length <= 1
+        && machines.every((machine) => machine.device.self);
+      if (statusUnavailableFallback) {
+        setFleetDiscoveryLoading(false);
+        return;
+      }
+      setDiscoveredMachines(() => mergeDiscoveredMachines([], machines));
       const discoveredSnapshots = data.machines.flatMap((machine) => machine.snapshots ?? []);
       if (discoveredSnapshots.length > 0) {
         setFleetSnapshots((current) => mergeSnapshotRecord(current, discoveredSnapshots));
       }
       setFleetDiscoveryLoading(false);
-  }, [applyHivemindLinkStatus, discoveredMachines.length]);
+  }, [applyHivemindLinkStatus, discoveredMachines.length, tailscaleStatus]);
   useVisibilityAwarePolling({
     enabled: hydrated && (activeView === "agents" || activeView === "chat"),
     intervalMs: 60_000,
@@ -1832,9 +1920,13 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
     const agent = displayAgents.find((item) => item.id === scheduleDraft.agentId && item.runtime === "aeon")
       ?? displayAgents.find((item) => item.runtime === "aeon")
       ?? (selectedAgent?.runtime === "aeon" ? selectedAgent : null);
-    if (!agent) { setAeonSkillOptions([]); return; }
     let cancelled = false;
     void (async () => {
+      if (!agent) {
+        await Promise.resolve();
+        if (!cancelled) setAeonSkillOptions([]);
+        return;
+      }
       const response = await fetch("/api/runtimes/aeon/skills", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2360,7 +2452,7 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
       <DashboardHeader {...{ Image, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, activeHeader, activeView, isWorkView, kanbanBoard, navItems, notificationClass, notificationSummary, setActiveView, setKanbanLoading, viewIcon }} />
 
       <div className="commandMain">
-      <AgentsPanel {...{ AgentCell, AgentTaskList, Bot, Button, CellMenu, Check, CircleAlert, Copy, CopyPlus, ExternalLink, FleetView, MachineCell, MessageSquare, PlugZap, Plus, QUIET_SNAPSHOT_HOLD_MS, RefreshCcw, Settings2, Trash2, WalletCards, activeView, addAgentToMachine, agentWorkById, agents, appVersion, beeRoleLabel, busyAgentId, cleanActivityTitle, copiedUpdateDetailKey, copyUpdateDetail, deleteAgent, fleetCheckedAt, fleetClass, fleetDiscoveryLoading, fleetSnapshots, fleetUpdateDetailByMachine, fleetUpdateStatusByMachine, fleetViewData, formatRelativeTime, friendlyEmptyTitle, runtimeSessionIdFromTask, hivemindLinkSignInPolling, hivemindLinkSignInPollingRef, hivemindLinkStatus, hydrateRuntimeSessionChat, isCollectorAutoUpdateable, isMeaningfulActive, localDashboardHasUnpublishedChanges, machineGroups, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineVersionCopy, markNotificationRead, openMachineInitModal, openSetupModal, renameMachine, renderAgentKey, requestDuplicateAgent, runMachineUpdate, selectedAgent, setActiveView, setAgentRenameDraft, setAgentRenameEditing, setAgentRoleModalId, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setHivemindLinkBannerDismissed, setHivemindLinkConnectedUntil, setHivemindLinkSignInPolling, setSelectedAgentId, showHivemindLinkConnectedBanner, showHivemindLinkSignInBanner, startAgentChat, startAgentWorkChat, tailscaleStatus, taskChatLeafKey, trackAgentTaskOnKanban, updateStatusByMachine }} />
+      <AgentsPanel {...{ AgentCell, AgentTaskList, Bot, Button, CellMenu, Check, CircleAlert, Copy, CopyPlus, ExternalLink, FleetView, MachineCell, MessageSquare, PlugZap, Plus, QUIET_SNAPSHOT_HOLD_MS, RefreshCcw, Settings2, Trash2, WalletCards, activeView, addAgentToMachine, agentWorkById, agents, appVersion, beeRoleLabel, busyAgentId, cleanActivityTitle, copiedUpdateDetailKey, copyUpdateDetail, deleteAgent, displayAgents, fleetCheckedAt, fleetClass, fleetDiscoveryLoading, fleetSnapshots, fleetUpdateDetailByMachine, fleetUpdateStatusByMachine, fleetViewData, formatRelativeTime, friendlyEmptyTitle, runtimeSessionIdFromTask, hivemindLinkSignInPolling, hivemindLinkSignInPollingRef, hivemindLinkStatus, hydrateRuntimeSessionChat, isCollectorAutoUpdateable, isMeaningfulActive, localDashboardHasUnpublishedChanges, machineGroups, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineVersionCopy, markNotificationRead, openMachineInitModal, openSetupModal, renameMachine, renderAgentKey, requestDuplicateAgent, runMachineUpdate, selectedAgent, setActiveView, setAgentRenameDraft, setAgentRenameEditing, setAgentRoleModalId, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setHivemindLinkBannerDismissed, setHivemindLinkConnectedUntil, setHivemindLinkSignInPolling, setSelectedAgentId, showHivemindLinkConnectedBanner, showHivemindLinkSignInBanner, startAgentChat, startAgentWorkChat, tailscaleStatus, taskChatLeafKey, trackAgentTaskOnKanban, updateStatusByMachine }} />
       <KanbanPanel {...{ AttachmentListMenuContent, AttachmentMenuContent, CellMenu, ChatMarkdown, Check, ChevronDown, ChevronRight, ComposerField, DEFAULT_SHARED_VAULT, ExternalLink, Eye, FolderOpen, Image, KANBAN_COLUMNS, KANBAN_STEER_TARGETS, MessageAttachments, MessageSquare, Paperclip, Plus, RotateCcw, Search, Settings2, activeView, addKanbanComment, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, attachQuickAddDirectory, attachQuickAddRecentDirectory, bulkPatchKanbanTasks, chatClass, commentDraft, createKanbanBoard, createKanbanTask, displayAgents, editAndInterruptKanbanTask, expandedKanbanCards, formatDurationShort, formatMessageTimestamp, formatRelativeTime, handleKanbanCardFileChange, handleKanbanCardImageChange, handleKanbanSteerFileChange, handleKanbanSteerImageChange, handleQuickAddFileChange, handleQuickAddImageChange, importNoteIntake, initialWorkHistory, isKanbanStaleWorkingTask, isKanbanTerminalMessage, isWorkView, kanbanAssigneeFilter, kanbanAssigneeOptions, kanbanBoard, kanbanBoardScrollRef, kanbanBoardScrollState, kanbanBoardSlug, kanbanBoards, kanbanBulkAssignee, kanbanBulkPending, kanbanCardAttachmentListOpen, kanbanCardAttachmentMenuOpen, kanbanCardDeliverableMenuOpen, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanCardMachineMenuOpen, kanbanCardMessage, kanbanCardRecentsExpanded, kanbanClass, kanbanEditDraft, kanbanEditPendingTaskId, kanbanError, kanbanEventLabel, kanbanIncludeArchived, kanbanInitialLoading, kanbanLoading, kanbanMachineTargets, kanbanPickupPreviewByTask, kanbanSearch, kanbanStaleAge, kanbanSteerAttachmentError, kanbanSteerAttachmentMenuOpen, kanbanSteerAttachmentMenuRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerFileInputRef, kanbanSteerImageInputRef, kanbanSteerTargetMenuOpen, kanbanSteerTargetMenuRef, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanStorage, kanbanTaskBee, kanbanTaskMenuItems, kanbanTaskModal, kanbanTenantFilter, kanbanTenants, kanbanViewColumns, markKanbanTaskReviewed, moveKanbanTask, newBoardDraft, noteIntakePending, noteIntakePreview, noteIntakeStatus, openKanbanCardFilePicker, openKanbanTaskModal, patchKanbanTask, quickAddAttachmentError, quickAddAttachmentMenuOpen, quickAddAttachmentMenuRef, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddFileInputRef, quickAddImageInputRef, quickAddMachineMenuOpen, quickAddMachineMenuRef, quickAddMachineTarget, quickAddMachineTargets, quickAddStatus, recentDirectories, recentDirectoriesExpanded, recording, removeKanbanCardAttachment, removeKanbanCardDirectory, removeKanbanSteerAttachment, removeKanbanSteerDirectory, removeQuickAddAttachment, removeQuickAddDirectory, scanNoteIntake, selectedKanbanAgent, selectedKanbanAgentMessages, selectedKanbanBulkIds, selectedKanbanComments, selectedKanbanEvents, selectedKanbanTask, selectedKanbanTaskId, selectedKanbanTaskIds, setActiveView, setCommentDraft, setExpandedKanbanCards, setKanbanAssigneeFilter, setKanbanBoardSlug, setKanbanBulkAssignee, setKanbanCardAttachmentListOpen, setKanbanCardAttachmentMenuOpen, setKanbanCardDeliverableMenuOpen, setKanbanCardMachineMenuOpen, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanIncludeArchived, setKanbanLoading, setKanbanSearch, setKanbanSteerAttachmentMenuOpen, setKanbanSteerDraft, setKanbanSteerTargetMenuOpen, setKanbanSteerTargetStatus, setKanbanTaskModal, setKanbanTenantFilter, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddStatus, setRecentDirectoriesExpanded, setSelectedKanbanTaskId, setSelectedKanbanTaskIds, sharedVault, startAudioRecording, steerSelectedKanbanTask, stopAudioRecording, updateKanbanTaskMachine, updateSharedVault, voiceBands, voiceTarget, voiceTranscript, walletClass, workBoardStats }} />
       <SchedulerPanel {...{ AlignLeft, Button, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Link, List, LoaderCircle, Paperclip, Pencil, Plus, Puzzle, RUNTIME_LABELS, Repeat2, SCHEDULER_MODEL_OPTIONS, SCHEDULE_PRESETS, SchedulerView, Search, Send, Sparkles, TaskModal, Trash2, activeView, addSchedulePath, addSchedulerStep, addSchedulerStepPath, browseSchedulerFolder, createSchedule, displayAgents, editSchedule, editingScheduleId, filteredSchedulerSkills, findScheduleForJob, fleetClass, importExistingSchedules, isSchedulerFilePath, machineGroups, openSkillBrowser, pickSchedulerFiles, pickSchedulerFolder, refreshSharedSchedulesFromVault, removeSchedule, removeSchedulePath, removeScheduleSkill, removeSchedulerStep, removeSchedulerStepPath, renderAgentKey, resetScheduleDraft, runScheduleNow, saveScheduleFromModal, scheduleDraft, scheduleImportStatus, scheduleImporting, schedulerAttachMenu, schedulerDraftOpen, schedulerJobs, schedulerModalInitial, schedulerPathDraft, schedulerPathKind, schedulerRunStates, schedulerSelectedStep, schedulerSkillSearch, schedules, selectedAgent, setScheduleDraft, setScheduleImportStatus, setSchedulerAttachMenu, setSchedulerDraftOpen, setSchedulerPathDraft, setSchedulerPathKind, setSchedulerSelectedStep, setSchedulerSkillSearch, sharedSkillOptions, aeonSkillOptions, toggleSchedule, toggleScheduleSkill, toggleSchedulerStepMode, toggleSchedulerStepSkill, updateSchedulerStep, updateSchedulerStepModel, vaultClass }} />
       <SwarmPanel {...{ SwarmView, activeView, allMirosharkTemplates, analyzeMirosharkRun, applyMirosharkTemplate, currentSwarmRun, displayAgents, launchMirosharkSwarm, loadMirosharkArchivedRun, mirosharkAnalysisAgentId, mirosharkAnalysisPending, mirosharkAnalysisResult, mirosharkAnalysisStatus, mirosharkArchiveLoading, mirosharkArchiveStatus, mirosharkExperimentPending, mirosharkExperimentStatus, mirosharkHelperPending, mirosharkHelperStatus, mirosharkMissingTemplateFields, mirosharkPlatform, mirosharkProgressLabel, mirosharkRounds, mirosharkRunPending, mirosharkScenario, mirosharkSelectedTemplate, mirosharkSelectedTemplateFields, mirosharkTemplateInputs, runMirosharkExperiment, runMirosharkScenarioHelper, runtimeModelSelectionsByRuntime, selectedAgent, selectedSwarmRunId, setMirosharkAnalysisAgentId, setMirosharkPlatform, setMirosharkRounds, setMirosharkScenario, startNewMirosharkSimulation, swarmAgents, swarmDecisions, swarmMarket, swarmRuns, swarmSocialPosts, swarmStatusLabel, swarmTemplates, updateMirosharkTemplateInput }} />
@@ -2375,10 +2467,13 @@ export default function DashboardApp({ initialView, initialVaultPanelMode, initi
         onSchedulerToggleJob={(job) => void toggleSchedule(job.id)}
         onSchedulerRunJob={(job) => { const schedule = findScheduleForJob(job); if (schedule) void runScheduleNow(schedule); }}
         onSchedulerEditJob={(job) => { const schedule = findScheduleForJob(job); if (schedule) editSchedule(schedule); }}
-        onSchedulerNewJob={() => {
-          const aeonAgentId = displayAgents.find((agent) => agent.runtime === "aeon")?.id ?? selectedAgent?.id ?? displayAgents[0]?.id ?? "";
+        onSchedulerNewJob={(agentId?: string) => {
+          const preferredAeonAgent = agentId ? displayAgents.find((agent) => agent.id === agentId && agent.runtime === "aeon") : undefined;
+          const selectedAeonAgent = selectedAgent?.runtime === "aeon" ? selectedAgent : undefined;
+          const aeonAgentId = preferredAeonAgent?.id ?? selectedAeonAgent?.id ?? displayAgents.find((agent) => agent.runtime === "aeon")?.id ?? displayAgents[0]?.id ?? "";
           resetScheduleDraft(aeonAgentId);
           setScheduleDraft((current) => ({ ...current, agentId: aeonAgentId }));
+          setScheduleImportStatus("");
           setSchedulerDraftOpen(true);
         }}
       />

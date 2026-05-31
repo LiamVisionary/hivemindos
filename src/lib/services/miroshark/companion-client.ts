@@ -4,6 +4,7 @@ import { homedir } from "os";
 import path from "path";
 import { execFile, spawn } from "child_process";
 import { promisify } from "util";
+import { discoverMiroSharkHivenetService, type DiscoveredMiroSharkService } from "@/lib/services/miroshark/hivenet-discovery";
 
 export type MiroSharkCompanionPhase =
   | "connected"
@@ -41,6 +42,13 @@ export type MiroSharkCompanionStatus = {
   ok: boolean;
   phase: MiroSharkCompanionPhase;
   baseUrl: string;
+  hivenetApp?: {
+    id?: string;
+    name?: string;
+    machineName?: string;
+    machineHost?: string;
+    healthUrl: string;
+  };
   service?: string;
   status?: string;
   installPath?: string;
@@ -222,6 +230,55 @@ function upsertEnvValue(raw: string, key: string, value: string) {
   return `${next.join("\n").replace(/\n*$/, "")}\n`;
 }
 
+function upsertEnvValueIfMissing(raw: string, key: string, value: string) {
+  const current = parseEnvValue(raw, key);
+  if (current || !value) return raw;
+  return upsertEnvValue(raw, key, value);
+}
+
+function managedEnvValues() {
+  const apiKey = preferredApiKey();
+  if (!apiKey) return [];
+  const openRouter = Boolean(process.env.OPENROUTER_API_KEY);
+  const baseUrl = openRouter ? "https://openrouter.ai/api/v1" : "https://api.openai.com/v1";
+  const embeddingBaseUrl = openRouter ? "https://openrouter.ai/api" : "https://api.openai.com/v1";
+  const model = openRouter ? "openai/gpt-4o-mini" : (process.env.OPENAI_MODEL || "gpt-4o-mini");
+  const internalKeyEnv: [string, string][] = process.env.MIROSHARK_INTERNAL_KEY
+    ? [["MIROSHARK_INTERNAL_KEY", process.env.MIROSHARK_INTERNAL_KEY]]
+    : [];
+  return [
+    ["FLASK_HOST", "127.0.0.1"],
+    ["FLASK_PORT", DEFAULT_MANAGED_PORT],
+    ["FLASK_DEBUG", "True"],
+    ["LLM_API_KEY", apiKey],
+    ["LLM_BASE_URL", baseUrl],
+    ["LLM_MODEL_NAME", model],
+    ["SMART_PROVIDER", "openai"],
+    ["SMART_API_KEY", apiKey],
+    ["SMART_BASE_URL", baseUrl],
+    ["SMART_MODEL_NAME", model],
+    ["NER_API_KEY", apiKey],
+    ["NER_BASE_URL", baseUrl],
+    ["NER_MODEL_NAME", model],
+    ["WONDERWALL_API_KEY", apiKey],
+    ["WONDERWALL_BASE_URL", baseUrl],
+    ["WONDERWALL_MODEL_NAME", model],
+    ["OPENAI_API_KEY", apiKey],
+    ["EMBEDDING_PROVIDER", "openai"],
+    ["EMBEDDING_API_KEY", apiKey],
+    ["EMBEDDING_BASE_URL", embeddingBaseUrl],
+    ["EMBEDDING_MODEL", "openai/text-embedding-3-small"],
+    ["EMBEDDING_DIMENSIONS", "768"],
+    ["NEO4J_URI", "bolt://localhost:7687"],
+    ["NEO4J_USER", "neo4j"],
+    ["NEO4J_PASSWORD", "miroshark"],
+    ["WEB_ENRICHMENT_ENABLED", "false"],
+    ["RERANKER_ENABLED", "false"],
+    ["GRAPH_SEARCH_ENABLED", "false"],
+    ...internalKeyEnv,
+  ] satisfies [string, string][];
+}
+
 function adminTokenFromEnvFile(installPath?: string) {
   if (!installPath) return "";
   const envPath = path.join(installPath, ".env");
@@ -256,30 +313,13 @@ function getAdminAuthStatus(installPath?: string): MiroSharkCompanionStatus["adm
 
 function writeManagedEnv(installPath: string) {
   const envPath = path.join(installPath, ".env");
-  if (existsSync(envPath)) return;
-  const apiKey = preferredApiKey();
-  if (!apiKey) return;
-  const baseUrl = process.env.OPENROUTER_API_KEY ? "https://openrouter.ai/api/v1" : "https://api.openai.com/v1";
-  const model = process.env.OPENROUTER_API_KEY ? "openai/gpt-4o-mini" : (process.env.OPENAI_MODEL || "gpt-4o-mini");
-  writeFileSync(envPath, [
-    "FLASK_HOST=127.0.0.1",
-    `FLASK_PORT=${DEFAULT_MANAGED_PORT}`,
-    `LLM_API_KEY=${apiKey}`,
-    `LLM_BASE_URL=${baseUrl}`,
-    `LLM_MODEL_NAME=${model}`,
-    `WONDERWALL_API_KEY=${apiKey}`,
-    `WONDERWALL_BASE_URL=${baseUrl}`,
-    `WONDERWALL_MODEL_NAME=${model}`,
-    "EMBEDDING_PROVIDER=openai",
-    "EMBEDDING_MODEL=openai/text-embedding-3-small",
-    "NEO4J_URI=bolt://localhost:7687",
-    "NEO4J_USER=neo4j",
-    "NEO4J_PASSWORD=miroshark",
-    "ENABLE_WEB_ENRICHMENT=false",
-    "ENABLE_RERANKER=false",
-    "ENABLE_GRAPH_SEARCH=false",
-    "",
-  ].join("\n"), { mode: 0o600 });
+  const values = managedEnvValues();
+  if (values.length === 0) return;
+  let raw = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
+  for (const [key, value] of values) {
+    raw = upsertEnvValueIfMissing(raw, key, value);
+  }
+  writeFileSync(envPath, raw.replace(/\n*$/, "\n"), { mode: 0o600 });
 }
 
 export function configureMiroSharkAdminAuth() {
@@ -297,29 +337,9 @@ export function configureMiroSharkAdminAuth() {
 }
 
 function writeBootstrapEnv() {
-  const apiKey = preferredApiKey();
-  if (!apiKey) return;
-  const baseUrl = process.env.OPENROUTER_API_KEY ? "https://openrouter.ai/api/v1" : "https://api.openai.com/v1";
-  const model = process.env.OPENROUTER_API_KEY ? "openai/gpt-4o-mini" : (process.env.OPENAI_MODEL || "gpt-4o-mini");
-  writeFileSync(BOOTSTRAP_ENV_PATH, [
-    "FLASK_HOST=127.0.0.1",
-    `FLASK_PORT=${DEFAULT_MANAGED_PORT}`,
-    `LLM_API_KEY=${apiKey}`,
-    `LLM_BASE_URL=${baseUrl}`,
-    `LLM_MODEL_NAME=${model}`,
-    `WONDERWALL_API_KEY=${apiKey}`,
-    `WONDERWALL_BASE_URL=${baseUrl}`,
-    `WONDERWALL_MODEL_NAME=${model}`,
-    "EMBEDDING_PROVIDER=openai",
-    "EMBEDDING_MODEL=openai/text-embedding-3-small",
-    "NEO4J_URI=bolt://localhost:7687",
-    "NEO4J_USER=neo4j",
-    "NEO4J_PASSWORD=miroshark",
-    "ENABLE_WEB_ENRICHMENT=false",
-    "ENABLE_RERANKER=false",
-    "ENABLE_GRAPH_SEARCH=false",
-    "",
-  ].join("\n"), { mode: 0o600 });
+  const values = managedEnvValues();
+  if (values.length === 0) return;
+  writeFileSync(BOOTSTRAP_ENV_PATH, `${values.map(([key, value]) => `${key}=${value}`).join("\n")}\n`, { mode: 0o600 });
 }
 
 function managedStartCommand(installPath: string) {
@@ -413,12 +433,34 @@ async function fetchJsonWithTimeout(url: string, timeoutMs = 3_500) {
   }
 }
 
-export async function getMiroSharkCompanionStatus(): Promise<MiroSharkCompanionStatus> {
-  const rawBaseUrl = process.env.MIROSHARK_BASE_URL || process.env.NEXT_PUBLIC_MIROSHARK_BASE_URL;
+type MiroSharkStatusOptions = {
+  requestUrl?: string;
+};
+
+function statusOptions(input?: string | MiroSharkStatusOptions): MiroSharkStatusOptions {
+  return typeof input === "string" ? { requestUrl: input } : input ?? {};
+}
+
+function hivenetStatusApp(discovered?: DiscoveredMiroSharkService | null): MiroSharkCompanionStatus["hivenetApp"] {
+  if (!discovered) return undefined;
+  return {
+    id: discovered.app.id,
+    name: discovered.app.name,
+    machineName: discovered.app.machineName,
+    machineHost: discovered.app.machineHost,
+    healthUrl: discovered.healthUrl,
+  };
+}
+
+export async function getMiroSharkCompanionStatus(input?: string | MiroSharkStatusOptions): Promise<MiroSharkCompanionStatus> {
+  const options = statusOptions(input);
+  const discoveredService = await discoverMiroSharkHivenetService(options.requestUrl).catch(() => null);
+  const envBaseUrl = process.env.MIROSHARK_BASE_URL || process.env.NEXT_PUBLIC_MIROSHARK_BASE_URL;
+  const rawBaseUrl = discoveredService?.baseUrl || envBaseUrl;
   const discovered = discoverInstall();
   const setup = getInstallState();
   const baseUrl = normalizeBaseUrl(rawBaseUrl || (discovered.installPath ? `http://127.0.0.1:${DEFAULT_MANAGED_PORT}` : undefined));
-  const configured = Boolean(rawBaseUrl?.trim());
+  const configured = Boolean(rawBaseUrl?.trim() || discoveredService);
   const requirements = await getRequirements(discovered.installPath);
   const adminAuth = getAdminAuthStatus(discovered.installPath);
   const hasKey = Boolean(preferredApiKey() || (discovered.installPath && existsSync(path.join(discovered.installPath, ".env"))));
@@ -435,13 +477,28 @@ export async function getMiroSharkCompanionStatus(): Promise<MiroSharkCompanionS
     const service = typeof payload?.service === "string" ? payload.service : undefined;
     const status = typeof payload?.status === "string" ? payload.status : undefined;
     const serviceLooksRight = /miroshark/i.test(service ?? "");
-    const ok = response.ok && status === "ok" && serviceLooksRight;
+    const healthOk = response.ok && status === "ok" && serviceLooksRight;
+    let apiReady = healthOk;
+    let apiError = "";
+    if (healthOk) {
+      try {
+        const apiCheck = await fetchJsonWithTimeout(endpoints.templates);
+        apiReady = apiCheck.response.ok;
+        const checkError = typeof apiCheck.payload?.error === "string" ? apiCheck.payload.error : "";
+        apiError = apiReady ? "" : checkError || `Templates endpoint returned HTTP ${apiCheck.response.status}`;
+      } catch (error) {
+        apiReady = false;
+        apiError = error instanceof Error ? error.message : "Templates endpoint is unreachable";
+      }
+    }
+    const ok = healthOk && apiReady;
 
     return {
       configured,
       ok,
-      phase: ok ? "connected" : setup.running ? "starting" : discovered.installPath ? "installed-stopped" : "not-installed",
+      phase: ok ? "connected" : healthOk ? "needs-config" : setup.running ? "starting" : discovered.installPath ? "installed-stopped" : "not-installed",
       baseUrl,
+      hivenetApp: hivenetStatusApp(discoveredService),
       service,
       status,
       installPath: discovered.installPath,
@@ -468,6 +525,8 @@ export async function getMiroSharkCompanionStatus(): Promise<MiroSharkCompanionS
       endpoints,
       error: ok
         ? undefined
+        : healthOk && apiError
+          ? `MiroShark health is OK, but the API is not ready: ${apiError}`
         : service && !serviceLooksRight
           ? `Port responded as ${service}, not MiroShark`
           : `Unexpected health response: HTTP ${response.status}`,
@@ -478,6 +537,7 @@ export async function getMiroSharkCompanionStatus(): Promise<MiroSharkCompanionS
       ok: false,
       phase: setup.running ? "starting" : discovered.installPath ? "installed-stopped" : "not-installed",
       baseUrl,
+      hivenetApp: hivenetStatusApp(discoveredService),
       installPath: discovered.installPath,
       installSource: discovered.installSource,
       checkedAt: Date.now(),

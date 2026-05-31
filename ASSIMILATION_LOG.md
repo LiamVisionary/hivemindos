@@ -1589,7 +1589,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 4. score=3.64 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
    note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
-   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared 
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 5. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
    note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
@@ -1628,7 +1628,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 2. score=4.74 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
    note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
-   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared 
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 3. score=4.04 LiamVisionary/claude-watch [repo-summary]
    url: https://github.com/LiamVisionary/claude-watch
    note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
@@ -1649,3 +1649,1007 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Query: `HivemindOS AEON dashboard auto commit push before GitHub Actions run, increment clone workspace names, delete local repo or git metadata UI`
 - Decision: passed
 - Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-05-31T05:09:05.990670+00:00 - local-search
+
+- Request: Add a confirmation alert with Local Repo/GitHub Repo/Local + GitHub choices and slide to unlock deletion for an Aeon agent roster delete button
+- Source: local-index
+- Query: `Add a confirmation alert with Local Repo/GitHub Repo/Local + GitHub choices and slide to unlock deletion for an Aeon agent roster delete button`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=23.05 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+2. score=11.42 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+3. score=10.12 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+4. score=9.68 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+5. score=9.68 LiamVisionary/exercise-db [repo-summary]
+   url: https://github.com/LiamVisionary/exercise-db
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
+6. score=9.61 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+7. score=5.50 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+8. score=4.99 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+
+## 2026-05-31T05:09:10.119710+00:00 - prebuild-gate
+
+- Request: Add a confirmation alert with Local Repo/GitHub Repo/Local + GitHub choices and slide to unlock deletion for an Aeon agent roster delete button
+- Source: public-github
+- Query: `Add a confirmation alert with Local Repo/GitHub Repo/Local + GitHub choices and slide to unlock deletion for an Aeon agent roster delete button`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-05-31T05:09:35.168480+00:00 - rejection
+
+- Request: Add Aeon roster delete depth choices and slide unlock
+- Source: public-github
+
+### Candidates
+- Sfedfcv/redesigned-pancake
+  - Decision: rejected
+  - Reason: search result is unrelated GitHub docs mirror/no compatible React component to transplant
+- klonnet23/helloy-word
+  - Decision: rejected
+  - Reason: unrelated generated repository contents/no safe UI component
+- arashstar1/bot-lua
+  - Decision: rejected
+  - Reason: Lua Telegram bot, wrong stack and suspicious large pasted source
+- heru299/script-copy
+  - Decision: rejected
+  - Reason: unrelated script repository and GPL license incompatible for copying into this app
+## 2026-05-31T05:16:42.967871+00:00 - local-search
+
+- Request: Replace a literal range input with an iOS style slide to unlock control in React
+- Source: local-index
+- Query: `Replace a literal range input with an iOS style slide to unlock control in React`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=13.79 LiamVisionary/exercise-db [repo-summary]
+   url: https://github.com/LiamVisionary/exercise-db
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
+2. score=13.63 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+3. score=13.27 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+4. score=13.27 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+5. score=9.08 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+6. score=5.49 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+7. score=5.22 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+8. score=1.75 LiamVisionary/claude-watch [repo-summary]
+   url: https://github.com/LiamVisionary/claude-watch
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
+
+## 2026-05-31T05:16:45.604352+00:00 - prebuild-gate
+
+- Request: Replace a literal range input with an iOS style slide to unlock control in React
+- Source: public-github
+- Query: `Replace a literal range input with an iOS style slide to unlock control in React`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-05-31T05:17:02.072669+00:00 - rejection
+
+- Request: Replace literal range input with iOS style slide to unlock control
+- Source: public-github
+
+### Candidates
+- zszszszsz/.config
+  - Decision: rejected
+  - Reason: OpenWrt shell configuration repository, unrelated to React slide unlock UI
+- LiamVisionary/exercise-db
+  - Decision: rejected
+  - Reason: exercise data frontend, no compatible slide unlock component to transplant
+- nativelaunch/expolaunch-template
+  - Decision: rejected
+  - Reason: React Native mobile template, wrong UI stack for this web component
+## 2026-05-31T06:29:21.714126+00:00 - local-search
+
+- Request: Optimize existing HivemindOS fleet discovery with stale-while-revalidate, shorter collector probe timeouts, and cached collector health version data
+- Source: local-index
+- Query: `Optimize existing HivemindOS fleet discovery with stale-while-revalidate, shorter collector probe timeouts, and cached collector health version data`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=4.63 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+2. score=3.70 LiamVisionary/exercise-db [repo-summary]
+   url: https://github.com/LiamVisionary/exercise-db
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
+3. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+4. score=3.35 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+5. score=3.35 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+6. score=3.35 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+7. score=0.44 LiamVisionary/data-annotation [repo-summary]
+   url: https://github.com/LiamVisionary/data-annotation
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-data-annotation.md
+   LiamVisionary/data-annotation Python Python
+8. score=0.35 LiamVisionary/ai-companion-website [repo-summary]
+   url: https://github.com/LiamVisionary/ai-companion-website
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
+
+## 2026-05-31T06:29:25.938692+00:00 - public-search
+
+- Request: Optimize existing HivemindOS fleet discovery with stale-while-revalidate, shorter collector probe timeouts, and cached collector health version data
+- Source: public-github
+- Query: `Optimize existing HivemindOS fleet discovery with stale-while-revalidate, shorter collector probe timeouts, and cached collector health version data`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T06:29:26.117731+00:00 - prebuild-gate
+
+- Request: Optimize existing HivemindOS fleet discovery with stale-while-revalidate, shorter collector probe timeouts, and cached collector health version data
+- Source: public-github
+- Query: `Optimize existing HivemindOS fleet discovery with stale-while-revalidate, shorter collector probe timeouts, and cached collector health version data`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
+cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+
+## 2026-05-31T06:29:49.292086+00:00 - public-search
+
+- Request: nodejs promise in flight cache stale while revalidate fetch abortsignal timeout
+- Source: public-github
+- Query: `nodejs promise in flight cache stale while revalidate fetch abortsignal timeout`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T06:30:09.932044+00:00 - triage
+
+- Request: Optimize existing HivemindOS fleet discovery with stale-while-revalidate, shorter collector probe timeouts, and cached collector health version data
+- Source: public-github
+
+### Candidates
+- next-boost/next-boost
+  - Decision: rejected
+  - Reason: highest-star result targets Next.js getServerSideProps page caching rather than Node route collector probes
+- jperasmus/stale-while-revalidate-cache
+  - Decision: selected
+  - Reason: MIT storage-agnostic SWR cache helper; inspect for stale/immediate refresh semantics
+- GustavoQnt/swr-lru-cache
+  - Decision: selected
+  - Reason: small MIT in-memory SWR cache with request dedupe; inspect for compact helper ideas
+## 2026-05-31T06:38:18.291153+00:00 - audit
+
+- Request: Optimize existing HivemindOS fleet discovery with stale-while-revalidate, shorter collector probe timeouts, and cached collector health version data
+- Source: public-github
+
+### Candidates
+- jperasmus/stale-while-revalidate-cache
+  - Decision: selected
+  - Reason: focused audit passed for src/index.ts, src/helpers.ts, src/constants.ts; adapted stale-return plus background revalidate flow
+  - Path: `src/index.ts`
+- GustavoQnt/swr-lru-cache
+  - Decision: selected
+  - Reason: focused audit passed for packages/ttl-cache/src; adapted fresh/stale/expired and in-flight dedupe shape
+  - Path: `packages/ttl-cache/src/ttl-cache.ts`
+- next-boost/next-boost
+  - Decision: rejected
+  - Reason: SSR page cache did not match route-handler collector polling
+## 2026-05-31T06:38:38.391878+00:00 - implementation
+
+- Request: Optimize existing HivemindOS fleet discovery with stale-while-revalidate, shorter collector probe timeouts, and cached collector health version data
+- Source: mixed
+- Selected backbone: hivemind-os
+- Assimilated: Adapted stale-return/background-refresh and in-flight dedupe control flow from jperasmus/stale-while-revalidate-cache:src/index.ts and GustavoQnt/swr-lru-cache:packages/ttl-cache/src/ttl-cache.ts into src/app/api/fleet/discover/route.ts; kept existing collector and Tailnet APIs as the project-specific backbone
+- Not assimilated: Did not import external cache modules because the route needs a tiny in-memory process cache over project-specific FleetDiscoverPayload data and existing module-level maps already provide the right boundary
+- Verification: Focused audits passed for jperasmus src/index.ts/src/helpers.ts/src/constants.ts and GustavoQnt packages/ttl-cache/src; eslint, node --check, tsc, diff check, and live curl timing performed
+## 2026-05-31T07:10:35.720923+00:00 - local-search
+
+- Request: Build HivemindOS AEON GitHub Actions brain endpoint with Tailscale tag policy, GitHub repository visibility verification, unrestricted private repo vault access, restricted public repo retrieval, and end-to-end tests
+- Source: local-index
+- Query: `Build HivemindOS AEON GitHub Actions brain endpoint with Tailscale tag policy, GitHub repository visibility verification, unrestricted private repo vault access, restricted public repo retrieval, and end-to-end tests`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=13.70 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+2. score=10.20 LiamVisionary/exercise-db [repo-summary]
+   url: https://github.com/LiamVisionary/exercise-db
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
+3. score=5.06 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+4. score=5.06 LiamVisionary/claw-code-mobile-private [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile-private
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile-private.md
+   LiamVisionary/claw-code-mobile-private Private fork: on-device inference + experimental features Rust
+5. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+6. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+7. score=3.35 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+8. score=3.35 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+
+## 2026-05-31T07:10:38.944170+00:00 - public-search
+
+- Request: Build HivemindOS AEON GitHub Actions brain endpoint with Tailscale tag policy, GitHub repository visibility verification, unrestricted private repo vault access, restricted public repo retrieval, and end-to-end tests
+- Source: public-github
+- Query: `Build HivemindOS AEON GitHub Actions brain endpoint with Tailscale tag policy, GitHub repository visibility verification, unrestricted private repo vault access, restricted public repo retrieval, and end-to-end tests`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T07:10:39.113395+00:00 - prebuild-gate
+
+- Request: Build HivemindOS AEON GitHub Actions brain endpoint with Tailscale tag policy, GitHub repository visibility verification, unrestricted private repo vault access, restricted public repo retrieval, and end-to-end tests
+- Source: public-github
+- Query: `Build HivemindOS AEON GitHub Actions brain endpoint with Tailscale tag policy, GitHub repository visibility verification, unrestricted private repo vault access, restricted public repo retrieval, and end-to-end tests`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: warn: query failed: Build HivemindOS AEON GitHub Actions brain endpoint with Tailscale tag policy, GitHub repository visibility verification, unrestricted private repo vault access, restricted public repo retrieval, and end-to-end tests: Invalid search query "Build HivemindOS AEON GitHub Actions brain endpoint with Tailscale tag policy, GitHub repository visibility verification, unrestricted private repo vault access, restricted public repo retrieval, and end-to-end tests archived:false fork:false is:public".
+The search is longer than 256 characters.
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
+cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+
+## 2026-05-31T07:13:42.402967+00:00 - triage
+
+- Request: Build AEON GitHub Actions brain access for HivemindOS
+- Source: public-github
+- Selected backbone: wirux/mcp-markdown-vault
+
+### Candidates
+- wirux/mcp-markdown-vault
+  - Decision: selected
+  - Reason: highest-fit TypeScript markdown vault server with safe local filesystem adapter, vault scope, chunking, and lexical search modules
+  - Path: `src/infrastructure/local-fs-adapter.ts,src/use-cases/fragment-retrieval.ts,src/use-cases/scoring.ts,src/use-cases/chunker.ts,src/use-cases/vault-search.ts`
+- smith-and-web/obsidian-mcp-server
+  - Decision: selected
+  - Reason: small TypeScript Obsidian vault manager with read/list/write API surfaces
+  - Path: `src/vault/VaultManager.ts`
+- ciffelia/tailscale-authenticate-action
+  - Decision: selected
+  - Reason: minimal GitHub Actions OIDC token exchange pattern for docs/workflow guidance
+  - Path: `action.yml`
+## 2026-05-31T07:13:42.444481+00:00 - rejection
+
+- Request: Build AEON GitHub Actions brain access for HivemindOS
+- Source: public-github
+
+### Candidates
+- benmaster82/Kwipu
+  - Decision: rejected
+  - Reason: higher-star vault RAG but Python graph RAG stack is too heavy for this Next.js endpoint
+- raphasouthall/neurostack
+  - Decision: rejected
+  - Reason: Python CLI/MCP shape not compatible enough for surgical TypeScript service reuse
+- dp-veritas/mcp-obsidian-tools
+  - Decision: rejected
+  - Reason: AGPL license incompatible for code transplant into this project
+## 2026-05-31T07:27:51.688494+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: wirux/mcp-markdown-vault:src/infrastructure/local-fs-adapter.ts => src/lib/services/aeon-brain/vault.ts, wirux/mcp-markdown-vault:src/use-cases/fragment-retrieval.ts,src/use-cases/scoring.ts,src/use-cases/chunker.ts,src/use-cases/vault-search.ts => src/lib/services/aeon-brain/vault.ts, ciffelia/tailscale-authenticate-action:action.yml => docs/runtimes/aeon/github-actions-brain-access.md, smith-and-web/obsidian-mcp-server:src/vault/VaultManager.ts => src/app/api/runtimes/aeon/brain/route.ts
+- Verification: Wrote ASSIMILATION.json with 4 entries and custom_code_assessment=balanced.
+## 2026-05-31T07:41:54.511367+00:00 - local-search
+
+- Request: Integrate UsePod AI OpenAI-compatible provider into HivemindOS runtime dashboard wallet x402 telemetry
+- Source: local-index
+- Query: `Integrate UsePod AI OpenAI-compatible provider into HivemindOS runtime dashboard wallet x402 telemetry`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=4.19 LiamVisionary/ai-companion-website [repo-summary]
+   url: https://github.com/LiamVisionary/ai-companion-website
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
+2. score=4.04 LiamVisionary/claude-watch [repo-summary]
+   url: https://github.com/LiamVisionary/claude-watch
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
+3. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+4. score=3.35 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+5. score=0.44 LiamVisionary/ai-chatbot [repo-summary]
+   url: https://github.com/LiamVisionary/ai-chatbot
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-chatbot.md
+   LiamVisionary/ai-chatbot TypeScript
+6. score=0.44 LiamVisionary/ai-girlfriend-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/ai-girlfriend-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-girlfriend-mobile.md
+   LiamVisionary/ai-girlfriend-mobile TypeScript
+7. score=0.44 LiamVisionary/ai-headshot-generator [repo-summary]
+   url: https://github.com/LiamVisionary/ai-headshot-generator
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   LiamVisionary/ai-headshot-generator TypeScript
+8. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
+   url: https://github.com/LiamVisionary/ami-ai-companion-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   LiamVisionary/ami-ai-companion-app TypeScript
+
+## 2026-05-31T07:41:56.873474+00:00 - public-search
+
+- Request: Integrate UsePod AI OpenAI-compatible provider into HivemindOS runtime dashboard wallet x402 telemetry
+- Source: public-github
+- Query: `Integrate UsePod AI OpenAI-compatible provider into HivemindOS runtime dashboard wallet x402 telemetry`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T07:41:56.920714+00:00 - prebuild-gate
+
+- Request: Integrate UsePod AI OpenAI-compatible provider into HivemindOS runtime dashboard wallet x402 telemetry
+- Source: public-github
+- Query: `Integrate UsePod AI OpenAI-compatible provider into HivemindOS runtime dashboard wallet x402 telemetry`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
+cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+
+## 2026-05-31T07:46:17.922273+00:00 - user-surfaced
+
+- Request: Integrate UsePod AI OpenAI-compatible provider into HivemindOS runtime dashboard wallet x402 telemetry
+- Source: public-github
+
+### Candidates
+- Sortis-AI/usepod-agent
+  - Decision: user_surfaced
+  - Reason: Relevant UsePod provider agent repo was not returned by the initial public searches even though it is directly relevant to supply-side hosting; added for explicit audit and integration planning.
+## 2026-05-31T07:46:43.467673+00:00 - audit
+
+- Request: Integrate UsePod AI OpenAI-compatible provider into HivemindOS runtime dashboard wallet x402 telemetry
+- Source: public-github
+
+### Candidates
+- Sortis-AI/usepod-agent
+  - Decision: selected_donor
+  - Reason: Direct supply-side UsePod provider agent; audited README/config/install docs. Medium caution: docs include pipe-to-shell install, so HivemindOS docs must prefer manual checksum/Docker/systemd guidance and not execute installers automatically.
+## 2026-05-31T07:52:44.256226+00:00 - triage
+
+- Request: Integrate UsePod AI OpenAI-compatible provider into HivemindOS runtime dashboard wallet x402 telemetry
+- Source: public-github
+- Selected backbone: tashfeenahmed/freellmapi
+- Verification: Focused audits passed on selected code paths; Sortis-AI/usepod-agent was separately user-surfaced and audited.
+
+### Candidates
+- tashfeenahmed/freellmapi
+  - Decision: selected
+  - Reason: Highest-star compatible TypeScript OpenAI-compatible provider implementation; reused provider URL, headers, and model-list patterns
+  - Path: `server/src/providers/openai-compat.ts`
+- fabiojbg/LLMApiGateway
+  - Decision: selected_donor
+  - Reason: MIT gateway with per-provider chat/model routing patterns useful for translating custom header config
+  - Path: `llm_gateway_core/api/v1/chat.py`
+- aisecuritygateway/aisecuritygateway
+  - Decision: selected_donor
+  - Reason: Apache-2.0 proxy with provider route metadata and fail-closed request handling concepts
+  - Path: `proxy-api/app/routers/proxy.py`
+- Mirrowel/LLM-API-Key-Proxy
+  - Decision: rejected
+  - Reason: Lower fit for this TypeScript Next.js runtime integration after higher-star compatible donor was selected
+- Nayjest/lm-proxy
+  - Decision: rejected
+  - Reason: Proxy focus and Python stack were less compatible than selected donors
+## 2026-05-31T07:52:51.678270+00:00 - assimilation-manifest
+
+- Request: Integrate UsePod AI OpenAI-compatible provider into HivemindOS runtime dashboard wallet x402 telemetry
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: tashfeenahmed/freellmapi:server/src/providers/openai-compat.ts => src/lib/services/runtime-adapters/openai-compatible.ts; tashfeenahmed/freellmapi:server/src/providers/openai-compat.ts => src/app/api/chat/agent-runtime/route.ts; fabiojbg/LLMApiGateway:llm_gateway_core/api/v1/chat.py => src/lib/services/usepod.ts; aisecuritygateway/aisecuritygateway:proxy-api/app/routers/proxy.py => src/app/api/chat/agent-runtime/route.ts; Sortis-AI/usepod-agent:agent.example.toml => docs/integrations/usepod.md; Sortis-AI/usepod-agent:install/README.md => docs/integrations/usepod.md
+- Verification: Updated ASSIMILATION.json with UsePod demand-side runtime entries and provider-hosting documentation entries.
+## 2026-05-31T07:56:10.203792+00:00 - implementation
+
+- Request: Make HivemindOS-linked AEON repos expose all shared env keys to GitHub Actions skill runs
+- Source: local-existing-code
+- Selected backbone: hivemind-os:src/lib/services/runtime-adapters/aeon.ts
+
+### Candidates
+- hivemind-os:src/lib/services/runtime-adapters/aeon.ts
+  - Decision: selected
+  - Reason: existing AEON secret sync and repo sync adapter was the exact integration surface to extend
+  - Path: `syncEnvToGitHubSecrets, repoSyncAction`
+- aaronjmars/aeon:.github/workflows/aeon.yml
+  - Decision: selected
+  - Reason: cloned AEON workflow env blocks were the concrete target shape for runtime env exposure
+  - Path: `.github/workflows/aeon.yml`
+## 2026-05-31T08:05:37.193257+00:00 - local-search
+
+- Request: Add a non-invasive Tauri phase 1 desktop shell for an existing Next.js app using a separate dev port
+- Source: local-index
+- Query: `Add a non-invasive Tauri phase 1 desktop shell for an existing Next.js app using a separate dev port`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=10.55 LiamVisionary/exercise-db [repo-summary]
+   url: https://github.com/LiamVisionary/exercise-db
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
+2. score=9.87 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+3. score=6.37 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+4. score=6.37 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+5. score=5.93 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+6. score=5.86 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+7. score=5.86 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+8. score=2.19 LiamVisionary/rdmorganiser_rdmo__fork__7cde0431 [repo-summary]
+   url: https://github.com/LiamVisionary/rdmorganiser_rdmo__fork__7cde0431
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-rdmorganiser_rdmo__fork__7cde0431.md
+   LiamVisionary/rdmorganiser_rdmo__fork__7cde0431
+
+## 2026-05-31T08:05:41.224461+00:00 - prebuild-gate
+
+- Request: Add a non-invasive Tauri phase 1 desktop shell for an existing Next.js app using a separate dev port
+- Source: public-github
+- Query: `Add a non-invasive Tauri phase 1 desktop shell for an existing Next.js app using a separate dev port`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-05-31T08:05:50.548065+00:00 - public-search
+
+- Request: tauri nextjs app router pnpm
+- Source: public-github
+- Query: `tauri nextjs app router pnpm`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T08:06:03.416842+00:00 - public-search
+
+- Request: tauri create app template v2 vanilla src-tauri
+- Source: public-github
+- Query: `tauri create app template v2 vanilla src-tauri`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T08:14:36.737317+00:00 - implementation
+
+- Request: Add a non-invasive Tauri phase 1 desktop shell for the existing Next.js app
+- Source: public-github
+- Selected backbone: kvnxiao/tauri-nextjs-template
+
+### Candidates
+- kvnxiao/tauri-nextjs-template
+  - Decision: selected
+  - Reason: highest-star compatible Tauri 2 + Next.js template with extractable src-tauri scaffold
+  - Path: `src-tauri/tauri.conf.json,src-tauri/Cargo.toml,src-tauri/src/lib.rs`
+- tauri-apps/create-tauri-app
+  - Decision: selected-donor
+  - Reason: official Tauri v2 base scaffold used for capabilities/build/main patterns
+  - Path: `templates/_base_/src-tauri`
+- 0xle0ne/nextauri
+  - Decision: rejected
+  - Reason: lower-star template and no extra needed paths after selected scaffold covered Phase 1
+- odest/catalyzer
+  - Decision: rejected
+  - Reason: monorepo/mobile scope was heavier than the focused desktop shell needed here
+## 2026-05-31T08:25:36.556511+00:00 - local-search
+
+- Request: automatically sync GitHub Actions repository secrets when local shared env changes differential sync
+- Source: local-index
+- Query: `automatically sync GitHub Actions repository secrets when local shared env changes differential sync`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=7.68 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+2. score=3.64 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+
+## 2026-05-31T08:25:39.747975+00:00 - prebuild-gate
+
+- Request: automatically sync GitHub Actions repository secrets when local shared env changes differential sync
+- Source: public-github
+- Query: `automatically sync GitHub Actions repository secrets when local shared env changes differential sync`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-05-31T08:25:58.979785+00:00 - triage
+
+- Request: Auto-sync changed shared env values to linked AEON GitHub repos when different
+- Source: local-existing-code
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: existing hive-env-add and AEON adapter already implement shared env parsing plus GitHub secret sync; safest concrete backbone for this repo-specific feature
+  - Path: `scripts/hive-env-add,src/lib/services/runtime-adapters/aeon.ts,src/app/api/env/route.ts`
+- cecobask/imdb-trakt-sync
+  - Decision: rejected
+  - Reason: GitHub Actions sync app but domain-specific Go app with no reusable GitHub secret differential code
+- pronamic/advanced-custom-fields-pro
+  - Decision: rejected
+  - Reason: mirror repo action workflow only; no local shared env or secret differential code
+## 2026-05-31T08:32:55.393600+00:00 - local-search
+
+- Request: Add a HivemindOS dashboard roster Call button for selected agents that triggers iPhone agent calls, reuses a shared call action, and shows a call modal with ringing/answered/talking states, waveform input feedback, transcript text, and animated agent icon
+- Source: local-index
+- Query: `Add a HivemindOS dashboard roster Call button for selected agents that triggers iPhone agent calls, reuses a shared call action, and shows a call modal with ringing/answered/talking states, waveform input feedback, transcript text, and animated agent icon`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=19.80 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+2. score=19.79 LiamVisionary/exercise-db [repo-summary]
+   url: https://github.com/LiamVisionary/exercise-db
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
+3. score=14.24 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+4. score=10.05 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+5. score=9.69 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+6. score=7.17 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+7. score=6.37 LiamVisionary/skills [repo-summary]
+   url: https://github.com/LiamVisionary/skills
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-skills.md
+   LiamVisionary/skills All versions of all skills that are on clawhub.com archived
+8. score=5.86 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+
+## 2026-05-31T08:32:57.903966+00:00 - prebuild-gate
+
+- Request: Add a HivemindOS dashboard roster Call button for selected agents that triggers iPhone agent calls, reuses a shared call action, and shows a call modal with ringing/answered/talking states, waveform input feedback, transcript text, and animated agent icon
+- Source: public-github
+- Query: `Add a HivemindOS dashboard roster Call button for selected agents that triggers iPhone agent calls, reuses a shared call action, and shows a call modal with ringing/answered/talking states, waveform input feedback, transcript text, and animated agent icon`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-05-31T08:33:10.097844+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /Users/liam/Documents/code/projects/hivemind-os:scripts/hive-env-add => scripts/hive-env-add, /Users/liam/Documents/code/projects/hivemind-os:src/lib/services/runtime-adapters/aeon.ts => src/lib/services/runtime-adapters/aeon.ts, /Users/liam/Documents/code/projects/hivemind-os:src/app/api/runtimes/aeon/workspaces/route.ts => src/app/api/runtimes/aeon/workspaces/route.ts, /Users/liam/Documents/code/projects/hivemind-os:src/app/api/runtimes/aeon/github-repos/route.ts => src/app/api/runtimes/aeon/github-repos/route.ts
+- Verification: Wrote ASSIMILATION.json with 4 entries and custom_code_assessment=balanced.
+## 2026-05-31T08:35:00.634306+00:00 - backbone-selection
+
+- Request: Agent roster Call button and call modal with waveform/transcript
+- Source: public-github-and-local-code
+- Query: `react voice recorder waveform analyser speech recognition`
+- Decision: selected-local-patterns
+- Reason: Highest-star public candidate xiangyuecn/Recorder was directionally relevant but too broad and audit-heavy; TypeScript recorder candidates reinforced the Web Audio analyser approach. Existing HivemindOS chat voice capture already implements the target browser APIs, so this feature reuses that local pattern and the existing /api/phone gateway route instead of importing external code.
+- Assimilated: Existing HivemindOS speechRecognitionConstructor and Web Audio AnalyserNode waveform pattern from use-status-chat-input-controller; existing /api/phone ring gateway contract.
+- Not assimilated: No external source files copied.
+
+### Candidates
+- xiangyuecn/Recorder
+  - Decision: reviewed-not-assimilated
+  - Reason: Huge general recorder library with thousands of medium audit hits; pattern only
+- stefanrmmr/streamlit-audio-recorder
+  - Decision: reviewed-not-assimilated
+  - Reason: React/TypeScript recorder pattern, medium audit hits; pattern only
+- mohamad-fallah/react-voice-recorder-kit
+  - Decision: reviewed-not-assimilated
+  - Reason: Small TypeScript waveform recorder, prepare script only; pattern only
+## 2026-05-31T08:48:14.869408+00:00 - verification
+
+- Request: Agent roster Call button and call modal with waveform/transcript
+- Source: local-implementation
+- Decision: verified
+- Reason: Implemented using existing HivemindOS phone gateway and voice capture patterns.
+- Assimilated: Local Web Audio/SpeechRecognition pattern and existing /api/phone gateway contract
+- Verification: pnpm exec eslint focused files; pnpm exec tsc --noEmit --pretty false --skipLibCheck; git diff --check focused files; Playwright smoke on http://127.0.0.1:5020/?view=agents with /api/phone mocked verified Snapshot Call opens talking modal and sends action=ring-agent with selected agent name.
+## 2026-05-31T09:28:37.868234+00:00 - local-search
+
+- Request: Tauri v2 Next.js production bundled sidecar Node server standalone output desktop app
+- Source: local-index
+- Query: `Tauri v2 Next.js production bundled sidecar Node server standalone output desktop app`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=6.85 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+2. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
+   url: https://github.com/LiamVisionary/ami-ai-companion-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   LiamVisionary/ami-ai-companion-app TypeScript
+3. score=0.44 LiamVisionary/Chatterbox-TTS-Server [repo-summary]
+   url: https://github.com/LiamVisionary/Chatterbox-TTS-Server
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-Chatterbox-TTS-Server.md
+   LiamVisionary/Chatterbox-TTS-Server Python Python
+4. score=0.44 LiamVisionary/inworld-nodejs-generate-token [repo-summary]
+   url: https://github.com/LiamVisionary/inworld-nodejs-generate-token
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-inworld-nodejs-generate-token.md
+   LiamVisionary/inworld-nodejs-generate-token TypeScript
+5. score=0.44 LiamVisionary/language-learning-app [repo-summary]
+   url: https://github.com/LiamVisionary/language-learning-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   LiamVisionary/language-learning-app TypeScript
+6. score=0.35 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+
+## 2026-05-31T09:28:40.122911+00:00 - prebuild-gate
+
+- Request: Tauri v2 Next.js production bundled sidecar Node server standalone output desktop app
+- Source: public-github
+- Query: `Tauri v2 Next.js production bundled sidecar Node server standalone output desktop app`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-05-31T09:28:52.261714+00:00 - public-search
+
+- Request: tauri nextjs standalone sidecar node production
+- Source: public-github
+- Query: `tauri nextjs standalone sidecar node production`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T09:29:06.382095+00:00 - triage
+
+- Request: Proceed with Phase 2 Tauri packaging
+- Source: public-github
+- Selected backbone: dieharders/example-tauri-v2-python-server-sidecar
+
+### Candidates
+- ChatGPTNextWeb/NextChat
+  - Decision: rejected
+  - Reason: highest-star Next app but not an exact Tauri sidecar packaging donor for this Phase 2 work
+- dieharders/example-tauri-v2-python-server-sidecar
+  - Decision: selected
+  - Reason: Tauri v2 plus bundled Next.js frontend and sidecar server example matches Phase 2 architecture
+- synle/sqlui-native
+  - Decision: selected-donor
+  - Reason: Tauri v2 app with Node.js sidecar, useful for sidecar config and spawn shape
+## 2026-05-31T09:39:54.642051+00:00 - local-search
+
+- Request: Wire AEON to HivemindOS hive endpoints to launch MiroShark simulations, archive results to Obsidian shared vault, and return verdicts to AEON
+- Source: local-index
+- Query: `Wire AEON to HivemindOS hive endpoints to launch MiroShark simulations, archive results to Obsidian shared vault, and return verdicts to AEON`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=16.18 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+2. score=4.99 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+3. score=3.64 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+4. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+5. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+6. score=3.35 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+7. score=1.75 LiamVisionary/ai-headshot-generator [repo-summary]
+   url: https://github.com/LiamVisionary/ai-headshot-generator
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   LiamVisionary/ai-headshot-generator TypeScript
+8. score=1.75 LiamVisionary/fantom-survivor-testnet [repo-summary]
+   url: https://github.com/LiamVisionary/fantom-survivor-testnet
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-fantom-survivor-testnet.md
+   LiamVisionary/fantom-survivor-testnet
+
+## 2026-05-31T09:39:57.753293+00:00 - public-search
+
+- Request: Wire AEON to HivemindOS hive endpoints to launch MiroShark simulations, archive results to Obsidian shared vault, and return verdicts to AEON
+- Source: public-github
+- Query: `Wire AEON to HivemindOS hive endpoints to launch MiroShark simulations, archive results to Obsidian shared vault, and return verdicts to AEON`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T09:39:57.861220+00:00 - prebuild-gate
+
+- Request: Wire AEON to HivemindOS hive endpoints to launch MiroShark simulations, archive results to Obsidian shared vault, and return verdicts to AEON
+- Source: public-github
+- Query: `Wire AEON to HivemindOS hive endpoints to launch MiroShark simulations, archive results to Obsidian shared vault, and return verdicts to AEON`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
+cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+
+## 2026-05-31T09:40:10.954881+00:00 - public-search
+
+- Request: aeon autonomous agent GitHub Actions skills aeon.yml
+- Source: public-github
+- Query: `aeon autonomous agent GitHub Actions skills aeon.yml`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T09:40:11.297668+00:00 - public-search
+
+- Request: MiroShark simulation API Flask aaronjmars
+- Source: public-github
+- Query: `MiroShark simulation API Flask aaronjmars`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T09:49:13.357082+00:00 - triage
+
+- Request: Wire AEON to HivemindOS hive endpoints to launch MiroShark simulations, archive results to Obsidian shared vault, and return verdicts to AEON
+- Source: public-github
+- Selected backbone: aaronjmars/MiroShark
+
+### Candidates
+- aaronjmars/MiroShark
+  - Decision: selected
+  - Reason: upstream simulation API already assimilated in this project; endpoint flow matches graph ontology/build, simulation create/prepare/start, run-status/posts/report fetches
+  - Path: `backend`
+- aaronjmars/aeon
+  - Decision: selected
+  - Reason: upstream AEON skill layout and aeon.yml runtime conventions; full skills subtree audit contains unrelated destructive examples so only local already-assimilated conventions were reused
+  - Path: `skills,aeon.yml`
+- boxpositron/markdown-vault
+  - Decision: rejected
+  - Reason: Python vault API wrong stack and audit flagged Dockerfile destructive cleanup pattern; existing HivemindOS Obsidian archive service is safer
+  - Path: `server`
+## 2026-05-31T09:50:45.674867+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: aaronjmars/MiroShark:backend/openapi.yaml => src/lib/services/miroshark/hive-rehearsal.ts, aaronjmars/MiroShark:backend/app/api/simulation.py => src/lib/services/miroshark/hive-rehearsal.ts, aaronjmars/aeon:aeon.yml => /Users/liam/Documents/Obsidian/hivemindos-vault/Skills/miroshark-rehearsal/SKILL.md
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-05-31T10:17:32.841692+00:00 - local-search
+
+- Request: Add AEON deliverables API UI tab badges machine transfer and end-to-end AEON MiroShark rehearsal test
+- Source: local-index
+- Query: `Add AEON deliverables API UI tab badges machine transfer and end-to-end AEON MiroShark rehearsal test`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=4.39 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+2. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+3. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+4. score=3.35 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+5. score=0.70 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+6. score=0.44 LiamVisionary/chatterbox-tts-api-modal-deployed [repo-summary]
+   url: https://github.com/LiamVisionary/chatterbox-tts-api-modal-deployed
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
+   LiamVisionary/chatterbox-tts-api-modal-deployed Python Python
+7. score=0.44 LiamVisionary/fantom-survivor-testnet [repo-summary]
+   url: https://github.com/LiamVisionary/fantom-survivor-testnet
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-fantom-survivor-testnet.md
+   LiamVisionary/fantom-survivor-testnet
+8. score=0.35 LiamVisionary/ai-companion-website [repo-summary]
+   url: https://github.com/LiamVisionary/ai-companion-website
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
+
+## 2026-05-31T10:17:39.497863+00:00 - public-search
+
+- Request: Add AEON deliverables API UI tab badges machine transfer and end-to-end AEON MiroShark rehearsal test
+- Source: public-github
+- Query: `Add AEON deliverables API UI tab badges machine transfer and end-to-end AEON MiroShark rehearsal test`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T10:17:39.590761+00:00 - prebuild-gate
+
+- Request: Add AEON deliverables API UI tab badges machine transfer and end-to-end AEON MiroShark rehearsal test
+- Source: public-github
+- Query: `Add AEON deliverables API UI tab badges machine transfer and end-to-end AEON MiroShark rehearsal test`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
+cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+
+## 2026-05-31T10:41:33.631394+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: dieharders/example-tauri-v2-python-server-sidecar:src-tauri/tauri.conf.json => src-tauri/tauri.conf.json, dieharders/example-tauri-v2-python-server-sidecar:src-tauri/src/main.rs => src-tauri/src/lib.rs, synle/sqlui-native:src-tauri/src/lib.rs => src-tauri/src/lib.rs, synle/sqlui-native:scripts/prepare-sidecar.js => scripts/tauri-build.mjs
+- Verification: Wrote ASSIMILATION.json with 4 entries and custom_code_assessment=balanced.
+## 2026-05-31T12:13:40.755121+00:00 - local-search
+
+- Request: Add an agent settings modal Calls tab for voice runtime, dynamic voices, phone connection QR onboarding, and scheduled calls using existing mobile gateway patterns
+- Source: local-index
+- Query: `Add an agent settings modal Calls tab for voice runtime, dynamic voices, phone connection QR onboarding, and scheduled calls using existing mobile gateway patterns`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=10.12 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+2. score=7.40 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+3. score=7.34 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+4. score=4.04 LiamVisionary/chatterbox [repo-summary]
+   url: https://github.com/LiamVisionary/chatterbox
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox.md
+   LiamVisionary/chatterbox SoTA open-source TTS Voice/TTS
+5. score=4.04 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+6. score=3.64 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+7. score=0.88 LiamVisionary/ai-companion-website [repo-summary]
+   url: https://github.com/LiamVisionary/ai-companion-website
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
+8. score=0.88 LiamVisionary/claw-code-mobile-private [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile-private
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile-private.md
+   LiamVisionary/claw-code-mobile-private Private fork: on-device inference + experimental features Rust
+
+## 2026-05-31T12:13:42.866342+00:00 - public-search
+
+- Request: Add an agent settings modal Calls tab for voice runtime, dynamic voices, phone connection QR onboarding, and scheduled calls using existing mobile gateway patterns
+- Source: public-github
+- Query: `Add an agent settings modal Calls tab for voice runtime, dynamic voices, phone connection QR onboarding, and scheduled calls using existing mobile gateway patterns`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-05-31T12:13:42.915961+00:00 - prebuild-gate
+
+- Request: Add an agent settings modal Calls tab for voice runtime, dynamic voices, phone connection QR onboarding, and scheduled calls using existing mobile gateway patterns
+- Source: public-github
+- Query: `Add an agent settings modal Calls tab for voice runtime, dynamic voices, phone connection QR onboarding, and scheduled calls using existing mobile gateway patterns`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
+cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+
+## 2026-05-31T12:16:45.785371+00:00 - triage
+
+- Request: Add agent settings Calls tab
+- Source: local-private
+- Selected backbone: LiamVisionary/claw-code-mobile-private
+
+### Candidates
+- LiamVisionary/claw-code-mobile-private
+  - Decision: selected
+  - Reason: canonical mobile call settings, dynamic voice provider config, device status and gateway endpoints
+  - Path: `store/agentCallSettings.ts,store/voiceProviders.ts,components/settings/AgentCallsTab.tsx,components/settings/SettingsFormContext.tsx,backend/src/routes/voice.ts`
+- Concept-Bytes/JarvisV3
+  - Decision: rejected
+  - Reason: Python Streamlit assistant; no compatible dashboard TSX or mobile gateway call settings to transplant
+## 2026-05-31T12:43:38.987876+00:00 - assimilation-manifest
+
+- Request: Add a Calls tab to the agent settings modal for dynamic voice runtime/voice selection and scheduled phone calls through Claw Code Mobile.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/claw-code-mobile-private:store/agentCallSettings.ts => src/lib/types/agent-runtime.ts, LiamVisionary/claw-code-mobile-private:store/voiceProviders.ts => src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx, LiamVisionary/claw-code-mobile-private:components/settings/AgentCallsTab.tsx => src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx, LiamVisionary/claw-code-mobile-private:components/settings/SettingsFormContext.tsx => src/app/api/phone/route.ts, LiamVisionary/claw-code-mobile-private:backend/src/routes/voice.ts => src/lib/services/phone/call-gateway.ts
+- Verification: Wrote ASSIMILATION.json with 5 entries and custom_code_assessment=balanced.
+## 2026-05-31T12:47:38.767657+00:00 - local-search
+
+- Request: Add an active app icon badge to an existing React/Next fleet graph cell using existing local app icon data
+- Source: local-index
+- Query: `Add an active app icon badge to an existing React/Next fleet graph cell using existing local app icon data`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=9.52 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+2. score=8.22 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+3. score=8.09 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+4. score=8.09 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+5. score=6.56 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+6. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+7. score=1.75 LiamVisionary/ami-ai-companion-app [repo-summary]
+   url: https://github.com/LiamVisionary/ami-ai-companion-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   LiamVisionary/ami-ai-companion-app TypeScript
+8. score=1.75 LiamVisionary/language-learning-app [repo-summary]
+   url: https://github.com/LiamVisionary/language-learning-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   LiamVisionary/language-learning-app TypeScript

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "HivemindOS",
+  "version": "0.1.0",
+  "identifier": "com.hivemindos.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm tauri:next-dev",
+    "devUrl": "http://127.0.0.1:5021",
+    "beforeBuildCommand": "pnpm tauri:prepare",
+    "frontendDist": "loading"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "HivemindOS",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 960,
+        "minHeight": 640,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": {
+      "resources/": "resources/"
+    },
+    "icon": [
+      "../public/icon-192.png",
+      "../public/icon-512.png",
+      "../public/favicon.ico"
+    ]
+  }
+}

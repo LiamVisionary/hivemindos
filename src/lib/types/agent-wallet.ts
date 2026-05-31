@@ -1,4 +1,4 @@
-export type AgentPaymentProvider = "manual" | "bankr" | "clawcard" | "moneyclaw" | "x402";
+export type AgentPaymentProvider = "manual" | "bankr" | "clawcard" | "moneyclaw" | "x402" | "usepod";
 
 export type AgentSurvivalTier = "dead" | "critical" | "low_compute" | "normal" | "high";
 

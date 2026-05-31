@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo } from "react";
 
 export function useWalletFilesController(props: any) {
   const { buildAgentPaymentPrompt, createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, displayAgents, duplicateAgentDraft, agents, honeyLedgerEnabled, normalizeMoney, openAgentCreationModal, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, selectedAgent, selectedAgentId, setAgents, setDuplicateAgentDraft, setHoneyLedgerEnabled, setHoneyTreasury, setMaintenanceBusy, setMaintenanceMessage, setMaintenanceReport, setMessagesByAgent, setMoneyClawLoadingEnvName, setMoneyClawStatusByEnvName, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setRuntimeFileRoots, setRuntimeFileStatus, setRuntimeFiles, setRuntimeUsage, setRuntimeUsageLoading, setSelectedAgentId, setSharedVault, setWalletActionsByAgent, setWalletVaultBackupBusy, setWalletVaultBackupMessage, setWalletVaultBackupStatus, setWalletsByAgent, sharedVault, updateAgentProfile, walletActionsByAgent, walletsByAgent } = props;
+  const deleteFetchTimeoutMs = 20_000;
   function updateSharedVault(patch: Partial<SharedVaultConfig>) {
     setSharedVault((current) => ({ ...current, ...patch }));
   }
@@ -566,8 +567,66 @@ export function useWalletFilesController(props: any) {
     setDuplicateAgentDraft(null);
   }
 
-  function deleteAgent(agentId = selectedAgent?.id) {
-    if (!agentId || agents.length <= 1) return;
+  async function deleteAgent(agentId = selectedAgent?.id, options?: { aeonDeleteDepth?: "local" | "github" | "both"; onProgress?: (progress: { step: "local" | "github"; status: "idle" | "working" | "done" | "failed"; message?: string }) => void }) {
+    if (!agentId) return;
+    const agent = displayAgents.find((item) => item.id === agentId) ?? agents.find((item) => item.id === agentId) ?? selectedAgent;
+    if (agent?.runtime === "aeon" && options?.aeonDeleteDepth) {
+      const staleLocalDeleteError = (message: string) => (
+        /does not exist/i.test(message)
+        || /does not look like an AEON workspace/i.test(message)
+        || /does not appear to be a local folder/i.test(message)
+        || /does not appear to be a local/i.test(message)
+        || /unsupported remote AEON workspace action/i.test(message)
+      );
+      try {
+        if (options.aeonDeleteDepth === "local" || options.aeonDeleteDepth === "both") {
+          options.onProgress?.({ step: "local", status: "working" });
+          try {
+            const response = await fetch("/api/runtimes/aeon/workspaces", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "delete-local", agent }),
+              signal: AbortSignal.timeout(deleteFetchTimeoutMs),
+            });
+            const data = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+            if (!response.ok || data?.ok === false) throw new Error(data?.error || "Could not delete the local AEON repo.");
+            options.onProgress?.({ step: "local", status: "done" });
+          } catch (error) {
+            const message = error instanceof DOMException && error.name === "TimeoutError"
+              ? `Local repo deletion timed out after ${Math.round(deleteFetchTimeoutMs / 1000)} seconds.`
+              : error instanceof Error ? error.message : "Could not delete the local AEON repo.";
+            if (!staleLocalDeleteError(message)) {
+              options.onProgress?.({ step: "local", status: "failed", message });
+              return { ok: false, error: message };
+            }
+            options.onProgress?.({
+              step: "local",
+              status: "done",
+              message: "Local folder was missing or no longer looked like an AEON workspace, so HivemindOS removed the stale roster entry.",
+            });
+          }
+        }
+        if (options.aeonDeleteDepth === "github" || options.aeonDeleteDepth === "both") {
+          if (!agent.aeonRepo?.trim()) throw new Error("No GitHub repo is configured for this AEON agent.");
+          options.onProgress?.({ step: "github", status: "working" });
+          const response = await fetch("/api/runtimes/aeon/github-repos", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "delete", agent, repo: agent.aeonRepo }),
+            signal: AbortSignal.timeout(deleteFetchTimeoutMs),
+          });
+          const data = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+          if (!response.ok || data?.ok === false) throw new Error(data?.error || "Could not delete the GitHub AEON repo.");
+          options.onProgress?.({ step: "github", status: "done" });
+        }
+      } catch (error) {
+        const message = error instanceof DOMException && error.name === "TimeoutError"
+          ? `GitHub repo deletion timed out after ${Math.round(deleteFetchTimeoutMs / 1000)} seconds.`
+          : error instanceof Error ? error.message : "Could not delete the AEON agent.";
+        options.onProgress?.({ step: "github", status: "failed", message });
+        return { ok: false, error: message };
+      }
+    }
     const next = agents.filter((agent) => agent.id !== agentId);
     setAgents(next);
     if (selectedAgentId === agentId) {
@@ -578,6 +637,7 @@ export function useWalletFilesController(props: any) {
       delete nextMessages[agentId];
       return nextMessages;
     });
+    return { ok: true };
   }
 
   return { updateSharedVault, updateWallet, resetWalletBurnClock, copyPaymentPrompt, refreshMoneyClawStatus, saveMoneyClawKey, initializeCoreWalletRails, refreshHoneyLedger, observeHoneyUsage, refreshRuntimeUsage, refreshWalletVaultBackupStatus, runWalletVaultBackupAction, refreshMaintenanceReport, runMaintenanceAction, runtimeFileRequest, refreshRuntimeFileRoots, listRuntimeFiles, openRuntimeFile, saveRuntimeFile, returnAllHiveToHoney, claimAllHoneyToBankrHive, enableHoneyLedger, updateWalletAction, createLocalWallet, refreshWalletBalance, sendWalletUsdc, testX402Fetch, addAgentToMachine, requestDuplicateAgent, duplicateAgent, deleteAgent };

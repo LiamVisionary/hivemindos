@@ -7,7 +7,7 @@ import { AddHexCell } from "./add-hex-cell";
 import { BeeIcon } from "./bee-icon";
 import { HexTile, type HexTone } from "./hex-tile";
 import { axialToPixel, HEX_H, HEX_W, hexSpiral } from "./hex-math";
-import { isFleetMachineMobile, type AgentState, type FleetAgent, type FleetMachine } from "./fleet-data";
+import { isFleetMachineMobile, type AgentState, type FleetActiveApp, type FleetAgent, type FleetMachine } from "./fleet-data";
 import styles from "./fleet-tokens.module.css";
 
 const STATE_TONE: Record<AgentState, HexTone> = {
@@ -117,10 +117,29 @@ function MachineScreenIcon({ name, selected, muted, mobile }: { name: string; se
   );
 }
 
+function ActiveAppBadge({ app }: { app: FleetActiveApp }) {
+  const [broken, setBroken] = React.useState(false);
+  return (
+    <span
+      className={styles.graphActiveAppBadge}
+      aria-label={`${app.name} is active`}
+      title={`${app.name} is active`}
+    >
+      {app.iconUrl && !broken ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={app.iconUrl} alt="" onError={() => setBroken(true)} />
+      ) : (
+        <span>{app.initials}</span>
+      )}
+    </span>
+  );
+}
+
 interface MachineClusterProps {
   machine: FleetMachine;
   cx: number;
   cy: number;
+  addCell?: [number, number];
   selected: boolean;
   selectedAgentId: string | null;
   onSelectMachine: () => void;
@@ -136,13 +155,14 @@ interface MachineClusterProps {
  */
 export function MachineCluster({
   machine,
-  cx, cy,
+  cx, cy, addCell,
   selected, selectedAgentId,
   onSelectMachine, onSelectAgent, onAddAgent,
 }: MachineClusterProps) {
   const agentCount = machine.agents.length;
-  // 1 machine + N agents + 1 "add" slot.
-  const cells = hexSpiral(agentCount + 2);
+  const occupiedCells = hexSpiral(agentCount + 1);
+  const defaultAddCell = hexSpiral(agentCount + 2)[agentCount + 1] ?? [0, 0];
+  const cells = [...occupiedCells, addCell ?? defaultAddCell];
 
   return (
     <div style={{ position: "absolute", left: cx, top: cy, width: 0, height: 0 }}>
@@ -194,7 +214,7 @@ export function MachineCluster({
         }
 
         return (
-          <div key={i} style={wrapperStyle} title={isMachine ? machine.name : agent!.name}>
+          <div key={i} style={wrapperStyle} title={isMachine ? machine.name : `${agent!.name}${agent!.activeApp ? ` · ${agent!.activeApp.name} active` : ""}`}>
             <HexTile
               size={HEX_W}
               tone={tone!}
@@ -244,6 +264,7 @@ export function MachineCluster({
                 )}
               </div>
             </HexTile>
+            {!isMachine && agent?.activeApp ? <ActiveAppBadge app={agent.activeApp} /> : null}
           </div>
         );
       })}

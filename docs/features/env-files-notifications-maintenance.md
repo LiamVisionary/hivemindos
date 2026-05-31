@@ -11,12 +11,16 @@ How it works:
 - Canonical shared env: `~/.hivemindos/.env`.
 - Optional encrypted backup: `hive.env.gpg` in the selected notes folder when GPG is configured.
 - Remote env sync uses collector `/env` and Tailscale/Link reachability.
+- Linked AEON GitHub repos are tracked in `~/.hivemindos/aeon-env-sync-repos.json`.
+- AEON GitHub secret sync state lives in `~/.hivemindos/aeon-env-sync-state.json` and stores fingerprints only, not secret values.
 
 Capabilities:
 
 - Add, update, import, reveal, and promote env values.
 - Keep shared env separate from runtime-specific compatibility stores.
 - Sync selected values to trusted machines.
+- Automatically sync changed shared env values to managed private AEON repos as GitHub Actions secrets.
+- Skip public AEON repos and remove HivemindOS-managed synced secrets when a managed repo becomes public.
 - Restore encrypted backups when configured.
 - Verify presence without printing values through `hive-env-check`.
 

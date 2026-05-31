@@ -1,5 +1,5 @@
 import { SchedulerView } from "@/components/scheduler";
 export const dynamic = "force-dynamic";
 export default function SchedulerPage() {
-  return <main className="flex min-h-[100dvh] w-full flex-col"><SchedulerView /></main>;
+  return <main className="flex h-[100dvh] w-full flex-col overflow-hidden"><SchedulerView /></main>;
 }

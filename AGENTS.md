@@ -20,6 +20,73 @@
 - Keep collectors private to Tailscale unless the user explicitly asks for another exposure model.
 - Prefer read-only fleet inspection by default. Remote mutation/update endpoints need explicit design and safety review.
 
+## Code Style Guide
+
+Agents are senior software engineers in this codebase and must follow these rules strictly.
+
+### Core Principles
+
+- Correctness first: prefer clear, reliable code over cleverness.
+- Keep logic DRY. If the same logic appears twice, extract it into a well-named helper or shared module.
+- Preserve single responsibility: each file, module, and function should do one thing well.
+- Build small, composable units instead of large, multi-purpose functions or modules.
+
+### Code Organization
+
+- Keep files small and focused. If a file starts to feel multi-purpose, split it along feature or domain boundaries.
+- Group code by feature or domain rather than by technical layer when practical.
+- Avoid "god utils". Utility modules should be narrowly scoped and named for their domain.
+- Prefer explicit exports and a minimal public surface area.
+
+### Readability And Style
+
+- Prefer descriptive names over abbreviations.
+- Keep functions short. If a function needs comments to explain what it is doing, refactor it.
+- Avoid deep nesting; use early returns and guard clauses.
+- Keep side effects isolated. I/O, network calls, storage, timers, and randomness should stay at the edges; pure logic should remain pure.
+
+### Types And Interfaces
+
+- Use TypeScript types to model domain data clearly.
+- Avoid `any`. If a value is not yet known, use `unknown` plus runtime narrowing.
+- Prefer small, specific types over broad "everything" types.
+- Validate external data at boundaries, including API responses, localStorage, user input, files, and environment variables.
+
+### Error Handling
+
+- Fail loudly in development and gracefully in production.
+- Add actionable error messages that explain what failed, why, and the relevant context.
+- Do not swallow errors silently. Handle them intentionally or rethrow with context.
+
+### Testing And Maintainability
+
+- Write code that is easy to test with dependency injection, pure functions, and clear boundaries.
+- If adding logic that can break, add or adjust focused tests, unit tests where practical.
+- Avoid time-based flakiness; isolate randomness and current time behind helpers.
+
+### Performance And Complexity
+
+- Prefer the simplest solution that is fast enough.
+- Avoid unnecessary renders, recomputation, and repeated expensive work.
+- Memoize only when there is a clear need, and keep the result readable.
+
+### Documentation
+
+- Prefer self-documenting code.
+- Add comments for why, not what.
+
+### Security And Privacy
+
+- Treat user data as sensitive by default.
+- Never log secrets, tokens, or PII.
+- Sanitize or escape where relevant, including HTML, URLs, shell commands, and database queries.
+
+### File Size Limit
+
+- Code files must never exceed 1500 lines. If they do, refactor into smaller, more focused modules.
+- Before pushing, run `node scripts/check-file-sizes.mjs` or `pnpm check-sizes` to check the repository.
+- If an existing oversized legacy file must be touched, prefer extracting code from it instead of adding to it.
+
 ## Dev Server Ownership
 
 - Port `5020` is Liam's managed HivemindOS dev server. Do not kill, restart, replace, or take over the process on port `5020` unless Liam explicitly asks for that exact action.

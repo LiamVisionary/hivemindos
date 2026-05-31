@@ -18,6 +18,7 @@ Wallets let agents hold controlled budgets and use payment rails. Honey and HIVE
 - Send USDC where configured and approved.
 - Store and recover wallet backup status.
 - Validate MoneyClaw keys.
+- Track UsePod prepaid token deposit details and runtime balance/route metadata when UsePod returns it.
 - Execute x402 paid requests through policy-aware helpers.
 - Observe runtime usage and submit privacy-safe Honey metadata.
 - Exchange Honey for HIVE through the configured ledger.

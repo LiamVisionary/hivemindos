@@ -1,10 +1,18 @@
 import { execFile } from "child_process";
+import { readFile, readlink } from "fs/promises";
 import { promisify } from "util";
 import { hivemindLinkControlUrl, localTelemetryCollectorUrl } from "@/lib/services/hivemind-link-control";
 
 export const runtime = "nodejs";
 
 const execFileAsync = promisify(execFile);
+const TAILSCALE_STATUS_TIMEOUT_MS = 6_000;
+const TAILSCALE_LOCAL_API_TIMEOUT_MS = 2_000;
+const TAILSCALE_CLI_CANDIDATES = [
+  "/usr/local/bin/tailscale",
+  "/opt/homebrew/bin/tailscale",
+  "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+];
 
 type TailscalePeer = {
   ID?: string;
@@ -39,8 +47,17 @@ type HivemindLinkStatus = {
   error?: string;
 };
 
+type TailnetHealth = {
+  state: "ok" | "peer-traffic-stalled" | "status-unavailable" | "not-running";
+  detail?: string;
+};
+
 function localCollectorUrl() {
   return localTelemetryCollectorUrl();
+}
+
+function shouldUseTailscaleCliFallback() {
+  return process.platform !== "darwin" || process.env.HIVEMIND_TAILSCALE_CLI_FALLBACK === "1";
 }
 
 function localDevice() {
@@ -91,11 +108,9 @@ function isSameTailscalePeer(left?: TailscalePeer, right?: TailscalePeer) {
 }
 
 function deviceIdentityKey(device: ReturnType<typeof simplifyDevice>) {
-  const physicalKey = devicePhysicalIdentityKey(device);
-  if (physicalKey) return physicalKey;
   const dnsName = normalizeName(dnsLabel(device.dnsName));
   const name = normalizeName(device.name) || dnsName;
-  if (name.startsWith("hivemindos")) return dnsName || name;
+  if (name.startsWith("hivemindos")) return hivemindMachineBase(device) || dnsName || name;
   if (device.self) return "self";
   return name || device.ip || device.collectorUrl;
 }
@@ -109,20 +124,46 @@ function isMobileDevice(device: ReturnType<typeof simplifyDevice>) {
   return /^(ios|android)$/i.test(device.os);
 }
 
-function devicePhysicalIdentityKey(device: ReturnType<typeof simplifyDevice>) {
-  const base = physicalMachineBase(device);
-  if (!base || isMobileDevice(device)) return "";
-  return isHivemindLinkDevice(device) ? `physical:${base}` : "";
+function isMacDevice(device: ReturnType<typeof simplifyDevice>) {
+  return /^(macos|darwin)$/i.test(device.os);
 }
 
-function isMacDevice(device: ReturnType<typeof simplifyDevice>) {
-  return /^macos$/i.test(device.os);
+function hasNeverHandshake(value?: string) {
+  return !value || value.startsWith("0001-01-01");
+}
+
+function peerLooksTrafficStalled(peer: TailscalePeer) {
+  return peer.Online === true
+    && hasNeverHandshake(peer.LastHandshake)
+    && (peer.RxBytes ?? 0) === 0
+    && (!peer.CurAddr || peer.CurAddr.trim() === "");
+}
+
+function tailnetHealthFromStatus(status?: TailscaleStatus | HivemindLinkStatus | null): TailnetHealth | undefined {
+  if (!status) return { state: "status-unavailable", detail: "Tailscale status was not available." };
+  const isCliStatus = Object.prototype.hasOwnProperty.call(status, "Self") || Object.prototype.hasOwnProperty.call(status, "Peer");
+  const backendState = isCliStatus ? (status as TailscaleStatus).BackendState : (status as HivemindLinkStatus).backendState;
+  if (backendState && backendState !== "Running") {
+    return { state: "not-running", detail: `Tailscale backend is ${backendState}.` };
+  }
+  const peerMap = isCliStatus ? (status as TailscaleStatus).Peer : (status as HivemindLinkStatus).peer;
+  const onlinePeers = Object.values(peerMap ?? {}).filter((peer) => peer.Online === true);
+  const stalledPeers = onlinePeers.filter(peerLooksTrafficStalled);
+  if (onlinePeers.length > 0 && stalledPeers.length === onlinePeers.length) {
+    return {
+      state: "peer-traffic-stalled",
+      detail: `Tailscale lists ${onlinePeers.length} online peer${onlinePeers.length === 1 ? "" : "s"}, but this Mac has no current peer receive traffic or handshake.`,
+    };
+  }
+  return { state: "ok" };
 }
 
 function hivemindMachineBase(device: ReturnType<typeof simplifyDevice>) {
-  const normalizedName = normalizeName(device.name);
-  const normalizedDnsName = normalizeName(dnsLabel(device.dnsName));
-  const value = normalizedName.startsWith("hivemindos") ? normalizedName : normalizedDnsName;
+  const rawName = device.name.toLowerCase();
+  const rawDnsName = dnsLabel(device.dnsName).toLowerCase();
+  const rawValue = normalizeName(rawName).startsWith("hivemindos") ? rawName : rawDnsName;
+  const canonicalValue = isMacDevice(device) ? rawValue.replace(/-\d+$/, "") : rawValue;
+  const value = normalizeName(canonicalValue);
   if (!value.startsWith("hivemindos")) return "";
   return value.replace(/^hivemindos/, "").replace(/local\d*$/, "");
 }
@@ -157,6 +198,7 @@ function isStaleSelfDuplicate(
 
 function deviceFreshnessScore(device: ReturnType<typeof simplifyDevice>) {
   return (device.self ? 10_000 : 0)
+    + (isHivemindLinkDevice(device) ? 500 : 0)
     + (device.online ? 1_000 : 0)
     + (device.active ? 100 : 0)
     + (device.lastHandshake && !device.lastHandshake.startsWith("0001-01-01") ? 10 : 0)
@@ -187,7 +229,7 @@ function simplifyDevice(peer: TailscalePeer, self = false, viaLink = false) {
     name: self ? "This Mac" : displayNameForPeer(peer, dnsName, ip),
     dnsName,
     os: peer.OS ?? "unknown",
-    online: Boolean(peer.Online),
+    online: self ? true : Boolean(peer.Online),
     ip,
     collectorUrl: self ? localCollectorUrl() : ip ? (viaLink ? linkCollectorUrl(ip) : `http://${ip}:8787`) : "",
     lastSeen: peer.LastSeen,
@@ -213,14 +255,45 @@ async function hivemindLinkStatus(): Promise<HivemindLinkStatus | null> {
   }
 }
 
-async function systemTailscaleSelf(): Promise<TailscalePeer | undefined> {
-  const { stdout } = await execFileAsync("tailscale", ["status", "--json"], {
-    timeout: 5_000,
-    maxBuffer: 1_500_000,
-  }).catch(() => ({ stdout: "" }));
-  if (!stdout) return undefined;
+async function systemTailscaleStatus(options: { allowCliFallback?: boolean } = {}) {
+  const localApiStatus = await tailscaleLocalApiStatus();
+  if (localApiStatus) return localApiStatus;
+  if (options.allowCliFallback === false || !shouldUseTailscaleCliFallback()) {
+    return { error: "Tailscale LocalAPI unavailable" };
+  }
+
+  let lastError = "tailscale unavailable";
+  for (const command of TAILSCALE_CLI_CANDIDATES) {
+    const { stdout, error } = await execFileAsync(command, ["status", "--json"], {
+      timeout: TAILSCALE_STATUS_TIMEOUT_MS,
+      maxBuffer: 1_500_000,
+    }).then(({ stdout }) => ({ stdout, error: "" })).catch((err) => ({ stdout: "", error: err instanceof Error ? err.message : "tailscale unavailable" }));
+    if (error) lastError = error;
+    if (!stdout) continue;
+    try {
+      return JSON.parse(stdout) as TailscaleStatus & { error?: string };
+    } catch {
+      lastError = "Could not parse tailscale status";
+      continue;
+    }
+  }
+  return { error: lastError };
+}
+
+async function tailscaleLocalApiStatus(): Promise<(TailscaleStatus & { error?: string }) | undefined> {
   try {
-    return (JSON.parse(stdout) as TailscaleStatus).Self;
+    const port = (await readlink("/Library/Tailscale/ipnport")).trim();
+    const proof = (await readFile(`/Library/Tailscale/sameuserproof-${port}`, "utf8")).trim();
+    if (!port || !proof) return undefined;
+    const response = await fetch(`http://127.0.0.1:${port}/localapi/v0/status`, {
+      cache: "no-store",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`x:${proof}`).toString("base64")}`,
+      },
+      signal: AbortSignal.timeout(TAILSCALE_LOCAL_API_TIMEOUT_MS),
+    });
+    if (!response.ok) return undefined;
+    return await response.json() as TailscaleStatus & { error?: string };
   } catch {
     return undefined;
   }
@@ -241,35 +314,35 @@ function devicesFromStatus(status: TailscaleStatus | HivemindLinkStatus, viaLink
 export async function GET() {
   const link = await hivemindLinkStatus();
   if (link) {
-    const localSystemSelf = await systemTailscaleSelf();
+    const status = await systemTailscaleStatus({ allowCliFallback: false });
+    const health = tailnetHealthFromStatus(status.error ? link : status);
     return Response.json({
       ok: link.ok === true,
       backendState: link.backendState,
       authUrl: link.authUrl,
       magicDnsSuffix: link.magicDnsSuffix,
       source: "hivemind-link",
-      devices: devicesFromStatus(link, true, localSystemSelf),
+      tailnetHealth: health,
+      devices: devicesFromStatus(link, true, status.error ? undefined : status.Self),
     });
   }
 
-  const { stdout } = await execFileAsync("tailscale", ["status", "--json"], {
-    timeout: 5_000,
-    maxBuffer: 1_500_000,
-  }).catch((error) => ({ stdout: JSON.stringify({ error: error instanceof Error ? error.message : "tailscale unavailable" }) }));
-
-  try {
-    const status = JSON.parse(stdout) as TailscaleStatus & { error?: string };
-    if (status.error) {
-      return Response.json({ ok: false, error: status.error, devices: [localDevice()] });
-    }
+  const status = await systemTailscaleStatus({ allowCliFallback: true });
+  if (status.error) {
     return Response.json({
-      ok: status.BackendState === "Running",
-      backendState: status.BackendState,
-      magicDnsSuffix: status.MagicDNSSuffix,
-      source: "tailscale-cli",
-      devices: devicesFromStatus(status),
+      ok: false,
+      error: status.error,
+      tailnetHealth: tailnetHealthFromStatus(null),
+      devices: [localDevice()],
     });
-  } catch {
-    return Response.json({ ok: false, error: "Could not parse tailscale status", devices: [localDevice()] });
   }
+  const health = tailnetHealthFromStatus(status);
+  return Response.json({
+    ok: status.BackendState === "Running",
+    backendState: status.BackendState,
+    magicDnsSuffix: status.MagicDNSSuffix,
+    source: "tailscale-cli",
+    tailnetHealth: health,
+    devices: devicesFromStatus(status),
+  });
 }

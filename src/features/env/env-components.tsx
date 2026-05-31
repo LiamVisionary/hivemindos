@@ -3,6 +3,7 @@ import { Copy, Eye, Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
 import { cleanActivityTitle } from "@/features/chat/chat-composer";
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { RUNTIME_LABELS, type AgentProfile } from "@/lib/types/agent-runtime";
@@ -62,7 +63,12 @@ export function chatSeedMessagesForTask(task: AgentTask): ChatMessage[] {
         ? `Resuming ${task.title || "previous chat"} from Hermes session metadata. The session id is available, but the dashboard could not display prior Hermes messages yet. Send the next message to continue this runtime session.`
         : `Resuming ${task.title || "previous chat"} from recent agent bridge metadata.`,
     },
-    ...(placeholderOnly ? [] : [{ role: "assistant" as const, content: task.lastMessage }]),
+    placeholderOnly
+      ? {
+        role: "assistant" as const,
+        content: `I found the runtime session for "${task.title || "previous chat"}", but there were no readable prior messages to display yet. Send the next message to continue this session.`,
+      }
+      : { role: "assistant" as const, content: task.lastMessage },
   ];
 }
 
@@ -125,6 +131,10 @@ export function findRosterChatTask(agentWork: AgentTask[], displayedTask?: strin
   const displayedKey = chatTaskMatchKey(displayedTask ?? "");
   const indexedTasks = agentWork.map((task, index) => ({ task, index }));
   const chatTasks = indexedTasks.filter(({ task }) => isChatSidebarTask(task));
+  const matchingTaskById = displayedTask
+    ? chatTasks.find(({ task }) => task.id === displayedTask)
+    : undefined;
+  if (matchingTaskById) return matchingTaskById;
   const matchingTask = displayedKey
     ? chatTasks.find(({ task }) => chatTaskMatchKey(task.title) === displayedKey)
       ?? chatTasks.find(({ task }) => chatTaskMatchKey(task.title).includes(displayedKey) || displayedKey.includes(chatTaskMatchKey(task.title)))
@@ -219,10 +229,8 @@ export function EnvValueRow({
       </div>
       <input
         key={`${revealKey}:${value}`}
-        type={revealed ? "text" : "password"}
+        {...secretInputProps}
         defaultValue={value}
-        autoComplete="off"
-        spellCheck={false}
         disabled={saving || !editable}
         onBlur={(event) => {
           if (editable) onSave(event.currentTarget.value);
@@ -234,7 +242,7 @@ export function EnvValueRow({
             event.currentTarget.blur();
           }
         }}
-        className={`min-w-0 rounded-sm border border-[rgba(148,163,184,0.14)] px-2 py-1 font-mono text-xs outline-none focus:border-[rgba(94,234,212,0.45)] focus:text-[var(--foreground)] ${editable ? "bg-[rgba(15,23,42,0.72)] text-[var(--muted)]" : "bg-[rgba(148,163,184,0.10)] text-[rgba(148,163,184,0.72)]"}`}
+        className={`min-w-0 rounded-sm border border-[rgba(148,163,184,0.14)] px-2 py-1 font-mono text-xs outline-none focus:border-[rgba(94,234,212,0.45)] focus:text-[var(--foreground)] ${revealed ? "" : maskedSecretValueClass} ${editable ? "bg-[rgba(15,23,42,0.72)] text-[var(--muted)]" : "bg-[rgba(148,163,184,0.10)] text-[rgba(148,163,184,0.72)]"}`}
       />
       {saving ? <small className="text-[var(--muted)]">Saving...</small> : null}
     </div>
@@ -300,14 +308,14 @@ export function AgentEnvCard({
           className="min-w-0 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(15,23,42,0.72)] px-2 py-2 font-mono text-xs text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)]"
         />
         <input
-          type="password"
+          {...secretInputProps}
           value={draft.value}
           onChange={(event) => onDraftChange({ ...draft, value: event.target.value })}
           onKeyDown={(event) => {
             if (event.key === "Enter") onAdd();
           }}
           placeholder="value"
-          className="min-w-0 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(15,23,42,0.72)] px-2 py-2 font-mono text-xs text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)]"
+          className={`min-w-0 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(15,23,42,0.72)] px-2 py-2 font-mono text-xs text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)] ${maskedSecretValueClass}`}
         />
         <Button type="button" size="icon" variant="secondary" aria-label={`Add env for ${agent.name}`} title="Add env" onClick={onAdd}>
           <Plus aria-hidden="true" />

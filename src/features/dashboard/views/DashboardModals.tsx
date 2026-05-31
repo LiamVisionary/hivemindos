@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
+import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
 import type { ComponentType, Dispatch, ElementType, FormEvent, SetStateAction } from "react";
 import type { SetupCellProps, SetupStep } from "@/components/cells/SetupCell";
 import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
@@ -182,14 +183,14 @@ export function DashboardModals(props: DashboardModalsProps) {
                 <label className={fleetClass("agentSettingsField")}>
                   <span>HCLOUD_TOKEN</span>
                   <input
-                    type="password"
+                    {...secretInputProps}
                     value={machineInitToken}
                     onChange={(event) => {
                       setMachineInitToken(event.target.value);
                       setMachineInitTokenStatus({});
                     }}
                     placeholder="Paste token"
-                    autoComplete="off"
+                    className={maskedSecretValueClass}
                   />
                 </label>
                 <div className={fleetClass("machineInitTokenActions")}>

@@ -32,6 +32,68 @@ export interface AdaptiveOpenRouterConfig {
   fallbackModel?: string;
 }
 
+export interface UsePodAgentConfig {
+  tokenEnvName?: string;
+  depositAddress?: string;
+  maxPriceInputMicrounits?: string;
+  maxPriceOutputMicrounits?: string;
+  lastBalanceRemaining?: string;
+  lastRoute?: string;
+}
+
+export type AgentVoiceRuntime = "openai-realtime" | "grok-voice" | "gemini-live" | (string & {});
+export type AgentCallMissedFallback = "none" | "in_app" | "obsidian_note" | "telegram";
+
+export interface AgentCallPreferences {
+  voiceRuntime: AgentVoiceRuntime;
+  voiceProviderId?: string;
+  voiceId?: string;
+  enabled: boolean;
+  dailyEnabled: boolean;
+  dailyCallTime: string;
+  timezone: string;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+  maxCallsPerDay: number;
+  sources: {
+    obsidianBriefing: boolean;
+    codingJobCompletion: boolean;
+    blockedAgentDecision: boolean;
+  };
+  missedCallFallback: AgentCallMissedFallback;
+}
+
+function detectAgentCallTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+export function buildAgentCallPreferences(input?: Partial<AgentCallPreferences> | null): AgentCallPreferences {
+  return {
+    voiceRuntime: input?.voiceRuntime || "openai-realtime",
+    voiceProviderId: input?.voiceProviderId,
+    voiceId: input?.voiceId,
+    enabled: input?.enabled ?? false,
+    dailyEnabled: input?.dailyEnabled ?? false,
+    dailyCallTime: input?.dailyCallTime || "09:00",
+    timezone: input?.timezone || detectAgentCallTimezone(),
+    quietHoursEnabled: input?.quietHoursEnabled ?? true,
+    quietHoursStart: input?.quietHoursStart || "22:00",
+    quietHoursEnd: input?.quietHoursEnd || "08:00",
+    maxCallsPerDay: input?.maxCallsPerDay ?? 1,
+    sources: {
+      obsidianBriefing: input?.sources?.obsidianBriefing ?? true,
+      codingJobCompletion: input?.sources?.codingJobCompletion ?? false,
+      blockedAgentDecision: input?.sources?.blockedAgentDecision ?? false,
+    },
+    missedCallFallback: input?.missedCallFallback || "obsidian_note",
+  };
+}
+
 export interface CustomWorkerClassProfile {
   id: string;
   label: string;
@@ -49,6 +111,8 @@ export interface AgentProfile {
   provider?: string;
   model?: string;
   adaptiveOpenRouter?: AdaptiveOpenRouterConfig;
+  usePod?: UsePodAgentConfig;
+  calls?: AgentCallPreferences;
   agentId?: string;
   sessionKey?: string;
   chatPath?: string;
@@ -281,6 +345,7 @@ export function createAgentProfile(runtime: AgentRuntime, index = 1): AgentProfi
     aeonMode: runtime === "aeon" ? "github" : undefined,
     beeRole: runtime === "openclaw" && index === 1 ? "queen" : "worker",
     workerClass: runtime === "openclaw" && index === 1 ? "general" : "general",
+    calls: buildAgentCallPreferences(),
   };
 }
 

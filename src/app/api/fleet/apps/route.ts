@@ -1,10 +1,26 @@
 import { NextRequest } from "next/server";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import { hivemindLinkControlUrl } from "@/lib/services/hivemind-link-control";
 
 export const runtime = "nodejs";
 
 const APPS_CACHE_MS = 10_000;
 const COLLECTOR_TIMEOUT_MS = 4_500;
 const ICON_PROBE_TIMEOUT_MS = 900;
+const SERVICE_SIGNATURE_TIMEOUT_MS = 2_500;
+const HIVEMIND_LINK_APP_TIMEOUT_MS = 4_000;
+const TAILSCALE_STATUS_TIMEOUT_MS = 3_000;
+const MIROSHARK_PORT = 5101;
+const HIVEMIND_LINK_COLLECTOR_PORTS = [8787, 8789, 8790, 8791, 8792];
+const TAILSCALE_CLI_CANDIDATES = [
+  "/usr/local/bin/tailscale",
+  "/opt/homebrew/bin/tailscale",
+  "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+  "tailscale",
+];
+
+const execFileAsync = promisify(execFile);
 
 type FleetMachine = {
   collector?: string;
@@ -30,11 +46,18 @@ type CollectorApp = {
   host?: string;
   port?: number;
   path?: string;
+  healthPath?: string;
+  healthUrl?: string;
+  apiBaseUrl?: string;
   localUrl?: string;
   proxyUrl?: string;
+  apiProxyUrl?: string;
+  healthProxyUrl?: string;
   process?: string;
   pid?: string;
   server?: string;
+  interactive?: boolean;
+  serviceKind?: string;
 };
 
 type HostedApp = {
@@ -51,10 +74,22 @@ type HostedApp = {
   local: boolean;
   online: boolean;
   interactive: boolean;
+  serviceKind?: string;
   scheme: string;
   port: number;
   path: string;
   openUrl: string;
+  apiBaseUrl: string;
+  healthUrl?: string;
+};
+
+type ServiceSignature = {
+  name: string;
+  description: string;
+  serviceKind: string;
+  healthPath: string;
+  healthUrl: string;
+  apiBaseUrl: string;
 };
 
 type AppsPayload = {
@@ -70,10 +105,20 @@ type AppsPayload = {
   }>;
 };
 
+type TailscalePeer = {
+  Online?: boolean;
+  TailscaleIPs?: string[];
+};
+
+type TailscaleStatus = {
+  Peer?: Record<string, TailscalePeer>;
+};
+
 let appsCache: { checkedAt: number; payload: AppsPayload } | null = null;
 let appsInFlight: Promise<AppsPayload> | null = null;
+let appsCacheGeneration = 0;
 
-type AppKind = "ai" | "creative" | "code" | "dashboard" | "media" | "app";
+type AppKind = "ai" | "creative" | "code" | "dashboard" | "media" | "service" | "app";
 
 const PLUMBING_PROCESSES = [
   "syncthing",
@@ -103,6 +148,7 @@ const KNOWN_APP_TITLES = [
   "openclaw",
   "claw code",
   "hivemindos",
+  "miroshark",
   "moneyprinter",
   "ai girlfriend",
   "ami",
@@ -117,6 +163,7 @@ const BRAND_ICON_SLUGS: Array<[RegExp, string]> = [
 const LOCAL_APP_ICONS: Array<[RegExp, string]> = [
   [/hivemindos/i, "/hivemindos-logo.png"],
   [/openclaw/i, "/icons/runtimes/openclaw.svg"],
+  [/miroshark/i, "/icons/miroshark.png"],
 ];
 
 const APP_ICON_FALLBACKS: Array<[RegExp, string]> = [
@@ -125,6 +172,10 @@ const APP_ICON_FALLBACKS: Array<[RegExp, string]> = [
 
 function normalizeBaseUrl(value?: string) {
   return value?.trim().replace(/\/+$/, "") || "";
+}
+
+function collectorAppsUrl(collectorUrl: string, forceRefresh: boolean) {
+  return `${collectorUrl}/apps${forceRefresh ? "?refresh=1" : ""}`;
 }
 
 function normalizePath(value?: string) {
@@ -271,6 +322,7 @@ function normalizeMachineName(value: string) {
 
 function appKind(name: string): AppKind {
   const value = name.toLowerCase();
+  if (/miroshark|api service/.test(value)) return "service";
   if (/comfy|z-image|image|studio|canvas|design/.test(value)) return "creative";
   if (/claw|openclaw|code|hivemind/.test(value)) return "code";
   if (/llm|ai|ami|chat|girlfriend/.test(value)) return "ai";
@@ -285,6 +337,7 @@ function appTheme(kind: AppKind) {
   if (kind === "ai") return "from-[#38bdf8] via-[#6366f1] to-[#a855f7]";
   if (kind === "media") return "from-[#facc15] via-[#fb7185] to-[#f97316]";
   if (kind === "dashboard") return "from-[#2dd4bf] via-[#0ea5e9] to-[#334155]";
+  if (kind === "service") return "from-[#14b8a6] via-[#0f766e] to-[#164e63]";
   return "from-[#94a3b8] via-[#64748b] to-[#334155]";
 }
 
@@ -324,6 +377,7 @@ function isInteractiveApp(name: string, app: CollectorApp) {
 }
 
 function appDescription(kind: AppKind, machineName: string) {
+  if (kind === "service") return `API service on ${machineName}`;
   if (kind === "creative") return `Creative workspace on ${machineName}`;
   if (kind === "code") return `Development workspace on ${machineName}`;
   if (kind === "ai") return `AI workspace on ${machineName}`;
@@ -332,13 +386,64 @@ function appDescription(kind: AppKind, machineName: string) {
   return `App on ${machineName}`;
 }
 
+function shouldProbeHealthSignature(name: string, app: CollectorApp) {
+  if (app.serviceKind || app.healthPath) return true;
+  if (Number(app.port) === 5101) return true;
+  const value = `${name} ${app.description || ""} ${app.process || ""} ${app.server || ""}`.toLowerCase();
+  return value.includes("404") || value.includes("not found") || value.includes("backend") || value.includes("api");
+}
+
+async function probeHealthSignature(input: {
+  app: CollectorApp;
+  name: string;
+  proxyUrl: string;
+  apiProxyUrl: string;
+  healthProxyUrl: string;
+}): Promise<ServiceSignature | null> {
+  if (!shouldProbeHealthSignature(input.name, input.app)) return null;
+  const apiBaseUrl = input.apiProxyUrl || input.proxyUrl.replace(/\/+$/, "");
+  if (!apiBaseUrl) return null;
+  const healthPath = input.app.healthPath || "/health";
+  const healthUrl = input.healthProxyUrl || `${apiBaseUrl}${normalizePath(healthPath)}`;
+  try {
+    const response = await fetch(healthUrl, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(SERVICE_SIGNATURE_TIMEOUT_MS),
+    });
+    const payload = await response.json().catch(() => null) as { service?: string; name?: string; status?: string; ok?: boolean } | null;
+    const service = String(payload?.service || payload?.name || "");
+    const status = String(payload?.status || (payload?.ok === true ? "ok" : ""));
+    if (!response.ok || !service) return null;
+    const isMiroShark = /miroshark/i.test(service);
+    return {
+      name: isMiroShark ? "MiroShark" : service,
+      description: status ? `API service · ${status}` : `API service · HTTP ${response.status}`,
+      serviceKind: isMiroShark ? "miroshark" : "api",
+      healthPath,
+      healthUrl,
+      apiBaseUrl,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUrl: string): Promise<HostedApp | null> {
   const port = Number(app.port);
-  const openUrl = rewriteCollectorUrl(app.proxyUrl, collectorUrl) || serviceUrl(app, machine);
+  const proxyUrl = rewriteCollectorUrl(app.proxyUrl, collectorUrl);
+  const apiProxyUrl = rewriteCollectorUrl(app.apiProxyUrl, collectorUrl);
+  const healthProxyUrl = rewriteCollectorUrl(app.healthProxyUrl, collectorUrl);
+  const directServiceUrl = serviceUrl(app, machine);
+  const openUrl = proxyUrl || directServiceUrl;
   if (!openUrl || !Number.isInteger(port)) return null;
   const machineName = normalizeMachineName(machine.device?.name || machine.collectorHost || machine.device?.ip || "Unknown machine");
-  const name = appName(app, port);
-  if (!isInteractiveApp(name, app)) return null;
+  const fallbackName = appName(app, port);
+  const signature = await probeHealthSignature({ app, name: fallbackName, proxyUrl, apiProxyUrl, healthProxyUrl });
+  const name = signature?.name || fallbackName;
+  const interactive = signature ? false : app.interactive ?? isInteractiveApp(name, app);
+  const serviceKind = signature?.serviceKind || app.serviceKind?.trim();
+  const healthPath = signature?.healthPath || app.healthPath;
+  if (!interactive && !serviceKind && !healthPath) return null;
   const kind = appKind(name);
   const local = isLocalMachine(machine);
   const collectorIconUrl = rewriteCollectorUrl(app.iconUrl, collectorUrl) || rewriteServiceAssetUrl(app.iconUrl, machine);
@@ -348,11 +453,12 @@ async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUr
       collectorIconUrl,
       await discoverDirectAppIcon(openUrl),
     ]) || brandFallbackIconUrl(name) || undefined;
+  const apiBaseUrl = signature?.apiBaseUrl || apiProxyUrl || proxyUrl.replace(/\/+$/, "") || appOriginUrl(directServiceUrl);
   return {
     id: `${local ? "local" : machineOpenHost(machine)}:${port}:${app.id || name}`,
     name,
     sourceName: app.name?.trim() || "",
-    description: appDescription(kind, machineName),
+    description: signature?.description || appDescription(kind, machineName),
     kind,
     theme: appTheme(kind),
     initials: appInitials(name),
@@ -361,11 +467,14 @@ async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUr
     machineHost: machineOpenHost(machine),
     local,
     online: machine.device?.online !== false,
-    interactive: true,
+    interactive,
+    serviceKind,
     scheme: app.scheme === "https" ? "https" : "http",
     port,
     path: normalizePath(app.path),
     openUrl,
+    apiBaseUrl,
+    healthUrl: signature?.healthUrl || healthProxyUrl || (healthPath ? `${apiBaseUrl}${normalizePath(healthPath)}` : undefined),
   };
 }
 
@@ -395,18 +504,116 @@ function dedupeVisibleApps(apps: HostedApp[]) {
   return [...byNameAndMachine.values()];
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
+async function fetchJson<T>(url: string, timeoutMs = COLLECTOR_TIMEOUT_MS): Promise<T> {
   const response = await fetch(url, {
     cache: "no-store",
-    signal: AbortSignal.timeout(COLLECTOR_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
   return response.json() as Promise<T>;
 }
 
+async function fetchJsonOrNull<T>(url: string, timeoutMs = HIVEMIND_LINK_APP_TIMEOUT_MS): Promise<T | null> {
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) return null;
+    return await response.json() as T;
+  } catch {
+    return null;
+  }
+}
+
+function configuredPeerIps() {
+  return (process.env.HIVEMIND_LINK_APP_PEERS || "")
+    .split(/[,\s]+/)
+    .map((value) => value.trim())
+    .filter((value) => /^\d+\.\d+\.\d+\.\d+$/.test(value));
+}
+
+async function tailscalePeerIps() {
+  const explicit = configuredPeerIps();
+  if (explicit.length > 0) return explicit;
+  for (const command of TAILSCALE_CLI_CANDIDATES) {
+    try {
+      const { stdout } = await execFileAsync(command, ["status", "--json"], {
+        encoding: "utf8",
+        timeout: TAILSCALE_STATUS_TIMEOUT_MS,
+        maxBuffer: 1_000_000,
+      });
+      const status = JSON.parse(stdout) as TailscaleStatus;
+      return Object.values(status.Peer ?? {})
+        .filter((peer) => peer?.Online)
+        .flatMap((peer) => peer?.TailscaleIPs ?? [])
+        .filter((ip) => /^\d+\.\d+\.\d+\.\d+$/.test(ip));
+    } catch {
+      continue;
+    }
+  }
+  return [];
+}
+
+function peerCollectorUrls(ip: string, collectorPort: number) {
+  const linkBase = hivemindLinkControlUrl();
+  const peer = encodeURIComponent(`${ip}:${collectorPort}`);
+  return [
+    { collectorUrl: `http://${ip}:${collectorPort}`, collector: "tailnet-direct" },
+    { collectorUrl: `${linkBase}/peer/${peer}`, collector: "hivemind-link" },
+  ];
+}
+
+function discoveredPeerIps(machines: FleetMachine[]) {
+  return machines
+    .flatMap((machine) => [machine.device?.ip, machine.collectorHost])
+    .map((value) => value?.trim() ?? "")
+    .filter((value) => /^\d+\.\d+\.\d+\.\d+$/.test(value));
+}
+
+async function readPeerMiroSharkApps(forceRefresh: boolean, machines: FleetMachine[]): Promise<{ name: string; collector: string; apps: HostedApp[]; error?: string }[]> {
+  const peers = [...new Set([...discoveredPeerIps(machines), ...await tailscalePeerIps()])];
+  const probes = peers.flatMap((ip) => (
+    HIVEMIND_LINK_COLLECTOR_PORTS.flatMap((collectorPort) => peerCollectorUrls(ip, collectorPort).map(async ({ collectorUrl, collector }) => {
+      const payload = await fetchJsonOrNull<{ apps?: CollectorApp[] }>(collectorAppsUrl(collectorUrl, forceRefresh));
+      const mirosharkApps = (payload?.apps ?? []).filter((app) => Number(app.port) === MIROSHARK_PORT);
+      if (mirosharkApps.length === 0) return null;
+      const machine: FleetMachine = {
+        collector: "ready",
+        collectorHost: ip,
+        device: {
+          self: false,
+          name: `MiroShark host ${ip}`,
+          ip,
+          online: true,
+          collectorUrl,
+        },
+      };
+      const apps = await Promise.all(mirosharkApps.map((app) => toHostedApp(app, machine, collectorUrl)));
+      const visibleApps = apps.filter((app): app is HostedApp => Boolean(app));
+      return visibleApps.length > 0 ? { name: machine.device?.name ?? ip, collector, apps: visibleApps } : null;
+    }))
+  ));
+  return (await Promise.all(probes)).filter((result): result is { name: string; collector: string; apps: HostedApp[] } => Boolean(result));
+}
+
 async function readApps(request: NextRequest): Promise<AppsPayload> {
+  const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
   const fleetUrl = new URL("/api/fleet/discover", request.url);
-  const fleet = await fetchJson<{ source?: string; machines?: FleetMachine[] }>(fleetUrl.toString());
+  fleetUrl.searchParams.set("includeSnapshots", "0");
+  if (forceRefresh) {
+    fleetUrl.searchParams.set("fresh", "1");
+  }
+  let fleet: { source?: string; machines?: FleetMachine[] } = {};
+  let fleetError = "";
+  try {
+    fleet = await fetchJson<{ source?: string; machines?: FleetMachine[] }>(
+      fleetUrl.toString(),
+      forceRefresh ? 12_000 : COLLECTOR_TIMEOUT_MS,
+    );
+  } catch (error) {
+    fleetError = error instanceof Error ? error.message : "Fleet discovery did not return apps.";
+  }
   const machines = fleet.machines ?? [];
   const results = await Promise.all(machines.map(async (machine) => {
     const collectorUrl = normalizeBaseUrl(machine.device?.collectorUrl);
@@ -415,7 +622,7 @@ async function readApps(request: NextRequest): Promise<AppsPayload> {
       return { name, collector: machine.collector || "missing", apps: [] as HostedApp[] };
     }
     try {
-      const payload = await fetchJson<{ apps?: CollectorApp[] }>(`${collectorUrl}/apps`);
+      const payload = await fetchJson<{ apps?: CollectorApp[] }>(collectorAppsUrl(collectorUrl, forceRefresh));
       const apps = await Promise.all((payload.apps ?? []).map((app) => toHostedApp(app, machine, collectorUrl)));
       return {
         name,
@@ -432,32 +639,59 @@ async function readApps(request: NextRequest): Promise<AppsPayload> {
     }
   }));
 
-  const apps = dedupeVisibleApps(results.flatMap((result) => result.apps))
+  const linkResults = results.some((result) => result.apps.some((app) => /miroshark/i.test(app.name) || app.port === MIROSHARK_PORT))
+    ? []
+    : await readPeerMiroSharkApps(forceRefresh, machines);
+
+  const allResults = [...results, ...linkResults];
+  const apps = dedupeVisibleApps(allResults.flatMap((result) => result.apps))
     .sort((left, right) => Number(right.local) - Number(left.local) || left.machineName.localeCompare(right.machineName) || left.port - right.port);
+  const machineResults = allResults.map((result) => ({
+    name: result.name,
+    collector: result.collector,
+    appCount: result.apps.length,
+    error: result.error,
+  }));
+  if (fleetError) {
+    machineResults.unshift({
+      name: "Fleet discovery",
+      collector: "error",
+      appCount: 0,
+      error: fleetError,
+    });
+  }
 
   return {
     ok: true,
     checkedAt: new Date().toISOString(),
-    source: fleet.source || "fleet-discover",
+    source: fleet.source || (fleetError ? "peer-miroshark-fallback" : "fleet-discover"),
     apps,
-    machines: results.map((result) => ({
-      name: result.name,
-      collector: result.collector,
-      appCount: result.apps.length,
-      error: result.error,
-    })),
+    machines: machineResults,
   };
 }
 
 export async function GET(request: NextRequest) {
   const now = Date.now();
-  if (appsCache && now - appsCache.checkedAt < APPS_CACHE_MS) {
+  const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
+  if (!forceRefresh && appsCache && now - appsCache.checkedAt < APPS_CACHE_MS) {
     return Response.json(appsCache.payload);
   }
+  if (forceRefresh) {
+    appsCacheGeneration += 1;
+    const generation = appsCacheGeneration;
+    const payload = await readApps(request);
+    if (generation === appsCacheGeneration) {
+      appsCache = { checkedAt: Date.now(), payload };
+    }
+    return Response.json(payload);
+  }
   if (!appsInFlight) {
+    const generation = appsCacheGeneration;
     appsInFlight = readApps(request)
       .then((payload) => {
-        appsCache = { checkedAt: Date.now(), payload };
+        if (generation === appsCacheGeneration) {
+          appsCache = { checkedAt: Date.now(), payload };
+        }
         return payload;
       })
       .finally(() => {

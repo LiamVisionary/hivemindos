@@ -6,6 +6,7 @@ import { join, resolve, sep } from "path";
 import { promisify } from "util";
 import { NextRequest, NextResponse } from "next/server";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { registerAeonEnvSyncRepo } from "@/lib/services/runtime-adapters/aeon-env-sync-registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -196,6 +197,12 @@ async function createRepo(input: {
   return { repo, linked, push };
 }
 
+async function deleteRepo(input: { repo?: string; agent?: AgentProfile }) {
+  const repo = normalizeRepo(input.repo || input.agent?.aeonRepo);
+  await githubFetch(`/repos/${encodeURIComponent(repo).replaceAll("%2F", "/")}`, { method: "DELETE" });
+  return repo;
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -268,8 +275,13 @@ export async function POST(request: NextRequest) {
       autoPush?: boolean;
       autoIncrement?: boolean;
     };
+    if (body.action === "delete") {
+      const repo = await deleteRepo(body);
+      return NextResponse.json({ ok: true, repo, deleted: true });
+    }
     if (body.action === "create") {
       const result = await createRepo(body);
+      await registerAeonEnvSyncRepo(result.repo.full_name, "github-repo:create").catch(() => undefined);
       return NextResponse.json({
         ok: true,
         repo: result.repo.full_name,
@@ -282,6 +294,7 @@ export async function POST(request: NextRequest) {
     }
     if (body.action === "fork-official") {
       const repo = await forkOfficialAeon({ name: body.name });
+      await registerAeonEnvSyncRepo(repo.full_name, "github-repo:fork-official").catch(() => undefined);
       return NextResponse.json({
         ok: true,
         repo: repo.full_name,
@@ -291,6 +304,7 @@ export async function POST(request: NextRequest) {
     }
     const repo = normalizeRepo(body.repo);
     const linked = await linkRepo(body.agent, repo);
+    await registerAeonEnvSyncRepo(repo, "github-repo:link").catch(() => undefined);
     return NextResponse.json({
       ok: true,
       repo,

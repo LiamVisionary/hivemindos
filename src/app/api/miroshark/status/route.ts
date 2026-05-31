@@ -12,14 +12,18 @@ let cachedStatus: {
 } | null = null;
 let inFlightStatus: ReturnType<typeof getMiroSharkCompanionStatus> | null = null;
 
-export async function GET() {
+export async function GET(request: Request) {
   const now = Date.now();
+  const forceRefresh = new URL(request.url).searchParams.get("refresh") === "1";
   const cacheMs = cachedStatus?.payload.install.running ? MIROSHARK_RUNNING_STATUS_CACHE_MS : MIROSHARK_STATUS_CACHE_MS;
-  if (cachedStatus && now - cachedStatus.checkedAt < cacheMs) {
+  if (!forceRefresh && cachedStatus && now - cachedStatus.checkedAt < cacheMs) {
     return Response.json(cachedStatus.payload);
   }
 
-  inFlightStatus ??= getMiroSharkCompanionStatus()
+  if (forceRefresh) {
+    inFlightStatus = null;
+  }
+  inFlightStatus ??= getMiroSharkCompanionStatus({ requestUrl: request.url })
     .then((payload) => {
       cachedStatus = { checkedAt: Date.now(), payload };
       return payload;

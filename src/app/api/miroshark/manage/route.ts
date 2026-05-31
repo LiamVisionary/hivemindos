@@ -15,5 +15,5 @@ export async function POST(request: Request) {
   } else {
     startMiroSharkSetup(action);
   }
-  return Response.json(await getMiroSharkCompanionStatus());
+  return Response.json(await getMiroSharkCompanionStatus({ requestUrl: request.url }));
 }

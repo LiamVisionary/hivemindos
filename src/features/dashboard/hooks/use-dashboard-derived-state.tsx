@@ -319,17 +319,6 @@ export function useDashboardDerivedState(props: any) {
     });
     const dedupeMachineGroups = (items: MachineGroup[]) => {
       const byIdentity = new Map<string, MachineGroup>();
-      const normalizeMachineName = (value = "") => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
-      const physicalBase = (machine: MachineGroup) => {
-        const dnsLabel = machine.dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
-        const value = normalizeMachineName(dnsLabel) || normalizeMachineName(machine.name);
-        return value.replace(/^hivemindos/, "").replace(/local\d*$/, "").replace(/\d+$/, "");
-      };
-      const isHivemindMachine = (machine: MachineGroup) => {
-        const dnsLabel = machine.dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
-        return normalizeMachineName(machine.name).startsWith("hivemindos")
-          || normalizeMachineName(dnsLabel).startsWith("hivemindos");
-      };
       const score = (machine: MachineGroup) => (
         (machine.self ? 10_000 : 0)
         + (machine.collector === "ready" ? 1_000 : 0)
@@ -338,10 +327,7 @@ export function useDashboardDerivedState(props: any) {
       );
       for (const item of items) {
         const machineId = item.collector === "ready" ? item.machineId?.trim().toLowerCase() : "";
-        const base = physicalBase(item);
-        const key = base && isHivemindMachine(item) && !isMobileMachineOs(item.os)
-          ? `physical:${base}`
-          : machineId && /^hivemind-machine-[a-f0-9]{32}$/.test(machineId)
+        const key = machineId && /^hivemind-machine-[a-f0-9]{32}$/.test(machineId)
           ? machineId
           : machineIdentityFromParts(item);
         const previous = byIdentity.get(key);
@@ -377,8 +363,9 @@ export function useDashboardDerivedState(props: any) {
         agent.localDataDir?.startsWith("~")
         || agent.localDataDir?.startsWith("/Users/")
       ) ? collectorKey(selfDevice.collectorUrl) : "";
-      const key = explicitKey || localKey;
-      const group = key ? groups.find((item) => item.key === key) : undefined;
+      const explicitGroup = explicitKey ? groups.find((item) => item.key === explicitKey) : undefined;
+      const localGroup = localKey ? groups.find((item) => item.key === localKey) : undefined;
+      const group = explicitGroup ?? localGroup;
       if (group) {
         group.agents.push(agent);
       } else {
@@ -455,7 +442,11 @@ export function useDashboardDerivedState(props: any) {
   );
 
   const fleetViewData = useMemo(() => {
-    const machines: FleetMachine[] = machineGroups.map((machine, index) => {
+    const rosterMachineGroups = machineGroups.filter((machine) => (
+      machine.key !== "unassigned"
+      && (machine.collector === "ready" || machine.self || machine.online || machine.agents.length > 0)
+    ));
+    const machines: FleetMachine[] = rosterMachineGroups.map((machine, index) => {
       const location = fleetMachineLocation(machine, index);
       const mobile = isMobileMachineOs(machine.os);
       const versionState = fleetVersionState(machine);
@@ -503,6 +494,18 @@ export function useDashboardDerivedState(props: any) {
           const hasMachineWiring = Boolean(agent.telemetryUrl || machine.self);
           const wallet = walletsByAgent[agent.id] ?? createDefaultAgentWallet(agent.id);
           const survival = getSurvivalSnapshot(wallet);
+          const primaryWorkFailed = primaryWork?.status === "failed";
+          const primaryWorkFailureText = [
+            primaryWork?.title,
+            primaryWork?.lastMessage,
+            primaryWork?.sourceDetail,
+          ].join("\n");
+          const snapshotErrorIsFailure = /\b(error|failed|failure|blocked|unavailable|unauthorized|forbidden|timeout|missing|not found|needs|invalid|rejected|login|auth)\b/i.test(snapshot?.error ?? "");
+          const activityStatus = primaryWork
+            ? primaryWork.source === "hermes-state" && primaryWorkFailed && !/\b(error|failed|failure|blocked|unavailable|unauthorized|forbidden|timeout|missing|not found|needs|invalid|rejected|login|auth)\b/i.test(primaryWorkFailureText)
+              ? "unknown"
+              : primaryWork.status
+            : snapshotErrorIsFailure ? "failed" : undefined;
           return {
             id: agent.id,
             name: agent.name,
@@ -523,6 +526,8 @@ export function useDashboardDerivedState(props: any) {
             task: primaryWork
               ? cleanActivityTitle(primaryWork.title)
               : snapshot?.summary || "Idle · waiting for the next handoff",
+            currentTaskId: primaryWork?.id,
+            activityStatus,
             since: primaryWork?.updatedAt ? formatRelativeTime(primaryWork.updatedAt) : snapshot?.checkedAt ? formatRelativeTime(snapshot.checkedAt) : "—",
             recentChats,
           };
@@ -570,6 +575,7 @@ export function useDashboardDerivedState(props: any) {
           };
         }),
       ...machineGroups
+        .filter((machine) => rosterMachineGroups.some((item) => item.key === machine.key))
         .filter((machine) => machine.collector !== "ready")
         .map((machine): FleetAlert => {
           const timestamp = machineAlertTimestamp(machine);
@@ -962,6 +968,7 @@ export function useDashboardDerivedState(props: any) {
       ...draftAgent,
       provider: agentCreateMachine ? agentCreateDraft.provider : draftAgent.provider,
       model: agentCreateMachine ? agentCreateDraft.model : draftAgent.model,
+      usePod: agentCreateMachine ? agentCreateDraft.usePod : draftAgent.usePod,
       telemetryUrl: agentCreateMachine?.collectorUrl ?? draftAgent.telemetryUrl,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

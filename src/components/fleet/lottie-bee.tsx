@@ -16,7 +16,7 @@ interface LottieBeeProps {
 export function LottieBee({ size = 44, className }: LottieBeeProps) {
   return (
     <LottiePlayer
-      src="/animations/Honey bee.lottie"
+      src="/animations/Honey%20bee.lottie"
       size={size}
       loop
       autoplay

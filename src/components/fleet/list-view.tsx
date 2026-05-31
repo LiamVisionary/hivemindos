@@ -3,7 +3,7 @@
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import * as React from "react";
-import { ChevronDown, Copy, MessageSquare, Monitor, Settings2, Smartphone, Trash2, Wallet } from "lucide-react";
+import { ChevronDown, Copy, MessageSquare, Monitor, PhoneCall, Settings2, Smartphone, Trash2, Wallet } from "lucide-react";
 import { BeeIcon } from "./bee-icon";
 import { HexTile } from "./hex-tile";
 import { fleetAgentCanChat, isFleetMachineMobile, type AgentState, type FleetAgent, type FleetAgentChat, type FleetMachine } from "./fleet-data";
@@ -18,6 +18,7 @@ interface ListViewProps {
   onAddAgent: (m: FleetMachine) => void;
   onOpenChat?: (m: FleetMachine, a: FleetAgent) => void;
   onOpenTaskChat?: (m: FleetMachine, a: FleetAgent, chat?: FleetAgentChat) => void;
+  onCallAgent?: (m: FleetMachine, a: FleetAgent) => void;
   onOpenWallet?: (m: FleetMachine, a: FleetAgent) => void;
   onEditSettings?: (m: FleetMachine, a: FleetAgent) => void;
   onDuplicate?: (m: FleetMachine, a: FleetAgent) => void;
@@ -54,7 +55,7 @@ export function ListView({
   machines,
   selected, selectedAgentId,
   onSelectMachine, onSelectAgent, onAddAgent,
-  onOpenChat, onOpenTaskChat, onOpenWallet, onEditSettings, onDuplicate, onRemove,
+  onOpenChat, onOpenTaskChat, onCallAgent, onOpenWallet, onEditSettings, onDuplicate, onRemove,
 }: ListViewProps) {
   const [expandedTaskIds, setExpandedTaskIds] = React.useState<Set<string>>(() => new Set());
   const toggleTaskPreview = (previewId: string) => {
@@ -192,7 +193,7 @@ export function ListView({
                     const canChat = fleetAgentCanChat(a);
                     const recentChats = (a.recentChats?.length
                       ? a.recentChats
-                      : [{ id: "current", title: a.task, task: a.task, since: a.since }]
+                      : [{ id: a.currentTaskId ?? "current", title: a.task, task: a.task, since: a.since }]
                     ).slice(0, 3);
                     return (
                       <tr
@@ -253,7 +254,7 @@ export function ListView({
                                   >
                                     {chat.title}
                                   </span>
-                                  {canChat && onOpenTaskChat ? (
+                                  {canChat && onOpenTaskChat && chat.id !== "current" ? (
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <button
@@ -323,6 +324,7 @@ export function ListView({
                                 )}
 
                                 {[
+                                  { id: "call", label: "Call", Icon: PhoneCall, onClick: fire(m, a, onCallAgent) },
                                   { id: "wallet", label: "Wallet & limits", Icon: Wallet, onClick: fire(m, a, onOpenWallet) },
                                   { id: "edit", label: "Edit settings", Icon: Settings2, onClick: fire(m, a, onEditSettings) },
                                   { id: "dup", label: "Duplicate", Icon: Copy, onClick: fire(m, a, onDuplicate) },

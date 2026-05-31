@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ComponentType, type Dispatch, type ElementType, type SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
+import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
 import type { AgentProfile, AgentRuntime, SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { AgentNotification, AgentNotificationSettings, AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import type { MemoryTelemetryPayload } from "@/lib/types/memory-telemetry";
@@ -274,14 +275,14 @@ export function UtilityPanels(props: UtilityPanelsProps) {
 	                    className="min-w-0 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(15,23,42,0.72)] px-2 py-2 font-mono text-xs text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)]"
 	                  />
 	                  <input
-	                    type="password"
+	                    {...secretInputProps}
 	                    value={sharedEnvDraft.value}
 	                    onChange={(event) => setSharedEnvDraft((current) => ({ ...current, value: event.target.value }))}
 	                    onKeyDown={(event) => {
 	                      if (event.key === "Enter") void addSharedEnvValue();
 	                    }}
 	                    placeholder="value"
-	                    className="min-w-0 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(15,23,42,0.72)] px-2 py-2 font-mono text-xs text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)]"
+	                    className={`min-w-0 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(15,23,42,0.72)] px-2 py-2 font-mono text-xs text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)] ${maskedSecretValueClass}`}
 	                  />
 		                  <div className="relative flex">
 			                    <Button type="button" size="sm" variant="secondary" className="h-full min-h-[2.5rem] rounded-r-none px-4 py-2" title="Stage a single env variable, then save it with hive-env-add." onClick={() => void addSharedEnvValue()}>

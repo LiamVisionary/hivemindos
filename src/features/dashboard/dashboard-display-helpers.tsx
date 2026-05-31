@@ -3,10 +3,8 @@ import type { FleetAgent, FleetMachine } from "@/components/fleet";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import type { AgentSnapshot, AppVersion, BrainGraphNode, DiscoveredMachine, MachineGroup } from "@/features/dashboard/dashboard-types";
 import {
-  isHivemindMachineName,
   isLocalLinkDuplicateOfSelf,
   isLoopbackCollector,
-  isMobileMachineOs,
   machineHivemindBase,
   machineIdentityFromParts,
   machinePhysicalBase,
@@ -43,7 +41,16 @@ export function tailnetPeerLooksUnreachable(machine: MachineGroup) {
   return !machine.self
     && machine.online
     && hasNeverHandshake(machine.lastHandshake)
-    && (machine.rxBytes ?? 0) === 0;
+    && (machine.rxBytes ?? 0) === 0
+    && !machine.collectorUrl;
+}
+
+export function tailnetPeerTrafficLooksStalled(machine: MachineGroup) {
+  return !machine.self
+    && machine.online
+    && hasNeverHandshake(machine.lastHandshake)
+    && (machine.rxBytes ?? 0) === 0
+    && (!machine.curAddr || machine.curAddr.trim() === "");
 }
 
 function collectorHealthCommand(machine: MachineGroup) {
@@ -56,7 +63,25 @@ function collectorHealthCommand(machine: MachineGroup) {
 export function machineNetworkIssue(machine: MachineGroup, tailscaleStatus: string): FleetMachine["networkIssue"] {
   if (machine.key === "unassigned") return undefined;
   if (/^(ios|android)$/i.test(machine.os ?? "") && machine.collector !== "ready") return undefined;
-  if (machine.self && (machine.ip === "127.0.0.1" || tailscaleStatus.startsWith("Tailscale not configured"))) {
+  if (machine.self && tailscaleStatus.includes("peer traffic stalled")) {
+    return {
+      label: "Tailscale traffic stalled. Fix?",
+      title: "Tailscale peer traffic is stalled",
+      detail: "Tailscale is signed in and has the Tailnet route, but this Mac is not receiving peer traffic. Restart or reconnect Tailscale on this Mac before reinstalling any agent bridges.",
+      fixAction: "restart-local-tailnet",
+      fixLabel: "Fix Tailnet now",
+      commands: [
+        "tailscale status --self",
+        "tailscale netcheck",
+        "open -a Tailscale",
+        "",
+        "# If the GUI still shows connected but peers time out",
+        "tailscale down",
+        "tailscale up",
+      ],
+    };
+  }
+  if (machine.self && tailscaleStatus.startsWith("Tailscale not configured")) {
     return {
       label: "Tailscale not configured. Fix?",
       title: "Tailscale is not configured",
@@ -130,11 +155,36 @@ export function machineNetworkIssue(machine: MachineGroup, tailscaleStatus: stri
         ],
       };
     }
+    if (tailnetPeerTrafficLooksStalled(machine)) {
+      const tailnetTarget = machine.dnsName || machine.ip || "<tailnet-ip>";
+      return {
+        label: "Tailnet traffic stalled. Fix?",
+        title: "Tailnet peer traffic is stalled",
+        detail: "Tailscale lists this machine as online, but this Mac has no peer receive traffic or current handshake for it. Fix the Tailscale transport first; reinstalling the agent bridge will not help until Tailnet traffic works again.",
+        fixAction: "restart-local-tailnet",
+        fixLabel: "Fix Tailnet now",
+        commands: [
+          "# From this dashboard machine",
+          `tailscale ping ${tailnetTarget}`,
+          "tailscale netcheck",
+          "open -a Tailscale",
+          "",
+          "# If peers still time out",
+          "tailscale down",
+          "tailscale up",
+          "",
+          "# Then retry the agent bridge",
+          collectorHealthCommand(machine),
+        ],
+      };
+    }
     const tailnetTarget = machine.dnsName || machine.ip || "<tailnet-ip>";
     return {
       label: "Agent bridge not reachable. Fix?",
       title: "Agent bridge is not reachable",
-      detail: "Tailscale lists this machine, but this dashboard cannot reach its agent bridge on port 8787. The agent bridge may be healthy locally while macOS firewall, Tailscale Shields Up, or Tailnet reachability blocks inbound access from this dashboard.",
+      detail: "Tailscale lists this machine, but this dashboard cannot reach its agent bridge on port 8787. The automatic fix restarts local Tailnet connectivity on this dashboard Mac only. If the bridge is still unreachable after that, run the remote-machine commands below for Shields Up, service install, or firewall repair.",
+      fixAction: "restart-local-tailnet",
+      fixLabel: "Restart local Tailnet",
       commands: [
         "# From this dashboard machine",
         `tailscale ping ${tailnetTarget}`,
@@ -235,10 +285,6 @@ export function mergeMachineSnapshots(previous: AgentSnapshot[] = [], incoming: 
 }
 
 export function discoveredMachineIdentity(machine: DiscoveredMachine) {
-  const physicalBase = machinePhysicalBase(machine.device.name, machine.device.dnsName);
-  if (physicalBase && isHivemindMachineName(machine.device.name, machine.device.dnsName) && !isMobileMachineOs(machine.device.os)) {
-    return `physical:${physicalBase}`;
-  }
   const machineId = machine.collector === "ready" ? machine.machineId?.trim().toLowerCase() : "";
   if (machineId && /^hivemind-machine-[a-f0-9]{32}$/.test(machineId)) return machineId;
   return machineIdentityFromParts({
@@ -710,8 +756,14 @@ export function fleetVersionState(machine: MachineGroup): FleetMachine["versionS
   return "current";
 }
 
+const FLEET_FAILURE_PATTERN = /\b(error|failed|failure|blocked|unavailable|unauthorized|forbidden|timeout|missing|not found|needs|invalid|rejected|login|auth)\b/i;
+
+export function isFleetFailureText(value?: string) {
+  return FLEET_FAILURE_PATTERN.test(value ?? "");
+}
+
 export function fleetAgentState(agent: AgentProfile, snapshot: AgentSnapshot | undefined, activeCount: number, hasMachineWiring: boolean): FleetAgent["state"] {
-  if (snapshot?.error) return "failed";
+  if (snapshot?.error && isFleetFailureText(snapshot.error)) return "failed";
   if (!hasMachineWiring) return "setup";
   if (activeCount > 0 || snapshot?.processRunning) return "working";
   return "ready";

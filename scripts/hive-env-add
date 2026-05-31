@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import hashlib
 import json
 import os
 import pathlib
@@ -35,6 +36,8 @@ OPENCLAW_JSON = OPENCLAW_DIR / "openclaw.json"
 OPENCLAW_SECRETS = OPENCLAW_DIR / "secrets.json"
 HERMES_ENV_FILE = pathlib.Path.home() / ".hermes" / ".env"
 AEON_ENV_FILE = pathlib.Path.home() / ".aeon" / ".env"
+AEON_ENV_SYNC_REPOS_FILE = pathlib.Path.home() / ".hivemindos" / "aeon-env-sync-repos.json"
+AEON_ENV_SYNC_STATE_FILE = pathlib.Path.home() / ".hivemindos" / "aeon-env-sync-state.json"
 
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 LOCAL_ONLY_KEYS = {
@@ -209,6 +212,16 @@ def read_json(path: pathlib.Path) -> dict[str, object]:
         return {}
 
 
+def read_plain_json(path: pathlib.Path) -> dict[str, object]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+        return data if isinstance(data, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
 def write_json(path: pathlib.Path, data: dict[str, object]) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     next_text = json.dumps(data, indent=2) + "\n"
@@ -288,6 +301,274 @@ def sync_aeon_github_secret(args: argparse.Namespace, key: str, value: str, quie
     if not quiet:
         print(f"synced Aeon GitHub secret {key} to {repo}")
     return True
+
+
+def normalize_github_repo(value: str) -> str:
+    cleaned = value.strip().removesuffix(".git")
+    github = re.search(r"github\.com[:/]([^/\s]+)\/([^/\s.]+)$", cleaned, re.I)
+    owner_repo = re.match(r"^([^/\s]+)\/([^/\s.]+)$", cleaned)
+    match = github or owner_repo
+    if not match:
+        return ""
+    return f"{match.group(1)}/{match.group(2)}"
+
+
+def configured_aeon_env_sync_repos() -> set[str]:
+    repos: set[str] = set()
+    configured = (
+        os.environ.get("HIVE_AEON_ENV_SYNC_REPOS")
+        or local_setting("HIVE_AEON_ENV_SYNC_REPOS")
+        or os.environ.get("AEON_REPO")
+        or local_setting("AEON_REPO")
+        or os.environ.get("NEXT_PUBLIC_AEON_REPO")
+        or local_setting("NEXT_PUBLIC_AEON_REPO")
+    )
+    for raw_repo in (configured or "").split(","):
+        repo = normalize_github_repo(raw_repo)
+        if repo:
+            repos.add(repo)
+    registry = read_plain_json(AEON_ENV_SYNC_REPOS_FILE)
+    raw_repos = registry.get("repos")
+    if isinstance(raw_repos, list):
+        for raw_repo in raw_repos:
+            if isinstance(raw_repo, str):
+                repo = normalize_github_repo(raw_repo)
+                if repo:
+                    repos.add(repo)
+            elif isinstance(raw_repo, dict):
+                raw_name = raw_repo.get("repo") or raw_repo.get("aeonRepo")
+                if isinstance(raw_name, str):
+                    repo = normalize_github_repo(raw_name)
+                    if repo:
+                        repos.add(repo)
+    return repos
+
+
+def vault_aeon_env_sync_repos() -> set[str]:
+    root = note_root()
+    if not root:
+        return set()
+    repos: set[str] = set()
+    for folder in ("Agents", "AGENTS"):
+        base = root / folder
+        if not base.exists():
+            continue
+        for profile_path in base.glob("**/profile.json"):
+            data = read_plain_json(profile_path)
+            if data.get("runtime") != "aeon":
+                continue
+            raw_repo = data.get("aeonRepo")
+            if isinstance(raw_repo, str):
+                repo = normalize_github_repo(raw_repo)
+                if repo:
+                    repos.add(repo)
+    return repos
+
+
+def read_aeon_env_sync_state() -> dict[str, object]:
+    data = read_plain_json(AEON_ENV_SYNC_STATE_FILE)
+    repos = data.get("repos")
+    if not isinstance(repos, dict):
+        data["repos"] = {}
+    data["version"] = 1
+    return data
+
+
+def write_aeon_env_sync_state(state: dict[str, object]) -> None:
+    write_json(AEON_ENV_SYNC_STATE_FILE, state)
+
+
+def state_repo_names(state: dict[str, object]) -> set[str]:
+    repos = state.get("repos")
+    if not isinstance(repos, dict):
+        return set()
+    return {repo for repo in repos if isinstance(repo, str) and normalize_github_repo(repo)}
+
+
+def aeon_env_sync_enabled() -> bool:
+    configured = os.environ.get("HIVE_AEON_ENV_AUTO_SYNC") or local_setting("HIVE_AEON_ENV_AUTO_SYNC")
+    if configured:
+        return truthy(configured)
+    return True
+
+
+def gh_json(args: list[str], timeout: int = 20) -> object:
+    proc = subprocess.run(
+        ["gh", *args],
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=timeout,
+    )
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout).strip()
+        raise RuntimeError(detail or f"gh exited with {proc.returncode}")
+    return json.loads(proc.stdout or "{}")
+
+
+def github_repo_is_private(repo: str) -> bool:
+    payload = gh_json(["repo", "view", repo, "--json", "isPrivate"], timeout=20)
+    return isinstance(payload, dict) and payload.get("isPrivate") is True
+
+
+def github_secret_names(repo: str) -> set[str]:
+    payload = gh_json(["secret", "list", "-R", repo, "--json", "name"], timeout=20)
+    if not isinstance(payload, list):
+        return set()
+    return {item.get("name") for item in payload if isinstance(item, dict) and isinstance(item.get("name"), str)}
+
+
+def secret_fingerprint(value: str) -> str:
+    digest = hashlib.sha256()
+    digest.update(str(len(value)).encode("utf-8"))
+    digest.update(b"\0")
+    digest.update(value.encode("utf-8"))
+    return digest.hexdigest()
+
+
+def github_secret_skip_reason(key: str, value: str) -> str:
+    if key in LOCAL_ONLY_KEYS:
+        return "local-only"
+    if not KEY_RE.match(key):
+        return "invalid-name"
+    if key.upper().startswith(("GITHUB_", "RUNNER_")):
+        return "github-reserved-name"
+    if not value:
+        return "empty"
+    if "\0" in value:
+        return "nul-byte"
+    return ""
+
+
+def managed_repo_state(state: dict[str, object], repo: str) -> dict[str, object]:
+    repos = state.setdefault("repos", {})
+    if not isinstance(repos, dict):
+        repos = {}
+        state["repos"] = repos
+    raw = repos.get(repo)
+    if not isinstance(raw, dict):
+        raw = {"secrets": {}}
+        repos[repo] = raw
+    secrets = raw.get("secrets")
+    if not isinstance(secrets, dict):
+        raw["secrets"] = {}
+    return raw
+
+
+def gh_set_secret(repo: str, key: str, value: str) -> None:
+    proc = subprocess.run(
+        ["gh", "secret", "set", key, "-R", repo],
+        input=value,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout).strip()
+        raise RuntimeError(detail or f"gh secret set exited with {proc.returncode}")
+
+
+def gh_delete_secret(repo: str, key: str) -> None:
+    proc = subprocess.run(
+        ["gh", "secret", "delete", key, "-R", repo, "--confirm"],
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=20,
+    )
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout).strip()
+        raise RuntimeError(detail or f"gh secret delete exited with {proc.returncode}")
+
+
+def sync_aeon_repo_shared_env(repo: str, values: dict[str, str], state: dict[str, object]) -> dict[str, int | str]:
+    repo_state = managed_repo_state(state, repo)
+    secrets_state = repo_state.setdefault("secrets", {})
+    if not isinstance(secrets_state, dict):
+        secrets_state = {}
+        repo_state["secrets"] = secrets_state
+
+    if not github_repo_is_private(repo):
+        deleted = 0
+        for key in sorted(list(secrets_state.keys())):
+            if KEY_RE.match(key):
+                try:
+                    gh_delete_secret(repo, key)
+                    deleted += 1
+                except RuntimeError:
+                    pass
+            secrets_state.pop(key, None)
+        repo_state["private"] = False
+        return {"repo": repo, "synced": 0, "deleted": deleted, "skipped": "public"}
+
+    existing = github_secret_names(repo)
+    synced = 0
+    skipped = 0
+    failed = 0
+    for key, value in sorted(values.items()):
+        if github_secret_skip_reason(key, value):
+            skipped += 1
+            continue
+        fingerprint = secret_fingerprint(value)
+        raw_previous = secrets_state.get(key)
+        previous = raw_previous if isinstance(raw_previous, dict) else {}
+        if previous.get("fingerprint") == fingerprint and key in existing:
+            continue
+        try:
+            gh_set_secret(repo, key, value)
+        except RuntimeError:
+            failed += 1
+            continue
+        secrets_state[key] = {
+            "fingerprint": fingerprint,
+            "updatedAt": time.time(),
+        }
+        existing.add(key)
+        synced += 1
+
+    deleted = 0
+    current_keys = {key for key, value in values.items() if not github_secret_skip_reason(key, value)}
+    for key in sorted(list(secrets_state.keys())):
+        if key in current_keys:
+            continue
+        try:
+            gh_delete_secret(repo, key)
+            deleted += 1
+        except RuntimeError:
+            pass
+        secrets_state.pop(key, None)
+
+    repo_state["private"] = True
+    repo_state["checkedAt"] = time.time()
+    return {"repo": repo, "synced": synced, "deleted": deleted, "skipped": skipped, "failed": failed}
+
+
+def auto_sync_aeon_shared_env(args: argparse.Namespace, values: dict[str, str]) -> None:
+    if not values or not aeon_env_sync_enabled() or shutil.which("gh") is None:
+        return
+    state = read_aeon_env_sync_state()
+    repos = configured_aeon_env_sync_repos() | vault_aeon_env_sync_repos() | state_repo_names(state)
+    if not repos:
+        return
+    results: list[dict[str, int | str]] = []
+    failures: list[str] = []
+    for repo in sorted(repos):
+        try:
+            results.append(sync_aeon_repo_shared_env(repo, values, state))
+        except Exception as error:
+            failures.append(f"{repo}: {error}")
+    write_aeon_env_sync_state(state)
+    synced = sum(int(result.get("synced", 0)) for result in results)
+    deleted = sum(int(result.get("deleted", 0)) for result in results)
+    failed = sum(int(result.get("failed", 0)) for result in results)
+    public = [str(result["repo"]) for result in results if result.get("skipped") == "public"]
+    if synced or deleted or failed or public:
+        public_suffix = f"; restricted public repo{'s' if len(public) != 1 else ''}: {', '.join(public)}" if public else ""
+        failed_suffix = f"; {failed} key write{'s' if failed != 1 else ''} failed" if failed else ""
+        print(f"aeon env sync updated {synced} secret{'s' if synced != 1 else ''} and removed {deleted} stale secret{'s' if deleted != 1 else ''} across {len(results)} repo{'s' if len(results) != 1 else ''}{failed_suffix}{public_suffix}")
+    if failures:
+        print("aeon env sync skipped " + "; ".join(failures), file=sys.stderr)
 
 def agent_env_file(args: argparse.Namespace) -> pathlib.Path:
     raw = (
@@ -494,6 +775,8 @@ def restore_encrypted_backup(args: argparse.Namespace, env_file: pathlib.Path) -
     print(f"restored {len(values)} env key{'s' if len(values) != 1 else ''} from encrypted backup")
     if not args.no_tailnet_sync:
         sync_tailnet_updates(args, values)
+    if not args.no_aeon_auto_sync and args.runtime == "generic":
+        auto_sync_aeon_shared_env(args, values)
     return 0
 
 
@@ -714,6 +997,7 @@ def pull_from_peer(args: argparse.Namespace, env_file: pathlib.Path, target: str
     incoming = {key: value for key, value in raw_values.items() if isinstance(key, str) and isinstance(value, str) and KEY_RE.match(key)}
     current = shared_env_values(args, env_file)
     applied = 0
+    changed = False
     applied_values: dict[str, str] = {}
     skipped = 0
     conflicts: list[str] = []
@@ -725,7 +1009,7 @@ def pull_from_peer(args: argparse.Namespace, env_file: pathlib.Path, target: str
             if args.conflict == "local-wins":
                 skipped += 1
                 continue
-        apply_update(args, env_file, key, value, quiet=True)
+        changed = apply_update(args, env_file, key, value, quiet=True) or changed
         applied += 1
         applied_values[key] = value
     if conflicts:
@@ -736,6 +1020,7 @@ def pull_from_peer(args: argparse.Namespace, env_file: pathlib.Path, target: str
         maybe_refresh_encrypted_backup(args, env_file)
     if applied and not args.no_tailnet_sync:
         sync_tailnet_updates(args, applied_values)
+    auto_sync_aeon_if_shared_agent_changed(args, env_file, changed)
     return 0
 
 
@@ -802,6 +1087,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--no-backup", action="store_true", help="Skip encrypted shared-note backup refresh")
     parser.add_argument("--no-tailnet-sync", action="store_true", help="Do not replicate this update to ready Tailnet collectors")
+    parser.add_argument("--no-aeon-auto-sync", action="store_true", help="Do not sync changed shared env values to managed private AEON GitHub repos")
     parser.add_argument("--aeon-repo", default="", help="owner/repo target for --sync-aeon-github-secret")
     parser.add_argument(
         "--sync-aeon-github-secret",
@@ -811,7 +1097,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def apply_update(args: argparse.Namespace, env_file: pathlib.Path, key: str, value: str, quiet: bool = False) -> None:
+def apply_update(args: argparse.Namespace, env_file: pathlib.Path, key: str, value: str, quiet: bool = False) -> bool:
     touched_file = env_store_file(args, env_file)
     changed = False
     if args.scope in ("all", "app"):
@@ -851,6 +1137,15 @@ def apply_update(args: argparse.Namespace, env_file: pathlib.Path, key: str, val
                 print(f"updated canonical shared hive env {path}: {key}")
     if changed:
         touch_env_meta(touched_file, [key])
+    return changed
+
+
+def auto_sync_aeon_if_shared_agent_changed(args: argparse.Namespace, env_file: pathlib.Path, changed: bool) -> None:
+    if not changed or args.no_aeon_auto_sync:
+        return
+    if args.scope not in ("all", "agent") or args.runtime != "generic":
+        return
+    auto_sync_aeon_shared_env(args, shared_env_values(args, env_file))
 
 
 def main() -> int:
@@ -883,6 +1178,8 @@ def main() -> int:
             return 1
         sync_tailnet_updates(args, values)
         maybe_refresh_encrypted_backup(args, env_file)
+        if not args.no_aeon_auto_sync and args.runtime == "generic":
+            auto_sync_aeon_shared_env(args, values)
         return 0
 
     if args.import_env:
@@ -895,11 +1192,13 @@ def main() -> int:
         if not valid_values:
             print(f"No valid env keys found in {source}", file=sys.stderr)
             return 1
+        changed = False
         for key, value in valid_values.items():
-            apply_update(args, env_file, key, value, quiet=True)
+            changed = apply_update(args, env_file, key, value, quiet=True) or changed
         print(f"imported {len(valid_values)} keys from {source}")
         maybe_refresh_encrypted_backup(args, env_file)
         sync_tailnet_updates(args, valid_values)
+        auto_sync_aeon_if_shared_agent_changed(args, env_file, changed)
         return 0
 
     if args.import_stdin:
@@ -908,11 +1207,13 @@ def main() -> int:
         if not valid_values:
             print("No valid env keys found on stdin", file=sys.stderr)
             return 1
+        changed = False
         for key, value in valid_values.items():
-            apply_update(args, env_file, key, value, quiet=True)
+            changed = apply_update(args, env_file, key, value, quiet=True) or changed
         print(f"imported {len(valid_values)} keys from stdin")
         maybe_refresh_encrypted_backup(args, env_file)
         sync_tailnet_updates(args, valid_values)
+        auto_sync_aeon_if_shared_agent_changed(args, env_file, changed)
         return 0
 
     if not args.assignment:
@@ -932,10 +1233,11 @@ def main() -> int:
         print(f"Invalid env key: {key!r}", file=sys.stderr)
         return 2
 
-    apply_update(args, env_file, key, value)
+    changed = apply_update(args, env_file, key, value)
 
     maybe_refresh_encrypted_backup(args, env_file)
     sync_tailnet_updates(args, {key: value})
+    auto_sync_aeon_if_shared_agent_changed(args, env_file, changed)
     return 0
 
 

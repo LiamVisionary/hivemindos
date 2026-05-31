@@ -282,7 +282,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as SwarmRunRequest | null;
   if (body?.action && body.action !== "run") {
     try {
-      const status = await getMiroSharkCompanionStatus();
+      const status = await getMiroSharkCompanionStatus({ requestUrl: request.url });
       if (!status.ok) return Response.json({ ok: false, error: status.error ?? "MiroShark is not connected" }, { status: 503 });
       const baseUrl = status.baseUrl;
       if (body.action === "ask") {
@@ -440,7 +440,7 @@ export async function POST(request: Request) {
   void (async () => {
     try {
       updateJob(jobId, { status: "running", step: "connect", message: "Checking MiroShark" });
-      const status = await getMiroSharkCompanionStatus();
+      const status = await getMiroSharkCompanionStatus({ requestUrl: request.url });
       if (!status.ok) throw new Error(status.error ?? "MiroShark is not connected");
       const baseUrl = status.baseUrl;
       updateJob(jobId, { baseUrl, step: "ontology", message: "Generating ontology" });
@@ -539,7 +539,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const metadata = searchParams.get("metadata");
   if (metadata === "1") {
-    const status = await getMiroSharkCompanionStatus();
+    const status = await getMiroSharkCompanionStatus({ requestUrl: request.url });
     if (!status.ok) {
       return Response.json({ ok: false, error: status.error ?? "MiroShark is not connected" }, { status: 503 });
     }
@@ -596,7 +596,7 @@ export async function GET(request: Request) {
   if (!simulationId) {
     return Response.json({ ok: false, error: "simulation_id is required" }, { status: 400 });
   }
-  const status = await getMiroSharkCompanionStatus();
+  const status = await getMiroSharkCompanionStatus({ requestUrl: request.url });
   if (!status.ok) {
     return Response.json({ ok: false, error: status.error ?? "MiroShark is not connected" }, { status: 503 });
   }
