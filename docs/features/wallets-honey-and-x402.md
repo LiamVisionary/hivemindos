@@ -1,12 +1,13 @@
-# Wallets, Honey, HIVE, And x402
+# Wallets, Tokens, Honey, HIVE, And x402
 
-Wallets let agents hold controlled budgets and use payment rails. Honey and HIVE provide optional reward and compute loops.
+Wallets let agents hold controlled budgets, token balances, prepaid inference deposits, and paid-request rails. Honey and HIVE provide optional reward and compute loops on top of those wallet/token surfaces.
 
 ## How It Works
 
 - Wallet services live in `src/lib/services/wallet`.
 - Local wallet vault: `~/.hivemindos/wallet-vault`.
 - Wallet records can be mirrored into the shared vault through `src/lib/services/obsidian/wallet-ledger.ts`.
+- Base and Solana wallet creation and balance reads are exposed through `/api/wallet/create`, `/api/wallet/balance`, and `/api/wallet/send`.
 - Local Honey ledger/cache is in `src/lib/services/wallet/honey-ledger.ts`.
 - Wallet-vault backup and restore logic is in `src/lib/services/wallet/wallet-vault-backup.ts`.
 - MoneyClaw account checks live in `src/lib/services/wallet/moneyclaw-client.ts`.
@@ -15,9 +16,9 @@ Wallets let agents hold controlled budgets and use payment rails. Honey and HIVE
 
 ## Capabilities
 
-- Create Base and Solana wallet secrets.
-- Read balances.
-- Send USDC where configured and approved.
+- Create Base and Solana wallet secrets for agent-scoped token rails.
+- Read native/token balances.
+- Send USDC where configured, capped, and approved.
 - Store and recover wallet backup status.
 - Validate MoneyClaw keys.
 - Track UsePod prepaid token deposit details and runtime balance/route metadata when UsePod returns it.
@@ -25,14 +26,22 @@ Wallets let agents hold controlled budgets and use payment rails. Honey and HIVE
 - Observe runtime usage and submit privacy-safe Honey metadata.
 - Exchange Honey for ledger HIVE, return legacy ledger HIVE back to Honey, or claim Bankr HIVE to a Base receiving address when the Bankr treasury rail is configured.
 
-## Wallet Rails
+## Wallet And Token Rails
 
 The Wallets tab treats each agent wallet as a set of payment rails:
 
 - Local Base or Solana wallets hold capped test funds for direct sends and x402 requests.
+- USDC sends enforce each agent's max-payment policy before signing.
 - MoneyClaw keys can be saved per agent or shared across agents after the API key is validated.
 - UsePod agents show a prepaid rail with deposit address, last balance, last route, model count, and test status from the runtime metadata.
 - x402 requests use the local wallet policy, max-payment cap, and explicit confirmation text for risky sends.
+
+Token-facing surfaces:
+
+- Base and Solana addresses are treated as operational agent wallets, not user custody wallets.
+- UsePod deposit addresses are shown as prepaid inference token rails when the selected agent uses the UsePod provider.
+- Honey is tracked as usage-earned accounting; HIVE can be ledger-only legacy balance or an actual Bankr transfer when the claim path is configured.
+- x402 uses token/payment policy around requests instead of giving runtimes unrestricted wallet access.
 
 ## Wallet Vault Backup
 

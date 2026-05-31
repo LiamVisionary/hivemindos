@@ -7,7 +7,7 @@ description: Local-first agent fleet control room documentation.
   <div>
     <p class="eyebrow">Local-first fleet manual</p>
     <h1>HivemindOS Documentation</h1>
-    <p class="lede">A compact operator map for agent fleets: local machines, Tailnet collectors, shared Obsidian memory, runtime adapters, background work, wallets, Honey, HIVE, simulations, and integration surfaces.</p>
+    <p class="lede">A compact operator map for agent fleets: local machines, Tailnet collectors, shared Obsidian memory, runtime adapters, background work, wallets, token rails, Honey, HIVE, simulations, and integration surfaces.</p>
     <div class="actionRow">
       <a href="features/">Read the feature guide</a>
       <a href="architecture/">Trace the architecture</a>
@@ -28,8 +28,13 @@ description: Local-first agent fleet control room documentation.
 <div class="docGrid">
   <section class="docCard">
     <h3>Feature Guide</h3>
-    <p>Tour the product surface by domain: Fleet, agents, chat, work, scheduler, brain, env, files, notifications, MiroShark, wallets, Honey, HIVE, and x402.</p>
+    <p>Tour the product surface by domain: Fleet, agents, chat, work, scheduler, brain, env, files, notifications, MiroShark, wallets, token rails, Honey, HIVE, and x402.</p>
     <a href="features/">Open features</a>
+  </section>
+  <section class="docCard">
+    <h3>Wallets And Tokens</h3>
+    <p>Follow agent wallets, Base/Solana token handling, UsePod prepaid deposits, MoneyClaw keys, Honey rewards, Bankr HIVE claims, and x402 payments.</p>
+    <a href="features/wallets-honey-and-x402.html">Open wallet docs</a>
   </section>
   <section class="docCard">
     <h3>Architecture</h3>
@@ -56,7 +61,7 @@ The codebase now spans more than the original Fleet, Work, Brain, Chat, and Wall
 - AEON: repository/workspace management, local clone/link flows, GitHub-backed duplicates, scheduler handoff, brain access, and deliverable discovery/download/transfer.
 - Swarm: MiroShark template-driven simulations, scenario helpers, archive loading, X/polymarket/reddit-style outputs, run intelligence, publish actions, and analysis-agent selection.
 - Brain Services: Obsidian graph, shared skills, GBrain, Synto, trading-brain install/status, service notes, Synthesis-folder configuration, and source-access policy controls.
-- Wallets and Usage: per-agent wallet rails, MoneyClaw key validation, UsePod prepaid status, x402 smoke tests, encrypted wallet-vault backup/restore, Honey observation, and Bankr HIVE claims.
+- Wallets, Tokens, and Usage: per-agent wallets, Base/Solana token rails, MoneyClaw key validation, UsePod prepaid status, x402 smoke tests, encrypted wallet-vault backup/restore, Honey observation, and Bankr HIVE claims.
 - Work History and Maintenance: dynamic changelog history, note-to-Kanban intake, bulk task triage, process/heap memory telemetry, and conservative local repair actions.
 - Native Desktop: a Tauri shell that can read desktop status directly and use native local folder browsing/creation while preserving the browser API fallbacks.
 - Phone: gateway-backed phone pairing, scheduled/ring-agent calls, dashboard LiveKit calls, AEON call context, and mobile push readiness checks.
@@ -89,6 +94,7 @@ flowchart LR
   Tailnet --> RemoteCollectors["Remote collectors"]
   Collector --> Runtimes["Hermes / OpenClaw / Aeon / Local OpenAI"]
   RemoteCollectors --> RemoteRuntimes["Remote runtimes"]
+  Api --> Wallets["Wallets / tokens / x402"]
   Api --> Workers["Honey ledger and compute gateway workers"]
   Api --> Companions["MiroShark / Nango / Syncthing"]
 ```

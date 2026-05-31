@@ -16,7 +16,7 @@ HivemindOS has a lot of surface area, so features are split into focused pages i
 ## Integrations And Economy
 
 - [MiroShark And Runtime Gateways](miroshark-and-openclaw.md): simulation, swarm rehearsal, run intelligence, route catalogs, and the minimal runtime-gateway integration points HivemindOS keeps.
-- [Wallets, Honey, HIVE, And x402](wallets-honey-and-x402.md): agent wallets, MoneyClaw, UsePod prepaid rails, encrypted wallet vault backup, Honey rewards, compute gateway, Bankr HIVE claims, and paid requests.
+- [Wallets, Tokens, Honey, HIVE, And x402](wallets-honey-and-x402.md): agent wallets, Base/Solana token rails, MoneyClaw, UsePod prepaid deposits, encrypted wallet vault backup, Honey rewards, compute gateway, Bankr HIVE claims, and paid requests.
 - [Integrations And Work History](integrations-and-work-history.md): Nango, GitHub OAuth fallback, My Apps, API-service launchers, phone pairing, dynamic changelog, and work history.
 
 ## Native And Background Surfaces
@@ -45,7 +45,8 @@ flowchart TD
   Runtimes --> OpenClaw["OpenClaw"]
   Runtimes --> MiroShark["MiroShark"]
   MiroShark --> Swarm["Swarm theater"]
-  Runtimes --> Wallets["Wallets and Honey"]
+  Runtimes --> Wallets["Wallets and tokens"]
   Wallets --> UsePod["UsePod prepaid"]
+  Wallets --> TokenRails["Base / Solana / USDC"]
   Wallets --> Bankr["Bankr HIVE"]
 ```

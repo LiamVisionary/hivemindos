@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-01 02:26:30 WITA - Promote Wallets And Tokens Docs
+
+- Status: Pushed
+- Areas changed: GitHub Pages homepage, docs sidebar, feature guide, wallet/token docs, changelog
+- Summary: Make wallets and token rails first-class in the public docs by adding direct homepage/sidebar entry points and expanding the wallet docs language around Base/Solana, USDC, UsePod deposits, Honey/HIVE, Bankr, and x402.
+- Verification: `git diff --check -- docs CHANGELOG.md`; markdown link check across `docs/**/*.md`; docs file-size check confirmed the largest docs file is `docs/preview.html` at 616 lines; wallet/token prominence search confirmed homepage, sidebar, feature map, and wallet page references. `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized/generated files outside this docs change.
+- Intended commit message: `Promote wallets and tokens docs`
+
 ## 2026-06-01 02:19:02 WITA - Add Second-Pass Docs Audit Coverage
 
 - Status: Pushed
