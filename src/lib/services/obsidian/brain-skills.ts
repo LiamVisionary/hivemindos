@@ -5,6 +5,14 @@ import { homedir } from "os";
 import { basename, dirname, join, relative, resolve } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { cachedCall } from "@/lib/services/async-cache";
+import {
+  auditSkillDirectory,
+  auditSkillInput,
+  createSkillManifest,
+  normalizeAgentAgnosticSkill,
+  SKILL_MANIFEST_FILE,
+  sourceRefFromGitHubUrl,
+} from "@/lib/services/skills/skill-os";
 
 export type BrainSkillProviderId = "claude" | "codex" | "hermes" | "gemini" | "openclaw" | "aeon";
 
@@ -951,12 +959,37 @@ export async function importRemoteBrainSkill(input: {
       skill.skillMdUrl ? `- SKILL.md: ${skill.skillMdUrl}` : "",
     ].filter(Boolean).join("\n");
   }
+  markdown = normalizeAgentAgnosticSkill(markdown, skill.source || skill.githubUrl || skill.skillMdUrl || "remote catalog");
+  const audit = await auditSkillInput({
+    slug: destinationSlug,
+    markdown,
+    sourceRef: skill.githubUrl ? sourceRefFromGitHubUrl(skill.githubUrl) : skill.skillMdUrl,
+  });
+  if (audit.status === "blocked") {
+    await rm(destinationDir, { recursive: true, force: true });
+    throw new Error(`Skill audit blocked ${destinationSlug}: ${audit.findings.map((finding) => finding.title).join(", ")}`);
+  }
 
   await writeFile(join(destinationDir, "SKILL.md"), markdown.endsWith("\n") ? markdown : `${markdown}\n`, "utf8");
+  await writeFile(join(destinationDir, SKILL_MANIFEST_FILE), JSON.stringify(createSkillManifest({
+    slug: destinationSlug,
+    name: skill.name || slugToName(destinationSlug),
+    description: skill.description || "Shared agent skill.",
+    sourceType: "registry",
+    sourceLabel: skill.source || "Skill browser",
+    sourceUrl: skill.skillMdUrl || skill.githubUrl || "",
+    sourceRef: skill.githubUrl ? sourceRefFromGitHubUrl(skill.githubUrl) : skill.skillMdUrl,
+    audit,
+    markdown,
+  }), null, 2), "utf8");
   await writeFile(join(destinationDir, SOURCE_METADATA_FILE), JSON.stringify({
     provider: "remote",
     providerLabel: skill.source || "Skill browser",
     sourceUrl: skill.skillMdUrl || skill.githubUrl || "",
+    agentAgnostic: true,
+    auditStatus: audit.status,
+    capabilities: audit.capabilities,
+    envKeys: audit.envKeys,
     importedAt: new Date().toISOString(),
   }, null, 2), "utf8");
 
@@ -988,7 +1021,33 @@ export async function importGitHubBrainSkill(input: {
     await rm(destinationDir, { recursive: true, force: true });
     throw error;
   }
+  const skillPath = join(destinationDir, "SKILL.md");
+  const rawMarkdown = await readFile(skillPath, "utf8");
+  const markdown = normalizeAgentAgnosticSkill(rawMarkdown, input.githubUrl);
+  await writeFile(skillPath, markdown.endsWith("\n") ? markdown : `${markdown}\n`, "utf8");
+  const audit = await auditSkillDirectory({
+    slug: destinationSlug,
+    dir: destinationDir,
+    sourceRef: `${source.owner}/${source.repo}@${ref}`,
+  });
+  if (audit.status === "blocked") {
+    await rm(destinationDir, { recursive: true, force: true });
+    throw new Error(`Skill audit blocked ${destinationSlug}: ${audit.findings.map((finding) => finding.title).join(", ")}`);
+  }
 
+  await writeFile(join(destinationDir, SKILL_MANIFEST_FILE), JSON.stringify(createSkillManifest({
+    slug: destinationSlug,
+    name: skillNameFromMarkdown(markdown),
+    description: firstParagraph(markdown) || "Shared agent skill.",
+    sourceType: "github",
+    sourceLabel: "GitHub",
+    sourceUrl: input.githubUrl.trim(),
+    sourceRepo: `${source.owner}/${source.repo}`,
+    sourceRef: ref,
+    sourcePath,
+    audit,
+    markdown,
+  }), null, 2), "utf8");
   await writeFile(join(destinationDir, SOURCE_METADATA_FILE), JSON.stringify({
     provider: "github",
     providerLabel: "GitHub",
@@ -996,6 +1055,10 @@ export async function importGitHubBrainSkill(input: {
     sourceRepo: `${source.owner}/${source.repo}`,
     sourceRef: ref,
     sourcePath,
+    agentAgnostic: true,
+    auditStatus: audit.status,
+    capabilities: audit.capabilities,
+    envKeys: audit.envKeys,
     importedAt: new Date().toISOString(),
   }, null, 2), "utf8");
 
@@ -1008,8 +1071,9 @@ export async function writeBrainSkill(input: {
   vaultPath?: string;
   markdown: string;
 }): Promise<BrainSkillInventory> {
-  const markdown = input.markdown.trim();
-  if (!markdown) throw new Error("Write the skill content before adding it.");
+  const rawMarkdown = input.markdown.trim();
+  if (!rawMarkdown) throw new Error("Write the skill content before adding it.");
+  const markdown = normalizeAgentAgnosticSkill(rawMarkdown, "written skill");
 
   const before = await getBrainSkillInventory(input.vaultPath);
   await mkdir(before.skillsFolder, { recursive: true });
@@ -1023,10 +1087,26 @@ export async function writeBrainSkill(input: {
   );
   const destinationDir = join(before.skillsFolder, destinationSlug);
   await mkdir(destinationDir, { recursive: true });
+  const audit = await auditSkillInput({ slug: destinationSlug, markdown, sourceRef: "written" });
+  if (audit.status === "blocked") throw new Error(`Skill audit blocked this draft: ${audit.findings.map((finding) => finding.title).join(", ")}`);
   await writeFile(join(destinationDir, "SKILL.md"), `${markdown}\n`, "utf8");
+  await writeFile(join(destinationDir, SKILL_MANIFEST_FILE), JSON.stringify(createSkillManifest({
+    slug: destinationSlug,
+    name: skillNameFromMarkdown(markdown),
+    description: firstParagraph(markdown) || "Written shared skill.",
+    sourceType: "written",
+    sourceLabel: "Written skills",
+    sourceRef: "written",
+    audit,
+    markdown,
+  }), null, 2), "utf8");
   await writeFile(join(destinationDir, SOURCE_METADATA_FILE), JSON.stringify({
     provider: "written",
     providerLabel: "Written skills",
+    agentAgnostic: true,
+    auditStatus: audit.status,
+    capabilities: audit.capabilities,
+    envKeys: audit.envKeys,
     writtenAt: new Date().toISOString(),
   }, null, 2), "utf8");
 
@@ -1212,7 +1292,7 @@ async function writeAeonSkillsManifest(
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 }
 
-async function writeSkillsReadme(inventory: BrainSkillInventory) {
+export async function writeSkillsReadme(inventory: BrainSkillInventory) {
   const grouped = new Map<string, BrainSkillSummary[]>();
   for (const skill of inventory.shared) {
     const key = skill.providerLabel || "Shared brain";

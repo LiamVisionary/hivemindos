@@ -255,6 +255,8 @@ export function useAgentController(props: UseAgentControllerProps) {
         usePod: {
           ...(agent.usePod ?? {}),
           depositAddress: usePodStatus.depositAddress || agent.usePod?.depositAddress || "",
+          depositCode: usePodStatus.depositCode || agent.usePod?.depositCode || "",
+          dashboardUrl: usePodStatus.dashboardUrl || agent.usePod?.dashboardUrl || "",
           lastBalanceRemaining: usePodStatus.balanceRemaining || agent.usePod?.lastBalanceRemaining || "",
           lastRoute: usePodStatus.route || agent.usePod?.lastRoute || "",
           lastCheckedAt: usePodStatus.checkedAt || agent.usePod?.lastCheckedAt || "",

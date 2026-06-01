@@ -5,6 +5,7 @@
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
 import { useCallback, useEffect, useMemo } from "react";
+import { getNativeBrainGraph } from "@/lib/native/brain-graph";
 import { getNativeBrainSkillInventory } from "@/lib/native/brain-skills";
 import { listNativeLocalDirectories, openNativeDirectory } from "@/lib/native/filesystem";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
@@ -362,6 +363,22 @@ export function useMirosharkBrainController(props: any) {
       && Date.now() - brainGraphLoadedAtRef.current < BRAIN_GRAPH_CLIENT_CACHE_MS
     ) return;
     setBrainGraphLoading(true);
+    const nativeGraph = await getNativeBrainGraph({
+      vaultPath: requestedVaultPath || undefined,
+      force,
+    });
+    if (nativeGraph) {
+      setBrainGraphLoading(false);
+      setBrainGraph(nativeGraph);
+      brainGraphLoadedAtRef.current = Date.now();
+      brainGraphVaultPathRef.current = requestedVaultPath;
+      setSelectedBrainNodeId((current) => current || nativeGraph.nodes[0]?.id || "");
+      const noteCount = nativeGraph.nodes.filter((node) => !node.id.startsWith("unresolved:")).length;
+      setBrainGraphStatus(nativeGraph.truncated
+        ? `Loaded first ${noteCount} notes, ${nativeGraph.nodes.length} cells, and ${nativeGraph.links.length} links.`
+        : `Loaded ${noteCount} notes, ${nativeGraph.nodes.length} cells, and ${nativeGraph.links.length} links.`);
+      return;
+    }
     const response = await fetch("/api/obsidian/graph", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -640,28 +657,35 @@ export function useMirosharkBrainController(props: any) {
     setSkillBrowserStatus("");
     setSkillBrowserLoading(true);
     const hermesDetailPromise = refreshHermesUpdateRequirement();
-    const [featuredResponse, communityResponse] = await Promise.all([
+    const [featuredResponse, communityResponse, packResponse] = await Promise.all([
+      fetch(`/api/skills/catalog?vaultPath=${encodeURIComponent(sharedVault.vaultPath.trim() || "")}`, { cache: "no-store" }).catch(() => null),
       Promise.resolve(null),
-      Promise.resolve(null),
+      fetch("/api/skills/packs", { cache: "no-store" }).catch(() => null),
     ]);
     const hermesDetail = await hermesDetailPromise;
     const hermesUpdateRequired = Boolean(hermesDetail || hermesUpdateRequiredDetail);
     const featured = await featuredResponse?.json().catch(() => null) as { skills?: Array<Record<string, unknown>> } | null;
     const community = await communityResponse?.json().catch(() => null) as { skills?: Array<Record<string, unknown>> } | null;
+    const packs = await packResponse?.json().catch(() => null) as { packs?: Array<Record<string, unknown>> } | null;
     const featuredSkills = (featured?.skills ?? []).map((skill) => ({
       id: String(skill.slug ?? skill.id ?? skill.name ?? Math.random()),
       slug: String(skill.slug ?? skill.id ?? skill.name ?? "skill"),
       name: String(skill.name ?? skill.slug ?? "Skill"),
       description: String(skill.description ?? ""),
-      source: "Featured",
+      source: String(skill.source ?? "Catalog"),
       category: typeof skill.category === "string" ? skill.category : undefined,
       skillMdUrl: typeof skill.skillMdUrl === "string" ? skill.skillMdUrl : undefined,
       githubUrl: typeof skill.githubUrl === "string" ? skill.githubUrl : typeof skill.githubRepoUrl === "string" ? skill.githubRepoUrl : undefined,
+      sourceRef: typeof skill.sourceRef === "string" ? skill.sourceRef : undefined,
+      capabilities: Array.isArray(skill.capabilities) ? skill.capabilities.map(String) : undefined,
+      envKeys: Array.isArray(skill.envKeys) ? skill.envKeys.map(String) : undefined,
+      auditStatus: typeof skill.auditStatus === "string" ? skill.auditStatus : typeof skill.audit === "object" && skill.audit && "status" in skill ? String((skill.audit as { status?: string }).status) : undefined,
+      imported: Boolean(skill.imported),
       requiresHermesUpdate: skillRequiresHermesUpdate({
         slug: String(skill.slug ?? skill.id ?? skill.name ?? "skill"),
         name: String(skill.name ?? skill.slug ?? "Skill"),
         description: String(skill.description ?? ""),
-        source: "Featured",
+        source: String(skill.source ?? "Catalog"),
       }, hermesUpdateRequired),
     }));
     const communitySkills = (community?.skills ?? []).map((skill) => ({
@@ -680,6 +704,26 @@ export function useMirosharkBrainController(props: any) {
         source: "Community",
       }, hermesUpdateRequired),
     }));
+    const packSkills: SkillBrowserSkill[] = (packs?.packs ?? []).map((pack) => ({
+      id: `pack-${String(pack.id ?? pack.name ?? "pack")}`,
+      slug: String(pack.id ?? pack.name ?? "pack"),
+      name: String(pack.name ?? pack.id ?? "Skill pack"),
+      description: String(pack.description ?? ""),
+      source: "Skill pack",
+      category: typeof pack.category === "string" ? "Pack" : "Pack",
+      capabilities: Array.isArray(pack.capabilities) ? pack.capabilities.map(String) : undefined,
+      includedSkills: Array.isArray(pack.skills)
+        ? pack.skills.map((skill) => ({
+          slug: String(skill.slug ?? skill.name ?? "skill"),
+          name: String(skill.name ?? skill.slug ?? "Skill"),
+          description: String(skill.description ?? ""),
+        }))
+        : [],
+      safety: typeof pack.safety === "string" ? pack.safety : undefined,
+      audience: typeof pack.audience === "string" ? pack.audience : undefined,
+      envKeys: [],
+      imported: false,
+    }));
     const installedSkills: SkillBrowserSkill[] = (brainSkills?.providers ?? []).flatMap((provider) => provider.skills.map((skill) => ({
       id: `${provider.id}-${skill.slug}`,
       slug: skill.slug,
@@ -689,6 +733,8 @@ export function useMirosharkBrainController(props: any) {
       category: "Installed",
       providerId: provider.id,
       imported: skill.imported,
+      capabilities: [],
+      envKeys: [],
       requiresHermesUpdate: skillRequiresHermesUpdate({ ...skill, providerId: provider.id, source: provider.label }, hermesUpdateRequired),
     })));
     const sharedSkills: SkillBrowserSkill[] = (brainSkills?.shared ?? []).map((skill) => ({
@@ -700,10 +746,12 @@ export function useMirosharkBrainController(props: any) {
       category: "Ready",
       providerId: "shared" as const,
       imported: true,
+      capabilities: [],
+      envKeys: [],
       requiresHermesUpdate: skillRequiresHermesUpdate({ ...skill, providerId: "shared" as const, source: "Shared brain" }, hermesUpdateRequired),
     }));
     const deduped = new Map<string, SkillBrowserSkill>();
-    for (const skill of [...sharedSkills, ...installedSkills, ...featuredSkills, ...communitySkills]) {
+    for (const skill of [...sharedSkills, ...installedSkills, ...packSkills, ...featuredSkills, ...communitySkills]) {
       const key = skill.skillMdUrl || skill.githubUrl || skill.slug;
       if (!deduped.has(key)) deduped.set(key, skill);
     }
@@ -711,7 +759,7 @@ export function useMirosharkBrainController(props: any) {
     setSkillBrowserLoading(false);
     if (!featuredResponse?.ok && !communityResponse?.ok) {
       setSkillBrowserStatus("Could not reach the skill catalogs. Provider-installed skills can still be imported below.");
-    } else if (!communityResponse?.ok) {
+    } else if (communityResponse && !communityResponse.ok) {
       setSkillBrowserStatus("Featured skills loaded. Community catalog is unavailable on this machine.");
     }
   }, [brainSkills, hermesUpdateRequiredDetail, refreshHermesUpdateRequirement]);
@@ -724,6 +772,33 @@ export function useMirosharkBrainController(props: any) {
     if (skill.providerId) {
       await importBrainSkills(skill.providerId);
       setSkillBrowserStatus(`Synced ${skill.name} from ${skill.source} into the shared brain.`);
+      return;
+    }
+    if (skill.source === "Skill pack" || skill.category === "Pack") {
+      if (!sharedVault.enabled) {
+        setSkillBrowserStatus("Turn on the shared brain before installing skill packs.");
+        return;
+      }
+      setSkillBrowserImporting(skill.id);
+      setSkillBrowserStatus("");
+      const response = await fetch("/api/skills/packs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          packId: skill.slug,
+          vaultPath: sharedVault.vaultPath.trim() || undefined,
+        }),
+      }).catch(() => null);
+      const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string; inventory?: BrainSkillInventory; installed?: string[]; skipped?: string[] } | null;
+      setSkillBrowserImporting("");
+      if (!response?.ok || !data?.ok) {
+        setSkillBrowserStatus(data?.error ?? "Could not install that skill pack.");
+        return;
+      }
+      if (data.inventory) setBrainSkills(data.inventory);
+      setSkillBrowserStatus(`Installed ${data.installed?.length ?? 0} skill${data.installed?.length === 1 ? "" : "s"} from ${skill.name}${data.skipped?.length ? `; skipped ${data.skipped.length} existing` : ""}.`);
+      void refreshBrainGraph();
+      void refreshBrainSkills();
       return;
     }
     if (!sharedVault.enabled) {
@@ -752,6 +827,39 @@ export function useMirosharkBrainController(props: any) {
     void refreshBrainGraph();
     void refreshBrainSkills();
   }, [importBrainSkills, refreshBrainGraph, refreshBrainSkills, sharedVault.enabled, sharedVault.vaultPath]);
+
+  const convertSkillToAeon = useCallback(async (skill: SkillBrowserSkill) => {
+    const aeonAgent = agents.find((agent) => agent.id === selectedAgentId && agent.runtime === "aeon")
+      ?? agents.find((agent) => agent.runtime === "aeon");
+    if (!aeonAgent) {
+      setSkillBrowserStatus("Add an Aeon agent before converting skills into Aeon workflows.");
+      return;
+    }
+    if (!skill.imported && skill.providerId !== "shared") {
+      setSkillBrowserStatus("Add the skill to the shared brain before converting it to an Aeon workflow.");
+      return;
+    }
+    setSkillBrowserImporting(skill.id);
+    setSkillBrowserStatus(`Converting ${skill.name} into an Aeon workflow...`);
+    const response = await fetch("/api/runtimes/aeon/skills/convert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agent: aeonAgent,
+        skill: skill.slug,
+        vaultPath: sharedVault.vaultPath.trim() || undefined,
+        schedule: "manual",
+        enabled: false,
+      }),
+    }).catch(() => null);
+    const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string; aeon?: { schedule?: string } } | null;
+    setSkillBrowserImporting("");
+    if (!response?.ok || !data?.ok) {
+      setSkillBrowserStatus(data?.error ?? "Could not convert that skill to Aeon.");
+      return;
+    }
+    setSkillBrowserStatus(`Converted ${skill.name} to an Aeon workflow (${data.aeon?.schedule ?? "manual"}, off duty).`);
+  }, [agents, selectedAgentId, setSkillBrowserImporting, setSkillBrowserStatus, sharedVault.vaultPath]);
 
   const installGithubSkillToBrain = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -840,7 +948,7 @@ export function useMirosharkBrainController(props: any) {
       return [...next.values()];
     });
     setSkillBrowserWrittenContent("");
-    setSkillBrowserView("browse");
+    setSkillBrowserView("catalog");
     setSkillBrowserStatus("Added written skill to the shared brain.");
     void refreshBrainGraph();
     void refreshBrainSkills();
@@ -1270,5 +1378,5 @@ export function useMirosharkBrainController(props: any) {
   const swarmStatusLabel = mirosharkStatus?.ok ? "connected" : mirosharkStatus?.install.running ? "starting" : "offline";
   const selectedSwarmRunId = selectedMirosharkRunId || currentSwarmRun?.id || (mirosharkWorkspaceMode === "new" ? "" : undefined);
 
-  return { refreshMirosharkMetadata, runMirosharkAction, startNewMirosharkSimulation, applyMirosharkTemplate, updateMirosharkTemplateInput, extractMirosharkHelperText, runMirosharkScenarioHelper, launchMirosharkSwarm, runMirosharkSwarm, runMirosharkExperiment, analyzeMirosharkRun, refreshMirosharkArchive, refreshBrainGraph, refreshRecentDirectories, recordRecentDirectory, loadMachineDirectories, chooseDirectoryForMachine, refreshHermesUpdateRequirement, refreshBrainSkills, importBrainSkills, syncBrainSkillsToAeon, openSkillBrowser, importRemoteSkillToBrain, installGithubSkillToBrain, addWrittenSkillToBrain, refreshNotifications, loadMirosharkArchivedRun, refreshMirosharkRun, mirosharkRunStatus, mirosharkRunIsArchived, mirosharkRunnerStatus, mirosharkPosts, mirosharkFeedIsWaiting, mirosharkFeedIsLive, mirosharkObservedRound, mirosharkTotalRounds, mirosharkCurrentRound, mirosharkProgressPercent, mirosharkRunIsWorking, mirosharkDisplayStep, mirosharkDisplayStatus, mirosharkProgressLabel, mirosharkTemplates, allMirosharkTemplates, mirosharkSelectedTemplate, mirosharkSelectedTemplateFields, mirosharkMissingTemplateFields, mirosharkTelemetryCount, mirosharkActionCount, mirosharkMarketCount, mirosharkTimelineItems, mirosharkActionItems, mirosharkProfileItems, mirosharkMarketItems, mirosharkObservabilityItems, mirosharkLlmCallItems, swarmTemplates, swarmTimelineItems, swarmObservabilityItems, swarmAgents, swarmDecisions, swarmThreadPosts, swarmSocialPosts, mirosharkMarketPricePayloads, swarmMarket, swarmIntegrationItems, swarmMarketPriceItems, swarmExportLinks, currentSwarmRun, swarmRuns, swarmStatusLabel, selectedSwarmRunId };
+  return { refreshMirosharkMetadata, runMirosharkAction, startNewMirosharkSimulation, applyMirosharkTemplate, updateMirosharkTemplateInput, extractMirosharkHelperText, runMirosharkScenarioHelper, launchMirosharkSwarm, runMirosharkSwarm, runMirosharkExperiment, analyzeMirosharkRun, refreshMirosharkArchive, refreshBrainGraph, refreshRecentDirectories, recordRecentDirectory, loadMachineDirectories, chooseDirectoryForMachine, refreshHermesUpdateRequirement, refreshBrainSkills, importBrainSkills, syncBrainSkillsToAeon, openSkillBrowser, importRemoteSkillToBrain, convertSkillToAeon, installGithubSkillToBrain, addWrittenSkillToBrain, refreshNotifications, loadMirosharkArchivedRun, refreshMirosharkRun, mirosharkRunStatus, mirosharkRunIsArchived, mirosharkRunnerStatus, mirosharkPosts, mirosharkFeedIsWaiting, mirosharkFeedIsLive, mirosharkObservedRound, mirosharkTotalRounds, mirosharkCurrentRound, mirosharkProgressPercent, mirosharkRunIsWorking, mirosharkDisplayStep, mirosharkDisplayStatus, mirosharkProgressLabel, mirosharkTemplates, allMirosharkTemplates, mirosharkSelectedTemplate, mirosharkSelectedTemplateFields, mirosharkMissingTemplateFields, mirosharkTelemetryCount, mirosharkActionCount, mirosharkMarketCount, mirosharkTimelineItems, mirosharkActionItems, mirosharkProfileItems, mirosharkMarketItems, mirosharkObservabilityItems, mirosharkLlmCallItems, swarmTemplates, swarmTimelineItems, swarmObservabilityItems, swarmAgents, swarmDecisions, swarmThreadPosts, swarmSocialPosts, mirosharkMarketPricePayloads, swarmMarket, swarmIntegrationItems, swarmMarketPriceItems, swarmExportLinks, currentSwarmRun, swarmRuns, swarmStatusLabel, selectedSwarmRunId };
 }

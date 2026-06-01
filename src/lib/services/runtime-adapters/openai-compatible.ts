@@ -89,6 +89,8 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
         usePod: {
           tokenEnvName: usePodStatus.tokenEnvName,
           depositAddress: usePodStatus.depositAddress,
+          depositCode: usePodStatus.depositCode,
+          dashboardUrl: usePodStatus.dashboardUrl,
           balanceRemaining: usePodStatus.balanceRemaining,
           route: usePodStatus.route,
           checkedAt: usePodStatus.checkedAt,

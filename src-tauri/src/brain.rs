@@ -7,6 +7,11 @@ use std::path::{Path, PathBuf};
 const DEFAULT_VAULT: &str = "~/Documents/Obsidian/hivemindos-vault";
 const SOURCE_METADATA_FILE: &str = ".hivemind-skill-source.json";
 const SKIPPED_DIRS: &[&str] = &[".git", "node_modules", ".next", "dist", "build", ".cache", ".archive"];
+const GRAPH_SKIPPED_DIRS: &[&str] = &[".git", ".obsidian", ".trash", "node_modules"];
+const MAX_GRAPH_NOTES: usize = 260;
+const MAX_NOTE_BYTES: u64 = 524_288;
+const ACCESS_LOG_PATH: &str = "Operations/Brain Services/access-log.jsonl";
+const LEGACY_ACCESS_LOG_PATH: &str = "Projects/HivemindOS/Brain Access/access-log.jsonl";
 
 #[derive(Debug, Serialize, Clone)]
 struct BrainSkillSummary {
@@ -314,5 +319,485 @@ pub(crate) fn brain_skill_inventory(vault_path: Option<String>, shared_only: Opt
         "shared": shared,
         "providers": providers,
         "totals": BrainSkillTotals { shared: shared_count, provider_skills, importable }
+    }))
+}
+
+#[derive(Debug, Clone)]
+struct GraphNote {
+    path: String,
+    content: String,
+    byte_size: u64,
+    tags: Vec<String>,
+}
+
+fn graph_relative_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn is_sync_conflict_file(name: &str) -> bool {
+    name.to_lowercase().contains("sync-conflict-") && name.to_lowercase().ends_with(".md")
+}
+
+fn walk_markdown(root: &Path, current: &Path, output: &mut Vec<PathBuf>) {
+    if output.len() >= MAX_GRAPH_NOTES {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(current) else {
+        return;
+    };
+    for entry in entries.filter_map(Result::ok) {
+        if output.len() >= MAX_GRAPH_NOTES {
+            break;
+        }
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_dir() {
+            if !GRAPH_SKIPPED_DIRS.contains(&name.as_str()) {
+                walk_markdown(root, &path, output);
+            }
+        } else if file_type.is_file() && name.to_lowercase().ends_with(".md") && !is_sync_conflict_file(&name) && path.starts_with(root) {
+            output.push(path);
+        }
+    }
+}
+
+fn extract_wiki_links(content: &str) -> Vec<String> {
+    let mut links = Vec::new();
+    let mut rest = content;
+    while let Some(start) = rest.find("[[") {
+        let after = &rest[start + 2..];
+        let Some(end) = after.find("]]") else {
+            break;
+        };
+        let raw = &after[..end];
+        let target = raw
+            .split(['|', '#', '^'])
+            .next()
+            .unwrap_or("")
+            .trim();
+        if !target.is_empty() {
+            links.push(target.to_string());
+        }
+        rest = &after[end + 2..];
+    }
+    links
+}
+
+fn extract_tags(content: &str) -> Vec<String> {
+    let mut tags = HashSet::new();
+    for token in content.split_whitespace() {
+        let trimmed = token.trim_matches(|item: char| !item.is_ascii_alphanumeric() && item != '#' && item != '_' && item != '-' && item != '/');
+        let Some(tag) = trimmed.strip_prefix('#') else {
+            continue;
+        };
+        if tag.len() >= 2
+            && tag.len() <= 48
+            && tag.chars().next().is_some_and(|item| item.is_ascii_alphanumeric())
+            && tag.chars().all(|item| item.is_ascii_alphanumeric() || item == '_' || item == '-' || item == '/')
+        {
+            tags.insert(tag.to_string());
+        }
+        if tags.len() >= 10 {
+            break;
+        }
+    }
+    let mut tags = tags.into_iter().collect::<Vec<_>>();
+    tags.sort();
+    tags
+}
+
+fn read_graph_notes(root: &Path) -> (Vec<GraphNote>, bool) {
+    let mut paths = Vec::new();
+    walk_markdown(root, root, &mut paths);
+    let truncated = paths.len() >= MAX_GRAPH_NOTES;
+    let mut notes = Vec::new();
+    for path in paths {
+        let Ok(metadata) = fs::metadata(&path) else {
+            continue;
+        };
+        if metadata.len() > MAX_NOTE_BYTES {
+            continue;
+        }
+        let content = fs::read_to_string(&path).unwrap_or_default();
+        notes.push(GraphNote {
+            path: graph_relative_path(root, &path),
+            byte_size: metadata.len(),
+            tags: extract_tags(&content),
+            content,
+        });
+    }
+    (notes, truncated)
+}
+
+fn read_access_events(root: &Path) -> Vec<serde_json::Value> {
+    let paths = [root.join(ACCESS_LOG_PATH), root.join(LEGACY_ACCESS_LOG_PATH)];
+    let mut events = Vec::new();
+    for path in paths {
+        let raw = fs::read_to_string(path).unwrap_or_default();
+        for line in raw.lines().filter(|line| !line.trim().is_empty()) {
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(line) {
+                if value.get("notePath").and_then(serde_json::Value::as_str).is_some()
+                    && value.get("accessedAt").and_then(serde_json::Value::as_str).is_some()
+                {
+                    events.push(value);
+                }
+            }
+        }
+    }
+    events.sort_by(|left, right| {
+        right
+            .get("accessedAt")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("")
+            .cmp(left.get("accessedAt").and_then(serde_json::Value::as_str).unwrap_or(""))
+    });
+    events.truncate(500);
+    events
+}
+
+fn resolve_graph_link(target: &str, all_paths: &[String]) -> Option<String> {
+    let target_lower = target.trim_end_matches(".md").to_lowercase();
+    for path in all_paths {
+        let name = path
+            .split('/')
+            .last()
+            .unwrap_or(path)
+            .trim_end_matches(".md")
+            .to_lowercase();
+        if name == target_lower {
+            return Some(path.clone());
+        }
+    }
+    for path in all_paths {
+        if path.to_lowercase().trim_end_matches(".md").ends_with(&format!("/{target_lower}")) {
+            return Some(path.clone());
+        }
+    }
+    None
+}
+
+#[tauri::command]
+pub(crate) fn brain_graph(vault_path: Option<String>, _force: Option<bool>) -> Result<serde_json::Value, String> {
+    let vault = vault_root(vault_path);
+    if !vault.is_dir() {
+        return Err("Vault path is not a directory.".to_string());
+    }
+    let (notes, truncated) = read_graph_notes(&vault);
+    let accesses = read_access_events(&vault);
+    let note_paths = notes.iter().map(|note| note.path.clone()).collect::<Vec<_>>();
+    let mut accesses_by_note = HashMap::<String, Vec<serde_json::Value>>::new();
+    for event in &accesses {
+        if let Some(note_path) = event.get("notePath").and_then(serde_json::Value::as_str) {
+            accesses_by_note.entry(note_path.to_string()).or_default().push(event.clone());
+        }
+    }
+
+    let mut links = Vec::<serde_json::Value>::new();
+    let mut unresolved = HashSet::<String>::new();
+    for note in &notes {
+        for target in extract_wiki_links(&note.content) {
+            if let Some(resolved) = resolve_graph_link(&target, &note_paths) {
+                links.push(serde_json::json!({ "source": note.path, "target": resolved }));
+            } else {
+                let id = format!("unresolved:{target}");
+                unresolved.insert(id.clone());
+                links.push(serde_json::json!({ "source": note.path, "target": id, "unresolved": true }));
+            }
+        }
+    }
+
+    let mut degree = HashMap::<String, (usize, usize)>::new();
+    for link in &links {
+        let source = link.get("source").and_then(serde_json::Value::as_str).unwrap_or("").to_string();
+        let target = link.get("target").and_then(serde_json::Value::as_str).unwrap_or("").to_string();
+        let source_degree = degree.entry(source).or_insert((0, 0));
+        source_degree.1 += 1;
+        let target_degree = degree.entry(target).or_insert((0, 0));
+        target_degree.0 += 1;
+    }
+
+    let mut nodes = notes
+        .iter()
+        .map(|note| {
+            let recent = accesses_by_note.get(&note.path).cloned().unwrap_or_default().into_iter().take(6).collect::<Vec<_>>();
+            let mut parts = note.path.split('/').collect::<Vec<_>>();
+            let label = parts.pop().unwrap_or(&note.path).trim_end_matches(".md").to_string();
+            let folder = if parts.is_empty() { "Vault root".to_string() } else { parts.join("/") };
+            let (incoming, outgoing) = degree.get(&note.path).copied().unwrap_or((0, 0));
+            serde_json::json!({
+                "id": note.path,
+                "label": label,
+                "folder": folder,
+                "tags": note.tags,
+                "byteSize": note.byte_size,
+                "incoming": incoming,
+                "outgoing": outgoing,
+                "accessCount": accesses_by_note.get(&note.path).map(Vec::len).unwrap_or(0),
+                "lastAccessedAt": recent.first().and_then(|event| event.get("accessedAt")).and_then(serde_json::Value::as_str),
+                "recentAccesses": recent,
+            })
+        })
+        .collect::<Vec<_>>();
+    for id in unresolved {
+        let (incoming, outgoing) = degree.get(&id).copied().unwrap_or((0, 0));
+        let label = id.trim_start_matches("unresolved:").to_string();
+        nodes.push(serde_json::json!({
+            "id": id,
+            "label": label,
+            "folder": "Unresolved links",
+            "tags": [],
+            "byteSize": 0,
+            "incoming": incoming,
+            "outgoing": outgoing,
+            "accessCount": 0,
+            "recentAccesses": [],
+        }));
+    }
+    nodes.sort_by(|left, right| {
+        let score = |node: &serde_json::Value| {
+            node.get("incoming").and_then(serde_json::Value::as_u64).unwrap_or(0)
+                + node.get("outgoing").and_then(serde_json::Value::as_u64).unwrap_or(0)
+                + node.get("accessCount").and_then(serde_json::Value::as_u64).unwrap_or(0)
+        };
+        score(right).cmp(&score(left))
+    });
+
+    Ok(serde_json::json!({
+        "vaultPath": vault.to_string_lossy(),
+        "accessLogPath": vault.join(ACCESS_LOG_PATH).to_string_lossy(),
+        "generatedAt": chrono::Utc::now().to_rfc3339(),
+        "nodes": nodes,
+        "links": links,
+        "recentAccesses": accesses.into_iter().take(24).collect::<Vec<_>>(),
+        "truncated": truncated,
+    }))
+}
+
+#[allow(dead_code)]
+fn vault_relative_unused(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+#[allow(dead_code)]
+fn is_sync_conflict_file_unused(name: &str) -> bool {
+    name.to_lowercase().contains("sync-conflict-") && name.to_lowercase().ends_with(".md")
+}
+
+#[allow(dead_code)]
+fn walk_markdown_unused(root: &Path, dir: &Path, output: &mut Vec<PathBuf>) {
+    if output.len() >= MAX_GRAPH_NOTES {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.filter_map(Result::ok) {
+        if output.len() >= MAX_GRAPH_NOTES {
+            break;
+        }
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if path.is_dir() {
+            if !GRAPH_SKIPPED_DIRS.contains(&name.as_str()) {
+                walk_markdown_unused(root, &path, output);
+            }
+        } else if path.is_file() && name.to_lowercase().ends_with(".md") && !is_sync_conflict_file_unused(&name) && path.starts_with(root) {
+            output.push(path);
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn graph_tags(content: &str) -> Vec<String> {
+    let mut tags = HashSet::new();
+    for part in content.split_whitespace() {
+        let tag = part.trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != '#' && ch != '/' && ch != '_' && ch != '-');
+        if let Some(rest) = tag.strip_prefix('#') {
+            if rest.len() > 1 && rest.len() <= 48 && rest.chars().next().is_some_and(|ch| ch.is_ascii_alphanumeric()) {
+                tags.insert(rest.to_string());
+            }
+        }
+    }
+    let mut values = tags.into_iter().collect::<Vec<_>>();
+    values.sort();
+    values.truncate(10);
+    values
+}
+
+#[allow(dead_code)]
+fn wiki_links(content: &str) -> Vec<String> {
+    let mut links = Vec::new();
+    let mut rest = content;
+    while let Some(start) = rest.find("[[") {
+        let after = &rest[start + 2..];
+        let Some(end) = after.find("]]") else {
+            break;
+        };
+        let raw = &after[..end];
+        let target = raw
+            .split(['|', '#', '^'])
+            .next()
+            .unwrap_or("")
+            .trim()
+            .trim_end_matches(".md");
+        if !target.is_empty() {
+            links.push(target.to_string());
+        }
+        rest = &after[end + 2..];
+    }
+    links
+}
+
+#[allow(dead_code)]
+fn resolve_wiki_link(target: &str, paths: &[String]) -> Option<String> {
+    let target = target.trim_end_matches(".md").to_lowercase();
+    for path in paths {
+        let name = path.rsplit('/').next().unwrap_or("").trim_end_matches(".md").to_lowercase();
+        if name == target {
+            return Some(path.clone());
+        }
+    }
+    for path in paths {
+        if path.trim_end_matches(".md").to_lowercase().ends_with(&format!("/{target}")) {
+            return Some(path.clone());
+        }
+    }
+    None
+}
+
+#[allow(dead_code)]
+fn read_access_events_unused(root: &Path) -> Vec<serde_json::Value> {
+    let mut lines = Vec::new();
+    for relative in [ACCESS_LOG_PATH, LEGACY_ACCESS_LOG_PATH] {
+        let path = root.join(relative);
+        if !path.starts_with(root) {
+            continue;
+        }
+        if let Ok(raw) = fs::read_to_string(path) {
+            lines.extend(raw.lines().map(str::to_string));
+        }
+    }
+    let mut events = lines
+        .iter()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|event| event.get("notePath").and_then(serde_json::Value::as_str).is_some())
+        .collect::<Vec<_>>();
+    events.sort_by(|left, right| {
+        right.get("accessedAt").and_then(serde_json::Value::as_str).unwrap_or("").cmp(left.get("accessedAt").and_then(serde_json::Value::as_str).unwrap_or(""))
+    });
+    events.truncate(500);
+    events
+}
+
+#[allow(dead_code)]
+fn brain_graph_unused(vault_path: Option<String>, _force: Option<bool>) -> Result<serde_json::Value, String> {
+    let root = vault_root(vault_path);
+    if !root.is_dir() {
+        return Err("Vault path is not a directory.".to_string());
+    }
+    let mut paths = Vec::new();
+    walk_markdown_unused(&root, &root, &mut paths);
+    let truncated = paths.len() >= MAX_GRAPH_NOTES;
+    let mut notes = Vec::<(String, String, u64, Vec<String>)>::new();
+    for path in paths {
+        let Ok(metadata) = fs::metadata(&path) else {
+            continue;
+        };
+        if metadata.len() > MAX_NOTE_BYTES {
+            continue;
+        }
+        let content = fs::read_to_string(&path).unwrap_or_default();
+        notes.push((vault_relative_unused(&root, &path), content.clone(), metadata.len(), graph_tags(&content)));
+    }
+    let note_paths = notes.iter().map(|(path, _, _, _)| path.clone()).collect::<Vec<_>>();
+    let accesses = read_access_events_unused(&root);
+    let mut accesses_by_note = HashMap::<String, Vec<serde_json::Value>>::new();
+    for event in &accesses {
+        if let Some(note_path) = event.get("notePath").and_then(serde_json::Value::as_str) {
+            accesses_by_note.entry(note_path.to_string()).or_default().push(event.clone());
+        }
+    }
+    let mut links = Vec::new();
+    let mut unresolved = HashSet::new();
+    for (path, content, _, _) in &notes {
+        for target in wiki_links(content) {
+            if let Some(resolved) = resolve_wiki_link(&target, &note_paths) {
+                links.push(serde_json::json!({ "source": path, "target": resolved }));
+            } else {
+                let id = format!("unresolved:{target}");
+                unresolved.insert(id.clone());
+                links.push(serde_json::json!({ "source": path, "target": id, "unresolved": true }));
+            }
+        }
+    }
+    let mut degree = HashMap::<String, (i64, i64)>::new();
+    for link in &links {
+        let source = link.get("source").and_then(serde_json::Value::as_str).unwrap_or("").to_string();
+        let target = link.get("target").and_then(serde_json::Value::as_str).unwrap_or("").to_string();
+        degree.entry(source).and_modify(|item| item.1 += 1).or_insert((0, 1));
+        degree.entry(target).and_modify(|item| item.0 += 1).or_insert((1, 0));
+    }
+    let mut nodes = Vec::new();
+    for (path, _, byte_size, tags) in notes {
+        let recent = accesses_by_note.get(&path).cloned().unwrap_or_default().into_iter().take(6).collect::<Vec<_>>();
+        let access_count = accesses_by_note.get(&path).map(Vec::len).unwrap_or(0);
+        let mut parts = path.split('/').collect::<Vec<_>>();
+        let file = parts.pop().unwrap_or(&path);
+        let label = file.trim_end_matches(".md").to_string();
+        let folder = if parts.is_empty() { "Vault root".to_string() } else { parts.join("/") };
+        let (incoming, outgoing) = degree.get(&path).copied().unwrap_or((0, 0));
+        nodes.push(serde_json::json!({
+            "id": path,
+            "label": label,
+            "folder": folder,
+            "tags": tags,
+            "byteSize": byte_size,
+            "incoming": incoming,
+            "outgoing": outgoing,
+            "accessCount": access_count,
+            "lastAccessedAt": recent.first().and_then(|event| event.get("accessedAt")).cloned().unwrap_or(serde_json::Value::Null),
+            "recentAccesses": recent
+        }));
+    }
+    for id in unresolved {
+        let (incoming, _) = degree.get(&id).copied().unwrap_or((0, 0));
+        let label = id.trim_start_matches("unresolved:").to_string();
+        nodes.push(serde_json::json!({
+            "id": id,
+            "label": label,
+            "folder": "Unresolved links",
+            "tags": [],
+            "byteSize": 0,
+            "incoming": incoming,
+            "outgoing": 0,
+            "accessCount": 0,
+            "recentAccesses": []
+        }));
+    }
+    nodes.sort_by(|left, right| {
+        let score = |node: &serde_json::Value| {
+            node.get("incoming").and_then(serde_json::Value::as_i64).unwrap_or(0)
+                + node.get("outgoing").and_then(serde_json::Value::as_i64).unwrap_or(0)
+                + node.get("accessCount").and_then(serde_json::Value::as_i64).unwrap_or(0)
+        };
+        score(right).cmp(&score(left))
+    });
+    Ok(serde_json::json!({
+        "vaultPath": root.to_string_lossy(),
+        "accessLogPath": root.join(ACCESS_LOG_PATH).to_string_lossy(),
+        "generatedAt": chrono::Utc::now().to_rfc3339(),
+        "nodes": nodes,
+        "links": links,
+        "recentAccesses": accesses.into_iter().take(24).collect::<Vec<_>>(),
+        "truncated": truncated
     }))
 }

@@ -49,6 +49,8 @@ export type RuntimeIntegrationStatus = {
     usePod?: {
       tokenEnvName?: string;
       depositAddress?: string;
+      depositCode?: string;
+      dashboardUrl?: string;
       balanceRemaining?: string;
       route?: string;
       checkedAt?: string;
@@ -323,10 +325,19 @@ export type SkillBrowserSkill = {
   category?: string;
   skillMdUrl?: string;
   githubUrl?: string;
+  sourceRef?: string;
+  capabilities?: string[];
+  envKeys?: string[];
+  auditStatus?: "trusted" | "review" | "restricted" | "blocked";
   providerId?: BrainSkillProviderId | "shared";
   imported?: boolean;
   requiresHermesUpdate?: boolean;
+  includedSkills?: Array<{ slug: string; name: string; description: string }>;
+  safety?: string;
+  audience?: string;
 };
+
+export type SkillBrowserView = "catalog" | "installed" | "packs" | "audit" | "write";
 
 export type HermesUpdateSkillLike = {
   slug: string;

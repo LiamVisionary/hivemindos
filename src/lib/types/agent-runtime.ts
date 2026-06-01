@@ -21,6 +21,9 @@ export interface RuntimeCapabilities {
   setup?: boolean;
   walletTools?: boolean;
   modelSelection?: boolean;
+  skillActions?: boolean;
+  skillActionRuntimes?: Array<"osascript" | "http" | "shell" | "node" | "python" | "mcp" | "tauri-native">;
+  skillCapabilities?: Array<"chat" | "background" | "scheduler" | "shell" | "browser" | "mcp" | "http" | "filesystem" | "wallet" | "publishing" | "deployment" | "analytics" | "aeon-workflow">;
 }
 
 export type RuntimeEnvFeature =
@@ -144,6 +147,8 @@ export interface AdaptiveOpenRouterConfig {
 export interface UsePodAgentConfig {
   tokenEnvName?: string;
   depositAddress?: string;
+  depositCode?: string;
+  dashboardUrl?: string;
   maxPriceInputMicrounits?: string;
   maxPriceOutputMicrounits?: string;
   spendPreset?: "cheapest" | "balanced" | "fast" | "none" | "custom";
@@ -422,6 +427,7 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
       status: true,
       chat: true,
       modelSelection: true,
+      skillCapabilities: ["chat", "mcp", "http"],
     },
     env: DEFAULT_RUNTIME_ENV_FEATURE,
     settings: {
@@ -464,6 +470,9 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
       setup: true,
       walletTools: true,
       modelSelection: true,
+      skillActions: true,
+      skillActionRuntimes: ["http", "shell", "node", "python", "mcp"],
+      skillCapabilities: ["chat", "background", "scheduler", "shell", "browser", "mcp", "http", "filesystem", "wallet", "publishing", "deployment", "analytics"],
     },
     env: DEFAULT_RUNTIME_ENV_FEATURE,
     settings: {
@@ -504,6 +513,9 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
       backgroundTasks: true,
       notifications: true,
       setup: true,
+      skillActions: true,
+      skillActionRuntimes: ["http", "shell", "node", "python"],
+      skillCapabilities: ["background", "scheduler", "shell", "http", "filesystem", "analytics", "aeon-workflow"],
     },
     env: {
       kind: "github-secrets",
@@ -570,6 +582,7 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
       status: true,
       chat: true,
       modelSelection: true,
+      skillCapabilities: ["chat", "http"],
     },
     env: DEFAULT_RUNTIME_ENV_FEATURE,
     settings: {

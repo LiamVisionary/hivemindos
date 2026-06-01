@@ -1,0 +1,167 @@
+name: Security Scan (Strix)
+
+on:
+  schedule:
+    - cron: "0 2 * * 0"  # Sunday 02:00 UTC
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: strix-main
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Check Main Update Gate
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.gate.outputs.should_run }}
+      reason: ${{ steps.gate.outputs.reason }}
+    steps:
+      - name: Check previous scheduled scan
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW_FILE: security-scan.yml
+        run: |
+          set -euo pipefail
+          runs_json="$(gh api --method GET \
+            "repos/$REPOSITORY/actions/workflows/$WORKFLOW_FILE/runs" \
+            -f branch=main \
+            -f event=schedule \
+            -f status=completed \
+            -f per_page=1)"
+          previous_sha="$(printf "%s" "$runs_json" | node -e '
+            let input = "";
+            process.stdin.on("data", (chunk) => input += chunk);
+            process.stdin.on("end", () => {
+              const payload = JSON.parse(input || "{}");
+              console.log(payload.workflow_runs?.[0]?.head_sha || "");
+            });
+          ')"
+          if [ -n "$previous_sha" ] && [ "$previous_sha" = "$CURRENT_SHA" ]; then
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "reason=main has not changed since the last completed scheduled Strix scan" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+          if [ -n "$previous_sha" ]; then
+            echo "reason=main advanced from $previous_sha to $CURRENT_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "reason=no previous completed scheduled Strix scan was found" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Gate summary
+        run: |
+          {
+            echo "## Strix Main Update Gate"
+            echo ""
+            echo "- **Run Strix:** ${{ steps.gate.outputs.should_run }}"
+            echo "- **Reason:** ${{ steps.gate.outputs.reason }}"
+            echo "- **SHA:** \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  strix-pentest:
+    name: Strix Penetration Test
+    needs: gate
+    if: needs.gate.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Strix
+        run: curl -sSL https://strix.ai/install | bash
+
+      - name: Run Strix Security Scan
+        id: scan
+        env:
+          STRIX_LLM: openrouter/deepseek/deepseek-v4-pro:baidu/fp8
+          LLM_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          if [ -z "${LLM_API_KEY:-}" ]; then
+            echo "OPENROUTER_API_KEY is not configured; skipping Strix."
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          set +e
+          strix -n -t ./ --scan-mode quick 2>&1 | tee strix-output.log
+          exit_code=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Strix Security Scan"
+            echo ""
+            echo "- **Exit code:** ${{ steps.scan.outputs.exit_code }}"
+            echo "- **Trigger:** \`${{ github.event_name }}\`"
+            echo "- **Branch:** \`${{ github.ref_name }}\`"
+            echo "- **SHA:** \`${{ github.sha }}\`"
+            echo "- **Gate reason:** ${{ needs.gate.outputs.reason }}"
+            echo ""
+            echo "### Output (last 80 lines)"
+            echo ""
+            echo '```'
+            tail -80 strix-output.log 2>/dev/null || echo '(no output captured)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload scan output as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strix-scan-${{ github.run_id }}
+          path: |
+            strix-output.log
+            strix-results/**
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Notify Telegram
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EXIT_CODE: ${{ steps.scan.outputs.exit_code }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Telegram secrets not configured; skipping notification."
+            exit 0
+          fi
+          if [ "$EXIT_CODE" = "0" ]; then
+            status="OK no findings"
+          else
+            status="FINDINGS exit=$EXIT_CODE"
+          fi
+          run_url="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          text="Strix: $status
+          Branch: ${{ github.ref_name }}
+          Trigger: ${{ github.event_name }}
+          $run_url"
+          curl -sS -o /dev/null -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            -d "disable_web_page_preview=true" \
+            --data-urlencode "text=$text" || true
+
+  skipped:
+    name: Strix Skipped
+    needs: gate
+    if: needs.gate.outputs.should_run != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
+        run: |
+          {
+            echo "## Strix Security Scan Skipped"
+            echo ""
+            echo "${{ needs.gate.outputs.reason }}"
+          } >> "$GITHUB_STEP_SUMMARY"

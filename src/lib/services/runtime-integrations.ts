@@ -43,6 +43,8 @@ export type RuntimeIntegrationStatus = {
     usePod?: {
       tokenEnvName?: string;
       depositAddress?: string;
+      depositCode?: string;
+      dashboardUrl?: string;
       balanceRemaining?: string;
       route?: string;
       checkedAt?: string;

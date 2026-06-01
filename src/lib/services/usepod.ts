@@ -9,6 +9,8 @@ import type { AgentProfile } from "@/lib/types/agent-runtime";
 export type UsePodRegistration = {
   token: string;
   depositAddress: string;
+  depositCode: string;
+  dashboardUrl: string;
   raw: unknown;
 };
 
@@ -34,6 +36,8 @@ export type UsePodCheckResult = {
   message: string;
   tokenEnvName: string;
   depositAddress: string;
+  depositCode: string;
+  dashboardUrl: string;
   modelCount: number;
   models: UsePodModel[];
   balanceRemaining: string;
@@ -47,6 +51,8 @@ const HERMES_ENV_FILE = join(homedir(), ".hermes", ".env");
 const USEPOD_API_BASE = "https://api.usepod.ai";
 const USEPOD_DEFAULT_TOKEN_ENV = "USEPOD_TOKEN";
 const USEPOD_DEPOSIT_ENV = "USEPOD_DEPOSIT_ADDRESS";
+const USEPOD_DEPOSIT_CODE_ENV = "USEPOD_DEPOSIT_CODE";
+const USEPOD_DASHBOARD_URL_ENV = "USEPOD_DASHBOARD_URL";
 
 function parseEnvFileValue(raw: string, key: string) {
   const pattern = new RegExp(`^\\s*(?:export\\s+)?${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*=\\s*(.*)\\s*$`, "m");
@@ -67,6 +73,15 @@ function firstString(record: unknown, keys: string[]) {
     if (typeof value === "string" && value.trim()) return value.trim();
   }
   return "";
+}
+
+function nestedString(record: unknown, path: string[]) {
+  let current = record;
+  for (const key of path) {
+    if (!current || typeof current !== "object") return "";
+    current = (current as Record<string, unknown>)[key];
+  }
+  return typeof current === "string" && current.trim() ? current.trim() : "";
 }
 
 function cleanMicrounits(value: unknown) {
@@ -153,6 +168,14 @@ export async function readUsePodDepositAddress(profile?: Pick<AgentProfile, "use
   return profile?.usePod?.depositAddress?.trim() || await readUsePodEnvValue(USEPOD_DEPOSIT_ENV);
 }
 
+export async function readUsePodDepositCode(profile?: Pick<AgentProfile, "usePod">) {
+  return profile?.usePod?.depositCode?.trim() || await readUsePodEnvValue(USEPOD_DEPOSIT_CODE_ENV);
+}
+
+export async function readUsePodDashboardUrl(profile?: Pick<AgentProfile, "usePod">) {
+  return profile?.usePod?.dashboardUrl?.trim() || await readUsePodEnvValue(USEPOD_DASHBOARD_URL_ENV);
+}
+
 export async function resolveUsePodRuntimeConfig(profile: AgentProfile): Promise<UsePodRuntimeConfig | null> {
   if (!isUsePodProfile(profile)) return null;
   const tokenEnvName = profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV;
@@ -197,9 +220,15 @@ export async function registerUsePodToken(): Promise<UsePodRegistration> {
     throw new Error(message);
   }
   const token = firstString(data, ["token", "apiToken", "api_token", "access_token"]);
+  const depositCode = firstString(data, ["depositCode", "deposit_code", "code"]);
   const depositAddress = firstString(data, ["depositAddress", "deposit_address", "address", "usdcDepositAddress", "usdc_deposit_address"]);
-  if (!token || !depositAddress) throw new Error("UsePod did not return both a token and a USDC deposit address.");
-  return { token, depositAddress, raw: data };
+  const dashboardUrl = firstString(data, ["dashboardUrl", "dashboard_url", "fundingUrl", "funding_url"])
+    || nestedString(data, ["instructions", "dashboard_url"]);
+  if (!token) throw new Error("UsePod did not return an API token.");
+  if (!depositAddress && !depositCode && !dashboardUrl) {
+    throw new Error("UsePod did not return funding instructions for the token.");
+  }
+  return { token, depositAddress, depositCode, dashboardUrl, raw: data };
 }
 
 async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckResult> {
@@ -214,6 +243,8 @@ async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckRe
       message: error instanceof Error ? error.message : "UsePod token is missing.",
       tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
       depositAddress: await readUsePodDepositAddress(profile),
+      depositCode: await readUsePodDepositCode(profile),
+      dashboardUrl: await readUsePodDashboardUrl(profile),
       modelCount: 0,
       models: [],
       balanceRemaining: "",
@@ -228,6 +259,8 @@ async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckRe
       message: "UsePod token is missing.",
       tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
       depositAddress: await readUsePodDepositAddress(profile),
+      depositCode: await readUsePodDepositCode(profile),
+      dashboardUrl: await readUsePodDashboardUrl(profile),
       modelCount: 0,
       models: [],
       balanceRemaining: "",
@@ -253,6 +286,8 @@ async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckRe
       message: messageForUsePodError(status, detail),
       tokenEnvName: config.tokenEnvName,
       depositAddress: await readUsePodDepositAddress(profile),
+      depositCode: await readUsePodDepositCode(profile),
+      dashboardUrl: await readUsePodDashboardUrl(profile),
       modelCount: 0,
       models: [],
       balanceRemaining: headers?.balanceRemaining ?? "",
@@ -267,6 +302,8 @@ async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckRe
     message: models.length ? `UsePod returned ${models.length} model${models.length === 1 ? "" : "s"}.` : "UsePod is reachable, but no models were returned.",
     tokenEnvName: config.tokenEnvName,
     depositAddress: await readUsePodDepositAddress(profile),
+    depositCode: await readUsePodDepositCode(profile),
+    dashboardUrl: await readUsePodDashboardUrl(profile),
     modelCount: models.length,
     models,
     balanceRemaining: headers?.balanceRemaining ?? profile.usePod?.lastBalanceRemaining ?? "",
@@ -286,6 +323,8 @@ export async function checkUsePodModels(profile: AgentProfile): Promise<UsePodCh
       message: error instanceof Error ? error.message : "UsePod model check failed.",
       tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
       depositAddress: await readUsePodDepositAddress(profile),
+      depositCode: await readUsePodDepositCode(profile),
+      dashboardUrl: await readUsePodDashboardUrl(profile),
       modelCount: 0,
       models: [],
       balanceRemaining: profile.usePod?.lastBalanceRemaining ?? "",
@@ -307,6 +346,8 @@ export async function testUsePodChat(profile: AgentProfile, model: string): Prom
       message: error instanceof Error ? error.message : "UsePod token is missing.",
       tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
       depositAddress: await readUsePodDepositAddress(profile),
+      depositCode: await readUsePodDepositCode(profile),
+      dashboardUrl: await readUsePodDashboardUrl(profile),
       modelCount: 0,
       models: [],
       balanceRemaining: "",
@@ -321,6 +362,8 @@ export async function testUsePodChat(profile: AgentProfile, model: string): Prom
       message: "UsePod token is missing.",
       tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
       depositAddress: await readUsePodDepositAddress(profile),
+      depositCode: await readUsePodDepositCode(profile),
+      dashboardUrl: await readUsePodDashboardUrl(profile),
       modelCount: 0,
       models: [],
       balanceRemaining: "",
@@ -364,6 +407,8 @@ export async function testUsePodChat(profile: AgentProfile, model: string): Prom
       message: messageForUsePodError(status, detail),
       tokenEnvName: config.tokenEnvName,
       depositAddress: await readUsePodDepositAddress(profile),
+      depositCode: await readUsePodDepositCode(profile),
+      dashboardUrl: await readUsePodDashboardUrl(profile),
       modelCount: 0,
       models: [],
       balanceRemaining: headers?.balanceRemaining ?? "",
@@ -378,6 +423,8 @@ export async function testUsePodChat(profile: AgentProfile, model: string): Prom
     message: `UsePod completed a tiny test request with ${selectedModel}.`,
     tokenEnvName: config.tokenEnvName,
     depositAddress: await readUsePodDepositAddress(profile),
+    depositCode: await readUsePodDepositCode(profile),
+    dashboardUrl: await readUsePodDashboardUrl(profile),
     modelCount: 0,
     models: [],
     balanceRemaining: headers?.balanceRemaining ?? profile.usePod?.lastBalanceRemaining ?? "",
@@ -425,8 +472,11 @@ export async function saveUsePodRegistration(registration: UsePodRegistration) {
   const entries: Array<[string, string]> = [
     [USEPOD_DEFAULT_TOKEN_ENV, registration.token],
     [USEPOD_DEPOSIT_ENV, registration.depositAddress],
+    [USEPOD_DEPOSIT_CODE_ENV, registration.depositCode],
+    [USEPOD_DASHBOARD_URL_ENV, registration.dashboardUrl],
   ];
   for (const [key, value] of entries) {
+    if (!value) continue;
     await writeHiveEnvValue(key, value, [
       "--scope",
       "agent",

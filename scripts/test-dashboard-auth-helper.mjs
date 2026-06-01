@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -15,11 +15,17 @@ try {
   let text = await readFile(envFile, "utf8");
   assert.match(text, /^EXISTING=value$/m);
   assert.match(text, /^HIVEMINDOS_DASHBOARD_DEVICE_TOKEN=[a-f0-9]{64}$/m);
+  if (process.platform !== "win32") {
+    assert.equal((await stat(envFile)).mode & 0o777, 0o600);
+  }
 
   const rotate = run("rotate-secret");
   assert.equal(rotate.status, 0, rotate.stderr);
   text = await readFile(envFile, "utf8");
   assert.match(text, /^HIVEMINDOS_DASHBOARD_AUTH_SECRET=[a-f0-9]{64}$/m);
+  if (process.platform !== "win32") {
+    assert.equal((await stat(envFile)).mode & 0o777, 0o600);
+  }
 
   const status = run("status");
   assert.equal(status.status, 0, status.stderr);

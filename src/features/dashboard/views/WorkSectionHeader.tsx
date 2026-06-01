@@ -51,26 +51,29 @@ export function SectionModeHeader<TMode extends string>({
   subtitle,
   title,
 }: SectionModeHeaderProps<TMode>) {
+  const hasModes = modes.length > 0;
   return (
-    <header className={styles.header} data-work-section-header="true">
+    <header className={`${styles.header} ${hasModes ? "" : styles.noModes}`} data-work-section-header="true">
       <div className={styles.titleBlock}>
         <div className={styles.titleText}>{title}</div>
         <span>{subtitle}</span>
       </div>
-      <nav className={styles.modeRail} role="tablist" aria-label={ariaLabel}>
-        {modes.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={activeMode === id}
-            className={activeMode === id ? styles.activeMode : undefined}
-            onClick={() => onSelect(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
+      {hasModes ? (
+        <nav className={styles.modeRail} role="tablist" aria-label={ariaLabel}>
+          {modes.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={activeMode === id}
+              className={activeMode === id ? styles.activeMode : undefined}
+              onClick={() => onSelect(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      ) : null}
       <div className={styles.rightBlock}>
         <div className={styles.stats} aria-label={`${ariaLabel} summary`}>
           {stats.map((stat) => (

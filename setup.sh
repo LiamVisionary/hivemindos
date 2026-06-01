@@ -1406,12 +1406,20 @@ if (( ${#missing[@]} > 0 )); then
   exit 1
 fi
 
+secure_env_local() {
+  local env_file="$ROOT/.env.local"
+  [[ -f "$env_file" ]] || return 0
+  chmod 600 "$env_file" 2>/dev/null || true
+}
+
 set_env_local() {
   local key="$1"
   local value="$2"
   local env_file="$ROOT/.env.local"
   [[ -f "$env_file" ]] || touch "$env_file"
+  secure_env_local
   if awk -v key="$key" -v value="$value" -F= '$1 == key && substr($0, length(key) + 2) == value { found=1 } END { exit found ? 0 : 1 }' "$env_file"; then
+    secure_env_local
     return 0
   fi
   if grep -q "^${key}=" "$env_file"; then
@@ -1422,6 +1430,7 @@ set_env_local() {
   else
     printf "%s=%s\n" "$key" "$value" >> "$env_file"
   fi
+  secure_env_local
 }
 
 env_local_value() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type Dispatch, type ElementType, type ReactNode, type SetStateAction } from "react";
+import { startTransition, useState, type Dispatch, type ElementType, type ReactNode, type SetStateAction } from "react";
 import type { AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import type { KanbanBoard } from "@/lib/types/kanban";
 import type { FleetActiveApp } from "@/components/fleet/fleet-data";
@@ -73,7 +73,9 @@ export function DashboardHeader(props: DashboardHeaderProps) {
   };
   const selectRoute = (id: DashboardView) => {
     if (id === "kanban" && !kanbanBoard) setKanbanLoading(true);
-    setActiveView(id);
+    startTransition(() => {
+      setActiveView(id);
+    });
     closeMobileRoutes();
   };
 
@@ -147,7 +149,7 @@ export function DashboardHeader(props: DashboardHeaderProps) {
               title="Return to Fleet"
               onClick={() => setActiveView("agents")}
             >
-              <Image className="brandLogo" src="/hivemindos-logo.png" alt="" width={190} height={194} priority />
+              <Image className="brandLogo" src="/icon-512.png" alt="" width={512} height={512} priority />
             </button>
             <div className="brandCopy">
               <p className="eyebrow">{activeHeader.eyebrow}</p>

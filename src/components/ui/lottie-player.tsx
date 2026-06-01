@@ -42,7 +42,17 @@ export function LottiePlayer({
   size,
   ariaLabel,
 }: LottiePlayerProps) {
-  const style = size ? { width: size, height: size } : undefined;
+  const pixelSize = size ? Math.max(1, Math.round(size)) : undefined;
+  const style = pixelSize
+    ? {
+        width: pixelSize,
+        height: pixelSize,
+        minWidth: pixelSize,
+        minHeight: pixelSize,
+        aspectRatio: "1 / 1",
+        lineHeight: 0,
+      }
+    : { lineHeight: 0 };
   const normalizedSrc = normalizeLottieSource(src);
 
   return (
@@ -57,7 +67,10 @@ export function LottiePlayer({
         src={normalizedSrc}
         loop={loop}
         autoplay={autoplay}
-        style={{ width: "100%", height: "100%" }}
+        renderConfig={{ autoResize: false, devicePixelRatio: 1 }}
+        width={pixelSize}
+        height={pixelSize}
+        style={{ display: "block", width: "100%", height: "100%" }}
       />
     </span>
   );

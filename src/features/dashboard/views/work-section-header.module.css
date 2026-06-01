@@ -8,6 +8,10 @@
   padding: 12px 28px 14px;
 }
 
+.noModes {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .titleBlock {
   display: grid;
   min-width: 0;
@@ -97,6 +101,10 @@
   gap: 8px;
 }
 
+.noModes .rightBlock {
+  grid-column: 2;
+}
+
 .stats {
   display: flex;
   min-width: 0;
@@ -155,6 +163,7 @@
   }
 
   .rightBlock {
+    grid-column: auto;
     justify-items: start;
   }
 

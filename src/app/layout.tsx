@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { BEE_ROLE_ICON_PATHS } from "@/lib/config/bee-role-icons";
 import "./globals.css";
 
@@ -16,6 +16,10 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  themeColor: "#080a0f",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -24,6 +28,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <style
+          dangerouslySetInnerHTML={{
+            __html: "html,body{background:#080a0f;color:#f4f7fb;}",
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* eslint-disable-next-line @next/next/no-page-custom-font -- App Router has no pages/_document; keep existing Google font families without CSS @import. */}

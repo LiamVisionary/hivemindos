@@ -24,6 +24,8 @@ yarn-error.log*
 coverage/
 artifacts/
 .hermes/
+strix-results/
+strix_runs/
 
 *.db
 *.sqlite

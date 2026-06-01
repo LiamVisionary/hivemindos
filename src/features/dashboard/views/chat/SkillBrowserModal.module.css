@@ -1,0 +1,120 @@
+.skillBrowserPackCard {
+  grid-column: span 2;
+  min-height: 0;
+  border-color: rgba(45, 212, 191, 0.18);
+  background:
+    linear-gradient(135deg, rgba(45, 212, 191, 0.08), rgba(250, 204, 21, 0.04) 42%, rgba(255, 255, 255, 0.018)),
+    rgba(255, 255, 255, 0.025);
+}
+
+.skillPackCountBadge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(45, 212, 191, 0.28);
+  border-radius: 999px;
+  background: rgba(45, 212, 191, 0.1);
+  color: #99f6e4;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.1;
+  padding: 4px 7px;
+  text-transform: uppercase;
+}
+
+.skillBrowserAudience {
+  color: rgba(226, 232, 240, 0.74) !important;
+}
+
+.skillCapabilityRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.skillCapabilityRow small {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.52);
+  color: rgba(226, 232, 240, 0.76);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.1;
+  padding: 4px 7px;
+  text-transform: uppercase;
+}
+
+.skillPackPreview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.skillPackPreview div {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.24);
+  padding: 8px;
+}
+
+.skillPackPreview strong {
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.skillPackPreview p {
+  font-size: 11px;
+  line-height: 1.38;
+}
+
+.skillPackPreview > small {
+  align-self: center;
+  color: rgba(250, 204, 21, 0.86);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.skillSafetyNote {
+  border-left: 2px solid rgba(45, 212, 191, 0.46);
+  padding-left: 10px;
+  color: rgba(153, 246, 228, 0.86) !important;
+}
+
+@media (max-width: 720px) {
+  .skillBrowserPackCard {
+    grid-column: span 1;
+  }
+
+  .skillPackPreview {
+    grid-template-columns: 1fr;
+  }
+}
+
+:global(:root[data-theme="hive-light"]) .skillBrowserPackCard {
+  border-color: rgba(20, 184, 166, 0.28);
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.12), rgba(217, 119, 6, 0.08) 42%, rgba(255, 255, 255, 0.48)),
+    var(--surface);
+}
+
+:global(:root[data-theme="hive-light"]) .skillCapabilityRow small,
+:global(:root[data-theme="hive-light"]) .skillPackPreview div {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .skillPackCountBadge,
+:global(:root[data-theme="hive-light"]) .skillSafetyNote {
+  border-color: rgba(13, 148, 136, 0.32);
+  background: rgba(20, 184, 166, 0.1);
+  color: #0f766e !important;
+}
+
+:global(:root[data-theme="hive-light"]) .skillBrowserAudience,
+:global(:root[data-theme="hive-light"]) .skillPackPreview p {
+  color: var(--muted) !important;
+}

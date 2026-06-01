@@ -6,11 +6,20 @@
     <title>HivemindOS</title>
     <style>
       :root {
-        color-scheme: light;
+        color-scheme: dark;
         font-family:
-          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #f8fafc;
-        color: #111827;
+          ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #080a0f;
+        color: #f4f7fb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        min-height: 100%;
+        background: #080a0f;
       }
 
       body {
@@ -18,29 +27,132 @@
         margin: 0;
         display: grid;
         place-items: center;
+        overflow: hidden;
+        background:
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%235eead4' stroke-opacity='.11' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E"),
+          radial-gradient(circle at 22% 18%, rgba(45, 212, 191, 0.15), transparent 25rem),
+          radial-gradient(circle at 78% 22%, rgba(255, 212, 90, 0.12), transparent 23rem),
+          linear-gradient(145deg, #080a0f 0%, #0d121b 50%, #111418 100%);
+        background-size: 72px 41.569px, auto, auto, auto;
       }
 
       main {
         display: grid;
-        gap: 0.75rem;
+        width: min(100vw - 48px, 360px);
+        justify-items: center;
+        gap: 1rem;
         text-align: center;
       }
 
-      strong {
-        font-size: 1rem;
-        font-weight: 700;
+      .iconShell {
+        position: relative;
+        display: grid;
+        width: 108px;
+        height: 108px;
+        place-items: center;
+        border: 1px solid rgba(255, 212, 90, 0.38);
+        border-radius: 28px;
+        background:
+          linear-gradient(145deg, rgba(255, 212, 90, 0.16), rgba(45, 212, 191, 0.08)),
+          rgba(5, 8, 14, 0.88);
+        box-shadow:
+          0 24px 70px rgba(0, 0, 0, 0.42),
+          0 0 42px rgba(45, 212, 191, 0.2),
+          inset 0 1px 0 rgba(255, 255, 255, 0.12);
       }
 
-      span {
-        color: #64748b;
+      .iconShell::before,
+      .iconShell::after {
+        position: absolute;
+        inset: -10px;
+        border: 1px solid rgba(94, 234, 212, 0.2);
+        border-radius: 34px;
+        content: "";
+        animation: pulse 1.8s ease-out infinite;
+      }
+
+      .iconShell::after {
+        animation-delay: 0.6s;
+      }
+
+      img {
+        width: 72px;
+        height: 72px;
+        object-fit: contain;
+        filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.34));
+      }
+
+      strong {
+        font-size: 1.32rem;
+        font-weight: 800;
+        line-height: 1.1;
+        letter-spacing: 0;
+      }
+
+      p {
+        max-width: 28ch;
+        margin: -0.35rem 0 0;
+        color: #c6d1df;
         font-size: 0.875rem;
+        line-height: 1.55;
+      }
+
+      .rail {
+        position: relative;
+        width: min(100%, 248px);
+        height: 4px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.18);
+      }
+
+      .rail::after {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: -42%;
+        width: 42%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, rgba(45, 212, 191, 0), #5eead4 45%, #ffd45a 100%);
+        content: "";
+        animation: rail 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          opacity: 0.65;
+          transform: scale(0.9);
+        }
+
+        100% {
+          opacity: 0;
+          transform: scale(1.18);
+        }
+      }
+
+      @keyframes rail {
+        to {
+          transform: translateX(340%);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .iconShell::before,
+        .iconShell::after,
+        .rail::after {
+          animation: none;
+        }
       }
     </style>
   </head>
   <body>
     <main>
+      <div class="iconShell" aria-hidden="true">
+        <img src="./icon-192.png" alt="" />
+      </div>
       <strong>Starting HivemindOS</strong>
-      <span>Opening the local desktop runtime...</span>
+      <p>Opening the local desktop runtime...</p>
+      <div class="rail" aria-hidden="true"></div>
     </main>
   </body>
 </html>

@@ -16,6 +16,7 @@ import type {
 } from "@/features/dashboard/dashboard-types";
 import type { KanbanBoard } from "@/lib/types/kanban";
 import { useVisibilityAwarePolling } from "@/features/dashboard/hooks/use-visibility-aware-polling";
+import { readNativeKanban } from "@/lib/native/kanban";
 
 type KanbanStorageInfo = NonNullable<KanbanResponse["storage"]>;
 
@@ -344,6 +345,21 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
         if (sharedVault.vaultPath.trim()) params.set("vaultPath", sharedVault.vaultPath.trim());
         if (sharedVault.kanbanFolder?.trim()) params.set("kanbanFolder", sharedVault.kanbanFolder.trim());
       }
+      const nativeData = await readNativeKanban({
+        board: kanbanBoardSlug,
+        boardsOnly: true,
+        vaultPath: sharedVault.enabled ? sharedVault.vaultPath.trim() : undefined,
+        kanbanFolder: sharedVault.enabled ? sharedVault.kanbanFolder?.trim() : undefined,
+      });
+      if (nativeData?.ok) {
+        if (!cancelled) {
+          setKanbanBoards(nativeData.boards ?? []);
+          setKanbanStorage(nativeData.storage ?? null);
+        }
+        controllers.delete(controller);
+        boardRefreshInFlight = false;
+        return;
+      }
       const response = await fetch(`/api/kanban?${params.toString()}`, {
         cache: "no-store",
         signal: controller.signal,
@@ -376,6 +392,33 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
       if (kanbanTenantFilter) params.set("tenant", kanbanTenantFilter);
       if (kanbanAssigneeFilter) params.set("assignee", kanbanAssigneeFilter);
       if (kanbanSearch) params.set("q", kanbanSearch);
+      const nativeData = await readNativeKanban({
+        board: kanbanBoardSlug,
+        includeArchived: kanbanIncludeArchived,
+        includeBoards: false,
+        tenant: kanbanTenantFilter || undefined,
+        assignee: kanbanAssigneeFilter || undefined,
+        query: kanbanSearch || undefined,
+        vaultPath: sharedVault.enabled ? sharedVault.vaultPath.trim() : undefined,
+        kanbanFolder: sharedVault.enabled ? sharedVault.kanbanFolder?.trim() : undefined,
+      });
+      if (nativeData?.ok && nativeData.board) {
+        if (!cancelled) {
+          setKanbanError("");
+          setKanbanBoard(nativeData.board);
+          if (nativeData.boards) setKanbanBoards(nativeData.boards);
+          setKanbanTenants(nativeData.tenants ?? []);
+          setKanbanAssignees(nativeData.assignees ?? []);
+          setKanbanStorage(nativeData.storage ?? null);
+          setSelectedKanbanTaskId((current) => (
+            current && nativeData.board?.tasks.some((task) => task.id === current) ? current : nativeData.board?.tasks[0]?.id ?? ""
+          ));
+          setKanbanLoading(false);
+        }
+        controllers.delete(controller);
+        kanbanRefreshInFlight = false;
+        return;
+      }
       const response = await fetch(`/api/kanban?${params.toString()}`, {
         cache: "no-store",
         signal: controller.signal,

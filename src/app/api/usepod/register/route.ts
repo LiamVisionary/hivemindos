@@ -14,6 +14,9 @@ export async function POST(request: NextRequest) {
       tokenEnvName: "USEPOD_TOKEN",
       depositEnvName: "USEPOD_DEPOSIT_ADDRESS",
       depositAddress: registration.depositAddress,
+      depositCode: registration.depositCode,
+      dashboardUrl: registration.dashboardUrl,
+      fundingUrl: registration.dashboardUrl || `https://usepod.ai/fund?token=${encodeURIComponent(registration.token)}`,
       tokenPreview: `${registration.token.slice(0, 6)}...${registration.token.slice(-4)}`,
       savedToEnv: body.saveToEnv !== false,
     });

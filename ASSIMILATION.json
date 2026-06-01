@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-05-31T17:38:09.080351+00:00",
+  "created_at": "2026-06-01T05:43:57.093847+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
@@ -78,6 +78,34 @@
       "target_path": "src/features/dashboard/views/brain-services-ui.tsx",
       "reuse_type": "translated_code",
       "note": "kept the extracted segmented Brain Services navigation aligned with the Radix tab trigger/content accessibility contract"
+    },
+    {
+      "source_repo": "/Users/liam/Documents/code/projects/hivemind-os",
+      "source_path": "src/features/dashboard/views/AeonAutopilotPanel.tsx",
+      "target_path": "src/features/dashboard/views/AeonAutopilotPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "reused existing AEON panel automation state, tab layout, and action wiring while adding automation power controls"
+    },
+    {
+      "source_repo": "/Users/liam/Documents/code/projects/hivemind-os",
+      "source_path": "src/components/scheduler/jobs.tsx",
+      "target_path": "src/features/dashboard/views/AeonAutopilotPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "adapted scheduler job status/counting patterns into the AEON automation summary and stop-all controls"
+    },
+    {
+      "source_repo": "/Users/liam/Documents/code/projects/hivemind-os",
+      "source_path": "src/features/dashboard/hooks/use-scheduler-controller.tsx",
+      "target_path": "src/features/dashboard/views/AeonAutopilotPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "reused scheduler controller stop semantics for per-automation and bulk AEON stop actions"
+    },
+    {
+      "source_repo": "ami-ai-companion",
+      "source_path": ".github/workflows/security-scan.yml",
+      "target_path": ".github/workflows/security-scan.yml",
+      "reuse_type": "config_adapted",
+      "note": "adapted Strix install, quick scan, artifact upload, and Telegram notification; changed triggers to a weekly schedule with a main-update gate"
     }
   ]
 }

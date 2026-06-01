@@ -1011,7 +1011,6 @@ fn repo_sync_status(agent: Option<&Value>) -> RuntimeRepoSyncStatus {
     let root = aeon_root(agent).unwrap_or_else(|| expand_home(DEFAULT_AEON_ROOT));
     let repo = aeon_repo(agent);
     let branch = aeon_branch(agent);
-    let _ = command_output("git", &["fetch", "--quiet", "origin", &branch], Some(&root));
     let status = command_output("git", &["status", "--porcelain"], Some(&root)).unwrap_or_default();
     let changed_files = status
         .lines()

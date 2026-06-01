@@ -3947,3 +3947,281 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
   - Decision: selected
   - Reason: chat topbar override removed and static checks passed
   - Path: `src/app/globals.css`
+## 2026-05-31T21:11:16.555907+00:00 - triage
+
+- Request: Split AEON dashboard refresh into fast local/native pass and background GitHub checks
+- Source: user-supplied-local
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: user-supplied app contains the AEON dashboard panel, runtime adapter, and Tauri native repo status path that directly implement the requested lag fix
+  - Path: `src/features/dashboard/views/AeonAutopilotPanel.tsx,src/lib/services/runtime-adapters/aeon.ts,src-tauri/src/deliverables.rs`
+## 2026-05-31T21:16:43.117335+00:00 - triage
+
+- Request: Add native Fleet discovery cache, local Tailscale reads, and native Obsidian graph/Kanban read paths
+- Source: user-supplied-local
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: user-supplied app already contains the Fleet, Tailscale, Kanban, Obsidian graph, and Tauri native bridge surfaces needed for this read-path migration
+  - Path: `src/app/api/fleet/apps/route.ts,src/app/api/tailscale/devices/route.ts,src/app/api/kanban/route.ts,src/app/api/obsidian/graph/route.ts,src-tauri/src/brain.rs,src-tauri/src/lib.rs`
+## 2026-05-31T21:21:45.620624+00:00 - triage
+
+- Request: Add a proper Tauri loading screen with the HivemindOS app icon
+- Source: user-supplied-local
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: current Tauri loading shell and existing app icon assets directly cover the requested startup UI fix
+  - Path: `src-tauri/loading/index.html,public/icon-192.png,public/icon-512.png,src-tauri/tauri.conf.json`
+## 2026-05-31T21:22:04.151835+00:00 - triage
+
+- Request: Add AEON automation counts and power controls to the HivemindOS AEON view
+- Source: user-pinned-local
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: user request targets the existing AEON dashboard and scheduler integration, so local repo is the pinned backbone
+  - Path: `src/features/dashboard/views/AeonAutopilotPanel.tsx,src/components/scheduler/jobs.tsx,src/features/dashboard/hooks/use-scheduler-controller.tsx`
+## 2026-05-31T21:22:43.308673+00:00 - assimilation-manifest
+
+- Request: Add AEON automation counts and power controls to the HivemindOS AEON view
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /tmp/synto-inspect:src/synto/cli.py => src/lib/services/brain/synto.ts, /tmp/synto-inspect:src/synto/serve.py => src/lib/services/brain/synto.ts, /tmp/synto-inspect:src/synto/config.py => src/lib/services/brain/synto.ts, /tmp/synto-inspect:README.md => docs/features/brain-vault-and-skills.md, tashfeenahmed/freellmapi:server/src/providers/openai-compat.ts => src/lib/services/usepod.ts, tashfeenahmed/freellmapi:server/src/__tests__/providers/openai-compat.test.ts => src/app/api/usepod/status/route.ts, Sortis-AI/usepod-agent:agent.example.toml => src/features/dashboard/views/chat/AgentSettingsModal.tsx, Sortis-AI/usepod-agent:install/README.md => docs/integrations/usepod.md, /Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives:packages/react/collapsible/src/collapsible.tsx => src/features/dashboard/brain-modules.tsx, /Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives:packages/react/tabs/src/tabs.tsx => src/features/dashboard/views/VaultPanel.tsx, /Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives:packages/react/tabs/src/tabs.tsx => src/features/dashboard/views/brain-services-ui.tsx, /Users/liam/Documents/code/projects/hivemind-os:src/features/dashboard/views/AeonAutopilotPanel.tsx => src/features/dashboard/views/AeonAutopilotPanel.tsx, /Users/liam/Documents/code/projects/hivemind-os:src/components/scheduler/jobs.tsx => src/features/dashboard/views/AeonAutopilotPanel.tsx, /Users/liam/Documents/code/projects/hivemind-os:src/features/dashboard/hooks/use-scheduler-controller.tsx => src/features/dashboard/views/AeonAutopilotPanel.tsx
+- Verification: Wrote ASSIMILATION.json with 14 entries and custom_code_assessment=balanced.
+## 2026-05-31T21:23:49.870268+00:00 - verification
+
+- Request: Add a proper Tauri loading screen with the HivemindOS app icon
+- Source: user-supplied-local
+- Selected backbone: hivemind-os
+- Assimilated: Reused the existing Tauri loading shell and copied the committed HivemindOS app icon asset into the loading bundle.
+- Verification: git diff --check passed for the loading shell, copied icon, changelog, and assimilation logs; Playwright rendered src-tauri/loading/index.html from file:// and confirmed the app icon loaded at natural width 192 with no horizontal overflow; eslint reported the expected ignored-HTML warning only; cargo check is blocked by an unrelated pre-existing borrow-check error in src-tauri/src/kanban.rs.
+
+### Candidates
+- src-tauri/loading/index.html,public/icon-192.png
+  - Decision: selected
+  - Reason: existing startup shell and app icon asset adapted for packaged Tauri boot UI
+  - Path: `src-tauri/loading/index.html,src-tauri/loading/icon-192.png`
+## 2026-06-01T03:41:23.547013+00:00 - triage
+
+- Request: Fix persistent white screen during Tauri startup after branded loading shell
+- Source: user-supplied-local
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: existing Tauri bootstrap, loading shell, app layout, and global CSS define every startup paint path that can still flash white
+  - Path: `src-tauri/src/lib.rs,src-tauri/loading/index.html,src-tauri/tauri.conf.json,src/app/layout.tsx,src/app/globals.css`
+## 2026-06-01T03:44:16.661259+00:00 - verification
+
+- Request: Fix persistent white screen during pnpm tauri:dev startup
+- Source: user-supplied-local
+- Selected backbone: hivemind-os
+- Assimilated: Reused existing Tauri bootstrap and app icon assets; extended the fix into the devUrl path with Tauri backgroundColor, critical Next document background, global html background, and root App Router loading UI.
+- Verification: cargo check --manifest-path src-tauri/Cargo.toml passed; pnpm exec tsc --noEmit --pretty false --skipLibCheck passed; git diff --check passed for startup files; eslint passed with the expected CSS ignored-file warning only; file-size script still reports pre-existing oversized generated/legacy files.
+
+### Candidates
+- src-tauri/tauri.conf.json,src/app/layout.tsx,src/app/loading.tsx,src/app/globals.css
+  - Decision: selected
+  - Reason: startup paint surfaces for pnpm tauri:dev and packaged builds
+  - Path: `src-tauri/tauri.conf.json,src/app/layout.tsx,src/app/loading.tsx,src/app/globals.css`
+## 2026-06-01T03:44:36.227011+00:00 - triage
+
+- Request: Fix Tauri dev white screen before Next is ready, Next themeColor warning, and dotlottie canvas warning
+- Source: user-supplied-local
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: existing dev wrapper, dev server script, app metadata, and shared Lottie wrapper are the startup/runtime surfaces producing the reported warnings
+  - Path: `scripts/tauri-next-dev.mjs,scripts/dev-server.mjs,src/app/layout.tsx,src/components/ui/lottie-player.tsx`
+## 2026-06-01T03:49:25.922296+00:00 - verification
+
+- Request: Fix Tauri dev white screen before Next is ready, Next themeColor warning, and dotlottie canvas warning
+- Source: user-supplied-local
+- Selected backbone: hivemind-os
+- Assimilated: Reused the existing Tauri loading shell and app icon; changed tauri-next-dev into an immediate loading proxy in front of the real Next dev server; moved themeColor to the viewport export; fixed DotLottie canvas sizing to integer non-auto-resized dimensions.
+- Verification: node --check scripts/tauri-next-dev.mjs passed; targeted eslint passed with expected CSS ignored-file warning only; tsc passed; cargo check passed; git diff --check passed; temporary proxy smoke confirmed / serves loading HTML before Next compile completes and /icon-192.png returns the icon.
+
+### Candidates
+- scripts/tauri-next-dev.mjs,src/app/layout.tsx,src/components/ui/lottie-player.tsx
+  - Decision: selected
+  - Reason: local startup wrapper, metadata, and Lottie wrapper surfaces directly produce the reported dev white screen and warnings
+  - Path: `scripts/tauri-next-dev.mjs,src/app/layout.tsx,src/components/ui/lottie-player.tsx`
+## 2026-06-01T04:13:38.198766+00:00 - triage
+
+- Request: Fix Fleet and Work route click lag by reducing synchronous dashboard render work
+- Source: user-supplied-local
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: user-supplied DashboardApp and panel wrappers contain the route rendering path that causes the lag
+  - Path: `src/features/dashboard/DashboardApp.tsx,src/features/dashboard/views/*Panel.tsx`
+## 2026-06-01T04:14:49.892591+00:00 - triage
+
+- Request: Fix dashboard Fleet and Work route click lag by deferring heavy route rendering
+- Source: user-supplied-local
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: existing dashboard shell, header, panel, and lazy component code directly define the route transition behavior to optimize
+  - Path: `src/features/dashboard/DashboardApp.tsx,src/features/dashboard/views/DashboardHeader.tsx,src/features/dashboard/lazy-components.tsx,src/features/dashboard/views/KanbanPanel.tsx,src/features/dashboard/views/AgentsPanel.tsx`
+## 2026-06-01T04:15:34.492001+00:00 - local-search
+
+- Request: agent agnostic skill catalog security auditor skill recommendations workflow actions analytics HivemindOS TypeScript Next.js
+- Source: local-index
+- Query: `agent agnostic skill catalog security auditor skill recommendations workflow actions analytics HivemindOS TypeScript Next.js`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=7.20 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+2. score=4.04 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+3. score=1.65 LiamVisionary/Ad-Alchemist [repo-summary]
+   url: https://github.com/LiamVisionary/Ad-Alchemist
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-Ad-Alchemist.md
+   LiamVisionary/Ad-Alchemist TypeScript
+4. score=1.65 LiamVisionary/ai-chatbot [repo-summary]
+   url: https://github.com/LiamVisionary/ai-chatbot
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-chatbot.md
+   LiamVisionary/ai-chatbot TypeScript
+5. score=1.65 LiamVisionary/ai-companion-website [repo-summary]
+   url: https://github.com/LiamVisionary/ai-companion-website
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
+6. score=1.65 LiamVisionary/ai-girlfriend-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/ai-girlfriend-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-girlfriend-mobile.md
+   LiamVisionary/ai-girlfriend-mobile TypeScript
+7. score=1.65 LiamVisionary/ai-headshot-generator [repo-summary]
+   url: https://github.com/LiamVisionary/ai-headshot-generator
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   LiamVisionary/ai-headshot-generator TypeScript
+8. score=1.65 LiamVisionary/ami-ai-companion-app [repo-summary]
+   url: https://github.com/LiamVisionary/ami-ai-companion-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   LiamVisionary/ami-ai-companion-app TypeScript
+
+## 2026-06-01T04:15:37.469035+00:00 - prebuild-gate
+
+- Request: agent agnostic skill catalog security auditor skill recommendations workflow actions analytics HivemindOS TypeScript Next.js
+- Source: public-github
+- Query: `agent agnostic skill catalog security auditor skill recommendations workflow actions analytics HivemindOS TypeScript Next.js`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-06-01T04:31:49.018112+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: Sachin1801/skills-registry:scripts/generate-registry.ts => src/lib/services/skills/skill-os.ts, Sachin1801/skills-registry:scripts/validate.ts => src/lib/services/skills/skill-os.ts
+- Verification: Wrote ASSIMILATION.json with 2 entries and custom_code_assessment=balanced.
+## 2026-06-01T04:31:59.241833+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: Sachin1801/skills-registry:registry.json => src/lib/services/skills/skill-os.ts
+- Verification: Wrote ASSIMILATION.json with 1 entries and custom_code_assessment=balanced.
+## 2026-06-01T04:32:14.993896+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: Sachin1801/skills-registry:scripts/generate-registry.ts => src/lib/services/skills/skill-os.ts, Sachin1801/skills-registry:scripts/validate.ts => src/lib/services/skills/skill-os.ts, Sachin1801/skills-registry:registry.json => src/lib/services/skills/skill-os.ts
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-01T05:11:31.902212+00:00 - implementation
+
+- Request: Repair UsePod setup wizard after failed token setup
+- Source: pinned-usepod-docs-and-local-code
+- Decision: adapted existing local UsePod integration to current UsePod register payload; no third-party source files transplanted
+- Not assimilated: No external repo code copied; change uses existing local HivemindOS UsePod service and official UsePod API docs payload shape.
+- Verification: curl POST https://api.usepod.ai/v1/register confirmed api_token/deposit_code/dashboard_url payload; pnpm tsc; focused eslint; git diff --check
+
+### Candidates
+- Sortis-AI/usepod-agent
+  - Decision: rejected
+  - Reason: provider-side agent repo, not needed for consumer token registration wizard
+  - Path: `README/source`
+## 2026-06-01T05:33:27.330662+00:00 - triage
+
+- Request: Add Bankr/Web3 skills directory to HivemindOS app with good UX
+- Source: user-supplied-local-repo
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: pinned local Next.js dashboard with existing Skill Browser, skill packs API, shared Obsidian brain importer
+  - Path: `src/lib/services/skills/skill-os.ts,src/features/dashboard/views/chat/SkillBrowserModal.tsx,src/features/dashboard/hooks/use-miroshark-brain-controller.tsx,src/features/dashboard/hooks/use-dashboard-derived-state.tsx,src/app/fleet.module.css`
+## 2026-06-01T05:35:41.209722+00:00 - triage
+
+- Request: Harden .env.local permissions for dashboard auth secrets
+- Source: pinned-local
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: follow existing setup/dashboard-auth helper patterns for env-file permissions
+  - Path: `setup.sh,setup.ps1,scripts/dashboard-auth.mjs,scripts/test-dashboard-auth-helper.mjs`
+## 2026-06-01T05:40:23.709341+00:00 - triage
+
+- Request: Copy Strix security testing setup from ami-ai-companion into HivemindOS with weekly gated action
+- Source: pinned-local
+- Selected backbone: ami-ai-companion
+
+### Candidates
+- ami-ai-companion
+  - Decision: selected
+  - Reason: user supplied local source for Strix setup; inspect and transplant concrete workflow/config/scripts
+  - Path: `/Users/liam/Documents/code/projects/ami-ai-companion`
+## 2026-06-01T05:41:58.086014+00:00 - implementation
+
+- Request: Add Bankr/Web3 skills directory to HivemindOS app with good UX
+- Source: user-supplied-local-repo
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+- Not assimilated: No external GitHub donor was needed because the pinned repo already contained the reusable pack installer, modal, and search surfaces.
+- Verification: pnpm typecheck; targeted eslint passed with existing hook warnings only; git diff --check on tracked files; trailing whitespace scan on tracked and untracked touched files; temporary 5024 browser smoke reached dashboard auth lock without console errors
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: adapted existing SkillPack API, Skill Browser card grid, shared brain install flow, and dashboard search rather than adding a standalone page
+  - Path: `src/lib/services/skills/skill-os.ts,src/features/dashboard/views/chat/SkillBrowserModal.tsx,src/features/dashboard/hooks/use-miroshark-brain-controller.tsx,src/features/dashboard/hooks/use-dashboard-derived-state.tsx`
+## 2026-06-01T05:43:45.345503+00:00 - implementation
+
+- Request: Copy Strix security testing setup from ami-ai-companion into HivemindOS with weekly gated action
+- Source: pinned-local
+- Selected backbone: ami-ai-companion
+
+### Candidates
+- ami-ai-companion:.github/workflows/security-scan.yml
+  - Decision: adapted
+  - Reason: copied Strix install/scan/artifact/Telegram pattern and constrained triggers to weekly scheduled main update gate
+## 2026-06-01T05:43:57.148513+00:00 - assimilation-manifest
+
+- Request: Copy Strix security testing setup from ami-ai-companion into HivemindOS with weekly gated action
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: ami-ai-companion:.github/workflows/security-scan.yml => .github/workflows/security-scan.yml
+- Verification: Wrote ASSIMILATION.json with 1 entries and custom_code_assessment=balanced.

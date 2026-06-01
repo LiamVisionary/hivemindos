@@ -105,6 +105,8 @@ export function AgentSettingsModal(props: any) {
     const nextUsePod = {
       tokenEnvName: usePodConfig.tokenEnvName || "USEPOD_TOKEN",
       depositAddress: usePodConfig.depositAddress || "",
+      depositCode: usePodConfig.depositCode || "",
+      dashboardUrl: usePodConfig.dashboardUrl || "",
       maxPriceInputMicrounits: usePodConfig.maxPriceInputMicrounits || "2000",
       maxPriceOutputMicrounits: usePodConfig.maxPriceOutputMicrounits || "8000",
       spendPreset: usePodConfig.spendPreset || "balanced",
@@ -165,6 +167,18 @@ export function AgentSettingsModal(props: any) {
     || Boolean(runtimeIntegrationMessage));
   const runtimeCanAddModels = Boolean(selectedRuntimeSettings.canAddModels);
   const runtimeCanAddUsePod = Boolean(selectedRuntimeSettings.canUsePod);
+  const hasRuntimeProviders = runtimeModelProviders.length > 0;
+  const runtimeCanAddCustomModel = runtimeCanAddModels && hasRuntimeProviders;
+  const runtimeLabel = RUNTIME_LABELS[agentSettingsRuntime] ?? agentSettingsRuntime;
+  const runtimeProviderEmptyTitle = runtimeIntegrationBusy === "status" ? "Loading providers..." : "No providers configured";
+  const runtimeProviderEmptyDetail = runtimeIntegrationMessage || `Add a provider, or refresh ${runtimeLabel} models from this machine.`;
+  const runtimeModelEmptyTitle = runtimeIntegrationBusy === "status"
+    ? "Loading models..."
+    : hasRuntimeProviders ? "No models configured" : "Add a provider first";
+  const runtimeModelEmptyDetail = runtimeIntegrationMessage
+    || (hasRuntimeProviders
+      ? "Add a model to the selected provider when it is not discovered automatically."
+      : "Models appear after a provider is connected.");
   const aeonAvailability = runtimeAvailability?.aeon;
   const aeonDetected = agentSettingsRuntime === "aeon" && aeonAvailability?.installed === true;
   const aeonNeedsSetup = agentSettingsRuntime === "aeon" && !aeonDetected;
@@ -398,16 +412,6 @@ export function AgentSettingsModal(props: any) {
                         </button>
                       </div>
                       <div className={fleetClass("agentRuntimeProviderCards")}>
-                        {runtimeCanAddModels ? (
-                          <button
-                            type="button"
-                            className={fleetClass("agentRuntimeAddCard")}
-                            onClick={() => setRuntimeModelSetupMode((current) => current === "provider" ? null : "provider")}
-                          >
-                            <Plus aria-hidden="true" />
-                            <strong>Add provider</strong>
-                          </button>
-                        ) : null}
                         {runtimeCanAddUsePod ? (
                           <button
                             type="button"
@@ -453,9 +457,19 @@ export function AgentSettingsModal(props: any) {
                         })}
                         {!runtimeModelProviders.length ? (
                           <div className={fleetClass("agentRuntimeEmptyCard")}>
-                            <strong>{runtimeIntegrationBusy === "status" ? "Loading models..." : "No providers returned"}</strong>
-                            <small>{runtimeIntegrationMessage || `Refresh ${RUNTIME_LABELS[agentSettingsRuntime] ?? agentSettingsRuntime} models from this machine.`}</small>
+                            <strong>{runtimeProviderEmptyTitle}</strong>
+                            <small>{runtimeProviderEmptyDetail}</small>
                           </div>
+                        ) : null}
+                        {runtimeCanAddModels ? (
+                          <button
+                            type="button"
+                            className={fleetClass("agentRuntimeAddCard")}
+                            onClick={() => setRuntimeModelSetupMode((current) => current === "provider" ? null : "provider")}
+                          >
+                            <Plus aria-hidden="true" />
+                            <strong>Add provider</strong>
+                          </button>
                         ) : null}
                       </div>
                     </div>
@@ -505,11 +519,11 @@ export function AgentSettingsModal(props: any) {
                         })}
                         {!selectedRuntimeModels.length ? (
                           <div className={fleetClass("agentRuntimeEmptyCard")}>
-                            <strong>{runtimeIntegrationBusy === "status" ? "Loading models..." : "No models returned"}</strong>
-                            <small>{runtimeIntegrationMessage || "The selected provider has not reported any models yet."}</small>
+                            <strong>{runtimeModelEmptyTitle}</strong>
+                            <small>{runtimeModelEmptyDetail}</small>
                           </div>
                         ) : null}
-                        {runtimeCanAddModels ? (
+                        {runtimeCanAddCustomModel ? (
                           <button
                             type="button"
                             className={fleetClass("agentRuntimeAddCard")}
@@ -556,7 +570,7 @@ export function AgentSettingsModal(props: any) {
                         </div>
                       </details>
                     ) : null}
-                    {(runtimeCanAddModels || runtimeCanAddUsePod) && runtimeModelSetupMode ? (
+                    {((runtimeModelSetupMode === "model" && runtimeCanAddCustomModel) || (runtimeModelSetupMode === "provider" && (runtimeCanAddModels || runtimeCanAddUsePod))) ? (
                       <div
                         className={fleetClass(
                           "agentRuntimeModelSetup",

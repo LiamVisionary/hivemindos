@@ -8,6 +8,8 @@ use tauri::{Manager, RunEvent};
 mod brain;
 mod deliverables;
 mod env;
+mod fleet;
+mod kanban;
 
 #[cfg(not(debug_assertions))]
 use std::net::{TcpListener, TcpStream};
@@ -448,7 +450,11 @@ pub fn run() {
             deliverables::list_aeon_runs,
             deliverables::get_aeon_run_log,
             brain::brain_skill_inventory,
+            brain::brain_graph,
             env::hive_env_read,
+            fleet::fleet_apps_cache,
+            fleet::tailscale_devices,
+            kanban::kanban_read,
             deliverables::download_aeon_deliverable,
             deliverables::send_aeon_deliverable
         ])

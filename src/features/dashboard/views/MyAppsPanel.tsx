@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Copy, ExternalLink, LoaderCircle, Maximize2, Minimize2, RefreshCcw, Route, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
+import { getNativeFleetAppsCache } from "@/lib/native/fleet";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
 
@@ -183,6 +184,18 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
     setLoading(true);
     setStatus("");
     try {
+      if (!force) {
+        const nativePayload = await getNativeFleetAppsCache({ maxAgeMs: 5 * 60 * 1000 }) as FleetAppsPayload | null;
+        if (nativePayload?.apps) {
+          setPayload(nativePayload);
+          setLoading(false);
+          void fetch("/api/fleet/apps", { cache: "no-store" })
+            .then((response) => response.ok ? response.json() : null)
+            .then((data: FleetAppsPayload | null) => { if (data?.apps) setPayload(data); })
+            .catch(() => undefined);
+          return;
+        }
+      }
       const response = await fetch(`/api/fleet/apps${force ? "?refresh=1" : ""}`, { cache: "no-store" });
       const data = await response.json() as FleetAppsPayload;
       if (!response.ok || data.ok === false) throw new Error(data.error || `${response.status} ${response.statusText}`);

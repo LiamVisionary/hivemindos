@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -45,11 +45,43 @@ function valueAfter(flag) {
 }
 
 function readEnvFile() {
+  secureEnvFile();
   return existsSync(envFile) ? readFileSync(envFile, "utf8") : "";
 }
 
 function writeEnvFile(text) {
   writeFileSync(envFile, text, { mode: 0o600 });
+  secureEnvFile();
+}
+
+function secureEnvFile() {
+  if (!existsSync(envFile)) return;
+  if (process.platform === "win32") {
+    secureWindowsEnvFile();
+    return;
+  }
+  try {
+    chmodSync(envFile, 0o600);
+  } catch (error) {
+    console.warn(`Could not set ${envFile} mode to 600: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function secureWindowsEnvFile() {
+  const user = process.env.USERDOMAIN && process.env.USERNAME
+    ? `${process.env.USERDOMAIN}\\${process.env.USERNAME}`
+    : process.env.USERNAME;
+  if (!user) return;
+  spawnSync("icacls.exe", [
+    envFile,
+    "/inheritance:r",
+    "/grant:r",
+    `${user}:F`,
+    "/grant:r",
+    "SYSTEM:F",
+    "/grant:r",
+    "Administrators:F",
+  ], { stdio: "ignore" });
 }
 
 function readKey(key) {

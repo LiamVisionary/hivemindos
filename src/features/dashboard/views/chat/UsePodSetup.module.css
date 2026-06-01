@@ -2,6 +2,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .stepPill {
@@ -25,6 +28,12 @@
   height: 13px;
 }
 
+.stepPill span {
+  display: grid;
+  place-items: center;
+  min-width: 14px;
+}
+
 .stepPill.active,
 .active {
   border-color: rgba(45, 212, 191, 0.26);
@@ -35,7 +44,7 @@
 .focusPanel,
 .depositPanel {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
   border: 1px solid rgba(94, 234, 212, 0.18);
   border-radius: 8px;
@@ -71,6 +80,35 @@
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
+}
+
+.cardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
+  margin-top: 2px;
+}
+
+.copyLine {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  border: 1px solid rgba(94, 234, 212, 0.18);
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.46);
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 860;
+  padding: 0 9px;
+}
+
+.copyLine svg {
+  width: 13px;
+  height: 13px;
 }
 
 .spendPanel {

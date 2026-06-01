@@ -112,6 +112,15 @@ export function useDashboardDerivedState(props: any) {
       || skill.slug.toLowerCase().includes(query)
       || skill.description.toLowerCase().includes(query)
       || skill.source.toLowerCase().includes(query)
+      || skill.category?.toLowerCase().includes(query)
+      || skill.audience?.toLowerCase().includes(query)
+      || skill.safety?.toLowerCase().includes(query)
+      || skill.capabilities?.some((capability) => capability.toLowerCase().includes(query))
+      || skill.includedSkills?.some((includedSkill) => (
+        includedSkill.name.toLowerCase().includes(query)
+        || includedSkill.slug.toLowerCase().includes(query)
+        || includedSkill.description.toLowerCase().includes(query)
+      ))
     ));
   }, [skillBrowserSearch, skillBrowserSkills]);
 

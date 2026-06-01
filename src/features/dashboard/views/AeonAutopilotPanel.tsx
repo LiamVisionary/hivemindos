@@ -442,6 +442,15 @@ function automationLabels(state: SkillAutomationState) {
   return { statusLabel: "Paused", actionLabel: "Resume" };
 }
 
+function isRuntimeScheduleOnDuty(schedule: RuntimeSchedule) {
+  if (schedule.enabled === false) return false;
+  return schedule.every !== "manual" && schedule.schedule !== "workflow_dispatch";
+}
+
+function aeonScheduleLabel(schedule: RuntimeSchedule | SchedulerJob) {
+  return schedule.name || schedule.id;
+}
+
 async function postJson<T>(url: string, body: Record<string, unknown>) {
   const response = await fetch(url, {
     method: "POST",
@@ -733,6 +742,14 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     openAeonScheduler();
     onSchedulerNewJob?.(selectedAgent.id);
   }, [onSchedulerNewJob, openAeonScheduler, selectedAgent.id]);
+  const aeonSchedulerJobs = useMemo(
+    () => schedulerJobs.filter((job) => job.runtime.trim().toLowerCase() === "aeon"),
+    [schedulerJobs],
+  );
+  const activeAeonSchedulerJobs = useMemo(
+    () => aeonSchedulerJobs.filter((job) => job.enabled),
+    [aeonSchedulerJobs],
+  );
   const updateObsidianSync = useCallback((status: AeonObsidianSyncStatus | null) => {
     setObsidianSyncByKey((current) => {
       if (!status) {
@@ -889,9 +906,9 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     const agent = selectedAgent;
     const body = { agent };
     const vaultBody = { ...body, vaultPath: sharedVault.vaultPath };
-    // Each request commits its own slice of state the moment it resolves, so the
-    // Ready Check and the other cards fill in progressively instead of blocking on
-    // the slowest call in the batch (gh run list, gh secret list, the env script).
+    // Each request commits its own slice of state the moment it resolves. The
+    // first batch stays local/native and cheap enough to unblock route entry;
+    // GitHub and sync checks continue in the background.
     // A failure on any one request surfaces a message but never holds back the rest.
     const fail = (error: unknown) => {
       setMessage((current) => current || (error instanceof Error ? error.message : "Aeon refresh failed."));
@@ -901,23 +918,51 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     // for the next paint once everything settles.
     let resolvedRepo = agent.aeonRepo || "";
     let resolvedSecretReady = false;
-    await Promise.allSettled([
-      track(postJson<AeonStatus>("/api/runtimes/aeon/status", body), (data) => { resolvedRepo = data?.status?.repo || resolvedRepo; setStatus(data); }),
-      track(postJson<{ skills?: RuntimeSkill[] }>("/api/runtimes/aeon/skills", vaultBody), (data) => setSkills(data.skills ?? [])),
+    const workspaceKey = aeonWorkspaceKey(agent);
+    const fastTasks = [
       track(loadSchedulesForAgent(agent), (data) => setSchedules(data.schedules ?? [])),
-      track(loadRunsForAgent(agent), (data) => setRuns(data.runs ?? [])),
       track(loadOutputsForAgent(agent), (data) => setOutputs(data.outputs ?? [])),
       track(loadDeliverablesForAgent(agent), (data) => {
         setDeliverablesByAgent((current) => ({ ...current, [agent.id]: data.deliverables ?? [] }));
       }),
-      track(postJson<{ analytics?: RuntimeAnalytics }>("/api/runtimes/aeon/analytics", vaultBody), (data) => setAnalytics(data.analytics ?? null)),
       track(loadMemoryForAgent(agent), (data) => setMemory(data.memory ?? null)),
-      track(postJson<{ secrets?: RuntimeSecretStatus }>("/api/runtimes/aeon/secrets/status", vaultBody), (data) => {
+      track(postJson<{ secrets?: RuntimeSecretStatus }>("/api/runtimes/aeon/secrets/status", { ...vaultBody, fast: true }), (data) => {
         const secret = data.secrets?.keys?.find((item) => item.key === "GH_GLOBAL");
         resolvedSecretReady = Boolean(secret?.isSet || secret?.availableInSharedEnv || secret?.availableLocally);
-        setSecrets(data.secrets ?? null);
+        if (data.secrets) {
+          setSecrets((current) => mergeSecretStatus(current, data.secrets as RuntimeSecretStatus));
+        }
       }),
       track(loadRepoSyncForAgent(agent), (data) => setRepoSync(data.status ?? null)),
+      // The Ready Check only reads the shared-brain skill list, so `?shared=1` skips
+      // the per-provider directory scan + remote-provider fetch the full inventory runs.
+      track(
+        loadSharedBrainSkills(),
+        (next) => { if (next?.ok) setAllSkills(next as BrainSkillInventory); },
+      ),
+    ];
+    await Promise.allSettled(fastTasks);
+    setLoading(false);
+    // Status + secrets have settled for this workspace, so the overview can now
+    // trust the live githubPowered verdict instead of the cached hint — and we
+    // remember it so the next paint skips the loading placeholder entirely.
+    writeGithubReady(workspaceKey, Boolean(resolvedRepo && resolvedSecretReady));
+    setConnectionLoadedKey(workspaceKey);
+    void Promise.allSettled([
+      track(postJson<AeonStatus>("/api/runtimes/aeon/status", body), (data) => {
+        resolvedRepo = data?.status?.repo || resolvedRepo;
+        setStatus(data);
+        writeGithubReady(workspaceKey, Boolean(resolvedRepo && resolvedSecretReady));
+      }),
+      track(postJson<{ skills?: RuntimeSkill[] }>("/api/runtimes/aeon/skills", vaultBody), (data) => setSkills(data.skills ?? [])),
+      track(loadRunsForAgent(agent), (data) => setRuns(data.runs ?? [])),
+      track(postJson<{ analytics?: RuntimeAnalytics }>("/api/runtimes/aeon/analytics", vaultBody), (data) => setAnalytics(data.analytics ?? null)),
+      track(postJson<{ secrets?: RuntimeSecretStatus }>("/api/runtimes/aeon/secrets/status", vaultBody), (data) => {
+        const secret = data.secrets?.keys?.find((item) => item.key === "GH_GLOBAL");
+        const secretReady = Boolean(secret?.isSet || secret?.availableInSharedEnv || secret?.availableLocally);
+        setSecrets(data.secrets ?? null);
+        writeGithubReady(workspaceKey, Boolean(resolvedRepo && secretReady));
+      }),
       track(
         postJson<AeonObsidianSyncStatus>("/api/runtimes/aeon/obsidian-sync", { ...vaultBody, action: "status" }).catch((error) => ({
           ok: false,
@@ -927,20 +972,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
         } as AeonObsidianSyncStatus)),
         (next) => updateObsidianSync(next ?? null),
       ),
-      // The Ready Check only reads the shared-brain skill list, so `?shared=1` skips
-      // the per-provider directory scan + remote-provider fetch the full inventory runs.
-      track(
-        loadSharedBrainSkills(),
-        (next) => { if (next?.ok) setAllSkills(next as BrainSkillInventory); },
-      ),
     ]);
-    setLoading(false);
-    // Status + secrets have settled for this workspace, so the overview can now
-    // trust the live githubPowered verdict instead of the cached hint — and we
-    // remember it so the next paint skips the loading placeholder entirely.
-    const workspaceKey = aeonWorkspaceKey(agent);
-    writeGithubReady(workspaceKey, Boolean(resolvedRepo && resolvedSecretReady));
-    setConnectionLoadedKey(workspaceKey);
   }, [loadDeliverablesForAgent, loadMemoryForAgent, loadOutputsForAgent, loadRepoSyncForAgent, loadRunsForAgent, loadSchedulesForAgent, loadSharedBrainSkills, selectedAgent, sharedVault.vaultPath, updateObsidianSync, writeGithubReady]);
 
   const refreshFastSecrets = useCallback(async () => {
@@ -1233,6 +1265,36 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
       await refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Aeon action failed.");
+    } finally {
+      setActionBusy("");
+    }
+  }
+
+  function stopAeonSchedulerJob(job: SchedulerJob) {
+    if (!job.enabled || !onSchedulerToggleJob) return;
+    onSchedulerToggleJob(job);
+    setMessage(`Stopped ${aeonScheduleLabel(job)}.`);
+  }
+
+  async function stopAllAeonAutomations() {
+    const runtimeTargets = schedules.filter(isRuntimeScheduleOnDuty);
+    const dashboardTargets = activeAeonSchedulerJobs;
+    const total = runtimeTargets.length + dashboardTargets.length;
+    if (!total) {
+      setMessage("No AEON automations are currently on duty.");
+      return;
+    }
+    setActionBusy("power:stop-all");
+    setMessage("");
+    try {
+      for (const schedule of runtimeTargets) {
+        await postJson("/api/runtimes/aeon/schedules/action", { agent: selectedAgent, action: "disable", jobId: schedule.id });
+      }
+      dashboardTargets.forEach((job) => onSchedulerToggleJob?.(job));
+      setMessage(`Stopped ${total} AEON automation${total === 1 ? "" : "s"}.`);
+      await refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not stop every AEON automation.");
     } finally {
       setActionBusy("");
     }
@@ -1544,7 +1606,9 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
 
   if (activeView !== "aeon") return null;
 
-  const enabledSchedules = schedules.filter((schedule) => schedule.enabled !== false);
+  const activeRuntimeSchedules = schedules.filter(isRuntimeScheduleOnDuty);
+  const activeAutomationCount = activeRuntimeSchedules.length + activeAeonSchedulerJobs.length;
+  const totalAutomationCount = schedules.length + aeonSchedulerJobs.length;
   const successfulRuns = runs.filter((run) => run.status === "completed").length;
   const failedRuns = runs.filter((run) => run.status === "failed").length;
   const selectedScheduleIds = new Set(schedules.map((schedule) => schedule.id));
@@ -1642,7 +1706,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
     { label: "AEON", value: localAeonSkillCount || visibleSkills.length },
     { label: "Shared Brain", value: sharedBrainCount },
     { label: "Automated", value: scheduledSkillCount },
-    { label: "On duty", value: enabledSchedules.length },
+    { label: "On duty", value: activeAutomationCount },
     { label: "A2A", value: a2aSkillCount },
   ];
   const aeonFleetHoneycomb = aeonFleetHoneycombSize(aeonFleetCardCount, aeonFleetColumns);
@@ -2003,7 +2067,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
 
   if (panelMode === "fleet") {
     return (
-      <section className={`${fleetStyles.root} tabPanel grid gap-4`}>
+      <section className={`${fleetStyles.root} tabPanel grid content-start gap-4`}>
         <div className="relative overflow-hidden rounded-lg border border-[rgba(148,163,184,0.16)] bg-[linear-gradient(135deg,rgba(10,14,21,0.94),rgba(18,28,35,0.88)_45%,rgba(16,20,29,0.92))] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
           <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(94,234,212,0.65),transparent)]" />
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2327,23 +2391,6 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
           </section>
         ) : null}
 
-        {aeonAgents.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="secondary" onClick={openAeonRepoCreateChoice} disabled={actionBusy === "workspace:initialize"}>
-              {actionBusy === "workspace:initialize" ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Plus aria-hidden="true" />}
-              New Aeon Agent Repo
-            </Button>
-            <Button type="button" size="sm" variant="secondary" onClick={() => void browseAeonWorkspace()} disabled={actionBusy === "workspace:browse"}>
-              {actionBusy === "workspace:browse" ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <FolderOpen aria-hidden="true" />}
-              Browse repo
-            </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setCloneRepoOpen((open) => !open)}>
-              <GitBranch aria-hidden="true" />
-              Clone repo
-            </Button>
-          </div>
-        ) : null}
-
         {aeonAgents.length > 0 && cloneRepoOpen ? (
           <div className="grid gap-3 rounded-lg border border-[rgba(94,234,212,0.18)] bg-[rgba(20,184,166,0.06)] p-3">
             <label className="grid gap-1 text-xs text-[var(--muted)]">
@@ -2486,7 +2533,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
   }
 
   if (aeonSchedulerOpen) {
-    const aeonJobCount = schedulerJobs.filter((job) => job.runtime.trim().toLowerCase() === "aeon").length;
+    const aeonJobCount = aeonSchedulerJobs.length;
     return (
       <section className={`${fleetStyles.root} tabPanel grid gap-4`}>
         <div className="relative overflow-hidden rounded-lg border border-[rgba(148,163,184,0.16)] bg-[linear-gradient(135deg,rgba(10,14,21,0.94),rgba(18,28,35,0.88)_45%,rgba(16,20,29,0.92))] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
@@ -2500,9 +2547,14 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
               </p>
               <div className="flex flex-wrap gap-2 text-xs text-[var(--muted)]">
                 <span className="rounded-md border border-[rgba(94,234,212,0.20)] bg-[rgba(20,184,166,0.08)] px-2 py-1 text-[var(--accent-strong)]">{aeonJobCount} AEON automation{aeonJobCount === 1 ? "" : "s"}</span>
+                <span className="rounded-md border border-amber-300/24 bg-amber-400/10 px-2 py-1 text-amber-100">{activeAeonSchedulerJobs.length} running</span>
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button type="button" variant="danger" onClick={() => void stopAllAeonAutomations()} disabled={!activeAutomationCount || actionBusy === "power:stop-all"}>
+                {actionBusy === "power:stop-all" ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Power aria-hidden="true" />}
+                Stop all
+              </Button>
               <Button type="button" variant="ghost" onClick={() => setAeonSchedulerOpen(false)}>
                 <ChevronLeft aria-hidden="true" />
                 Back to AEON
@@ -2526,13 +2578,13 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
   }
 
   return (
-    <section className={`tabPanel grid gap-4 ${detailView === "settings" ? "xl:grid-cols-2 xl:items-start" : ""}`}>
-      <div className={`relative overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[linear-gradient(135deg,rgba(10,14,21,0.94),rgba(18,28,35,0.88)_45%,rgba(16,20,29,0.92))] shadow-[0_18px_60px_rgba(0,0,0,0.24)] ${detailView === "settings" ? "xl:col-span-2" : ""}`}>
+    <section className="tabPanel grid gap-4">
+      <div className="relative overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[linear-gradient(135deg,rgba(10,14,21,0.94),rgba(18,28,35,0.88)_45%,rgba(16,20,29,0.92))] shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
         <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(94,234,212,0.65),transparent)]" />
         <SectionModeHeader
           activeMode={detailView}
           ariaLabel="AEON detail view"
-          modes={detailTabs.map(({ id, label }) => ({ id, label }))}
+          modes={[]}
           onSelect={setDetailView}
           title={
             <InlineRenameControl
@@ -2567,7 +2619,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
           }
           subtitle="Aeon Autopilot"
           stats={[
-            { value: enabledSchedules.length, label: "on duty", tone: "cyan" },
+            { value: activeAutomationCount, label: "on duty", tone: activeAutomationCount ? "honey" : "cyan" },
             { value: skills.length, label: "skills", tone: "honey" },
             { value: runs.length, label: "runs" },
             { value: selectedDeliverableCount, label: "handoffs", tone: "cyan" },
@@ -2577,6 +2629,10 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
             <Button type="button" variant="ghost" onClick={() => setPanelMode("fleet")}>
               <ChevronLeft aria-hidden="true" />
               All AEON Agents
+            </Button>
+            <Button type="button" variant="danger" onClick={() => void stopAllAeonAutomations()} disabled={!activeAutomationCount || actionBusy === "power:stop-all"}>
+              {actionBusy === "power:stop-all" ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Power aria-hidden="true" />}
+              Stop AEON
             </Button>
             <Button type="button" variant="secondary" onClick={() => {
               void refreshFastSecrets();
@@ -2591,6 +2647,28 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
         {message ? (
           <p className="mx-5 mb-4 rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(10,14,21,0.64)] px-3 py-2 text-sm text-[var(--foreground)]">{message}</p>
         ) : null}
+      </div>
+
+      <div className="relative z-10 grid gap-2 rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(10,14,21,0.52)] p-2 shadow-[0_12px_34px_rgba(0,0,0,0.18)] sm:grid-cols-5" role="tablist" aria-label="AEON detail sections">
+        {detailTabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={detailView === tab.id}
+            data-aeon-detail-tab={tab.id}
+            className={`grid gap-1 rounded-md px-3 py-2 text-left transition ${detailView === tab.id ? "border border-[rgba(94,234,212,0.34)] bg-[rgba(20,184,166,0.15)] text-[var(--accent-strong)]" : "border border-transparent text-[var(--muted)] hover:bg-[rgba(148,163,184,0.08)] hover:text-[var(--foreground)]"}`}
+            onClick={() => setDetailView(tab.id)}
+          >
+            <span className="flex items-center gap-2 text-sm font-bold">
+              {tab.label}
+              {tab.id === "deliverables" && selectedDeliverableCount > 0 ? (
+                <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full border border-[rgba(94,234,212,0.34)] bg-[rgba(20,184,166,0.16)] px-1.5 text-[10px] leading-none text-[var(--accent-strong)]">{selectedDeliverableCount}</span>
+              ) : null}
+            </span>
+            <span className="text-[11px] leading-4">{tab.detail}</span>
+          </button>
+        ))}
       </div>
 
       {convertSkill ? (
@@ -3005,6 +3083,85 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
           )}
         </section>
 
+        <section className={`${detailView === "overview" ? "xl:col-span-2" : "hidden"} overflow-hidden rounded-lg border ${activeAutomationCount ? "border-amber-300/24 bg-[linear-gradient(135deg,rgba(251,191,36,0.12),rgba(16,20,29,0.82))]" : "border-[rgba(148,163,184,0.16)] bg-[rgba(16,20,29,0.78)]"} p-4`}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-md border ${activeAutomationCount ? "border-amber-300/30 bg-amber-400/10 text-amber-100 shadow-[0_0_24px_rgba(251,191,36,0.18)]" : "border-[rgba(94,234,212,0.24)] bg-[rgba(20,184,166,0.08)] text-[var(--accent-strong)]"}`}>
+                <Power aria-hidden="true" className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="eyebrow">Automation Power</p>
+                <h3 className="m-0 text-lg font-bold leading-tight text-[var(--foreground)]">
+                  {activeAutomationCount} running · {totalAutomationCount} configured
+                </h3>
+                <p className="m-0 mt-1 text-xs leading-5 text-[var(--muted)]">
+                  {activeRuntimeSchedules.length} AEON config · {activeAeonSchedulerJobs.length} dashboard schedule{activeAeonSchedulerJobs.length === 1 ? "" : "s"}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="secondary" size="sm" onClick={openAeonScheduler}>
+                <Clock3 aria-hidden="true" />
+                Open schedules
+              </Button>
+              <Button type="button" variant="danger" size="sm" onClick={() => void stopAllAeonAutomations()} disabled={!activeAutomationCount || actionBusy === "power:stop-all"}>
+                {actionBusy === "power:stop-all" ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Power aria-hidden="true" />}
+                Stop all
+              </Button>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 lg:grid-cols-2">
+            <div className="grid gap-2 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.28)] p-3">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="font-bold text-[var(--foreground)]">AEON config</span>
+                <span className="font-mono text-[var(--muted)]">{activeRuntimeSchedules.length}/{schedules.length}</span>
+              </div>
+              {activeRuntimeSchedules.length ? (
+                <div className="grid max-h-44 gap-2 overflow-auto pr-1">
+                  {activeRuntimeSchedules.map((schedule) => (
+                    <div key={schedule.id} className="grid gap-2 rounded-md border border-amber-300/20 bg-amber-400/10 p-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                      <div className="min-w-0">
+                        <span className="block text-sm font-bold text-[var(--foreground)] [overflow-wrap:anywhere]">{aeonScheduleLabel(schedule)}</span>
+                        <span className="block text-[11px] leading-4 text-[var(--muted)] [overflow-wrap:anywhere]">{schedule.every || schedule.schedule}</span>
+                      </div>
+                      <Button type="button" size="sm" variant="secondary" onClick={() => void runScheduleAction("disable", schedule.id)} disabled={Boolean(actionBusy)}>
+                        {actionBusy === `disable:${schedule.id}` ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Power aria-hidden="true" />}
+                        Stop
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="m-0 rounded-md border border-[rgba(148,163,184,0.12)] bg-[rgba(10,14,21,0.34)] px-3 py-2 text-xs text-[var(--muted)]">No AEON config automations are running.</p>
+              )}
+            </div>
+            <div className="grid gap-2 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.28)] p-3">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="font-bold text-[var(--foreground)]">Dashboard schedules</span>
+                <span className="font-mono text-[var(--muted)]">{activeAeonSchedulerJobs.length}/{aeonSchedulerJobs.length}</span>
+              </div>
+              {activeAeonSchedulerJobs.length ? (
+                <div className="grid max-h-44 gap-2 overflow-auto pr-1">
+                  {activeAeonSchedulerJobs.map((job) => (
+                    <div key={job.id} className="grid gap-2 rounded-md border border-amber-300/20 bg-amber-400/10 p-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                      <div className="min-w-0">
+                        <span className="block text-sm font-bold text-[var(--foreground)] [overflow-wrap:anywhere]">{aeonScheduleLabel(job)}</span>
+                        <span className="block text-[11px] leading-4 text-[var(--muted)] [overflow-wrap:anywhere]">{job.cronLabel} · {job.machine}</span>
+                      </div>
+                      <Button type="button" size="sm" variant="secondary" onClick={() => stopAeonSchedulerJob(job)} disabled={!onSchedulerToggleJob || Boolean(actionBusy)}>
+                        <Power aria-hidden="true" />
+                        Stop
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="m-0 rounded-md border border-[rgba(148,163,184,0.12)] bg-[rgba(10,14,21,0.34)] px-3 py-2 text-xs text-[var(--muted)]">No dashboard AEON schedules are running.</p>
+              )}
+            </div>
+          </div>
+        </section>
+
         <section className="hidden rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(16,20,29,0.78)] p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -3063,7 +3220,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
           </div>
         </section>
 
-        <section className={`${detailView === "settings" ? "" : "hidden"} rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(16,20,29,0.78)] p-4`}>
+        <section className={`${detailView === "settings" ? "order-2" : "hidden"} rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(16,20,29,0.78)] p-4`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="eyebrow">Save and update</p>
@@ -3094,7 +3251,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
           </div>
         </section>
 
-        <section className={`${detailView === "settings" ? "" : "hidden"} rounded-lg border border-rose-300/20 bg-[linear-gradient(135deg,rgba(127,29,29,0.18),rgba(16,20,29,0.78))] p-4`}>
+        <section className={`${detailView === "settings" ? "order-6 xl:col-span-2" : "hidden"} rounded-lg border border-rose-300/20 bg-[linear-gradient(135deg,rgba(127,29,29,0.18),rgba(16,20,29,0.78))] p-4`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="eyebrow">Danger zone</p>
@@ -3137,7 +3294,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
       </div>
 
       <div className={detailView === "work" ? "grid gap-3" : detailView === "settings" ? "contents" : "hidden"}>
-        <section className={`${detailView === "settings" ? "" : "hidden"} rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(16,20,29,0.78)] p-4`}>
+        <section className={`${detailView === "settings" ? "order-1" : "hidden"} rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(16,20,29,0.78)] p-4`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="eyebrow">Setup</p>
@@ -3530,7 +3687,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
           />
         </div>
 
-        <section className={`${detailView === "settings" ? "" : "hidden"} rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(16,20,29,0.78)] p-4`}>
+        <section className={`${detailView === "settings" ? "order-3 xl:col-span-2" : "hidden"} rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(16,20,29,0.78)] p-4`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="eyebrow">Keys</p>
@@ -3568,7 +3725,7 @@ export function AeonAutopilotPanel({ activeView, displayAgents, selectedAgentId,
           </div>
         </section>
 
-        <section className={`${detailView === "settings" ? "" : "hidden"} rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(16,20,29,0.78)] p-4`}>
+        <section className={`${detailView === "settings" ? "order-4 xl:col-span-2" : "hidden"} rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(16,20,29,0.78)] p-4`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="eyebrow">Memory</p>

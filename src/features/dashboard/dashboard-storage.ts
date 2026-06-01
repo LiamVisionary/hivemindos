@@ -107,7 +107,7 @@ function mergeRuntimeCapabilities(runtime: AgentRuntime, patch?: RuntimeCapabili
   const base = runtimeCapabilitiesByRuntime[runtime] ?? {};
   const merged = { ...(patch ?? {}), ...base };
   for (const key of Object.keys(base) as Array<keyof RuntimeCapabilities>) {
-    if (base[key]) merged[key] = true;
+    if (typeof base[key] === "boolean" && base[key]) (merged as Record<string, unknown>)[key] = true;
   }
   return merged;
 }

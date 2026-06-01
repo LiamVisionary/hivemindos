@@ -838,7 +838,6 @@ async function repoSyncStatus(profile: AgentProfile): Promise<RuntimeRepoSyncSta
   const repo = aeonRepo(profile);
   const branch = aeonBranch(profile);
   if (!root) return { root: "", repo, branch, hasChanges: false, changedFiles: [], behind: 0, ahead: 0 };
-  await execFileAsync("git", ["fetch", "--quiet", "origin", branch], { cwd: root, timeout: 60_000, maxBuffer: 1_000_000 }).catch(() => undefined);
   const status = await execFileAsync("git", ["status", "--porcelain"], { cwd: root, timeout: 12_000, maxBuffer: 1_000_000 }).then(({ stdout }) => stdout).catch(() => "");
   const changedFiles = status.split(/\r?\n/).map((line) => line.slice(3).trim()).filter(Boolean);
   const aheadBehind = await execFileAsync("git", ["rev-list", "--left-right", "--count", `origin/${branch}...HEAD`], { cwd: root, timeout: 12_000, maxBuffer: 1_000_000 })

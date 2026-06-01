@@ -288,9 +288,33 @@ function Copy-DashboardTokenIfRequested {
   }
 }
 
+function Protect-EnvLocal($Path) {
+  if (-not (Test-Path $Path)) { return }
+  try {
+    $item = Get-Item $Path
+    $acl = New-Object System.Security.AccessControl.FileSecurity
+    $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+    $system = New-Object System.Security.Principal.SecurityIdentifier "S-1-5-18"
+    $admins = New-Object System.Security.Principal.SecurityIdentifier "S-1-5-32-544"
+    foreach ($identity in @($currentUser, $system, $admins)) {
+      $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        $identity,
+        [System.Security.AccessControl.FileSystemRights]::FullControl,
+        [System.Security.AccessControl.AccessControlType]::Allow
+      )
+      $acl.AddAccessRule($rule) | Out-Null
+    }
+    $acl.SetAccessRuleProtection($true, $false)
+    Set-Acl -Path $item.FullName -AclObject $acl
+  } catch {
+    Warn "Could not tighten .env.local ACL: $($_.Exception.Message)"
+  }
+}
+
 function Set-EnvLocal($Key, $Value) {
   $envFile = Join-Path $Root ".env.local"
   if (-not (Test-Path $envFile)) { New-Item -ItemType File -Path $envFile | Out-Null }
+  Protect-EnvLocal $envFile
   $lines = Get-Content $envFile -ErrorAction SilentlyContinue
   $replaced = $false
   $next = foreach ($line in $lines) {
@@ -302,8 +326,12 @@ function Set-EnvLocal($Key, $Value) {
     }
   }
   if (-not $replaced) { $next += "$Key=$Value" }
-  if (($lines -join "`n") -eq ($next -join "`n")) { return }
+  if (($lines -join "`n") -eq ($next -join "`n")) {
+    Protect-EnvLocal $envFile
+    return
+  }
   Set-Content -Path $envFile -Value $next
+  Protect-EnvLocal $envFile
 }
 
 function Get-EnvLocal($Key) {

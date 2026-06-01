@@ -18,6 +18,10 @@
         "height": 860,
         "minWidth": 960,
         "minHeight": 640,
+        "backgroundColor": "#080a0f",
+        "decorations": true,
+        "titleBarStyle": "Transparent",
+        "hiddenTitle": true,
         "resizable": true,
         "fullscreen": false
       }
@@ -33,9 +37,11 @@
       "resources/": "resources/"
     },
     "icon": [
-      "../public/icon-192.png",
-      "../public/icon-512.png",
-      "../public/favicon.ico"
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
     ]
   }
 }
