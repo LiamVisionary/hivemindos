@@ -1,27 +1,41 @@
 {
-  "created_at": "2026-06-01T20:19:33.944697+00:00",
+  "created_at": "2026-06-01T20:28:19.207267+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
-      "source_repo": "/Users/liam/Documents/code/projects/hivemind-os",
-      "source_path": "src/lib/services/obsidian/brain-graph.ts",
-      "target_path": "src/lib/services/obsidian/brain-graph.ts",
+      "source_repo": "hilman2/4dy-client",
+      "source_path": "desktop-client/src-tauri/src/tray.rs",
+      "target_path": "src-tauri/src/desktop_navigation.rs",
       "reuse_type": "adapted_code",
-      "note": "extended existing Obsidian graph builder with previews, modified metadata, and missing-note creation"
+      "note": "adapted Tauri 2 tray menu and left-click restore patterns for HivemindOS route navigation"
     },
     {
-      "source_repo": "/Users/liam/Documents/code/projects/hivemind-os",
-      "source_path": "src-tauri/src/brain.rs",
-      "target_path": "src-tauri/src/brain.rs",
+      "source_repo": "hilman2/4dy-client",
+      "source_path": "desktop-client/src-tauri/src/hotkeys.rs",
+      "target_path": "src-tauri/src/desktop_navigation.rs",
       "reuse_type": "adapted_code",
-      "note": "mirrored graph preview and modified metadata in native Tauri graph reader"
+      "note": "adapted shortcut-to-app-event pattern through native menu accelerators and emitted dashboard events"
     },
     {
-      "source_repo": "/Users/liam/Documents/code/projects/hivemind-os",
-      "source_path": "src/features/dashboard/views/VaultPanel.tsx",
-      "target_path": "src/features/dashboard/views/BrainGraphExplorer.tsx",
+      "source_repo": "hilman2/4dy-client",
+      "source_path": "desktop-client/src-tauri/src/config.rs",
+      "target_path": "src-tauri/src/desktop_navigation.rs",
       "reuse_type": "adapted_code",
-      "note": "extracted and expanded existing VaultPanel graph UI into focused graph explorer with filters, inspector actions, and context bundling"
+      "note": "adapted compact app-data window-state persistence for native window restore"
+    },
+    {
+      "source_repo": "kevinturpin97/react-ctrlk",
+      "source_path": "src/Shortcut.tsx",
+      "target_path": "src/features/dashboard/views/DashboardCommandPalette.tsx",
+      "reuse_type": "adapted_code",
+      "note": "adapted React keyboard shortcut registration and cleanup pattern for dashboard palette and route shortcuts"
+    },
+    {
+      "source_repo": "kevinturpin97/react-ctrlk",
+      "source_path": "src/useShortcut.ts",
+      "target_path": "src/features/dashboard/views/DashboardCommandPalette.tsx",
+      "reuse_type": "adapted_code",
+      "note": "adapted hook-style shortcut ergonomics into local command action handling"
     }
   ]
 }

@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-02 04:27:53 WITA - Record Native Navigation Assimilation
+
+- Status: Pushed
+- Areas changed: Assimilation manifest, assimilation logs, changelog
+- Summary: Record the concrete donor repositories and adapted patterns used by the native navigation layer so the published metadata matches the implemented Tauri menu, tray, window-state, pop-out, and command-palette work.
+- Verification: `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION.json`; `git diff --check -- CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `node scripts/check-file-sizes.mjs CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`.
+- Intended commit message: `Record native navigation assimilation`
+
 ## 2026-06-02 04:18 WITA - Fix UsePod Ready Balance Display
 
 - Status: Pushed

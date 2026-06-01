@@ -4635,3 +4635,34 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
   - Decision: selected
   - Reason: transplanted supplied AEON UI bundle after heuristic audit passed
   - Path: `src/components/aeon,src/app/aeon/page.tsx`
+## 2026-06-01T20:28:09.054821+00:00 - native-navigation-reuse
+
+- Request: Add native Tauri navigation improvements for HivemindOS
+- Source: github-assimilator
+- Decision: selected audited donor patterns for Tauri navigation and React shortcuts
+- Reason: hilman2/4dy-client had compact Tauri 2 tray, menu/hotkey, and window-state patterns; kevinturpin97/react-ctrlk had a small keyboard shortcut hook pattern suitable for adaptation into the dashboard command palette.
+- Selected backbone: local HivemindOS dashboard/Tauri app
+- Verification: Focused audits passed for selected donor paths; cargo check, TypeScript, ESLint, size checks, and browser smoke passed for the implemented navigation layer.
+
+### Candidates
+- hilman2/4dy-client
+  - Decision: assimilated
+  - Reason: Tauri 2 desktop tray, menu/hotkey event, and window-state patterns
+  - Path: `desktop-client/src-tauri/src`
+- kevinturpin97/react-ctrlk
+  - Decision: assimilated
+  - Reason: React keyboard shortcut registration and cleanup pattern
+  - Path: `src/Shortcut.tsx`
+- emilk/egui
+  - Decision: not_assimilated
+  - Reason: native Rust GUI framework would replace the existing React/Tauri shell instead of improving it in place
+- tauri-apps/tauri
+  - Decision: reference_only
+  - Reason: official framework source was too broad for direct feature reuse
+## 2026-06-01T20:28:19.310542+00:00 - assimilation-manifest
+
+- Request: Add native Tauri navigation improvements for HivemindOS
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hilman2/4dy-client:desktop-client/src-tauri/src/tray.rs => src-tauri/src/desktop_navigation.rs, hilman2/4dy-client:desktop-client/src-tauri/src/hotkeys.rs => src-tauri/src/desktop_navigation.rs, hilman2/4dy-client:desktop-client/src-tauri/src/config.rs => src-tauri/src/desktop_navigation.rs, kevinturpin97/react-ctrlk:src/Shortcut.tsx => src/features/dashboard/views/DashboardCommandPalette.tsx, kevinturpin97/react-ctrlk:src/useShortcut.ts => src/features/dashboard/views/DashboardCommandPalette.tsx
+- Verification: Wrote ASSIMILATION.json with 5 entries and custom_code_assessment=balanced.
