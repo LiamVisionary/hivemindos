@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, Ban, Clock3, Copy, ExternalLink, LoaderCircle, Maximize2, Minimize2, RefreshCcw, Route, Sparkles, XOctagon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AGENT_APP_CATALOG } from "@/features/dashboard/agent-capability-catalog";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { getNativeFleetAppsCache } from "@/lib/native/fleet";
 
@@ -46,7 +47,7 @@ type RunningServiceTask = {
   stuckReason?: string;
   canCancel?: boolean;
   canKill?: boolean;
-  source: "miroshark";
+  source?: string;
 };
 
 type ApiServiceRoute = {
@@ -224,6 +225,25 @@ function isSparseAppsPayload(payload: FleetAppsPayload | null) {
   return apps.length <= 1 && readyMachines > 1;
 }
 
+function appMachineKey(name: string) {
+  return name.trim().toLowerCase().replace(/^hivemindos[-\s]*/i, "").replace(/[^a-z0-9]+/g, "");
+}
+
+function addMachineKey(keys: Set<string>, name: string) {
+  const next = appMachineKey(name);
+  if (!next) return;
+  for (const existing of keys) {
+    if (existing.startsWith(next) || next.startsWith(existing)) {
+      if (next.length < existing.length) {
+        keys.delete(existing);
+        keys.add(next);
+      }
+      return;
+    }
+  }
+  keys.add(next);
+}
+
 async function readFleetAppsResponse(response: Response): Promise<FleetAppsPayload> {
   const text = await response.text();
   let data: FleetAppsPayload;
@@ -240,6 +260,7 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
   const [payload, setPayload] = useState<FleetAppsPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
+  const [statusTone, setStatusTone] = useState<"info" | "error">("info");
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [liveAppExpanded, setLiveAppExpanded] = useState(false);
   const [copiedRouteKey, setCopiedRouteKey] = useState("");
@@ -249,14 +270,15 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
 
   const refresh = useCallback(async (force = false) => {
     setLoading(true);
-    setStatus("");
+    setStatusTone("info");
+    setStatus(force ? "Refreshing app discovery..." : "");
     let nativePayload: FleetAppsPayload | null = null;
     try {
       nativePayload = await getNativeFleetAppsCache(force ? {} : { maxAgeMs: 5 * 60 * 1000 }) as FleetAppsPayload | null;
       if (nativePayload?.apps) {
         setPayload(nativePayload);
       }
-      if (nativePayload?.apps) {
+      if (nativePayload?.apps && !force) {
         setLoading(false);
         const query = force || isSparseAppsPayload(nativePayload) ? "?refresh=1&fast=1" : "?fast=1";
         void fetch(`/api/fleet/apps${query}`, { cache: "no-store" })
@@ -272,9 +294,10 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
           .catch(() => undefined);
         return;
       }
-      const response = await fetch(`/api/fleet/apps${force ? "?refresh=1&fast=1" : "?fast=1"}`, { cache: "no-store" });
+      const response = await fetch(`/api/fleet/apps${force ? "?refresh=1&fast=1&wait=1" : "?fast=1"}`, { cache: "no-store" });
       const data = await readFleetAppsResponse(response);
       setPayload(data);
+      setStatus("");
       void fetch("/api/fleet/apps?refresh=1", { cache: "no-store" })
         .then((fullResponse) => readFleetAppsResponse(fullResponse).catch(() => null))
         .then((fullData: FleetAppsPayload | null) => { if (fullData?.apps) setPayload(fullData); })
@@ -283,6 +306,7 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
       if (nativePayload?.apps) {
         setPayload(nativePayload);
       }
+      setStatusTone("error");
       setStatus(friendlyAppsError(error));
     } finally {
       setLoading(false);
@@ -315,8 +339,19 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
   const apps = payload?.apps ?? [];
   const selectedApp = apps.find((app) => app.id === selectedAppId) ?? null;
   const checkedAt = payload?.checkedAt ? Date.parse(payload.checkedAt) : 0;
-  const readyMachines = payload?.machines?.filter((machine) => machine.collector === "ready").length ?? 0;
-  const reportingMachines = payload?.machines?.filter((machine) => machine.appCount > 0).length ?? 0;
+  const visibleMachineKeys = new Set<string>();
+  const reportingMachineKeys = new Set<string>();
+  for (const machine of payload?.machines ?? []) {
+    if (machine.collector === "error") continue;
+    if (machine.appCount > 0) addMachineKey(reportingMachineKeys, machine.name);
+    if (machine.appCount > 0 || machine.collector === "ready" || machine.collector === "native-local") addMachineKey(visibleMachineKeys, machine.name);
+  }
+  for (const app of apps) {
+    addMachineKey(reportingMachineKeys, app.machineName);
+    addMachineKey(visibleMachineKeys, app.machineName);
+  }
+  const readyMachines = visibleMachineKeys.size;
+  const reportingMachines = reportingMachineKeys.size;
 
   const copyRoute = async (route: ApiServiceRoute) => {
     await navigator.clipboard.writeText(route.url || route.path).catch(() => undefined);
@@ -346,7 +381,6 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
   };
 
   if (selectedApp) {
-    const isComfy = /comfy/i.test(selectedApp.name);
     const launchUrl = appLaunchUrl(selectedApp);
     const serviceUrl = selectedApp.healthUrl || selectedApp.apiBaseUrl || launchUrl;
     const apiRoutes = selectedApp.apiRoutes ?? [];
@@ -365,7 +399,7 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
             }}
           >
             <ArrowLeft aria-hidden="true" />
-            Apps
+            Apps & Services
           </Button>
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="secondary" onClick={() => void refresh(true)} disabled={loading}>
@@ -417,11 +451,6 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
                       </span>
                     </div>
                   ) : null}
-                </div>
-              ) : null}
-              {isComfy ? (
-                <div className="rounded-md border border-[rgba(94,234,212,0.20)] bg-[rgba(20,184,166,0.08)] p-3 text-sm leading-6 text-[var(--foreground)]">
-                  ComfyUI exposes its own workflow controls. The embedded workspace below is the safest way to run the current graph from HivemindOS without guessing at your node schema.
                 </div>
               ) : null}
             </div>
@@ -575,7 +604,7 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
                   </div>
                   <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
                     {apiRoutes.length > 0
-                      ? "Routes are discovered from the service API catalog when available, with Hivemind-owned fallbacks for known hivenet services."
+                      ? "Routes are discovered from the service API catalog when available."
                       : "This API is reachable, but HivemindOS has not found a route catalog for it yet."}
                   </p>
                 </div>
@@ -646,9 +675,9 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
     <section className={fleetClass("taskPanel", "tabPanel")}>
       <div className={fleetClass("taskPanelHeader")}>
         <div>
-          <p className="eyebrow">My Apps</p>
-          <h2>Apps and services running now</h2>
-          <p>Private network apps and API services, discovered from live machines.</p>
+          <p className="eyebrow">Apps</p>
+          <h2>Apps & Services</h2>
+          <p>Running Tailnet services plus installable providers that humans can open and agents can call.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" variant="secondary" onClick={() => void refresh(true)} disabled={loading}>
@@ -658,7 +687,17 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
         </div>
       </div>
 
-      {status ? <p className="mt-3 rounded-md border border-[rgba(248,113,113,0.24)] bg-[rgba(127,29,29,0.20)] px-3 py-2 text-xs text-[var(--foreground)]">{status}</p> : null}
+      {status ? (
+        <p
+          className={`mt-3 rounded-md border px-3 py-2 text-xs text-[var(--foreground)] ${
+            statusTone === "error"
+              ? "border-[rgba(248,113,113,0.24)] bg-[rgba(127,29,29,0.20)]"
+              : "border-[rgba(94,234,212,0.22)] bg-[rgba(20,184,166,0.10)]"
+          }`}
+        >
+          {status}
+        </p>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
         <span>{apps.length} apps/services</span>
@@ -696,6 +735,43 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
           No apps or services found yet. Start something on a ready hivenet machine, then refresh.
         </div>
       ) : null}
+
+      <section className="mt-8">
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="eyebrow">Agent app catalog</p>
+            <h3 className="m-0 text-base font-bold text-[var(--foreground)]">Installable providers</h3>
+            <p className="m-0 mt-1 text-xs leading-5 text-[var(--muted)]">Install one of these as a local, Tailnet, or cloud service; once it exposes an API, agents can receive its handles through Tools.</p>
+          </div>
+          <span className="rounded-md border border-[rgba(94,234,212,0.22)] bg-[rgba(20,184,166,0.08)] px-2.5 py-1 text-xs font-bold text-[var(--accent-strong)]">
+            {AGENT_APP_CATALOG.length} providers
+          </span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {AGENT_APP_CATALOG.map((app) => (
+            <article key={app.id} className="grid gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4">
+              <div>
+                <span className="font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">{app.category}</span>
+                <strong className="mt-1 block text-sm text-[var(--foreground)]">{app.name}</strong>
+              </div>
+              <p className="m-0 text-xs leading-5 text-[var(--muted)]">{app.description}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {[...app.badges, ...app.handles.slice(0, 2)].map((label) => (
+                  <span key={label} className="rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(15,23,42,0.58)] px-2 py-1 text-[11px] font-bold text-[var(--muted)]">
+                    {label}
+                  </span>
+                ))}
+              </div>
+              <Button type="button" size="sm" variant="secondary" className="w-fit" asChild>
+                <a href={app.sourceUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink aria-hidden="true" />
+                  Source
+                </a>
+              </Button>
+            </article>
+          ))}
+        </div>
+      </section>
     </section>
   );
 }

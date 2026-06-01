@@ -209,6 +209,21 @@ write_source_metadata() {
 JSON
 }
 
+write_packaged_auto_install_metadata() {
+  local dir="$1"
+  local slug="$2"
+  local source_path="$3"
+  cat > "$dir/.hivemind-skill-source.json" <<JSON
+{
+  "provider": "packaged-auto-install",
+  "providerLabel": "HivemindOS auto-installed packaged skills",
+  "sourcePath": "$source_path",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/auto-install/$slug",
+  "importedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+JSON
+}
+
 write_managed_block() {
   local file="$1"
   local start="<!-- BEGIN HIVEMINDOS_SHARED_SKILLS -->"
@@ -376,7 +391,34 @@ seed_bundled_skills() {
   fi
 }
 
+seed_packaged_auto_install_skills() {
+  local seeded=0
+  local source_root="$ROOT/packaged-skills/auto-install"
+  [[ -d "$source_root" ]] || return 0
+  while IFS= read -r packaged_skill_md; do
+    local packaged_dir slug destination
+    packaged_dir="$(dirname "$packaged_skill_md")"
+    slug="$(basename "$packaged_dir")"
+    destination="$skills_folder/$slug"
+    if [[ -f "$destination/SKILL.md" ]]; then
+      write_packaged_auto_install_metadata "$destination" "$slug" "$packaged_dir"
+      continue
+    fi
+    mkdir -p "$destination"
+    copy_skill_dir "$packaged_dir" "$destination"
+    write_packaged_auto_install_metadata "$destination" "$slug" "$packaged_dir"
+    seeded=$((seeded + 1))
+  done < <(find "$source_root" -mindepth 2 -maxdepth 2 -name SKILL.md -type f 2>/dev/null | sort)
+
+  if (( seeded > 0 )); then
+    ok "Installed $seeded auto-install packaged skill(s) into the shared brain"
+  else
+    ok "Auto-install packaged skills already present in the shared brain"
+  fi
+}
+
 seed_bundled_skills
+seed_packaged_auto_install_skills
 
 for agent in "${agent_ids[@]}"; do
   if list_includes_agent "$import_sources" "$agent"; then

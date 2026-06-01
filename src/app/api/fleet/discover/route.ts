@@ -97,7 +97,7 @@ const FOREGROUND_COLLECTOR_FETCH_TIMEOUT_MS = 2_500;
 const BACKGROUND_COLLECTOR_FETCH_TIMEOUT_MS = 8_000;
 const SNAPSHOT_FETCH_TIMEOUT_MS = 4_000;
 const DISCOVERY_CACHE_MS = 15_000;
-const DISCOVERY_REQUEST_TIMEOUT_MS = 12_000;
+const DISCOVERY_REQUEST_TIMEOUT_MS = 20_000;
 const DISCOVERY_CACHE_VERSION = "v3";
 const TAILSCALE_STATUS_TIMEOUT_MS = 6_000;
 const TAILSCALE_LOCAL_API_TIMEOUT_MS = 2_000;
@@ -195,6 +195,8 @@ function deviceIdentityKey(device: Device) {
   const name = normalizeName(device.name) || dnsName;
   if (name.startsWith("hivemindos")) return hivemindMachineBase(device) || dnsName || name;
   if (device.self) return "self";
+  const macBase = macNumberedHostnameBase(device);
+  if (macBase) return macBase;
   return name || device.ip || device.collectorUrl;
 }
 
@@ -226,6 +228,15 @@ function physicalMachineBase(device: Device) {
   const normalizedName = normalizeName(device.name);
   const value = normalizedDnsName || normalizedName;
   return value.replace(/^hivemindos/, "").replace(/local\d*$/, "").replace(/\d+$/, "");
+}
+
+function macNumberedHostnameBase(device: Device) {
+  if (!isMacDevice(device)) return "";
+  const rawValue = dnsLabel(device.dnsName) || device.name || "";
+  const withoutTailnetSuffix = rawValue.toLowerCase().replace(/-\d+$/, "");
+  const normalizedValue = normalizeName(rawValue);
+  const normalizedBase = normalizeName(withoutTailnetSuffix);
+  return normalizedBase && normalizedBase !== normalizedValue ? normalizedBase : "";
 }
 
 function isStaleSelfDuplicate(self: Device | undefined, device: Device) {
@@ -461,6 +472,7 @@ function shouldForceFresh(request: Request) {
 type DiscoveryProbeOptions = {
   collectorTimeoutMs: number;
   snapshotTimeoutMs: number;
+  allowSshFallback?: boolean;
 };
 
 type CollectorProbeResult = {
@@ -473,7 +485,7 @@ type CollectorProbeResult = {
   machineId?: string;
 };
 
-const REMOTE_COLLECTOR_PORT_CANDIDATES = Array.from({ length: 24 }, (_, index) => 8787 + index);
+const REMOTE_COLLECTOR_PORT_CANDIDATES = Array.from({ length: 8 }, (_, index) => 8787 + index);
 
 function collectorUrlWithPort(rawUrl: string, port: number) {
   try {
@@ -492,13 +504,64 @@ function collectorUrlWithPort(rawUrl: string, port: number) {
   }
 }
 
+function collectorUrlForHost(host: string, port: number) {
+  const trimmed = host.replace(/\.$/, "").trim();
+  return trimmed ? `http://${trimmed}:${port}` : "";
+}
+
 function collectorUrlCandidates(device: Device) {
   const primary = device.collectorUrl?.replace(/\/+$/, "");
   if (!primary || device.self) return primary ? [primary] : [];
+  const dnsName = device.dnsName?.replace(/\.$/, "");
+  const dnsShortName = dnsName ? dnsLabel(dnsName) : "";
+  const dnsCandidates = dnsName
+    ? REMOTE_COLLECTOR_PORT_CANDIDATES.flatMap((port) => [
+      collectorUrlForHost(dnsShortName, port),
+      collectorUrlForHost(dnsName, port),
+    ])
+    : [];
   return [
     primary,
     ...REMOTE_COLLECTOR_PORT_CANDIDATES.map((port) => collectorUrlWithPort(primary, port)),
+    ...dnsCandidates,
   ].filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index);
+}
+
+function shellQuote(value: string) {
+  return `'${value.replaceAll("'", "'\"'\"'")}'`;
+}
+
+function remoteHostCandidates(device: Device) {
+  return [
+    dnsLabel(device.dnsName),
+    device.dnsName?.replace(/\.$/, ""),
+    device.ip,
+  ].filter((value, index, values): value is string => Boolean(value?.trim()) && values.indexOf(value) === index);
+}
+
+async function fetchRemoteCollectorJsonViaTailscale(device: Device, path: string, timeoutMs: number) {
+  const safePath = path.startsWith("/") ? path : `/${path}`;
+  const script = [
+    "set -eu",
+    "[ -f \"$HOME/.hivemindos/collector.env\" ] && . \"$HOME/.hivemindos/collector.env\" || true",
+    "port=\"${AGENT_TELEMETRY_PORT:-8787}\"",
+    `curl -fsS --max-time 5 "http://127.0.0.1:$port${shellQuote(safePath).slice(1, -1)}"`,
+  ].join("\n");
+  const errors: string[] = [];
+  for (const host of remoteHostCandidates(device)) {
+    for (const target of [`root@${host}`, `ubuntu@${host}`, host]) {
+      try {
+        const { stdout } = await execFileAsync("tailscale", ["ssh", target, "sh", "-lc", script], {
+          timeout: Math.max(timeoutMs, 4_000),
+          maxBuffer: 1_500_000,
+        });
+        return JSON.parse(stdout) as Record<string, unknown>;
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : "Tailscale SSH collector fallback failed.");
+      }
+    }
+  }
+  throw new Error(errors.at(-1) ?? "Tailscale SSH collector fallback failed.");
 }
 
 async function probeCollector(device: Device, collectorUrl: string, options: DiscoveryProbeOptions): Promise<CollectorProbeResult> {
@@ -527,6 +590,34 @@ async function probeCollector(device: Device, collectorUrl: string, options: Dis
   };
 }
 
+async function probeCollectorViaTailscale(device: Device, options: DiscoveryProbeOptions): Promise<CollectorProbeResult> {
+  const healthData = await fetchRemoteCollectorJsonViaTailscale(device, "/health", options.collectorTimeoutMs) as {
+    host?: string;
+    machineId?: string;
+    version?: CollectorVersion;
+    capabilities?: CollectorCapabilities;
+    envSync?: CollectorEnvSync;
+  };
+  const agentsData = await fetchRemoteCollectorJsonViaTailscale(device, "/agents", options.collectorTimeoutMs)
+    .catch(() => ({ agents: [] })) as { agents?: AgentProfile[] };
+  const capabilities = healthData.capabilities ?? { chat: false, runtimes: [] };
+  const agents = (agentsData.agents ?? []).map((agent) => ({
+    ...agent,
+    telemetryUrl: device.collectorUrl,
+    machineName: device.name,
+    collectorCapabilities: capabilities,
+  }));
+  return {
+    device,
+    agents,
+    version: healthData.version,
+    capabilities,
+    envSync: healthData.envSync,
+    collectorHost: healthData.host,
+    machineId: healthData.machineId,
+  };
+}
+
 async function readDiscovery(includeSnapshots: boolean, options: DiscoveryProbeOptions): Promise<FleetDiscoverPayload> {
   const fleetStatus = await tailscaleDevices().catch((): FleetDeviceStatus => ({ devices: [localDevice()], source: "local" }));
   const devices = fleetStatus.devices;
@@ -544,6 +635,9 @@ async function readDiscovery(includeSnapshots: boolean, options: DiscoveryProbeO
         collectorUrlCandidates(device).map((collectorUrl) => probeCollector(device, collectorUrl, probeOptions).catch(() => null)),
       );
       probe = probeResults.find((result): result is CollectorProbeResult => Boolean(result)) ?? null;
+      if (!probe && options.allowSshFallback && !device.self && device.online) {
+        probe = await probeCollectorViaTailscale(device, probeOptions).catch(() => null);
+      }
     } catch {
       probe = null;
     }
@@ -615,17 +709,24 @@ async function readDiscovery(includeSnapshots: boolean, options: DiscoveryProbeO
   };
 }
 
-function foregroundProbeOptions(includeSnapshots: boolean): DiscoveryProbeOptions {
+function shouldAllowSshFallback(request: Request) {
+  const value = new URL(request.url).searchParams.get("sshFallback")?.toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || process.env.HIVEMIND_FLEET_SSH_FALLBACK === "1";
+}
+
+function foregroundProbeOptions(includeSnapshots: boolean, allowSshFallback = false): DiscoveryProbeOptions {
   return {
     collectorTimeoutMs: FOREGROUND_COLLECTOR_FETCH_TIMEOUT_MS,
     snapshotTimeoutMs: includeSnapshots ? SNAPSHOT_FETCH_TIMEOUT_MS : FOREGROUND_COLLECTOR_FETCH_TIMEOUT_MS,
+    allowSshFallback,
   };
 }
 
-function backgroundProbeOptions(): DiscoveryProbeOptions {
+function backgroundProbeOptions(allowSshFallback = false): DiscoveryProbeOptions {
   return {
     collectorTimeoutMs: BACKGROUND_COLLECTOR_FETCH_TIMEOUT_MS,
     snapshotTimeoutMs: BACKGROUND_COLLECTOR_FETCH_TIMEOUT_MS,
+    allowSshFallback,
   };
 }
 
@@ -637,10 +738,12 @@ function refreshDiscovery(
 ) {
   let inFlight = inFlightMap.get(cacheKey);
   if (!inFlight) {
+    const previousPayload = discoveryCache.get(cacheKey)?.payload;
     inFlight = withTimeout(readDiscovery(includeSnapshots, options), DISCOVERY_REQUEST_TIMEOUT_MS)
       .then((payload) => {
-        discoveryCache.set(cacheKey, { checkedAt: Date.now(), payload });
-        return payload;
+        const stablePayload = stabilizeDiscoveryPayload(payload, previousPayload);
+        discoveryCache.set(cacheKey, { checkedAt: Date.now(), payload: stablePayload });
+        return stablePayload;
       })
       .finally(() => {
         inFlightMap.delete(cacheKey);
@@ -659,14 +762,15 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
   });
 }
 
-function refreshDiscoveryInBackground(cacheKey: string, includeSnapshots: boolean) {
-  void refreshDiscovery(cacheKey, includeSnapshots, backgroundProbeOptions(), discoveryBackgroundInFlight)
+function refreshDiscoveryInBackground(cacheKey: string, includeSnapshots: boolean, allowSshFallback: boolean) {
+  void refreshDiscovery(cacheKey, includeSnapshots, backgroundProbeOptions(allowSshFallback), discoveryBackgroundInFlight)
     .catch(() => undefined);
 }
 
 export async function GET(request: Request) {
   const includeSnapshots = shouldIncludeSnapshots(request);
   const forceFresh = shouldForceFresh(request);
+  const allowSshFallback = shouldAllowSshFallback(request);
   const cacheKey = `${DISCOVERY_CACHE_VERSION}:${includeSnapshots ? "with-snapshots" : "light"}`;
   const cached = discoveryCache.get(cacheKey);
   const now = Date.now();
@@ -676,17 +780,17 @@ export async function GET(request: Request) {
 
   if (cached) {
     try {
-      const payload = await refreshDiscovery(cacheKey, includeSnapshots, foregroundProbeOptions(includeSnapshots), discoveryInFlight);
-      refreshDiscoveryInBackground(cacheKey, includeSnapshots);
+      const payload = await refreshDiscovery(cacheKey, includeSnapshots, foregroundProbeOptions(includeSnapshots, allowSshFallback), discoveryInFlight);
+      refreshDiscoveryInBackground(cacheKey, includeSnapshots, allowSshFallback);
       return Response.json(payload);
     } catch {
-      refreshDiscoveryInBackground(cacheKey, includeSnapshots);
+      refreshDiscoveryInBackground(cacheKey, includeSnapshots, allowSshFallback);
       return Response.json(cached.payload);
     }
   }
 
-  const payload = await refreshDiscovery(cacheKey, includeSnapshots, foregroundProbeOptions(includeSnapshots), discoveryInFlight);
-  refreshDiscoveryInBackground(cacheKey, includeSnapshots);
+  const payload = await refreshDiscovery(cacheKey, includeSnapshots, foregroundProbeOptions(includeSnapshots, allowSshFallback), discoveryInFlight);
+  refreshDiscoveryInBackground(cacheKey, includeSnapshots, allowSshFallback);
   return Response.json(payload);
 }
 
@@ -707,8 +811,12 @@ function machineScore(machine: {
 }
 
 function dedupeMachines<T extends { device: Device; collector: string; machineId?: string; agents: AgentProfile[]; version?: CollectorVersion; capabilities?: CollectorCapabilities }>(machines: T[]) {
+  const readyMachineBases = new Set(machines
+    .filter((machine) => machine.collector === "ready")
+    .flatMap(machineBaseCandidates));
   const byIdentity = new Map<string, T>();
   for (const machine of machines) {
+    if (hasFreshReadyDuplicate(machine, readyMachineBases)) continue;
     const key = machineIdentityKey(machine);
     const previous = byIdentity.get(key);
     if (!previous) {
@@ -721,4 +829,45 @@ function dedupeMachines<T extends { device: Device; collector: string; machineId
     byIdentity.set(key, { ...preferred, agents });
   }
   return [...byIdentity.values()];
+}
+
+function machineBaseCandidates(machine: { device: Device }) {
+  return [
+    deviceIdentityKey(machine.device),
+    hivemindMachineBase(machine.device),
+    physicalMachineBase(machine.device),
+  ].filter((value, index, all) => value && all.indexOf(value) === index);
+}
+
+function hasFreshReadyDuplicate(machine: { device: Device; collector: string }, readyMachineBases: Set<string>) {
+  if (machine.collector === "ready") return false;
+  return machineBaseCandidates(machine).some((base) => readyMachineBases.has(base));
+}
+
+function shouldKeepPreviousReadyMachine(current: DiscoveredMachine, previous: DiscoveredMachine) {
+  return current.collector !== "ready"
+    && current.agents.length === 0
+    && previous.collector === "ready"
+    && previous.agents.length > 0;
+}
+
+function stabilizeDiscoveryPayload(payload: FleetDiscoverPayload, previous?: FleetDiscoverPayload) {
+  if (!previous) return payload;
+
+  const previousReadyByKey = new Map<string, DiscoveredMachine>();
+  for (const machine of previous.machines) {
+    if (machine.collector !== "ready" || machine.agents.length === 0) continue;
+    for (const key of machineBaseCandidates(machine)) previousReadyByKey.set(key, machine);
+  }
+
+  if (previousReadyByKey.size === 0) return payload;
+
+  const machines = payload.machines.map((machine) => {
+    const previousReady = machineBaseCandidates(machine)
+      .map((key) => previousReadyByKey.get(key))
+      .find((candidate): candidate is DiscoveredMachine => Boolean(candidate));
+    return previousReady && shouldKeepPreviousReadyMachine(machine, previousReady) ? previousReady : machine;
+  });
+
+  return { ...payload, machines: dedupeMachines(machines) };
 }

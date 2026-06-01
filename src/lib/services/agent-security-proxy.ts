@@ -101,6 +101,9 @@ const SECRET_PATTERNS: Array<{ pattern: RegExp; label: string; redactWith: strin
   { pattern: /service_role[^\s]*\s*[:=]\s*["']?eyJ[A-Za-z0-9\-_]{20,}/gi, label: 'supabase-service-key', redactWith: '[REDACTED_SERVICE_KEY]' },
   // Generic password= / token= / key= assignments
   { pattern: /(password|passwd|secret|api_key|apikey|token)\s*[:=]\s*["']?[A-Za-z0-9!@#$%^&*\-_+]{8,}["']?/gi, label: 'credential-assignment', redactWith: '$1=[REDACTED]' },
+  // Private Tailnet addresses and local app proxy URLs should not be exposed in chat.
+  { pattern: /https?:\/\/100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])(?:\.\d{1,3}){2}(?::\d+)?(?:\/[^\s"'`<>)\]]*)?/g, label: 'tailnet-url', redactWith: '[REDACTED_TAILNET_URL]' },
+  { pattern: /\b100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])(?:\.\d{1,3}){2}\b/g, label: 'tailnet-ip', redactWith: '[REDACTED_TAILNET_IP]' },
 ];
 
 /**

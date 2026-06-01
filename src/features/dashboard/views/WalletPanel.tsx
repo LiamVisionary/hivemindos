@@ -1,14 +1,13 @@
 "use client";
 
-/* eslint-disable react-hooks/immutability, react-hooks/purity */
-
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ComponentType, Dispatch, ElementType, SetStateAction } from "react";
 import Image from "next/image";
 import type { AgentWalletCardProps } from "@/components/wallet/AgentWalletCard";
 import type { AgentWalletCardCompactProps } from "@/components/wallet/AgentWalletCardCompact";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentPaymentProvider, AgentSurvivalSnapshot, AgentWalletConfig, HoneyAgentReward } from "@/lib/types/agent-wallet";
+import { resolveAgentWallet } from "@/lib/utils/agent-wallet";
 import type { DashboardView, RuntimeUsageAnalytics, WalletActionState, WalletMoneyClawStatus, WalletVaultBackupStatus } from "@/features/dashboard/dashboard-types";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
@@ -77,6 +76,7 @@ type WalletPanelProps = {
   initializeCoreWalletRails: (agentId: string) => Promise<void>;
   moneyClawStatusByEnvName: Record<string, WalletMoneyClawStatus | null | undefined>;
   refreshRuntimeUsage: () => void | Promise<void>;
+  refreshRuntimeIntegrations: (agent?: AgentProfile | null) => void | Promise<void>;
   refreshWalletBalance: (agentId: string) => void | Promise<void>;
   renderAgentKey: (agent: AgentProfile, index: number) => string;
   resetWalletBurnClock: (agentId: string) => void;
@@ -94,6 +94,7 @@ type WalletPanelProps = {
   setWalletExpanded: Dispatch<SetStateAction<boolean>>;
   setWalletPanelMode: Dispatch<SetStateAction<"wallets" | "usage">>;
   testX402Fetch: (agentId: string) => void | Promise<void>;
+  updateAgentProfile: (agentId: string, patch: Partial<AgentProfile>) => void;
   updateWallet: (agentId: string, patch: Partial<AgentWalletConfig>) => void;
   updateWalletAction: (agentId: string, patch: WalletActionState) => void;
   vaultClass: ClassNameBuilder;
@@ -109,7 +110,8 @@ type WalletPanelProps = {
 };
 
 export function WalletPanel(props: WalletPanelProps) {
-  const { AGENT_PAYMENT_PROVIDER_COPY, AgentWalletCard, AgentWalletCardCompact, Button, ChevronLeft, Download, HandCoins, LoaderCircle, RUNTIME_LABELS, RefreshCcw, activeView, claimAllHoneyToBankrHive, copyPaymentPrompt, createDefaultAgentWallet, createLocalWallet, displayAgents, enableHoneyLedger, formatHiveAmount, formatRelativeTime, getSurvivalSnapshot, honeyLedgerEnabled, honeyStats, initializeCoreWalletRails, moneyClawStatusByEnvName, refreshRuntimeUsage, refreshWalletBalance, renderAgentKey, resetWalletBurnClock, returnAllHiveToHoney, runWalletVaultBackupAction, runtimeUsage, runtimeUsageLoading, saveMoneyClawKey, selectedAgent, selectedHoneyReward, selectedWallet, selectedWalletSnapshot, sendWalletUsdc, setSelectedAgentId, setWalletExpanded, setWalletPanelMode, testX402Fetch, updateWallet, updateWalletAction, vaultClass, walletActionsByAgent, walletClass, walletExpanded, walletPanelMode, walletStats, walletVaultBackupBusy, walletVaultBackupMessage, walletVaultBackupStatus, walletsByAgent } = props;
+  const { AGENT_PAYMENT_PROVIDER_COPY, AgentWalletCard, AgentWalletCardCompact, Button, ChevronLeft, Download, HandCoins, LoaderCircle, RUNTIME_LABELS, RefreshCcw, activeView, claimAllHoneyToBankrHive, copyPaymentPrompt, createDefaultAgentWallet, createLocalWallet, displayAgents, enableHoneyLedger, formatHiveAmount, formatRelativeTime, getSurvivalSnapshot, honeyLedgerEnabled, honeyStats, initializeCoreWalletRails, moneyClawStatusByEnvName, refreshRuntimeIntegrations, refreshRuntimeUsage, refreshWalletBalance, renderAgentKey, resetWalletBurnClock, returnAllHiveToHoney, runWalletVaultBackupAction, runtimeUsage, runtimeUsageLoading, saveMoneyClawKey, selectedAgent, selectedHoneyReward, selectedWallet, selectedWalletSnapshot, sendWalletUsdc, setSelectedAgentId, setWalletExpanded, setWalletPanelMode, testX402Fetch, updateAgentProfile, updateWallet, updateWalletAction, vaultClass, walletActionsByAgent, walletClass, walletExpanded, walletPanelMode, walletStats, walletVaultBackupBusy, walletVaultBackupMessage, walletVaultBackupStatus, walletsByAgent } = props;
+  const refreshedUsePodAgentIds = useRef<Set<string>>(new Set());
   const [bankrClaimBusy, setBankrClaimBusy] = useState(false);
   const [bankrConnectBusy, setBankrConnectBusy] = useState(false);
   const [bankrClaimStatus, setBankrClaimStatus] = useState("");
@@ -118,6 +120,27 @@ export function WalletPanel(props: WalletPanelProps) {
     return window.localStorage.getItem("hivemindos.bankrRecipientAddress") ?? "";
   });
   const bankrRecipientReady = /^0x[a-fA-F0-9]{40}$/.test(bankrRecipientAddress.trim());
+  const effectiveSelectedWallet = selectedAgent && selectedWallet ? resolveAgentWallet(selectedAgent, selectedWallet) : selectedWallet;
+  const effectiveSelectedWalletSnapshot = effectiveSelectedWallet ? getSurvivalSnapshot(effectiveSelectedWallet) : selectedWalletSnapshot;
+
+  function refreshUsePodWallet(agent: AgentProfile) {
+    const nextUsePod = {
+      ...(agent.usePod ?? {}),
+      lastTestStatus: "checking",
+      lastStatusMessage: "Checking UsePod balance.",
+    };
+    updateAgentProfile(agent.id, { usePod: nextUsePod });
+    void refreshRuntimeIntegrations({ ...agent, provider: "usepod", usePod: nextUsePod });
+  }
+
+  useEffect(() => {
+    if (activeView !== "wallet" || walletPanelMode !== "wallets") return;
+    for (const agent of displayAgents) {
+      if (agent.provider !== "usepod" || refreshedUsePodAgentIds.current.has(agent.id)) continue;
+      refreshedUsePodAgentIds.current.add(agent.id);
+      void refreshRuntimeIntegrations(agent);
+    }
+  }, [activeView, displayAgents, refreshRuntimeIntegrations, walletPanelMode]);
 
   async function connectBaseWallet() {
     const provider = (window as WalletWindow).ethereum;
@@ -281,10 +304,10 @@ export function WalletPanel(props: WalletPanelProps) {
 
         {walletPanelMode === "wallets" ? (
         <div className={walletClass("walletWorkspace")}>
-          {walletExpanded && selectedAgent && selectedWallet && selectedWalletSnapshot ? (
+          {walletExpanded && selectedAgent && effectiveSelectedWallet && effectiveSelectedWalletSnapshot ? (
             (() => {
               const walletAction = walletActionsByAgent[selectedAgent.id] ?? {};
-              const moneyClawEnvName = selectedWallet.moneyClawEnvName?.trim() || "MONEYCLAW_API_KEY";
+              const moneyClawEnvName = effectiveSelectedWallet.moneyClawEnvName?.trim() || "MONEYCLAW_API_KEY";
               return (
             <div className={walletClass("walletDetail")}>
               <button
@@ -299,21 +322,26 @@ export function WalletPanel(props: WalletPanelProps) {
                 agentName={selectedAgent.name}
                 machineName={selectedAgent.machineName}
                 agentUsePod={selectedAgent.usePod}
-                wallet={selectedWallet}
-                survival={selectedWalletSnapshot}
+                wallet={effectiveSelectedWallet}
+                survival={effectiveSelectedWalletSnapshot}
                 honeyReward={selectedHoneyReward}
                 honeyLedgerEnabled={honeyLedgerEnabled}
-                providerCopy={AGENT_PAYMENT_PROVIDER_COPY[selectedWallet.provider]}
+                providerCopy={AGENT_PAYMENT_PROVIDER_COPY[effectiveSelectedWallet.provider]}
                 providerOptions={Object.entries(AGENT_PAYMENT_PROVIDER_COPY) as Array<[AgentPaymentProvider, typeof AGENT_PAYMENT_PROVIDER_COPY[AgentPaymentProvider]]>}
                 moneyClawStatus={moneyClawStatusByEnvName[moneyClawEnvName] ?? null}
                 walletAction={walletAction}
                 onUpdateWallet={(patch) => updateWallet(selectedAgent.id, patch)}
                 onUpdateAction={(patch) => updateWalletAction(selectedAgent.id, patch)}
                 onSaveMoneyClawKey={(apiKey, options) => saveMoneyClawKey(selectedAgent.id, apiKey, options)}
+                onUpdateUsePod={(patch) => {
+                  const nextUsePod = { ...(selectedAgent.usePod ?? {}), ...patch };
+                  updateAgentProfile(selectedAgent.id, { usePod: nextUsePod });
+                  void refreshRuntimeIntegrations({ ...selectedAgent, usePod: nextUsePod, provider: "usepod" });
+                }}
                 onResetRunway={() => resetWalletBurnClock(selectedAgent.id)}
-                onCopyPaymentPrompt={() => copyPaymentPrompt(selectedWallet)}
-                onCreateLocalWallet={() => createLocalWallet(selectedAgent.id, selectedWallet.network)}
-                onRefreshBalance={() => refreshWalletBalance(selectedAgent.id)}
+                onCopyPaymentPrompt={() => copyPaymentPrompt(effectiveSelectedWallet)}
+                onCreateLocalWallet={() => createLocalWallet(selectedAgent.id, effectiveSelectedWallet.network)}
+                onRefreshBalance={() => effectiveSelectedWallet.provider === "usepod" ? refreshUsePodWallet(selectedAgent) : refreshWalletBalance(selectedAgent.id)}
                 onSendUsdc={() => sendWalletUsdc(selectedAgent.id)}
                 onCallX402={() => testX402Fetch(selectedAgent.id)}
               />
@@ -323,12 +351,13 @@ export function WalletPanel(props: WalletPanelProps) {
           ) : displayAgents.length > 0 ? (
             <div className={walletClass("walletGridList")} role="list" aria-label="Agent wallets">
               {displayAgents.map((agent, agentIndex) => {
-                const wallet = walletsByAgent[agent.id] ?? createDefaultAgentWallet(agent.id);
+                const wallet = resolveAgentWallet(agent, walletsByAgent[agent.id] ?? createDefaultAgentWallet(agent.id));
                 const snapshot = getSurvivalSnapshot(wallet);
                 return (
                   <div role="listitem" key={renderAgentKey(agent, agentIndex)}>
                     <AgentWalletCardCompact
                       agentName={agent.name}
+                      agentUsePod={agent.usePod}
                       wallet={wallet}
                       survival={snapshot}
                       onOpen={() => {

@@ -15,7 +15,7 @@ Run the native development shell:
 pnpm tauri:dev
 ```
 
-This starts the shared Next.js app on `http://127.0.0.1:5021` and opens it in a Tauri window. The normal browser dashboard still uses:
+This starts the shared Next.js app behind the Tauri loading proxy on `http://127.0.0.1:5021` and opens it in a Tauri window. The proxy chooses an isolated internal Next.js backend port starting at `5121`, so stale backend processes do not corrupt a fresh dev run. The normal browser dashboard still uses:
 
 ```bash
 pnpm dev
@@ -31,11 +31,31 @@ Build the packaged native app:
 pnpm tauri:build
 ```
 
-Phase 2 keeps the browser and native app on the same Next.js codebase. Before Tauri packages the app, `pnpm tauri:prepare` builds a standalone Next.js server into `src-tauri/resources/hivemindos-next` and copies the active local Node.js runtime into `src-tauri/resources/hivemindos-node`. In release builds the Rust shell starts that bundled server on an ephemeral `127.0.0.1` port, then navigates the native window to it.
+Phase 2 keeps the browser and native app on the same Next.js codebase. The browser version still serves the full Next app and API routes through `pnpm dev` / `pnpm build`.
+
+## Phase 3
+
+Packaged native builds now default to a static Tauri UI:
+
+```bash
+pnpm tauri:prepare
+```
+
+The prepare step exports the shared dashboard React app into `src-tauri/static`, prunes bulky browser-only icon/source assets, keeps Lottie animation assets, and does not bundle the standalone Next server or a Node.js runtime. In release builds the Rust shell loads the static webview directly and reports `phase-3-static` from `desktop_status`.
+
+Opening the packaged app does not auto-run `setup.sh` or `install.sh`. The first-run setup wizard checks local capabilities from native code, asks the user how to install the hive, detects agent runtimes, lets skills and memory imports be selected independently, then opens an explicit Terminal command only after the user approves it.
+
+For debugging only, the old embedded Next server package can still be generated:
+
+```bash
+HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 pnpm tauri:prepare
+```
+
+That fallback builds a standalone Next.js server into `src-tauri/resources/hivemindos-next` and copies the active local Node.js runtime into `src-tauri/resources/hivemindos-node`. In release builds the Rust shell detects those resources, starts the bundled server on an ephemeral `127.0.0.1` port, then navigates the native window to it.
 
 The generated `src-tauri/resources` contents are ignored by git and are rebuilt for each package. Keep new feature code shared by putting platform differences behind small adapters instead of forking browser and desktop views.
 
-The standalone Next build is bounded by `TAURI_NEXT_BUILD_TIMEOUT_SECONDS` and defaults to 1800 seconds. Generated resources are scrubbed so local `.env*` files are not bundled into the desktop app.
+The static and embedded builds are bounded by `TAURI_NEXT_BUILD_TIMEOUT_SECONDS` and default to 1800 seconds. Static export hides `src/app/api` only during the export so API routes remain available for the browser app and embedded fallback.
 
 ## Native Bridge
 
@@ -47,6 +67,8 @@ The desktop shell exposes a narrow command surface for operations that should be
 | `list_local_directories` | `listNativeLocalDirectories` | Browse local directories without routing through the collector |
 | `create_local_folder` | `createNativeLocalFolder` | Create a local child folder after validating and cleaning the requested name |
 | `display_local_path` | `displayNativeLocalPath` | Normalize local paths for display |
+| `native_setup_status` | `readNativeSetupStatus` | Detect setup prerequisites and local agent runtimes for the first-run wizard |
+| `native_setup_run` | `runNativeSetup` | Open a user-approved Terminal command that runs `setup.sh` with selected wizard options |
 
 The browser path remains fully supported. Frontend code calls native helpers only when Tauri is detected and the target collector URL is local. Remote machines still use Hivemind Link or collector directory APIs so local native privileges are never confused with remote access.
 
@@ -56,6 +78,7 @@ Current consumers include AEON workspace clone/link flows, chat folder creation,
 
 - Port `5020` remains reserved for the managed browser dashboard.
 - Phase 1 development uses `5021`.
-- Phase 2 packaged builds use an ephemeral localhost port.
+- Phase 3 packaged builds load static UI directly.
+- Embedded fallback packaged builds use an ephemeral localhost port.
 - Generated resources are rebuilt, ignored, and scrubbed of local `.env*` files.
 - Native filesystem helpers are intentionally directory-scoped and local-only; remote browsing stays behind collector APIs.

@@ -26,6 +26,7 @@ export type BrainModuleInstallDefinition = {
   installingLabel?: string;
   onInstall?: () => void;
   secondaryActions?: BrainModuleAction[];
+  setupSteps?: string[];
   state: BrainModuleInstallState;
   successLabel?: string;
 };
@@ -107,6 +108,11 @@ export class BrainModule {
               <span />
             </div>
             <strong>{brainModule.install?.installingLabel ?? `Installing ${brainModule.name}`}</strong>
+            {brainModule.install?.setupSteps?.length ? (
+              <ol className={vaultClass("brainModuleInstallSteps")}>
+                {brainModule.install.setupSteps.map((step, index) => <li key={step} style={{ "--step-index": index } as Record<string, number>}>{step}</li>)}
+              </ol>
+            ) : null}
           </div>
         ) : !showInstalledView && brainModule.install ? (
           <div className={vaultClass("brainModuleInstallContent")}>

@@ -29,7 +29,7 @@ function projectDirectoryPath(path?: string) {
 }
 
 export function useChatTreeController(props: any) {
-  const { RUNTIME_CAPABILITIES, RUNTIME_DEFAULTS, RUNTIME_KINDS, RUNTIME_LABELS, activeView, agentWorkById, chatCustomFolders, chatDedupeKey, chatFolderDraft, chatMessageStorageKey, chatMessageWindow, chatPreviewDedupeKey, chatSeedMessagesForTask, chooseDirectoryForMachine, createChatLeafKey, displayAgents, findRosterChatTask, runtimeSessionIdFromTask, isChatSidebarTask, isManualAgentChatMessage, logClientTelemetry, machineGroups, messagesByAgent, parentPathFromPath, preferChatTreeItem, recordRecentDirectory, runtimeCan, runtimeSessionForChat, selectedAgent, selectedChatDirectoryPath, selectedChatLeafKey, setActiveView, setChatCustomFolders, setChatFolderDraft, setChatMessageWindow, setMessagesByAgent, setSelectedAgentId, setSelectedChatDirectoryPath, setSelectedChatLeafKey, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setSetupCommandCopied, setSetupMachineKey, setupCollectorCommand, setStatus, setStatusAgentId, taskChatLeafKey, updateAgent, workPriority, workspaceLabelFromPath } = props;
+  const { RUNTIME_CAPABILITIES, RUNTIME_DEFAULTS, RUNTIME_KINDS, RUNTIME_LABELS, activeView, agentWorkById, chatCustomFolders, chatDedupeKey, chatFolderDraft, chatMessageStorageKey, chatMessageWindow, chatPreviewDedupeKey, chatSeedMessagesForTask, chooseDirectoryForMachine, createChatLeafKey, displayAgents, findRosterChatTask, runtimeSessionIdFromTask, isChatSidebarTask, isManualAgentChatMessage, logClientTelemetry, machineGroups, messagesByAgent, parentPathFromPath, preferChatTreeItem, recordRecentDirectory, runtimeCan, runtimeSessionForChat, selectedAgent, selectedChatDirectoryPath, selectedChatLeafKey, setActiveView, setChatCustomFolders, setChatFolderDraft, setChatHistoryLoadingByKey, setChatMessageWindow, setMessagesByAgent, setSelectedAgentId, setSelectedChatDirectoryPath, setSelectedChatLeafKey, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setSetupCommandCopied, setSetupMachineKey, setupCollectorCommand, setStatus, setStatusAgentId, taskChatLeafKey, updateAgent, workPriority, workspaceLabelFromPath } = props;
   function switchRuntime(runtime: AgentRuntime) {
     const defaults = RUNTIME_DEFAULTS[runtime];
     const runtimeSettings = runtimeSettingsFeature(runtime);
@@ -109,38 +109,50 @@ export function useChatTreeController(props: any) {
 
   const hydrateRuntimeSessionChat = useCallback(async (agent: AgentProfile, sessionId: string, leafKey: string) => {
     const startedAt = Date.now();
-    const hydratedMessages = await loadRuntimeSessionMessages(agent, sessionId);
-    if (!hydratedMessages.length) return;
-
     const storageKey = chatMessageStorageKey(agent.id, leafKey);
-    if (isAutomationHydratedTranscript(hydratedMessages)) {
+    setChatHistoryLoadingByKey?.((current: Record<string, boolean>) => (
+      current[storageKey] ? current : { ...current, [storageKey]: true }
+    ));
+    try {
+      const hydratedMessages = await loadRuntimeSessionMessages(agent, sessionId);
+      if (!hydratedMessages.length) return;
+
+      if (isAutomationHydratedTranscript(hydratedMessages)) {
+        setMessagesByAgent((current) => {
+          if (!current[storageKey]) return current;
+          const next = { ...current };
+          delete next[storageKey];
+          return next;
+        });
+        setSelectedChatPreview((current) => (
+          current?.agentId === agent.id && current.leafKey === leafKey ? null : current
+        ));
+        return;
+      }
       setMessagesByAgent((current) => {
+        const existing = current[storageKey] ?? [];
+        const userSentAfterOpen = existing.some((message) => (
+          message.role === "user"
+          && !message.sourceSessionId
+          && Number(message.createdAt || 0) >= startedAt
+        ));
+        return userSentAfterOpen ? current : { ...current, [storageKey]: hydratedMessages };
+      });
+      setSelectedChatPreview((current) => (
+        current?.agentId === agent.id && current.leafKey === leafKey
+          ? { ...current, messages: hydratedMessages }
+          : current
+      ));
+      return hydratedMessages;
+    } finally {
+      setChatHistoryLoadingByKey?.((current: Record<string, boolean>) => {
         if (!current[storageKey]) return current;
         const next = { ...current };
         delete next[storageKey];
         return next;
       });
-      setSelectedChatPreview((current) => (
-        current?.agentId === agent.id && current.leafKey === leafKey ? null : current
-      ));
-      return;
     }
-    setMessagesByAgent((current) => {
-      const existing = current[storageKey] ?? [];
-      const userSentAfterOpen = existing.some((message) => (
-        message.role === "user"
-        && !message.sourceSessionId
-        && Number(message.createdAt || 0) >= startedAt
-      ));
-      return userSentAfterOpen ? current : { ...current, [storageKey]: hydratedMessages };
-    });
-    setSelectedChatPreview((current) => (
-      current?.agentId === agent.id && current.leafKey === leafKey
-        ? { ...current, messages: hydratedMessages }
-        : current
-    ));
-    return hydratedMessages;
-  }, [loadRuntimeSessionMessages]);
+  }, [chatMessageStorageKey, loadRuntimeSessionMessages, setChatHistoryLoadingByKey, setMessagesByAgent, setSelectedChatPreview]);
 
   const startAgentChat = useCallback((agentId: string, options: { fresh?: boolean; messageLimit?: number; seedMessages?: ChatMessage[]; chatLeafKey?: string; workingDirectoryPath?: string; runtimeSessionId?: string } = {}) => {
     const agent = displayAgents.find((item) => item.id === agentId);

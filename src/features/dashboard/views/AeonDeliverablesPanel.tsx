@@ -2,8 +2,8 @@
 
 import { Download, ExternalLink, FileJson, FileText, FolderOpen, HardDriveDownload, LoaderCircle, MessageSquare, MonitorDown, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { AeonDeliverable } from "@/lib/types/aeon-deliverables";
 import type { KanbanMachineTarget } from "@/lib/types/kanban";
-import type { AeonDeliverable } from "@/app/api/runtimes/aeon/deliverables/route";
 
 type AeonDeliverablesPanelProps = {
   deliverables: AeonDeliverable[];

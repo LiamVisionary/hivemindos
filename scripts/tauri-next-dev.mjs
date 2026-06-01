@@ -1,30 +1,97 @@
 import { spawn } from "node:child_process";
 import { createReadStream, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
-import { connect } from "node:net";
+import { connect, createServer as createNetServer } from "node:net";
 import { extname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const nextEnvPath = fileURLToPath(new URL("../next-env.d.ts", import.meta.url));
-const tauriNextDir = fileURLToPath(new URL("../.next-tauri", import.meta.url));
+const tsconfigPath = fileURLToPath(new URL("../tsconfig.json", import.meta.url));
 const loadingDir = fileURLToPath(new URL("../src-tauri/loading/", import.meta.url));
 const loadingHtmlPath = fileURLToPath(new URL("../src-tauri/loading/index.html", import.meta.url));
 const loadingIconPath = fileURLToPath(new URL("../src-tauri/loading/icon-192.png", import.meta.url));
-const proxyPort = Number(process.env.PORT || "5021");
-const nextPort = Number(process.env.HIVEMINDOS_TAURI_NEXT_PORT || proxyPort + 100);
 const host = "127.0.0.1";
+
+function readPort(value, fallback, name) {
+  const port = Number(value || fallback);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    console.error(`Invalid ${name} value "${value}". Expected a TCP port from 1 to 65535.`);
+    process.exit(1);
+  }
+  return port;
+}
+
+function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const server = createNetServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, host);
+  });
+}
+
+async function findAvailablePort(startPort) {
+  for (let port = startPort; port < startPort + 25 && port <= 65535; port += 1) {
+    if (await isPortAvailable(port)) return port;
+  }
+  throw new Error(`No available Tauri Next.js backend port found from ${startPort} to ${Math.min(startPort + 24, 65535)}.`);
+}
+
+const proxyPort = readPort(process.env.PORT, "5021", "PORT");
+const requestedNextPort = readPort(process.env.HIVEMINDOS_TAURI_NEXT_PORT, String(proxyPort + 100), "HIVEMINDOS_TAURI_NEXT_PORT");
+
+if (!(await isPortAvailable(proxyPort))) {
+  console.error(`Tauri loading proxy port ${host}:${proxyPort} is already in use. Stop the existing Tauri dev shell, then run pnpm tauri:dev again.`);
+  process.exit(1);
+}
+
+let nextPort;
+try {
+  nextPort = await findAvailablePort(requestedNextPort);
+} catch (error) {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+}
+const tauriNextDistDir = `.next-tauri/dev-${nextPort}`;
+const tauriNextDir = fileURLToPath(new URL(`../${tauriNextDistDir}/`, import.meta.url));
+
+if (nextPort !== requestedNextPort) {
+  console.warn(`Tauri Next.js backend port ${requestedNextPort} is already in use; using ${nextPort} with ${tauriNextDistDir}.`);
+}
 
 function restoreNextEnv() {
   try {
     const current = readFileSync(nextEnvPath, "utf8");
-    const restored = current.replace(
-      'import "./.next-tauri/dev/types/routes.d.ts";',
-      'import "./.next/dev/types/routes.d.ts";',
-    );
+    const restored = current.replace(/import "\.\/\.next-tauri(?:\/dev-\d+)?\/dev\/types\/routes\.d\.ts";/g, 'import "./.next/dev/types/routes.d.ts";');
     if (restored !== current) writeFileSync(nextEnvPath, restored);
   } catch {
     // Best-effort cleanup for Next.js' generated type reference.
   }
+}
+
+function restoreTsconfig() {
+  try {
+    const current = readFileSync(tsconfigPath, "utf8");
+    const config = JSON.parse(current);
+    if (!Array.isArray(config.include)) return;
+
+    const include = config.include.filter((entry) => {
+      return typeof entry !== "string" || !/^\.next-tauri\/dev-\d+\/(?:dev\/)?types\/\*\*\/\*\.ts$/.test(entry);
+    });
+    if (include.length === config.include.length) return;
+
+    config.include = include;
+    writeFileSync(tsconfigPath, `${JSON.stringify(config, null, 2)}\n`);
+  } catch {
+    // Best-effort cleanup for Next.js' generated TypeScript config paths.
+  }
+}
+
+function restoreGeneratedTypeReferences() {
+  restoreNextEnv();
+  restoreTsconfig();
 }
 
 function contentType(path) {
@@ -96,6 +163,8 @@ function proxyHttp(clientRequest, clientResponse) {
     useFallback();
   });
   proxyRequest.on("error", useFallback);
+  clientRequest.on("error", () => proxyRequest.destroy());
+  clientResponse.on("error", () => proxyRequest.destroy());
 
   clientRequest.pipe(proxyRequest);
 }
@@ -152,6 +221,8 @@ proxyServer.on("upgrade", (request, socket, head) => {
     socket.pipe(upstream);
   });
   upstream.on("error", () => socket.destroy());
+  socket.on("error", () => upstream.destroy());
+  socket.on("close", () => upstream.destroy());
 });
 
 rmSync(tauriNextDir, { force: true, recursive: true });
@@ -162,7 +233,15 @@ const child = spawn(process.execPath, ["scripts/dev-server.mjs"], {
     ...process.env,
     PORT: String(nextPort),
     HIVEMINDOS_TAURI_DEV: "1",
+    HIVEMINDOS_TAURI_NEXT_DIST_DIR: tauriNextDistDir,
   },
+});
+
+proxyServer.on("error", (error) => {
+  child.kill("SIGTERM");
+  restoreGeneratedTypeReferences();
+  console.error(error);
+  process.exit(1);
 });
 
 proxyServer.listen(proxyPort, host, () => {
@@ -173,11 +252,19 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
   process.once(signal, () => {
     proxyServer.close();
     child.kill(signal);
+    restoreGeneratedTypeReferences();
   });
 }
 
 child.on("exit", (code) => {
   proxyServer.close();
-  restoreNextEnv();
+  restoreGeneratedTypeReferences();
   process.exit(code ?? 0);
+});
+
+child.on("error", (error) => {
+  proxyServer.close();
+  restoreGeneratedTypeReferences();
+  console.error(error);
+  process.exit(1);
 });

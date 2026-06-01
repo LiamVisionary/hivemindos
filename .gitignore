@@ -2,6 +2,7 @@ node_modules/
 .next/
 .next-tauri/
 .next-tauri-build/
+.next-tauri-static-build/
 .setup-cache/
 out/
 dist/

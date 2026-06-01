@@ -1,5 +1,5 @@
-import type { AeonDeliverable } from "@/app/api/runtimes/aeon/deliverables/route";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import type { AeonDeliverable } from "@/lib/types/aeon-deliverables";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { KanbanMachineTarget } from "@/lib/types/kanban";
 

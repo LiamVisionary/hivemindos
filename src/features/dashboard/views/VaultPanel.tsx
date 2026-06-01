@@ -6,12 +6,13 @@
 
 import { BrainModule } from "@/features/dashboard/brain-modules";
 import { useEffect, useRef, useState } from "react";
+import { BrainGraphExplorer } from "./BrainGraphExplorer";
 import { BrainServiceOverview, BrainServiceRunResult, BrainServiceSegmentedNav, BrainServiceSettingsDeck } from "./brain-services-ui";
 import brainServiceStyles from "./brain-services.module.css";
 import { SectionModeHeader } from "./WorkSectionHeader";
 
 export function VaultPanel(props: any) {
-  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, Clock3, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, Image, KeyRound, LoaderCircle, MemoryCell, Network, PlugZap, RefreshCcw, Repeat2, Sparkles, activeView, brainGraph, brainGraphEdgePath, brainGraphLoading, brainGraphStats, brainGraphStatus, brainLayout, brainNodePoints, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, openSkillBrowser, pairSyncthingVaultSync, queryGbrainFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, selectedBrainTargetIds, setBrainPan, setGbrainQuery, setSkillBrowserSearch, setSyntoQuery, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, splitBrainLabel, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus, visibleBrainNodes } = props;
+  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, Clock3, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, Image, KeyRound, LoaderCircle, MemoryCell, Network, PlugZap, RefreshCcw, Repeat2, Sparkles, activeView, brainGraph, brainGraphEdgePath, brainGraphLoading, brainGraphStats, brainGraphStatus, brainNodePoints, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, openSkillBrowser, pairSyncthingVaultSync, queryGbrainFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setGbrainQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, splitBrainLabel, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus } = props;
   const brainClass = (...classes) => classes.map((className) => brainServiceStyles[className] || vaultClass(className)).filter(Boolean).join(" ");
   const gbrainMetric = (keys: string[]) => {
     const stats = gbrainStatus?.stats ?? {};
@@ -141,9 +142,15 @@ export function VaultPanel(props: any) {
   ].find(Boolean) || "";
   const syntoOutputHints = `${syntoActionStatus}\n${syntoQueryResult}`;
   const syntoNeedsModelSetup = /ollama|model/i.test(syntoOutputHints) && /missing|not running|not found|failed|error/i.test(syntoOutputHints);
-  const syntoModuleEnabled = sharedVault.synto.enabled || Boolean(syntoStatus?.installed);
-  const gbrainModuleEnabled = sharedVault.gbrain.enabled || Boolean(gbrainStatus?.installed);
-  const tradingBrainModuleEnabled = Boolean(sharedVault.tradingBrainEnabled || tradingBrainStatus?.installed);
+  const gbrainSetupSteps = ["Check Bun runtime", "Install GBrain CLI", "Initialize local brain", "Import shared vault", "Refresh stale embeddings", "Extract graph links", "Scaffold retrieval skills"];
+  const syntoSetupSteps = ["Install Syntho CLI", "Initialize Synthesis", "Run doctor checks", "Prepare MCP surface"];
+  const tradingBrainSetupSteps = ["Create vault folders", "Write trading templates", "Seed runtime guidance", "Verify scaffold"];
+  const syntoModuleEnabled = Boolean(syntoStatus?.installed && sharedVault.synto.enabled);
+  const gbrainModuleEnabled = Boolean(gbrainStatus?.installed && sharedVault.gbrain.enabled);
+  const tradingBrainModuleEnabled = Boolean(tradingBrainStatus?.installed && sharedVault.tradingBrainEnabled);
+  const syntoModuleAvailable = Boolean(syntoStatus?.installed || syntoBusy === "install" || syntoBusy === "connect" || brainModuleSuccess.synto);
+  const gbrainModuleAvailable = Boolean(gbrainStatus?.installed || gbrainBusy === "install" || gbrainBusy === "connect" || brainModuleSuccess.gbrain);
+  const tradingBrainModuleAvailable = Boolean(tradingBrainStatus?.installed || tradingBrainBusy === "install" || brainModuleSuccess["trading-brain"]);
   const brainModules = [
     new BrainModule({
       id: "gbrain",
@@ -162,6 +169,7 @@ export function VaultPanel(props: any) {
         icon: gbrainBusy === "install" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />,
         installingLabel: gbrainBusy === "connect" ? "Connecting GBrain runtime" : "Installing GBrain retrieval core",
         onInstall: () => void runGbrainAction("install"),
+        setupSteps: gbrainSetupSteps,
         successLabel: "Installed!",
         features: [
           <>Semantic retrieval across the shared vault</>,
@@ -239,12 +247,21 @@ export function VaultPanel(props: any) {
       settings: (
         <div className={brainClass("brainServiceSettings")}>
           <label className={brainClass("brainServiceToggle")}>
-            <input
-              type="checkbox"
-              checked={sharedVault.gbrain.enabled}
-              onChange={(event) => updateSharedVault({ gbrain: { ...sharedVault.gbrain, enabled: event.target.checked } })}
-            />
-            {sharedVault.gbrain.enabled ? "GBrain integration enabled" : "GBrain integration disabled"}
+            {gbrainStatus?.installed ? (
+              <>
+                <input
+                  type="checkbox"
+                  checked={sharedVault.gbrain.enabled}
+                  onChange={(event) => updateSharedVault({ gbrain: { ...sharedVault.gbrain, enabled: event.target.checked } })}
+                />
+                {sharedVault.gbrain.enabled ? "GBrain integration enabled" : "GBrain integration disabled"}
+              </>
+            ) : (
+              <Button type="button" size="sm" variant="secondary" disabled={Boolean(gbrainBusy) || !sharedVault.enabled} onClick={() => void runGbrainAction("install")}>
+                {gbrainBusy === "install" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />}
+                Install GBrain
+              </Button>
+            )}
           </label>
           <label>
             Search mode
@@ -299,6 +316,7 @@ export function VaultPanel(props: any) {
         icon: syntoBusy === "install" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />,
         installingLabel: syntoBusy === "connect" ? "Connecting Syntho runtime" : "Installing Syntho knowledge compiler",
         onInstall: () => void runSyntoAction("install"),
+        setupSteps: syntoSetupSteps,
         successLabel: "Installed!",
         features: [
           <>Ingests source notes from Synthesis/raw into reviewed wiki drafts</>,
@@ -495,6 +513,7 @@ export function VaultPanel(props: any) {
         icon: tradingBrainBusy === "install" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />,
         installingLabel: "Building Trading Brain vault scaffold",
         onInstall: () => void installTradingBrainFromDashboard(),
+        setupSteps: tradingBrainSetupSteps,
         successLabel: "Installed!",
         features: [
           <>Structured trade capture templates for open and closed positions</>,
@@ -590,7 +609,7 @@ export function VaultPanel(props: any) {
     }),
   ];
   const brainModuleById = new Map(brainModules.map((module) => [module.definition.id, module]));
-  const brainServiceSections = [{ id: "overview", label: "Overview", icon: <Activity aria-hidden="true" /> }, { id: "synto", label: "Syntho", icon: <FileText aria-hidden="true" /> }, ...(gbrainModuleEnabled ? [{ id: "gbrain", label: "GBrain", icon: <BrainCircuit aria-hidden="true" /> }] : []), ...(tradingBrainModuleEnabled ? [{ id: "trading-brain", label: "Trading", icon: <Activity aria-hidden="true" /> }] : []), { id: "synthesis", label: "Synthesis", icon: <Sparkles aria-hidden="true" /> }, { id: "settings", label: "Settings", icon: <KeyRound aria-hidden="true" /> }];
+  const brainServiceSections = [{ id: "overview", label: "Overview", icon: <Activity aria-hidden="true" /> }, ...(syntoModuleAvailable ? [{ id: "synto", label: "Syntho", icon: <FileText aria-hidden="true" /> }] : []), ...(gbrainModuleAvailable ? [{ id: "gbrain", label: "GBrain", icon: <BrainCircuit aria-hidden="true" /> }] : []), ...(tradingBrainModuleAvailable ? [{ id: "trading-brain", label: "Trading", icon: <Activity aria-hidden="true" /> }] : []), { id: "synthesis", label: "Synthesis", icon: <Sparkles aria-hidden="true" /> }, { id: "settings", label: "Settings", icon: <KeyRound aria-hidden="true" /> }];
   useEffect(() => { if (!brainServiceSections.some((section) => section.id === brainServiceSection)) setBrainServiceSection("overview"); }, [brainServiceSection, brainServiceSections]);
   const brainServiceOverviewCards = [
     {
@@ -605,8 +624,19 @@ export function VaultPanel(props: any) {
       tone: syntoStatus?.installed && syntoStatus.initialized ? "live" : "idle",
       icon: <FileText aria-hidden="true" />,
       enabled: syntoModuleEnabled,
+      canToggle: Boolean(syntoStatus?.installed),
+      toggleLabel: syntoModuleEnabled ? "Syntho enabled" : "Enable Syntho",
       onToggle: (enabled) => updateSharedVault({ synto: { ...sharedVault.synto, enabled } }),
-      action: syntoModuleEnabled ? "Open Syntho" : "Enable Syntho",
+      action: syntoStatus?.installed ? "Open Syntho" : "Install Syntho",
+      installAction: {
+        disabled: Boolean(syntoBusy) || !sharedVault.enabled,
+        icon: syntoBusy === "install" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />,
+        label: "Install Syntho",
+        onClick: () => void runSyntoAction("install"),
+        progressLabel: syntoBusy === "connect" ? "Connecting Syntho runtime" : "Installing Syntho knowledge compiler",
+        setupSteps: syntoSetupSteps,
+        state: syntoInstallState,
+      },
     },
     {
       id: "gbrain",
@@ -618,8 +648,19 @@ export function VaultPanel(props: any) {
       tone: gbrainStatus?.installed ? "live" : "idle",
       icon: <BrainCircuit aria-hidden="true" />,
       enabled: gbrainModuleEnabled,
+      canToggle: Boolean(gbrainStatus?.installed),
+      toggleLabel: gbrainModuleEnabled ? "GBrain enabled" : "Enable GBrain",
       onToggle: (enabled) => updateSharedVault({ gbrain: { ...sharedVault.gbrain, enabled } }),
-      action: gbrainModuleEnabled ? "Open GBrain" : "Enable GBrain",
+      action: gbrainStatus?.installed ? "Open GBrain" : "Install GBrain",
+      installAction: {
+        disabled: Boolean(gbrainBusy) || !sharedVault.enabled,
+        icon: gbrainBusy === "install" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />,
+        label: "Install GBrain",
+        onClick: () => void runGbrainAction("install"),
+        progressLabel: gbrainBusy === "connect" ? "Connecting GBrain runtime" : "Installing GBrain retrieval core",
+        setupSteps: gbrainSetupSteps,
+        state: gbrainInstallState,
+      },
     },
     {
       id: "trading-brain",
@@ -631,8 +672,19 @@ export function VaultPanel(props: any) {
       tone: tradingBrainStatus?.installed ? "live" : "idle",
       icon: <Activity aria-hidden="true" />,
       enabled: tradingBrainModuleEnabled,
+      canToggle: Boolean(tradingBrainStatus?.installed),
+      toggleLabel: tradingBrainModuleEnabled ? "Trading Brain enabled" : "Enable Trading Brain",
       onToggle: (enabled) => updateSharedVault({ tradingBrainEnabled: enabled }),
-      action: tradingBrainModuleEnabled ? "Open Trading" : "Enable Trading Brain",
+      action: tradingBrainStatus?.installed ? "Open Trading" : "Install Trading Brain",
+      installAction: {
+        disabled: Boolean(tradingBrainBusy) || !sharedVault.enabled,
+        icon: tradingBrainBusy === "install" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />,
+        label: "Install Trading Brain",
+        onClick: () => void installTradingBrainFromDashboard(),
+        progressLabel: "Building Trading Brain vault scaffold",
+        setupSteps: tradingBrainSetupSteps,
+        state: tradingBrainInstallState,
+      },
     },
     {
       id: "synthesis",
@@ -654,13 +706,6 @@ export function VaultPanel(props: any) {
     url.searchParams.set("view", "vault");
     url.searchParams.set("vaultPanel", mode);
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-  };
-  const panBrainGraphWithWheel = (event) => {
-    event.preventDefault();
-    setBrainPan((current) => ({
-      x: current.x + event.deltaX,
-      y: current.y + event.deltaY,
-    }));
   };
   const vaultPanelModes = [
     { id: "hive-vault", label: "Hive Vault" },
@@ -696,163 +741,7 @@ export function VaultPanel(props: any) {
 
         <div className={vaultClass("vaultPanelBody", vaultPanelMode === "hive-vault" && "brainMapBody")}>
         {vaultPanelMode === "hive-vault" ? (
-        <div className={vaultClass("brainWorkspace")}>
-          <section className={vaultClass("brainGraphPanel")} aria-label="Shared brain graph">
-            <div className={vaultClass("brainGraphCanvas")} onWheel={panBrainGraphWithWheel}>
-              <button
-                type="button"
-                className={vaultClass("brainGraphRefreshButton")}
-                aria-label={brainGraphLoading ? "Refreshing brain graph" : "Refresh brain graph"}
-                title={brainGraphLoading ? "Refreshing brain graph" : "Refresh brain graph"}
-                onClick={() => refreshBrainGraph(true)}
-                disabled={brainGraphLoading}
-              >
-                {brainGraphLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
-              </button>
-              {visibleBrainNodes.length ? (
-                <>
-                  <svg
-                    viewBox={`${brainPan.x} ${brainPan.y} ${brainLayout.width} ${brainLayout.height}`}
-                    role="img"
-                    aria-label="Hive shaped Obsidian graph"
-                    onPointerDown={startBrainPan}
-                    onPointerMove={moveBrainPan}
-                    onPointerUp={endBrainPan}
-                    onPointerCancel={endBrainPan}
-                    className={vaultClass("draggable", brainGraphLoading && "dimmed")}
-                  >
-                    <defs>
-                      <filter id="brainNodeGlow" x="-40%" y="-40%" width="180%" height="180%">
-                        <feGaussianBlur stdDeviation="5" result="blur" />
-                        <feMerge>
-                          <feMergeNode in="blur" />
-                          <feMergeNode in="SourceGraphic" />
-                        </feMerge>
-                      </filter>
-                    </defs>
-                    {visibleBrainNodes.map((node) => {
-                      const position = brainLayout.positions.get(node.id);
-                      if (!position) return null;
-                      const selected = selectedBrainNode?.id === node.id;
-                      const target = !selected && selectedBrainTargetIds.has(node.id);
-                      const unresolved = node.id.startsWith("unresolved:");
-                      const labelLines = splitBrainLabel(node.label);
-                      return (
-                        <g
-                          key={node.id}
-                          role="button"
-                          tabIndex={0}
-                          data-brain-node-id={node.id}
-                          aria-label={selected ? `Open ${node.label} in Obsidian` : `Inspect ${node.label}`}
-                          className={vaultClass("brainNode", selected && "selected", target && "target", unresolved && "unresolved")}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") void inspectBrainNode(node);
-                          }}
-                        >
-                          <polygon
-                            points={brainNodePoints(position.x, position.y, brainLayout.radius)}
-                            filter={selected ? "url(#brainNodeGlow)" : undefined}
-                          />
-                          <text x={position.x} y={position.y - (labelLines.length > 1 ? 11 : 4)} textAnchor="middle">
-                            {labelLines.map((line, index) => (
-                              <tspan key={`${line}-${index}`} x={position.x} dy={index === 0 ? 0 : 15}>{line}</tspan>
-                            ))}
-                          </text>
-                          <text x={position.x} y={position.y + 31} textAnchor="middle" className={vaultClass("brainNodeMeta")}>
-                            {node.accessCount ? `${node.accessCount} reads` : `${node.incoming + node.outgoing} links`}
-                          </text>
-                        </g>
-                      );
-                    })}
-                    {brainGraph?.links
-                      .filter((link) => (
-                        selectedBrainNode
-                        && (link.source === selectedBrainNode.id || link.target === selectedBrainNode.id)
-                        && brainLayout.positions.has(link.source)
-                        && brainLayout.positions.has(link.target)
-                      ))
-                      .filter((link, index, links) => {
-                        const selectedId = selectedBrainNode!.id;
-                        const otherId = link.source === selectedId ? link.target : link.source;
-                        return links.findIndex((candidate) => (
-                          (candidate.source === selectedId ? candidate.target : candidate.source) === otherId
-                        )) === index;
-                      })
-                      .slice(0, 24)
-                      .map((link, index) => {
-                        const selectedId = selectedBrainNode!.id;
-                        const otherId = link.source === selectedId ? link.target : link.source;
-                        const source = brainLayout.coordsByNode.get(selectedId)!;
-                        const target = brainLayout.coordsByNode.get(otherId)!;
-                        return (
-                          <path
-                            key={`${selectedId}-${otherId}-${index}`}
-                            data-brain-route={`${selectedId}->${otherId}`}
-                            d={brainGraphEdgePath(source, target, brainLayout.positionsByCoord, brainLayout.radius)}
-                            className={vaultClass("brainEdgeActive")}
-                          />
-                        );
-                      })}
-                  </svg>
-                  {brainGraphLoading ? <BrainGraphLoader compact /> : null}
-                </>
-              ) : brainGraphLoading ? (
-                <BrainGraphLoader />
-              ) : (
-                <div className={vaultClass("brainEmpty")}>
-                  <Hexagon aria-hidden="true" />
-                  <strong>No graph loaded</strong>
-                  <span>{brainGraphStatus || "Refresh the graph after the vault path is reachable."}</span>
-                </div>
-              )}
-            </div>
-          </section>
-
-          <aside className={vaultClass("brainInspector")}>
-            <div className={vaultClass("brainInspectorHeader")}>
-              <span><BrainCircuit aria-hidden="true" /> Note inspector</span>
-              <small>{selectedAgent?.name ?? "Dashboard"} is the active accessor</small>
-            </div>
-            {selectedBrainNode ? (
-              <>
-                <h3>{selectedBrainNode.label}</h3>
-                <p>{selectedBrainNode.folder}</p>
-                <dl>
-                  <div><dt>Incoming</dt><dd>{selectedBrainNode.incoming}</dd></div>
-                  <div><dt>Outgoing</dt><dd>{selectedBrainNode.outgoing}</dd></div>
-                  <div><dt>Accesses</dt><dd>{selectedBrainNode.accessCount}</dd></div>
-                  <div><dt>Last seen</dt><dd>{formatBrainDate(selectedBrainNode.lastAccessedAt)}</dd></div>
-                </dl>
-                {selectedBrainNode.tags.length ? (
-                  <div className={vaultClass("brainTags")}>
-                    {selectedBrainNode.tags.map((tag) => <span key={tag}>#{tag}</span>)}
-                  </div>
-                ) : null}
-                <div className={vaultClass("brainAccessList")}>
-                  <strong>Access history</strong>
-                  {(selectedBrainNode.recentAccesses.length ? selectedBrainNode.recentAccesses : brainGraph?.recentAccesses.slice(0, 5) ?? []).map((event) => (
-                    <article key={event.id}>
-                      <Bot aria-hidden="true" />
-                      <div>
-                        <span>{event.agentName} on {event.machineName}</span>
-                        <small>{formatBrainDate(event.accessedAt)} · {event.action} · {event.notePath}</small>
-                      </div>
-                    </article>
-                  ))}
-                  {!selectedBrainNode.recentAccesses.length && !brainGraph?.recentAccesses.length ? (
-                    <p>No agent access history yet. Click a note to seed the audit trail.</p>
-                  ) : null}
-                </div>
-              </>
-            ) : (
-              <div className={vaultClass("brainEmpty", "compact")}>
-                <Hexagon aria-hidden="true" />
-                <strong>Select a hive cell</strong>
-                <span>Agent and machine access history will appear here.</span>
-              </div>
-            )}
-          </aside>
-        </div>
+        <BrainGraphExplorer {...{ Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, Download, FileText, GitBranch, Hexagon, LoaderCircle, Network, RefreshCcw, Sparkles, brainGraph, brainGraphEdgePath, brainGraphLoading, brainGraphStats, brainGraphStatus, brainNodePoints, brainPan, endBrainPan, formatBrainDate, inspectBrainNode, moveBrainPan, refreshBrainGraph, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserView, setSkillBrowserWrittenContent, setText, sharedVault, splitBrainLabel, startBrainPan, vaultClass }} />
         ) : null}
 
         {vaultPanelMode === "shared-skills" && brainSkillsLoading ? (

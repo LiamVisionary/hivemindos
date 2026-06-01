@@ -137,6 +137,16 @@
   padding: 12px;
 }
 
+.notificationCard[role="button"] {
+  cursor: pointer;
+}
+
+.notificationCard[role="button"]:hover,
+.notificationCard[role="button"]:focus-visible {
+  border-color: rgba(94, 234, 212, 0.32);
+  outline: none;
+}
+
 .notificationCard.unread {
   background:
     linear-gradient(90deg, rgba(45, 212, 191, 0.1), transparent 48%),

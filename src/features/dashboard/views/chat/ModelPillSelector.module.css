@@ -1,0 +1,147 @@
+.modelSelector {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.modelSearch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.22);
+  color: var(--muted);
+  padding: 0 10px;
+}
+
+.modelSearch:focus-within {
+  border-color: rgba(94, 234, 212, 0.34);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.08);
+}
+
+.modelSearch svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.modelSearch input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  outline: 0;
+}
+
+.modelSearch input::placeholder {
+  color: rgba(148, 163, 184, 0.72);
+}
+
+.modelPillGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  max-height: min(240px, 34vh);
+  overflow: auto;
+  padding: 1px;
+}
+
+.modelPill,
+.addModelPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 30px;
+  width: fit-content;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--button-secondary);
+  color: var(--button-secondary-foreground);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  overflow: hidden;
+  padding: 6px 12px;
+  text-align: left;
+  transition: color 150ms ease, background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.modelPill:hover,
+.addModelPill:hover {
+  background: color-mix(in srgb, var(--button-secondary) 88%, var(--button-primary));
+  border-color: rgba(94, 234, 212, 0.18);
+  color: var(--foreground);
+}
+
+.modelPill:focus-visible,
+.addModelPill:focus-visible {
+  border-color: var(--button-ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--button-ring) 45%, transparent);
+  outline: none;
+}
+
+.modelPill:disabled,
+.addModelPill:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.modelPill[data-selected="true"] {
+  background: var(--button-primary);
+  color: var(--button-primary-foreground);
+}
+
+.modelPillDot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(94, 234, 212, 0.7);
+  flex: 0 0 auto;
+}
+
+.modelPill[data-selected="true"] .modelPillDot {
+  background: currentColor;
+}
+
+.modelPillSource {
+  border-right: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  font-weight: 520;
+  padding-right: 8px;
+}
+
+.modelPillName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.addModelPill {
+  border-color: rgba(148, 163, 184, 0.28);
+  border-style: dashed;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.addModelPill svg {
+  width: 14px;
+  height: 14px;
+}
+
+.emptySearch {
+  margin: -1px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 680;
+}

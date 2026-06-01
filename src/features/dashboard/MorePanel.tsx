@@ -1,11 +1,11 @@
-import { Activity, AppWindow, Bell, Bot, FolderOpen, PhoneCall, PlugZap, ShieldCheck } from "lucide-react";
+import { Activity, AppWindow, Bell, Bot, FolderOpen, PhoneCall, PlugZap, Search, ShieldCheck, Wrench } from "lucide-react";
 
 import fleetStyles from "@/app/fleet.module.css";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 
 const fleetClass = createStyleClass(fleetStyles);
 
-type MorePanelTarget = "integrations" | "env" | "maintenance" | "files" | "notifications" | "memory" | "my-apps" | "phone" | "aeon";
+type MorePanelTarget = "integrations" | "env" | "maintenance" | "sessions" | "tools" | "files" | "notifications" | "memory" | "my-apps" | "phone" | "aeon";
 
 export type MorePanelProps = {
   sharedEnvCount?: number;
@@ -51,11 +51,25 @@ export function MorePanel({
       body: "Run dashboard and runtime health checks.",
     },
     {
+      id: "sessions" as const,
+      icon: <Search aria-hidden="true" />,
+      eyebrow: "Runtime memory",
+      title: "Sessions",
+      body: "Search readable Hermes and OpenClaw conversations from one place.",
+    },
+    {
+      id: "tools" as const,
+      icon: <Wrench aria-hidden="true" />,
+      eyebrow: "Callable handles",
+      title: "Tools",
+      body: "Review built-in, runtime, and app-provided handles agents can invoke.",
+    },
+    {
       id: "my-apps" as const,
       icon: <AppWindow aria-hidden="true" />,
-      eyebrow: "Tailnet apps",
-      title: "My Apps",
-      body: "Open web apps hosted across your Tailscale machines.",
+      eyebrow: "Providers",
+      title: "Apps & Services",
+      body: "Open running apps and browse installable providers agents can also call.",
     },
     {
       id: "phone" as const,

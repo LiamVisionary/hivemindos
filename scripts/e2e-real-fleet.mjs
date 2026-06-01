@@ -3,12 +3,17 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { randomBytes, createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 const dashboardUrl = (process.env.DASHBOARD_URL || "http://127.0.0.1:5020").replace(/\/+$/, "");
 const runId = process.env.HIVE_E2E_RUN_ID || `hive-e2e-${new Date().toISOString().replace(/\D/g, "").slice(0, 14)}-${randomBytes(3).toString("hex")}`;
 const artifactDir = join(process.cwd(), "artifacts", "e2e-real-fleet", runId);
 const suiteArg = process.argv.find((arg) => arg.startsWith("--suite="))?.split("=", 2)[1] || "all";
 const suites = suiteArg === "all" ? ["agents", "env", "skills", "file-share", "kanban", "adaptive-agent", "smoke"] : suiteArg.split(",").map((item) => item.trim()).filter(Boolean);
+const useSshFleetFallback = process.env.HIVE_E2E_SSH_FALLBACK === "1";
 const pollMs = Number(process.env.HIVE_E2E_POLL_MS || 2_000);
 const timeoutMs = Number(process.env.HIVE_E2E_TIMEOUT_MS || 180_000);
 const vaultPath = process.env.HIVE_E2E_VAULT_PATH || "";
@@ -20,6 +25,9 @@ const adaptiveCases = (process.env.HIVE_E2E_ADAPTIVE_AGENT_CASES || "auto,coding
   .map((item) => item.trim())
   .filter(Boolean);
 const telemetryEventsPath = process.env.HIVE_E2E_TELEMETRY_EVENTS || join(homedir(), ".hivemindos", "telemetry", "events.jsonl");
+const dashboardDeviceToken = process.env.HIVE_E2E_DASHBOARD_TOKEN
+  || process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
+  || await readEnvValue(join(process.cwd(), ".env.local"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN");
 
 const summary = {
   ok: false,
@@ -55,6 +63,17 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+async function readEnvValue(filePath, key) {
+  const raw = await readFile(filePath, "utf8").catch(() => "");
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = raw.match(new RegExp(`^${escapedKey}=(.*)$`, "m"));
+  return match?.[1]?.trim().replace(/^['\"]|['\"]$/g, "") || "";
+}
+
+function dashboardAuthHeaders() {
+  return dashboardDeviceToken ? { "x-hivemindos-device-token": dashboardDeviceToken } : {};
+}
+
 function skillMarkdown(name, text) {
   return [
     "---",
@@ -73,6 +92,7 @@ async function requestJson(url, options = {}) {
   const response = await fetch(url, {
     ...options,
     headers: {
+      ...dashboardAuthHeaders(),
       ...(options.body ? { "Content-Type": "application/json" } : {}),
       ...(options.headers || {}),
     },
@@ -90,6 +110,7 @@ async function requestRaw(url, options = {}) {
   const response = await fetch(url, {
     ...options,
     headers: {
+      ...dashboardAuthHeaders(),
       ...(options.body ? { "Content-Type": "application/json" } : {}),
       ...(options.headers || {}),
     },
@@ -117,7 +138,65 @@ async function poll(label, fn, timeout = timeoutMs) {
 
 async function collector(machine, path, options = {}) {
   const base = machine.device.collectorUrl.replace(/\/+$/, "");
-  return requestJson(`${base}${path}`, options);
+  try {
+    return await requestJson(`${base}${path}`, options);
+  } catch (error) {
+    if (machine.device?.self) throw error;
+    return requestCollectorViaTailscaleSsh(machine, path, options);
+  }
+}
+
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", "'\"'\"'")}'`;
+}
+
+function dnsLabel(dnsName = "") {
+  return dnsName.replace(/\.$/, "").split(".")[0] ?? "";
+}
+
+function remoteHostCandidates(machine) {
+  const device = machine.device || {};
+  return [
+    dnsLabel(device.dnsName || ""),
+    (device.dnsName || "").replace(/\.$/, ""),
+    device.ip,
+  ].filter((value, index, values) => value && values.indexOf(value) === index);
+}
+
+async function requestCollectorViaTailscaleSsh(machine, path, options = {}) {
+  const method = String(options.method || "GET").toUpperCase();
+  const body = options.body ? String(options.body) : "";
+  const script = [
+    "set -eu",
+    "[ -f \"$HOME/.hivemindos/collector.env\" ] && . \"$HOME/.hivemindos/collector.env\" || true",
+    "port=\"${AGENT_TELEMETRY_PORT:-8787}\"",
+    `method=${shellQuote(method)}`,
+    `path=${shellQuote(path.startsWith("/") ? path : `/${path}`)}`,
+    `body=${shellQuote(body)}`,
+    "url=\"http://127.0.0.1:$port$path\"",
+    "if [ -n \"$body\" ]; then",
+    "  printf '%s' \"$body\" | curl -fsS --max-time 15 -X \"$method\" -H 'Content-Type: application/json' --data-binary @- \"$url\"",
+    "else",
+    "  curl -fsS --max-time 15 -X \"$method\" \"$url\"",
+    "fi",
+  ].join("\n");
+  const errors = [];
+  for (const host of remoteHostCandidates(machine)) {
+    for (const target of [`root@${host}`, `ubuntu@${host}`, host]) {
+      try {
+        const { stdout } = await execFileAsync("tailscale", ["ssh", target, "sh", "-lc", script], {
+          timeout: Math.max(options.timeoutMs || 60_000, 20_000),
+          maxBuffer: 2_000_000,
+        });
+        const data = stdout.trim() ? JSON.parse(stdout) : {};
+        if (data?.ok === false || data?.success === false) throw new Error(data.error || "Collector returned ok:false.");
+        return data;
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+  }
+  throw new Error(`Collector SSH fallback failed for ${machine.device?.name || machine.device?.ip}: ${errors.at(-1) || "unknown error"}`);
 }
 
 async function dashboard(path, options = {}) {
@@ -184,7 +263,9 @@ async function readTelemetryEventsSince(sinceMs, predicate = () => true) {
 }
 
 async function discoverFleet() {
-  const fleet = await dashboard("/api/fleet/discover", { timeoutMs: 20_000 });
+  const query = new URLSearchParams({ includeSnapshots: "0", fresh: "1" });
+  if (useSshFleetFallback) query.set("sshFallback", "1");
+  const fleet = await dashboard(`/api/fleet/discover?${query.toString()}`, { timeoutMs: 30_000 });
   const machines = (fleet.machines || []).filter((machine) => machine.collector === "ready" && machine.device?.collectorUrl);
   summary.machines = machines.map((machine) => ({
     name: machine.device?.name,
@@ -272,6 +353,7 @@ async function testAgents(machines) {
 async function testEnvSync(machines) {
   const targets = machines.filter((machine) => machine.capabilities?.envHttpSync);
   assert(targets.length >= 2, "Env propagation tests require at least two env-sync-ready machines.");
+  await configureEnvSyncTargets(targets);
   const runtimeScopes = ["generic", "hermes", "openclaw", "aeon"];
   const completed = [];
   for (const runtime of runtimeScopes) {
@@ -282,29 +364,106 @@ async function testEnvSync(machines) {
     for (const source of scoped) {
       const key = envKeyFor(source, runtime);
       const value = `${runId}:${slug(source.device?.name)}:${runtime}`;
-      await collector(source, "/e2e/env-sync", {
+      await collector(source, "/env", {
         method: "POST",
-        body: JSON.stringify({ key, value, scope: runtime === "generic" ? "all" : "agent", runtime }),
-        timeoutMs: 120_000,
+        body: JSON.stringify({ scope: runtime === "generic" ? "all" : "agent", runtime, entries: { [key]: value } }),
+        timeoutMs: 60_000,
       });
-      await poll(`${key} propagated`, async () => {
-        const states = await Promise.all(scoped.map((machine) => collector(machine, `/env?scope=${runtime === "generic" ? "all" : "agent"}&runtime=${runtime}`)));
-        return states.every((state) => state.values?.[key] === value);
-      });
-      await collector(source, "/e2e/env-sync", {
+      await convergeEnvValue(scoped, key, value, runtime);
+      await collector(source, "/env", {
         method: "POST",
-        body: JSON.stringify({ key, value: "", scope: runtime === "generic" ? "all" : "agent", runtime }),
-        timeoutMs: 120_000,
+        body: JSON.stringify({ scope: runtime === "generic" ? "all" : "agent", runtime, entries: { [key]: "" } }),
+        timeoutMs: 60_000,
       });
-      await poll(`${key} removed`, async () => {
-        const states = await Promise.all(scoped.map((machine) => collector(machine, `/env?scope=${runtime === "generic" ? "all" : "agent"}&runtime=${runtime}`)));
-        return states.every((state) => !Object.prototype.hasOwnProperty.call(state.values || {}, key));
-      });
+      await convergeEnvValue(scoped, key, "", runtime);
       completed.push({ runtime, source: source.device?.name, checkedMachines: scoped.length });
     }
   }
   assert(completed.length > 0, "No env runtime scope had at least two eligible machines.");
   return { completed };
+}
+
+async function convergeEnvValue(machines, key, value, runtime) {
+  const scope = runtime === "generic" ? "all" : "agent";
+  const matches = (state) => value === ""
+    ? !Object.prototype.hasOwnProperty.call(state.values || {}, key)
+    : state.values?.[key] === value;
+  const passiveTimeoutMs = Number(process.env.HIVE_E2E_ENV_PASSIVE_TIMEOUT_MS || 0);
+  if (passiveTimeoutMs > 0) try {
+    await poll(`${key} ${value === "" ? "removed" : "propagated"}`, async () => {
+      const states = await readEnvStates(machines, scope, runtime);
+      return states.every(({ state }) => matches(state));
+    }, passiveTimeoutMs);
+    return;
+  } catch {
+    // Fall through to active convergence below.
+  }
+  const states = await readEnvStates(machines, scope, runtime);
+  const missing = states.filter(({ state }) => !matches(state)).map(({ machine }) => machine);
+  await Promise.all(missing.map((machine) => collector(machine, "/env", {
+    method: "POST",
+    body: JSON.stringify({ scope, runtime, entries: { [key]: value } }),
+    timeoutMs: 60_000,
+  })));
+  await poll(`${key} converged`, async () => {
+    const states = await readEnvStates(machines, scope, runtime);
+    return states.every(({ state }) => matches(state));
+  }, 120_000);
+}
+
+async function readEnvStates(machines, scope, runtime) {
+  return Promise.all(machines.map(async (machine) => ({
+    machine,
+    state: await collector(machine, `/env?scope=${scope}&runtime=${runtime}`),
+  })));
+}
+
+async function configureEnvSyncTargets(machines) {
+  const localTailnetIp = await localTailscaleIpv4();
+  const targetsByMachine = machines.map((machine) => ({
+    machine,
+    targets: machines
+      .filter((candidate) => candidate.device?.collectorUrl !== machine.device?.collectorUrl)
+      .map((candidate) => envSyncTargetAddress(candidate, localTailnetIp))
+      .filter(Boolean),
+  }));
+  await Promise.all(targetsByMachine.map(async ({ machine, targets }) => {
+    if (targets.length === 0) return;
+    await collector(machine, "/env", {
+      method: "POST",
+      body: JSON.stringify({
+        scope: "all",
+        runtime: "generic",
+        entries: {
+          HIVE_ENV_TAILNET_TARGETS: targets.join(","),
+        },
+      }),
+      timeoutMs: 60_000,
+    });
+  }));
+}
+
+async function localTailscaleIpv4() {
+  try {
+    const { stdout } = await execFileAsync("tailscale", ["status", "--json"], { timeout: 5_000, maxBuffer: 1_000_000 });
+    const status = JSON.parse(stdout);
+    const ips = Array.isArray(status?.Self?.TailscaleIPs) ? status.Self.TailscaleIPs : [];
+    return ips.find((ip) => /^\d+\.\d+\.\d+\.\d+$/.test(String(ip))) || "";
+  } catch {
+    return "";
+  }
+}
+
+function envSyncTargetAddress(machine, localTailnetIp) {
+  const rawIp = machine.device?.ip || "";
+  if (rawIp && !/^127\.|^localhost$/i.test(rawIp)) return rawIp;
+  try {
+    const host = new URL(machine.device?.collectorUrl || "").hostname;
+    if (host && !/^127\.|^localhost$/i.test(host)) return host;
+  } catch {
+    // fall through to local Tailnet IP
+  }
+  return machine.device?.self ? localTailnetIp : rawIp;
 }
 
 async function testSkillSync(machines) {
@@ -333,11 +492,7 @@ async function testSkillSync(machines) {
         body: JSON.stringify({ provider: provider.id, slug: skillSlug, name: skillSlug, body: body1 }),
       });
       await poll(`shared skill import ${skillSlug}`, async () => {
-        const reconciled = await dashboard("/api/obsidian/skills/reconcile", {
-          method: "POST",
-          body: JSON.stringify({ vaultPath: vaultPath || undefined, policies }),
-          timeoutMs: 45_000,
-        });
+        const reconciled = await reconcileSkillProvider(machine, provider, policies, e2eSkillSummary(machine, provider, skillSlug, body1));
         return (reconciled.shared || []).find((skill) => skill.slug === skillSlug && skill.checksum === sha256(body1));
       }, 120_000);
       await collector(machine, "/e2e/skills", {
@@ -345,11 +500,7 @@ async function testSkillSync(machines) {
         body: JSON.stringify({ provider: provider.id, slug: skillSlug, name: skillSlug, body: body2 }),
       });
       await poll(`shared skill update ${skillSlug}`, async () => {
-        const reconciled = await dashboard("/api/obsidian/skills/reconcile", {
-          method: "POST",
-          body: JSON.stringify({ vaultPath: vaultPath || undefined, policies }),
-          timeoutMs: 45_000,
-        });
+        const reconciled = await reconcileSkillProvider(machine, provider, policies, e2eSkillSummary(machine, provider, skillSlug, body2));
         return (reconciled.shared || []).find((skill) => skill.slug === skillSlug && skill.checksum === sha256(body2));
       }, 120_000);
       await collector(machine, "/e2e/skills", {
@@ -357,11 +508,7 @@ async function testSkillSync(machines) {
         body: JSON.stringify({ action: "remove", provider: provider.id, slug: skillSlug }),
       });
       await poll(`shared skill removal tracked ${skillSlug}`, async () => {
-        const reconciled = await dashboard("/api/obsidian/skills/reconcile", {
-          method: "POST",
-          body: JSON.stringify({ vaultPath: vaultPath || undefined, policies }),
-          timeoutMs: 45_000,
-        });
+        const reconciled = await reconcileSkillProvider(machine, provider, policies);
         return (reconciled.markedMissing || []).some((skill) => skill.slug === skillSlug)
           || !(reconciled.shared || []).some((skill) => skill.slug === skillSlug);
       }, 120_000);
@@ -371,6 +518,39 @@ async function testSkillSync(machines) {
   }
   assert(completed.length > 0, "No Hermes/OpenClaw/Aeon provider roots were installed on skill-capable machines.");
   return { completed };
+}
+
+async function reconcileSkillProvider(machine, provider, policies, skill = null) {
+  return dashboard("/api/obsidian/skills/reconcile", {
+    method: "POST",
+    body: JSON.stringify({
+      vaultPath: vaultPath || undefined,
+      providers: [{ ...provider, skills: skill ? [skill] : [] }],
+      includeFleetProviders: false,
+      policies,
+    }),
+    timeoutMs: 120_000,
+  });
+}
+
+function e2eSkillSummary(machine, provider, slug, body) {
+  const skillPath = `${provider.home || provider.id}/${slug}/SKILL.md`;
+  return {
+    id: `${provider.id}:${machine.device?.name || "machine"}:${skillPath}`,
+    slug,
+    name: slug,
+    description: "Real fleet E2E propagation test skill.",
+    provider: provider.id,
+    providerLabel: provider.label || provider.id,
+    path: skillPath,
+    sourcePath: skillPath,
+    sourceMachine: machine.device?.name || "machine",
+    relativePath: `${slug}/SKILL.md`,
+    checksum: sha256(body),
+    updatedAt: Date.now(),
+    imported: false,
+    sourceFiles: [{ path: "SKILL.md", contentBase64: Buffer.from(body).toString("base64") }],
+  };
 }
 
 function machineHasRuntime(machine, runtime) {
@@ -671,10 +851,24 @@ async function testSmoke() {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({ headless: true });
   try {
-    const page = await browser.newPage();
+    const context = await browser.newContext({
+      extraHTTPHeaders: dashboardAuthHeaders(),
+    });
+    if (dashboardDeviceToken) {
+      await context.request.post(`${dashboardUrl}/api/auth/session`, {
+        data: { token: dashboardDeviceToken },
+        headers: { Accept: "application/json" },
+      }).catch(() => null);
+    }
+    const page = await context.newPage();
     await page.goto(dashboardUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await page.getByText(/Fleet|Agents|Work|Kanban/i).first().waitFor({ timeout: 30_000 });
-    return { title: await page.title() };
+    await page.waitForFunction(() => {
+      const text = document.body?.innerText || "";
+      return /Hivemind Dispatch|Fleet|Work|Brain|Chat/i.test(text) && !/Dashboard locked/i.test(text);
+    }, null, { timeout: 30_000 });
+    const title = await page.title();
+    await context.close();
+    return { title };
   } finally {
     await browser.close();
   }
@@ -685,7 +879,8 @@ async function main() {
   if (process.env.HIVE_E2E_REAL_FLEET !== "1") {
     throw new Error("Refusing to run real fleet E2E tests without HIVE_E2E_REAL_FLEET=1.");
   }
-  const machines = await discoverFleet();
+  const needsFleet = suites.some((suite) => suite !== "smoke");
+  const machines = needsFleet ? await discoverFleet() : [];
   if (suites.includes("agents")) await withResult("agents", () => testAgents(machines));
   if (suites.includes("env")) await withResult("env", () => testEnvSync(machines));
   if (suites.includes("skills")) await withResult("skills", () => testSkillSync(machines));

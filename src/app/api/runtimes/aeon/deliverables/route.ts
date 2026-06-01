@@ -4,6 +4,7 @@ import { access, copyFile, mkdir, readdir, readFile, stat, writeFile } from "nod
 import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { homedir, hostname } from "node:os";
 import { NextRequest, NextResponse } from "next/server";
+import type { AeonDeliverable } from "@/lib/types/aeon-deliverables";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { KanbanMachineTarget } from "@/lib/types/kanban";
 import { requireAuth } from "@/lib/utils/server-auth";
@@ -20,24 +21,6 @@ type AeonDeliverableBody = {
   path?: string;
   url?: string;
   targetMachine?: KanbanMachineTarget | null;
-};
-
-export type AeonDeliverable = {
-  id: string;
-  title: string;
-  kind: "verdict" | "miroshark-run" | "posts" | "json" | "output" | "document" | "file" | "url";
-  source: "vault" | "aeon-output" | "remote";
-  repository?: string;
-  simulationId?: string;
-  status?: string;
-  path?: string;
-  url?: string;
-  relativePath?: string;
-  size?: number;
-  updatedAt: string;
-  availableOnMachine: boolean;
-  machineName?: string;
-  summary?: string;
 };
 
 const TRANSFER_DIR = ".hivemindos-transfers";

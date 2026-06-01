@@ -40,6 +40,9 @@ export async function readMaintenanceReport(input: { agents?: AgentProfile[]; sh
 }
 
 export async function runMaintenanceRepair(action: string, input: { sharedVault?: SharedVaultConfig }) {
+  if (action === "diagnostic-dump") {
+    return createDiagnosticDump(input);
+  }
   if (action === "repair-state") {
     await mkdir(join(homedir(), ".hivemindos"), { recursive: true, mode: 0o700 });
     return { ok: true, message: "Created ~/.hivemindos." };
@@ -60,6 +63,32 @@ export async function runMaintenanceRepair(action: string, input: { sharedVault?
     return { ok: true, message: "Prepared runtime run log folder." };
   }
   return { ok: false, error: `Unknown repair action: ${action}` };
+}
+
+async function createDiagnosticDump(input: { sharedVault?: SharedVaultConfig }) {
+  const report = await readMaintenanceReport({ sharedVault: input.sharedVault, agents: [] });
+  const diagnosticsDir = join(homedir(), ".hivemindos", "diagnostics");
+  await mkdir(diagnosticsDir, { recursive: true, mode: 0o700 });
+  const file = join(diagnosticsDir, `diagnostic-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
+  const payload = {
+    generatedAt: new Date().toISOString(),
+    node: process.version,
+    platform: process.platform,
+    cwd: redactHome(process.cwd()),
+    sharedVault: {
+      enabled: Boolean(input.sharedVault?.enabled),
+      vaultPath: redactHome(input.sharedVault?.vaultPath ?? ""),
+      brainServicesFolder: input.sharedVault?.brainServicesFolder,
+      kanbanFolder: input.sharedVault?.kanbanFolder,
+      scheduledFolder: input.sharedVault?.scheduledFolder,
+    },
+    report: {
+      ...report,
+      checks: report.checks.map((check) => ({ ...check, detail: redactHome(check.detail) })),
+    },
+  };
+  await writeFile(file, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 });
+  return { ok: true, message: `Wrote redacted diagnostic dump to ${redactHome(file)}.` };
 }
 
 async function checkHermes(agents: AgentProfile[]): Promise<MaintenanceCheck> {
@@ -104,4 +133,8 @@ async function checkPath(label: string, path: string, failDetail: string, repair
 
 function expandHome(path: string) {
   return path.replace(/^~(?=$|\/)/, homedir()).trim();
+}
+
+function redactHome(value: string) {
+  return value.replaceAll(homedir(), "~");
 }

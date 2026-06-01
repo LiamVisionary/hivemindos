@@ -112,6 +112,8 @@ function deviceIdentityKey(device: ReturnType<typeof simplifyDevice>) {
   const name = normalizeName(device.name) || dnsName;
   if (name.startsWith("hivemindos")) return hivemindMachineBase(device) || dnsName || name;
   if (device.self) return "self";
+  const macBase = macNumberedHostnameBase(device);
+  if (macBase) return macBase;
   return name || device.ip || device.collectorUrl;
 }
 
@@ -173,6 +175,15 @@ function physicalMachineBase(device: ReturnType<typeof simplifyDevice>) {
   const normalizedName = normalizeName(device.name);
   const value = normalizedDnsName || normalizedName;
   return value.replace(/^hivemindos/, "").replace(/local\d*$/, "").replace(/\d+$/, "");
+}
+
+function macNumberedHostnameBase(device: ReturnType<typeof simplifyDevice>) {
+  if (!isMacDevice(device)) return "";
+  const rawValue = dnsLabel(device.dnsName) || device.name || "";
+  const withoutTailnetSuffix = rawValue.toLowerCase().replace(/-\d+$/, "");
+  const normalizedValue = normalizeName(rawValue);
+  const normalizedBase = normalizeName(withoutTailnetSuffix);
+  return normalizedBase && normalizedBase !== normalizedValue ? normalizedBase : "";
 }
 
 function isStaleSelfDuplicate(

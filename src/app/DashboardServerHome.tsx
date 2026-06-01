@@ -1,6 +1,7 @@
 import DashboardUnlockRecovery from "@/app/DashboardUnlockRecovery";
-import DashboardApp, { type DashboardVaultPanelMode } from "@/features/dashboard/DashboardApp";
-import type { DashboardView } from "@/features/dashboard/dashboard-types";
+import DashboardNativeFrame from "@/app/DashboardNativeFrame";
+import type { DashboardVaultPanelMode } from "@/features/dashboard/DashboardApp";
+import { isDashboardView } from "@/features/dashboard/dashboard-navigation";
 import { listDynamicWorkHistory } from "@/lib/services/work-history/dynamic-changelog";
 import {
   DASHBOARD_SESSION_COOKIE,
@@ -11,26 +12,6 @@ import {
 } from "@/lib/utils/server-auth";
 import { cookies } from "next/headers";
 
-const DASHBOARD_VIEWS = new Set<DashboardView>([
-  "agents",
-  "kanban",
-  "scheduler",
-  "swarm",
-  "history",
-  "wallet",
-  "vault",
-  "integrations",
-  "maintenance",
-  "memory",
-  "files",
-  "notifications",
-  "chat",
-  "more",
-  "env",
-  "my-apps",
-  "phone",
-  "aeon",
-]);
 const DASHBOARD_VAULT_PANEL_MODES = new Set<DashboardVaultPanelMode>([
   "hive-vault",
   "shared-skills",
@@ -51,8 +32,8 @@ export default async function Home({ searchParams }: HomeProps) {
   if (!hasSession) return <DashboardUnlock params={params} />;
 
   const rawView = Array.isArray(params?.view) ? params?.view[0] : params?.view;
-  const initialView = rawView && DASHBOARD_VIEWS.has(rawView as DashboardView)
-    ? rawView as DashboardView
+  const initialView = rawView && isDashboardView(rawView)
+    ? rawView
     : undefined;
   const rawVaultPanel = Array.isArray(params?.vaultPanel) ? params?.vaultPanel[0] : params?.vaultPanel;
   const initialVaultPanelMode = rawVaultPanel && DASHBOARD_VAULT_PANEL_MODES.has(rawVaultPanel as DashboardVaultPanelMode)
@@ -62,7 +43,7 @@ export default async function Home({ searchParams }: HomeProps) {
     ? await listDynamicWorkHistory({ limit: 10 }).catch(() => undefined)
     : undefined;
 
-  return <DashboardApp initialView={initialView} initialVaultPanelMode={initialVaultPanelMode} initialWorkHistory={initialWorkHistory} />;
+  return <DashboardNativeFrame initialView={initialView} initialVaultPanelMode={initialVaultPanelMode} initialWorkHistory={initialWorkHistory} />;
 }
 
 function DashboardUnlock({ params }: { params?: Record<string, string | string[] | undefined> }) {

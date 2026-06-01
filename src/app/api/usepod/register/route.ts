@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     if (body.saveToEnv !== false) await saveUsePodRegistration(registration);
     return NextResponse.json({
       ok: true,
-      tokenEnvName: "USEPOD_TOKEN",
+      tokenEnvName: registration.tokenEnvName ?? "USEPOD_TOKEN",
       depositEnvName: "USEPOD_DEPOSIT_ADDRESS",
       depositAddress: registration.depositAddress,
       depositCode: registration.depositCode,

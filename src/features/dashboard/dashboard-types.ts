@@ -56,6 +56,7 @@ export type RuntimeIntegrationStatus = {
       checkedAt?: string;
       status?: string;
       message?: string;
+      httpStatus?: number;
       modelCount?: number;
     };
   };
@@ -678,6 +679,9 @@ export type BrainGraphNode = {
   folder: string;
   tags: string[];
   byteSize: number;
+  lineCount?: number;
+  modifiedAt?: string;
+  preview?: string;
   incoming: number;
   outgoing: number;
   accessCount: number;
@@ -902,7 +906,7 @@ export type MiroSharkSurfaceView = "x" | "reddit" | "polymarket" | "timeline";
 
 export type MiroSharkWorkspaceMode = "new" | "run";
 
-export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "vault" | "integrations" | "maintenance" | "memory" | "files" | "notifications" | "chat" | "more" | "env" | "my-apps" | "phone" | "aeon";
+export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "chat" | "more" | "env" | "my-apps" | "phone" | "aeon";
 
 export type WorkView = Extract<DashboardView, "kanban" | "scheduler" | "swarm" | "history">;
 

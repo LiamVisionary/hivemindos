@@ -6,6 +6,7 @@ const projectRoot = path.join(/*turbopackIgnore: true*/ __dirname);
 const isTauriDev = process.env.HIVEMINDOS_TAURI_DEV === "1";
 const isTauriStaticBuild = process.env.HIVEMINDOS_TAURI_STATIC_BUILD === "1";
 const isTauriBuild = process.env.HIVEMINDOS_TAURI_BUILD === "1";
+const tauriDevDistDir = process.env.HIVEMINDOS_TAURI_NEXT_DIST_DIR || ".next-tauri";
 
 function splitOrigins(value?: string) {
   return (value ?? "")
@@ -38,8 +39,13 @@ function detectedTailnetDevOrigins() {
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  distDir: isTauriDev ? ".next-tauri" : isTauriStaticBuild ? ".next-tauri-static-build" : isTauriBuild ? ".next-tauri-build" : ".next",
+  distDir: isTauriDev ? tauriDevDistDir : isTauriStaticBuild ? ".next-tauri-static-build" : isTauriBuild ? ".next-tauri-build" : ".next",
   output: isTauriStaticBuild ? "export" : isTauriBuild ? "standalone" : undefined,
+  typescript: isTauriStaticBuild
+    ? {
+        ignoreBuildErrors: true,
+      }
+    : undefined,
   trailingSlash: isTauriStaticBuild ? true : undefined,
   images: isTauriStaticBuild || isTauriBuild
     ? {

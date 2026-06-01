@@ -5,7 +5,6 @@
 import { ChatFolderModal } from "@/features/dashboard/views/chat/ChatFolderModal";
 import { ChatInlineMarkdown } from "@/features/dashboard/ChatMarkdown";
 import { SkillBrowserModal } from "@/features/dashboard/views/chat/SkillBrowserModal";
-import { AgentSettingsModal } from "@/features/dashboard/views/chat/AgentSettingsModal";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { useEffect, useState } from "react";
 
@@ -225,8 +224,25 @@ function AgentProcessPanel({ Activity, ChevronDown, ChevronUp, CircleAlert, File
   );
 }
 
+function ChatHistorySkeleton() {
+  return (
+    <div className="grid min-h-[360px] w-full max-w-[min(100%,1080px)] gap-6" aria-label="Loading chat history" aria-busy="true">
+      {[0, 1, 2, 3].map((index) => (
+        <div className={`flex w-full items-start gap-3.5 ${index % 2 === 1 ? "justify-end" : ""}`} key={index} aria-hidden="true">
+          {index % 2 === 0 ? <span className="h-9 w-9 shrink-0 animate-pulse rounded-[14px] bg-white/10" /> : null}
+          <span className={`grid min-h-24 gap-2.5 rounded-3xl border border-white/10 bg-white/5 p-4.5 ${index % 2 === 1 ? "w-[min(58%,620px)] rounded-tr-[7px] border-teal-300/15 bg-teal-300/10" : "w-[min(72%,760px)] rounded-tl-[7px]"}`}>
+            <span className="h-2.5 w-[68%] animate-pulse rounded-full bg-white/10" />
+            <span className="h-2.5 w-[92%] animate-pulse rounded-full bg-white/10" />
+            <span className="h-2.5 w-[42%] animate-pulse rounded-full bg-white/10" />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ChatPanel(props: any) {
-  const { Activity, AgentResponseLoader, AlignLeft, Button, ChatMarkdown, Check, ChevronDown, ChevronUp, CircleAlert, ComposerField, Copy, FileText, Folder, GitBranch, Hammer, Image, KanbanSquare, LoaderCircle, MessageAttachments, MessageSquare, Monitor, Pencil, RUNTIME_LABELS, Search, Sparkles, Terminal, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Upload, activeView, aeonEnvKeys, aeonEnvSyncStatus, aeonEnvSyncing, attachChatDirectory, attachChatRecentDirectory, attachmentError, attachmentMenuOpen, attachmentMenuRef, beeRoleIconPath, busy, changeChatWorkingDirectory, chatAttachments, chatClass, chatContextMenu, chatContextMenuRef, chatDirectories, chatDisplayContent, chatFileInputRef, chatImageInputRef, chatKanbanGeneration, chatSidebarTree, checkStatus, dismissChatKanbanGeneration, displayAgents, expandedChatFolders, fleetClass, formatAgentEnvText, formatRelativeTime, generateKanbanTaskFromChat, handleChatFileChange, handleChatImageChange, hasStreamingChunk, lastAssistant, machineGroups, messagesEndRef, messagesScrollRef, parseAgentEnvText, recentDirectories, recentDirectoriesExpanded, recording, refreshRuntimeIntegrations, removeChatAttachment, removeChatDirectory, runRuntimeIntegrationAction, runtimeIntegrationBusy, runtimeModelSelection, runtimeModelSelectionsByRuntime, selectedAgent, selectedChatDirectory, selectedChatMachine, selectedChatProcess, sendMessage, sessionNotice, setAeonEnvKeys, setAttachmentMenuOpen, setChatContextMenu, setExpandedChatFolders, setRecentDirectoriesExpanded, setStatus, setStatusAgentId, setText, startAgentChat, startAudioRecording, status, statusAgentId, stopAudioRecording, switchRuntime, syncAeonEnvToGitHub, text, updateAgent, updateChatAutoScroll, vaultClass, visibleMessages, voiceBands, voiceTarget, voiceTranscript } = props;
+  const { Activity, AgentResponseLoader, AlignLeft, Button, ChatMarkdown, Check, ChevronDown, ChevronUp, CircleAlert, ComposerField, Copy, FileText, Folder, GitBranch, Hammer, Image, KanbanSquare, LoaderCircle, MessageAttachments, MessageSquare, Monitor, Pencil, RUNTIME_LABELS, Search, Sparkles, Terminal, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Upload, activeView, aeonEnvKeys, aeonEnvSyncStatus, aeonEnvSyncing, attachChatDirectory, attachChatRecentDirectory, attachmentError, attachmentMenuOpen, attachmentMenuRef, beeRoleIconPath, busy, changeChatWorkingDirectory, chatAttachments, chatClass, chatContextMenu, chatContextMenuRef, chatDirectories, chatDisplayContent, chatFileInputRef, chatImageInputRef, chatKanbanGeneration, chatSidebarTree, checkStatus, dismissChatKanbanGeneration, displayAgents, expandedChatFolders, fleetClass, formatAgentEnvText, formatRelativeTime, generateKanbanTaskFromChat, handleChatFileChange, handleChatImageChange, hasStreamingChunk, lastAssistant, machineGroups, messagesEndRef, messagesScrollRef, parseAgentEnvText, recentDirectories, recentDirectoriesExpanded, recording, refreshRuntimeIntegrations, removeChatAttachment, removeChatDirectory, runRuntimeIntegrationAction, runtimeIntegrationBusy, runtimeModelSelection, runtimeModelSelectionsByRuntime, selectedAgent, selectedChatDirectory, selectedChatHistoryLoading, selectedChatMachine, selectedChatProcess, sendMessage, sessionNotice, setAeonEnvKeys, setAttachmentMenuOpen, setChatContextMenu, setExpandedChatFolders, setRecentDirectoriesExpanded, setStatus, setStatusAgentId, setText, startAgentChat, startAudioRecording, status, statusAgentId, stopAudioRecording, switchRuntime, syncAeonEnvToGitHub, text, updateAgent, updateChatAutoScroll, vaultClass, visibleMessages, voiceBands, voiceTarget, voiceTranscript } = props;
   const [openKanbanTaskMenuKey, setOpenKanbanTaskMenuKey] = useState("");
   const [copiedMessageKey, setCopiedMessageKey] = useState("");
   const [agentMode, setAgentMode] = useState<"plan" | "act">("act");
@@ -737,17 +753,19 @@ export function ChatPanel(props: any) {
               </div>
             ) : null}
             <div
-              className={chatClass("messages", visibleMessages.length === 0 && "empty")}
+              className={chatClass("messages", selectedChatHistoryLoading ? "loading" : visibleMessages.length === 0 && "empty")}
               ref={messagesScrollRef}
               onScroll={updateChatAutoScroll}
             >
-              {visibleMessages.length === 0 ? (
+              {selectedChatHistoryLoading ? (
+                <ChatHistorySkeleton />
+              ) : visibleMessages.length === 0 ? (
                 <div className={chatClass("chatEmptyPrompt")}>
                   <strong>No messages yet</strong>
                   <p>Messages with {selectedAgent.name} will appear here.</p>
                 </div>
               ) : null}
-              {visibleMessages.map((message, index) => {
+              {!selectedChatHistoryLoading ? visibleMessages.map((message, index) => {
                 const messageKey = `${message.role}-${index}`;
                 const displayContent = chatDisplayContent(message);
                 const generationForMessage = chatKanbanGeneration?.key === messageKey ? chatKanbanGeneration : null;
@@ -894,10 +912,10 @@ export function ChatPanel(props: any) {
                     </div>
                   </div>
                 );
-              })}
+              }) : null}
               <div ref={messagesEndRef} aria-hidden="true" />
             </div>
-            {visibleMessages.length === 0 ? (
+            {!selectedChatHistoryLoading && visibleMessages.length === 0 ? (
               <div className={chatClass("chatSuggestions")} aria-label="Suggested prompts">
                 {[
                   "What are you working on?",
@@ -942,7 +960,7 @@ export function ChatPanel(props: any) {
                 onToggleRecording={recording ? stopAudioRecording : () => void startAudioRecording("chat")}
                 canSend={Boolean(text.trim() || chatAttachments.length || chatDirectories.length)}
                 submitOnEnter
-                hermesSlashCommands={selectedAgent.runtime === "hermes"}
+                hermesSlashCommands
                 agentMode={agentMode}
                 onAgentModeChange={setAgentMode}
                 modelPicker={modelPicker}
@@ -974,7 +992,5 @@ export function ChatPanel(props: any) {
       <ChatFolderModal {...props} />
 
       <SkillBrowserModal {...props} />
-
-      <AgentSettingsModal {...props} />
   </>);
 }

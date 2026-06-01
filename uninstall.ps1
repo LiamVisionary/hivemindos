@@ -248,6 +248,22 @@ if (Ask-YesNo "Remove seeded AI-ready shared-brain contract, templates, and Obsi
   Ok "Removed seeded AI-ready shared-brain files"
 }
 
+if (Ask-YesNo "Remove auto-installed packaged HivemindOS skills from the shared Skills shelf?" $false) {
+  $skillsFolder = Join-Path $vaultPath "Skills"
+  if (Test-Path $skillsFolder) {
+    Get-ChildItem -Path $skillsFolder -Recurse -Filter ".hivemind-skill-source.json" -File -ErrorAction SilentlyContinue |
+      Where-Object {
+        $content = Get-Content $_.FullName -Raw
+        $content -match '"provider"\s*:\s*"packaged-auto-install"'
+      } |
+      ForEach-Object {
+        $skillDir = $_.Directory.FullName
+        Remove-Item $skillDir -Recurse -Force -ErrorAction SilentlyContinue
+        Ok "Removed $skillDir"
+      }
+  }
+}
+
 if (Ask-YesNo "Remove HivemindOS app cache/build/dependencies from this checkout?" $true) {
   foreach ($path in @(".next", ".setup-cache", "node_modules")) {
     if (Test-Path $path) { Remove-Item $path -Recurse -Force }

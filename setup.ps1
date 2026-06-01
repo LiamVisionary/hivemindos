@@ -473,6 +473,30 @@ function Seed-BundledSharedSkills {
     } | ConvertTo-Json -Depth 3
     Set-Content -Path (Join-Path $destination ".hivemind-skill-source.json") -Value $metadata
   }
+  $autoInstallRoot = Join-Path $Root "packaged-skills\auto-install"
+  $autoInstallSkillFiles = if (Test-Path $autoInstallRoot) {
+    Get-ChildItem -Path $autoInstallRoot -Recurse -Filter "SKILL.md" -File -ErrorAction SilentlyContinue |
+      Where-Object { $_.Directory.Parent.FullName -eq $autoInstallRoot }
+  } else {
+    @()
+  }
+  foreach ($skillFile in $autoInstallSkillFiles) {
+    $slug = $skillFile.Directory.Name
+    $destination = Join-Path $skillsFolder $slug
+    if (-not (Test-Path (Join-Path $destination "SKILL.md"))) {
+      New-Item -ItemType Directory -Force -Path $destination | Out-Null
+      Copy-Item -Path (Join-Path $skillFile.Directory.FullName "*") -Destination $destination -Recurse -Force
+      $seeded += 1
+    }
+    $metadata = @{
+      provider = "packaged-auto-install"
+      providerLabel = "HivemindOS auto-installed packaged skills"
+      sourcePath = $skillFile.Directory.FullName
+      sourceUrl = "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/auto-install/$slug"
+      importedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    } | ConvertTo-Json -Depth 3
+    Set-Content -Path (Join-Path $destination ".hivemind-skill-source.json") -Value $metadata
+  }
 
   $readme = New-Object System.Collections.Generic.List[string]
   $readme.Add("# Skills")
@@ -492,7 +516,7 @@ function Seed-BundledSharedSkills {
     $readme.Add("- [[$($_.Name)/SKILL]] - $description")
   }
   Set-Content -Path (Join-Path $skillsFolder "README.md") -Value $readme
-  if ($seeded -gt 0) { Ok "Seeded $seeded bundled HivemindOS shared skill(s)" } else { Ok "Bundled HivemindOS shared skills already present" }
+  if ($seeded -gt 0) { Ok "Seeded $seeded bundled/auto-install HivemindOS shared skill(s)" } else { Ok "Bundled and auto-install HivemindOS shared skills already present" }
 }
 
 Seed-BundledSharedSkills -VaultPath $vaultPath

@@ -8,6 +8,7 @@ import type { AgentProfile } from "@/lib/types/agent-runtime";
 
 export type UsePodRegistration = {
   token: string;
+  tokenEnvName?: string;
   depositAddress: string;
   depositCode: string;
   dashboardUrl: string;
@@ -100,6 +101,24 @@ function messageForUsePodError(status: UsePodCheckStatus, detail = "") {
   return detail || "UsePod could not be checked right now.";
 }
 
+function isRetryableUsePodError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const cause = "cause" in error ? error.cause : undefined;
+  const code = cause && typeof cause === "object" && "code" in cause ? String(cause.code) : "";
+  return error.name === "TimeoutError"
+    || error.message.toLowerCase().includes("fetch failed")
+    || code.startsWith("UND_")
+    || code === "ECONNRESET"
+    || code === "ETIMEDOUT";
+}
+
+function messageForUsePodNetworkError(error: unknown) {
+  if (error instanceof Error && error.name === "TimeoutError") {
+    return "UsePod did not answer the model check in time. If you just funded it, wait a moment and check again.";
+  }
+  return "HivemindOS could not reach UsePod for the model check. Your token may be funded, but the checker hit a network hiccup. Try Check funding again.";
+}
+
 function categorizeUsePodError(status: number, detail: string): UsePodCheckStatus {
   const text = detail.toLowerCase();
   if (status === 401 || status === 403) return "missing-token";
@@ -130,7 +149,44 @@ function extractUsePodModels(data: unknown): UsePodModel[] {
     const name = typeof source.name === "string" && source.name.trim() ? source.name.trim() : undefined;
     models.push({ id, name });
   }
-  return models;
+  const uniqueModels = new Map<string, UsePodModel>();
+  for (const model of models) {
+    const existing = uniqueModels.get(model.id);
+    if (!existing) {
+      uniqueModels.set(model.id, model);
+      continue;
+    }
+    if (!existing.name && model.name) uniqueModels.set(model.id, model);
+  }
+  return Array.from(uniqueModels.values());
+}
+
+function extractUsePodBalanceRemaining(data: unknown): string {
+  if (!data || typeof data !== "object") return "";
+  const queue: unknown[] = [data];
+  const balanceKeys = new Set([
+    "balance",
+    "balance_remaining",
+    "balanceRemaining",
+    "remaining_balance",
+    "remainingBalance",
+    "remaining_usdc",
+    "remainingUsdc",
+    "usdcBalance",
+    "usdBalance",
+  ]);
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object") continue;
+    for (const [key, value] of Object.entries(current as Record<string, unknown>)) {
+      if (balanceKeys.has(key) && (typeof value === "string" || typeof value === "number")) {
+        const text = String(value).trim();
+        if (text) return text;
+      }
+      if (value && typeof value === "object" && !Array.isArray(value)) queue.push(value);
+    }
+  }
+  return "";
 }
 
 function extractErrorMessage(data: unknown, fallback: string) {
@@ -151,6 +207,26 @@ export function isUsePodProfile(profile: Pick<AgentProfile, "provider">) {
 
 export function buildUsePodOpenAIBaseUrl(token: string) {
   return `${USEPOD_API_BASE}/proxy/${encodeURIComponent(token)}/v1`;
+}
+
+function tokenFromUsePodDashboardUrl(url?: string) {
+  const text = url?.trim();
+  if (!text) return "";
+  try {
+    const parsed = new URL(text);
+    return parsed.searchParams.get("token")?.trim() || "";
+  } catch {
+    const match = text.match(/[?&]token=([^&#]+)/);
+    return match ? decodeURIComponent(match[1]).trim() : "";
+  }
+}
+
+function buildUsePodTokenEnvName(registration: Pick<UsePodRegistration, "depositCode" | "token">) {
+  const suffix = (registration.depositCode || registration.token)
+    .replace(/[^A-Za-z0-9]/g, "")
+    .slice(0, 24)
+    .toUpperCase();
+  return suffix ? `USEPOD_TOKEN_${suffix}` : USEPOD_DEFAULT_TOKEN_ENV;
 }
 
 export async function readUsePodEnvValue(key: string) {
@@ -176,10 +252,34 @@ export async function readUsePodDashboardUrl(profile?: Pick<AgentProfile, "usePo
   return profile?.usePod?.dashboardUrl?.trim() || await readUsePodEnvValue(USEPOD_DASHBOARD_URL_ENV);
 }
 
+export async function readUsePodSavedSetup(profile?: Pick<AgentProfile, "usePod">): Promise<UsePodCheckResult> {
+  const tokenEnvName = profile?.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV;
+  const token = await readUsePodEnvValue(tokenEnvName);
+  const depositAddress = await readUsePodDepositAddress(profile);
+  const depositCode = await readUsePodDepositCode(profile);
+  const dashboardUrl = await readUsePodDashboardUrl(profile);
+  return {
+    ok: Boolean(token),
+    status: token ? "needs-funding" : "missing-token",
+    message: token ? "UsePod token is saved." : "No saved UsePod token found.",
+    tokenEnvName,
+    depositAddress,
+    depositCode,
+    dashboardUrl,
+    modelCount: 0,
+    models: [],
+    balanceRemaining: "",
+    route: "",
+    checkedAt: new Date().toISOString(),
+  };
+}
+
 export async function resolveUsePodRuntimeConfig(profile: AgentProfile): Promise<UsePodRuntimeConfig | null> {
   if (!isUsePodProfile(profile)) return null;
   const tokenEnvName = profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV;
-  const token = profile.token?.trim() || await readUsePodEnvValue(tokenEnvName);
+  const token = profile.token?.trim()
+    || tokenFromUsePodDashboardUrl(profile.usePod?.dashboardUrl)
+    || await readUsePodEnvValue(tokenEnvName);
   if (!token) {
     throw new Error(`${tokenEnvName} is required before this UsePod agent can run inference. Use the UsePod setup action or save a funded token in shared env.`);
   }
@@ -208,6 +308,31 @@ export function summarizeUsePodResponseHeaders(headers: Headers) {
   };
 }
 
+async function probeUsePodBalance(config: UsePodRuntimeConfig, model: string) {
+  const response = await fetch(`${config.baseUrl}${config.chatPath}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...config.headers,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "user", content: "ok" }],
+      stream: false,
+      max_tokens: 1,
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(20_000),
+  });
+  const headers = summarizeUsePodResponseHeaders(response.headers);
+  const data = await response.json().catch(async () => ({ error: await response.text().catch(() => "") })) as unknown;
+  if (!response.ok) return null;
+  return {
+    balanceRemaining: headers?.balanceRemaining || extractUsePodBalanceRemaining(data),
+    route: headers?.route ?? "",
+  };
+}
+
 export async function registerUsePodToken(): Promise<UsePodRegistration> {
   const response = await fetch(`${USEPOD_API_BASE}/v1/register`, {
     method: "POST",
@@ -228,7 +353,7 @@ export async function registerUsePodToken(): Promise<UsePodRegistration> {
   if (!depositAddress && !depositCode && !dashboardUrl) {
     throw new Error("UsePod did not return funding instructions for the token.");
   }
-  return { token, depositAddress, depositCode, dashboardUrl, raw: data };
+  return { token, tokenEnvName: buildUsePodTokenEnvName({ token, depositCode }), depositAddress, depositCode, dashboardUrl, raw: data };
 }
 
 async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckResult> {
@@ -268,15 +393,36 @@ async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckRe
       checkedAt,
     };
   }
-  const response = await fetch(`${config.baseUrl}${config.statusPath}`, {
-    method: "GET",
-    headers: config.headers,
-    cache: "no-store",
-    signal: AbortSignal.timeout(12_000),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${config.baseUrl}${config.statusPath}`, {
+      method: "GET",
+      headers: config.headers,
+      cache: "no-store",
+      signal: AbortSignal.timeout(12_000),
+    });
+  } catch (error) {
+    if (!isRetryableUsePodError(error)) throw error;
+    response = await fetch(`${config.baseUrl}${config.statusPath}`, {
+      method: "GET",
+      headers: config.headers,
+      cache: "no-store",
+      signal: AbortSignal.timeout(12_000),
+    }).catch((retryError) => {
+      throw new Error(messageForUsePodNetworkError(retryError));
+    });
+  }
   const headers = summarizeUsePodResponseHeaders(response.headers);
   const data = await response.json().catch(async () => ({ error: await response.text().catch(() => "") })) as unknown;
   const models = extractUsePodModels(data);
+  const bodyBalance = extractUsePodBalanceRemaining(data);
+  let balanceRemaining = headers?.balanceRemaining || bodyBalance;
+  let route = headers?.route ?? "";
+  if (response.ok && !balanceRemaining && models[0]?.id && profile.usePod?.lastTestStatus === "checking") {
+    const probe = await probeUsePodBalance(config, models[0].id).catch(() => null);
+    balanceRemaining = probe?.balanceRemaining || "";
+    route = probe?.route || route;
+  }
   if (!response.ok) {
     const detail = extractErrorMessage(data, `UsePod returned HTTP ${response.status}.`);
     const status = categorizeUsePodError(response.status, detail);
@@ -290,8 +436,8 @@ async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckRe
       dashboardUrl: await readUsePodDashboardUrl(profile),
       modelCount: 0,
       models: [],
-      balanceRemaining: headers?.balanceRemaining ?? "",
-      route: headers?.route ?? "",
+      balanceRemaining,
+      route,
       checkedAt,
       httpStatus: response.status,
     };
@@ -299,15 +445,17 @@ async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckRe
   return {
     ok: true,
     status: "ready",
-    message: models.length ? `UsePod returned ${models.length} model${models.length === 1 ? "" : "s"}.` : "UsePod is reachable, but no models were returned.",
+    message: models.length
+      ? `UsePod returned ${models.length} model${models.length === 1 ? "" : "s"}.`
+      : "UsePod is reachable, but no models were returned.",
     tokenEnvName: config.tokenEnvName,
     depositAddress: await readUsePodDepositAddress(profile),
     depositCode: await readUsePodDepositCode(profile),
     dashboardUrl: await readUsePodDashboardUrl(profile),
     modelCount: models.length,
     models,
-    balanceRemaining: headers?.balanceRemaining ?? profile.usePod?.lastBalanceRemaining ?? "",
-    route: headers?.route ?? profile.usePod?.lastRoute ?? "",
+    balanceRemaining: balanceRemaining || profile.usePod?.lastBalanceRemaining || "",
+    route: route || profile.usePod?.lastRoute || "",
     checkedAt,
     httpStatus: response.status,
   };
@@ -320,7 +468,9 @@ export async function checkUsePodModels(profile: AgentProfile): Promise<UsePodCh
     return {
       ok: false,
       status: "provider-unavailable",
-      message: error instanceof Error ? error.message : "UsePod model check failed.",
+      message: error instanceof Error && !error.message.toLowerCase().includes("fetch failed")
+        ? error.message
+        : messageForUsePodNetworkError(error),
       tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
       depositAddress: await readUsePodDepositAddress(profile),
       depositCode: await readUsePodDepositCode(profile),
@@ -398,6 +548,7 @@ export async function testUsePodChat(profile: AgentProfile, model: string): Prom
   });
   const headers = summarizeUsePodResponseHeaders(response.headers);
   const data = await response.json().catch(async () => ({ error: await response.text().catch(() => "") })) as unknown;
+  const balanceRemaining = headers?.balanceRemaining || extractUsePodBalanceRemaining(data);
   if (!response.ok) {
     const detail = extractErrorMessage(data, `UsePod returned HTTP ${response.status}.`);
     const status = categorizeUsePodError(response.status, detail);
@@ -411,7 +562,7 @@ export async function testUsePodChat(profile: AgentProfile, model: string): Prom
       dashboardUrl: await readUsePodDashboardUrl(profile),
       modelCount: 0,
       models: [],
-      balanceRemaining: headers?.balanceRemaining ?? "",
+      balanceRemaining,
       route: headers?.route ?? "",
       checkedAt,
       httpStatus: response.status,
@@ -427,26 +578,34 @@ export async function testUsePodChat(profile: AgentProfile, model: string): Prom
     dashboardUrl: await readUsePodDashboardUrl(profile),
     modelCount: 0,
     models: [],
-    balanceRemaining: headers?.balanceRemaining ?? profile.usePod?.lastBalanceRemaining ?? "",
+    balanceRemaining: balanceRemaining || profile.usePod?.lastBalanceRemaining || "",
     route: headers?.route ?? profile.usePod?.lastRoute ?? "",
     checkedAt,
     httpStatus: response.status,
   };
 }
 
-async function writeHiveEnvValue(key: string, value: string, args: string[]) {
+function envAssignments(entries: Array<[string, string]>) {
+  return entries
+    .filter(([, value]) => value)
+    .map(([key, value]) => `${key}=${value}`)
+    .join("\n");
+}
+
+async function importHiveEnvValues(entries: Array<[string, string]>, args: string[]) {
+  const input = envAssignments(entries);
+  if (!input) return;
   await new Promise<void>((resolve, reject) => {
     const child = spawn(join(process.cwd(), "scripts", "hive-env-add"), [
-      "--stdin",
+      "--import-stdin",
       ...args,
-      key,
     ], {
       stdio: ["pipe", "pipe", "pipe"],
     });
     let stderr = "";
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
-      reject(new Error(`Timed out while saving ${key} to shared env.`));
+      reject(new Error("Timed out while saving UsePod credentials to shared env."));
     }, 30_000);
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => {
@@ -462,36 +621,32 @@ async function writeHiveEnvValue(key: string, value: string, args: string[]) {
         resolve();
         return;
       }
-      reject(new Error(stderr.trim() || `hive-env-add exited with status ${code ?? "unknown"} while saving ${key}.`));
+      reject(new Error(stderr.trim() || `hive-env-add exited with status ${code ?? "unknown"} while saving UsePod credentials.`));
     });
-    child.stdin.end(value);
+    child.stdin.end(`${input}\n`);
   });
 }
 
 export async function saveUsePodRegistration(registration: UsePodRegistration) {
+  const tokenEnvName = registration.tokenEnvName || buildUsePodTokenEnvName(registration);
   const entries: Array<[string, string]> = [
-    [USEPOD_DEFAULT_TOKEN_ENV, registration.token],
+    [tokenEnvName, registration.token],
     [USEPOD_DEPOSIT_ENV, registration.depositAddress],
     [USEPOD_DEPOSIT_CODE_ENV, registration.depositCode],
     [USEPOD_DASHBOARD_URL_ENV, registration.dashboardUrl],
   ];
-  for (const [key, value] of entries) {
-    if (!value) continue;
-    await writeHiveEnvValue(key, value, [
-      "--scope",
-      "agent",
-      "--runtime",
-      "generic",
-    ]);
-    for (const runtime of ["openclaw", "hermes", "aeon"]) {
-      await writeHiveEnvValue(key, value, [
-        "--no-backup",
-        "--no-tailnet-sync",
-        "--scope",
-        "agent",
-        "--runtime",
-        runtime,
-      ]);
-    }
-  }
+  await importHiveEnvValues(entries, [
+    "--scope",
+    "agent",
+    "--runtime",
+    "generic",
+  ]);
+  await Promise.all(["openclaw", "hermes", "aeon"].map((runtime) => importHiveEnvValues(entries, [
+    "--no-backup",
+    "--no-tailnet-sync",
+    "--scope",
+    "agent",
+    "--runtime",
+    runtime,
+  ])));
 }

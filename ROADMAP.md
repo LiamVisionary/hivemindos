@@ -24,6 +24,8 @@ HivemindOS is a local-first control room for private agent fleets. It connects a
 ## Next
 
 - Polish first-run onboarding around HivemindOS naming, repo rename redirects, default vault migration, Tailscale status, missing Node.js/pnpm, and collector reachability.
+- Add workspace/profile isolation for operators who need separate agent fleets, vault targets, provider defaults, wallet policies, allowed tools, and runtime session stores for different projects or clients.
+- Expand the native first-run path into a guided setup and repair wizard that classifies fresh, update, replace, remote, and existing-install states before running actions.
 - Add a clear migration panel for users moving from older local storage keys, old vault folder names, and previous collector service names.
 - Make collector auto-update safer and more visible, including dry-run diff summaries, rollback notes, and post-update health checks.
 - Add collector authentication on top of Tailnet reachability.

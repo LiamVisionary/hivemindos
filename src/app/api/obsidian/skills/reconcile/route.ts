@@ -15,11 +15,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({})) as {
       vaultPath?: string;
       providers?: RemoteBrainSkillProviderInventory[];
+      includeFleetProviders?: boolean;
       policies?: Partial<Record<BrainSkillProviderId, BrainSkillProviderAutoSyncPolicy>>;
     };
     const remoteProviders = [
       ...(body.providers ?? []),
-      ...(await remoteSkillProviders(request)),
+      ...(body.includeFleetProviders === false ? [] : await remoteSkillProviders(request, { includeSourceFiles: true })),
     ];
     const result = await reconcileBrainSkills({
       vaultPath: body.vaultPath,

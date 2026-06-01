@@ -9,11 +9,134 @@ import { AgentCallsSettingsPanel } from "./AgentCallsSettingsPanel";
 import { GuidedProviderSetup } from "./GuidedProviderSetup";
 import { GuidedUsePodSetup } from "./GuidedUsePodSetup";
 import { InlineRenameControl } from "@/features/dashboard/views/shared/InlineRenameControl";
+import { ModelPillSelector } from "./ModelPillSelector";
+import { summarizeRuntimeModelRegistry } from "./runtime-model-registry";
 import type { AgentRuntime } from "@/lib/types/agent-runtime";
 import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 
+const USEPOD_RUNTIME_ICON_PATH = "/icons/runtimes/usepod.webp";
+const USEPOD_RUNTIME_ICON_MARK_STYLE = {
+  width: 34,
+  height: 34,
+  overflow: "hidden",
+  borderColor: "rgba(94, 234, 212, 0.24)",
+  borderRadius: 8,
+  background: "rgba(2, 6, 23, 0.28)",
+};
+const USEPOD_RUNTIME_ICON_IMAGE_STYLE = {
+  "--runtime-image": `url(${USEPOD_RUNTIME_ICON_PATH})`,
+  width: 32,
+  height: 32,
+  borderRadius: 7,
+};
+
+function ProviderDiscoveryCard({ fleetClass, runtimeLabel }: { fleetClass: (...names: Array<string | false | null | undefined>) => string; runtimeLabel: string }) {
+  const shimmerGradient = "linear-gradient(90deg, rgba(148,163,184,.13), rgba(94,234,212,.28), rgba(251,191,36,.22), rgba(148,163,184,.13))";
+  return (
+    <div
+      className={fleetClass("agentRuntimeEmptyCard")}
+      role="status"
+      aria-live="polite"
+      aria-label={`Discovering ${runtimeLabel} providers`}
+      style={{
+        minHeight: 74,
+        alignContent: "center",
+        gap: 10,
+        padding: 10,
+      }}
+    >
+      <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, minWidth: 0 }}>
+        <strong style={{ fontSize: 12, lineHeight: 1.2 }}>{runtimeLabel} providers</strong>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--muted)", fontSize: 10, fontWeight: 750 }}>
+          {[0, 1, 2].map((index) => (
+            <span
+              key={index}
+              className="animate-pulse"
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: 999,
+                background: index === 1 ? "rgba(251,191,36,.78)" : "rgba(94,234,212,.68)",
+                animationDelay: `${index * 140}ms`,
+              }}
+            />
+          ))}
+          Scanning
+        </span>
+      </span>
+      <span style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 7 }}>
+        {[0, 1, 2].map((index) => (
+          <span
+            key={index}
+            style={{
+              position: "relative",
+              overflow: "hidden",
+              minHeight: 40,
+              border: "1px solid rgba(148,163,184,.14)",
+              borderRadius: 7,
+              background: "rgba(15,23,42,.36)",
+              display: "grid",
+              gridTemplateColumns: "18px minmax(0, 1fr)",
+              alignItems: "center",
+              gap: 7,
+              padding: "8px 9px",
+            }}
+          >
+            <span
+              className="animate-pulse"
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: 6,
+                background: index === 1 ? "rgba(251,191,36,.20)" : "rgba(94,234,212,.16)",
+                boxShadow: index === 1 ? "inset 0 0 0 1px rgba(251,191,36,.28)" : "inset 0 0 0 1px rgba(94,234,212,.22)",
+                animationDelay: `${index * 110}ms`,
+              }}
+            />
+            <span style={{ display: "grid", gap: 5 }}>
+              <span
+                className="animate-pulse"
+                style={{
+                  width: `${68 - index * 8}%`,
+                  height: 6,
+                  borderRadius: 999,
+                  background: "rgba(226,232,240,.20)",
+                  animationDelay: `${index * 110}ms`,
+                }}
+              />
+              <span
+                className="animate-pulse"
+                style={{
+                  width: `${42 + index * 8}%`,
+                  height: 5,
+                  borderRadius: 999,
+                  background: "rgba(148,163,184,.14)",
+                  animationDelay: `${index * 110 + 70}ms`,
+                }}
+              />
+            </span>
+            <svg
+              width="100%"
+              height="100%"
+              viewBox="0 0 120 40"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              focusable="false"
+              style={{ position: "absolute", inset: 0, opacity: 0.42, pointerEvents: "none" }}
+            >
+              <rect x="-90" y="0" width="44" height="40" fill={shimmerGradient}>
+                <animate attributeName="x" values="-90;140" dur="1.7s" begin={`${index * 0.16}s`} repeatCount="indefinite" />
+              </rect>
+            </svg>
+          </span>
+        ))}
+      </span>
+    </div>
+  );
+}
+
 export function AgentSettingsModal(props: any) {
-  const { BEE_WORKER_PRESET_LIST, BrainCircuit, Button, Check, ChevronRight, Copy, Cpu, Eye, FolderOpen, HERMES_UPDATE_INTEGRATION_KEYS, Image, KanbanSquare, LoaderCircle, MessageSquare, Minus, Pencil, PlugZap, Plus, RUNTIME_LABELS, RefreshCcw, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Upload, addHermesModelFromDraft, agentCreateDraft, agentCreateMachine, agentRenameDraft, agentRenameEditing, agentRuntimeAdvancedOpen, agentRuntimeFolderBrowsing, agentRuntimeFolderEditing, agentRuntimeFolderStatus, agentSettingsCustomWorker, agentSettingsCustomWorkers, agentSettingsDescription, agentSettingsIntegrationTarget, agentSettingsPanel, agentSettingsPreferredSkills, agentSettingsProvider, agentSettingsRuntime, agentSettingsSelectedCustomWorkerId, agentSettingsSkillProfile, agentSettingsTitle, agentSettingsWorkerClass, agentSettingsWorkerImage, agentSettingsWorkerLabel, agentSettingsWorkerPreset, agentWorkerClassView, applyCustomWorkerClass, beeRoleIconPath, browseAgentRuntimeFolder, closeAgentSettingsModal, createAgentFromModal, customWorkerDraft, customWorkerImageError, customWorkerImageInputRef, customWorkerSkillSearch, filteredCustomWorkerSkills, fleetClass, hermesUpdateRequired, openAgentSkillBrowser, openCustomWorkerClassCreator, providerIconPath, providerIconRenderMode, refreshRuntimeIntegrations, removeAgentPreferredSkill, roleModalAgent, runRuntimeIntegrationAction, runtimeAvailability, runtimeBackgroundPrompt, runtimeCapabilities, runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode, runtimeIntegrationBusy, runtimeIntegrationMessage, runtimeIntegrationStatus, runtimeModelDraft, runtimeModelProviders, runtimeModelSelection, runtimeModelSetupMode, runtimeSessionQuery, runtimeSessionResults, runtimeSetupDefinition, runtimeSetupKey, runtimeUpdateConfirmKey, searchRuntimeSessionsForAgent, selectAgentWorkerClass, selectCustomWorkerClass, selectedRuntimeModelId, selectedRuntimeModels, selectedRuntimeProvider, setActiveView, setAgentCreateDraft, setAgentRenameDraft, setAgentRenameEditing, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setAgentWorkerClassView, setCustomWorkerDraft, setCustomWorkerSkillSearch, setRuntimeBackgroundPrompt, setRuntimeModelDraft, setRuntimeModelSetupMode, setRuntimeSessionQuery, setRuntimeSetupKey, setRuntimeUpdateConfirmKey, sharedVault, startAgentChat, toggleCustomWorkerSkill, updateAgentProfile, updateAgentRuntimeModel, updateAgentSkillProfile, uploadCustomWorkerImage, workerCapabilityBadges } = props;
+  const { BEE_WORKER_PRESET_LIST, BrainCircuit, Button, Check, ChevronRight, Copy, Cpu, Eye, FolderOpen, HERMES_UPDATE_INTEGRATION_KEYS, Image, KanbanSquare, LoaderCircle, MessageSquare, Minus, Pencil, PlugZap, Plus, RUNTIME_LABELS, RefreshCcw, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Upload, addHermesModelFromDraft, agentCreateDraft, agentCreateMachine, agentRenameDraft, agentRenameEditing, agentRuntimeAdvancedOpen, agentRuntimeFolderBrowsing, agentRuntimeFolderEditing, agentRuntimeFolderStatus, agentSettingsCustomWorker, agentSettingsCustomWorkers, agentSettingsDescription, agentSettingsIntegrationTarget, agentSettingsPanel, agentSettingsPreferredSkills, agentSettingsProvider, agentSettingsRuntime, agentSettingsSelectedCustomWorkerId, agentSettingsSkillProfile, agentSettingsTitle, agentSettingsWorkerClass, agentSettingsWorkerImage, agentSettingsWorkerLabel, agentSettingsWorkerPreset, agentWorkerClassView, applyCustomWorkerClass, beeRoleIconPath, browseAgentRuntimeFolder, closeAgentSettingsModal, createAgentFromModal, customWorkerDraft, customWorkerImageError, customWorkerImageInputRef, customWorkerSkillSearch, displayAgents, filteredCustomWorkerSkills, fleetClass, hermesUpdateRequired, openAgentSkillBrowser, openCustomWorkerClassCreator, providerIconPath, providerIconRenderMode, refreshRuntimeIntegrations, removeAgentPreferredSkill, roleModalAgent, runRuntimeIntegrationAction, runtimeAvailability, runtimeBackgroundPrompt, runtimeCapabilities, runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode, runtimeIntegrationBusy, runtimeIntegrationMessage, runtimeIntegrationStatus, runtimeModelDraft, runtimeModelProviders, runtimeModelSelectionFresh, runtimeModelSetupMode, runtimeSessionQuery, runtimeSessionResults, runtimeSetupDefinition, runtimeSetupKey, runtimeUpdateConfirmKey, searchRuntimeSessionsForAgent, selectAgentWorkerClass, selectCustomWorkerClass, selectedRuntimeModelId, selectedRuntimeModels, selectedRuntimeProvider, setActiveView, setAgentCreateDraft, setAgentRenameDraft, setAgentRenameEditing, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setAgentWorkerClassView, setCustomWorkerDraft, setCustomWorkerSkillSearch, setRuntimeBackgroundPrompt, setRuntimeModelDraft, setRuntimeModelSetupMode, setRuntimeSessionQuery, setRuntimeSetupKey, setRuntimeUpdateConfirmKey, sharedVault, startAgentChat, toggleCustomWorkerSkill, updateAgentProfile, updateAgentRuntimeModel, updateAgentSkillProfile, uploadCustomWorkerImage, workerCapabilityBadges } = props;
   const [aeonOauthConnecting, setAeonOauthConnecting] = useState(false);
   const portalTarget = typeof document === "undefined" ? null : document.body;
   const openRouterSelected = (selectedRuntimeProvider?.slug || agentSettingsProvider) === "openrouter";
@@ -21,6 +144,29 @@ export function AgentSettingsModal(props: any) {
   const adaptiveSelected = openRouterSelected && selectedRuntimeModelId === "adaptive";
   const adaptiveOpenRouter = agentCreateMachine ? agentCreateDraft.adaptiveOpenRouter ?? {} : roleModalAgent?.adaptiveOpenRouter ?? {};
   const usePodConfig = agentCreateMachine ? agentCreateDraft.usePod ?? {} : roleModalAgent?.usePod ?? {};
+  const hasUsePodSetup = (config = {}) => Boolean(
+    config.tokenEnvName
+      || config.depositAddress
+      || config.depositCode
+      || config.dashboardUrl
+      || config.lastBalanceRemaining
+      || config.lastRoute
+      || config.lastCheckedAt
+      || typeof config.lastModelCount === "number",
+  );
+  const isUsePodSetupReady = (config = {}) => config.lastTestStatus === "ready" || (typeof config.lastModelCount === "number" && config.lastModelCount > 0);
+  const usePodSetupStarted = hasUsePodSetup(usePodConfig);
+  const usePodSetupComplete = isUsePodSetupReady(usePodConfig);
+  const usePodCreateBlocked = Boolean(agentCreateMachine && usePodSelected && !usePodSetupComplete);
+  const existingUsePodAgents = (displayAgents ?? []).filter((agent) => agent.provider === "usepod" && hasUsePodSetup(agent.usePod));
+  const unfinishedUsePodAgent = agentCreateMachine && !usePodSetupStarted
+    ? existingUsePodAgents.find((agent) => !isUsePodSetupReady(agent.usePod)) ?? null
+    : null;
+  const completedUsePodWallets = unfinishedUsePodAgent
+    ? []
+    : existingUsePodAgents.filter((agent) => isUsePodSetupReady(agent.usePod));
+  const usePodSetupTarget = unfinishedUsePodAgent ?? agentSettingsIntegrationTarget;
+  const usePodRequiresCurrentSetup = usePodSetupStarted || Boolean(unfinishedUsePodAgent);
   const adaptiveUseCaseOptions = [
     { value: "auto", label: "Auto" },
     { value: "coding", label: "Coding" },
@@ -39,6 +185,14 @@ export function AgentSettingsModal(props: any) {
     if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
     await refreshRuntimeIntegrations({ ...(agentSettingsIntegrationTarget ?? {}), ...patch });
+  };
+  const applyUsePodSetupProfile = async (patch: Record<string, unknown>) => {
+    if (agentCreateMachine && unfinishedUsePodAgent) {
+      updateAgentProfile(unfinishedUsePodAgent.id, patch);
+      await refreshRuntimeIntegrations({ ...unfinishedUsePodAgent, ...patch });
+      return;
+    }
+    await applyUsePodProfile(patch);
   };
   const openAeonGithubOauth = () => {
     if (aeonOauthConnecting) return;
@@ -170,7 +324,8 @@ export function AgentSettingsModal(props: any) {
   const hasRuntimeProviders = runtimeModelProviders.length > 0;
   const runtimeCanAddCustomModel = runtimeCanAddModels && hasRuntimeProviders;
   const runtimeLabel = RUNTIME_LABELS[agentSettingsRuntime] ?? agentSettingsRuntime;
-  const runtimeProviderEmptyTitle = runtimeIntegrationBusy === "status" ? "Loading providers..." : "No providers configured";
+  const showProviderDiscovery = !runtimeModelProviders.length && modelSelectableRuntime && !usePodSelected && !runtimeModelSelectionFresh && !runtimeIntegrationMessage;
+  const runtimeProviderEmptyTitle = "No providers configured";
   const runtimeProviderEmptyDetail = runtimeIntegrationMessage || `Add a provider, or refresh ${runtimeLabel} models from this machine.`;
   const runtimeModelEmptyTitle = runtimeIntegrationBusy === "status"
     ? "Loading models..."
@@ -179,10 +334,19 @@ export function AgentSettingsModal(props: any) {
     || (hasRuntimeProviders
       ? "Add a model to the selected provider when it is not discovered automatically."
       : "Models appear after a provider is connected.");
+  const runtimeModelOptions = openRouterSelected
+    ? [
+      { id: "adaptive", name: "Adaptive" },
+      ...selectedRuntimeModels.filter((model) => model.id !== "adaptive"),
+    ]
+    : selectedRuntimeModels;
+  const runtimeModelProviderSlug = selectedRuntimeProvider?.slug ?? agentSettingsProvider;
+  const runtimeModelRegistry = summarizeRuntimeModelRegistry(runtimeModelProviders, runtimeModelProviderSlug);
   const aeonAvailability = runtimeAvailability?.aeon;
   const aeonDetected = agentSettingsRuntime === "aeon" && aeonAvailability?.installed === true;
   const aeonNeedsSetup = agentSettingsRuntime === "aeon" && !aeonDetected;
   const isAutopilotSettings = selectedRuntimeSettings.kind === "autopilot";
+  const showWorkerClassSection = !isAutopilotSettings && !(usePodSelected && !usePodSetupComplete);
   const hideRuntimeSection = !agentCreateMachine && Boolean(selectedRuntimeSettings.hidesRuntimeSelectorWhenEditing);
   const runtimeFolderValue = roleModalAgent
     ? isAutopilotSettings
@@ -329,18 +493,24 @@ export function AgentSettingsModal(props: any) {
                           </span>
                         );
                       })}
-                      <span className={fleetClass("runtimeSegmentShell")} title="UsePod runs through its hosted OpenAI-compatible proxy and does not need a local OpenAI server.">
+                      <span className={fleetClass("runtimeSegmentShell")} title="UsePod runs through an OpenAI-compatible endpoint and does not need a local OpenAI server.">
                         <button
                           type="button"
                           aria-pressed={agentSettingsRuntime === "openai-compatible" && usePodSelected}
                           className={agentSettingsRuntime === "openai-compatible" && usePodSelected ? fleetClass("selectedRuntimeSegment") : ""}
                           onClick={selectUsePodRuntime}
                         >
-                          <span className={fleetClass("runtimeIconMark")} aria-hidden="true">
-                            <PlugZap aria-hidden="true" />
+                          <span
+                            className={fleetClass("runtimeIconMark")}
+                            aria-hidden="true"
+                            style={USEPOD_RUNTIME_ICON_MARK_STYLE}
+                          >
+                            <span
+                              className={fleetClass("runtimeIconImage")}
+                              style={USEPOD_RUNTIME_ICON_IMAGE_STYLE}
+                            />
                           </span>
                           <strong>UsePod</strong>
-                          <small className={fleetClass("runtimeSegmentSubcopy")}>Hosted proxy</small>
                         </button>
                       </span>
                     </div>
@@ -389,19 +559,23 @@ export function AgentSettingsModal(props: any) {
                     {usePodSelected ? (
                       <div className={fleetClass("agentRuntimeModelSetup", "agentRuntimeModelSetupProvider")}>
                         <GuidedUsePodSetup
-                          agent={agentSettingsIntegrationTarget}
+                          key={usePodSetupTarget?.id ?? "new-usepod"}
+                          agent={usePodSetupTarget}
                           busy={runtimeIntegrationBusy}
+                          existingWallets={completedUsePodWallets}
                           fleetClass={fleetClass}
+                          requireCurrentSetup={usePodRequiresCurrentSetup}
+                          recoverSavedSetup={!agentCreateMachine}
                           onCancel={closeAgentSettingsModal}
-                          onComplete={applyUsePodProfile}
+                          onComplete={applyUsePodSetupProfile}
                         />
                       </div>
                     ) : (
                       <>
-                    <div className={fleetClass("agentRuntimeCardGroup")}>
-                      <div className={fleetClass("agentRuntimeGroupHeader")}>
-                        <span>Provider</span>
-                        <button
+	                    <div className={fleetClass("agentRuntimeCardGroup")}>
+	                      <div className={fleetClass("agentRuntimeGroupHeader")}>
+	                        <span>Provider</span>
+	                        <button
                           type="button"
                           aria-label={`Refresh ${RUNTIME_LABELS[agentSettingsRuntime] ?? agentSettingsRuntime} models`}
                           title={`Refresh ${RUNTIME_LABELS[agentSettingsRuntime] ?? agentSettingsRuntime} models`}
@@ -420,8 +594,15 @@ export function AgentSettingsModal(props: any) {
                             onClick={() => setRuntimeModelSetupMode((current) => current === "provider" ? null : "provider")}
                           >
                             <span className={fleetClass("providerCardTitle")}>
-                              <span className={fleetClass("runtimeIconMark")} aria-hidden="true">
-                                <PlugZap aria-hidden="true" />
+                              <span
+                                className={fleetClass("runtimeIconMark")}
+                                aria-hidden="true"
+                                style={USEPOD_RUNTIME_ICON_MARK_STYLE}
+                              >
+                                <span
+                                  className={fleetClass("runtimeIconImage")}
+                                  style={USEPOD_RUNTIME_ICON_IMAGE_STYLE}
+                                />
                               </span>
                               <strong>UsePod</strong>
                             </span>
@@ -455,7 +636,9 @@ export function AgentSettingsModal(props: any) {
                             </button>
                           );
                         })}
-                        {!runtimeModelProviders.length ? (
+                        {showProviderDiscovery ? (
+                          <ProviderDiscoveryCard fleetClass={fleetClass} runtimeLabel={runtimeLabel} />
+                        ) : !runtimeModelProviders.length ? (
                           <div className={fleetClass("agentRuntimeEmptyCard")}>
                             <strong>{runtimeProviderEmptyTitle}</strong>
                             <small>{runtimeProviderEmptyDetail}</small>
@@ -473,67 +656,19 @@ export function AgentSettingsModal(props: any) {
                         ) : null}
                       </div>
                     </div>
-                    <div className={fleetClass("agentRuntimeCardGroup")}>
-                      <div className={fleetClass("agentRuntimeGroupHeader")}>
-                        <span>Model</span>
-                      </div>
-                      <div className={fleetClass("agentRuntimeModelCards")}>
-                        {openRouterSelected ? (
-                          <button
-                            type="button"
-                            className={adaptiveSelected ? fleetClass("agentRuntimeModelCard", "adaptiveRuntimeModelCard", "selectedRuntimeCard") : fleetClass("agentRuntimeModelCard", "adaptiveRuntimeModelCard")}
-                            aria-pressed={adaptiveSelected}
-                            onClick={() => updateAgentRuntimeModel("openrouter", "adaptive")}
-                          >
-                            <span className={fleetClass("adaptiveModelTitle")}>
-                              <strong>Adaptive</strong>
-                              <span className={fleetClass("adaptiveFreeBadge")}>Free</span>
-                            </span>
-                            <small>Best matching promo/free model</small>
-                            <span className={fleetClass("adaptiveTooltip")} role="tooltip">
-                              Leverages promo models on OpenRouter to power your agent 100% free, with a fallback on a paid agent of your choice
-                            </span>
-                          </button>
-                        ) : null}
-                        {selectedRuntimeModels.map((model) => {
-                          const selected = model.id === selectedRuntimeModelId;
-                          const modelLabel = model.name || model.id;
-                          const slashIndex = modelLabel.indexOf("/");
-                          const modelProviderLabel = slashIndex > 0 ? modelLabel.slice(0, slashIndex) : "";
-                          const modelNameLabel = slashIndex > 0 ? modelLabel.slice(slashIndex + 1) : modelLabel;
-                          return (
-                            <button
-                              type="button"
-                              key={model.id}
-                              className={selected ? fleetClass("agentRuntimeModelCard", "selectedRuntimeCard") : fleetClass("agentRuntimeModelCard")}
-                              aria-pressed={selected}
-                              onClick={() => updateAgentRuntimeModel(selectedRuntimeProvider?.slug ?? agentSettingsProvider, model.id)}
-                            >
-                              <span className={fleetClass("agentRuntimeModelTitle")}>
-                                {modelProviderLabel ? <span>{modelProviderLabel}</span> : null}
-                                <strong>{modelNameLabel}</strong>
-                              </span>
-                              {model.name ? <small>{model.id}</small> : null}
-                            </button>
-                          );
-                        })}
-                        {!selectedRuntimeModels.length ? (
-                          <div className={fleetClass("agentRuntimeEmptyCard")}>
-                            <strong>{runtimeModelEmptyTitle}</strong>
-                            <small>{runtimeModelEmptyDetail}</small>
-                          </div>
-                        ) : null}
-                        {runtimeCanAddCustomModel ? (
-                          <button
-                            type="button"
-                            className={fleetClass("agentRuntimeAddCard")}
-                            onClick={() => setRuntimeModelSetupMode((current) => current === "model" ? null : "model")}
-                          >
-                            <Plus aria-hidden="true" />
-                            <strong>Add model</strong>
-                          </button>
-                        ) : null}
-                      </div>
+	                    <div className={fleetClass("agentRuntimeCardGroup")}>
+	                      <div className={fleetClass("agentRuntimeGroupHeader")}>
+	                        <span>Model</span>
+	                      </div>
+                      <ModelPillSelector
+                        models={runtimeModelOptions}
+                        selectedModelId={selectedRuntimeModelId}
+                        disabled={Boolean(runtimeIntegrationBusy)}
+                        canAddModel={runtimeCanAddCustomModel}
+                        emptyLabel={`${runtimeModelEmptyTitle}. ${runtimeModelEmptyDetail}`}
+                        onSelectModel={(modelId) => updateAgentRuntimeModel(modelId === "adaptive" ? "openrouter" : runtimeModelProviderSlug, modelId)}
+                        onAddModel={() => setRuntimeModelSetupMode((current) => current === "model" ? null : "model")}
+                      />
                     </div>
                     {adaptiveSelected ? (
                       <details className={fleetClass("adaptiveAdvanced")}>
@@ -579,11 +714,15 @@ export function AgentSettingsModal(props: any) {
                       >
                         {runtimeModelSetupMode === "provider" && runtimeCanAddUsePod ? (
                           <GuidedUsePodSetup
-                            agent={agentSettingsIntegrationTarget}
+                            key={usePodSetupTarget?.id ?? "new-usepod"}
+                            agent={usePodSetupTarget}
                             busy={runtimeIntegrationBusy}
+                            existingWallets={completedUsePodWallets}
                             fleetClass={fleetClass}
+                            requireCurrentSetup={usePodRequiresCurrentSetup}
+                            recoverSavedSetup={!agentCreateMachine}
                             onCancel={() => setRuntimeModelSetupMode(null)}
-                            onComplete={applyUsePodProfile}
+                            onComplete={applyUsePodSetupProfile}
                           />
                         ) : runtimeModelSetupMode === "provider" ? (
                           <GuidedProviderSetup
@@ -691,7 +830,7 @@ export function AgentSettingsModal(props: any) {
                     </label>
                   </div>
                 ) : null}
-                {!isAutopilotSettings ? (
+                {showWorkerClassSection ? (
                 <div className={fleetClass("agentSettingsField", "agentWorkerClassPicker")}>
                   <span>Worker class</span>
                   {agentWorkerClassView === "presets" ? (
@@ -1299,7 +1438,7 @@ export function AgentSettingsModal(props: any) {
             ) : null}
 
             <div className={fleetClass("setupModalActions")}>
-              <Button type="button" disabled={runtimeIntegrationBusy === "create-agent"} onClick={agentCreateMachine ? () => void createAgentFromModal() : closeAgentSettingsModal}>
+              <Button type="button" disabled={runtimeIntegrationBusy === "create-agent" || usePodCreateBlocked} onClick={agentCreateMachine ? () => void createAgentFromModal() : closeAgentSettingsModal}>
                 <Check aria-hidden="true" />
                 {agentCreateMachine ? runtimeIntegrationBusy === "create-agent" ? "Creating..." : runtimeSettingsFeature(agentCreateDraft.runtime).createActionLabel || "Add agent" : "Done"}
               </Button>

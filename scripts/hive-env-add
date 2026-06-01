@@ -44,6 +44,7 @@ LOCAL_ONLY_KEYS = {
     "HIVE_AGENT_ENV_FILE",
     "HIVE_ENV_BACKUP_DIR",
     "HIVE_ENV_COLLECTOR_PORT",
+    "HIVE_ENV_COLLECTOR_PORTS",
     "HIVE_ENV_FILE",
     "HIVE_ENV_GPG_RECIPIENT",
     "HIVE_ENV_PROJECT_ROOT",
@@ -94,6 +95,58 @@ def local_setting(key: str) -> str:
         if value:
             return value
     return ""
+
+
+def hive_collector_setting(key: str) -> str:
+    value = parse_env_file(pathlib.Path.home() / ".hivemindos" / "collector.env").get(key)
+    return value or ""
+
+
+def valid_port(value: str) -> bool:
+    if not re.match(r"^\d+$", value):
+        return False
+    port = int(value)
+    return 0 < port < 65536
+
+
+def collector_ports() -> list[str]:
+    raw_ports = os.environ.get("HIVE_ENV_COLLECTOR_PORTS") or local_setting("HIVE_ENV_COLLECTOR_PORTS")
+    candidates: list[str] = []
+    if raw_ports:
+        candidates.extend(part.strip() for part in raw_ports.split(","))
+    candidates.extend([
+        os.environ.get("HIVE_ENV_COLLECTOR_PORT", ""),
+        local_setting("HIVE_ENV_COLLECTOR_PORT"),
+        hive_collector_setting("AGENT_TELEMETRY_PORT"),
+        "8787",
+        "8789",
+        "8791",
+    ])
+    ports: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if valid_port(candidate) and candidate not in seen:
+            ports.append(candidate)
+            seen.add(candidate)
+    return ports
+
+
+def tailscale_cli() -> str:
+    path_cli = shutil.which("tailscale")
+    candidates = [
+        path_cli or "",
+        os.environ.get("HIVE_TAILSCALE_CLI", ""),
+        "/opt/homebrew/opt/tailscale/bin/tailscale",
+        "/opt/homebrew/bin/tailscale",
+        "/usr/local/opt/tailscale/bin/tailscale",
+        "/usr/local/bin/tailscale",
+        "/Applications/Tailscale.app/Contents/MacOS/tailscale",
+        "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+    ]
+    for candidate in candidates:
+        if candidate and pathlib.Path(candidate).exists():
+            return candidate
+    return path_cli or ""
 
 
 def truthy(value: str | None) -> bool:
@@ -794,9 +847,10 @@ def tailscale_peer_targets() -> list[dict[str, str]]:
             {"host": target.strip(), "ip": target.strip(), "user": ""}
             for target in sorted({target.strip() for target in configured.split(",") if target.strip()})
         ]
-    if shutil.which("tailscale") is None:
+    cli = tailscale_cli()
+    if not cli:
         return []
-    proc = subprocess.run(["tailscale", "status", "--json"], text=True, capture_output=True, check=False)
+    proc = subprocess.run([cli, "status", "--json"], text=True, capture_output=True, check=False)
     if proc.returncode != 0:
         return []
     try:
@@ -813,27 +867,29 @@ def tailscale_peer_targets() -> list[dict[str, str]]:
         if not ip or ip in local_ips:
             continue
         target_host = str(peer.get("DNSName") or "").rstrip(".") or ip
-        user = env_sync_user_from_collector(ip)
-        if user:
-            targets.append({"host": target_host, "ip": ip, "user": user})
+        env_sync = env_sync_from_collector(ip)
+        if env_sync:
+            targets.append({"host": target_host, "ip": ip, **env_sync})
     return sorted(targets, key=lambda target: target["host"])
 
 
-def env_sync_user_from_collector(ip: str) -> str:
-    port = os.environ.get("HIVE_ENV_COLLECTOR_PORT") or local_setting("HIVE_ENV_COLLECTOR_PORT") or "8787"
-    try:
-        with urllib.request.urlopen(f"http://{ip}:{port}/health", timeout=2) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except Exception:
-        return ""
-    capabilities = data.get("capabilities")
-    if isinstance(capabilities, dict) and capabilities.get("envHttpSync") is not True:
-        return ""
-    env_sync = data.get("envSync")
-    if not isinstance(env_sync, dict) or env_sync.get("ready") is not True:
-        return ""
-    user = str(env_sync.get("user") or "").strip()
-    return user if KEY_RE.match(user.replace("-", "_")) or re.match(r"^[A-Za-z0-9._-]+$", user) else ""
+def env_sync_from_collector(ip: str) -> dict[str, str] | None:
+    for port in collector_ports():
+        try:
+            with urllib.request.urlopen(f"http://{ip}:{port}/health", timeout=2) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except Exception:
+            continue
+        capabilities = data.get("capabilities")
+        if isinstance(capabilities, dict) and capabilities.get("envHttpSync") is not True:
+            continue
+        env_sync = data.get("envSync")
+        if not isinstance(env_sync, dict) or env_sync.get("ready") is not True:
+            continue
+        user = str(env_sync.get("user") or "").strip()
+        if KEY_RE.match(user.replace("-", "_")) or re.match(r"^[A-Za-z0-9._-]+$", user):
+            return {"user": user, "port": port}
+    return None
 
 
 def target_candidates(target: str) -> list[str]:
@@ -882,22 +938,26 @@ def remote_update_args(args: argparse.Namespace, key: str) -> list[str]:
 
 
 def sync_target_over_collector(target: dict[str, str], args: argparse.Namespace, updates: dict[str, str]) -> tuple[bool, str]:
-    port = os.environ.get("HIVE_ENV_COLLECTOR_PORT") or local_setting("HIVE_ENV_COLLECTOR_PORT") or "8787"
-    url = f"http://{target['ip']}:{port}/env"
     payload = json.dumps({
         "scope": args.scope,
         "runtime": args.runtime,
         "entries": updates,
     }).encode("utf-8")
-    request = urllib.request.Request(url, data=payload, headers={"content-type": "application/json"}, method="POST")
-    try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            data = json.loads(response.read().decode("utf-8") or "{}")
-    except Exception as error:
-        return False, str(error)
-    if data.get("ok") is True:
-        return True, ""
-    return False, str(data.get("error") or "collector env sync failed")
+    ports = [target["port"]] if target.get("port") else collector_ports()
+    last_error = ""
+    for port in ports:
+        url = f"http://{target['ip']}:{port}/env"
+        request = urllib.request.Request(url, data=payload, headers={"content-type": "application/json"}, method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                data = json.loads(response.read().decode("utf-8") or "{}")
+        except Exception as error:
+            last_error = f"{port}: {error}"
+            continue
+        if data.get("ok") is True:
+            return True, ""
+        last_error = f"{port}: {data.get('error') or 'collector env sync failed'}"
+    return False, last_error or "collector env sync failed"
 
 
 def shared_env_values(args: argparse.Namespace, env_file: pathlib.Path) -> dict[str, str]:

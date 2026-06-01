@@ -6,6 +6,8 @@ import type {
   AgentWalletConfig,
   X402PaymentRequirement,
 } from "@/lib/types/agent-wallet";
+import type { AgentProfile, UsePodAgentConfig } from "@/lib/types/agent-runtime";
+import { agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
 
 export const DEFAULT_AGENT_WALLET: Omit<AgentWalletConfig, "agentId"> = {
   enabled: false,
@@ -89,7 +91,62 @@ export function stripUnfundedWalletBalance(config: AgentWalletConfig): AgentWall
   };
 }
 
+export function parseWalletBalanceUsd(value?: string | number | null): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? Math.max(0, value) : null;
+  const text = value?.trim();
+  if (!text) return null;
+  const match = text.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const numeric = Number(match[0]);
+  return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
+}
+
+export function getUsePodBalanceUsd(config?: UsePodAgentConfig): number | null {
+  return parseWalletBalanceUsd(config?.lastBalanceRemaining);
+}
+
+export function resolveAgentWallet(agent: Pick<AgentProfile, "id" | "provider" | "usePod">, wallet?: AgentWalletConfig): AgentWalletConfig {
+  const base = wallet ?? createDefaultAgentWallet(agent.id);
+  const provider = agent.provider === "usepod" ? "usepod" : base.provider;
+  const providerFeatures = agentPaymentProviderFeatures(provider);
+  if (providerFeatures.balanceSource !== "usepod-runtime") {
+    return base.provider === provider ? base : { ...base, provider };
+  }
+
+  const usePod = agent.usePod ?? {};
+  const usePodBalance = getUsePodBalanceUsd(usePod);
+  const checkedAtMs = Date.parse(usePod.lastCheckedAt ?? "");
+  const hasCheckedAt = Number.isFinite(checkedAtMs);
+  const setupVisible = Boolean(
+    usePod.tokenEnvName
+      || usePod.depositAddress
+      || usePod.depositCode
+      || usePod.dashboardUrl
+      || usePod.lastTestStatus
+      || usePod.lastStatusMessage
+      || typeof usePod.lastModelCount === "number"
+      || usePodBalance !== null,
+  );
+  return {
+    ...base,
+    provider: "usepod",
+    enabled: base.enabled || setupVisible || (usePodBalance !== null && usePodBalance > 0),
+    walletAddress: usePod.depositAddress || base.walletAddress,
+    network: "solana:mainnet",
+    tokenSymbol: "USDC",
+    currentBalanceUsd: usePodBalance ?? base.currentBalanceUsd,
+    onchainBalanceUsd: usePodBalance ?? base.onchainBalanceUsd,
+    lastOnchainSyncAt: hasCheckedAt ? checkedAtMs : base.lastOnchainSyncAt,
+    custodyMode: "watch",
+    x402BaseUrl: base.x402BaseUrl || "https://api.usepod.ai",
+  };
+}
+
 export function getDisplayWalletBalanceUsd(config: AgentWalletConfig, now = Date.now()): number {
+  const providerFeatures = agentPaymentProviderFeatures(config.provider);
+  if (providerFeatures.balanceSource === "usepod-runtime") {
+    return normalizeMoney(config.currentBalanceUsd);
+  }
   return hasWalletBalanceEvidence(config) ? getEffectiveBalanceUsd(config, now) : 0;
 }
 

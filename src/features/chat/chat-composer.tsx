@@ -6,6 +6,7 @@ import kanbanStyles from "@/app/kanban-board.module.css";
 import { LottiePlayer } from "@/components/ui/lottie-player";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { DASHBOARD_SLASH_COMMANDS } from "@/features/chat/dashboard-slash-commands";
 import { attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import type { KanbanLinkedDirectory, KanbanTaskAttachment } from "@/lib/types/kanban";
@@ -117,6 +118,11 @@ export const HERMES_SLASH_COMMANDS: HermesSlashCommand[] = [
   { name: "debug", category: "Info", description: "Upload a debug report" },
   { name: "quit", category: "Exit", description: "Exit the CLI", argsHint: "[--delete]", aliases: ["exit"], cliOnly: true },
   { name: "<skill-name>", category: "Dynamic", description: "Invoke any installed Hermes skill by name" },
+];
+
+const CHAT_SLASH_COMMANDS: HermesSlashCommand[] = [
+  ...DASHBOARD_SLASH_COMMANDS,
+  ...HERMES_SLASH_COMMANDS,
 ];
 
 const RESPONSE_LOADING_PHRASES = [
@@ -729,7 +735,7 @@ export function ComposerField({
   const filteredSlashCommands = useMemo(() => {
     if (!hermesSlashCommands) return [];
     const query = slashCommandQuery.trim();
-    const matching = HERMES_SLASH_COMMANDS.filter((command) => {
+    const matching = CHAT_SLASH_COMMANDS.filter((command) => {
       const haystack = [
         command.name,
         command.description,
@@ -739,7 +745,7 @@ export function ComposerField({
       ].join(" ").toLowerCase();
       return !query || haystack.includes(query);
     });
-    return matching.length ? matching : HERMES_SLASH_COMMANDS;
+    return matching.length ? matching : CHAT_SLASH_COMMANDS;
   }, [hermesSlashCommands, slashCommandQuery]);
   const slashCommandOpen = Boolean(hermesSlashCommands && slashTokenMatch && !disabled && filteredSlashCommands.length > 0);
 
@@ -860,10 +866,10 @@ export function ComposerField({
             onPointerDown={(event) => event.preventDefault()}
           >
             <div className={chatClass("slashCommandHeader")}>
-              <strong>Hermes commands</strong>
+              <strong>Commands</strong>
               <span>{filteredSlashCommands.length} matches</span>
             </div>
-            <div className={chatClass("slashCommandList")} role="listbox" aria-label="Hermes slash commands">
+            <div className={chatClass("slashCommandList")} role="listbox" aria-label="Chat slash commands">
               {filteredSlashCommands.map((command, index) => {
                 const active = index === selectedSlashCommandIndex;
                 const usage = `/${command.name}${command.argsHint ? ` ${command.argsHint}` : ""}`;

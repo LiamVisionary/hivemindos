@@ -77,8 +77,7 @@ function setupMethodLabel(method?: NangoHostSetupResult["method"]) {
 }
 
 function setupStepForPayload(payload: NangoIntegrationPayload): SetupStep {
-  if (!payload.config.hostMachineId) return "welcome";
-  return payload.health.ok ? "apps" : "method";
+  return payload.health.ok ? "apps" : "host";
 }
 
 type NangoIntegrationsViewProps = {

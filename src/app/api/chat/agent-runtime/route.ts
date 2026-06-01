@@ -17,6 +17,8 @@ import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
 import { normalizeRuntimeStreamEvent, RUNTIME_STREAM_EVENT_TYPES, type RuntimeStreamEvent } from "@/lib/services/runtime-stream-events";
 import { isUsePodProfile, resolveUsePodRuntimeConfig, summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
 import { activeSharedVault, buildVaultContext } from "@/lib/services/chat/shared-vault-context";
+import { buildTaskRetrievalContext } from "@/lib/services/chat/task-retrieval-context";
+import { resolveAdaptiveOpenRouterModel, resolveAdaptiveOpenRouterModels } from "@/lib/services/chat/adaptive-openrouter-models";
 import {
   appendRuntimeChatSessionEvent,
   appendRuntimeChatSessionText,
@@ -457,122 +459,6 @@ async function openRouterCompatibleProfile(profile: AgentProfile) {
   };
 }
 
-type OpenRouterModelRecord = {
-  id?: string;
-  name?: string;
-  description?: string;
-  created?: number;
-  context_length?: number;
-  architecture?: {
-    input_modalities?: string[];
-    output_modalities?: string[];
-  };
-  pricing?: Record<string, string | number | null | undefined>;
-  supported_parameters?: string[];
-};
-
-function zeroPriced(value: unknown) {
-  if (value === undefined || value === null || value === "") return true;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) && numeric === 0;
-}
-
-function isFreeOpenRouterModel(model: OpenRouterModelRecord) {
-  if (model.id?.endsWith(":free")) return true;
-  const pricing = model.pricing ?? {};
-  return ["prompt", "completion", "request", "image", "web_search", "internal_reasoning"].every((key) => zeroPriced(pricing[key]));
-}
-
-function configuredAdaptiveUseCase(profile: AgentProfile) {
-  const useCase = profile.adaptiveOpenRouter?.useCase;
-  return useCase && useCase !== "auto" ? [useCase] : null;
-}
-
-function adaptiveUseCases(profile: AgentProfile, messages: IncomingMessage[]) {
-  const configured = configuredAdaptiveUseCase(profile);
-  if (configured) return configured;
-  const latest = latestUserMessage(messages);
-  const latestText = typeof latest?.content === "string"
-    ? latest.content
-    : latest?.content?.map((part) => part.text ?? "").join(" ") ?? "";
-  const hasImage = Array.isArray(latest?.content) && latest.content.some((part) => part.type === "image_url");
-  const hasFile = Array.isArray(latest?.content) && latest.content.some((part) => part.type === "file");
-  const text = [
-    profile.workerClass,
-    profile.name,
-    profile.skillProfilePrompt,
-    profile.preferredSkillSlugs?.join(" "),
-    latestText,
-  ].filter(Boolean).join(" ").toLowerCase();
-  const cases = new Set<string>();
-  if (hasImage) cases.add("vision");
-  if (hasFile) cases.add("research");
-  if (/\b(code|coding|program|developer|debug|repo|typescript|javascript|python|react|next\.?js|bug|test|refactor|cli|api|schema|sql)\b/.test(text)) cases.add("coding");
-  if (/\b(write|writing|copy|essay|story|draft|edit|rewrite|tone|blog|newsletter|creative)\b/.test(text)) cases.add("writing");
-  if (/\b(research|compare|summari[sz]e|sources?|search|evidence|market|analysis|report)\b/.test(text)) cases.add("research");
-  if (/\b(image|draw|illustration|photo|visual|vision|screenshot|diagram)\b/.test(text)) cases.add(hasImage ? "vision" : "image");
-  if (/\b(tool|function|agent|workflow|automation|shell|command|browser|github|filesystem)\b/.test(text)) cases.add("tool-use");
-  if (!cases.size) cases.add("general");
-  return [...cases];
-}
-
-function modelUseCaseScore(model: OpenRouterModelRecord, useCases: string[]) {
-  const haystack = `${model.id ?? ""} ${model.name ?? ""} ${model.description ?? ""} ${(model.supported_parameters ?? []).join(" ")}`.toLowerCase();
-  let score = 0;
-  for (const useCase of useCases) {
-    if (useCase === "coding" && /code|coding|coder|programming|developer|devstral|deepseek|qwen|kimi|agent|tools?/.test(haystack)) score += 40;
-    if (useCase === "writing" && /write|writing|creative|story|copy|editor|chat|instruct/.test(haystack)) score += 32;
-    if (useCase === "vision" && (/vision|visual|image|vlm|multimodal/.test(haystack) || model.architecture?.input_modalities?.includes("image"))) score += 44;
-    if (useCase === "image" && (model.architecture?.output_modalities?.includes("image") || /image|diffusion|flux|stable/.test(haystack))) score += 44;
-    if (useCase === "research" && /research|search|reason|r1|thinking|analysis/.test(haystack)) score += 34;
-    if (useCase === "tool-use" && ((model.supported_parameters ?? []).includes("tools") || /tool|function/.test(haystack))) score += 30;
-  }
-  if ((model.supported_parameters ?? []).includes("tools")) score += 10;
-  if ((model.supported_parameters ?? []).includes("reasoning")) score += 8;
-  if (/latest|preview|turbo|pro|large|reason|thinking|instruct/.test(haystack)) score += 6;
-  return score;
-}
-
-async function resolveAdaptiveOpenRouterModels(profile: AgentProfile, messages: IncomingMessage[]) {
-  const response = await fetch("https://openrouter.ai/api/v1/models?output_modalities=all", {
-    headers: { Accept: "application/json" },
-    cache: "no-store",
-    signal: AbortSignal.timeout(12_000),
-  }).catch(() => null);
-  const fallbackModel = profile.adaptiveOpenRouter?.fallbackModel?.trim();
-  if (!response?.ok) {
-    if (fallbackModel) return [fallbackModel];
-    throw new Error("Could not fetch OpenRouter's free model inventory for Adaptive mode.");
-  }
-  const payload = await response.json().catch(() => null) as { data?: OpenRouterModelRecord[] } | null;
-  const latest = latestUserMessage(messages);
-  const requiresImage = Array.isArray(latest?.content) && latest.content.some((part) => part.type === "image_url");
-  const requiredModalities = requiresImage ? ["text", "image"] : ["text"];
-  const useCases = adaptiveUseCases(profile, messages);
-  const candidates = (payload?.data ?? [])
-    .filter((model) => model.id)
-    .filter(isFreeOpenRouterModel)
-    .filter((model) => requiredModalities.every((modality) => model.architecture?.input_modalities?.includes(modality)))
-    .sort((left, right) => {
-      const rightTools = right.supported_parameters?.includes("tools") ? 1 : 0;
-      const leftTools = left.supported_parameters?.includes("tools") ? 1 : 0;
-      return modelUseCaseScore(right, useCases) - modelUseCaseScore(left, useCases)
-        || rightTools - leftTools
-      || (right.context_length ?? 0) - (left.context_length ?? 0)
-      || (right.created ?? 0) - (left.created ?? 0)
-      || (left.name ?? left.id ?? "").localeCompare(right.name ?? right.id ?? "");
-    });
-  if (!candidates[0]?.id && fallbackModel) return [fallbackModel];
-  if (!candidates[0]?.id) throw new Error("OpenRouter did not report any free model that matches this Adaptive request.");
-  const ids = candidates.map((model) => model.id!).filter(Boolean);
-  return fallbackModel && !ids.includes(fallbackModel) ? [...ids, fallbackModel] : ids;
-}
-
-async function resolveAdaptiveOpenRouterModel(profile: AgentProfile, messages: IncomingMessage[]) {
-  const candidates = await resolveAdaptiveOpenRouterModels(profile, messages);
-  return candidates[0];
-}
-
 function retryableAdaptiveOpenRouterStatus(status: number) {
   return status === 408 || status === 409 || status === 429 || status === 502 || status === 503 || status === 504;
 }
@@ -597,7 +483,7 @@ function providerErrorMessage(body: string, status: number, model?: string) {
 
 function finalAdaptiveOpenRouterError(status: number, modelAttempts: string[]) {
   if (status === 429) {
-    return `OpenRouter's free models are currently rate-limited or out of promo capacity. Adaptive tried ${modelAttempts.length} free model${modelAttempts.length === 1 ? "" : "s"}${modelAttempts.length ? `, ending with ${modelAttempts.at(-1)}` : ""}. Try again shortly or set a paid fallback model in Adaptive advanced settings.`;
+    return `OpenRouter's free models are currently rate-limited or out of promo capacity. Adaptive tried ${modelAttempts.length} free model${modelAttempts.length === 1 ? "" : "s"}${modelAttempts.length ? `, ending with ${modelAttempts.at(-1)}` : ""}. Try again shortly.`;
   }
   return `OpenRouter could not complete this Adaptive request after trying ${modelAttempts.length || 1} free model${modelAttempts.length === 1 ? "" : "s"}.`;
 }
@@ -713,18 +599,19 @@ async function streamHttpRuntime(
   honeyLedgerEnabled = false,
   runtimeSessionId = "",
   telemetry?: RuntimeRouteTelemetry,
+  taskRetrievalContext = "",
 ) {
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
     return Response.json({ error: inputCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
   }
   if (isOpenAICompatibleRuntime(profile)) {
-    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry);
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext);
   }
-  if (isOpenRouterProvider(profile)) {
+  if (isOpenRouterProvider(profile) && !isAdaptiveOpenRouterProfile(profile)) {
     try {
       const openRouterProfile = await openRouterCompatibleProfile(profile);
-      return streamOpenAICompatibleRuntime(openRouterProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry);
+      return streamOpenAICompatibleRuntime(openRouterProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext);
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "OpenRouter model selection failed." }, { status: 502 });
     }
@@ -752,11 +639,9 @@ async function streamHttpRuntime(
   const vaultContext = buildVaultContext(sharedVault);
   const walletContext = buildWalletToolContext(wallet);
   const modeContext = buildAgentModeContext(agentMode);
-  const context = [buildAgentProfileContext(runtimeProfile), modeContext, buildWorkingDirectoryContext(workingDirectory), vaultContext, walletContext].filter(Boolean).join("\n\n");
+  const context = [buildAgentProfileContext(runtimeProfile), modeContext, buildWorkingDirectoryContext(workingDirectory), vaultContext, taskRetrievalContext, walletContext].filter(Boolean).join("\n\n");
   const hermesSlashCommand = profile.runtime === "hermes" && /^\/[^\s/]*(?:\s|$)/.test(inputCheck.text.trim());
-  const runtimeMessages = context && !hermesSlashCommand
-    ? [{ role: "system", content: context }, ...messages]
-    : messages;
+  const runtimeMessages = context && !hermesSlashCommand ? [{ role: "system", content: context }, ...messages] : messages;
   const runtimeMessage = inputCheck.text;
   const workspaceBefore = await readWorkspaceSnapshot(workingDirectory);
   let upstream: Response;
@@ -1158,6 +1043,7 @@ async function streamOpenAICompatibleRuntime(
   honeyLedgerEnabled = false,
   runtimeSessionId = "",
   telemetry?: RuntimeRouteTelemetry,
+  taskRetrievalContext = "",
 ) {
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
@@ -1201,14 +1087,7 @@ async function streamOpenAICompatibleRuntime(
   }
   const modelMessagesFor = (candidateModel: string) => {
     const candidateProfile = profileWithResolvedModel(runtimeProfile, candidateModel);
-    const context = [
-      buildAgentProfileContext(candidateProfile),
-      buildAdaptiveOpenRouterResolvedModelContext(runtimeProfile, candidateModel),
-      buildAgentModeContext(agentMode),
-      buildWorkingDirectoryContext(workingDirectory),
-      buildVaultContext(sharedVault),
-      buildWalletToolContext(wallet),
-    ].filter(Boolean).join("\n\n");
+    const context = [buildAgentProfileContext(candidateProfile), buildAdaptiveOpenRouterResolvedModelContext(runtimeProfile, candidateModel), buildAgentModeContext(agentMode), buildWorkingDirectoryContext(workingDirectory), buildVaultContext(sharedVault), taskRetrievalContext, buildWalletToolContext(wallet)].filter(Boolean).join("\n\n");
     return context ? [{ role: "system" as const, content: context }, ...messages] : messages;
   };
   let candidateModels: string[];
@@ -1310,7 +1189,7 @@ async function streamOpenAICompatibleRuntime(
     releaseInteractiveRuntime(lockKey);
     return new Response(
       ssePayload({ error: lastFetchError
-        ? `OpenRouter had a network issue while Adaptive was trying free models. Adaptive tried ${attemptedModels.length || 1} model${attemptedModels.length === 1 ? "" : "s"}. Try again shortly or set a paid fallback model in Adaptive advanced settings.`
+        ? `OpenRouter had a network issue while Adaptive was trying free models. Adaptive tried ${attemptedModels.length || 1} model${attemptedModels.length === 1 ? "" : "s"}. Try again shortly.`
         : finalAdaptiveOpenRouterError(lastStatus || 502, attemptedModels) }) + "data: [DONE]\n\n",
       { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } },
     );
@@ -1562,6 +1441,7 @@ export async function POST(request: NextRequest) {
   }
   const vault = activeSharedVault(profile, sharedVault);
   runtimeSessionId = createRuntimeChatSessionId(profile, runtimeSessionId || clientRunId);
+  const taskRetrievalContext = await buildTaskRetrievalContext({ origin: request.url, query: userPrompt, sharedVault: vault });
   await startRuntimeChatSession({
     sessionId: runtimeSessionId,
     agent: profile,
@@ -1569,7 +1449,7 @@ export async function POST(request: NextRequest) {
     userContent: userPrompt,
     startedAt: routeStartedAt,
   }).catch(() => undefined);
-  const runtimeContexts = [buildAgentProfileContext(profile), buildAgentModeContext(agentMode), buildWorkingDirectoryContext(workingDirectory), buildVaultContext(vault), buildWalletToolContext(wallet)].filter(Boolean).join("\n\n");
+  const runtimeContexts = [buildAgentProfileContext(profile), buildAgentModeContext(agentMode), buildWorkingDirectoryContext(workingDirectory), buildVaultContext(vault), taskRetrievalContext, buildWalletToolContext(wallet)].filter(Boolean).join("\n\n");
   const textWithVaultContext = runtimeContexts
     ? `${runtimeContexts}\n\nUser message:\n${userPrompt}`
     : promptCheck.text;
@@ -1624,7 +1504,7 @@ export async function POST(request: NextRequest) {
     return streamHttpRuntime(effectiveProfile, messages, promptCheck.text, vault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, {
       request,
       routeStartedAt,
-    });
+    }, taskRetrievalContext);
   }
 
   const token = await getGatewayAuthToken(profile.token);

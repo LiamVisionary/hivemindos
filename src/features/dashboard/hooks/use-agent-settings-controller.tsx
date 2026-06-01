@@ -93,6 +93,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
     && runtimeIntegrationStatus.targetKey === runtimeIntegrationTargetKey(agentSettingsIntegrationTarget)
     ? runtimeIntegrationStatus.modelSelection
     : undefined;
+  const runtimeModelSelectionFresh = Boolean(freshRuntimeModelSelection);
   const runtimeModelSelection = freshRuntimeModelSelection ?? runtimeModelSelectionsByRuntime[agentSettingsRuntime];
   const runtimeModelProviders = runtimeModelSelection?.providers ?? [];
   const selectedRuntimeProvider = runtimeModelProviders.find((provider) => provider.slug === agentSettingsProvider)
@@ -240,5 +241,5 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
     && hivemindLinkStatus?.ok === true
     && hivemindLinkConnectedUntil > Date.now();
 
-  return { agentSettingsSelectedCustomWorkerId, agentSettingsCustomWorker, agentSettingsWorkerLabel, agentSettingsWorkerImage, agentSettingsSkillProfile, agentSettingsPreferredSkills, agentSettingsRuntime, agentSettingsProvider, agentSettingsModel, runtimeModelSelection, runtimeModelProviders, selectedRuntimeProvider, selectedRuntimeModels, selectedRuntimeModelId, selectedRuntimeModel, updateAgentRuntimeModel, agentSettingsIntegrationTarget, addHermesModelFromDraft, selectAgentWorkerClass, selectCustomWorkerClass, updateAgentSkillProfile, addAgentPreferredSkill, removeAgentPreferredSkill, openCustomWorkerClassCreator, applyCustomWorkerClass, toggleCustomWorkerSkill, uploadCustomWorkerImage, filteredCustomWorkerSkills, selectedHetznerServerType, showHivemindLinkConnectedBanner };
+  return { agentSettingsSelectedCustomWorkerId, agentSettingsCustomWorker, agentSettingsWorkerLabel, agentSettingsWorkerImage, agentSettingsSkillProfile, agentSettingsPreferredSkills, agentSettingsRuntime, agentSettingsProvider, agentSettingsModel, runtimeModelSelection, runtimeModelSelectionFresh, runtimeModelProviders, selectedRuntimeProvider, selectedRuntimeModels, selectedRuntimeModelId, selectedRuntimeModel, updateAgentRuntimeModel, agentSettingsIntegrationTarget, addHermesModelFromDraft, selectAgentWorkerClass, selectCustomWorkerClass, updateAgentSkillProfile, addAgentPreferredSkill, removeAgentPreferredSkill, openCustomWorkerClassCreator, applyCustomWorkerClass, toggleCustomWorkerSkill, uploadCustomWorkerImage, filteredCustomWorkerSkills, selectedHetznerServerType, showHivemindLinkConnectedBanner };
 }

@@ -111,6 +111,29 @@ refresh_tool_paths() {
   hash -r 2>/dev/null || true
 }
 
+run_privileged() {
+  if [[ "$(id -u)" == "0" ]]; then
+    "$@"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo "$@"
+  else
+    return 127
+  fi
+}
+
+apt_install() {
+  run_privileged apt-get update
+  DEBIAN_FRONTEND=noninteractive run_privileged apt-get install -y "$@"
+}
+
+dnf_install() {
+  run_privileged dnf install -y "$@"
+}
+
+yum_install() {
+  run_privileged yum install -y "$@"
+}
+
 run_with_timeout() {
   local seconds="$1"
   shift
@@ -161,6 +184,59 @@ pnpm_run() {
     echo "  brew install pnpm"
   fi
   exit 1
+}
+
+node_major_version() {
+  node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || true
+}
+
+node_version_is_supported() {
+  local major
+  command -v node >/dev/null 2>&1 || return 1
+  major="$(node_major_version)"
+  [[ "$major" =~ ^[0-9]+$ && "$major" -ge 20 ]]
+}
+
+install_node_if_missing() {
+  refresh_tool_paths
+  if node_version_is_supported; then
+    ok "Node found: $(node --version)"
+    return 0
+  fi
+
+  if command -v node >/dev/null 2>&1; then
+    warn "Node found, but HivemindOS needs Node.js 20+: $(node --version)"
+  fi
+
+  if [[ "$(uname -s)" == "Darwin" ]] && { command -v brew >/dev/null 2>&1 || ensure_homebrew; }; then
+    if ! setup_is_interactive || prompt_yes_no "Install Node.js 20+ with Homebrew now?" "yes"; then
+      info "Installing Node.js with Homebrew"
+      brew install node
+      refresh_tool_paths
+    fi
+  elif command -v apt-get >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
+    info "Installing Node.js 22 with apt"
+    curl -fsSL https://deb.nodesource.com/setup_22.x | run_privileged bash -
+    apt_install nodejs
+    refresh_tool_paths
+  elif command -v dnf >/dev/null 2>&1; then
+    info "Installing Node.js with dnf"
+    dnf_install nodejs npm
+    refresh_tool_paths
+  elif command -v yum >/dev/null 2>&1; then
+    info "Installing Node.js with yum"
+    yum_install nodejs npm
+    refresh_tool_paths
+  fi
+
+  if node_version_is_supported; then
+    ok "Node found: $(node --version)"
+    return 0
+  fi
+
+  missing+=("Node.js 20+")
+  fail "Node.js 20+ is missing"
+  return 1
 }
 
 usage() {
@@ -299,13 +375,12 @@ install_rsync_if_missing() {
   warn "rsync is missing; trying to install it for Tailnet vault sync"
   if [[ "$(uname -s)" == "Darwin" ]] && { command -v brew >/dev/null 2>&1 || ensure_homebrew; }; then
     brew install rsync
-  elif command -v apt-get >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo apt-get update
-    sudo apt-get install -y rsync
-  elif command -v dnf >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo dnf install -y rsync
-  elif command -v yum >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo yum install -y rsync
+  elif command -v apt-get >/dev/null 2>&1; then
+    apt_install rsync
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf_install rsync
+  elif command -v yum >/dev/null 2>&1; then
+    yum_install rsync
   else
     missing+=("Install rsync for Tailnet vault sync")
     fail "rsync is missing"
@@ -330,13 +405,12 @@ install_syncthing_if_missing() {
   warn "Syncthing is missing; trying to install it for realtime folder sync"
   if [[ "$(uname -s)" == "Darwin" ]] && { command -v brew >/dev/null 2>&1 || ensure_homebrew; }; then
     brew install syncthing
-  elif command -v apt-get >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo apt-get update
-    sudo apt-get install -y syncthing
-  elif command -v dnf >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo dnf install -y syncthing
-  elif command -v yum >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo yum install -y syncthing
+  elif command -v apt-get >/dev/null 2>&1; then
+    apt_install syncthing
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf_install syncthing
+  elif command -v yum >/dev/null 2>&1; then
+    yum_install syncthing
   else
     missing+=("Install Syncthing for realtime folder sync")
     fail "Syncthing is missing"
@@ -361,13 +435,12 @@ install_unison_if_missing() {
   warn "Unison is missing; trying to install it for AEON Obsidian folder mirroring"
   if [[ "$(uname -s)" == "Darwin" ]] && { command -v brew >/dev/null 2>&1 || ensure_homebrew; }; then
     brew install unison
-  elif command -v apt-get >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo apt-get update
-    sudo apt-get install -y unison
-  elif command -v dnf >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo dnf install -y unison
-  elif command -v yum >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo yum install -y unison
+  elif command -v apt-get >/dev/null 2>&1; then
+    apt_install unison
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf_install unison
+  elif command -v yum >/dev/null 2>&1; then
+    yum_install unison
   else
     missing+=("Install Unison for AEON Obsidian folder mirroring")
     fail "Unison is missing"
@@ -839,7 +912,7 @@ install_tailscale_if_missing() {
   if [[ "$(uname -s)" == "Darwin" ]] && { command -v brew >/dev/null 2>&1 || ensure_homebrew; }; then
     warn "Tailscale is not installed; trying to install it for multi-machine sync"
     HOMEBREW_NO_INSTALL_CLEANUP=1 brew install --formula tailscale || true
-  elif command -v apt-get >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
+  elif command -v apt-get >/dev/null 2>&1; then
     if command -v curl >/dev/null 2>&1; then
       warn "Tailscale is not installed; trying to install it for multi-machine sync"
       curl -fsSL https://tailscale.com/install.sh | sh || true
@@ -943,16 +1016,15 @@ install_gpg_if_missing() {
   if [[ "$(uname -s)" == "Darwin" ]] && { command -v brew >/dev/null 2>&1 || ensure_homebrew; }; then
     info "Installing GnuPG with Homebrew"
     brew install gnupg
-  elif command -v apt-get >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
+  elif command -v apt-get >/dev/null 2>&1; then
     info "Installing GnuPG with apt"
-    sudo apt-get update
-    sudo apt-get install -y gnupg
-  elif command -v dnf >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
+    apt_install gnupg
+  elif command -v dnf >/dev/null 2>&1; then
     info "Installing GnuPG with dnf"
-    sudo dnf install -y gnupg2
-  elif command -v yum >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
+    dnf_install gnupg2
+  elif command -v yum >/dev/null 2>&1; then
     info "Installing GnuPG with yum"
-    sudo yum install -y gnupg2
+    yum_install gnupg2
   else
     warn "No automatic GnuPG installer found for this OS"
     warn "Install GnuPG later to enable encrypted hive-env-add note backups"
@@ -1312,12 +1384,7 @@ process.stdin.on("end", () => {
   return 1
 }
 
-if command -v node >/dev/null 2>&1; then
-  ok "Node found: $(node --version)"
-else
-  missing+=("Node.js 20+")
-  fail "Node is missing"
-fi
+install_node_if_missing || true
 
 load_homebrew_shellenv || true
 install_pnpm_if_missing || true

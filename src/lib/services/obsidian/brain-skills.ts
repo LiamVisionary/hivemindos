@@ -756,6 +756,11 @@ async function copySkillSource(source: BrainSkillSummary, destinationDir: string
   });
 }
 
+async function canCopySkillSource(source: BrainSkillSummary) {
+  if (source.sourceFiles?.length) return true;
+  return exists(dirname(source.path));
+}
+
 async function writeImportedMetadata(destinationDir: string, source: BrainSkillSummary, extra: Record<string, unknown> = {}) {
   await writeFile(join(destinationDir, SOURCE_METADATA_FILE), JSON.stringify({
     provider: source.provider,
@@ -848,6 +853,10 @@ export async function reconcileBrainSkills(input: {
           skipped.push({ ...source, reason: "auto-import disabled" });
           continue;
         }
+        if (!(await canCopySkillSource(source))) {
+          skipped.push({ ...source, reason: "source files unavailable" });
+          continue;
+        }
         const destinationSlug = await nextDestinationSlug(before.skillsFolder, source.slug, source.provider, sharedBySlug);
         const destinationDir = join(before.skillsFolder, destinationSlug);
         await copySkillSource(source, destinationDir);
@@ -866,6 +875,10 @@ export async function reconcileBrainSkills(input: {
       }
       if ((source.updatedAt ?? 0) < (shared.updatedAt ?? 0)) {
         skipped.push({ ...source, reason: "shared copy is newer" });
+        continue;
+      }
+      if (!(await canCopySkillSource(source))) {
+        skipped.push({ ...source, reason: "source files unavailable" });
         continue;
       }
       const destinationDir = dirname(shared.path);
@@ -896,7 +909,10 @@ export async function reconcileBrainSkills(input: {
   if (!deletionFreeze) {
     for (const { skill, metadata } of missing) {
       const currentStatus = typeof metadata?.status === "string" ? metadata.status : "";
-      if (currentStatus === "missing-upstream") continue;
+      if (currentStatus === "missing-upstream") {
+        markedMissing.push(skill);
+        continue;
+      }
       await writeFile(join(dirname(skill.path), SOURCE_METADATA_FILE), JSON.stringify({
         ...metadata,
         status: "missing-upstream",

@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useMemo } from "react";
 import { runtimeUsesAgentEnvOverlay } from "@/lib/types/agent-runtime";
+import { getUsePodBalanceUsd, resolveAgentWallet } from "@/lib/utils/agent-wallet";
 
 export function useDashboardDerivedState(props: any) {
   const { RUNTIME_LABELS, activeView, agentAliasMap, agentCreateDraft, agentCreateMachineKey, agentRoleModalId, agentSettingsPanel, agents, beeRoleLabel, brainGraph, brainGraphLayout, brainSkills, chatAutoScrollRef, chatDisplayContent, chatMessageStorageKey, chatMessageWindow, chatProcessByKey, chatStreamingByKey, cleanActivityTitle, collectorKey, createAgentProfile, createDefaultAgentWallet, dedupeAgents, discoveredMachines, displayMachineName, fleetAgentState, fleetMachineLocation, fleetMetric, fleetSnapshots, fleetVersionState, formatRelativeTime, getHoneyAgentRewards, getSurvivalSnapshot, groupKanbanTasks, groupNotifications, hermesUpdateRequiredDetail, hiveEnv, hiveEnvRuntimeSourceId, honeyTreasury, hydrated, inferCurrentTask, inferLatestAgentMessage, isChatSidebarTask, isLoopbackCollector, isManualAgentChatMessage, isMeaningfulActive, isMobileMachineOs, isStarterPlaceholder, isVisibleFleetMachine, isWorkView, kanbanAssignees, kanbanBoard, kanbanBoardScrollRef, kanbanError, kanbanIncludeArchived, kanbanLoading, kanbanTaskAssigneeAgent, machineIdentityFromParts, machineNameAliases, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineNetworkIssue, maintenanceReport, messagesByAgent, messagesScrollRef, mirosharkAnalysisAgentId, mirosharkStatus, moneyClawLoadingEnvName, moneyClawStatusByEnvName, normalizeAgentProfile, notificationActorMeta, notificationDisplayBody, notificationDisplayTitle, notificationSourceLabel, notificationSummary, notifications, parseEnvImportText, quickAddMachineTargets, refreshMoneyClawStatus, refreshRuntimeIntegrations, refreshSharedSchedulesFromVault, runtimeCan, runtimeCount, runtimeFileRoots, runtimeUsage, schedulerSkillSearch, schedules, selectedAgentId, selectedBrainNodeId, selectedChatLeafKey, selectedChatPreview, selectedKanbanTaskId, selectedKanbanTaskIds, setKanbanBoardScrollState, setMachineNameAliases, setScheduleDraft, setupMachineKey, sharedEnvImportText, sharedVault, skillBrowserSearch, skillBrowserSkills, tailscaleDevices, tailscaleStatus, tasks, updateStatusByMachine, walletExpanded, walletsByAgent, workPriority } = props;
@@ -502,7 +503,7 @@ export function useDashboardDerivedState(props: any) {
               since: work.updatedAt > 0 ? formatRelativeTime(work.updatedAt) : work.startedAt > 0 ? formatRelativeTime(work.startedAt) : "—",
             }));
           const hasMachineWiring = Boolean(agent.telemetryUrl || machine.self);
-          const wallet = walletsByAgent[agent.id] ?? createDefaultAgentWallet(agent.id);
+          const wallet = resolveAgentWallet(agent, walletsByAgent[agent.id] ?? createDefaultAgentWallet(agent.id));
           const survival = getSurvivalSnapshot(wallet);
           const primaryWorkFailed = primaryWork?.status === "failed";
           const primaryWorkFailureText = [
@@ -745,7 +746,7 @@ export function useDashboardDerivedState(props: any) {
 
   const selectedWallet = useMemo(() => {
     if (!selectedAgent) return null;
-    return walletsByAgent[selectedAgent.id] ?? createDefaultAgentWallet(selectedAgent.id);
+    return resolveAgentWallet(selectedAgent, walletsByAgent[selectedAgent.id] ?? createDefaultAgentWallet(selectedAgent.id));
   }, [selectedAgent, walletsByAgent]);
 
   const selectedWalletSnapshot = useMemo(
@@ -765,13 +766,23 @@ export function useDashboardDerivedState(props: any) {
   }, [activeView, hydrated, moneyClawLoadingEnvName, moneyClawStatusByEnvName, selectedAgent, selectedWallet, walletExpanded]);
 
   const walletStats = useMemo(() => {
-    const walletRows = displayAgents.map((agent) => walletsByAgent[agent.id] ?? createDefaultAgentWallet(agent.id));
-    const enabled = walletRows.filter((wallet) => wallet.enabled);
-    const survival = enabled.map((wallet) => getSurvivalSnapshot(wallet));
+    const walletRows = displayAgents.map((agent) => ({
+      agent,
+      wallet: resolveAgentWallet(agent, walletsByAgent[agent.id] ?? createDefaultAgentWallet(agent.id)),
+    }));
+    const enabled = walletRows.filter(({ wallet }) => wallet.enabled);
+    const survival = enabled.map(({ agent, wallet }) => ({
+      agent,
+      wallet,
+      snapshot: getSurvivalSnapshot(wallet),
+    }));
     return {
       enabled: enabled.length,
-      critical: survival.filter((snapshot) => snapshot.tier === "critical" || snapshot.tier === "dead").length,
-      balance: survival.reduce((total, snapshot) => total + Math.max(0, snapshot.effectiveBalanceUsd), 0),
+      critical: survival.filter(({ agent, snapshot }) => {
+        const readyUsePodUnknown = agent.provider === "usepod" && agent.usePod?.lastTestStatus === "ready" && getUsePodBalanceUsd(agent.usePod) === null;
+        return !readyUsePodUnknown && (snapshot.tier === "critical" || snapshot.tier === "dead");
+      }).length,
+      balance: survival.reduce((total, { snapshot }) => total + Math.max(0, snapshot.effectiveBalanceUsd), 0),
     };
   }, [displayAgents, walletsByAgent]);
 
@@ -926,6 +937,11 @@ export function useDashboardDerivedState(props: any) {
       detail: maintenanceReport?.ok === false ? "repairs available" : "checks",
     },
     {
+      id: "sessions" as const,
+      label: "Sessions",
+      detail: "runtime search",
+    },
+    {
       id: "files" as const,
       label: "Files",
       detail: runtimeFileRoots.length ? `${runtimeFileRoots.length} roots` : "runtime roots",
@@ -958,7 +974,7 @@ export function useDashboardDerivedState(props: any) {
   const activeNavItem = navItems.find((item) => (
     item.id === activeView
     || (item.id === "kanban" && isWorkView(activeView))
-    || (item.id === "more" && (activeView === "maintenance" || activeView === "memory" || activeView === "files" || activeView === "notifications" || activeView === "env" || activeView === "integrations" || activeView === "my-apps" || activeView === "phone" || activeView === "aeon"))
+    || (item.id === "more" && (activeView === "maintenance" || activeView === "sessions" || activeView === "tools" || activeView === "memory" || activeView === "files" || activeView === "notifications" || activeView === "env" || activeView === "integrations" || activeView === "my-apps" || activeView === "phone" || activeView === "aeon"))
   ));
   const activeHeader = (() => {
     const detail = activeNavItem?.detail ?? "";
@@ -972,13 +988,15 @@ export function useDashboardDerivedState(props: any) {
       vault: { label: "Brain Graph", title: "What the hive remembers" },
       integrations: { label: "Integrations", title: "What APIs connect" },
       maintenance: { label: "Fleet Diagnostics", title: "What the hive repairs" },
+      sessions: { label: "Sessions", title: "What agents already said" },
+      tools: { label: "Tools", title: "What agents can invoke" },
       memory: { label: "Memory", title: "What memory grows" },
       files: { label: "Brain Files", title: "What agents inspect" },
       notifications: { label: "Alerts", title: "What alerts need" },
       chat: { label: "Agent Chat", title: selectedAgent?.name ? `Talking with ${selectedAgent.name}` : "Choose an agent to chat with" },
       more: { label: "More", title: "Where utilities live" },
       env: { label: "Env", title: "What agents share" },
-      "my-apps": { label: "My Apps", title: "What the Tailnet hosts" },
+      "my-apps": { label: "Apps & Services", title: "What runs and what agents can call" },
       phone: { label: "Phone", title: "What your phone calls about" },
       aeon: { label: "Aeon", title: "What runs unattended" },
     };
@@ -1005,13 +1023,14 @@ export function useDashboardDerivedState(props: any) {
       : roleModalAgent;
     if (!draftAgent) return;
     if (agentSettingsPanel !== "tools" && !runtimeCan(draftAgent, "modelSelection")) return;
-    void refreshRuntimeIntegrations({
+    const refreshTimer = window.setTimeout(() => void refreshRuntimeIntegrations({
       ...draftAgent,
       provider: agentCreateMachine ? agentCreateDraft.provider : draftAgent.provider,
       model: agentCreateMachine ? agentCreateDraft.model : draftAgent.model,
       usePod: agentCreateMachine ? agentCreateDraft.usePod : draftAgent.usePod,
       telemetryUrl: agentCreateMachine?.collectorUrl ?? draftAgent.telemetryUrl,
-    });
+    }), agentCreateMachine ? 350 : 0);
+    return () => window.clearTimeout(refreshTimer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentSettingsPanel, roleModalAgent?.id, roleModalAgent?.runtime, roleModalAgent?.provider, roleModalAgent?.model, roleModalAgent?.telemetryUrl, agentCreateMachineKey, agentCreateMachine?.collectorUrl, agentCreateDraft.runtime, agentCreateDraft.provider, agentCreateDraft.model]);
   return { discoveredAgents, agentAliases, candidateAgents, candidateWorkById, displayAgents, agentWorkById, effectiveSelectedAgentId, selectedAgent, sharedSkillOptions, filteredSkillBrowserSkills, hermesUpdateRequired, filteredSchedulerSkills, selectedBrainNode, visibleBrainNodes, brainLayout, brainGraphStats, selectedBrainTargetIds, messages, lastAssistant, visibleMessages, sessionNotice, selectedChatStreaming, selectedChatHasStreamingChunk, selectedChatProcess, updateChatAutoScroll, machineGroups, renameMachine, kanbanMachineTargets, localKanbanMachineTarget, quickAddMachineTarget, agentsForKanbanTask, visibleAgentCount, fleetViewData, fleetUpdateStatusByMachine, fleetUpdateDetailByMachine, kanbanColumns, visibleKanbanColumns, selectedKanbanTask, selectedKanbanComments, selectedKanbanAgent, selectedKanbanAgentMessages, notificationGroups, selectedKanbanEvents, selectedKanbanBulkIds, selectedWallet, selectedWalletSnapshot, walletStats, honeyAgentRewards, selectedHoneyReward, honeyStats, kanbanAssigneeOptions, workBoardStats, kanbanViewColumns, kanbanInitialLoading, updateKanbanBoardScrollState, agentSpecificEnvCount, sharedEnvSource, runtimeEnvSources, selectedRuntimeEnvSource, sharedEnvCount, unsharedRuntimeEnvCount, sharedBackupStatus, sharedEnvImport, sharedEnvImportDiff, sharedEnvImportNewCount, sharedEnvImportChangedCount, sharedEnvImportSameCount, brainSkillImportableCount, brainSkillImportAllLabel, brainSkillImportAllDescription, navItems, activeNavItem, activeHeader, setupMachine, roleModalAgent, agentCreateMachine, brainSkillImportableLabel };

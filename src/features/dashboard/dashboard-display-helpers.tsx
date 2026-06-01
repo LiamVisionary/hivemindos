@@ -319,8 +319,12 @@ function hasFreshReadyDuplicate(machine: DiscoveredMachine, readyMachineBases: S
 }
 
 export function dedupeDiscoveredMachines(machines: DiscoveredMachine[]) {
+  const readyMachineBases = new Set(machines
+    .filter((machine) => machine.collector === "ready")
+    .flatMap(machineBaseCandidates));
   const byIdentity = new Map<string, DiscoveredMachine>();
   for (const machine of machines) {
+    if (hasFreshReadyDuplicate(machine, readyMachineBases)) continue;
     const key = discoveredMachineIdentity(machine);
     const previous = byIdentity.get(key);
     if (!previous) {

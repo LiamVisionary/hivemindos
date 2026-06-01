@@ -248,28 +248,49 @@
   background: #99f6e4;
 }
 
+.brainServiceOverviewControls {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.brainServiceOverviewControls > button {
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 42px;
+  border-radius: 999px;
+  padding-inline: 16px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
 .brainServiceEnableToggle {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin-top: auto;
+  flex: 1 1 auto;
+  min-width: 0;
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.55);
   color: var(--foreground);
-  padding: 8px 12px 8px 8px;
+  min-height: 42px;
+  padding: 0 14px 0 10px;
   font-size: 12px;
   font-weight: 850;
+  line-height: 1;
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease;
 }
 
-.brainServiceOverviewCard > button {
-  margin-top: auto;
+.brainServiceEnableToggle > span:last-child {
+  white-space: nowrap;
 }
 
-.brainServiceEnableToggle + button {
-  margin-top: 0;
+.brainServiceOverviewCard > button {
+  margin-top: auto;
 }
 
 .brainServiceEnableToggle input {
@@ -320,6 +341,47 @@
 .brainServiceEnableToggle input:checked + .brainServiceSwitch span {
   background: #ccfbf1;
   transform: translateX(16px);
+}
+
+.brainServiceOverviewInstallProgress {
+  display: grid;
+  gap: 10px;
+  margin-top: auto;
+  border: 1px solid rgba(45, 212, 191, 0.2);
+  border-radius: 8px;
+  background: rgba(20, 184, 166, 0.08);
+  padding: 12px;
+}
+
+.brainServiceOverviewInstallProgress strong {
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.brainServiceOverviewInstallProgress ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.brainServiceOverviewInstallProgress li {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  animation: brainModuleStepGlow 2.8s ease-in-out infinite;
+  animation-delay: calc(var(--step-index, 0) * 220ms);
+}
+
+.brainServiceOverviewInstallPulse {
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(45, 212, 191, 0.42);
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(45, 212, 191, 0.34), rgba(15, 23, 42, 0.3));
+  animation: brainModulePulse 1.6s ease-in-out infinite;
 }
 
 .brainServiceGrid {
@@ -526,6 +588,28 @@
   line-height: 1.15;
 }
 
+.brainModuleInstallSteps {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 320px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.brainModuleInstallSteps li {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.46);
+  color: var(--muted);
+  padding: 8px 11px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  animation: brainModuleStepGlow 3.2s ease-in-out infinite;
+  animation-delay: calc(var(--step-index, 0) * 260ms);
+}
+
 .brainModuleInstallOrbit {
   position: relative;
   width: 112px;
@@ -649,11 +733,26 @@
   }
 }
 
+@keyframes brainModuleStepGlow {
+  0%,
+  100% {
+    border-color: rgba(148, 163, 184, 0.14);
+    color: var(--muted);
+  }
+  42% {
+    border-color: rgba(45, 212, 191, 0.44);
+    color: var(--foreground);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .brainModuleInstallOrbit,
   .brainModuleInstallOrbit::before,
   .brainModuleInstallOrbit::after,
   .brainModuleInstallOrbit span,
+  .brainModuleInstallSteps li,
+  .brainServiceOverviewInstallProgress li,
+  .brainServiceOverviewInstallPulse,
   .brainModuleSuccess,
   .brainModuleCheckmark,
   .brainModuleCheckmark circle,

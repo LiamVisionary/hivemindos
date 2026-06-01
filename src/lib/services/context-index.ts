@@ -95,6 +95,7 @@ const DOC_ROOTS = ["docs"];
 const WORKSPACE_ROOTS = ["src/lib", "src/features/dashboard", "src/components", "scripts", "workers", "cmd", "src-tauri/src"];
 const TOP_LEVEL_FILES = ["AGENTS.md", "README.md", "ROADMAP.md", "CHANGELOG.md", "package.json", "setup.sh", "setup.ps1", "uninstall.sh", "uninstall.ps1"];
 const TOOL_SCHEMA_FILES = ["src/lib/search-tool.ts", "src/app/api/orchestrator/route.ts", "src/app/api/scheduler/skill-action/route.ts"];
+const PACKAGED_AUTO_INSTALL_SKILLS_ROOT = "packaged-skills/auto-install";
 const CONNECTED_APPS_NOTE = "Connected Apps Context Index.md";
 
 function workspaceRoot() {
@@ -143,6 +144,17 @@ function firstUsefulParagraph(markdown: string) {
     .split(/\n\s*\n/)
     .map((part) => part.replace(/^#+\s*/, "").replace(/\s+/g, " ").trim())
     .find((part) => part && !part.startsWith("![")) ?? "";
+}
+
+function parseSimpleFrontmatter(markdown: string) {
+  const fields = new Map<string, string>();
+  const match = markdown.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return fields;
+  for (const line of match[1].split("\n")) {
+    const field = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (field) fields.set(field[1].toLowerCase(), field[2].replace(/^["']|["']$/g, "").trim());
+  }
+  return fields;
 }
 
 function titleFromMarkdown(path: string, markdown: string) {
@@ -314,6 +326,36 @@ async function skillItems(options: ContextIndexOptions): Promise<ContextIndexIte
   return [...shared, ...providerSkills];
 }
 
+async function packagedSkillItems(): Promise<ContextIndexItem[]> {
+  const root = absolutePath(PACKAGED_AUTO_INSTALL_SKILLS_ROOT);
+  if (!(await canRead(root))) return [];
+  const files = (await walkFiles(root, [], 200)).filter((file) => basename(file) === "SKILL.md");
+  return Promise.all(files.map(async (path): Promise<ContextIndexItem> => {
+    const markdown = await readFile(path, "utf8").catch(() => "");
+    const frontmatter = parseSimpleFrontmatter(markdown);
+    const relativePath = toPosix(relative(workspaceRoot(), path));
+    const slug = basename(dirname(path));
+    const st = await safeStat(path);
+    const description = frontmatter.get("description") || firstUsefulParagraph(markdown) || `Packaged skill ${slug}.`;
+    return {
+      id: `skill:packaged:auto-install:${slug}`,
+      kind: "skill",
+      title: frontmatter.get("name") || slug,
+      summary: description,
+      tags: tagParts(slug, "packaged", "auto-install", "installable", "one-click", "skill"),
+      path,
+      retrievalText: retrievalText([description, relativePath, "packaged skill auto-install catalog"]),
+      load: {
+        type: "file",
+        target: path,
+        note: "Packaged auto-install skill metadata is indexed for setup discovery. Optional packaged skills are excluded until the user installs them into the shared brain.",
+      },
+      updatedAt: st?.mtimeMs,
+      sizeBytes: st?.size,
+    };
+  }));
+}
+
 async function apiRouteItems(): Promise<ContextIndexItem[]> {
   const files = await walkFiles(join(workspaceRoot(), "src/app/api"), [], 500);
   const routes = files.filter((file) => file.endsWith(`${sep}route.ts`));
@@ -366,6 +408,46 @@ async function toolSchemaItems(): Promise<ContextIndexItem[]> {
     });
   }
   return items;
+}
+
+function localCliToolItems(): ContextIndexItem[] {
+  return [
+    {
+      id: "tool-schema:local-cli:xurl",
+      kind: "tool-schema",
+      title: "xurl CLI",
+      summary: "Authenticated X/Twitter CLI for search, reads, posting, replies, DMs, media upload, and raw X API requests.",
+      tags: ["xurl", "x", "twitter", "search", "post", "social", "cli", "terminal", "tool"],
+      aliases: ["x search", "twitter search", "x post", "tweet", "social posting", "xurl search", "xurl post"],
+      retrievalText: [
+        "Use the terminal tool to run xurl when X/Twitter research or posting is needed.",
+        "Examples: xurl search \"Base chain\" -n 20; xurl post \"text\"; xurl read <post_id>.",
+        "Prefer xurl when Grok/x_search is not configured or account credits are exhausted.",
+      ].join(" "),
+      load: {
+        type: "none",
+        note: "Local CLI capability. Use the agent terminal tool; do not hard-code credentials.",
+      },
+    },
+    {
+      id: "tool-schema:local-cli:hermes-send",
+      kind: "tool-schema",
+      title: "hermes send CLI",
+      summary: "Hermes terminal delivery command for configured messaging platforms such as Telegram, Discord, Slack, Signal, SMS, and WhatsApp.",
+      tags: ["hermes", "send", "telegram", "discord", "slack", "message", "delivery", "notification", "cli", "terminal", "tool"],
+      aliases: ["telegram send", "send message", "message delivery", "notify user", "hermes send", "delivery channel"],
+      retrievalText: [
+        "Use the terminal tool to run hermes send for user messaging.",
+        "List targets first when a channel/person is not obvious: hermes send --list telegram --json.",
+        "Send with an explicit target such as hermes send --to telegram:<id> \"message\".",
+        "Do not reveal numeric chat IDs in final responses.",
+      ].join(" "),
+      load: {
+        type: "none",
+        note: "Local CLI capability. Use the agent terminal tool and list targets before sending when needed.",
+      },
+    },
+  ];
 }
 
 function connectedAppItems(apps: ContextConnectedApp[] | undefined): ContextIndexItem[] {
@@ -612,8 +694,10 @@ export async function buildContextIndex(options: ContextIndexOptions = {}): Prom
   const root = workspaceRoot();
   const items = (await Promise.all([
     skillItems(options).catch(() => []),
+    packagedSkillItems().catch(() => []),
     apiRouteItems(),
     toolSchemaItems(),
+    Promise.resolve(localCliToolItems()),
     Promise.resolve(connectedAppItems(options.connectedApps)),
     Promise.resolve(runtimeItems()),
     docItems(),

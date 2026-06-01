@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { DotLottie } from "@lottiefiles/dotlottie-react";
+import { DotLottie } from "@lottiefiles/dotlottie-web";
 
 import { cn } from "@/lib/utils/cn";
 

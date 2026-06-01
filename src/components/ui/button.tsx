@@ -1,25 +1,37 @@
 import * as React from "react";
-import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { LoaderCircle } from "lucide-react";
+import { Slot } from "radix-ui";
 
-import { cn } from "@/lib/utils/cn";
+import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[5px] text-center text-[13px] font-medium leading-[1.15] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(45,212,191,0.38)] disabled:pointer-events-none disabled:opacity-45 [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0",
+  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium tracking-normal outline-none transition-all focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-[0.99] disabled:pointer-events-none disabled:scale-100 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "border border-[rgba(94,234,212,0.36)] bg-[rgba(45,212,191,0.14)] text-[var(--accent-strong)] hover:border-[rgba(94,234,212,0.58)] hover:bg-[rgba(45,212,191,0.22)] hover:text-[var(--foreground)]",
-        secondary: "border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.44)] text-[var(--text-soft)] hover:border-[rgba(94,234,212,0.36)] hover:bg-[rgba(45,212,191,0.09)] hover:text-[var(--foreground)]",
-        ghost: "border border-transparent text-[var(--muted)] hover:bg-[rgba(148,163,184,0.08)] hover:text-[var(--foreground)]",
-        danger: "border border-[rgba(251,113,133,0.28)] bg-[rgba(251,113,133,0.10)] text-[#fecdd3] hover:bg-[rgba(251,113,133,0.18)]",
+        default: "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90",
+        destructive:
+          "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20",
+        danger:
+          "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20",
+        outline:
+          "border border-input bg-background shadow-xs hover:bg-accent hover:text-accent-foreground",
+        secondary:
+          "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
+        ghost:
+          "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+        link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "min-h-[30px] px-2.5 py-1.5",
-        sm: "min-h-7 px-2 py-1 text-xs",
-        lg: "min-h-8 px-3 py-1.5",
-        icon: "size-7 p-0",
+        default: "h-9 px-4 py-2 has-[>svg]:px-3",
+        xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
+        sm: "h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5",
+        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
+        icon: "size-9",
+        "icon-xs": "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
+        "icon-sm": "size-8",
+        "icon-lg": "size-10",
       },
     },
     defaultVariants: {
@@ -45,10 +57,12 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({
   children,
   ...props
 }, ref) => {
-  const Comp = asChild ? Slot : "button";
+  const Comp = asChild ? Slot.Root : "button";
   const buttonProps = {
     ref,
     "data-slot": "button",
+    "data-variant": variant,
+    "data-size": size,
     className: cn(buttonVariants({ variant, size, className })),
     disabled: disabled || isLoading,
     "aria-busy": isLoading || undefined,

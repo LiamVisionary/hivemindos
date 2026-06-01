@@ -4,13 +4,16 @@ import { useState } from "react";
 import { Check, ChevronRight, LoaderCircle, Power } from "lucide-react";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 
+import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent-wallet";
-import { getDisplayWalletBalanceUsd } from "@/lib/utils/agent-wallet";
+import { agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
+import { getDisplayWalletBalanceUsd, getUsePodBalanceUsd } from "@/lib/utils/agent-wallet";
 
 import styles from "./AgentWalletCardCompact.module.css";
 
 export type AgentWalletCardCompactProps = {
   agentName: string;
+  agentUsePod?: AgentProfile["usePod"];
   wallet: AgentWalletConfig;
   survival: AgentSurvivalSnapshot;
   onOpen: () => void;
@@ -20,11 +23,22 @@ export type AgentWalletCardCompactProps = {
 type ChipTone = "ok" | "warn" | "danger" | "off" | "muted";
 type SetupStage = "idle" | "confirm" | "loading" | "done";
 
-function statusFor(wallet: AgentWalletConfig, survival: AgentSurvivalSnapshot): {
+function statusFor(wallet: AgentWalletConfig, survival: AgentSurvivalSnapshot, agentUsePod?: AgentProfile["usePod"]): {
   tone: ChipTone;
   text: string;
 } {
-  if (!wallet.walletAddress && !wallet.vaultAddress) return { tone: "off", text: "Initialize rails" };
+  const providerFeatures = agentPaymentProviderFeatures(wallet.provider);
+  if (providerFeatures.balanceSource === "usepod-runtime") {
+    const balance = getUsePodBalanceUsd(agentUsePod);
+    if (balance !== null && balance > 0) return { tone: "ok", text: "UsePod funded" };
+    if (agentUsePod?.lastTestStatus === "ready") return { tone: "ok", text: "UsePod ready" };
+    if (agentUsePod?.lastTestStatus === "needs-funding") return { tone: "warn", text: "Needs funding" };
+    if (agentUsePod?.lastTestStatus === "missing-token") return { tone: "warn", text: "Token pending" };
+    if (agentUsePod?.lastTestStatus === "provider-unavailable" || agentUsePod?.lastTestStatus === "error") return { tone: "warn", text: "Check UsePod" };
+    const hasFundingDetails = Boolean(agentUsePod?.depositAddress || agentUsePod?.depositCode || agentUsePod?.dashboardUrl);
+    return { tone: hasFundingDetails ? "muted" : "off", text: hasFundingDetails ? "Check funding" : "Set up UsePod" };
+  }
+  if (providerFeatures.localWalletRequired && !wallet.walletAddress && !wallet.vaultAddress) return { tone: "off", text: "Initialize rails" };
   if (!wallet.enabled) return { tone: "off", text: "Wallet off" };
   if (survival.tier === "critical" || survival.tier === "dead") {
     return { tone: "danger", text: "Needs funding" };
@@ -40,12 +54,15 @@ function formatMoney(value: number): string {
   return `$${Math.max(0, value).toFixed(2)}`;
 }
 
-export function AgentWalletCardCompact({ agentName, wallet, survival, onOpen, onInitialize }: AgentWalletCardCompactProps) {
+export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, survival, onOpen, onInitialize }: AgentWalletCardCompactProps) {
   const tier = wallet.enabled ? survival.tier : "off";
   const safeBalance = getDisplayWalletBalanceUsd(wallet);
-  const status = statusFor(wallet, survival);
+  const status = statusFor(wallet, survival, agentUsePod);
+  const providerFeatures = agentPaymentProviderFeatures(wallet.provider);
+  const usePodBalanceUnknown = providerFeatures.balanceSource === "usepod-runtime" && getUsePodBalanceUsd(agentUsePod) === null;
+  const usePodReadyBalanceUnknown = usePodBalanceUnknown && agentUsePod?.lastTestStatus === "ready";
   const [setupStage, setSetupStage] = useState<SetupStage>("idle");
-  const needsInitialization = !wallet.walletAddress && !wallet.vaultAddress;
+  const needsInitialization = providerFeatures.localWalletRequired && !wallet.walletAddress && !wallet.vaultAddress;
 
   const openOrConfirm = () => {
     if (needsInitialization) {
@@ -113,7 +130,7 @@ export function AgentWalletCardCompact({ agentName, wallet, survival, onOpen, on
       </div>
 
       <div className={styles.balance}>
-        <span className={styles.amount}>{formatMoney(safeBalance)}</span>
+        <span className={styles.amount}>{usePodReadyBalanceUnknown ? "Ready" : usePodBalanceUnknown ? "Pending" : formatMoney(safeBalance)}</span>
         <span className={styles.unit}>{wallet.tokenSymbol || "USDC"}</span>
       </div>
 

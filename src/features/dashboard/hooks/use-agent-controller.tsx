@@ -1,7 +1,5 @@
 "use client";
 
-/* eslint-disable react-hooks/immutability, react-hooks/purity */
-
 import type { Dispatch, SetStateAction } from "react";
 import { openNativeDirectory } from "@/lib/native/filesystem";
 import type { BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
@@ -261,6 +259,8 @@ export function useAgentController(props: UseAgentControllerProps) {
           lastRoute: usePodStatus.route || agent.usePod?.lastRoute || "",
           lastCheckedAt: usePodStatus.checkedAt || agent.usePod?.lastCheckedAt || "",
           lastTestStatus: usePodStatus.status || agent.usePod?.lastTestStatus || "",
+          lastStatusMessage: usePodStatus.message || agent.usePod?.lastStatusMessage || "",
+          lastHttpStatus: usePodStatus.httpStatus ?? agent.usePod?.lastHttpStatus,
           lastModelCount: usePodStatus.modelCount ?? agent.usePod?.lastModelCount,
         },
       });

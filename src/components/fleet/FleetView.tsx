@@ -96,7 +96,6 @@ export function FleetView({
   const [view, setView] = React.useState<ViewMode>("graph");
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set(["nimbus"]));
   const [dispatchIdx, setDispatchIdx] = React.useState(0);
-  const [addToast, setAddToast] = React.useState<string | null>(null);
   const [dismissedAlertIds, setDismissedAlertIds] = React.useState<Set<string>>(() => new Set());
   const [selectedAlert, setSelectedAlert] = React.useState<FleetAlert | null>(null);
   const [settledFleet, setSettledFleet] = React.useState<SettledFleetViewData>({
@@ -136,12 +135,6 @@ export function FleetView({
     return () => clearInterval(t);
   }, [displayTicker.length]);
 
-  React.useEffect(() => {
-    if (!addToast) return;
-    const t = setTimeout(() => setAddToast(null), 2200);
-    return () => clearTimeout(t);
-  }, [addToast]);
-
   const selectedMachineId = selected && displayMachines.some((machine) => machine.id === selected)
     ? selected
     : preferredInitialMachineId(displayMachines);
@@ -157,9 +150,6 @@ export function FleetView({
     setExpanded(new Set([m.id]));
   }, []);
   const handleAddAgent = React.useCallback((m: FleetMachine) => {
-    setSelected(m.id);
-    setSelectedAgentId(null);
-    setAddToast(m.name);
     onAddAgent?.(m);
   }, [onAddAgent]);
   const toggleExpand = React.useCallback((id: string) => {
@@ -588,26 +578,6 @@ export function FleetView({
             </section>
           </aside>
         </div>
-
-        {/* Add-agent toast */}
-        {addToast && (
-          <div
-            className="absolute"
-            style={{
-              left: "50%", bottom: 28, transform: "translateX(-50%)",
-              zIndex: 20,
-              padding: "10px 16px", borderRadius: 9999,
-              background: "rgba(16,20,29,0.95)",
-              border: "1px solid var(--hex-honey-border)",
-              color: "var(--foreground)",
-              fontFamily: "var(--f-mono)", fontSize: 12,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
-              animation: "fleet-toast-in 240ms ease",
-            }}
-          >
-            ＋ adding agent to <strong style={{ color: "var(--hex-honey-border)" }}>{addToast}</strong> · pick a runtime
-          </div>
-        )}
 
         {selectedAlert ? (
           <div

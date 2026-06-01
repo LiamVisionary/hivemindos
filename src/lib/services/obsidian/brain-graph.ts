@@ -1,6 +1,6 @@
 import { constants } from "fs";
 import { execFile } from "child_process";
-import { access, mkdir, readFile, readdir, stat, appendFile } from "fs/promises";
+import { access, appendFile, mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
 import { hostname } from "os";
 import { dirname, relative, resolve, sep } from "path";
 import { promisify } from "util";
@@ -35,6 +35,9 @@ export type BrainGraphNode = {
   folder: string;
   tags: string[];
   byteSize: number;
+  lineCount?: number;
+  modifiedAt?: string;
+  preview?: string;
   incoming: number;
   outgoing: number;
   accessCount: number;
@@ -62,6 +65,9 @@ type NoteRecord = {
   path: string;
   content: string;
   byteSize: number;
+  lineCount: number;
+  modifiedAt?: string;
+  preview: string;
   tags: string[];
 };
 
@@ -123,6 +129,23 @@ function extractTags(content: string): string[] {
   return [...tags].slice(0, 10);
 }
 
+function markdownPreview(content: string): string {
+  const withoutFrontmatter = content.replace(/^---\s*[\s\S]*?\s*---\s*/, "");
+  const text = withoutFrontmatter
+    .split("\n")
+    .map((line) => line
+      .replace(/^#{1,6}\s+/, "")
+      .replace(/!\[[^\]]*]\([^)]+\)/g, "")
+      .replace(/\[([^\]]+)]\([^)]+\)/g, "$1")
+      .replace(/\[\[([^\]|#^]+)(?:#[^\]|^]+)?(?:\^[^\]|]+)?(?:\|([^\]]+))?]]/g, "$2$1")
+      .trim())
+    .filter((line) => line && !line.startsWith("```") && !line.startsWith("|"))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.slice(0, 280);
+}
+
 function resolveLink(target: string, allPaths: string[]): string | null {
   const targetLower = target.toLowerCase().replace(/\.md$/, "");
   for (const path of allPaths) {
@@ -146,6 +169,9 @@ async function readNotes(root: string): Promise<{ notes: NoteRecord[]; truncated
       path: toVaultPath(root, fullPath),
       content,
       byteSize: fileStat.size,
+      lineCount: content ? content.split("\n").length : 0,
+      modifiedAt: fileStat.mtime.toISOString(),
+      preview: markdownPreview(content),
       tags: extractTags(content),
     });
   }
@@ -222,6 +248,9 @@ export async function buildBrainGraph(vaultPath?: string, options: { force?: boo
         folder: parts.join("/") || "Vault root",
         tags: note.tags,
         byteSize: note.byteSize,
+        lineCount: note.lineCount,
+        modifiedAt: note.modifiedAt,
+        preview: note.preview,
         incoming: degree.get(note.path)?.incoming ?? 0,
         outgoing: degree.get(note.path)?.outgoing ?? 0,
         accessCount: accessesByNote.get(note.path)?.length ?? 0,
@@ -235,6 +264,8 @@ export async function buildBrainGraph(vaultPath?: string, options: { force?: boo
       folder: "Unresolved links",
       tags: [],
       byteSize: 0,
+      lineCount: 0,
+      preview: "",
       incoming: degree.get(id)?.incoming ?? 0,
       outgoing: 0,
       accessCount: 0,
@@ -309,4 +340,48 @@ export async function openBrainNoteInObsidian(input: {
   ], { timeout: 10_000 });
 
   return { notePath, vaultName, stdout, stderr };
+}
+
+function unresolvedTargetToNotePath(target: string): string {
+  const cleanTarget = target
+    .replace(/^unresolved:/, "")
+    .replace(/\.md$/i, "")
+    .trim();
+  const parts = cleanTarget
+    .split("/")
+    .map((part) => part
+      .trim()
+      .replace(/[\\:*?"<>|]/g, "-")
+      .replace(/^\.+|\.+$/g, "")
+      .replace(/\s+/g, " ")
+      .slice(0, 80))
+    .filter(Boolean);
+  if (!parts.length) throw new Error("Missing note title.");
+  return `${parts.join("/")}.md`;
+}
+
+export async function createBrainNoteFromUnresolved(input: {
+  vaultPath?: string;
+  target: string;
+  sourceNotePath?: string;
+}): Promise<{ notePath: string; title: string }> {
+  const root = resolveObsidianVaultPath(input.vaultPath, { requireWritable: true });
+  const notePath = unresolvedTargetToNotePath(input.target);
+  const absoluteNotePath = resolve(root, notePath);
+  assertInside(root, absoluteNotePath);
+  await access(absoluteNotePath, constants.F_OK).then(() => {
+    throw new Error("That note already exists.");
+  }).catch((error: NodeJS.ErrnoException) => {
+    if (error?.code !== "ENOENT") throw error;
+  });
+
+  const title = notePath.split("/").pop()?.replace(/\.md$/i, "") ?? notePath;
+  const createdAt = new Date().toISOString();
+  const sourceLine = input.sourceNotePath?.trim()
+    ? `\nCreated from unresolved link in [[${input.sourceNotePath.replace(/\.md$/i, "")}]].`
+    : "";
+  const body = `---\ntype: note\ncreated: ${createdAt}\nsource: shared-brain-graph\n---\n\n# ${title}\n\nCreated from the Shared Brain graph.${sourceLine}\n\n`;
+  await mkdir(dirname(absoluteNotePath), { recursive: true });
+  await writeFile(absoluteNotePath, body, "utf-8");
+  return { notePath, title };
 }

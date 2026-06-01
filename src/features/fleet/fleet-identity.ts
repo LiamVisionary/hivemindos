@@ -74,6 +74,16 @@ export function machinePhysicalBase(name?: string, dnsName?: string) {
   return value.replace(/^hivemindos/, "").replace(/local\d*$/, "").replace(/\d+$/, "");
 }
 
+function macNumberedHostnameBase(name?: string, dnsName?: string, os?: string) {
+  if (!isMacMachineOs(os)) return "";
+  const rawDnsLabel = dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
+  const rawValue = rawDnsLabel || name || "";
+  const withoutTailnetSuffix = rawValue.toLowerCase().replace(/-\d+$/, "");
+  const normalizedValue = normalizeMachineName(rawValue);
+  const normalizedBase = normalizeMachineName(withoutTailnetSuffix);
+  return normalizedBase && normalizedBase !== normalizedValue ? normalizedBase : "";
+}
+
 export function isLocalLinkDuplicateOfSelf(self: FleetMachineIdentity | undefined, device: FleetMachineIdentity) {
   if (!self || device.self) return false;
   const deviceBase = machineHivemindBase(device.name, device.dnsName, device.os);
@@ -132,6 +142,8 @@ export function machineIdentityFromParts({
     return machineHivemindBase(name, dnsName, os) || normalizedDnsName || normalizedName;
   }
   if (self) return "self";
+  const macBase = macNumberedHostnameBase(name, dnsName, os);
+  if (macBase) return macBase;
   return normalizedName || collectorKey(collectorUrl) || ip || "";
 }
 

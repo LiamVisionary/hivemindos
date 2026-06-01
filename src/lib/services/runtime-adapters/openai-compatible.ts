@@ -96,6 +96,7 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
           checkedAt: usePodStatus.checkedAt,
           status: usePodStatus.status,
           message: usePodStatus.message,
+          httpStatus: usePodStatus.httpStatus,
           modelCount: usePodStatus.modelCount,
         },
       } : undefined,

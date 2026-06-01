@@ -35,6 +35,7 @@ export type NotificationsPanelProps = {
   onRefresh: (options?: { append?: boolean }) => void | Promise<void>;
   onMarkAllRead: () => void;
   onMarkRead: (id: string) => void;
+  onOpenNotification?: (notification: AgentNotification) => void;
   onUpdateSettings: (settings: Partial<AgentNotificationSettings>) => void;
 };
 
@@ -56,6 +57,7 @@ export function NotificationsPanel({
   onRefresh,
   onMarkAllRead,
   onMarkRead,
+  onOpenNotification,
   onUpdateSettings,
 }: NotificationsPanelProps) {
   return (
@@ -117,6 +119,16 @@ export function NotificationsPanel({
                   <article
                     key={notification.id}
                     className={notificationClass("notificationCard", notification.priority, !notification.read && "unread")}
+                    role={onOpenNotification ? "button" : undefined}
+                    tabIndex={onOpenNotification ? 0 : undefined}
+                    onClick={() => onOpenNotification?.(notification)}
+                    onKeyDown={(event) => {
+                      if (!onOpenNotification) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onOpenNotification(notification);
+                      }
+                    }}
                   >
                     <div className={notificationClass("notificationGlyph")}>
                       {notificationIcon(notification.kind, notification.priority)}
@@ -162,7 +174,10 @@ export function NotificationsPanel({
                           {notification.tags.slice(0, 4).map((tag) => <span className={notificationClass("kindPill")} key={`${notification.id}-${tag}`}>{notificationTagLabel(tag)}</span>)}
                         </div>
                         {!notification.read ? (
-                          <Button type="button" size="sm" variant="secondary" onClick={() => onMarkRead(notification.id)}>
+                          <Button type="button" size="sm" variant="secondary" onClick={(event) => {
+                            event.stopPropagation();
+                            onMarkRead(notification.id);
+                          }}>
                             <Check aria-hidden="true" />
                             Read
                           </Button>

@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT="${PORT:-5020}"
 COLLECTOR_PORT="${AGENT_TELEMETRY_PORT:-8787}"
+TAILNET_COLLECTOR_PORT="${HIVE_TAILNET_COLLECTOR_PORT:-8787}"
 
 info() { printf "\033[1;36m%s\033[0m\n" "$*"; }
 ok() { printf "\033[1;32m✓\033[0m %s\n" "$*"; }
@@ -176,6 +177,26 @@ if ask "Remove HivemindOS telemetry collector service?" "yes"; then
     rm -f "$HOME/.config/systemd/user/agent-telemetry.service"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
     ok "Removed systemd user service agent-telemetry.service"
+  fi
+fi
+
+if ask "Disable HivemindOS Tailscale Serve collector forwarding on port $TAILNET_COLLECTOR_PORT?" "yes"; then
+  tailscale_cli=""
+  if [[ -n "${HIVE_TAILSCALE_CLI:-}" && -x "${HIVE_TAILSCALE_CLI:-}" ]]; then
+    tailscale_cli="$HIVE_TAILSCALE_CLI"
+  elif run_if_exists tailscale; then
+    tailscale_cli="$(command -v tailscale)"
+  elif run_if_exists brew; then
+    tailscale_prefix="$(brew --prefix tailscale 2>/dev/null || true)"
+    [[ -n "$tailscale_prefix" && -x "$tailscale_prefix/bin/tailscale" ]] && tailscale_cli="$tailscale_prefix/bin/tailscale"
+  fi
+  if [[ -n "$tailscale_cli" ]]; then
+    "$tailscale_cli" serve "--http=$TAILNET_COLLECTOR_PORT" off >/dev/null 2>&1 \
+      || sudo -n "$tailscale_cli" serve "--http=$TAILNET_COLLECTOR_PORT" off >/dev/null 2>&1 \
+      || true
+    ok "Disabled Tailscale Serve collector forwarding on port $TAILNET_COLLECTOR_PORT"
+  else
+    warn "Tailscale CLI is unavailable; skipped Serve cleanup"
   fi
 fi
 
@@ -380,6 +401,18 @@ if ask "Remove seeded AI-ready shared-brain contract, templates, and Obsidian se
   rm -f "$vault_path/$brain_services_folder/Obsidian CLI.md"
   rm -rf "$vault_path/Templates/HivemindOS"
   ok "Removed seeded AI-ready shared-brain files"
+fi
+
+if ask "Remove auto-installed packaged HivemindOS skills from the shared Skills shelf?" "no"; then
+  if [[ -d "$vault_path/Skills" ]]; then
+    find "$vault_path/Skills" -mindepth 2 -maxdepth 2 -name .hivemind-skill-source.json -type f 2>/dev/null |
+      while IFS= read -r marker; do
+        if grep -q '"provider": "packaged-auto-install"' "$marker"; then
+          rm -rf "$(dirname "$marker")"
+          ok "Removed $(dirname "$marker")"
+        fi
+      done
+  fi
 fi
 
 if ask "Remove the shared Skills shelf created in the Obsidian vault?" "no"; then

@@ -13,6 +13,7 @@ import type { MorePanelProps } from "@/features/dashboard/MorePanel";
 import type { NotificationGroup, NotificationsPanelProps } from "@/features/notifications/NotificationsPanel";
 import { MemoryTelemetryPanel } from "@/features/dashboard/views/MemoryTelemetryPanel";
 import { MyAppsPanel } from "@/features/dashboard/views/MyAppsPanel";
+import { AgentToolsPanel } from "@/features/dashboard/views/AgentToolsPanel";
 import type {
   DashboardView,
   HiveEnvBackupStatus,
@@ -22,6 +23,7 @@ import type {
   RuntimeFileEntry,
   RuntimeFileRoot,
   RuntimeModelSelection,
+  RuntimeSessionSearchResult,
 } from "@/features/dashboard/dashboard-types";
 import type { RuntimeSecretStatus } from "@/lib/services/runtime-adapters/types";
 
@@ -89,6 +91,7 @@ type UtilityPanelsProps = {
   notifications: AgentNotification[];
   notificationsLoading: boolean;
   notificationsStatus: string;
+  onOpenNotification?: (notification: AgentNotification) => void;
   openRuntimeFile: (file: RuntimeFileEntry) => void | Promise<void>;
   promoteRuntimeEnvValue: (source: HiveEnvSource, key: string, value: string) => void | Promise<void>;
   refreshHiveEnv: () => void | Promise<void>;
@@ -109,10 +112,15 @@ type UtilityPanelsProps = {
   runtimeFileStatus: string;
   runtimeFiles: RuntimeFileEntry[];
   runtimeModelSelectionsByRuntime: Partial<Record<AgentRuntime, RuntimeModelSelection>>;
+  searchAllRuntimeSessions: (queryOverride?: string) => void | Promise<void>;
   saveAgentEnvValue: (agent: AgentProfile, key: string, value: string, previousValue: string) => void | Promise<void>;
   saveRuntimeFile: () => void | Promise<void>;
   saveSharedEnvValue: (source: HiveEnvSource, key: string, value: string, previousValue: string) => void | Promise<void>;
   selectedRuntimeEnvSource: HiveEnvSource | null | undefined;
+  sessionSearchLoading: boolean;
+  sessionSearchMessage: string;
+  sessionSearchQuery: string;
+  sessionSearchResults: RuntimeSessionSearchResult[];
   setActiveView: Dispatch<SetStateAction<DashboardView>>;
   setAgentEnvDrafts: Dispatch<SetStateAction<Record<string, EnvDraft>>>;
   setHiveEnvRuntimeSourceId: Dispatch<SetStateAction<string>>;
@@ -120,6 +128,7 @@ type UtilityPanelsProps = {
   setRuntimeFileOpen: Dispatch<SetStateAction<RuntimeOpenFile | null>>;
   setRuntimeFilePath: Dispatch<SetStateAction<string>>;
   setRuntimeFileRootKey: Dispatch<SetStateAction<string>>;
+  setSessionSearchQuery: Dispatch<SetStateAction<string>>;
   setSharedEnvAddMenuOpen: Dispatch<SetStateAction<boolean>>;
   setSharedEnvDraft: Dispatch<SetStateAction<EnvDraft>>;
   setSharedEnvEditable: Dispatch<SetStateAction<boolean>>;
@@ -140,6 +149,7 @@ type UtilityPanelsProps = {
   sharedEnvImporting: boolean;
   sharedEnvSource: HiveEnvSource | null | undefined;
   sharedVault: SharedVaultConfig;
+  startAgentChat: (agentId: string, options?: { fresh?: boolean; runtimeSessionId?: string }) => void | Promise<void>;
   syncSharedEnvMachines: () => void | Promise<void>;
   toggleEnvValue: (key: string) => void;
   updateNotificationSettings: (settings: Partial<AgentNotificationSettings>) => void | Promise<void>;
@@ -149,7 +159,7 @@ type UtilityPanelsProps = {
 };
 
 export function UtilityPanels(props: UtilityPanelsProps) {
-  const { AgentEnvCard, Activity, Button, Check, ChevronDown, ChevronLeft, Download, EnvValueRow, FileText, FileUp, FolderOpen, LoaderCircle, MorePanel, NotificationsPanel, Pencil, Plus, RefreshCcw, RotateCcw, ShieldCheck, Sparkles, URL, Upload, activeView, addAgentEnvValue, addSharedEnvValue, agentEnvDrafts, agentSpecificEnvCount, displayAgents, fleetClass, formatRelativeTime, generateSharedEnvSecret, hiveEnvLoading, hiveEnvRestoring, hiveEnvSavingKey, hiveEnvStatus, hiveEnvSyncing, importSharedEnvEntries, listRuntimeFiles, maintenanceBusy, maintenanceMessage, maintenanceReport, markAllNotificationsRead, markNotificationRead, memoryTelemetry, memoryTelemetryLoading, notificationCursor, notificationGroups, notificationSummary, notifications, notificationsLoading, notificationsStatus, openRuntimeFile, promoteRuntimeEnvValue, refreshHiveEnv, refreshMaintenanceReport, refreshMemoryTelemetry, refreshNotifications, refreshRuntimeFileRoots, renderAgentKey, restoreSharedEnvBackup, revealedEnvValues, runMaintenanceAction, runtimeEnvSources, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, runtimeFileStatus, runtimeFiles, runtimeModelSelectionsByRuntime, saveAgentEnvValue, saveRuntimeFile, saveSharedEnvValue, selectedRuntimeEnvSource, setActiveView, setAgentEnvDrafts, setHiveEnvRuntimeSourceId, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setSharedEnvAddMenuOpen, setSharedEnvDraft, setSharedEnvEditable, setSharedEnvImportOpen, setSharedEnvImportText, sharedBackupStatus, sharedEnvAddMenuOpen, sharedEnvCount, sharedEnvDraft, sharedEnvEditable, sharedEnvImport, sharedEnvImportChangedCount, sharedEnvImportDiff, sharedEnvImportNewCount, sharedEnvImportOpen, sharedEnvImportSameCount, sharedEnvImportText, sharedEnvImporting, sharedEnvSource, sharedVault, syncSharedEnvMachines, toggleEnvValue, updateNotificationSettings, vaultClass, vaultPanelMode, walletClass } = props;
+  const { AgentEnvCard, Activity, Button, Check, ChevronDown, ChevronLeft, Download, EnvValueRow, FileText, FileUp, FolderOpen, LoaderCircle, MorePanel, NotificationsPanel, Pencil, Plus, RefreshCcw, RotateCcw, ShieldCheck, Sparkles, URL, Upload, activeView, addAgentEnvValue, addSharedEnvValue, agentEnvDrafts, agentSpecificEnvCount, displayAgents, fleetClass, formatRelativeTime, generateSharedEnvSecret, hiveEnvLoading, hiveEnvRestoring, hiveEnvSavingKey, hiveEnvStatus, hiveEnvSyncing, importSharedEnvEntries, listRuntimeFiles, maintenanceBusy, maintenanceMessage, maintenanceReport, markAllNotificationsRead, markNotificationRead, memoryTelemetry, memoryTelemetryLoading, notificationCursor, notificationGroups, notificationSummary, notifications, notificationsLoading, notificationsStatus, onOpenNotification, openRuntimeFile, promoteRuntimeEnvValue, refreshHiveEnv, refreshMaintenanceReport, refreshMemoryTelemetry, refreshNotifications, refreshRuntimeFileRoots, renderAgentKey, restoreSharedEnvBackup, revealedEnvValues, runMaintenanceAction, runtimeEnvSources, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, runtimeFileStatus, runtimeFiles, runtimeModelSelectionsByRuntime, saveAgentEnvValue, saveRuntimeFile, saveSharedEnvValue, searchAllRuntimeSessions, selectedRuntimeEnvSource, sessionSearchLoading, sessionSearchMessage, sessionSearchQuery, sessionSearchResults, setActiveView, setAgentEnvDrafts, setHiveEnvRuntimeSourceId, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setSessionSearchQuery, setSharedEnvAddMenuOpen, setSharedEnvDraft, setSharedEnvEditable, setSharedEnvImportOpen, setSharedEnvImportText, sharedBackupStatus, sharedEnvAddMenuOpen, sharedEnvCount, sharedEnvDraft, sharedEnvEditable, sharedEnvImport, sharedEnvImportChangedCount, sharedEnvImportDiff, sharedEnvImportNewCount, sharedEnvImportOpen, sharedEnvImportSameCount, sharedEnvImportText, sharedEnvImporting, sharedEnvSource, sharedVault, startAgentChat, syncSharedEnvMachines, toggleEnvValue, updateNotificationSettings, vaultClass, vaultPanelMode, walletClass } = props;
   const portalTarget = typeof document === "undefined" ? null : document.body;
   const aeonAgent = useMemo(() => displayAgents.find((agent) => agent.runtime === "aeon") ?? null, [displayAgents]);
   const agentEnvOverlayAgents = useMemo(
@@ -193,6 +203,7 @@ export function UtilityPanels(props: UtilityPanelsProps) {
             setActiveView(target);
             if (target === "integrations") return;
             if (target === "maintenance") void refreshMaintenanceReport();
+            if (target === "sessions") void searchAllRuntimeSessions("");
             if (target === "memory") void refreshMemoryTelemetry();
             if (target === "files") void refreshRuntimeFileRoots();
             if (target === "notifications") void refreshNotifications();
@@ -204,6 +215,14 @@ export function UtilityPanels(props: UtilityPanelsProps) {
         activeView={activeView}
         fleetClass={fleetClass}
         formatRelativeTime={formatRelativeTime}
+      />
+
+      <AgentToolsPanel
+        activeView={activeView}
+        displayAgents={displayAgents}
+        fleetClass={fleetClass}
+        setActiveView={setActiveView}
+        startAgentChat={startAgentChat}
       />
 
       {envPanelVisible ? (
@@ -667,6 +686,10 @@ export function UtilityPanels(props: UtilityPanelsProps) {
             {maintenanceBusy === "check" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
             Check
           </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={() => void runMaintenanceAction("diagnostic-dump")} disabled={Boolean(maintenanceBusy)}>
+            {maintenanceBusy === "diagnostic-dump" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <FileText aria-hidden="true" />}
+            Dump
+          </Button>
         </div>
         {maintenanceMessage ? <p className="mt-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] px-3 py-2 text-xs text-[var(--foreground)]">{maintenanceMessage}</p> : null}
         {maintenanceReport?.error ? <p className="mt-3 text-xs text-[#fecdd3]">{maintenanceReport.error}</p> : null}
@@ -688,6 +711,83 @@ export function UtilityPanels(props: UtilityPanelsProps) {
           {maintenanceReport?.checks?.length ? null : (
             <div className="rounded-md border border-dashed border-[rgba(148,163,184,0.22)] p-6 text-center text-sm text-[var(--muted)]">
               Press Check to run diagnostics.
+            </div>
+          )}
+        </div>
+      </section>
+      ) : null}
+
+      {activeView === "sessions" ? (
+      <section className={fleetClass("taskPanel", "tabPanel")}>
+        <div className={fleetClass("taskPanelHeader")}>
+          <div>
+            <p className="eyebrow">Runtime sessions</p>
+            <h2>Session search</h2>
+            <p>Search readable local Hermes and OpenClaw history without opening each agent's settings.</p>
+          </div>
+          <Button type="button" size="sm" variant="secondary" onClick={() => void searchAllRuntimeSessions()} disabled={sessionSearchLoading}>
+            {sessionSearchLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
+            Search
+          </Button>
+        </div>
+        <form
+          className="mt-4 flex flex-wrap items-center gap-2 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void searchAllRuntimeSessions();
+          }}
+        >
+          <input
+            className="min-h-9 min-w-[220px] flex-1 rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(2,6,23,0.34)] px-3 text-sm text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)]"
+            value={sessionSearchQuery}
+            onChange={(event) => setSessionSearchQuery(event.target.value)}
+            placeholder="Search sessions by title, prompt, model, or id"
+          />
+          <Button type="submit" size="sm" disabled={sessionSearchLoading}>
+            {sessionSearchLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
+            Search
+          </Button>
+        </form>
+        {sessionSearchMessage ? <p className="mt-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] px-3 py-2 text-xs text-[var(--foreground)]">{sessionSearchMessage}</p> : null}
+        <div className="mt-4 grid gap-3">
+          {sessionSearchResults.map((session) => {
+            const agent = displayAgents.find((item) => item.runtime === session.runtime);
+            const timestamp = session.updatedAt || session.startedAt;
+            return (
+              <article key={`${session.runtime}-${session.id}`} className="grid gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4">
+                <div className="grid gap-1">
+                  <strong>{session.title || session.id}</strong>
+                  <span className="text-xs font-semibold uppercase text-[var(--muted)]">
+                    {[session.runtime, session.source, session.model, timestamp ? new Date(timestamp).toLocaleString() : ""].filter(Boolean).join(" · ")}
+                  </span>
+                  <p className="m-0 break-words text-xs leading-5 text-[var(--muted)]">{session.excerpt || session.path || "No preview available."}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {agent ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setActiveView("chat");
+                        void startAgentChat(agent.id, { fresh: true, runtimeSessionId: session.id });
+                      }}
+                    >
+                      <Activity aria-hidden="true" />
+                      Open in chat
+                    </Button>
+                  ) : null}
+                  <Button type="button" size="sm" variant="ghost" onClick={() => navigator.clipboard?.writeText(session.id)}>
+                    <FileText aria-hidden="true" />
+                    Copy id
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
+          {sessionSearchResults.length || sessionSearchLoading ? null : (
+            <div className="rounded-md border border-dashed border-[rgba(148,163,184,0.22)] p-6 text-center text-sm text-[var(--muted)]">
+              Search or open this panel to load recent readable sessions.
             </div>
           )}
         </div>
@@ -812,6 +912,7 @@ export function UtilityPanels(props: UtilityPanelsProps) {
           onRefresh={refreshNotifications}
           onMarkAllRead={markAllNotificationsRead}
           onMarkRead={markNotificationRead}
+          onOpenNotification={onOpenNotification}
           onUpdateSettings={updateNotificationSettings}
         />
       ) : null}

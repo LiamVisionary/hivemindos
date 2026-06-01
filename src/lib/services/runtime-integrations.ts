@@ -50,6 +50,7 @@ export type RuntimeIntegrationStatus = {
       checkedAt?: string;
       status?: string;
       message?: string;
+      httpStatus?: number;
       modelCount?: number;
     };
   };
@@ -75,6 +76,7 @@ type HermesSessionRow = {
   started_at: number;
   updated_at: number | null;
   system_prompt: string | null;
+  excerpt: string | null;
 };
 
 export async function getRuntimeIntegrationStatus(runtime: AgentRuntime, agent?: AgentProfile): Promise<RuntimeIntegrationStatus> {
@@ -287,9 +289,20 @@ async function searchHermesSessions(query: string, limit: number) {
   const q = query.trim();
   const pattern = `%${q.replace(/'/g, "''")}%`;
   const sql = `
-    select id, source, model, title, started_at, coalesce(ended_at, started_at) as updated_at, system_prompt
-    from sessions
-    ${q ? `where lower(coalesce(title, '') || ' ' || coalesce(system_prompt, '') || ' ' || id) like lower('${pattern}')` : ""}
+    select s.id, s.source, s.model, s.title, s.started_at, coalesce(s.ended_at, s.started_at) as updated_at, s.system_prompt,
+      (
+        select m.content from messages m
+        where m.session_id = s.id and m.content is not null and trim(m.content) != ''
+        ${q ? `and lower(m.content) like lower('${pattern}')` : ""}
+        order by m.timestamp, m.id
+        limit 1
+      ) as excerpt
+    from sessions s
+    ${q ? `where lower(coalesce(s.title, '') || ' ' || coalesce(s.system_prompt, '') || ' ' || s.id) like lower('${pattern}')
+      or exists (
+        select 1 from messages m
+        where m.session_id = s.id and lower(coalesce(m.content, '')) like lower('${pattern}')
+      )` : ""}
     order by started_at desc
     limit ${Math.max(1, Math.min(100, limit))};
   `;
@@ -299,7 +312,7 @@ async function searchHermesSessions(query: string, limit: number) {
     secondary: rows.map((row) => ({
       id: row.id,
       title: row.title || row.id,
-      preview: previewSessionText(row.system_prompt),
+      preview: previewSessionText(row.excerpt || row.system_prompt),
       lastActive: toIso(row.updated_at || row.started_at),
       messageCount: 0,
       source: row.source,
@@ -315,7 +328,7 @@ async function searchHermesSessions(query: string, limit: number) {
     model: row.model,
     startedAt: toIso(row.started_at),
     updatedAt: toIso(row.updated_at || row.started_at),
-    excerpt: String(session.preview || row.system_prompt || "").replace(/\s+/g, " ").slice(0, 280),
+    excerpt: String(session.preview || row.excerpt || row.system_prompt || "").replace(/\s+/g, " ").slice(0, 280),
     };
   });
 }

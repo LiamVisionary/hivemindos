@@ -156,6 +156,8 @@ export interface UsePodAgentConfig {
   lastRoute?: string;
   lastCheckedAt?: string;
   lastTestStatus?: string;
+  lastStatusMessage?: string;
+  lastHttpStatus?: number;
   lastModelCount?: number;
 }
 

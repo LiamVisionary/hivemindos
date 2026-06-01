@@ -20,11 +20,21 @@ type BrainServiceSection = {
 type BrainServiceOverviewCard = {
   action: string;
   bullets?: ReactNode[];
+  canToggle?: boolean;
   detail: ReactNode;
   enabled?: boolean;
   eyebrow: string;
   icon: ReactNode;
   id: string;
+  installAction?: {
+    disabled?: boolean;
+    icon?: ReactNode;
+    label: string;
+    onClick?: () => void;
+    progressLabel?: string;
+    setupSteps?: string[];
+    state?: "failed" | "install" | "installing" | "installed" | "success";
+  };
   onToggle?: (enabled: boolean) => void;
   status: string;
   title: string;
@@ -107,36 +117,61 @@ export function BrainServiceOverview({
 }) {
   return (
     <div className={brainClass("brainServiceOverviewGrid")}>
-      {cards.map((card) => (
-        <article key={card.id} className={brainClass("brainServiceOverviewCard", card.tone === "live" ? "live" : "idle")}>
-          <div className={brainClass("brainServiceOverviewTopline")}>
-            <span className={brainClass("brainServiceOverviewIcon")}>{card.icon}</span>
-            <small className={brainClass(card.tone === "live" ? "serviceBadgeLive" : "serviceBadgeIdle")}>{card.status}</small>
-          </div>
-          <div>
-            <small>{card.eyebrow}</small>
-            <h4>{card.title}</h4>
-            <p>{card.detail}</p>
-          </div>
-          {card.bullets?.length ? (
-            <ul className={brainClass("brainServiceOverviewBullets")}>
-              {card.bullets.map((bullet, index) => <li key={index}>{bullet}</li>)}
-            </ul>
-          ) : null}
-          {card.onToggle ? (
-            <label className={brainClass("brainServiceEnableToggle")}>
-              <input type="checkbox" checked={Boolean(card.enabled)} onChange={(event) => card.onToggle?.(event.target.checked)} />
-              <span className={brainClass("brainServiceSwitch")} aria-hidden="true"><span /></span>
-              <span>{card.enabled ? "Enabled" : card.action}</span>
-            </label>
-          ) : null}
-          {!card.onToggle || card.enabled ? (
-            <Button type="button" size="sm" variant="secondary" onClick={() => setActiveSection(card.id)}>
-              {card.action}
-            </Button>
-          ) : null}
-        </article>
-      ))}
+      {cards.map((card) => {
+        const showActionButton = (!card.onToggle || card.enabled || card.canToggle) && card.installAction?.state !== "installing" && !(card.installAction?.state === "install" && !card.canToggle);
+        const showControlRow = Boolean((card.canToggle && card.onToggle) || showActionButton);
+        const toggleText = card.toggleLabel ?? (card.enabled ? `${card.title} enabled` : `Enable ${card.title}`);
+        return (
+          <article key={card.id} className={brainClass("brainServiceOverviewCard", card.tone === "live" ? "live" : "idle")}>
+            <div className={brainClass("brainServiceOverviewTopline")}>
+              <span className={brainClass("brainServiceOverviewIcon")}>{card.icon}</span>
+              <small className={brainClass(card.tone === "live" ? "serviceBadgeLive" : "serviceBadgeIdle")}>{card.status}</small>
+            </div>
+            <div>
+              <small>{card.eyebrow}</small>
+              <h4>{card.title}</h4>
+              <p>{card.detail}</p>
+            </div>
+            {card.bullets?.length ? (
+              <ul className={brainClass("brainServiceOverviewBullets")}>
+                {card.bullets.map((bullet, index) => <li key={index}>{bullet}</li>)}
+              </ul>
+            ) : null}
+            {card.installAction && card.installAction.state === "installing" ? (
+              <div className={brainClass("brainServiceOverviewInstallProgress")} role="status" aria-live="polite">
+                <span className={brainClass("brainServiceOverviewInstallPulse")} aria-hidden="true" />
+                <strong>{card.installAction.progressLabel ?? card.installAction.label}</strong>
+                {card.installAction.setupSteps?.length ? (
+                  <ol>
+                    {card.installAction.setupSteps.slice(0, 4).map((step, index) => <li key={step} style={{ "--step-index": index } as Record<string, number>}>{step}</li>)}
+                  </ol>
+                ) : null}
+              </div>
+            ) : card.installAction && !card.canToggle ? (
+              <Button type="button" size="sm" variant="secondary" disabled={card.installAction.disabled} onClick={card.installAction.onClick}>
+                {card.installAction.icon}
+                {card.installAction.label}
+              </Button>
+            ) : null}
+            {showControlRow ? (
+              <div className={brainClass("brainServiceOverviewControls")}>
+                {card.canToggle && card.onToggle ? (
+                  <label className={brainClass("brainServiceEnableToggle")}>
+                    <input type="checkbox" checked={Boolean(card.enabled)} onChange={(event) => card.onToggle?.(event.target.checked)} />
+                    <span className={brainClass("brainServiceSwitch")} aria-hidden="true"><span /></span>
+                    <span>{toggleText}</span>
+                  </label>
+                ) : null}
+                {showActionButton ? (
+                  <Button type="button" size="sm" variant="secondary" onClick={() => setActiveSection(card.id)}>
+                    {card.action}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+          </article>
+        );
+      })}
     </div>
   );
 }

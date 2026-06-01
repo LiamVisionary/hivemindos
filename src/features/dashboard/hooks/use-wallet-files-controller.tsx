@@ -252,9 +252,9 @@ export function useWalletFilesController(props: any) {
       body: JSON.stringify({ action, sharedVault }),
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as { ok?: boolean; message?: string; error?: string } | null;
-    setMaintenanceMessage(data?.ok ? data.message ?? "Repair completed." : data?.error ?? "Repair failed.");
     setMaintenanceBusy("");
     await refreshMaintenanceReport();
+    setMaintenanceMessage(data?.ok ? data.message ?? "Repair completed." : data?.error ?? "Repair failed.");
   }
 
   async function runtimeFileRequest(body: Record<string, unknown>) {

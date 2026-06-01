@@ -3,6 +3,7 @@ set -euo pipefail
 
 PORT="${AGENT_TELEMETRY_PORT:-8787}"
 REQUESTED_PORT="$PORT"
+TAILNET_COLLECTOR_PORT="${HIVE_TAILNET_COLLECTOR_PORT:-8787}"
 LINK_TAILNET_PORT="${HIVE_LINK_TAILNET_PORT:-8787}"
 HERMES_API_HOST="${AGENT_TELEMETRY_HERMES_API_HOST:-127.0.0.1}"
 HERMES_API_PORT="${AGENT_TELEMETRY_HERMES_API_PORT:-8642}"
@@ -20,6 +21,7 @@ LINK_CONTROL="${HIVE_LINK_CONTROL:-127.0.0.1:${HIVE_LINK_CONTROL_PORT:-8788}}"
 LINK_STATE_DIR="${HIVE_LINK_STATE_DIR:-$HOME/.hivemindos/link/default}"
 LINK_CONTROL_STATUS_URL="http://$LINK_CONTROL/status"
 LINK_CONTROL_HEALTH_URL="http://$LINK_CONTROL/health"
+SYSTEM_TAILNET_SERVE_ACTIVE="false"
 NODE_BIN="$(command -v node)"
 
 if [[ -z "${HIVE_LINK_CONTROL:-}" && -f "$HOME/.hivemindos/collector.env" ]]; then
@@ -42,6 +44,29 @@ if [[ ! -f "$COLLECTOR" ]]; then
   exit 1
 fi
 
+run_privileged() {
+  if [[ "$(id -u)" == "0" ]]; then
+    "$@"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo "$@"
+  else
+    return 127
+  fi
+}
+
+apt_install() {
+  run_privileged apt-get update
+  DEBIAN_FRONTEND=noninteractive run_privileged apt-get install -y "$@"
+}
+
+dnf_install() {
+  run_privileged dnf install -y "$@"
+}
+
+yum_install() {
+  run_privileged yum install -y "$@"
+}
+
 install_rsync_if_missing() {
   if command -v rsync >/dev/null 2>&1; then
     return
@@ -49,13 +74,12 @@ install_rsync_if_missing() {
   echo "rsync is missing; trying to install it for Tailnet vault sync"
   if [[ "$(uname -s)" == "Darwin" ]] && command -v brew >/dev/null 2>&1; then
     brew install rsync
-  elif command -v apt-get >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo apt-get update
-    sudo apt-get install -y rsync
-  elif command -v dnf >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo dnf install -y rsync
-  elif command -v yum >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo yum install -y rsync
+  elif command -v apt-get >/dev/null 2>&1; then
+    apt_install rsync
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf_install rsync
+  elif command -v yum >/dev/null 2>&1; then
+    yum_install rsync
   else
     echo "Install rsync to use Tailnet vault sync." >&2
   fi
@@ -68,13 +92,12 @@ install_syncthing_if_missing() {
   echo "Syncthing is missing; trying to install it for realtime folder sync"
   if [[ "$(uname -s)" == "Darwin" ]] && command -v brew >/dev/null 2>&1; then
     brew install syncthing
-  elif command -v apt-get >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo apt-get update
-    sudo apt-get install -y syncthing
-  elif command -v dnf >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo dnf install -y syncthing
-  elif command -v yum >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo yum install -y syncthing
+  elif command -v apt-get >/dev/null 2>&1; then
+    apt_install syncthing
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf_install syncthing
+  elif command -v yum >/dev/null 2>&1; then
+    yum_install syncthing
   else
     echo "Install Syncthing to use realtime folder sync." >&2
   fi
@@ -84,18 +107,17 @@ install_go_if_missing() {
   if command -v go >/dev/null 2>&1; then
     return 0
   fi
-  if ! prompt_yes_no "Go is missing. Install Go so Hivemind Link can build its embedded Tailscale sidecar?" "yes"; then
-    return 1
-  fi
   if [[ "$(uname -s)" == "Darwin" ]] && { command -v brew >/dev/null 2>&1 || load_homebrew_shellenv; }; then
+    if ! prompt_yes_no "Go is missing. Install Go so Hivemind Link can build its embedded Tailscale sidecar?" "yes"; then
+      return 1
+    fi
     brew install go
-  elif command -v apt-get >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo apt-get update
-    sudo apt-get install -y golang-go
-  elif command -v dnf >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo dnf install -y golang
-  elif command -v yum >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo yum install -y golang
+  elif command -v apt-get >/dev/null 2>&1; then
+    apt_install golang-go
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf_install golang
+  elif command -v yum >/dev/null 2>&1; then
+    yum_install golang
   else
     echo "Install Go, then rerun ./scripts/install-telemetry-collector.sh with HIVE_LINK_ENABLED=true." >&2
     return 1
@@ -299,14 +321,14 @@ install_tailscale_if_missing() {
   if [[ "$(uname -s)" == "Darwin" ]]; then
     setup_homebrew_tailscaled_for_fleet
     return
-  elif command -v apt-get >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
+  elif command -v apt-get >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
     curl -fsSL https://tailscale.com/install.sh | sh
-  elif command -v dnf >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo dnf install -y tailscale
-    sudo systemctl enable --now tailscaled || true
-  elif command -v yum >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo yum install -y tailscale
-    sudo systemctl enable --now tailscaled || true
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf_install tailscale
+    run_privileged systemctl enable --now tailscaled || true
+  elif command -v yum >/dev/null 2>&1; then
+    yum_install tailscale
+    run_privileged systemctl enable --now tailscaled || true
   else
     echo "No automatic Tailscale installer found for this OS." >&2
     return 1
@@ -434,6 +456,29 @@ enable_tailscale_ssh() {
   fi
 }
 
+maybe_enable_system_tailnet_collector_serve() {
+  [[ "$SYSTEM_TAILNET_SERVE_ACTIVE" == "true" ]] || return
+  tailscale_status_connected || return
+
+  local cli output=""
+  cli="$(tailscale_cli_candidates | awk '!seen[$0]++ { print; exit }')"
+  [[ -n "$cli" ]] || return
+
+  if output="$(run_tailscale_cli "$cli" serve --bg --http "$TAILNET_COLLECTOR_PORT" "http://localhost:$PORT" 2>&1)"; then
+    echo "Tailnet collector URL: http://<this-machine>:$TAILNET_COLLECTOR_PORT"
+    return
+  fi
+  if output="$(run_tailscale_cli_sudo_noninteractive "$cli" serve --bg --http "$TAILNET_COLLECTOR_PORT" "http://localhost:$PORT" 2>&1)"; then
+    echo "Tailnet collector URL: http://<this-machine>:$TAILNET_COLLECTOR_PORT"
+    return
+  fi
+
+  echo "Could not enable Tailscale Serve for the collector on Tailnet port $TAILNET_COLLECTOR_PORT." >&2
+  if [[ -n "$output" ]]; then
+    echo "Tailscale said: $(printf "%s" "$output" | tr '\n' ' ' | sed 's/[[:space:]]\{1,\}/ /g')" >&2
+  fi
+}
+
 stop_existing_listener() {
   local pids=""
   if command -v lsof >/dev/null 2>&1; then
@@ -445,6 +490,10 @@ stop_existing_listener() {
     echo "Stopping existing collector listener on port $PORT: $pids"
     kill $pids >/dev/null 2>&1 || true
     sleep 1
+    if [[ -n "$(port_listener_pids "$PORT")" ]]; then
+      kill -9 $(port_listener_pids "$PORT") >/dev/null 2>&1 || true
+      sleep 1
+    fi
   fi
 }
 
@@ -536,6 +585,23 @@ choose_link_local_collector_port() {
   echo "Port $requested_port is already used by another local service, and no nearby collector port was free." >&2
   echo "Stop the process on $requested_port or set AGENT_TELEMETRY_PORT to a free local port before rerunning setup." >&2
   exit 1
+}
+
+choose_system_tailnet_collector_port() {
+  [[ "$LINK_ACTIVE" != "true" && "$TAILNET_SYNC_ENABLED" == "true" ]] || return
+  [[ "$PORT" == "$TAILNET_COLLECTOR_PORT" ]] || return
+
+  local candidate
+  candidate="$(choose_nearest_available_port "$((TAILNET_COLLECTOR_PORT + 2))" 200 "$TAILNET_COLLECTOR_PORT" || true)"
+  if [[ -z "$candidate" ]]; then
+    echo "No nearby private collector port was free for Full Tailnet mode." >&2
+    echo "Stop the process on $TAILNET_COLLECTOR_PORT or set AGENT_TELEMETRY_PORT to a free local port before rerunning setup." >&2
+    exit 1
+  fi
+
+  echo "Full Tailnet mode will publish the collector on Tailnet port $TAILNET_COLLECTOR_PORT and run the private local collector on 127.0.0.1:$candidate."
+  PORT="$candidate"
+  SYSTEM_TAILNET_SERVE_ACTIVE="true"
 }
 
 choose_link_control_port() {
@@ -677,7 +743,7 @@ wait_for_hivemind_link_status() {
   LINK_STATUS=""
   while (( elapsed < seconds )); do
     LINK_STATUS="$(hivemind_link_status)"
-    if [[ -n "$LINK_STATUS" ]] && printf "%s" "$LINK_STATUS" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{try{const j=JSON.parse(d); process.exit(j.authUrl || j.ok || j.backendState ? 0 : 1)}catch{process.exit(1)}})' 2>/dev/null; then
+    if [[ -n "$LINK_STATUS" ]] && printf "%s" "$LINK_STATUS" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{try{const j=JSON.parse(d); process.exit(j.authUrl || j.ok ? 0 : 1)}catch{process.exit(1)}})' 2>/dev/null; then
       return 0
     fi
     if hivemind_link_log_has_stale_identity; then
@@ -953,6 +1019,7 @@ elif ensure_tailscale_connected; then
 else
   echo "Tailscale setup was not completed; multi-machine collaboration and shared memory sync are disabled for this run. Local collector features will still work." >&2
 fi
+choose_system_tailnet_collector_port
 choose_link_local_collector_port
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
@@ -1015,7 +1082,7 @@ PLIST
   <key>EnvironmentVariables</key>
   <dict>
     <key>AGENT_TELEMETRY_PORT</key><string>$PORT</string>
-    <key>AGENT_TELEMETRY_HOST</key><string>$( [[ "$LINK_ACTIVE" == "true" ]] && printf "127.0.0.1" || printf "0.0.0.0" )</string>
+    <key>AGENT_TELEMETRY_HOST</key><string>$( [[ "$LINK_ACTIVE" == "true" || "$SYSTEM_TAILNET_SERVE_ACTIVE" == "true" ]] && printf "127.0.0.1" || printf "0.0.0.0" )</string>
     <key>AGENT_TELEMETRY_HERMES_API_HOST</key><string>$HERMES_API_HOST</string>
     <key>AGENT_TELEMETRY_HERMES_API_PORT</key><string>$HERMES_API_PORT</string>
   </dict>
@@ -1092,6 +1159,8 @@ SERVICE
     fi
   fi
 
+  systemctl --user stop agent-telemetry.service >/dev/null 2>&1 || true
+  systemctl --user reset-failed agent-telemetry.service >/dev/null 2>&1 || true
   stop_existing_listener
   SERVICE="$HOME/.config/systemd/user/agent-telemetry.service"
   mkdir -p "$(dirname "$SERVICE")"
@@ -1101,7 +1170,7 @@ Description=HivemindOS telemetry collector
 
 [Service]
 Environment=AGENT_TELEMETRY_PORT=$PORT
-Environment=AGENT_TELEMETRY_HOST=$( [[ "$LINK_ACTIVE" == "true" ]] && printf "127.0.0.1" || printf "0.0.0.0" )
+Environment=AGENT_TELEMETRY_HOST=$( [[ "$LINK_ACTIVE" == "true" || "$SYSTEM_TAILNET_SERVE_ACTIVE" == "true" ]] && printf "127.0.0.1" || printf "0.0.0.0" )
 Environment=AGENT_TELEMETRY_HERMES_API_HOST=$HERMES_API_HOST
 Environment=AGENT_TELEMETRY_HERMES_API_PORT=$HERMES_API_PORT
 ExecStart=$(command -v node) $COLLECTOR
@@ -1141,6 +1210,7 @@ fi
 mkdir -p "$HOME/.hivemindos"
 {
   printf "AGENT_TELEMETRY_PORT=%q\n" "$PORT"
+  printf "HIVE_TAILNET_COLLECTOR_PORT=%q\n" "$TAILNET_COLLECTOR_PORT"
   printf "HIVE_LINK_TAILNET_PORT=%q\n" "$LINK_TAILNET_PORT"
   printf "HIVE_LINK_CONTROL=%q\n" "$LINK_CONTROL"
   printf "HIVE_LINK_STATE_DIR=%q\n" "$LINK_STATE_DIR"
@@ -1233,6 +1303,7 @@ if wait_for_local_collector 10; then
 else
   echo "The local collector is still starting. The dashboard will keep checking it." >&2
 fi
+maybe_enable_system_tailnet_collector_serve
 if [[ "$LINK_ACTIVE" != "true" && "$NETWORK_MANAGED_BY_SETUP" != "true" && -n "${IP:-}" ]]; then
   echo "Tailnet reachability check from another dashboard machine:"
   echo "  curl --max-time 5 http://$IP:$PORT/health"

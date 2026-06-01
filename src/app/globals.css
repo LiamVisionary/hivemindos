@@ -20,7 +20,41 @@
   --honey: #ffd45a;
   --pollen: #fff6cf;
   --comb-line: rgba(242, 183, 5, 0.22);
+  --radius: 0.625rem;
+  --button-background: #090b10;
+  --button-primary: #5eead4;
+  --button-primary-foreground: #041113;
+  --button-secondary: rgba(148, 163, 184, 0.14);
+  --button-secondary-foreground: #eef4fb;
+  --button-accent: rgba(94, 234, 212, 0.11);
+  --button-accent-foreground: #f4f7fb;
+  --button-muted-foreground: #9aa8ba;
+  --button-destructive: #e54864;
+  --button-border: rgba(148, 163, 184, 0.2);
+  --button-input: rgba(148, 163, 184, 0.18);
+  --button-ring: rgba(94, 234, 212, 0.46);
+  --button-popover: #0b1018;
+  --button-popover-foreground: #f4f7fb;
   color-scheme: dark;
+}
+
+@theme inline {
+  --color-background: var(--button-background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--button-primary);
+  --color-primary-foreground: var(--button-primary-foreground);
+  --color-secondary: var(--button-secondary);
+  --color-secondary-foreground: var(--button-secondary-foreground);
+  --color-muted-foreground: var(--button-muted-foreground);
+  --color-accent: var(--button-accent);
+  --color-accent-foreground: var(--button-accent-foreground);
+  --color-destructive: var(--button-destructive);
+  --color-border: var(--button-border);
+  --color-input: var(--button-input);
+  --color-ring: var(--button-ring);
+  --color-popover: var(--button-popover);
+  --color-popover-foreground: var(--button-popover-foreground);
+  --radius-md: var(--radius);
 }
 
 :root[data-theme="hive-light"] {
@@ -42,6 +76,20 @@
   --honey: #d4b46f;
   --pollen: #eee1bf;
   --comb-line: rgba(92, 75, 45, 0.22);
+  --button-background: #f4eee0;
+  --button-primary: #6f5625;
+  --button-primary-foreground: #fff7df;
+  --button-secondary: rgba(111, 86, 37, 0.12);
+  --button-secondary-foreground: #2a1c05;
+  --button-accent: rgba(111, 86, 37, 0.11);
+  --button-accent-foreground: #2a1c05;
+  --button-muted-foreground: #665a47;
+  --button-destructive: #b42342;
+  --button-border: rgba(92, 75, 45, 0.22);
+  --button-input: rgba(92, 75, 45, 0.2);
+  --button-ring: rgba(111, 86, 37, 0.38);
+  --button-popover: #f0e8d8;
+  --button-popover-foreground: #2a1c05;
   color-scheme: light;
 }
 
@@ -421,6 +469,26 @@ a {
   flex: 0 0 auto;
   margin: 0;
   object-fit: contain;
+  transform-origin: center;
+  transition: transform 160ms ease, filter 160ms ease;
+  will-change: transform;
+}
+
+.brandHex:hover .brandLogo,
+.brandHex:focus-visible .brandLogo {
+  filter: brightness(1.04);
+  transform: scale(1.045);
+}
+
+.brandHex:active .brandLogo {
+  filter: brightness(0.98);
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brandLogo {
+    transition: none;
+  }
 }
 
 .brandCopy {
@@ -610,6 +678,192 @@ h1 {
 
 .viewTab.active small {
   color: var(--accent-strong);
+}
+
+.commandPaletteTab {
+  min-width: 42px;
+}
+
+.dashboardBreadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(100%, 1280px);
+  margin: -4px auto 12px;
+  padding: 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.dashboardBreadcrumbs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.dashboardBreadcrumbs button[aria-current="page"] {
+  color: var(--foreground);
+  cursor: default;
+}
+
+.dashboardBreadcrumbs strong {
+  min-width: 0;
+  max-width: min(38vw, 28rem);
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.commandPaletteOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  padding: min(12vh, 96px) 16px 16px;
+  background: rgba(3, 6, 12, 0.72);
+  backdrop-filter: blur(12px);
+}
+
+.commandPalette {
+  display: grid;
+  width: min(672px, 100%);
+  max-height: min(672px, calc(100vh - 64px));
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(9, 13, 20, 0.98);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
+}
+
+.commandPaletteSearch {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.commandPaletteSearch svg {
+  width: 16px;
+  height: 16px;
+  color: var(--accent-strong);
+}
+
+.commandPaletteSearch input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+}
+
+.commandPalette kbd,
+.commandPaletteSearch kbd {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 6px;
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 6px;
+}
+
+.commandPaletteList {
+  display: grid;
+  gap: 4px;
+  min-height: 192px;
+  max-height: min(496px, calc(100vh - 208px));
+  overflow-y: auto;
+  padding: 7px;
+}
+
+.commandPaletteList > button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 68px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+  padding: 11px 12px;
+  text-align: left;
+}
+
+.commandPaletteList > button.active,
+.commandPaletteList > button:hover {
+  border-color: rgba(94, 234, 212, 0.28);
+  background: rgba(20, 184, 166, 0.1);
+}
+
+.commandPaletteList small,
+.commandPaletteList em {
+  display: block;
+  color: var(--muted);
+  font-style: normal;
+  overflow-wrap: anywhere;
+}
+
+.commandPaletteList strong {
+  display: block;
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+.commandPaletteActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.commandPaletteActions i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+
+.commandPaletteActions i:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--foreground);
+}
+
+.commandPaletteActions svg {
+  width: 15px;
+  height: 15px;
+}
+
+.commandPaletteEmpty,
+.commandPaletteFooter {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.commandPaletteEmpty {
+  padding: 24px;
+}
+
+.commandPaletteFooter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  padding: 10px 14px;
 }
 
 :root[data-theme="hive-light"] .commandMain :where(section, aside, article, details, [data-slot="card"], [data-slot="cell"]) {

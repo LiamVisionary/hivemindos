@@ -1,0 +1,122 @@
+/* AEON Autopilot — self-contained design tokens (dark default + hive-light).
+   Scoped to .root so it drops in regardless of host globals; map these onto
+   your semantic vars (--foreground / --muted / --accent-strong) if you prefer. */
+
+.root {
+  --f-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --f-body: "Geist", "Inter", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --bg-0: #06080d;
+  --bg-1: #0a0e16;
+  --bg-2: #10151f;
+  --bg-3: #161c2a;
+  --bg-4: #1d2334;
+  --line: rgba(148,163,184,0.12);
+  --line-2: rgba(148,163,184,0.22);
+  --fg: #f4f7fb;
+  --fg-2: #c6d1df;
+  --fg-3: #8e9bb1;
+  --fg-4: #5a6478;
+
+  --cyan: #2dd4bf;
+  --cyan-2: #5eead4;
+  --cyan-3: #99f6e4;
+  --honey: #f2b705;
+  --honey-2: #ffd45a;
+  --danger: #fb7185;
+  --danger-2: #fecdd3;
+
+  /* AEON signature — overridable at runtime via setAccent() */
+  --aeon: #5eead4;
+  --aeon-deep: #2dd4bf;
+  --aeon-soft: rgba(94,234,212,0.14);
+  --aeon-line: rgba(94,234,212,0.30);
+  --aeon-glow: rgba(45,212,191,0.34);
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+
+  --panel-bg: rgba(16,20,29,0.78);
+  --panel-bg-soft: rgba(8,12,19,0.55);
+  --panel-grad: linear-gradient(180deg, rgba(16,20,29,0.78), rgba(6,8,13,0.60));
+  --panel-card-grad: linear-gradient(180deg, rgba(22,28,42,0.72), rgba(16,21,31,0.62));
+}
+
+:global([data-theme="hive-light"]) .root,
+.root:global([data-theme="hive-light"]) {
+  --bg-0: #f3ecd6;
+  --bg-1: #ede4c8;
+  --bg-2: #e6dcbb;
+  --bg-3: #ddd0a8;
+  --bg-4: #d0c190;
+  --line: rgba(92,75,45,0.18);
+  --line-2: rgba(92,75,45,0.32);
+  --fg: #2a1c05;
+  --fg-2: #4a3a1f;
+  --fg-3: #6e5c3d;
+  --fg-4: #8a7a5a;
+
+  --cyan: #0d8e7e;
+  --cyan-2: #137e6c;
+  --cyan-3: #0c5a4e;
+  --honey: #b88216;
+  --honey-2: #8c5e0a;
+  --danger: #b42342;
+  --danger-2: #8f1d2c;
+
+  --aeon: #137e6c;
+  --aeon-deep: #0d8e7e;
+  --aeon-soft: rgba(19,126,108,0.14);
+  --aeon-line: rgba(19,126,108,0.34);
+  --aeon-glow: rgba(13,142,126,0.30);
+
+  --panel-bg: rgba(240,232,216,0.94);
+  --panel-bg-soft: rgba(232,223,203,0.82);
+  --panel-grad: linear-gradient(180deg, rgba(240,232,216,0.94), rgba(223,212,190,0.86));
+  --panel-card-grad: linear-gradient(180deg, rgba(245,238,222,0.92), rgba(232,223,203,0.78));
+}
+
+.monoCap {
+  font-family: var(--f-mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.18em; text-transform: uppercase;
+}
+.dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 9999px;
+  background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
+}
+.scroll::-webkit-scrollbar { width: 7px; height: 7px; }
+.scroll::-webkit-scrollbar-track { background: transparent; }
+.scroll::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
+
+.eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+.eq i { width: 2px; height: 100%; border-radius: 2px; background: currentColor; transform-origin: bottom; animation: aeon-bar 1s ease-in-out infinite; }
+.eq i:nth-child(2) { animation-delay: 0.18s; }
+.eq i:nth-child(3) { animation-delay: 0.36s; }
+.eq i:nth-child(4) { animation-delay: 0.54s; }
+
+.sheen { position: relative; overflow: hidden; }
+.sheen::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,0.16) 50%, transparent 65%);
+  background-size: 220% 100%; animation: aeon-sheen 4.5s ease-in-out infinite;
+}
+
+/* global keyframes (referenced by name from inline styles) */
+:global {
+  @keyframes aeon-breathe { 0%,100% { opacity: .55; transform: scale(1); } 50% { opacity: .95; transform: scale(1.08); } }
+  @keyframes aeon-orbit { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+  @keyframes aeon-ring { 0% { transform: scale(.82); opacity: .9; } 70% { opacity: 0; } 100% { transform: scale(1.6); opacity: 0; } }
+  @keyframes aeon-bar { 0% { transform: scaleY(.35); } 50% { transform: scaleY(1); } 100% { transform: scaleY(.35); } }
+  @keyframes aeon-sheen { 0% { background-position: -160% 0; } 100% { background-position: 260% 0; } }
+  @keyframes aeon-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+}
+.rise { animation: aeon-rise .42s cubic-bezier(.16,.84,.44,1) both; }
+
+:global([data-aeon-motion="off"]) .pulse,
+:global([data-aeon-motion="off"]) .orbit,
+:global([data-aeon-motion="off"]) .ring,
+:global([data-aeon-motion="off"]) .bar,
+:global([data-aeon-motion="off"]) .sheen::after,
+:global([data-aeon-motion="off"]) .rise { animation-duration: 0s !important; animation-iteration-count: 1 !important; }

@@ -1,139 +1,27 @@
 {
-  "created_at": "2026-06-01T05:43:57.093847+00:00",
+  "created_at": "2026-06-01T20:19:33.944697+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
-      "source_repo": "/tmp/synto-inspect",
-      "source_path": "src/synto/cli.py",
-      "target_path": "src/lib/services/brain/synto.ts",
-      "reuse_type": "translated_code",
-      "note": "translated Synto CLI commands for init, run, maintain, compare, eval, doctor, pack, and query into HivemindOS service actions"
-    },
-    {
-      "source_repo": "/tmp/synto-inspect",
-      "source_path": "src/synto/serve.py",
-      "target_path": "src/lib/services/brain/synto.ts",
-      "reuse_type": "translated_code",
-      "note": "translated Synto MCP tool catalog and stdio serve command into service status metadata"
-    },
-    {
-      "source_repo": "/tmp/synto-inspect",
-      "source_path": "src/synto/config.py",
-      "target_path": "src/lib/services/brain/synto.ts",
-      "reuse_type": "translated_code",
-      "note": "translated Synto MCP source-access mode options into dashboard-backed config patching"
-    },
-    {
-      "source_repo": "/tmp/synto-inspect",
-      "source_path": "README.md",
-      "target_path": "docs/features/brain-vault-and-skills.md",
-      "reuse_type": "config_adapted",
-      "note": "adapted Synto feature surface and install semantics into HivemindOS brain-service docs"
-    },
-    {
-      "source_repo": "tashfeenahmed/freellmapi",
-      "source_path": "server/src/providers/openai-compat.ts",
-      "target_path": "src/lib/services/usepod.ts",
+      "source_repo": "/Users/liam/Documents/code/projects/hivemind-os",
+      "source_path": "src/lib/services/obsidian/brain-graph.ts",
+      "target_path": "src/lib/services/obsidian/brain-graph.ts",
       "reuse_type": "adapted_code",
-      "note": "OpenAI-compatible /models validation, timeout, extra-header, and error categorization flow adapted for UsePod readiness and model discovery checks"
-    },
-    {
-      "source_repo": "tashfeenahmed/freellmapi",
-      "source_path": "server/src/__tests__/providers/openai-compat.test.ts",
-      "target_path": "src/app/api/usepod/status/route.ts",
-      "reuse_type": "test_adapted",
-      "note": "Validated-key and custom-header request expectations adapted into a server-only status/test endpoint that keeps UsePod tokens out of the client"
-    },
-    {
-      "source_repo": "Sortis-AI/usepod-agent",
-      "source_path": "agent.example.toml",
-      "target_path": "src/features/dashboard/views/chat/AgentSettingsModal.tsx",
-      "reuse_type": "config_adapted",
-      "note": "Provider hosting identity, backend, pricing, limits, and observability concepts adapted into a gated Earn with UsePod checklist"
-    },
-    {
-      "source_repo": "Sortis-AI/usepod-agent",
-      "source_path": "install/README.md",
-      "target_path": "docs/integrations/usepod.md",
-      "reuse_type": "config_adapted",
-      "note": "Manual provider-hosting setup guidance retained while explicitly excluding pipe-to-shell automation"
-    },
-    {
-      "source_repo": "/Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives",
-      "source_path": "packages/react/collapsible/src/collapsible.tsx",
-      "target_path": "src/features/dashboard/brain-modules.tsx",
-      "reuse_type": "translated_code",
-      "note": "translated the accessible trigger/content disclosure structure into native BrainModule details sections for advanced actions, settings, and command transcripts"
-    },
-    {
-      "source_repo": "/Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives",
-      "source_path": "packages/react/tabs/src/tabs.tsx",
-      "target_path": "src/features/dashboard/views/VaultPanel.tsx",
-      "reuse_type": "translated_code",
-      "note": "translated the Radix Tabs trigger/content accessibility contract into native segmented Brain Services pills with role=tablist, role=tab, aria-selected, aria-controls, and tabpanel IDs"
-    },
-    {
-      "source_repo": "/Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives",
-      "source_path": "packages/react/tabs/src/tabs.tsx",
-      "target_path": "src/features/dashboard/views/brain-services-ui.tsx",
-      "reuse_type": "translated_code",
-      "note": "kept the extracted segmented Brain Services navigation aligned with the Radix tab trigger/content accessibility contract"
+      "note": "extended existing Obsidian graph builder with previews, modified metadata, and missing-note creation"
     },
     {
       "source_repo": "/Users/liam/Documents/code/projects/hivemind-os",
-      "source_path": "src/features/dashboard/views/AeonAutopilotPanel.tsx",
-      "target_path": "src/features/dashboard/views/AeonAutopilotPanel.tsx",
+      "source_path": "src-tauri/src/brain.rs",
+      "target_path": "src-tauri/src/brain.rs",
       "reuse_type": "adapted_code",
-      "note": "reused existing AEON panel automation state, tab layout, and action wiring while adding automation power controls"
+      "note": "mirrored graph preview and modified metadata in native Tauri graph reader"
     },
     {
       "source_repo": "/Users/liam/Documents/code/projects/hivemind-os",
-      "source_path": "src/components/scheduler/jobs.tsx",
-      "target_path": "src/features/dashboard/views/AeonAutopilotPanel.tsx",
+      "source_path": "src/features/dashboard/views/VaultPanel.tsx",
+      "target_path": "src/features/dashboard/views/BrainGraphExplorer.tsx",
       "reuse_type": "adapted_code",
-      "note": "adapted scheduler job status/counting patterns into the AEON automation summary and stop-all controls"
-    },
-    {
-      "source_repo": "/Users/liam/Documents/code/projects/hivemind-os",
-      "source_path": "src/features/dashboard/hooks/use-scheduler-controller.tsx",
-      "target_path": "src/features/dashboard/views/AeonAutopilotPanel.tsx",
-      "reuse_type": "adapted_code",
-      "note": "reused scheduler controller stop semantics for per-automation and bulk AEON stop actions"
-    },
-    {
-      "source_repo": "ami-ai-companion",
-      "source_path": ".github/workflows/security-scan.yml",
-      "target_path": ".github/workflows/security-scan.yml",
-      "reuse_type": "config_adapted",
-      "note": "adapted Strix install, quick scan, artifact upload, and Telegram notification; changed triggers to a weekly schedule with a main-update gate"
-    },
-    {
-      "source_repo": "local-hivemindos",
-      "source_path": "src/lib/services/obsidian/brain-skills.ts",
-      "target_path": "src/lib/services/context-index.ts",
-      "reuse_type": "adapted_code",
-      "note": "adapted shared/runtime skill inventory summary and load-hint patterns for the unified context index"
-    },
-    {
-      "source_repo": "local-hivemindos",
-      "source_path": "src/lib/services/skills/skill-os.ts",
-      "target_path": "src/lib/services/context-index.ts",
-      "reuse_type": "adapted_code",
-      "note": "adapted lightweight lexical scoring ideas for task-to-context ranking"
-    },
-    {
-      "source_repo": "local-hivemindos",
-      "source_path": "src/lib/services/brain/gbrain.ts",
-      "target_path": "src/app/api/context-index/route.ts",
-      "reuse_type": "adapted_code",
-      "note": "adapted GBrain query invocation for optional semantic retrieval in the context index endpoint"
-    },
-    {
-      "source_repo": "local-hivemindos",
-      "source_path": "src/app/api/fleet/apps/route.ts",
-      "target_path": "src/lib/services/context-index.ts",
-      "reuse_type": "adapted_code",
-      "note": "adapted existing Apps view Tailnet app and service route catalog payload into generic connected-app and app-endpoint context records"
+      "note": "extracted and expanded existing VaultPanel graph UI into focused graph explorer with filters, inspector actions, and context bundling"
     }
   ]
 }

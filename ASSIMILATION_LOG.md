@@ -4343,3 +4343,295 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
   - Decision: selected
   - Reason: existing Next standalone packaging, Tauri config, Rust commands, and native bridge helpers define the static-native migration surface
   - Path: `scripts/tauri-build.mjs,src-tauri/tauri.conf.json,src-tauri/src,src/lib/native`
+## 2026-06-01T10:41:18.808022+00:00 - implementation
+
+- Request: Replace the UsePod button icon in agent runtimes with a supplied compressed local image asset
+- Source: user-supplied-asset-and-local-code
+- Selected backbone: hivemind-os
+
+### Candidates
+- user-supplied:/Users/liam/Downloads/Untitled - June 01, 2026 at 18.39.20.png
+  - Decision: selected
+  - Reason: pinned source image for UsePod icon replacement
+  - Path: `image asset`
+- hivemind-os
+  - Decision: selected
+  - Reason: existing AgentSettingsModal UsePod button patterns
+  - Path: `src/features/dashboard/views/chat/AgentSettingsModal.tsx`
+## 2026-06-01T10:48:15.365845+00:00 - assimilation-manifest
+
+- Request: Replace the UsePod button icon in agent runtimes with a supplied compressed local image asset
+- Source: user-supplied-asset-and-local-code
+- Selected backbone: hivemind-os
+
+### Candidates
+- user-supplied:/Users/liam/Downloads/Untitled - June 01, 2026 at 18.39.20.png
+  - Decision: selected
+  - Reason: cropped and compressed into public/icons/runtimes/usepod.webp
+  - Path: `image asset`
+- hivemind-os:src/features/dashboard/views/chat/AgentSettingsModal.tsx
+  - Decision: selected
+  - Reason: reused existing runtime/provider icon mark pattern for UsePod buttons
+  - Path: `component markup`
+## 2026-06-01T10:56:10.984448+00:00 - implementation
+
+- Request: Add UsePod funding browser picker
+- Source: local-code
+- Query: `UsePod setup split funding button browser opener`
+- Decision: Used existing local shadcn-style Button patterns and added small local browser-open API; no external repo code copied.
+- Reason: The requested change is a narrow UX refinement and OS integration inside an existing wizard; existing project primitives were a better fit than importing donor code.
+- Not assimilated: External split-button examples
+- Verification: Focused TypeScript, ESLint, diff check, file-size check, and API smoke for browser detection/URL validation.
+## 2026-06-01T11:03:48.263613+00:00 - implementation
+
+- Request: Install shadcn components for UsePod funding split button
+- Source: shadcn-registry
+- Query: `@shadcn/button-group @shadcn/dropdown-menu`
+- Decision: Installed radix-ui and added shadcn DropdownMenu, ButtonGroup, and Separator primitives while preserving the existing project Button component.
+- Reason: User explicitly requested shadcn for a more modern UI; registry primitives fit the split-button browser picker and avoid bespoke menu behavior.
+- Assimilated: src/components/ui/dropdown-menu.tsx; src/components/ui/button-group.tsx; src/components/ui/separator.tsx
+- Verification: TypeScript, focused ESLint, diff check, file-size check, and browser-detection API smoke.
+## 2026-06-01T11:11:22.202398+00:00 - implementation
+
+- Request: Switch app buttons to shadcn styling
+- Source: shadcn-registry
+- Query: `@shadcn/button`
+- Decision: Reworked the shared Button primitive around the shadcn new-york v4 button recipe while preserving HivemindOS-specific danger and isLoading compatibility.
+- Reason: User explicitly preferred shadcn buttons over the custom button styling; the shared primitive controls most app buttons.
+- Assimilated: src/components/ui/button.tsx
+- Verification: TypeScript, focused ESLint, diff check, line count, and local HTTP smoke.
+## 2026-06-01T11:31:01.367562+00:00 - triage
+
+- Request: Add native first-run onboarding for packaged Tauri users instead of auto-running setup.sh
+- Source: user-supplied-local-repo
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: existing Tauri command surface, setup.sh installer prompts, and dashboard modal patterns define the first-run native onboarding implementation
+  - Path: `src-tauri/src/lib.rs,setup.sh,src/features/dashboard/views/DashboardModals.tsx,src/app/StaticNativeHome.tsx`
+## 2026-06-01T11:43:59.897610+00:00 - triage
+
+- Request: Turn first-run native onboarding into a multi-step HivemindOS installer wizard that covers setup.sh choices and agent skill/memory imports
+- Source: user-supplied-local-repo
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: setup.sh/setup.ps1 define installer capability surface; AgentSettingsModal/runtime-icons define provider artwork; existing Tauri commands define native action bridge
+  - Path: `setup.sh,setup.ps1,src/features/dashboard/views/chat/AgentSettingsModal.tsx,src/lib/config/runtime-icons.ts,src-tauri/src`
+## 2026-06-01T13:15:29.468840+00:00 - implementation
+
+- Request: Let the UsePod Add Agent recording flow create a new agent even when a saved UsePod token already exists
+- Source: local-code
+- Selected backbone: hivemind-os
+- Not assimilated: No public donor used; this is a narrow local behavior toggle on existing UsePod setup flow.
+- Verification: Pending focused TypeScript, ESLint, and diff checks.
+
+### Candidates
+- hivemind-os:src/features/dashboard/views/chat/GuidedUsePodSetup.tsx
+  - Decision: selected
+  - Reason: existing saved-token recovery logic needed a create-flow gate
+  - Path: `component state/effect`
+- hivemind-os:src/features/dashboard/views/chat/AgentSettingsModal.tsx
+  - Decision: selected
+  - Reason: existing Add Agent vs edit-agent modal context provides the gate
+  - Path: `component props`
+## 2026-06-01T13:16:44.840266+00:00 - verification
+
+- Request: Let the UsePod Add Agent recording flow create a new agent even when a saved UsePod token already exists
+- Source: local-code
+- Verification: pnpm exec eslint src/features/dashboard/views/chat/GuidedUsePodSetup.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999; pnpm exec tsc --noEmit --pretty false --skipLibCheck; git diff --check -- touched files; node scripts/check-file-sizes.mjs touched files
+## 2026-06-01T15:46:32.284685+00:00 - implementation
+
+- Request: Gate Brain Services toggles behind installation and add reusable install animation
+- Source: local-repo
+- Selected backbone: hivemind-os
+
+### Candidates
+- src/features/dashboard/brain-modules.tsx
+  - Decision: selected
+  - Reason: extended existing reusable BrainModule install state renderer with setup steps
+- src/features/dashboard/views/brain-services-ui.tsx
+  - Decision: selected
+  - Reason: adapted existing BrainServiceOverview card controls to show install CTAs before toggles
+- src/features/dashboard/views/VaultPanel.tsx
+  - Decision: selected
+  - Reason: reused existing GBrain/Syntho/Trading Brain module definitions and action handlers
+## 2026-06-01T15:55:34.615387+00:00 - triage
+
+- Request: Improve HivemindOS from fathah/hermes-desktop: diagnostics, searchable sessions, provider/model management, slash commands, typed boundaries
+- Source: user-pinned-github
+- Selected backbone: fathah/hermes-desktop
+
+### Candidates
+- fathah/hermes-desktop
+  - Decision: selected
+  - Reason: user-pinned desktop companion with reusable diagnostics, session search, slash-command, and provider/model patterns
+  - Path: `src/main/session-cache.ts,src/main/sessions.ts,src/main/installer.ts,src/renderer/src/screens/Chat/slashCommands.ts,src/renderer/src/screens/Settings/Settings.tsx`
+## 2026-06-01T16:05:45.251483+00:00 - triage
+
+- Request: Add Apps and Tools surfaces for agent-usable app providers
+- Source: user-pinned-local
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: pinned existing dashboard source; reused MorePanel, UtilityPanels, MyAppsPanel, and dashboard navigation patterns
+  - Path: `src/features/dashboard`
+## 2026-06-01T16:11:48.844697+00:00 - assimilation-manifest
+
+- Request: Improve HivemindOS from fathah/hermes-desktop: diagnostics, searchable sessions, provider/model management, slash commands, typed boundaries
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: fathah/hermes-desktop:src/main/sessions.ts => src/lib/services/runtime-integrations.ts, fathah/hermes-desktop:src/main/installer.ts => src/lib/services/runtime-maintenance.ts, fathah/hermes-desktop:src/renderer/src/screens/Chat/slashCommands.ts => src/features/chat/dashboard-slash-commands.ts, fathah/hermes-desktop:src/renderer/src/screens/Settings/Settings.tsx => src/features/dashboard/views/UtilityPanels.tsx, fathah/hermes-desktop:src/main/model-discovery.ts => src/features/dashboard/views/chat/runtime-model-registry.ts
+- Verification: Wrote ASSIMILATION.json with 5 entries and custom_code_assessment=balanced.
+## 2026-06-01T16:15:17.622576+00:00 - implementation
+
+- Request: Make UsePod Add Agent reuse completed wallets, force unfinished setup completion, or start setup when no wallet exists
+- Source: local-code
+- Selected backbone: hivemind-os
+- Not assimilated: No public donor used; this is a narrow product-state refinement in existing local UsePod UI.
+- Verification: Focused ESLint, TypeScript, diff check, and file-size check passed.
+
+### Candidates
+- hivemind-os:src/features/dashboard/views/chat/GuidedUsePodSetup.tsx
+  - Decision: selected
+  - Reason: existing UsePod setup wizard owns token funding model selection spend caps
+  - Path: `component`
+- hivemind-os:src/features/dashboard/views/chat/AgentSettingsModal.tsx
+  - Decision: selected
+  - Reason: existing Add Agent/Edit Agent runtime context owns draft vs saved agent behavior
+  - Path: `component`
+- hivemind-os:src/features/dashboard/DashboardApp.tsx
+  - Decision: selected
+  - Reason: existing modal prop wiring already carries displayAgents to nearby panels
+  - Path: `component wiring`
+## 2026-06-01T18:15:46.535652+00:00 - implementation
+
+- Request: Add UsePod direct funding controls with reusable copy line and wallet transaction preparation
+- Source: local-code
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: user-supplied local codebase with existing UsePod setup wizard, shadcn Button/ButtonGroup/DropdownMenu primitives, Solana wallet service utilities, and clipboard patterns
+  - Path: `src/features/dashboard/views/chat/GuidedUsePodSetup.tsx,src/features/dashboard/views/chat/UsePodSetup.module.css,src/components/ui/button.tsx,src/components/ui/button-group.tsx,src/components/ui/dropdown-menu.tsx,src/lib/services/wallet/chain-wallet.ts`
+- public-github
+  - Decision: not-searched
+  - Reason: pinned local source covered the requested reusable UI primitive and Solana transaction integration surface; UsePod protocol details came from official docs rather than donor source
+## 2026-06-01T18:55:18.815998+00:00 - implementation
+
+- Request: Clarify UsePod direct funding labels and hide extension transfer controls in Tauri
+- Source: local-pinned
+- Decision: Used existing local UsePod setup flow and Tauri runtime helper; public GitHub discovery skipped because this was a small in-repo UI correction against pinned source.
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: pinned local app already contains UsePod setup and native runtime detection surfaces
+  - Path: `src/features/dashboard/views/chat/GuidedUsePodSetup.tsx,src/lib/native/desktop-status.ts`
+## 2026-06-01T18:59:56.296677+00:00 - implementation
+
+- Request: Hide worker class section until UsePod setup is complete
+- Source: local-pinned
+- Decision: Used existing local UsePod completion state to gate the worker class picker; public GitHub discovery skipped because this is a surgical in-repo UI condition against pinned source.
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: pinned local modal already owns UsePod setup status and worker class rendering
+  - Path: `src/features/dashboard/views/chat/AgentSettingsModal.tsx`
+## 2026-06-01T19:19:36.724449+00:00 - implementation
+
+- Request: Add wallet provider feature matrix and make UsePod wallet cards display UsePod funded balance
+- Source: local-pinned
+- Decision: Using the existing local runtime/wallet architecture as the pinned backbone; public GitHub discovery skipped because this is an in-repo typed provider matrix and display-state fix specific to HivemindOS UsePod metadata.
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: pinned local wallet layer already contains provider copy, agent wallet utils, wallet cards, and UsePod runtime metadata
+  - Path: `src/lib/config/agent-payments.ts,src/lib/utils/agent-wallet.ts,src/components/wallet,src/features/dashboard/views/WalletPanel.tsx`
+## 2026-06-01T19:52:57.780830+00:00 - triage
+
+- Request: Make the shared brain graph utilitarian while leaving Brain Worklist unimplemented and generate Worklist concept images
+- Source: user-supplied-local-repo
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: pinned local app already contains Obsidian graph builder, VaultPanel graph UI, chat attachment flow, and graph access endpoints to extend directly
+  - Path: `src/lib/services/obsidian/brain-graph.ts,src-tauri/src/brain.rs,src/features/dashboard/views/VaultPanel.tsx,src/features/dashboard/hooks/use-dashboard-derived-state.tsx,src/features/dashboard/hooks/use-status-chat-input-controller.tsx`
+## 2026-06-01T20:08:09.527819+00:00 - local-search
+
+- Request: Add native Tauri desktop navigation improvements: command palette, keyboard shortcuts, URL route state, recents, breadcrumbs, notification deep links, multi-window support, native menubar, dock/tray quick actions, restore workspace state
+- Source: local-index
+- Query: `Add native Tauri desktop navigation improvements: command palette, keyboard shortcuts, URL route state, recents, breadcrumbs, notification deep links, multi-window support, native menubar, dock/tray quick actions, restore workspace state`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=14.19 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+2. score=14.19 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+3. score=14.19 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+4. score=8.09 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+
+## 2026-06-01T20:08:12.346960+00:00 - prebuild-gate
+
+- Request: Add native Tauri desktop navigation improvements: command palette, keyboard shortcuts, URL route state, recents, breadcrumbs, notification deep links, multi-window support, native menubar, dock/tray quick actions, restore workspace state
+- Source: public-github
+- Query: `Add native Tauri desktop navigation improvements: command palette, keyboard shortcuts, URL route state, recents, breadcrumbs, notification deep links, multi-window support, native menubar, dock/tray quick actions, restore workspace state`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-06-01T20:16:11.568071+00:00 - implementation
+
+- Request: Replace HivemindOS AEON route with supplied nextjs-aeon redesign
+- Source: user-pinned-local
+- Selected backbone: /Users/liam/Downloads/nextjs-aeon
+- Assimilated: /Users/liam/Downloads/nextjs-aeon:README.md=>src/features/dashboard/DashboardApp.tsx::adapted_code::DashboardApp activeView aeon wiring
+- Verification: candidate audit passed; local typecheck/lint pending
+
+### Candidates
+- /Users/liam/Downloads/nextjs-aeon
+  - Decision: selected
+  - Reason: user-supplied TypeScript AEON redesign drop-in matching existing Next.js component conventions
+  - Path: `src/components/aeon,src/app/aeon/page.tsx`
+## 2026-06-01T20:19:33.991387+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /Users/liam/Documents/code/projects/hivemind-os:src/lib/services/obsidian/brain-graph.ts => src/lib/services/obsidian/brain-graph.ts, /Users/liam/Documents/code/projects/hivemind-os:src-tauri/src/brain.rs => src-tauri/src/brain.rs, /Users/liam/Documents/code/projects/hivemind-os:src/features/dashboard/views/VaultPanel.tsx => src/features/dashboard/views/BrainGraphExplorer.tsx
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-01T20:21:20.072851+00:00 - implementation-update
+
+- Request: Replace HivemindOS AEON route with supplied nextjs-aeon redesign
+- Source: user-pinned-local
+- Selected backbone: /Users/liam/Downloads/nextjs-aeon
+- Assimilated: /Users/liam/Downloads/nextjs-aeon:src/components/aeon/*=>src/components/aeon/*::copied_code::redesigned AEON panel, tabs, mock data, and tokens; /Users/liam/Downloads/nextjs-aeon:src/app/aeon/page.tsx=>src/app/aeon/page.tsx::adapted_code::standalone route with no-op callbacks; /Users/liam/Downloads/nextjs-aeon:README.md=>src/features/dashboard/DashboardApp.tsx::adapted_code::activeView aeon wiring
+- Verification: pnpm exec tsc --noEmit --pretty false --skipLibCheck; pnpm exec eslint src/components/aeon src/app/aeon/page.tsx src/features/dashboard/views/AeonAutopilotPanel.tsx --max-warnings=0; git diff --check target paths; Playwright /aeon smoke passed; /?view=aeon blocked by dashboard auth lock
+
+### Candidates
+- /Users/liam/Downloads/nextjs-aeon
+  - Decision: selected
+  - Reason: transplanted supplied AEON UI bundle after heuristic audit passed
+  - Path: `src/components/aeon,src/app/aeon/page.tsx`

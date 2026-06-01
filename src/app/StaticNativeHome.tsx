@@ -2,29 +2,9 @@
 
 import { useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import DashboardApp, { type DashboardVaultPanelMode } from "@/features/dashboard/DashboardApp";
-import type { DashboardView } from "@/features/dashboard/dashboard-types";
-
-const DASHBOARD_VIEWS = new Set<DashboardView>([
-  "agents",
-  "kanban",
-  "scheduler",
-  "swarm",
-  "history",
-  "wallet",
-  "vault",
-  "integrations",
-  "maintenance",
-  "memory",
-  "files",
-  "notifications",
-  "chat",
-  "more",
-  "env",
-  "my-apps",
-  "phone",
-  "aeon",
-]);
+import DashboardNativeFrame from "@/app/DashboardNativeFrame";
+import type { DashboardVaultPanelMode } from "@/features/dashboard/DashboardApp";
+import { isDashboardView } from "@/features/dashboard/dashboard-navigation";
 
 const DASHBOARD_VAULT_PANEL_MODES = new Set<DashboardVaultPanelMode>([
   "hive-vault",
@@ -38,7 +18,7 @@ export default function StaticNativeHome() {
   const searchParams = useSearchParams();
   const initialView = useMemo(() => {
     const view = searchParams.get("view");
-    return view && DASHBOARD_VIEWS.has(view as DashboardView) ? view as DashboardView : undefined;
+    return view && isDashboardView(view) ? view : undefined;
   }, [searchParams]);
   const initialVaultPanelMode = useMemo(() => {
     const vaultPanel = searchParams.get("vaultPanel");
@@ -47,5 +27,5 @@ export default function StaticNativeHome() {
       : undefined;
   }, [searchParams]);
 
-  return <DashboardApp initialView={initialView} initialVaultPanelMode={initialVaultPanelMode} />;
+  return <DashboardNativeFrame initialView={initialView} initialVaultPanelMode={initialVaultPanelMode} />;
 }

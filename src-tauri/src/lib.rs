@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use tauri::{Manager, RunEvent};
 
 mod brain;
+mod desktop_navigation;
 mod deliverables;
 mod env;
 mod fleet;
@@ -18,6 +19,7 @@ mod phone;
 mod runtime_files;
 mod runtime_usage;
 mod scheduler;
+mod setup;
 
 #[cfg(not(debug_assertions))]
 use std::net::{TcpListener, TcpStream};
@@ -576,7 +578,16 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(NativeServerState::new())
+        .menu(desktop_navigation::app_menu)
+        .on_menu_event(|app, event| {
+            desktop_navigation::handle_menu_event(app, event.id().as_ref());
+        })
         .setup(|_app| {
+            if let Err(error) = desktop_navigation::setup_tray(_app.handle()) {
+                eprintln!("HivemindOS tray setup failed: {error}");
+            }
+            desktop_navigation::restore_window_state(_app.handle());
+
             #[cfg(not(debug_assertions))]
             {
                 let app = _app;
@@ -621,16 +632,27 @@ pub fn run() {
             phone::phone_prompts,
             runtime_files::runtime_files,
             runtime_usage::runtime_usage,
+            setup::native_setup_run,
+            setup::native_setup_status,
             scheduler::scheduler_shared_schedules,
             deliverables::download_aeon_deliverable,
-            deliverables::send_aeon_deliverable
+            deliverables::send_aeon_deliverable,
+            desktop_navigation::open_route_window
         ])
         .build(tauri::generate_context!())
         .expect("error while building HivemindOS desktop")
         .run(|app_handle, event| {
-            if let RunEvent::ExitRequested { .. } = event {
-                let state = app_handle.state::<NativeServerState>();
-                stop_native_server(state);
+            match event {
+                RunEvent::WindowEvent { label, event, .. } if label == "main" => {
+                    if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) | tauri::WindowEvent::CloseRequested { .. }) {
+                        desktop_navigation::save_main_window_state(app_handle);
+                    }
+                }
+                RunEvent::ExitRequested { .. } => {
+                    let state = app_handle.state::<NativeServerState>();
+                    stop_native_server(state);
+                }
+                _ => {}
             }
         });
 }

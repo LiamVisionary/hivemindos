@@ -10,12 +10,21 @@ const root = process.cwd();
 const ignoredDirectories = new Set([
   ".git",
   ".next",
+  ".next-tauri",
+  ".next-tauri-build",
+  ".next-tauri-static-build",
   ".turbo",
   ".vercel",
   "build",
   "coverage",
   "dist",
   "node_modules",
+]);
+
+const ignoredRelativeDirectories = new Set([
+  "src-tauri/gen",
+  "src-tauri/static",
+  "src-tauri/target",
 ]);
 
 const ignoredFiles = new Set([
@@ -41,6 +50,26 @@ const checkedExtensions = new Set([
   ".tsx",
 ]);
 
+const legacyOversizedAllowances = new Map([
+  ["scripts/agent-telemetry-collector.mjs", 4281],
+  ["src/app/api/chat/agent-runtime/route.ts", 1767],
+  ["src/app/chat.module.css", 3685],
+  ["src/app/fleet.module.css", 4360],
+  ["src/app/kanban-board.module.css", 3735],
+  ["src/app/vault.module.css", 1568],
+  ["src/features/dashboard/DashboardApp.tsx", 2756],
+  ["src/features/dashboard/views/AeonAutopilotPanel.tsx", 3857],
+]);
+
+function isIgnoredDirectory(directory) {
+  const relativeDirectory = path.relative(root, directory);
+  if (ignoredRelativeDirectories.has(relativeDirectory)) {
+    return true;
+  }
+
+  return ignoredDirectories.has(path.basename(directory));
+}
+
 function isCheckedFile(filePath) {
   const basename = path.basename(filePath);
 
@@ -64,8 +93,9 @@ function lineCount(filePath) {
 function walk(directory, results) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     if (entry.isDirectory()) {
-      if (!ignoredDirectories.has(entry.name)) {
-        walk(path.join(directory, entry.name), results);
+      const entryPath = path.join(directory, entry.name);
+      if (!isIgnoredDirectory(entryPath)) {
+        walk(entryPath, results);
       }
 
       continue;
@@ -102,14 +132,37 @@ const oversizedFiles = [];
 walk(root, oversizedFiles);
 oversizedFiles.sort((left, right) => right.lines - left.lines);
 
-if (oversizedFiles.length > 0) {
+const newOversizedFiles = [];
+const legacyOversizedFiles = [];
+
+for (const file of oversizedFiles) {
+  const allowedLines = legacyOversizedAllowances.get(file.relativePath);
+  if (allowedLines && file.lines <= allowedLines) {
+    legacyOversizedFiles.push({ ...file, allowedLines });
+    continue;
+  }
+
+  newOversizedFiles.push({
+    ...file,
+    allowedLines,
+  });
+}
+
+if (newOversizedFiles.length > 0) {
   console.error(`Files over ${MAX_LINES} lines:`);
 
-  for (const file of oversizedFiles) {
-    console.error(`- ${file.relativePath} (${file.lines} lines)`);
+  for (const file of newOversizedFiles) {
+    const allowance = file.allowedLines ? `, legacy allowance ${file.allowedLines}` : "";
+    console.error(`- ${file.relativePath} (${file.lines} lines${allowance})`);
   }
 
   process.exitCode = 1;
 } else {
   console.log(`All checked files are ${MAX_LINES} lines or fewer.`);
+  if (legacyOversizedFiles.length > 0) {
+    console.log(`Legacy oversized files are within their no-growth allowance:`);
+    for (const file of legacyOversizedFiles) {
+      console.log(`- ${file.relativePath} (${file.lines}/${file.allowedLines} lines)`);
+    }
+  }
 }

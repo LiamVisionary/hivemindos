@@ -3,7 +3,8 @@
   "identifier": "default",
   "description": "Capability for the HivemindOS desktop window",
   "windows": [
-    "main"
+    "main",
+    "route-*"
   ],
   "permissions": [
     "core:default",

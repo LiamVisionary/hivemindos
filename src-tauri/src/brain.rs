@@ -363,6 +363,9 @@ struct GraphNote {
     path: String,
     content: String,
     byte_size: u64,
+    line_count: usize,
+    modified_at: Option<String>,
+    preview: String,
     tags: Vec<String>,
 }
 
@@ -425,6 +428,39 @@ fn extract_wiki_links(content: &str) -> Vec<String> {
     links
 }
 
+fn graph_preview(content: &str) -> String {
+    let body = if content.trim_start().starts_with("---") {
+        content
+            .splitn(3, "---")
+            .nth(2)
+            .unwrap_or(content)
+    } else {
+        content
+    };
+    let mut preview = String::new();
+    for line in body.lines() {
+        let trimmed = line
+            .trim()
+            .trim_start_matches('#')
+            .trim()
+            .replace("[[", "")
+            .replace("]]", "")
+            .replace("**", "")
+            .replace("__", "");
+        if trimmed.is_empty() || trimmed.starts_with("```") || trimmed.starts_with('|') {
+            continue;
+        }
+        if !preview.is_empty() {
+            preview.push(' ');
+        }
+        preview.push_str(&trimmed);
+        if preview.len() >= 280 {
+            break;
+        }
+    }
+    preview.chars().take(280).collect()
+}
+
 fn extract_tags(content: &str) -> Vec<String> {
     let mut tags = HashSet::new();
     for token in content.split_whitespace() {
@@ -464,6 +500,12 @@ fn read_graph_notes(root: &Path) -> (Vec<GraphNote>, bool) {
         notes.push(GraphNote {
             path: graph_relative_path(root, &path),
             byte_size: metadata.len(),
+            line_count: content.lines().count(),
+            modified_at: metadata
+                .modified()
+                .ok()
+                .map(|time| chrono::DateTime::<chrono::Utc>::from(time).to_rfc3339()),
+            preview: graph_preview(&content),
             tags: extract_tags(&content),
             content,
         });
@@ -572,6 +614,9 @@ pub(crate) fn brain_graph(vault_path: Option<String>, _force: Option<bool>) -> R
                 "folder": folder,
                 "tags": note.tags,
                 "byteSize": note.byte_size,
+                "lineCount": note.line_count,
+                "modifiedAt": note.modified_at,
+                "preview": note.preview,
                 "incoming": incoming,
                 "outgoing": outgoing,
                 "accessCount": accesses_by_note.get(&note.path).map(Vec::len).unwrap_or(0),
@@ -589,6 +634,8 @@ pub(crate) fn brain_graph(vault_path: Option<String>, _force: Option<bool>) -> R
             "folder": "Unresolved links",
             "tags": [],
             "byteSize": 0,
+            "lineCount": 0,
+            "preview": "",
             "incoming": incoming,
             "outgoing": outgoing,
             "accessCount": 0,

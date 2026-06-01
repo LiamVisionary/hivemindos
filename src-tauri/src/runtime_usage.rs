@@ -94,10 +94,39 @@ fn parse_json_line(line: &str) -> Option<Value> {
 }
 
 fn iso_from_seconds(value: &Value) -> String {
-    let seconds = value.as_i64().unwrap_or(0);
-    chrono::DateTime::from_timestamp(seconds, 0)
+    let Some(raw_seconds) = value
+        .as_f64()
+        .filter(|number| number.is_finite() && *number > 0.0)
+    else {
+        return chrono::Utc::now().to_rfc3339();
+    };
+    let whole_seconds = raw_seconds.floor();
+    if whole_seconds > i64::MAX as f64 {
+        return chrono::Utc::now().to_rfc3339();
+    }
+    let mut seconds = whole_seconds as i64;
+    let mut nanos = ((raw_seconds - whole_seconds) * 1_000_000_000.0).round() as u32;
+    if nanos >= 1_000_000_000 {
+        seconds += 1;
+        nanos = 0;
+    }
+    chrono::DateTime::from_timestamp(seconds, nanos)
         .unwrap_or_else(chrono::Utc::now)
         .to_rfc3339()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::iso_from_seconds;
+    use serde_json::json;
+
+    #[test]
+    fn formats_fractional_hermes_epoch_seconds() {
+        assert!(
+            iso_from_seconds(&json!(1780338433.050725936))
+                .starts_with("2026-06-01T18:27:13.050")
+        );
+    }
 }
 
 fn read_hermes_rows(limit: usize) -> Vec<Value> {
