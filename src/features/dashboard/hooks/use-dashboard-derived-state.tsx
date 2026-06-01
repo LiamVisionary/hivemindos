@@ -605,17 +605,43 @@ export function useDashboardDerivedState(props: any) {
       ...displayAgents.flatMap((agent) => {
         const snapshot = fleetSnapshots[agent.id];
         const machine = machineGroups.find((group) => group.agents.some((item) => item.id === agent.id));
-        return snapshot?.error ? [{
-          id: `agent-${agent.id}`,
-          tone: "danger" as const,
-          priority: "high" as const,
-          title: `${agent.name} reported an error`,
-          agent: agent.name,
-          machine: machine?.name ?? "unassigned",
-          text: snapshot.error,
-          since: formatRelativeTime(snapshot.checkedAt),
-          timestamp: snapshot.checkedAt,
-        }] : [];
+        if (snapshot?.error) {
+          return [{
+            id: `agent-${agent.id}`,
+            tone: "danger" as const,
+            priority: "high" as const,
+            title: /remote agent bridge unavailable/i.test(snapshot.error)
+              ? `${agent.name} bridge unavailable`
+              : `${agent.name} reported an error`,
+            agent: agent.name,
+            machine: machine?.name ?? "unassigned",
+            text: snapshot.error,
+            since: formatRelativeTime(snapshot.checkedAt),
+            timestamp: snapshot.checkedAt,
+          }];
+        }
+        if (snapshot?.warning) {
+          const localFilesPrefix = "Runtime files are not available on this dashboard: ";
+          const missingPath = snapshot.warning.startsWith(localFilesPrefix)
+            ? snapshot.warning.slice(localFilesPrefix.length)
+            : "";
+          return [{
+            id: `agent-warning-${agent.id}`,
+            tone: "warn" as const,
+            priority: "normal" as const,
+            title: machine && !machine.self
+              ? `${agent.name} history not available on this Mac`
+              : `${agent.name} runtime folder not available`,
+            agent: agent.name,
+            machine: machine?.name ?? "unassigned",
+            text: missingPath && machine && !machine.self
+              ? `Runtime files live on ${machine.name}; this dashboard cannot read ${missingPath}.`
+              : snapshot.warning,
+            since: formatRelativeTime(snapshot.checkedAt),
+            timestamp: snapshot.checkedAt,
+          }];
+        }
+        return [];
       }),
     ];
     const ticker = tasks.filter((task) => task.lane === "doing").slice(0, 8).map((task) => (

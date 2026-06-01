@@ -1,5 +1,6 @@
 import type { FleetHostedApp } from "@/components/fleet/active-apps";
 import type { TailnetHealth, TailscaleDevice } from "@/features/dashboard/dashboard-types";
+import { readNativeDashboardBootstrap } from "@/lib/native/dashboard-bootstrap";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 
 export type NativeFleetAppsPayload = {
@@ -26,6 +27,8 @@ export type NativeTailscaleDevicesPayload = {
 export async function getNativeFleetAppsCache<TPayload = NativeFleetAppsPayload>(input: { maxAgeMs?: number } = {}): Promise<TPayload | null> {
   if (!isTauriDesktopRuntime()) return null;
   try {
+    const bootstrap = await readNativeDashboardBootstrap({ maxAgeMs: input.maxAgeMs });
+    if (bootstrap?.fleetApps) return bootstrap.fleetApps as TPayload;
     const { invoke } = await import("@tauri-apps/api/core");
     return await invoke<TPayload>("fleet_apps_cache", { maxAgeMs: input.maxAgeMs });
   } catch {
@@ -36,6 +39,8 @@ export async function getNativeFleetAppsCache<TPayload = NativeFleetAppsPayload>
 export async function getNativeTailscaleDevices(): Promise<NativeTailscaleDevicesPayload | null> {
   if (!isTauriDesktopRuntime()) return null;
   try {
+    const bootstrap = await readNativeDashboardBootstrap();
+    if (bootstrap?.tailscaleDevices) return bootstrap.tailscaleDevices;
     const { invoke } = await import("@tauri-apps/api/core");
     return await invoke<NativeTailscaleDevicesPayload>("tailscale_devices");
   } catch {

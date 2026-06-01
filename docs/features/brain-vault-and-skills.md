@@ -36,14 +36,19 @@ Seeded structure:
 
 How it works:
 
+- Context index generation is in `src/lib/services/context-index.ts`.
 - Brain graph generation is in `src/lib/services/obsidian/brain-graph.ts`.
 - GBrain actions are in `src/lib/services/brain/gbrain.ts`.
 - Syntho actions are in `src/lib/services/brain/synto.ts`; the internal API slug and installed CLI command remain `synto`.
 - Trading-brain install/status lives in `src/lib/services/brain/trading-brain.ts`.
-- API routes live under `/api/brain/gbrain/*`, `/api/brain/synto/*`, `/api/brain/trading-brain/*`, and `/api/obsidian/graph`.
+- API routes live under `/api/context-index`, `/api/brain/gbrain/*`, `/api/brain/synto/*`, `/api/brain/trading-brain/*`, and `/api/obsidian/graph`.
 
 Capabilities:
 
+- Build a lightweight context index over shared/runtime skills, tool-call surfaces, API routes, connected Tailnet apps, app endpoint catalogs, runtime capability definitions, docs, and workspace files.
+- Retrieve the most relevant index records for a task before loading full files or schemas, including connected-app capability aliases such as image generation, simulation, graph, exports, monitoring, settings, and API docs.
+- Optionally ask GBrain for semantic retrieval alongside the lightweight index when a caller posts `semantic: true` to `/api/context-index`.
+- Write a managed connected-app retrieval snapshot into `Operations/Brain Services/Connected Apps Context Index.md` and refresh GBrain import/embed when a caller posts `syncConnectedAppsToGbrain: true`.
 - Build a graph from markdown notes and access logs.
 - Show a Brain Services cockpit with service health summaries, primary actions, advanced settings, structured run output, and repair guidance when local prerequisites are missing.
 - Install or connect GBrain.
@@ -91,6 +96,7 @@ Capabilities:
 ## Main Code Paths
 
 - `src/lib/services/obsidian/vault-path.ts`
+- `src/lib/services/context-index.ts`
 - `src/lib/services/obsidian/brain-graph.ts`
 - `src/lib/services/obsidian/brain-skills.ts`
 - `src/lib/services/brain/gbrain.ts`
@@ -98,6 +104,7 @@ Capabilities:
 - `src/lib/services/brain/trading-brain.ts`
 - `src/lib/services/chat/shared-vault-context.ts`
 - `src/app/api/obsidian/**`
+- `src/app/api/context-index/route.ts`
 - `src/app/api/brain/gbrain/**`
 - `src/app/api/brain/synto/**`
 - `src/app/api/brain/trading-brain/**`

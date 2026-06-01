@@ -322,6 +322,42 @@ pub(crate) fn brain_skill_inventory(vault_path: Option<String>, shared_only: Opt
     }))
 }
 
+pub(crate) fn brain_summary(vault_path: Option<String>) -> Result<serde_json::Value, String> {
+    let vault = vault_root(vault_path);
+    let skills_folder = vault.join("Skills");
+    let shared = read_shared_skills(&skills_folder);
+    let (notes, graph_truncated) = if vault.is_dir() {
+        read_graph_notes(&vault)
+    } else {
+        (Vec::new(), false)
+    };
+    let accesses = if vault.is_dir() {
+        read_access_events(&vault)
+    } else {
+        Vec::new()
+    };
+    let folders = notes
+        .iter()
+        .filter_map(|note| note.path.rsplit_once('/').map(|(folder, _)| folder.to_string()))
+        .collect::<HashSet<_>>();
+
+    Ok(serde_json::json!({
+        "ok": true,
+        "source": "native-brain-summary",
+        "checkedAt": chrono::Utc::now().to_rfc3339(),
+        "vaultPath": vault.to_string_lossy(),
+        "skillsFolder": skills_folder.to_string_lossy(),
+        "totals": {
+            "sharedSkills": shared.len(),
+            "notes": notes.len(),
+            "folders": folders.len(),
+            "recentAccesses": accesses.len(),
+        },
+        "recentAccesses": accesses.into_iter().take(12).collect::<Vec<_>>(),
+        "truncated": graph_truncated,
+    }))
+}
+
 #[derive(Debug, Clone)]
 struct GraphNote {
     path: String,

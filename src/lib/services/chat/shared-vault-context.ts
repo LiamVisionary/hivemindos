@@ -12,6 +12,7 @@ export function buildVaultContext(sharedVault: SharedVaultConfig | null): string
     "Shared Obsidian vault context:",
     `- Vault path: ${sharedVault.vaultPath}`,
     "- Shared skills folder: Skills/. Read Skills/README.md for the index, then read the relevant Skills/<slug>/SKILL.md before using a shared skill.",
+    "- Context retrieval: call /api/context-index with a task query to find relevant skills, tool schemas, API routes, connected Tailnet apps, app endpoints, docs, runtime capabilities, and workspace files before loading full context. Connected app records include capability aliases for intent queries such as image generation, simulation, graph, exports, monitoring, settings, and API docs; POST with syncConnectedAppsToGbrain only when the task needs those app records embedded into GBrain retrieval.",
     "- AI-ready vault contract: read Operations/AI-Ready Vault Contract.md before durable vault edits; use Templates/HivemindOS/ for durable notes when practical.",
     `- Agent inbox folder: ${sharedVault.inboxFolder || "(not set)"}`,
     `- Shared note: ${sharedVault.sharedNotePath || "(not set)"}`,

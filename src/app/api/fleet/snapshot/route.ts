@@ -50,6 +50,7 @@ type AgentSnapshot = {
   sources: string[];
   tasks: FleetTask[];
   checkedAt: number;
+  warning?: string;
   error?: string;
 };
 
@@ -643,6 +644,9 @@ async function readSnapshots(agents: AgentWithLocal[], sharedVault?: SharedVault
       };
     }
     const hasReadableDataDir = (await Promise.all(dataDirsToScan.map(pathReadable))).some(Boolean);
+    const localFilesWarning = configuredDataDir && !hasReadableDataDir
+      ? `Runtime files are not available on this dashboard: ${configuredDataDir}`
+      : undefined;
     const [runtimeResult, taskBusTasks, dataDirTaskGroups, hermesDbTaskGroups, runtimeRuns, processes] = await Promise.all([
       checkRuntime(agent),
       controlRoomPath ? scanTaskBus(agent, controlRoomPath) : Promise.resolve([]),
@@ -674,31 +678,32 @@ async function readSnapshots(agents: AgentWithLocal[], sharedVault?: SharedVault
       runtimeRuns.checked ? "GitHub Actions" : "",
       processes.length ? "local process" : "",
     ].filter(Boolean);
+    const hasHealthySource = runtimeResult.reachable || tasks.length > 0 || processes.length > 0 || runtimeRuns.checked;
+    const error = failedTask
+      ? failedTask.title
+      : hasHealthySource
+        ? undefined
+        : agent.runtime === "aeon" && /endpoint is not listening/i.test(runtimeResult.error)
+          ? undefined
+          : remoteSnapshot?.error || runtimeResult.error || undefined;
     return {
       agentId: agent.id,
-      ok: runtimeResult.reachable || processes.length > 0 || tasks.length > 0 || runtimeRuns.checked,
+      ok: hasHealthySource,
       runtimeReachable: runtimeResult.reachable,
       processRunning: processes.length > 0,
       summary: tasks[0]?.title
         ?? (processes.length
           ? "Process is running; no current task exposed yet."
-          : configuredDataDir && !hasReadableDataDir
-            ? `Configured data dir is not available here: ${configuredDataDir}`
+          : localFilesWarning
+            ? localFilesWarning
             : agent.runtime === "aeon"
               ? "Idle. No current AEON task detected."
               : "No external activity source exposed a task yet."),
       sources,
       tasks,
       checkedAt,
-      error: configuredDataDir && !hasReadableDataDir
-        ? `No local runtime files found at ${configuredDataDir}`
-        : failedTask
-          ? failedTask.title
-          : runtimeResult.reachable || tasks.length > 0 || processes.length > 0 || runtimeRuns.checked
-            ? undefined
-            : agent.runtime === "aeon" && /endpoint is not listening/i.test(runtimeResult.error)
-              ? undefined
-              : runtimeResult.error || remoteSnapshot?.error || undefined,
+      warning: localFilesWarning,
+      error,
     };
   }));
 

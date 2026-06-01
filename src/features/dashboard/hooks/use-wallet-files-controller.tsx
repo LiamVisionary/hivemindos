@@ -5,6 +5,8 @@
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
 import { useCallback, useEffect, useMemo } from "react";
+import { nativeRuntimeFileRequest } from "@/lib/native/runtime-files";
+import { readNativeRuntimeUsage } from "@/lib/native/runtime-usage";
 
 export function useWalletFilesController(props: any) {
   const { buildAgentPaymentPrompt, createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, displayAgents, duplicateAgentDraft, agents, honeyLedgerEnabled, normalizeMoney, openAgentCreationModal, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, selectedAgent, selectedAgentId, setAgents, setDuplicateAgentDraft, setHoneyLedgerEnabled, setHoneyTreasury, setMaintenanceBusy, setMaintenanceMessage, setMaintenanceReport, setMessagesByAgent, setMoneyClawLoadingEnvName, setMoneyClawStatusByEnvName, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setRuntimeFileRoots, setRuntimeFileStatus, setRuntimeFiles, setRuntimeUsage, setRuntimeUsageLoading, setSelectedAgentId, setSharedVault, setWalletActionsByAgent, setWalletVaultBackupBusy, setWalletVaultBackupMessage, setWalletVaultBackupStatus, setWalletsByAgent, sharedVault, updateAgentProfile, walletActionsByAgent, walletsByAgent } = props;
@@ -176,8 +178,9 @@ export function useWalletFilesController(props: any) {
 
   async function refreshRuntimeUsage() {
     setRuntimeUsageLoading(true);
-    const response = await fetch("/api/runtime-usage", { cache: "no-store" }).catch(() => null);
-    const data = await response?.json().catch(() => null) as RuntimeUsageAnalytics | null;
+    const nativeData = await readNativeRuntimeUsage({ force: true });
+    const response = nativeData?.ok ? null : await fetch("/api/runtime-usage", { cache: "no-store" }).catch(() => null);
+    const data = nativeData?.ok ? nativeData : await response?.json().catch(() => null) as RuntimeUsageAnalytics | null;
     setRuntimeUsage(data ?? { ok: false, error: "Could not read runtime usage." });
     setRuntimeUsageLoading(false);
   }
@@ -255,6 +258,12 @@ export function useWalletFilesController(props: any) {
   }
 
   async function runtimeFileRequest(body: Record<string, unknown>) {
+    const nativeData = await nativeRuntimeFileRequest({
+      agents: displayAgents,
+      sharedVault,
+      ...body,
+    });
+    if (nativeData) return nativeData as RuntimeFilePayload;
     const response = await fetch("/api/runtime-files", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

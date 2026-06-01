@@ -4,6 +4,7 @@
 
 import { useEffect } from "react";
 import { getNativeAppVersion } from "@/lib/native/desktop-status";
+import { readNativeKanban } from "@/lib/native/kanban";
 
 export function useFleetNotificationsController(props: any) {
   const { DEFAULT_SHARED_VAULT, addKanbanStorageParams, appVersion, hydrated, isCollectorAutoUpdateable, kanbanAssigneeFilter, kanbanBoardSlug, kanbanIncludeArchived, kanbanSearch, kanbanTenantFilter, cleanActivityTitle, localDashboardHasUnpublishedChanges, machineInitDraft, machineInitToken, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineVersionCopy, mergeDiscoveredMachines, mergeSnapshotRecord, noteIntakeAutoInFlightRef, notifications, setAppVersion, setCopiedUpdateDetailKey, setDiscoveredMachines, setFleetSnapshots, setKanbanAssignees, setKanbanBoard, setKanbanBoards, setKanbanError, setKanbanStorage, setKanbanTenants, setActiveView, setSelectedKanbanTaskId, setMachineInitCopiedKey, setMachineInitOpen, setMachineInitStatus, setMachineInitToken, setMachineInitTokenStatus, setNoteIntakePending, setNoteIntakePreview, setNoteIntakeStatus, setNotificationCursor, setNotificationSummary, setNotifications, setNotificationsStatus, setTasks, setUpdateStatusByMachine, sharedVault, summarizeHermesAuthError, updateStatusByMachine } = props;
@@ -195,9 +196,19 @@ export function useFleetNotificationsController(props: any) {
     if (kanbanTenantFilter) params.set("tenant", kanbanTenantFilter);
     if (kanbanAssigneeFilter) params.set("assignee", kanbanAssigneeFilter);
     if (kanbanSearch) params.set("q", kanbanSearch);
-    const response = await fetch(`/api/kanban?${params.toString()}`, { cache: "no-store" });
-    const data = await response.json().catch(() => null) as KanbanResponse | null;
-    if (!response.ok || !data?.ok || !data.board) throw new Error(data?.error ?? "Kanban refresh failed.");
+    const nativeData = await readNativeKanban({
+      board: kanbanBoardSlug,
+      includeArchived: kanbanIncludeArchived,
+      includeBoards: false,
+      tenant: kanbanTenantFilter || undefined,
+      assignee: kanbanAssigneeFilter || undefined,
+      query: kanbanSearch || undefined,
+      vaultPath: sharedVault.enabled ? sharedVault.vaultPath?.trim() : undefined,
+      kanbanFolder: sharedVault.enabled ? sharedVault.kanbanFolder?.trim() || DEFAULT_SHARED_VAULT.kanbanFolder : undefined,
+    });
+    const response = nativeData?.ok && nativeData.board ? null : await fetch(`/api/kanban?${params.toString()}`, { cache: "no-store" });
+    const data = nativeData?.ok && nativeData.board ? nativeData : await response.json().catch(() => null) as KanbanResponse | null;
+    if ((!nativeData?.ok && !response.ok) || !data?.ok || !data.board) throw new Error(data?.error ?? "Kanban refresh failed.");
     setKanbanError("");
     setKanbanBoard(data.board);
     if (data.boards) setKanbanBoards(data.boards);

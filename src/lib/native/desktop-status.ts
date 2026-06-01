@@ -27,6 +27,21 @@ export async function getNativeAppVersion(signal?: AbortSignal): Promise<AppVers
   if (!isTauriDesktopRuntime() || signal?.aborted) return null;
 
   try {
+    const { readNativeDashboardBootstrap } = await import("@/lib/native/dashboard-bootstrap");
+    const bootstrap = await readNativeDashboardBootstrap();
+    const bootStatus = bootstrap?.appVersion ?? bootstrap?.desktopStatus;
+    if (!signal?.aborted && bootStatus?.commit) {
+      return {
+        appDir: bootStatus.appDir,
+        commit: bootStatus.commit,
+        shortCommit: bootStatus.shortCommit ?? bootStatus.commit.slice(0, 7),
+        branch: bootStatus.branch,
+        dirty: bootStatus.dirty,
+        latestCommit: bootStatus.latestCommit ?? bootStatus.commit,
+        latestShortCommit: bootStatus.latestShortCommit ?? bootStatus.commit.slice(0, 7),
+        updateCommand: bootStatus.updateCommand,
+      };
+    }
     const { invoke } = await import("@tauri-apps/api/core");
     const status = await invoke<NativeDesktopStatus>("desktop_status");
     if (signal?.aborted || !status?.commit) return null;

@@ -820,33 +820,32 @@
 }
 
 .workBoardPanel {
-  --kb-bg-0: #06080d;
-  --kb-bg-1: #0a0e16;
-  --kb-bg-2: #10151f;
-  --kb-bg-3: #161c2a;
-  --kb-line: rgba(148, 163, 184, 0.14);
-  --kb-line-strong: rgba(94, 234, 212, 0.24);
-  --kb-fg: #f4f7fb;
-  --kb-muted: #8e9bb1;
-  --kb-cyan: #2dd4bf;
-  --kb-cyan-2: #5eead4;
-  --kb-cyan-3: #99f6e4;
-  --kb-danger: #fb7185;
-  --kb-danger-2: #fecdd3;
-  --kb-honey: #f2b705;
-  --kb-honey-2: #ffd45a;
-  --kb-honey-3: #fff6cf;
+  --kb-bg-0: #0a0c10;
+  --kb-bg-1: #0f1218;
+  --kb-bg-2: #141820;
+  --kb-bg-3: #1a1f29;
+  --kb-column: rgba(255, 255, 255, 0.022);
+  --kb-card: rgba(18, 21, 27, 0.94);
+  --kb-card-hover: rgba(22, 26, 34, 0.98);
+  --kb-line: rgba(170, 179, 193, 0.12);
+  --kb-line-strong: rgba(170, 179, 193, 0.2);
+  --kb-fg: #f2f4f7;
+  --kb-muted: #8f97a4;
+  --kb-muted-soft: rgba(143, 151, 164, 0.68);
+  --kb-cyan: #46c4b5;
+  --kb-cyan-2: #68d6ca;
+  --kb-cyan-3: #a8ebe3;
+  --kb-danger: #e57386;
+  --kb-danger-2: #ffc8d0;
+  --kb-honey: #d8a837;
+  --kb-honey-2: #f0ca72;
+  --kb-honey-3: #fff0c6;
   height: 100%;
   min-height: 0;
-  border: 1px solid rgba(94, 234, 212, 0.12);
-  border-radius: 2px;
-  background:
-    radial-gradient(circle at 12% 8%, rgba(45, 212, 191, 0.18), transparent 26%),
-    radial-gradient(circle at 82% 16%, rgba(242, 183, 5, 0.12), transparent 24%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='55.426' viewBox='0 0 96 55.426'%3E%3Cg fill='none' stroke='%235eead4' stroke-opacity='.045' stroke-width='1'%3E%3Cpath d='M16 0h32l16 27.713-16 27.713H16L0 27.713z'/%3E%3Cpath d='M64-27.713h32L112 0 96 27.713H64L48 0z'/%3E%3Cpath d='M64 27.713h32l16 27.713-16 27.713H64L48 55.426z'/%3E%3C/g%3E%3C/svg%3E"),
-    linear-gradient(180deg, var(--kb-bg-0), var(--kb-bg-1) 45%, #070a10);
-  background-size: auto, auto, 96px 55.426px, auto;
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(170, 179, 193, 0.09);
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--kb-bg-1), var(--kb-bg-0));
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.2);
   color: var(--kb-fg);
   overflow: hidden;
 }
@@ -854,10 +853,10 @@
 .workBoardShell {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 18px;
+  gap: 14px;
   height: 100%;
   min-height: 0;
-  padding: 0 20px 26px;
+  padding: 0 24px 24px;
 }
 
 .workBoardShell > [data-work-section-header="true"] {
@@ -1053,37 +1052,89 @@
 
 .workBoardControls {
   display: grid;
-  grid-template-columns: 180px 180px minmax(260px, 340px) minmax(0, 1fr) auto auto;
-  gap: 14px;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(150px, 0.9fr) minmax(280px, 1.5fr) minmax(150px, 0.9fr) auto auto;
+  gap: 8px;
   align-items: end;
-  border: 0;
-  background: transparent;
-  padding: 0 16px;
+  border: 1px solid rgba(170, 179, 193, 0.075);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.012);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  padding: 12px;
 }
 
 .workBoardControls label {
   display: grid;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
+}
+
+.workBoardPanel .workBoardControls label > span {
+  color: var(--kb-muted-soft);
+  font-family: var(--f-body, inherit);
+  font-size: 11px;
+  font-weight: 620;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .workBoardControls select,
 .workBoardControls input,
 .workBoardOptions > summary {
-  min-height: 38px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  min-height: 36px;
+  border: 1px solid rgba(170, 179, 193, 0.095);
   border-radius: 7px;
-  background: rgba(16, 21, 31, 0.84);
+  background: rgba(5, 7, 10, 0.48);
   color: var(--kb-fg);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 560;
+  letter-spacing: 0;
   outline: none;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease, color 150ms ease;
 }
 
 .workBoardControls select,
 .workBoardControls input {
   width: 100%;
-  padding: 0 10px;
+  padding: 0 12px;
+}
+
+.workBoardControls select {
+  appearance: none;
+  padding-right: 34px;
+}
+
+.workBoardSelectShell {
+  position: relative;
+  display: grid;
+  min-width: 0;
+}
+
+.workBoardSelectShell svg {
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  width: 14px;
+  height: 14px;
+  color: rgba(143, 151, 164, 0.72);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.workBoardControls select:hover,
+.workBoardControls input:hover,
+.workBoardOptions > summary:hover,
+.workBoardToggle:hover {
+  border-color: rgba(170, 179, 193, 0.18);
+  background: rgba(8, 11, 16, 0.58);
+}
+
+.workBoardControls select:focus,
+.workBoardControls input:focus,
+.workBoardOptions > summary:focus-visible,
+.workBoardToggle:focus-within {
+  border-color: rgba(104, 214, 202, 0.34);
+  background: rgba(9, 13, 19, 0.72);
+  box-shadow: 0 0 0 3px rgba(104, 214, 202, 0.08);
 }
 
 .workBoardSearch div {
@@ -1097,40 +1148,73 @@
   left: 10px;
   width: 14px;
   height: 14px;
-  color: var(--kb-cyan-2);
+  color: rgba(104, 214, 202, 0.82);
   transform: translateY(-50%);
 }
 
 .workBoardSearch input {
-  padding-left: 32px;
+  padding-left: 36px;
+}
+
+.workBoardSearch input::placeholder {
+  color: rgba(143, 151, 164, 0.62);
+  font-weight: 520;
 }
 
 .workBoardToggle {
   display: inline-flex !important;
   grid-template-columns: auto 1fr;
   align-items: center;
-  min-height: 38px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  gap: 9px;
+  min-height: 36px;
+  border: 1px solid rgba(170, 179, 193, 0.095);
   border-radius: 7px;
-  background: rgba(16, 21, 31, 0.84);
-  padding: 0 10px;
+  background: rgba(5, 7, 10, 0.48);
+  padding: 0 12px;
 }
 
 .workBoardToggle input {
   width: 16px;
   height: 16px;
+  margin: 0;
+  accent-color: var(--kb-cyan-2);
 }
 
 .workBoardOptions > summary {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 11px;
+  gap: 7px;
+  min-width: 84px;
+  justify-content: center;
+  color: var(--kb-fg);
+  padding: 0 12px;
 }
 
 .workBoardOptions > summary svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
+  color: rgba(226, 232, 240, 0.68);
+}
+
+.workBoardPanel .kanbanSyncPill {
+  min-height: 36px;
+  border-color: rgba(104, 214, 202, 0.2);
+  border-radius: 999px;
+  background: rgba(104, 214, 202, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  color: #b9f3ee;
+  font-size: 13px;
+  font-weight: 620;
+  letter-spacing: 0;
+  padding: 0 14px 0 12px;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.workBoardPanel .kanbanSyncPill.local {
+  border-color: rgba(216, 168, 55, 0.2);
+  background: rgba(216, 168, 55, 0.08);
+  color: var(--kb-honey-2);
 }
 
 .workBoardPanel .kanbanWorkspace {
@@ -1156,14 +1240,14 @@
 .workBoardPanel .kanbanBoard {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 350px;
+  grid-auto-columns: minmax(310px, 1fr);
   grid-template-columns: none;
-  gap: 18px;
+  gap: 16px;
   height: 100%;
   min-height: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 8px;
+  padding: 2px 2px 10px;
   scroll-behavior: smooth;
   scrollbar-width: none;
 }
@@ -1211,20 +1295,18 @@
   --lane-accent: var(--kb-cyan-2);
   --lane-accent-rgb: 94, 234, 212;
   --lane-title: var(--kb-fg);
-  --lane-soft: rgba(var(--lane-accent-rgb), 0.08);
+  --lane-soft: rgba(var(--lane-accent-rgb), 0.055);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px;
+  gap: 12px;
   min-height: 0;
-  border: 1px solid rgba(var(--lane-accent-rgb), 0.2);
+  border: 1px solid rgba(170, 179, 193, 0.085);
   border-radius: 8px;
   background:
-    linear-gradient(90deg, rgba(var(--lane-accent-rgb), 0.15), transparent 42%),
-    linear-gradient(180deg, rgba(var(--lane-accent-rgb), 0.08), rgba(8, 13, 20, 0.68) 35%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%235eead4' stroke-opacity='.045' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E"),
-    linear-gradient(180deg, rgba(13, 18, 28, 0.98), rgba(8, 13, 20, 0.96));
-  background-size: auto, auto, 72px 41.569px, auto;
-  padding: 16px;
+    linear-gradient(180deg, rgba(var(--lane-accent-rgb), 0.035), transparent 112px),
+    var(--kb-column);
+  box-shadow: inset 1px 0 0 rgba(var(--lane-accent-rgb), 0.16);
+  padding: 14px;
 }
 
 .workBoardPanel .kanbanColumn.ideas {
@@ -1264,75 +1346,82 @@
 }
 
 .workBoardPanel .kanbanColumn:hover {
-  border-color: rgba(var(--lane-accent-rgb), 0.38);
-  background-position: 0 0, 0 0, 18px 10px, 0 0;
+  border-color: rgba(170, 179, 193, 0.16);
+  background:
+    linear-gradient(180deg, rgba(var(--lane-accent-rgb), 0.05), transparent 112px),
+    rgba(255, 255, 255, 0.032);
 }
 
 .workBoardPanel .kanbanColumnHeader {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: start;
-  gap: 8px;
-  min-height: 92px;
+  gap: 8px 10px;
+  min-height: 68px;
   border: 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.11);
+  border-bottom: 1px solid rgba(170, 179, 193, 0.085);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  padding: 0 0 10px;
+  padding: 0 0 12px;
 }
 
 .workBoardPanel .kanbanColumnHeader h3 {
   color: var(--lane-title);
-  font-size: 18px;
-  font-weight: 900;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.18em;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .workBoardPanel .kanbanColumnHeader p {
   grid-column: auto;
-  margin: 6px 0 0;
-  color: var(--kb-muted);
-  font-size: 12px;
+  margin: 5px 0 0;
+  color: var(--kb-muted-soft);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .kanbanColumnDot {
-  width: 14px;
-  height: 14px;
-  margin-top: 7px;
-  border: 3px solid rgba(var(--lane-accent-rgb), 0.2);
+  width: 7px;
+  height: 7px;
+  margin-top: 4px;
+  border: 0;
   border-radius: 999px;
   background: var(--lane-accent);
-  box-shadow: 0 0 20px rgba(var(--lane-accent-rgb), 0.3);
+  box-shadow: 0 0 14px rgba(var(--lane-accent-rgb), 0.22);
 }
 
 .kanbanColumnCount {
   display: inline-grid;
-  min-width: 28px;
-  height: 28px;
+  min-width: 22px;
+  height: 22px;
   place-items: center;
-  border: 1px solid rgba(var(--lane-accent-rgb), 0.32);
+  border: 0;
   border-radius: 999px;
-  background: rgba(var(--lane-accent-rgb), 0.12);
-  color: var(--lane-title);
-  font-size: 12px;
-  font-weight: 900;
+  background: transparent;
+  color: var(--kb-muted);
+  font-size: 11px;
+  font-weight: 850;
 }
 
 .workBoardPanel .kanbanAddColumnTask {
-  width: 28px;
-  height: 28px;
-  border-color: rgba(var(--lane-accent-rgb), 0.24);
-  background: rgba(16, 21, 31, 0.78);
+  width: 24px;
+  height: 24px;
+  border-color: rgba(170, 179, 193, 0.12);
+  background: rgba(255, 255, 255, 0.026);
   color: var(--lane-title);
 }
 
 .workBoardPanel .kanbanCards {
   display: grid;
   align-content: start;
-  gap: 9px;
+  gap: 8px;
   min-height: 0;
   overflow-y: auto;
-  padding-right: 2px;
+  padding: 2px 2px 2px 0;
 }
 
 .workBoardPanel .kanbanColumn:has(.kanbanInlineAdd [aria-expanded="true"]) {
@@ -1346,40 +1435,34 @@
 }
 
 .workBoardPanel .kanbanCard {
-  gap: 10px;
-  border: 1px solid rgba(var(--lane-accent-rgb), 0.26);
+  gap: 9px;
+  border: 1px solid rgba(170, 179, 193, 0.1);
   border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgba(var(--lane-accent-rgb), 0.11), rgba(10, 15, 23, 0.26) 38%),
-    linear-gradient(180deg, rgba(22, 28, 42, 0.98), rgba(10, 15, 23, 0.98));
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.16);
-  padding: 12px;
+  background: var(--kb-card);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12);
+  padding: 13px;
 }
 
 .workBoardPanel .kanbanCard:hover,
 .workBoardPanel .kanbanCard:focus-visible {
-  border-color: rgba(var(--lane-accent-rgb), 0.48);
-  background:
-    linear-gradient(180deg, rgba(var(--lane-accent-rgb), 0.16), rgba(12, 18, 27, 0.3) 42%),
-    linear-gradient(180deg, rgba(25, 34, 50, 0.98), rgba(12, 18, 27, 0.98));
+  border-color: rgba(var(--lane-accent-rgb), 0.28);
+  background: var(--kb-card-hover);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
 }
 
 .workBoardPanel .kanbanCard.working {
-  border-color: rgba(255, 212, 90, 0.44);
-  background:
-    linear-gradient(180deg, rgba(255, 212, 90, 0.18), rgba(10, 15, 23, 0.28) 44%),
-    linear-gradient(180deg, rgba(25, 28, 32, 0.98), rgba(10, 15, 23, 0.98));
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 212, 90, 0.08);
+  border-color: rgba(240, 202, 114, 0.26);
+  box-shadow: inset 2px 0 0 rgba(240, 202, 114, 0.55), 0 8px 22px rgba(0, 0, 0, 0.12);
 }
 
 .workBoardPanel .kanbanCard.stale {
-  border-color: rgba(251, 113, 133, 0.6);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  border-color: rgba(229, 115, 134, 0.38);
+  box-shadow: inset 2px 0 0 rgba(229, 115, 134, 0.62), 0 8px 22px rgba(0, 0, 0, 0.12);
 }
 
 .workBoardPanel .kanbanCard.active {
-  border-color: rgba(255, 212, 90, 0.7);
-  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.22), 0 0 24px rgba(255, 212, 90, 0.12);
+  border-color: rgba(var(--lane-accent-rgb), 0.42);
+  box-shadow: inset 2px 0 0 var(--lane-accent), 0 14px 34px rgba(0, 0, 0, 0.18);
 }
 
 .kanbanSkeletonShell {
@@ -1466,18 +1549,19 @@
 
 .workBoardPanel .kanbanCardTitle {
   color: var(--kb-fg);
-  font-size: 15px !important;
-  line-height: 1.28 !important;
+  font-size: 14px !important;
+  font-weight: 780;
+  line-height: 1.3 !important;
 }
 
 .workBoardPanel .kanbanMessageRow {
   grid-template-columns: minmax(0, 1fr) auto;
-  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  border-top: 1px solid rgba(170, 179, 193, 0.075);
   padding-top: 8px;
 }
 
 .workBoardPanel .kanbanCardMarkdown {
-  color: #b7c2d2;
+  color: var(--kb-muted);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -1488,9 +1572,9 @@
   align-items: center;
   gap: 6px 8px;
   justify-content: flex-start;
-  color: var(--kb-muted);
+  color: var(--kb-muted-soft);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 750;
 }
 
 .workBoardPanel .kanbanCardFooter time {
@@ -1508,12 +1592,30 @@
 }
 
 .workBoardPanel .kanbanEmptyAction {
-  min-height: 40px;
-  border: 1px dashed rgba(153, 246, 228, 0.45);
+  min-height: 34px;
+  border: 0;
   border-radius: 8px;
-  background: rgba(45, 212, 191, 0.03);
-  color: var(--kb-cyan-3);
-  font-weight: 900;
+  background: transparent;
+  color: var(--kb-muted);
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.kanbanEmptyLane {
+  display: grid;
+  align-content: space-between;
+  gap: 18px;
+  min-height: 100%;
+}
+
+.kanbanEmptyLaneMessage {
+  align-self: center;
+  color: rgba(143, 151, 164, 0.56);
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 0;
+  padding: 18vh 8px 0;
+  text-align: center;
 }
 
 .workBoardPanel .kanbanDrawer {
@@ -2469,10 +2571,17 @@
   border-radius: 999px;
   background: #090d14;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 900;
-  padding: 4px 8px;
-  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 780;
+  line-height: 1;
+  padding: 4px 7px;
+  text-transform: none;
+}
+
+.workBoardPanel .priorityPill {
+  border-color: rgba(170, 179, 193, 0.12);
+  background: rgba(255, 255, 255, 0.026);
+  color: var(--kb-muted);
 }
 
 .priorityPill.needs-human,
@@ -2481,6 +2590,15 @@
 .priorityPill.stale {
   border-color: rgba(251, 113, 133, 0.48);
   color: #fecdd3;
+}
+
+.workBoardPanel .priorityPill.needs-human,
+.workBoardPanel .priorityPill.high,
+.workBoardPanel .priorityPill.urgent,
+.workBoardPanel .priorityPill.stale {
+  border-color: rgba(229, 115, 134, 0.22);
+  background: rgba(229, 115, 134, 0.06);
+  color: var(--kb-danger-2);
 }
 
 .priorityPill.stale {
@@ -2493,6 +2611,14 @@
 .priorityPill.normal {
   border-color: rgba(94, 234, 212, 0.36);
   color: var(--accent-strong);
+}
+
+.workBoardPanel .priorityPill.ready,
+.workBoardPanel .priorityPill.working,
+.workBoardPanel .priorityPill.normal {
+  border-color: rgba(104, 214, 202, 0.2);
+  background: rgba(104, 214, 202, 0.055);
+  color: var(--kb-cyan-3);
 }
 
 .priorityPill.ideas {
@@ -3500,22 +3626,92 @@
 }
 
 :global(:root[data-theme="hive-light"]) .workBoardPanel {
+  --kb-bg-0: #f5f2eb;
+  --kb-bg-1: #fbfaf6;
+  --kb-bg-2: #f1ece2;
+  --kb-bg-3: #e7dfd0;
+  --kb-column: rgba(255, 255, 255, 0.58);
+  --kb-card: rgba(255, 255, 255, 0.86);
+  --kb-card-hover: rgba(255, 255, 255, 0.98);
+  --kb-line: rgba(79, 68, 52, 0.12);
+  --kb-line-strong: rgba(79, 68, 52, 0.2);
+  --kb-fg: #26221c;
+  --kb-muted: #746b5f;
+  --kb-muted-soft: rgba(116, 107, 95, 0.68);
+  --kb-cyan: #2d8f84;
+  --kb-cyan-2: #3aa99b;
+  --kb-cyan-3: #1d6f66;
+  --kb-danger: #b64558;
+  --kb-danger-2: #8f2f40;
+  --kb-honey: #b1842e;
+  --kb-honey-2: #916a22;
+  --kb-honey-3: #604617;
+  border-color: rgba(79, 68, 52, 0.12);
   background:
-    radial-gradient(circle at 12% 8%, rgba(45, 212, 191, 0.18), transparent 26%),
-    radial-gradient(circle at 82% 16%, rgba(242, 183, 5, 0.12), transparent 24%),
-    linear-gradient(180deg, var(--kb-bg-0), var(--kb-bg-1) 45%, #070a10);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(245, 242, 235, 0.94)),
+    var(--kb-bg-0);
   color: var(--kb-fg);
+  box-shadow: 0 22px 64px rgba(88, 73, 49, 0.11);
 }
 
 :global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanColumn {
   background:
-    linear-gradient(180deg, rgba(13, 18, 28, 0.92), rgba(8, 13, 20, 0.68)),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%235eead4' stroke-opacity='.045' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E");
-  background-size: auto, 72px 41.569px;
+    linear-gradient(180deg, rgba(var(--lane-accent-rgb), 0.055), transparent 112px),
+    var(--kb-column);
+  box-shadow: inset 1px 0 0 rgba(var(--lane-accent-rgb), 0.16);
 }
 
 :global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanCard {
-  background: linear-gradient(180deg, rgba(22, 28, 42, 0.94), rgba(10, 15, 23, 0.92));
+  border-color: rgba(79, 68, 52, 0.1);
+  background: var(--kb-card);
+  box-shadow: 0 10px 28px rgba(83, 70, 48, 0.08);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardControls,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanBulkBar {
+  border-color: rgba(79, 68, 52, 0.11);
+  background: rgba(255, 255, 255, 0.42);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardControls select,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardControls input,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardOptions > summary,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardToggle {
+  border-color: rgba(79, 68, 52, 0.14);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--kb-fg);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardSelectShell svg,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardOptions > summary svg,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardSearch svg {
+  color: rgba(116, 107, 95, 0.72);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanSyncPill {
+  border-color: rgba(58, 169, 155, 0.24);
+  background: rgba(58, 169, 155, 0.1);
+  color: #1d6f66;
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanSyncPill.local {
+  border-color: rgba(177, 132, 46, 0.24);
+  background: rgba(177, 132, 46, 0.1);
+  color: #916a22;
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanEmptyLaneMessage {
+  color: rgba(116, 107, 95, 0.54);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanMachinePicker > button,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanMachineLabel,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanCardAttachmentButton,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanCardMoveFabs button,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanIconAction {
+  border-color: rgba(79, 68, 52, 0.12);
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--kb-muted);
 }
 
 :global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanCardTitle,

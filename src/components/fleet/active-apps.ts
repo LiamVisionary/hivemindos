@@ -41,17 +41,27 @@ function appMatchesMachine(machine: FleetMachine, app: FleetHostedApp) {
 }
 
 function appMatchScore(searchText: string, app: FleetHostedApp) {
+  if (isMiroSharkApp(app)) {
+    if (!miroSharkTaskMatch(searchText)) return 0;
+    return 20 + (app.iconUrl ? 5 : 0) + (app.interactive ? 2 : 0);
+  }
   const names = [app.name, app.sourceName].map(normalize).filter((value) => value.length >= 4);
   const exactNameMatch = names.some((name) => searchText.includes(name));
-  if (!exactNameMatch && !miroSharkTaskMatch(searchText, app)) return 0;
+  if (!exactNameMatch) return 0;
   return 20 + (app.iconUrl ? 5 : 0) + (app.interactive ? 2 : 0);
 }
 
-function miroSharkTaskMatch(searchText: string, app: FleetHostedApp) {
-  if (!/miroshark/i.test(app.name)) return false;
-  const hasSimulationSurface = /(xposts|twitter|reddit|polymarket|market|simulation)/.test(searchText);
-  const hasMiroSharkWorkflow = /(swarm|simulation|rehearsal)/.test(searchText);
-  return hasSimulationSurface && hasMiroSharkWorkflow;
+function isMiroSharkApp(app: FleetHostedApp) {
+  return /miroshark/i.test(`${app.name} ${app.sourceName ?? ""}`);
+}
+
+function miroSharkTaskMatch(searchText: string) {
+  if (!searchText.includes("miroshark")) return false;
+  const looksLikeDashboardMaintenance = /(notification|toast|badge|icon|dashboard|route|ui|bug|fix|debug|code|component|matcher|falsepositive)/.test(searchText);
+  if (looksLikeDashboardMaintenance) return false;
+  const hasSimulationSurface = /(miroshark|xposts|twitter|reddit|polymarket|predictionmarket|market|simulation|simulator|sim[a-z0-9]{6,})/.test(searchText);
+  const hasExecutionIntent = /(run|running|launch|start|execute|monitor|archive|analy[sz]e|rehearsal|swarm|simulate|simulationid|sim[a-z0-9]{6,})/.test(searchText);
+  return hasSimulationSurface && hasExecutionIntent;
 }
 
 function appBadge(app: FleetHostedApp): FleetActiveApp {

@@ -69,6 +69,7 @@ async function openSession(url) {
   assert.equal(body.ok, true);
   const cookie = response.headers.get("set-cookie")?.split(";")[0] ?? "";
   assert.match(cookie, /^hivemindos_session=/);
+  assert(!response.headers.get("set-cookie")?.includes("Secure"), "local HTTP dashboard sessions must not use Secure cookies");
   return cookie;
 }
 

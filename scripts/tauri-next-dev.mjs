@@ -56,6 +56,7 @@ function sendLoading(response) {
 
 function proxyHttp(clientRequest, clientResponse) {
   let handled = false;
+  const proxyTimeoutMs = clientRequest.url?.startsWith("/api/") ? 60_000 : 650;
   const useFallback = () => {
     if (handled || clientResponse.headersSent) return;
     handled = true;
@@ -90,7 +91,7 @@ function proxyHttp(clientRequest, clientResponse) {
     },
   );
 
-  proxyRequest.setTimeout(650, () => {
+  proxyRequest.setTimeout(proxyTimeoutMs, () => {
     proxyRequest.destroy();
     useFallback();
   });

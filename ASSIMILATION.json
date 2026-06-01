@@ -106,6 +106,34 @@
       "target_path": ".github/workflows/security-scan.yml",
       "reuse_type": "config_adapted",
       "note": "adapted Strix install, quick scan, artifact upload, and Telegram notification; changed triggers to a weekly schedule with a main-update gate"
+    },
+    {
+      "source_repo": "local-hivemindos",
+      "source_path": "src/lib/services/obsidian/brain-skills.ts",
+      "target_path": "src/lib/services/context-index.ts",
+      "reuse_type": "adapted_code",
+      "note": "adapted shared/runtime skill inventory summary and load-hint patterns for the unified context index"
+    },
+    {
+      "source_repo": "local-hivemindos",
+      "source_path": "src/lib/services/skills/skill-os.ts",
+      "target_path": "src/lib/services/context-index.ts",
+      "reuse_type": "adapted_code",
+      "note": "adapted lightweight lexical scoring ideas for task-to-context ranking"
+    },
+    {
+      "source_repo": "local-hivemindos",
+      "source_path": "src/lib/services/brain/gbrain.ts",
+      "target_path": "src/app/api/context-index/route.ts",
+      "reuse_type": "adapted_code",
+      "note": "adapted GBrain query invocation for optional semantic retrieval in the context index endpoint"
+    },
+    {
+      "source_repo": "local-hivemindos",
+      "source_path": "src/app/api/fleet/apps/route.ts",
+      "target_path": "src/lib/services/context-index.ts",
+      "reuse_type": "adapted_code",
+      "note": "adapted existing Apps view Tailnet app and service route catalog payload into generic connected-app and app-endpoint context records"
     }
   ]
 }

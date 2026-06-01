@@ -17,6 +17,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
+import { readNativePhonePrompts } from "@/lib/native/phone";
+import type { SharedVaultConfig } from "@/lib/types/agent-runtime";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
 
@@ -66,6 +68,7 @@ type PhonePanelProps = {
   activeView: DashboardView;
   fleetClass: ClassNameBuilder;
   formatRelativeTime: (timestamp: number) => string;
+  sharedVault?: SharedVaultConfig;
 };
 
 type DraftState = {
@@ -83,7 +86,7 @@ function formatCompletion(value: number | null): string {
   return `${Math.round(value)}%`;
 }
 
-export function PhonePanel({ activeView, fleetClass, formatRelativeTime }: PhonePanelProps) {
+export function PhonePanel({ activeView, fleetClass, formatRelativeTime, sharedVault }: PhonePanelProps) {
   const [prompts, setPrompts] = useState<CallPrompt[]>([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
@@ -96,14 +99,18 @@ export function PhonePanel({ activeView, fleetClass, formatRelativeTime }: Phone
   const [syncLoading, setSyncLoading] = useState(false);
 
   const portalTarget = typeof document === "undefined" ? null : document.body;
+  const nativeVaultPath = sharedVault?.enabled ? sharedVault.vaultPath : undefined;
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setStatus("");
     try {
-      const response = await fetch("/api/phone", { cache: "no-store" });
-      const data = await response.json() as PromptsPayload;
-      if (!response.ok || data.ok === false) throw new Error(data.error || `${response.status} ${response.statusText}`);
+      const nativeData = await readNativePhonePrompts({
+        vaultPath: nativeVaultPath,
+      });
+      const response = nativeData?.ok ? null : await fetch("/api/phone", { cache: "no-store" });
+      const data = nativeData?.ok ? nativeData as PromptsPayload : await response?.json() as PromptsPayload;
+      if ((!nativeData?.ok && !response?.ok) || data.ok === false) throw new Error(data.error || `${response?.status} ${response?.statusText}`);
       setPrompts(data.prompts ?? []);
       setCheckedAt(Date.now());
     } catch (error) {
@@ -111,7 +118,7 @@ export function PhonePanel({ activeView, fleetClass, formatRelativeTime }: Phone
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [nativeVaultPath]);
 
   const refreshSync = useCallback(async () => {
     setSyncLoading(true);

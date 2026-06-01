@@ -1,13 +1,14 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "HivemindOS",
+  "mainBinaryName": "HivemindOS",
   "version": "0.1.0",
   "identifier": "com.hivemindos.desktop",
   "build": {
     "beforeDevCommand": "pnpm tauri:next-dev",
     "devUrl": "http://127.0.0.1:5021",
     "beforeBuildCommand": "pnpm tauri:prepare",
-    "frontendDist": "loading"
+    "frontendDist": "static"
   },
   "app": {
     "windows": [
@@ -33,6 +34,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "macOS": {
+      "bundleName": "HivemindOS"
+    },
     "resources": {
       "resources/": "resources/"
     },

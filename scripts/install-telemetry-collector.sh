@@ -571,6 +571,32 @@ choose_link_control_port() {
   exit 1
 }
 
+choose_link_tailnet_port() {
+  [[ "$LINK_ACTIVE" == "true" ]] || return
+  local listener
+  listener="$(port_listener_pids "$LINK_TAILNET_PORT")"
+  if [[ -z "$listener" ]]; then
+    return
+  fi
+
+  local requested_port="$LINK_TAILNET_PORT"
+  local control_port="${LINK_CONTROL##*:}"
+  local candidate
+  candidate="$(choose_nearest_available_port "$requested_port" 200 "$PORT" || true)"
+  if [[ -n "$candidate" && "$candidate" == "$control_port" ]]; then
+    candidate="$(choose_nearest_available_port "$((candidate + 1))" 200 "$PORT" || true)"
+  fi
+  if [[ -n "$candidate" ]]; then
+    echo "Port $requested_port is already used by another local service, so Hivemind Link will expose the collector on the next available Tailnet port: $candidate."
+    LINK_TAILNET_PORT="$candidate"
+    return
+  fi
+
+  echo "Port $requested_port is already used by another local service, and no nearby Hivemind Link Tailnet port was free." >&2
+  echo "Stop the process on $requested_port or set HIVE_LINK_TAILNET_PORT to a free port before rerunning setup." >&2
+  exit 1
+}
+
 run_with_timeout() {
   local seconds="$1"
   shift
@@ -919,6 +945,7 @@ TAILNET_SYNC_ENABLED="false"
 if [[ "$LINK_ACTIVE" == "true" ]]; then
   TAILNET_SYNC_ENABLED="false"
   choose_link_control_port
+  choose_link_tailnet_port
 elif [[ "$NETWORK_MANAGED_BY_SETUP" == "true" ]]; then
   TAILNET_SYNC_ENABLED="$SETUP_TAILNET_SYNC_ENABLED"
 elif ensure_tailscale_connected; then

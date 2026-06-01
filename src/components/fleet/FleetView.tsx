@@ -75,8 +75,6 @@ export function FleetView({
   ticker = TICKER,
   edges = FLEET_EDGES,
   loading = false,
-  checkedLabel,
-  tailnetLabel = "tailnet private",
   mastheadMode = "all",
   onAddAgent,
   onAddMachine,
@@ -269,7 +267,7 @@ export function FleetView({
                 className="text-center uppercase"
                 style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--muted)", letterSpacing: 0.1 }}
               >
-                {checkedLabel ?? today} · <span style={{ color: "var(--accent-strong)" }}>{tailnetLabel}</span>
+                {today}
               </div>
               <div /> {/* reserved for the host app's user menu */}
             </div>
@@ -411,10 +409,7 @@ export function FleetView({
             <div className={styles.stageToolbar}>
               <div className={styles.monoCap} style={{ color: "var(--accent-strong)" }}>
                 <span className={`${styles.dot} ${styles.dotLive}`} style={{ color: "var(--accent)" }} />
-                &nbsp; {refreshing ? "scanning constellation" : "live constellation"}
-              </div>
-              <div className={styles.stageStatus}>
-                {today} · <span>{checkedLabel ?? "Fleet scan pending"}</span> · <span>{tailnetLabel}</span>
+                &nbsp; {refreshing ? "scanning swarm" : "live swarm"}
               </div>
               <div className="flex" style={{ gap: 6 }}>
                 {(["graph", "map", "list"] as ViewMode[]).map((v) => (

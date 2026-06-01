@@ -16,8 +16,10 @@ const ICON_PROBE_TIMEOUT_MS = 900;
 const SERVICE_SIGNATURE_TIMEOUT_MS = 2_500;
 const HIVEMIND_LINK_APP_TIMEOUT_MS = 4_000;
 const TAILSCALE_STATUS_TIMEOUT_MS = 3_000;
-const HIVEMIND_LINK_COLLECTOR_PORTS = [8787, 8789, 8790, 8791, 8792];
+const HIVEMIND_LINK_COLLECTOR_PORTS = Array.from({ length: 24 }, (_, index) => 8787 + index);
 const SERVICE_ROUTE_CATALOG_TIMEOUT_MS = 2_500;
+const SERVICE_RUNNING_TASK_TIMEOUT_MS = 2_500;
+const RUNNING_TASK_STUCK_MS = 30 * 60 * 1000;
 const SERVICE_ROUTE_LIMIT = 80;
 const OPENAPI_CATALOG_PATHS = [
   "/openapi.json",
@@ -99,6 +101,7 @@ type HostedApp = {
   healthUrl?: string;
   apiRoutes?: ServiceRoute[];
   apiRoutesSource?: "openapi" | "hivemind";
+  runningTasks?: ServiceRunningTask[];
 };
 
 type ServiceSignature = {
@@ -124,6 +127,23 @@ type ServiceRouteSpec = {
   path: string;
   category: string;
   summary: string;
+};
+
+type ServiceRunningTask = {
+  id: string;
+  title: string;
+  status: string;
+  startedAt?: string;
+  updatedAt?: string;
+  progressPercent?: number;
+  currentRound?: number;
+  totalRounds?: number;
+  detail?: string;
+  potentiallyStuck?: boolean;
+  stuckReason?: string;
+  canCancel?: boolean;
+  canKill?: boolean;
+  source: "miroshark";
 };
 
 type ServiceHealthPayload = {
@@ -212,9 +232,17 @@ type TailscaleStatus = {
 
 type AppsCacheRecord = { checkedAt: number; payload: AppsPayload };
 
+type AppTaskActionBody = {
+  action?: "cancel-task" | "kill-task";
+  appId?: string;
+  taskId?: string;
+};
+
 let appsCache: AppsCacheRecord | null = null;
 let appsInFlight: Promise<AppsPayload> | null = null;
 let appsCacheGeneration = 0;
+
+type AppDiscoveryMode = "fast" | "full";
 
 async function readDiskAppsCache() {
   try {
@@ -236,6 +264,56 @@ async function writeDiskAppsCache(record: AppsCacheRecord) {
 function rememberAppsPayload(payload: AppsPayload) {
   appsCache = { checkedAt: Date.now(), payload };
   void writeDiskAppsCache(appsCache).catch(() => undefined);
+}
+
+function sortHostedApps(apps: HostedApp[]) {
+  return apps.sort((left, right) => Number(right.local) - Number(left.local) || left.machineName.localeCompare(right.machineName) || left.port - right.port);
+}
+
+function mergeMachineResults(current: AppsPayload["machines"], cached: AppsPayload["machines"]) {
+  const byName = new Map<string, AppsPayload["machines"][number]>();
+  for (const machine of cached) {
+    byName.set(machine.name, machine);
+  }
+  for (const machine of current) {
+    const previous = byName.get(machine.name);
+    byName.set(machine.name, !previous || machine.appCount >= previous.appCount ? machine : previous);
+  }
+  return [...byName.values()];
+}
+
+function cachedAppMerge(payload: AppsPayload): AppsPayload {
+  const cached = appsCache?.payload;
+  if (!cached?.apps.length || cached.apps.length <= payload.apps.length) return payload;
+  const apps = sortHostedApps(dedupeVisibleApps([...payload.apps, ...cached.apps]));
+  return {
+    ...payload,
+    source: `${payload.source}:cached-merge`,
+    apps,
+    machines: mergeMachineResults(payload.machines, cached.machines),
+  };
+}
+
+function isSparsePayload(payload: AppsPayload) {
+  const readyMachines = payload.machines.filter((machine) => machine.collector === "ready").length;
+  return payload.apps.length <= 1 && readyMachines > 1;
+}
+
+function payloadWithRefreshError(payload: AppsPayload, error: unknown): AppsPayload {
+  const message = error instanceof Error ? error.message : "Fleet app refresh failed.";
+  return {
+    ...payload,
+    source: `${payload.source}:stale-after-error`,
+    machines: [
+      {
+        name: "Fleet app refresh",
+        collector: "error",
+        appCount: 0,
+        error: message,
+      },
+      ...payload.machines,
+    ],
+  };
 }
 
 type AppKind = "ai" | "creative" | "code" | "dashboard" | "media" | "service" | "app";
@@ -442,6 +520,115 @@ async function serviceRouteCatalog(apiBaseUrl: string, serviceKind?: string): Pr
     routes: known.routes.map((route) => routeFromSpec(apiBaseUrl, route, "hivemind")),
     source: "hivemind",
   };
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function numberValue(value: unknown) {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function isoTimestamp(value: unknown) {
+  const text = stringValue(value);
+  if (!text) return undefined;
+  const parsed = Date.parse(text);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : text;
+}
+
+function timestampMs(value?: string) {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isMiroSharkTaskRunning(run: Record<string, unknown>, status: Record<string, unknown>) {
+  const runnerStatus = stringValue(status.runner_status).toLowerCase();
+  const listStatus = stringValue(run.status).toLowerCase();
+  return runnerStatus === "running"
+    || listStatus === "running"
+    || status.twitter_running === true
+    || status.reddit_running === true
+    || status.polymarket_running === true;
+}
+
+function miroSharkRunningSurfaces(status: Record<string, unknown>) {
+  return [
+    status.twitter_running === true ? "Twitter" : "",
+    status.reddit_running === true ? "Reddit" : "",
+    status.polymarket_running === true ? "Polymarket" : "",
+  ].filter(Boolean);
+}
+
+function miroSharkPotentiallyStuck(input: {
+  startedAt?: string;
+  updatedAt?: string;
+  status: Record<string, unknown>;
+}) {
+  const startedMs = timestampMs(input.startedAt);
+  if (!startedMs) return { stuck: false, reason: "" };
+  const progress = numberValue(input.status.progress_percent) ?? 0;
+  const currentRound = numberValue(input.status.current_round) ?? 0;
+  const totalActions = numberValue(input.status.total_actions_count) ?? 0;
+  const updatedMs = timestampMs(input.updatedAt);
+  const runningMs = Date.now() - startedMs;
+  const noProgress = progress <= 0 && currentRound <= 0 && totalActions <= 0;
+  const staleUpdate = !updatedMs || updatedMs - startedMs < 2 * 60 * 1000 || Date.now() - updatedMs > RUNNING_TASK_STUCK_MS;
+  if (runningMs >= RUNNING_TASK_STUCK_MS && noProgress && staleUpdate) {
+    return {
+      stuck: true,
+      reason: "Running for a while with 0% progress, no completed rounds, and no recorded actions.",
+    };
+  }
+  return { stuck: false, reason: "" };
+}
+
+async function miroSharkRunningTasks(apiBaseUrl: string): Promise<ServiceRunningTask[]> {
+  const list = await fetchJsonOrNull<{ data?: Array<Record<string, unknown>> }>(
+    routeUrl(apiBaseUrl, "/api/simulation/list"),
+    SERVICE_RUNNING_TASK_TIMEOUT_MS,
+  );
+  const simulations = Array.isArray(list?.data) ? list.data.slice(0, 16) : [];
+  const tasks = await Promise.all(simulations.map(async (run): Promise<ServiceRunningTask | null> => {
+    const simulationId = stringValue(run.simulation_id);
+    if (!simulationId) return null;
+    const statusPayload = await fetchJsonOrNull<{ data?: Record<string, unknown> }>(
+      routeUrl(apiBaseUrl, `/api/simulation/${encodeURIComponent(simulationId)}/run-status`),
+      SERVICE_RUNNING_TASK_TIMEOUT_MS,
+    );
+    const status = statusPayload?.data ?? {};
+    if (!isMiroSharkTaskRunning(run, status)) return null;
+    const startedAt = isoTimestamp(status.started_at ?? run.started_at ?? run.created_at);
+    const updatedAt = isoTimestamp(status.updated_at ?? run.updated_at);
+    const surfaces = miroSharkRunningSurfaces(status);
+    const stuck = miroSharkPotentiallyStuck({ startedAt, updatedAt, status });
+    const currentRound = numberValue(status.current_round ?? run.current_round);
+    const totalRounds = numberValue(status.total_rounds);
+    return {
+      id: simulationId,
+      title: `Simulation ${simulationId}`,
+      status: stringValue(status.runner_status) || stringValue(run.status) || "running",
+      startedAt,
+      updatedAt,
+      progressPercent: numberValue(status.progress_percent),
+      currentRound,
+      totalRounds,
+      detail: surfaces.length ? `${surfaces.join(", ")} runner active` : undefined,
+      potentiallyStuck: stuck.stuck || undefined,
+      stuckReason: stuck.reason || undefined,
+      canCancel: true,
+      canKill: true,
+      source: "miroshark" as const,
+    };
+  }));
+  return tasks.filter((task): task is ServiceRunningTask => Boolean(task));
+}
+
+async function serviceRunningTasks(apiBaseUrl: string, serviceKind?: string): Promise<ServiceRunningTask[]> {
+  if (serviceKind !== "miroshark") return [];
+  return miroSharkRunningTasks(apiBaseUrl);
 }
 
 function dnsHost(value?: string) {
@@ -720,7 +907,7 @@ async function probeHealthSignature(input: {
   return null;
 }
 
-async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUrl: string): Promise<HostedApp | null> {
+async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUrl: string, mode: AppDiscoveryMode = "full"): Promise<HostedApp | null> {
   const port = Number(app.port);
   const proxyUrl = rewriteCollectorUrl(app.proxyUrl, collectorUrl);
   const apiProxyUrl = rewriteCollectorUrl(app.apiProxyUrl, collectorUrl);
@@ -730,7 +917,7 @@ async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUr
   if (!openUrl || !Number.isInteger(port)) return null;
   const machineName = normalizeMachineName(machine.device?.name || machine.collectorHost || machine.device?.ip || "Unknown machine");
   const fallbackName = appName(app, port);
-  const signature = await probeHealthSignature({ app, name: fallbackName, proxyUrl, apiProxyUrl, healthProxyUrl });
+  const signature = mode === "full" ? await probeHealthSignature({ app, name: fallbackName, proxyUrl, apiProxyUrl, healthProxyUrl }) : null;
   const name = signature?.name || fallbackName;
   const interactive = signature ? false : app.interactive ?? isInteractiveApp(name, app);
   const serviceKind = signature?.serviceKind || app.serviceKind?.trim();
@@ -739,14 +926,17 @@ async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUr
   const kind = appKind(name);
   const local = isLocalMachine(machine);
   const collectorIconUrl = rewriteCollectorUrl(app.iconUrl, collectorUrl) || rewriteServiceAssetUrl(app.iconUrl, machine);
-  const iconUrl = /\/app-assets\//.test(collectorIconUrl)
-    ? dashboardIconProxyUrl(collectorIconUrl)
-    : await firstReachableIcon([
-      collectorIconUrl,
-      await discoverDirectAppIcon(openUrl),
-    ]) || brandFallbackIconUrl(name) || undefined;
+  const iconUrl = mode === "fast"
+    ? (collectorIconUrl ? (/\/app-assets\//.test(collectorIconUrl) ? dashboardIconProxyUrl(collectorIconUrl) : collectorIconUrl) : brandFallbackIconUrl(name) || undefined)
+    : (/\/app-assets\//.test(collectorIconUrl)
+      ? dashboardIconProxyUrl(collectorIconUrl)
+      : await firstReachableIcon([
+        collectorIconUrl,
+        await discoverDirectAppIcon(openUrl),
+      ]) || brandFallbackIconUrl(name) || undefined);
   const apiBaseUrl = signature?.apiBaseUrl || apiProxyUrl || proxyUrl.replace(/\/+$/, "") || appOriginUrl(directServiceUrl);
-  const routes = !interactive ? await serviceRouteCatalog(apiBaseUrl, serviceKind) : null;
+  const routes = mode === "full" && !interactive ? await serviceRouteCatalog(apiBaseUrl, serviceKind) : null;
+  const runningTasks = mode === "full" ? await serviceRunningTasks(apiBaseUrl, serviceKind) : [];
   return {
     id: `${local ? "local" : machineOpenHost(machine)}:${port}:${app.id || name}`,
     name,
@@ -770,6 +960,7 @@ async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUr
     healthUrl: signature?.healthUrl || healthProxyUrl || (healthPath ? `${apiBaseUrl}${normalizePath(healthPath)}` : undefined),
     apiRoutes: routes?.routes,
     apiRoutesSource: routes?.source,
+    runningTasks: runningTasks.length ? runningTasks : undefined,
   };
 }
 
@@ -790,6 +981,7 @@ async function hostedAppFromHealth(input: {
   const kind = appKind(name);
   const apiBaseUrl = input.healthUrl.replace(/\/health\/?$/i, "");
   const routes = await serviceRouteCatalog(apiBaseUrl, serviceKind);
+  const runningTasks = await serviceRunningTasks(apiBaseUrl, serviceKind);
   return {
     id: `${input.ip}:${input.port}:${name}`,
     name,
@@ -813,6 +1005,7 @@ async function hostedAppFromHealth(input: {
     healthUrl: input.healthUrl,
     apiRoutes: routes?.routes,
     apiRoutesSource: routes?.source,
+    runningTasks: runningTasks.length ? runningTasks : undefined,
   };
 }
 
@@ -834,6 +1027,7 @@ async function toKnownServiceHostedApp(app: CollectorApp, machine: FleetMachine,
     const kind = appKind(known.displayName);
     const local = isLocalMachine(machine);
     const routes = await serviceRouteCatalog(apiBaseUrl, known.serviceKind);
+    const runningTasks = await serviceRunningTasks(apiBaseUrl, known.serviceKind);
     return {
       id: `${local ? "local" : machineOpenHost(machine)}:${port}:${app.id || known.displayName}`,
       name: known.displayName,
@@ -857,6 +1051,7 @@ async function toKnownServiceHostedApp(app: CollectorApp, machine: FleetMachine,
       healthUrl,
       apiRoutes: routes?.routes,
       apiRoutesSource: routes?.source,
+      runningTasks: runningTasks.length ? runningTasks : undefined,
     };
   }
   return null;
@@ -867,6 +1062,7 @@ function dedupeVisibleApps(apps: HostedApp[]) {
   const score = (app: HostedApp) => (
     (/gateway/i.test(app.sourceName || "") ? -100 : 0)
     + (app.iconUrl ? 10 : 0)
+    + ((app.apiRoutes?.length ?? 0) > 0 ? 8 : 0)
     + (app.local ? 2 : 0)
   );
   const iconScore = (app: HostedApp) => (
@@ -874,7 +1070,7 @@ function dedupeVisibleApps(apps: HostedApp[]) {
     + (/gateway/i.test(app.sourceName || "") ? 30 : 0)
   );
   for (const app of apps) {
-    const key = `${app.machineName.toLowerCase()}:${app.name.toLowerCase()}`;
+    const key = `${app.machineName.toLowerCase()}:${app.name.toLowerCase()}:${app.port}`;
     const previous = byNameAndMachine.get(key);
     if (!previous || score(app) > score(previous) || (score(app) === score(previous) && app.openUrl.length < previous.openUrl.length)) {
       const iconSource = previous && iconScore(previous) > iconScore(app) ? previous : app;
@@ -921,6 +1117,19 @@ async function fetchJsonOrNull<T>(url: string, timeoutMs = HIVEMIND_LINK_APP_TIM
   } catch {
     return null;
   }
+}
+
+async function postJson<T>(url: string, body: unknown, timeoutMs = COLLECTOR_TIMEOUT_MS): Promise<T> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const payload = await response.json().catch(() => null) as { error?: string } | null;
+  if (!response.ok) throw new Error(payload?.error || `${response.status} ${response.statusText}`);
+  return payload as T;
 }
 
 function configuredPeerIps() {
@@ -1030,11 +1239,12 @@ async function readPeerKnownServiceApps(forceRefresh: boolean, machines: FleetMa
   return (await Promise.all(probes)).filter((result): result is { name: string; collector: string; apps: HostedApp[] } => Boolean(result));
 }
 
-async function readApps(request: NextRequest): Promise<AppsPayload> {
+async function readApps(request: NextRequest, mode: AppDiscoveryMode = "full"): Promise<AppsPayload> {
   const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
+  const forceCollectors = forceRefresh && mode === "full";
   const fleetUrl = new URL("/api/fleet/discover", request.url);
   fleetUrl.searchParams.set("includeSnapshots", "0");
-  if (forceRefresh) {
+  if (forceCollectors) {
     fleetUrl.searchParams.set("fresh", "1");
   }
   let fleet: { source?: string; machines?: FleetMachine[] } = {};
@@ -1042,7 +1252,7 @@ async function readApps(request: NextRequest): Promise<AppsPayload> {
   try {
     fleet = await fetchJson<{ source?: string; machines?: FleetMachine[] }>(
       fleetUrl.toString(),
-      forceRefresh ? 12_000 : COLLECTOR_TIMEOUT_MS,
+      forceCollectors ? 12_000 : COLLECTOR_TIMEOUT_MS,
     );
   } catch (error) {
     fleetError = error instanceof Error ? error.message : "Fleet discovery did not return apps.";
@@ -1055,8 +1265,8 @@ async function readApps(request: NextRequest): Promise<AppsPayload> {
       return { name, collector: machine.collector || "missing", apps: [] as HostedApp[] };
     }
     try {
-      const payload = await fetchJson<{ apps?: CollectorApp[] }>(collectorAppsUrl(collectorUrl, forceRefresh));
-      const apps = await Promise.all((payload.apps ?? []).map((app) => toHostedApp(app, machine, collectorUrl)));
+      const payload = await fetchJson<{ apps?: CollectorApp[] }>(collectorAppsUrl(collectorUrl, forceCollectors));
+      const apps = await Promise.all((payload.apps ?? []).map((app) => toHostedApp(app, machine, collectorUrl, mode)));
       return {
         name,
         collector: machine.collector,
@@ -1072,20 +1282,21 @@ async function readApps(request: NextRequest): Promise<AppsPayload> {
     }
   }));
 
-  const linkResults = results.some((result) => result.apps.some((app) => app.serviceKind && app.healthUrl))
+  const linkResults = mode === "fast" || results.some((result) => result.apps.some((app) => app.serviceKind && app.healthUrl))
     ? []
     : await readPeerKnownServiceApps(forceRefresh, machines);
 
   const allResults = [
     ...results,
     ...linkResults,
-    ...await probeKnownServiceHealthApps(machines),
+    ...(mode === "fast" ? [] : await probeKnownServiceHealthApps(machines)),
   ];
-  let apps = dedupeVisibleApps(allResults.flatMap((result) => result.apps))
-    .sort((left, right) => Number(right.local) - Number(left.local) || left.machineName.localeCompare(right.machineName) || left.port - right.port);
+  let apps = sortHostedApps(dedupeVisibleApps(allResults.flatMap((result) => result.apps)));
   if (!apps.some((app) => app.serviceKind && app.healthUrl)) {
-    apps = dedupeVisibleApps([...apps, ...await healthyCachedKnownServiceApps()])
-      .sort((left, right) => Number(right.local) - Number(left.local) || left.machineName.localeCompare(right.machineName) || left.port - right.port);
+    const cachedKnownApps = mode === "fast"
+      ? appsCache?.payload.apps.filter((app) => app.serviceKind && app.healthUrl) ?? []
+      : await healthyCachedKnownServiceApps();
+    apps = sortHostedApps(dedupeVisibleApps([...apps, ...cachedKnownApps]));
   }
   const machineResults = allResults.map((result) => ({
     name: result.name,
@@ -1102,20 +1313,36 @@ async function readApps(request: NextRequest): Promise<AppsPayload> {
     });
   }
 
-  return {
+  return cachedAppMerge({
     ok: true,
     checkedAt: new Date().toISOString(),
     source: fleet.source || (fleetError ? "peer-service-fallback" : "fleet-discover"),
     apps,
     machines: machineResults,
-  };
+  });
 }
 
 export async function GET(request: NextRequest) {
   const now = Date.now();
   const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
-  if (!forceRefresh && !appsCache) {
-    appsCache = await readDiskAppsCache();
+  const mode: AppDiscoveryMode = request.nextUrl.searchParams.get("fast") === "1" ? "fast" : "full";
+  if (!appsCache) appsCache = await readDiskAppsCache();
+  if (forceRefresh && mode === "fast" && appsCache && !isSparsePayload(appsCache.payload)) {
+    if (!appsInFlight) {
+      const generation = appsCacheGeneration;
+      appsInFlight = readApps(request, "fast")
+        .then((payload) => {
+          if (generation === appsCacheGeneration) {
+            rememberAppsPayload(payload);
+          }
+          return payload;
+        })
+        .catch(() => appsCache!.payload)
+        .finally(() => {
+          appsInFlight = null;
+        });
+    }
+    return Response.json(appsCache.payload);
   }
   if (!forceRefresh && appsCache && now - appsCache.checkedAt < APPS_CACHE_MS) {
     return Response.json(appsCache.payload);
@@ -1124,7 +1351,7 @@ export async function GET(request: NextRequest) {
     const stalePayload = appsCache.payload;
     if (!appsInFlight) {
       const generation = appsCacheGeneration;
-      appsInFlight = readApps(request)
+      appsInFlight = readApps(request, mode)
         .then((payload) => {
           if (generation === appsCacheGeneration) {
             rememberAppsPayload(payload);
@@ -1141,7 +1368,14 @@ export async function GET(request: NextRequest) {
   if (forceRefresh) {
     appsCacheGeneration += 1;
     const generation = appsCacheGeneration;
-    const payload = await readApps(request);
+    let payload: AppsPayload;
+    try {
+      payload = await readApps(request, mode);
+    } catch (error) {
+      const fallbackCache = appsCache ?? await readDiskAppsCache();
+      if (fallbackCache) return Response.json(payloadWithRefreshError(fallbackCache.payload, error));
+      throw error;
+    }
     if (generation === appsCacheGeneration) {
       rememberAppsPayload(payload);
     }
@@ -1149,7 +1383,7 @@ export async function GET(request: NextRequest) {
   }
   if (!appsInFlight) {
     const generation = appsCacheGeneration;
-    appsInFlight = readApps(request)
+    appsInFlight = readApps(request, mode)
       .then((payload) => {
         if (generation === appsCacheGeneration) {
           rememberAppsPayload(payload);
@@ -1161,4 +1395,49 @@ export async function GET(request: NextRequest) {
       });
   }
   return Response.json(await appsInFlight);
+}
+
+async function appForTaskAction(request: NextRequest, appId: string) {
+  if (!appsCache) appsCache = await readDiskAppsCache();
+  let app = appsCache?.payload.apps.find((item) => item.id === appId);
+  if (app) return app;
+  const payload = await readApps(request, "full");
+  rememberAppsPayload(payload);
+  app = payload.apps.find((item) => item.id === appId);
+  return app ?? null;
+}
+
+export async function POST(request: NextRequest) {
+  const body = await request.json().catch(() => null) as AppTaskActionBody | null;
+  const action = body?.action;
+  const appId = body?.appId?.trim();
+  const taskId = body?.taskId?.trim();
+  if (action !== "cancel-task" && action !== "kill-task") {
+    return Response.json({ ok: false, error: "Unsupported app task action." }, { status: 400 });
+  }
+  if (!appId || !taskId) {
+    return Response.json({ ok: false, error: "appId and taskId are required." }, { status: 400 });
+  }
+
+  const app = await appForTaskAction(request, appId);
+  if (!app) return Response.json({ ok: false, error: "App is not in the current fleet app cache." }, { status: 404 });
+  if (app.serviceKind !== "miroshark") {
+    return Response.json({ ok: false, error: "This app does not expose managed running tasks yet." }, { status: 400 });
+  }
+
+  const payload = await postJson(
+    routeUrl(app.apiBaseUrl, "/api/simulation/stop"),
+    { simulation_id: taskId, force: action === "kill-task" },
+    SERVICE_RUNNING_TASK_TIMEOUT_MS,
+  );
+  appsCacheGeneration += 1;
+  appsCache = null;
+  return Response.json({
+    ok: true,
+    action,
+    appId,
+    taskId,
+    message: action === "kill-task" ? "Kill signal sent to the running task." : "Cancel signal sent to the running task.",
+    payload,
+  });
 }

@@ -18,13 +18,17 @@ import { fileURLToPath } from "node:url";
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 const nextEnvPath = join(projectRoot, "next-env.d.ts");
 const nextBuildDir = join(projectRoot, ".next-tauri-build");
+const nextStaticBuildDir = join(projectRoot, ".next-tauri-static-build");
+const nextStaticOutDir = join(projectRoot, "out");
 const resourcesDir = join(projectRoot, "src-tauri", "resources");
+const staticResourceDir = join(projectRoot, "src-tauri", "static");
 const serverResourceDir = join(resourcesDir, "hivemindos-next");
 const nodeResourceDir = join(resourcesDir, "hivemindos-node");
 const standaloneDir = join(nextBuildDir, "standalone");
 const standaloneServer = join(standaloneDir, "server.js");
 const nodeBinaryName = process.platform === "win32" ? "node.exe" : "node";
 const buildTimeoutSeconds = process.env.TAURI_NEXT_BUILD_TIMEOUT_SECONDS || "1800";
+const embeddedNextMode = process.env.HIVEMINDOS_TAURI_EMBEDDED_NEXT === "1";
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -33,7 +37,6 @@ function run(command, args, options = {}) {
     env: {
       ...process.env,
       NEXT_TELEMETRY_DISABLED: "1",
-      HIVEMINDOS_TAURI_BUILD: "1",
       ...options.env,
     },
   });
@@ -246,7 +249,23 @@ function pruneImageOptimizerRuntime() {
   }
 }
 
-function optimizePackagedPngAssets() {
+function prunePackagedBuildArtifacts() {
+  rmSync(join(serverResourceDir, ".next-tauri-build", "cache"), { force: true, recursive: true });
+  rmSync(join(serverResourceDir, ".next-tauri-build", "diagnostics"), { force: true, recursive: true });
+
+  for (const filePath of collectFiles(serverResourceDir, (candidate) => {
+    const fileName = basename(candidate);
+    return fileName.endsWith(".map")
+      || fileName.endsWith(".d.ts")
+      || fileName.endsWith(".tsbuildinfo")
+      || fileName.endsWith(".nft.json")
+      || fileName === ".DS_Store";
+  })) {
+    rmSync(filePath, { force: true });
+  }
+}
+
+function optimizePackagedPngAssets(root = join(serverResourceDir, "public")) {
   const versionResult = spawnSync("oxipng", ["--version"], {
     cwd: projectRoot,
     encoding: "utf8",
@@ -255,7 +274,7 @@ function optimizePackagedPngAssets() {
     return;
   }
 
-  const pngFiles = collectFiles(join(serverResourceDir, "public"), (filePath) => extname(filePath).toLowerCase() === ".png");
+  const pngFiles = collectFiles(root, (filePath) => extname(filePath).toLowerCase() === ".png");
   if (pngFiles.length === 0) {
     return;
   }
@@ -322,50 +341,104 @@ function copyRequiredRuntimePackages() {
   }
 }
 
-rmSync(serverResourceDir, { force: true, recursive: true });
-rmSync(nodeResourceDir, { force: true, recursive: true });
-mkdirSync(resourcesDir, { recursive: true });
+function buildEmbeddedNextResources() {
+  rmSync(serverResourceDir, { force: true, recursive: true });
+  rmSync(nodeResourceDir, { force: true, recursive: true });
+  rmSync(staticResourceDir, { force: true, recursive: true });
+  mkdirSync(resourcesDir, { recursive: true });
+  mkdirSync(staticResourceDir, { recursive: true });
+  writeFileSync(join(staticResourceDir, "README.md"), "# Static Tauri UI\n\nRun `pnpm tauri:prepare` without `HIVEMINDOS_TAURI_EMBEDDED_NEXT=1` to regenerate this directory.\n");
 
-try {
-  run("scripts/run-with-memory-limit.sh", [
-    "--limit-mb",
-    "5000",
-    "--timeout-seconds",
-    buildTimeoutSeconds,
-    "--",
-    "pnpm",
-    "exec",
-    "next",
-    "build",
-  ]);
-} finally {
-  restoreNextEnv();
+  try {
+    run("scripts/run-with-memory-limit.sh", [
+      "--limit-mb",
+      "5000",
+      "--timeout-seconds",
+      buildTimeoutSeconds,
+      "--",
+      "pnpm",
+      "exec",
+      "next",
+      "build",
+    ], {
+      env: {
+        HIVEMINDOS_TAURI_BUILD: "1",
+      },
+    });
+  } finally {
+    restoreNextEnv();
+  }
+
+  if (!existsSync(standaloneServer)) {
+    throw new Error(`Next standalone server was not generated at ${standaloneServer}`);
+  }
+
+  mkdirSync(serverResourceDir, { recursive: true });
+  cpSync(standaloneDir, serverResourceDir, { recursive: true });
+
+  const staticDir = join(nextBuildDir, "static");
+  if (existsSync(staticDir)) {
+    cpSync(staticDir, join(serverResourceDir, ".next-tauri-build", "static"), { recursive: true });
+  }
+
+  const publicDir = join(projectRoot, "public");
+  if (existsSync(publicDir)) {
+    cpSync(publicDir, join(serverResourceDir, "public"), { recursive: true });
+  }
+
+  scrubPackagedResources();
+  materializeResourceSymlinks(serverResourceDir);
+  copyRequiredRuntimePackages();
+  pruneImageOptimizerRuntime();
+  pruneNativeOnlyResources();
+  pruneMaterializedPnpmStore();
+  prunePackagedBuildArtifacts();
+  optimizePackagedPngAssets();
+  copyNodeBinary();
+
+  console.log(`Prepared embedded Tauri Next server resources in ${basename(resourcesDir)}/`);
 }
 
-if (!existsSync(standaloneServer)) {
-  throw new Error(`Next standalone server was not generated at ${standaloneServer}`);
+function buildStaticNativeResources() {
+  rmSync(staticResourceDir, { force: true, recursive: true });
+  rmSync(serverResourceDir, { force: true, recursive: true });
+  rmSync(nodeResourceDir, { force: true, recursive: true });
+  rmSync(nextStaticBuildDir, { force: true, recursive: true });
+  rmSync(nextStaticOutDir, { force: true, recursive: true });
+  mkdirSync(resourcesDir, { recursive: true });
+
+  try {
+    run("scripts/run-with-memory-limit.sh", [
+      "--limit-mb",
+      "5000",
+      "--timeout-seconds",
+      buildTimeoutSeconds,
+      "--",
+      "pnpm",
+      "exec",
+      "next",
+      "build",
+    ], {
+      env: {
+        HIVEMINDOS_TAURI_STATIC_BUILD: "1",
+      },
+    });
+  } finally {
+    restoreNextEnv();
+  }
+
+  if (!existsSync(join(nextStaticOutDir, "index.html"))) {
+    throw new Error(`Next static export was not generated at ${nextStaticOutDir}`);
+  }
+
+  mkdirSync(staticResourceDir, { recursive: true });
+  cpSync(nextStaticOutDir, staticResourceDir, { recursive: true });
+  optimizePackagedPngAssets(staticResourceDir);
+  console.log(`Prepared static Tauri UI resources in ${basename(staticResourceDir)}/`);
 }
 
-mkdirSync(serverResourceDir, { recursive: true });
-cpSync(standaloneDir, serverResourceDir, { recursive: true });
-
-const staticDir = join(nextBuildDir, "static");
-if (existsSync(staticDir)) {
-  cpSync(staticDir, join(serverResourceDir, ".next-tauri-build", "static"), { recursive: true });
+if (embeddedNextMode) {
+  buildEmbeddedNextResources();
+} else {
+  buildStaticNativeResources();
 }
-
-const publicDir = join(projectRoot, "public");
-if (existsSync(publicDir)) {
-  cpSync(publicDir, join(serverResourceDir, "public"), { recursive: true });
-}
-
-scrubPackagedResources();
-materializeResourceSymlinks(serverResourceDir);
-copyRequiredRuntimePackages();
-pruneImageOptimizerRuntime();
-pruneNativeOnlyResources();
-pruneMaterializedPnpmStore();
-optimizePackagedPngAssets();
-copyNodeBinary();
-
-console.log(`Prepared Tauri Next server resources in ${basename(resourcesDir)}/`);

@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useMemo } from "react";
 import { openNativeDirectory } from "@/lib/native/filesystem";
+import { readNativeSharedSchedules } from "@/lib/native/scheduler";
 import { runtimeSchedulerFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
 
@@ -652,7 +653,11 @@ export function useSchedulerController(props: any) {
 
   async function refreshSharedSchedulesFromVault() {
     if (!sharedVault.enabled) return;
-    const response = await fetch("/api/scheduler/shared", {
+    const nativeData = await readNativeSharedSchedules({
+      vaultPath: sharedVault.vaultPath,
+      scheduledFolder: sharedVault.scheduledFolder,
+    });
+    const response = nativeData?.ok ? null : await fetch("/api/scheduler/shared", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -661,8 +666,8 @@ export function useSchedulerController(props: any) {
         scheduledFolder: sharedVault.scheduledFolder,
       }),
     }).catch(() => null);
-    const data = await response?.json().catch(() => null) as { ok?: boolean; schedules?: Array<Record<string, unknown>>; error?: string } | null;
-    if (!response?.ok || !data?.ok) {
+    const data = nativeData?.ok ? nativeData : await response?.json().catch(() => null) as { ok?: boolean; schedules?: Array<Record<string, unknown>>; error?: string } | null;
+    if ((!nativeData?.ok && !response?.ok) || !data?.ok) {
       if (data?.error) setScheduleImportStatus(data.error);
       return;
     }

@@ -57,6 +57,14 @@ export function KanbanPanel(props: any) {
     if (deliverable.kind === "audio") return "Play audio";
     return "Open";
   };
+  const emptyLaneMessage = (column: any) => {
+    if (column.id === "ideas") return "Nothing in the backlog";
+    if (column.id === "ready") return "Nothing waiting for Queen";
+    if (column.id === "working") return "Nothing in progress";
+    if (column.id === "needs-human") return "Nothing needs you";
+    if (column.id === "done") return "No completed tasks yet";
+    return "Nothing archived";
+  };
   const fileManagerLabel = () => {
     const platform = typeof navigator === "undefined" ? "" : navigator.platform.toLowerCase();
     if (platform.includes("mac")) return "Show in Finder";
@@ -146,8 +154,8 @@ export function KanbanPanel(props: any) {
           <WorkSectionHeader
             activeView={activeView}
             onSelect={selectWorkMode}
-            title="Workboard"
-            subtitle="Tasks by lane"
+            title="Tasks"
+            subtitle="Board"
             stats={[
               { value: workBoardStats.working, label: "working", tone: "honey" },
               { value: workBoardStats.needsHuman, label: "needs you", tone: "danger" },
@@ -157,22 +165,28 @@ export function KanbanPanel(props: any) {
           />
 
           <section className={kanbanClass("workBoardControls")} aria-label="Work board controls">
-            <label>
-              <span>tenant</span>
-              <select value={kanbanTenantFilter} onChange={(event) => setKanbanTenantFilter(event.target.value)}>
-                <option value="">all</option>
-                {kanbanTenants.map((tenant) => <option value={tenant} key={tenant}>{tenant}</option>)}
-              </select>
+            <label className={kanbanClass("workBoardField")}>
+              <span>Tenant</span>
+              <div className={kanbanClass("workBoardSelectShell")}>
+                <select value={kanbanTenantFilter} onChange={(event) => setKanbanTenantFilter(event.target.value)}>
+                  <option value="">All</option>
+                  {kanbanTenants.map((tenant) => <option value={tenant} key={tenant}>{tenant}</option>)}
+                </select>
+                <ChevronDown aria-hidden="true" />
+              </div>
             </label>
-            <label>
-              <span>assignee</span>
-              <select value={kanbanAssigneeFilter} onChange={(event) => setKanbanAssigneeFilter(event.target.value)}>
-                <option value="">all</option>
-                {kanbanAssigneeOptions.map((assignee) => <option value={assignee} key={assignee}>{assignee}</option>)}
-              </select>
+            <label className={kanbanClass("workBoardField")}>
+              <span>Assignee</span>
+              <div className={kanbanClass("workBoardSelectShell")}>
+                <select value={kanbanAssigneeFilter} onChange={(event) => setKanbanAssigneeFilter(event.target.value)}>
+                  <option value="">All</option>
+                  {kanbanAssigneeOptions.map((assignee) => <option value={assignee} key={assignee}>{assignee}</option>)}
+                </select>
+                <ChevronDown aria-hidden="true" />
+              </div>
             </label>
-            <label className={kanbanClass("workBoardSearch")}>
-              <span>search</span>
+            <label className={kanbanClass("workBoardField", "workBoardSearch")}>
+              <span>Search</span>
               <div>
                 <Search aria-hidden="true" />
                 <input value={kanbanSearch} onChange={(event) => setKanbanSearch(event.target.value)} placeholder="title, note, result..." />
@@ -184,10 +198,10 @@ export function KanbanPanel(props: any) {
                 checked={kanbanIncludeArchived}
                 onChange={(event) => setKanbanIncludeArchived(event.target.checked)}
               />
-              <span>archived</span>
+              <span>Archived</span>
             </label>
             <details className={kanbanClass("kanbanAdvanced", "workBoardOptions")}>
-              <summary><Settings2 aria-hidden="true" /> board</summary>
+              <summary><Settings2 aria-hidden="true" /> Board</summary>
               <div className={kanbanClass("kanbanAdvancedPanel")}>
                 <label>
                   Board
@@ -258,7 +272,7 @@ export function KanbanPanel(props: any) {
               title={kanbanStorage?.file}
             >
               <span className={kanbanClass("liveDot")} aria-hidden="true" />
-              {kanbanStorage?.source === "obsidian" ? "obsidian · synced" : "local fallback"}
+              {kanbanStorage?.source === "obsidian" ? "Obsidian synced" : "Local fallback"}
             </span>
           </section>
 
@@ -760,14 +774,19 @@ export function KanbanPanel(props: any) {
                       );
                     })}
                     {!kanbanInitialLoading && column.tasks.length === 0 && quickAddStatus !== column.id ? (
-                      <button
-                        type="button"
-                        className={kanbanClass("kanbanEmpty", "kanbanEmptyAction")}
-                        onClick={() => setQuickAddStatus(column.id)}
-                      >
-                        <Plus aria-hidden="true" />
-                        Add Task
-                      </button>
+                      <div className={kanbanClass("kanbanEmptyLane")}>
+                        <p className={kanbanClass("kanbanEmptyLaneMessage")}>
+                          {emptyLaneMessage(column)}
+                        </p>
+                        <button
+                          type="button"
+                          className={kanbanClass("kanbanEmpty", "kanbanEmptyAction")}
+                          onClick={() => setQuickAddStatus(column.id)}
+                        >
+                          <Plus aria-hidden="true" />
+                          Add a task
+                        </button>
+                      </div>
                     ) : null}
                   </div>
                 </section>

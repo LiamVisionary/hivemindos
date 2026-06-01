@@ -473,7 +473,7 @@ type CollectorProbeResult = {
   machineId?: string;
 };
 
-const REMOTE_COLLECTOR_PORT_CANDIDATES = [8787, 8789, 8790, 8791, 8792];
+const REMOTE_COLLECTOR_PORT_CANDIDATES = Array.from({ length: 24 }, (_, index) => 8787 + index);
 
 function collectorUrlWithPort(rawUrl: string, port: number) {
   try {

@@ -39,13 +39,11 @@ type AgentsPanelProps = {
     },
   ) => void | Promise<AeonDeleteResult | void>;
   displayAgents: AgentProfile[];
-  fleetCheckedAt: number | null;
   fleetClass: ClassNameBuilder;
   fleetUpdateDetailByMachine: NonNullable<FleetViewProps["updateDetailByMachine"]>;
   fleetUpdateStatusByMachine: NonNullable<FleetViewProps["updateStatusByMachine"]>;
   fleetDiscoveryLoading: boolean;
   fleetViewData: FleetViewData;
-  formatRelativeTime: (timestamp: number) => string;
   hivemindLinkSignInPolling: boolean;
   hivemindLinkSignInPollingRef: MutableRefObject<boolean>;
   hivemindLinkStatus: HivemindLinkClientStatus | null;
@@ -71,7 +69,6 @@ type AgentsPanelProps = {
   showHivemindLinkSignInBanner: boolean;
   startAgentChat: (agentId: string, options?: { fresh?: boolean }) => void;
   startAgentWorkChat: (agentId: string, task?: string) => void;
-  tailscaleStatus: string;
 };
 
 type FleetPanelMachine = FleetViewData["machines"][number];
@@ -135,13 +132,11 @@ export function AgentsPanel(props: AgentsPanelProps) {
     agents,
     deleteAgent,
     displayAgents,
-    fleetCheckedAt,
     fleetClass,
     fleetDiscoveryLoading,
     fleetUpdateDetailByMachine,
     fleetUpdateStatusByMachine,
     fleetViewData,
-    formatRelativeTime,
     hivemindLinkSignInPolling,
     hivemindLinkSignInPollingRef,
     hivemindLinkStatus,
@@ -167,7 +162,6 @@ export function AgentsPanel(props: AgentsPanelProps) {
     showHivemindLinkSignInBanner,
     startAgentChat,
     startAgentWorkChat,
-    tailscaleStatus,
   } = props;
   const [agentCallSession, setAgentCallSession] = useState<{
     machine: FleetPanelMachine;
@@ -307,8 +301,6 @@ export function AgentsPanel(props: AgentsPanelProps) {
               ticker={fleetViewData.ticker}
               edges={fleetViewData.edges}
               loading={fleetDiscoveryLoading}
-              checkedLabel={fleetCheckedAt ? `Scanned ${formatRelativeTime(fleetCheckedAt)}` : "Fleet scan pending"}
-              tailnetLabel={tailscaleStatus}
               mastheadMode="mobile"
               onAddAgent={(machine) => {
                 const group = machineGroups.find((item) => item.key === machine.id);

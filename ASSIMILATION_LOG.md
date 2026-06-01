@@ -4225,3 +4225,121 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Decision: assimilated
 - Assimilated: ami-ai-companion:.github/workflows/security-scan.yml => .github/workflows/security-scan.yml
 - Verification: Wrote ASSIMILATION.json with 1 entries and custom_code_assessment=balanced.
+## 2026-06-01T06:31:16.166480+00:00 - triage
+
+- Request: Further speed dashboard route switches with true conditional rendering and fix parentNode.removeChild null crash
+- Source: user-supplied-local
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: existing dashboard shell and DOM-owning UI components define route rendering and cleanup behavior to optimize
+  - Path: `src/features/dashboard/DashboardApp.tsx,src/features/dashboard/lazy-components.tsx,src/features/dashboard/views/DashboardHeader.tsx,src/components/ui/lottie-player.tsx`
+## 2026-06-01T06:43:55.220713+00:00 - triage
+
+- Request: Add a unified context index and RAG retrieval surface for HivemindOS skills, tools, schemas, files, workspace, and GBrain
+- Source: user-supplied-local-repo
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: user-pinned HivemindOS repo already contains shared skills, runtime capability definitions, API route conventions, and GBrain integration to reuse
+  - Path: `src/lib/services/obsidian/brain-skills.ts,src/lib/services/skills/skill-os.ts,src/lib/services/brain/gbrain.ts,src/lib/services/chat/shared-vault-context.ts`
+## 2026-06-01T06:45:20.190184+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-hivemindos:src/lib/services/obsidian/brain-skills.ts => src/lib/services/context-index.ts, local-hivemindos:src/lib/services/skills/skill-os.ts => src/lib/services/context-index.ts, local-hivemindos:src/lib/services/brain/gbrain.ts => src/app/api/context-index/route.ts
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-01T07:17:20.375077+00:00 - triage
+
+- Request: Add connected Tailnet apps and app endpoint catalogs to context index without hardcoding app names
+- Source: user-supplied-local-repo
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: existing My Apps/Fleet app discovery already discovers connected Tailnet apps and API route catalogs
+  - Path: `src/app/api/fleet/apps/route.ts,src/features/dashboard/views/MyAppsPanel.tsx`
+## 2026-06-01T07:30:57.571060+00:00 - pinned-source
+
+- Request: Change macOS Dock hover app name to HivemindOS
+- Source: local-repo
+
+### Candidates
+- hivemind-os
+  - Decision: pinned
+  - Reason: Tauri bundle display-name metadata is local project config; no external donor needed
+## 2026-06-01T07:31:57.366884+00:00 - implementation
+
+- Request: Add intent/RAG retrieval for discovered Tailnet apps in context index
+- Source: local-repo
+- Selected backbone: hivemind-os
+
+### Candidates
+- src/lib/services/context-index.ts
+  - Decision: selected
+  - Reason: extended existing local context index service with app aliases and managed RAG snapshot writer
+- src/app/api/context-index/route.ts
+  - Decision: selected
+  - Reason: reused existing context-index API and GBrain import/query service path for optional semantic sync
+## 2026-06-01T07:50:07.968160+00:00 - triage
+
+- Request: Add dashboard unlock token recovery UI
+- Source: local-workspace
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: existing Next dashboard lock screen and dashboard-auth helper are the authoritative source for this small UI addition
+  - Path: `src/app/page.tsx,scripts/dashboard-auth.mjs,src/lib/utils/server-auth.ts`
+## 2026-06-01T08:05:00.035483+00:00 - triage
+
+- Request: Add running connected-app task controls to HivemindOS Apps detail view
+- Source: user-supplied-local-repo
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: pinned local Next.js dashboard already owns My Apps detail view and fleet app discovery endpoint
+  - Path: `src/features/dashboard/views/MyAppsPanel.tsx,src/app/api/fleet/apps/route.ts`
+## 2026-06-01T08:24:14.148593+00:00 - triage
+
+- Request: Implement full native performance pass: dashboard bootstrap, static/native path, route splitting, cached local reads, Rust cache workers, installer cleanup
+- Source: user-supplied-local-repo
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: existing Tauri commands, dashboard shell, API routes, and build scripts define the native migration surface
+## 2026-06-01T08:24:25.335884+00:00 - implementation
+
+- Request: Add running connected-app task controls to HivemindOS Apps detail view
+- Source: user-supplied-local-repo
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+- Assimilated: Existing MyAppsPanel detail/endpoints UI and fleet apps route catalog were extended in place
+- Not assimilated: No public donor was needed because the pinned dashboard already owned app discovery, service route catalogs, and focused app rendering.
+- Verification: targeted eslint, typecheck, temporary API smoke on 5033, Playwright lock smoke, diff check, file-size check, assimilation manifest verification
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: extended current Apps API and focused service view
+  - Path: `src/app/api/fleet/apps/route.ts,src/features/dashboard/views/MyAppsPanel.tsx`
+## 2026-06-01T08:47:11.702121+00:00 - triage
+
+- Request: Migrate the packaged Tauri app toward static native UI without embedded Next server while keeping the browser version intact
+- Source: user-supplied-local-repo
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: existing Next standalone packaging, Tauri config, Rust commands, and native bridge helpers define the static-native migration surface
+  - Path: `scripts/tauri-build.mjs,src-tauri/tauri.conf.json,src-tauri/src,src/lib/native`

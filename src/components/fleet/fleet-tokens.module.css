@@ -760,27 +760,14 @@
 
 .stageToolbar {
   display: grid;
-  grid-template-columns: minmax(130px, auto) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(130px, auto) auto;
   gap: 14px;
   align-items: center;
+  align-self: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: min(100%, calc(100dvh - 220px));
   margin-bottom: 10px;
-}
-
-.stageStatus {
-  min-width: 0;
-  color: var(--muted);
-  font-family: var(--f-mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.stageStatus span {
-  color: var(--accent-strong);
 }
 
 .stageFrame {
@@ -808,6 +795,14 @@
   max-width: 100%;
 }
 
+.dispatchCard {
+  display: flex;
+  flex-direction: column;
+  height: 170px;
+  min-height: 170px;
+  max-height: 170px;
+}
+
 .dispatchText,
 .dispatchStoryName,
 .dispatchStoryTask,
@@ -819,7 +814,17 @@
   word-break: break-word;
 }
 
+.dispatchText {
+  flex: 0 0 9.3em;
+  max-height: 9.3em;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
 .dispatchMeta {
+  flex: 0 0 auto;
   display: flex;
   min-width: 0;
   max-width: 100%;
@@ -874,12 +879,6 @@
 
   .stageToolbar {
     grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .stageStatus {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    text-align: left;
   }
 }
 

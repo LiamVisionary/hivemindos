@@ -112,11 +112,18 @@ function requestCookie(request: Request, name: string) {
   return parseCookies(request.headers.get("cookie")).get(name) ?? "";
 }
 
-export function dashboardSessionCookieOptions(): CookieOptions {
+function secureDashboardRequest(request?: Request) {
+  if (!request) return process.env.NODE_ENV === "production";
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+  if (forwardedProto) return forwardedProto === "https";
+  return new URL(request.url).protocol === "https:";
+}
+
+export function dashboardSessionCookieOptions(request?: Request): CookieOptions {
   return {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: secureDashboardRequest(request),
     path: "/",
     maxAge: Math.floor(SESSION_DURATION_MS / 1000),
   };

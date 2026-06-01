@@ -1,5 +1,11 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { useEffect } from "react";
 
 export default function IntegrationsRoute() {
-  redirect("/?view=integrations");
+  useEffect(() => {
+    window.location.replace("/?view=integrations");
+  }, []);
+
+  return null;
 }

@@ -1,8 +1,11 @@
 use serde::Serialize;
+use serde_json::Value;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tauri::{Manager, RunEvent};
 
 mod brain;
@@ -10,6 +13,11 @@ mod deliverables;
 mod env;
 mod fleet;
 mod kanban;
+mod memory;
+mod phone;
+mod runtime_files;
+mod runtime_usage;
+mod scheduler;
 
 #[cfg(not(debug_assertions))]
 use std::net::{TcpListener, TcpStream};
@@ -18,15 +26,21 @@ use std::os::windows::process::CommandExt;
 #[cfg(not(debug_assertions))]
 use std::process::Stdio;
 #[cfg(not(debug_assertions))]
-use std::time::{Duration, Instant};
 
 #[cfg(all(not(debug_assertions), target_os = "windows"))]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 const NATIVE_HOST: &str = "127.0.0.1";
+const NATIVE_CACHE_TTL: Duration = Duration::from_secs(30);
+
+struct NativeCacheEntry {
+    loaded_at: Instant,
+    payload: Value,
+}
 
 struct NativeServerState {
     child: Mutex<Option<Child>>,
     port: Mutex<Option<u16>>,
+    cache: Mutex<HashMap<String, NativeCacheEntry>>,
 }
 
 impl NativeServerState {
@@ -34,6 +48,7 @@ impl NativeServerState {
         Self {
             child: Mutex::new(None),
             port: Mutex::new(None),
+            cache: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -325,10 +340,138 @@ fn desktop_status(state: tauri::State<NativeServerState>) -> serde_json::Value {
         "latestShortCommit": latest_commit.map(short_commit),
         "updateCommand": "Install the latest HivemindOS desktop build.",
         "runtime": "tauri",
-        "phase": if cfg!(debug_assertions) { "phase-1-dev" } else { "phase-2-packaged" },
+        "phase": if cfg!(debug_assertions) {
+            "phase-1-dev"
+        } else if port.is_some() {
+            "phase-2-packaged"
+        } else {
+            "phase-3-static"
+        },
         "devUrl": if cfg!(debug_assertions) { Some("http://127.0.0.1:5021") } else { None },
         "nativeHost": NATIVE_HOST,
         "nativePort": port
+    })
+}
+
+fn native_payload(result: Result<serde_json::Value, String>) -> serde_json::Value {
+    match result {
+        Ok(value) => value,
+        Err(error) => serde_json::json!({ "ok": false, "error": error }),
+    }
+}
+
+fn cache_key(name: &str, parts: &[Option<&str>]) -> String {
+    let mut key = name.to_string();
+    for part in parts {
+        key.push('|');
+        key.push_str(part.unwrap_or(""));
+    }
+    key
+}
+
+fn cached_payload<F>(state: &tauri::State<NativeServerState>, key: String, refresh: F) -> Value
+where
+    F: FnOnce() -> Value,
+{
+    if let Ok(cache) = state.cache.lock() {
+        if let Some(entry) = cache.get(&key) {
+            if entry.loaded_at.elapsed() <= NATIVE_CACHE_TTL {
+                let mut payload = entry.payload.clone();
+                if let Some(object) = payload.as_object_mut() {
+                    object.insert("nativeCacheHit".to_string(), Value::Bool(true));
+                }
+                return payload;
+            }
+        }
+    }
+
+    let payload = refresh();
+    if let Ok(mut cache) = state.cache.lock() {
+        cache.insert(key, NativeCacheEntry {
+            loaded_at: Instant::now(),
+            payload: payload.clone(),
+        });
+    }
+    payload
+}
+
+fn join_scoped_payload(handle: std::thread::ScopedJoinHandle<'_, Value>) -> Value {
+    handle.join().unwrap_or_else(|_| serde_json::json!({ "ok": false, "error": "Native cache worker panicked." }))
+}
+
+#[tauri::command]
+fn dashboard_bootstrap(
+    state: tauri::State<NativeServerState>,
+    max_age_ms: Option<u64>,
+    vault_path: Option<String>,
+    kanban_folder: Option<String>,
+    kanban_board: Option<String>,
+    scheduled_folder: Option<String>,
+) -> serde_json::Value {
+    let hive_key = cache_key("hive-env", &[]);
+    let max_age_key = max_age_ms.map(|value| value.to_string());
+    let fleet_key = cache_key("fleet-apps", &[max_age_key.as_deref()]);
+    let tailscale_key = cache_key("tailscale", &[]);
+    let kanban_key = cache_key("kanban", &[kanban_board.as_deref(), vault_path.as_deref(), kanban_folder.as_deref()]);
+    let brain_key = cache_key("brain-summary", &[vault_path.as_deref()]);
+    let memory_key = cache_key("memory", &[]);
+    let phone_key = cache_key("phone-prompts", &[vault_path.as_deref()]);
+    let runtime_usage_key = cache_key("runtime-usage", &[]);
+    let scheduler_key = cache_key("scheduler", &[vault_path.as_deref(), scheduled_folder.as_deref()]);
+    let desktop_status = desktop_status(state.clone());
+
+    std::thread::scope(|scope| {
+        let state_ref = &state;
+        let hive_env = scope.spawn(move || cached_payload(state_ref, hive_key, || native_payload(env::hive_env_read())));
+        let fleet_apps = scope.spawn(move || cached_payload(state_ref, fleet_key, || native_payload(fleet::fleet_apps_cache(max_age_ms))));
+        let tailscale_devices = scope.spawn(move || cached_payload(state_ref, tailscale_key, || native_payload(fleet::tailscale_devices())));
+        let kanban_read = {
+            let vault_path = vault_path.clone();
+            let kanban_folder = kanban_folder.clone();
+            let kanban_board = kanban_board.clone();
+            scope.spawn(move || cached_payload(state_ref, kanban_key, || native_payload(kanban::kanban_read(
+                kanban_board,
+                vault_path,
+                kanban_folder,
+                None,
+                Some(true),
+                Some(false),
+                None,
+                None,
+                None,
+            ))))
+        };
+        let brain_summary = {
+            let vault_path = vault_path.clone();
+            scope.spawn(move || cached_payload(state_ref, brain_key, || native_payload(brain::brain_summary(vault_path))))
+        };
+        let memory_telemetry = scope.spawn(move || cached_payload(state_ref, memory_key, || native_payload(memory::memory_telemetry())));
+        let phone_prompts = {
+            let vault_path = vault_path.clone();
+            scope.spawn(move || cached_payload(state_ref, phone_key, || native_payload(phone::phone_prompts(vault_path))))
+        };
+        let runtime_usage = scope.spawn(move || cached_payload(state_ref, runtime_usage_key, || native_payload(runtime_usage::runtime_usage(Some(200)))));
+        let scheduler_shared = {
+            let vault_path = vault_path.clone();
+            let scheduled_folder = scheduled_folder.clone();
+            scope.spawn(move || cached_payload(state_ref, scheduler_key, || native_payload(scheduler::scheduler_shared_schedules(vault_path, scheduled_folder))))
+        };
+
+        serde_json::json!({
+            "ok": true,
+            "checkedAt": chrono::Utc::now().to_rfc3339(),
+            "desktopStatus": desktop_status,
+            "appVersion": desktop_status,
+            "hiveEnv": join_scoped_payload(hive_env),
+            "fleetApps": join_scoped_payload(fleet_apps),
+            "tailscaleDevices": join_scoped_payload(tailscale_devices),
+            "kanban": join_scoped_payload(kanban_read),
+            "brainSummary": join_scoped_payload(brain_summary),
+            "memoryTelemetry": join_scoped_payload(memory_telemetry),
+            "phonePrompts": join_scoped_payload(phone_prompts),
+            "runtimeUsage": join_scoped_payload(runtime_usage),
+            "schedulerShared": join_scoped_payload(scheduler_shared),
+        })
     })
 }
 
@@ -355,7 +498,7 @@ fn wait_for_native_server(port: u16) -> Result<(), String> {
 }
 
 #[cfg(not(debug_assertions))]
-fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16), Box<dyn std::error::Error>> {
+fn packaged_next_server_paths(app: &tauri::App) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>> {
     let resource_dir = app.path().resource_dir()?;
     let server_dir = resource_dir.join("resources").join("hivemindos-next");
     let server_js = server_dir.join("server.js");
@@ -367,6 +510,22 @@ fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16), Box<dyn st
         } else {
             "node"
         });
+    Ok((server_js, node_path))
+}
+
+#[cfg(not(debug_assertions))]
+fn has_packaged_next_server(app: &tauri::App) -> bool {
+    packaged_next_server_paths(app)
+        .map(|(server_js, node_path)| server_js.exists() && node_path.exists())
+        .unwrap_or(false)
+}
+
+#[cfg(not(debug_assertions))]
+fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16), Box<dyn std::error::Error>> {
+    let (server_js, node_path) = packaged_next_server_paths(app)?;
+    let server_dir = server_js
+        .parent()
+        .ok_or("Packaged Next server path has no parent directory")?;
 
     if !server_js.exists() {
         return Err(format!("Missing packaged Next server at {}", server_js.display()).into());
@@ -421,22 +580,25 @@ pub fn run() {
             #[cfg(not(debug_assertions))]
             {
                 let app = _app;
-                let (child, port) = spawn_native_next_server(app)?;
-                let state = app.state::<NativeServerState>();
-                *state.child.lock().map_err(|_| "Native server lock poisoned")? = Some(child);
-                *state.port.lock().map_err(|_| "Native server port lock poisoned")? = Some(port);
+                if has_packaged_next_server(app) {
+                    let (child, port) = spawn_native_next_server(app)?;
+                    let state = app.state::<NativeServerState>();
+                    *state.child.lock().map_err(|_| "Native server lock poisoned")? = Some(child);
+                    *state.port.lock().map_err(|_| "Native server port lock poisoned")? = Some(port);
 
-                let window = app
-                    .get_webview_window("main")
-                    .ok_or("Missing main HivemindOS window")?;
-                let url = url::Url::parse(&format!("http://{NATIVE_HOST}:{port}/"))?;
-                window.navigate(url)?;
+                    let window = app
+                        .get_webview_window("main")
+                        .ok_or("Missing main HivemindOS window")?;
+                    let url = url::Url::parse(&format!("http://{NATIVE_HOST}:{port}/"))?;
+                    window.navigate(url)?;
+                }
             }
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             desktop_status,
+            dashboard_bootstrap,
             list_local_directories,
             create_local_folder,
             display_local_path,
@@ -455,6 +617,11 @@ pub fn run() {
             fleet::fleet_apps_cache,
             fleet::tailscale_devices,
             kanban::kanban_read,
+            memory::memory_telemetry,
+            phone::phone_prompts,
+            runtime_files::runtime_files,
+            runtime_usage::runtime_usage,
+            scheduler::scheduler_shared_schedules,
             deliverables::download_aeon_deliverable,
             deliverables::send_aeon_deliverable
         ])

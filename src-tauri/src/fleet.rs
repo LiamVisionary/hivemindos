@@ -231,11 +231,6 @@ pub(crate) fn fleet_apps_cache(max_age_ms: Option<u64>) -> Result<Value, String>
         Ok(value) => value,
         Err(_) => return local_collector_apps_payload(),
     };
-    let checked_at = parsed.get("checkedAt").and_then(Value::as_u64).unwrap_or(0);
-    let cache_age_ms = (chrono::Utc::now().timestamp_millis().max(0) as u64).saturating_sub(checked_at);
-    if max_age_ms.is_some_and(|max_age| checked_at == 0 || cache_age_ms > max_age) {
-        return local_collector_apps_payload();
-    }
     let payload = parsed
         .get("payload")
         .and_then(Value::as_object)
@@ -245,12 +240,20 @@ pub(crate) fn fleet_apps_cache(max_age_ms: Option<u64>) -> Result<Value, String>
     {
         return Err("Fleet apps cache payload is incomplete.".to_string());
     }
+    let checked_at = parsed.get("checkedAt").and_then(Value::as_u64).unwrap_or(0);
+    if checked_at == 0 {
+        return local_collector_apps_payload();
+    }
+    let cache_age_ms = (chrono::Utc::now().timestamp_millis().max(0) as u64).saturating_sub(checked_at);
     let mut payload = Value::Object(payload.clone());
     if let Some(object) = payload.as_object_mut() {
         let previous = object.get("source").and_then(Value::as_str).unwrap_or("cache");
         object.insert("source".to_string(), Value::String(format!("native-cache:{previous}")));
         object.insert("cacheAgeMs".to_string(), Value::Number(cache_age_ms.into()));
-        object.insert("stale".to_string(), Value::Bool(cache_age_ms > 60_000));
+        object.insert(
+            "stale".to_string(),
+            Value::Bool(max_age_ms.is_some_and(|max_age| cache_age_ms > max_age) || cache_age_ms > 60_000),
+        );
     }
     Ok(payload)
 }

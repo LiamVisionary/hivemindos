@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Copy, ExternalLink, LoaderCircle, Maximize2, Minimize2, RefreshCcw, Route, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Ban, Clock3, Copy, ExternalLink, LoaderCircle, Maximize2, Minimize2, RefreshCcw, Route, Sparkles, XOctagon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { getNativeFleetAppsCache } from "@/lib/native/fleet";
@@ -29,6 +29,24 @@ type HostedApp = {
   healthUrl?: string;
   apiRoutes?: ApiServiceRoute[];
   apiRoutesSource?: "openapi" | "hivemind";
+  runningTasks?: RunningServiceTask[];
+};
+
+type RunningServiceTask = {
+  id: string;
+  title: string;
+  status: string;
+  startedAt?: string;
+  updatedAt?: string;
+  progressPercent?: number;
+  currentRound?: number;
+  totalRounds?: number;
+  detail?: string;
+  potentiallyStuck?: boolean;
+  stuckReason?: string;
+  canCancel?: boolean;
+  canKill?: boolean;
+  source: "miroshark";
 };
 
 type ApiServiceRoute = {
@@ -171,6 +189,53 @@ function routeTone(method: string) {
   return "border-[rgba(148,163,184,0.24)] bg-[rgba(148,163,184,0.10)] text-[var(--muted)]";
 }
 
+function taskTimeLabel(value: string | undefined, formatRelativeTime: (timestamp: number) => string) {
+  if (!value) return "Unknown";
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return value;
+  return `${formatRelativeTime(timestamp)} · ${new Date(timestamp).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
+}
+
+function taskProgressLabel(task: RunningServiceTask) {
+  const progress = typeof task.progressPercent === "number" ? `${Math.round(task.progressPercent)}%` : "No progress reported";
+  if (typeof task.currentRound === "number" && typeof task.totalRounds === "number" && task.totalRounds > 0) {
+    return `${progress} · round ${task.currentRound}/${task.totalRounds}`;
+  }
+  if (typeof task.currentRound === "number") return `${progress} · round ${task.currentRound}`;
+  return progress;
+}
+
+function friendlyAppsError(error: unknown) {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  if (/expected pattern|failed to fetch|load failed|network|503|service unavailable|warming up/i.test(message)) {
+    return "Could not reach app discovery. Any cached app list will stay on screen while the fleet catches up.";
+  }
+  return message || "Could not load hosted apps.";
+}
+
+function isSparseAppsPayload(payload: FleetAppsPayload | null) {
+  const apps = payload?.apps ?? [];
+  const readyMachines = payload?.machines?.filter((machine) => machine.collector === "ready").length ?? 0;
+  return apps.length <= 1 && readyMachines > 1;
+}
+
+async function readFleetAppsResponse(response: Response): Promise<FleetAppsPayload> {
+  const text = await response.text();
+  let data: FleetAppsPayload;
+  try {
+    data = JSON.parse(text) as FleetAppsPayload;
+  } catch {
+    throw new Error(response.ok ? "App discovery returned an unreadable response." : `App discovery returned ${response.status} ${response.statusText}.`);
+  }
+  if (!response.ok || data.ok === false) throw new Error(data.error || `${response.status} ${response.statusText}`);
+  return data;
+}
+
 export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAppsPanelProps) {
   const [payload, setPayload] = useState<FleetAppsPayload | null>(null);
   const [loading, setLoading] = useState(false);
@@ -178,30 +243,47 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [liveAppExpanded, setLiveAppExpanded] = useState(false);
   const [copiedRouteKey, setCopiedRouteKey] = useState("");
+  const [taskActionStatus, setTaskActionStatus] = useState("");
+  const [busyTaskAction, setBusyTaskAction] = useState("");
   const previousActiveViewRef = useRef<DashboardView | null>(null);
 
   const refresh = useCallback(async (force = false) => {
     setLoading(true);
     setStatus("");
+    let nativePayload: FleetAppsPayload | null = null;
     try {
-      if (!force) {
-        const nativePayload = await getNativeFleetAppsCache({ maxAgeMs: 5 * 60 * 1000 }) as FleetAppsPayload | null;
-        if (nativePayload?.apps) {
-          setPayload(nativePayload);
-          setLoading(false);
-          void fetch("/api/fleet/apps", { cache: "no-store" })
-            .then((response) => response.ok ? response.json() : null)
-            .then((data: FleetAppsPayload | null) => { if (data?.apps) setPayload(data); })
-            .catch(() => undefined);
-          return;
-        }
+      nativePayload = await getNativeFleetAppsCache(force ? {} : { maxAgeMs: 5 * 60 * 1000 }) as FleetAppsPayload | null;
+      if (nativePayload?.apps) {
+        setPayload(nativePayload);
       }
-      const response = await fetch(`/api/fleet/apps${force ? "?refresh=1" : ""}`, { cache: "no-store" });
-      const data = await response.json() as FleetAppsPayload;
-      if (!response.ok || data.ok === false) throw new Error(data.error || `${response.status} ${response.statusText}`);
+      if (nativePayload?.apps) {
+        setLoading(false);
+        const query = force || isSparseAppsPayload(nativePayload) ? "?refresh=1&fast=1" : "?fast=1";
+        void fetch(`/api/fleet/apps${query}`, { cache: "no-store" })
+          .then((response) => readFleetAppsResponse(response).catch(() => null))
+          .then((data: FleetAppsPayload | null) => {
+            if (!data?.apps) return;
+            setPayload(data);
+            void fetch("/api/fleet/apps?refresh=1", { cache: "no-store" })
+              .then((response) => readFleetAppsResponse(response).catch(() => null))
+              .then((fullData: FleetAppsPayload | null) => { if (fullData?.apps) setPayload(fullData); })
+              .catch(() => undefined);
+          })
+          .catch(() => undefined);
+        return;
+      }
+      const response = await fetch(`/api/fleet/apps${force ? "?refresh=1&fast=1" : "?fast=1"}`, { cache: "no-store" });
+      const data = await readFleetAppsResponse(response);
       setPayload(data);
+      void fetch("/api/fleet/apps?refresh=1", { cache: "no-store" })
+        .then((fullResponse) => readFleetAppsResponse(fullResponse).catch(() => null))
+        .then((fullData: FleetAppsPayload | null) => { if (fullData?.apps) setPayload(fullData); })
+        .catch(() => undefined);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Could not load hosted apps.");
+      if (nativePayload?.apps) {
+        setPayload(nativePayload);
+      }
+      setStatus(friendlyAppsError(error));
     } finally {
       setLoading(false);
     }
@@ -242,12 +324,34 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
     window.setTimeout(() => setCopiedRouteKey(""), 1400);
   };
 
+  const runTaskAction = async (app: HostedApp, task: RunningServiceTask, action: "cancel-task" | "kill-task") => {
+    const actionKey = `${action}:${task.id}`;
+    setBusyTaskAction(actionKey);
+    setTaskActionStatus("");
+    try {
+      const response = await fetch("/api/fleet/apps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, appId: app.id, taskId: task.id }),
+      });
+      const data = await response.json().catch(() => null) as { ok?: boolean; error?: string; message?: string } | null;
+      if (!response.ok || !data?.ok) throw new Error(data?.error || "Could not update the running task.");
+      setTaskActionStatus(data.message || "Task action sent.");
+      await refresh(true);
+    } catch (error) {
+      setTaskActionStatus(error instanceof Error ? error.message : "Could not update the running task.");
+    } finally {
+      setBusyTaskAction("");
+    }
+  };
+
   if (selectedApp) {
     const isComfy = /comfy/i.test(selectedApp.name);
     const launchUrl = appLaunchUrl(selectedApp);
     const serviceUrl = selectedApp.healthUrl || selectedApp.apiBaseUrl || launchUrl;
     const apiRoutes = selectedApp.apiRoutes ?? [];
     const apiRouteGroups = routeGroups(apiRoutes);
+    const runningTasks = selectedApp.runningTasks ?? [];
     return (
       <section className={fleetClass("taskPanel", "tabPanel")}>
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -353,6 +457,109 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
             </div>
           ) : (
             <div className="min-h-[360px] rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.48)] p-5">
+              <section className="mb-6 rounded-md border border-[rgba(94,234,212,0.18)] bg-[rgba(20,184,166,0.07)] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="grid h-9 w-9 place-items-center rounded-md border border-[rgba(94,234,212,0.24)] bg-[rgba(20,184,166,0.10)] text-[var(--accent-strong)]">
+                        <Clock3 aria-hidden="true" className="h-4 w-4" />
+                      </span>
+                      <div>
+                        <h3 className="m-0 text-lg font-black text-[var(--foreground)]">Running tasks</h3>
+                        <p className="m-0 text-xs font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
+                          {runningTasks.length ? `${runningTasks.length} active` : "None reported"}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+                      Live service work reported by the app itself. Cancel asks the service to stop cleanly; Kill sends the stronger stop request.
+                    </p>
+                  </div>
+                  {runningTasks.some((task) => task.potentiallyStuck) ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-[rgba(251,191,36,0.34)] bg-[rgba(251,191,36,0.10)] px-3 py-1 text-xs font-black uppercase text-[#fde68a]">
+                      <AlertTriangle aria-hidden="true" className="h-3.5 w-3.5" />
+                      Needs attention
+                    </span>
+                  ) : null}
+                </div>
+
+                {taskActionStatus ? (
+                  <p className="mt-3 rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.34)] px-3 py-2 text-xs leading-5 text-[var(--foreground)]">
+                    {taskActionStatus}
+                  </p>
+                ) : null}
+
+                {runningTasks.length > 0 ? (
+                  <div className="mt-4 grid gap-3">
+                    {runningTasks.map((task) => {
+                      const cancelKey = `cancel-task:${task.id}`;
+                      const killKey = `kill-task:${task.id}`;
+                      return (
+                        <article key={task.id} className="grid gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.30)] p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded border border-[rgba(94,234,212,0.30)] bg-[rgba(20,184,166,0.10)] px-2 py-0.5 text-[10px] font-black uppercase text-[var(--accent-strong)]">
+                                  {task.status || "running"}
+                                </span>
+                                {task.potentiallyStuck ? (
+                                  <span className="inline-flex items-center gap-1 rounded border border-[rgba(251,191,36,0.34)] bg-[rgba(251,191,36,0.10)] px-2 py-0.5 text-[10px] font-black uppercase text-[#fde68a]">
+                                    <AlertTriangle aria-hidden="true" className="h-3 w-3" />
+                                    Potentially stuck
+                                  </span>
+                                ) : null}
+                              </div>
+                              <h4 className="m-0 mt-2 break-all text-sm font-black text-[var(--foreground)]">{task.title}</h4>
+                              <div className="mt-2 grid gap-1 text-xs leading-5 text-[var(--muted)]">
+                                <span>Started {taskTimeLabel(task.startedAt, formatRelativeTime)}</span>
+                                {task.updatedAt ? <span>Last update {taskTimeLabel(task.updatedAt, formatRelativeTime)}</span> : null}
+                                <span>{taskProgressLabel(task)}</span>
+                                {task.detail ? <span>{task.detail}</span> : null}
+                                {task.stuckReason ? <span className="text-[#fde68a]">{task.stuckReason}</span> : null}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {task.canCancel ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  className="h-8 px-2 text-xs"
+                                  onClick={() => void runTaskAction(selectedApp, task, "cancel-task")}
+                                  isLoading={busyTaskAction === cancelKey}
+                                  disabled={Boolean(busyTaskAction)}
+                                >
+                                  <Ban aria-hidden="true" className="h-3.5 w-3.5" />
+                                  Cancel
+                                </Button>
+                              ) : null}
+                              {task.canKill ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="danger"
+                                  className="h-8 px-2 text-xs"
+                                  onClick={() => void runTaskAction(selectedApp, task, "kill-task")}
+                                  isLoading={busyTaskAction === killKey}
+                                  disabled={Boolean(busyTaskAction)}
+                                >
+                                  <XOctagon aria-hidden="true" className="h-3.5 w-3.5" />
+                                  Kill
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.24)] p-3 text-sm leading-6 text-[var(--muted)]">
+                    This service is not reporting any running tasks right now.
+                  </div>
+                )}
+              </section>
+
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">

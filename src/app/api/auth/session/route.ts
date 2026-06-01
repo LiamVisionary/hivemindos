@@ -52,7 +52,7 @@ async function openSession(request: NextRequest, token: string, returnTo = "/") 
   const response = wantsJson(request)
     ? NextResponse.json({ ok: true })
     : NextResponse.redirect(new URL(returnTo, request.url));
-  response.cookies.set(DASHBOARD_SESSION_COOKIE, await createDashboardSessionCookieValue(), dashboardSessionCookieOptions());
+  response.cookies.set(DASHBOARD_SESSION_COOKIE, await createDashboardSessionCookieValue(), dashboardSessionCookieOptions(request));
   return response;
 }
 

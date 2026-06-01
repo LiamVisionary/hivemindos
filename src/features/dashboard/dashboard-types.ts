@@ -420,6 +420,7 @@ export type AgentSnapshot = {
   sources: string[];
   tasks: AgentTask[];
   checkedAt: number;
+  warning?: string;
   error?: string;
 };
 

@@ -5,3 +5,5 @@
 /gen/schemas
 /resources/*
 !/resources/README.md
+/static/*
+!/static/README.md

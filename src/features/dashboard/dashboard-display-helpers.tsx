@@ -248,7 +248,7 @@ export function localDashboardHasUnpublishedChanges(version?: AppVersion | null)
 
 export function friendlyEmptyTitle(snapshot: AgentSnapshot | undefined, hasTelemetryUrl: boolean) {
   if (!hasTelemetryUrl) return "Waiting for an agent bridge";
-  if (snapshot?.summary?.startsWith("Configured data dir is not available")) return "Agent folder needs a path";
+  if (snapshot?.warning?.startsWith("Runtime files are not available")) return "Limited history visibility";
   if (snapshot?.summary?.startsWith("Remote agent bridge unavailable")) return "Machine is temporarily unreachable";
   if (snapshot?.processRunning) return "Agent is running";
   return "Waiting for new work";
