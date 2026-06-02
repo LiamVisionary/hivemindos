@@ -17,6 +17,7 @@ All routes below are served by the Next.js app under `src/app/api`.
 | `/api/control-room/status` | Control-room path and setup status checks |
 | `/api/env` | Shared and runtime-specific env listing/import/update through hive-env helpers |
 | `/api/fleet/*` | Fleet discovery, snapshots, updates, app/service discovery, app icons, machine init, and Hetzner setup helpers |
+| `/api/gitlawb/*` | GitLawb Code Proof CLI, DID, node health, and lazy setup status |
 | `/api/honey-ledger` | Honey ledger reads, local observation submission, exchange actions |
 | `/api/integrations/github/oauth/*` | GitHub OAuth fallback that saves `GH_GLOBAL` for AEON |
 | `/api/integrations/nango/*` | Nango configuration, health, connections, and setup |
@@ -31,6 +32,7 @@ All routes below are served by the Next.js app under `src/app/api`.
 | OpenClaw runtime support | OpenClaw is exposed through the generic runtime/chat facade rather than standalone product routes |
 | `/api/orchestrator/*` | Orchestrator route/event surfaces |
 | `/api/phone` | Phone gateway config/status, scheduled ring prompts, ring-agent actions, and dashboard-agent-call starts |
+| `/api/projects/*` | Hivemind project registry and GitLawb repo linking |
 | `/api/runtime-files` | Safe runtime/app file roots, listing, read, and write |
 | `/api/runtime-usage` | Runtime usage analytics for supported runtimes |
 | `/api/runtimes/*` | Generic runtime adapter facade for status, integrations, skills, schedules, runs, outputs, env sync, sessions |
@@ -80,6 +82,22 @@ Dynamic runtime routes call `src/lib/services/runtime-adapters/registry.ts`:
 | `/api/runtimes/[runtime]/memory` | runtime memory context where supported |
 
 Known runtime ids are `openclaw`, `hermes`, `aeon`, and `openai-compatible`.
+
+## GitLawb Code Proof
+
+GitLawb routes are advisory and non-blocking. Missing GitLawb should return safe status payloads, not break normal HivemindOS setup or Work board execution.
+
+| Route | Purpose |
+|---|---|
+| `GET /api/gitlawb/status` | Detect CLI/helper binaries, local DID, node health, repo/peer counts, and MCP availability |
+| `POST /api/gitlawb/setup-cli` | Install or repair lightweight GitLawb CLI binaries where supported |
+| `POST /api/gitlawb/identity` | Create or refresh a local DID without public node registration |
+| `POST /api/gitlawb/node/setup` | Return lazy local-node readiness/guidance |
+| `GET /api/projects` | Read shared-vault or local-fallback project registry |
+| `POST /api/projects` | Create or update a Hivemind project |
+| `POST /api/projects/link-gitlawb` | Link project metadata to a GitLawb repo and degrade gracefully when a node is unavailable |
+
+Default node probes use `http://127.0.0.1:7545`. Full node hosting is not part of default setup; it requires the user to opt into local repo hosting and normally means a Docker/Postgres-backed GitLawb node.
 
 ## Native Desktop Command Surface
 
@@ -151,6 +169,9 @@ Important files and folders:
 | `~/.hivemindos/install-id` | Workspace id used by Honey and compute flows |
 | `~/.hivemindos/.env` | Canonical shared env store managed by `hive-env-add` |
 | `~/.hivemindos/collector.env` | Persisted collector/Link runtime settings such as selected port |
+| `~/.hivemindos/gitlawb/status.json` | Short-lived GitLawb status cache with no private keys |
+| `~/.hivemindos/gitlawb/installed-by-hivemindos.json` | Marker for GitLawb CLI binaries installed by HivemindOS setup |
+| `~/.hivemindos/projects.json` | Local fallback Hivemind project registry |
 | `~/.hivemindos/kanban` | Local Kanban fallback when the Obsidian vault is unavailable |
 | `~/.hivemindos/runtime-agents.json` | Local runtime agent registry used by the collector |
 | `~/.hivemindos/runtime-runs` | Runtime run cache/output metadata |
@@ -174,6 +195,7 @@ Default folders and files are configured in `DEFAULT_SHARED_VAULT` in `src/lib/t
 | `Intake` | Agent/user inbox and note task import source |
 | `Shared Context.md` | Shared instruction/context note |
 | `Operations/Work Board` | Kanban board state |
+| `Operations/Code Projects/projects.json` | Hivemind project registry and optional GitLawb repo links |
 | `Operations/Agent Notifications` | Notification records and settings |
 | `Operations/Automations` | Scheduled schedules and run records |
 | `Operations/Brain Services` | GBrain/Syntho/trading-brain service notes |
@@ -244,6 +266,10 @@ Common local variables:
 | `LOCAL_OPENAI_MODEL` | Preferred local model |
 | `MIROSHARK_HOME` | Local MiroShark checkout |
 | `MIROSHARK_BASE_URL` | MiroShark backend API URL |
+| `NEXT_PUBLIC_GITLAWB_PROOF_READY` | Enables Code Proof-ready dashboard posture |
+| `NEXT_PUBLIC_GITLAWB_NODE_URL` | Default local GitLawb node URL, normally `http://127.0.0.1:7545` |
+| `GITLAWB_NODE_URL` / `GITLAWB_NODE` | Server-side GitLawb node URL override |
+| `GITLAWB_INSTALL_DIR` | Optional install directory for GitLawb static CLI binaries |
 | `HONEY_LEDGER_REMOTE_URL` | Official or forked Honey ledger worker |
 | `HONEY_LEDGER_ISSUER_ID` | Honey ledger issuer id |
 | `HONEY_LEDGER_SIGNING_SECRET` | Trusted receipt signing secret |

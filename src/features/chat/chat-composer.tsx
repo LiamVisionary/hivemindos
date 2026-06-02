@@ -1158,9 +1158,9 @@ export function ComposerField({
             type="submit"
             className={chatClass("composerIconButton", "sendButton")}
             disabled={disabled || !canSend}
-            aria-label={busy ? "Waiting" : "Send"}
+            aria-label={busy ? "Queue message" : "Send"}
           >
-            {busy ? "·" : compact ? <Check aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}
+            {busy ? <Clock3 aria-hidden="true" /> : compact ? <Check aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}
           </button>
         </div>
       </div>

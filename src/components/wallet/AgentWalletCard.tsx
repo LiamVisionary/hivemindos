@@ -30,6 +30,10 @@ import type {
 } from "@/lib/types/agent-wallet";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
+import {
+  USEPOD_COMPATIBILITY_MATRIX,
+  USEPOD_ROUTING_MATRIX,
+} from "@/lib/config/usepod-features";
 import { cn } from "@/lib/utils/cn";
 import { getDisplayWalletBalanceUsd, getUsePodBalanceUsd } from "@/lib/utils/agent-wallet";
 
@@ -49,6 +53,7 @@ type WalletActionState = {
 
 type ProviderCopy = { label: string; summary: string; setup: string };
 type RailState = "ready" | "setup" | "blocked";
+type UsePodAdvancedSection = "status" | "connect" | "routing" | "repair";
 type MoneyClawStatus = {
   configured: boolean;
   apiKeyEnvName: string;
@@ -74,7 +79,7 @@ export type AgentWalletCardProps = {
   onUpdateWallet: (patch: Partial<AgentWalletConfig>) => void;
   onUpdateAction: (patch: WalletActionState) => void;
   onSaveMoneyClawKey: (apiKey: string, options: MoneyClawSaveOptions) => Promise<{ ok: boolean; error?: string }>;
-  onUpdateUsePod?: (patch: Partial<AgentProfile["usePod"]>) => void;
+  onUpdateUsePod?: (patch: Partial<AgentProfile["usePod"]>) => void | Promise<void>;
   onResetRunway: () => void;
   onCopyPaymentPrompt: () => void;
   onCreateLocalWallet: () => void;
@@ -125,6 +130,16 @@ function tokenFingerprint(config?: AgentProfile["usePod"]) {
   return `${token.slice(0, 6)}…${token.slice(-6)}`;
 }
 
+function tokenSourceLabelText(source?: string) {
+  if (source === "hivemindos-env") return "HivemindOS env";
+  if (source === "legacy-hermes-env") return "Legacy Hermes env";
+  if (source === "dashboard-url") return "Dashboard URL";
+  if (source === "process-env") return "Process env";
+  if (source === "profile") return "Profile token";
+  if (source === "missing") return "Missing";
+  return "Not checked";
+}
+
 function railText(state: RailState) {
   if (state === "ready") return "Ready";
   if (state === "blocked") return "Needs attention";
@@ -172,6 +187,7 @@ export function AgentWalletCard({
   const [moneyClawSaveError, setMoneyClawSaveError] = useState("");
   const [usePodTokenDraft, setUsePodTokenDraft] = useState("");
   const [usePodRepairStatus, setUsePodRepairStatus] = useState("");
+  const [usePodAdvancedSection, setUsePodAdvancedSection] = useState<UsePodAdvancedSection>("status");
   const portalTarget = typeof document === "undefined" ? null : document.body;
 
   const tier = wallet.enabled ? survival.tier : "off";
@@ -192,12 +208,44 @@ export function AgentWalletCard({
   const usePodDepositAddress = agentUsePod?.depositAddress || wallet.walletAddress;
   const usePodFundingReference = agentUsePod?.depositCode || agentUsePod?.dashboardUrl || "";
   const primaryRailReady = usePodRail ? Boolean(usePodDepositAddress || usePodFundingReference) : cardRailState === "ready" && cryptoRailState === "ready";
-  const usePodBalance = agentUsePod?.lastBalanceRemaining
-    || (usePodBalanceValue !== null ? formatMoney(safeBalance) : usePodStatus === "ready" ? "Not returned" : "Check funding");
+  const usePodBalance = usePodBalanceValue !== null
+    ? formatMoney(usePodBalanceValue)
+    : usePodStatus === "ready"
+      ? "Not returned"
+      : "Check funding";
   const usePodRoute = agentUsePod?.lastRoute || "";
   const usePodModelCount = agentUsePod?.lastModelCount;
   const usePodTokenFingerprint = tokenFingerprint(agentUsePod);
+  const usePodTokenMissing = agentUsePod?.lastTokenPresent === false || agentUsePod?.lastTokenSource === "missing";
+  const usePodTokenHealth = usePodTokenMissing
+    ? "Token missing"
+    : agentUsePod?.lastTokenPresent
+      ? `Token saved in ${tokenSourceLabelText(agentUsePod.lastTokenSource)}`
+      : `Token source: ${tokenSourceLabelText(agentUsePod?.lastTokenSource)}`;
+  const usePodStatusMessage = agentUsePod?.lastStatusMessage || "";
+  const usePodStaleErrorMessage = usePodStatus === "ready"
+    && usePodBalanceValue !== null
+    && /\b(unauthorized|token not found|not activated)\b/i.test(usePodStatusMessage);
+  const visibleUsePodStatusMessage = usePodStaleErrorMessage ? "" : usePodStatusMessage;
   const heroBalanceText = usePodReadyBalanceUnknown ? "Ready" : usePodRail && usePodBalanceValue === null ? "Pending" : formatMoney(safeBalance);
+  const usePodFundingRailState: RailState = primaryRailReady ? "ready" : "setup";
+  const usePodInferenceRailState: RailState = usePodStatus === "ready" ? "ready" : usePodTokenMissing ? "blocked" : "setup";
+  const usePodX402RailState: RailState = usePodTokenMissing ? "blocked" : "ready";
+  const usePodCapsRailState: RailState = agentUsePod?.maxPriceInputMicrounits || agentUsePod?.maxPriceOutputMicrounits ? "ready" : "setup";
+  const usePodRoutingMode = agentUsePod?.routingMode === "marketplace-only" ? "marketplace-only" : "auto";
+  const usePodRoutingFeature = USEPOD_ROUTING_MATRIX[usePodRoutingMode];
+  const usePodCompatibility = agentUsePod?.apiCompatibility === "anthropic" ? "anthropic" : "openai";
+  const usePodCompatibilityFeature = USEPOD_COMPATIBILITY_MATRIX[usePodCompatibility];
+  const autoUseAvailable = providerFeatures.canAutopay;
+  const advancedSectionSet = new Set<string>(providerFeatures.advancedSetup.sections);
+  const showAdvancedSection = (section: string) => advancedSectionSet.has(section);
+  const usePodAdvancedTabs: Array<{ id: UsePodAdvancedSection; label: string }> = [
+    showAdvancedSection("usepod-status") ? { id: "status", label: "Status" } : null,
+    showAdvancedSection("usepod-connection") ? { id: "connect", label: "Connect" } : null,
+    showAdvancedSection("usepod-routing") ? { id: "routing", label: "Routing" } : null,
+    showAdvancedSection("usepod-repair") ? { id: "repair", label: "Repair" } : null,
+  ].filter(Boolean) as Array<{ id: UsePodAdvancedSection; label: string }>;
+  const hasUsePodAdvanced = usePodAdvancedTabs.length > 0;
 
   const saveMoneyClawKey = async () => {
     const key = moneyClawKeyDraft.trim();
@@ -241,7 +289,7 @@ export function AgentWalletCard({
     }
   };
 
-  const saveUsePodTokenRepair = () => {
+  const saveUsePodTokenRepair = async () => {
     const raw = usePodTokenDraft.trim();
     if (!raw) {
       setUsePodRepairStatus("Paste a UsePod dashboard URL or token first.");
@@ -261,9 +309,28 @@ export function AgentWalletCard({
       return;
     }
     const envSuffix = compact.replace(/[^A-Za-z0-9]/g, "").slice(0, 24).toUpperCase();
-    onUpdateUsePod?.({
-      dashboardUrl: `https://usepod.ai/dashboard?token=${encodeURIComponent(compact)}`,
-      tokenEnvName: envSuffix ? `USEPOD_TOKEN_${envSuffix}` : agentUsePod?.tokenEnvName || "USEPOD_TOKEN",
+    const tokenEnvName = envSuffix ? `USEPOD_TOKEN_${envSuffix}` : agentUsePod?.tokenEnvName || "USEPOD_TOKEN";
+    const dashboardUrl = `https://usepod.ai/dashboard?token=${encodeURIComponent(compact)}`;
+    setUsePodRepairStatus("Saving UsePod token...");
+    const response = await fetch("/api/usepod/save-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: compact,
+        tokenEnvName,
+        dashboardUrl,
+        depositAddress: agentUsePod?.depositAddress || "",
+        depositCode: agentUsePod?.depositCode || "",
+      }),
+    }).catch(() => null);
+    const data = await response?.json().catch(() => null) as { ok?: boolean; tokenEnvName?: string; dashboardUrl?: string; error?: string } | null;
+    if (!response?.ok || !data?.ok) {
+      setUsePodRepairStatus(data?.error || "Could not save the UsePod token.");
+      return;
+    }
+    await onUpdateUsePod?.({
+      dashboardUrl: data.dashboardUrl || dashboardUrl,
+      tokenEnvName: data.tokenEnvName || tokenEnvName,
       lastBalanceRemaining: "",
       lastRoute: "",
       lastCheckedAt: "",
@@ -271,9 +338,12 @@ export function AgentWalletCard({
       lastStatusMessage: "Checking the repaired UsePod token.",
       lastHttpStatus: undefined,
       lastModelCount: undefined,
+      lastTokenPresent: true,
+      lastTokenSource: "hivemindos-env",
     });
     setUsePodTokenDraft("");
-    setUsePodRepairStatus("Saved repaired token for this wallet. Refreshing UsePod status...");
+    setUsePodAdvancedSection("status");
+    setUsePodRepairStatus("Token saved and UsePod status refreshed.");
   };
 
   return (
@@ -342,22 +412,88 @@ export function AgentWalletCard({
         <button
           type="button"
           className={styles.actionBtn}
-          data-tone={wallet.autoPayEnabled ? "danger" : undefined}
-          disabled={!providerFeatures.canAutopay}
+          data-active={wallet.autoPayEnabled}
+          disabled={!autoUseAvailable}
           onClick={() => onUpdateWallet({ autoPayEnabled: !wallet.autoPayEnabled })}
         >
           <HandCoins aria-hidden="true" />
-          <span>{wallet.autoPayEnabled ? "Auto on" : "Autopay"}</span>
+          <span>{wallet.autoPayEnabled ? "Allowed" : "Auto-use"}</span>
         </button>
       </div>
 
+      <button
+        type="button"
+        className={styles.autoUseToggle}
+        data-on={wallet.autoPayEnabled}
+        disabled={!autoUseAvailable}
+        onClick={() => onUpdateWallet({ autoPayEnabled: !wallet.autoPayEnabled })}
+        aria-pressed={wallet.autoPayEnabled}
+      >
+        <span>
+          <strong>Allow auto-use</strong>
+          <small>{wallet.autoPayEnabled
+            ? "Agents can use this wallet within the hard spend cap without another prompt."
+            : "Agents must ask before using paid wallet rails."}</small>
+        </span>
+        <span className={styles.autoUseSwitch} aria-hidden="true">
+          <span />
+        </span>
+      </button>
+
       <section className={styles.railStack} aria-label="Agent payment rail setup">
+        {usePodRail ? (
+          <>
+            <div className={styles.railStackHeader}>
+              <div>
+                <strong>UsePod rails</strong>
+                <span>{usePodStatus === "ready"
+                  ? "One funded token covers model calls, UsePod routing, and machine-native paywalls."
+                  : "Finish the UsePod token setup once; the wallet can handle the rest."}</span>
+              </div>
+            </div>
+            <div className={styles.railGrid}>
+              <div className={styles.railItem} data-state={usePodInferenceRailState}>
+                <Bot aria-hidden="true" />
+                <div>
+                  <strong>Inference</strong>
+                  <span>{usePodStatus === "ready"
+                    ? `${typeof usePodModelCount === "number" ? `${usePodModelCount} models` : "Models available"}`
+                    : usePodTokenMissing ? "Repair token" : "Check UsePod status"}</span>
+                </div>
+                <small>{railText(usePodInferenceRailState)}</small>
+              </div>
+              <div className={styles.railItem} data-state={usePodFundingRailState}>
+                <WalletCards aria-hidden="true" />
+                <div>
+                  <strong>Funding</strong>
+                  <span>{usePodDepositAddress ? "Solana USDC receiver" : agentUsePod?.depositCode ? "Deposit code saved" : "Needs deposit details"}</span>
+                </div>
+                <small>{railText(usePodFundingRailState)}</small>
+              </div>
+              <div className={styles.railItem} data-state={usePodX402RailState}>
+                <HandCoins aria-hidden="true" />
+                <div>
+                  <strong>x402</strong>
+                  <span>{usePodTokenMissing ? "Needs token" : "Automatic via UsePod wallet"}</span>
+                </div>
+                <small>{usePodX402RailState === "ready" ? "Auto" : railText(usePodX402RailState)}</small>
+              </div>
+              <div className={styles.railItem} data-state={usePodCapsRailState}>
+                <SlidersHorizontal aria-hidden="true" />
+                <div>
+                  <strong>Spend caps</strong>
+                  <span>{usePodCapsRailState === "ready" ? "UsePod price ceilings" : "Default price routing"}</span>
+                </div>
+                <small>{railText(usePodCapsRailState)}</small>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
           <div className={styles.railStackHeader}>
             <div>
-              <strong>{usePodRail ? "Payment rails" : "Core rails"}</strong>
-              <span>{usePodRail
-              ? primaryRailReady ? "UsePod funding details are available. Refresh after the token activates." : "Register UsePod from agent settings before funding."
-              : primaryRailReady ? "Card and crypto are ready for bounded spending." : "Initialize once, then top up only when needed."}</span>
+              <strong>Core rails</strong>
+              <span>{primaryRailReady ? "Card and crypto are ready for bounded spending." : "Initialize once, then top up only when needed."}</span>
             </div>
           </div>
         <div className={styles.railGrid}>
@@ -394,6 +530,8 @@ export function AgentWalletCard({
             <small>{railText(tradingRailState)}</small>
           </div>
         </div>
+          </>
+        )}
       </section>
 
       {usePodRail ? (
@@ -401,65 +539,37 @@ export function AgentWalletCard({
           <div className={styles.usePodRailHeader}>
             <div>
               <strong>UsePod prepaid</strong>
-              <span>{agentUsePod?.tokenEnvName || "USEPOD_TOKEN"}</span>
+              <span>{usePodStatus === "ready"
+                ? `${typeof usePodModelCount === "number" ? `${usePodModelCount} models` : "Models ready"} · provider-managed x402`
+                : "Prepaid Solana USDC for inference and paywalls"}</span>
             </div>
             <small>{usePodStatus}</small>
           </div>
-          <div className={styles.usePodRailGrid}>
-            <div>
-              <span>{usePodDepositAddress ? "Recipient" : agentUsePod?.depositCode ? "Funding ref" : "Deposit"}</span>
-              <strong>{usePodDepositAddress ? shortenAddress(usePodDepositAddress) : agentUsePod?.depositCode || "Pending"}</strong>
-            </div>
+          <div className={styles.usePodPrimaryBalance}>
             <div>
               <span>Balance</span>
               <strong>{usePodBalance || "After test"}</strong>
             </div>
-            <div>
-              <span>{usePodRoute ? "Route" : "Token"}</span>
-              <strong>{usePodRoute || usePodTokenFingerprint || "Unknown"}</strong>
-            </div>
-            <div>
-              <span>Models</span>
-              <strong>{typeof usePodModelCount === "number" ? usePodModelCount : "Check"}</strong>
-            </div>
+            {visibleUsePodStatusMessage && usePodStatus !== "ready" ? <p data-tone="error">{visibleUsePodStatusMessage}</p> : null}
           </div>
-          {agentUsePod?.lastStatusMessage ? <p className={styles.sheetStatus} data-tone={usePodStatus === "ready" ? "ok" : "error"}>{agentUsePod.lastStatusMessage}</p> : null}
-          <button type="button" className={styles.sheetCopy} onClick={onRefreshBalance}>
-            <RefreshCcw aria-hidden="true" width={14} height={14} />
-            Refresh UsePod status
-          </button>
-          {agentUsePod?.dashboardUrl ? (
-            <button type="button" className={styles.sheetCopy} onClick={() => window.open(agentUsePod.dashboardUrl, "_blank", "noopener,noreferrer")}>
-              <ArrowUpRight aria-hidden="true" width={14} height={14} />
-              Open UsePod dashboard
+          <div className={styles.usePodActionRow}>
+            <button type="button" className={styles.sheetCopy} onClick={onRefreshBalance}>
+              <RefreshCcw aria-hidden="true" width={14} height={14} />
+              Refresh
             </button>
-          ) : null}
-          {onUpdateUsePod ? (
-            <details className={styles.usePodRepair}>
-              <summary>Repair token binding</summary>
-              <p>Paste the funded UsePod dashboard URL or API token for this wallet.</p>
-              <input
-                value={usePodTokenDraft}
-                onChange={(event) => {
-                  setUsePodTokenDraft(event.target.value);
-                  setUsePodRepairStatus("");
-                }}
-                className={maskedSecretValueClass}
-                placeholder="https://usepod.ai/dashboard?token=..."
-                {...secretInputProps}
-              />
-              <button type="button" className={styles.sheetCopy} onClick={saveUsePodTokenRepair}>
-                Save and recheck
+            {agentUsePod?.dashboardUrl ? (
+              <button type="button" className={styles.sheetCopy} onClick={() => window.open(agentUsePod.dashboardUrl, "_blank", "noopener,noreferrer")}>
+                <ArrowUpRight aria-hidden="true" width={14} height={14} />
+                Dashboard
               </button>
-              {usePodRepairStatus ? <p className={styles.sheetStatus} data-tone="muted">{usePodRepairStatus}</p> : null}
-            </details>
-          ) : null}
-          {usePodDepositAddress ? (
-            <button type="button" className={styles.sheetCopy} onClick={() => void navigator.clipboard.writeText(usePodDepositAddress).catch(() => undefined)}>
-              <Copy aria-hidden="true" width={14} height={14} />
-              Copy UsePod deposit
-            </button>
-          ) : null}
+            ) : null}
+            {usePodDepositAddress ? (
+              <button type="button" className={styles.sheetCopy} onClick={() => void navigator.clipboard.writeText(usePodDepositAddress).catch(() => undefined)}>
+                <Copy aria-hidden="true" width={14} height={14} />
+                Copy receiver
+              </button>
+            ) : null}
+          </div>
         </section>
       ) : null}
 
@@ -470,7 +580,7 @@ export function AgentWalletCard({
             <CloseIconButton size="sm" onClick={() => setSheet(null)} aria-label="Close send sheet" />
           </div>
           <p className={styles.sheetHelp}>
-            Hard cap per payment: {formatMoney(wallet.maxPaymentUsd)}. Type SEND_USDC to confirm if asked.
+            Hard cap per payment: {formatMoney(wallet.maxPaymentUsd)}. {wallet.autoPayEnabled ? "Auto-use is on, so transfers under the hard cap can send without another prompt." : "Auto-use is off, so type SEND_USDC to confirm this transfer."}
           </p>
           <div className={styles.sheetField}>
             <label htmlFor="wallet-send-to">Recipient address</label>
@@ -481,7 +591,7 @@ export function AgentWalletCard({
               placeholder="0x… or Solana address"
             />
           </div>
-          <div className={styles.sheetGrid}>
+          {wallet.autoPayEnabled ? (
             <div className={styles.sheetField}>
               <label htmlFor="wallet-send-amount">Amount</label>
               <input
@@ -491,16 +601,28 @@ export function AgentWalletCard({
                 placeholder={`Max ${formatMoney(wallet.maxPaymentUsd)}`}
               />
             </div>
-            <div className={styles.sheetField}>
-              <label htmlFor="wallet-send-confirm">Confirm</label>
-              <input
-                id="wallet-send-confirm"
-                value={walletAction.confirmation ?? ""}
-                onChange={(event) => onUpdateAction({ confirmation: event.target.value })}
-                placeholder="SEND_USDC"
-              />
+          ) : (
+            <div className={styles.sheetGrid}>
+              <div className={styles.sheetField}>
+                <label htmlFor="wallet-send-amount">Amount</label>
+                <input
+                  id="wallet-send-amount"
+                  value={walletAction.sendAmount ?? ""}
+                  onChange={(event) => onUpdateAction({ sendAmount: event.target.value })}
+                  placeholder={`Max ${formatMoney(wallet.maxPaymentUsd)}`}
+                />
+              </div>
+              <div className={styles.sheetField}>
+                <label htmlFor="wallet-send-confirm">Confirm</label>
+                <input
+                  id="wallet-send-confirm"
+                  value={walletAction.confirmation ?? ""}
+                  onChange={(event) => onUpdateAction({ confirmation: event.target.value })}
+                  placeholder="SEND_USDC"
+                />
+              </div>
             </div>
-          </div>
+          )}
           <div className={styles.sheetButtons}>
             <Button type="button" size="sm" variant="danger" disabled={walletAction.busy} onClick={onSendUsdc}>
               <Send aria-hidden="true" />
@@ -709,107 +831,299 @@ export function AgentWalletCard({
       <details className={styles.advanced}>
         <summary>Advanced setup</summary>
         <div className={styles.advancedBody}>
-          <div className={styles.sheetField}>
-            <label htmlFor="wallet-provider">Payment method</label>
-            <select
-              id="wallet-provider"
-              value={wallet.provider}
-              onChange={(event) => onUpdateWallet({ provider: event.target.value as AgentPaymentProvider })}
-            >
-              {providerOptions.map(([provider, copy]) => (
-                <option key={provider} value={provider}>{copy.label}</option>
-              ))}
-            </select>
-            <p className={styles.sheetHelp}>{providerCopy.summary}</p>
-          </div>
+          {hasUsePodAdvanced ? (
+            <>
+              <div className={styles.usePodAdvancedSegmented} role="tablist" aria-label="UsePod advanced sections">
+                {usePodAdvancedTabs.map((section) => (
+                  <button
+                    key={section.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={usePodAdvancedSection === section.id}
+                    className={cn(styles.usePodAdvancedSegment, usePodAdvancedSection === section.id && styles.usePodAdvancedSegmentActive)}
+                    onClick={() => setUsePodAdvancedSection(section.id)}
+                  >
+                    {section.label}
+                  </button>
+                ))}
+              </div>
 
-          <div className={styles.sheetField}>
-            <label htmlFor="wallet-address">{usePodRail ? "UsePod deposit address" : "Wallet address"}</label>
-            <input
-              id="wallet-address"
-              value={wallet.walletAddress}
-              onChange={(event) => onUpdateWallet({ walletAddress: event.target.value })}
-              placeholder={usePodRail ? "Solana USDC deposit address" : "0x… or Solana address"}
-            />
-            {wallet.walletAddress ? (
-              <p className={styles.sheetHelp}>{usePodRail ? "UsePod token deposit" : "Deposit"}: {shortenAddress(wallet.walletAddress)}</p>
-            ) : null}
-          </div>
+              {showAdvancedSection("usepod-status") && usePodAdvancedSection === "status" ? (
+                <>
+                  <div className={styles.sheetField}>
+                    <span className={styles.fieldLabel}>Payment method</span>
+                    <div className={styles.readOnlyField}>UsePod prepaid</div>
+                    <p className={styles.sheetHelp}>{providerCopy.summary}</p>
+                  </div>
 
-          <div className={styles.sheetGrid}>
-            <div className={styles.sheetField}>
-              <label htmlFor="wallet-network">Network</label>
-              <select
-                id="wallet-network"
-                value={wallet.network}
-                onChange={(event) => onUpdateWallet({ network: event.target.value })}
-              >
-                <option value="eip155:8453">Base mainnet</option>
-                <option value="eip155:84532">Base Sepolia</option>
-                <option value="solana:mainnet">Solana mainnet</option>
-                <option value="solana:devnet">Solana devnet</option>
-              </select>
-            </div>
-            <div className={styles.sheetField}>
-              <label htmlFor="wallet-token">Token</label>
-              <input
-                id="wallet-token"
-                value={wallet.tokenSymbol}
-                onChange={(event) => onUpdateWallet({ tokenSymbol: event.target.value.toUpperCase() })}
-              />
-            </div>
-          </div>
+                  <div className={styles.usePodAdvancedGrid}>
+                    <div>
+                      <span>Token source</span>
+                      <strong>{usePodTokenHealth}</strong>
+                    </div>
+                    <div>
+                      <span>Token</span>
+                      <strong>{usePodTokenFingerprint || "Unknown"}</strong>
+                    </div>
+                    <div>
+                      <span>Funding ref</span>
+                      <strong>{agentUsePod?.depositCode || "Not saved"}</strong>
+                    </div>
+                    <div>
+                      <span>Route</span>
+                      <strong>{usePodRoute || "Default"}</strong>
+                    </div>
+                    <div>
+                      <span>Models</span>
+                      <strong>{typeof usePodModelCount === "number" ? usePodModelCount : "Check status"}</strong>
+                    </div>
+                  </div>
 
-          <div className={styles.sheetField}>
-            <label htmlFor="wallet-x402">{usePodRail ? "UsePod proxy base URL" : "x402 base URL"}</label>
-            <input
-              id="wallet-x402"
-              value={wallet.x402BaseUrl}
-              onChange={(event) => onUpdateWallet({ x402BaseUrl: event.target.value })}
-              placeholder={usePodRail ? "https://api.usepod.ai/proxy/<token>/v1" : "https://paid-api.example.com"}
-            />
-          </div>
+                  {visibleUsePodStatusMessage ? (
+                    <p className={styles.sheetStatus} data-tone={usePodStatus === "ready" ? "ok" : "error"}>{visibleUsePodStatusMessage}</p>
+                  ) : null}
 
-          <div className={styles.sheetField}>
-            <label htmlFor="wallet-moneyclaw">MoneyClaw env name</label>
-            <input
-              id="wallet-moneyclaw"
-              value={wallet.moneyClawEnvName}
-              onChange={(event) => onUpdateWallet({ moneyClawEnvName: event.target.value })}
-            />
-          </div>
+                  {usePodDepositAddress ? (
+                    <div className={styles.sheetField}>
+                      <span className={styles.fieldLabel}>Receiver address</span>
+                      <div className={styles.sheetAddress}>{usePodDepositAddress}</div>
+                    </div>
+                  ) : null}
 
-          <div className={styles.sheetField}>
-            <label htmlFor="wallet-clawcard">ClawCard env name (legacy)</label>
-            <input
-              id="wallet-clawcard"
-              value={wallet.clawCardEnvName}
-              onChange={(event) => onUpdateWallet({ clawCardEnvName: event.target.value })}
-            />
-          </div>
+                  <div className={styles.sheetGrid}>
+                    <div className={styles.sheetField}>
+                      <span className={styles.fieldLabel}>Network</span>
+                      <div className={styles.readOnlyField}>Solana mainnet</div>
+                    </div>
+                    <div className={styles.sheetField}>
+                      <span className={styles.fieldLabel}>Token</span>
+                      <div className={styles.readOnlyField}>USDC</div>
+                    </div>
+                  </div>
 
-          <div className={styles.sheetField}>
-            <label htmlFor="wallet-notes">Private setup notes</label>
-            <textarea
-              id="wallet-notes"
-              value={wallet.notes}
-              onChange={(event) => onUpdateWallet({ notes: event.target.value })}
-              placeholder="Provider dashboard URL, deposit memo, funding policy…"
-              rows={3}
-            />
-          </div>
+                  <div className={styles.sheetButtons}>
+                    <Button type="button" size="sm" variant="secondary" onClick={onCopyPaymentPrompt}>
+                      <Copy aria-hidden="true" />
+                      Copy agent prompt
+                    </Button>
+                  </div>
+                  <p className={styles.sheetStatus} data-tone="muted">{providerCopy.setup}</p>
+                </>
+              ) : showAdvancedSection("usepod-connection") && usePodAdvancedSection === "connect" ? (
+                <>
+                  <div className={styles.sheetField}>
+                    <span className={styles.fieldLabel}>Current compatibility</span>
+                    <div className={styles.readOnlyField}>{usePodCompatibilityFeature.label}</div>
+                    <p className={styles.sheetHelp}>
+                      UsePod is a base-URL swap. HivemindOS currently runs this wallet through the OpenAI-compatible adapter, and keeps Anthropic details visible for future runtime/provider wiring.
+                    </p>
+                  </div>
 
-          <div className={styles.sheetButtons}>
-            <Button type="button" size="sm" variant="secondary" onClick={onCopyPaymentPrompt}>
-              <Copy aria-hidden="true" />
-              Copy agent prompt
-            </Button>
-            <Button type="button" size="sm" variant="secondary" disabled={walletAction.busy} onClick={onCallX402}>
-              <Send aria-hidden="true" />
-              Test x402
-            </Button>
-          </div>
-          <p className={styles.sheetStatus} data-tone="muted">{providerCopy.setup}</p>
+                  <div className={styles.usePodAdvancedGrid}>
+                    {Object.values(USEPOD_COMPATIBILITY_MATRIX).map((compatibility) => (
+                      <div key={compatibility.id}>
+                        <span>{compatibility.label}</span>
+                        <strong>{compatibility.baseUrlTemplate}</strong>
+                      </div>
+                    ))}
+                    <div>
+                      <span>Token env</span>
+                      <strong>{agentUsePod?.tokenEnvName || "USEPOD_TOKEN"}</strong>
+                    </div>
+                    <div>
+                      <span>Endpoints</span>
+                      <strong>{usePodCompatibilityFeature.endpoints.join(", ")}</strong>
+                    </div>
+                  </div>
+
+                  <div className={styles.sheetButtons}>
+                    <Button type="button" size="sm" variant="secondary" onClick={() => window.open(usePodCompatibilityFeature.docsUrl, "_blank", "noopener,noreferrer")}>
+                      <ArrowUpRight aria-hidden="true" />
+                      Open docs
+                    </Button>
+                    <Button type="button" size="sm" variant="secondary" onClick={() => void navigator.clipboard.writeText(usePodCompatibilityFeature.baseUrlTemplate).catch(() => undefined)}>
+                      <Copy aria-hidden="true" />
+                      Copy template
+                    </Button>
+                  </div>
+                </>
+              ) : showAdvancedSection("usepod-routing") && usePodAdvancedSection === "routing" ? (
+                <>
+                  <div className={styles.sheetField}>
+                    <span className={styles.fieldLabel}>Routing mode</span>
+                    <div className={styles.readOnlyField}>{usePodRoutingFeature.label}</div>
+                    <p className={styles.sheetHelp}>{usePodRoutingFeature.summary}</p>
+                  </div>
+
+                  <div className={styles.usePodAdvancedGrid}>
+                    <div>
+                      <span>Last route</span>
+                      <strong>{usePodRoute || "Not returned yet"}</strong>
+                    </div>
+                    <div>
+                      <span>Input cap</span>
+                      <strong>{agentUsePod?.maxPriceInputMicrounits || "Default"}</strong>
+                    </div>
+                    <div>
+                      <span>Output cap</span>
+                      <strong>{agentUsePod?.maxPriceOutputMicrounits || "Default"}</strong>
+                    </div>
+                    <div>
+                      <span>Request controls</span>
+                      <strong>Price ceiling headers</strong>
+                    </div>
+                  </div>
+
+                  <p className={styles.sheetStatus} data-tone="muted">
+                    Marketplace-only is documented as a UsePod routing mode, but the public proxy docs only publish price-ceiling headers right now. HivemindOS keeps the documented request path and records route headers as UsePod returns them.
+                  </p>
+                </>
+              ) : showAdvancedSection("usepod-repair") ? (
+                <>
+                  <div className={styles.usePodRepair}>
+                    <strong>Repair token binding</strong>
+                    <p>Paste the funded UsePod dashboard URL or API token for this wallet.</p>
+                    <input
+                      value={usePodTokenDraft}
+                      onChange={(event) => {
+                        setUsePodTokenDraft(event.target.value);
+                        setUsePodRepairStatus("");
+                      }}
+                      className={maskedSecretValueClass}
+                      placeholder="https://usepod.ai/dashboard?token=..."
+                      {...secretInputProps}
+                    />
+                    <button type="button" className={styles.sheetCopy} onClick={() => void saveUsePodTokenRepair()}>
+                      Save and recheck
+                    </button>
+                    {usePodRepairStatus ? <p className={styles.sheetStatus} data-tone="muted">{usePodRepairStatus}</p> : null}
+                  </div>
+                </>
+              ) : null}
+            </>
+          ) : (
+            <>
+              {showAdvancedSection("provider") ? (
+                <div className={styles.sheetField}>
+                  <label htmlFor="wallet-provider">Payment method</label>
+                  <select
+                    id="wallet-provider"
+                    value={wallet.provider}
+                    onChange={(event) => onUpdateWallet({ provider: event.target.value as AgentPaymentProvider })}
+                  >
+                    {providerOptions.map(([provider, copy]) => (
+                      <option key={provider} value={provider}>{copy.label}</option>
+                    ))}
+                  </select>
+                  <p className={styles.sheetHelp}>{providerCopy.summary}</p>
+                </div>
+              ) : null}
+
+              {showAdvancedSection("wallet-address") ? (
+                <div className={styles.sheetField}>
+                  <label htmlFor="wallet-address">Wallet address</label>
+                  <input
+                    id="wallet-address"
+                    value={wallet.walletAddress}
+                    onChange={(event) => onUpdateWallet({ walletAddress: event.target.value })}
+                    placeholder="0x… or Solana address"
+                  />
+                  {wallet.walletAddress ? (
+                    <p className={styles.sheetHelp}>Deposit: {shortenAddress(wallet.walletAddress)}</p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {showAdvancedSection("network-token") ? (
+                <div className={styles.sheetGrid}>
+                  <div className={styles.sheetField}>
+                    <label htmlFor="wallet-network">Network</label>
+                    <select
+                      id="wallet-network"
+                      value={wallet.network}
+                      onChange={(event) => onUpdateWallet({ network: event.target.value })}
+                    >
+                      <option value="eip155:8453">Base mainnet</option>
+                      <option value="eip155:84532">Base Sepolia</option>
+                      <option value="solana:mainnet">Solana mainnet</option>
+                      <option value="solana:devnet">Solana devnet</option>
+                    </select>
+                  </div>
+                  <div className={styles.sheetField}>
+                    <label htmlFor="wallet-token">Token</label>
+                    <input
+                      id="wallet-token"
+                      value={wallet.tokenSymbol}
+                      onChange={(event) => onUpdateWallet({ tokenSymbol: event.target.value.toUpperCase() })}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {showAdvancedSection("x402-base-url") ? (
+                <div className={styles.sheetField}>
+                  <label htmlFor="wallet-x402">x402 base URL</label>
+                  <input
+                    id="wallet-x402"
+                    value={wallet.x402BaseUrl}
+                    onChange={(event) => onUpdateWallet({ x402BaseUrl: event.target.value })}
+                    placeholder="https://paid-api.example.com"
+                  />
+                </div>
+              ) : null}
+
+              {showAdvancedSection("moneyclaw-env") ? (
+                <div className={styles.sheetField}>
+                  <label htmlFor="wallet-moneyclaw">MoneyClaw env name</label>
+                  <input
+                    id="wallet-moneyclaw"
+                    value={wallet.moneyClawEnvName}
+                    onChange={(event) => onUpdateWallet({ moneyClawEnvName: event.target.value })}
+                  />
+                </div>
+              ) : null}
+
+              {showAdvancedSection("clawcard-env") ? (
+                <div className={styles.sheetField}>
+                  <label htmlFor="wallet-clawcard">ClawCard env name (legacy)</label>
+                  <input
+                    id="wallet-clawcard"
+                    value={wallet.clawCardEnvName}
+                    onChange={(event) => onUpdateWallet({ clawCardEnvName: event.target.value })}
+                  />
+                </div>
+              ) : null}
+
+              {showAdvancedSection("notes") ? (
+                <div className={styles.sheetField}>
+                  <label htmlFor="wallet-notes">Private setup notes</label>
+                  <textarea
+                    id="wallet-notes"
+                    value={wallet.notes}
+                    onChange={(event) => onUpdateWallet({ notes: event.target.value })}
+                    placeholder="Provider dashboard URL, deposit memo, funding policy…"
+                    rows={3}
+                  />
+                </div>
+              ) : null}
+
+              <div className={styles.sheetButtons}>
+                {showAdvancedSection("copy-prompt") ? (
+                  <Button type="button" size="sm" variant="secondary" onClick={onCopyPaymentPrompt}>
+                    <Copy aria-hidden="true" />
+                    Copy agent prompt
+                  </Button>
+                ) : null}
+                {showAdvancedSection("test-x402") ? (
+                  <Button type="button" size="sm" variant="secondary" disabled={walletAction.busy} onClick={onCallX402}>
+                    <Send aria-hidden="true" />
+                    Test x402
+                  </Button>
+                ) : null}
+              </div>
+              <p className={styles.sheetStatus} data-tone="muted">{providerCopy.setup}</p>
+            </>
+          )}
         </div>
       </details>
 

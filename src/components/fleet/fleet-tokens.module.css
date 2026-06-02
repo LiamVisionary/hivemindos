@@ -106,8 +106,10 @@
 .graphActiveAppBadge img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  padding: 3px;
+  display: block;
+  object-fit: cover;
+  padding: 0;
+  transform: scale(1.08);
 }
 
 .hexAdd {
@@ -209,6 +211,23 @@
   margin-top: 1px;
 }
 
+.hexFill {
+  pointer-events: none;
+}
+
+.rosterHexTile {
+  --hex-default-bg: rgba(14, 42, 52, 0.96);
+  --hex-default-border: rgba(94, 234, 212, 0.24);
+  --hex-active-bg: rgba(14, 70, 65, 0.96);
+  --hex-active-border: rgba(94, 234, 212, 0.54);
+  --hex-active-glow: transparent;
+  --hex-honey-bg: rgba(74, 58, 20, 0.96);
+  --hex-honey-border: rgba(255, 212, 90, 0.58);
+  --hex-honey-glow: transparent;
+  --hex-ghost-bg: rgba(16, 28, 38, 0.92);
+  --hex-ghost-border: rgba(148, 163, 184, 0.22);
+}
+
 .rosterNetworkIssue {
   display: inline-flex;
   max-width: 100%;
@@ -234,6 +253,218 @@
 .rosterNetworkIssue span {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.rosterUsePodHostButton {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  padding: 4px 7px;
+  border: 1px solid rgba(94, 234, 212, 0.38);
+  border-radius: 7px;
+  background: rgba(45, 212, 191, 0.12);
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-family: var(--f-mono);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.rosterUsePodHostButton:hover {
+  border-color: rgba(94, 234, 212, 0.68);
+  background: rgba(45, 212, 191, 0.18);
+  transform: translateY(-1px);
+}
+
+.rosterUsePodHostButton img {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.rosterUsePodHostButton span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rosterLoadingList {
+  display: grid;
+  gap: 8px;
+}
+
+.rosterLoadingCard {
+  --roster-loading-delay: 0ms;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 10px;
+  background: rgba(16, 20, 29, 0.54);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.rosterLoadingCardSelected {
+  border-color: rgba(94, 234, 212, 0.22);
+  background:
+    linear-gradient(180deg, rgba(45, 212, 191, 0.07), transparent 56%),
+    rgba(16, 20, 29, 0.62);
+}
+
+.rosterLoadingMachineRow {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) 22px;
+  align-items: start;
+  gap: 8px 10px;
+  padding: 9px 10px;
+}
+
+.rosterLoadingBody,
+.rosterLoadingIdentity,
+.rosterLoadingAgentBody {
+  display: grid;
+  min-width: 0;
+}
+
+.rosterLoadingBody {
+  gap: 6px;
+}
+
+.rosterLoadingSummary {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+
+.rosterLoadingIdentity {
+  flex: 1 1 9rem;
+  min-width: min(100%, 9rem);
+  gap: 5px;
+}
+
+.rosterLoadingBlock {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, rgba(226, 232, 240, 0.13), rgba(148, 163, 184, 0.08)),
+    rgba(15, 23, 42, 0.44);
+}
+
+.rosterLoadingBlock::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  animation: roster-loading-shimmer 1.55s ease-in-out infinite;
+  animation-delay: var(--roster-loading-delay);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.13), transparent);
+}
+
+.rosterLoadingHex {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: rgb(14, 42, 52);
+  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+}
+
+.rosterLoadingHex::after {
+  display: none;
+}
+
+.rosterLoadingTitle {
+  width: min(72%, 126px);
+  height: 13px;
+  border-radius: 5px;
+}
+
+.rosterLoadingMeta {
+  width: min(88%, 158px);
+  height: 9px;
+  border-radius: 999px;
+  opacity: 0.76;
+}
+
+.rosterLoadingCount {
+  width: 18px;
+  height: 13px;
+  margin-top: 1px;
+  border-radius: 999px;
+  background: rgba(94, 234, 212, 0.15);
+}
+
+.rosterLoadingToggle {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  opacity: 0.62;
+}
+
+.rosterLoadingAgentList {
+  display: grid;
+  gap: 5px;
+  padding: 0 10px 10px;
+}
+
+.rosterLoadingAgent {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.rosterLoadingAgentHex {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  background: rgb(16, 28, 38);
+  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+}
+
+.rosterLoadingAgentHex::after {
+  display: none;
+}
+
+.rosterLoadingAgentBody {
+  gap: 5px;
+}
+
+.rosterLoadingAgentName {
+  width: min(68%, 112px);
+  height: 11px;
+  border-radius: 5px;
+}
+
+.rosterLoadingAgentMeta {
+  width: min(84%, 142px);
+  height: 8px;
+  border-radius: 999px;
+  opacity: 0.7;
+}
+
+.rosterLoadingState {
+  width: 44px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(94, 234, 212, 0.12);
 }
 
 .rosterUpdateButton {
@@ -705,6 +936,12 @@
   background: currentColor;
   box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
 }
+
+@keyframes roster-loading-shimmer {
+  0% { transform: translateX(-120%); }
+  58%, 100% { transform: translateX(120%); }
+}
+
 @keyframes fleet-pulse {
   0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
   50%      { box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 6%, transparent); }

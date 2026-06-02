@@ -1,4 +1,5 @@
 import { execFile } from "child_process";
+import { readFile } from "fs/promises";
 import { promisify } from "util";
 
 export const runtime = "nodejs";
@@ -9,6 +10,8 @@ const VERSION_CACHE_MS = 60_000;
 type AppVersionPayload = {
   ok: true;
   appDir: string;
+  version: string;
+  latestVersion: string;
   commit: string;
   shortCommit: string;
   branch: string;
@@ -34,8 +37,14 @@ async function safeGit(args: string[]) {
   return git(args).catch(() => "");
 }
 
+async function packageVersion() {
+  const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { version?: string };
+  return packageJson.version || "0.0.0";
+}
+
 async function readVersion(): Promise<AppVersionPayload> {
-  const [commit, branch, dirty, remoteCommit] = await Promise.all([
+  const [version, commit, branch, dirty, remoteCommit] = await Promise.all([
+    packageVersion(),
     safeGit(["rev-parse", "HEAD"]),
     safeGit(["rev-parse", "--abbrev-ref", "HEAD"]),
     safeGit(["status", "--porcelain"]),
@@ -46,6 +55,8 @@ async function readVersion(): Promise<AppVersionPayload> {
   return {
     ok: true,
     appDir: process.cwd(),
+    version,
+    latestVersion: version,
     commit,
     shortCommit: commit.slice(0, 7),
     branch,

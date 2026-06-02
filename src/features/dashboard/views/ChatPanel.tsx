@@ -4,8 +4,8 @@
 
 import { ChatFolderModal } from "@/features/dashboard/views/chat/ChatFolderModal";
 import { ChatInlineMarkdown } from "@/features/dashboard/ChatMarkdown";
-import { SkillBrowserModal } from "@/features/dashboard/views/chat/SkillBrowserModal";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
+import chatQueueStyles from "@/features/dashboard/views/chat/ChatQueue.module.css";
 import { useEffect, useState } from "react";
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -242,7 +242,7 @@ function ChatHistorySkeleton() {
 }
 
 export function ChatPanel(props: any) {
-  const { Activity, AgentResponseLoader, AlignLeft, Button, ChatMarkdown, Check, ChevronDown, ChevronUp, CircleAlert, ComposerField, Copy, FileText, Folder, GitBranch, Hammer, Image, KanbanSquare, LoaderCircle, MessageAttachments, MessageSquare, Monitor, Pencil, RUNTIME_LABELS, Search, Sparkles, Terminal, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Upload, activeView, aeonEnvKeys, aeonEnvSyncStatus, aeonEnvSyncing, attachChatDirectory, attachChatRecentDirectory, attachmentError, attachmentMenuOpen, attachmentMenuRef, beeRoleIconPath, busy, changeChatWorkingDirectory, chatAttachments, chatClass, chatContextMenu, chatContextMenuRef, chatDirectories, chatDisplayContent, chatFileInputRef, chatImageInputRef, chatKanbanGeneration, chatSidebarTree, checkStatus, dismissChatKanbanGeneration, displayAgents, expandedChatFolders, fleetClass, formatAgentEnvText, formatRelativeTime, generateKanbanTaskFromChat, handleChatFileChange, handleChatImageChange, hasStreamingChunk, lastAssistant, machineGroups, messagesEndRef, messagesScrollRef, parseAgentEnvText, recentDirectories, recentDirectoriesExpanded, recording, refreshRuntimeIntegrations, removeChatAttachment, removeChatDirectory, runRuntimeIntegrationAction, runtimeIntegrationBusy, runtimeModelSelection, runtimeModelSelectionsByRuntime, selectedAgent, selectedChatDirectory, selectedChatHistoryLoading, selectedChatMachine, selectedChatProcess, sendMessage, sessionNotice, setAeonEnvKeys, setAttachmentMenuOpen, setChatContextMenu, setExpandedChatFolders, setRecentDirectoriesExpanded, setStatus, setStatusAgentId, setText, startAgentChat, startAudioRecording, status, statusAgentId, stopAudioRecording, switchRuntime, syncAeonEnvToGitHub, text, updateAgent, updateChatAutoScroll, vaultClass, visibleMessages, voiceBands, voiceTarget, voiceTranscript } = props;
+  const { Activity, AgentResponseLoader, AlignLeft, Button, ChatMarkdown, Check, ChevronDown, ChevronUp, CircleAlert, ComposerField, Copy, FileText, Folder, GitBranch, Hammer, Image, KanbanSquare, LoaderCircle, MessageAttachments, MessageSquare, Monitor, Pencil, RUNTIME_LABELS, Search, Send, Sparkles, Terminal, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Upload, activeView, aeonEnvKeys, aeonEnvSyncStatus, aeonEnvSyncing, attachChatDirectory, attachChatRecentDirectory, attachmentError, attachmentMenuOpen, attachmentMenuRef, beeRoleIconPath, busy, changeChatWorkingDirectory, chatAttachments, chatClass, chatContextMenu, chatContextMenuRef, chatDirectories, chatDisplayContent, chatFileInputRef, chatImageInputRef, chatKanbanGeneration, chatSidebarTree, checkStatus, dismissChatKanbanGeneration, displayAgents, expandedChatFolders, fleetClass, flushingChatQueueId, formatAgentEnvText, formatRelativeTime, generateKanbanTaskFromChat, handleChatFileChange, handleChatImageChange, hasStreamingChunk, lastAssistant, machineGroups, messagesEndRef, messagesScrollRef, parseAgentEnvText, queuedChatMessages = [], recentDirectories, recentDirectoriesExpanded, recording, refreshRuntimeIntegrations, removeChatAttachment, removeChatDirectory, removeQueuedChatMessage, runRuntimeIntegrationAction, runtimeIntegrationBusy, runtimeModelSelection, runtimeModelSelectionsByRuntime, selectedAgent, selectedChatDirectory, selectedChatHistoryLoading, selectedChatMachine, selectedChatProcess, sendMessage, sendQueuedChatMessageNow, sessionNotice, setAeonEnvKeys, setAttachmentMenuOpen, setChatContextMenu, setExpandedChatFolders, setRecentDirectoriesExpanded, setStatus, setStatusAgentId, setText, startAgentChat, startAudioRecording, status, statusAgentId, stopAudioRecording, switchRuntime, syncAeonEnvToGitHub, text, updateAgent, updateChatAutoScroll, vaultClass, visibleMessages, voiceBands, voiceTarget, voiceTranscript } = props;
   const [openKanbanTaskMenuKey, setOpenKanbanTaskMenuKey] = useState("");
   const [copiedMessageKey, setCopiedMessageKey] = useState("");
   const [agentMode, setAgentMode] = useState<"plan" | "act">("act");
@@ -928,12 +928,56 @@ export function ChatPanel(props: any) {
                 ))}
               </div>
             ) : null}
+            {queuedChatMessages.length ? (
+              <section className={chatQueueStyles.chatQueue} aria-label="Queued chat messages">
+                <div className={chatQueueStyles.chatQueueHeader}>
+                  <span>{queuedChatMessages.length} queued</span>
+                  <small>{busy ? "Runs after the current task" : "Ready to send"}</small>
+                </div>
+                <div className={chatQueueStyles.chatQueueList}>
+                  {queuedChatMessages.map((item: any, index: number) => {
+                    const attachmentCount = item.attachments?.length ?? 0;
+                    const directoryCount = item.directories?.length ?? 0;
+                    const flushing = flushingChatQueueId === item.id;
+                    const meta = [
+                      attachmentCount ? `${attachmentCount} file${attachmentCount === 1 ? "" : "s"}` : "",
+                      directoryCount ? `${directoryCount} folder${directoryCount === 1 ? "" : "s"}` : "",
+                      item.queuedAt ? new Date(item.queuedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
+                    ].filter(Boolean).join(" · ");
+                    return (
+                      <article className={chatQueueStyles.chatQueueItem} key={item.id}>
+                        <MessageSquare aria-hidden="true" />
+                        <div className={chatQueueStyles.chatQueueBody}>
+                          <strong>{item.label || `Queued message ${index + 1}`}</strong>
+                          {meta ? <small>{meta}</small> : null}
+                        </div>
+                        <button
+                          type="button"
+                          className={chatQueueStyles.chatQueueAction}
+                          onClick={() => sendQueuedChatMessageNow?.(item.id)}
+                          disabled={busy || Boolean(flushingChatQueueId)}
+                        >
+                          {flushing ? <LoaderCircle aria-hidden="true" className={chatClass("spinIcon")} /> : Send ? <Send aria-hidden="true" /> : null}
+                          <span>{flushing ? "Sending" : "Send"}</span>
+                        </button>
+                        <CloseIconButton
+                          className={chatQueueStyles.chatQueueRemove}
+                          onClick={() => removeQueuedChatMessage?.(item.id)}
+                          disabled={flushing}
+                          aria-label="Remove queued message"
+                        />
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
             <form onSubmit={sendMessage}>
               <ComposerField
                 value={text}
                 onChange={setText}
                 placeholder={`Ask ${selectedAgent.name} to do something...`}
-                disabled={busy}
+                disabled={false}
                 busy={busy && !hasStreamingChunk}
                 attachments={chatAttachments}
                 directories={chatDirectories}
@@ -990,7 +1034,5 @@ export function ChatPanel(props: any) {
         </section>
       ) : null}
       <ChatFolderModal {...props} />
-
-      <SkillBrowserModal {...props} />
   </>);
 }

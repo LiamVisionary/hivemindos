@@ -33,6 +33,8 @@ export async function getNativeAppVersion(signal?: AbortSignal): Promise<AppVers
     if (!signal?.aborted && bootStatus?.commit) {
       return {
         appDir: bootStatus.appDir,
+        version: bootStatus.version,
+        latestVersion: bootStatus.latestVersion,
         commit: bootStatus.commit,
         shortCommit: bootStatus.shortCommit ?? bootStatus.commit.slice(0, 7),
         branch: bootStatus.branch,
@@ -48,6 +50,8 @@ export async function getNativeAppVersion(signal?: AbortSignal): Promise<AppVers
 
     return {
       appDir: status.appDir,
+      version: status.version,
+      latestVersion: status.latestVersion,
       commit: status.commit,
       shortCommit: status.shortCommit ?? status.commit.slice(0, 7),
       branch: status.branch,

@@ -19,6 +19,15 @@ LINK_LABEL="${HIVE_LINK_LABEL:-com.hivemindos.linkd.agent}"
 LINK_LEGACY_LABEL="com.hivemindos.linkd"
 LINK_CONTROL="${HIVE_LINK_CONTROL:-127.0.0.1:${HIVE_LINK_CONTROL_PORT:-8788}}"
 LINK_STATE_DIR="${HIVE_LINK_STATE_DIR:-$HOME/.hivemindos/link/default}"
+if [[ -n "${HIVE_LINK_LOG_FILE:-}" ]]; then
+  LINK_LOG_FILE="$HIVE_LINK_LOG_FILE"
+elif [[ "$(uname -s)" == "Darwin" ]]; then
+  LINK_LOG_FILE="$HOME/Library/Logs/hivemindos-linkd.err.log"
+else
+  LINK_LOG_FILE="$HOME/.hivemindos/link/hivemind-linkd.err.log"
+fi
+LINK_LOG_MAX_BYTES="${HIVE_LINK_LOG_MAX_BYTES:-2097152}"
+LINK_TAILSCALE_DEBUG_LOGS="${HIVE_LINK_TAILSCALE_DEBUG_LOGS:-false}"
 LINK_CONTROL_STATUS_URL="http://$LINK_CONTROL/status"
 LINK_CONTROL_HEALTH_URL="http://$LINK_CONTROL/health"
 SYSTEM_TAILNET_SERVE_ACTIVE="false"
@@ -1118,6 +1127,9 @@ PLIST
     <key>HIVE_LINK_LISTEN</key><string>:$LINK_TAILNET_PORT</string>
     <key>HIVE_LINK_CONTROL</key><string>$LINK_CONTROL</string>
     <key>HIVE_LINK_STATE_DIR</key><string>$LINK_STATE_DIR</string>
+    <key>HIVE_LINK_LOG_FILE</key><string>$LINK_LOG_FILE</string>
+    <key>HIVE_LINK_LOG_MAX_BYTES</key><string>$LINK_LOG_MAX_BYTES</string>
+    <key>HIVE_LINK_TAILSCALE_DEBUG_LOGS</key><string>$LINK_TAILSCALE_DEBUG_LOGS</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -1195,6 +1207,9 @@ Environment=HIVE_LINK_TARGET=http://127.0.0.1:$PORT
 Environment=HIVE_LINK_LISTEN=:$LINK_TAILNET_PORT
 Environment=HIVE_LINK_CONTROL=$LINK_CONTROL
 Environment=HIVE_LINK_STATE_DIR=$LINK_STATE_DIR
+Environment=HIVE_LINK_LOG_FILE=$LINK_LOG_FILE
+Environment=HIVE_LINK_LOG_MAX_BYTES=$LINK_LOG_MAX_BYTES
+Environment=HIVE_LINK_TAILSCALE_DEBUG_LOGS=$LINK_TAILSCALE_DEBUG_LOGS
 ExecStart=$LINK_BIN
 Restart=always
 
@@ -1216,6 +1231,9 @@ mkdir -p "$HOME/.hivemindos"
   printf "HIVE_LINK_STATE_DIR=%q\n" "$LINK_STATE_DIR"
   printf "HIVE_LINK_LABEL=%q\n" "$LINK_LABEL"
   printf "HIVE_LINK_CONTROL_URL=%q\n" "http://$LINK_CONTROL"
+  printf "HIVE_LINK_LOG_FILE=%q\n" "$LINK_LOG_FILE"
+  printf "HIVE_LINK_LOG_MAX_BYTES=%q\n" "$LINK_LOG_MAX_BYTES"
+  printf "HIVE_LINK_TAILSCALE_DEBUG_LOGS=%q\n" "$LINK_TAILSCALE_DEBUG_LOGS"
 } > "$HOME/.hivemindos/collector.env"
 
 if [[ "$TAILNET_SYNC_ENABLED" == "true" && "$NETWORK_MANAGED_BY_SETUP" != "true" ]]; then

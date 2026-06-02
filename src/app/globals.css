@@ -680,45 +680,6 @@ h1 {
   color: var(--accent-strong);
 }
 
-.commandPaletteTab {
-  min-width: 42px;
-}
-
-.dashboardBreadcrumbs {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: min(100%, 1280px);
-  margin: -4px auto 12px;
-  padding: 0 16px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.dashboardBreadcrumbs button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  padding: 2px 0;
-}
-
-.dashboardBreadcrumbs button[aria-current="page"] {
-  color: var(--foreground);
-  cursor: default;
-}
-
-.dashboardBreadcrumbs strong {
-  min-width: 0;
-  max-width: min(38vw, 28rem);
-  overflow-wrap: anywhere;
-  font-weight: 700;
-}
-
 .commandPaletteOverlay {
   position: fixed;
   inset: 0;
@@ -778,7 +739,8 @@ h1 {
 }
 
 .commandPaletteList {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
   min-height: 192px;
   max-height: min(496px, calc(100vh - 208px));
@@ -790,14 +752,16 @@ h1 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
-  align-items: center;
-  min-height: 68px;
+  align-items: start;
+  min-height: 88px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
   color: var(--foreground);
   cursor: pointer;
-  padding: 11px 12px;
+  font: inherit;
+  line-height: normal;
+  padding: 12px;
   text-align: left;
 }
 
@@ -807,17 +771,25 @@ h1 {
   background: rgba(20, 184, 166, 0.1);
 }
 
-.commandPaletteList small,
-.commandPaletteList em {
+.commandPaletteActionText {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  align-content: start;
+}
+
+.commandPaletteActionText small,
+.commandPaletteActionText em {
   display: block;
   color: var(--muted);
   font-style: normal;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 
-.commandPaletteList strong {
+.commandPaletteActionText strong {
   display: block;
-  margin: 2px 0;
+  line-height: 1.18;
   overflow-wrap: anywhere;
 }
 
@@ -825,6 +797,8 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  min-height: 30px;
+  padding-top: 3px;
 }
 
 .commandPaletteActions i {

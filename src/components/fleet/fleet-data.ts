@@ -3,6 +3,7 @@
 // your real data fetcher when wiring up.
 
 import type { BeeWorkerClass } from "@/lib/types/agent-runtime";
+import type { GitLawbNodeStatus } from "@/lib/types/gitlawb";
 
 export type AgentState = "working" | "ready" | "scheduled" | "setup" | "failed";
 export type FleetAgentActivityStatus = "active" | "completed" | "failed" | "unknown";
@@ -80,6 +81,7 @@ export interface FleetMachine {
   lon: number;
   uptime: string;
   networkIssue?: FleetMachineNetworkIssue;
+  gitlawb?: GitLawbNodeStatus;
   agents: FleetAgent[];
 }
 

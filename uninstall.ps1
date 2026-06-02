@@ -143,6 +143,65 @@ if (Ask-YesNo "Remove HivemindOS collector environment file ~/.hivemindos/collec
   Ok "Removed $collectorEnv"
 }
 
+if (Ask-YesNo "Remove HivemindOS GitLawb config/status cache from ~/.hivemindos/gitlawb?" $true) {
+  $gitlawbDir = Join-Path $UserHome ".hivemindos\gitlawb"
+  Remove-Item (Join-Path $gitlawbDir "status.json") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $gitlawbDir "setup-status.json") -Force -ErrorAction SilentlyContinue
+  Ok "Removed HivemindOS GitLawb status cache"
+}
+
+if (Ask-YesNo "Remove fallback HivemindOS project registry ~/.hivemindos/projects.json?" $false) {
+  $projectsFile = Join-Path $UserHome ".hivemindos\projects.json"
+  Remove-Item $projectsFile -Force -ErrorAction SilentlyContinue
+  Ok "Removed $projectsFile"
+}
+
+if (Ask-YesNo "Remove GitLawb CLI binaries installed by HivemindOS?" $false) {
+  $marker = Join-Path $UserHome ".hivemindos\gitlawb\installed-by-hivemindos.json"
+  if (Test-Path $marker) {
+    $managed = Get-Content $marker -Raw | ConvertFrom-Json
+    foreach ($binary in @($managed.binaries)) {
+      if ($binary -match '^[A-Za-z0-9._-]+$') {
+        Remove-Item (Join-Path $managed.installDir $binary) -Force -ErrorAction SilentlyContinue
+        Remove-Item (Join-Path $managed.installDir "$binary.exe") -Force -ErrorAction SilentlyContinue
+        Remove-Item (Join-Path $managed.installDir "$binary.cmd") -Force -ErrorAction SilentlyContinue
+      }
+    }
+    Remove-Item $marker -Force -ErrorAction SilentlyContinue
+    Ok "Removed HivemindOS-managed GitLawb binaries listed in $marker"
+  } else {
+    Warn "No HivemindOS GitLawb install marker found; skipped unmanaged CLI binaries"
+  }
+}
+
+if (Ask-YesNo "Remove GitLawb config keys from .env.local?" $false) {
+  $envLocal = Join-Path $Root ".env.local"
+  if (Test-Path $envLocal) {
+    $next = Get-Content $envLocal | Where-Object { $_ -notmatch '^(NEXT_PUBLIC_GITLAWB_|GITLAWB_)' }
+    Set-Content -Path $envLocal -Value $next
+    Ok "Removed GitLawb config keys from .env.local"
+  }
+}
+
+if (Ask-YesNo "DANGEROUS: remove local GitLawb identity directory ~/.gitlawb? This may delete signing identity material." $false) {
+  $identityDir = Join-Path $UserHome ".gitlawb"
+  Remove-Item $identityDir -Recurse -Force -ErrorAction SilentlyContinue
+  Ok "Removed $identityDir"
+}
+
+if (Ask-YesNo "Stop/remove GitLawb node service or container only if HivemindOS created it?" $false) {
+  $marker = Join-Path $UserHome ".hivemindos\gitlawb\node-created-by-hivemindos.json"
+  if (Test-Path $marker) {
+    if (Test-Command docker) {
+      & docker rm -f hivemindos-gitlawb-node 2>$null | Out-Null
+      Ok "Removed HivemindOS GitLawb node container if present"
+    }
+    Remove-Item $marker -Force -ErrorAction SilentlyContinue
+  } else {
+    Warn "No HivemindOS GitLawb node marker found; skipped node cleanup"
+  }
+}
+
 if (Ask-YesNo "Remove HivemindOS shared-skill instructions from agent files?" $true) {
   Remove-ManagedBlock (Join-Path $vaultPath "AGENTS.md")
   AgentInstructionFiles | ForEach-Object { Remove-ManagedBlock $_ }
@@ -293,6 +352,7 @@ if (Ask-YesNo "Remove empty canonical HivemindOS vault folders created by setup?
     "$synthesisFolder/wiki",
     "$synthesisFolder/raw",
     $synthesisFolder,
+    "Operations/Code Projects",
     "Operations",
     "Archive/Processed Requests",
     "Archive",

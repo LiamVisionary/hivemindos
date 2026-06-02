@@ -4,6 +4,8 @@ import { spawn } from "child_process";
 import { readFile } from "fs/promises";
 import { homedir } from "os";
 import { join } from "path";
+import { USEPOD_API_BASE, type UsePodApiCompatibility, type UsePodRoutingMode } from "@/lib/config/usepod-features";
+import { resolveUsePodUsdcRecipientAddress } from "@/lib/services/usepod/deposit-recipient";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 
 export type UsePodRegistration = {
@@ -18,7 +20,10 @@ export type UsePodRegistration = {
 export type UsePodRuntimeConfig = {
   token: string;
   tokenEnvName: string;
+  tokenSource: UsePodTokenSource;
   baseUrl: string;
+  apiCompatibility: UsePodApiCompatibility;
+  routingMode: UsePodRoutingMode;
   chatPath: string;
   statusPath: string;
   headers: Record<string, string>;
@@ -30,12 +35,15 @@ export type UsePodModel = {
 };
 
 export type UsePodCheckStatus = "ready" | "missing-token" | "needs-funding" | "cap-too-low" | "provider-unavailable" | "error";
+export type UsePodTokenSource = "profile" | "dashboard-url" | "hivemindos-env" | "legacy-hermes-env" | "process-env" | "missing";
 
 export type UsePodCheckResult = {
   ok: boolean;
   status: UsePodCheckStatus;
   message: string;
   tokenEnvName: string;
+  tokenPresent: boolean;
+  tokenSource: UsePodTokenSource;
   depositAddress: string;
   depositCode: string;
   dashboardUrl: string;
@@ -49,7 +57,6 @@ export type UsePodCheckResult = {
 
 const HIVE_ENV_FILE = join(homedir(), ".hivemindos", ".env");
 const HERMES_ENV_FILE = join(homedir(), ".hermes", ".env");
-const USEPOD_API_BASE = "https://api.usepod.ai";
 const USEPOD_DEFAULT_TOKEN_ENV = "USEPOD_TOKEN";
 const USEPOD_DEPOSIT_ENV = "USEPOD_DEPOSIT_ADDRESS";
 const USEPOD_DEPOSIT_CODE_ENV = "USEPOD_DEPOSIT_CODE";
@@ -189,6 +196,41 @@ function extractUsePodBalanceRemaining(data: unknown): string {
   return "";
 }
 
+function numericRecordValue(record: unknown, key: string): number | null {
+  if (!record || typeof record !== "object") return null;
+  const value = (record as Record<string, unknown>)[key];
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const numeric = Number(value.trim());
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function formatUsePodUsd(value: number) {
+  if (!Number.isFinite(value) || value < 0) return "";
+  return value.toFixed(2);
+}
+
+function parseUsePodUsd(value?: string | number | null): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? Math.max(0, value) : null;
+  const text = value?.trim();
+  if (!text) return null;
+  const match = text.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const numeric = Number(match[0]);
+  return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
+}
+
+function extractUsePodProxyBalance(data: unknown): string {
+  if (!data || typeof data !== "object") return "";
+  const direct = firstString(data, ["balance_usdc", "balanceUsd", "balance_usd"]);
+  if (direct) return direct;
+  const microUsdc = numericRecordValue(data, "usdc_balance") ?? numericRecordValue(data, "balance_units");
+  if (microUsdc !== null) return formatUsePodUsd(microUsdc / 1_000_000);
+  const creditBalance = numericRecordValue(data, "credit_balance");
+  if (creditBalance !== null) return formatUsePodUsd(creditBalance);
+  return "";
+}
+
 function extractErrorMessage(data: unknown, fallback: string) {
   if (!data || typeof data !== "object") return fallback;
   const record = data as Record<string, unknown>;
@@ -206,7 +248,18 @@ export function isUsePodProfile(profile: Pick<AgentProfile, "provider">) {
 }
 
 export function buildUsePodOpenAIBaseUrl(token: string) {
-  return `${USEPOD_API_BASE}/proxy/${encodeURIComponent(token)}/v1`;
+  return buildUsePodProxyBaseUrl(token, "openai");
+}
+
+export function buildUsePodAnthropicBaseUrl(token: string) {
+  return buildUsePodProxyBaseUrl(token, "anthropic");
+}
+
+export function buildUsePodProxyBaseUrl(token: string, compatibility: UsePodApiCompatibility = "openai") {
+  const encodedToken = encodeURIComponent(token);
+  return compatibility === "anthropic"
+    ? `${USEPOD_API_BASE}/proxy/${encodedToken}`
+    : `${USEPOD_API_BASE}/proxy/${encodedToken}/v1`;
 }
 
 function tokenFromUsePodDashboardUrl(url?: string) {
@@ -221,27 +274,41 @@ function tokenFromUsePodDashboardUrl(url?: string) {
   }
 }
 
-function buildUsePodTokenEnvName(registration: Pick<UsePodRegistration, "depositCode" | "token">) {
-  const suffix = (registration.depositCode || registration.token)
+export function buildUsePodTokenEnvNameFromToken(token: string) {
+  const suffix = token
     .replace(/[^A-Za-z0-9]/g, "")
     .slice(0, 24)
     .toUpperCase();
   return suffix ? `USEPOD_TOKEN_${suffix}` : USEPOD_DEFAULT_TOKEN_ENV;
 }
 
-export async function readUsePodEnvValue(key: string) {
-  const existing = process.env[key]?.trim();
-  if (existing) return existing;
-  for (const path of [HIVE_ENV_FILE, HERMES_ENV_FILE]) {
-    const raw = await readFile(path, "utf8").catch(() => "");
-    const value = parseEnvFileValue(raw, key);
-    if (value) return value;
-  }
-  return "";
+function buildUsePodTokenEnvName(registration: Pick<UsePodRegistration, "depositCode" | "token">) {
+  return buildUsePodTokenEnvNameFromToken(registration.token || registration.depositCode);
 }
 
-export async function readUsePodDepositAddress(profile?: Pick<AgentProfile, "usePod">) {
-  return profile?.usePod?.depositAddress?.trim() || await readUsePodEnvValue(USEPOD_DEPOSIT_ENV);
+async function readUsePodEnvValueWithSource(key: string): Promise<{ value: string; source: UsePodTokenSource }> {
+  const existing = process.env[key]?.trim();
+  if (existing) return { value: existing, source: "process-env" };
+  const sources: Array<[string, UsePodTokenSource]> = [
+    [HIVE_ENV_FILE, "hivemindos-env"],
+    [HERMES_ENV_FILE, "legacy-hermes-env"],
+  ];
+  for (const [path, source] of sources) {
+    const raw = await readFile(path, "utf8").catch(() => "");
+    const value = parseEnvFileValue(raw, key);
+    if (value) return { value, source };
+  }
+  return { value: "", source: "missing" };
+}
+
+export async function readUsePodEnvValue(key: string) {
+  return (await readUsePodEnvValueWithSource(key)).value;
+}
+
+export async function readUsePodDepositAddress(profile?: Pick<AgentProfile, "usePod">, options?: { deriveFallback?: boolean }) {
+  const saved = profile?.usePod?.depositAddress?.trim() || await readUsePodEnvValue(USEPOD_DEPOSIT_ENV);
+  if (saved || !options?.deriveFallback) return saved;
+  return await resolveUsePodUsdcRecipientAddress().catch(() => "");
 }
 
 export async function readUsePodDepositCode(profile?: Pick<AgentProfile, "usePod">) {
@@ -254,15 +321,20 @@ export async function readUsePodDashboardUrl(profile?: Pick<AgentProfile, "usePo
 
 export async function readUsePodSavedSetup(profile?: Pick<AgentProfile, "usePod">): Promise<UsePodCheckResult> {
   const tokenEnvName = profile?.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV;
-  const token = await readUsePodEnvValue(tokenEnvName);
-  const depositAddress = await readUsePodDepositAddress(profile);
   const depositCode = await readUsePodDepositCode(profile);
   const dashboardUrl = await readUsePodDashboardUrl(profile);
+  const envToken = await readUsePodEnvValueWithSource(tokenEnvName);
+  const dashboardToken = envToken.value ? "" : tokenFromUsePodDashboardUrl(dashboardUrl);
+  const token = envToken.value || dashboardToken;
+  const tokenSource: UsePodTokenSource = envToken.value ? envToken.source : dashboardToken ? "dashboard-url" : "missing";
+  const depositAddress = await readUsePodDepositAddress(profile, { deriveFallback: Boolean(token || depositCode || dashboardUrl) });
   return {
     ok: Boolean(token),
     status: token ? "needs-funding" : "missing-token",
     message: token ? "UsePod token is saved." : "No saved UsePod token found.",
     tokenEnvName,
+    tokenPresent: Boolean(token),
+    tokenSource,
     depositAddress,
     depositCode,
     dashboardUrl,
@@ -277,20 +349,27 @@ export async function readUsePodSavedSetup(profile?: Pick<AgentProfile, "usePod"
 export async function resolveUsePodRuntimeConfig(profile: AgentProfile): Promise<UsePodRuntimeConfig | null> {
   if (!isUsePodProfile(profile)) return null;
   const tokenEnvName = profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV;
-  const token = profile.token?.trim()
-    || tokenFromUsePodDashboardUrl(profile.usePod?.dashboardUrl)
-    || await readUsePodEnvValue(tokenEnvName);
+  const profileToken = profile.token?.trim() || "";
+  const envToken = profileToken ? { value: "", source: "missing" as UsePodTokenSource } : await readUsePodEnvValueWithSource(tokenEnvName);
+  const dashboardToken = profileToken || envToken.value ? "" : tokenFromUsePodDashboardUrl(profile.usePod?.dashboardUrl);
+  const token = profileToken || envToken.value || dashboardToken;
+  const tokenSource: UsePodTokenSource = profileToken ? "profile" : envToken.value ? envToken.source : dashboardToken ? "dashboard-url" : "missing";
   if (!token) {
     throw new Error(`${tokenEnvName} is required before this UsePod agent can run inference. Use the UsePod setup action or save a funded token in shared env.`);
   }
   const inputCeiling = cleanMicrounits(profile.usePod?.maxPriceInputMicrounits ?? await readUsePodEnvValue("USEPOD_MAX_PRICE_INPUT_MICRO_USDC"));
   const outputCeiling = cleanMicrounits(profile.usePod?.maxPriceOutputMicrounits ?? await readUsePodEnvValue("USEPOD_MAX_PRICE_OUTPUT_MICRO_USDC"));
+  const apiCompatibility = profile.usePod?.apiCompatibility === "anthropic" ? "anthropic" : "openai";
+  const routingMode = profile.usePod?.routingMode === "marketplace-only" ? "marketplace-only" : "auto";
   return {
     token,
     tokenEnvName,
-    baseUrl: buildUsePodOpenAIBaseUrl(token),
-    chatPath: "/chat/completions",
-    statusPath: "/models",
+    tokenSource,
+    baseUrl: buildUsePodProxyBaseUrl(token, apiCompatibility),
+    apiCompatibility,
+    routingMode,
+    chatPath: apiCompatibility === "anthropic" ? "/v1/messages" : "/chat/completions",
+    statusPath: apiCompatibility === "anthropic" ? "/v1/models" : "/models",
     headers: {
       ...(inputCeiling ? { "X-Pod-Max-Price-Input": inputCeiling } : {}),
       ...(outputCeiling ? { "X-Pod-Max-Price-Output": outputCeiling } : {}),
@@ -306,6 +385,17 @@ export function summarizeUsePodResponseHeaders(headers: Headers) {
     balanceRemaining,
     route,
   };
+}
+
+async function fetchUsePodTokenBalance(config: UsePodRuntimeConfig) {
+  const response = await fetch(`${USEPOD_API_BASE}/proxy/${encodeURIComponent(config.token)}/balance`, {
+    method: "GET",
+    cache: "no-store",
+    signal: AbortSignal.timeout(12_000),
+  });
+  const data = await response.json().catch(async () => ({ error: await response.text().catch(() => "") })) as unknown;
+  if (!response.ok) return "";
+  return extractUsePodProxyBalance(data);
 }
 
 async function probeUsePodBalance(config: UsePodRuntimeConfig, model: string) {
@@ -326,10 +416,27 @@ async function probeUsePodBalance(config: UsePodRuntimeConfig, model: string) {
   });
   const headers = summarizeUsePodResponseHeaders(response.headers);
   const data = await response.json().catch(async () => ({ error: await response.text().catch(() => "") })) as unknown;
-  if (!response.ok) return null;
+  const balanceRemaining = headers?.balanceRemaining || extractUsePodBalanceRemaining(data);
+  const route = headers?.route ?? "";
+  if (!response.ok) {
+    const detail = extractErrorMessage(data, `UsePod returned HTTP ${response.status}.`);
+    const status = categorizeUsePodError(response.status, detail);
+    return {
+      ok: false,
+      status,
+      message: messageForUsePodError(status, detail),
+      balanceRemaining,
+      route,
+      httpStatus: response.status,
+    };
+  }
   return {
-    balanceRemaining: headers?.balanceRemaining || extractUsePodBalanceRemaining(data),
-    route: headers?.route ?? "",
+    ok: true,
+    status: "ready" as const,
+    message: `UsePod completed a tiny funding check with ${model}.`,
+    balanceRemaining,
+    route,
+    httpStatus: response.status,
   };
 }
 
@@ -346,7 +453,8 @@ export async function registerUsePodToken(): Promise<UsePodRegistration> {
   }
   const token = firstString(data, ["token", "apiToken", "api_token", "access_token"]);
   const depositCode = firstString(data, ["depositCode", "deposit_code", "code"]);
-  const depositAddress = firstString(data, ["depositAddress", "deposit_address", "address", "usdcDepositAddress", "usdc_deposit_address"]);
+  const apiDepositAddress = firstString(data, ["depositAddress", "deposit_address", "address", "usdcDepositAddress", "usdc_deposit_address"]);
+  const depositAddress = apiDepositAddress || await resolveUsePodUsdcRecipientAddress().catch(() => "");
   const dashboardUrl = firstString(data, ["dashboardUrl", "dashboard_url", "fundingUrl", "funding_url"])
     || nestedString(data, ["instructions", "dashboard_url"]);
   if (!token) throw new Error("UsePod did not return an API token.");
@@ -367,6 +475,8 @@ async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckRe
       status: "missing-token",
       message: error instanceof Error ? error.message : "UsePod token is missing.",
       tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
+      tokenPresent: false,
+      tokenSource: "missing",
       depositAddress: await readUsePodDepositAddress(profile),
       depositCode: await readUsePodDepositCode(profile),
       dashboardUrl: await readUsePodDashboardUrl(profile),
@@ -383,6 +493,8 @@ async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckRe
       status: "missing-token",
       message: "UsePod token is missing.",
       tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
+      tokenPresent: false,
+      tokenSource: "missing",
       depositAddress: await readUsePodDepositAddress(profile),
       depositCode: await readUsePodDepositCode(profile),
       dashboardUrl: await readUsePodDashboardUrl(profile),
@@ -418,10 +530,73 @@ async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckRe
   const bodyBalance = extractUsePodBalanceRemaining(data);
   let balanceRemaining = headers?.balanceRemaining || bodyBalance;
   let route = headers?.route ?? "";
-  if (response.ok && !balanceRemaining && models[0]?.id && profile.usePod?.lastTestStatus === "checking") {
+  if (response.ok && !balanceRemaining) {
+    balanceRemaining = await fetchUsePodTokenBalance(config).catch(() => "");
+  }
+  const balanceUsd = parseUsePodUsd(balanceRemaining);
+  let fundingProbeSucceeded = false;
+  if (response.ok && models[0]?.id && (balanceUsd === null || balanceUsd <= 0)) {
     const probe = await probeUsePodBalance(config, models[0].id).catch(() => null);
-    balanceRemaining = probe?.balanceRemaining || "";
+    balanceRemaining = probe?.balanceRemaining || balanceRemaining;
     route = probe?.route || route;
+    if (probe && !probe.ok) {
+      return {
+        ok: false,
+        status: probe.status,
+        message: probe.message,
+        tokenEnvName: config.tokenEnvName,
+        tokenPresent: true,
+        tokenSource: config.tokenSource,
+        depositAddress: await readUsePodDepositAddress(profile, { deriveFallback: true }),
+        depositCode: await readUsePodDepositCode(profile),
+        dashboardUrl: await readUsePodDashboardUrl(profile),
+        modelCount: 0,
+        models: [],
+        balanceRemaining,
+        route,
+        checkedAt,
+        httpStatus: probe.httpStatus,
+      };
+    }
+    if (!probe && balanceUsd !== null && balanceUsd <= 0) {
+      return {
+        ok: false,
+        status: "needs-funding",
+        message: messageForUsePodError("needs-funding"),
+        tokenEnvName: config.tokenEnvName,
+        tokenPresent: true,
+        tokenSource: config.tokenSource,
+        depositAddress: await readUsePodDepositAddress(profile, { deriveFallback: true }),
+        depositCode: await readUsePodDepositCode(profile),
+        dashboardUrl: await readUsePodDashboardUrl(profile),
+        modelCount: 0,
+        models: [],
+        balanceRemaining,
+        route,
+        checkedAt,
+        httpStatus: response.status,
+      };
+    }
+    if (probe?.ok) fundingProbeSucceeded = true;
+  }
+  if (response.ok && models.length && !fundingProbeSucceeded && !balanceRemaining && parseUsePodUsd(balanceRemaining) === null) {
+    return {
+      ok: false,
+      status: "provider-unavailable",
+      message: "UsePod returned models, but HivemindOS could not confirm that the token is funded. Try Check funding again in a moment.",
+      tokenEnvName: config.tokenEnvName,
+      tokenPresent: true,
+      tokenSource: config.tokenSource,
+      depositAddress: await readUsePodDepositAddress(profile, { deriveFallback: true }),
+      depositCode: await readUsePodDepositCode(profile),
+      dashboardUrl: await readUsePodDashboardUrl(profile),
+      modelCount: 0,
+      models: [],
+      balanceRemaining,
+      route,
+      checkedAt,
+      httpStatus: response.status,
+    };
   }
   if (!response.ok) {
     const detail = extractErrorMessage(data, `UsePod returned HTTP ${response.status}.`);
@@ -431,7 +606,28 @@ async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckRe
       status,
       message: messageForUsePodError(status, detail),
       tokenEnvName: config.tokenEnvName,
-      depositAddress: await readUsePodDepositAddress(profile),
+      tokenPresent: true,
+      tokenSource: config.tokenSource,
+      depositAddress: await readUsePodDepositAddress(profile, { deriveFallback: true }),
+      depositCode: await readUsePodDepositCode(profile),
+      dashboardUrl: await readUsePodDashboardUrl(profile),
+      modelCount: 0,
+      models: [],
+      balanceRemaining,
+      route,
+      checkedAt,
+      httpStatus: response.status,
+    };
+  }
+  if (!models.length) {
+    return {
+      ok: false,
+      status: "provider-unavailable",
+      message: "UsePod is reachable, but no models were returned.",
+      tokenEnvName: config.tokenEnvName,
+      tokenPresent: true,
+      tokenSource: config.tokenSource,
+      depositAddress: await readUsePodDepositAddress(profile, { deriveFallback: true }),
       depositCode: await readUsePodDepositCode(profile),
       dashboardUrl: await readUsePodDashboardUrl(profile),
       modelCount: 0,
@@ -445,11 +641,11 @@ async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckRe
   return {
     ok: true,
     status: "ready",
-    message: models.length
-      ? `UsePod returned ${models.length} model${models.length === 1 ? "" : "s"}.`
-      : "UsePod is reachable, but no models were returned.",
+    message: `UsePod returned ${models.length} model${models.length === 1 ? "" : "s"}.`,
     tokenEnvName: config.tokenEnvName,
-    depositAddress: await readUsePodDepositAddress(profile),
+    tokenPresent: true,
+    tokenSource: config.tokenSource,
+    depositAddress: await readUsePodDepositAddress(profile, { deriveFallback: true }),
     depositCode: await readUsePodDepositCode(profile),
     dashboardUrl: await readUsePodDashboardUrl(profile),
     modelCount: models.length,
@@ -472,7 +668,16 @@ export async function checkUsePodModels(profile: AgentProfile): Promise<UsePodCh
         ? error.message
         : messageForUsePodNetworkError(error),
       tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
-      depositAddress: await readUsePodDepositAddress(profile),
+      tokenPresent: Boolean(profile.token?.trim() || tokenFromUsePodDashboardUrl(profile.usePod?.dashboardUrl)),
+      tokenSource: profile.token?.trim() ? "profile" : tokenFromUsePodDashboardUrl(profile.usePod?.dashboardUrl) ? "dashboard-url" : "missing",
+      depositAddress: await readUsePodDepositAddress(profile, {
+        deriveFallback: Boolean(
+          profile.token?.trim()
+            || tokenFromUsePodDashboardUrl(profile.usePod?.dashboardUrl)
+            || profile.usePod?.depositCode
+            || profile.usePod?.dashboardUrl,
+        ),
+      }),
       depositCode: await readUsePodDepositCode(profile),
       dashboardUrl: await readUsePodDashboardUrl(profile),
       modelCount: 0,
@@ -495,6 +700,8 @@ export async function testUsePodChat(profile: AgentProfile, model: string): Prom
       status: "missing-token",
       message: error instanceof Error ? error.message : "UsePod token is missing.",
       tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
+      tokenPresent: false,
+      tokenSource: "missing",
       depositAddress: await readUsePodDepositAddress(profile),
       depositCode: await readUsePodDepositCode(profile),
       dashboardUrl: await readUsePodDashboardUrl(profile),
@@ -511,6 +718,8 @@ export async function testUsePodChat(profile: AgentProfile, model: string): Prom
       status: "missing-token",
       message: "UsePod token is missing.",
       tokenEnvName: profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV,
+      tokenPresent: false,
+      tokenSource: "missing",
       depositAddress: await readUsePodDepositAddress(profile),
       depositCode: await readUsePodDepositCode(profile),
       dashboardUrl: await readUsePodDashboardUrl(profile),
@@ -548,7 +757,9 @@ export async function testUsePodChat(profile: AgentProfile, model: string): Prom
   });
   const headers = summarizeUsePodResponseHeaders(response.headers);
   const data = await response.json().catch(async () => ({ error: await response.text().catch(() => "") })) as unknown;
-  const balanceRemaining = headers?.balanceRemaining || extractUsePodBalanceRemaining(data);
+  const balanceRemaining = headers?.balanceRemaining
+    || extractUsePodBalanceRemaining(data)
+    || await fetchUsePodTokenBalance(config).catch(() => "");
   if (!response.ok) {
     const detail = extractErrorMessage(data, `UsePod returned HTTP ${response.status}.`);
     const status = categorizeUsePodError(response.status, detail);
@@ -557,7 +768,9 @@ export async function testUsePodChat(profile: AgentProfile, model: string): Prom
       status,
       message: messageForUsePodError(status, detail),
       tokenEnvName: config.tokenEnvName,
-      depositAddress: await readUsePodDepositAddress(profile),
+      tokenPresent: true,
+      tokenSource: config.tokenSource,
+      depositAddress: await readUsePodDepositAddress(profile, { deriveFallback: true }),
       depositCode: await readUsePodDepositCode(profile),
       dashboardUrl: await readUsePodDashboardUrl(profile),
       modelCount: 0,
@@ -573,7 +786,9 @@ export async function testUsePodChat(profile: AgentProfile, model: string): Prom
     status: "ready",
     message: `UsePod completed a tiny test request with ${selectedModel}.`,
     tokenEnvName: config.tokenEnvName,
-    depositAddress: await readUsePodDepositAddress(profile),
+    tokenPresent: true,
+    tokenSource: config.tokenSource,
+    depositAddress: await readUsePodDepositAddress(profile, { deriveFallback: true }),
     depositCode: await readUsePodDepositCode(profile),
     dashboardUrl: await readUsePodDashboardUrl(profile),
     modelCount: 0,
@@ -641,12 +856,4 @@ export async function saveUsePodRegistration(registration: UsePodRegistration) {
     "--runtime",
     "generic",
   ]);
-  await Promise.all(["openclaw", "hermes", "aeon"].map((runtime) => importHiveEnvValues(entries, [
-    "--no-backup",
-    "--no-tailnet-sync",
-    "--scope",
-    "agent",
-    "--runtime",
-    runtime,
-  ])));
 }

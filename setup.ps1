@@ -258,6 +258,29 @@ function Ensure-HiveEnvAdd {
   }
 }
 
+function Ensure-GitLawbCodeProof {
+  $stateDir = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".hivemindos\gitlawb"
+  New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+  if ((Test-Command gl) -and (Test-Command git-remote-gitlawb)) {
+    Ok "GitLawb CLI found: $((Get-Command gl).Source)"
+    $identity = & gl identity show 2>$null
+    if ($LASTEXITCODE -eq 0 -and $identity) {
+      Ok "GitLawb DID found"
+    } elseif (Ask-YesNo "Create a local GitLawb DID now? This does not register with a public node." $true) {
+      & gl identity new | Out-Null
+      if ($LASTEXITCODE -eq 0) { Ok "GitLawb DID created locally" } else { Warn "Could not create GitLawb DID; use Integrations later." }
+    }
+  } else {
+    Warn "GitLawb CLI is optional and not installed. Windows setup will keep Code Proof ready in the dashboard; install GitLawb manually, then refresh Integrations."
+  }
+  $status = @{
+    checkedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    proofReadyDefault = $true
+    nodeStartedBySetup = $false
+  } | ConvertTo-Json
+  Set-Content -Path (Join-Path $stateDir "setup-status.json") -Value $status
+}
+
 function Open-DashboardIfRequested($Url) {
   if ($SkipDashboard) { return }
   if (Ask-YesNo "Open the HivemindOS dashboard now?" $true) {
@@ -371,6 +394,7 @@ Ensure-Unison
 Ensure-Obsidian
 Ensure-Gpg
 Ensure-HiveEnvAdd
+Ensure-GitLawbCodeProof
 
 if ($Missing.Count -gt 0) {
   Write-Host ""
@@ -399,6 +423,8 @@ Set-EnvLocal "NEXT_PUBLIC_GBRAIN_CLI_PATH" $(if ($env:NEXT_PUBLIC_GBRAIN_CLI_PAT
 Set-EnvLocal "NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION" $(if ($env:NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION) { $env:NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION } else { "Skills/GBrain" })
 Set-EnvLocal "NEXT_PUBLIC_SYNTO_CLI_PATH" $(if ($env:NEXT_PUBLIC_SYNTO_CLI_PATH) { $env:NEXT_PUBLIC_SYNTO_CLI_PATH } else { "synto" })
 Set-EnvLocal "NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL" $(if ($env:NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL) { $env:NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL } else { "llama3.1:8b" })
+Set-EnvLocal "NEXT_PUBLIC_GITLAWB_PROOF_READY" "true"
+Set-EnvLocal "NEXT_PUBLIC_GITLAWB_NODE_URL" $(if ($env:NEXT_PUBLIC_GITLAWB_NODE_URL) { $env:NEXT_PUBLIC_GITLAWB_NODE_URL } else { "http://127.0.0.1:7545" })
 $dashboardAuthSecret = if ($env:HIVEMINDOS_DASHBOARD_AUTH_SECRET) { $env:HIVEMINDOS_DASHBOARD_AUTH_SECRET } else { Get-EnvLocal "HIVEMINDOS_DASHBOARD_AUTH_SECRET" }
 $dashboardDeviceToken = if ($env:HIVEMINDOS_DASHBOARD_DEVICE_TOKEN) { $env:HIVEMINDOS_DASHBOARD_DEVICE_TOKEN } else { Get-EnvLocal "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN" }
 if (-not $dashboardAuthSecret) { $dashboardAuthSecret = New-DashboardSecret }
@@ -424,6 +450,7 @@ foreach ($folder in @(
   "Memory/Meetings",
   "Projects",
   "Operations",
+  "Operations/Code Projects",
   "Skills",
   "Templates/HivemindOS",
   "Archive",
@@ -609,6 +636,14 @@ Copy-DashboardTokenIfRequested
 Write-Host ""
 Write-Host "Collector:"
 Write-Host "  http://localhost:$CollectorPort"
+Write-Host ""
+Write-Host "Code Proof:"
+if (Test-Command gl) {
+  Write-Host "  GitLawb CLI: $((Get-Command gl).Source)"
+} else {
+  Write-Host "  GitLawb CLI: not installed"
+}
+Write-Host "  GitLawb node: lazy; not started by setup"
 Write-Host ""
 if ($tailnetSyncEnabled) {
   Write-Host "Tailscale is connected. Syncthing can sync shared-brain folders over your Tailnet."

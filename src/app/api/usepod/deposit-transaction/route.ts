@@ -1,14 +1,16 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getAssociatedTokenAddressSync, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { Connection, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
+import {
+  createUsePodSolanaConnection,
+  resolveUsePodDepositAccounts,
+  USEPOD_DEPOSIT_PROGRAM_ID,
+  USEPOD_DEPOSIT_USDC_MINT,
+} from "@/lib/services/usepod/deposit-recipient";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const USEPOD_PROGRAM_ID = new PublicKey("BBAdcqUkg68JXNiPQ1HR1wujfZuayyK3eQTQSYAh6FSW");
-const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
-const SOLANA_MAINNET_RPC = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
 
 type DepositTransactionBody = {
   amountUsdc?: string;
@@ -61,27 +63,23 @@ export async function POST(request: NextRequest) {
     const depositCode = parseDepositCode(body.depositCode);
     const amountMicros = parseUsdcMicros(body.amountUsdc);
     const depositor = new PublicKey(body.depositor ?? "");
-    const connection = new Connection(SOLANA_MAINNET_RPC, "confirmed");
-    const [config] = PublicKey.findProgramAddressSync([new TextEncoder().encode("config")], USEPOD_PROGRAM_ID);
-    const configAccount = await connection.getAccountInfo(config);
-    if (!configAccount) throw new Error("UsePod program config was not found on Solana mainnet.");
+    const connection = createUsePodSolanaConnection();
+    const depositAccounts = await resolveUsePodDepositAccounts(connection);
 
-    const opsWallet = new PublicKey(configAccount.data.subarray(8, 40));
-    const depositorAta = getAssociatedTokenAddressSync(USDC_MINT, depositor);
-    const opsWalletAta = getAssociatedTokenAddressSync(USDC_MINT, opsWallet, true);
+    const depositorAta = getAssociatedTokenAddressSync(USEPOD_DEPOSIT_USDC_MINT, depositor);
     const data = concatBytes([
       anchorDiscriminator("deposit_usdc"),
       depositCode,
       u64Le(amountMicros),
     ]);
     const instruction = new TransactionInstruction({
-      programId: USEPOD_PROGRAM_ID,
+      programId: USEPOD_DEPOSIT_PROGRAM_ID,
       keys: [
         { pubkey: depositorAta, isSigner: false, isWritable: true },
-        { pubkey: opsWalletAta, isSigner: false, isWritable: true },
-        { pubkey: config, isSigner: false, isWritable: false },
+        { pubkey: depositAccounts.recipientTokenAccount, isSigner: false, isWritable: true },
+        { pubkey: depositAccounts.config, isSigner: false, isWritable: false },
         { pubkey: depositor, isSigner: true, isWritable: false },
-        { pubkey: USDC_MINT, isSigner: false, isWritable: false },
+        { pubkey: USEPOD_DEPOSIT_USDC_MINT, isSigner: false, isWritable: false },
         { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
         { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       ],
@@ -100,7 +98,8 @@ export async function POST(request: NextRequest) {
       amountMicros: amountMicros.toString(),
       currency: "USDC",
       network: "Solana mainnet-beta",
-      programId: USEPOD_PROGRAM_ID.toBase58(),
+      recipientAddress: depositAccounts.recipientTokenAccount.toBase58(),
+      programId: USEPOD_DEPOSIT_PROGRAM_ID.toBase58(),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message.trim() : "";

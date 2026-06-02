@@ -1,0 +1,15 @@
+infographic sequence-steps-badge-card
+data
+  sequences
+    - label Private AI Brain
+      desc HivemindOS keeps projects, agents, machines, and memory organized.
+      icon brain
+    - label Signed Code Proof
+      desc GitLawb signs commits, repos, identities, and provenance.
+      icon shield check
+    - label Trusted AI Work
+      desc People can verify the story and trust what shipped.
+      icon check circle
+  order asc
+theme
+  palette #38bdf8 #22c55e #fbbf24

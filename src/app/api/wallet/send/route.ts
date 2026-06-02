@@ -3,17 +3,13 @@ import { sendUsdc } from "@/lib/services/wallet/chain-wallet";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { requireAuth } from "@/lib/utils/server-auth";
 
-const APPROVAL_TTL_MS = 2 * 60 * 1000;
-const approvals = new Map<string, { fingerprint: string; expiresAt: number }>();
-
 type SendUsdcBody = {
-  action?: "approve" | "send";
   agentId?: string;
   toAddress?: string;
   amountUsd?: number;
   maxPaymentUsd?: number;
+  autoPayEnabled?: boolean;
   confirmation?: string;
-  approvalToken?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -24,21 +20,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({})) as SendUsdcBody;
     const validation = validateSendBody(body);
     if (validation) return validation;
-    if (body.confirmation !== "SEND_USDC") return sendError("Type SEND_USDC to confirm this money-moving action.");
-
-    if (body.action === "approve") {
-      const approvalToken = crypto.randomUUID();
-      approvals.set(approvalToken, {
-        fingerprint: approvalFingerprint(body),
-        expiresAt: Date.now() + APPROVAL_TTL_MS,
-      });
-      return NextResponse.json({ ok: true, approvalToken, expiresAt: Date.now() + APPROVAL_TTL_MS });
-    }
-
-    const approval = body.approvalToken ? approvals.get(body.approvalToken) : null;
-    approvals.delete(body.approvalToken ?? "");
-    if (!approval || approval.expiresAt <= Date.now() || approval.fingerprint !== approvalFingerprint(body)) {
-      return sendError("Create a fresh server approval before sending USDC.");
+    if (!body.autoPayEnabled && body.confirmation !== "SEND_USDC") {
+      return sendError("Wallet auto-use is off. Type SEND_USDC to confirm this transfer.");
     }
 
     const agentId = body.agentId!.trim();
@@ -63,24 +46,19 @@ function validateSendBody(body: SendUsdcBody) {
   const agentId = body.agentId?.trim();
   const toAddress = body.toAddress?.trim();
   const amountUsd = Number(body.amountUsd);
+  const maxPaymentUsd = Number(body.maxPaymentUsd);
   if (!agentId) return sendError("agentId is required");
   if (!toAddress) return sendError("Recipient address is required");
   if (!Number.isFinite(amountUsd) || amountUsd <= 0) return sendError("Amount must be greater than zero");
-  if (body.maxPaymentUsd != null && amountUsd > Number(body.maxPaymentUsd)) {
-    return sendError(`Amount exceeds this agent's per-payment cap ($${Number(body.maxPaymentUsd).toFixed(2)})`);
+  if (body.maxPaymentUsd != null && (!Number.isFinite(maxPaymentUsd) || maxPaymentUsd < 0)) {
+    return sendError("Per-payment cap must be zero or greater.");
+  }
+  if (body.maxPaymentUsd != null && amountUsd > maxPaymentUsd) {
+    return sendError(`Amount exceeds this agent's per-payment cap ($${maxPaymentUsd.toFixed(2)})`);
   }
   return null;
 }
 
 function sendError(error: string) {
   return NextResponse.json({ ok: false, error }, { status: 400 });
-}
-
-function approvalFingerprint(body: SendUsdcBody) {
-  return JSON.stringify({
-    agentId: body.agentId?.trim() ?? "",
-    toAddress: body.toAddress?.trim().toLowerCase() ?? "",
-    amountUsd: Number(body.amountUsd),
-    maxPaymentUsd: body.maxPaymentUsd == null ? null : Number(body.maxPaymentUsd),
-  });
 }

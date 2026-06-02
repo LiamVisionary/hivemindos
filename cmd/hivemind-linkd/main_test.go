@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -27,6 +28,63 @@ func TestLinkHostnameFromHostStripsMacOSConflictSuffix(t *testing.T) {
 	got := linkHostnameFromHost("Liams-MacBook-Pro-6.local")
 	if got != "hivemindos-liams-macbook-pro" {
 		t.Fatalf("linkHostnameFromHost = %q, want %q", got, "hivemindos-liams-macbook-pro")
+	}
+}
+
+func TestCappedLogWriterKeepsActiveLogUnderLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hivemind-linkd.err.log")
+	writer := newCappedLogWriter(path, 64)
+
+	if n, err := writer.Write([]byte(strings.Repeat("a", 48))); err != nil || n != 48 {
+		t.Fatalf("first write = %d, %v; want 48, nil", n, err)
+	}
+	if n, err := writer.Write([]byte(strings.Repeat("b", 48))); err != nil || n != 48 {
+		t.Fatalf("second write = %d, %v; want 48, nil", n, err)
+	}
+	if n, err := writer.Write([]byte(strings.Repeat("c", 96))); err != nil || n != 96 {
+		t.Fatalf("oversized write = %d, %v; want 96, nil", n, err)
+	}
+
+	active, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if active.Size() > 64 {
+		t.Fatalf("active log size = %d, want <= 64", active.Size())
+	}
+	rotated, err := os.Stat(path + ".1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rotated.Size() > 64 {
+		t.Fatalf("rotated log size = %d, want <= 64", rotated.Size())
+	}
+}
+
+func TestDefaultLogMaxBytesIsAgentFriendly(t *testing.T) {
+	if defaultLogMaxBytes != 2*1024*1024 {
+		t.Fatalf("defaultLogMaxBytes = %d, want 2 MiB", defaultLogMaxBytes)
+	}
+}
+
+func TestShouldLogTailscaleFiltersHandshakeChatter(t *testing.T) {
+	noisy := []string{
+		"wg: [v2] [QDmc2] - Handshake did not complete after 5 seconds, retrying (try 2)",
+		"wg: [v2] [QDmc2] - Sending handshake initiation",
+		"wg: [v2] [/63gV] - Receiving keepalive packet",
+		"wgengine: sending TSMP disco key advertisement to 203.0.113.10",
+		"magicsock: derp-28 does not know about peer [QDmc2], removing route",
+	}
+	for _, message := range noisy {
+		if shouldLogTailscale(message, false) {
+			t.Fatalf("expected noisy Tailscale message to be filtered: %q", message)
+		}
+		if !shouldLogTailscale(message, true) {
+			t.Fatalf("expected debug mode to keep Tailscale message: %q", message)
+		}
+	}
+	if !shouldLogTailscale("control: client.Login(8)", false) {
+		t.Fatal("expected non-noisy Tailscale status log to be kept")
 	}
 }
 

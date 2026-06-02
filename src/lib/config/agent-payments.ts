@@ -1,6 +1,24 @@
 import type { AgentPaymentProvider } from "@/lib/types/agent-wallet";
 
 export type AgentPaymentProviderBalanceSource = "manual-ledger" | "local-wallet" | "moneyclaw" | "x402-wallet" | "usepod-runtime";
+export type AgentPaymentProviderAdvancedSection =
+  | "provider"
+  | "wallet-address"
+  | "network-token"
+  | "x402-base-url"
+  | "moneyclaw-env"
+  | "clawcard-env"
+  | "notes"
+  | "copy-prompt"
+  | "test-x402"
+  | "usepod-status"
+  | "usepod-connection"
+  | "usepod-routing"
+  | "usepod-repair";
+
+export type AgentPaymentProviderAdvancedSetup = {
+  sections: readonly AgentPaymentProviderAdvancedSection[];
+};
 
 export type AgentPaymentProviderFeatures = {
   label: string;
@@ -14,7 +32,11 @@ export type AgentPaymentProviderFeatures = {
   canRunway: boolean;
   canAutopay: boolean;
   canX402: boolean;
+  advancedSetup: AgentPaymentProviderAdvancedSetup;
 };
+
+const MANUAL_ADVANCED_SECTIONS = ["provider", "wallet-address", "network-token", "notes", "copy-prompt"] as const;
+const LOCAL_WALLET_ADVANCED_SECTIONS = ["provider", "wallet-address", "network-token", "x402-base-url", "notes", "copy-prompt", "test-x402"] as const;
 
 export const AGENT_PAYMENT_PROVIDER_FEATURES = {
   bankr: {
@@ -29,6 +51,9 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     canRunway: true,
     canAutopay: true,
     canX402: false,
+    advancedSetup: {
+      sections: ["provider", "notes", "copy-prompt"],
+    },
   },
   clawcard: {
     label: "ClawCard legacy",
@@ -42,6 +67,9 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     canRunway: true,
     canAutopay: true,
     canX402: false,
+    advancedSetup: {
+      sections: ["provider", "clawcard-env", "notes", "copy-prompt"],
+    },
   },
   moneyclaw: {
     label: "MoneyClaw",
@@ -55,6 +83,9 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     canRunway: true,
     canAutopay: true,
     canX402: true,
+    advancedSetup: {
+      sections: ["provider", "wallet-address", "network-token", "x402-base-url", "moneyclaw-env", "notes", "copy-prompt", "test-x402"],
+    },
   },
   x402: {
     label: "x402",
@@ -68,19 +99,25 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     canRunway: true,
     canAutopay: true,
     canX402: true,
+    advancedSetup: {
+      sections: LOCAL_WALLET_ADVANCED_SECTIONS,
+    },
   },
   usepod: {
     label: "UsePod prepaid",
-    summary: "Prepaid USDC balance for UsePod inference tokens, funded through the token deposit address.",
-    setup: "Register UsePod from agent settings, keep USEPOD_TOKEN in shared env, and send Solana USDC to the saved deposit address.",
+    summary: "Prepaid Solana USDC wallet for UsePod inference, model routing, spend controls, and provider-managed x402 paywalls.",
+    setup: "Register UsePod from agent settings, keep the token in HivemindOS env, fund the saved receiver, and let UsePod handle model calls and machine-native paywalls from that balance.",
     balanceSource: "usepod-runtime",
     addressSource: "usepod-deposit",
     localWalletRequired: false,
     canReceive: true,
     canSend: false,
     canRunway: true,
-    canAutopay: false,
-    canX402: false,
+    canAutopay: true,
+    canX402: true,
+    advancedSetup: {
+      sections: ["usepod-status", "usepod-connection", "usepod-routing", "usepod-repair", "copy-prompt"],
+    },
   },
   manual: {
     label: "Manual ledger",
@@ -94,6 +131,9 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     canRunway: true,
     canAutopay: false,
     canX402: false,
+    advancedSetup: {
+      sections: MANUAL_ADVANCED_SECTIONS,
+    },
   },
 } as const satisfies Record<AgentPaymentProvider, AgentPaymentProviderFeatures>;
 

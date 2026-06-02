@@ -1,3 +1,5 @@
+import type { GitLawbProof } from "@/lib/types/gitlawb";
+
 export type KanbanStatus = "ideas" | "ready" | "working" | "needs-human" | "done" | "archived";
 
 export type KanbanPriority = "low" | "normal" | "high" | "urgent";
@@ -95,6 +97,8 @@ export type KanbanTask = {
   linkedDirectories?: KanbanLinkedDirectory[];
   deliverables?: KanbanDeliverable[];
   targetMachine?: KanbanMachineTarget | null;
+  projectId?: string;
+  proofs?: GitLawbProof[];
   agentSession?: KanbanAgentSession | null;
   claimLock?: string;
   claimExpiresAt?: number;

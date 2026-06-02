@@ -16,7 +16,6 @@ export type DashboardAppCompletionNotification = {
 
 type DashboardHeaderProps = {
   Image: ElementType;
-  Search: ElementType;
   Tooltip: ElementType;
   TooltipContent: ElementType;
   TooltipProvider: ElementType;
@@ -29,7 +28,6 @@ type DashboardHeaderProps = {
   appCompletionNotification?: DashboardAppCompletionNotification | null;
   notificationClass: (...names: string[]) => string;
   notificationSummary?: AgentNotificationSummary | null;
-  onOpenCommandPalette: () => void;
   setActiveView: Dispatch<SetStateAction<DashboardView>>;
   setKanbanLoading: Dispatch<SetStateAction<boolean>>;
   viewIcon: (view: DashboardView) => ReactNode;
@@ -38,7 +36,6 @@ type DashboardHeaderProps = {
 export function DashboardHeader(props: DashboardHeaderProps) {
   const {
     Image,
-    Search,
     Tooltip,
     TooltipContent,
     TooltipProvider,
@@ -51,7 +48,6 @@ export function DashboardHeader(props: DashboardHeaderProps) {
     appCompletionNotification,
     notificationClass,
     notificationSummary,
-    onOpenCommandPalette,
     setActiveView,
     setKanbanLoading,
     viewIcon,
@@ -68,7 +64,7 @@ export function DashboardHeader(props: DashboardHeaderProps) {
     .filter((item): item is (typeof navItems)[number] => Boolean(item));
   const isActiveRoute = (id: DashboardView) => id === activeView
     || (id === "kanban" && isWorkView(activeView))
-    || (id === "more" && (activeView === "maintenance" || activeView === "sessions" || activeView === "tools" || activeView === "memory" || activeView === "files" || activeView === "notifications" || activeView === "env" || activeView === "integrations" || activeView === "my-apps" || activeView === "phone" || activeView === "aeon"));
+    || (id === "more" && (activeView === "maintenance" || activeView === "sessions" || activeView === "tools" || activeView === "memory" || activeView === "files" || activeView === "notifications" || activeView === "env" || activeView === "integrations" || activeView === "my-apps" || activeView === "phone" || activeView === "aeon" || activeView === "fusion"));
   const activeNavLabel = navItems.find((item) => item.id === activeView)?.label
     ?? primaryNavItems.find((item) => isActiveRoute(item.id))?.label
     ?? activeHeader.title;
@@ -198,23 +194,6 @@ export function DashboardHeader(props: DashboardHeaderProps) {
                   </Tooltip>
                 );
               })}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="viewTab commandPaletteTab"
-                    title="Open command palette"
-                    onClick={onOpenCommandPalette}
-                  >
-                    <Search aria-hidden="true" />
-                    <span>Go</span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <strong className="block">Command palette</strong>
-                  <span className="block text-[var(--muted)]">Search routes, agents, tasks, alerts, and recents.</span>
-                </TooltipContent>
-              </Tooltip>
           </nav>
         </div>
         {appCompletionNotification ? (

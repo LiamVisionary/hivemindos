@@ -34,25 +34,54 @@ const ORB: Record<OrbState, { core: string; glow: string; ring: string }> = {
   duty: { core: "var(--honey-2)", glow: "rgba(255,212,90,0.5)", ring: "rgba(255,212,90,0.7)" },
   paused: { core: "var(--fg-3)", glow: "rgba(148,163,184,0.28)", ring: "rgba(148,163,184,0.4)" },
 };
-const HEX_CLIP = "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)";
+const HEX_CLIP = "polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%)";
 
-export function AeonOrb({ size = 132, state = "idle" }: { size?: number; state?: OrbState }) {
+export function AeonOrb({ size = 132, state = "idle", iconSrc }: { size?: number; state?: OrbState; iconSrc?: string }) {
   const t = ORB[state];
   return (
     <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
-      <div aria-hidden style={{ position: "absolute", inset: -size * 0.35, borderRadius: "50%",
-        background: `radial-gradient(circle, ${t.glow}, transparent 62%)`, animation: "aeon-breathe 4.5s ease-in-out infinite", filter: "blur(2px)" }} />
-      <div aria-hidden style={{ position: "absolute", inset: size * 0.04, borderRadius: "50%",
-        border: `1px dashed ${t.ring}`, opacity: 0.55, animation: "aeon-orbit 18s linear infinite" }} />
+      <div aria-hidden className={styles.pulse} style={{ position: "absolute", inset: -size * 0.35, borderRadius: "50%",
+        background: `radial-gradient(circle, ${t.glow}, transparent 62%)`, filter: "blur(2px)" }} />
+      <div aria-hidden className={styles.orbit} style={{ position: "absolute", inset: size * 0.04, borderRadius: "50%",
+        border: `1px dashed ${t.ring}`, opacity: 0.55 }} />
       {(state === "working" || state === "duty") && (
-        <div aria-hidden style={{ position: "absolute", inset: size * 0.1, borderRadius: "50%", border: `1.5px solid ${t.ring}`, animation: "aeon-ring 2.6s ease-out infinite" }} />
+        <div aria-hidden className={styles.ring} style={{ position: "absolute", inset: size * 0.1, borderRadius: "50%", border: `1.5px solid ${t.ring}` }} />
       )}
-      <div style={{ position: "absolute", inset: size * 0.18, clipPath: HEX_CLIP,
-        background: `linear-gradient(160deg, ${t.glow}, rgba(8,12,20,0.6))`, border: `1px solid ${t.ring}`,
-        display: "grid", placeItems: "center", boxShadow: `0 0 40px ${t.glow}, inset 0 0 30px rgba(0,0,0,0.4)` }}>
-        <div style={{ color: t.core, display: "grid", placeItems: "center", gap: 5 }}>
-          <Bot size={size * 0.26} strokeWidth={1.4} aria-hidden />
+      <div style={{
+        position: "absolute",
+        inset: size * 0.18,
+        clipPath: HEX_CLIP,
+        background: `linear-gradient(145deg, rgba(255,255,255,0.16), ${t.ring} 42%, rgba(2,6,23,0.32))`,
+        filter: `drop-shadow(0 0 ${size * 0.16}px ${t.glow})`,
+      }}>
+        <div style={{
+          position: "absolute",
+          inset: 1,
+          clipPath: HEX_CLIP,
+          background: `radial-gradient(circle at 50% 18%, rgba(255,255,255,0.16), transparent 24%), linear-gradient(160deg, ${t.glow}, rgba(8,12,20,0.72) 72%)`,
+          display: "grid",
+          placeItems: "center",
+          boxShadow: `inset 0 ${size * 0.12}px ${size * 0.22}px rgba(255,255,255,0.07), inset 0 -${size * 0.18}px ${size * 0.28}px rgba(0,0,0,0.38)`,
+        }}>
+        <div style={{ color: t.core, display: "grid", placeItems: "center", gap: 5, position: "relative", zIndex: 1 }}>
+          {iconSrc ? (
+            <span
+              aria-hidden="true"
+              style={{
+                width: size * 0.4,
+                height: size * 0.4,
+                backgroundImage: `url(${iconSrc})`,
+                backgroundPosition: "center",
+                backgroundRepeat: "no-repeat",
+                backgroundSize: "contain",
+                filter: `drop-shadow(0 0 ${size * 0.05}px rgba(94,234,212,0.36))`,
+              }}
+            />
+          ) : (
+            <Bot size={size * 0.26} strokeWidth={1.4} aria-hidden />
+          )}
           {state === "working" && <span className={styles.eq} style={{ color: t.core, height: size * 0.1 }}><i /><i /><i /><i /></span>}
+        </div>
         </div>
       </div>
     </div>
@@ -87,8 +116,9 @@ interface BtnProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 export function Btn({ variant = "secondary", icon, size = "md", sheen, children, style, ...rest }: BtnProps) {
   const v = BTN[variant];
   const pad = size === "sm" ? "6px 11px" : size === "icon" ? "8px" : "9px 15px";
+  const className = [styles.interactiveSubtle, sheen ? styles.sheen : null, rest.className].filter(Boolean).join(" ");
   return (
-    <button {...rest} className={sheen ? styles.sheen : undefined} style={{
+    <button {...rest} className={className} style={{
       display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: pad,
       fontSize: size === "sm" ? 12 : 13, fontWeight: 600, fontFamily: "var(--f-body)", color: v.fg,
       background: v.bg, border: `1px solid ${v.bd}`, borderRadius: 9, boxShadow: v.sh, lineHeight: 1.1,
@@ -126,9 +156,10 @@ export function Stat({ value, label, tone }: { value: React.ReactNode; label: st
 }
 
 export function Sparkline({ data, w = 132, h = 36, color = "var(--aeon)" }: { data: number[]; w?: number; h?: number; color?: string }) {
-  const max = Math.max(...data, 1);
-  const step = w / (data.length - 1);
-  const pts = data.map((d, i) => [i * step, h - (d / max) * (h - 6) - 3] as const);
+  const safeData = data.length ? data : [0, 0];
+  const max = Math.max(...safeData, 1);
+  const step = w / Math.max(safeData.length - 1, 1);
+  const pts = safeData.map((d, i) => [i * step, h - (d / max) * (h - 6) - 3] as const);
   const line = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
   const id = React.useId();
   return (

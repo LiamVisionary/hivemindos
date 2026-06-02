@@ -12,6 +12,11 @@ import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } fro
 export function useStatusChatInputController(props: any) {
   const { AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceBands, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent } = props;
   const [chatKanbanGeneration, setChatKanbanGeneration] = useState(null);
+  const [chatQueue, setChatQueue] = useState([]);
+  const [flushingChatQueueId, setFlushingChatQueueId] = useState("");
+  const queuedChatMessages = selectedAgent
+    ? chatQueue.filter((item: any) => item.agentId === selectedAgent.id && item.leafKey === selectedChatLeafKey)
+    : [];
 
   function runtimePromptFromPayload(parsed: any) {
     const event = parsed?.event && typeof parsed.event === "object" ? parsed.event : null;
@@ -96,6 +101,54 @@ export function useStatusChatInputController(props: any) {
       };
     });
   }
+
+  function chatQueueLabel(prompt: string, attachments: any[], directories: any[]) {
+    if (prompt) return prompt;
+    if (attachments.length) return attachmentSummary(attachments);
+    if (directories.length) return `Linked ${directories.length} director${directories.length === 1 ? "y" : "ies"}`;
+    return "Queued message";
+  }
+
+  function clearChatComposerDraft() {
+    setText("");
+    setChatAttachments([]);
+    setChatDirectories([]);
+    setAttachmentError("");
+    setAttachmentMenuOpen(false);
+  }
+
+  function queueChatMessage(item: any) {
+    setChatQueue((current: any[]) => [...current, item]);
+    clearChatComposerDraft();
+    setStatus("Message queued for after the current task finishes.");
+    setStatusAgentId(item.agentId);
+  }
+
+  function removeQueuedChatMessage(id: string) {
+    setChatQueue((current: any[]) => current.filter((item) => item.id !== id));
+  }
+
+  function sendQueuedChatMessageNow(id: string) {
+    if (busy || flushingChatQueueId) return;
+    const queuedMessage = chatQueue.find((item: any) => item.id === id);
+    if (!queuedMessage) return;
+    setFlushingChatQueueId(id);
+    setChatQueue((current: any[]) => current.filter((item) => item.id !== id));
+    void runChatMessage(queuedMessage).finally(() => setFlushingChatQueueId(""));
+  }
+
+  useEffect(() => {
+    if (busy || flushingChatQueueId || !selectedAgent) return;
+    const nextQueuedMessage = chatQueue.find((item: any) => item.agentId === selectedAgent.id && item.leafKey === selectedChatLeafKey);
+    if (!nextQueuedMessage) return;
+    const flushTimer = window.setTimeout(() => {
+      setFlushingChatQueueId(nextQueuedMessage.id);
+      setChatQueue((current: any[]) => current.filter((item) => item.id !== nextQueuedMessage.id));
+      void runChatMessage(nextQueuedMessage).finally(() => setFlushingChatQueueId(""));
+    }, 0);
+    return () => window.clearTimeout(flushTimer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, chatQueue, flushingChatQueueId, selectedAgent?.id, selectedChatLeafKey]);
 
   function processLabelFromComment(eventText: string) {
     return eventText
@@ -860,7 +913,35 @@ export function useStatusChatInputController(props: any) {
     const agentMode = submittedAgentMode === "plan" ? "plan" : "act";
     const outgoingAttachments = chatAttachments;
     const outgoingDirectories = chatDirectories;
-    if (!selectedAgent || busy || (!prompt && outgoingAttachments.length === 0 && outgoingDirectories.length === 0)) return;
+    if (!selectedAgent || (!prompt && outgoingAttachments.length === 0 && outgoingDirectories.length === 0)) return;
+    const queuedMessage = {
+      id: `chat-queue-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      agent: selectedAgent,
+      agentId: selectedAgent.id,
+      agentMode,
+      attachments: outgoingAttachments,
+      directories: outgoingDirectories,
+      directoryPath: selectedChatDirectoryPath,
+      label: chatQueueLabel(prompt, outgoingAttachments, outgoingDirectories),
+      leafKey: selectedChatLeafKey,
+      prompt,
+      queuedAt: Date.now(),
+    };
+    if (busy) {
+      queueChatMessage(queuedMessage);
+      return;
+    }
+    await runChatMessage(queuedMessage);
+  }
+
+  async function runChatMessage(queuedMessage: any) {
+    const selectedAgent = queuedMessage.agent;
+    const selectedChatLeafKey = queuedMessage.leafKey;
+    const selectedChatDirectoryPath = queuedMessage.directoryPath;
+    const prompt = queuedMessage.prompt;
+    const agentMode = queuedMessage.agentMode === "plan" ? "plan" : "act";
+    const outgoingAttachments = queuedMessage.attachments ?? [];
+    const outgoingDirectories = queuedMessage.directories ?? [];
     const dashboardCommand = outgoingAttachments.length === 0 && outgoingDirectories.length === 0
       ? resolveDashboardSlashCommand(prompt)
       : null;
@@ -1390,5 +1471,5 @@ export function useStatusChatInputController(props: any) {
   }
   /* eslint-enable react-hooks/purity */
 
-  return { checkStatus, checkVaultStatus, checkControlRoomStatus, runVaultTailnetSync, pairSyncthingCollector, pairSyncthingVaultSync, inspectBrainNode, startBrainPan, moveBrainPan, endBrainPan, addChatFiles, handleChatFileChange, handleChatImageChange, removeChatAttachment, attachChatDirectory, attachChatRecentDirectory, removeChatDirectory, addQuickAddFiles, handleQuickAddFileChange, handleQuickAddImageChange, removeQuickAddAttachment, attachQuickAddDirectory, attachQuickAddRecentDirectory, removeQuickAddDirectory, addKanbanSteerFiles, handleKanbanSteerFileChange, handleKanbanSteerImageChange, removeKanbanSteerAttachment, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, removeKanbanSteerDirectory, updateVoiceTranscript, appendVoiceTranscriptToInput, cleanupVoiceCapture, startVoiceWaveform, startAudioRecording, stopAudioRecording, sendMessage, generateKanbanTaskFromChat, dismissChatKanbanGeneration, chatKanbanGeneration };
+  return { checkStatus, checkVaultStatus, checkControlRoomStatus, runVaultTailnetSync, pairSyncthingCollector, pairSyncthingVaultSync, inspectBrainNode, startBrainPan, moveBrainPan, endBrainPan, addChatFiles, handleChatFileChange, handleChatImageChange, removeChatAttachment, attachChatDirectory, attachChatRecentDirectory, removeChatDirectory, addQuickAddFiles, handleQuickAddFileChange, handleQuickAddImageChange, removeQuickAddAttachment, attachQuickAddDirectory, attachQuickAddRecentDirectory, removeQuickAddDirectory, addKanbanSteerFiles, handleKanbanSteerFileChange, handleKanbanSteerImageChange, removeKanbanSteerAttachment, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, removeKanbanSteerDirectory, updateVoiceTranscript, appendVoiceTranscriptToInput, cleanupVoiceCapture, startVoiceWaveform, startAudioRecording, stopAudioRecording, sendMessage, queuedChatMessages, flushingChatQueueId, removeQueuedChatMessage, sendQueuedChatMessageNow, generateKanbanTaskFromChat, dismissChatKanbanGeneration, chatKanbanGeneration };
 }

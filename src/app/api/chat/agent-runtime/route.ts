@@ -189,9 +189,16 @@ function buildWalletToolContext(wallet?: AgentWalletConfig): string {
     summarizeX402Policy(wallet),
     "- Tool: x402_fetch",
     "- Dashboard endpoint: POST /api/wallet/x402 with { agentId, url, method, headers, body, policy, confirmation }.",
-    "- Approval gate: if autopay is off or the payment is over the approval threshold, do not proceed until the user explicitly supplies PAY_X402.",
+    wallet.autoPayEnabled
+      ? "- Allow auto-use is on: x402_fetch may pay without another prompt while staying under the hard per-payment cap."
+      : "- Allow auto-use is off: do not run x402_fetch until the user explicitly supplies PAY_X402.",
+    "- Read-only balance check: POST /api/wallet/balance with public address and network.",
+    wallet.autoPayEnabled
+      ? "- USDC sends follow the same auto-use rule: POST /api/wallet/send may send without another prompt while staying under the hard per-payment cap."
+      : "- USDC sends follow the same auto-use rule: do not call POST /api/wallet/send until the user explicitly supplies SEND_USDC for the exact recipient and amount.",
+    wallet.provider === "usepod" ? "- UsePod rail: use the prepaid UsePod balance for inference and provider-managed x402/paywalls; do not require a separate local wallet for UsePod x402." : "",
     "- Hard rule: never ask for or reveal private keys; the dashboard signs from its encrypted local vault.",
-  ];
+  ].filter(Boolean);
   return lines.join("\n");
 }
 
@@ -483,9 +490,9 @@ function providerErrorMessage(body: string, status: number, model?: string) {
 
 function finalAdaptiveOpenRouterError(status: number, modelAttempts: string[]) {
   if (status === 429) {
-    return `OpenRouter's free models are currently rate-limited or out of promo capacity. Adaptive tried ${modelAttempts.length} free model${modelAttempts.length === 1 ? "" : "s"}${modelAttempts.length ? `, ending with ${modelAttempts.at(-1)}` : ""}. Try again shortly.`;
+    return `OpenRouter's free models are currently rate-limited or out of promo capacity. Adaptive tried ${modelAttempts.length} configured model${modelAttempts.length === 1 ? "" : "s"}${modelAttempts.length ? `, ending with ${modelAttempts.at(-1)}` : ""}. Try again shortly or choose an optional paid fallback model in Adaptive advanced settings.`;
   }
-  return `OpenRouter could not complete this Adaptive request after trying ${modelAttempts.length || 1} free model${modelAttempts.length === 1 ? "" : "s"}.`;
+  return `OpenRouter could not complete this Adaptive request after trying ${modelAttempts.length || 1} configured model${modelAttempts.length === 1 ? "" : "s"}.`;
 }
 
 async function recordChatHoney(profile: AgentProfile, inputText: string, outputText: string, enabled: boolean, source: "chat" | "kanban-chat" = "chat") {
@@ -1189,7 +1196,7 @@ async function streamOpenAICompatibleRuntime(
     releaseInteractiveRuntime(lockKey);
     return new Response(
       ssePayload({ error: lastFetchError
-        ? `OpenRouter had a network issue while Adaptive was trying free models. Adaptive tried ${attemptedModels.length || 1} model${attemptedModels.length === 1 ? "" : "s"}. Try again shortly.`
+        ? `OpenRouter had a network issue while Adaptive was trying configured models. Adaptive tried ${attemptedModels.length || 1} model${attemptedModels.length === 1 ? "" : "s"}. Try again shortly or choose an optional paid fallback model in Adaptive advanced settings.`
         : finalAdaptiveOpenRouterError(lastStatus || 502, attemptedModels) }) + "data: [DONE]\n\n",
       { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } },
     );

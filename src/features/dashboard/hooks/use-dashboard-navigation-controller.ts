@@ -13,11 +13,6 @@ import { listenForDesktopNavigation, openNativeRouteWindow } from "@/lib/native/
 const NAV_RECENTS_STORAGE_KEY = "hivemindos.dashboardNavigation.recents.v1";
 const RESTORED_ROUTE_STORAGE_KEY = "hivemindos.dashboardNavigation.lastRoute.v1";
 
-type NavigationAgent = {
-  id: string;
-  name?: string;
-};
-
 type NavigationTask = {
   agentId?: string;
   id: string;
@@ -25,14 +20,10 @@ type NavigationTask = {
 };
 
 type UseDashboardNavigationControllerOptions = {
-  activeHeaderTitle: string;
-  activeNavLabel?: string;
   activeView: DashboardView;
   hydrated: boolean;
-  selectedAgent?: NavigationAgent | null;
   selectedAgentId: string;
   selectedChatLeafKey: string;
-  selectedKanbanTask?: NavigationTask | null;
   selectedKanbanTaskId: string;
   setActiveView: (view: DashboardView) => void;
   setSelectedAgentId: (agentId: string) => void;
@@ -51,7 +42,8 @@ export function initialDashboardView(): DashboardView {
     try {
       const stored = window.localStorage.getItem(RESTORED_ROUTE_STORAGE_KEY);
       const target = stored ? JSON.parse(stored) : null;
-      if (target?.view && isDashboardView(target.view)) return target.view;
+      const restoredView = normalizeStoredDashboardView(target?.view);
+      if (restoredView) return restoredView;
     } catch {}
   }
 
@@ -59,14 +51,10 @@ export function initialDashboardView(): DashboardView {
 }
 
 export function useDashboardNavigationController({
-  activeHeaderTitle,
-  activeNavLabel,
   activeView,
   hydrated,
-  selectedAgent,
   selectedAgentId,
   selectedChatLeafKey,
-  selectedKanbanTask,
   selectedKanbanTaskId,
   setActiveView,
   setSelectedAgentId,
@@ -110,13 +98,6 @@ export function useDashboardNavigationController({
 
     navigateDashboardTarget({ view: "notifications" });
   }, [navigateDashboardTarget, tasks]);
-
-  const navigationBreadcrumbs: Array<{ label: string; target: DashboardRouteTarget }> = [{ label: "HivemindOS", target: { view: "agents" } }];
-  const sectionLabel = activeNavLabel ?? activeHeaderTitle;
-  if (sectionLabel !== "Fleet") navigationBreadcrumbs.push({ label: sectionLabel, target: { view: activeView } });
-  if (activeView === "chat" && selectedAgent?.name) navigationBreadcrumbs.push({ label: selectedAgent.name, target: { view: "chat", agentId: selectedAgent.id } });
-  if ((activeView === "kanban" || activeView === "history") && selectedKanbanTask?.title) navigationBreadcrumbs.push({ label: selectedKanbanTask.title, target: { view: "kanban", taskId: selectedKanbanTask.id, agentId: selectedKanbanTask.agentId } });
-  if (activeView === "vault" && vaultPanelMode) navigationBreadcrumbs.push({ label: vaultPanelMode.replace(/-/g, " "), target: { view: "vault", vaultPanel: vaultPanelMode } });
 
   useEffect(() => {
     if (!hydrated || initialRouteAppliedRef.current) return;
@@ -181,7 +162,6 @@ export function useDashboardNavigationController({
   return {
     commandPaletteOpen,
     navigateDashboardTarget,
-    navigationBreadcrumbs,
     navigationRecents,
     openDashboardNotification,
     popoutDashboardTarget,
@@ -193,7 +173,7 @@ function dashboardViewFromLocation(): DashboardView | null {
   if (typeof window === "undefined") return null;
 
   const view = new URLSearchParams(window.location.search).get("view");
-  return view && isDashboardView(view) ? view : null;
+  return normalizeStoredDashboardView(view);
 }
 
 function initialNavigationRecents(): DashboardRouteTarget[] {
@@ -203,9 +183,20 @@ function initialNavigationRecents(): DashboardRouteTarget[] {
     const value = window.localStorage.getItem(NAV_RECENTS_STORAGE_KEY);
     const parsed = value ? JSON.parse(value) : [];
     return Array.isArray(parsed)
-      ? parsed.filter((item) => item?.view && isDashboardView(item.view)).slice(0, 8)
+      ? parsed
+        .map((item) => {
+          const view = normalizeStoredDashboardView(item?.view);
+          return view ? { ...item, view } : null;
+        })
+        .filter((item): item is DashboardRouteTarget => Boolean(item))
+        .slice(0, 8)
       : [];
   } catch {
     return [];
   }
+}
+
+function normalizeStoredDashboardView(value: unknown): DashboardView | null {
+  if (value === "demo") return "fusion";
+  return typeof value === "string" && isDashboardView(value) ? value : null;
 }

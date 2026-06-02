@@ -268,6 +268,8 @@ Environment overrides:
   HIVE_SHARED_SKILL_IMPORTS=all|none|codex,hermes,aeon
   HIVE_SHARED_SKILL_TARGETS=all|none|codex,hermes,aeon
   HIVE_SETUP_INTERACTIVE=false
+  HIVE_GITLAWB_SETUP=true|false
+  HIVE_GITLAWB_IDENTITY=true|false
   HIVE_NETWORK_MODE=link|system-tailscale|local
 EOF
 }
@@ -1515,6 +1517,69 @@ random_dashboard_secret() {
   node -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))'
 }
 
+ensure_gitlawb_code_proof() {
+  set_env_local "NEXT_PUBLIC_GITLAWB_PROOF_READY" "true"
+  set_env_local "NEXT_PUBLIC_GITLAWB_NODE_URL" "${NEXT_PUBLIC_GITLAWB_NODE_URL:-http://127.0.0.1:7545}"
+
+  mkdir -p "$HOME/.hivemindos/gitlawb"
+  if command -v gl >/dev/null 2>&1 && command -v git-remote-gitlawb >/dev/null 2>&1; then
+    ok "GitLawb CLI found: $(command -v gl)"
+  else
+    local should_install="false"
+    if [[ "${HIVE_GITLAWB_SETUP:-}" =~ ^(1|true|yes|on)$ ]]; then
+      should_install="true"
+    elif setup_is_interactive && [[ "${HIVE_GITLAWB_SETUP:-true}" != "false" ]] && prompt_yes_no "Install GitLawb CLI for Code Proof now?" "yes"; then
+      should_install="true"
+    fi
+
+    if [[ "$should_install" == "true" ]]; then
+      if command -v curl >/dev/null 2>&1; then
+        local installer install_dir
+        installer="$(mktemp)"
+        install_dir="${GITLAWB_INSTALL_DIR:-$HOME/.local/bin}"
+        mkdir -p "$install_dir"
+        if curl -fsSL https://gitlawb.com/install.sh -o "$installer" && GITLAWB_INSTALL_DIR="$install_dir" sh "$installer"; then
+          printf '{\n  "installDir": "%s",\n  "binaries": ["gl", "git-remote-gitlawb", "gitlawb-node"],\n  "installedAt": "%s"\n}\n' "$install_dir" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" > "$HOME/.hivemindos/gitlawb/installed-by-hivemindos.json"
+          ok "GitLawb CLI installed in $install_dir"
+          refresh_tool_paths
+          export PATH="$install_dir:$PATH"
+        else
+          warn "GitLawb CLI install failed; HivemindOS setup will continue without Code Proof CLI."
+        fi
+        rm -f "$installer"
+      else
+        warn "curl is unavailable; skipped GitLawb CLI install."
+      fi
+    else
+      warn "Skipping GitLawb CLI install; Code Proof can be enabled later from Integrations."
+    fi
+  fi
+
+  if command -v gl >/dev/null 2>&1; then
+    if gl identity show >/dev/null 2>&1; then
+      ok "GitLawb DID found"
+    else
+      local should_create_identity="false"
+      if [[ "${HIVE_GITLAWB_IDENTITY:-}" =~ ^(1|true|yes|on)$ ]]; then
+        should_create_identity="true"
+      elif setup_is_interactive && [[ "${HIVE_GITLAWB_IDENTITY:-true}" != "false" ]] && prompt_yes_no "Create a local GitLawb DID now? This does not register with a public node." "yes"; then
+        should_create_identity="true"
+      fi
+      if [[ "$should_create_identity" == "true" ]]; then
+        if gl identity new >/dev/null 2>&1; then
+          ok "GitLawb DID created locally"
+        else
+          warn "Could not create GitLawb DID; Code Proof identity can be created later from Integrations."
+        fi
+      else
+        warn "No GitLawb DID created; Code Proof identity can be created later from Integrations."
+      fi
+    fi
+  fi
+
+  printf '{\n  "checkedAt": "%s",\n  "proofReadyDefault": true,\n  "nodeStartedBySetup": false\n}\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" > "$HOME/.hivemindos/gitlawb/setup-status.json"
+}
+
 set_env_local "NEXT_PUBLIC_TAILNET_SYNC_ENABLED" "$tailnet_sync_enabled"
 set_env_local "HIVE_ENV_TAILNET_SYNC" "$env_tailnet_sync_enabled"
 set_env_local "HIVE_ENV_TAILNET_USER" "$(id -un 2>/dev/null || printf "%s" "${USER:-}")"
@@ -1532,6 +1597,7 @@ set_env_local "NEXT_PUBLIC_GBRAIN_CLI_PATH" "${NEXT_PUBLIC_GBRAIN_CLI_PATH:-gbra
 set_env_local "NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION" "${NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION:-Skills/GBrain}"
 set_env_local "NEXT_PUBLIC_SYNTO_CLI_PATH" "${NEXT_PUBLIC_SYNTO_CLI_PATH:-synto}"
 set_env_local "NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL" "${NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL:-llama3.1:8b}"
+ensure_gitlawb_code_proof
 
 dashboard_auth_secret="${HIVEMINDOS_DASHBOARD_AUTH_SECRET:-$(env_local_value HIVEMINDOS_DASHBOARD_AUTH_SECRET)}"
 dashboard_device_token="${HIVEMINDOS_DASHBOARD_DEVICE_TOKEN:-$(env_local_value HIVEMINDOS_DASHBOARD_DEVICE_TOKEN)}"
@@ -1559,6 +1625,7 @@ mkdir -p \
   "$shared_vault_path/Memory/Meetings" \
   "$shared_vault_path/Projects" \
   "$shared_vault_path/Operations" \
+  "$shared_vault_path/Operations/Code Projects" \
   "$shared_vault_path/Agents" \
   "$shared_vault_path/Skills" \
   "$shared_vault_path/Templates/HivemindOS" \
@@ -1871,6 +1938,14 @@ elif [[ "$hivemind_link_enabled" == "true" ]]; then
 else
   echo "  http://localhost:$COLLECTOR_PORT"
 fi
+echo
+echo "Code Proof:"
+if command -v gl >/dev/null 2>&1; then
+  echo "  GitLawb CLI: $(command -v gl)"
+else
+  echo "  GitLawb CLI: not installed"
+fi
+echo "  GitLawb node: lazy; not started by setup"
 echo
 if [[ "$hivemind_link_enabled" == "true" ]]; then
   echo "On other machines that run agents, clone the repo and run:"

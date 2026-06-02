@@ -21,6 +21,7 @@ export const DASHBOARD_VIEWS = [
   "my-apps",
   "phone",
   "aeon",
+  "fusion",
 ] as const satisfies readonly DashboardView[];
 
 const DASHBOARD_VIEW_SET = new Set<string>(DASHBOARD_VIEWS);
@@ -57,6 +58,7 @@ export const DASHBOARD_ROUTE_CATALOG: DashboardRouteCatalogItem[] = [
   { id: "swarm", label: "Swarm", detail: "MiroShark simulations", group: "Work", keywords: ["swarm", "miroshark", "simulation", "rehearsal"] },
   { id: "history", label: "History", detail: "Completed work log", group: "Work", keywords: ["history", "done", "completed", "changelog"] },
   { id: "aeon", label: "Aeon", detail: "Autopilot runs and outputs", group: "Utilities", keywords: ["aeon", "autopilot", "unattended", "runs"] },
+  { id: "fusion", label: "Hive Fusion", detail: "Skill and workflow fusion", group: "Utilities", keywords: ["fusion", "skill fusion", "workflow fusion", "skill builder"] },
   { id: "integrations", label: "Integrations", detail: "Nango and external APIs", group: "Utilities", keywords: ["integrations", "nango", "api", "apps"] },
   { id: "my-apps", label: "Apps & Services", detail: "Running apps and providers", group: "Utilities", keywords: ["apps", "services", "providers"] },
   { id: "notifications", label: "Alerts", detail: "Agent notifications", group: "Utilities", keywords: ["alerts", "notifications", "inbox"] },
@@ -79,7 +81,8 @@ export function dashboardRouteForView(view: DashboardView) {
 
 export function dashboardTargetFromSearch(search: string): DashboardRouteTarget | null {
   const params = new URLSearchParams(search);
-  const view = params.get("view");
+  const viewParam = params.get("view");
+  const view = viewParam === "demo" ? "fusion" : viewParam;
   if (!view || !isDashboardView(view)) return null;
   return {
     view,

@@ -128,9 +128,8 @@ function selectRequirement(policy: X402FetchPolicy, confirmation?: string) {
     if (amountUsd > policy.maxPaymentUsd) {
       throw new Error(`x402 payment would exceed this agent's per-payment cap ($${policy.maxPaymentUsd.toFixed(2)}).`);
     }
-    const needsApproval = !policy.autoPayEnabled || amountUsd > policy.approvalRequiredOverUsd;
-    if (needsApproval && confirmation !== "PAY_X402") {
-      throw new Error(`x402 payment needs approval. Type PAY_X402 to approve up to $${policy.maxPaymentUsd.toFixed(2)}.`);
+    if (!policy.autoPayEnabled && confirmation !== "PAY_X402") {
+      throw new Error(`x402 auto-use is off. Type PAY_X402 to approve up to $${policy.maxPaymentUsd.toFixed(2)}.`);
     }
     return selected;
   };
@@ -237,8 +236,8 @@ export function summarizeX402Policy(policy: AgentWalletConfig) {
     `- Network: ${policy.network}`,
     `- Paid API base URL: ${policy.x402BaseUrl || "(not restricted yet)"}`,
     `- Max per x402 payment: $${policy.maxPaymentUsd.toFixed(2)}`,
-    `- Approval required over: $${policy.approvalRequiredOverUsd.toFixed(2)}`,
-    `- Autopay under approval threshold: ${policy.autoPayEnabled ? "yes" : "no"}`,
+    `- Approval required over: $${policy.approvalRequiredOverUsd.toFixed(2)} when auto-use is off`,
+    `- Allow auto-use within hard cap: ${policy.autoPayEnabled ? "yes" : "no"}`,
   ].join("\n");
 }
 

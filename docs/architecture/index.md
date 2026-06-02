@@ -79,6 +79,7 @@ The app uses Next.js route handlers under `src/app/api`. They form the dashboard
 
 - `/api/fleet/*`: machine discovery, snapshots, updates, provisioning helpers.
 - `/api/fleet/apps` and `/api/fleet/app-icon`: hivenet app/service discovery, icon proxying, health checks, and API route catalogs.
+- `/api/gitlawb/*` and `/api/projects/*`: GitLawb Code Proof status/setup plus Hivemind project registry and repo linking.
 - `/api/runtimes/*`: runtime status, integrations, skills, schedules, runs, outputs, env sync, sessions, availability.
 - `/api/chat/*`: runtime chat bridge, session reads, and chat folders.
 - `/api/kanban`: file-backed board CRUD, task moves, claims, completions, comments, events.

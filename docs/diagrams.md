@@ -325,12 +325,12 @@ flowchart TB
   Api --> Brain["brain/* and obsidian/*"]
   Api --> Work["kanban, scheduler, work-history"]
   Api --> Wallet["wallet/* and honey-ledger"]
-  Api --> Integrations["integrations/*, usepod/*, miroshark/*"]
+  Api --> Integrations["integrations/*, gitlawb/*, projects/*, usepod/*, miroshark/*"]
   Api --> Ops["maintenance, memory-telemetry, runtime-files"]
   Fleet --> Collectors["Collectors and app proxies"]
   Chat --> RuntimeAdapters["Runtime adapters"]
   Brain --> Vault["Obsidian vault"]
-  Work --> SharedSchedules["Schedules and task boards"]
+  Work --> SharedSchedules["Schedules, task boards, and project proof links"]
   Wallet --> PaymentRails["Token and payment rails"]
 ```
 

@@ -37,6 +37,7 @@ Clone it, run one setup command, and get a local-first dashboard for the agents 
 - **Share environment variables across agent machines** with `hive-env-add`, without copying secrets by hand.
 - **Send targeted files to a machine, runtime, or agent** with `hive-transfer` envelopes in the shared vault.
 - **Assign work to agents** through a shared Kanban board with retries, stale-work recovery, and human handoff.
+- **Attach signed code provenance** with GitLawb Code Proof for project-linked work.
 - **Create and import schedules** so supported runtimes can keep working in the background.
 - **Run MiroShark simulations** from the same control room.
 - **Give agents controlled Base and Solana wallets** so they can pay for approved tools, APIs, transactions, and actions.
@@ -101,9 +102,11 @@ pnpm dashboard-auth rotate-secret
 
 Use `copy-token` when you need to paste the token into the unlock screen again. Use `reset-token` if the token is lost, then restart the dashboard so it reloads `.env.local`. Use `rotate-secret` when you also want to invalidate existing browser sessions after restart.
 
-Setup checks Node.js and pnpm/Corepack, installs dependencies, installs `hive-env-add`, installs the lightweight machine monitor where supported, starts the dashboard when possible, and can open the dashboard for you. Production dashboard builds are skipped by default; use `./setup.sh --build` when you explicitly want one. On macOS/Linux use `setup.sh`; on native Windows use `setup.ps1`.
+Setup checks Node.js and pnpm/Corepack, installs dependencies, installs `hive-env-add`, installs the lightweight machine monitor where supported, prepares GitLawb Code Proof where available, starts the dashboard when possible, and can open the dashboard for you. Production dashboard builds are skipped by default; use `./setup.sh --build` when you explicitly want one. On macOS/Linux use `setup.sh`; on native Windows use `setup.ps1`.
 
-To remove HivemindOS later, run the matching uninstaller. It asks one prompt at a time before removing services, generated files, `hive-env-add`, shared-skill agent hints, or optional apps such as Tailscale, Syncthing, pnpm, GnuPG, and Obsidian:
+GitLawb setup is proof-ready by default, not full node hosting by default. On macOS/Linux, interactive setup offers to install `gl`, `git-remote-gitlawb`, and the `gitlawb-node` binary, then offers to create a local DID without registering with a public node. HivemindOS does not start a GitLawb node, install Docker/Postgres, expose repo hosting, or enable federation/IPFS/Arweave/staking during first setup. Full local node setup stays lazy and is surfaced from Integrations or project linking when a project needs local GitLawb repo hosting.
+
+To remove HivemindOS later, run the matching uninstaller. It asks one prompt at a time before removing services, generated files, GitLawb Code Proof cache/managed binaries, `hive-env-add`, shared-skill agent hints, or optional apps such as Tailscale, Syncthing, pnpm, GnuPG, and Obsidian:
 
 ```bash
 ./uninstall.sh
@@ -178,6 +181,7 @@ The adapter calls `POST /v1/chat/completions` for chat and `GET /v1/models` for 
 | **Shared env sync** | Adds keys once with `hive-env-add` and syncs them to trusted machines over Tailscale SSH |
 | **Targeted file transfers** | Routes artifacts through the shared vault to a specific machine, runtime, or agent with payload hashes and acknowledgements |
 | **Work board** | Gives agents a shared Kanban queue for tasks, delegation, retries, stale work, and human handoff |
+| **GitLawb Code Proof** | Links projects and tasks to signed GitLawb provenance while keeping local node hosting optional |
 | **Scheduler studio** | Creates, imports, pauses, resumes, and runs background schedules where runtimes support them |
 | **Agent chat bridge** | Sends chat to supported runtimes through a local safety and redaction proxy |
 | **MiroShark integration** | Runs and tracks MiroShark simulations from the HivemindOS dashboard |
@@ -323,7 +327,10 @@ Automation can skip prompts with `CI=true`, `HIVE_SETUP_INTERACTIVE=false`, or e
 ```bash
 HIVE_SHARED_SKILLS=true HIVE_SHARED_SKILL_IMPORTS=all HIVE_SHARED_SKILL_TARGETS=all ./setup.sh
 HIVE_SHARED_SKILLS=false ./setup.sh
+HIVE_GITLAWB_SETUP=true HIVE_GITLAWB_IDENTITY=true ./setup.sh
 ```
+
+More detail: [docs/integrations/gitlawb.md](docs/integrations/gitlawb.md)
 
 ## Development
 

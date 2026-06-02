@@ -1,0 +1,41 @@
+name: Bump App Version
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bump-app-version-main
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Bump patch version
+    if: ${{ github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip version bump]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump app version
+        run: node scripts/bump-app-version.mjs
+
+      - name: Commit version bump
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock; then
+            echo "No version changes to commit."
+            exit 0
+          fi
+          version="$(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version)")"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
+          git commit -m "chore: bump app version to ${version} [skip version bump]"
+          git push

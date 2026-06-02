@@ -510,6 +510,9 @@ async function testSkillSync(machines) {
       await poll(`shared skill removal tracked ${skillSlug}`, async () => {
         const reconciled = await reconcileSkillProvider(machine, provider, policies);
         return (reconciled.markedMissing || []).some((skill) => skill.slug === skillSlug)
+          || (reconciled.shared || []).some((skill) => skill.slug === skillSlug && skill.sourceStatus === "missing-upstream")
+          || await sharedSkillMarkedMissing(reconciled, skillSlug)
+          || (reconciled.skipped || []).some((skill) => skill.slug === skillSlug && /deletion freeze/i.test(skill.reason || ""))
           || !(reconciled.shared || []).some((skill) => skill.slug === skillSlug);
       }, 120_000);
       summary.cleanup.push({ type: "skill", ok: true, machine: machine.device?.name, provider: provider.id, slug: skillSlug });
@@ -521,13 +524,14 @@ async function testSkillSync(machines) {
 }
 
 async function reconcileSkillProvider(machine, provider, policies, skill = null) {
+  const scopedPolicies = policies[provider.id] ? { [provider.id]: policies[provider.id] } : policies;
   return dashboard("/api/obsidian/skills/reconcile", {
     method: "POST",
     body: JSON.stringify({
       vaultPath: vaultPath || undefined,
       providers: [{ ...provider, skills: skill ? [skill] : [] }],
       includeFleetProviders: false,
-      policies,
+      policies: scopedPolicies,
     }),
     timeoutMs: 120_000,
   });
@@ -553,6 +557,20 @@ function e2eSkillSummary(machine, provider, slug, body) {
   };
 }
 
+async function sharedSkillMarkedMissing(reconciled, slug) {
+  const shared = (reconciled.shared || []).find((skill) => skill.slug === slug && skill.path);
+  if (!shared) return false;
+  const metadataPath = join(shared.path, "..", ".hivemind-skill-source.json");
+  const raw = await readFile(metadataPath, "utf8").catch(() => "");
+  if (!raw) return false;
+  try {
+    const metadata = JSON.parse(raw);
+    return metadata?.status === "missing-upstream";
+  } catch {
+    return false;
+  }
+}
+
 function machineHasRuntime(machine, runtime) {
   return (machine.capabilities?.runtimes || []).includes(runtime)
     || (machine.agents || []).some((agent) => agent.runtime === runtime);
@@ -569,80 +587,34 @@ function agentForRuntime(machine, runtime) {
 async function testEncryptedFileShare(machines) {
   const hermesMachines = machines.filter((machine) => machineHasRuntime(machine, "hermes"));
   const openclawMachines = machines.filter((machine) => machineHasRuntime(machine, "openclaw"));
-  const senderMachine = hermesMachines.find((machine) => openclawMachines.some((candidate) => candidate.device?.collectorUrl !== machine.device?.collectorUrl));
-  const receiverMachine = senderMachine
-    ? openclawMachines.find((machine) => machine.device?.collectorUrl !== senderMachine.device?.collectorUrl)
+  const hermesSender = hermesMachines.find((machine) => openclawMachines.some((candidate) => candidate.device?.collectorUrl !== machine.device?.collectorUrl));
+  const openclawReceiver = hermesSender
+    ? openclawMachines.find((machine) => machine.device?.collectorUrl !== hermesSender.device?.collectorUrl)
     : null;
-  assert(senderMachine && receiverMachine, "Encrypted file sharing requires Hermes and OpenClaw on different ready machines.");
+  const openclawSender = openclawMachines.find((machine) => hermesMachines.some((candidate) => candidate.device?.collectorUrl !== machine.device?.collectorUrl));
+  const hermesReceiver = openclawSender
+    ? hermesMachines.find((machine) => machine.device?.collectorUrl !== openclawSender.device?.collectorUrl)
+    : null;
+  assert(hermesSender && openclawReceiver && openclawSender && hermesReceiver, "Bidirectional encrypted file sharing requires Hermes and OpenClaw on different ready machines.");
 
-  const senderAgent = agentForRuntime(senderMachine, "hermes");
-  const receiverAgent = agentForRuntime(receiverMachine, "openclaw");
-  const fileName = `${runId}-hermes-to-openclaw.txt`;
-  const content = [
-    `run=${runId}`,
-    `sender=${senderAgent.name}`,
-    `receiver=${receiverAgent.name}`,
-    "encrypted file sharing over HivemindOS fleet collectors",
-  ].join("\n");
-  const expectedHash = sha256(content);
-
+  const transfers = [];
   try {
-    const recipient = await collector(receiverMachine, "/e2e/file-share", {
-      method: "POST",
-      body: JSON.stringify({
-        action: "prepare-recipient",
-        runId,
-        runtime: "openclaw",
-        agentId: receiverAgent.id || receiverAgent.name,
-        agentName: receiverAgent.name,
-      }),
-      timeoutMs: 30_000,
-    });
-    const sent = await collector(senderMachine, "/e2e/file-share", {
-      method: "POST",
-      body: JSON.stringify({
-        action: "send",
-        runId,
-        senderRuntime: "hermes",
-        senderAgentId: senderAgent.id || senderAgent.name,
-        senderAgentName: senderAgent.name,
-        recipientRuntime: "openclaw",
-        recipientAgentId: receiverAgent.id || receiverAgent.name,
-        recipientAgentName: receiverAgent.name,
-        recipientPublicKey: recipient.publicKey,
-        fileName,
-        content,
-      }),
-      timeoutMs: 30_000,
-    });
-    assert(sent.envelope?.ciphertextBase64 && !sent.envelope.ciphertextBase64.includes(content), "Sender did not produce an encrypted envelope.");
-    const received = await collector(receiverMachine, "/e2e/file-share", {
-      method: "POST",
-      body: JSON.stringify({
-        action: "receive",
-        runId,
-        runtime: "openclaw",
-        agentId: receiverAgent.id || receiverAgent.name,
-        envelope: sent.envelope,
-      }),
-      timeoutMs: 30_000,
-    });
-    assert(received.plaintextSha256 === expectedHash, "Receiver decrypted payload hash did not match.");
-    return {
-      senderMachine: senderMachine.device?.name,
+    transfers.push(await encryptedFileShareTransfer({
+      senderMachine: hermesSender,
       senderRuntime: "hermes",
-      senderAgent: senderAgent.name,
-      receiverMachine: receiverMachine.device?.name,
+      receiverMachine: openclawReceiver,
       receiverRuntime: "openclaw",
-      receiverAgent: receiverAgent.name,
-      fileName,
-      plaintextSha256: expectedHash,
-      ciphertextSha256: sent.ciphertextSha256,
-      recipientPublicKeySha256: recipient.publicKeySha256,
-      receivedBytes: received.bytes,
-    };
+    }));
+    transfers.push(await encryptedFileShareTransfer({
+      senderMachine: openclawSender,
+      senderRuntime: "openclaw",
+      receiverMachine: hermesReceiver,
+      receiverRuntime: "hermes",
+    }));
+    return { transfers };
   } finally {
-    for (const machine of [senderMachine, receiverMachine].filter(Boolean)) {
+    const cleanupMachines = [...new Set([hermesSender, openclawReceiver, openclawSender, hermesReceiver].filter(Boolean))];
+    for (const machine of cleanupMachines) {
       try {
         await collector(machine, "/e2e/file-share", {
           method: "POST",
@@ -655,6 +627,74 @@ async function testEncryptedFileShare(machines) {
       }
     }
   }
+}
+
+async function encryptedFileShareTransfer({ senderMachine, senderRuntime, receiverMachine, receiverRuntime }) {
+  const senderAgent = agentForRuntime(senderMachine, senderRuntime);
+  const receiverAgent = agentForRuntime(receiverMachine, receiverRuntime);
+  const fileName = `${runId}-${senderRuntime}-to-${receiverRuntime}.txt`;
+  const content = [
+    `run=${runId}`,
+    `sender=${senderAgent.name}`,
+    `receiver=${receiverAgent.name}`,
+    `encrypted file sharing from ${senderRuntime} to ${receiverRuntime} over HivemindOS fleet collectors`,
+  ].join("\n");
+  const expectedHash = sha256(content);
+
+  const recipient = await collector(receiverMachine, "/e2e/file-share", {
+    method: "POST",
+    body: JSON.stringify({
+      action: "prepare-recipient",
+      runId,
+      runtime: receiverRuntime,
+      agentId: receiverAgent.id || receiverAgent.name,
+      agentName: receiverAgent.name,
+    }),
+    timeoutMs: 30_000,
+  });
+  const sent = await collector(senderMachine, "/e2e/file-share", {
+    method: "POST",
+    body: JSON.stringify({
+      action: "send",
+      runId,
+      senderRuntime,
+      senderAgentId: senderAgent.id || senderAgent.name,
+      senderAgentName: senderAgent.name,
+      recipientRuntime: receiverRuntime,
+      recipientAgentId: receiverAgent.id || receiverAgent.name,
+      recipientAgentName: receiverAgent.name,
+      recipientPublicKey: recipient.publicKey,
+      fileName,
+      content,
+    }),
+    timeoutMs: 30_000,
+  });
+  assert(sent.envelope?.ciphertextBase64 && !sent.envelope.ciphertextBase64.includes(content), `${senderRuntime} -> ${receiverRuntime} did not produce an encrypted envelope.`);
+  const received = await collector(receiverMachine, "/e2e/file-share", {
+    method: "POST",
+    body: JSON.stringify({
+      action: "receive",
+      runId,
+      runtime: receiverRuntime,
+      agentId: receiverAgent.id || receiverAgent.name,
+      envelope: sent.envelope,
+    }),
+    timeoutMs: 30_000,
+  });
+  assert(received.plaintextSha256 === expectedHash, `${senderRuntime} -> ${receiverRuntime} decrypted payload hash did not match.`);
+  return {
+    senderMachine: senderMachine.device?.name,
+    senderRuntime,
+    senderAgent: senderAgent.name,
+    receiverMachine: receiverMachine.device?.name,
+    receiverRuntime,
+    receiverAgent: receiverAgent.name,
+    fileName,
+    plaintextSha256: expectedHash,
+    ciphertextSha256: sent.ciphertextSha256,
+    recipientPublicKeySha256: recipient.publicKeySha256,
+    receivedBytes: received.bytes,
+  };
 }
 
 async function kanbanRequest(method, body = {}, query = {}) {

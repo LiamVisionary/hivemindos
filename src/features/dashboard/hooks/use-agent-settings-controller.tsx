@@ -5,8 +5,10 @@
 import { type ChangeEvent, type Dispatch, type SetStateAction, useMemo } from "react";
 import type { BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import type { AgentProfile, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile } from "@/lib/types/agent-runtime";
+import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 import type { BrainSkillSummary, HivemindLinkClientStatus, MachineGroup, RuntimeIntegrationStatus, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
 import type { AgentCreateDraft, AgentWorkerClassView, RuntimeModelDraft } from "@/features/dashboard/agent-settings-types";
+import { selectBestRuntimeModel } from "@/features/dashboard/views/chat/runtime-model-registry";
 type HetznerServerTypeOption = {
   value: string;
   label: string;
@@ -100,7 +102,12 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
     ?? runtimeModelProviders.find((provider) => provider.slug === runtimeModelSelection?.provider)
     ?? runtimeModelProviders[0];
   const selectedRuntimeModels = selectedRuntimeProvider?.models ?? [];
-  const selectedRuntimeModelId = agentSettingsModel || runtimeModelSelection?.model || selectedRuntimeModels[0]?.id || "";
+  const selectedRuntimeModelId = agentSettingsModel || selectBestRuntimeModel(selectedRuntimeProvider, {
+    currentModel: runtimeModelSelection?.model,
+    defaultModel: runtimeSettingsFeature(agentSettingsRuntime).defaultModel,
+    runtimeSelectedModel: runtimeModelSelection?.model,
+    preferAdaptive: true,
+  });
   const selectedRuntimeModel = selectedRuntimeModels.find((model) => model.id === selectedRuntimeModelId);
   const updateAgentRuntimeModel = (provider: string, model: string) => {
     const patch = { provider, model };
@@ -108,7 +115,9 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
     const target = agentSettingsIntegrationTarget;
     if (target && (target.runtime === "openclaw" || target.runtime === "hermes")) {
-      void runRuntimeIntegrationAction("set-model", patch, { ...target, ...patch });
+      window.setTimeout(() => {
+        void runRuntimeIntegrationAction("set-model", patch, { ...target, ...patch });
+      }, 0);
     }
   };
   const addHermesModelFromDraft = async () => {

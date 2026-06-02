@@ -27,6 +27,7 @@ artifacts/
 .hermes/
 strix-results/
 strix_runs/
+.antvis-infographic/
 
 *.db
 *.sqlite

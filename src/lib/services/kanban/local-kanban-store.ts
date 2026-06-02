@@ -3,6 +3,7 @@ import { existsSync, statSync } from "fs";
 import { homedir } from "os";
 import { isAbsolute, join, sep } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
+import { sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import type {
   KanbanBoard,
@@ -40,12 +41,14 @@ type CreateTaskInput = {
   linkedDirectories?: KanbanTask["linkedDirectories"];
   deliverables?: KanbanTask["deliverables"];
   targetMachine?: KanbanTask["targetMachine"];
+  projectId?: string;
+  proofs?: KanbanTask["proofs"];
   parents?: string[];
   idempotencyKey?: string;
   maxRuntimeMs?: number;
 };
 
-type PatchTaskInput = Partial<Pick<KanbanTask, "title" | "body" | "result" | "assignee" | "tenant" | "status" | "priority" | "workspace" | "skills" | "attachments" | "linkedDirectories" | "deliverables" | "targetMachine" | "agentSession" | "reviewedBy" | "undoRequestedBy">> & {
+type PatchTaskInput = Partial<Pick<KanbanTask, "title" | "body" | "result" | "assignee" | "tenant" | "status" | "priority" | "workspace" | "skills" | "attachments" | "linkedDirectories" | "deliverables" | "targetMachine" | "projectId" | "proofs" | "agentSession" | "reviewedBy" | "undoRequestedBy">> & {
   reviewedAt?: number | null;
   undoRequestedAt?: number | null;
 };
@@ -236,6 +239,8 @@ function normalizeTask(task: KanbanTask): KanbanTask {
     linkedDirectories: Array.isArray(task.linkedDirectories) ? task.linkedDirectories : [],
     deliverables: filterSourceDeliverables(task, storedDeliverables.length ? storedDeliverables : extractedDeliverables),
     targetMachine: task.targetMachine?.key ? task.targetMachine : null,
+    projectId: cleanOptional(task.projectId),
+    proofs: Array.isArray(task.proofs) ? task.proofs.map((proof) => sanitizeGitLawbProof(proof)) : [],
     claimLock: cleanOptional(task.claimLock),
     currentRunId: cleanOptional(task.currentRunId),
   };
@@ -334,6 +339,8 @@ export async function createTask(slug: string | null, input: CreateTaskInput, op
     linkedDirectories: Array.isArray(input.linkedDirectories) ? input.linkedDirectories : [],
     deliverables: Array.isArray(input.deliverables) ? input.deliverables : [],
     targetMachine: input.targetMachine?.key ? input.targetMachine : null,
+    projectId: cleanOptional(input.projectId),
+    proofs: Array.isArray(input.proofs) ? input.proofs.map((proof) => sanitizeGitLawbProof(proof)) : [],
     maxRuntimeMs: positiveNumber(input.maxRuntimeMs),
     idempotencyKey: cleanOptional(input.idempotencyKey),
     createdAt: now,
@@ -368,6 +375,8 @@ export async function patchTask(slug: string | null, taskId: string, patch: Patc
     linkedDirectories: patch.linkedDirectories ?? task.linkedDirectories,
     deliverables: patch.deliverables ?? task.deliverables,
     targetMachine: patch.targetMachine === null ? null : patch.targetMachine ?? task.targetMachine,
+    projectId: patch.projectId === "" ? undefined : patch.projectId ?? task.projectId,
+    proofs: Array.isArray(patch.proofs) ? patch.proofs.map((proof) => sanitizeGitLawbProof(proof)) : task.proofs,
     result: retryingWorking ? patch.result ?? "" : patch.result ?? task.result,
     agentSession: retryingWorking ? patch.agentSession ?? undefined : patch.agentSession ?? task.agentSession,
     reviewedAt: patch.reviewedAt === null ? undefined : patch.reviewedAt ?? task.reviewedAt,

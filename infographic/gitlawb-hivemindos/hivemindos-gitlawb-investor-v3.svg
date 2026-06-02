@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">HivemindOS x GitLawb premium investor infographic</title>
+  <desc id="desc">A polished infographic showing HivemindOS as the private AI brain and GitLawb as signed code proof, combining into trusted autonomous software.</desc>
+  <defs>
+    <radialGradient id="aura" cx="52%" cy="40%" r="62%">
+      <stop offset="0%" stop-color="#16f3b6" stop-opacity="0.26"/>
+      <stop offset="36%" stop-color="#38bdf8" stop-opacity="0.22"/>
+      <stop offset="72%" stop-color="#fbbf24" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#071827" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bg" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#071827"/>
+      <stop offset="46%" stop-color="#0d3742"/>
+      <stop offset="100%" stop-color="#071827"/>
+    </linearGradient>
+    <linearGradient id="blueCard" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#0e3a5a"/>
+      <stop offset="100%" stop-color="#08263f"/>
+    </linearGradient>
+    <linearGradient id="greenCard" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#0b4b3a"/>
+      <stop offset="100%" stop-color="#072f2a"/>
+    </linearGradient>
+    <linearGradient id="goldCard" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#193549"/>
+      <stop offset="100%" stop-color="#2c2613"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#31566f" stroke-width="1" opacity="0.30"/>
+    </pattern>
+    <filter id="shadow" x="-18%" y="-18%" width="136%" height="136%">
+      <feDropShadow dx="0" dy="24" stdDeviation="22" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+    <filter id="glow" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <style>
+      .text { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #eef9ff; letter-spacing: 0; }
+      .muted { fill: #b9d3df; }
+      .blue { fill: #7dd3fc; }
+      .green { fill: #86efac; }
+      .gold { fill: #fbbf24; }
+      .cream { fill: #fef3c7; }
+      .title { font-size: 76px; font-weight: 880; }
+      .subtitle { font-size: 30px; font-weight: 620; }
+      .kicker { font-size: 18px; font-weight: 820; text-transform: uppercase; }
+      .cardTitle { font-size: 38px; font-weight: 880; }
+      .body { font-size: 23px; font-weight: 570; }
+      .small { font-size: 18px; font-weight: 720; }
+      .micro { font-size: 14px; font-weight: 700; }
+      .symbol { font-size: 72px; font-weight: 900; }
+      .chip { fill: rgba(238, 249, 255, 0.10); stroke: rgba(238, 249, 255, 0.30); stroke-width: 1.5; }
+      .connector { stroke: rgba(238, 249, 255, 0.38); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 2 12; fill: none; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect width="1600" height="900" fill="url(#grid)"/>
+  <rect width="1600" height="900" fill="url(#aura)"/>
+
+  <circle cx="124" cy="722" r="78" fill="#38bdf8" opacity="0.08"/>
+  <circle cx="1440" cy="176" r="96" fill="#86efac" opacity="0.08"/>
+  <circle cx="1320" cy="724" r="120" fill="#fbbf24" opacity="0.08"/>
+
+  <text class="text title" x="86" y="102">HivemindOS x GitLawb</text>
+  <text class="text subtitle muted" x="90" y="150">The trust layer for autonomous software teams.</text>
+
+  <g transform="translate(1060 80)">
+    <rect width="420" height="54" rx="27" fill="rgba(251, 191, 36, 0.13)" stroke="rgba(251, 191, 36, 0.66)" stroke-width="1.6"/>
+    <text class="text small gold" x="34" y="35">CLI + DID default · node only when needed</text>
+  </g>
+
+  <path class="connector" d="M472 386 C540 386, 566 386, 610 386"/>
+  <path class="connector" d="M990 386 C1058 386, 1084 386, 1128 386"/>
+
+  <g transform="translate(86 246)" filter="url(#shadow)">
+    <rect width="386" height="312" rx="30" fill="url(#blueCard)" stroke="#7dd3fc" stroke-width="2.5"/>
+    <circle cx="78" cy="76" r="38" fill="rgba(125, 211, 252, 0.16)" stroke="#7dd3fc" stroke-width="2"/>
+    <path d="M66 69h24M66 81h24M78 57v36" stroke="#7dd3fc" stroke-width="5" stroke-linecap="round"/>
+    <text class="text kicker blue" x="126" y="68">HivemindOS</text>
+    <text class="text cardTitle" x="38" y="142">Private AI Brain</text>
+    <text class="text body muted" x="38" y="196">Agents, projects, machines,</text>
+    <text class="text body muted" x="38" y="228">memory, and decision trails.</text>
+    <rect x="38" y="258" width="202" height="42" rx="21" class="chip"/>
+    <text class="text small blue" x="62" y="286">Private by default</text>
+  </g>
+
+  <g transform="translate(524 342)">
+    <circle cx="54" cy="44" r="44" fill="rgba(238, 249, 255, 0.10)" stroke="rgba(238, 249, 255, 0.40)" stroke-width="2"/>
+    <text class="text symbol" x="31" y="68">+</text>
+  </g>
+
+  <g transform="translate(610 246)" filter="url(#shadow)">
+    <rect width="386" height="312" rx="30" fill="url(#greenCard)" stroke="#86efac" stroke-width="2.5"/>
+    <circle cx="78" cy="76" r="38" fill="rgba(134, 239, 172, 0.15)" stroke="#86efac" stroke-width="2"/>
+    <path d="M62 78l14 14 30-34" fill="none" stroke="#86efac" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <text class="text kicker green" x="126" y="68">GitLawb</text>
+    <text class="text cardTitle" x="38" y="142">Signed Code Proof</text>
+    <text class="text body muted" x="38" y="196">Commits, repos, identities,</text>
+    <text class="text body muted" x="38" y="228">and provenance badges.</text>
+    <rect x="38" y="258" width="214" height="42" rx="21" class="chip"/>
+    <text class="text small green" x="62" y="286">Proof-ready setup</text>
+  </g>
+
+  <g transform="translate(1044 342)">
+    <circle cx="54" cy="44" r="44" fill="rgba(238, 249, 255, 0.10)" stroke="rgba(238, 249, 255, 0.40)" stroke-width="2"/>
+    <text class="text symbol" x="31" y="68">=</text>
+  </g>
+
+  <g transform="translate(1130 222)" filter="url(#shadow)">
+    <rect width="424" height="360" rx="34" fill="url(#goldCard)" stroke="#fbbf24" stroke-width="2.8"/>
+    <circle cx="324" cy="92" r="56" fill="rgba(251, 191, 36, 0.16)" stroke="#fbbf24" stroke-width="2" filter="url(#glow)"/>
+    <path d="M298 95l18 18 48-58" fill="none" stroke="#fef3c7" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <text class="text kicker gold" x="38" y="72">Result</text>
+    <text class="text cardTitle cream" x="38" y="128">Trusted</text>
+    <text class="text cardTitle cream" x="38" y="176">Autonomous</text>
+    <text class="text cardTitle cream" x="38" y="224">Software</text>
+    <text class="text body muted" x="38" y="286">People can see the work,</text>
+    <text class="text body muted" x="38" y="318">verify the code, and trust</text>
+    <text class="text body muted" x="38" y="350">what shipped.</text>
+  </g>
+
+  <g transform="translate(182 636)" filter="url(#shadow)">
+    <rect width="1236" height="92" rx="46" fill="rgba(238, 249, 255, 0.10)" stroke="rgba(238, 249, 255, 0.28)" stroke-width="2"/>
+    <text class="text cardTitle" x="72" y="58">Remember the work</text>
+    <text class="text cardTitle green" x="462" y="58">Prove the code</text>
+    <text class="text cardTitle gold" x="812" y="58">Trust the result</text>
+  </g>
+
+  <g transform="translate(284 780)">
+    <rect width="284" height="54" rx="27" fill="rgba(125, 211, 252, 0.12)" stroke="#7dd3fc" stroke-width="1.8"/>
+    <text class="text small blue" x="42" y="35">private memory stays private</text>
+  </g>
+
+  <g transform="translate(622 780)">
+    <rect width="284" height="54" rx="27" fill="rgba(134, 239, 172, 0.12)" stroke="#86efac" stroke-width="1.8"/>
+    <text class="text small green" x="54" y="35">proof becomes effortless</text>
+  </g>
+
+  <g transform="translate(960 780)">
+    <rect width="318" height="54" rx="27" fill="rgba(251, 191, 36, 0.12)" stroke="#fbbf24" stroke-width="1.8"/>
+    <text class="text small gold" x="46" y="35">public federation stays opt-in</text>
+  </g>
+</svg>

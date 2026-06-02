@@ -1,14 +1,16 @@
 // src/components/fleet/roster.tsx
 "use client";
 
+import Image from "next/image";
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, ChevronDown, ChevronRight, Copy, LoaderCircle, MessageSquare, Monitor, Pencil, PhoneCall, PlugZap, Plus, Settings2, Smartphone, Trash2, Wallet } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Copy, GitBranch, LoaderCircle, MessageSquare, Monitor, Pencil, PhoneCall, PlugZap, Plus, Settings2, Smartphone, Trash2, Wallet } from "lucide-react";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { BeeIcon } from "./bee-icon";
 import { HexTile } from "./hex-tile";
 import { fleetAgentCanChat, isFleetMachineMobile, type AgentState, type FleetAgent, type FleetAgentChat, type FleetMachine } from "./fleet-data";
+import { UsePodHostModal } from "./usepod-host-modal";
 import styles from "./fleet-tokens.module.css";
 
 const STATE_COLOR: Record<AgentState, string> = {
@@ -18,6 +20,7 @@ const STATE_COLOR: Record<AgentState, string> = {
   setup:     "#fde68a",
   failed:    "var(--danger)",
 };
+const USEPOD_RUNTIME_ICON_PATH = "/icons/runtimes/usepod.webp";
 
 export type MachineUpdateButtonStatus = "idle" | "updating" | "updated" | "failed";
 export type MachineUpdateButtonDetail = {
@@ -48,6 +51,7 @@ interface RosterRowProps {
   onSelectAgent: (a: FleetAgent) => void;
   onToggle: () => void;
   onAddAgent: () => void;
+  onOpenUsePodHost?: () => void;
   onUpdateMachine?: () => void;
   onRenameMachine?: (name: string) => void;
   onOpenNetworkIssue?: () => void;
@@ -65,6 +69,7 @@ function RosterRow({
   updateStatus,
   updateDetail,
   onSelectMachine, onSelectAgent, onToggle, onAddAgent,
+  onOpenUsePodHost,
   onUpdateMachine,
   onRenameMachine,
   onOpenNetworkIssue,
@@ -124,6 +129,14 @@ function RosterRow({
 	  );
   const updateDisabled = updateStatus === "updating" || updateStatus === "updated";
   const MachineIcon = isFleetMachineMobile(machine) ? Smartphone : Monitor;
+  const codeNode = machine.gitlawb;
+  const codeNodeLabel = codeNode?.healthy
+    ? "Code node"
+    : codeNode?.enabled
+      ? "Code node offline"
+      : codeNode
+        ? "Code proof"
+        : "";
 
   return (
     <div
@@ -140,7 +153,7 @@ function RosterRow({
           color: selected ? "var(--hex-honey-border)" : "var(--foreground)",
         }}
       >
-        <HexTile size={22} tone={selected ? "honey" : "default"}>
+        <HexTile className={styles.rosterHexTile} size={22} tone={selected ? "honey" : "default"} surface="flat">
           <MachineIcon
             aria-hidden="true"
             size={13}
@@ -326,6 +339,52 @@ function RosterRow({
               <span>{machine.networkIssue.label}</span>
             </button>
           ) : null}
+          {codeNodeLabel ? (
+            <span
+              title={[
+                codeNode?.nodeUrl,
+                codeNode?.repoCount !== undefined ? `${codeNode.repoCount} repo${codeNode.repoCount === 1 ? "" : "s"}` : "",
+                codeNode?.peerCount !== undefined ? `${codeNode.peerCount} peer${codeNode.peerCount === 1 ? "" : "s"}` : "",
+              ].filter(Boolean).join(" · ")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                width: "fit-content",
+                maxWidth: "100%",
+                border: `1px solid ${codeNode?.healthy ? "rgba(94,234,212,0.38)" : "rgba(148,163,184,0.22)"}`,
+                borderRadius: 7,
+                background: codeNode?.healthy ? "rgba(45,212,191,0.12)" : "rgba(148,163,184,0.10)",
+                color: codeNode?.healthy ? "var(--accent-strong)" : "var(--muted)",
+                padding: "4px 7px",
+                fontFamily: "var(--f-mono)",
+                fontSize: 9.5,
+                fontWeight: 800,
+              }}
+            >
+              <GitBranch size={10} aria-hidden="true" />
+              <span>{codeNodeLabel}</span>
+            </span>
+          ) : null}
+          {selected && onOpenUsePodHost ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenUsePodHost();
+                  }}
+                  className={styles.rosterUsePodHostButton}
+                  aria-label={`Rent ${machine.name} compute through UsePod`}
+                >
+                  <Image src={USEPOD_RUNTIME_ICON_PATH} alt="" aria-hidden="true" width={15} height={15} unoptimized />
+                  <span>Rent compute</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Run usepod-agent on this machine</TooltipContent>
+            </Tooltip>
+          ) : null}
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); onToggle(); }}
@@ -369,7 +428,7 @@ function RosterRow({
                     color: "inherit",
                   }}
                 >
-                  <HexTile size={28} tone={isSelA ? "honey" : a.state === "working" ? "active" : "ghost"}>
+                  <HexTile className={styles.rosterHexTile} size={28} tone={isSelA ? "honey" : a.state === "working" ? "active" : "ghost"} surface="flat">
                     <BeeIcon
                       role={a.beeRole === "queen" ? "queen" : "worker"}
                       workerClass={a.workerClass}
@@ -789,6 +848,7 @@ export function Roster({
   onOpenChat, onOpenTaskChat, onCallAgent, onOpenWallet, onEditSettings, onDuplicate, onRemove,
 }: RosterProps) {
   const [activeIssueMachine, setActiveIssueMachine] = React.useState<FleetMachine | null>(null);
+  const [usePodHostMachine, setUsePodHostMachine] = React.useState<FleetMachine | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<{ machine: FleetMachine; agent: FleetAgent } | null>(null);
   const [deleteDepth, setDeleteDepth] = React.useState<AeonDeleteDepth | null>(null);
   const [deletePhase, setDeletePhase] = React.useState<"choice" | "deleting" | "done" | "error">("choice");
@@ -911,6 +971,7 @@ export function Roster({
           onSelectAgent={(a) => onSelectAgent(m, a)}
           onToggle={() => onToggleExpand(m.id)}
           onAddAgent={() => onAddAgent(m)}
+          onOpenUsePodHost={() => setUsePodHostMachine(m)}
           onUpdateMachine={onUpdateMachine ? () => onUpdateMachine(m) : undefined}
           onRenameMachine={onRenameMachine ? (name) => onRenameMachine(m.id, name) : undefined}
           onOpenNetworkIssue={m.networkIssue ? () => setActiveIssueMachine(m) : undefined}
@@ -923,6 +984,9 @@ export function Roster({
           onRemove={(a) => requestRemove(m, a)}
         />
       ))}
+      {usePodHostMachine && portalTarget ? createPortal((
+        <UsePodHostModal machine={usePodHostMachine} onClose={() => setUsePodHostMachine(null)} />
+      ), portalTarget) : null}
       {activeIssue && portalTarget ? createPortal((
         <div
           role="presentation"

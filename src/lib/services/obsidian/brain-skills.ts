@@ -31,6 +31,7 @@ export type BrainSkillSummary = {
   importedAs?: string;
   sourceMachine?: string;
   sourcePath?: string;
+  sourceStatus?: string;
   sourceFiles?: BrainSkillSourceFile[];
 };
 
@@ -324,15 +325,19 @@ async function skillSummary(input: {
     updatedAt,
     imported: input.provider === "shared" || Boolean(existing),
     importedAs: existing?.slug,
+    sourceStatus: sourceMetadata?.status,
   };
 }
 
-async function readSourceMetadata(skillDir: string): Promise<{ providerLabel?: string } | null> {
+async function readSourceMetadata(skillDir: string): Promise<{ providerLabel?: string; status?: string } | null> {
   const metadata = await readText(join(skillDir, SOURCE_METADATA_FILE));
   if (!metadata) return null;
   try {
-    const parsed = JSON.parse(metadata) as { providerLabel?: unknown };
-    return typeof parsed.providerLabel === "string" ? { providerLabel: parsed.providerLabel } : null;
+    const parsed = JSON.parse(metadata) as { providerLabel?: unknown; status?: unknown };
+    return {
+      providerLabel: typeof parsed.providerLabel === "string" ? parsed.providerLabel : undefined,
+      status: typeof parsed.status === "string" ? parsed.status : undefined,
+    };
   } catch {
     return null;
   }

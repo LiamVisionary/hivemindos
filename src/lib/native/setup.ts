@@ -1,5 +1,8 @@
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 
+export const NATIVE_SETUP_DEMO_ENABLED = false;
+export const NATIVE_SETUP_RERUN_EVENT = "hivemindos:rerun-setup";
+
 export type NativeSetupCheck = {
   id: string;
   label: string;
@@ -49,7 +52,40 @@ export type NativeSetupRunResult = {
   error?: string;
 };
 
-export async function readNativeSetupStatus(): Promise<NativeSetupStatus | null> {
+export function createNativeSetupDemoStatus(): NativeSetupStatus {
+  return {
+    ok: true,
+    checked_at: new Date().toISOString(),
+    auto_runs_setup_script: false,
+    setup_script_available: true,
+    setup_script_path: "./setup.sh",
+    platform: "demo",
+    checks: [
+      {
+        id: "demo-app",
+        label: "HivemindOS app",
+        installed: true,
+        detail: "Demo preview only. No setup files or services will be changed.",
+        optional: false,
+      },
+    ],
+    detected_agents: [
+      { id: "codex", label: "Codex", installed: true, detail: "Detected for demo preview" },
+      { id: "claude", label: "Claude", installed: true, detail: "Detected for demo preview" },
+      { id: "hermes", label: "Hermes", installed: true, detail: "Detected for demo preview" },
+      { id: "gemini", label: "Gemini", installed: true, detail: "Detected for demo preview" },
+      { id: "openclaw", label: "OpenClaw", installed: true, detail: "Detected for demo preview" },
+      { id: "aeon", label: "Aeon", installed: true, detail: "Detected for demo preview" },
+    ],
+  };
+}
+
+type NativeSetupOptions = {
+  demoMode?: boolean;
+};
+
+export async function readNativeSetupStatus(options?: NativeSetupOptions): Promise<NativeSetupStatus | null> {
+  if (options?.demoMode) return createNativeSetupDemoStatus();
   if (!isTauriDesktopRuntime()) return null;
   try {
     const { invoke } = await import("@tauri-apps/api/core");
@@ -62,7 +98,15 @@ export async function readNativeSetupStatus(): Promise<NativeSetupStatus | null>
   }
 }
 
-export async function runNativeSetup(input: NativeSetupRunInput): Promise<NativeSetupRunResult | null> {
+export async function runNativeSetup(input: NativeSetupRunInput, options?: NativeSetupOptions): Promise<NativeSetupRunResult | null> {
+  if (options?.demoMode) {
+    return {
+      ok: true,
+      mode: input.installMode,
+      command: "demo",
+      command_path: "demo",
+    };
+  }
   if (!isTauriDesktopRuntime()) return null;
   try {
     const { invoke } = await import("@tauri-apps/api/core");

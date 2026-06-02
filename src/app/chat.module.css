@@ -1899,19 +1899,17 @@ details[open] > summary .treeDisclosure::before {
   height: 13px;
 }
 
-.chat textarea {
+.chatComposerField textarea {
   width: 100%;
-  min-height: 112px;
-  max-height: 120px;
   border: 0;
   background: transparent;
   color: #e5eaf2;
-  padding: 16px 18px 48px;
   resize: vertical;
   font-size: 13px;
+  outline: none;
 }
 
-.chat textarea:focus {
+.chatComposerField textarea:focus {
   border-color: transparent;
 }
 

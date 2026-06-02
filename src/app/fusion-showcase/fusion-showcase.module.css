@@ -1,0 +1,1057 @@
+.page {
+  min-height: 100vh;
+  padding: 42px 26px 56px;
+  color: #17202c;
+  background:
+    radial-gradient(circle at 18% 16%, rgba(0, 168, 157, 0.1), transparent 24rem),
+    radial-gradient(circle at 84% 76%, rgba(139, 92, 246, 0.11), transparent 24rem),
+    linear-gradient(180deg, #f3f7fb 0%, #e8f0f6 52%, #f6f2fb 100%);
+}
+
+.hero,
+.cardGrid,
+.workflowShowcase,
+.infographic {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.hero {
+  display: grid;
+  gap: 12px;
+  padding: 12px 0 28px;
+}
+
+.eyebrow {
+  margin: 0;
+  color: #007f78;
+  font-size: 12px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  max-width: 900px;
+  margin: 0;
+  color: #101826;
+  font-size: 48px;
+  line-height: 1.02;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.lede {
+  max-width: 790px;
+  margin: 0;
+  color: #405264;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.workflowShowcase {
+  display: grid;
+  gap: 18px;
+  margin-bottom: 24px;
+  padding: 22px;
+  overflow: hidden;
+  border: 1px solid #cbd9e5;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(241, 248, 250, 0.92)),
+    radial-gradient(circle at 14% 16%, rgba(0, 168, 157, 0.16), transparent 18rem);
+  box-shadow: 0 20px 50px rgba(34, 48, 70, 0.12);
+}
+
+.workflowCopy {
+  display: grid;
+  gap: 8px;
+  max-width: 850px;
+}
+
+.workflowCopy h2,
+.backupHeader h2 {
+  margin: 0;
+  color: #101826;
+  font-size: 30px;
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+
+.workflowCopy p {
+  margin: 0;
+  color: #405264;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.workflowCanvas {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #d1dee9;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(236, 245, 248, 0.82)),
+    linear-gradient(90deg, rgba(0, 168, 157, 0.09), rgba(244, 182, 63, 0.08), rgba(139, 92, 246, 0.09));
+}
+
+.workflowTrack {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  padding: 24px;
+}
+
+.workflowTrack::before {
+  position: absolute;
+  top: 86px;
+  right: 84px;
+  left: 84px;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #141820, #8b5cf6 32%, #d29319 52%, #172dd7 74%, #26a5e4);
+  content: "";
+}
+
+.workflowNode {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px 10px 14px;
+  border: 1px solid rgba(203, 217, 229, 0.88);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  text-align: center;
+  box-shadow: 0 12px 26px rgba(34, 48, 70, 0.09);
+}
+
+.nodeIndex {
+  color: #738497;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 850;
+}
+
+.logoTile {
+  --logo-tile-size: 76px;
+  --logo-image-size: 48px;
+  display: grid;
+  place-items: center;
+  width: var(--logo-tile-size);
+  height: var(--logo-tile-size);
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  color: #00a89d;
+  background: #ffffff;
+  box-shadow:
+    0 10px 24px rgba(34, 48, 70, 0.12),
+    0 0 0 8px color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.logoImage {
+  display: block;
+  width: var(--logo-image-size);
+  height: var(--logo-image-size);
+  object-fit: contain;
+}
+
+.logoTile.black {
+  color: #141820;
+  background: #141820;
+}
+
+.logoTile.violet {
+  color: #7c4dd8;
+}
+
+.logoTile.gold {
+  color: #d29319;
+  background: #fffaf0;
+}
+
+.logoTile.blue {
+  color: #172dd7;
+}
+
+.workflowNode strong {
+  color: #17202c;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.workflowNode p {
+  min-height: 52px;
+  margin: 0;
+  color: #4a5d70;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.workflowNode em {
+  display: inline-grid;
+  min-height: 24px;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 24%, #d4dee8);
+  border-radius: 999px;
+  padding: 3px 9px;
+  color: color-mix(in srgb, currentColor 78%, #17202c);
+  background: color-mix(in srgb, currentColor 9%, #ffffff);
+  font-size: 10px;
+  line-height: 1.2;
+  font-style: normal;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.receiptGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.receiptChip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid #d1dee9;
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.receiptChip svg {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  color: #007f78;
+  stroke-width: 2.35;
+}
+
+.receiptChip span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.receiptChip strong {
+  color: #17202c;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.receiptChip small {
+  color: #526476;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.skillCard {
+  --skill-accent: #00a89d;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--skill-accent) 30%, #cbd7e3);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 20px 48px rgba(34, 48, 70, 0.12);
+}
+
+.artFrame {
+  position: relative;
+  display: grid;
+  aspect-ratio: 16 / 10;
+  place-items: center;
+  overflow: hidden;
+  border-bottom: 1px solid #d7e2ec;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--skill-accent) 12%, white), #ffffff 48%, #eef4f8);
+}
+
+.skillArt {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 235px;
+}
+
+.specificSkillArt,
+.specificWorkflowArt,
+.specificAeonArt {
+  display: grid;
+  align-content: center;
+  gap: 18px;
+  padding: 24px;
+}
+
+.logoCluster {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.logoClusterItem,
+.cardMiniNode {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: #46596d;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 850;
+  text-align: center;
+}
+
+.fusionPackage {
+  display: inline-grid;
+  grid-auto-flow: column;
+  justify-self: center;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #b9d8d4;
+  border-radius: 999px;
+  padding: 9px 14px;
+  color: #007f78;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 12px 28px rgba(34, 48, 70, 0.1);
+}
+
+.fusionPackage svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.35;
+}
+
+.fusionPackage span,
+.aeonBadge span {
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.cardMiniFlow {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+
+.cardMiniFlow::before {
+  position: absolute;
+  top: 32px;
+  right: 34px;
+  left: 34px;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #141820, #8b5cf6 32%, #d29319 52%, #172dd7 74%, #26a5e4);
+  content: "";
+}
+
+.cardMiniNode {
+  position: relative;
+  z-index: 1;
+}
+
+.cardProofStrip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 7px;
+}
+
+.cardProofStrip span {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #cddae6;
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: #405264;
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.cardProofStrip svg {
+  width: 14px;
+  height: 14px;
+  color: #007f78;
+  stroke-width: 2.5;
+}
+
+.specificAeonArt {
+  justify-items: center;
+}
+
+.aeonBadge {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #c7baf4;
+  border-radius: 999px;
+  padding: 10px 16px;
+  color: #6f42c8;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 12px 28px rgba(34, 48, 70, 0.1);
+}
+
+.aeonBadge svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 2.35;
+}
+
+.aeonLogoRing {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  width: min(360px, 100%);
+}
+
+.aeonLogoNode {
+  display: grid;
+  place-items: center;
+}
+
+.skillFusionArt,
+.aeonArt {
+  display: grid;
+  place-items: center;
+}
+
+.workflowArt {
+  display: grid;
+  align-content: center;
+  gap: 24px;
+  padding: 34px 32px;
+}
+
+.skillFusionArt::before,
+.aeonArt::before,
+.skillFusionArt::after,
+.aeonArt::after {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  pointer-events: none;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  content: "";
+}
+
+.skillFusionArt::before,
+.aeonArt::before {
+  width: 230px;
+  height: 230px;
+  border: 2px dashed rgba(0, 127, 120, 0.24);
+}
+
+.skillFusionArt::after,
+.aeonArt::after {
+  width: 142px;
+  height: 142px;
+  border: 1px solid rgba(124, 77, 216, 0.2);
+}
+
+.visualCore,
+.pipelineNode,
+.outputCapsule,
+.flowIcon,
+.orbitIcon {
+  display: grid;
+  place-items: center;
+  color: #007f78;
+}
+
+.visualCore {
+  position: relative;
+  z-index: 2;
+  width: 94px;
+  height: 94px;
+  border: 2px solid #00a89d;
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, #ffffff, #eef9f8);
+  box-shadow:
+    0 10px 24px rgba(0, 127, 120, 0.14),
+    0 0 0 10px rgba(0, 168, 157, 0.08);
+}
+
+.visualCore svg {
+  width: 38px;
+  height: 38px;
+  stroke-width: 2.4;
+}
+
+.orbitingCircles {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.orbitItem {
+  position: absolute;
+  left: calc(var(--icon-size) / -2);
+  top: calc(var(--icon-size) / -2);
+  width: var(--icon-size);
+  height: var(--icon-size);
+  animation: orbit var(--duration) linear infinite;
+  animation-delay: calc(var(--duration) / var(--count) * var(--index) * -1);
+}
+
+.reverse .orbitItem {
+  animation-direction: reverse;
+}
+
+.orbitIcon {
+  width: 100%;
+  height: 100%;
+  border: 1px solid currentColor;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow:
+    0 10px 22px rgba(34, 48, 70, 0.11),
+    0 0 0 7px color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.orbitIcon svg {
+  width: 52%;
+  height: 52%;
+  stroke-width: 2.25;
+}
+
+@keyframes orbit {
+  from {
+    transform: rotate(0deg) translateX(var(--radius)) rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg) translateX(var(--radius)) rotate(-360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbitItem {
+    animation-play-state: paused;
+  }
+}
+
+.teal {
+  color: #00a89d;
+}
+
+.gold {
+  color: #d29319;
+}
+
+.violet {
+  color: #7c4dd8;
+}
+
+.receiptRow {
+  display: flex;
+  justify-content: center;
+  gap: 42px;
+}
+
+.receiptRow span {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 42px;
+  border: 1px solid #bdc8d3;
+  border-radius: 8px;
+  background:
+    linear-gradient(#f9fbfd, #edf2f7);
+  box-shadow: 0 7px 18px rgba(34, 48, 70, 0.08);
+}
+
+.receiptRow svg {
+  width: 20px;
+  height: 20px;
+  color: #8a99a8;
+  stroke-width: 2.1;
+}
+
+.pipeline {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: center;
+  gap: 14px;
+}
+
+.pipeline::before {
+  position: absolute;
+  right: 48px;
+  left: 48px;
+  height: 8px;
+  border-radius: 999px;
+  background: #00a89d;
+  content: "";
+}
+
+.pipelineNode,
+.outputCapsule {
+  position: relative;
+  z-index: 2;
+  width: 62px;
+  height: 62px;
+  justify-self: center;
+  border: 1px solid currentColor;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 10px 22px rgba(34, 48, 70, 0.1);
+}
+
+.pipelineNode svg,
+.outputCapsule svg {
+  width: 28px;
+  height: 28px;
+  stroke-width: 2.25;
+}
+
+.outputCapsule {
+  width: 78px;
+  border-radius: 999px;
+  color: #d29319;
+}
+
+.aeonArt .visualCore {
+  border-radius: 999px;
+}
+
+.cardBody {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 17px;
+}
+
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  color: color-mix(in srgb, var(--skill-accent) 72%, #17202c);
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+.cardMeta code {
+  border: 1px solid #cfdbe6;
+  border-radius: 6px;
+  padding: 4px 7px;
+  color: #263445;
+  background: #f6f9fc;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.cardBody h2 {
+  margin: 0;
+  color: #101826;
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.cardBody p {
+  margin: 0;
+  color: #425467;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.infographic {
+  display: grid;
+  gap: 18px;
+  margin-top: 24px;
+  padding: 22px;
+  border: 1px solid #cbd9e5;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 18px 44px rgba(34, 48, 70, 0.1);
+}
+
+.infographicCopy {
+  display: grid;
+  gap: 8px;
+}
+
+.infographicCopy h2 {
+  max-width: 880px;
+  margin: 0;
+  color: #101826;
+  font-size: 26px;
+  line-height: 1.18;
+  letter-spacing: 0;
+}
+
+.fusionFlow {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin: 6px 0 0;
+  padding: 16px 0 4px;
+  list-style: none;
+}
+
+.fusionFlow::before {
+  position: absolute;
+  top: 54px;
+  right: 44px;
+  left: 44px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #00a89d, #d29319 54%, #7c4dd8);
+  content: "";
+}
+
+.flowStep {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  min-width: 0;
+  text-align: center;
+}
+
+.flowIcon {
+  width: 76px;
+  height: 76px;
+  border: 2px solid currentColor;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(34, 48, 70, 0.11);
+}
+
+.flowIcon svg {
+  width: 30px;
+  height: 30px;
+  stroke-width: 2.25;
+}
+
+.flowStep em {
+  display: block;
+  color: #6d7d8f;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.flowStep strong {
+  display: block;
+  color: #17202c;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.flowStep p {
+  margin: 3px auto 0;
+  max-width: 126px;
+  color: #526476;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.backupSection {
+  width: min(1180px, 100%);
+  margin: 24px auto 0;
+}
+
+.backupHeader {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.backupDetails {
+  margin-top: 16px;
+}
+
+.backupDetails summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  border: 1px solid #cfdbe6;
+  border-radius: 8px;
+  padding: 0 13px;
+  color: #405264;
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.backupDetails .cardGrid {
+  margin-top: 14px;
+}
+
+@media (max-width: 1120px) {
+  .logoCluster,
+  .cardMiniFlow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .cardMiniFlow::before {
+    display: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .page {
+    padding: 30px 16px 42px;
+  }
+
+  .hero h1 {
+    font-size: 38px;
+  }
+
+  .cardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .workflowTrack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workflowTrack::before {
+    display: none;
+  }
+
+  .workflowNode:nth-child(5) {
+    grid-column: 1 / -1;
+  }
+
+  .receiptGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .skillCard {
+    grid-template-columns: minmax(220px, 0.72fr) 1fr;
+    grid-template-rows: auto;
+  }
+
+  .artFrame {
+    height: 100%;
+  }
+
+  .skillArt {
+    min-height: 230px;
+  }
+
+  .logoCluster,
+  .cardMiniFlow {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .cardMiniFlow::before {
+    display: block;
+  }
+}
+
+@media (max-width: 680px) {
+  .hero h1 {
+    font-size: 31px;
+  }
+
+  .workflowShowcase {
+    padding: 16px;
+  }
+
+  .workflowCopy h2,
+  .backupHeader h2 {
+    font-size: 23px;
+  }
+
+  .workflowTrack {
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+
+  .workflowNode,
+  .workflowNode:nth-child(5) {
+    grid-column: auto;
+  }
+
+  .workflowNode {
+    grid-template-columns: 62px minmax(0, 1fr);
+    justify-items: start;
+    align-items: center;
+    text-align: left;
+  }
+
+  .nodeIndex,
+  .workflowNode em {
+    grid-column: 2;
+  }
+
+  .workflowNode > .logoTile {
+    grid-row: 1 / span 4;
+    width: var(--logo-tile-size);
+    height: var(--logo-tile-size);
+  }
+
+  .workflowNode > .logoTile .logoImage {
+    width: var(--logo-image-size);
+    height: var(--logo-image-size);
+  }
+
+  .workflowNode p {
+    min-height: 0;
+  }
+
+  .lede {
+    font-size: 15px;
+  }
+
+  .skillCard {
+    grid-template-columns: 1fr;
+  }
+
+  .artFrame {
+    height: auto;
+    min-height: 232px;
+  }
+
+  .specificSkillArt,
+  .specificWorkflowArt,
+  .specificAeonArt {
+    padding: 18px;
+  }
+
+  .logoCluster,
+  .cardMiniFlow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .cardMiniFlow::before {
+    display: none;
+  }
+
+  .aeonLogoRing {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+    width: min(205px, 100%);
+  }
+
+  .specificAeonArt {
+    gap: 12px;
+  }
+
+  .specificAeonArt .cardProofStrip {
+    display: none;
+  }
+
+  .aeonLogoNode .logoTile {
+    width: 34px;
+    height: 34px;
+  }
+
+  .aeonLogoNode .logoImage {
+    width: 22px;
+    height: 22px;
+  }
+
+  .pipeline {
+    gap: 8px;
+  }
+
+  .pipelineNode {
+    width: 54px;
+    height: 54px;
+  }
+
+  .outputCapsule {
+    width: 64px;
+    height: 54px;
+  }
+
+  .receiptRow {
+    gap: 22px;
+  }
+
+  .cardBody h2 {
+    font-size: 22px;
+  }
+
+  .infographic {
+    padding: 16px;
+  }
+
+  .infographicCopy h2 {
+    font-size: 22px;
+  }
+
+  .fusionFlow {
+    grid-template-columns: 1fr;
+    padding: 0;
+  }
+
+  .fusionFlow::before {
+    display: none;
+  }
+
+  .flowStep {
+    grid-template-columns: 54px minmax(0, 1fr);
+    justify-items: start;
+    align-items: center;
+    gap: 12px;
+    min-height: 68px;
+    border: 1px solid #d3dee8;
+    border-radius: 8px;
+    padding: 10px;
+    background: #ffffff;
+    text-align: left;
+  }
+
+  .flowIcon {
+    width: 44px;
+    height: 44px;
+    border-radius: 16px;
+  }
+
+  .flowIcon svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .flowStep p {
+    max-width: none;
+    margin: 2px 0 0;
+    font-size: 12px;
+  }
+}

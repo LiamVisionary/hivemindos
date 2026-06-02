@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">HivemindOS x GitLawb simplified infographic</title>
+  <desc id="desc">A simple investor-friendly equation: HivemindOS private AI brain plus GitLawb code proof equals trusted autonomous software work.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#061826"/>
+      <stop offset="52%" stop-color="#0b2c38"/>
+      <stop offset="100%" stop-color="#061826"/>
+    </linearGradient>
+    <linearGradient id="result" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#12304a"/>
+      <stop offset="100%" stop-color="#0f3d31"/>
+    </linearGradient>
+    <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse">
+      <path d="M44 0H0V44" fill="none" stroke="#2f5570" stroke-width="1" opacity="0.3"/>
+    </pattern>
+    <filter id="cardShadow" x="-12%" y="-12%" width="124%" height="124%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+    <style>
+      .text { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #e8f7ff; letter-spacing: 0; }
+      .muted { fill: #b5cad8; }
+      .cyan { fill: #7dd3fc; }
+      .green { fill: #86efac; }
+      .amber { fill: #fbbf24; }
+      .title { font-size: 74px; font-weight: 850; }
+      .subtitle { font-size: 30px; font-weight: 620; }
+      .eyebrow { font-size: 22px; font-weight: 820; text-transform: uppercase; }
+      .cardTitle { font-size: 38px; font-weight: 850; }
+      .body { font-size: 25px; font-weight: 560; }
+      .badge { font-size: 20px; font-weight: 760; }
+      .symbol { font-size: 82px; font-weight: 850; fill: #e8f7ff; }
+      .small { font-size: 18px; font-weight: 650; }
+      .card { filter: url(#cardShadow); }
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect width="1600" height="900" fill="url(#grid)"/>
+
+  <text class="text title" x="80" y="100">HivemindOS x GitLawb</text>
+  <text class="text subtitle muted" x="84" y="150">Private AI workspaces with verifiable code proof.</text>
+
+  <g transform="translate(80 230)" class="card">
+    <rect width="380" height="300" rx="26" fill="#09263d" stroke="#7dd3fc" stroke-width="2.5"/>
+    <text class="text eyebrow cyan" x="34" y="58">HivemindOS</text>
+    <text class="text cardTitle" x="34" y="114">Private AI</text>
+    <text class="text cardTitle" x="34" y="158">Brain</text>
+    <text class="text body muted" x="34" y="212">Remembers projects,</text>
+    <text class="text body muted" x="34" y="245">agents, machines,</text>
+    <text class="text body muted" x="34" y="278">and decisions.</text>
+  </g>
+
+  <text class="text symbol" x="520" y="410">+</text>
+
+  <g transform="translate(610 230)" class="card">
+    <rect width="380" height="300" rx="26" fill="#0a3028" stroke="#86efac" stroke-width="2.5"/>
+    <text class="text eyebrow green" x="34" y="58">GitLawb</text>
+    <text class="text cardTitle" x="34" y="114">Signed Code</text>
+    <text class="text cardTitle" x="34" y="158">Proof</text>
+    <text class="text body muted" x="34" y="212">Signs commits and</text>
+    <text class="text body muted" x="34" y="245">repo actions so work</text>
+    <text class="text body muted" x="34" y="278">can be verified.</text>
+  </g>
+
+  <text class="text symbol" x="1050" y="410">=</text>
+
+  <g transform="translate(1140 230)" class="card">
+    <rect width="380" height="300" rx="26" fill="url(#result)" stroke="#fbbf24" stroke-width="2.5"/>
+    <text class="text eyebrow amber" x="34" y="58">Result</text>
+    <text class="text cardTitle" x="34" y="114">Trusted</text>
+    <text class="text cardTitle" x="34" y="158">AI Work</text>
+    <text class="text body muted" x="34" y="212">Autonomous software</text>
+    <text class="text body muted" x="34" y="245">with a clear, provable</text>
+    <text class="text body muted" x="34" y="278">history.</text>
+  </g>
+
+  <rect x="204" y="590" width="1192" height="82" rx="41" fill="rgba(232, 247, 255, 0.09)" stroke="rgba(232, 247, 255, 0.35)" stroke-width="2"/>
+  <text class="text subtitle" x="294" y="642">The AI team remembers the work. GitLawb proves the code.</text>
+
+  <g transform="translate(220 728)">
+    <rect width="280" height="64" rx="32" fill="rgba(125, 211, 252, 0.12)" stroke="#7dd3fc" stroke-width="1.6"/>
+    <text class="text badge cyan" x="58" y="40">Private by default</text>
+  </g>
+
+  <g transform="translate(570 728)">
+    <rect width="280" height="64" rx="32" fill="rgba(134, 239, 172, 0.12)" stroke="#86efac" stroke-width="1.6"/>
+    <text class="text badge green" x="54" y="40">Proof-ready setup</text>
+  </g>
+
+  <g transform="translate(920 728)">
+    <rect width="338" height="64" rx="32" fill="rgba(251, 191, 36, 0.12)" stroke="#fbbf24" stroke-width="1.6"/>
+    <text class="text badge amber" x="42" y="40">Local node only when needed</text>
+  </g>
+
+  <text class="text small muted" x="80" y="852">Public federation stays opt-in. Private memory stays private. Code proof becomes effortless.</text>
+</svg>

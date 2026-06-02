@@ -9,10 +9,10 @@ HivemindOS is a control room for local-first agent fleets. The feature surface i
 
 <div class="signalGrid">
   <section class="signalCard"><strong>Connect</strong><span>Fleet, collectors, Tailnet/Link, apps, and runtime discovery.</span></section>
-  <section class="signalCard"><strong>Operate</strong><span>Agents, chat, Work board, Scheduler, Swarm, and deliverables.</span></section>
+  <section class="signalCard"><strong>Operate</strong><span>Agents, chat, Work board, Code Proof, Scheduler, Swarm, and deliverables.</span></section>
   <section class="signalCard"><strong>Remember</strong><span>Obsidian vault, shared skills, GBrain, Syntho, Synthesis, and notifications.</span></section>
   <section class="signalCard"><strong>Pay</strong><span>Wallets, Base/Solana, USDC, UsePod prepaid, Honey, HIVE, and x402.</span></section>
-  <section class="signalCard"><strong>Integrate</strong><span>MiroShark, Nango, GitHub OAuth, My Apps, phone, and work history.</span></section>
+  <section class="signalCard"><strong>Integrate</strong><span>GitLawb, MiroShark, Nango, GitHub OAuth, My Apps, phone, and work history.</span></section>
   <section class="signalCard"><strong>Maintain</strong><span>Env sync, runtime files, native helpers, memory telemetry, and repair checks.</span></section>
 </div>
 
@@ -40,7 +40,7 @@ Work is where operator intent turns into agent execution. The board captures rou
 <div class="docGrid">
   <section class="docCard">
     <h3>Work Board And Scheduler</h3>
-    <p>Kanban tasks, agent dispatch, deliverables, schedules, machine-aware folder picking, background jobs, and work history.</p>
+    <p>Kanban tasks, project provenance, Code Proof badges, agent dispatch, deliverables, schedules, machine-aware folder picking, background jobs, and work history.</p>
     <a href="work-and-scheduler.html">Open work docs</a>
   </section>
   <section class="docCard">
@@ -79,7 +79,7 @@ Wallet and token features are explicit rails, not a background permission pool. 
   </section>
   <section class="docCard">
     <h3>Integrations And Work History</h3>
-    <p>Nango, GitHub OAuth fallback, My Apps, API-service launchers, phone pairing, dynamic changelog, and work history.</p>
+    <p>GitLawb Code Proof, Nango, GitHub OAuth fallback, My Apps, API-service launchers, phone pairing, dynamic changelog, and work history.</p>
     <a href="integrations-and-work-history.html">Open integrations</a>
   </section>
 </div>
@@ -117,6 +117,7 @@ flowchart TD
   Chat --> Work["Work board"]
   Work --> Scheduler["Scheduler"]
   Work --> Deliverables["Deliverables"]
+  Work --> CodeProof["GitLawb Code Proof"]
   Work --> History["Work history"]
   Vault["Brain and vault"] --> Skills["Shared skills"]
   Vault --> GBrain["GBrain"]
@@ -130,4 +131,5 @@ flowchart TD
   Wallets --> UsePod["UsePod prepaid"]
   Wallets --> TokenRails["Base / Solana / USDC"]
   Wallets --> Bankr["Bankr HIVE"]
+  CodeProof --> Projects["Project registry"]
 ```

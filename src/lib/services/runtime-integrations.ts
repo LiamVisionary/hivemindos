@@ -42,6 +42,8 @@ export type RuntimeIntegrationStatus = {
   providerStatus?: {
     usePod?: {
       tokenEnvName?: string;
+      tokenPresent?: boolean;
+      tokenSource?: string;
       depositAddress?: string;
       depositCode?: string;
       dashboardUrl?: string;

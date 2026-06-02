@@ -13,6 +13,7 @@ type ModelPillSelectorProps = {
   models: ModelPillOption[];
   selectedModelId: string;
   disabled?: boolean;
+  addModelDisabled?: boolean;
   canAddModel?: boolean;
   addModelLabel?: string;
   emptyLabel?: string;
@@ -42,6 +43,7 @@ export function ModelPillSelector({
   models,
   selectedModelId,
   disabled = false,
+  addModelDisabled = false,
   canAddModel = false,
   addModelLabel = "Add model",
   emptyLabel = "No matching models.",
@@ -50,11 +52,29 @@ export function ModelPillSelector({
   onAddModel,
 }: ModelPillSelectorProps) {
   const [modelSearch, setModelSearch] = useState("");
+  const [optimisticSelection, setOptimisticSelection] = useState<{ modelId: string; baseSelectedModelId: string } | null>(null);
+
+  const markOptimisticModel = (modelId: string) => {
+    setOptimisticSelection({ modelId, baseSelectedModelId: selectedModelId });
+  };
+
+  const selectModel = (modelId: string) => {
+    markOptimisticModel(modelId);
+    requestAnimationFrame(() => {
+      window.setTimeout(() => void onSelectModel(modelId), 0);
+    });
+  };
+
   const filteredModels = useMemo(() => {
     const query = modelSearch.trim().toLowerCase();
     if (!query) return models;
     return models.filter((model) => `${model.name ?? ""} ${model.id}`.toLowerCase().includes(query));
   }, [models, modelSearch]);
+  const effectiveOptimisticModelId = optimisticSelection
+    && models.some((model) => model.id === optimisticSelection.modelId)
+    && (selectedModelId === optimisticSelection.baseSelectedModelId || selectedModelId === optimisticSelection.modelId)
+    ? optimisticSelection.modelId
+    : null;
 
   return (
     <div className={styles.modelSelector}>
@@ -72,7 +92,7 @@ export function ModelPillSelector({
       </label>
       <div className={styles.modelPillGrid} role="listbox" aria-label="Models">
         {filteredModels.map((model) => {
-          const selected = model.id === selectedModelId;
+          const selected = model.id === (effectiveOptimisticModelId ?? selectedModelId);
           const pill = modelPillParts(model);
           return (
             <button
@@ -82,7 +102,8 @@ export function ModelPillSelector({
               aria-selected={selected}
               role="option"
               key={model.id}
-              onClick={() => void onSelectModel(model.id)}
+              onPointerDown={() => markOptimisticModel(model.id)}
+              onClick={() => selectModel(model.id)}
               disabled={disabled}
               title={pill.detail || model.id}
             >
@@ -94,11 +115,11 @@ export function ModelPillSelector({
         })}
         {canAddModel ? (
           <button
-            type="button"
-            className={styles.addModelPill}
-            onClick={onAddModel}
-            disabled={disabled}
-          >
+              type="button"
+              className={styles.addModelPill}
+              onClick={onAddModel}
+              disabled={disabled || addModelDisabled}
+            >
             <Plus aria-hidden="true" />
             <span>{addModelLabel}</span>
           </button>

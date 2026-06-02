@@ -20,6 +20,7 @@ const HEX_CLIP = "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)"
 interface HexTileProps extends React.HTMLAttributes<HTMLDivElement> {
   size?: number;
   tone?: HexTone;
+  surface?: "frosted" | "flat";
   children?: React.ReactNode;
 }
 
@@ -30,7 +31,7 @@ interface HexTileProps extends React.HTMLAttributes<HTMLDivElement> {
  * shared edge instead of two parallel 1px lines.
  */
 export const HexTile = React.forwardRef<HTMLDivElement, HexTileProps>(function HexTile(
-  { size = 80, tone = "default", children, className, onClick, style, ...rest },
+  { size = 80, tone = "default", surface = "frosted", children, className, onClick, style, ...rest },
   ref,
 ) {
   const t = TONE_VARS[tone] ?? TONE_VARS.default;
@@ -54,12 +55,16 @@ export const HexTile = React.forwardRef<HTMLDivElement, HexTileProps>(function H
     >
       {/* Clipped fill — gradient + frosted glass */}
       <div
-        className="absolute inset-0"
+        className={`${styles.hexFill} absolute inset-0`}
         style={{
           clipPath: HEX_CLIP,
           background: t.bg,
-          backdropFilter: "blur(10px) saturate(140%)",
-          WebkitBackdropFilter: "blur(10px) saturate(140%)",
+          ...(surface === "frosted"
+            ? {
+                backdropFilter: "blur(10px) saturate(140%)",
+                WebkitBackdropFilter: "blur(10px) saturate(140%)",
+              }
+            : undefined),
         }}
       />
       {/* Border overlay — single shared SVG stroke */}

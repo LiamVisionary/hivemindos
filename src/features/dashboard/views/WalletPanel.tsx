@@ -123,14 +123,14 @@ export function WalletPanel(props: WalletPanelProps) {
   const effectiveSelectedWallet = selectedAgent && selectedWallet ? resolveAgentWallet(selectedAgent, selectedWallet) : selectedWallet;
   const effectiveSelectedWalletSnapshot = effectiveSelectedWallet ? getSurvivalSnapshot(effectiveSelectedWallet) : selectedWalletSnapshot;
 
-  function refreshUsePodWallet(agent: AgentProfile) {
+  async function refreshUsePodWallet(agent: AgentProfile) {
     const nextUsePod = {
       ...(agent.usePod ?? {}),
       lastTestStatus: "checking",
       lastStatusMessage: "Checking UsePod balance.",
     };
     updateAgentProfile(agent.id, { usePod: nextUsePod });
-    void refreshRuntimeIntegrations({ ...agent, provider: "usepod", usePod: nextUsePod });
+    await refreshRuntimeIntegrations({ ...agent, provider: "usepod", usePod: nextUsePod });
   }
 
   useEffect(() => {
@@ -333,15 +333,15 @@ export function WalletPanel(props: WalletPanelProps) {
                 onUpdateWallet={(patch) => updateWallet(selectedAgent.id, patch)}
                 onUpdateAction={(patch) => updateWalletAction(selectedAgent.id, patch)}
                 onSaveMoneyClawKey={(apiKey, options) => saveMoneyClawKey(selectedAgent.id, apiKey, options)}
-                onUpdateUsePod={(patch) => {
+                onUpdateUsePod={async (patch) => {
                   const nextUsePod = { ...(selectedAgent.usePod ?? {}), ...patch };
                   updateAgentProfile(selectedAgent.id, { usePod: nextUsePod });
-                  void refreshRuntimeIntegrations({ ...selectedAgent, usePod: nextUsePod, provider: "usepod" });
+                  await refreshRuntimeIntegrations({ ...selectedAgent, usePod: nextUsePod, provider: "usepod" });
                 }}
                 onResetRunway={() => resetWalletBurnClock(selectedAgent.id)}
                 onCopyPaymentPrompt={() => copyPaymentPrompt(effectiveSelectedWallet)}
                 onCreateLocalWallet={() => createLocalWallet(selectedAgent.id, effectiveSelectedWallet.network)}
-                onRefreshBalance={() => effectiveSelectedWallet.provider === "usepod" ? refreshUsePodWallet(selectedAgent) : refreshWalletBalance(selectedAgent.id)}
+                onRefreshBalance={() => { void (effectiveSelectedWallet.provider === "usepod" ? refreshUsePodWallet(selectedAgent) : refreshWalletBalance(selectedAgent.id)); }}
                 onSendUsdc={() => sendWalletUsdc(selectedAgent.id)}
                 onCallX402={() => testX402Fetch(selectedAgent.id)}
               />

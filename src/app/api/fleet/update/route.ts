@@ -14,6 +14,8 @@ type UpdateBody = {
   updateCommand?: string;
   expectedCommit?: string;
   preferRemoteShell?: boolean;
+  simulate?: boolean;
+  source?: string;
   requiredCapabilities?: {
     chat?: boolean;
     envHttpSync?: boolean;
@@ -286,6 +288,23 @@ function localUpdateScript() {
   ].join("\n");
 }
 
+function localUpdateRehearsalScript(appDir?: string) {
+  const script = [
+    "set -euo pipefail",
+    appDir?.trim() ? `cd ${shellSingleQuote(appDir.trim())}` : "",
+    "echo 'HivemindOS update rehearsal started.'",
+    "git rev-parse --is-inside-work-tree >/dev/null",
+    "echo \"current=$(git rev-parse --short HEAD)\"",
+    "echo \"branch=$(git rev-parse --abbrev-ref HEAD)\"",
+    "echo 'working-tree-status:'",
+    "git status --short --untracked-files=no || true",
+    "if command -v pnpm >/dev/null 2>&1; then echo \"pnpm=$(pnpm --version)\"; else echo 'pnpm=missing'; fi",
+    "test -f scripts/install-telemetry-collector.sh",
+    "echo 'HivemindOS update rehearsal completed.'",
+  ].filter(Boolean);
+  return script.join("\n");
+}
+
 function fallbackScript(appDir?: string, allowReclone = false) {
   if (appDir?.trim()) {
     return [
@@ -482,6 +501,11 @@ async function isLocalCheckout(appDir?: string) {
 }
 
 async function tryLocalShell(body: UpdateBody) {
+  if (body.simulate) {
+    const script = localUpdateRehearsalScript(body.appDir);
+    const { stdout, stderr } = await runProcess("bash", ["-s"], script, 45_000);
+    return { ok: true, accepted: true, method: "local-shell-rehearsal", target: "this machine", stdout, stderr, command: script, simulated: true };
+  }
   if (body.appDir?.trim()) {
     const status = await runProcess("git", ["-C", body.appDir.trim(), "status", "--porcelain"], null, 10_000);
     const dirtyFiles = status.stdout.trim();
@@ -516,6 +540,9 @@ export async function POST(request: Request) {
       : body.collectorUrl
         ? tryCollectorUpdate(body)
         : tryTailscaleSsh(body));
+    if (body.simulate) {
+      return Response.json({ ...result, verified: true, health: preUpdateHealth });
+    }
     const verification = await waitForCollectorVerification(body, verificationOptions);
     if (!verification.verified) {
       return Response.json({

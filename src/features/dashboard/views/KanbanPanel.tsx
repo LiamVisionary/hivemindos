@@ -10,6 +10,18 @@ import { WorkSectionHeader } from "./WorkSectionHeader";
 
 const EMPTY_WORK_HISTORY: WorkHistoryPayload = { projects: [], entries: [] };
 const WORK_HISTORY_PAGE_SIZE = 10;
+const codeProofPillStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  minHeight: 22,
+  border: "1px solid rgba(94,234,212,0.28)",
+  borderRadius: 7,
+  background: "rgba(45,212,191,0.10)",
+  color: "#99f6e4",
+  padding: "3px 7px",
+  fontSize: 10.5,
+  fontWeight: 800,
+};
 
 export function KanbanPanel(props: any) {
   const { AttachmentListMenuContent, AttachmentMenuContent, CellMenu, ChatMarkdown, Check, ChevronDown, ChevronRight, ComposerField, DEFAULT_SHARED_VAULT, ExternalLink, Eye, FolderOpen, Image, KANBAN_COLUMNS, KANBAN_STEER_TARGETS, MessageAttachments, MessageSquare, Paperclip, Plus, RotateCcw, Search, Settings2, activeView, addKanbanComment, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, attachQuickAddDirectory, attachQuickAddRecentDirectory, bulkPatchKanbanTasks, chatClass, commentDraft, createKanbanBoard, createKanbanTask, displayAgents, editAndInterruptKanbanTask, expandedKanbanCards, formatDurationShort, formatMessageTimestamp, formatRelativeTime, handleKanbanCardFileChange, handleKanbanCardImageChange, handleKanbanSteerFileChange, handleKanbanSteerImageChange, handleQuickAddFileChange, handleQuickAddImageChange, importNoteIntake, initialWorkHistory, isKanbanStaleWorkingTask, isKanbanTerminalMessage, kanbanAssigneeFilter, kanbanAssigneeOptions, kanbanBoard, kanbanBoardScrollRef, kanbanBoardScrollState, kanbanBoardSlug, kanbanBoards, kanbanBulkAssignee, kanbanBulkPending, kanbanCardAttachmentListOpen, kanbanCardAttachmentMenuOpen, kanbanCardDeliverableMenuOpen, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanCardMachineMenuOpen, kanbanCardMessage, kanbanCardRecentsExpanded, kanbanClass, kanbanEditDraft, kanbanEditPendingTaskId, kanbanError, kanbanEventLabel, kanbanIncludeArchived, kanbanInitialLoading, kanbanLoading, kanbanMachineTargets, kanbanPickupPreviewByTask, kanbanSearch, kanbanStaleAge, kanbanSteerAttachmentError, kanbanSteerAttachmentMenuOpen, kanbanSteerAttachmentMenuRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerFileInputRef, kanbanSteerImageInputRef, kanbanSteerTargetMenuOpen, kanbanSteerTargetMenuRef, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanStorage, kanbanTaskBee, kanbanTaskMenuItems, kanbanTaskModal, kanbanTenantFilter, kanbanTenants, kanbanViewColumns, markKanbanTaskReviewed, moveKanbanTask, newBoardDraft, noteIntakePending, noteIntakePreview, noteIntakeStatus, openKanbanCardFilePicker, openKanbanTaskModal, patchKanbanTask, quickAddAttachmentError, quickAddAttachmentMenuOpen, quickAddAttachmentMenuRef, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddFileInputRef, quickAddImageInputRef, quickAddMachineMenuOpen, quickAddMachineMenuRef, quickAddMachineTarget, quickAddMachineTargets, quickAddStatus, recentDirectories, recentDirectoriesExpanded, recording, removeKanbanCardAttachment, removeKanbanCardDirectory, removeKanbanSteerAttachment, removeKanbanSteerDirectory, removeQuickAddAttachment, removeQuickAddDirectory, scanNoteIntake, selectedKanbanAgent, selectedKanbanAgentMessages, selectedKanbanBulkIds, selectedKanbanComments, selectedKanbanEvents, selectedKanbanTask, selectedKanbanTaskId, selectedKanbanTaskIds, setActiveView, setCommentDraft, setExpandedKanbanCards, setKanbanAssigneeFilter, setKanbanBoardSlug, setKanbanBulkAssignee, setKanbanCardAttachmentListOpen, setKanbanCardAttachmentMenuOpen, setKanbanCardDeliverableMenuOpen, setKanbanCardMachineMenuOpen, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanIncludeArchived, setKanbanLoading, setKanbanSearch, setKanbanSteerAttachmentMenuOpen, setKanbanSteerDraft, setKanbanSteerTargetMenuOpen, setKanbanSteerTargetStatus, setKanbanTaskModal, setKanbanTenantFilter, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddStatus, setRecentDirectoriesExpanded, setSelectedKanbanTaskId, setSelectedKanbanTaskIds, sharedVault, startAudioRecording, steerSelectedKanbanTask, stopAudioRecording, updateKanbanTaskMachine, updateSharedVault, voiceBands, voiceTarget, voiceTranscript, workBoardStats } = props;
@@ -20,6 +32,9 @@ export function KanbanPanel(props: any) {
   const [workHistoryProject, setWorkHistoryProject] = useState("");
   const [workHistoryQuery, setWorkHistoryQuery] = useState("");
   const [deliverableMenuPosition, setDeliverableMenuPosition] = useState<Record<string, any>>({});
+  const [codeProjects, setCodeProjects] = useState<any[]>([]);
+  const [selectedCodeProjectId, setSelectedCodeProjectId] = useState("");
+  const [gitlawbStatus, setGitlawbStatus] = useState<any>(null);
   const workHistorySkipInitialFetchRef = useRef(Boolean(initialWorkHistory?.generatedAt));
   const workHistoryEntryCountRef = useRef(workHistory.entries.length);
   const sharedVaultPath = sharedVault?.vaultPath;
@@ -80,10 +95,38 @@ export function KanbanPanel(props: any) {
     const data = await response.json().catch(() => null);
     if (!response.ok || !data?.ok) throw new Error(data?.error || "Could not open deliverable.");
   };
+  const codeProjectById = useMemo(() => new Map(codeProjects.map((project) => [project.id, project])), [codeProjects]);
+  const proofLabelForTask = (task: any) => {
+    const proof = Array.isArray(task.proofs) ? task.proofs.find((item: any) => item?.status && item.status !== "unavailable" && item.status !== "failed") : null;
+    if (proof?.status === "verified") return "Code proof verified";
+    if (proof) return "Code proof linked";
+    if (!task.projectId) return "";
+    const project = codeProjectById.get(task.projectId);
+    if (project?.gitlawbRepo) return "Code proof linked";
+    if (gitlawbStatus?.cli?.installed && gitlawbStatus?.identity?.source === "local") return "Code proof ready";
+    return "Code proof unavailable";
+  };
 
   useEffect(() => {
     workHistoryEntryCountRef.current = workHistory.entries.length;
   }, [workHistory.entries.length]);
+
+  useEffect(() => {
+    if (activeView !== "kanban") return;
+    const controller = new AbortController();
+    const params = new URLSearchParams();
+    if (sharedVaultPath) params.set("vaultPath", sharedVaultPath);
+    Promise.all([
+      fetch(`/api/projects${params.toString() ? `?${params.toString()}` : ""}`, { signal: controller.signal }).then((response) => response.json()).catch(() => null),
+      fetch("/api/gitlawb/status", { signal: controller.signal }).then((response) => response.json()).catch(() => null),
+    ]).then(([projectsData, statusData]) => {
+      if (projectsData?.ok) setCodeProjects(projectsData.projects ?? []);
+      if (statusData?.ok) setGitlawbStatus(statusData.status);
+    }).catch((error) => {
+      if (error?.name !== "AbortError") setCodeProjects([]);
+    });
+    return () => controller.abort();
+  }, [activeView, sharedVaultPath]);
 
   const loadWorkHistory = useCallback((options: { append?: boolean; signal?: AbortSignal } = {}) => {
     const append = Boolean(options.append);
@@ -181,6 +224,16 @@ export function KanbanPanel(props: any) {
                 <select value={kanbanAssigneeFilter} onChange={(event) => setKanbanAssigneeFilter(event.target.value)}>
                   <option value="">All</option>
                   {kanbanAssigneeOptions.map((assignee) => <option value={assignee} key={assignee}>{assignee}</option>)}
+                </select>
+                <ChevronDown aria-hidden="true" />
+              </div>
+            </label>
+            <label className={kanbanClass("workBoardField")}>
+              <span>Project</span>
+              <div className={kanbanClass("workBoardSelectShell")}>
+                <select value={selectedCodeProjectId} onChange={(event) => setSelectedCodeProjectId(event.target.value)}>
+                  <option value="">No project</option>
+                  {codeProjects.map((project) => <option value={project.id} key={project.id}>{project.name}</option>)}
                 </select>
                 <ChevronDown aria-hidden="true" />
               </div>
@@ -356,7 +409,7 @@ export function KanbanPanel(props: any) {
                         </article>
                       ))
                     ) : quickAddStatus === column.id ? (
-                      <form className={kanbanClass("kanbanInlineAdd")} onSubmit={(event) => createKanbanTask(event, column.id)}>
+                      <form className={kanbanClass("kanbanInlineAdd")} onSubmit={(event) => createKanbanTask(event, column.id, selectedCodeProjectId || undefined)}>
                         <div className={kanbanClass("kanbanInlineAddMeta")} ref={quickAddMachineMenuRef}>
                           <div className={kanbanClass("kanbanMachinePicker")}>
                             <button
@@ -451,6 +504,9 @@ export function KanbanPanel(props: any) {
                       const taskAttachmentCount = (task.attachments?.length ?? 0) + (task.linkedDirectories?.length ?? 0);
                       const deliverables = task.status === "done" ? (task.deliverables ?? []) : [];
                       const undoInProgress = Boolean(task.undoRequestedAt && (task.status === "ready" || task.status === "working"));
+                      const taskProject = task.projectId ? codeProjectById.get(task.projectId) : null;
+                      const taskProof = Array.isArray(task.proofs) ? task.proofs.find((proof: any) => proof?.repo || proof?.title) : null;
+                      const proofLabel = proofLabelForTask(task);
                       return (
                         <article className={kanbanClass("kanbanCardShell")} key={task.id}>
                           <div
@@ -500,6 +556,20 @@ export function KanbanPanel(props: any) {
                               ) : null}
                             </div>
                             <strong className={kanbanClass("kanbanCardTitle")}>{task.title}</strong>
+                            {proofLabel ? (
+                              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                                {taskProject ? (
+                                  <span style={codeProofPillStyle} title={taskProject.gitlawbRepo?.repoName || taskProject.name}>
+                                    {taskProject.name}
+                                  </span>
+                                ) : taskProof?.repo || taskProof?.title ? (
+                                  <span style={codeProofPillStyle} title={taskProof.repo || taskProof.title}>
+                                    {taskProof.repo || taskProof.title}
+                                  </span>
+                                ) : null}
+                                <span style={codeProofPillStyle}>{proofLabel}</span>
+                              </div>
+                            ) : null}
                             <div className={kanbanClass("kanbanCardMeta")}>
                               <div className={kanbanClass("kanbanMachinePicker")} data-kanban-machine-menu="true">
                                 <button

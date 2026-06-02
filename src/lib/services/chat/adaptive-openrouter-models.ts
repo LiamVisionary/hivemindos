@@ -158,7 +158,11 @@ function modelUseCaseScore(model: OpenRouterModelRecord, useCases: string[]) {
 }
 
 export async function resolveAdaptiveOpenRouterModels(profile: AgentProfile, messages: IncomingMessage[]) {
-  const inventory = await fetchOpenRouterModelInventory();
+  const fallbackModel = profile.adaptiveOpenRouter?.fallbackModel?.trim();
+  const inventory = await fetchOpenRouterModelInventory().catch((error: unknown) => {
+    if (fallbackModel) return [] as OpenRouterModelRecord[];
+    throw error;
+  });
   const latest = latestUserMessage(messages);
   const requiresImage = Array.isArray(latest?.content) && latest.content.some((part) => part.type === "image_url");
   const requiredModalities = requiresImage ? ["text", "image"] : ["text"];
@@ -176,8 +180,9 @@ export async function resolveAdaptiveOpenRouterModels(profile: AgentProfile, mes
         || (right.created ?? 0) - (left.created ?? 0)
         || (left.name ?? left.id ?? "").localeCompare(right.name ?? right.id ?? "");
     });
-  if (!candidates[0]?.id) throw new Error("OpenRouter did not report any free model that matches this Adaptive request.");
-  return candidates.map((model) => model.id!).filter(Boolean);
+  if (!candidates[0]?.id && !fallbackModel) throw new Error("OpenRouter did not report any free model that matches this Adaptive request.");
+  const ids = candidates.map((model) => model.id!).filter(Boolean);
+  return fallbackModel && !ids.includes(fallbackModel) ? [...ids, fallbackModel] : ids;
 }
 
 export async function resolveAdaptiveOpenRouterModel(profile: AgentProfile, messages: IncomingMessage[]) {

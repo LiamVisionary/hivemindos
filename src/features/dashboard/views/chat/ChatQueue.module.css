@@ -1,0 +1,154 @@
+.chatQueue {
+  position: absolute;
+  right: 24px;
+  bottom: 142px;
+  left: 24px;
+  z-index: 9;
+  display: grid;
+  max-height: min(34vh, 238px);
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(8, 13, 20, 0.9);
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(26px) saturate(1.35);
+  -webkit-backdrop-filter: blur(26px) saturate(1.35);
+}
+
+.chatQueueHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  padding: 9px 13px;
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.chatQueueHeader small {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.chatQueueList {
+  display: grid;
+}
+
+.chatQueueItem {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 52px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  color: #dbe6f4;
+  padding: 9px 11px 9px 13px;
+}
+
+.chatQueueItem:last-child {
+  border-bottom: 0;
+}
+
+.chatQueueItem > svg {
+  width: 16px;
+  height: 16px;
+  color: #94a3b8;
+}
+
+.chatQueueBody {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.chatQueueBody strong {
+  color: #e5edf7;
+  font-size: 13px;
+  font-weight: 620;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.chatQueueBody small {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.chatQueueAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  border: 1px solid rgba(94, 234, 212, 0.2);
+  border-radius: 999px;
+  background: rgba(94, 234, 212, 0.08);
+  color: #99f6e4;
+  padding: 0 10px !important;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.chatQueueAction:disabled {
+  border-color: rgba(148, 163, 184, 0.12);
+  background: rgba(148, 163, 184, 0.08);
+  color: #64748b;
+}
+
+.chatQueueAction svg {
+  width: 13px;
+  height: 13px;
+}
+
+.chatQueueRemove {
+  width: 30px;
+  height: 30px;
+}
+
+:global(:root[data-theme="hive-light"]) .chatQueue {
+  border-color: var(--comb-line);
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+:global(:root[data-theme="hive-light"]) .chatQueueHeader,
+:global(:root[data-theme="hive-light"]) .chatQueueBody strong {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .chatQueueHeader,
+:global(:root[data-theme="hive-light"]) .chatQueueItem {
+  border-color: var(--comb-line);
+}
+
+:global(:root[data-theme="hive-light"]) .chatQueueAction {
+  border-color: rgba(111, 86, 37, 0.22);
+  background: rgba(212, 180, 111, 0.16);
+  color: var(--foreground);
+}
+
+@media (min-width: 721px) {
+  .chatQueue {
+    right: auto;
+    left: 50%;
+    width: min(var(--chat-column-width), calc(100% - 48px));
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 720px) {
+  .chatQueue {
+    right: 10px;
+    bottom: 132px;
+    left: 10px;
+    max-height: min(32vh, 220px);
+  }
+
+  .chatQueueAction span {
+    display: none;
+  }
+}

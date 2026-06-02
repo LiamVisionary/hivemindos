@@ -9,6 +9,7 @@ import { HexTile } from "./hex-tile";
 import { ListView } from "./list-view";
 import { MapView } from "./map-view";
 import { NetworkGraph } from "./network-graph";
+import { FleetConstellationLoading, FleetDispatchLoading, FleetRosterLoading, FleetScanOverlay } from "./fleet-loading";
 import { Roster, type AeonDeleteDepth, type AeonDeleteProgress, type AeonDeleteResult, type MachineUpdateButtonDetail, type MachineUpdateButtonStatus } from "./roster";
 import {
   ALERTS,
@@ -98,6 +99,7 @@ export function FleetView({
   const [dispatchIdx, setDispatchIdx] = React.useState(0);
   const [dismissedAlertIds, setDismissedAlertIds] = React.useState<Set<string>>(() => new Set());
   const [selectedAlert, setSelectedAlert] = React.useState<FleetAlert | null>(null);
+  const [gitlawbNode, setGitlawbNode] = React.useState<FleetMachine["gitlawb"] | null>(null);
   const [settledFleet, setSettledFleet] = React.useState<SettledFleetViewData>({
     machines: [],
     tasks: [],
@@ -107,21 +109,26 @@ export function FleetView({
     hasValue: false,
   });
 
-  const incomingAgentCount = machines.reduce((count, machine) => count + machine.agents.length, 0);
-
   React.useEffect(() => {
     if (loading) return;
-    if (machines.length === 0 || incomingAgentCount === 0) return;
+    if (machines.length === 0) return;
     const timer = window.setTimeout(() => {
       setSettledFleet({ machines, tasks, alerts, ticker, edges, hasValue: true });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [alerts, edges, incomingAgentCount, loading, machines, tasks, ticker]);
+  }, [alerts, edges, loading, machines, tasks, ticker]);
 
-  const displayMachines = React.useMemo(
+  const baseDisplayMachines = React.useMemo(
     () => loading && !settledFleet.hasValue ? [] : loading ? settledFleet.machines : machines,
     [loading, machines, settledFleet.hasValue, settledFleet.machines],
   );
+  const displayMachines = React.useMemo(() => {
+    if (!gitlawbNode) return baseDisplayMachines;
+    const preferredId = preferredInitialMachineId(baseDisplayMachines);
+    return baseDisplayMachines.map((machine) => (
+      machine.id === preferredId ? { ...machine, gitlawb: gitlawbNode } : machine
+    ));
+  }, [baseDisplayMachines, gitlawbNode]);
   const displayTasks = loading && !settledFleet.hasValue ? [] : loading ? settledFleet.tasks : tasks;
   const displayAlerts = loading && !settledFleet.hasValue ? [] : loading ? settledFleet.alerts : alerts;
   const displayTicker = loading && !settledFleet.hasValue ? [] : loading ? settledFleet.ticker : ticker;
@@ -134,6 +141,19 @@ export function FleetView({
     const t = setInterval(() => setDispatchIdx((i) => displayTicker.length ? (i + 1) % displayTicker.length : 0), 2200);
     return () => clearInterval(t);
   }, [displayTicker.length]);
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/gitlawb/status", { signal: controller.signal })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data?.ok) setGitlawbNode(data.status?.node ?? null);
+      })
+      .catch((error) => {
+        if (error?.name !== "AbortError") setGitlawbNode(null);
+      });
+    return () => controller.abort();
+  }, []);
 
   const selectedMachineId = selected && displayMachines.some((machine) => machine.id === selected)
     ? selected
@@ -626,108 +646,6 @@ export function FleetView({
 
       </div>
     </TooltipProvider>
-  );
-}
-
-function FleetScanOverlay() {
-  return (
-    <div className="pointer-events-none absolute inset-x-4 top-4 z-10 rounded-xl border border-[rgba(94,234,212,0.24)] bg-[rgba(8,13,22,0.78)] px-4 py-3 shadow-[0_18px_60px_rgba(0,0,0,0.26)] backdrop-blur">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className={styles.monoCap} style={{ color: "var(--accent-strong)" }}>Scanning Fleet</div>
-          <p className="m-0 mt-1 text-xs leading-5 text-[var(--muted)]">Refreshing machines, agent bridges, and live status.</p>
-        </div>
-        <span className="relative h-9 w-28 overflow-hidden rounded-full border border-[rgba(94,234,212,0.20)] bg-[rgba(45,212,191,0.08)]">
-          <span className="absolute inset-y-0 left-0 w-10 animate-[fleet-scan-sweep_1.35s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-[rgba(94,234,212,0.42)] to-transparent" />
-          <span className="absolute left-4 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[rgba(94,234,212,0.72)] shadow-[0_0_16px_rgba(94,234,212,0.50)]" />
-          <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[rgba(255,212,90,0.68)] shadow-[0_0_16px_rgba(255,212,90,0.42)]" />
-          <span className="absolute right-4 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[rgba(94,234,212,0.46)]" />
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function FleetRosterLoading() {
-  return (
-    <div className="grid gap-2" aria-live="polite" aria-busy="true">
-      {Array.from({ length: 4 }, (_, index) => (
-        <div
-          key={index}
-          className="grid grid-cols-[26px_minmax(0,1fr)_22px] items-start gap-x-2.5 rounded-xl border border-[rgba(148,163,184,0.14)] bg-[rgba(16,20,29,0.58)] px-2.5 py-2.5"
-        >
-          <span className="h-[26px] w-[26px] animate-pulse rounded-md border border-[rgba(94,234,212,0.22)] bg-[rgba(45,212,191,0.10)]" style={{ animationDelay: `${index * 80}ms` }} />
-          <span className="grid min-w-0 gap-2">
-            <span className="h-3 w-28 animate-pulse rounded-full bg-[rgba(226,232,240,0.18)]" style={{ animationDelay: `${index * 80 + 70}ms` }} />
-            <span className="h-2 w-36 animate-pulse rounded-full bg-[rgba(148,163,184,0.14)]" style={{ animationDelay: `${index * 80 + 120}ms` }} />
-            <span className="mt-1 h-6 w-full animate-pulse rounded-md bg-[rgba(15,23,42,0.42)]" style={{ animationDelay: `${index * 80 + 170}ms` }} />
-          </span>
-          <span className="h-[22px] w-[22px] animate-pulse rounded-md bg-[rgba(148,163,184,0.12)]" style={{ animationDelay: `${index * 80 + 90}ms` }} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function FleetConstellationLoading() {
-  const nodes = [
-    { left: "50%", top: "45%", size: 74, delay: 0 },
-    { left: "29%", top: "32%", size: 50, delay: 120 },
-    { left: "68%", top: "30%", size: 54, delay: 220 },
-    { left: "33%", top: "65%", size: 46, delay: 320 },
-    { left: "72%", top: "62%", size: 48, delay: 420 },
-  ];
-  return (
-    <div className="relative h-full w-full" aria-live="polite" aria-busy="true">
-      <div className="absolute left-1/2 top-[45%] h-[min(58%,520px)] w-[min(58%,520px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[rgba(94,234,212,0.16)]" />
-      <div className="absolute left-1/2 top-[45%] h-[min(42%,380px)] w-[min(42%,380px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[rgba(255,212,90,0.14)]" />
-      <div className="absolute left-1/2 top-[45%] h-px w-[56%] -translate-x-1/2 rotate-[18deg] bg-gradient-to-r from-transparent via-[rgba(94,234,212,0.32)] to-transparent" />
-      <div className="absolute left-1/2 top-[45%] h-px w-[54%] -translate-x-1/2 -rotate-[22deg] bg-gradient-to-r from-transparent via-[rgba(255,212,90,0.28)] to-transparent" />
-      {nodes.map((node) => (
-        <span
-          key={`${node.left}-${node.top}`}
-          className="absolute grid animate-pulse place-items-center rounded-[22px] border border-[rgba(94,234,212,0.26)] bg-[rgba(16,20,29,0.74)] shadow-[0_18px_54px_rgba(45,212,191,0.12)]"
-          style={{
-            left: node.left,
-            top: node.top,
-            width: node.size,
-            height: node.size,
-            marginLeft: -node.size / 2,
-            marginTop: -node.size / 2,
-            animationDelay: `${node.delay}ms`,
-          }}
-        >
-          <span className="h-3 w-3 rounded-full bg-[rgba(94,234,212,0.65)] shadow-[0_0_18px_rgba(94,234,212,0.45)]" />
-        </span>
-      ))}
-      <div className="absolute inset-x-6 bottom-7 rounded-xl border border-[rgba(148,163,184,0.16)] bg-[rgba(8,13,22,0.72)] px-4 py-3 text-center shadow-[0_20px_70px_rgba(0,0,0,0.20)]">
-        <div className={styles.monoCap} style={{ color: "var(--accent-strong)" }}>Scanning fleet discovery</div>
-        <p className="m-0 mt-2 text-sm leading-6 text-[var(--muted)]">
-          Finding Tailnet machines, agent bridges, and live status snapshots.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function FleetDispatchLoading() {
-  return (
-    <>
-      {Array.from({ length: 3 }, (_, index) => (
-        <article
-          key={index}
-          className="rounded-xl border border-[rgba(148,163,184,0.14)] bg-[rgba(16,20,29,0.58)] p-3"
-        >
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="h-2 w-20 animate-pulse rounded-full bg-[rgba(94,234,212,0.18)]" style={{ animationDelay: `${index * 90}ms` }} />
-            <span className="h-2 w-10 animate-pulse rounded-full bg-[rgba(148,163,184,0.14)]" style={{ animationDelay: `${index * 90 + 80}ms` }} />
-          </div>
-          <span className="block h-3 w-32 animate-pulse rounded-full bg-[rgba(226,232,240,0.18)]" style={{ animationDelay: `${index * 90 + 120}ms` }} />
-          <span className="mt-2 block h-2 w-full animate-pulse rounded-full bg-[rgba(148,163,184,0.14)]" style={{ animationDelay: `${index * 90 + 180}ms` }} />
-          <span className="mt-2 block h-2 w-2/3 animate-pulse rounded-full bg-[rgba(148,163,184,0.12)]" style={{ animationDelay: `${index * 90 + 240}ms` }} />
-        </article>
-      ))}
-    </>
   );
 }
 

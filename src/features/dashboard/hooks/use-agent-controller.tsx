@@ -4,7 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { openNativeDirectory } from "@/lib/native/filesystem";
 import type { BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
-import { runtimeIntegrationFeature, runtimeLocalDataDirPatch, runtimePostCreateAction, runtimeProfileFeature, runtimeSettingsFeature } from "@/lib/types/agent-runtime";
+import { defaultAgentNameForRuntime, runtimeIntegrationFeature, runtimeLocalDataDirPatch, runtimePostCreateAction, runtimeProfileFeature, runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 import type { AgentCreateDraft, AgentSettingsPanel, AgentWorkerClassView, RuntimeModelDraft, RuntimeModelSetupMode } from "@/features/dashboard/agent-settings-types";
 import type { DashboardView, DiscoveredMachine, MachineGroup, RuntimeEnvSyncResponse, RuntimeIntegrationStatus, RuntimeModelSelection, RuntimeSessionSearchResult, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
 
@@ -120,11 +120,12 @@ export function useAgentController(props: UseAgentControllerProps) {
     setAeonEnvSyncStatus(`Synced ${synced} secret${synced === 1 ? "" : "s"} to ${data.result?.repo ?? selectedAgent.aeonRepo}${skipped ? `, skipped ${skipped}` : ""}.`);
   }
 
-  function openAgentCreationModal(machine: MachineGroup, runtime: AgentRuntime = "hermes", name = "") {
+  function openAgentCreationModal(machine: MachineGroup, runtime?: AgentRuntime, name = "") {
     if (machine.collector !== "ready" || !machine.collectorUrl) {
       openSetupModal(machine);
       return;
     }
+    const selectedRuntime = runtime ?? selectedAgent?.runtime ?? "hermes";
     setAgentRoleModalId("");
     setAgentRenameEditing(false);
     setAgentRuntimeFolderEditing(false);
@@ -144,14 +145,15 @@ export function useAgentController(props: UseAgentControllerProps) {
     setCustomWorkerImageError("");
     setAgentSettingsPanel("role");
     setAgentCreateMachineKey(machine.key);
-    const baseAgent = createAgentProfile(runtime, runtimeCount(agents, runtime) + 1);
-    const runtimeSettings = runtimeSettingsFeature(runtime);
-    const runtimeProfile = runtimeProfileFeature(runtime);
+    const baseAgent = createAgentProfile(selectedRuntime, runtimeCount(agents, selectedRuntime) + 1);
+    const runtimeSettings = runtimeSettingsFeature(selectedRuntime);
+    const runtimeProfile = runtimeProfileFeature(selectedRuntime);
     const autopilotDefaults = runtimeProfile.aeonDefaults;
+    const defaultProvider = runtimeSettings.defaultProvider || "";
     setAgentCreateDraft({
-      name,
-      runtime,
-      provider: runtimeSettings.defaultProvider || "",
+      name: name || defaultAgentNameForRuntime(displayAgents.length ? displayAgents : agents, selectedRuntime, RUNTIME_LABELS, { provider: defaultProvider }),
+      runtime: selectedRuntime,
+      provider: defaultProvider,
       model: runtimeSettings.defaultModel || "",
       calls: baseAgent.calls,
       workerClass: baseAgent.workerClass ?? "general",
@@ -259,9 +261,11 @@ export function useAgentController(props: UseAgentControllerProps) {
           lastRoute: usePodStatus.route || agent.usePod?.lastRoute || "",
           lastCheckedAt: usePodStatus.checkedAt || agent.usePod?.lastCheckedAt || "",
           lastTestStatus: usePodStatus.status || agent.usePod?.lastTestStatus || "",
-          lastStatusMessage: usePodStatus.message || agent.usePod?.lastStatusMessage || "",
+          lastStatusMessage: usePodStatus.message ?? "",
           lastHttpStatus: usePodStatus.httpStatus ?? agent.usePod?.lastHttpStatus,
           lastModelCount: usePodStatus.modelCount ?? agent.usePod?.lastModelCount,
+          lastTokenPresent: usePodStatus.tokenPresent ?? agent.usePod?.lastTokenPresent,
+          lastTokenSource: usePodStatus.tokenSource || agent.usePod?.lastTokenSource || "",
         },
       });
     }
@@ -317,7 +321,7 @@ export function useAgentController(props: UseAgentControllerProps) {
     const autopilotGatewayUrl = autopilotDefaults ? agentCreateDraft.a2aUrl || baseAgent.a2aUrl || autopilotDefaults.a2aUrlFallback : baseAgent.gatewayUrl;
     const draft: AgentProfile = {
       ...baseAgent,
-      name: agentCreateDraft.name.trim() || `${RUNTIME_LABELS[runtime] ?? runtime} on ${agentCreateMachine.name}`,
+      name: agentCreateDraft.name.trim() || defaultAgentNameForRuntime(displayAgents.length ? displayAgents : agents, runtime, RUNTIME_LABELS, { provider: agentCreateDraft.provider }),
       telemetryUrl: agentCreateMachine.collectorUrl,
       machineName: agentCreateMachine.name,
       agentId: runtimeSettings.defaultAgentId || "",

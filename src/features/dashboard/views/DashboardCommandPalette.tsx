@@ -224,7 +224,7 @@ export function DashboardCommandPalette(props: DashboardCommandPaletteProps) {
               onMouseEnter={() => setActiveIndex(index)}
               onClick={() => chooseAction(action)}
             >
-              <span>
+              <span className="commandPaletteActionText">
                 <small>{action.group}</small>
                 <strong>{action.label}</strong>
                 <em>{action.detail}</em>

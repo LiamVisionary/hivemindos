@@ -9,7 +9,7 @@ import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } fro
 
 export function useKanbanTaskController(props: any) {
   const { AbortController, Eye, GitBranch, KANBAN_COLUMNS, KANBAN_PICKUP_PREVIEW_MS, MessageSquare, Pencil, RotateCcw, Trash2, Users, agentsForKanbanTask, appVersion, appendMessage, attachmentSizeLabel, beeRoleIconPath, beeWorkerClassLabel, chatSetupIssue, chooseBeeAssignment, chooseDirectoryForMachine, createDefaultAgentWallet, dispatchKanbanTaskToAgentRef, displayAgents, honeyLedgerEnabled, kanbanBoard, kanbanBoardSlug, kanbanCardAttachmentTargetId, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanDispatchCooldownRef, kanbanEditDraft, kanbanEditPendingTaskId, kanbanReadyPickupAttemptRef, kanbanReadyPickupInFlightRef, kanbanReadyPickupSignature, kanbanRuntimeAbortRef, kanbanStorageBody, kanbanTaskAssigneeAgent, kanbanTaskInterruptPrompt, linkedDirectoryLabel, logClientTelemetry, newBoardDraft, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddMachineTarget, readComposerFiles, recordRecentDirectory, refreshHoneyLedger, refreshKanbanOnce, selectedKanbanAgent, selectedKanbanBulkIds, selectedKanbanTask, selectedKanbanTaskId, setKanbanBoard, setKanbanBoardSlug, setKanbanBulkPending, setKanbanCardAttachmentMenuOpen, setKanbanCardAttachmentTargetId, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanEditPendingTaskId, setKanbanError, setKanbanPickupPreviewByTask, setKanbanStorage, setKanbanTaskModal, setMessagesByAgent, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddStatus, setSelectedKanbanTaskId, setSelectedKanbanTaskIds, sharedVault, updateTask, upsertTask, wait, walletsByAgent } = props;
-  async function createKanbanTask(event: FormEvent, status: KanbanStatus) {
+  async function createKanbanTask(event: FormEvent, status: KanbanStatus, projectId?: string) {
     event.preventDefault();
     const title = quickAddDrafts[status]?.trim();
     const attachments = quickAddAttachments[status] ?? [];
@@ -37,6 +37,7 @@ export function useKanbanTaskController(props: any) {
         attachments,
         linkedDirectories: directories,
         targetMachine,
+        projectId,
       }),
     });
     const data = await response.json().catch(() => null) as KanbanResponse | null;

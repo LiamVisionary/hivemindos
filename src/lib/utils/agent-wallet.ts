@@ -316,12 +316,14 @@ export function buildAgentPaymentPrompt(config: AgentWalletConfig, snapshot = ge
       ? `MoneyClaw via ${config.moneyClawEnvName}`
       : config.provider === "x402"
         ? "x402 wallet payments"
-        : "manual wallet accounting";
+        : config.provider === "usepod"
+          ? "UsePod prepaid inference wallet with provider-managed x402 payments"
+          : "manual wallet accounting";
   return [
     `Payment mode: ${provider}.`,
     `Network: ${config.network}; token: ${config.tokenSymbol}; wallet: ${config.walletAddress || "not yet connected"}.`,
     `Spend cap: $${config.maxPaymentUsd.toFixed(2)} per payment; require approval over $${config.approvalRequiredOverUsd.toFixed(2)}.`,
-    `Autopay is ${config.autoPayEnabled ? "enabled within caps" : "disabled; ask before spending"}.`,
+    `Allow auto-use is ${config.autoPayEnabled ? "on within the hard spend cap" : "off; ask before spending"}.`,
     `Survival tier: ${snapshot.tier}; effective balance $${snapshot.effectiveBalanceUsd.toFixed(2)}; compute burn $${config.dailyComputeBurnUsd.toFixed(2)}/day.`,
     `Use ${snapshot.modelHint} model behavior and ${snapshot.heartbeatHint} heartbeat behavior.`,
     "Never expose private keys, card PAN/CVV, or billing identity in chat or durable shared notes.",

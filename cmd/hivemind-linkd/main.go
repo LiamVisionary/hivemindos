@@ -18,7 +18,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -28,6 +30,7 @@ import (
 
 const appProxyContextCookie = "hivemind_link_app_proxy"
 const appProxyContextQuery = "__hive_app_proxy"
+const defaultLogMaxBytes = 2 * 1024 * 1024
 
 type config struct {
 	hostname   string
@@ -37,6 +40,9 @@ type config struct {
 	target     string
 	authKey    string
 	controlURL string
+	logFile    string
+	logMax     int64
+	tailDebug  bool
 }
 
 func defaultHostname() string {
@@ -85,8 +91,186 @@ func parseConfig() config {
 	flag.StringVar(&cfg.target, "target", env("HIVE_LINK_TARGET", "http://127.0.0.1:8787"), "local collector URL to proxy")
 	flag.StringVar(&cfg.authKey, "auth-key", env("HIVE_LINK_AUTH_KEY", ""), "optional Tailscale auth key for headless linking")
 	flag.StringVar(&cfg.controlURL, "tailscale-control-url", env("HIVE_LINK_TAILSCALE_CONTROL_URL", ""), "optional custom Tailscale control URL")
+	flag.StringVar(&cfg.logFile, "log-file", defaultLogFile(), "optional capped log file for daemon diagnostics")
+	flag.Int64Var(&cfg.logMax, "log-max-bytes", defaultLogMaxBytesFromEnv(), "maximum active daemon log size in bytes")
+	flag.BoolVar(&cfg.tailDebug, "tailscale-debug-logs", defaultTailscaleDebugLogs(), "include verbose embedded Tailscale logs")
 	flag.Parse()
 	return cfg
+}
+
+func defaultTailscaleDebugLogs() bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv("HIVE_LINK_TAILSCALE_DEBUG_LOGS")))
+	return value == "1" || value == "true" || value == "yes" || value == "on"
+}
+
+func defaultLogFile() string {
+	if value := strings.TrimSpace(os.Getenv("HIVE_LINK_LOG_FILE")); value != "" {
+		return value
+	}
+	if runtime.GOOS != "darwin" || !strings.Contains(os.Getenv("XPC_SERVICE_NAME"), "hivemindos.linkd") {
+		return ""
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ""
+	}
+	return filepath.Join(home, "Library", "Logs", "hivemindos-linkd.err.log")
+}
+
+func defaultLogMaxBytesFromEnv() int64 {
+	value := strings.TrimSpace(os.Getenv("HIVE_LINK_LOG_MAX_BYTES"))
+	if value == "" {
+		return defaultLogMaxBytes
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed <= 0 {
+		return defaultLogMaxBytes
+	}
+	if parsed > defaultLogMaxBytes {
+		return defaultLogMaxBytes
+	}
+	return parsed
+}
+
+type cappedLogWriter struct {
+	mu       sync.Mutex
+	path     string
+	maxBytes int64
+}
+
+func newCappedLogWriter(path string, maxBytes int64) *cappedLogWriter {
+	return &cappedLogWriter{path: path, maxBytes: maxBytes}
+}
+
+func (writer *cappedLogWriter) Write(p []byte) (int, error) {
+	writer.mu.Lock()
+	defer writer.mu.Unlock()
+
+	originalLen := len(p)
+	if writer.maxBytes <= 0 {
+		writer.maxBytes = defaultLogMaxBytes
+	}
+	if err := writer.rotateIfNeeded(int64(len(p))); err != nil {
+		return 0, err
+	}
+	file, err := os.OpenFile(writer.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	if int64(len(p)) > writer.maxBytes {
+		p = p[int64(len(p))-writer.maxBytes:]
+	}
+	written, err := file.Write(p)
+	if err != nil {
+		return written, err
+	}
+	if written != len(p) {
+		return written, io.ErrShortWrite
+	}
+	if int64(written) > writer.maxBytes {
+		return written, writer.truncateToMax()
+	}
+	return originalLen, nil
+}
+
+func (writer *cappedLogWriter) rotateIfNeeded(incoming int64) error {
+	info, err := os.Stat(writer.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Size()+incoming <= writer.maxBytes {
+		return nil
+	}
+	rotated := writer.path + ".1"
+	_ = os.Remove(rotated)
+	if err := os.Rename(writer.path, rotated); err != nil {
+		return err
+	}
+	return trimFile(rotated, writer.maxBytes)
+}
+
+func (writer *cappedLogWriter) truncateToMax() error {
+	return trimFile(writer.path, writer.maxBytes)
+}
+
+func trimFile(path string, maxBytes int64) error {
+	if maxBytes <= 0 {
+		return nil
+	}
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil || info.Size() <= maxBytes {
+		return err
+	}
+	file, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	if _, err := file.Seek(-maxBytes, io.SeekEnd); err != nil {
+		return err
+	}
+	buf, err := io.ReadAll(file)
+	if err != nil {
+		return err
+	}
+	if err := file.Truncate(0); err != nil {
+		return err
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	_, err = file.Write(buf)
+	return err
+}
+
+func configureLogging(cfg config) {
+	if strings.TrimSpace(cfg.logFile) == "" {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.logFile), 0o700); err != nil {
+		log.Printf("create log dir: %v", err)
+		return
+	}
+	log.SetOutput(newCappedLogWriter(cfg.logFile, cfg.logMax))
+}
+
+func tailscaleLogf(debug bool) func(string, ...any) {
+	return func(format string, args ...any) {
+		message := fmt.Sprintf(format, args...)
+		if !shouldLogTailscale(message, debug) {
+			return
+		}
+		log.Print("tailscale: " + message)
+	}
+}
+
+func shouldLogTailscale(message string, debug bool) bool {
+	if debug {
+		return true
+	}
+	noisePatterns := []string{
+		"[v2]",
+		"Handshake did not complete",
+		"Sending handshake initiation",
+		"Receiving keepalive packet",
+		"sending TSMP disco key advertisement",
+		"does not know about peer",
+	}
+	for _, pattern := range noisePatterns {
+		if strings.Contains(message, pattern) {
+			return false
+		}
+	}
+	return true
 }
 
 func newProxy(target *url.URL, lc *local.Client) http.Handler {
@@ -673,11 +857,7 @@ func appPortalScript(hostPort string, appProxyPrefix string) string {
 ` + `</script>`
 }
 
-func serveControl(ctx context.Context, addr string, lc *local.Client, ts *tsnet.Server) (*http.Server, error) {
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
+func serveControl(ctx context.Context, ln net.Listener, lc *local.Client, ts *tsnet.Server) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "hivemind-linkd"})
@@ -688,17 +868,18 @@ func serveControl(ctx context.Context, addr string, lc *local.Client, ts *tsnet.
 	})
 	mux.HandleFunc("/peer/", servePeerProxy(ts))
 	mux.HandleFunc("/", servePeerRefererFallback(ts))
-	server := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	server := &http.Server{Addr: ln.Addr().String(), Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
 			log.Printf("control API error: %v", err)
 		}
 	}()
-	return server, nil
+	return server
 }
 
 func main() {
 	cfg := parseConfig()
+	configureLogging(cfg)
 	if err := os.MkdirAll(cfg.stateDir, 0o700); err != nil {
 		log.Fatalf("create state dir: %v", err)
 	}
@@ -706,15 +887,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("invalid target URL: %v", err)
 	}
+	controlListener, err := net.Listen("tcp", cfg.control)
+	if err != nil {
+		log.Fatalf("listen on control API %s before starting embedded tailscale: %v", cfg.control, err)
+	}
+	defer controlListener.Close()
 
 	ts := &tsnet.Server{
 		Hostname:     cfg.hostname,
 		Dir:          cfg.stateDir,
 		AuthKey:      cfg.authKey,
 		RunWebClient: true,
-		Logf: func(format string, args ...any) {
-			log.Printf("tailscale: "+format, args...)
-		},
+		Logf:         tailscaleLogf(cfg.tailDebug),
 	}
 	if cfg.controlURL != "" {
 		ts.ControlURL = cfg.controlURL
@@ -731,10 +915,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("embedded tailscale local client: %v", err)
 	}
-	controlServer, err := serveControl(ctx, cfg.control, lc, ts)
-	if err != nil {
-		log.Fatalf("listen on control API %s: %v", cfg.control, err)
-	}
+	controlServer := serveControl(ctx, controlListener, lc, ts)
 	defer controlServer.Shutdown(context.Background()) //nolint:errcheck
 
 	ln, err := ts.Listen("tcp", cfg.listenAddr)

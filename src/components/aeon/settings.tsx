@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Btn, Card, Pill, SectionHead, StatusRow, TONE, type IconName, type Tone, aeonStyles as styles } from "./parts";
 import { DEFAULT_SECRET_KEYS, type AeonAgent, type AeonMemory, type AeonPathEntry, type AeonSecret, type SecretStatus } from "./aeon-data";
+import type { RuntimeRepoSyncStatus } from "@/lib/services/runtime-adapters/types";
 
 const SECRET_STATUS: Record<SecretStatus, { tone: Tone; label: string }> = {
   set: { tone: "green", label: "Set in AEON" },
@@ -20,15 +21,35 @@ function SettingsCard({ eyebrow, title, icon, action, children, danger }: { eyeb
   );
 }
 
-export function AeonSettings({ agent, secrets, paths, memory }: { agent: AeonAgent; secrets: AeonSecret[]; paths: AeonPathEntry[]; memory: AeonMemory }) {
+type AeonSettingsStatus = { hasConfig?: boolean; a2aReachable?: boolean };
+
+export function AeonSettings({
+  agent,
+  secrets,
+  paths,
+  memory,
+  status,
+  repoSync,
+  onRepoAction,
+}: {
+  agent: AeonAgent;
+  secrets: AeonSecret[];
+  paths: AeonPathEntry[];
+  memory: AeonMemory;
+  status?: AeonSettingsStatus;
+  repoSync?: RuntimeRepoSyncStatus;
+  onRepoAction?: (action: "pull" | "push") => void;
+}) {
   const [mirror, setMirror] = React.useState(true);
   const [showMap, setShowMap] = React.useState(false);
+  const localChanges = repoSync ? `${repoSync.changedFiles.length} changed` : "Unknown";
+  const remoteDelta = repoSync ? `${repoSync.behind} behind · ${repoSync.ahead} ahead` : "Unknown";
   return (
     <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
       <SettingsCard eyebrow="Setup" title="Connection & sync" icon="git" action={<Pill tone="green" dot>Ready</Pill>}>
         <div style={{ display: "grid", gap: 8 }}>
-          <StatusRow label="Local config" value="aeon.yml found" ok mono />
-          <StatusRow label="A2A card" value="Reachable" ok />
+          <StatusRow label="Local config" value={status?.hasConfig ? "aeon.yml found" : "Not found"} ok={status?.hasConfig !== false} mono />
+          <StatusRow label="A2A card" value={status?.a2aReachable ? "Reachable" : "Not reachable"} ok={status?.a2aReachable === true} />
           <StatusRow label="GitHub repo" value={agent.repo ?? "Local only"} ok={!!agent.repo} mono />
           <StatusRow label="Local path" value={agent.localPath} ok mono />
         </div>
@@ -53,12 +74,12 @@ export function AeonSettings({ agent, secrets, paths, memory }: { agent: AeonAge
         <div style={{ display: "grid", gap: 8 }}>
           <StatusRow label="Repo" value={agent.repo ?? "Not configured"} ok={!!agent.repo} mono />
           <StatusRow label="Branch" value={agent.branch} ok mono />
-          <StatusRow label="Local changes" value="2 changed" ok={false} />
-          <StatusRow label="Remote delta" value="0 behind · 1 ahead" ok={false} mono />
+          <StatusRow label="Local changes" value={localChanges} ok={repoSync ? !repoSync.hasChanges : false} />
+          <StatusRow label="Remote delta" value={remoteDelta} ok={repoSync ? repoSync.behind === 0 && repoSync.ahead === 0 : false} mono />
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <Btn size="sm" variant="secondary" icon="download">Update from GitHub</Btn>
-          <Btn size="sm" variant="primary" icon="upload">Save to GitHub</Btn>
+          <Btn size="sm" variant="secondary" icon="download" onClick={() => onRepoAction?.("pull")}>Update from GitHub</Btn>
+          <Btn size="sm" variant="primary" icon="upload" onClick={() => onRepoAction?.("push")}>Save to GitHub</Btn>
         </div>
       </SettingsCard>
 

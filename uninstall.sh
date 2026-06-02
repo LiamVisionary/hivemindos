@@ -254,6 +254,70 @@ if ask "Remove HivemindOS collector environment file ~/.hivemindos/collector.env
   ok "Removed ~/.hivemindos/collector.env"
 fi
 
+if ask "Remove HivemindOS GitLawb config/status cache from ~/.hivemindos/gitlawb?" "yes"; then
+  rm -rf "$HOME/.hivemindos/gitlawb/status.json" "$HOME/.hivemindos/gitlawb/setup-status.json"
+  ok "Removed HivemindOS GitLawb status cache"
+fi
+
+if ask "Remove fallback HivemindOS project registry ~/.hivemindos/projects.json?" "no"; then
+  rm -f "$HOME/.hivemindos/projects.json"
+  ok "Removed ~/.hivemindos/projects.json"
+fi
+
+if ask "Remove GitLawb CLI binaries installed by HivemindOS?" "no"; then
+  marker="$HOME/.hivemindos/gitlawb/installed-by-hivemindos.json"
+  if [[ -f "$marker" ]] && command -v node >/dev/null 2>&1; then
+    node - "$marker" <<'NODE'
+const fs = require("fs");
+const path = require("path");
+const marker = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const installDir = String(marker.installDir || "");
+const binaries = Array.isArray(marker.binaries) ? marker.binaries : [];
+if (!installDir || installDir.includes("\0")) process.exit(0);
+for (const binary of binaries) {
+  if (!/^[A-Za-z0-9._-]+$/.test(binary)) continue;
+  const target = path.join(installDir, binary);
+  try {
+    fs.rmSync(target, { force: true });
+    console.log(target);
+  } catch {}
+}
+NODE
+    rm -f "$marker"
+    ok "Removed HivemindOS-managed GitLawb binaries listed in $marker"
+  else
+    warn "No HivemindOS GitLawb install marker found; skipped unmanaged CLI binaries"
+  fi
+fi
+
+if ask "Remove GitLawb config keys from .env.local?" "no"; then
+  env_file="$ROOT/.env.local"
+  if [[ -f "$env_file" ]]; then
+    tmp_file="$(mktemp)"
+    grep -Ev '^(NEXT_PUBLIC_GITLAWB_|GITLAWB_)' "$env_file" > "$tmp_file" || true
+    mv "$tmp_file" "$env_file"
+    ok "Removed GitLawb config keys from .env.local"
+  fi
+fi
+
+if ask "DANGEROUS: remove local GitLawb identity directory ~/.gitlawb? This may delete signing identity material." "no"; then
+  rm -rf "$HOME/.gitlawb"
+  ok "Removed ~/.gitlawb"
+fi
+
+if ask "Stop/remove GitLawb node service or container only if HivemindOS created it?" "no"; then
+  marker="$HOME/.hivemindos/gitlawb/node-created-by-hivemindos.json"
+  if [[ -f "$marker" ]]; then
+    if run_if_exists docker; then
+      docker rm -f hivemindos-gitlawb-node >/dev/null 2>&1 || true
+      ok "Removed HivemindOS GitLawb node container if present"
+    fi
+    rm -f "$marker"
+  else
+    warn "No HivemindOS GitLawb node marker found; skipped node cleanup"
+  fi
+fi
+
 if ask "Stop and remove the HivemindOS Syncthing service wrapper?" "yes"; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
     plist="$HOME/Library/LaunchAgents/com.hivemindos.syncthing.plist"
@@ -435,6 +499,7 @@ if ask "Remove empty canonical HivemindOS vault folders created by setup?" "no";
     "$vault_path/$synthesis_folder/wiki" \
     "$vault_path/$synthesis_folder/raw" \
     "$vault_path/$synthesis_folder" \
+    "$vault_path/Operations/Code Projects" \
     "$vault_path/Operations" \
     "$vault_path/Archive/Processed Requests" \
     "$vault_path/Archive" \

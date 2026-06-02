@@ -3,9 +3,9 @@
 import type { Dispatch, ElementType, FormEvent, SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
-import { cssClass } from "@/features/dashboard/style-classes";
+import { Btn } from "@/components/aeon/parts";
 import type { SkillBrowserSkill, SkillBrowserView } from "@/features/dashboard/dashboard-types";
-import browserStyles from "./SkillBrowserModal.module.css";
+import { UnifiedSkillBrowser, type UnifiedSkillBrowserItem, type UnifiedSkillBrowserSource } from "./UnifiedSkillBrowser";
 
 type SkillBrowserModalProps = {
   Button: ElementType;
@@ -19,7 +19,7 @@ type SkillBrowserModalProps = {
   RefreshCcw: ElementType;
   Sparkles: ElementType;
   addWrittenSkillToBrain: () => void | Promise<void>;
-  filteredSkillBrowserSkills: SkillBrowserSkill[];
+  skillBrowserSkills: SkillBrowserSkill[];
   fleetClass: (...names: string[]) => string;
   hermesUpdateRequired: boolean;
   hermesUpdateRequiredDetail: string;
@@ -54,18 +54,93 @@ type SkillBrowserModalProps = {
 };
 
 export function SkillBrowserModal(props: SkillBrowserModalProps) {
-  const { Button, Copy, Download, GitBranch, Image, LoaderCircle, Minus, Plus, RefreshCcw, Sparkles, addAgentPreferredSkill, addWrittenSkillToBrain, agentSettingsPreferredSkills, convertSkillToAeon, filteredSkillBrowserSkills, fleetClass, hermesUpdateRequired, hermesUpdateRequiredDetail, importRemoteSkillToBrain, installGithubSkillToBrain, openAgentSkillBrowser, openSkillBrowser, removeAgentPreferredSkill, setSkillBrowserGithubOpen, setSkillBrowserGithubUrl, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, skillBrowserGithubInstalling, skillBrowserGithubOpen, skillBrowserGithubUrl, skillBrowserImporting, skillBrowserLoading, skillBrowserMode, skillBrowserOpen, skillBrowserSearch, skillBrowserStatus, skillBrowserView, skillBrowserWrittenContent, skillBrowserWriting, skillRequiresHermesUpdate, vaultClass } = props;
-  const browserClass = (...names: Array<string | false | null | undefined>) => cssClass(browserStyles, ...names);
+  const { Button, Copy, Download, GitBranch, Image, LoaderCircle, RefreshCcw, addAgentPreferredSkill, addWrittenSkillToBrain, agentSettingsPreferredSkills, convertSkillToAeon, fleetClass, hermesUpdateRequired, hermesUpdateRequiredDetail, importRemoteSkillToBrain, installGithubSkillToBrain, openAgentSkillBrowser, openSkillBrowser, removeAgentPreferredSkill, setSkillBrowserGithubOpen, setSkillBrowserGithubUrl, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, skillBrowserGithubInstalling, skillBrowserGithubOpen, skillBrowserGithubUrl, skillBrowserImporting, skillBrowserLoading, skillBrowserMode, skillBrowserOpen, skillBrowserSearch, skillBrowserStatus, skillBrowserView, skillBrowserWrittenContent, skillBrowserWriting, skillRequiresHermesUpdate, skillBrowserSkills, vaultClass } = props;
   const portalTarget = typeof document === "undefined" ? null : document.body;
-  const viewFilteredSkills = filteredSkillBrowserSkills.filter((skill) => {
-    if (skillBrowserView === "packs") return skill.category === "Pack" || skill.source === "Skill pack";
-    if (skillBrowserView === "installed") return Boolean(skill.providerId || skill.imported);
-    if (skillBrowserView === "audit") return Boolean(skill.auditStatus || skill.capabilities?.length || skill.envKeys?.length || skill.sourceRef);
-    return skill.category !== "Pack" && skill.source !== "Skill pack";
+  const safeSkillBrowserSkills = Array.isArray(skillBrowserSkills) ? skillBrowserSkills : [];
+  const browserSkillRecords = skillBrowserMode === "agent-class"
+    ? safeSkillBrowserSkills.filter((skill) => skill.providerId === "shared")
+    : safeSkillBrowserSkills;
+  const skillById = new Map(browserSkillRecords.map((skill) => [skill.id, skill]));
+  const browserItems: UnifiedSkillBrowserItem[] = browserSkillRecords.map((skill) => {
+    const isPack = skill.category === "Pack" || skill.source === "Skill pack";
+    const needsHermesUpdate = skill.requiresHermesUpdate || skillRequiresHermesUpdate(skill, hermesUpdateRequired);
+    const addedToAgent = agentSettingsPreferredSkills.includes(skill.slug);
+    const stateLabel = skillBrowserMode === "agent-class"
+      ? addedToAgent ? "Added" : needsHermesUpdate ? "Needs Hermes" : "Shared Brain"
+      : skill.imported ? "In brain" : needsHermesUpdate ? "Needs Hermes" : isPack ? "Pack" : "Catalog";
+    return {
+      id: skill.id,
+      slug: skill.slug,
+      name: skill.name,
+      description: skill.description,
+      source: skill.source,
+      sourceId: skill.providerId ?? skill.source,
+      sourceKind: skill.source,
+      providerId: skill.providerId,
+      category: skill.category ?? (isPack ? "Pack" : "Skill"),
+      categoryId: skill.category ?? (isPack ? "Pack" : "Skill"),
+      stateLabel,
+      stateTone: addedToAgent || skill.imported ? "green" : needsHermesUpdate ? "honey" : isPack ? "sky" : "muted",
+      stateIcon: addedToAgent || skill.imported ? "check" : needsHermesUpdate ? "refresh" : isPack ? "layers" : undefined,
+      stateActive: addedToAgent || skill.imported,
+      capabilities: skill.capabilities,
+      envKeys: skill.envKeys,
+      audience: skill.audience,
+      safety: skill.safety,
+      auditStatus: skill.auditStatus,
+      sourceRef: skill.sourceRef,
+      includedSkills: skill.includedSkills,
+      imported: skill.imported,
+      requiresHermesUpdate: needsHermesUpdate,
+      selected: addedToAgent,
+      scheduleLabel: skill.source,
+    };
   });
-  const browserSkills = skillBrowserMode === "agent-class"
-    ? filteredSkillBrowserSkills.filter((skill) => skill.providerId === "shared")
-    : viewFilteredSkills;
+  const browserSources: UnifiedSkillBrowserSource[] | undefined = skillBrowserMode === "brain" ? [
+    { id: "catalog", label: "Catalog", predicate: (item) => item.categoryId !== "Pack" && item.sourceKind !== "Skill pack" },
+    { id: "installed", label: "Installed", predicate: (item) => Boolean(item.providerId || item.imported) },
+    { id: "packs", label: "Packs", predicate: (item) => item.categoryId === "Pack" || item.sourceKind === "Skill pack" },
+    { id: "audit", label: "Audit", predicate: (item) => Boolean(item.auditStatus || item.capabilities?.length || item.envKeys?.length || item.sourceRef) },
+  ] : undefined;
+  const refreshBrowser = skillBrowserMode === "agent-class" ? openAgentSkillBrowser : openSkillBrowser;
+
+  const renderSkillActions = (item: UnifiedSkillBrowserItem) => {
+    const skill = skillById.get(item.id);
+    if (!skill) return null;
+    const addedToAgent = agentSettingsPreferredSkills.includes(skill.slug);
+    const isPack = skill.category === "Pack" || skill.source === "Skill pack";
+    return (
+      <>
+        {skillBrowserMode === "agent-class" ? (
+          <Btn
+            type="button"
+            size="sm"
+            variant={addedToAgent ? "danger" : "primary"}
+            icon={addedToAgent ? "x" : "plus"}
+            onClick={() => addedToAgent ? removeAgentPreferredSkill(skill.slug) : addAgentPreferredSkill(skill.slug)}
+          >
+            {addedToAgent ? "Remove" : "Add Skill"}
+          </Btn>
+        ) : (
+          <Btn type="button" size="sm" variant="primary" onClick={() => void importRemoteSkillToBrain(skill)} disabled={skill.imported || skillBrowserImporting === skill.id}>
+            {skillBrowserImporting === skill.id ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />}
+            {skill.imported ? "In brain" : isPack ? "Install pack" : "Add to brain"}
+          </Btn>
+        )}
+        {skillBrowserMode === "brain" && skill.imported && convertSkillToAeon ? (
+          <Btn type="button" size="sm" variant="secondary" icon="sparkles" onClick={() => void convertSkillToAeon(skill)}>
+            Convert to Aeon
+          </Btn>
+        ) : null}
+        {skill.githubUrl || skill.skillMdUrl ? (
+          <Btn type="button" size="sm" variant="secondary" onClick={() => void navigator.clipboard?.writeText(skill.githubUrl || skill.skillMdUrl || "")}>
+            <Copy aria-hidden="true" />
+            Copy source
+          </Btn>
+        ) : null}
+      </>
+    );
+  };
 
   if (!portalTarget) return null;
 
@@ -73,6 +148,7 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
       {skillBrowserOpen ? (
         <div
           className={fleetClass("setupModalBackdrop")}
+          style={{ zIndex: 120 }}
           role="presentation"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setSkillBrowserOpen(false);
@@ -90,51 +166,6 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
               </div>
               <CloseIconButton aria-label="Close skill browser" onClick={() => setSkillBrowserOpen(false)} />
             </div>
-            {skillBrowserView !== "write" ? <div className={fleetClass("skillBrowserSearch")}>
-              <input
-                value={skillBrowserSearch}
-                onChange={(event) => setSkillBrowserSearch(event.target.value)}
-                placeholder="Search skills, tools, runtimes, workflows..."
-                autoFocus
-              />
-              {skillBrowserMode === "brain" ? (["catalog", "installed", "packs", "audit"] as const).map((view) => (
-                <Button
-                  key={view}
-                  type="button"
-                  variant={skillBrowserView === view ? "default" : "secondary"}
-                  size="sm"
-                  onClick={() => setSkillBrowserView(view)}
-                >
-                  {view === "catalog" ? "Catalog" : view === "installed" ? "Installed" : view === "packs" ? "Packs" : "Audit"}
-                </Button>
-              )) : null}
-              {skillBrowserMode === "brain" ? <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setSkillBrowserGithubOpen((open) => !open)}
-                disabled={skillBrowserGithubInstalling}
-              >
-                <GitBranch aria-hidden="true" />
-                Install From Github
-              </Button> : null}
-              {skillBrowserMode === "brain" ? <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setSkillBrowserGithubOpen(false);
-                  setSkillBrowserView("write");
-                }}
-              >
-                <Sparkles aria-hidden="true" />
-                Write Skill
-              </Button> : null}
-              <Button type="button" variant="secondary" size="sm" onClick={skillBrowserMode === "agent-class" ? openAgentSkillBrowser : openSkillBrowser} disabled={skillBrowserLoading}>
-                {skillBrowserLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
-                Refresh
-              </Button>
-            </div> : null}
             {skillBrowserMode === "brain" && skillBrowserView === "catalog" && skillBrowserGithubOpen ? (
               <form className={fleetClass("skillBrowserGithubForm")} onSubmit={(event) => void installGithubSkillToBrain(event)}>
                 <input
@@ -197,87 +228,54 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
                 </div>
               </div>
             ) : (
-            <div className={fleetClass("skillBrowserGrid")}>
-              {skillBrowserLoading ? (
-                <div className={fleetClass("scheduleEmpty")}><LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /><strong>Loading skills</strong><p>Checking installed skills and community catalogs.</p></div>
-              ) : browserSkills.length ? browserSkills.map((skill) => {
-                const needsHermesUpdate = skill.requiresHermesUpdate || skillRequiresHermesUpdate(skill, hermesUpdateRequired);
-                const addedToAgent = agentSettingsPreferredSkills.includes(skill.slug);
-                const isPack = skill.category === "Pack" || skill.source === "Skill pack";
-                const includedSkills = skill.includedSkills ?? [];
-                return (
-                  <article key={`${skill.source}-${skill.id}`} className={fleetClass("skillBrowserCard", isPack ? browserClass("skillBrowserPackCard") : "")}>
-                    <div className={fleetClass("skillBrowserMetaRow")}>
-                      <Image src="/icons/worker-bee-general-v2.png" alt="" width={24} height={24} unoptimized />
-                      <span>{skill.source}{skill.category ? ` · ${skill.category}` : ""}</span>
-                      {isPack && includedSkills.length ? <small className={browserClass("skillPackCountBadge")}>{includedSkills.length} skills</small> : null}
-                      {needsHermesUpdate ? <small className={fleetClass("skillUpdateBadge")}>Needs Hermes update</small> : null}
-                    </div>
-                    <strong>{skill.name}</strong>
-                    <p>{skill.description || "No description provided yet."}</p>
-                    {skill.audience ? <p className={browserClass("skillBrowserAudience")}>{skill.audience}</p> : null}
-                    {skill.capabilities?.length ? (
-                      <div className={browserClass("skillCapabilityRow")} aria-label="Skill capabilities">
-                        {skill.capabilities.slice(0, 8).map((capability) => <small key={capability}>{capability}</small>)}
-                      </div>
+              <UnifiedSkillBrowser
+                items={browserItems}
+                sources={browserSources}
+                controlledSourceId={skillBrowserMode === "brain" ? skillBrowserView : undefined}
+                onSourceChange={(view) => setSkillBrowserView(view as SkillBrowserView)}
+                query={skillBrowserSearch}
+                onQueryChange={setSkillBrowserSearch}
+                searchPlaceholder="Search skills, tools, runtimes, workflows"
+                loading={skillBrowserLoading}
+                loadingLabel="Checking installed skills and community catalogs"
+                emptyTitle="No skills found"
+                emptyDescription={skillBrowserMode === "agent-class" ? "Try a different search, or add shared skills to the brain first." : "Try another tab, refresh the catalog, or import from provider installs below the shared skills shelf."}
+                renderActions={renderSkillActions}
+                toolbar={(
+                  <>
+                    {skillBrowserMode === "brain" ? (
+                      <Btn
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setSkillBrowserGithubOpen((open) => !open)}
+                        disabled={skillBrowserGithubInstalling}
+                      >
+                        <GitBranch aria-hidden="true" />
+                        Install From Github
+                      </Btn>
                     ) : null}
-                    {includedSkills.length ? (
-                      <div className={browserClass("skillPackPreview")}>
-                        {includedSkills.slice(0, 6).map((includedSkill) => (
-                          <div key={includedSkill.slug}>
-                            <strong>{includedSkill.name}</strong>
-                            <p>{includedSkill.description}</p>
-                          </div>
-                        ))}
-                        {includedSkills.length > 6 ? <small>+{includedSkills.length - 6} more in this directory</small> : null}
-                      </div>
+                    {skillBrowserMode === "brain" ? (
+                      <Btn
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        icon="sparkles"
+                        onClick={() => {
+                          setSkillBrowserGithubOpen(false);
+                          setSkillBrowserView("write");
+                        }}
+                      >
+                        Write Skill
+                      </Btn>
                     ) : null}
-                    {skill.safety ? <p className={browserClass("skillSafetyNote")}>{skill.safety}</p> : null}
-                    {skill.auditStatus || (!isPack && skill.capabilities?.length) || skill.envKeys?.length || skill.sourceRef ? (
-                      <p>
-                        {skill.auditStatus ? `Audit: ${skill.auditStatus}. ` : ""}
-                        {!isPack && skill.capabilities?.length ? `Capabilities: ${skill.capabilities.slice(0, 5).join(", ")}. ` : ""}
-                        {skill.envKeys?.length ? `Env: ${skill.envKeys.slice(0, 4).join(", ")}. ` : ""}
-                        {skill.sourceRef ? `Source: ${skill.sourceRef}.` : ""}
-                      </p>
-                    ) : null}
-                    <div className={fleetClass("scheduleActions")}>
-                      {skillBrowserMode === "agent-class" ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={addedToAgent ? "danger" : "default"}
-                          className={addedToAgent ? fleetClass("skillBrowserRemoveSkillButton") : ""}
-                          onClick={() => addedToAgent ? removeAgentPreferredSkill(skill.slug) : addAgentPreferredSkill(skill.slug)}
-                        >
-                          {addedToAgent ? <Minus aria-hidden="true" /> : <Plus aria-hidden="true" />}
-                          {addedToAgent ? "Remove" : "Add Skill"}
-                        </Button>
-                      ) : (
-                        <Button type="button" size="sm" onClick={() => void importRemoteSkillToBrain(skill)} disabled={skill.imported || skillBrowserImporting === skill.id}>
-                          {skillBrowserImporting === skill.id ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />}
-                          {skill.imported ? "In brain" : isPack ? "Install pack" : "Add to brain"}
-                        </Button>
-                      )}
-                      {skillBrowserMode === "brain" && skill.imported && convertSkillToAeon ? (
-                        <Button type="button" size="sm" variant="secondary" onClick={() => void convertSkillToAeon(skill)}>
-                          <Sparkles aria-hidden="true" />
-                          Convert to Aeon
-                        </Button>
-                      ) : null}
-                      {skill.githubUrl || skill.skillMdUrl ? (
-                        <Button type="button" size="sm" variant="secondary" onClick={() => navigator.clipboard?.writeText(skill.githubUrl || skill.skillMdUrl || "")}>
-                          <Copy aria-hidden="true" />
-                          Copy source
-                        </Button>
-                      ) : null}
-                    </div>
-                  </article>
-                );
-              }) : (
-                <div className={fleetClass("scheduleEmpty")}><Sparkles aria-hidden="true" /><strong>No skills found</strong><p>{skillBrowserMode === "agent-class" ? "Try a different search, or add shared skills to the brain first." : "Try another tab, refresh the catalog, or import from provider installs below the shared skills shelf."}</p></div>
-              )}
-            </div>
+                    <Btn type="button" variant="secondary" size="sm" onClick={() => void refreshBrowser()} disabled={skillBrowserLoading}>
+                      {skillBrowserLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
+                      Refresh
+                    </Btn>
+                  </>
+                )}
+              />
             )}
           </section>
         </div>

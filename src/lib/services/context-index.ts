@@ -4,6 +4,13 @@ import { basename, dirname, extname, join, relative, sep } from "path";
 import { cachedCall } from "@/lib/services/async-cache";
 import { getBrainSkillInventory } from "@/lib/services/obsidian/brain-skills";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
+import {
+  USEPOD_COMPATIBILITY_MATRIX,
+  USEPOD_FUNDING_MATRIX,
+  USEPOD_PROVIDER_BOND_USDC,
+  USEPOD_PROVIDER_EARN_SHARE,
+  USEPOD_SUPPLY_MATRIX,
+} from "@/lib/config/usepod-features";
 import { RUNTIME_DEFINITIONS } from "@/lib/types/agent-runtime";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 
@@ -439,12 +446,52 @@ function localCliToolItems(): ContextIndexItem[] {
       retrievalText: [
         "Use the terminal tool to run hermes send for user messaging.",
         "List targets first when a channel/person is not obvious: hermes send --list telegram --json.",
-        "Send with an explicit target such as hermes send --to telegram:<id> \"message\".",
+        "If no platform home channel is confirmed, do not send to bare telegram/discord/slack. Send with an explicit listed target such as hermes send --to telegram:<id> \"message\".",
+        "After sending, inspect the JSON result and report success plus the returned message_id when present.",
         "Do not reveal numeric chat IDs in final responses.",
       ].join(" "),
       load: {
         type: "none",
         note: "Local CLI capability. Use the agent terminal tool and list targets before sending when needed.",
+      },
+    },
+    {
+      id: "tool-schema:wallet-actions",
+      kind: "tool-schema",
+      title: "agent wallet tools",
+      summary: "Dashboard wallet capability for read-only balance checks, local encrypted-wallet x402 paid fetches, UsePod prepaid status, and auto-use-gated USDC sends.",
+      tags: ["wallet", "payment", "crypto", "usdc", "x402", "usepod", "moneyclaw", "bankr", "spend", "balance", "agent", "tool"],
+      aliases: [
+        "agent wallet",
+        "wallet actions",
+        "wallet tools",
+        "payment rails",
+        "crypto payment",
+        "paid api",
+        "x402 fetch",
+        "x402 payment",
+        "send usdc",
+        "wallet balance",
+        "usepod wallet",
+        "moneyclaw",
+        "bankr trading",
+      ],
+      retrievalText: [
+        "Use this capability when a workflow needs agent wallet, payment, crypto, x402, USDC, UsePod, MoneyClaw, Bankr, or paid API actions.",
+        "Read-only checks: POST /api/wallet/balance for public wallet balance, GET /api/wallet/moneyclaw for MoneyClaw status, POST /api/usepod/status for UsePod token balance/models.",
+        "Paid API path: x402_fetch uses POST /api/wallet/x402 with { agentId, url, method, headers, body, policy, confirmation } and signs from the encrypted local wallet vault.",
+        "Approval gate: when Allow auto-use is off, wait for explicit PAY_X402 from the user before x402_fetch. When Allow auto-use is on, x402_fetch can pay without another prompt while staying under the hard per-payment cap.",
+        "USDC sends use the same Allow auto-use policy: POST /api/wallet/send can send under the hard per-payment cap when auto-use is on, and requires SEND_USDC for the exact recipient and amount when auto-use is off.",
+        "UsePod agents use their prepaid UsePod token balance for inference and provider-managed x402/paywall handling; do not require a separate local wallet for UsePod x402.",
+        `UsePod drop-in bases: ${USEPOD_COMPATIBILITY_MATRIX.openai.baseUrlTemplate} for OpenAI-compatible clients and ${USEPOD_COMPATIBILITY_MATRIX.anthropic.baseUrlTemplate} for Anthropic-compatible clients; never expose the actual token in shared notes.`,
+        `UsePod direct deposits use ${USEPOD_FUNDING_MATRIX.USDC.label} on ${USEPOD_FUNDING_MATRIX.USDC.network} through the UsePod on-chain deposit instruction; do not use a plain SPL transfer memo.`,
+        `UsePod provider hosting: ${USEPOD_SUPPLY_MATRIX["provider-agent"].commands?.join(" -> ")}. Enroll at ${USEPOD_SUPPLY_MATRIX["provider-agent"].actionUrl}; providers post a $${USEPOD_PROVIDER_BOND_USDC} USDC bond and earn ${(USEPOD_PROVIDER_EARN_SHARE * 100).toFixed(0)}% of settled inference.`,
+        `UsePod key relay: use ${USEPOD_SUPPLY_MATRIX["key-relay"].docsUrl} when a user wants to resell upstream API-key capacity instead of local compute.`,
+        "Never request, print, store in shared notes, or reveal private keys, seed phrases, wallet secrets, card details, or API keys.",
+      ].join(" "),
+      load: {
+        type: "none",
+        note: "Dashboard wallet capability. Use read-only status first; money movement follows the wallet Allow auto-use setting and hard caps.",
       },
     },
   ];

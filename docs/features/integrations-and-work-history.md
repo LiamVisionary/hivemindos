@@ -4,13 +4,13 @@ The Integrations, My Apps, Phone, and Work History surfaces connect external acc
 
 ## Integrations
 
-The Integrations view currently centers on Nango host setup and connected-account discovery.
+The Integrations view owns setup/debug details for external systems that should not clutter daily Work or Fleet surfaces.
 
 How it works:
 
-- UI: `src/features/integrations/NangoIntegrationsView.tsx`.
+- UI: `src/features/integrations/NangoIntegrationsView.tsx` and `src/features/integrations/GitLawbIntegrationPanel.tsx`.
 - Services: `src/lib/services/integrations/nango-client.ts` and `src/lib/services/integrations/nango-host.ts`.
-- Routes: `/api/integrations/nango` and `/api/integrations/nango/setup`.
+- Routes: `/api/integrations/nango`, `/api/integrations/nango/setup`, `/api/gitlawb/*`, and `/api/projects/*`.
 - Remote collector setup can proxy through `/integrations/nango/setup`.
 
 Capabilities:
@@ -19,6 +19,33 @@ Capabilities:
 - Check Nango host health.
 - List Nango connections.
 - Start setup on local or capable remote machines.
+- Show GitLawb Code Proof readiness, local DID status, optional node status, and linked project count.
+- Install/repair the lightweight GitLawb CLI where supported.
+- Create a local GitLawb DID without public registration.
+- Keep full GitLawb node setup lazy and local/Tailnet-only by default.
+
+## GitLawb Code Proof
+
+GitLawb is the code provenance integration. HivemindOS uses it as signed proof for project-linked work while the private Brain remains HivemindOS-owned memory and audit.
+
+How it works:
+
+- Service wrapper: `src/lib/services/gitlawb/gitlawb-service.ts`.
+- Project registry: `src/lib/services/projects/project-registry.ts`.
+- API routes: `/api/gitlawb/status`, `/api/gitlawb/setup-cli`, `/api/gitlawb/identity`, `/api/gitlawb/node/setup`, `/api/projects`, and `/api/projects/link-gitlawb`.
+- Shared-vault project storage: `Operations/Code Projects/projects.json`.
+- Local fallback project storage: `~/.hivemindos/projects.json`.
+
+Capabilities:
+
+- Detect `gl`, `git-remote-gitlawb`, and `gitlawb-node`.
+- Detect or create a local DID.
+- Probe local node health at `http://127.0.0.1:7545` by default.
+- Surface repo count, peer count, and MCP availability when a node is healthy.
+- Link many HivemindOS projects to many GitLawb repos on the same machine.
+- Redact private keys, secrets, Tailnet IPs, and exact private vault paths from proof metadata.
+
+See [GitLawb Code Proof](../integrations/gitlawb.md) for setup weight, lazy node behavior, and uninstall details.
 
 ## GitHub OAuth Fallback
 
@@ -97,10 +124,13 @@ Capabilities:
 ## Main Code Paths
 
 - `src/features/integrations/NangoIntegrationsView.tsx`
+- `src/features/integrations/GitLawbIntegrationPanel.tsx`
 - `src/features/dashboard/views/MyAppsPanel.tsx`
 - `src/features/dashboard/views/PhonePanel.tsx`
 - `src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx`
 - `src/lib/services/integrations/github-oauth.ts`
+- `src/lib/services/gitlawb/gitlawb-service.ts`
+- `src/lib/services/projects/project-registry.ts`
 - `src/lib/services/integrations/nango-client.ts`
 - `src/lib/services/integrations/nango-host.ts`
 - `src/lib/services/phone/call-gateway.ts`
@@ -111,5 +141,7 @@ Capabilities:
 - `src/app/api/integrations/github/oauth/callback/route.ts`
 - `src/app/api/integrations/nango/route.ts`
 - `src/app/api/integrations/nango/setup/route.ts`
+- `src/app/api/gitlawb/**`
+- `src/app/api/projects/**`
 - `src/lib/services/work-history/dynamic-changelog.ts`
 - `src/app/api/work-history/route.ts`

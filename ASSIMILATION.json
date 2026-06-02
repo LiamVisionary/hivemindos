@@ -1,41 +1,34 @@
 {
-  "created_at": "2026-06-01T20:28:19.207267+00:00",
+  "created_at": "2026-06-02T08:36:40.073947+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
-      "source_repo": "hilman2/4dy-client",
-      "source_path": "desktop-client/src-tauri/src/tray.rs",
-      "target_path": "src-tauri/src/desktop_navigation.rs",
+      "source_repo": "hivemind-os",
+      "source_path": "src/features/chat/chat-composer.tsx",
+      "target_path": "src/features/dashboard/views/DemoPanel.tsx",
       "reuse_type": "adapted_code",
-      "note": "adapted Tauri 2 tray menu and left-click restore patterns for HivemindOS route navigation"
+      "note": "reused ComposerField and AgentResponseLoader for compact demo chat input and assistant thinking UI"
     },
     {
-      "source_repo": "hilman2/4dy-client",
-      "source_path": "desktop-client/src-tauri/src/hotkeys.rs",
-      "target_path": "src-tauri/src/desktop_navigation.rs",
+      "source_repo": "hivemind-os",
+      "source_path": "src/components/fleet/lottie-bee.tsx",
+      "target_path": "src/features/dashboard/views/DemoPanel.tsx",
       "reuse_type": "adapted_code",
-      "note": "adapted shortcut-to-app-event pattern through native menu accelerators and emitted dashboard events"
+      "note": "reused LottieBee for the chat avatar and plucking/fusion animation"
     },
     {
-      "source_repo": "hilman2/4dy-client",
-      "source_path": "desktop-client/src-tauri/src/config.rs",
-      "target_path": "src-tauri/src/desktop_navigation.rs",
+      "source_repo": "hivemind-os",
+      "source_path": "src/features/dashboard/MorePanel.tsx",
+      "target_path": "src/features/dashboard/MorePanel.tsx",
       "reuse_type": "adapted_code",
-      "note": "adapted compact app-data window-state persistence for native window restore"
+      "note": "extended existing More/system menu card pattern with a Demos section"
     },
     {
-      "source_repo": "kevinturpin97/react-ctrlk",
-      "source_path": "src/Shortcut.tsx",
-      "target_path": "src/features/dashboard/views/DashboardCommandPalette.tsx",
+      "source_repo": "hivemind-os",
+      "source_path": "src/features/dashboard/dashboard-navigation.ts",
+      "target_path": "src/features/dashboard/dashboard-navigation.ts",
       "reuse_type": "adapted_code",
-      "note": "adapted React keyboard shortcut registration and cleanup pattern for dashboard palette and route shortcuts"
-    },
-    {
-      "source_repo": "kevinturpin97/react-ctrlk",
-      "source_path": "src/useShortcut.ts",
-      "target_path": "src/features/dashboard/views/DashboardCommandPalette.tsx",
-      "reuse_type": "adapted_code",
-      "note": "adapted hook-style shortcut ergonomics into local command action handling"
+      "note": "extended existing dashboard route catalog with the demo view"
     }
   ]
 }

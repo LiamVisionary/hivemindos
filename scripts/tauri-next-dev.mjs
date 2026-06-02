@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { createReadStream, rmSync, readFileSync, writeFileSync } from "node:fs";
+import { createReadStream, mkdirSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import { connect, createServer as createNetServer } from "node:net";
 import { extname } from "node:path";
@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 
 const nextEnvPath = fileURLToPath(new URL("../next-env.d.ts", import.meta.url));
 const tsconfigPath = fileURLToPath(new URL("../tsconfig.json", import.meta.url));
+const tauriNextRootDir = fileURLToPath(new URL("../.next-tauri/", import.meta.url));
+const tauriDevServerInfoPath = fileURLToPath(new URL("../.next-tauri/dev-server.json", import.meta.url));
 const loadingDir = fileURLToPath(new URL("../src-tauri/loading/", import.meta.url));
 const loadingHtmlPath = fileURLToPath(new URL("../src-tauri/loading/index.html", import.meta.url));
 const loadingIconPath = fileURLToPath(new URL("../src-tauri/loading/icon-192.png", import.meta.url));
@@ -94,6 +96,16 @@ function restoreGeneratedTypeReferences() {
   restoreTsconfig();
 }
 
+function writeDevServerInfo() {
+  mkdirSync(tauriNextRootDir, { recursive: true });
+  writeFileSync(tauriDevServerInfoPath, JSON.stringify({
+    backendUrl: `http://${host}:${nextPort}`,
+    nextPort,
+    proxyPort,
+    proxyUrl: `http://${host}:${proxyPort}`,
+  }, null, 2) + "\n");
+}
+
 function contentType(path) {
   if (path.endsWith(".html")) return "text/html; charset=utf-8";
   if (path.endsWith(".png")) return "image/png";
@@ -109,11 +121,94 @@ function sendFile(response, path, status = 200) {
   createReadStream(path).pipe(response);
 }
 
+const devRecoveryScript = String.raw`
+<script data-hivemindos-tauri-dev-recovery>
+(function () {
+  if (window.__HIVEMINDOS_TAURI_DEV_RECOVERY__) return;
+  window.__HIVEMINDOS_TAURI_DEV_RECOVERY__ = true;
+
+  var readyWasDown = false;
+  var routeLoadingSince = 0;
+  var reloading = false;
+  var reloadCooldownMs = 20000;
+  var routeLoadingTimeoutMs = 12000;
+  var reloadStampKey = "hivemindos:tauri-dev:last-reload";
+
+  function lastReloadAt() {
+    try {
+      var value = window.sessionStorage.getItem(reloadStampKey);
+      var parsed = value ? JSON.parse(value) : null;
+      return parsed && typeof parsed.at === "number" ? parsed.at : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function forceReload(reason, ignoreCooldown) {
+    if (reloading || (!ignoreCooldown && Date.now() - lastReloadAt() < reloadCooldownMs)) return;
+    reloading = true;
+    try {
+      window.sessionStorage.setItem(reloadStampKey, JSON.stringify({ at: Date.now(), reason: reason }));
+    } catch (_) {}
+    window.location.reload();
+  }
+
+  function checkReady() {
+    var staticLoading = document.querySelector("[data-hivemindos-static-loading='true']");
+    var scope = staticLoading ? "route" : "backend";
+    fetch("/__hivemindos_dev_ready?scope=" + scope + "&ts=" + Date.now(), { cache: "no-store" })
+      .then(function (response) {
+        if (response.ok) {
+          if (staticLoading) forceReload("route became ready", true);
+          else if (readyWasDown) forceReload("dev server recovered", false);
+          return;
+        }
+        readyWasDown = true;
+      })
+      .catch(function () {
+        readyWasDown = true;
+      });
+  }
+
+  function checkRouteLoading() {
+    var loading = document.querySelector("[data-hivemindos-route-loading='true']");
+    if (!loading) {
+      routeLoadingSince = 0;
+      return;
+    }
+    if (!routeLoadingSince) routeLoadingSince = Date.now();
+    if (Date.now() - routeLoadingSince > routeLoadingTimeoutMs) forceReload("route loading timeout");
+  }
+
+  function maybeReloadForChunkFailure(value) {
+    var message = String(value && (value.message || value.reason || value) || "");
+    if (/ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(message)) {
+      forceReload("chunk load failure");
+    }
+  }
+
+  window.addEventListener("error", function (event) {
+    maybeReloadForChunkFailure(event && (event.error || event.message));
+  });
+  window.addEventListener("unhandledrejection", function (event) {
+    maybeReloadForChunkFailure(event && event.reason);
+  });
+
+  checkReady();
+  checkRouteLoading();
+  window.setInterval(checkReady, 1000);
+  window.setInterval(checkRouteLoading, 1000);
+})();
+</script>`;
+
+function injectDevRecoveryScript(html) {
+  if (html.includes("data-hivemindos-tauri-dev-recovery")) return html;
+  if (html.includes("</body>")) return html.replace("</body>", `${devRecoveryScript}</body>`);
+  return `${html}${devRecoveryScript}`;
+}
+
 function sendLoading(response) {
-  const html = readFileSync(loadingHtmlPath, "utf8").replace(
-    "</body>",
-    '<script>setInterval(function(){fetch("/__hivemindos_dev_ready",{cache:"no-store"}).then(function(response){if(response.ok) location.reload();}).catch(function(){});},500);</script></body>',
-  );
+  const html = injectDevRecoveryScript(readFileSync(loadingHtmlPath, "utf8"));
   response.writeHead(200, {
     "Content-Type": "text/html; charset=utf-8",
     "Cache-Control": "no-store",
@@ -121,13 +216,70 @@ function sendLoading(response) {
   response.end(html);
 }
 
+function isDevReadyPath(url) {
+  return url === "/__hivemindos_dev_ready" || Boolean(url?.startsWith("/__hivemindos_dev_ready?"));
+}
+
+function devReadyScope(url) {
+  try {
+    return new URL(url ?? "", "http://localhost").searchParams.get("scope") === "route" ? "route" : "backend";
+  } catch {
+    return "backend";
+  }
+}
+
+function checkBackendReady(response) {
+  let settled = false;
+  const finish = (status) => {
+    if (settled || response.headersSent) return;
+    settled = true;
+    response.writeHead(status, { "Cache-Control": "no-store" });
+    response.end();
+  };
+  const socket = connect(nextPort, host, () => {
+    socket.destroy();
+    finish(204);
+  });
+  socket.setTimeout(650, () => {
+    socket.destroy();
+    finish(503);
+  });
+  socket.on("error", () => finish(503));
+}
+
+function checkRouteReady(response) {
+  let settled = false;
+  const finish = (status) => {
+    if (settled || response.headersSent) return;
+    settled = true;
+    response.writeHead(status, { "Cache-Control": "no-store" });
+    response.end();
+  };
+  const readinessRequest = httpRequest({ hostname: host, port: nextPort, path: "/", method: "HEAD" }, (readinessResponse) => {
+    finish(readinessResponse.statusCode && readinessResponse.statusCode < 500 ? 204 : 503);
+    readinessResponse.resume();
+  });
+  readinessRequest.setTimeout(2_500, () => {
+    readinessRequest.destroy();
+    finish(503);
+  });
+  readinessRequest.on("error", () => finish(503));
+  readinessRequest.end();
+}
+
+function proxyTimeoutForRequest(clientRequest) {
+  if (clientRequest.url?.startsWith("/api/")) return 60_000;
+  if (clientRequest.headers.accept?.includes("text/html")) return 15_000;
+  return 2_500;
+}
+
 function proxyHttp(clientRequest, clientResponse) {
   let handled = false;
-  const proxyTimeoutMs = clientRequest.url?.startsWith("/api/") ? 60_000 : 650;
+  const proxyTimeoutMs = proxyTimeoutForRequest(clientRequest);
   const useFallback = () => {
     if (handled || clientResponse.headersSent) return;
     handled = true;
-    if (clientRequest.url === "/__hivemindos_dev_ready") {
+    if (isDevReadyPath(clientRequest.url)) {
       clientResponse.writeHead(503, { "Cache-Control": "no-store" });
       clientResponse.end("warming");
       return;
@@ -170,25 +322,12 @@ function proxyHttp(clientRequest, clientResponse) {
 }
 
 const proxyServer = createServer((request, response) => {
-  if (request.url === "/__hivemindos_dev_ready") {
-    const readinessRequest = httpRequest({ hostname: host, port: nextPort, path: "/", method: "HEAD" }, (readinessResponse) => {
-      response.writeHead(readinessResponse.statusCode && readinessResponse.statusCode < 500 ? 204 : 503, {
-        "Cache-Control": "no-store",
-      });
-      response.end();
-      readinessResponse.resume();
-    });
-    readinessRequest.setTimeout(650, () => {
-      readinessRequest.destroy();
-      response.writeHead(503, { "Cache-Control": "no-store" });
-      response.end();
-    });
-    readinessRequest.on("error", () => {
-      if (response.headersSent) return;
-      response.writeHead(503, { "Cache-Control": "no-store" });
-      response.end();
-    });
-    readinessRequest.end();
+  if (isDevReadyPath(request.url)) {
+    if (devReadyScope(request.url) === "route") {
+      checkRouteReady(response);
+    } else {
+      checkBackendReady(response);
+    }
     return;
   }
 
@@ -226,6 +365,7 @@ proxyServer.on("upgrade", (request, socket, head) => {
 });
 
 rmSync(tauriNextDir, { force: true, recursive: true });
+writeDevServerInfo();
 
 const child = spawn(process.execPath, ["scripts/dev-server.mjs"], {
   stdio: "inherit",

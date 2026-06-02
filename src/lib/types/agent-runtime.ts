@@ -149,6 +149,8 @@ export interface UsePodAgentConfig {
   depositAddress?: string;
   depositCode?: string;
   dashboardUrl?: string;
+  apiCompatibility?: "openai" | "anthropic";
+  routingMode?: "auto" | "marketplace-only";
   maxPriceInputMicrounits?: string;
   maxPriceOutputMicrounits?: string;
   spendPreset?: "cheapest" | "balanced" | "fast" | "none" | "custom";
@@ -159,6 +161,8 @@ export interface UsePodAgentConfig {
   lastStatusMessage?: string;
   lastHttpStatus?: number;
   lastModelCount?: number;
+  lastTokenPresent?: boolean;
+  lastTokenSource?: string;
 }
 
 export type AgentVoiceRuntime = "openai-realtime" | "grok-voice" | "gemini-live" | (string & {});
@@ -222,6 +226,13 @@ export interface CustomWorkerClassProfile {
   preferredSkillSlugs: string[];
 }
 
+export interface AgentGitLawbStatus {
+  did?: string;
+  source: "local" | "missing";
+  publicOnly: boolean;
+  lastCheckedAt?: number;
+}
+
 export interface AgentProfile {
   id: string;
   name: string;
@@ -269,6 +280,7 @@ export interface AgentProfile {
   skillProfilePrompt?: string;
   preferredSkillSlugs?: string[];
   agentEnv?: Record<string, string>;
+  gitlawb?: AgentGitLawbStatus;
   memoryForkedFromAgentId?: string;
 }
 
@@ -701,9 +713,50 @@ export function runtimeUsesAgentEnvOverlay(runtime: AgentRuntime) {
   return runtimeEnvFeature(runtime).kind === "agent-overlay";
 }
 
+type RuntimeAgentNameOptions = {
+  provider?: string;
+};
+
+function runtimeAgentNameLabel(runtime: AgentRuntime, labels: Record<string, string>, options: RuntimeAgentNameOptions = {}) {
+  const provider = options.provider?.trim().toLowerCase() ?? "";
+  if (runtime === "openai-compatible" && provider === "usepod") return "UsePod";
+  return labels[runtime] ?? runtime;
+}
+
+export function runtimeAgentNamePrefix(runtime: AgentRuntime, labels: Record<string, string> = RUNTIME_LABELS, options: RuntimeAgentNameOptions = {}) {
+  const label = runtimeAgentNameLabel(runtime, labels, options);
+  const compactLabel = label
+    .replace(/[^A-Za-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+    .join("");
+  return `${compactLabel || "Agent"}Agent`;
+}
+
+export function defaultAgentNameForRuntime(agents: AgentProfile[], runtime: AgentRuntime, labels: Record<string, string> = RUNTIME_LABELS, options: RuntimeAgentNameOptions = {}) {
+  const prefix = runtimeAgentNamePrefix(runtime, labels, options);
+  const compactPrefix = prefix.toLowerCase();
+  const spacedPrefix = prefix.replace(/Agent$/i, " Agent").toLowerCase();
+  const usedIndexes = new Set<number>();
+  for (const agent of agents) {
+    if (agent.runtime !== runtime) continue;
+    const compactName = agent.name.replace(/\s+/g, "");
+    const compactMatch = compactName.match(new RegExp(`^${compactPrefix}(\\d+)$`, "i"));
+    const spacedMatch = agent.name.match(new RegExp(`^${spacedPrefix}\\s+(\\d+)$`, "i"));
+    const match = compactMatch ?? spacedMatch;
+    if (!match) continue;
+    const value = Number.parseInt(match[1] ?? "", 10);
+    if (Number.isFinite(value) && value > 0) usedIndexes.add(value);
+  }
+  for (let index = 1; index < 1000; index += 1) {
+    if (!usedIndexes.has(index)) return `${prefix}${String(index).padStart(2, "0")}`;
+  }
+  return `${prefix}${Date.now()}`;
+}
+
 export function createAgentProfile(runtime: AgentRuntime, index = 1): AgentProfile {
   const defaults = RUNTIME_DEFAULTS[runtime] ?? RUNTIME_DEFAULTS["openai-compatible"];
-  const label = RUNTIME_LABELS[runtime] ?? runtime;
   const settings = runtimeSettingsFeature(runtime);
   const profile = runtimeProfileFeature(runtime);
   const aeonDefaults = profile.aeonDefaults;
@@ -715,7 +768,7 @@ export function createAgentProfile(runtime: AgentRuntime, index = 1): AgentProfi
     : profile.defaultWorkerClass ?? "general";
   return {
     id: `${runtime}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name: `${label} Agent ${index}`,
+    name: `${runtimeAgentNamePrefix(runtime)}${String(index).padStart(2, "0")}`,
     runtime,
     gatewayUrl: defaults.gatewayUrl,
     chatPath: defaults.chatPath,

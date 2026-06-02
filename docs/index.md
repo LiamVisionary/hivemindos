@@ -72,6 +72,7 @@ The codebase now spans more than the original Fleet, Work, Brain, Chat, and Wall
 - Swarm: MiroShark template-driven simulations, scenario helpers, archive loading, X/polymarket/reddit-style outputs, run intelligence, publish actions, and analysis-agent selection.
 - Brain Services: Obsidian graph, shared skills, GBrain, Syntho, trading-brain install/status, service notes, Synthesis-folder configuration, and source-access policy controls.
 - Wallets, Tokens, and Usage: per-agent wallets, Base/Solana token rails, MoneyClaw key validation, UsePod prepaid status, x402 smoke tests, encrypted wallet-vault backup/restore, Honey observation, and Bankr HIVE claims.
+- GitLawb Code Proof: lightweight CLI/DID setup, project registry, task proof badges, Fleet Code Node status, and lazy local repo node hosting.
 - Work History and Maintenance: dynamic changelog history, note-to-Kanban intake, bulk task triage, process/heap memory telemetry, and conservative local repair actions.
 - Native Desktop: a Tauri shell that can read desktop status directly and use native local folder browsing/creation while preserving the browser API fallbacks.
 - Phone: gateway-backed phone pairing, scheduled/ring-agent calls, dashboard LiveKit calls, AEON call context, and mobile push readiness checks.
@@ -106,7 +107,7 @@ flowchart LR
   RemoteCollectors --> RemoteRuntimes["Remote runtimes"]
   Api --> Wallets["Wallets / tokens / x402"]
   Api --> Workers["Honey ledger and compute gateway workers"]
-  Api --> Companions["MiroShark / Nango / Syncthing"]
+  Api --> Companions["GitLawb / MiroShark / Nango / Syncthing"]
 ```
 
 ## Current Audit Snapshot
@@ -117,6 +118,7 @@ This documentation reflects a code audit of the repository on 2026-06-01 WITA. T
 - API facade: `src/app/api/**`
 - Runtime adapters: `src/lib/services/runtime-adapters/**`
 - Shared state services: `src/lib/services/kanban/**`, `src/lib/services/obsidian/**`, `src/lib/services/brain/**`
+- Code proof services: `src/lib/services/gitlawb/**`, `src/lib/services/projects/**`, `src/app/api/gitlawb/**`, `src/app/api/projects/**`
 - Native desktop bridge: `src/lib/native/**`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/default.json`
 - Fleet/app discovery: `src/app/api/fleet/**`, `src/features/dashboard/views/MyAppsPanel.tsx`, `src/components/fleet/**`
 - Scheduler, Swarm, AEON, Phone, and Integrations views: `src/features/dashboard/views/**`, `src/components/scheduler/**`, `src/components/swarm/**`

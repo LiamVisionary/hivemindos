@@ -334,6 +334,8 @@ fn desktop_status(state: tauri::State<NativeServerState>) -> serde_json::Value {
     serde_json::json!({
         "ok": true,
         "appDir": app_dir,
+        "version": env!("CARGO_PKG_VERSION"),
+        "latestVersion": env!("CARGO_PKG_VERSION"),
         "commit": commit,
         "shortCommit": commit.map(short_commit),
         "branch": branch,

@@ -46,6 +46,8 @@ type UsePodStatusResponse = {
   status?: string;
   message?: string;
   tokenEnvName?: string;
+  tokenPresent?: boolean;
+  tokenSource?: string;
   depositAddress?: string;
   depositCode?: string;
   dashboardUrl?: string;
@@ -123,7 +125,13 @@ function hasUsePodSetup(config?: AgentProfile["usePod"]) {
 }
 
 function isUsePodSetupReady(config?: AgentProfile["usePod"]) {
-  return config?.lastTestStatus === "ready" || (typeof config?.lastModelCount === "number" && config.lastModelCount > 0);
+  return config?.lastTestStatus === "ready";
+}
+
+function initialUsePodSetupStep(config?: AgentProfile["usePod"]): SetupStep {
+  if (isUsePodSetupReady(config)) return 3;
+  if (config?.dashboardUrl || config?.depositCode || config?.depositAddress || config?.lastTestStatus === "needs-funding") return 2;
+  return 1;
 }
 
 function walletKeyForUsePodAgent(agent: AgentProfile) {
@@ -197,7 +205,7 @@ export function GuidedUsePodSetup({
   onCancel,
   onComplete,
 }: GuidedUsePodSetupProps) {
-  const initialStep: SetupStep = agent?.usePod?.lastModelCount ? 3 : agent?.usePod?.dashboardUrl || agent?.usePod?.depositCode || agent?.usePod?.depositAddress ? 2 : 1;
+  const initialStep = initialUsePodSetupStep(agent?.usePod);
   const walletOptions = useMemo(() => {
     const wallets = new Map<string, AgentProfile>();
     for (const wallet of existingWallets) {
@@ -298,6 +306,8 @@ export function GuidedUsePodSetup({
             lastCheckedAt: data.checkedAt ?? "",
             lastTestStatus: data.status ?? "",
             lastModelCount: data.modelCount,
+            lastTokenPresent: data.tokenPresent,
+            lastTokenSource: data.tokenSource ?? "",
           }),
         });
         if (data.dashboardUrl || data.depositCode || data.depositAddress) setCurrentStep(2);
@@ -370,6 +380,8 @@ export function GuidedUsePodSetup({
         lastStatusMessage: status?.message ?? agent?.usePod?.lastStatusMessage ?? "",
         lastHttpStatus: status?.httpStatus ?? agent?.usePod?.lastHttpStatus,
         lastModelCount: status?.modelCount ?? agent?.usePod?.lastModelCount,
+        lastTokenPresent: status?.tokenPresent ?? agent?.usePod?.lastTokenPresent,
+        lastTokenSource: status?.tokenSource ?? agent?.usePod?.lastTokenSource ?? "",
         ...extra,
       },
     };
@@ -429,6 +441,8 @@ export function GuidedUsePodSetup({
         lastStatusMessage: walletUsePod.lastStatusMessage || "",
         lastHttpStatus: walletUsePod.lastHttpStatus,
         lastModelCount: walletUsePod.lastModelCount,
+        lastTokenPresent: walletUsePod.lastTokenPresent,
+        lastTokenSource: walletUsePod.lastTokenSource || "",
       },
     });
     setSetupView("setup");
@@ -479,10 +493,12 @@ export function GuidedUsePodSetup({
           lastStatusMessage: data.message ?? "",
           lastHttpStatus: data.httpStatus,
           lastModelCount: data.modelCount,
+          lastTokenPresent: data.tokenPresent,
+          lastTokenSource: data.tokenSource ?? "",
         }),
         model: resolvedModel,
       });
-      if (data.models?.length) {
+      if (data.status === "ready" && data.models?.length) {
         setMessage("");
         setShowingSuccess(true);
         successTimerRef.current = window.setTimeout(() => {
@@ -492,6 +508,7 @@ export function GuidedUsePodSetup({
         }, 1250);
         return;
       }
+      if (data.status === "needs-funding") setCurrentStep(2);
       setMessage(data.message ?? "Funding may still be pending. Try again after UsePod confirms the top-up.");
     } catch (error) {
       setMessage(friendlyUsePodCheckError(error));
@@ -806,7 +823,7 @@ export function GuidedUsePodSetup({
                 <div className={styles.directDepositHeader}>
                   <div>
                     <strong>Deposit directly</strong>
-                    <p>UsePod accepts USDC on Solana mainnet. The funding reference identifies this token; it is not a wallet address.</p>
+                    <p>UsePod accepts USDC on Solana mainnet. Copy the recipient address and keep the funding reference with the deposit.</p>
                   </div>
                   <span>USDC</span>
                 </div>

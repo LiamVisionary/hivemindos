@@ -43,7 +43,7 @@ pnpm tauri:prepare
 
 The prepare step exports the shared dashboard React app into `src-tauri/static`, prunes bulky browser-only icon/source assets, keeps Lottie animation assets, and does not bundle the standalone Next server or a Node.js runtime. In release builds the Rust shell loads the static webview directly and reports `phase-3-static` from `desktop_status`.
 
-Opening the packaged app does not auto-run `setup.sh` or `install.sh`. The first-run setup wizard checks local capabilities from native code, asks the user how to install the hive, detects agent runtimes, lets skills and memory imports be selected independently, then opens an explicit Terminal command only after the user approves it.
+Opening the packaged app does not auto-run `setup.sh` or `install.sh`. The first-run setup wizard checks local capabilities from native code, asks the user how to install the hive, detects agent runtimes, lets skills and memory imports be selected independently, then opens an explicit Terminal command only after the user approves it. That terminal setup path runs `setup.sh --interactive ...`, so it can prompt for GitLawb Code Proof CLI/DID preparation, but it does not silently start a full GitLawb node or install Docker/Postgres.
 
 For debugging only, the old embedded Next server package can still be generated:
 
@@ -69,6 +69,8 @@ The desktop shell exposes a narrow command surface for operations that should be
 | `display_local_path` | `displayNativeLocalPath` | Normalize local paths for display |
 | `native_setup_status` | `readNativeSetupStatus` | Detect setup prerequisites and local agent runtimes for the first-run wizard |
 | `native_setup_run` | `runNativeSetup` | Open a user-approved Terminal command that runs `setup.sh` with selected wizard options |
+
+The wizard delegates Code Proof preparation to `setup.sh`: macOS/Linux users can accept the GitLawb CLI and DID prompts in the opened terminal, while full local node hosting remains a later Integrations/project-linking action.
 
 The browser path remains fully supported. Frontend code calls native helpers only when Tauri is detected and the target collector URL is local. Remote machines still use Hivemind Link or collector directory APIs so local native privileges are never confused with remote access.
 

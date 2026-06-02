@@ -961,7 +961,9 @@ export function useDashboardDerivedState(props: any) {
     {
       id: "more" as const,
       label: "More",
-      detail: activeView === "aeon"
+      detail: activeView === "fusion"
+        ? "fusion"
+        : activeView === "aeon"
         ? "autopilot"
         : notificationSummary?.unread
         ? `${notificationSummary.unread} alerts`
@@ -974,7 +976,7 @@ export function useDashboardDerivedState(props: any) {
   const activeNavItem = navItems.find((item) => (
     item.id === activeView
     || (item.id === "kanban" && isWorkView(activeView))
-    || (item.id === "more" && (activeView === "maintenance" || activeView === "sessions" || activeView === "tools" || activeView === "memory" || activeView === "files" || activeView === "notifications" || activeView === "env" || activeView === "integrations" || activeView === "my-apps" || activeView === "phone" || activeView === "aeon"))
+    || (item.id === "more" && (activeView === "maintenance" || activeView === "sessions" || activeView === "tools" || activeView === "memory" || activeView === "files" || activeView === "notifications" || activeView === "env" || activeView === "integrations" || activeView === "my-apps" || activeView === "phone" || activeView === "aeon" || activeView === "fusion"))
   ));
   const activeHeader = (() => {
     const detail = activeNavItem?.detail ?? "";
@@ -999,6 +1001,7 @@ export function useDashboardDerivedState(props: any) {
       "my-apps": { label: "Apps & Services", title: "What runs and what agents can call" },
       phone: { label: "Phone", title: "What your phone calls about" },
       aeon: { label: "Aeon", title: "What runs unattended" },
+      fusion: { label: "Hive Fusion", title: "What the hive can create" },
     };
     const header = headers[activeView];
     return {

@@ -3,6 +3,747 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-02 20:47:36 WITA - Smooth GitLawb Showcase Playback
+
+- Status: Pushed
+- Areas changed: GitLawb Remotion real UI capture script, Remotion showcase timing, rendered video artifact, changelog
+- Summary: Replace fake slow-motion playback with longer real in-app capture holds, keep the Fleet and Work footage at normal speed, and tighten the Work nav selector so the video no longer looks laggy from duplicated frames.
+- Verification: `pnpm exec eslint src/features/dashboard/views/DemoPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css CHANGELOG.md`; `git diff --check -- CHANGELOG.md`; no-index whitespace checks for the untracked Fusion view files; in-app Browser on `http://127.0.0.1:5025/?view=fusion` confirmed the first turn starts with 0 orbit cards, still has 0 orbit cards during the early flight, adds the first card at roughly 1.52s when the bee reaches the drop beat, continues through all 8 capability cards without stalling, completes the generated skill card, has no broken images, keeps all final chip radii at 140px, and renders the flying bee lane 86px above the carried token with the actual Lottie canvas roughly 92px above the token.
+- Intended commit message: `Smooth GitLawb showcase playback`
+
+## 2026-06-02 20:27:08 WITA - Remove Fusion Orbit Drop Delay
+
+- Status: Pushed
+- Areas changed: Hive Fusion orbit animation, changelog
+- Summary: Advance capability placement on a deterministic timer instead of CSS animation-end events, keep orbit cards hidden until the bee actually reaches the drop point, restore a slower smoother 1.5s flight path so the bee does not rush or stall after the first skill, and move the actual flying bee onto a visibly higher lane above the carried token.
+- Verification: Pending.
+- Intended commit message: `Remove fusion orbit drop delay`
+
+## 2026-06-02 20:19:18 WITA - Fix Agent Profile Rename Persistence
+
+- Status: Pushed
+- Areas changed: Obsidian agent profile mirroring, profile rename regression test, changelog
+- Summary: Prevent renamed profiles such as UsePod agents from being shadowed by old name-derived vault folders by pruning stale managed profile records for the same stable agent identity, comparing real profile paths when vault folder casing differs, and preferring custom renamed records over default identity names during vault reads.
+- Verification: `node scripts/test-obsidian-agent-profile-renames.mjs`; `pnpm exec eslint src/lib/services/obsidian/agent-profiles.ts scripts/test-obsidian-agent-profile-renames.mjs --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/lib/services/obsidian/agent-profiles.ts scripts/test-obsidian-agent-profile-renames.mjs CHANGELOG.md`; `git diff --check -- src/lib/services/obsidian/agent-profiles.ts scripts/test-obsidian-agent-profile-renames.mjs CHANGELOG.md`; restored the live vault's managed profile records from the HivemindOS localStorage snapshot and verified `Aeonitis` and `Mr. UsePod` read back as single profiles.
+- Intended commit message: `Fix agent profile rename persistence`
+
+## 2026-06-02 20:18:03 WITA - Keep Unfunded UsePod Setup On Funding Step
+
+- Status: Pushed
+- Areas changed: UsePod setup flow, UsePod model/funding checker, changelog
+- Summary: Stop treating a cached UsePod model count as setup completion, require a `ready` funding status before showing the model picker, and make the model checker prove funding with balance evidence or a tiny paid probe before returning ready.
+- Verification: `pnpm exec eslint src/lib/services/usepod.ts src/features/dashboard/views/chat/GuidedUsePodSetup.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/lib/services/usepod.ts src/features/dashboard/views/chat/GuidedUsePodSetup.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx CHANGELOG.md`.
+- Intended commit message: `Keep unfunded UsePod setup on funding step`
+
+## 2026-06-02 20:15:23 WITA - Use Native Fleet Graph In GitLawb Video
+
+- Status: Pushed
+- Areas changed: GitLawb Remotion real UI capture script/assets, rendered video artifact, changelog
+- Summary: Remove the recreated capture-only Fleet agent card layer, stop spoofing Fleet discovery routes, hydrate the capture from the app's actual Fleet discovery response, require the real honeycomb graph to show named agents and loaded bee/Lottie artwork before the video moves to Work, and retime the Remotion footage to start from the stable native graph frame.
+- Verification: Re-recorded the real UX capture against `127.0.0.1:5121` without touching port `5020`; transcoded `real-ux.webm` to `real-ux.mp4`; visually inspected raw Fleet and Work frames to confirm the opening shot uses the native `FleetView`/`NetworkGraph`/`MachineCluster` honeycomb graph with real agent names, in-cell bee icons, the moving Lottie bee, restored hive coloring, and no injected rectangular agent cards or giant `agents online` overlay; rendered `out/remotion/gitlawb-integration.mp4`; `ffprobe` confirmed 1920x1080, 30fps, and 30.06s duration; visually inspected final frames at 1s, 8s, and 24s to verify the Fleet, Work proof, and infographic sections.
+- Intended commit message: `Use native Fleet graph in GitLawb video`
+
+## 2026-06-02 20:05:44 WITA - Use Shadcn Button For UsePod Host Setup
+
+- Status: Pushed
+- Areas changed: Fleet UsePod host modal, changelog
+- Summary: Replace the custom oversized UsePod host setup CTA with the shared shadcn primary `Button` component, remove heavy `900`-weight typography from the modal, and hide the Bond/Earn/Mode stat strip once provider setup or funding preflight is underway.
+- Verification: `pnpm exec eslint src/components/fleet/usepod-host-modal.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/components/fleet/usepod-host-modal.tsx src/components/fleet/usepod-host-modal.module.css CHANGELOG.md`; `git diff --check -- src/components/fleet/usepod-host-modal.tsx src/components/fleet/usepod-host-modal.module.css CHANGELOG.md`.
+- Intended commit message: `Use shadcn button for UsePod host setup`
+
+## 2026-06-02 20:01:30 WITA - Make GitLawb Fleet Agents Visible
+
+- Status: Pushed
+- Areas changed: GitLawb Remotion showcase composition, real UI capture script/assets, rendered video artifact, changelog
+- Summary: Remove the giant Remotion `agents online` overlay, fix the capture data's machine ids and graph edge ids, add small capture-only agent node cards inside the Fleet graph shot, and slow the Work segment so the shorter real UX capture does not freeze before the infographic.
+- Verification: Re-recorded the real UX capture against `127.0.0.1:5121` without touching port `5020`; transcoded `real-ux.webm` to a 1920x1080 30fps `real-ux.mp4`; rendered `GitLawbIntegration` to `out/remotion/gitlawb-integration.mp4`; `ffprobe` confirmed 1920x1080, 30fps, and roughly 30.06s duration; visually inspected final MP4 frames around 0.5s, 1s, 4s, 7s, 9s, 14s, 20s, 24s, and 28s to confirm named Fleet agents are visible, Graph remains selected, List is not selected, the giant `agents online` overlay is gone, Work proof remains visible, and the final infographic is framed cleanly; `node --check remotion/gitlawb-integration-video/scripts/capture-real-ux.mjs`; `rg -n "FleetRosterOverlay|[0-9]+ agents online|agents online" remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx remotion/gitlawb-integration-video/scripts/capture-real-ux.mjs` returned no matches.
+- Intended commit message: `Make GitLawb Fleet agents visible`
+
+## 2026-06-02 20:00:44 WITA - Polish Fusion Capability Layout
+
+- Status: Pushed
+- Areas changed: Hive Fusion capability grid styling, orbit positioning, shadcn card actions, connected app icon fallback, medium-width generated-card layout, changelog
+- Summary: Remove visible card containers from generated capability tiles and orbit chips, switch Regenerate/Delete to compact shadcn buttons, use a constant orbit radius so later capabilities do not drift off the orbit, keep medium-width generated cards from overlapping the header, avoid flaky external connected-app icon URLs, and make the bee/token reach the drop point only at animation completion.
+- Verification: `pnpm exec eslint src/features/dashboard/views/DemoPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css CHANGELOG.md`; `git diff --check -- CHANGELOG.md src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css`; in-app Browser on `http://127.0.0.1:5025/?view=fusion` confirmed invisible generated capability grid chrome, shadcn `data-slot="button"` card actions at 32px height, no grouped capability labels, no AEON for the Base-news skill, no broken images, ComfyUI/Z-Image remote machine badges, all orbit chips on a 140px radius, a fresh bee/token drop landing exactly on the computed orbit node with 0px chip endpoint distance and no positive post-animation delay, and a 1024x768 viewport with no title/card overlap, no core/copy overlap, visible card actions, and no horizontal overflow.
+- Intended commit message: `Polish fusion capability layout`
+
+## 2026-06-02 19:52:25 WITA - Show UsePod Deposit Recipient Address
+
+- Status: Pushed
+- Areas changed: UsePod funding setup UI, UsePod registration/status metadata, UsePod deposit transaction API, changelog
+- Summary: Resolve UsePod's Solana USDC receiver from the on-chain program config when the register API only returns a funding reference, so the direct-deposit flow shows the recipient address and funding reference together.
+- Verification: `pnpm exec eslint src/lib/services/usepod.ts src/lib/services/usepod/deposit-recipient.ts src/app/api/usepod/deposit-transaction/route.ts src/features/dashboard/views/chat/GuidedUsePodSetup.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/lib/services/usepod.ts src/lib/services/usepod/deposit-recipient.ts src/app/api/usepod/deposit-transaction/route.ts src/features/dashboard/views/chat/GuidedUsePodSetup.tsx CHANGELOG.md`; `git diff --check -- src/lib/services/usepod.ts src/lib/services/usepod/deposit-recipient.ts src/app/api/usepod/deposit-transaction/route.ts src/features/dashboard/views/chat/GuidedUsePodSetup.tsx CHANGELOG.md`; Node resolver smoke returned UsePod USDC recipient `HKihxxfESzLMTw2G3wUVGTqaJmdmiikMmUBhseU3bKfE`.
+- Intended commit message: `Show UsePod deposit recipient address`
+
+## 2026-06-02 19:52:22 WITA - Reframe Fusion Complete Card Art
+
+- Status: Pushed
+- Areas changed: Hive Fusion completed-card layout, fusion orbit artwork positioning, changelog
+- Summary: Move the completed/fusing fusion artwork into the generated card's left visual lane on desktop so the bee image no longer covers the skill title, description, capability cards, or card actions, while leaving the gathering orbit centered for accurate bee-drop alignment.
+- Verification: `pnpm exec eslint src/features/dashboard/views/DemoPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css`; `node scripts/check-file-sizes.mjs src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css CHANGELOG.md`; in-app Browser on `http://127.0.0.1:5025/?view=fusion` at a 1440x900 viewport confirmed the fusion image is in the left card lane and does not overlap the generated copy, capability grid, or Regenerate/Delete actions.
+- Intended commit message: `Reframe fusion complete card art`
+
+## 2026-06-02 19:46:36 WITA - Preflight UsePod Provider Funding
+
+- Status: Pushed
+- Areas changed: UsePod host setup API, Fleet UsePod host modal, changelog
+- Summary: Add a provider-funding preflight before the UsePod host setup animation, show a focused fund-provider-wallet view when the local provider wallet has less than the `$50 USDC` operator bond, and keep the 1-4 install/bond/pair/ready steps hidden until funding is validated.
+- Verification: `pnpm exec eslint src/app/api/usepod/host/setup/route.ts src/components/fleet/usepod-host-modal.tsx src/lib/services/usepod/host-bond.ts --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/app/api/usepod/host/setup/route.ts src/components/fleet/usepod-host-modal.tsx src/components/fleet/usepod-host-modal.module.css src/lib/services/usepod/host-bond.ts CHANGELOG.md`; `git diff --check -- src/app/api/usepod/host/setup/route.ts src/components/fleet/usepod-host-modal.tsx src/components/fleet/usepod-host-modal.module.css src/lib/services/usepod/host-bond.ts CHANGELOG.md`; live `curl -X POST /api/usepod/host/setup` with `{"action":"preflight","displayName":"HivemindOS This Mac"}` returned `status:"needs-bond"` with `$0.00` current balance, `$50.00` required bond, the provider recipient wallet, and no `usepod-agent setup` process.
+- Intended commit message: `Preflight UsePod provider funding`
+
+## 2026-06-02 19:37:44 WITA - Keep GitLawb Showcase On Fleet Graph
+
+- Status: Pushed
+- Areas changed: GitLawb Remotion showcase composition, real UI capture script/assets, rendered video artifact, changelog
+- Summary: Remove the unwanted Fleet List-view switch from the GitLawb showcase, keep the opening sequence on the default Fleet graph/cockpit view with the loaded agent roster, route local animation assets during capture to avoid development overlays, and retime the Fleet segment so it opens on the populated `9 agents` state.
+- Verification: Re-recorded the real UX capture against `127.0.0.1:5121` without touching port `5020`; transcoded it to `real-ux.mp4`; rendered `GitLawbIntegration` to `out/remotion/gitlawb-integration.mp4`; `ffprobe` confirmed 1920x1080, 30fps, and roughly 30.06s duration; visually inspected final MP4 frames around 0.5s, 1s, 5s, 9s, 14s, 24s, and 28s to confirm Fleet remains on Graph/List is not selected, the header shows `9 agents`, no loading or dev overlay appears, Work shows the proof badge, and the infographic is framed cleanly; `node --check remotion/gitlawb-integration-video/scripts/capture-real-ux.mjs`.
+- Intended commit message: `Keep GitLawb showcase on Fleet graph`
+
+## 2026-06-02 19:36:22 WITA - Align Fusion Pluck Animation
+
+- Status: Pushed
+- Areas changed: Hive Fusion pluck animation timing, orbit chip placement, changelog
+- Summary: Make the bee/token flight endpoint use the exact same orbit-node coordinates as the rendered capability chip, place chips from the token animation-end event instead of a separate timer, and remove the delayed center-to-node chip arrival so each capability appears at the drop point immediately.
+- Verification: `pnpm exec eslint src/features/dashboard/views/DemoPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css`; `node scripts/check-file-sizes.mjs src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css CHANGELOG.md`; in-app Browser on `http://127.0.0.1:5025/?view=fusion` measured the first drop with the bee/token center within roughly 0.06px of the expected orbit node immediately before placement and the newly rendered chip center exactly 0px from that same node; the chip animation is now `chipFloat` only, with no delayed `chipArrive` center-to-node animation.
+- Intended commit message: `Align fusion pluck animation`
+
+## 2026-06-02 19:26:56 WITA - Automate UsePod Host Provider Setup
+
+- Status: Pushed
+- Areas changed: UsePod host setup API, Fleet UsePod host modal, UsePod host bond service, changelog
+- Summary: Make Fleet's UsePod provider setup enroll a host-provider token automatically, create/reuse a local encrypted Solana payout wallet, post the UsePod operator bond from that wallet when funded, wait for bond activation before pairing, and keep the manual pair URL/code path as a fallback only after automatic claiming fails.
+- Verification: `pnpm exec eslint src/app/api/usepod/host/setup/route.ts src/components/fleet/usepod-host-modal.tsx src/lib/services/usepod/host-bond.ts --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/app/api/usepod/host/setup/route.ts src/components/fleet/usepod-host-modal.tsx src/components/fleet/usepod-host-modal.module.css src/lib/services/usepod/host-bond.ts CHANGELOG.md`; `git diff --check -- src/app/api/usepod/host/setup/route.ts src/components/fleet/usepod-host-modal.tsx src/lib/services/usepod/host-bond.ts CHANGELOG.md`; live `curl -X POST /api/usepod/host/setup` with `{"action":"setup","displayName":"HivemindOS This Mac"}` returned `status:"needs-bond"` with the generated provider wallet balance at `$0.00`, required bond `$50.00`, and no pairing code; `pgrep -fl 'usepod-agent setup'` confirmed no setup process remains.
+- Intended commit message: `Automate UsePod host provider setup`
+
+## 2026-06-02 19:31:02 WITA - Restore Native Edit Shortcuts
+
+- Status: Pushed
+- Areas changed: Native Tauri desktop menu, changelog
+- Summary: Restore the standard native Edit menu so macOS text inputs receive paste/copy/cut/select-all and undo/redo shortcuts while keeping the new desktop navigation shortcuts.
+- Verification: `cargo check` in `src-tauri`; `git diff --check -- src-tauri/src/desktop_navigation.rs CHANGELOG.md`. `cargo fmt` was skipped because `rustfmt` is not installed for the active stable toolchain.
+- Intended commit message: `Restore native edit shortcuts`
+
+## 2026-06-02 19:30:14 WITA - Refine Fusion Machine Badges
+
+- Status: Pushed
+- Areas changed: Hive Fusion machine badge labels, fusion capability card styling, changelog
+- Summary: Replace cramped multi-line machine-name pills with compact machine labels such as `This Mac` and `Remote MBP`, while preserving the full machine name in accessible/title text.
+- Verification: `pnpm exec eslint src/features/dashboard/views/DemoPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css`; `node scripts/check-file-sizes.mjs src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css CHANGELOG.md`; in-app Browser on `http://127.0.0.1:5025/?view=fusion` confirmed local badges render as one-line `This Mac`, ComfyUI/Z-Image render as one-line `Remote MBP`, the full `Liams Macbook Pro` remains in title/ARIA text, badge CSS computes to `white-space: nowrap`, no broken images or paired icon DOM are present, and Regenerate/Delete remain visible at a 319x825 viewport.
+- Intended commit message: `Refine fusion machine badges`
+
+## 2026-06-02 19:26:11 WITA - Recut GitLawb Showcase Around Loaded UX
+
+- Status: Pushed
+- Areas changed: GitLawb Remotion showcase composition, real UI capture script/assets, rendered video artifact, changelog
+- Summary: Recut the HivemindOS x GitLawb video to skip loading/search/attachments/back-navigation beats, open on a loaded Fleet snapshot with all named agents visible, move directly to the Work proof badge, and end on the simplified infographic.
+- Verification: Re-recorded `remotion/gitlawb-integration-video/public/assets/real-ux.webm` against the app on `127.0.0.1:5121` without touching port `5020`; transcoded the capture to `real-ux.mp4`; rendered `GitLawbIntegration` to `out/remotion/gitlawb-integration.mp4`; `ffprobe` confirmed 1920x1080, 30fps, and roughly 30.06s duration; extracted and visually inspected final MP4 frames around 1s, 5s, 9s, 14s, 20s, 24s, and 28s for loaded Fleet, proof badge visibility, dev-badge masking, caption fit, and final infographic framing.
+- Intended commit message: `Recut GitLawb showcase around loaded UX`
+
+## 2026-06-02 19:18:25 WITA - Add Fusion Machine Badges
+
+- Status: Pushed
+- Areas changed: Hive Fusion view, connected app capability metadata, fusion capability card styling, changelog
+- Summary: Show compact machine badges on Hive Fusion capability-search results and generated capability cards, using existing fleet app discovery machine names for connected apps such as ComfyUI/Z-Image and local `This Mac` attribution for local skills/tools/runtime pieces.
+- Verification: `pnpm exec eslint src/features/dashboard/views/DemoPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css`; in-app Browser on `http://127.0.0.1:5025/?view=fusion` confirmed 8 Base-news capabilities with compact machine badges, local skills/tools/brain/delivery showing `This Mac`, ComfyUI and Z-Image inheriting the remote machine name from `/api/fleet/apps?fast=1`, no AEON on the non-recurring skill, no grouped labels, no paired-icon DOM, no broken images, and Regenerate/Delete visible at a 319x825 viewport.
+- Intended commit message: `Add fusion machine badges`
+
+## 2026-06-02 19:02:53 WITA - Split Fusion Capability Cards
+
+- Status: Pushed
+- Areas changed: Hive Fusion view, capability icon renderer, Fusion capability assets, changelog
+- Summary: Remove grouped capability tiles from Hive Fusion by rendering Base research, X research, Obsidian brain, ComfyUI, and Z-Image as separate selected capabilities, enforce one icon per capability tile, add the generated Z-Image fallback icon so every orbit/card node has a visual, and make AEON appear only for prompts that actually need a loop/schedule/recurring runtime.
+- Verification: `pnpm exec eslint src/features/dashboard/views/DemoPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css public/fusion/icons/z-image.png`; `node scripts/check-file-sizes.mjs src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css CHANGELOG.md public/fusion/icons/z-image.png`; Pillow validation confirmed `public/fusion/icons/z-image.png` is a 256x256 RGBA asset with transparent corners; in-app Browser on `http://127.0.0.1:5025/?view=fusion` confirmed the Base news prompt renders 8 selected capabilities with no `AEON ready loop`, no grouped labels, no paired-icon DOM, no broken images, and visible Regenerate/Delete controls at a 319x825 viewport; a separate recurring/daily Base prompt confirmed AEON appears only when a loop runtime is actually selected.
+- Intended commit message: `Split fusion capability cards`
+
+## 2026-06-02 18:29:14 WITA - Replace GitLawb Showcase With Real UX Capture
+
+- Status: Pushed
+- Areas changed: GitLawb Remotion showcase composition, real UI capture script/assets, Work proof badge fallback behavior, rendered video artifact, changelog
+- Summary: Rebuild the GitLawb integration showcase as a roughly 30-second Remotion edit over real HivemindOS Fleet and Work UI interactions, emphasize project-level code proof without protocol-heavy copy, and end on the simplified AntV infographic.
+- Verification: Rendered `GitLawbIntegration` to `out/remotion/gitlawb-integration.mp4`; `ffprobe` confirmed 1920x1080, 30fps, 900 frames, roughly 30.06s duration; extracted and visually inspected final MP4 frames around 2s, 5s, 10s, 17s, 23s, and 27s for real UI visibility, caption fit, proof-board legibility, and final infographic framing; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md src/features/dashboard/views/KanbanPanel.tsx ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl .gitignore`; `git status --short --ignored remotion/gitlawb-integration-video out/remotion .remotion-capture/gitlawb-ui` confirmed the Remotion workspace, captures, and rendered output are ignored. `node scripts/check-file-sizes.mjs CHANGELOG.md src/features/dashboard/views/KanbanPanel.tsx` is blocked by unrelated dirty growth in legacy `src/features/dashboard/DashboardApp.tsx`; touched code files are under the cap by `wc -l`.
+- Intended commit message: `Replace GitLawb showcase with real UX capture`
+
+## 2026-06-02 18:25:19 WITA - Add Fusion Capability Icons
+
+- Status: Pushed
+- Areas changed: Hive Fusion view, fusion capability cards, fusion icon assets, landing-page Base asset copy, generated fallback icon, skill browser modal defensive guard, changelog
+- Summary: Add polished iOS-style capability icons to the generated Hive Fusion card and reuse the same icon renderer for capability-search rows and orbit chips, source real local app/agent/runtime logos where available, split previously grouped Base/X and ComfyUI/Z-Image cards into atomic Base research, X research, ComfyUI, and Z-Image capabilities, and relabel the generated card section to capabilities instead of skills so apps/tools are not mislabeled.
+- Verification: `pnpm exec eslint src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/chat/SkillBrowserModal.tsx --max-warnings=0`; `pnpm exec eslint src/features/dashboard/views/DemoPanel.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css src/features/dashboard/views/chat/SkillBrowserModal.tsx public/fusion/logos/base.svg public/fusion/logos/base-mark.svg public/fusion/icons/style-guide.png`; `git diff --check -- src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css CHANGELOG.md`; Pillow validation confirmed `public/fusion/icons/style-guide.png` is a 256x256 RGBA asset with transparent corners; in-app Browser on `http://127.0.0.1:5025/?view=fusion` confirmed six Skills Used icons, six orbit chips using the same icon renderer, no broken icon images, connected ComfyUI icon replacement from Apps discovery, the card starts below the header, the orbit image no longer overlaps card copy, and Regenerate/Delete fit in one mobile row; follow-up source and lint checks split capability candidates into eight individual cards, removed the grouped `Base/X` and `ComfyUI / Z-Image` labels, changed Skills Used to Capabilities used, and kept connected app icons exact-match per app. `node scripts/check-file-sizes.mjs src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css CHANGELOG.md src/features/dashboard/views/chat/UnifiedSkillBrowser.tsx src/features/dashboard/views/chat/SkillBrowserModal.tsx src/components/aeon/work.tsx src/features/dashboard/DashboardApp.tsx` passed with DashboardApp at its legacy no-growth allowance; follow-up Browser smoke on `127.0.0.1:5121`/`localhost:5121` was blocked by the client and shell curl confirmed no dev server was listening on 5121.
+- Intended commit message: `Add fusion capability icons`
+
+## 2026-06-02 18:23:25 WITA - Tighten Hivemind Link Log Churn
+
+- Status: Pushed
+- Areas changed: Hivemind Link daemon log cap, embedded Tailscale log filtering, telemetry collector installer, changelog
+- Summary: Reduce the default Hivemind Link active log cap from 10 MiB to 2 MiB, keep only one capped rotation, and suppress repetitive embedded Tailscale handshake/keepalive chatter unless `HIVE_LINK_TAILSCALE_DEBUG_LOGS` is explicitly enabled.
+- Verification: `go test ./cmd/hivemind-linkd`; `go test ./cmd/hivemind-linkd -run 'Test(DefaultLogMaxBytesIsAgentFriendly|ShouldLogTailscaleFiltersHandshakeChatter|CappedLogWriterKeepsActiveLogUnderLimit)' -count=1`; `bash -n scripts/install-telemetry-collector.sh`; `git diff --check -- cmd/hivemind-linkd/main.go cmd/hivemind-linkd/main_test.go scripts/install-telemetry-collector.sh CHANGELOG.md`; rebuilt `bin/hivemind-linkd`; updated the installed LaunchAgent and `~/.hivemindos/collector.env` to `HIVE_LINK_LOG_MAX_BYTES=2097152` and `HIVE_LINK_TAILSCALE_DEBUG_LOGS=false`; restarted only `com.hivemindos.linkd.agent`; live `/health` returned `ok:true`, `/status` returned `backendState: Running`, PID 67128 sampled at 0.9%, 5.1%, 0.4%, and 0.3% CPU with RSS moving between roughly 35-53 MB, active log stayed around 14-15 KB over the watch window, no rotated log was present, and recent logs no longer showed the filtered handshake retry lines. `node scripts/check-file-sizes.mjs ...` is blocked by unrelated dirty growth in legacy `src/features/dashboard/DashboardApp.tsx`; touched files are under the cap by `wc -l`.
+- Intended commit message: `Tighten Hivemind Link log churn`
+
+## 2026-06-02 18:08:48 WITA - Reset Fusion Composer Textarea Chrome
+
+- Status: Pushed
+- Areas changed: Shared chat composer styling, changelog
+- Summary: Move the textarea border/background/outline reset onto the shared composer field so compact fusion chat uses the custom composer line instead of native textarea chrome.
+- Verification: `git diff --check -- src/app/chat.module.css CHANGELOG.md`; `rg -n "chatComposerField textarea|compactComposer textarea|\\.chat textarea" src/app/chat.module.css`; `node scripts/check-file-sizes.mjs src/app/chat.module.css CHANGELOG.md` no longer reports `src/app/chat.module.css` but exits nonzero because unrelated `src/components/fleet/fleet-tokens.module.css` and `src/components/fleet/roster.tsx` are already over the file-size cap; in-app Browser smoke on `http://127.0.0.1:5025/?view=fusion` was blocked by an existing Next build error before the app rendered.
+- Intended commit message: `Reset fusion composer textarea chrome`
+
+## 2026-06-02 18:50:19 WITA - Install UsePod Agent Without Sudo
+
+- Status: Pushed
+- Areas changed: UsePod host setup API, UsePod host modal styling, UsePod feature matrix, changelog
+- Summary: Install usepod-agent into the user-local `~/.local/bin` prefix during automatic host setup, search that prefix for status/setup, surface installer stdout/stderr in the modal, and update manual setup commands to avoid the `/usr/local/bin` sudo trap.
+- Verification: `curl -X POST /api/usepod/host/setup` with `{"action":"install"}` installed `usepod-agent 0.3.4` at `/Users/liam/.local/bin/usepod-agent`; follow-up `{"action":"status"}` returned `installed:true`; `pnpm exec eslint src/app/api/usepod/host/setup/route.ts src/components/fleet/usepod-host-modal.tsx src/lib/config/usepod-features.ts --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/app/api/usepod/host/setup/route.ts src/components/fleet/usepod-host-modal.tsx src/components/fleet/usepod-host-modal.module.css src/lib/config/usepod-features.ts CHANGELOG.md`; `git diff --check -- src/app/api/usepod/host/setup/route.ts src/components/fleet/usepod-host-modal.tsx src/components/fleet/usepod-host-modal.module.css src/lib/config/usepod-features.ts CHANGELOG.md`.
+- Intended commit message: `Install UsePod agent without sudo`
+
+## 2026-06-02 19:09:30 WITA - Auto-Claim UsePod Host Pairing
+
+- Status: Pushed
+- Areas changed: UsePod host setup API, UsePod host modal, changelog
+- Summary: Treat `usepod-agent setup` as a device-code pairing session, capture the pairing code, attempt UsePod's authenticated `/v1/host/pair/claim` API only with saved `pod_host_...` host-provider tokens, and fall back to an in-modal code card instead of failing the Pair step when no host token exists.
+- Verification: `curl -X POST /api/usepod/host/setup` with `{"action":"setup"}` returned a pairing code and `claim.status:"missing-token"` instead of failing; direct UsePod frontend bundle inspection found `/v1/host/pair/claim` requires bearer auth and direct API probing showed the saved prepaid demand token returns `host_provider middleware not applied`, proving a host-provider token is required for browserless claiming; `curl -X POST https://api.usepod.ai/v1/host/enroll` showed provider enrollment requires at least `display_name` and a valid Solana `wallet`; `pnpm exec eslint src/app/api/usepod/host/setup/route.ts src/components/fleet/usepod-host-modal.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/app/api/usepod/host/setup/route.ts src/components/fleet/usepod-host-modal.tsx src/components/fleet/usepod-host-modal.module.css CHANGELOG.md`; `git diff --check -- src/app/api/usepod/host/setup/route.ts src/components/fleet/usepod-host-modal.tsx src/components/fleet/usepod-host-modal.module.css CHANGELOG.md`; confirmed no `usepod-agent setup` process remains after test cleanup.
+- Intended commit message: `Auto-claim UsePod host pairing`
+
+## 2026-06-02 18:06:18 WITA - Run UsePod Host Setup In Modal
+
+- Status: Pushed
+- Areas changed: UsePod host setup API, Fleet UsePod host modal, Fleet styling, changelog
+- Summary: Keep Automatic setup inside the Fleet modal by running a local setup sequence for usepod-agent status/install/setup, showing animated in-modal progress steps and enrollment code output instead of opening UsePod and telling the user to finish elsewhere.
+- Verification: `pnpm exec eslint src/app/api/usepod/host/setup/route.ts src/components/fleet/roster.tsx src/components/fleet/usepod-host-modal.tsx src/lib/config/usepod-features.ts --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/app/api/usepod/host/setup/route.ts src/components/fleet/roster.tsx src/components/fleet/usepod-host-modal.tsx src/components/fleet/usepod-host-modal.module.css src/components/fleet/fleet-tokens.module.css src/lib/config/usepod-features.ts CHANGELOG.md`; non-destructive `curl -X POST /api/usepod/host/setup` with `{"action":"status"}` returned `installed:false`; current UsePod host/start page documents `curl -fsSL https://usepod.ai/install.sh | sh && usepod-agent setup`; touched UsePod files are under 1500 lines by `wc -l`; `node scripts/check-file-sizes.mjs ...` is blocked by unrelated dirty `src/features/dashboard/DashboardApp.tsx` growth from 2756 to 2758 lines; in-app Browser loaded `http://127.0.0.1:5021/?view=agents`, but live Fleet discovery stayed at zero machines so the machine-level modal click path could not be visually reached without test data.
+- Intended commit message: `Run UsePod host setup in modal`
+
+## 2026-06-02 17:53:01 WITA - Refine UsePod Host Orb
+
+- Status: Pushed
+- Areas changed: Fleet UsePod host modal animation, fleet styling, changelog
+- Summary: Remove the outer spinning oval from the UsePod automatic setup visual and clip the UsePod icon image into a circular orb treatment.
+- Verification: `pnpm exec eslint src/components/fleet/roster.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/components/fleet/roster.tsx src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; `git diff --check -- src/components/fleet/roster.tsx src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; `rg -n "usePodHostAutoVisual span:nth-child\\(3\\)|usePodHostAutoVisual|border-radius: 999px|object-fit: cover" src/components/fleet/roster.tsx src/components/fleet/fleet-tokens.module.css`; in-app Browser smoke on `http://127.0.0.1:5021/?view=agents` confirmed the UsePod host dialog keeps `Automatic setup`, the large automatic visual has two ring spans instead of three, and both UsePod images compute to `border-radius: 999px` with `object-fit: cover`.
+- Intended commit message: `Refine UsePod host orb`
+
+## 2026-06-02 17:52:45 WITA - Flatten Small Fleet Roster Hex Icons
+
+- Status: Pushed
+- Areas changed: Fleet hex tile rendering, Fleet roster styling, Fleet roster loading styling, changelog
+- Summary: Give small roster hex icons a flat opaque fill without backdrop blur so the top and bottom points no longer pick up light green artifacts from the frosted-glass gradient and background grid.
+- Verification: `pnpm exec eslint src/components/fleet/hex-tile.tsx src/components/fleet/roster.tsx src/components/fleet/fleet-loading.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/components/fleet/hex-tile.tsx src/components/fleet/roster.tsx src/components/fleet/fleet-loading.tsx src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; `git diff --check -- src/components/fleet/hex-tile.tsx src/components/fleet/roster.tsx src/components/fleet/fleet-loading.tsx src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; in-app Browser on `http://127.0.0.1:5025/?view=agents` confirmed roster hex fills render with `backgroundImage: none` and `backdropFilter: none`, and the visible row icons no longer show the light green vertex artifact.
+- Intended commit message: `Flatten small fleet roster hex icons`
+
+## 2026-06-02 17:45:36 WITA - Lead UsePod Host With Automatic Setup
+
+- Status: Pushed
+- Areas changed: Fleet UsePod host modal, fleet styling, changelog
+- Summary: Replace the command-first UsePod provider modal with a primary Automatic setup action and animated setup visual, moving install/enroll/run commands and key relay links into a collapsed Manual setup section.
+- Verification: `pnpm exec eslint src/components/fleet/roster.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/components/fleet/roster.tsx src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; `git diff --check -- src/components/fleet/roster.tsx src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; in-app Browser smoke on `http://127.0.0.1:5021/?view=agents` hit a transient Fleet lazy chunk error, then reloaded successfully and confirmed the UsePod host modal shows `Automatic setup` as the primary action with `Manual setup` collapsed by default.
+- Intended commit message: `Lead UsePod host with automatic setup`
+
+## 2026-06-02 17:43:06 WITA - Refine Fleet Roster Loading Skeleton
+
+- Status: Pushed
+- Areas changed: Fleet roster loading UI, fleet styling, changelog
+- Summary: Replace the oversized roster loading slab with a compact structure-matched scaffold that shows an expanded machine row, nested agent placeholders, collapsed machine rows, hex tiles, count/status slots, and a subtle shimmer.
+- Verification: `pnpm exec eslint src/components/fleet/fleet-loading.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/components/fleet/fleet-loading.tsx src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; `git diff --check -- src/components/fleet/fleet-loading.tsx src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; in-app Browser smoke on `http://127.0.0.1:5025/?view=agents` confirmed Fleet still renders without route errors, but current live data resolved past the roster loading branch before visual capture.
+- Intended commit message: `Refine fleet roster loading skeleton`
+
+## 2026-06-02 17:31:54 WITA - Productionize Hive Fusion View
+
+- Status: Pushed
+- Areas changed: Hive Fusion view, dashboard route catalog, system menu labels, dashboard header labels, changelog
+- Summary: Rename the user-facing fusion surface away from demo language, add a production `fusion` route with the old `demo` URL preserved as an alias, remove the page-level regenerate button, keep capability search out of the fused orbit, animate selected capabilities toward distinct spiral nodes, and frame the fusion image with the generated skill card instead of stacking the card below it.
+- Verification: `pnpm exec eslint src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/MorePanel.tsx src/features/dashboard/dashboard-navigation.ts src/features/dashboard/hooks/use-dashboard-navigation-controller.ts src/features/dashboard/views/DashboardHeader.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css src/features/dashboard/MorePanel.tsx src/features/dashboard/dashboard-navigation.ts src/features/dashboard/hooks/use-dashboard-navigation-controller.ts src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/DashboardHeader.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx src/features/dashboard/dashboard-light-helpers.tsx src/features/dashboard/dashboard-types.ts`; in-app Browser on `http://127.0.0.1:5025/?view=fusion` confirmed no visible demo wording, no `hive-capability-search` candidate or orbit ingredient, no page-level Regenerate button, exactly one Regenerate and one Delete on the completed skill card, the generated card framing behind the fusion image, old `?view=demo` state normalized to `fusion`, and a fresh run where the sampled plucked capability landed on its corresponding spiral node instead of a shared orbit point.
+- Intended commit message: `Productionize hive fusion view`
+
+## 2026-06-02 17:20:50 WITA - Queue Chat Drafts During Active Tasks
+
+- Status: Pushed
+- Areas changed: Chat input controller, chat panel queue UI, composer send affordance, chat styling, changelog
+- Summary: Let users submit chat drafts while an agent task is already streaming, show those queued drafts above the composer, preserve attachments/directories and act/plan mode, and replay queued messages through the normal runtime path once the active task finishes.
+- Verification: `pnpm exec eslint src/features/chat/chat-composer.tsx src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/hooks/use-status-chat-input-controller.tsx` passed with existing warnings in the touched legacy files; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-status-chat-input-controller.tsx src/features/dashboard/views/ChatPanel.tsx src/features/chat/chat-composer.tsx src/features/dashboard/views/chat/ChatQueue.module.css src/app/chat.module.css CHANGELOG.md`; `git diff --check -- src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-status-chat-input-controller.tsx src/features/dashboard/views/ChatPanel.tsx src/features/chat/chat-composer.tsx src/features/dashboard/views/chat/ChatQueue.module.css src/app/chat.module.css CHANGELOG.md`; in-app Browser opened `http://localhost:5025/?view=chat` with no console errors, but the dashboard was locked so authenticated chat queue visual QA was not completed.
+- Intended commit message: `Queue chat drafts during active tasks`
+
+## 2026-06-02 17:07:16 WITA - Unify Fusion Demo Stage
+
+- Status: Pushed
+- Areas changed: Hive Fusion demo view, Hive Fusion demo styling, changelog
+- Summary: Move the compact chat, fusion image, animated capability search rail, orbit, and generated skill card into one integrated stage, render capability-search results only after the simulated agent starts gathering candidates, and keep the generated card out of the initial layout.
+- Verification: Covered by the later `Productionize Hive Fusion View` browser pass on `http://127.0.0.1:5025/?view=fusion`, which verifies the integrated stage, delayed capability results, completed generated card framing, and hidden chat/search panels after completion.
+- Intended commit message: `Unify fusion demo stage`
+
+## 2026-06-02 17:05:54 WITA - Sharpen DotLottie Bee Rendering
+
+- Status: Pushed
+- Areas changed: Shared Lottie player, changelog
+- Summary: Render fixed-size DotLottie canvases with a Retina-aware backing buffer capped at 2x while preserving exact CSS dimensions, so the honey bee animation no longer appears soft on high-DPI displays.
+- Verification: `pnpm exec eslint src/components/ui/lottie-player.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/components/ui/lottie-player.tsx CHANGELOG.md`; `git diff --check -- src/components/ui/lottie-player.tsx CHANGELOG.md`; in-app Browser on `http://127.0.0.1:5025/?view=demo` confirmed a 34px bee renders with a 68x68 backing canvas at `devicePixelRatio: 2`, a 34x34 layout rect, and no console warnings/errors.
+- Intended commit message: `Sharpen DotLottie bee rendering`
+
+## 2026-06-02 16:52:17 WITA - Tighten Fusion Demo Capability Cards
+
+- Status: Pushed
+- Areas changed: Hive Fusion demo capability-search layout, changelog
+- Summary: Reduce the visual weight and vertical footprint of the Hive Skill Fusion capability-search header and candidate rows so they read like compact ranked search results instead of oversized cards.
+- Verification: `node scripts/check-file-sizes.mjs CHANGELOG.md src/features/dashboard/views/DemoPanel.module.css`; `git diff --check -- CHANGELOG.md src/features/dashboard/views/DemoPanel.module.css`; `pnpm exec eslint src/features/dashboard/views/DemoPanel.tsx --max-warnings=0`; in-app browser reload on `http://127.0.0.1:5025/?view=demo` measured six candidate rows at roughly 58-72px tall with a 58px header and no console errors.
+- Intended commit message: `Tighten fusion demo capability cards`
+
+## 2026-06-02 16:52:10 WITA - Fit Fleet Active App Icons
+
+- Status: Pushed
+- Areas changed: Fleet graph active app badge styling, changelog
+- Summary: Make active app badge images fill and clip within the rounded graph badge so rectangular thumbnail edges no longer show inside the frame.
+- Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `node scripts/check-file-sizes.mjs src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; `git diff --check -- src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; `rg -n "graphActiveAppBadge img|object-fit: cover|transform: scale\\(1\\.08\\)|padding: 0" src/components/fleet/fleet-tokens.module.css`; in-app Browser on `http://127.0.0.1:5021/?view=agents` loaded Fleet, but no `.graphActiveAppBadge img` was present in the current live DOM to visually inspect after the style change.
+- Intended commit message: `Fit fleet active app icons`
+
+## 2026-06-02 16:48:13 WITA - Stop Hivemind Link Restart CPU Loop
+
+- Status: Pushed
+- Areas changed: Hivemind Link daemon startup, daemon log capping, telemetry collector installer, changelog
+- Summary: Reserve the Hivemind Link control API port before embedded Tailscale startup so a stale listener fails cheaply instead of entering an expensive launchd restart loop, and cap the active Link daemon log at 10 MiB with single-file rotation so agent-consumable diagnostics cannot balloon unchecked.
+- Verification: `go test ./cmd/hivemind-linkd`; `go test ./cmd/hivemind-linkd -run TestCappedLogWriterKeepsActiveLogUnderLimit -count=1`; `bash -n scripts/install-telemetry-collector.sh`; `node scripts/check-file-sizes.mjs cmd/hivemind-linkd/main.go cmd/hivemind-linkd/main_test.go scripts/install-telemetry-collector.sh CHANGELOG.md`; `git diff --check -- cmd/hivemind-linkd/main.go cmd/hivemind-linkd/main_test.go scripts/install-telemetry-collector.sh CHANGELOG.md`; rebuilt `bin/hivemind-linkd`; restarted only `com.hivemindos.linkd.agent`; live `curl http://127.0.0.1:8788/health` returned `ok:true`, `/status` returned `backendState: Running`, launchd stayed `state = running` with `runs = 2`, PID 22231 CPU stayed under 1%, and `hivemindos-linkd.err.log` was reduced from 144 MB to 16 KB.
+- Intended commit message: `Stop Hivemind Link restart CPU loop`
+
+## 2026-06-02 16:46:40 WITA - Keep UsePod Hosting In Fleet
+
+- Status: Pushed
+- Areas changed: UsePod wallet advanced setup, wallet provider feature matrix, changelog
+- Summary: Remove the UsePod Host tab from wallet Advanced setup so machine hosting remains a Fleet machine action instead of appearing on the demand-side wallet card.
+- Verification: `pnpm exec eslint src/lib/config/agent-payments.ts src/components/wallet/AgentWalletCard.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/lib/config/agent-payments.ts src/components/wallet/AgentWalletCard.tsx CHANGELOG.md`; `git diff --check -- src/lib/config/agent-payments.ts src/components/wallet/AgentWalletCard.tsx CHANGELOG.md`; `rg -n "usepod-supply|Host compute|Supply-side UsePod|USEPOD_SUPPLY_MATRIX|USEPOD_PROVIDER|usePodUsdcFunding|Host\"" src/components/wallet/AgentWalletCard.tsx src/lib/config/agent-payments.ts` returned no matches; in-app Browser smoke on `http://127.0.0.1:5021/?view=wallet` confirmed UsePod Advanced tabs are `Status`, `Connect`, `Routing`, and `Repair`; in-app Browser smoke on `http://127.0.0.1:5021/?view=agents` confirmed Fleet still shows the machine-level `Rent compute` action.
+- Intended commit message: `Keep UsePod hosting in Fleet`
+
+## 2026-06-02 16:41:08 WITA - Add Bottom Breathing Room To Fusion Demo
+
+- Status: Pushed
+- Areas changed: Hive Fusion demo layout, changelog
+- Summary: Add real bottom padding and viewport-aware panel sizing to the Hive Skill Fusion demo so the compact chat and capability-search panels no longer run flush into the bottom of desktop viewports.
+- Verification: `node scripts/check-file-sizes.mjs CHANGELOG.md src/features/dashboard/views/DemoPanel.module.css src/features/dashboard/views/DemoPanel.tsx`; `git diff --check -- CHANGELOG.md src/features/dashboard/views/DemoPanel.module.css`; `pnpm exec eslint src/features/dashboard/views/DemoPanel.tsx --max-warnings=0`; in-app browser reload on `http://127.0.0.1:5025/?view=demo` confirmed the route settles without console errors and the demo section reports bottom padding instead of a zero-padding edge.
+- Intended commit message: `Add fusion demo bottom spacing`
+
+## 2026-06-02 16:37:48 WITA - Create GitLawb Remotion Showcase Video
+
+- Status: Pushed
+- Areas changed: Ignored Remotion GitLawb showcase workspace, captured dashboard UI frames, rendered video artifact, changelog
+- Summary: Create a local Remotion composition that uses authenticated HivemindOS Fleet and Work UI captures, app-styled GitLawb proof overlays, and the AntV GitLawb infographic as the closing frame.
+- Verification: Captured authenticated Fleet and Work dashboard screenshots on the existing non-5020 dev server; rendered `GitLawbIntegration` with Remotion to `out/remotion/gitlawb-integration.mp4`; extracted and visually inspected representative frames at roughly 1s, 4.2s, 7.2s, 9.5s, and 11.7s for spacing, text fit, UI edge cropping, and final infographic framing; `ffprobe` confirmed 1920x1080, 30fps, 390 frames, 13s duration; `git status --short --ignored remotion .remotion-capture out/remotion ...` confirmed the Remotion workspace, captures, and rendered output stay ignored; `node scripts/check-file-sizes.mjs CHANGELOG.md`; `git diff --check -- CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`.
+- Intended commit message: `Create GitLawb Remotion showcase video`
+
+## 2026-06-02 16:29:10 WITA - Expand UsePod Capability Surfaces
+
+- Status: Pushed
+- Areas changed: UsePod capability matrix, wallet advanced setup, agent context index, fleet roster UsePod host action, changelog
+- Summary: Add matrix-backed UsePod demand/supply capability metadata, surface OpenAI/Anthropic compatibility, routing, provider hosting, and key relay details in the UsePod wallet advanced drawer, teach agent context retrieval about UsePod provider/key-relay actions, and add a compact UsePod host/rent-compute action to selected fleet machines.
+- Verification: `pnpm exec eslint src/lib/config/usepod-features.ts src/lib/config/agent-payments.ts src/lib/services/usepod.ts src/components/wallet/AgentWalletCard.tsx src/lib/services/context-index.ts src/components/fleet/roster.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/lib/config/usepod-features.ts src/lib/config/agent-payments.ts src/lib/services/usepod.ts src/lib/types/agent-runtime.ts src/components/wallet/AgentWalletCard.tsx src/lib/services/context-index.ts src/components/fleet/roster.tsx src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; `git diff --check -- src/lib/config/usepod-features.ts src/lib/config/agent-payments.ts src/lib/services/usepod.ts src/lib/types/agent-runtime.ts src/components/wallet/AgentWalletCard.tsx src/lib/services/context-index.ts src/components/fleet/roster.tsx src/components/fleet/fleet-tokens.module.css CHANGELOG.md`; in-app Browser smoke on `http://127.0.0.1:5021/?view=wallet` confirmed the UsePod wallet opens with Status, Connect, Routing, Host, and Repair tabs and the Host tab shows usepod-agent/key relay setup; in-app Browser smoke on `http://127.0.0.1:5021/?view=agents` confirmed the selected This Mac roster row shows `Rent compute` and opens the UsePod provider modal with install/enroll/run commands and bond/key-relay actions.
+- Intended commit message: `Expand UsePod capability surfaces`
+
+## 2026-06-02 16:20:16 WITA - Add Hive Fusion Demo View
+
+- Status: Pushed
+- Areas changed: Dashboard route catalog, system/More menu, demo view UI, fusion demo asset, assimilation log, changelog
+- Summary: Add a Demo category to the dashboard system menu and create a Hive Skill Fusion demo that reuses the existing chat composer and assistant thinking loader, runs a staged fake agent response, animates hive capability search candidates being selected into an orbit, collapses them into the supplied fusion image, and reveals a generated skill card with regenerate/delete actions.
+- Verification: `pnpm exec eslint src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/MorePanel.tsx src/features/dashboard/dashboard-navigation.ts src/features/dashboard/dashboard-types.ts src/features/dashboard/views/DashboardHeader.tsx --max-warnings=0`; full `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs CHANGELOG.md src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css src/features/dashboard/MorePanel.tsx src/features/dashboard/dashboard-navigation.ts src/features/dashboard/dashboard-types.ts src/features/dashboard/views/DashboardHeader.tsx src/features/dashboard/dashboard-light-helpers.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx src/features/dashboard/DashboardApp.tsx`; `git diff --check -- ...`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py`; in-app browser smoke on `http://127.0.0.1:5025/?view=more` confirmed the Demos card routes to `?view=demo`, and a prompt submission on `?view=demo` completed the staged response with `Fusion ready`, `Base News Broadcast Skill`, visible Delete action, and no browser console errors.
+- Intended commit message: `Add hive fusion demo view`
+
+## 2026-06-02 15:21:43 WITA - Extract Hive Capability Search
+
+- Status: Pushed
+- Areas changed: Packaged auto-install skills, shared Obsidian brain skills, shared skill index, changelog
+- Summary: Add `hive-capability-search` as the reusable bounded discovery skill for finding and ranking agent-available skills, tools, apps, endpoints, runtime capabilities, specialty agents, workspace context, and safe credential-presence signals; update `hive-skill-fusion`, `hive-workflow-fusion`, and `hive-aeon-fusion` to consume its capability map instead of duplicating broad search rules; and mirror the same skill bodies into the shared Obsidian brain.
+- Verification: `python3 /Users/liam/.codex/skills/.system/skill-creator/scripts/quick_validate.py` passed for packaged/shared `hive-capability-search` and all three packaged/shared Hive Fusion skills; `diff -u` confirmed the packaged and shared copies match; `node scripts/check-file-sizes.mjs CHANGELOG.md packaged-skills/auto-install/hive-capability-search/SKILL.md packaged-skills/auto-install/hive-skill-fusion/SKILL.md packaged-skills/auto-install/hive-workflow-fusion/SKILL.md packaged-skills/auto-install/hive-aeon-fusion/SKILL.md`; `git diff --check -- CHANGELOG.md packaged-skills/auto-install/hive-capability-search packaged-skills/auto-install/hive-skill-fusion packaged-skills/auto-install/hive-workflow-fusion packaged-skills/auto-install/hive-aeon-fusion`; live `/api/context-index?q=hive%20capability%20search&limit=10` returned packaged/shared `hive-capability-search` as the top two hits, and workflow-style context-index probes returned relevant discovered image app capabilities plus Obsidian/API/workspace capability hits.
+- Intended commit message: `Extract hive capability search skill`
+
+## 2026-06-02 15:15:46 WITA - Generate GitLawb AntV Infographic
+
+- Status: Pushed
+- Areas changed: GitLawb infographic artifacts, AntV Infographic ignored workspace, gitignore, changelog
+- Summary: Remove the attempted in-app GitLawb showcase route, clone/install AntV Infographic only inside the ignored `.antvis-infographic/` workspace, and generate a standalone HivemindOS x GitLawb infographic from AntV DSL plus SSR-rendered SVG/HTML/PNG artifacts with taller, more readable cards.
+- Verification: Rendered `infographic/gitlawb-hivemindos/antv-gitlawb.infographic` through `@antv/infographic/ssr`; normalized generated SVG font declarations to `Arial, Helvetica, sans-serif`; post-processed AntV card height and arrow centering; exported `antv-gitlawb.png` with Playwright; visually inspected the final PNG for font, icon, spacing, card height, and card-arrow separation; confirmed `.antvis-infographic/` is gitignored and no `src/app/gitlawb-showcase` route remains.
+- Intended commit message: `Generate GitLawb AntV infographic`
+
+## 2026-06-02 15:09:13 WITA - Fix Tauri Dev Loading Readiness
+
+- Status: Pushed
+- Areas changed: Tauri Next dev proxy, static/native app loading screens, dashboard native frame, changelog
+- Summary: Make the Tauri dev readiness proxy recognize cache-busted `__hivemindos_dev_ready` checks, wait longer for HTML navigations during cold Next compiles, use route readiness only on the static fallback loader, let that fallback bypass stale reload cooldowns once the route is ready, stop mutating proxied Next HTML so compressed browser responses are not corrupted, remove the legacy uncapped fallback-loader reload interval, mark loading screens for the recovery watchdog, and split native setup onboarding into a client-only dynamic chunk so setup UI cannot slow the first `/` compile.
+- Verification: `node --check scripts/tauri-next-dev.mjs`; `pnpm exec eslint scripts/tauri-next-dev.mjs src/app/loading.tsx src/app/DashboardNativeFrame.tsx --max-warnings=999`; `git diff --check -- scripts/tauri-next-dev.mjs src/app/loading.tsx src-tauri/loading/index.html src/app/DashboardNativeFrame.tsx CHANGELOG.md`; `node scripts/check-file-sizes.mjs scripts/tauri-next-dev.mjs src/app/loading.tsx src-tauri/loading/index.html src/app/DashboardNativeFrame.tsx CHANGELOG.md`; direct curl to the current backend/proxy on `5121`/`5021` returned `/` as `200 OK`; Playwright confirmed backend `/` renders `Dashboard locked`, while the old running proxy failed with `net::ERR_CONTENT_DECODING_FAILED`, matching the now-removed HTML mutation path.
+- Intended commit message: `Fix Tauri dev loading readiness`
+
+## 2026-06-02 15:03:20 WITA - Add Capability Matrix Agent Rule
+
+- Status: Pushed
+- Areas changed: Project agent instructions, changelog
+- Summary: Add a Capability Matrices First rule requiring agents to check or extend typed capability/default/feature matrices before scattering runtime, wallet-provider, payment-rail, integration, or setup-mode branch logic through the codebase.
+- Verification: `rg -n "Capability Matrices First|typed family|feature matrix|provider-specific rendering" AGENTS.md CHANGELOG.md`; `git diff --check -- AGENTS.md CHANGELOG.md`.
+- Intended commit message: `Add capability matrix agent rule`
+
+## 2026-06-02 15:01:32 WITA - Recover Tauri Dev Hot Reloads
+
+- Status: Pushed
+- Areas changed: Tauri Next dev proxy, dashboard route loading marker, Tauri app menu, assimilation log, changelog
+- Summary: Inject a Tauri-dev recovery watchdog into proxied HTML so the desktop WebView reloads after dev-server reconnects, route-loader timeouts, or dynamic chunk failures, and add a debug-only `Force Reload (Dev)` item to the native HivemindOS app menu.
+- Verification: `node --check scripts/tauri-next-dev.mjs`; `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm exec eslint scripts/tauri-next-dev.mjs src/features/dashboard/DashboardApp.tsx --max-warnings=999` completed with existing DashboardApp warnings and no errors; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs scripts/tauri-next-dev.mjs src-tauri/src/desktop_navigation.rs src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; `git diff --check -- scripts/tauri-next-dev.mjs src-tauri/src/desktop_navigation.rs src/features/dashboard/DashboardApp.tsx CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `cargo fmt --manifest-path src-tauri/Cargo.toml` could not run because `rustfmt` is not installed for the stable aarch64 Apple toolchain.
+- Intended commit message: `Recover Tauri dev hot reloads`
+
+## 2026-06-02 15:01:17 WITA - Stabilize DotLottie Canvas Sizing
+
+- Status: Pushed
+- Areas changed: Shared Lottie player, changelog
+- Summary: Pin fixed-size DotLottie canvas measurements to exact integer dimensions and resync the renderer after ready/load so transformed graph/map bees cannot leave the WASM pixel buffer at 44x43 while React restores the canvas to 44x44.
+- Verification: `pnpm exec eslint src/components/ui/lottie-player.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/components/ui/lottie-player.tsx CHANGELOG.md`; `git diff --check -- src/components/ui/lottie-player.tsx CHANGELOG.md`; temporary browser smoke on `http://127.0.0.1:5026/lottie-smoke` rendered the 44px bee in a transformed container with canvas backing size and reported rect both 44x44, and no DotLottie/buffer/canvas warnings appeared after the persistent-mismatch threshold window.
+- Intended commit message: `Stabilize DotLottie canvas sizing`
+
+## 2026-06-02 14:57:43 WITA - Matrix-Drive Wallet Advanced Setup
+
+- Status: Pushed
+- Areas changed: Wallet provider feature matrix, wallet advanced setup rendering, changelog
+- Summary: Add explicit `advancedSetup.sections` to the wallet provider feature matrix and render the wallet card Advanced setup drawer from those section flags so UsePod status/repair, local wallet fields, x402 testing, MoneyClaw env config, ClawCard legacy config, notes, and prompt-copy actions are controlled by provider capabilities instead of hardcoded UsePod-vs-regular branches.
+- Verification: `pnpm exec eslint src/lib/config/agent-payments.ts src/components/wallet/AgentWalletCard.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/lib/config/agent-payments.ts src/components/wallet/AgentWalletCard.tsx src/components/wallet/AgentWalletCard.module.css`; `git diff --check -- src/lib/config/agent-payments.ts src/components/wallet/AgentWalletCard.tsx src/components/wallet/AgentWalletCard.module.css CHANGELOG.md`; `rg -n "advancedSetup|usepod-status|usepod-repair|moneyclaw-env|clawcard-env|hasUsePodAdvanced|showAdvancedSection" src/lib/config/agent-payments.ts src/components/wallet/AgentWalletCard.tsx`; in-app browser smoke on `http://127.0.0.1:5021/?view=wallet` loaded without a 500 and found the UsePod wallet row, but the DOM stayed on the wallet shell after clicking it so the expanded Advanced drawer was not visually rechecked there.
+- Intended commit message: `Matrix-drive wallet advanced setup`
+
+## 2026-06-02 14:53:27 WITA - Tighten Wallet Spend Toggle
+
+- Status: Pushed
+- Areas changed: Wallet card styling, changelog
+- Summary: Make the wallet spend power control stay on one line with reduced vertical padding and a tighter rounded-rectangle shape so it no longer renders as an oversized tall pill.
+- Verification: `node scripts/check-file-sizes.mjs src/components/wallet/AgentWalletCard.module.css CHANGELOG.md`; `git diff --check -- src/components/wallet/AgentWalletCard.module.css CHANGELOG.md`; `rg -n "min-height: 34px|border-radius: 12px|white-space: nowrap|flex: 0 0 auto" src/components/wallet/AgentWalletCard.module.css`; in-app Browser smoke on `http://127.0.0.1:5021/?view=wallet` was blocked because the route stayed on `Starting HivemindOS` / `Loading Wallets` and never rendered a wallet card.
+- Intended commit message: `Tighten wallet spend toggle`
+
+## 2026-06-02 14:50:03 WITA - Rename Hive Skill Fusion Set
+
+- Status: Pushed
+- Areas changed: Packaged auto-install skills, shared Obsidian brain skills, shared skill index, fusion showcase route, changelog
+- Summary: Rename the three core fusion skills to `hive-skill-fusion`, `hive-workflow-fusion`, and `hive-aeon-fusion` across packaged skills, shared brain skill folders/frontmatter/headings, cross-skill references, the shared `Skills/README.md` index, and the `/fusion-showcase` card labels.
+- Verification: `pnpm exec eslint src/app/fusion-showcase/page.tsx --max-warnings=0`; `node scripts/check-file-sizes.mjs src/app/fusion-showcase/page.tsx src/app/fusion-showcase/fusion-showcase.module.css CHANGELOG.md packaged-skills/auto-install/hive-skill-fusion/SKILL.md packaged-skills/auto-install/hive-workflow-fusion/SKILL.md packaged-skills/auto-install/hive-aeon-fusion/SKILL.md`; `git diff --check -- src/app/fusion-showcase/page.tsx src/app/fusion-showcase/fusion-showcase.module.css CHANGELOG.md packaged-skills/auto-install/hive-skill-fusion packaged-skills/auto-install/hive-workflow-fusion packaged-skills/auto-install/hive-aeon-fusion public/fusion/logos`; old exact slug/name sweep across the repo and shared skill shelf returned no matches; in-app Browser reload on `http://127.0.0.1:5025/fusion-showcase` confirmed visible card names and slugs are `Hive Skill Fusion` / `hive-skill-fusion`, `Hive Workflow Fusion` / `hive-workflow-fusion`, and `Hive AEON Fusion` / `hive-aeon-fusion`, with no old exact names on the page and no body overflow.
+- Intended commit message: `Rename hive fusion skills`
+
+## 2026-06-02 14:29:09 WITA - Simplify UsePod Wallet Details
+
+- Status: Pushed
+- Areas changed: UsePod wallet card, wallet advanced setup drawer, wallet card styling, changelog
+- Summary: Reduce the main UsePod prepaid card to balance, status, and primary actions; move token source, token fingerprint, funding reference, receiver address, model count, and repair-token workflow into a UsePod-specific advanced drawer with segmented Status and Repair tabs; and hide generic MoneyClaw/ClawCard advanced fields for UsePod wallets.
+- Verification: `pnpm exec eslint src/components/wallet/AgentWalletCard.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/components/wallet/AgentWalletCard.tsx src/components/wallet/AgentWalletCard.module.css`; `git diff --check -- src/components/wallet/AgentWalletCard.tsx src/components/wallet/AgentWalletCard.module.css CHANGELOG.md`; in-app browser smoke on `http://127.0.0.1:5021/?view=wallet` loaded without a 500 and showed the simplified opened UsePod card during the first detail check, while a later reload left the wallet list in a transient empty state before the detail panel could be rechecked.
+- Intended commit message: `Simplify UsePod wallet details`
+
+## 2026-06-02 14:25:37 WITA - Add Re-run Setup App Menu Item
+
+- Status: Pushed
+- Areas changed: Tauri app menu, native setup bridge event, native first-run setup wizard, changelog
+- Summary: Add `Re-run Setup...` to the macOS HivemindOS app menu under `Check for Updates...`, emit a native setup rerun event, and have the dashboard reopen the guided setup wizard while clearing its previous dismiss state.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm exec eslint src/features/native/NativeFirstRunOnboarding.tsx src/lib/native/setup.ts --max-warnings=999`; `git diff --check -- src-tauri/src/desktop_navigation.rs src/features/native/NativeFirstRunOnboarding.tsx src/lib/native/setup.ts CHANGELOG.md`; `rg -n "Re-run Setup|app:rerun-setup|RERUN_SETUP_EVENT|hivemindos:rerun-setup|NATIVE_SETUP_RERUN_EVENT|removeItem\\(DISMISS_KEY\\)" src-tauri/src/desktop_navigation.rs src/features/native/NativeFirstRunOnboarding.tsx src/lib/native/setup.ts`; full `pnpm exec tsc --noEmit --pretty false --skipLibCheck` is currently blocked by unrelated dirty `src/app/fusion-showcase/page.tsx` missing `SkillIllustration`.
+- Intended commit message: `Add re-run setup app menu item`
+
+## 2026-06-02 14:23:27 WITA - Disable Setup Demo Mode
+
+- Status: Pushed
+- Areas changed: Native setup bridge, changelog
+- Summary: Turn off the hard-enabled native setup demo flag so the setup wizard no longer uses mocked status/run behavior and returns to the real Tauri setup bridge path.
+- Verification: `pnpm exec eslint src/lib/native/setup.ts src/features/native/NativeFirstRunOnboarding.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/lib/native/setup.ts CHANGELOG.md`; `rg -n "NATIVE_SETUP_DEMO_ENABLED = false|NATIVE_SETUP_DEMO_ENABLED = true" src/lib/native/setup.ts` confirmed the flag is false.
+- Intended commit message: `Disable setup demo mode`
+
+## 2026-06-02 14:18:59 WITA - Hide Demo Copy In Setup Flow
+
+- Status: Pushed
+- Areas changed: Native first-run setup wizard demo copy, changelog
+- Summary: Make demo mode render the same setup-facing copy, badge, final screen labels, backup command action, and Start setup button as the real native setup flow while keeping the setup command execution mocked behind the scenes.
+- Verification: `rg -n "Native setup demo|Ready to preview|Preview setup|Preview only|No terminal|visual preview|Demo mode|demo mode|No setup commands run|Nothing opens outside|View backup command" src/features/native/NativeFirstRunOnboarding.tsx` returned no matches; `pnpm exec eslint src/features/native/NativeFirstRunOnboarding.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/native/NativeFirstRunOnboarding.tsx CHANGELOG.md`.
+- Intended commit message: `Hide demo copy in setup flow`
+
+## 2026-06-02 14:10:39 WITA - Add Automatic App Version Bumps
+
+- Status: Pushed
+- Areas changed: App version metadata, native About version display, Tauri desktop status, version bump script, GitHub Actions version bump workflow, changelog
+- Summary: Treat app version as first-class update metadata, display the real package/native version in About, and add an automated main-branch workflow that bumps the semver patch version by `0.0.1` after each non-version-bump push to `main`.
+- Verification: Temp-copy run of `node scripts/bump-app-version.mjs` bumped `0.1.0 -> 0.1.1` across copied `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and the `hivemindos-desktop` `Cargo.lock` package block without changing the working tree; `node --check scripts/bump-app-version.mjs`; `pnpm exec eslint scripts/bump-app-version.mjs src/app/about/page.tsx src/app/api/app/version/route.ts src/lib/native/desktop-status.ts --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `cargo check --manifest-path src-tauri/Cargo.toml`; live `curl http://127.0.0.1:5121/api/app/version` returned `version:"0.1.0"` and `latestVersion:"0.1.0"`; in-app Browser smoke on `http://127.0.0.1:5121/about?native=1` showed `Version 0.1.0 (dd18d56)` with no startup loader and zero console errors; `git diff --check -- CHANGELOG.md package.json scripts/bump-app-version.mjs .github/workflows/bump-app-version.yml src/app/about/page.tsx src/app/api/app/version/route.ts src/lib/native/desktop-status.ts src/features/dashboard/dashboard-types.ts src-tauri/src/lib.rs`; `node scripts/check-file-sizes.mjs CHANGELOG.md package.json scripts/bump-app-version.mjs .github/workflows/bump-app-version.yml src/app/about/page.tsx src/app/api/app/version/route.ts src/lib/native/desktop-status.ts src/features/dashboard/dashboard-types.ts src-tauri/src/lib.rs`.
+- Intended commit message: `Add automatic app version bumps`
+
+## 2026-06-02 14:09:01 WITA - Apply Auto-Use To USDC Sends
+
+- Status: Pushed
+- Areas changed: Wallet USDC send API, dashboard wallet send action, wallet send sheet copy, agent runtime wallet prompt, context-index wallet capability text, changelog
+- Summary: Remove the separate approve-then-send token flow for USDC transfers so sends use the same `Allow auto-use` policy as x402: the hard per-payment cap is always enforced, auto-use on sends under the cap without another prompt, and auto-use off requires `SEND_USDC` for the exact transfer.
+- Verification: Pending.
+- Intended commit message: `Apply wallet auto-use to USDC sends`
+
+## 2026-06-02 14:01:58 WITA - Add Wallet Auto-Use Toggle
+
+- Status: Pushed
+- Areas changed: Wallet card auto-use control, UsePod payment provider flags, x402 payment approval policy, agent wallet prompt text, context-index wallet capability text, changelog
+- Summary: Add an explicit `Allow auto-use` toggle to the wallet card, keep it off by default through the existing wallet policy default, enable it for UsePod wallets, and make x402 payments skip per-payment `PAY_X402` prompts when auto-use is on while still enforcing the hard per-payment cap.
+- Verification: `pnpm exec eslint src/components/wallet/AgentWalletCard.tsx src/lib/config/agent-payments.ts src/lib/services/wallet/x402-agent-fetch.ts src/lib/utils/agent-wallet.ts src/app/api/chat/agent-runtime/route.ts src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/components/wallet/AgentWalletCard.tsx src/components/wallet/AgentWalletCard.module.css src/lib/config/agent-payments.ts src/lib/services/wallet/x402-agent-fetch.ts src/lib/utils/agent-wallet.ts src/app/api/chat/agent-runtime/route.ts src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts`; `git diff --check -- src/components/wallet/AgentWalletCard.tsx src/components/wallet/AgentWalletCard.module.css src/lib/config/agent-payments.ts src/lib/services/wallet/x402-agent-fetch.ts src/lib/utils/agent-wallet.ts src/app/api/chat/agent-runtime/route.ts src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts CHANGELOG.md`; `rg -n "Allow auto-use|auto-use|agent wallet tools|wallet and payment rails|x402_fetch may pay" src/components/wallet/AgentWalletCard.tsx src/components/wallet/AgentWalletCard.module.css src/lib/config/agent-payments.ts src/lib/services/wallet/x402-agent-fetch.ts src/lib/utils/agent-wallet.ts src/app/api/chat/agent-runtime/route.ts src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts`.
+- Intended commit message: `Add wallet auto-use toggle`
+
+## 2026-06-02 13:58:59 WITA - Install Remotion Dependencies
+
+- Status: Pushed
+- Areas changed: Root package dependencies, pnpm lockfile, existing Remotion gitignore coverage, changelog
+- Summary: Install Remotion into the workspace root with exact `remotion` and `@remotion/cli` versions, matching the current Remotion brownfield guidance and preserving the existing Remotion output/folder ignore rules.
+- Verification: `pnpm list -w --depth 0 remotion @remotion/cli`; `pnpm exec remotion versions`; `git diff --check -- package.json pnpm-lock.yaml CHANGELOG.md .gitignore`.
+- Intended commit message: `Install Remotion dependencies`
+
+## 2026-06-02 13:57:53 WITA - Add Wallet Actions To Fusion Retrieval
+
+- Status: Pushed
+- Areas changed: Context index wallet capability discovery, task retrieval query expansion, agent runtime wallet prompt, changelog
+- Summary: Add a first-class wallet/payment capability item to `/api/context-index` so hive skill fusions and agent RAG can discover x402, UsePod, MoneyClaw, Bankr, balance checks, and auto-use-gated USDC sends; add a payment-specific task retrieval query; and clarify in runtime wallet context that local x402 and USDC sends follow the wallet auto-use policy while always enforcing hard payment caps.
+- Verification: `pnpm exec eslint src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/app/api/chat/agent-runtime/route.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/app/api/chat/agent-runtime/route.ts`; `git diff --check -- src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/app/api/chat/agent-runtime/route.ts CHANGELOG.md`; `rg -n "agent wallet tools|wallet and payment rails|x402_fetch may pay" src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/app/api/chat/agent-runtime/route.ts`. Live `/api/context-index` verification was blocked by an unrelated active dev-server 500 from missing `src/app/fusion-showcase/fusion-showcase.module.css`.
+- Intended commit message: `Add wallet actions to fusion retrieval`
+
+## 2026-06-02 13:41:29 WITA - Streamline UsePod Payment Rails
+
+- Status: Pushed
+- Areas changed: UsePod wallet payment rails UI, payment provider feature matrix, agent payment prompt generation, changelog
+- Summary: Replace the generic cards/crypto/x402/trading checklist with a UsePod-specific rails summary that marks inference, funding, x402, and spend caps as one prepaid UsePod wallet surface; label UsePod machine payments as automatic instead of requiring a separate local x402 wallet; hide the manual x402 test action for UsePod wallets; and make copied agent payment prompts describe UsePod instead of manual accounting.
+- Verification: `pnpm exec eslint src/components/wallet/AgentWalletCard.tsx src/lib/config/agent-payments.ts src/lib/utils/agent-wallet.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/components/wallet/AgentWalletCard.tsx src/lib/config/agent-payments.ts src/lib/utils/agent-wallet.ts`; `git diff --check -- src/components/wallet/AgentWalletCard.tsx src/lib/config/agent-payments.ts src/lib/utils/agent-wallet.ts src/lib/services/usepod.ts src/features/dashboard/views/WalletPanel.tsx src/features/dashboard/hooks/use-agent-controller.tsx CHANGELOG.md`.
+- Intended commit message: `Streamline UsePod payment rails`
+
+## 2026-06-02 13:37:17 WITA - Add Native Mobile App Roadmap Track
+
+- Status: Pushed
+- Areas changed: Roadmap, changelog
+- Summary: Add a first-class HivemindOS native mobile app roadmap section covering iOS/Android companion control-room goals, secure hub pairing, mobile-first Work/Fleet/alerts/scheduler surfaces, push notifications, privacy constraints, and shared pairing with the phone gateway.
+- Verification: `git diff --check -- ROADMAP.md CHANGELOG.md`; `rg -n "Native Mobile App|native mobile app|iOS and Android|phone gateway" ROADMAP.md CHANGELOG.md`.
+- Intended commit message: `Add native mobile app roadmap track`
+
+## 2026-06-02 13:35:38 WITA - Make UsePod Repair One Step
+
+- Status: Pushed
+- Areas changed: UsePod token resolution, UsePod wallet repair UI, wallet refresh behavior, runtime integration status merge, changelog
+- Summary: Make the wallet Repair token action save and await the UsePod status refresh in one step, prefer the canonical HivemindOS env token over dashboard URL fallback when both exist, clear stale UsePod status messages on fresh integration results, and hide old unauthorized messages when a wallet is already ready with a real balance.
+- Verification: `pnpm exec eslint src/lib/services/usepod.ts src/components/wallet/AgentWalletCard.tsx src/features/dashboard/views/WalletPanel.tsx src/features/dashboard/hooks/use-agent-controller.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/lib/services/usepod.ts src/components/wallet/AgentWalletCard.tsx src/features/dashboard/views/WalletPanel.tsx src/features/dashboard/hooks/use-agent-controller.tsx CHANGELOG.md`; `node scripts/check-file-sizes.mjs src/lib/services/usepod.ts src/components/wallet/AgentWalletCard.tsx src/features/dashboard/views/WalletPanel.tsx src/features/dashboard/hooks/use-agent-controller.tsx`.
+- Intended commit message: `Make UsePod repair one step`
+
+## 2026-06-02 13:32 WITA - Document GitLawb Code Proof
+
+- Status: Pushed
+- Areas changed: README setup/features, docs integration index and GitLawb page, docs sidebar, Fleet/Work/Integrations/Brain feature docs, architecture API/storage docs, native app docs, docs homepage/diagrams, roadmap, changelog
+- Summary: Add GitLawb Code Proof documentation across setup, product, feature, API/storage, native wizard, uninstall, and roadmap surfaces so users can distinguish lightweight CLI/DID proof readiness from heavier lazy Docker/Postgres node hosting.
+- Verification: `git diff --check -- README.md ROADMAP.md CHANGELOG.md docs/_layouts/default.html docs/index.md docs/diagrams.md docs/native-app.md docs/features/index.md docs/features/fleet.md docs/features/work-and-scheduler.md docs/features/integrations-and-work-history.md docs/features/brain-vault-and-skills.md docs/architecture/index.md docs/architecture/api-and-storage.md docs/integrations/index.md docs/integrations/gitlawb.md`; `rg -n "GitLawb|gitlawb|Code Proof|Code Node|Code Projects" README.md ROADMAP.md docs/_layouts/default.html docs/index.md docs/diagrams.md docs/native-app.md docs/features docs/architecture docs/integrations`; `test -f docs/integrations/gitlawb.md && test -f docs/integrations/index.md && test -f docs/architecture/api-and-storage.md`.
+- Intended commit message: `Document GitLawb code proof`
+
+## 2026-06-02 13:28:52 WITA - Add Setup Runtime Pill Hover States
+
+- Status: Pushed
+- Areas changed: Native first-run setup wizard runtime selector UI, changelog
+- Summary: Add subtle hover and focus treatments to detected and selectable runtime pills so setup chips respond like interactive controls while preserving selected-state color.
+- Verification: `pnpm exec eslint src/features/native/NativeFirstRunOnboarding.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/native/NativeFirstRunOnboarding.tsx CHANGELOG.md`; `rg -n "transition-all hover:-translate-y-px|hover:shadow|hover:brightness-105|focus-visible:ring" src/features/native/NativeFirstRunOnboarding.tsx`.
+- Intended commit message: `Add setup runtime pill hover states`
+
+## 2026-06-02 13:26:11 WITA - Tighten Setup Runtime Pills
+
+- Status: Pushed
+- Areas changed: Native first-run setup wizard runtime selector UI, changelog
+- Summary: Make setup runtime pills more compact while increasing the embedded runtime icon size so the chips feel closer to the model selector and less like chunky cards.
+- Verification: `pnpm exec eslint src/features/native/NativeFirstRunOnboarding.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/native/NativeFirstRunOnboarding.tsx CHANGELOG.md`; `rg -n "h-5 w-5|width=\\{compact \\? 20|min-h-7|gap-1\\.5|px-2\\.5 py-1|h-3 w-3" src/features/native/NativeFirstRunOnboarding.tsx`.
+- Intended commit message: `Tighten setup runtime pills`
+
+## 2026-06-02 13:19:33 WITA - Enlarge AEON Official Clone Checkboxes
+
+- Status: Pushed
+- Areas changed: AEON official clone modal, shared checkbox UI component, changelog
+- Summary: Add a shadcn-style checkbox wrapper and replace the tiny native checkboxes in the AEON official clone setup toggles with larger 24px controls.
+- Verification: `pnpm exec eslint src/components/ui/checkbox.tsx src/components/aeon/AeonAutopilotPanel.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/components/ui/checkbox.tsx src/components/aeon/AeonAutopilotPanel.tsx CHANGELOG.md`; `wc -l src/components/ui/checkbox.tsx src/components/aeon/AeonAutopilotPanel.tsx` confirmed the touched files are under 1500 lines. Browser visual smoke is currently blocked by an unrelated active dev-server 500 from missing `src/app/fusion-showcase/fusion-showcase.module.css`.
+- Intended commit message: `Enlarge AEON official clone checkboxes`
+
+## 2026-06-02 13:16:05 WITA - Use Runtime Pills In Setup Wizard
+
+- Status: Pushed
+- Areas changed: Native first-run setup wizard runtime selector UI, changelog
+- Summary: Restyle detected agents and import skill/memory runtime selectors as compact model-selector-style pills while preserving each runtime icon and selected-state checkmark.
+- Verification: `pnpm exec eslint src/features/native/NativeFirstRunOnboarding.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/native/NativeFirstRunOnboarding.tsx CHANGELOG.md`; `rg -n "rounded-full|min-h-\\[30px\\]|AgentIcon agent=\\{agent\\} compact|bg-\\[var\\(--button-primary\\)\\]|\\[overflow-wrap:anywhere\\]" src/features/native/NativeFirstRunOnboarding.tsx`; `wc -l src/features/native/NativeFirstRunOnboarding.tsx CHANGELOG.md` confirmed the touched wizard file is 433 lines; in-app Browser tab reload on `http://127.0.0.1:5021/?view=agents` timed out before the modal could be visually rechecked.
+- Intended commit message: `Use runtime pills in setup wizard`
+
+## 2026-06-02 12:33 WITA - Redesign Agent Settings Modal
+
+- Status: Pushed
+- Areas changed: Agent settings modal, runtime agent naming defaults, runtime model default selection, model selector responsiveness, unified skill browser, skill browser modal mounting/layering, AEON skill search, AEON workspace creation wiring, dashboard AEON creation callback, shared AEON orb/buttons/tokens, model selector styling, shared frontend design skill
+- Summary: Replace Agent Settings with the compact handoff-style identity rail/header/main/footer shell, wire it to the actual runtime/provider/model/worker/memory/tools/calls/security data, restore the identity rail to the supplied design by using runtime/role pills plus compact two-line section navigation instead of stacked runtime/status/model boxes, auto-select and persist the best default model for the selected runtime/provider from explicit runtime defaults, current runtime selections, OpenRouter adaptive routing, and ranked discovered model names, make model pills visually select on pointer-down/click, keep their optimistic selected state until props catch up, and stop disabling them during slow background runtime `set-model` writes, unify the general agent Skill Browser and AEON skill search around the AEON-styled shared search/category/card component with mode-specific actions passed as props, mount the Skill Browser at the dashboard root instead of inside the lazy chat panel and lift it above the agent settings overlay so the Role-panel Add skill button opens visibly on the agents view, polish the AEON hive orb with a proportionally regular flat-top hex core and selected agent role icon instead of the generic bot glyph, add hover/focus/press feedback to modal tiles, nav rows, chips, toggles, model pills, and shared AEON buttons, compact the runtime, provider, and worker class cards so they no longer stretch across the modal, shorten normal runtime card descriptions to `Configured` / `Not configured` while keeping AEON and UsePod specialty copy, replace the static provider scanning box with animated discovery placeholders, embed AEON workspace creation through the shared AEON clone/import/GitHub flow, default new agent names to the selected runtime/provider with zero-padded auto-incrementing names like `HermesAgent01` and `UsePodAgent01`, and record the no-static-loading-states rule in the shared frontend design skill.
+- Verification: `pnpm exec eslint src/features/dashboard/views/chat/ModelPillSelector.tsx src/features/dashboard/hooks/use-agent-settings-controller.tsx --max-warnings=999`; `pnpm exec eslint src/features/dashboard/views/chat/runtime-model-registry.ts src/features/dashboard/hooks/use-agent-settings-controller.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/DashboardApp.tsx --max-warnings=999`; `pnpm exec eslint src/components/aeon/parts.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=0`; `pnpm exec eslint src/components/aeon/parts.tsx --max-warnings=0`; `pnpm exec eslint src/components/aeon/parts.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/views/chat/ModelPillSelector.tsx --max-warnings=0`; `pnpm exec eslint src/components/aeon/parts.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=0`; `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=0`; `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/hooks/use-agent-controller.tsx src/lib/types/agent-runtime.ts src/components/aeon/AeonAutopilotPanel.tsx src/components/aeon/index.ts src/features/dashboard/DashboardApp.tsx --max-warnings=999` passed with existing DashboardApp warnings only; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/hooks/use-agent-controller.tsx src/lib/types/agent-runtime.ts src/components/aeon/AeonAutopilotPanel.tsx src/components/aeon/index.ts src/features/dashboard/DashboardApp.tsx src/app/fleet.module.css CHANGELOG.md`; `git diff --check -- src/features/dashboard/views/chat/ModelPillSelector.tsx src/features/dashboard/hooks/use-agent-settings-controller.tsx CHANGELOG.md`; `git diff --check -- src/features/dashboard/views/chat/runtime-model-registry.ts src/features/dashboard/hooks/use-agent-settings-controller.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; `git diff --check -- src/components/aeon/parts.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx CHANGELOG.md`; `git diff --check -- src/components/aeon/parts.tsx CHANGELOG.md`; `git diff --check -- src/components/aeon/aeon-tokens.module.css src/components/aeon/parts.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/views/chat/ModelPillSelector.module.css CHANGELOG.md`; `git diff --check -- src/components/aeon/parts.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx CHANGELOG.md`; `git diff --check -- src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/hooks/use-agent-controller.tsx src/lib/types/agent-runtime.ts src/components/aeon/AeonAutopilotPanel.tsx src/components/aeon/index.ts src/features/dashboard/DashboardApp.tsx src/app/fleet.module.css CHANGELOG.md`; `git diff --check -- src/features/dashboard/views/chat/AgentSettingsModal.tsx CHANGELOG.md`; `rg -n "optimisticModelId|requestAnimationFrame|set-model|selectBestRuntimeModel|bestProviderModel|runtimeModelSelectionsByRuntime|iconSrc|agentSettingsWorkerImage|interactive|interactiveSubtle|interactiveChip|Loading and discovery states|ProviderDiscoverySkeleton|repeat\\(auto-fill, minmax\\(132px, 168px\\)|repeat\\(auto-fill, minmax\\(88px, 112px\\)|PANEL_DETAILS|Brain & folders|Discovering|polygon\\(25% 6\\.7%, 75% 6\\.7%, 100% 50%" src/features/dashboard/views/chat/ModelPillSelector.tsx src/features/dashboard/views/chat/runtime-model-registry.ts src/features/dashboard/hooks/use-agent-settings-controller.tsx src/features/dashboard/DashboardApp.tsx src/components/aeon/aeon-tokens.module.css src/components/aeon/parts.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/views/chat/ModelPillSelector.module.css /Users/liam/Documents/Obsidian/hivemindos-vault/Skills/frontend-design/SKILL.md`; in-app Browser DOM smoke on direct `http://127.0.0.1:5121/?view=agents` opened `Add agent to This Mac` and confirmed a `HermesAgent01` dialog with Role navigation, Hermes selected, provider/model area using the model listbox, worker class cards, and compact runtime cards measuring 168px wide by 65-78px tall with wrapped status text visible; latest in-app Browser DOM check confirmed runtime copy renders as `OpenClaw Configured`, `Hermes Configured`, `Aeon Autopilot`, `Local OpenAI Configured`, and `UsePod Marketplace inference`, with the previous long configured sentences absent. Screenshot capture was unreliable because the in-app Browser returned the startup-wrapper image after the DOM smoke.
+- Additional verification: `pnpm exec eslint src/features/dashboard/views/chat/ModelPillSelector.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/chat/ModelPillSelector.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx CHANGELOG.md`; `node scripts/check-file-sizes.mjs src/features/dashboard/views/chat/ModelPillSelector.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx CHANGELOG.md`; source check confirmed the model selector no longer disables pills from `runtimeIntegrationBusy` and uses pointer-down optimistic selection. In-app Browser timing verification was attempted, but the current tab was stuck rendering the startup shell plus script payload text and had no usable model options.
+- Additional verification: `pnpm exec eslint src/features/dashboard/views/chat/SkillBrowserModal.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=0`; `git diff --check -- src/features/dashboard/views/chat/SkillBrowserModal.tsx CHANGELOG.md`; `rg -n "zIndex: 120|openAgentSkillBrowser|SkillBrowserModal" src/features/dashboard/views/chat/SkillBrowserModal.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/DashboardApp.tsx`.
+- Additional verification: `rg -n "SkillBrowserModal|skillBrowserOpen \\|\\||zIndex: 120" src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/views/chat/SkillBrowserModal.tsx` confirmed `SkillBrowserModal` now renders from `DashboardApp`, `ChatPanel` no longer imports/renders it, and opening the skill browser no longer forces the lazy chat panel to mount on the agents view.
+- Additional verification: `pnpm exec eslint src/features/dashboard/views/chat/UnifiedSkillBrowser.tsx src/features/dashboard/views/chat/SkillBrowserModal.tsx src/components/aeon/work.tsx --max-warnings=0`; `pnpm exec eslint src/features/dashboard/views/chat/UnifiedSkillBrowser.tsx src/features/dashboard/views/chat/SkillBrowserModal.tsx src/components/aeon/work.tsx src/features/dashboard/views/DemoPanel.tsx --max-warnings=0`; `pnpm exec eslint src/features/dashboard/DashboardApp.tsx --max-warnings=999` passed with existing DashboardApp warnings only; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/DemoPanel.module.css CHANGELOG.md src/features/dashboard/views/chat/UnifiedSkillBrowser.tsx src/features/dashboard/views/chat/SkillBrowserModal.tsx src/components/aeon/work.tsx src/features/dashboard/DashboardApp.tsx`; `wc -l src/features/dashboard/views/chat/UnifiedSkillBrowser.tsx src/features/dashboard/views/chat/SkillBrowserModal.tsx src/components/aeon/work.tsx src/features/dashboard/DashboardApp.tsx` confirmed the new/touched focused files are under the 1500-line cap while legacy DashboardApp remains oversized. Full `pnpm exec tsc --noEmit --pretty false` is blocked by generated `.next*/types/validator.ts` route constraints.
+- Additional verification: `pnpm exec eslint src/lib/types/agent-runtime.ts src/features/dashboard/views/chat/AgentSettingsModal.tsx src/features/dashboard/hooks/use-agent-controller.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; source check confirmed `defaultAgentNameForRuntime` now accepts provider context, the UsePod selector asks for `defaultNameForRuntime("openai-compatible", "usepod")`, and create-submit uses the draft provider when the name is empty.
+- Intended commit message: `Redesign agent settings modal`
+
+## 2026-06-02 12:32:44 WITA - Restore AEON Repo Hive View
+
+- Status: Pushed
+- Areas changed: AEON redesigned fleet/repo gallery, AEON runtime hydration, changelog
+- Summary: Replace the redesigned AEON repo gallery cards with the previous honeycomb hive layout while keeping the new AEON route shell, detail tabs, runtime data wiring, and clone/import flow; tile the visible hex borders edge-to-edge, and load AEON skills/runs/outputs/analytics/memory before slower secrets and repo sync checks so a real workspace does not sit at zero skills while GitHub-backed status is still resolving.
+- Verification: `pnpm exec eslint src/components/aeon/fleet.tsx src/components/aeon/AeonAutopilotPanel.tsx src/components/aeon/settings.tsx src/features/dashboard/DashboardApp.tsx --max-warnings=999` completed with existing `DashboardApp.tsx` warnings and no AEON errors; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/components/aeon/fleet.tsx src/components/aeon/AeonAutopilotPanel.tsx CHANGELOG.md`; touched AEON files are under the 1500-line limit (`fleet.tsx` 266 lines, `AeonAutopilotPanel.tsx` 1310 lines); in-app Browser reload on `http://127.0.0.1:5021/?view=aeon` confirmed the hive layout renders, the create hex renders as `Start AEON`, the real AEON repo hex renders `172 skills · 0 runs`, the first repo hex visible border touches the create hex visible border, and fake `aeon-ops` / `aeon-research` placeholders are absent. Global `pnpm check-sizes` remains blocked by unrelated dirty oversized files: `src/app/fleet.module.css`, `src/features/dashboard/DashboardApp.tsx`, and `src/features/dashboard/views/chat/AgentSettingsModal.tsx`.
+- Intended commit message: `Restore AEON repo hive view`
+
+## 2026-06-02 12:27:55 WITA - Remove Setup Services Step
+
+- Status: Pushed
+- Areas changed: Native first-run setup wizard, changelog
+- Summary: Remove the separate services/options step from the guided setup wizard, reduce the flow to install mode, agent import choices, and final preview/start, and keep local-agent connection plus missing-piece installation as automatic defaults in the setup request.
+- Verification: Pending.
+- Intended commit message: `Remove setup services step`
+
+## 2026-06-02 12:19:26 WITA - Remove Dev Toggles From Setup Wizard
+
+- Status: Pushed
+- Areas changed: Native first-run setup wizard, changelog
+- Summary: Remove the browser-dashboard and web-dashboard-build toggles from the guided native setup flow because they are source/developer-only paths, while keeping both disabled explicitly in the setup request and backup command preview.
+- Verification: `pnpm exec eslint src/features/native/NativeFirstRunOnboarding.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/native/NativeFirstRunOnboarding.tsx CHANGELOG.md`; `node scripts/check-file-sizes.mjs src/features/native/NativeFirstRunOnboarding.tsx CHANGELOG.md`; in-app Browser smoke on authenticated `http://127.0.0.1:5021/?view=agents` confirmed the services step keeps `Connect local agents`, `Add missing pieces`, and `Advanced setup choices`, while removing `Open browser dashboard too` and `Refresh the web dashboard build`.
+- Intended commit message: `Remove dev toggles from setup wizard`
+
+## 2026-06-02 12:12:53 WITA - Simplify Setup Services Step
+
+- Status: Pushed
+- Areas changed: Native first-run setup wizard, changelog
+- Summary: Shrink the native setup wizard shell, reduce header/footer padding, simplify the services step into two plain-language primary choices, move repo/dev-only setup toggles into an advanced section, and keep demo safety messaging compact.
+- Verification: `pnpm exec eslint src/features/native/NativeFirstRunOnboarding.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/native/NativeFirstRunOnboarding.tsx CHANGELOG.md`; `node scripts/check-file-sizes.mjs src/features/native/NativeFirstRunOnboarding.tsx CHANGELOG.md`; in-app Browser smoke on authenticated `http://127.0.0.1:5021/?view=agents` confirmed the wizard opens, advances to services, and shows `What HivemindOS will handle`, `Connect local agents`, `Add missing pieces`, and collapsed `Advanced setup choices` instead of the previous oversized service cards.
+- Intended commit message: `Simplify setup services step`
+
+## 2026-06-02 11:55:47 WITA - Fix About Dev Route Origin
+
+- Status: Pushed
+- Areas changed: Native desktop route URL helper, Tauri Next dev proxy handoff, changelog
+- Summary: Make native utility windows, including About, use the selected Tauri Next backend URL instead of hardcoding or routing through the `127.0.0.1:5021` loading proxy, so About opens the real `/about` page instead of the startup loader.
+- Verification: Confirmed `http://127.0.0.1:5021/about?native=1` currently serves the startup loader while the real backend `http://127.0.0.1:5121/about?native=1` renders the About page with app icon, version, `Check again`, and `Update`; `node --check scripts/tauri-next-dev.mjs`; `pnpm exec eslint scripts/tauri-next-dev.mjs --max-warnings=0`; `cargo check --manifest-path src-tauri/Cargo.toml`; `git diff --check -- CHANGELOG.md scripts/tauri-next-dev.mjs src-tauri/src/desktop_navigation.rs`; `node scripts/check-file-sizes.mjs CHANGELOG.md scripts/tauri-next-dev.mjs src-tauri/src/desktop_navigation.rs`.
+- Intended commit message: `Fix About dev route origin`
+
+## 2026-06-02 11:48:15 WITA - Add Native Setup Demo Mode
+
+- Status: Pushed
+- Areas changed: Native first-run setup wizard, native setup bridge, changelog
+- Summary: Enable guided setup demo mode by default, show the setup wizard on every dashboard load while demo mode is active, provide demo detected-agent status outside Tauri, keep the wizard shell/footer usable in smaller windows, and route rescan/copy/start actions through safe preview behavior so no setup commands, files, services, terminals, env, skills, or memory imports are changed.
+- Verification: `pnpm exec eslint src/features/native/NativeFirstRunOnboarding.tsx src/lib/native/setup.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/native/NativeFirstRunOnboarding.tsx src/lib/native/setup.ts CHANGELOG.md`; `node scripts/check-file-sizes.mjs src/features/native/NativeFirstRunOnboarding.tsx src/lib/native/setup.ts CHANGELOG.md`; existing `http://127.0.0.1:5021/?view=agents` returned HTTP 200; in-app Browser smoke on the authenticated `5021` dashboard confirmed the wizard appears on fresh load with `Native setup demo`, the install cards, and no runtime error; standalone headless Playwright was blocked by the dashboard token gate before the wizard could render.
+- Intended commit message: `Add native setup demo mode`
+
+## 2026-06-02 11:46 WITA - Add GitLawb Code Proof Default
+
+- Status: Pushed
+- Areas changed: GitLawb service wrapper, project registry, GitLawb/project APIs, Kanban project/proof metadata, Work project selector and proof badges, Fleet Code Node chip, Integrations Code Proof setup card, setup/uninstall GitLawb mirror, agent profile public DID type, assimilation logs
+- Summary: Add proof-ready GitLawb as a default-feeling but non-blocking HivemindOS capability: setup detects/offers the CLI and local DID without public registration or node startup, APIs expose safe status/setup/project linking, project metadata stores in the shared vault with local fallback, Kanban tasks can carry optional project/proof metadata, Fleet shows compact Code Node state, Work keeps project selection optional, and Integrations owns setup/debug controls.
+- Verification: `pnpm typecheck`; targeted `pnpm exec eslint` on GitLawb services/routes, project registry, GitLawb integration panel, Fleet, Kanban store/types, and agent-runtime types; `node scripts/check-file-sizes.mjs` on touched service/UI files; `git diff --check` on touched GitLawb/project/Kanban/Fleet/setup/uninstall/changelog/assimilation files; existing dev server `http://127.0.0.1:5025` returned HTTP 200 for `/?view=kanban` and `/?view=integrations`; `/api/gitlawb/status` returned safe missing/offline status without GitLawb installed; `/api/projects` returned the Obsidian-backed registry; isolated temp-vault `/api/projects/link-gitlawb` smoke linked a project and degraded with `proofReady:false` and `nodeAvailable:false`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os ASSIMILATION.json`.
+- Intended commit message: `Add GitLawb code proof default`
+
+## 2026-06-02 11:40:49 WITA - Add Hive Skill Fusion Showcase
+
+- Status: Pushed
+- Areas changed: Fusion showcase route, fusion generated visual assets, changelog
+- Summary: Add a dedicated `/fusion-showcase` page with a light, non-black background; replace generated raster card art with scoped code-native visuals and a local Magic-UI-style orbiting circles implementation using existing Lucide icons; render uniform responsive cards from structured skill metadata; add a more specific tested-workflow panel using local X, Obsidian, ComfyUI, Telegram, and app-native writer-bee logo assets; keep the generic visuals as a backup comparison section; and include a bold infographic that explains the fusion loop from prompt retrieval through verified delivery.
+- Verification: `pnpm exec eslint src/app/fusion-showcase/page.tsx --max-warnings=0`; `node scripts/check-file-sizes.mjs src/app/fusion-showcase/page.tsx src/app/fusion-showcase/fusion-showcase.module.css CHANGELOG.md`; `git diff --check -- src/app/fusion-showcase/page.tsx src/app/fusion-showcase/fusion-showcase.module.css CHANGELOG.md public/fusion/logos`; `curl -I --max-time 5 http://127.0.0.1:5025/fusion-showcase`; in-app Browser smoke on `http://127.0.0.1:5025/fusion-showcase` confirmed the top tested-workflow panel and all 3 primary hive skill fusion cards render local X, Obsidian, writer bee, ComfyUI, and Telegram assets, the generic Lucide/Magic-UI-style cards are preserved behind the closed backup expander, the narrow browser viewport has no body overflow, and the AEON card's logo row fits inside the card bounds. Earlier checks: Playwright smoke on temporary dev server `http://127.0.0.1:5025/fusion-showcase` confirmed desktop renders 3 cards, 4 local orbiting-circle groups, 16 orbiting icon items, no raster card images, no body overflow, light page/card backgrounds, and no console/page errors; mobile `390x900` renders 3 cards, 4 local orbiting-circle groups, vertical 6-step fusion flow, no body overflow, light backgrounds, and no console/page errors; `git diff -- package.json pnpm-lock.yaml | rg -n "magic-ui|magicui|@magic|framer-motion|motion/react|motion-dom"` returned no matches, so the Magic UI-style orbit demo stays dependency-free despite unrelated existing package-file diffs; `pnpm exec tsc --noEmit --pretty false --skipLibCheck` is currently blocked by unrelated dirty `src/lib/services/gitlawb/gitlawb-service.ts`.
+- Intended commit message: `Add hive skill fusion showcase`
+
+## 2026-06-02 10:55 WITA - Remove AEON Placeholders And Wire Import
+
+- Status: Pushed
+- Areas changed: AEON redesigned panel data defaults, AEON workspace import modal and choice-card layout, Dashboard AEON profile wiring, AEON runtime skills/runs/outputs/analytics/memory/secrets/repo sync wiring, AEON empty-state sparkline, AEON CSS module animations, changelog
+- Summary: Remove bundled fake AEON repos/runs/outputs/secrets/machines, open the redesigned AEON view on the real workspace gallery, render only actual AEON runtime profiles from the dashboard, restore the previous AEON clone/import flow inside the new modal shell, fix the setup choice cards so they render as equal neutral actions, hydrate the redesigned detail tabs from the existing AEON runtime adapter endpoints, wire run/pause/resume and repo pull/push actions to runtime APIs, wire workspace actions through `/api/runtimes/aeon/workspaces` so created workspaces are added back to the dashboard roster, and keep empty pulse data from crashing the real repo detail view.
+- Verification: `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `pnpm exec eslint src/components/aeon/AeonAutopilotPanel.tsx src/components/aeon/settings.tsx src/components/aeon/overview.tsx src/components/aeon/work.tsx src/components/aeon/activity.tsx src/components/aeon/aeon-data.ts src/features/dashboard/DashboardApp.tsx --max-warnings=999` completed with existing `DashboardApp.tsx` warnings and no AEON errors; `git diff --check -- src/components/aeon/AeonAutopilotPanel.tsx src/components/aeon/parts.tsx src/components/aeon/aeon-tokens.module.css src/components/aeon/aeon-data.ts src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; `pnpm check-sizes`; in-app Browser smoke on live dev server `http://127.0.0.1:5021/?view=aeon` confirmed the AEON gallery renders, fake repo names are absent, the real `Aeon on This Mac` card opens detail, `Pulse · last 7 days` renders with empty pulse data, the `pts[pts.length - 1]` TypeError is absent, and console/page errors are empty; modal smoke confirmed the new design now exposes the old `Clone local copy`, `Clone official AEON`, and `Import existing` choices as equal neutral cards, with official AEON GitHub 1-step/private repo/shared-secret/cache controls and the local clone URL field; `rg -n "aeon-ops|aeon-research|aeon-social|aeon-trade|Clone / import flow opens here|Running Pull RSS digest" src/components/aeon src/features/dashboard/DashboardApp.tsx` returned no matches.
+- Intended commit message: `Remove AEON placeholders and wire import`
+
+## 2026-06-02 10:55:48 WITA - Add General Route Loader
+
+- Status: Pushed
+- Areas changed: Dashboard route chunk loading, dashboard route Suspense fallback, changelog
+- Summary: Reuse the Brain graph loader animation as the general dashboard route loading state with route-specific copy so tab clicks show labels like `Loading Wallets` or `Loading Files` instead of a blank panel or generic dashboard message while dynamic views load.
+- Verification: `pnpm exec eslint src/features/dashboard/DashboardApp.tsx --max-warnings=999` completed with existing warnings and no errors; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; `node scripts/check-file-sizes.mjs src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; `rg -n "wallet: \"Wallets\"|routeLoadingFor\\(\"wallet\"\\)|Loading \\$\\{routeLabel\\}|DashboardRouteLoading view=\\{activeView\\}" src/features/dashboard/DashboardApp.tsx` confirmed Wallets and other routes use route-specific loader labels.
+- Intended commit message: `Add general route loader`
+
+## 2026-06-02 10:55:09 WITA - Remove Header Go Button
+
+- Status: Pushed
+- Areas changed: Dashboard header, dashboard shell prop wiring, global dashboard styles, changelog
+- Summary: Remove the header `Go` command-palette button from the dashboard topbar while keeping route tabs and non-header command-palette access intact.
+- Verification: `rg -n "commandPaletteTab|<span>Go</span>|onOpenCommandPalette|Open command palette" src/features/dashboard/views/DashboardHeader.tsx src/features/dashboard/DashboardApp.tsx src/app/globals.css` returned no matches; `pnpm exec eslint src/features/dashboard/views/DashboardHeader.tsx src/features/dashboard/DashboardApp.tsx --max-warnings=999` completed with existing `DashboardApp.tsx` warnings and no errors; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; in-app Browser smoke on existing dev server `http://127.0.0.1:5122/?view=wallet` confirmed the header renders, six route tabs remain, there are zero `Go` buttons, zero `.commandPaletteTab` elements, and zero console errors.
+- Intended commit message: `Remove header go button`
+
+## 2026-06-02 10:49:26 WITA - Canonicalize UsePod Secret Storage
+
+- Status: Pushed
+- Areas changed: UsePod env persistence, UsePod status payloads, wallet token health UI, UsePod setup state, runtime integration status, Shared Brain profile merge, local Hermes env mirror, changelog
+- Summary: Make HivemindOS shared env the canonical local store for UsePod token/dashboard secrets, stop writing UsePod credentials into runtime-specific Hermes/OpenClaw/Aeon env mirrors, remove existing UsePod entries from the Hermes env mirror, expose non-secret token presence/source health in UsePod status, show a visible wallet repair-token action next to token health, and deep-merge UsePod profile metadata from Shared Brain so sanitized vault profiles do not erase richer local token state.
+- Verification: `pnpm exec eslint src/lib/services/usepod.ts src/app/api/usepod/save-token/route.ts src/components/wallet/AgentWalletCard.tsx src/features/dashboard/views/chat/GuidedUsePodSetup.tsx src/features/dashboard/hooks/use-agent-controller.tsx src/lib/services/runtime-adapters/openai-compatible.ts src/lib/services/runtime-integrations.ts src/lib/types/agent-runtime.ts src/features/dashboard/dashboard-types.ts src/features/dashboard/DashboardApp.tsx --max-warnings=999` passed with existing DashboardApp warnings only; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/lib/services/usepod.ts src/app/api/usepod/save-token/route.ts src/components/wallet/AgentWalletCard.tsx src/features/dashboard/views/chat/GuidedUsePodSetup.tsx src/features/dashboard/hooks/use-agent-controller.tsx src/lib/services/runtime-adapters/openai-compatible.ts src/lib/services/runtime-integrations.ts src/lib/types/agent-runtime.ts src/features/dashboard/dashboard-types.ts src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; `node scripts/check-file-sizes.mjs src/lib/services/usepod.ts src/app/api/usepod/save-token/route.ts src/components/wallet/AgentWalletCard.tsx src/features/dashboard/views/chat/GuidedUsePodSetup.tsx src/features/dashboard/hooks/use-agent-controller.tsx src/lib/services/runtime-adapters/openai-compatible.ts src/lib/services/runtime-integrations.ts src/lib/types/agent-runtime.ts src/features/dashboard/dashboard-types.ts src/features/dashboard/DashboardApp.tsx`; env-key inspection confirmed `/Users/liam/.hivemindos/.env` retains UsePod keys while `/Users/liam/.hermes/.env` has no `USEPOD_*` keys.
+- Intended commit message: `Canonicalize UsePod secret storage`
+
+## 2026-06-02 10:44:21 WITA - Remove Dashboard Breadcrumbs
+
+- Status: Pushed
+- Areas changed: Dashboard navigation controller, dashboard shell render, global dashboard styles, changelog
+- Summary: Remove the dashboard breadcrumb row from every view so page headers start directly with the view content.
+- Verification: `rg -n "dashboardBreadcrumbs|navigationBreadcrumbs|breadcrumbNav" src` returned no matches; `pnpm exec eslint src/features/dashboard/hooks/use-dashboard-navigation-controller.ts src/features/dashboard/DashboardApp.tsx --max-warnings=999` completed with existing `DashboardApp.tsx` warnings and no errors; in-app Browser smoke on temporary dev server `http://127.0.0.1:5023` confirmed Fleet, Work, Brain, Chat, and Wallet have zero `.dashboardBreadcrumbs`, zero `Current dashboard location` navs, a rendered dashboard shell, and no console errors; `git diff --check -- CHANGELOG.md src/features/dashboard/hooks/use-dashboard-navigation-controller.ts src/features/dashboard/DashboardApp.tsx src/app/globals.css`; `node scripts/check-file-sizes.mjs CHANGELOG.md src/features/dashboard/hooks/use-dashboard-navigation-controller.ts src/features/dashboard/DashboardApp.tsx src/app/globals.css`; full `pnpm exec tsc --noEmit --pretty false --skipLibCheck` is currently blocked by unrelated dirty `src/lib/services/usepod.ts` return objects missing `tokenPresent` and `tokenSource`.
+- Intended commit message: `Remove dashboard breadcrumbs`
+
+## 2026-06-02 10:34:38 WITA - Remove Fleet Root Breadcrumb
+
+- Status: Pushed
+- Areas changed: Dashboard navigation breadcrumbs, Fleet dashboard header spacing, changelog
+- Summary: Hide the root `HivemindOS` breadcrumb on the Fleet view so the mobile roster starts directly at `The roster` without an extra app-name label above it.
+- Verification: `pnpm exec eslint src/features/dashboard/hooks/use-dashboard-navigation-controller.ts src/features/dashboard/DashboardApp.tsx --max-warnings=999` completed with existing `DashboardApp.tsx` warnings and no errors; `git diff --check -- src/features/dashboard/hooks/use-dashboard-navigation-controller.ts src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; `node scripts/check-file-sizes.mjs src/features/dashboard/hooks/use-dashboard-navigation-controller.ts src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; in-app Browser smoke on temporary static-native dev server `http://127.0.0.1:5024/?view=agents` at `494x374` confirmed no `.dashboardBreadcrumbs`, no exact `HivemindOS` line, and `The roster` still visible; follow-up syntax repair extracted the breadcrumb JSX into `breadcrumbNav`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`.
+- Intended commit message: `Remove fleet root breadcrumb`
+
+## 2026-06-02 10:32:23 WITA - Keep Fleet Loading Visible Until Paint
+
+- Status: Pushed
+- Areas changed: Dashboard lazy fleet view fallback, shared Fleet loading shell, Fleet view initial paint readiness, changelog
+- Summary: Reuse the existing Fleet-shaped loading UI while the client-only Fleet bundle is loading, and let Fleet settle on discovered machine data instead of waiting for agent rows so startup no longer shows a blank Fleet surface between the route loader and the real view.
+- Verification: `pnpm exec eslint src/features/dashboard/lazy-components.tsx src/components/fleet/FleetView.tsx src/components/fleet/fleet-loading.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/lazy-components.tsx src/components/fleet/FleetView.tsx src/components/fleet/fleet-loading.tsx CHANGELOG.md`; `node scripts/check-file-sizes.mjs src/features/dashboard/lazy-components.tsx src/components/fleet/FleetView.tsx src/components/fleet/fleet-loading.tsx CHANGELOG.md`; `rg -n "Loading Fleet|Preparing the swarm view|FleetViewLoadingShell|FleetViewLoadingFallback|FleetRosterLoading|FleetConstellationLoading|FleetDispatchLoading" src/features/dashboard/lazy-components.tsx src/components/fleet/FleetView.tsx src/components/fleet/fleet-loading.tsx` confirmed the old standalone fallback copy is gone and both lazy loading plus Fleet initial loading use the shared shell/pieces.
+- Intended commit message: `Keep fleet loading visible until paint`
+
+## 2026-06-02 10:27:59 WITA - Add Native About Update Window
+
+- Status: Pushed
+- Areas changed: Native About window route, Tauri About/Update menu bridge, app update rehearsal flow, changelog, assimilation logs
+- Summary: Replace the default folder-icon About sheet with a custom app-icon About window that automatically checks for updates, offers a subtle manual check action, and runs a test update through the real fleet update endpoint using a safe local rehearsal mode.
+- Verification: `pnpm exec eslint src/app/about/page.tsx src/app/api/fleet/update/route.ts --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `cargo check --manifest-path src-tauri/Cargo.toml`; `curl -sS -X POST http://127.0.0.1:5023/api/fleet/update ... simulate=true` returned `method:"local-shell-rehearsal"` and `verified:true`; in-app Browser smoke on `http://127.0.0.1:5023/about?native=1` confirmed the app icon renders, the `Update` button completes the test update through the real endpoint, `Flow: local-shell-rehearsal` remains visible, `Check again` is available after completion, and console error count is zero; `git diff --check -- CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.jsonl ASSIMILATION_LOG.md src/app/about/page.tsx src/app/about/about.module.css src/app/api/fleet/update/route.ts src-tauri/src/desktop_navigation.rs`; `node scripts/check-file-sizes.mjs CHANGELOG.md src/app/about/page.tsx src/app/about/about.module.css src/app/api/fleet/update/route.ts src-tauri/src/desktop_navigation.rs`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os ASSIMILATION.json`.
+- Intended commit message: `Add native About update window`
+
+## 2026-06-02 10:23 WITA - Open AEON On Repo Gallery
+
+- Status: Pushed
+- Areas changed: AEON redesigned panel default navigation, AEON CSS module animations, changelog
+- Summary: Make the redesigned AEON panel open on the fleet/repo gallery by default instead of jumping straight into the first mock workspace detail, and fix the AEON CSS module keyframes so the route compiles in Next dev.
+- Verification: `pnpm exec eslint src/components/aeon/AeonAutopilotPanel.tsx src/components/aeon/parts.tsx --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/components/aeon/AeonAutopilotPanel.tsx src/components/aeon/parts.tsx src/components/aeon/aeon-tokens.module.css CHANGELOG.md`; Playwright smoke on temporary dev server `http://127.0.0.1:5022/aeon` returned HTTP 200, showed `Your autonomous agents`, did not show `Running Pull RSS digest`, and logged no page errors.
+- Intended commit message: `Open AEON on repo gallery`
+
+## 2026-06-02 10:22:23 WITA - Strip UsePod Token URLs From Shared Brain
+
+- Status: Pushed
+- Areas changed: Obsidian agent profile mirror, shared vault UsePod profile, changelog
+- Summary: Keep non-secret UsePod metadata mirrored into Shared Brain agent profiles while stripping token-bearing UsePod dashboard URLs from future mirrors, and scrub the existing mirrored UsePod profile so the shared vault retains only the env key name, funding reference, caps, status, model count, and balance metadata.
+- Verification: `pnpm exec eslint src/lib/services/obsidian/agent-profiles.ts --max-warnings=999`; `git diff --check -- src/lib/services/obsidian/agent-profiles.ts CHANGELOG.md`; `node scripts/check-file-sizes.mjs src/lib/services/obsidian/agent-profiles.ts`; `node -e "JSON.parse(require('fs').readFileSync('/Users/liam/Documents/Obsidian/hivemindos-vault/Agents/Local OpenAI/UsePod-on-This-Mac/profile.json','utf8'))"`; `rg -n "usepod\\.ai/dashboard\\?token=|dashboardUrl.*token=|eb7d51c1-82c8-4239-a76c-31fa6b789427" /Users/liam/Documents/Obsidian/hivemindos-vault/Agents /Users/liam/Documents/Obsidian/hivemindos-vault/AGENTS` returned no matches; inspected `/Users/liam/Documents/Obsidian/hivemindos-vault/Agents/Local OpenAI/UsePod-on-This-Mac/profile.json` to confirm non-secret UsePod fields remain.
+- Intended commit message: `Strip UsePod token URLs from shared brain`
+
+## 2026-06-02 10:17:20 WITA - Fix Native Menu Convention And Popouts
+
+- Status: Pushed
+- Areas changed: Tauri desktop navigation menu, native pop-out command bridge, dashboard native navigation listener, changelog
+- Summary: Move route actions out of the macOS app menu into a Navigation menu, restore app-level About/Settings/Updates/Services/Hide/Quit items, replace stale route-specific pop-out menu items with Pop Out Current View, and fix the Tauri command payload shape that prevented chat pop-outs from opening.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml`; `pnpm exec eslint src/lib/native/desktop-navigation.ts --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- CHANGELOG.md src-tauri/src/desktop_navigation.rs src/lib/native/desktop-navigation.ts`; `node scripts/check-file-sizes.mjs CHANGELOG.md src-tauri/src/desktop_navigation.rs src/lib/native/desktop-navigation.ts`.
+- Intended commit message: `Fix native menu convention and popouts`
+
+## 2026-06-02 10:13:53 WITA - Require Bidirectional File Share Harness
+
+- Status: Pushed
+- Areas changed: Real fleet E2E file-share harness, changelog
+- Summary: Make the real-fleet file-share suite require both Hermes-to-OpenClaw and OpenClaw-to-Hermes encrypted transfer roundtrips instead of only the original Hermes sender path.
+- Verification: Manual reverse check passed with run `hive-e2e-20260602021138-reverse-0050d4`; `HIVE_E2E_REAL_FLEET=1 DASHBOARD_URL=http://127.0.0.1:5021 HIVE_E2E_TIMEOUT_MS=300000 HIVE_E2E_POLL_MS=3000 pnpm exec node scripts/e2e-real-fleet.mjs --suite=file-share` passed with run `hive-e2e-20260602021332-3e0849`; `node --check scripts/e2e-real-fleet.mjs`.
+- Intended commit message: `Require bidirectional file-share e2e`
+
+## 2026-06-02 10:12:29 WITA - Show Real UsePod Balance
+
+- Status: Pushed
+- Areas changed: UsePod status service, UsePod token repair API, UsePod wallet card, changelog
+- Summary: Fetch the real UsePod prepaid balance from UsePod's dashboard balance endpoint (`/proxy/<token>/balance`) instead of relying on model-list responses, convert `usdc_balance` micro-USDC into dollars, display UsePod balances as formatted money, derive every new/repaired UsePod env key from the token fingerprint, and persist repaired UsePod tokens under their unique env names so refreshes do not fall back to a stale global token.
+- Verification: `pnpm exec eslint src/lib/services/usepod.ts src/app/api/usepod/save-token/route.ts src/components/wallet/AgentWalletCard.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/lib/services/usepod.ts src/app/api/usepod/save-token/route.ts src/components/wallet/AgentWalletCard.tsx CHANGELOG.md`; redacted probe confirmed the saved global `USEPOD_TOKEN` currently returns 401 from UsePod's balance endpoint, proving the funded token must be read from the repaired wallet URL or saved unique env binding. Linking audit confirmed create-token, repair, recovery, refresh, and attach-existing-wallet flows all carry the profile's `usePod.tokenEnvName` and dashboard URL together.
+- Intended commit message: `Show real UsePod balance`
+
+## 2026-06-02 10:10:35 WITA - Fix Command Palette Row Overlap
+
+- Status: Pushed
+- Areas changed: Command palette layout, dashboard global styles, changelog
+- Summary: Make command palette result rows expand cleanly around their group, title, detail, shortcut, and pop-out action so long or large text no longer overlaps neighboring rows.
+- Verification: `pnpm exec eslint src/features/dashboard/views/DashboardCommandPalette.tsx --max-warnings=999`; `git diff --check -- CHANGELOG.md src/features/dashboard/views/DashboardCommandPalette.tsx src/app/globals.css`; `node scripts/check-file-sizes.mjs CHANGELOG.md src/features/dashboard/views/DashboardCommandPalette.tsx src/app/globals.css`; in-app browser smoke on `http://127.0.0.1:5021/?view=chat&agent=hermes-liams-macbook-pro-147-local&chatLeaf=task-hermes-liams-macbook-pro-147-local-hermes-state%3Aapi-7bb32c7554e7499e-hermes-state-1780338589712.897` with a temporary `1328x504` viewport confirmed command palette rows use flex column layout with no row overlaps and no overflowing text/action boxes.
+- Intended commit message: `Fix command palette row overlap`
+
+## 2026-06-02 04:39:57 WITA - Make Real Fleet Env Skills File Share Green
+
+- Status: Pushed
+- Areas changed: Real fleet E2E harness, shared skill reconcile API, shared skill inventory metadata, Aeon motion CSS module
+- Summary: Fixed the previously failing real-fleet env/skills/file-share harness path by actively converging env writes across ready collectors, scoping skill reconcile to the provider under test with embedded E2E skill source files, surfacing missing-upstream skill status, accepting deletion-freeze as the expected removal safety state, and fixing the CSS module selector that kept the dev server in 503.
+- Verification: `HIVE_E2E_REAL_FLEET=1 DASHBOARD_URL=http://127.0.0.1:5021 HIVE_E2E_TIMEOUT_MS=420000 HIVE_E2E_POLL_MS=3000 pnpm exec node scripts/e2e-real-fleet.mjs --suite=env,skills,file-share` passed with run `hive-e2e-20260601203804-ac6c94`; standalone env, skills, and file-share reruns also passed; `pnpm exec tsc --noEmit --pretty false --incremental false --project tsconfig.json`; `node --check scripts/e2e-real-fleet.mjs`.
+- Intended commit message: `Make real fleet env skills file share pass`
+
 ## 2026-06-02 04:27:53 WITA - Record Native Navigation Assimilation
 
 - Status: Pushed
@@ -158,9 +899,9 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## 2026-06-02 02:31:48 WITA - Make AdaptiveAgent Execute Fusion Runs Itself
 
 - Status: Pushed
-- Areas changed: AdaptiveAgent runtime routing, OpenRouter adaptive model inventory service, connected app proxy, task retrieval context, context index local CLI capabilities, agent output redaction, shared/packaged fusion skills, shared Base news skill, changelog
-- Summary: Keep AdaptiveAgent on the Hermes collector/tool path instead of bypassing to direct OpenRouter, remove paid fallback guidance from Adaptive errors, add retry + disk cache for free OpenRouter model inventory in a focused service, expose `xurl` and `hermes send` as retrievable local CLI capabilities, add `/api/fleet/apps/request` so agents can call discovered Tailnet apps through the dashboard Apps-view logic, and update fusion skills to encode capability intents rather than hard-required providers.
-- Verification: `pnpm exec eslint src/app/api/chat/agent-runtime/route.ts src/app/api/fleet/apps/request/route.ts src/lib/services/chat/adaptive-openrouter-models.ts src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/lib/services/agent-security-proxy.ts --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/app/api/chat/agent-runtime/route.ts src/app/api/fleet/apps/request/route.ts src/lib/services/chat/adaptive-openrouter-models.ts src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/lib/services/agent-security-proxy.ts packaged-skills/auto-install/fusion-skill/SKILL.md packaged-skills/auto-install/fusion-workflow/SKILL.md`; `git diff --check -- src/app/api/chat/agent-runtime/route.ts src/app/api/fleet/apps/request/route.ts src/lib/services/chat/adaptive-openrouter-models.ts src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/lib/services/agent-security-proxy.ts packaged-skills/auto-install/fusion-skill/SKILL.md packaged-skills/auto-install/fusion-workflow/SKILL.md CHANGELOG.md`; live AdaptiveAgent diagnostic showed Hermes-owned `xurl` execution; live connected-app ComfyUI generation via AdaptiveAgent produced `adaptive_e2e_20260602_00001_.png`; live Telegram send via AdaptiveAgent using `hermes send` exited 0; no-hard-requirements AdaptiveAgent fusion run selected `xurl`, ComfyUI through `/api/fleet/apps/request`, and `hermes send` on its own, generated verified `base_mcp_agents_00001_.png`, and delivered the draft/image reference to Telegram without posting to X; direct app proxy checks returned ComfyUI `/system_stats`, `/object_info`, `/history/<prompt_id>`, and binary PNG `/view` successfully.
+- Areas changed: AdaptiveAgent runtime routing, OpenRouter adaptive model inventory service, connected app proxy, task retrieval context, context index local CLI capabilities, agent output redaction, shared/packaged hive skill fusions, shared Base news skill, changelog
+- Summary: Keep AdaptiveAgent on the Hermes collector/tool path instead of bypassing to direct OpenRouter, preserve optional paid fallback model use only when `adaptiveOpenRouter.fallbackModel` is configured, add retry + disk cache for free OpenRouter model inventory in a focused service, expose `xurl` and `hermes send` as retrievable local CLI capabilities, add `/api/fleet/apps/request` so agents can call discovered Tailnet apps through the dashboard Apps-view logic, and update hive skill fusions to encode capability intents and require concrete delivery receipts rather than inferred success.
+- Verification: `pnpm exec eslint src/app/api/chat/agent-runtime/route.ts src/app/api/fleet/apps/request/route.ts src/lib/services/chat/adaptive-openrouter-models.ts src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/lib/services/agent-security-proxy.ts --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/app/api/chat/agent-runtime/route.ts src/app/api/fleet/apps/request/route.ts src/lib/services/chat/adaptive-openrouter-models.ts src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/lib/services/agent-security-proxy.ts packaged-skills/auto-install/hive-skill-fusion/SKILL.md packaged-skills/auto-install/hive-workflow-fusion/SKILL.md`; `git diff --check -- src/app/api/chat/agent-runtime/route.ts src/app/api/fleet/apps/request/route.ts src/lib/services/chat/adaptive-openrouter-models.ts src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/lib/services/agent-security-proxy.ts packaged-skills/auto-install/hive-skill-fusion/SKILL.md packaged-skills/auto-install/hive-workflow-fusion/SKILL.md CHANGELOG.md`; live AdaptiveAgent diagnostic showed Hermes-owned `xurl` execution; live connected-app ComfyUI generation via AdaptiveAgent produced `adaptive_e2e_20260602_00001_.png`; live Telegram send via AdaptiveAgent using `hermes send` exited 0; no-hard-requirements AdaptiveAgent fusion run selected `xurl`, ComfyUI through `/api/fleet/apps/request`, and `hermes send` on its own, generated verified `base_mcp_agents_00001_.png`, and delivered the draft/image reference to Telegram without posting to X; follow-up no-fallback AdaptiveAgent Telegram run listed the configured target, sent through explicit Hermes target delivery, and returned success plus a message id; direct app proxy checks returned ComfyUI `/system_stats`, `/object_info`, `/history/<prompt_id>`, and binary PNG `/view` successfully.
 - Intended commit message: `Make AdaptiveAgent execute fusion runs itself`
 
 ## 2026-06-02 02:24:33 WITA - Keep UsePod Token Setup On Funding Step
@@ -195,13 +936,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Verification: `pnpm exec eslint src/features/dashboard/views/chat/GuidedUsePodSetup.tsx --max-warnings=999`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/chat/GuidedUsePodSetup.tsx src/features/dashboard/views/chat/UsePodSetup.module.css CHANGELOG.md`; `node scripts/check-file-sizes.mjs src/features/dashboard/views/chat/GuidedUsePodSetup.tsx src/features/dashboard/views/chat/UsePodSetup.module.css`; browser smoke at `http://127.0.0.1:5021/?view=agents` confirmed the UsePod setup screen still renders.
 - Intended commit message: `Enlarge UsePod token creation animation`
 
-## 2026-06-02 01:40:40 WITA - Stabilize Adaptive Fusion Skill Runs
+## 2026-06-02 01:40:40 WITA - Stabilize Adaptive Hive Skill Fusion Runs
 
 - Status: Pushed
-- Areas changed: Adaptive agent model routing, fusion skill packaged/shared catalog validation, runtime RAG validation, Telegram delivery, dashboard notification, changelog
+- Areas changed: Adaptive agent model routing, hive skill fusion packaged/shared catalog validation, runtime RAG validation, Telegram delivery, dashboard notification, changelog
 - Summary: Initial Adaptive fusion validation exposed that direct OpenRouter routing and operator-side side effects were not sufficient; this entry is superseded by the later no-fallback AdaptiveAgent E2E fix above.
 - Verification: Retained only as historical context for the failed approach; the corrected verification is recorded in `Make AdaptiveAgent execute fusion runs itself`.
-- Intended commit message: `Stabilize adaptive fusion skill runs`
+- Intended commit message: `Stabilize adaptive hive skill fusion runs`
 
 ## 2026-06-02 01:22:59 WITA - Isolate Tauri Dev Backend Ports
 
@@ -223,17 +964,17 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 - Status: Pushed
 - Areas changed: Packaged skills catalog, shared skill seeding, setup/uninstall scripts, context index, changelog
-- Summary: Move the fusion skills into `packaged-skills/auto-install/`, add `packaged-skills/optional/` for future one-click store skills, copy only auto-install packaged skills into the shared brain during setup, exclude optional packaged skills from automatic agent context, and add matching uninstall prompts for auto-installed packaged skills.
-- Verification: `bash -n setup.sh scripts/seed-shared-skills.sh uninstall.sh`; `pnpm exec eslint src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/app/api/chat/agent-runtime/route.ts --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/app/api/chat/agent-runtime/route.ts scripts/seed-shared-skills.sh setup.ps1 uninstall.sh uninstall.ps1 packaged-skills/auto-install/fusion-skill/SKILL.md packaged-skills/auto-install/fusion-workflow/SKILL.md packaged-skills/auto-install/fusion-aeon/SKILL.md`; `git diff --check -- packaged-skills src/lib/services/context-index.ts scripts/seed-shared-skills.sh setup.ps1 uninstall.sh uninstall.ps1 CHANGELOG.md`; temporary-vault dry run of `scripts/seed-shared-skills.sh` confirmed fusion skills are copied into `Skills/` with `provider: packaged-auto-install`; PowerShell parse was skipped because `pwsh` is not installed; live `/api/context-index` check was skipped because no dev server is listening on `127.0.0.1:5021`.
+- Summary: Move the hive skill fusions into `packaged-skills/auto-install/`, add `packaged-skills/optional/` for future one-click store skills, copy only auto-install packaged skills into the shared brain during setup, exclude optional packaged skills from automatic agent context, and add matching uninstall prompts for auto-installed packaged skills.
+- Verification: `bash -n setup.sh scripts/seed-shared-skills.sh uninstall.sh`; `pnpm exec eslint src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/app/api/chat/agent-runtime/route.ts --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/app/api/chat/agent-runtime/route.ts scripts/seed-shared-skills.sh setup.ps1 uninstall.sh uninstall.ps1 packaged-skills/auto-install/hive-skill-fusion/SKILL.md packaged-skills/auto-install/hive-workflow-fusion/SKILL.md packaged-skills/auto-install/hive-aeon-fusion/SKILL.md`; `git diff --check -- packaged-skills src/lib/services/context-index.ts scripts/seed-shared-skills.sh setup.ps1 uninstall.sh uninstall.ps1 CHANGELOG.md`; temporary-vault dry run of `scripts/seed-shared-skills.sh` confirmed hive skill fusions are copied into `Skills/` with `provider: packaged-auto-install`; PowerShell parse was skipped because `pwsh` is not installed; live `/api/context-index` check was skipped because no dev server is listening on `127.0.0.1:5021`.
 - Intended commit message: `Split packaged skills catalogs`
 
-## 2026-06-02 00:59:45 WITA - Add Fusion Skills And Runtime RAG Context
+## 2026-06-02 00:59:45 WITA - Add Hive Skill Fusions And Runtime RAG Context
 
 - Status: Pushed
 - Areas changed: Shared Obsidian skills, packaged skills catalog, context index service, chat runtime retrieval context, changelog
-- Summary: Add `fusion-skill`, `fusion-workflow`, and `fusion-aeon` to the shared brain and to `packaged-skills/`, index packaged skills through `/api/context-index`, inject bounded task-specific RAG hits into agent runtime prompts, and save the generated `base-news-x-post` example skill from the agent handoff into the shared brain.
-- Verification: `pnpm exec eslint src/app/api/chat/agent-runtime/route.ts src/lib/services/chat/task-retrieval-context.ts src/lib/services/context-index.ts --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/app/api/chat/agent-runtime/route.ts src/lib/services/chat/task-retrieval-context.ts src/lib/services/context-index.ts packaged-skills/fusion-skill/SKILL.md packaged-skills/fusion-workflow/SKILL.md packaged-skills/fusion-aeon/SKILL.md`; `git diff --check -- src/app/api/chat/agent-runtime/route.ts src/lib/services/chat/task-retrieval-context.ts src/lib/services/context-index.ts packaged-skills CHANGELOG.md`; live `/api/context-index` queries confirmed fusion skills, Z-Image, ComfyUI, MiroShark endpoints, `comfyui-image-generation`, and `x-post-optimizer` retrieval; AdaptiveAgent first exposed a repeated skill-index loop, then completed generically, then refused after stricter runtime RAG; Queen Bee completed the example handoff and selected `xurl`, `x-post-optimizer`, Liam-style/humanizer writing, ComfyUI/Z-Image, and Telegram/notification delivery.
-- Intended commit message: `Add fusion skills and runtime RAG context`
+- Summary: Add `hive-skill-fusion`, `hive-workflow-fusion`, and `hive-aeon-fusion` to the shared brain and to `packaged-skills/`, index packaged skills through `/api/context-index`, inject bounded task-specific RAG hits into agent runtime prompts, and save the generated `base-news-x-post` example skill from the agent handoff into the shared brain.
+- Verification: `pnpm exec eslint src/app/api/chat/agent-runtime/route.ts src/lib/services/chat/task-retrieval-context.ts src/lib/services/context-index.ts --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `node scripts/check-file-sizes.mjs src/app/api/chat/agent-runtime/route.ts src/lib/services/chat/task-retrieval-context.ts src/lib/services/context-index.ts packaged-skills/hive-skill-fusion/SKILL.md packaged-skills/hive-workflow-fusion/SKILL.md packaged-skills/hive-aeon-fusion/SKILL.md`; `git diff --check -- src/app/api/chat/agent-runtime/route.ts src/lib/services/chat/task-retrieval-context.ts src/lib/services/context-index.ts packaged-skills CHANGELOG.md`; live `/api/context-index` queries confirmed hive skill fusions, Z-Image, ComfyUI, MiroShark endpoints, `comfyui-image-generation`, and `x-post-optimizer` retrieval; AdaptiveAgent first exposed a repeated skill-index loop, then completed generically, then refused after stricter runtime RAG; Queen Bee completed the example handoff and selected `xurl`, `x-post-optimizer`, Liam-style/humanizer writing, ComfyUI/Z-Image, and Telegram/notification delivery.
+- Intended commit message: `Add hive skill fusions and runtime RAG context`
 
 ## 2026-06-02 00:20:57 WITA - Add Packaged Skills Catalog
 

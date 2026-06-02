@@ -38,6 +38,12 @@ Agents are senior software engineers in this codebase and must follow these rule
 - Avoid "god utils". Utility modules should be narrowly scoped and named for their domain.
 - Prefer explicit exports and a minimal public surface area.
 
+### Capability Matrices First
+
+- When behavior varies by a typed family such as runtime, agent kind, wallet provider, payment rail, model provider, machine target, integration provider, or setup mode, look for an existing capability/default/feature matrix before adding branching logic.
+- If no matrix exists and the new behavior is likely to recur for multiple members of the same family, create or extend a typed matrix instead of scattering `if`/`switch` checks through UI, API, and service code.
+- Keep provider-specific rendering, validation, copy, actions, and defaults driven by the matrix where practical, with small local branches only for genuinely unique workflows.
+
 ### Readability And Style
 
 - Prefer descriptive names over abbreviations.

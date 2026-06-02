@@ -51,6 +51,8 @@ export type RuntimeIntegrationStatus = {
       depositAddress?: string;
       depositCode?: string;
       dashboardUrl?: string;
+      tokenPresent?: boolean;
+      tokenSource?: string;
       balanceRemaining?: string;
       route?: string;
       checkedAt?: string;
@@ -544,6 +546,8 @@ export type DiscoveredMachine = {
 
 export type AppVersion = {
   appDir?: string;
+  version?: string;
+  latestVersion?: string;
   commit?: string;
   shortCommit?: string;
   branch?: string;
@@ -906,7 +910,7 @@ export type MiroSharkSurfaceView = "x" | "reddit" | "polymarket" | "timeline";
 
 export type MiroSharkWorkspaceMode = "new" | "run";
 
-export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "chat" | "more" | "env" | "my-apps" | "phone" | "aeon";
+export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "chat" | "more" | "env" | "my-apps" | "phone" | "aeon" | "fusion";
 
 export type WorkView = Extract<DashboardView, "kanban" | "scheduler" | "swarm" | "history">;
 

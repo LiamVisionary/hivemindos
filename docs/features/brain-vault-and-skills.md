@@ -21,7 +21,7 @@ Capabilities:
 - Validate and open a configured Obsidian vault.
 - Record note access events.
 - Build a graph of notes and access history.
-- Store Kanban board state, notifications, scheduled runs, wallet records, shared skills, and brain-service notes.
+- Store Kanban board state, project registry metadata, notifications, scheduled runs, wallet records, shared skills, and brain-service notes.
 - Seed an AI-ready vault contract, durable note templates, optional Obsidian CLI/plugin-pack status notes, and disabled foundation workflows for common shared-brain routines.
 
 Seeded structure:
@@ -31,6 +31,7 @@ Seeded structure:
 - `Operations/Brain Services/Obsidian CLI.md` records detected CLI status when setup runs.
 - `Operations/Brain Services/Obsidian Plugin Pack.md` lists optional manual Obsidian plugins for templates, tasks, Dataview, retrieval, calendar, Kanban, and Git.
 - `Operations/Automations/Foundation Workflows/` contains disabled workflow schedules for context synthesis, intake processing, meeting processing, research ingestion, vault health checks, decision review, argument building, book notes, feedback-loop capture, project updates, weekly synthesis, connection finding, and distillation.
+- `Operations/Code Projects/projects.json` stores Hivemind project records and optional GitLawb repo links. This is private coordination metadata; GitLawb proof records should not contain private keys, secrets, Tailnet IPs, or exact private vault paths.
 
 ## Brain Graph, GBrain, Syntho, And Trading Brain
 

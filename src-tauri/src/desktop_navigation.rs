@@ -15,16 +15,12 @@ use crate::NATIVE_HOST;
 const NAVIGATE_EVENT: &str = "hivemindos:navigate";
 const OPEN_PALETTE_EVENT: &str = "hivemindos:open-command-palette";
 const OPEN_POPOUT_EVENT: &str = "hivemindos:open-popout";
+const RERUN_SETUP_EVENT: &str = "hivemindos:rerun-setup";
 
 #[derive(Deserialize)]
 pub struct RouteWindowTarget {
     url: String,
     view: String,
-}
-
-#[derive(Deserialize)]
-pub struct OpenRouteWindowTarget {
-    target: RouteWindowTarget,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -48,6 +44,10 @@ fn emit_popout(app: &AppHandle, view: &str) {
     let _ = app.emit(OPEN_POPOUT_EVENT, serde_json::json!({ "view": view }));
 }
 
+fn emit_current_popout(app: &AppHandle) {
+    let _ = app.emit(OPEN_POPOUT_EVENT, serde_json::json!({}));
+}
+
 fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
@@ -56,7 +56,35 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
+#[cfg(debug_assertions)]
+fn force_reload_main_window(app: &AppHandle) {
+    show_main_window(app);
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.eval("window.location.reload()");
+        let _ = window.set_focus();
+    }
+}
+
 pub fn app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    let about = menu_item(app, "app:about", "About HivemindOS", None::<&str>)?;
+    let settings = menu_item(app, "app:settings", "Settings...", Some("CmdOrCtrl+,"))?;
+    let updates = menu_item(app, "app:updates", "Check for Updates...", None::<&str>)?;
+    let rerun_setup = menu_item(app, "app:rerun-setup", "Re-run Setup...", None::<&str>)?;
+    #[cfg(debug_assertions)]
+    let force_reload = menu_item(app, "app:force-reload", "Force Reload (Dev)", Some("CmdOrCtrl+Shift+R"))?;
+    let services = PredefinedMenuItem::services(app, Some("Services"))?;
+    let hide = PredefinedMenuItem::hide(app, Some("Hide HivemindOS"))?;
+    let hide_others = PredefinedMenuItem::hide_others(app, Some("Hide Others"))?;
+    let show_all = PredefinedMenuItem::show_all(app, Some("Show All"))?;
+    let quit = PredefinedMenuItem::quit(app, Some("Quit HivemindOS"))?;
+
+    let undo = PredefinedMenuItem::undo(app, None)?;
+    let redo = PredefinedMenuItem::redo(app, None)?;
+    let cut = PredefinedMenuItem::cut(app, None)?;
+    let copy = PredefinedMenuItem::copy(app, None)?;
+    let paste = PredefinedMenuItem::paste(app, None)?;
+    let select_all = PredefinedMenuItem::select_all(app, None)?;
+
     let fleet = menu_item(app, "nav:agents", "Fleet", Some("CmdOrCtrl+1"))?;
     let work = menu_item(app, "nav:kanban", "Work", Some("CmdOrCtrl+2"))?;
     let brain = menu_item(app, "nav:vault", "Brain", Some("CmdOrCtrl+3"))?;
@@ -67,16 +95,51 @@ pub fn app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let new_task = menu_item(app, "nav:new-task", "New Task", Some("CmdOrCtrl+Shift+K"))?;
     let new_chat = menu_item(app, "nav:new-chat", "Agent Chat", Some("CmdOrCtrl+Shift+C"))?;
 
-    let popout_chat = menu_item(app, "popout:chat", "Pop Out Chat", None::<&str>)?;
-    let popout_work = menu_item(app, "popout:kanban", "Pop Out Work", None::<&str>)?;
     let show = menu_item(app, "window:show", "Show Main Window", None::<&str>)?;
+    let popout_current = menu_item(app, "window:popout-current", "Pop Out Current View", None::<&str>)?;
 
     Menu::with_items(
         app,
         &[
             &Submenu::with_items(
                 app,
-                "Navigate",
+                "HivemindOS",
+                true,
+                &[
+                    &about,
+                    &PredefinedMenuItem::separator(app)?,
+                    &settings,
+                    &updates,
+                    &rerun_setup,
+                    #[cfg(debug_assertions)]
+                    &force_reload,
+                    &PredefinedMenuItem::separator(app)?,
+                    &services,
+                    &PredefinedMenuItem::separator(app)?,
+                    &hide,
+                    &hide_others,
+                    &show_all,
+                    &PredefinedMenuItem::separator(app)?,
+                    &quit,
+                ],
+            )?,
+            &Submenu::with_items(
+                app,
+                "Edit",
+                true,
+                &[
+                    &undo,
+                    &redo,
+                    &PredefinedMenuItem::separator(app)?,
+                    &cut,
+                    &copy,
+                    &paste,
+                    &select_all,
+                ],
+            )?,
+            &Submenu::with_items(
+                app,
+                "Navigation",
                 true,
                 &[
                     &palette,
@@ -99,11 +162,12 @@ pub fn app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
                 &[
                     &show,
                     &PredefinedMenuItem::separator(app)?,
-                    &popout_chat,
-                    &popout_work,
+                    &popout_current,
                     &PredefinedMenuItem::separator(app)?,
                     &PredefinedMenuItem::minimize(app, None)?,
                     &PredefinedMenuItem::close_window(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::bring_all_to_front(app, None)?,
                 ],
             )?,
         ],
@@ -111,6 +175,29 @@ pub fn app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 }
 
 pub fn handle_menu_event(app: &AppHandle, id: &str) {
+    if let Some(action) = id.strip_prefix("app:") {
+        if action == "about" {
+            let _ = open_about_window(app, false);
+            return;
+        } else if action == "settings" {
+            emit_route(app, "more");
+        } else if action == "updates" {
+            let _ = open_about_window(app, true);
+            return;
+        } else if action == "rerun-setup" {
+            show_main_window(app);
+            let _ = app.emit(RERUN_SETUP_EVENT, ());
+            return;
+        } else if action == "force-reload" {
+            #[cfg(debug_assertions)]
+            force_reload_main_window(app);
+            #[cfg(not(debug_assertions))]
+            show_main_window(app);
+            return;
+        }
+        show_main_window(app);
+        return;
+    }
     if let Some(view) = id.strip_prefix("nav:") {
         if view == "palette" {
             let _ = app.emit(OPEN_PALETTE_EVENT, ());
@@ -130,6 +217,8 @@ pub fn handle_menu_event(app: &AppHandle, id: &str) {
     }
     if id == "window:show" || id == "tray:show" {
         show_main_window(app);
+    } else if id == "window:popout-current" {
+        emit_current_popout(app);
     } else if id == "tray:palette" {
         show_main_window(app);
         let _ = app.emit(OPEN_PALETTE_EVENT, ());
@@ -235,12 +324,20 @@ pub fn save_main_window_state(app: &AppHandle) {
     save_window_state(app);
 }
 
-fn route_url(app: &AppHandle, state: tauri::State<NativeServerState>, route: &str) -> Result<WebviewUrl, String> {
+fn route_url(app: &AppHandle, state: &NativeServerState, route: &str) -> Result<WebviewUrl, String> {
     #[cfg(debug_assertions)]
     {
-        let _ = app;
         let _ = state;
-        let url = url::Url::parse(&format!("http://127.0.0.1:5021{route}")).map_err(|error| error.to_string())?;
+        let main_window_route = app.get_webview_window("main").and_then(|window| {
+            window
+                .url()
+                .ok()
+                .and_then(|main_url| main_url.join(route).ok())
+        });
+        let url = dev_backend_route_url(route)
+            .or(main_window_route)
+            .or_else(|| url::Url::parse(&format!("http://127.0.0.1:5021{route}")).ok())
+            .ok_or_else(|| format!("Could not build native route URL for {route}"))?;
         Ok(WebviewUrl::External(url))
     }
 
@@ -258,24 +355,62 @@ fn route_url(app: &AppHandle, state: tauri::State<NativeServerState>, route: &st
     }
 }
 
+#[cfg(debug_assertions)]
+fn dev_backend_route_url(route: &str) -> Option<url::Url> {
+    let content = fs::read_to_string(".next-tauri/dev-server.json").ok()?;
+    let value = serde_json::from_str::<serde_json::Value>(&content).ok()?;
+    let backend_url = value.get("backendUrl")?.as_str()?;
+    url::Url::parse(backend_url).ok()?.join(route).ok()
+}
+
+fn open_about_window(app: &AppHandle, check_now: bool) -> Result<(), String> {
+    let state = app.state::<NativeServerState>();
+    let route = if check_now {
+        "/about?native=1&check=1"
+    } else {
+        "/about?native=1"
+    };
+    if let Some(window) = app.get_webview_window("about") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        if let WebviewUrl::External(url) = route_url(app, &state, route)? {
+            let _ = window.navigate(url);
+        }
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    let mut builder = WebviewWindowBuilder::new(app, "about", route_url(app, &state, route)?)
+        .title("About HivemindOS")
+        .inner_size(520.0, 430.0)
+        .min_inner_size(520.0, 430.0)
+        .resizable(false);
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone()).map_err(|error| error.to_string())?;
+    }
+    let window = builder.build().map_err(|error| error.to_string())?;
+    let _ = window.set_focus();
+    Ok(())
+}
+
 #[tauri::command]
 pub fn open_route_window(
     app: AppHandle,
     state: tauri::State<NativeServerState>,
-    target: OpenRouteWindowTarget,
+    target: RouteWindowTarget,
 ) -> Result<(), String> {
-    let route = if target.target.url.starts_with('/') {
-        target.target.url
+    let route = if target.url.starts_with('/') {
+        target.url
     } else {
-        format!("/{}", target.target.url)
+        format!("/{}", target.url)
     };
     let created_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| error.to_string())?
         .as_millis();
-    let label = format!("route-{}-{created_at}", target.target.view.replace(|c: char| !c.is_ascii_alphanumeric(), "-"));
-    let title = format!("HivemindOS - {}", target.target.view);
-    let window = WebviewWindowBuilder::new(&app, label, route_url(&app, state, &route)?)
+    let label = format!("route-{}-{created_at}", target.view.replace(|c: char| !c.is_ascii_alphanumeric(), "-"));
+    let title = format!("HivemindOS - {}", target.view);
+    let window = WebviewWindowBuilder::new(&app, label, route_url(&app, &state, &route)?)
         .title(title)
         .inner_size(1100.0, 760.0)
         .min_inner_size(860.0, 560.0)

@@ -15,6 +15,7 @@ How it works:
 - Storage service: `src/lib/services/kanban/local-kanban-store.ts`.
 - Shared-vault storage is preferred under the configured Obsidian Kanban folder.
 - Local fallback storage is `~/.hivemindos/kanban`.
+- Project provenance metadata is stored separately in `Operations/Code Projects/projects.json`, with `~/.hivemindos/projects.json` as fallback.
 - Agent dispatch is handled in `use-kanban-dispatch-controller`.
 
 Columns:
@@ -38,6 +39,9 @@ Capabilities:
 - Detect stale or no-progress work.
 - Preserve agent sessions on cards.
 - Store attachments, linked directories, target machines, comments, events, run records, child links, and deliverables.
+- Optionally attach a Hivemind project to a task with `projectId`.
+- Preserve sanitized GitLawb proof records on cards through optional `proofs`.
+- Show compact Code Proof badges for project-linked tasks.
 - Extract local paths and URLs from completed output into deliverables.
 - Roll completed child deliverables into parent handoff tasks while filtering planning/source artifacts.
 - Open or reveal deliverables through `/api/kanban/deliverable`.
@@ -54,6 +58,19 @@ The Work surface also acts as an audit and intake console:
 - The board settings surface controls note-intake enablement and folder scope through the shared-vault config.
 - `/api/work-history` reads dynamic changelog and repository activity, then supports project filters, text search, paging, and append loading in the History tab.
 - Work History is rendered beside Workboard, Automations, and Simulation so local changes and agent work stay visible without leaving the control room.
+
+## Project Provenance
+
+The Work board can link tasks to Hivemind projects without requiring every task to be part of a repo.
+
+How it works:
+
+- `GET /api/projects` reads the project registry.
+- `POST /api/projects` creates or updates a project.
+- `POST /api/projects/link-gitlawb` links a project to GitLawb repo metadata.
+- Kanban task records can include `projectId` and sanitized `proofs`.
+
+This lets one machine work across many projects and many GitLawb repos. The shared Brain keeps private task/memory context; GitLawb carries public-key code provenance.
 
 ## Scheduler
 
@@ -92,10 +109,14 @@ AEON work now has a stronger handoff loop:
 - `src/app/api/note-intake/route.ts`
 - `src/app/api/work-history/route.ts`
 - `src/lib/services/kanban/local-kanban-store.ts`
+- `src/lib/services/projects/project-registry.ts`
+- `src/lib/services/gitlawb/gitlawb-service.ts`
 - `src/lib/services/notes/note-task-intake.ts`
 - `src/lib/services/work-history/dynamic-changelog.ts`
 - `src/features/dashboard/views/KanbanPanel.tsx`
 - `src/features/dashboard/hooks/use-kanban-task-controller.tsx`
+- `src/app/api/projects/**`
+- `src/app/api/gitlawb/**`
 - `src/features/dashboard/hooks/use-kanban-dispatch-controller.tsx`
 - `src/features/dashboard/hooks/use-scheduler-controller.tsx`
 - `src/components/scheduler/**`

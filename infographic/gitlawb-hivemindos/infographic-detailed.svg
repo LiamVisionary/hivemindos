@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">HivemindOS + GitLawb integration infographic</title>
+  <desc id="desc">A technical schematic showing how HivemindOS integrates GitLawb as proof-ready code provenance with an optional lazy local node.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#2c557f" stroke-width="1" opacity="0.45"/>
+    </pattern>
+    <pattern id="smallGrid" width="8" height="8" patternUnits="userSpaceOnUse">
+      <path d="M 8 0 L 0 0 0 8" fill="none" stroke="#4b7fae" stroke-width="0.6" opacity="0.2"/>
+    </pattern>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <marker id="arrow" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto">
+      <path d="M0,0 L11,5.5 L0,11 Z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="amberArrow" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto">
+      <path d="M0,0 L11,5.5 L0,11 Z" fill="#f59e0b"/>
+    </marker>
+    <style>
+      .bg { fill: #102a43; }
+      .panel { fill: rgba(16, 42, 67, 0.9); stroke: #7dd3fc; stroke-width: 2.2; }
+      .panel-amber { fill: rgba(43, 34, 18, 0.82); stroke: #f59e0b; stroke-width: 2.2; }
+      .panel-green { fill: rgba(13, 45, 42, 0.86); stroke: #34d399; stroke-width: 2.2; }
+      .callout { fill: rgba(224, 242, 254, 0.08); stroke: #bae6fd; stroke-width: 1.4; }
+      .text { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #e0f2fe; }
+      .muted { fill: #a6c6de; }
+      .cyan { fill: #7dd3fc; }
+      .amber { fill: #fbbf24; }
+      .green { fill: #86efac; }
+      .red { fill: #fca5a5; }
+      .title { font-size: 58px; font-weight: 800; letter-spacing: 0; }
+      .subtitle { font-size: 24px; font-weight: 520; }
+      .h { font-size: 26px; font-weight: 800; letter-spacing: 0; text-transform: uppercase; }
+      .h-small { font-size: 22px; font-weight: 800; letter-spacing: 0; text-transform: uppercase; }
+      .body { font-size: 18px; font-weight: 520; }
+      .small { font-size: 15px; font-weight: 540; }
+      .tiny { font-size: 13px; font-weight: 520; }
+      .mono { font-family: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace; }
+      .line { fill: none; stroke: #7dd3fc; stroke-width: 2.4; marker-end: url(#arrow); }
+      .amber-line { fill: none; stroke: #f59e0b; stroke-width: 2.4; marker-end: url(#amberArrow); }
+      .thin { fill: none; stroke: #bae6fd; stroke-width: 1.3; opacity: 0.8; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1600" height="900"/>
+  <rect width="1600" height="900" fill="url(#grid)"/>
+  <rect width="1600" height="900" fill="url(#smallGrid)"/>
+
+  <text class="text title" x="70" y="82">HivemindOS + GitLawb</text>
+  <text class="text subtitle muted" x="74" y="122">Proof-ready by default. Full node only when needed.</text>
+  <text class="text tiny muted mono" x="1330" y="64">BAOYU INFOGRAPHIC</text>
+  <text class="text tiny muted mono" x="1330" y="84">STRUCTURAL BREAKDOWN</text>
+  <text class="text tiny muted mono" x="1330" y="104">TECHNICAL SCHEMATIC</text>
+
+  <line x1="800" y1="150" x2="800" y2="790" stroke="#f59e0b" stroke-width="3" stroke-dasharray="12 10" opacity="0.9"/>
+  <rect x="674" y="153" width="252" height="40" rx="4" class="panel-amber"/>
+  <text class="text body amber" x="704" y="179">REDACTION BOUNDARY</text>
+
+  <rect x="70" y="160" width="420" height="180" rx="8" class="panel"/>
+  <text class="text h cyan" x="96" y="205">1. CODE PROOF SETUP</text>
+  <g transform="translate(98 230)">
+    <rect x="0" y="0" width="104" height="62" rx="6" class="callout"/>
+    <text class="text small" x="17" y="28">Detect</text>
+    <text class="text small cyan" x="28" y="48">CLI</text>
+    <rect x="132" y="0" width="104" height="62" rx="6" class="callout"/>
+    <text class="text small" x="153" y="28">Create</text>
+    <text class="text small cyan" x="165" y="48">DID</text>
+    <rect x="264" y="0" width="118" height="62" rx="6" class="callout"/>
+    <text class="text small" x="284" y="28">Node</text>
+    <text class="text small amber" x="284" y="48">stays off</text>
+    <path class="thin" d="M106 31 H130"/>
+    <path class="thin" d="M238 31 H262"/>
+  </g>
+  <text class="text small muted" x="98" y="314">Default CLI + DID is non-blocking if install fails.</text>
+
+  <rect x="100" y="400" width="520" height="280" rx="10" class="panel"/>
+  <text class="text h cyan" x="130" y="446">PRIVATE BRAIN</text>
+  <text class="text body" x="130" y="480">HivemindOS keeps memory, audit, routing, and UX.</text>
+  <g transform="translate(132 512)">
+    <rect x="0" y="0" width="144" height="52" rx="5" class="callout"/>
+    <text class="text small" x="24" y="32">Vault notes</text>
+    <rect x="162" y="0" width="164" height="52" rx="5" class="callout"/>
+    <text class="text small" x="184" y="32">Project registry</text>
+    <rect x="344" y="0" width="130" height="52" rx="5" class="callout"/>
+    <text class="text small" x="374" y="32">Task audit</text>
+    <rect x="0" y="78" width="178" height="52" rx="5" class="callout"/>
+    <text class="text small" x="24" y="110">Machine routing</text>
+    <rect x="198" y="78" width="276" height="52" rx="5" class="callout"/>
+    <text class="text tiny mono muted" x="218" y="101">Operations/Code Projects/</text>
+    <text class="text tiny mono cyan" x="218" y="121">projects.json</text>
+  </g>
+  <path class="line" d="M620 535 C680 535, 716 535, 780 535"/>
+
+  <rect x="1000" y="246" width="480" height="284" rx="10" class="panel-green"/>
+  <text class="text h green" x="1030" y="292">SIGNED CODE PROOF</text>
+  <text class="text body" x="1030" y="326">GitLawb owns signed repo provenance.</text>
+  <g transform="translate(1032 354)">
+    <circle cx="44" cy="36" r="31" fill="rgba(52, 211, 153, 0.15)" stroke="#86efac" stroke-width="2"/>
+    <text class="text small green" x="28" y="42">DID</text>
+    <rect x="96" y="6" width="150" height="60" rx="6" class="callout"/>
+    <text class="text small" x="116" y="31">Signed</text>
+    <text class="text small green" x="116" y="51">commits</text>
+    <rect x="266" y="6" width="176" height="60" rx="6" class="callout"/>
+    <text class="text small" x="288" y="31">Repo</text>
+    <text class="text small green" x="288" y="51">provenance</text>
+    <rect x="96" y="88" width="330" height="56" rx="6" class="callout"/>
+    <text class="text tiny mono muted" x="118" y="112">actorDid + repo + branch + commit/ref</text>
+    <text class="text tiny mono green" x="118" y="132">status + verifiedAt</text>
+  </g>
+  <path class="line" d="M820 535 C900 510, 935 425, 992 390"/>
+
+  <rect x="1038" y="590" width="442" height="230" rx="10" class="panel-amber"/>
+  <text class="text h amber" x="1070" y="635">LAZY LOCAL NODE</text>
+  <text class="text body" x="1070" y="668">One-click machine capability.</text>
+  <g transform="translate(1072 700)">
+    <rect x="0" y="0" width="92" height="42" rx="5" class="callout"/>
+    <text class="text small" x="22" y="27">Health</text>
+    <rect x="108" y="0" width="112" height="42" rx="5" class="callout"/>
+    <text class="text small" x="127" y="27">Repo count</text>
+    <rect x="236" y="0" width="112" height="42" rx="5" class="callout"/>
+    <text class="text small" x="256" y="27">Peer count</text>
+    <rect x="0" y="62" width="154" height="42" rx="5" class="callout"/>
+    <text class="text small" x="24" y="89">Recent refs</text>
+    <rect x="170" y="62" width="178" height="42" rx="5" class="callout"/>
+    <text class="text small amber" x="195" y="89">Public opt-in</text>
+  </g>
+  <path class="amber-line" d="M875 682 C930 706, 975 706, 1030 704"/>
+
+  <rect x="320" y="718" width="700" height="120" rx="10" class="panel"/>
+  <text class="text h cyan" x="390" y="760">MANY PROJECTS, ONE MACHINE</text>
+  <g transform="translate(382 784)">
+    <rect x="0" y="0" width="116" height="36" rx="5" class="callout"/>
+    <text class="text small" x="24" y="24">Project A</text>
+    <rect x="142" y="0" width="116" height="36" rx="5" class="callout"/>
+    <text class="text small" x="166" y="24">Project B</text>
+    <rect x="284" y="0" width="116" height="36" rx="5" class="callout"/>
+    <text class="text small" x="308" y="24">Project C</text>
+    <rect x="426" y="0" width="162" height="36" rx="5" class="callout"/>
+    <text class="text small green" x="442" y="24">Optional repo link</text>
+  </g>
+  <path class="line" d="M560 680 C580 702, 598 710, 625 718"/>
+  <path class="line" d="M820 598 C820 640, 810 686, 782 716"/>
+
+  <rect x="690" y="320" width="220" height="220" rx="18" fill="rgba(125, 211, 252, 0.10)" stroke="#e0f2fe" stroke-width="2.2" filter="url(#glow)"/>
+  <text class="text h" x="728" y="390">HIVEMINDOS</text>
+  <text class="text body cyan" x="748" y="424">Code Proof</text>
+  <text class="text small muted" x="724" y="462">Simple UX surface</text>
+  <text class="text tiny mono muted" x="734" y="494">Setup · Work · Fleet</text>
+  <text class="text tiny mono muted" x="748" y="516">Agents · Integrations</text>
+
+  <rect x="560" y="204" width="404" height="92" rx="8" class="panel"/>
+  <text class="text body" x="594" y="232">Daily surfaces show one thing:</text>
+  <text class="text h-small green" x="594" y="260">PROOF READY · LINKED</text>
+  <text class="text h-small green" x="594" y="284">UNAVAILABLE</text>
+  <path class="line" d="M490 250 C520 250, 538 250, 556 250"/>
+  <path class="line" d="M858 296 C908 304, 948 314, 996 326"/>
+
+  <rect x="650" y="562" width="320" height="104" rx="8" class="panel-amber"/>
+  <text class="text body amber" x="674" y="594">Blocked from proof metadata:</text>
+  <text class="text small red" x="674" y="622">keys · secrets · Tailnet IPs</text>
+  <text class="text small red" x="674" y="646">exact vault paths</text>
+
+  <text class="text tiny muted mono" x="70" y="866">Default: CLI + DID enabled. Node: lazy/on-demand. Federation: explicit opt-in.</text>
+</svg>
