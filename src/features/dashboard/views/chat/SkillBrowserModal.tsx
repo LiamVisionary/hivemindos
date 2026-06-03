@@ -4,8 +4,8 @@ import type { Dispatch, ElementType, FormEvent, SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { Btn } from "@/components/aeon/parts";
+import { AeonSkillBrowserSection, type UnifiedSkillBrowserItem, type UnifiedSkillBrowserSource } from "@/components/aeon/skill-browser-section";
 import type { SkillBrowserSkill, SkillBrowserView } from "@/features/dashboard/dashboard-types";
-import { UnifiedSkillBrowser, type UnifiedSkillBrowserItem, type UnifiedSkillBrowserSource } from "./UnifiedSkillBrowser";
 
 type SkillBrowserModalProps = {
   Button: ElementType;
@@ -63,6 +63,12 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
   const skillById = new Map(browserSkillRecords.map((skill) => [skill.id, skill]));
   const browserItems: UnifiedSkillBrowserItem[] = browserSkillRecords.map((skill) => {
     const isPack = skill.category === "Pack" || skill.source === "Skill pack";
+    const normalizedCategory = skill.category?.trim();
+    const browserCategory = normalizedCategory && normalizedCategory.toLowerCase() !== "ready"
+      ? normalizedCategory
+      : isPack
+        ? "Pack"
+        : "Skill";
     const needsHermesUpdate = skill.requiresHermesUpdate || skillRequiresHermesUpdate(skill, hermesUpdateRequired);
     const addedToAgent = agentSettingsPreferredSkills.includes(skill.slug);
     const stateLabel = skillBrowserMode === "agent-class"
@@ -77,8 +83,8 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
       sourceId: skill.providerId ?? skill.source,
       sourceKind: skill.source,
       providerId: skill.providerId,
-      category: skill.category ?? (isPack ? "Pack" : "Skill"),
-      categoryId: skill.category ?? (isPack ? "Pack" : "Skill"),
+      category: browserCategory,
+      categoryId: browserCategory,
       stateLabel,
       stateTone: addedToAgent || skill.imported ? "green" : needsHermesUpdate ? "honey" : isPack ? "sky" : "muted",
       stateIcon: addedToAgent || skill.imported ? "check" : needsHermesUpdate ? "refresh" : isPack ? "layers" : undefined,
@@ -96,13 +102,54 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
       scheduleLabel: skill.source,
     };
   });
-  const browserSources: UnifiedSkillBrowserSource[] | undefined = skillBrowserMode === "brain" ? [
+  const browserSources: UnifiedSkillBrowserSource[] = skillBrowserMode === "brain" ? [
     { id: "catalog", label: "Catalog", predicate: (item) => item.categoryId !== "Pack" && item.sourceKind !== "Skill pack" },
     { id: "installed", label: "Installed", predicate: (item) => Boolean(item.providerId || item.imported) },
     { id: "packs", label: "Packs", predicate: (item) => item.categoryId === "Pack" || item.sourceKind === "Skill pack" },
     { id: "audit", label: "Audit", predicate: (item) => Boolean(item.auditStatus || item.capabilities?.length || item.envKeys?.length || item.sourceRef) },
-  ] : undefined;
+  ] : [
+    { id: "shared", label: "Shared Brain", predicate: (item) => item.providerId === "shared" || item.sourceId === "shared" },
+  ];
   const refreshBrowser = skillBrowserMode === "agent-class" ? openAgentSkillBrowser : openSkillBrowser;
+  const addedSkillCount = browserItems.filter((item) => item.selected).length;
+  const importedSkillCount = browserItems.filter((item) => item.imported).length;
+  const browserSectionTitle = skillBrowserMode === "agent-class"
+    ? `${browserItems.length} available · ${addedSkillCount} added`
+    : `${browserItems.length} available · ${importedSkillCount} in brain`;
+  const browserSectionActions = (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+      {skillBrowserMode === "brain" ? (
+        <Btn
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => setSkillBrowserGithubOpen((open) => !open)}
+          disabled={skillBrowserGithubInstalling}
+        >
+          <GitBranch aria-hidden="true" />
+          Install From Github
+        </Btn>
+      ) : null}
+      {skillBrowserMode === "brain" ? (
+        <Btn
+          type="button"
+          variant="secondary"
+          size="sm"
+          icon="sparkles"
+          onClick={() => {
+            setSkillBrowserGithubOpen(false);
+            setSkillBrowserView("write");
+          }}
+        >
+          Write Skill
+        </Btn>
+      ) : null}
+      <Btn type="button" variant="secondary" size="sm" onClick={() => void refreshBrowser()} disabled={skillBrowserLoading}>
+        {skillBrowserLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
+        Refresh
+      </Btn>
+    </div>
+  );
 
   const renderSkillActions = (item: UnifiedSkillBrowserItem) => {
     const skill = skillById.get(item.id);
@@ -228,53 +275,21 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
                 </div>
               </div>
             ) : (
-              <UnifiedSkillBrowser
+              <AeonSkillBrowserSection
+                title={browserSectionTitle}
+                action={browserSectionActions}
                 items={browserItems}
                 sources={browserSources}
-                controlledSourceId={skillBrowserMode === "brain" ? skillBrowserView : undefined}
+                controlledSourceId={skillBrowserMode === "brain" ? skillBrowserView : "shared"}
                 onSourceChange={(view) => setSkillBrowserView(view as SkillBrowserView)}
                 query={skillBrowserSearch}
                 onQueryChange={setSkillBrowserSearch}
-                searchPlaceholder="Search skills, tools, runtimes, workflows"
+                searchPlaceholder="Search skills"
                 loading={skillBrowserLoading}
                 loadingLabel="Checking installed skills and community catalogs"
                 emptyTitle="No skills found"
                 emptyDescription={skillBrowserMode === "agent-class" ? "Try a different search, or add shared skills to the brain first." : "Try another tab, refresh the catalog, or import from provider installs below the shared skills shelf."}
                 renderActions={renderSkillActions}
-                toolbar={(
-                  <>
-                    {skillBrowserMode === "brain" ? (
-                      <Btn
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setSkillBrowserGithubOpen((open) => !open)}
-                        disabled={skillBrowserGithubInstalling}
-                      >
-                        <GitBranch aria-hidden="true" />
-                        Install From Github
-                      </Btn>
-                    ) : null}
-                    {skillBrowserMode === "brain" ? (
-                      <Btn
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        icon="sparkles"
-                        onClick={() => {
-                          setSkillBrowserGithubOpen(false);
-                          setSkillBrowserView("write");
-                        }}
-                      >
-                        Write Skill
-                      </Btn>
-                    ) : null}
-                    <Btn type="button" variant="secondary" size="sm" onClick={() => void refreshBrowser()} disabled={skillBrowserLoading}>
-                      {skillBrowserLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
-                      Refresh
-                    </Btn>
-                  </>
-                )}
               />
             )}
           </section>

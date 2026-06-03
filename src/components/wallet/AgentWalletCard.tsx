@@ -10,11 +10,14 @@ import {
   CreditCard,
   Fuel,
   HandCoins,
+  KeyRound,
   Power,
   QrCode,
   RefreshCcw,
   Send,
+  ShieldCheck,
   SlidersHorizontal,
+  Terminal,
   TrendingUp,
   WalletCards,
 } from "lucide-react";
@@ -24,6 +27,7 @@ import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
 import type {
   AgentPaymentProvider,
+  AgentSpendCapAsset,
   AgentSurvivalSnapshot,
   AgentWalletConfig,
   HoneyAgentReward,
@@ -34,15 +38,30 @@ import {
   USEPOD_COMPATIBILITY_MATRIX,
   USEPOD_ROUTING_MATRIX,
 } from "@/lib/config/usepod-features";
+import {
+  VEIL_CASH_APP_URL,
+  VEIL_CASH_CONTRACTS,
+  VEIL_CASH_DEFAULT_X402_URL,
+  VEIL_CASH_USDC_DEPOSIT_MINIMUM,
+  VEIL_CASH_DOCS_URL,
+  VEIL_CASH_NETWORK,
+  VEIL_CASH_TRANSFER_CONFIRMATION_LABEL,
+  VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM,
+  VEIL_CASH_WALLET_URL,
+  VEIL_CASH_X402_CONFIRMATION,
+  veilCashCliQuickStart,
+} from "@/lib/config/veil-cash";
 import { cn } from "@/lib/utils/cn";
-import { getDisplayWalletBalanceUsd, getUsePodBalanceUsd } from "@/lib/utils/agent-wallet";
+import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS, assetSpendCapFor, getDisplayWalletBalanceUsd, getUsePodBalanceUsd } from "@/lib/utils/agent-wallet";
 
+import { VeilAdvancedSetup, type VeilSetupAction } from "./VeilAdvancedSetup";
 import styles from "./AgentWalletCard.module.css";
 
 type WalletActionState = {
   busy?: boolean;
   sendTo?: string;
   sendAmount?: string;
+  sendAsset?: AgentSpendCapAsset;
   confirmation?: string;
   x402Url?: string;
   x402Method?: string;
@@ -63,6 +82,24 @@ type MoneyClawStatus = {
   errors?: Record<string, string>;
 };
 type MoneyClawSaveOptions = { shareWithAllAgents: boolean };
+type VeilSetupStatus = {
+  cliInstalled?: boolean;
+  cliPath?: string;
+  mcpInstalled?: boolean;
+  mcpPath?: string;
+  mcpVersion?: string;
+  mcpMinimumVersion?: string;
+  mcpMeetsMinimum?: boolean;
+  veilKeyConfigured?: boolean;
+  depositKeyConfigured?: boolean;
+  mode?: string;
+};
+type VeilSetupResponse = {
+  ok?: boolean;
+  status?: VeilSetupStatus;
+  message?: string;
+  error?: string;
+};
 
 export type AgentWalletCardProps = {
   agentName: string;
@@ -119,6 +156,30 @@ function formatNumber(value: number, fractionDigits = 2): string {
 function shortenAddress(address: string): string {
   if (address.length <= 14) return address;
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+async function readVeilSetupResponse(response: Response | null): Promise<VeilSetupResponse | null> {
+  if (!response) return { ok: false, error: "Could not reach the Veil setup route." };
+  const text = await response.text().catch(() => "");
+  if (!text) return { ok: false, error: `Veil setup returned HTTP ${response.status}.` };
+  try {
+    return JSON.parse(text) as VeilSetupResponse;
+  } catch {
+    return {
+      ok: false,
+      error: `Veil setup returned HTTP ${response.status}: ${redactSetupText(text).slice(0, 240)}`,
+    };
+  }
+}
+
+function veilSetupErrorMessage(response: Response | null, data: VeilSetupResponse | null, fallback: string) {
+  if (data?.error) return data.error;
+  if (response) return `${fallback}. HTTP ${response.status} ${response.statusText}`.trim();
+  return fallback;
+}
+
+function redactSetupText(value: string) {
+  return value.replace(/0x[a-fA-F0-9]{64,}/g, "[redacted]");
 }
 
 function tokenFingerprint(config?: AgentProfile["usePod"]) {
@@ -188,12 +249,16 @@ export function AgentWalletCard({
   const [usePodTokenDraft, setUsePodTokenDraft] = useState("");
   const [usePodRepairStatus, setUsePodRepairStatus] = useState("");
   const [usePodAdvancedSection, setUsePodAdvancedSection] = useState<UsePodAdvancedSection>("status");
+  const [veilSetupStatus, setVeilSetupStatus] = useState<VeilSetupStatus | null>(null);
+  const [veilSetupAction, setVeilSetupAction] = useState<VeilSetupAction>(null);
+  const [veilSetupMessage, setVeilSetupMessage] = useState("");
   const portalTarget = typeof document === "undefined" ? null : document.body;
 
   const tier = wallet.enabled ? survival.tier : "off";
   const safeBalance = getDisplayWalletBalanceUsd(wallet);
   const providerFeatures = agentPaymentProviderFeatures(wallet.provider);
   const usePodRail = providerFeatures.balanceSource === "usepod-runtime";
+  const veilRail = wallet.provider === "veil";
   const usePodBalanceValue = usePodRail ? getUsePodBalanceUsd(agentUsePod) : null;
   const usePodStatus = agentUsePod?.lastTestStatus || "not checked";
   const usePodReadyBalanceUnknown = usePodRail && usePodStatus === "ready" && usePodBalanceValue === null;
@@ -204,10 +269,24 @@ export function AgentWalletCard({
   const cryptoRailState: RailState = wallet.walletAddress || wallet.vaultAddress ? "ready" : "setup";
   const x402RailState: RailState = cryptoRailState === "ready" ? "ready" : "setup";
   const tradingRailState: RailState = "setup";
+  const veilWalletRailState: RailState = wallet.network === VEIL_CASH_NETWORK && (wallet.walletAddress || wallet.vaultAddress) ? "ready" : "setup";
+  const veilRegistrationRailState: RailState = veilWalletRailState === "ready" ? "setup" : "blocked";
+  const veilPrivateRailState: RailState = veilWalletRailState === "ready" ? "setup" : "blocked";
+  const veilCliCommand = veilCashCliQuickStart(wallet.walletAddress || wallet.vaultAddress);
+  const veilContracts = [
+    { key: "entry", label: "Entry", kind: "entry" as const, value: VEIL_CASH_CONTRACTS.entry },
+    { key: "usdc", label: "USDC queue", kind: "usdc" as const, value: VEIL_CASH_CONTRACTS.usdcQueue },
+    { key: "eth", label: "ETH queue", kind: "eth" as const, value: VEIL_CASH_CONTRACTS.ethQueue },
+    { key: "relay", label: "Relay", kind: "relay" as const, value: VEIL_CASH_CONTRACTS.relayUrl },
+  ];
   const moneyClawBalance = moneyClawBalanceLabel(moneyClawStatus);
   const usePodDepositAddress = agentUsePod?.depositAddress || wallet.walletAddress;
   const usePodFundingReference = agentUsePod?.depositCode || agentUsePod?.dashboardUrl || "";
-  const primaryRailReady = usePodRail ? Boolean(usePodDepositAddress || usePodFundingReference) : cardRailState === "ready" && cryptoRailState === "ready";
+  const primaryRailReady = usePodRail
+    ? Boolean(usePodDepositAddress || usePodFundingReference)
+    : veilRail
+      ? veilWalletRailState === "ready"
+      : cardRailState === "ready" && cryptoRailState === "ready";
   const usePodBalance = usePodBalanceValue !== null
     ? formatMoney(usePodBalanceValue)
     : usePodStatus === "ready"
@@ -237,6 +316,21 @@ export function AgentWalletCard({
   const usePodCompatibility = agentUsePod?.apiCompatibility === "anthropic" ? "anthropic" : "openai";
   const usePodCompatibilityFeature = USEPOD_COMPATIBILITY_MATRIX[usePodCompatibility];
   const autoUseAvailable = providerFeatures.canAutopay;
+  const privateTransferAssets = providerFeatures.privateTransferAssets;
+  const veilSendAsset: AgentSpendCapAsset = veilRail && walletAction.sendAsset === "ETH" && privateTransferAssets.includes("ETH") ? "ETH" : "USDC";
+  const veilSendCap = assetSpendCapFor(wallet, veilSendAsset);
+  const veilSendCapLabel = veilSendAsset === "ETH" ? `${veilSendCap.toFixed(6)} ETH` : formatMoney(veilSendCap);
+  const duplicateGuardSeconds = Number.isFinite(Number(wallet.duplicatePaymentGuardSeconds))
+    ? Math.max(0, Number(wallet.duplicatePaymentGuardSeconds))
+    : DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS;
+  const duplicateGuardEnabled = wallet.duplicatePaymentGuardEnabled !== false;
+  const duplicateGuardOptions = [
+    { value: 60, label: "1 minute" },
+    { value: 300, label: "5 minutes" },
+    { value: DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS, label: "15 minutes" },
+    { value: 3600, label: "1 hour" },
+  ];
+  const hasCustomDuplicateGuard = duplicateGuardSeconds > 0 && !duplicateGuardOptions.some((option) => option.value === duplicateGuardSeconds);
   const advancedSectionSet = new Set<string>(providerFeatures.advancedSetup.sections);
   const showAdvancedSection = (section: string) => advancedSectionSet.has(section);
   const usePodAdvancedTabs: Array<{ id: UsePodAdvancedSection; label: string }> = [
@@ -246,6 +340,47 @@ export function AgentWalletCard({
     showAdvancedSection("usepod-repair") ? { id: "repair", label: "Repair" } : null,
   ].filter(Boolean) as Array<{ id: UsePodAdvancedSection; label: string }>;
   const hasUsePodAdvanced = usePodAdvancedTabs.length > 0;
+
+  const handleProviderChange = (provider: AgentPaymentProvider) => {
+    if (provider === "veil") {
+      onUpdateWallet({
+        provider,
+        network: VEIL_CASH_NETWORK,
+        tokenSymbol: "USDC",
+        autoPayEnabled: false,
+      });
+      return;
+    }
+    onUpdateWallet({ provider });
+  };
+
+  const copyVeilCliQuickStart = async () => {
+    await navigator.clipboard.writeText(veilCliCommand).catch(() => undefined);
+  };
+
+  const refreshVeilSetupStatus = async () => {
+    setVeilSetupAction("checking");
+    setVeilSetupMessage("");
+    const response = await fetch("/api/wallet/veil/setup", { cache: "no-store" }).catch(() => null);
+    const data = await readVeilSetupResponse(response);
+    setVeilSetupStatus(data?.status ?? null);
+    setVeilSetupMessage(response?.ok && data?.ok ? "Veil setup checked." : veilSetupErrorMessage(response, data, "Could not check Veil setup."));
+    setVeilSetupAction(null);
+  };
+
+  const setupVeilOperator = async () => {
+    setVeilSetupAction("setting");
+    setVeilSetupMessage("Setting up Veil...");
+    const response = await fetch("/api/wallet/veil/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "setup" }),
+    }).catch(() => null);
+    const data = await readVeilSetupResponse(response);
+    setVeilSetupStatus(data?.status ?? null);
+    setVeilSetupMessage(response?.ok && data?.ok ? data?.message ?? "Veil setup complete." : veilSetupErrorMessage(response, data, "Could not set up Veil."));
+    setVeilSetupAction(null);
+  };
 
   const saveMoneyClawKey = async () => {
     const key = moneyClawKeyDraft.trim();
@@ -488,6 +623,49 @@ export function AgentWalletCard({
               </div>
             </div>
           </>
+        ) : veilRail ? (
+          <>
+            <div className={styles.railStackHeader}>
+              <div>
+                <strong>Veil Cash rails</strong>
+                <span>{primaryRailReady ? "One agent spend balance for private sends; shielding is internal when needed." : "Create or connect a Base wallet before deriving Veil keys."}</span>
+              </div>
+            </div>
+            <div className={styles.railGrid}>
+              <button type="button" className={styles.railItem} data-state="ready" onClick={() => window.open(VEIL_CASH_APP_URL, "_blank", "noopener,noreferrer")}>
+                <ShieldCheck aria-hidden="true" />
+                <div>
+                  <strong>Veil app</strong>
+                  <span>Key management, deposits, private sends, withdrawals</span>
+                </div>
+                <small>Open</small>
+              </button>
+              <div className={styles.railItem} data-state={veilWalletRailState}>
+                <WalletCards aria-hidden="true" />
+                <div>
+                  <strong>Base wallet</strong>
+                  <span>{wallet.walletAddress ? shortenAddress(wallet.walletAddress) : "Local or external signer address"}</span>
+                </div>
+                <small>{railText(veilWalletRailState)}</small>
+              </div>
+              <div className={styles.railItem} data-state={veilRegistrationRailState}>
+                <KeyRound aria-hidden="true" />
+                <div>
+                  <strong>Deposit key</strong>
+                  <span>Configured once for shielding agent funds</span>
+                </div>
+                <small>{railText(veilRegistrationRailState)}</small>
+              </div>
+              <div className={styles.railItem} data-state={veilPrivateRailState}>
+                <Terminal aria-hidden="true" />
+                <div>
+                  <strong>Private actions</strong>
+                  <span>Auto-shield when needed, then withdraw privately</span>
+                </div>
+                <small>{railText(veilPrivateRailState)}</small>
+              </div>
+            </div>
+          </>
         ) : (
           <>
           <div className={styles.railStackHeader}>
@@ -576,12 +754,28 @@ export function AgentWalletCard({
       {sheet === "send" ? (
         <div className={styles.sheet}>
           <div className={styles.sheetTitle}>
-            Send {wallet.tokenSymbol || "USDC"}
+            {veilRail ? "Private send" : `Send ${wallet.tokenSymbol || "USDC"}`}
             <CloseIconButton size="sm" onClick={() => setSheet(null)} aria-label="Close send sheet" />
           </div>
           <p className={styles.sheetHelp}>
-            Hard cap per payment: {formatMoney(wallet.maxPaymentUsd)}. {wallet.autoPayEnabled ? "Auto-use is on, so transfers under the hard cap can send without another prompt." : "Auto-use is off, so type SEND_USDC to confirm this transfer."}
+            {veilRail
+              ? `Private ${veilSendAsset} send from this agent's spend balance. If ready private USDC is short, HivemindOS shields from the local Base wallet first and finishes after Veil accepts the deposit. ${veilSendAsset === "USDC" ? `Minimum send ${VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM} USDC; shielding may require ${VEIL_CASH_USDC_DEPOSIT_MINIMUM} USDC plus gas.` : ""} Hard cap: ${veilSendCapLabel}. Review the recipient and amount, then type ${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL} to send.`
+              : `Hard cap per payment: ${formatMoney(wallet.maxPaymentUsd)}. ${wallet.autoPayEnabled ? "Auto-use is on, so transfers under the hard cap can send without another prompt." : "Auto-use is off, so type SEND_USDC to confirm this transfer."}`}
           </p>
+          {veilRail ? (
+            <div className={styles.sheetField}>
+              <label htmlFor="wallet-send-asset">Asset</label>
+              <select
+                id="wallet-send-asset"
+                value={veilSendAsset}
+                onChange={(event) => onUpdateAction({ sendAsset: event.target.value === "ETH" ? "ETH" : "USDC" })}
+              >
+                {privateTransferAssets.map((asset) => (
+                  <option key={asset} value={asset}>{asset}</option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div className={styles.sheetField}>
             <label htmlFor="wallet-send-to">Recipient address</label>
             <input
@@ -591,14 +785,14 @@ export function AgentWalletCard({
               placeholder="0x… or Solana address"
             />
           </div>
-          {wallet.autoPayEnabled ? (
+          {wallet.autoPayEnabled && !veilRail ? (
             <div className={styles.sheetField}>
               <label htmlFor="wallet-send-amount">Amount</label>
               <input
                 id="wallet-send-amount"
                 value={walletAction.sendAmount ?? ""}
                 onChange={(event) => onUpdateAction({ sendAmount: event.target.value })}
-                placeholder={`Max ${formatMoney(wallet.maxPaymentUsd)}`}
+                placeholder={`Max ${veilRail ? veilSendCapLabel : formatMoney(wallet.maxPaymentUsd)}`}
               />
             </div>
           ) : (
@@ -609,7 +803,7 @@ export function AgentWalletCard({
                   id="wallet-send-amount"
                   value={walletAction.sendAmount ?? ""}
                   onChange={(event) => onUpdateAction({ sendAmount: event.target.value })}
-                  placeholder={`Max ${formatMoney(wallet.maxPaymentUsd)}`}
+                  placeholder={`Max ${veilRail ? veilSendCapLabel : formatMoney(wallet.maxPaymentUsd)}`}
                 />
               </div>
               <div className={styles.sheetField}>
@@ -618,7 +812,7 @@ export function AgentWalletCard({
                   id="wallet-send-confirm"
                   value={walletAction.confirmation ?? ""}
                   onChange={(event) => onUpdateAction({ confirmation: event.target.value })}
-                  placeholder="SEND_USDC"
+                  placeholder={veilRail ? VEIL_CASH_TRANSFER_CONFIRMATION_LABEL : "SEND_USDC"}
                 />
               </div>
             </div>
@@ -626,7 +820,7 @@ export function AgentWalletCard({
           <div className={styles.sheetButtons}>
             <Button type="button" size="sm" variant="danger" disabled={walletAction.busy} onClick={onSendUsdc}>
               <Send aria-hidden="true" />
-              Send
+              {veilRail ? "Send privately" : "Send"}
             </Button>
           </div>
           {walletAction.message ? <p className={styles.sheetStatus} data-tone="ok">{walletAction.message}</p> : null}
@@ -637,10 +831,40 @@ export function AgentWalletCard({
       {sheet === "receive" ? (
         <div className={styles.sheet}>
           <div className={styles.sheetTitle}>
-            Receive {wallet.tokenSymbol || "USDC"}
+            {veilRail ? "Veil Cash receive" : `Receive ${wallet.tokenSymbol || "USDC"}`}
             <CloseIconButton size="sm" onClick={() => setSheet(null)} aria-label="Close receive sheet" />
           </div>
-          {(usePodRail ? usePodDepositAddress : wallet.walletAddress) ? (
+          {veilRail ? (
+            <>
+              <p className={styles.sheetHelp}>
+                Fund this Base signer with USDC and gas. Private sends can shield from it automatically when ready private funds are short.
+              </p>
+              {wallet.walletAddress ? (
+                <>
+                  <div className={styles.sheetAddress}>
+                    <strong>Public Base signer</strong>
+                    {wallet.walletAddress}
+                  </div>
+                  <button type="button" className={styles.sheetCopy} onClick={handleCopyAddress}>
+                    <Copy aria-hidden="true" width={14} height={14} />
+                    Copy signer address
+                  </button>
+                </>
+              ) : (
+                <p className={styles.sheetHelp}>Add a Base signer address in Advanced setup before building unsigned Veil registration or deposit payloads.</p>
+              )}
+              <div className={styles.sheetButtons}>
+                <Button type="button" size="sm" variant="secondary" onClick={() => window.open(VEIL_CASH_APP_URL, "_blank", "noopener,noreferrer")}>
+                  <ArrowUpRight aria-hidden="true" />
+                  Open Veil app
+                </Button>
+                <Button type="button" size="sm" variant="secondary" onClick={() => void copyVeilCliQuickStart()}>
+                  <Copy aria-hidden="true" />
+                  Copy CLI
+                </Button>
+              </div>
+            </>
+          ) : (usePodRail ? usePodDepositAddress : wallet.walletAddress) ? (
             <>
               <p className={styles.sheetHelp}>
                 {usePodRail ? "Send Solana USDC to the UsePod token deposit address." : `Send ${wallet.tokenSymbol || "USDC"} on ${networkLabel(wallet.network)} to this address.`}
@@ -723,6 +947,24 @@ export function AgentWalletCard({
                 onChange={(event) => onUpdateWallet({ maxPaymentUsd: Number(event.target.value) || 0 })}
               />
             </div>
+            {veilRail && privateTransferAssets.includes("ETH") ? (
+              <div className={styles.sheetField}>
+                <label htmlFor="wallet-limit-eth">Max ETH transfer</label>
+                <input
+                  id="wallet-limit-eth"
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  value={assetSpendCapFor(wallet, "ETH")}
+                  onChange={(event) => onUpdateWallet({
+                    assetSpendCaps: {
+                      ...(wallet.assetSpendCaps ?? {}),
+                      ETH: Number(event.target.value) || 0,
+                    },
+                  })}
+                />
+              </div>
+            ) : null}
             <div className={styles.sheetField}>
               <label htmlFor="wallet-limit-burn">Daily running cost</label>
               <input
@@ -735,6 +977,38 @@ export function AgentWalletCard({
               />
             </div>
           </div>
+          <button
+            type="button"
+            className={styles.autoUseToggle}
+            data-on={duplicateGuardEnabled}
+            onClick={() => onUpdateWallet({ duplicatePaymentGuardEnabled: !duplicateGuardEnabled })}
+            aria-pressed={duplicateGuardEnabled}
+          >
+            <span>
+              <strong>Duplicate payment guard</strong>
+              <small>{duplicateGuardEnabled
+                ? "Repeating the same asset, amount, and recipient returns the recent submitted transaction during the window."
+                : "Intentional repeat payments can submit again as soon as the previous transfer finishes."}</small>
+            </span>
+            <span className={styles.autoUseSwitch} aria-hidden="true">
+              <span />
+            </span>
+          </button>
+          {duplicateGuardEnabled ? (
+            <div className={styles.sheetField}>
+              <label htmlFor="wallet-duplicate-guard-window">Duplicate guard window</label>
+              <select
+                id="wallet-duplicate-guard-window"
+                value={duplicateGuardSeconds}
+                onChange={(event) => onUpdateWallet({ duplicatePaymentGuardSeconds: Number(event.target.value) || DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS })}
+              >
+                {hasCustomDuplicateGuard ? <option value={duplicateGuardSeconds}>{Math.round(duplicateGuardSeconds)} seconds</option> : null}
+                {duplicateGuardOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div className={styles.sheetButtons}>
             <Button type="button" size="sm" variant="secondary" onClick={onResetRunway}>
               <RefreshCcw aria-hidden="true" />
@@ -1003,62 +1277,87 @@ export function AgentWalletCard({
             </>
           ) : (
             <>
-              {showAdvancedSection("provider") ? (
-                <div className={styles.sheetField}>
-                  <label htmlFor="wallet-provider">Payment method</label>
-                  <select
-                    id="wallet-provider"
-                    value={wallet.provider}
-                    onChange={(event) => onUpdateWallet({ provider: event.target.value as AgentPaymentProvider })}
-                  >
-                    {providerOptions.map(([provider, copy]) => (
-                      <option key={provider} value={provider}>{copy.label}</option>
-                    ))}
-                  </select>
-                  <p className={styles.sheetHelp}>{providerCopy.summary}</p>
-                </div>
-              ) : null}
-
-              {showAdvancedSection("wallet-address") ? (
-                <div className={styles.sheetField}>
-                  <label htmlFor="wallet-address">Wallet address</label>
-                  <input
-                    id="wallet-address"
-                    value={wallet.walletAddress}
-                    onChange={(event) => onUpdateWallet({ walletAddress: event.target.value })}
-                    placeholder="0x… or Solana address"
-                  />
-                  {wallet.walletAddress ? (
-                    <p className={styles.sheetHelp}>Deposit: {shortenAddress(wallet.walletAddress)}</p>
+              {veilRail && showAdvancedSection("veil-setup") ? (
+                <VeilAdvancedSetup
+                  signerAddress={wallet.walletAddress}
+                  networkLabel="Base mainnet"
+                  assetsLabel="ETH and USDC"
+                  provider={wallet.provider}
+                  providerOptions={providerOptions}
+                  providerCopy={providerCopy}
+                  contracts={veilContracts}
+                  setupStatus={veilSetupStatus}
+                  setupAction={veilSetupAction}
+                  setupMessage={veilSetupMessage}
+                  onChangeProvider={handleProviderChange}
+                  onChangeSignerAddress={(walletAddress) => onUpdateWallet({ walletAddress })}
+                  onCheckSetup={refreshVeilSetupStatus}
+                  onSetupVeil={setupVeilOperator}
+                  onCopyPrompt={onCopyPaymentPrompt}
+                  onOpenWallet={() => window.open(VEIL_CASH_WALLET_URL, "_blank", "noopener,noreferrer")}
+                  onOpenDocs={() => window.open(VEIL_CASH_DOCS_URL, "_blank", "noopener,noreferrer")}
+                  onCopyCli={() => void copyVeilCliQuickStart()}
+                />
+              ) : (
+                <>
+                  {showAdvancedSection("provider") ? (
+                    <div className={styles.sheetField}>
+                      <label htmlFor="wallet-provider">Payment method</label>
+                      <select
+                        id="wallet-provider"
+                        value={wallet.provider}
+                        onChange={(event) => handleProviderChange(event.target.value as AgentPaymentProvider)}
+                      >
+                        {providerOptions.map(([provider, copy]) => (
+                          <option key={provider} value={provider}>{copy.label}</option>
+                        ))}
+                      </select>
+                      <p className={styles.sheetHelp}>{providerCopy.summary}</p>
+                    </div>
                   ) : null}
-                </div>
-              ) : null}
 
-              {showAdvancedSection("network-token") ? (
-                <div className={styles.sheetGrid}>
-                  <div className={styles.sheetField}>
-                    <label htmlFor="wallet-network">Network</label>
-                    <select
-                      id="wallet-network"
-                      value={wallet.network}
-                      onChange={(event) => onUpdateWallet({ network: event.target.value })}
-                    >
-                      <option value="eip155:8453">Base mainnet</option>
-                      <option value="eip155:84532">Base Sepolia</option>
-                      <option value="solana:mainnet">Solana mainnet</option>
-                      <option value="solana:devnet">Solana devnet</option>
-                    </select>
-                  </div>
-                  <div className={styles.sheetField}>
-                    <label htmlFor="wallet-token">Token</label>
-                    <input
-                      id="wallet-token"
-                      value={wallet.tokenSymbol}
-                      onChange={(event) => onUpdateWallet({ tokenSymbol: event.target.value.toUpperCase() })}
-                    />
-                  </div>
-                </div>
-              ) : null}
+                  {showAdvancedSection("wallet-address") ? (
+                    <div className={styles.sheetField}>
+                      <label htmlFor="wallet-address">Wallet address</label>
+                      <input
+                        id="wallet-address"
+                        value={wallet.walletAddress}
+                        onChange={(event) => onUpdateWallet({ walletAddress: event.target.value })}
+                        placeholder="0x... or Solana address"
+                      />
+                      {wallet.walletAddress ? (
+                        <p className={styles.sheetHelp}>Deposit: {shortenAddress(wallet.walletAddress)}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {showAdvancedSection("network-token") ? (
+                    <div className={styles.sheetGrid}>
+                      <div className={styles.sheetField}>
+                        <label htmlFor="wallet-network">Network</label>
+                        <select
+                          id="wallet-network"
+                          value={wallet.network}
+                          onChange={(event) => onUpdateWallet({ network: event.target.value })}
+                        >
+                          <option value="eip155:8453">Base mainnet</option>
+                          <option value="eip155:84532">Base Sepolia</option>
+                          <option value="solana:mainnet">Solana mainnet</option>
+                          <option value="solana:devnet">Solana devnet</option>
+                        </select>
+                      </div>
+                      <div className={styles.sheetField}>
+                        <label htmlFor="wallet-token">Token</label>
+                        <input
+                          id="wallet-token"
+                          value={wallet.tokenSymbol}
+                          onChange={(event) => onUpdateWallet({ tokenSymbol: event.target.value.toUpperCase() })}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              )}
 
               {showAdvancedSection("x402-base-url") ? (
                 <div className={styles.sheetField}>
@@ -1067,8 +1366,31 @@ export function AgentWalletCard({
                     id="wallet-x402"
                     value={wallet.x402BaseUrl}
                     onChange={(event) => onUpdateWallet({ x402BaseUrl: event.target.value })}
-                    placeholder="https://paid-api.example.com"
+                    placeholder={veilRail ? VEIL_CASH_DEFAULT_X402_URL : "https://paid-api.example.com"}
                   />
+                </div>
+              ) : null}
+
+              {showAdvancedSection("test-x402") ? (
+                <div className={styles.sheetGrid}>
+                  <div className={styles.sheetField}>
+                    <label htmlFor="wallet-x402-endpoint">x402 endpoint</label>
+                    <input
+                      id="wallet-x402-endpoint"
+                      value={walletAction.x402Url ?? ""}
+                      onChange={(event) => onUpdateAction({ x402Url: event.target.value })}
+                      placeholder={veilRail ? VEIL_CASH_DEFAULT_X402_URL : "http://127.0.0.1:5025/api/wallet/x402/mock-paid"}
+                    />
+                  </div>
+                  <div className={styles.sheetField}>
+                    <label htmlFor="wallet-x402-confirm">Confirm x402</label>
+                    <input
+                      id="wallet-x402-confirm"
+                      value={walletAction.x402Confirmation ?? ""}
+                      onChange={(event) => onUpdateAction({ x402Confirmation: event.target.value })}
+                      placeholder={veilRail ? VEIL_CASH_X402_CONFIRMATION : "PAY_X402"}
+                    />
+                  </div>
                 </div>
               ) : null}
 
@@ -1108,7 +1430,7 @@ export function AgentWalletCard({
               ) : null}
 
               <div className={styles.sheetButtons}>
-                {showAdvancedSection("copy-prompt") ? (
+                {showAdvancedSection("copy-prompt") && !veilRail ? (
                   <Button type="button" size="sm" variant="secondary" onClick={onCopyPaymentPrompt}>
                     <Copy aria-hidden="true" />
                     Copy agent prompt
@@ -1117,7 +1439,7 @@ export function AgentWalletCard({
                 {showAdvancedSection("test-x402") ? (
                   <Button type="button" size="sm" variant="secondary" disabled={walletAction.busy} onClick={onCallX402}>
                     <Send aria-hidden="true" />
-                    Test x402
+                    {veilRail ? "Test private x402" : "Test x402"}
                   </Button>
                 ) : null}
               </div>

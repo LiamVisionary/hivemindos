@@ -1502,6 +1502,20 @@ set_env_local() {
   secure_env_local
 }
 
+save_shared_hive_env_entries() {
+  local input="$1"
+  local hive_env_add="$ROOT/scripts/hive-env-add"
+  if [[ ! -x "$hive_env_add" ]]; then
+    warn "hive-env-add is unavailable; shared hive env keys were not refreshed"
+    return 0
+  fi
+  if printf "%s" "$input" | "$hive_env_add" --import-stdin --scope agent --runtime generic >/dev/null 2>&1; then
+    ok "Saved dashboard auth keys to shared hive env"
+  else
+    warn "Could not save dashboard auth keys to shared hive env; dashboard unlock still works from .env.local"
+  fi
+}
+
 env_local_value() {
   local key="$1"
   local env_file="$ROOT/.env.local"
@@ -1605,6 +1619,9 @@ dashboard_auth_secret="${dashboard_auth_secret:-$(random_dashboard_secret)}"
 dashboard_device_token="${dashboard_device_token:-$(random_dashboard_secret)}"
 set_env_local "HIVEMINDOS_DASHBOARD_AUTH_SECRET" "$dashboard_auth_secret"
 set_env_local "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN" "$dashboard_device_token"
+save_shared_hive_env_entries "HIVEMINDOS_DASHBOARD_AUTH_SECRET=$(node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "$dashboard_auth_secret")
+HIVEMINDOS_DASHBOARD_DEVICE_TOKEN=$(node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "$dashboard_device_token")
+"
 
 shared_vault_path="${NEXT_PUBLIC_OBSIDIAN_VAULT_PATH:-$HOME/Documents/Obsidian/hivemindos-vault}"
 if [[ "$shared_vault_path" == "~/"* ]]; then
@@ -1925,7 +1942,7 @@ echo "  $local_url"
 if [[ -n "$network_url" ]]; then
   echo "  $network_url"
 fi
-echo "  Unlock token: stored in .env.local as HIVEMINDOS_DASHBOARD_DEVICE_TOKEN"
+echo "  Unlock token: stored in .env.local and shared hive env as HIVEMINDOS_DASHBOARD_DEVICE_TOKEN"
 echo "  Copy token later: pnpm dashboard-auth copy-token"
 echo "  Reset lost token: pnpm dashboard-auth reset-token"
 copy_dashboard_token_if_requested

@@ -808,9 +808,15 @@ details[open] > summary .treeDisclosure::before {
   min-height: 0;
   overflow: auto;
   margin: 0 -18px;
-  padding: 22px max(18px, calc((100% - 860px) / 2)) 18px;
+  padding: 22px max(18px, calc((100% - 860px) / 2)) 92px;
   scroll-behavior: auto;
   overflow-anchor: none;
+}
+
+.messagesEnd {
+  width: 100%;
+  min-height: 1px;
+  flex: 0 0 1px;
 }
 
 .messages.empty {
@@ -1647,6 +1653,17 @@ details[open] > summary .treeDisclosure::before {
   border-color: rgba(226, 232, 240, 0.18);
   background-position: center;
   background-size: cover;
+}
+
+.processBadge.active {
+  border-color: rgba(251, 191, 36, 0.34);
+  background: rgba(251, 191, 36, 0.1);
+  color: #facc15;
+}
+
+.processBadge.active > * {
+  width: 24px;
+  height: 24px;
 }
 
 .processBadge b {
@@ -2991,6 +3008,34 @@ details[open] > summary .treeDisclosure::before {
   line-height: 1.72;
 }
 
+.draftMarkdown {
+  border-left: 3px solid rgba(94, 234, 212, 0.72);
+  border-radius: 0 8px 8px 0;
+  background: rgba(20, 184, 166, 0.08);
+  padding: 12px 14px;
+}
+
+.draftMarkdownLabel {
+  display: block;
+  margin: 0;
+  color: #99f6e4;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.draftMarkdownBody {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.draftMarkdownBody p {
+  margin: 0;
+  color: #dbe6f4;
+}
+
 .messageMarkdown p {
   white-space: pre-wrap;
 }
@@ -3137,6 +3182,35 @@ details[open] > summary .treeDisclosure::before {
 
 .chat textarea {
   background: transparent;
+  min-height: 82px;
+  max-height: 180px;
+  color: #f8fafc;
+  padding: 16px 18px 50px;
+  outline: none;
+}
+
+.floatingComposer {
+  width: 100%;
+  border-color: rgba(255, 255, 255, 0.13);
+  border-radius: 24px;
+  background: rgba(8, 13, 20, 0.34);
+  box-shadow:
+    0 20px 70px rgba(0, 0, 0, 0.44),
+    0 0 0 1px rgba(255, 255, 255, 0.02),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(34px) saturate(1.55);
+  -webkit-backdrop-filter: blur(34px) saturate(1.55);
+}
+
+.floatingComposer:focus-within {
+  border-color: rgba(94, 234, 212, 0.34);
+  box-shadow:
+    0 20px 70px rgba(0, 0, 0, 0.44),
+    0 0 0 1px rgba(94, 234, 212, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.floatingComposer textarea {
   min-height: 82px;
   max-height: 180px;
   color: #f8fafc;

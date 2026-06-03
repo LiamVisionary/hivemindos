@@ -1,6 +1,7 @@
 import type {
   HoneyAgentReward,
   HoneyTreasuryConfig,
+  AgentSpendCapAsset,
   AgentSurvivalSnapshot,
   AgentSurvivalTier,
   AgentWalletConfig,
@@ -8,6 +9,12 @@ import type {
 } from "@/lib/types/agent-wallet";
 import type { AgentProfile, UsePodAgentConfig } from "@/lib/types/agent-runtime";
 import { agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
+import {
+  VEIL_CASH_TRANSFER_CONFIRMATION_LABEL,
+  VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM,
+} from "@/lib/config/veil-cash";
+
+export const DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS = 15 * 60;
 
 export const DEFAULT_AGENT_WALLET: Omit<AgentWalletConfig, "agentId"> = {
   enabled: false,
@@ -19,8 +26,13 @@ export const DEFAULT_AGENT_WALLET: Omit<AgentWalletConfig, "agentId"> = {
   currentBalanceUsd: 0,
   dailyComputeBurnUsd: 0,
   maxPaymentUsd: 0.5,
+  assetSpendCaps: {
+    ETH: 0.01,
+  },
   approvalRequiredOverUsd: 2,
   autoPayEnabled: false,
+  duplicatePaymentGuardEnabled: true,
+  duplicatePaymentGuardSeconds: DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS,
   clawCardEnvName: "CLAWCARD_API_KEY",
   moneyClawEnvName: "MONEYCLAW_API_KEY",
   x402BaseUrl: "",
@@ -33,6 +45,13 @@ export const DEFAULT_AGENT_WALLET: Omit<AgentWalletConfig, "agentId"> = {
   nativeBalance: 0,
   lastOnchainSyncAt: 0,
 };
+
+export function assetSpendCapFor(config: Pick<AgentWalletConfig, "assetSpendCaps" | "maxPaymentUsd">, asset: AgentSpendCapAsset): number {
+  if (asset === "USDC") return normalizeMoney(config.assetSpendCaps?.USDC, config.maxPaymentUsd);
+  const cap = Number(config.assetSpendCaps?.[asset]);
+  if (!Number.isFinite(cap)) return asset === "ETH" ? 0.01 : 0;
+  return Math.max(0, cap);
+}
 
 export const DEFAULT_HONEY_TREASURY_CONFIG: HoneyTreasuryConfig = {
   honeyPerThousandTokens: 0.001,
@@ -65,6 +84,7 @@ export function createDefaultAgentWallet(agentId: string): AgentWalletConfig {
   const now = Date.now();
   return {
     ...DEFAULT_AGENT_WALLET,
+    assetSpendCaps: { ...DEFAULT_AGENT_WALLET.assetSpendCaps },
     agentId,
     survivalStartedAt: now,
     updatedAt: now,
@@ -308,6 +328,9 @@ export function maxAmount(maxBaseUnits: bigint | number): X402Policy {
 }
 
 export function buildAgentPaymentPrompt(config: AgentWalletConfig, snapshot = getSurvivalSnapshot(config)): string {
+  const duplicateGuardSeconds = Number.isFinite(Number(config.duplicatePaymentGuardSeconds))
+    ? Math.max(0, Number(config.duplicatePaymentGuardSeconds))
+    : DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS;
   const provider = config.provider === "bankr"
     ? "Bankr LLM Gateway with dashboard spending caps"
     : config.provider === "clawcard"
@@ -318,14 +341,22 @@ export function buildAgentPaymentPrompt(config: AgentWalletConfig, snapshot = ge
         ? "x402 wallet payments"
         : config.provider === "usepod"
           ? "UsePod prepaid inference wallet with provider-managed x402 payments"
+          : config.provider === "veil"
+            ? "private Base privacy-pool payments via the active privacy rail"
           : "manual wallet accounting";
   return [
     `Payment mode: ${provider}.`,
     `Network: ${config.network}; token: ${config.tokenSymbol}; wallet: ${config.walletAddress || "not yet connected"}.`,
     `Spend cap: $${config.maxPaymentUsd.toFixed(2)} per payment; require approval over $${config.approvalRequiredOverUsd.toFixed(2)}.`,
+    config.provider === "veil" ? `ETH transfer cap: ${assetSpendCapFor(config, "ETH").toFixed(6)} ETH.` : "",
+    config.enabled ? "Wallet spending is on." : "Wallet spending is off; prepare drafts only and do not execute wallet tools.",
     `Allow auto-use is ${config.autoPayEnabled ? "on within the hard spend cap" : "off; ask before spending"}.`,
+    `Duplicate payment guard is ${config.duplicatePaymentGuardEnabled !== false ? `on for ${Math.max(1, Math.round(duplicateGuardSeconds / 60))} minutes` : "off; intentional repeat payments may submit back to back after the previous transfer finishes"}.`,
     `Survival tier: ${snapshot.tier}; effective balance $${snapshot.effectiveBalanceUsd.toFixed(2)}; compute burn $${config.dailyComputeBurnUsd.toFixed(2)}/day.`,
     `Use ${snapshot.modelHint} model behavior and ${snapshot.heartbeatHint} heartbeat behavior.`,
+    config.provider === "veil"
+      ? `Capability: private sends are available for USDC and ETH on Base. If the user asks to send privately, make a private payment, or privately pay an x402 endpoint, infer this active private rail automatically; do not require the user to name Veil Cash. Present one agent spend balance; public, queued, and ready private Veil balances are internal rail state. Dashboard execution uses POST /api/wallet/veil/transfer after the user confirms a reviewed transfer draft; use ${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL} as the internal route confirmation and autoShield for USDC sends. Private x402 drafts and confirmations are handled directly by the chat wallet capability; ask the user for plain confirmation such as "confirm" and map provider-specific confirmation tokens internally. By default private sends go to any public Ethereum address; current public-recipient USDC withdrawals require at least ${VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM} USDC. If ready private USDC is short, HivemindOS can shield from the agent's encrypted local Base wallet first and finish after Veil accepts the deposit. Only use registered-recipient mode for an explicit in-pool shielded transfer to a registered Veil recipient. VEIL_KEY and the Veil CLI must be configured on the server. Do not execute private actions without explicit setup and approval.`
+      : "",
     "Never expose private keys, card PAN/CVV, or billing identity in chat or durable shared notes.",
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }

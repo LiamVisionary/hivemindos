@@ -5,8 +5,9 @@
 import { ChatFolderModal } from "@/features/dashboard/views/chat/ChatFolderModal";
 import { ChatInlineMarkdown } from "@/features/dashboard/ChatMarkdown";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
+import { LottiePlayer } from "@/components/ui/lottie-player";
 import chatQueueStyles from "@/features/dashboard/views/chat/ChatQueue.module.css";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const PROVIDER_LABELS: Record<string, string> = {
   "openai-codex": "OpenAI Codex",
@@ -80,7 +81,7 @@ function selectedAgentIcon(agent?: any, beeRoleIconPath?: (role?: string, worker
     ?? agent.customWorkerClass;
   return customWorkerClass?.imageSrc
     || beeRoleIconPath?.("worker", agent.workerClass ?? "general")
-    || "/icons/worker-bee-general-v2.png";
+    || "/icons/worker-bee-general-v3.png";
 }
 
 function agentMenuIcon(agent?: any, beeRoleIconPath?: (role?: string, workerClass?: string) => string) {
@@ -167,15 +168,66 @@ function processFileTarget(event: any) {
 
 function processDisplayLabel(event: any) {
   const label = String(event?.label ?? "Runtime event").trim();
-  if (/assistant wrote in session/i.test(label)) return "Agent replied";
   if (/assistant started writing/i.test(label)) return "Agent started writing";
   if (/tool output/i.test(label)) return "Tool output";
   return label;
 }
 
+function stableMessageHash(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function chatMessageBaseRenderKey(message: any, index: number) {
+  const sourceSessionId = String(message?.sourceSessionId ?? "").trim();
+  const sourceIndex = Number.isFinite(message?.sourceIndex) ? String(message.sourceIndex) : "";
+  const role = String(message?.role ?? "message");
+  const content = String(message?.content ?? "").replace(/\s+/g, " ").trim();
+  const contentHash = stableMessageHash(content);
+  if (sourceSessionId && sourceIndex) return `${sourceSessionId}:${sourceIndex}:${role}:${contentHash}`;
+  const createdAt = Number.isFinite(message?.createdAt) ? String(message.createdAt) : "";
+  if (createdAt) return `${role}:${createdAt}:${index}:${contentHash}`;
+  return `${role}:${index}:${contentHash}`;
+}
+
+function chatMessageRenderKeys(messages: any[]) {
+  const seen = new Map<string, number>();
+  return messages.map((message, index) => {
+    const baseKey = chatMessageBaseRenderKey(message, index);
+    const occurrence = seen.get(baseKey) ?? 0;
+    seen.set(baseKey, occurrence + 1);
+    return occurrence ? `${baseKey}:duplicate-${occurrence}` : baseKey;
+  });
+}
+
+function processEventsAreActive(events: any[] = []) {
+  if (!events.length) return false;
+  const visibleEvents = processDisplayEvents(events);
+  if (!visibleEvents.length) return false;
+  const lastEvent = visibleEvents[visibleEvents.length - 1];
+  const lastStatus = String(lastEvent?.status ?? "").trim().toLowerCase();
+  const lastLabel = String(lastEvent?.label ?? "").trim().toLowerCase();
+  if (/assistant started writing|assistant wrote in session|agent replied/.test(lastLabel)) return false;
+  return lastStatus !== "completed" && lastStatus !== "failed";
+}
+
+function processDisplayEvents(events: any[] = []) {
+  return events.filter((event) => !/assistant wrote in session|agent replied/i.test(String(event?.label ?? "")));
+}
+
 function AgentProcessPanel({ Activity, ChevronDown, ChevronUp, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal, agentIconSrc, agentInitials, chatClass, events = [] }: any) {
   const [expanded, setExpanded] = useState(false);
-  if (!events.length) return null;
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const visibleEvents = processDisplayEvents(events);
+  useEffect(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+  }, [visibleEvents.length, expanded]);
+  if (!visibleEvents.length) return null;
   const Icon = expanded ? ChevronUp : ChevronDown;
   const iconProps = { Activity, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal };
   return (
@@ -187,21 +239,24 @@ function AgentProcessPanel({ Activity, ChevronDown, ChevronUp, CircleAlert, File
         aria-expanded={expanded}
       >
         <span>Process</span>
-        <small>{events.length} event{events.length === 1 ? "" : "s"}</small>
+        <small>{visibleEvents.length} event{visibleEvents.length === 1 ? "" : "s"}</small>
         {Icon ? <Icon aria-hidden="true" /> : null}
       </button>
-      <div className={chatClass("processScroll")}>
-        {events.map((event: any, index: number) => {
+      <div className={chatClass("processScroll")} ref={scrollRef}>
+        {visibleEvents.map((event: any, index: number) => {
           const toolKey = processToolKey(event);
           const isAssistant = toolKey === "assistant";
+          const isActive = event?.status === "running" && index === visibleEvents.length - 1;
           const meta = PROCESS_TOOL_META[toolKey] ?? PROCESS_TOOL_META.unknown;
           const BadgeIcon = processIconComponent(meta.icon, iconProps);
           const fileTarget = processFileTarget(event);
           return (
-          <div className={chatClass("processRow", isAssistant && "assistant")} key={`${event.at}-${index}`}>
+          <div className={chatClass("processRow", isAssistant && "assistant", isActive && "active")} key={`${event.at}-${index}`}>
             <time>{new Date(event.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time>
-            <div className={chatClass("processBadge", isAssistant && agentIconSrc && "avatar")} style={{ "--process-accent": meta.color, ...(isAssistant && agentIconSrc ? { backgroundImage: `url(${agentIconSrc})` } : {}) } as any} aria-hidden="true">
-              {isAssistant && agentIconSrc ? (
+            <div className={chatClass("processBadge", isAssistant && agentIconSrc && "avatar", isActive && "active")} style={{ "--process-accent": meta.color, ...(isAssistant && agentIconSrc ? { backgroundImage: `url(${agentIconSrc})` } : {}) } as any} aria-hidden="true">
+              {isActive ? (
+                <LottiePlayer src="/animations/Honey%20bee.lottie" size={24} ariaLabel="Active tool running" />
+              ) : isAssistant && agentIconSrc ? (
                 null
               ) : isAssistant ? (
                 <b>{agentInitials}</b>
@@ -242,7 +297,7 @@ function ChatHistorySkeleton() {
 }
 
 export function ChatPanel(props: any) {
-  const { Activity, AgentResponseLoader, AlignLeft, Button, ChatMarkdown, Check, ChevronDown, ChevronUp, CircleAlert, ComposerField, Copy, FileText, Folder, GitBranch, Hammer, Image, KanbanSquare, LoaderCircle, MessageAttachments, MessageSquare, Monitor, Pencil, RUNTIME_LABELS, Search, Send, Sparkles, Terminal, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Upload, activeView, aeonEnvKeys, aeonEnvSyncStatus, aeonEnvSyncing, attachChatDirectory, attachChatRecentDirectory, attachmentError, attachmentMenuOpen, attachmentMenuRef, beeRoleIconPath, busy, changeChatWorkingDirectory, chatAttachments, chatClass, chatContextMenu, chatContextMenuRef, chatDirectories, chatDisplayContent, chatFileInputRef, chatImageInputRef, chatKanbanGeneration, chatSidebarTree, checkStatus, dismissChatKanbanGeneration, displayAgents, expandedChatFolders, fleetClass, flushingChatQueueId, formatAgentEnvText, formatRelativeTime, generateKanbanTaskFromChat, handleChatFileChange, handleChatImageChange, hasStreamingChunk, lastAssistant, machineGroups, messagesEndRef, messagesScrollRef, parseAgentEnvText, queuedChatMessages = [], recentDirectories, recentDirectoriesExpanded, recording, refreshRuntimeIntegrations, removeChatAttachment, removeChatDirectory, removeQueuedChatMessage, runRuntimeIntegrationAction, runtimeIntegrationBusy, runtimeModelSelection, runtimeModelSelectionsByRuntime, selectedAgent, selectedChatDirectory, selectedChatHistoryLoading, selectedChatMachine, selectedChatProcess, sendMessage, sendQueuedChatMessageNow, sessionNotice, setAeonEnvKeys, setAttachmentMenuOpen, setChatContextMenu, setExpandedChatFolders, setRecentDirectoriesExpanded, setStatus, setStatusAgentId, setText, startAgentChat, startAudioRecording, status, statusAgentId, stopAudioRecording, switchRuntime, syncAeonEnvToGitHub, text, updateAgent, updateChatAutoScroll, vaultClass, visibleMessages, voiceBands, voiceTarget, voiceTranscript } = props;
+  const { Activity, AgentResponseLoader, AlignLeft, Button, ChatMarkdown, Check, ChevronDown, ChevronUp, CircleAlert, ComposerField, Copy, FileText, Folder, GitBranch, Hammer, Image, KanbanSquare, LoaderCircle, MessageAttachments, MessageSquare, Monitor, Pencil, RUNTIME_LABELS, Search, Send, Sparkles, Terminal, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Upload, activeView, aeonEnvKeys, aeonEnvSyncStatus, aeonEnvSyncing, attachChatDirectory, attachChatRecentDirectory, attachmentError, attachmentMenuOpen, attachmentMenuRef, beeRoleIconPath, busy, changeChatWorkingDirectory, chatAttachments, chatAutoScrollRef, chatClass, chatContextMenu, chatContextMenuRef, chatDirectories, chatDisplayContent, chatFileInputRef, chatImageInputRef, chatKanbanGeneration, chatSidebarTree, checkStatus, dismissChatKanbanGeneration, displayAgents, expandedChatFolders, fleetClass, flushingChatQueueId, formatAgentEnvText, formatRelativeTime, generateKanbanTaskFromChat, handleChatFileChange, handleChatImageChange, hasStreamingChunk, lastAssistant, machineGroups, messagesEndRef, messagesScrollRef, parseAgentEnvText, queuedChatMessages = [], recentDirectories, recentDirectoriesExpanded, recording, refreshRuntimeIntegrations, removeChatAttachment, removeChatDirectory, removeQueuedChatMessage, runRuntimeIntegrationAction, runtimeIntegrationBusy, runtimeModelSelection, runtimeModelSelectionsByRuntime, selectedAgent, selectedChatDirectory, selectedChatHistoryLoading, selectedChatMachine, selectedChatProcess, sendMessage, sendQueuedChatMessageNow, sessionNotice, setAeonEnvKeys, setAttachmentMenuOpen, setChatContextMenu, setExpandedChatFolders, setRecentDirectoriesExpanded, setStatus, setStatusAgentId, setText, startAgentChat, startAudioRecording, status, statusAgentId, stopAudioRecording, switchRuntime, syncAeonEnvToGitHub, text, updateAgent, updateChatAutoScroll, vaultClass, visibleMessages, voiceBands, voiceTarget, voiceTranscript } = props;
   const [openKanbanTaskMenuKey, setOpenKanbanTaskMenuKey] = useState("");
   const [copiedMessageKey, setCopiedMessageKey] = useState("");
   const [agentMode, setAgentMode] = useState<"plan" | "act">("act");
@@ -255,6 +310,34 @@ export function ChatPanel(props: any) {
   const selectedAgentInitials = agentInitials(selectedAgent);
   const selectedAgentIconSrc = selectedAgentIcon(selectedAgent, beeRoleIconPath);
   const selectedStatusChecking = Boolean(selectedAgent?.id && statusCheckingAgentId === selectedAgent.id);
+  const latestVisibleMessage = visibleMessages?.[visibleMessages.length - 1];
+  const visibleMessageKeys = useMemo(
+    () => chatMessageRenderKeys(visibleMessages ?? []),
+    [visibleMessages],
+  );
+  const latestVisibleDisplay = latestVisibleMessage ? chatDisplayContent(latestVisibleMessage) : "";
+  const latestVisibleHasInlineProcess = Boolean(
+    latestVisibleMessage?.role === "assistant"
+    && !latestVisibleDisplay.trim()
+    && selectedChatProcess?.length,
+  );
+  const processIsActive = processEventsAreActive(selectedChatProcess);
+  const showDetachedProcess = Boolean(
+    selectedChatProcess?.length
+    && !latestVisibleHasInlineProcess
+    && (busy || processIsActive || latestVisibleMessage?.role === "user"),
+  );
+  const setMessagesScrollNode = useCallback((node: HTMLDivElement | null) => {
+    messagesScrollRef.current = node;
+    if (!node) return;
+    chatAutoScrollRef.current = true;
+    const scrollToBottom = () => {
+      node.scrollTop = node.scrollHeight;
+      messagesEndRef?.current?.scrollIntoView({ block: "end" });
+    };
+    window.requestAnimationFrame(scrollToBottom);
+    [120, 360, 900].forEach((delay) => window.setTimeout(scrollToBottom, delay));
+  }, [chatAutoScrollRef, messagesEndRef, messagesScrollRef]);
   async function handleCheckStatus() {
     if (!selectedAgent || selectedStatusChecking) return;
     setStatusCheckingAgentId(selectedAgent.id);
@@ -314,6 +397,38 @@ export function ChatPanel(props: any) {
     }, 2600);
     return () => window.clearTimeout(timer);
   }, [chatKanbanGeneration, dismissChatKanbanGeneration]);
+
+  useEffect(() => {
+    const element = messagesScrollRef?.current;
+    if (!element) return undefined;
+    chatAutoScrollRef.current = true;
+    const scrollToBottom = () => {
+      element.scrollTop = element.scrollHeight;
+      messagesEndRef?.current?.scrollIntoView({ block: "end" });
+    };
+    const frame = window.requestAnimationFrame(scrollToBottom);
+    const timeouts = [180, 600, 1_200].map((delay) => window.setTimeout(scrollToBottom, delay));
+    return () => {
+      window.cancelAnimationFrame(frame);
+      timeouts.forEach((timeout) => window.clearTimeout(timeout));
+    };
+  }, [chatAutoScrollRef, messagesEndRef, messagesScrollRef, selectedAgent?.id, selectedChatMachine]);
+
+  useEffect(() => {
+    if (!chatAutoScrollRef?.current) return undefined;
+    const element = messagesScrollRef?.current;
+    if (!element) return undefined;
+    const scrollToBottom = () => {
+      element.scrollTop = element.scrollHeight;
+      messagesEndRef?.current?.scrollIntoView({ block: "end" });
+    };
+    const frame = window.requestAnimationFrame(scrollToBottom);
+    const timeouts = [120, 360, 900].map((delay) => window.setTimeout(scrollToBottom, delay));
+    return () => {
+      window.cancelAnimationFrame(frame);
+      timeouts.forEach((timeout) => window.clearTimeout(timeout));
+    };
+  }, [busy, chatAutoScrollRef, messagesEndRef, messagesScrollRef, selectedAgent?.id, visibleMessages.length]);
 
   function dismissKanbanPopover(messageKey: string) {
     dismissChatKanbanGeneration?.(messageKey);
@@ -528,7 +643,7 @@ export function ChatPanel(props: any) {
                 <label>
                   {selectedAgent.runtime === "aeon" ? "A2A Gateway URL" : selectedAgent.runtime === "openclaw" ? "Gateway URL" : "Runtime URL"}
                   <input
-                    value={selectedAgent.runtime === "aeon" ? selectedAgent.a2aUrl ?? selectedAgent.gatewayUrl : selectedAgent.gatewayUrl}
+                    value={selectedAgent.runtime === "aeon" ? selectedAgent.a2aUrl ?? selectedAgent.gatewayUrl ?? "" : selectedAgent.gatewayUrl ?? ""}
                     onChange={(event) => updateAgent(selectedAgent.runtime === "aeon"
                       ? { gatewayUrl: event.target.value, a2aUrl: event.target.value }
                       : { gatewayUrl: event.target.value })}
@@ -652,7 +767,7 @@ export function ChatPanel(props: any) {
                   <span className={chatClass("chatIdentityCopy")}>
                     <span className={chatClass("chatTitleRow")}>
                       <span className={chatClass("chatIdentityTitle")}>{selectedAgent.name}</span>
-                      <span className={chatClass("livePill")}><span aria-hidden="true" />Live</span>
+                      <span className={chatClass("livePill")}><span aria-hidden="true" />{busy ? "working" : "ready"}</span>
                     </span>
                     <span className={chatClass("chatIdentityMeta")}>
                       <span className={chatClass("chatHeaderMetaFull")}>{runtimeIdentity} · {selectedChatMachine?.name ?? selectedAgent.machineName ?? "This Mac"}</span>
@@ -754,7 +869,7 @@ export function ChatPanel(props: any) {
             ) : null}
             <div
               className={chatClass("messages", selectedChatHistoryLoading ? "loading" : visibleMessages.length === 0 && "empty")}
-              ref={messagesScrollRef}
+              ref={setMessagesScrollNode}
               onScroll={updateChatAutoScroll}
             >
               {selectedChatHistoryLoading ? (
@@ -766,11 +881,13 @@ export function ChatPanel(props: any) {
                 </div>
               ) : null}
               {!selectedChatHistoryLoading ? visibleMessages.map((message, index) => {
-                const messageKey = `${message.role}-${index}`;
+                const messageKey = visibleMessageKeys[index] ?? chatMessageBaseRenderKey(message, index);
                 const displayContent = chatDisplayContent(message);
                 const generationForMessage = chatKanbanGeneration?.key === messageKey ? chatKanbanGeneration : null;
                 const generating = generationForMessage && ["generating", "creating"].includes(generationForMessage.phase);
                 const isStreamingAssistant = message.role === "assistant" && busy && index === visibleMessages.length - 1;
+                const isLatestAssistant = message.role === "assistant" && index === visibleMessages.length - 1;
+                const showLatestProcess = isLatestAssistant && selectedChatProcess?.length > 0;
                 const canGenerateKanbanTask = message.role === "assistant" && !isStreamingAssistant && displayContent?.trim() && generateKanbanTaskFromChat;
                 const copied = copiedMessageKey === messageKey;
                 const agentPrompt = message.agentPrompt;
@@ -814,10 +931,10 @@ export function ChatPanel(props: any) {
                       ) : displayContent ? (
                         <ChatMarkdown text={displayContent} />
                       ) : (
-                        message.role === "assistant" && busy ? (
+                        message.role === "assistant" && (busy || showLatestProcess) ? (
                           <>
-                            <AgentResponseLoader />
-                            <AgentProcessPanel {...{ Activity, ChevronDown, ChevronUp, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal, agentIconSrc: selectedAgentIconSrc, agentInitials: selectedAgentInitials, chatClass, events: selectedChatProcess }} />
+                            {busy ? <AgentResponseLoader /> : null}
+                            {showLatestProcess ? <AgentProcessPanel {...{ Activity, ChevronDown, ChevronUp, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal, agentIconSrc: selectedAgentIconSrc, agentInitials: selectedAgentInitials, chatClass, events: selectedChatProcess }} /> : null}
                           </>
                         ) : <p />
                       )}
@@ -913,7 +1030,21 @@ export function ChatPanel(props: any) {
                   </div>
                 );
               }) : null}
-              <div ref={messagesEndRef} aria-hidden="true" />
+              {!selectedChatHistoryLoading && showDetachedProcess ? (
+                <div className={chatClass("message", "assistant", busy && "streaming")} key="detached-process">
+                  {renderAgentAvatar("messageAvatar")}
+                  <div className={chatClass("messageBody")}>
+                    <div className={chatClass("assistantByline")}>
+                      {renderAgentAvatar("messageBylineAvatar")}
+                      <span>{selectedAgent.name}</span>
+                      <small>{runtimeIdentity}</small>
+                    </div>
+                    {busy ? <AgentResponseLoader /> : null}
+                    <AgentProcessPanel {...{ Activity, ChevronDown, ChevronUp, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal, agentIconSrc: selectedAgentIconSrc, agentInitials: selectedAgentInitials, chatClass, events: selectedChatProcess }} />
+                  </div>
+                </div>
+              ) : null}
+              <div ref={messagesEndRef} className={chatClass("messagesEnd")} aria-hidden="true" />
             </div>
             {!selectedChatHistoryLoading && visibleMessages.length === 0 ? (
               <div className={chatClass("chatSuggestions")} aria-label="Suggested prompts">
@@ -973,42 +1104,42 @@ export function ChatPanel(props: any) {
               </section>
             ) : null}
             <form onSubmit={sendMessage}>
-              <ComposerField
-                value={text}
-                onChange={setText}
-                placeholder={`Ask ${selectedAgent.name} to do something...`}
-                disabled={false}
-                busy={busy && !hasStreamingChunk}
-                attachments={chatAttachments}
-                directories={chatDirectories}
-                attachmentError={attachmentError}
-                attachmentMenuOpen={attachmentMenuOpen}
-                setAttachmentMenuOpen={setAttachmentMenuOpen}
-                attachmentMenuRef={attachmentMenuRef}
-                fileInputRef={chatFileInputRef}
-                imageInputRef={chatImageInputRef}
-                onFileChange={handleChatFileChange}
-                onImageChange={handleChatImageChange}
-                onRemoveAttachment={removeChatAttachment}
-                onAttachDirectory={() => void attachChatDirectory()}
-                recentDirectories={recentDirectories}
-                recentDirectoriesExpanded={recentDirectoriesExpanded}
-                setRecentDirectoriesExpanded={setRecentDirectoriesExpanded}
-                onAttachRecentDirectory={attachChatRecentDirectory}
-                onRemoveDirectory={removeChatDirectory}
-                workingDirectoryLabel={selectedChatDirectory}
-                onChangeWorkingDirectory={() => void changeChatWorkingDirectory?.()}
-                recording={recording && voiceTarget === "chat"}
-                voiceBands={voiceBands}
-                voiceTranscript={voiceTranscript}
-                onToggleRecording={recording ? stopAudioRecording : () => void startAudioRecording("chat")}
-                canSend={Boolean(text.trim() || chatAttachments.length || chatDirectories.length)}
-                submitOnEnter
-                hermesSlashCommands
-                agentMode={agentMode}
-                onAgentModeChange={setAgentMode}
-                modelPicker={modelPicker}
-              />
+                <ComposerField
+                  value={text ?? ""}
+                  onChange={setText}
+                  placeholder={`Ask ${selectedAgent.name} to do something...`}
+                  disabled={false}
+                  busy={busy && !hasStreamingChunk}
+                  attachments={chatAttachments}
+                  directories={chatDirectories}
+                  attachmentError={attachmentError}
+                  attachmentMenuOpen={attachmentMenuOpen}
+                  setAttachmentMenuOpen={setAttachmentMenuOpen}
+                  attachmentMenuRef={attachmentMenuRef}
+                  fileInputRef={chatFileInputRef}
+                  imageInputRef={chatImageInputRef}
+                  onFileChange={handleChatFileChange}
+                  onImageChange={handleChatImageChange}
+                  onRemoveAttachment={removeChatAttachment}
+                  onAttachDirectory={() => void attachChatDirectory()}
+                  recentDirectories={recentDirectories}
+                  recentDirectoriesExpanded={recentDirectoriesExpanded}
+                  setRecentDirectoriesExpanded={setRecentDirectoriesExpanded}
+                  onAttachRecentDirectory={attachChatRecentDirectory}
+                  onRemoveDirectory={removeChatDirectory}
+                  workingDirectoryLabel={selectedChatDirectory}
+                  onChangeWorkingDirectory={() => void changeChatWorkingDirectory?.()}
+                  recording={recording && voiceTarget === "chat"}
+                  voiceBands={voiceBands}
+                  voiceTranscript={voiceTranscript}
+                  onToggleRecording={recording ? stopAudioRecording : () => void startAudioRecording("chat")}
+                  canSend={Boolean((text ?? "").trim() || chatAttachments.length || chatDirectories.length)}
+                  submitOnEnter
+                  hermesSlashCommands
+                  agentMode={agentMode}
+                  onAgentModeChange={setAgentMode}
+                  modelPicker={modelPicker}
+                />
             </form>
             <p className={chatClass("composerHint")}>
               <span>{runtimeIdentity} active</span>

@@ -425,7 +425,16 @@ export function AgentSettingsModal(props: any) {
   const completedUsePodWallets = unfinishedUsePodAgent
     ? []
     : existingUsePodAgents.filter((agent) => isUsePodSetupReady(agent.usePod));
-  const usePodSetupTarget = unfinishedUsePodAgent ?? agentSettingsIntegrationTarget;
+  const usePodDraftSetupTarget = agentCreateMachine
+    ? {
+      id: "new-usepod-draft",
+      name: displayName,
+      provider: "usepod",
+      model: agentCreateDraft.model,
+      usePod: agentCreateDraft.usePod,
+    }
+    : null;
+  const usePodSetupTarget = unfinishedUsePodAgent ?? usePodDraftSetupTarget ?? agentSettingsIntegrationTarget;
   const usePodRequiresCurrentSetup = usePodSetupStarted || Boolean(unfinishedUsePodAgent);
   const modelSelectableRuntime = Boolean(runtimeCapabilities(agentSettingsIntegrationTarget ?? roleModalAgent)?.modelSelection);
   const hasRuntimeProviders = runtimeModelProviders.length > 0;

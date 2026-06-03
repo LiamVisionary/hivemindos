@@ -85,6 +85,12 @@ async function readLocalHermesSession(agent: AgentProfile | undefined, sessionId
   return null;
 }
 
+function sessionMatchesRequest(session: { chatStorageKey?: unknown; id?: unknown; sessionId?: unknown } | null | undefined, sessionId = "", chatStorageKey = "") {
+  if (!session) return false;
+  if (sessionId) return [session.sessionId, session.id].some((value) => String(value ?? "") === sessionId);
+  return !chatStorageKey || String(session.chatStorageKey ?? "") === chatStorageKey;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as { agent?: AgentProfile; sessionId?: string; sinceMs?: number; chatStorageKey?: string };
@@ -137,6 +143,11 @@ export async function POST(request: NextRequest) {
       const session = await fallbackLocalSession();
       if (session) return NextResponse.json({ ok: true, session });
       return NextResponse.json({ ok: false, error: data?.error || `Agent bridge returned ${response.status}` }, { status: response.ok ? 502 : response.status });
+    }
+    if (!sessionMatchesRequest(data.session, sessionId, chatStorageKey)) {
+      const session = await fallbackLocalSession();
+      if (session) return NextResponse.json({ ok: true, session });
+      return NextResponse.json({ ok: false, error: "No runtime session found for this chat." }, { status: 404 });
     }
     return NextResponse.json({ ok: true, session: data.session });
   } catch (error) {

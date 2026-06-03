@@ -1,0 +1,403 @@
+.veilHero {
+  position: relative;
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  border: 1px solid rgba(167, 139, 250, 0.22);
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(167, 139, 250, 0.12), transparent 60%),
+    rgba(15, 19, 27, 0.5);
+  padding: 13px 14px;
+}
+
+.veilShield {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+}
+
+.veilRing {
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  border-radius: 999px;
+  animation: veilPulse 2.8s ease-out infinite;
+}
+
+.veilRing[data-d="2"] {
+  animation-delay: 1.4s;
+}
+
+.veilShieldHex {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  color: #c4b5fd;
+}
+
+.veilShieldHex > svg:first-child {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.veilShieldHex > svg:last-child {
+  width: 22px;
+  height: 22px;
+}
+
+.veilHeroText {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.veilHeroText strong {
+  color: var(--foreground);
+  font-size: 13.5px;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.veilHeroText p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.veilMethods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.veilMethod {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  width: 72px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 10px;
+  background: rgba(15, 19, 27, 0.48);
+  color: inherit;
+  padding: 9px 5px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.veilMethod:hover,
+.veilMethod:focus-visible {
+  border-color: rgba(148, 163, 184, 0.28);
+  outline: none;
+}
+
+.veilMethodActive {
+  border-color: rgba(45, 212, 191, 0.45);
+  background: rgba(45, 212, 191, 0.07);
+}
+
+.veilMethodIcon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  border-radius: 8px;
+  background: rgba(167, 139, 250, 0.08);
+  color: #a78bfa;
+}
+
+.veilMethodIcon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.veilMethodActive .veilMethodIcon {
+  border-color: rgba(45, 212, 191, 0.4);
+  background: rgba(45, 212, 191, 0.1);
+  color: var(--accent-strong);
+}
+
+.veilMethodBody b {
+  display: block;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.veilMethodActive .veilMethodBody b {
+  color: var(--foreground);
+}
+
+.veilMethodCheck {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: none;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #042f2e;
+}
+
+.veilMethodActive .veilMethodCheck {
+  display: grid;
+}
+
+.veilMethodCheck svg {
+  width: 9px;
+  height: 9px;
+}
+
+.veilStatGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.veilStat {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 10px;
+  background: rgba(15, 19, 27, 0.48);
+  padding: 10px 12px;
+  transition: border-color 200ms ease, background 200ms ease;
+}
+
+.veilStat[data-state="ok"] {
+  border-color: rgba(45, 212, 191, 0.32);
+  background: rgba(45, 212, 191, 0.06);
+}
+
+.veilStat[data-state="pending"] {
+  border-color: rgba(167, 139, 250, 0.34);
+  background: rgba(167, 139, 250, 0.08);
+}
+
+.veilStatHead {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.veilStatHead span {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.veilPin {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--muted);
+  opacity: 0.6;
+}
+
+.veilStat[data-state="ok"] .veilPin {
+  background: var(--accent);
+  opacity: 1;
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
+}
+
+.veilStat[data-state="pending"] .veilPin {
+  background: #a78bfa;
+  opacity: 1;
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.2);
+  animation: veilBlink 1.2s ease-in-out infinite;
+}
+
+.veilStat strong {
+  display: block;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.veilStat[data-state="idle"] strong {
+  color: var(--muted);
+}
+
+.veilActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.veilProgress {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(167, 139, 250, 0.22);
+  border-radius: 10px;
+  background: rgba(167, 139, 250, 0.07);
+  padding: 11px 13px;
+}
+
+.veilProgressTitle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: #c4b5fd;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.veilProgressTitle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.veilProgressRow {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  transition: color 250ms ease;
+}
+
+.veilProgressRow svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+}
+
+.veilProgressRow[data-state="done"] {
+  color: var(--accent-strong);
+}
+
+.veilProgressRow[data-state="active"] {
+  color: var(--foreground);
+}
+
+.veilSectionLabel {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: #c4b5fd;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.veilSectionLabel svg {
+  width: 13px;
+  height: 13px;
+}
+
+.veilSectionLabel::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(167, 139, 250, 0.3), transparent);
+}
+
+.veilContracts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.veilAddr {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 10px;
+  background: rgba(15, 19, 27, 0.48);
+  padding: 10px 12px;
+  animation: veilRise 420ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+.veilAddrHead {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.veilAddrHead svg {
+  width: 13px;
+  height: 13px;
+  color: #a78bfa;
+}
+
+.veilAddr code {
+  color: var(--foreground);
+  font-size: 11.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.veilAddr[data-relay="true"] code {
+  color: var(--accent-strong);
+}
+
+.veilSpin {
+  animation: veilSpin 1s linear infinite;
+}
+
+@keyframes veilSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes veilPulse {
+  0% { transform: scale(0.55); opacity: 0.7; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+
+@keyframes veilBlink {
+  50% { opacity: 0.35; }
+}
+
+@keyframes veilRise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .veilRing,
+  .veilStat[data-state="pending"] .veilPin,
+  .veilSpin {
+    animation: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .veilStatGrid,
+  .veilContracts {
+    grid-template-columns: 1fr;
+  }
+
+  .veilActions {
+    grid-template-columns: 1fr;
+  }
+}

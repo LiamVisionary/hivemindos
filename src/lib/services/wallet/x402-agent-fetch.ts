@@ -11,7 +11,7 @@ import { base58 } from "@scure/base";
 import { privateKeyToAccount } from "viem/accounts";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 
-type X402Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export type X402Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export type X402FetchPolicy = Pick<
   AgentWalletConfig,
@@ -28,6 +28,23 @@ export type X402FetchInput = {
   body?: unknown;
   policy: X402FetchPolicy;
   confirmation?: string;
+};
+
+export type X402PaymentDiscoveryInput = {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+  policy: X402FetchPolicy;
+};
+
+export type X402PaymentDiscovery = {
+  status: number;
+  url: string;
+  method: X402Method;
+  network: string;
+  amountUsd: number;
+  requirement: PaymentRequirements;
 };
 
 export type X402FetchResult = {
@@ -64,13 +81,13 @@ const x402SvmNetworkByWalletNetwork: Record<string, string> = {
   "solana:devnet": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
 };
 
-function parseMethod(value?: string): X402Method {
+export function parseX402Method(value?: string): X402Method {
   const method = (value || "GET").trim().toUpperCase();
   if (method === "GET" || method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") return method;
   throw new Error("Unsupported x402 HTTP method.");
 }
 
-function assertPaidUrl(url: string, baseUrl?: string) {
+export function assertPaidUrl(url: string, baseUrl?: string) {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -95,7 +112,7 @@ function redactHeaders(headers: Record<string, string> = {}) {
   return next;
 }
 
-function amountFromRequirement(requirement: PaymentRequirements): number {
+export function amountFromRequirement(requirement: PaymentRequirements): number {
   const extended = requirement as PaymentRequirements & { maxAmountRequired?: string | number | bigint; value?: string | number | bigint };
   const raw = requirement.amount ?? extended.maxAmountRequired ?? extended.value ?? 0;
   if (typeof raw === "bigint") return Number(raw) / 1_000_000;
@@ -106,7 +123,7 @@ function amountFromRequirement(requirement: PaymentRequirements): number {
   return Number(BigInt(trimmed)) / 1_000_000;
 }
 
-function x402Network(network: string): Network {
+export function x402Network(network: string): Network {
   return (x402SvmNetworkByWalletNetwork[network] ?? network) as Network;
 }
 
@@ -133,6 +150,31 @@ function selectRequirement(policy: X402FetchPolicy, confirmation?: string) {
     }
     return selected;
   };
+}
+
+function paymentRequiredHeader(response: Response): string {
+  return response.headers.get("PAYMENT-REQUIRED") ?? response.headers.get("X-PAYMENT-REQUIRED") ?? "";
+}
+
+function decodePaymentRequiredHeader(value: string): unknown {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return JSON.parse(Buffer.from(trimmed, "base64").toString("utf8")) as unknown;
+  }
+}
+
+async function paymentRequiredFromResponse(response: Response): Promise<PaymentRequired> {
+  const header = paymentRequiredHeader(response);
+  const parsed = header ? decodePaymentRequiredHeader(header) : await response.json().catch(() => null) as unknown;
+  if (!parsed || typeof parsed !== "object") throw new Error("x402 endpoint did not return a readable payment requirement.");
+  const required = parsed as PaymentRequired;
+  if (!Array.isArray(required.accepts) || required.accepts.length === 0) {
+    throw new Error("x402 payment requirement did not include any accepted payment options.");
+  }
+  return required;
 }
 
 async function appendSpendRecord(record: X402SpendRecord) {
@@ -170,7 +212,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
   if (input.policy.network !== input.network) throw new Error("Stored wallet network does not match the x402 policy network.");
   assertPaidUrl(input.url, input.policy.x402BaseUrl);
 
-  const method = parseMethod(input.method);
+  const method = parseX402Method(input.method);
   let selectedAmountUsd = 0;
   let paid = false;
   const network = x402Network(input.network);
@@ -227,6 +269,41 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
     });
   }
   return result;
+}
+
+export async function discoverX402Payment(input: X402PaymentDiscoveryInput): Promise<X402PaymentDiscovery> {
+  if (!input.policy.enabled) throw new Error("This agent's wallet is not enabled.");
+  if (!supportedEvmNetworks.has(input.policy.network) && !supportedSvmNetworks.has(input.policy.network)) {
+    throw new Error("x402 execution currently supports local Base, Base Sepolia, Solana mainnet, and Solana devnet wallets.");
+  }
+  assertPaidUrl(input.url, input.policy.x402BaseUrl);
+
+  const method = parseX402Method(input.method);
+  const response = await fetch(input.url, {
+    method,
+    headers: {
+      ...redactHeaders(input.headers),
+      ...(input.body == null ? {} : { "Content-Type": "application/json" }),
+    },
+    body: input.body == null || method === "GET" ? undefined : JSON.stringify(input.body),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (response.status !== 402) {
+    throw new Error(`x402 endpoint returned HTTP ${response.status}; expected 402 Payment Required.`);
+  }
+
+  const required = await paymentRequiredFromResponse(response);
+  const selectionPolicy = { ...input.policy, autoPayEnabled: true };
+  const requirement = selectRequirement(selectionPolicy, "PAY_X402")(required.x402Version, required.accepts);
+  const amountUsd = amountFromRequirement(requirement);
+  return {
+    status: response.status,
+    url: input.url,
+    method,
+    network: x402Network(input.policy.network),
+    amountUsd,
+    requirement,
+  };
 }
 
 export function summarizeX402Policy(policy: AgentWalletConfig) {

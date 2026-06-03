@@ -647,6 +647,8 @@ export function ComposerField({
   value,
   onChange,
   placeholder,
+  className,
+  floating = false,
   disabled,
   busy,
   compact = false,
@@ -687,6 +689,8 @@ export function ComposerField({
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
+  className?: string;
+  floating?: boolean;
   disabled?: boolean;
   busy?: boolean;
   compact?: boolean;
@@ -725,12 +729,13 @@ export function ComposerField({
   modelPicker?: ComposerModelPicker;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const composerValue = value ?? "";
   const [selectedSlashCommandIndex, setSelectedSlashCommandIndex] = useState(0);
   const [agentModeMenuOpen, setAgentModeMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [workingDirectoryMenuOpen, setWorkingDirectoryMenuOpen] = useState(false);
   const [workingDirectoryOpening, setWorkingDirectoryOpening] = useState(false);
-  const slashTokenMatch = hermesSlashCommands ? value.match(/^\/([^\s/]*)$/) : null;
+  const slashTokenMatch = hermesSlashCommands ? composerValue.match(/^\/([^\s/]*)$/) : null;
   const slashCommandQuery = slashTokenMatch?.[1]?.toLowerCase() ?? "";
   const filteredSlashCommands = useMemo(() => {
     if (!hermesSlashCommands) return [];
@@ -801,7 +806,7 @@ export function ComposerField({
   }
 
   return (
-    <div className={chatClass("chatComposerField", compact && "compactComposer")}>
+    <div className={chatClass("chatComposerField", floating && "floatingComposer", compact && "compactComposer", className)}>
       {agentMode ? <input type="hidden" name="agentMode" value={agentMode} /> : null}
       <input
         ref={fileInputRef}
@@ -847,7 +852,7 @@ export function ComposerField({
           <TooltipTrigger asChild>
             <textarea
               ref={textareaRef}
-              value={value}
+              value={composerValue}
               onChange={(event) => {
                 onChange(event.target.value);
                 setSelectedSlashCommandIndex(0);

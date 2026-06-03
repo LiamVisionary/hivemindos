@@ -50,6 +50,10 @@ type UnifiedSkillBrowserProps = {
   items: UnifiedSkillBrowserItem[];
   categories?: UnifiedSkillBrowserCategory[];
   sources?: UnifiedSkillBrowserSource[];
+  density?: "aeon" | "compact";
+  showCardDescription?: boolean;
+  showCategoryFilters?: boolean;
+  showDefaultDetail?: boolean;
   query?: string;
   onQueryChange?: (query: string) => void;
   searchPlaceholder?: string;
@@ -163,19 +167,24 @@ function SkillCategoryChip({ active, color, count, label, onClick }: { active: b
 }
 
 function SkillCard({
+  density,
   item,
   selected,
   onSelect,
   renderActions,
+  showDescription,
 }: {
+  density: "aeon" | "compact";
   item: UnifiedSkillBrowserItem;
   selected: boolean;
   onSelect?: (item: UnifiedSkillBrowserItem) => void;
   renderActions?: (item: UnifiedSkillBrowserItem) => React.ReactNode;
+  showDescription: boolean;
 }) {
   const categoryLabel = defaultCategoryLabel(item);
   const categoryColor = item.categoryColor ?? "var(--aeon)";
   const actions = renderActions?.(item);
+  const compact = density === "compact";
 
   return (
     <article
@@ -185,10 +194,12 @@ function SkillCard({
       }}
       className={styles.interactiveSubtle}
       style={{
-        display: "grid",
-        gap: 11,
-        padding: 14,
-        borderRadius: 11,
+        display: "flex",
+        flexDirection: "column",
+        gap: compact ? 8 : 11,
+        minHeight: compact ? 0 : 190,
+        padding: compact ? 12 : 14,
+        borderRadius: compact ? 10 : 11,
         cursor: item.disabled ? "not-allowed" : "pointer",
         opacity: item.disabled ? 0.58 : 1,
         border: `1px solid ${selected || item.selected ? "var(--aeon-line)" : "var(--line)"}`,
@@ -207,24 +218,26 @@ function SkillCard({
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--fg)", lineHeight: 1.25, overflowWrap: "anywhere" }}>{item.name}</div>
+          <div style={{ fontSize: compact ? 13.5 : 14, fontWeight: 600, color: "var(--fg)", lineHeight: 1.25, overflowWrap: "anywhere" }}>{item.name}</div>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6, fontSize: 10.5, fontFamily: "var(--f-mono)", textTransform: "uppercase", letterSpacing: 0, color: "var(--fg-4)" }}>
             <span aria-hidden style={{ width: 7, height: 7, borderRadius: 999, background: categoryColor }} />
             {categoryLabel}
           </span>
         </div>
         {item.stateLabel ? (
-          <Pill tone={item.stateTone ?? "muted"} icon={item.stateIcon} dot={item.stateActive}>
+          <Pill tone={item.stateTone ?? "muted"} icon={item.stateIcon} dot={item.stateActive} style={{ flexShrink: 0, whiteSpace: "nowrap" }}>
             {item.stateLabel}
           </Pill>
         ) : null}
       </div>
 
-      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: "var(--fg-3)", overflowWrap: "anywhere" }}>{item.description || "No description provided yet."}</p>
+      {showDescription ? (
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: "var(--fg-3)", overflowWrap: "anywhere" }}>{item.description || "No description provided yet."}</p>
+      ) : null}
 
-      {item.audience ? <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.45, color: "var(--fg-4)" }}>{item.audience}</p> : null}
+      {!compact && item.audience ? <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.45, color: "var(--fg-4)" }}>{item.audience}</p> : null}
 
-      {item.capabilities?.length ? (
+      {!compact && item.capabilities?.length ? (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }} aria-label="Skill capabilities">
           {item.capabilities.slice(0, 8).map((capability) => (
             <Pill key={capability} tone="muted" style={{ fontSize: 10, padding: "3px 7px" }}>{capability}</Pill>
@@ -232,7 +245,7 @@ function SkillCard({
         </div>
       ) : null}
 
-      {item.includedSkills?.length ? (
+      {!compact && item.includedSkills?.length ? (
         <div style={{ display: "grid", gap: 7, padding: 9, borderRadius: 9, background: "rgba(2,6,23,0.28)", border: "1px solid var(--line)" }}>
           {item.includedSkills.slice(0, 4).map((includedSkill) => (
             <div key={includedSkill.slug}>
@@ -244,9 +257,9 @@ function SkillCard({
         </div>
       ) : null}
 
-      {item.safety ? <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.45, color: "var(--honey-2)" }}>{item.safety}</p> : null}
+      {!compact && item.safety ? <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.45, color: "var(--honey-2)" }}>{item.safety}</p> : null}
 
-      {item.auditStatus || item.envKeys?.length || item.sourceRef ? (
+      {!compact && (item.auditStatus || item.envKeys?.length || item.sourceRef) ? (
         <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.45, color: "var(--fg-4)", overflowWrap: "anywhere" }}>
           {item.auditStatus ? `Audit: ${item.auditStatus}. ` : ""}
           {item.envKeys?.length ? `Env: ${item.envKeys.slice(0, 4).join(", ")}. ` : ""}
@@ -254,8 +267,8 @@ function SkillCard({
         </p>
       ) : null}
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 2, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 10.5, color: "var(--fg-4)", fontFamily: "var(--f-mono)" }}>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, marginTop: "auto", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 10.5, color: "var(--fg-4)", fontFamily: "var(--f-mono)", overflowWrap: "anywhere" }}>
           {item.scheduleLabel || item.model || item.source || ""}
         </span>
         {actions ? (
@@ -271,10 +284,82 @@ function SkillCard({
   );
 }
 
+function DetailLine({ label, value }: { label: string; value?: React.ReactNode }) {
+  if (!value) return null;
+  return (
+    <div style={{ display: "grid", gap: 3 }}>
+      <span style={{ fontSize: 10.5, color: "var(--fg-4)", fontFamily: "var(--f-mono)", textTransform: "uppercase", letterSpacing: 0 }}>{label}</span>
+      <div style={{ fontSize: 12.5, color: "var(--fg-2)", lineHeight: 1.45, overflowWrap: "anywhere" }}>{value}</div>
+    </div>
+  );
+}
+
+function DefaultSkillDetail({ item, renderActions }: { item: UnifiedSkillBrowserItem | undefined; renderActions?: (item: UnifiedSkillBrowserItem) => React.ReactNode }) {
+  if (!item) {
+    return (
+      <section style={{ display: "grid", gap: 6, padding: 13, borderRadius: 12, border: "1px dashed var(--line)", background: "rgba(2,6,23,0.26)", color: "var(--fg-3)" }}>
+        <strong style={{ color: "var(--fg)" }}>Select a skill</strong>
+        <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5 }}>Pick a skill to inspect its source, requirements, and full description.</p>
+      </section>
+    );
+  }
+  const actions = renderActions?.(item);
+  return (
+    <section style={{ display: "grid", gap: 12, padding: 14, borderRadius: 12, border: "1px solid var(--line)", background: "var(--panel-bg-soft)" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ minWidth: 0 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10.5, color: "var(--fg-4)", fontFamily: "var(--f-mono)", textTransform: "uppercase", letterSpacing: 0 }}>
+            <span aria-hidden style={{ width: 7, height: 7, borderRadius: 999, background: item.categoryColor ?? "var(--aeon)" }} />
+            {defaultCategoryLabel(item)}
+          </span>
+          <h3 style={{ margin: "5px 0 0", fontSize: 17, lineHeight: 1.2, color: "var(--fg)", overflowWrap: "anywhere" }}>{item.name}</h3>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {item.stateLabel ? (
+            <Pill tone={item.stateTone ?? "muted"} icon={item.stateIcon} dot={item.stateActive} style={{ flexShrink: 0, whiteSpace: "nowrap" }}>
+              {item.stateLabel}
+            </Pill>
+          ) : null}
+          {actions ? <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>{actions}</div> : null}
+        </div>
+      </div>
+      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: "var(--fg-2)", overflowWrap: "anywhere" }}>{item.description || "No description provided yet."}</p>
+      {item.capabilities?.length ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {item.capabilities.map((capability) => <Pill key={capability} tone="muted" style={{ fontSize: 10.5, padding: "3px 7px" }}>{capability}</Pill>)}
+        </div>
+      ) : null}
+      {item.includedSkills?.length ? (
+        <div style={{ display: "grid", gap: 8, padding: 10, borderRadius: 10, border: "1px solid var(--line)", background: "rgba(2,6,23,0.24)" }}>
+          {item.includedSkills.map((includedSkill) => (
+            <div key={includedSkill.slug}>
+              <strong style={{ display: "block", fontSize: 12, color: "var(--fg-2)" }}>{includedSkill.name}</strong>
+              {includedSkill.description ? <p style={{ margin: "2px 0 0", fontSize: 11.5, lineHeight: 1.4, color: "var(--fg-4)" }}>{includedSkill.description}</p> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+        <DetailLine label="Source" value={item.sourceRef || item.source} />
+        <DetailLine label="Audience" value={item.audience} />
+        <DetailLine label="Model" value={item.model} />
+        <DetailLine label="Schedule" value={item.scheduleLabel} />
+        <DetailLine label="Audit" value={item.auditStatus} />
+        <DetailLine label="Environment" value={item.envKeys?.join(", ")} />
+        <DetailLine label="Safety" value={item.safety} />
+      </div>
+    </section>
+  );
+}
+
 export function UnifiedSkillBrowser({
   items,
   categories,
   sources,
+  density = "aeon",
+  showCardDescription = true,
+  showCategoryFilters = true,
+  showDefaultDetail = false,
   query: controlledQuery,
   onQueryChange,
   searchPlaceholder = "Search skills",
@@ -293,6 +378,7 @@ export function UnifiedSkillBrowser({
   const [internalQuery, setInternalQuery] = React.useState("");
   const [internalSourceId, setInternalSourceId] = React.useState(sources?.[0]?.id ?? "all");
   const [categoryId, setCategoryId] = React.useState("all");
+  const [internalSelectedId, setInternalSelectedId] = React.useState<string | null>(null);
   const query = controlledQuery ?? internalQuery;
   const normalizedQuery = normalizeSearch(query);
   const activeSourceId = controlledSourceId ?? internalSourceId;
@@ -310,7 +396,9 @@ export function UnifiedSkillBrowser({
     ? sourceFilteredItems
     : sourceFilteredItems.filter((item) => categoryForItem(item) === activeCategoryId);
   const visibleItems = categoryFilteredItems.filter((item) => matchesQuery(item, normalizedQuery));
-  const selectedItem = visibleItems.find((item) => item.id === selectedItemId || item.slug === selectedItemId);
+  const effectiveSelectedItemId = selectedItemId === undefined ? internalSelectedId : selectedItemId;
+  const selectedItem = visibleItems.find((item) => item.id === effectiveSelectedItemId || item.slug === effectiveSelectedItemId);
+  const compact = density === "compact";
 
   const updateQuery = (nextQuery: string) => {
     if (onQueryChange) {
@@ -329,10 +417,18 @@ export function UnifiedSkillBrowser({
     setInternalSourceId(sourceId);
   };
 
+  const selectItem = (item: UnifiedSkillBrowserItem) => {
+    if (onSelectItem) {
+      onSelectItem(item);
+      return;
+    }
+    setInternalSelectedId(item.id);
+  };
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        {sources && sources.length > 1 ? (
+      <div style={{ display: "grid", gridTemplateColumns: sources && sources.length > 0 ? "minmax(220px, 300px) minmax(260px, 1fr) auto" : "minmax(260px, 1fr) auto", gap: 10, alignItems: "center" }}>
+        {sources && sources.length > 0 ? (
           <div style={{ display: "inline-flex", padding: 3, borderRadius: 9, background: "rgba(2,6,23,0.5)", border: "1px solid var(--line-2)" }}>
             {sources.map((source) => (
               <button
@@ -341,6 +437,7 @@ export function UnifiedSkillBrowser({
                 onClick={() => updateSource(source.id)}
                 className={styles.interactiveSubtle}
                 style={{
+                  flex: 1,
                   padding: "6px 13px",
                   borderRadius: 7,
                   fontSize: 12,
@@ -381,7 +478,7 @@ export function UnifiedSkillBrowser({
         {toolbar ? <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>{toolbar}</div> : null}
       </div>
 
-      {availableCategories.length ? (
+      {showCategoryFilters && availableCategories.length ? (
         <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
           <SkillCategoryChip label="All" active={activeCategoryId === "all"} count={sourceFilteredItems.length} onClick={() => setCategoryId("all")} />
           {availableCategories.map((category) => (
@@ -398,31 +495,33 @@ export function UnifiedSkillBrowser({
       ) : null}
 
       {loading ? (
-        <div style={{ display: "grid", placeItems: "center", gap: 8, minHeight: 180, padding: 18, border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel-bg-soft)", color: "var(--fg-3)" }}>
+        <div style={{ display: "grid", placeItems: "center", gap: 8, minHeight: compact ? 132 : 180, padding: 18, border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel-bg-soft)", color: "var(--fg-3)" }}>
           <Icon name="refresh" size={18} />
           <strong style={{ color: "var(--fg)" }}>{loadingLabel}</strong>
         </div>
       ) : visibleItems.length ? (
-        <div style={{ display: "grid", gap: 11, gridTemplateColumns: "repeat(auto-fill, minmax(248px, 1fr))" }}>
+        <div style={{ display: "grid", gap: compact ? 8 : 11, gridTemplateColumns: compact ? "repeat(auto-fill, minmax(188px, 1fr))" : "repeat(auto-fill, minmax(248px, 1fr))" }}>
           {visibleItems.map((item) => (
             <SkillCard
               key={`${item.source ?? "skill"}-${item.id}`}
+              density={density}
               item={item}
-              selected={Boolean((selectedItemId && (item.id === selectedItemId || item.slug === selectedItemId)) || item.selected)}
-              onSelect={onSelectItem}
+              selected={Boolean((effectiveSelectedItemId && (item.id === effectiveSelectedItemId || item.slug === effectiveSelectedItemId)) || item.selected)}
+              onSelect={selectItem}
               renderActions={renderActions}
+              showDescription={showCardDescription}
             />
           ))}
         </div>
       ) : (
-        <div style={{ display: "grid", placeItems: "center", gap: 6, minHeight: 180, padding: 18, border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel-bg-soft)", color: "var(--fg-3)", textAlign: "center" }}>
+        <div style={{ display: "grid", placeItems: "center", gap: 6, minHeight: compact ? 132 : 180, padding: 18, border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel-bg-soft)", color: "var(--fg-3)", textAlign: "center" }}>
           <Icon name="sparkles" size={18} />
           <strong style={{ color: "var(--fg)" }}>{emptyTitle}</strong>
           <p style={{ margin: 0, maxWidth: 420, fontSize: 12.5, lineHeight: 1.5 }}>{emptyDescription}</p>
         </div>
       )}
 
-      {renderDetail ? renderDetail(selectedItem) : null}
+      {renderDetail ? renderDetail(selectedItem) : showDefaultDetail ? <DefaultSkillDetail item={selectedItem} renderActions={renderActions} /> : null}
     </div>
   );
 }

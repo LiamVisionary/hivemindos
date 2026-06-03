@@ -1,34 +1,90 @@
 {
-  "created_at": "2026-06-02T08:36:40.073947+00:00",
+  "created_at": "2026-06-03T10:04:19.183998+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
-      "source_repo": "hivemind-os",
-      "source_path": "src/features/chat/chat-composer.tsx",
-      "target_path": "src/features/dashboard/views/DemoPanel.tsx",
+      "source_repo": "/Users/liam/Downloads/nextjs-work-history",
+      "source_path": "src/features/dashboard/views/WorkHistoryView.tsx",
+      "target_path": "src/features/dashboard/views/WorkHistoryView.tsx",
       "reuse_type": "adapted_code",
-      "note": "reused ComposerField and AgentResponseLoader for compact demo chat input and assistant thinking UI"
+      "note": "day-grouped Work History timeline component"
     },
     {
-      "source_repo": "hivemind-os",
-      "source_path": "src/components/fleet/lottie-bee.tsx",
-      "target_path": "src/features/dashboard/views/DemoPanel.tsx",
+      "source_repo": "/Users/liam/Downloads/nextjs-work-history",
+      "source_path": "src/features/dashboard/views/WorkHistoryView.module.css",
+      "target_path": "src/features/dashboard/views/WorkHistoryView.module.css",
       "reuse_type": "adapted_code",
-      "note": "reused LottieBee for the chat avatar and plucking/fusion animation"
+      "note": "scoped timeline CSS module adapted for project wrapping and radius rules"
     },
     {
-      "source_repo": "hivemind-os",
-      "source_path": "src/features/dashboard/MorePanel.tsx",
-      "target_path": "src/features/dashboard/MorePanel.tsx",
+      "source_repo": "/Users/liam/Downloads/nextjs-work-history",
+      "source_path": "README.md",
+      "target_path": "src/features/dashboard/views/KanbanPanel.tsx",
       "reuse_type": "adapted_code",
-      "note": "extended existing More/system menu card pattern with a Demos section"
+      "note": "documented WorkHistoryView prop wiring transplanted into the existing history branch"
     },
     {
-      "source_repo": "hivemind-os",
-      "source_path": "src/features/dashboard/dashboard-navigation.ts",
-      "target_path": "src/features/dashboard/dashboard-navigation.ts",
+      "source_repo": "/Users/liam/Downloads/nextjs-chat",
+      "source_path": "src/app/chat/page.tsx",
+      "target_path": "src/app/chat/page.tsx",
       "reuse_type": "adapted_code",
-      "note": "extended existing dashboard route catalog with the demo view"
+      "note": "standalone chat route adapted to open the authenticated HivemindOS dashboard chat view"
+    },
+    {
+      "source_repo": "/Users/liam/Downloads/nextjs-chat",
+      "source_path": "src/components/chat/ChatView.tsx",
+      "target_path": "src/features/dashboard/views/ChatPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "donor chat shell concepts adapted into the live dashboard chat panel without replacing runtime wiring"
+    },
+    {
+      "source_repo": "/Users/liam/Downloads/nextjs-chat",
+      "source_path": "src/components/chat/ChatNav.tsx",
+      "target_path": "src/features/dashboard/views/ChatPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "donor left rail new-chat/header/footer patterns adapted to real chatSidebarTree machines and folders"
+    },
+    {
+      "source_repo": "/Users/liam/Downloads/nextjs-chat",
+      "source_path": "src/components/chat/glyph.tsx",
+      "target_path": "src/features/dashboard/views/chat/ChatRoutePrimitives.tsx",
+      "reuse_type": "adapted_code",
+      "note": "donor route glyph paths adapted into local chat route primitives"
+    },
+    {
+      "source_repo": "/Users/liam/Downloads/nextjs-chat",
+      "source_path": "src/components/chat/hex-tile.tsx",
+      "target_path": "src/features/dashboard/views/chat/ChatRoutePrimitives.tsx",
+      "reuse_type": "adapted_code",
+      "note": "donor hex tile primitive adapted for the standalone chat rail and agent header"
+    },
+    {
+      "source_repo": "/Users/liam/Downloads/nextjs-chat",
+      "source_path": "src/components/chat/bee-icon.tsx",
+      "target_path": "src/features/dashboard/views/chat/ChatRoutePrimitives.tsx",
+      "reuse_type": "adapted_code",
+      "note": "donor bee icon wrapper adapted to existing HivemindOS bee image assets"
+    },
+    {
+      "source_repo": "/Users/liam/Downloads/nextjs-chat",
+      "source_path": "src/components/chat/ChatThread.tsx",
+      "target_path": "src/features/dashboard/views/ChatPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "donor centered thread lane, boxless assistant turns, and teal user bubble treatment adapted around live chat messages"
+    },
+    {
+      "source_repo": "/Users/liam/Downloads/nextjs-chat",
+      "source_path": "src/components/chat/ShelfPanels.tsx",
+      "target_path": "src/features/dashboard/views/ChatPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "donor collapsible right shelf and section layout adapted to live runtime, scope, process, and quick action data"
+    },
+    {
+      "source_repo": "/Users/liam/Downloads/nextjs-chat",
+      "source_path": "src/components/chat/chat-tokens.module.css",
+      "target_path": "src/features/dashboard/views/chat/ChatRouteShell.module.css",
+      "reuse_type": "style_adapted",
+      "note": "donor scoped hive tokens, route grid, thread, rail, shelf, and tooltip treatments adapted into a focused route-shell CSS module"
     }
   ]
 }

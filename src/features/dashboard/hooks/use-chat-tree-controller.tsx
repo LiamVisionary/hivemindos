@@ -4,7 +4,7 @@
 
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createNativeLocalFolder } from "@/lib/native/filesystem";
 import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 
@@ -30,6 +30,7 @@ function projectDirectoryPath(path?: string) {
 
 export function useChatTreeController(props: any) {
   const { RUNTIME_CAPABILITIES, RUNTIME_DEFAULTS, RUNTIME_KINDS, RUNTIME_LABELS, activeView, agentWorkById, chatCustomFolders, chatDedupeKey, chatFolderDraft, chatMessageStorageKey, chatMessageWindow, chatPreviewDedupeKey, chatSeedMessagesForTask, chooseDirectoryForMachine, createChatLeafKey, displayAgents, findRosterChatTask, runtimeSessionIdFromTask, isChatSidebarTask, isManualAgentChatMessage, logClientTelemetry, machineGroups, messagesByAgent, parentPathFromPath, preferChatTreeItem, recordRecentDirectory, runtimeCan, runtimeSessionForChat, selectedAgent, selectedChatDirectoryPath, selectedChatLeafKey, setActiveView, setChatCustomFolders, setChatFolderDraft, setChatHistoryLoadingByKey, setChatMessageWindow, setMessagesByAgent, setSelectedAgentId, setSelectedChatDirectoryPath, setSelectedChatLeafKey, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setSetupCommandCopied, setSetupMachineKey, setupCollectorCommand, setStatus, setStatusAgentId, taskChatLeafKey, updateAgent, workPriority, workspaceLabelFromPath } = props;
+  const [freshChatDraft, setFreshChatDraft] = useState<{ agentId: string; leafKey: string } | null>(null);
   function switchRuntime(runtime: AgentRuntime) {
     const defaults = RUNTIME_DEFAULTS[runtime];
     const runtimeSettings = runtimeSettingsFeature(runtime);
@@ -107,6 +108,22 @@ export function useChatTreeController(props: any) {
       }));
   }, []);
 
+  function hasLocalInFlightChat(existing: ChatMessage[], hydratedMessages: ChatMessage[]) {
+    const hydratedUser = hydratedMessages.find((message) => message.role === "user" && message.content.trim());
+    if (!hydratedUser) return false;
+    const hasMatchingLocalUser = existing.some((message) => (
+      message.role === "user"
+      && !message.sourceSessionId
+      && message.content.trim() === hydratedUser.content.trim()
+    ));
+    if (!hasMatchingLocalUser) return false;
+    return existing.some((message) => (
+      message.role === "assistant"
+      && !message.sourceSessionId
+      && !message.content.trim()
+    ));
+  }
+
   const hydrateRuntimeSessionChat = useCallback(async (agent: AgentProfile, sessionId: string, leafKey: string) => {
     const startedAt = Date.now();
     const storageKey = chatMessageStorageKey(agent.id, leafKey);
@@ -136,11 +153,13 @@ export function useChatTreeController(props: any) {
           && !message.sourceSessionId
           && Number(message.createdAt || 0) >= startedAt
         ));
-        return userSentAfterOpen ? current : { ...current, [storageKey]: hydratedMessages };
+        return userSentAfterOpen || hasLocalInFlightChat(existing, hydratedMessages)
+          ? current
+          : { ...current, [storageKey]: hydratedMessages };
       });
       setSelectedChatPreview((current) => (
         current?.agentId === agent.id && current.leafKey === leafKey
-          ? { ...current, messages: hydratedMessages }
+          ? hasLocalInFlightChat(current.messages, hydratedMessages) ? current : { ...current, messages: hydratedMessages }
           : current
       ));
       return hydratedMessages;
@@ -161,6 +180,7 @@ export function useChatTreeController(props: any) {
     const leafBase = options.chatLeafKey ?? `agent-${agentId}`;
     const leafKey = options.fresh ? createChatLeafKey(agentId, leafBase.replace(new RegExp(`-${agentId}$`), "")) : leafBase;
     const machine = machineGroups.find((group) => group.agents.some((item) => item.id === agentId));
+    setFreshChatDraft(options.fresh ? { agentId, leafKey } : null);
     setSelectedAgentId(agentId);
     setSelectedChatLeafKey(leafKey);
     setSelectedChatRuntimeSessionId(runtimeSessionForChat(agent, leafKey, options.runtimeSessionId));
@@ -608,11 +628,16 @@ export function useChatTreeController(props: any) {
 
   useEffect(() => {
     if (activeView !== "chat" || selectedChatLeafKey) return;
+    if (freshChatDraft) {
+      setSelectedAgentId(freshChatDraft.agentId);
+      setSelectedChatLeafKey(freshChatDraft.leafKey);
+      return;
+    }
     const latestChat = chatSidebarTree
       .flatMap((machine) => machine.folders.flatMap((folder) => folder.chats))
       .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0];
     latestChat?.onOpen();
-  }, [activeView, chatSidebarTree, selectedChatLeafKey]);
+  }, [activeView, chatSidebarTree, freshChatDraft, selectedChatLeafKey, setSelectedAgentId, setSelectedChatLeafKey]);
 
   const selectedChatMachine = useMemo(() => (
     selectedAgent

@@ -397,6 +397,7 @@ export type WalletActionState = {
   error?: string;
   sendTo?: string;
   sendAmount?: string;
+  sendAsset?: "USDC" | "ETH";
   confirmation?: string;
   x402Url?: string;
   x402Method?: string;

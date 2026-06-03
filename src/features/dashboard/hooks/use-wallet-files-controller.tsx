@@ -2,11 +2,10 @@
 // @ts-nocheck
 "use client";
 
-/* eslint-disable react-hooks/immutability, react-hooks/purity */
-
-import { useCallback, useEffect, useMemo } from "react";
 import { nativeRuntimeFileRequest } from "@/lib/native/runtime-files";
 import { readNativeRuntimeUsage } from "@/lib/native/runtime-usage";
+import { VEIL_CASH_DEFAULT_X402_URL } from "@/lib/config/veil-cash";
+import { assetSpendCapFor } from "@/lib/utils/agent-wallet";
 
 export function useWalletFilesController(props: any) {
   const { buildAgentPaymentPrompt, createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, displayAgents, duplicateAgentDraft, agents, honeyLedgerEnabled, normalizeMoney, openAgentCreationModal, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, selectedAgent, selectedAgentId, setAgents, setDuplicateAgentDraft, setHoneyLedgerEnabled, setHoneyTreasury, setMaintenanceBusy, setMaintenanceMessage, setMaintenanceReport, setMessagesByAgent, setMoneyClawLoadingEnvName, setMoneyClawStatusByEnvName, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setRuntimeFileRoots, setRuntimeFileStatus, setRuntimeFiles, setRuntimeUsage, setRuntimeUsageLoading, setSelectedAgentId, setSharedVault, setWalletActionsByAgent, setWalletVaultBackupBusy, setWalletVaultBackupMessage, setWalletVaultBackupStatus, setWalletsByAgent, sharedVault, updateAgentProfile, walletActionsByAgent, walletsByAgent } = props;
@@ -468,6 +467,58 @@ export function useWalletFilesController(props: any) {
     const wallet = walletsByAgent[agentId] ?? createDefaultAgentWallet(agentId);
     const action = walletActionsByAgent[agentId] ?? {};
     const amount = Number(action.sendAmount);
+    if (wallet.provider === "veil") {
+      const asset = action.sendAsset === "ETH" ? "ETH" : "USDC";
+      updateWalletAction(agentId, { busy: true, error: "", message: "Submitting Veil private transfer..." });
+      const response = await fetch("/api/wallet/veil/transfer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId,
+          enabled: wallet.enabled,
+          provider: wallet.provider,
+          network: wallet.network,
+          asset,
+          recipientAddress: action.sendTo,
+          amount: action.sendAmount,
+          maxAssetAmount: assetSpendCapFor(wallet, asset),
+          confirmation: action.confirmation,
+          autoShield: true,
+          duplicateGuardEnabled: wallet.duplicatePaymentGuardEnabled !== false,
+          duplicateGuardSeconds: wallet.duplicatePaymentGuardSeconds,
+        }),
+      }).catch(() => null);
+      const data = await response?.json().catch(() => null) as {
+        ok?: boolean;
+        status?: "submitted" | "shielding";
+        transfer?: { transactionHash?: string; amount?: string; recipient?: string };
+        shield?: { transactionHash?: string; amount?: string; totalSent?: string };
+        pending?: { message?: string; amount?: string; recipient?: string };
+        error?: string;
+      } | null;
+      if (!response?.ok || !data?.ok) {
+        updateWalletAction(agentId, { busy: false, error: data?.error ?? "Veil private transfer failed.", message: "" });
+        return;
+      }
+      if (data.status === "shielding") {
+        updateWalletAction(agentId, {
+          busy: false,
+          error: "",
+          confirmation: "",
+          message: data.shield?.transactionHash
+            ? `Shielding started: ${data.shield.transactionHash}. HivemindOS will finish the private send after Veil accepts the deposit.`
+            : data.pending?.message ?? "Shielding started. HivemindOS will finish the private send after Veil accepts the deposit.",
+        });
+        return;
+      }
+      updateWalletAction(agentId, {
+        busy: false,
+        error: "",
+        confirmation: "",
+        message: `Veil transfer submitted${data.transfer?.transactionHash ? `: ${data.transfer.transactionHash}` : "."}`,
+      });
+      return;
+    }
     updateWalletAction(agentId, { busy: true, error: "", message: "Sending USDC..." });
     const response = await fetch("/api/wallet/send", {
       method: "POST",
@@ -498,13 +549,16 @@ export function useWalletFilesController(props: any) {
   async function testX402Fetch(agentId: string) {
     const wallet = walletsByAgent[agentId] ?? createDefaultAgentWallet(agentId);
     const action = walletActionsByAgent[agentId] ?? {};
-    const url = (action.x402Url || wallet.x402BaseUrl || "http://localhost:5020/api/wallet/x402/mock-paid").trim();
-    updateWalletAction(agentId, { busy: true, error: "", message: "Calling paid x402 endpoint..." });
-    const response = await fetch("/api/wallet/x402", {
+    const localX402Url = typeof window !== "undefined" ? `${window.location.origin}/api/wallet/x402/mock-paid` : "http://127.0.0.1:5025/api/wallet/x402/mock-paid";
+    const url = (action.x402Url || wallet.x402BaseUrl || (wallet.provider === "veil" ? VEIL_CASH_DEFAULT_X402_URL : localX402Url)).trim();
+    const privateVeilX402 = wallet.provider === "veil";
+    updateWalletAction(agentId, { busy: true, error: "", message: privateVeilX402 ? "Calling private Veil x402 endpoint..." : "Calling paid x402 endpoint..." });
+    const response = await fetch(privateVeilX402 ? "/api/wallet/veil/x402" : "/api/wallet/x402", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         agentId,
+        provider: wallet.provider,
         url,
         method: action.x402Method || "GET",
         policy: wallet,
@@ -515,16 +569,21 @@ export function useWalletFilesController(props: any) {
       ok?: boolean;
       error?: string;
       result?: { status?: number; amountUsd?: number; paid?: boolean };
+      privateX402?: { x402?: { status?: number; amountUsd?: number; paid?: boolean }; amountUsd?: number; payerAddress?: string; payerIndex?: number };
     } | null;
     if (!response?.ok || !data?.ok) {
       updateWalletAction(agentId, { busy: false, error: data?.error ?? "x402 request failed.", message: "" });
       return;
     }
+    const x402Result = data.privateX402?.x402 ?? data.result;
+    const paidAmount = data.privateX402?.amountUsd ?? x402Result?.amountUsd ?? 0;
     updateWalletAction(agentId, {
       busy: false,
       error: "",
       x402Confirmation: "",
-      message: `x402 returned ${data.result?.status ?? "ok"}${data.result?.paid ? ` after $${(data.result.amountUsd ?? 0).toFixed(4)} payment` : ""}.`,
+      message: privateVeilX402
+        ? `Private x402 returned ${x402Result?.status ?? "ok"} after $${paidAmount.toFixed(4)} from payer index ${data.privateX402?.payerIndex ?? "new"}.`
+        : `x402 returned ${x402Result?.status ?? "ok"}${x402Result?.paid ? ` after $${paidAmount.toFixed(4)} payment` : ""}.`,
     });
     await refreshWalletBalance(agentId);
   }

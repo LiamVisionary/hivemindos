@@ -4,7 +4,12 @@ import { homedir } from "os";
 import { isAbsolute, join, sep } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
+import { gitLawbProofForProject, readProjectRegistry } from "@/lib/services/projects/project-registry";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
+import type {
+  GitLawbProof,
+  HivemindProject,
+} from "@/lib/types/gitlawb";
 import type {
   KanbanBoard,
   KanbanBoardMeta,
@@ -151,29 +156,75 @@ async function readBoardMeta(slugInput?: string | null, options: KanbanStorageOp
   return readBoardMetaFile(storage.file, slug);
 }
 
+async function projectMapForKanban(options: KanbanStorageOptions = {}) {
+  try {
+    const registry = await readProjectRegistry({ vaultPath: options.vaultPath });
+    return new Map(registry.projects.map((project) => [project.id, project]));
+  } catch {
+    return new Map<string, HivemindProject>();
+  }
+}
+
+function mergedProjectProofs(task: Pick<KanbanTask, "projectId" | "proofs">, projectsById: Map<string, HivemindProject>) {
+  const proofs = Array.isArray(task.proofs) ? task.proofs.map((proof) => sanitizeGitLawbProof(proof) as GitLawbProof) : [];
+  if (!task.projectId) return proofs;
+  const project = projectsById.get(task.projectId);
+  const projectProof = project ? gitLawbProofForProject(project) : null;
+  if (!projectProof) return proofs;
+  const targetIndex = proofs.findIndex((proof) => proof?.kind === "task");
+  if (targetIndex === -1) return [projectProof, ...proofs];
+  const target = proofs[targetIndex];
+  const next = [...proofs];
+  next[targetIndex] = sanitizeGitLawbProof({
+    ...projectProof,
+    ...target,
+    repo: cleanOptional(target.repo) ?? projectProof.repo,
+    branch: cleanOptional(target.branch) ?? projectProof.branch,
+    title: cleanOptional(target.title) ?? projectProof.title,
+    metadata: {
+      ...(projectProof.metadata ?? {}),
+      ...(target.metadata && typeof target.metadata === "object" ? target.metadata : {}),
+    },
+  }) as GitLawbProof;
+  return next;
+}
+
+async function hydrateBoardProjectProofs(board: KanbanBoard, options: KanbanStorageOptions = {}) {
+  if (!board.tasks.some((task) => task.projectId)) return board;
+  const projectsById = await projectMapForKanban(options);
+  if (!projectsById.size) return board;
+  return {
+    ...board,
+    tasks: board.tasks.map((task) => ({
+      ...task,
+      proofs: mergedProjectProofs(task, projectsById),
+    })),
+  };
+}
+
 export async function readBoard(slugInput?: string | null, options: KanbanStorageOptions = {}): Promise<KanbanBoard> {
   const slug = normalizeBoardSlug(slugInput);
   const storage = resolveKanbanStorage(slug, options);
   if (!existsSync(storage.file)) {
     const defaultVaultBoard = await readDefaultVaultBoardIfPopulated(slug, options, storage);
-    if (defaultVaultBoard) return defaultVaultBoard;
+    if (defaultVaultBoard) return hydrateBoardProjectProofs(defaultVaultBoard, options);
     const localPath = boardPathFor(ROOT_DIR, BOARDS_DIR, slug);
     if (storage.source === "obsidian" && existsSync(localPath)) {
       const migrated = normalizeBoard(await readBoardFile(localPath), slug);
       migrated.events.unshift(event("board.migrated", "Migrated board from local dashboard storage into the shared Obsidian vault."));
       await writeBoard(migrated, options);
-      return migrated;
+      return hydrateBoardProjectProofs(migrated, options);
     }
     const board = emptyBoard(slug);
     await writeBoard(board, options);
-    return board;
+    return hydrateBoardProjectProofs(board, options);
   }
   const board = normalizeBoard(await readBoardFile(storage.file), slug);
   if (storage.source === "obsidian" && board.tasks.length === 0) {
     const defaultVaultBoard = await readDefaultVaultBoardIfPopulated(slug, options, storage);
-    if (defaultVaultBoard) return defaultVaultBoard;
+    if (defaultVaultBoard) return hydrateBoardProjectProofs(defaultVaultBoard, options);
   }
-  return board;
+  return hydrateBoardProjectProofs(board, options);
 }
 
 async function readBoardFile(path: string) {
@@ -311,6 +362,7 @@ export async function archiveBoard(slugInput: string, options: KanbanStorageOpti
 
 export async function createTask(slug: string | null, input: CreateTaskInput, options: KanbanStorageOptions = {}) {
   const board = await readBoard(slug, options);
+  const projectsById = await projectMapForKanban(options);
   const title = input.title?.trim();
   if (!title) throw new Error("Task title is required.");
   if (input.idempotencyKey) {
@@ -325,7 +377,7 @@ export async function createTask(slug: string | null, input: CreateTaskInput, op
     const parent = existingTasksById.get(parentId);
     return parent && parent.status !== "done" && parent.status !== "archived";
   });
-  const task: KanbanTask = {
+  const taskBase: KanbanTask = {
     id: `t_${now.toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
     title,
     body: input.body?.trim() ?? "",
@@ -346,6 +398,10 @@ export async function createTask(slug: string | null, input: CreateTaskInput, op
     createdAt: now,
     updatedAt: now,
   };
+  const task: KanbanTask = {
+    ...taskBase,
+    proofs: mergedProjectProofs(taskBase, projectsById),
+  };
   board.tasks.unshift(task);
   for (const parentId of parents) {
     board.links.push({ parentId, childId: task.id, createdAt: now });
@@ -358,12 +414,13 @@ export async function createTask(slug: string | null, input: CreateTaskInput, op
 
 export async function patchTask(slug: string | null, taskId: string, patch: PatchTaskInput, options: KanbanStorageOptions = {}) {
   const board = await readBoard(slug, options);
+  const projectsById = await projectMapForKanban(options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   const fromStatus = task.status;
   const nextStatus = patch.status && KANBAN_STATUSES.includes(patch.status) ? patch.status : undefined;
   const retryingWorking = nextStatus === "working" && isRetryBlockerResult(task.result);
-  const changed = {
+  const changedBase = {
     ...task,
     ...patch,
     status: nextStatus ?? task.status,
@@ -385,6 +442,10 @@ export async function patchTask(slug: string | null, taskId: string, patch: Patc
     undoRequestedBy: patch.undoRequestedBy === "" ? undefined : patch.undoRequestedBy ?? task.undoRequestedBy,
     updatedAt: Date.now(),
     completedAt: nextStatus ? (nextStatus === "done" ? Date.now() : undefined) : task.completedAt,
+  };
+  const changed = {
+    ...changedBase,
+    proofs: mergedProjectProofs(changedBase, projectsById),
   };
   if (changed.status === "done") {
     changed.deliverables = mergeDeliverables(

@@ -3893,7 +3893,7 @@
 }
 
 .skillBrowserModal {
-  width: min(1040px, calc(100vw - 28px));
+  width: min(1680px, calc(100vw - 28px));
   max-width: none;
 }
 

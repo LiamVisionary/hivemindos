@@ -1,4 +1,4 @@
-import type { AgentPaymentProvider } from "@/lib/types/agent-wallet";
+import type { AgentPaymentProvider, AgentSpendCapAsset } from "@/lib/types/agent-wallet";
 
 export type AgentPaymentProviderBalanceSource = "manual-ledger" | "local-wallet" | "moneyclaw" | "x402-wallet" | "usepod-runtime";
 export type AgentPaymentProviderAdvancedSection =
@@ -8,6 +8,7 @@ export type AgentPaymentProviderAdvancedSection =
   | "x402-base-url"
   | "moneyclaw-env"
   | "clawcard-env"
+  | "veil-setup"
   | "notes"
   | "copy-prompt"
   | "test-x402"
@@ -32,6 +33,9 @@ export type AgentPaymentProviderFeatures = {
   canRunway: boolean;
   canAutopay: boolean;
   canX402: boolean;
+  privateTransferAssets: readonly AgentSpendCapAsset[];
+  privateTransferEndpoint?: string;
+  x402Endpoint?: string;
   advancedSetup: AgentPaymentProviderAdvancedSetup;
 };
 
@@ -51,6 +55,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     canRunway: true,
     canAutopay: true,
     canX402: false,
+    privateTransferAssets: [],
     advancedSetup: {
       sections: ["provider", "notes", "copy-prompt"],
     },
@@ -67,6 +72,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     canRunway: true,
     canAutopay: true,
     canX402: false,
+    privateTransferAssets: [],
     advancedSetup: {
       sections: ["provider", "clawcard-env", "notes", "copy-prompt"],
     },
@@ -83,6 +89,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     canRunway: true,
     canAutopay: true,
     canX402: true,
+    privateTransferAssets: [],
     advancedSetup: {
       sections: ["provider", "wallet-address", "network-token", "x402-base-url", "moneyclaw-env", "notes", "copy-prompt", "test-x402"],
     },
@@ -99,6 +106,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     canRunway: true,
     canAutopay: true,
     canX402: true,
+    privateTransferAssets: [],
     advancedSetup: {
       sections: LOCAL_WALLET_ADVANCED_SECTIONS,
     },
@@ -115,8 +123,28 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     canRunway: true,
     canAutopay: true,
     canX402: true,
+    privateTransferAssets: [],
     advancedSetup: {
       sections: ["usepod-status", "usepod-connection", "usepod-routing", "usepod-repair", "copy-prompt"],
+    },
+  },
+  veil: {
+    label: "Veil Cash",
+    summary: "Base privacy-pool rail for private ETH and USDC sends from one agent spend balance, with shielding handled internally when possible.",
+    setup: "Run Setup Veil once, keep a funded Base wallet for the agent, and let HivemindOS use ready private funds or shield from the local wallet before completing reviewed private sends.",
+    balanceSource: "local-wallet",
+    addressSource: "manual",
+    localWalletRequired: false,
+    canReceive: true,
+    canSend: true,
+    canRunway: true,
+    canAutopay: false,
+    canX402: true,
+    privateTransferAssets: ["USDC", "ETH"],
+    privateTransferEndpoint: "/api/wallet/veil/transfer",
+    x402Endpoint: "/api/wallet/veil/x402",
+    advancedSetup: {
+      sections: ["provider", "wallet-address", "network-token", "x402-base-url", "veil-setup", "notes", "copy-prompt", "test-x402"],
     },
   },
   manual: {
@@ -131,6 +159,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     canRunway: true,
     canAutopay: false,
     canX402: false,
+    privateTransferAssets: [],
     advancedSetup: {
       sections: MANUAL_ADVANCED_SECTIONS,
     },
@@ -160,6 +189,7 @@ export const PAYMENT_SAFETY_RULES = [
   "Treat the payment task, not the card, as the auditable source of truth.",
   "Never fabricate billing identity, verification data, card details, or wallet balances.",
   "Inspect transaction state before retrying failed or ambiguous payment attempts.",
+  "For Veil Cash, keep reviewed private sends explicit while treating shielded/private balances as internal rail state rather than user-managed wallets.",
 ] as const;
 
 export const SOVEREIGN_AGENT_LAUNCH_STEPS = [

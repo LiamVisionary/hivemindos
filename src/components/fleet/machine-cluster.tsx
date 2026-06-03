@@ -43,6 +43,79 @@ function compactMachineLabel(name: string) {
   return [letters || "NODE", suffix || words.find((word) => /^\d+$/.test(word)) || ""].filter(Boolean).slice(0, 2);
 }
 
+const GRAPH_AGENT_COMPACT_WORDS: Record<string, string> = {
+  capability: "Cap",
+};
+
+function graphAgentNameWords(name: string) {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .map((word) => GRAPH_AGENT_COMPACT_WORDS[word.toLowerCase()] ?? word)
+    .slice(0, 2);
+}
+
+const GRAPH_AGENT_EDGE_LABEL_FONT_SIZE = 7;
+const GRAPH_AGENT_EDGE_LABEL_COMPACT_FONT_SIZE = 6.1;
+const GRAPH_AGENT_EDGE_LABEL_DENSE_FONT_SIZE = 5.3;
+const GRAPH_AGENT_EDGE_LABEL_COMPACT_THRESHOLD = 13;
+const GRAPH_AGENT_EDGE_LABEL_DENSE_THRESHOLD = 16;
+const GRAPH_AGENT_EDGE_LABEL_ANCHOR_INSET = 5;
+const GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET = 3;
+
+function GraphAgentEdgeLabel({ words, selected }: { words: string[]; selected: boolean }) {
+  const color = selected ? "var(--hex-honey-border)" : "var(--foreground)";
+  const labelLength = words.reduce((total, word) => total + word.length, 0);
+  const fontSize = labelLength > GRAPH_AGENT_EDGE_LABEL_DENSE_THRESHOLD
+    ? GRAPH_AGENT_EDGE_LABEL_DENSE_FONT_SIZE
+    : labelLength >= GRAPH_AGENT_EDGE_LABEL_COMPACT_THRESHOLD
+      ? GRAPH_AGENT_EDGE_LABEL_COMPACT_FONT_SIZE
+      : GRAPH_AGENT_EDGE_LABEL_FONT_SIZE;
+  const lowerEdgeAnchorY = (HEX_H * 3) / 4 + GRAPH_AGENT_EDGE_LABEL_ANCHOR_INSET / Math.sqrt(3);
+  const lowerEdgeInnerY = lowerEdgeAnchorY - GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET * (Math.sqrt(3) / 2);
+  const lowerLeftX = GRAPH_AGENT_EDGE_LABEL_ANCHOR_INSET + GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET / 2;
+  const lowerLeftY = lowerEdgeInnerY;
+  const lowerRightX = HEX_W - GRAPH_AGENT_EDGE_LABEL_ANCHOR_INSET - GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET / 2;
+  const lowerRightY = lowerEdgeInnerY;
+
+  return (
+    <svg
+      aria-hidden="true"
+      className={`${styles.graphAgentName} font-semibold`}
+      viewBox={`0 0 ${HEX_W} ${HEX_H}`}
+      style={{ color }}
+    >
+      {words[0] ? (
+        <text
+          className={styles.graphAgentNameText}
+          dominantBaseline="middle"
+          fontSize={fontSize}
+          textAnchor="start"
+          x={lowerLeftX}
+          y={lowerLeftY}
+          transform={`rotate(30 ${lowerLeftX} ${lowerLeftY})`}
+        >
+          {words[0]}
+        </text>
+      ) : null}
+      {words[1] ? (
+        <text
+          className={styles.graphAgentNameText}
+          dominantBaseline="middle"
+          fontSize={fontSize}
+          textAnchor="end"
+          x={lowerRightX}
+          y={lowerRightY}
+          transform={`rotate(-30 ${lowerRightX} ${lowerRightY})`}
+        >
+          {words[1]}
+        </text>
+      ) : null}
+    </svg>
+  );
+}
+
 function MachineScreenIcon({ name, selected, muted, mobile }: { name: string; selected: boolean; muted: boolean; mobile?: boolean }) {
   const color = selected
     ? "var(--hex-honey-border)"
@@ -172,6 +245,7 @@ export function MachineCluster({
         const { x, y } = axialToPixel(q, r);
         const agent = !isMachine && !isAdd ? machine.agents[i - 1] : null;
         const isAgentSelected = !!(agent && selectedAgentId === agent.id);
+        const agentNameWords = agent ? graphAgentNameWords(agent.name) : [];
 
         const tone: HexTone | null = isAdd
           ? null
@@ -227,15 +301,15 @@ export function MachineCluster({
             >
               {!isMachine && agent?.activeApp ? <ActiveAppBadge app={agent.activeApp} /> : null}
               <div
-                className={`grid justify-items-center text-center ${!isMachine ? styles.graphAgentCellContent : ""}`}
+                className={isMachine ? "grid justify-items-center text-center" : `${styles.graphAgentCellContent} text-center`}
                 style={{
                   width: isMachine ? "100%" : undefined,
                   height: isMachine ? "100%" : undefined,
-                  maxWidth: isMachine ? HEX_W : HEX_W - 8,
+                  maxWidth: isMachine ? HEX_W : undefined,
                   paddingInline: isMachine ? 0 : 4,
                   alignContent: isMachine ? "center" : "center",
                   gap: isMachine ? 0 : 1,
-                  transform: isMachine ? undefined : "translateY(-5px)",
+                  transform: undefined,
                 }}
               >
                 {isMachine ? (
@@ -247,20 +321,13 @@ export function MachineCluster({
                   />
                 ) : (
                   <>
-                    <BeeIcon role={agent!.beeRole === "queen" ? "queen" : "worker"} workerClass={agent!.workerClass} size={34}
-                      dim={agent!.state === "ready" && !isAgentSelected} />
-                    <span
-                      className={`${styles.graphAgentName} font-semibold`}
-                      style={{
-                        fontFamily: "var(--f-mono)",
-                        fontSize: 7.8,
-                        letterSpacing: 0.04,
-                        lineHeight: 1.05,
-                        color: isAgentSelected ? "var(--hex-honey-border)" : "var(--foreground)",
-                      }}
-                    >
-                      {agent!.name}
-                    </span>
+                    <BeeIcon
+                      role={agent!.beeRole === "queen" ? "queen" : "worker"}
+                      workerClass={agent!.workerClass}
+                      size={48}
+                      dim={agent!.state === "ready" && !isAgentSelected}
+                    />
+                    <GraphAgentEdgeLabel words={agentNameWords} selected={isAgentSelected} />
                   </>
                 )}
               </div>

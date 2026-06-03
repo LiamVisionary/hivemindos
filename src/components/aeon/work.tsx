@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { UnifiedSkillBrowser, type UnifiedSkillBrowserItem } from "@/features/dashboard/views/chat/UnifiedSkillBrowser";
-import { Btn, Card, Eyebrow, Pill, SectionHead, type IconName, type Tone, aeonStyles as styles } from "./parts";
+import { type UnifiedSkillBrowserItem } from "@/features/dashboard/views/chat/UnifiedSkillBrowser";
+import { Btn, Eyebrow, Pill, type IconName, type Tone, aeonStyles as styles } from "./parts";
 import { AEON_CATEGORIES, CAT, type AeonRun, type AeonSkill, type SkillState } from "./aeon-data";
+import { AeonSkillBrowserSection } from "./skill-browser-section";
 
 const STATE_META: Record<SkillState, { tone: Tone; label: string; action: string; icon: IconName }> = {
   "on-duty": { tone: "honey", label: "On duty", action: "Pause", icon: "pause" },
@@ -85,42 +86,39 @@ export function AeonWork({ skills, runs, selectedSlug, onSelect, onAction, onImp
   const setUp = skills.filter((s) => ["on-duty", "paused", "manual"].includes(s.state)).length;
 
   return (
-    <Card>
-      <SectionHead eyebrow="Skills" title={`${skills.length} available · ${setUp} set up`} icon="sparkles"
-        action={<div style={{ display: "flex", gap: 8 }}>
+    <AeonSkillBrowserSection
+      title={`${skills.length} available · ${setUp} set up`}
+      action={<div style={{ display: "flex", gap: 8 }}>
           <Btn size="sm" variant="secondary" icon="fileUp" onClick={onImport}>Import skill</Btn>
           <Btn size="sm" variant="secondary" icon="clock">Scheduler</Btn>
-        </div>} />
-
-      <UnifiedSkillBrowser
-        items={browserItems}
-        sources={[
-          { id: "aeon", label: "AEON", predicate: (item) => item.sourceKind !== "shared-brain" },
-          { id: "shared", label: "Shared Brain", predicate: (item) => item.sourceKind === "shared-brain" },
-        ]}
-        categories={AEON_CATEGORIES}
-        selectedItemId={selectedSlug}
-        onSelectItem={(item) => onSelect(item.slug === selectedSlug ? null : item.slug)}
-        emptyTitle="No skills match this filter"
-        emptyDescription="Try another source, category, or search."
-        renderActions={(item) => {
-          const skill = skillBySlug.get(item.slug);
-          if (!skill) return null;
-          const state = STATE_META[skill.state];
-          return (
-            <Btn
-              size="sm"
-              variant={skill.state === "on-duty" || skill.state === "available" || skill.state === "ready" ? "secondary" : "primary"}
-              icon={state.icon}
-              onClick={() => onAction(skill)}
-            >
-              {state.action}
-            </Btn>
-          );
-        }}
-        renderDetail={(item) => <SkillDetail skill={item ? skillBySlug.get(item.slug) : undefined} runs={runs} onAction={onAction} />}
-      />
-    </Card>
+        </div>}
+      items={browserItems}
+      sources={[
+        { id: "aeon", label: "AEON", predicate: (item) => item.sourceKind !== "shared-brain" },
+        { id: "shared", label: "Shared Brain", predicate: (item) => item.sourceKind === "shared-brain" },
+      ]}
+      categories={AEON_CATEGORIES}
+      selectedItemId={selectedSlug}
+      onSelectItem={(item) => onSelect(item.slug === selectedSlug ? null : item.slug)}
+      emptyTitle="No skills match this filter"
+      emptyDescription="Try another source, category, or search."
+      renderActions={(item) => {
+        const skill = skillBySlug.get(item.slug);
+        if (!skill) return null;
+        const state = STATE_META[skill.state];
+        return (
+          <Btn
+            size="sm"
+            variant={skill.state === "on-duty" || skill.state === "available" || skill.state === "ready" ? "secondary" : "primary"}
+            icon={state.icon}
+            onClick={() => onAction(skill)}
+          >
+            {state.action}
+          </Btn>
+        );
+      }}
+      renderDetail={(item) => <SkillDetail skill={item ? skillBySlug.get(item.slug) : undefined} runs={runs} onAction={onAction} />}
+    />
   );
 }
 

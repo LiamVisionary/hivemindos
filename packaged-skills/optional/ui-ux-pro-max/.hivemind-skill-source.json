@@ -1,0 +1,11 @@
+{
+  "upstreamName": "ui-ux-pro-max",
+  "sourceUrl": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill/tree/main/.claude/skills/ui-ux-pro-max",
+  "repository": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+  "commit": "b7e3af80f6e331f6fb456667b82b12cade7c9d35",
+  "importedAt": "2026-06-03T03:05:17.042Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/ui-ux-pro-max",
+  "status": "optional"
+}

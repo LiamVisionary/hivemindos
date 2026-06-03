@@ -1,6 +1,8 @@
-export type AgentPaymentProvider = "manual" | "bankr" | "clawcard" | "moneyclaw" | "x402" | "usepod";
+export type AgentPaymentProvider = "manual" | "bankr" | "clawcard" | "moneyclaw" | "x402" | "usepod" | "veil";
 
 export type AgentSurvivalTier = "dead" | "critical" | "low_compute" | "normal" | "high";
+export type AgentSpendCapAsset = "USDC" | "ETH";
+export type AgentAssetSpendCaps = Partial<Record<AgentSpendCapAsset, number>>;
 
 export interface AgentWalletConfig {
   agentId: string;
@@ -13,8 +15,11 @@ export interface AgentWalletConfig {
   currentBalanceUsd: number;
   dailyComputeBurnUsd: number;
   maxPaymentUsd: number;
+  assetSpendCaps?: AgentAssetSpendCaps;
   approvalRequiredOverUsd: number;
   autoPayEnabled: boolean;
+  duplicatePaymentGuardEnabled?: boolean;
+  duplicatePaymentGuardSeconds?: number;
   clawCardEnvName: string;
   moneyClawEnvName: string;
   x402BaseUrl: string;

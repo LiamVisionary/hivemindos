@@ -228,12 +228,36 @@ if (Ask-YesNo "Remove optional GBrain and Syntho config keys from .env.local?" $
   }
 }
 
-if (Ask-YesNo "Remove dashboard auth secret and device token from .env.local?" $false) {
+if (Ask-YesNo "Remove dashboard auth secret and device token from .env.local and shared hive env?" $false) {
   $envLocal = Join-Path $Root ".env.local"
   if (Test-Path $envLocal) {
     $next = Get-Content $envLocal | Where-Object { $_ -notmatch '^(HIVEMINDOS_DASHBOARD_AUTH_SECRET|HIVEMINDOS_DASHBOARD_DEVICE_TOKEN)=' }
     Set-Content -Path $envLocal -Value $next
     Ok "Removed dashboard auth keys from .env.local"
+  }
+  $hiveEnvAdd = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".local\bin\hive-env-add.cmd"
+  if (Test-Path $hiveEnvAdd) {
+    try {
+      $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+      $processInfo.FileName = "cmd.exe"
+      $processInfo.Arguments = "/c `"$hiveEnvAdd`" --import-stdin --scope agent --runtime generic"
+      $processInfo.WorkingDirectory = $Root
+      $processInfo.UseShellExecute = $false
+      $processInfo.RedirectStandardInput = $true
+      $processInfo.RedirectStandardOutput = $true
+      $processInfo.RedirectStandardError = $true
+      $process = [System.Diagnostics.Process]::Start($processInfo)
+      $process.StandardInput.Write("HIVEMINDOS_DASHBOARD_AUTH_SECRET=`nHIVEMINDOS_DASHBOARD_DEVICE_TOKEN=`n")
+      $process.StandardInput.Close()
+      $process.WaitForExit()
+      if ($process.ExitCode -eq 0) {
+        Ok "Removed dashboard auth keys from shared hive env"
+      } else {
+        Warn "Could not remove dashboard auth keys from shared hive env"
+      }
+    } catch {
+      Warn "Could not remove dashboard auth keys from shared hive env: $($_.Exception.Message)"
+    }
   }
 }
 

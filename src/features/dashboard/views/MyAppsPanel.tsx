@@ -17,6 +17,7 @@ type HostedApp = {
   theme: string;
   initials: string;
   iconUrl?: string;
+  sourceName?: string;
   machineName: string;
   machineHost: string;
   local: boolean;
@@ -225,6 +226,104 @@ function isSparseAppsPayload(payload: FleetAppsPayload | null) {
   return apps.length <= 1 && readyMachines > 1;
 }
 
+function hostedAppScore(app: HostedApp) {
+  return (app.iconUrl ? 10 : 0)
+    + (isSpecificHostedApp(app) ? 40 : 0)
+    + (app.serviceKind && app.serviceKind !== "api" ? 30 : 0)
+    + (app.sourceName?.trim().toLowerCase() === app.name.trim().toLowerCase() ? 20 : 0)
+    + ((app.apiRoutes?.length ?? 0) > 0 ? 8 : 0)
+    + (app.interactive ? 4 : 0)
+    + (app.online ? 2 : 0)
+    + (app.local ? 1 : 0);
+}
+
+function normalizedHostedAppName(app: HostedApp) {
+  return app.name.trim().toLowerCase();
+}
+
+function isGenericHostedApiApp(app: HostedApp) {
+  const name = normalizedHostedAppName(app);
+  return /^(?:node|python(?:3(?:\.\d+)?)?|docker-pr|container|cloudflar|cloudflare|ssh|tailscale|syncthing|nginx|megasync|discord|controlce)(?: api)?$/.test(name)
+    || /^welcome to nginx!?$/.test(name);
+}
+
+function isInfrastructureHostedApp(app: HostedApp) {
+  const name = normalizedHostedAppName(app);
+  const text = `${name} ${app.sourceName ?? ""}`.toLowerCase();
+  return name === "hivemind-linkd"
+    || name === "tailscale api"
+    || name === "syncthing api"
+    || name === "ssh api"
+    || /^welcome to nginx!?$/.test(name)
+    || /\b(?:cloudflar|cloudflare|container)\b/.test(text);
+}
+
+function isSpecificHostedApp(app: HostedApp) {
+  const serviceKind = app.serviceKind?.trim().toLowerCase();
+  if (serviceKind && serviceKind !== "api") return true;
+  return !isGenericHostedApiApp(app) && !isInfrastructureHostedApp(app);
+}
+
+function hostedDisplayAppKey(app: HostedApp) {
+  const name = normalizedHostedAppName(app);
+  if (name === "hivemindos") return name;
+  if (isGenericHostedApiApp(app) || isInfrastructureHostedApp(app)) return "";
+  return name;
+}
+
+function proxiedHostedAppKey(app: HostedApp) {
+  for (const rawUrl of [app.healthUrl, app.apiBaseUrl, app.openUrl]) {
+    if (!rawUrl) continue;
+    try {
+      const url = new URL(rawUrl);
+      const peerMatch = url.pathname.match(/\/peer\/([^/]+)\/app-proxy\/(\d+)(?:\/|$)/);
+      if (peerMatch) {
+        const peer = decodeURIComponent(peerMatch[1] ?? "").split(":")[0];
+        if (peer) return `${peer}:${peerMatch[2]}`;
+      }
+      const match = url.pathname.match(/\/app-proxy\/(\d+)(?:\/|$)/);
+      if (match) return `${app.machineHost.toLowerCase() || url.hostname}:${match[1]}`;
+    } catch {
+      continue;
+    }
+  }
+  return "";
+}
+
+function sourceHostedAppKey(app: HostedApp) {
+  const idMatch = app.id.match(/:(\d+):([^:]+)$/);
+  return idMatch ? `${idMatch[1]}:${idMatch[2]}` : "";
+}
+
+function dedupeByHostedAppKey(apps: HostedApp[], keyForApp: (app: HostedApp) => string) {
+  const byKey = new Map<string, HostedApp>();
+  for (const app of apps) {
+    const key = keyForApp(app) || app.id;
+    const previous = byKey.get(key);
+    if (!previous || hostedAppScore(app) > hostedAppScore(previous) || (hostedAppScore(app) === hostedAppScore(previous) && app.openUrl.length < previous.openUrl.length)) {
+      byKey.set(key, app);
+    }
+  }
+  return [...byKey.values()];
+}
+
+function dedupeHostedApps(apps: HostedApp[]) {
+  const launchableApps = dedupeByHostedAppKey(
+    dedupeByHostedAppKey(
+      dedupeByHostedAppKey(
+        apps.filter((app) => !isInfrastructureHostedApp(app) && (!isGenericHostedApiApp(app) || app.name.toLowerCase() === "hivemindos")),
+        proxiedHostedAppKey,
+      ),
+      sourceHostedAppKey,
+    ),
+    hostedDisplayAppKey,
+  );
+  return dedupeByHostedAppKey(
+    launchableApps,
+    (app) => app.id,
+  );
+}
+
 function appMachineKey(name: string) {
   return name.trim().toLowerCase().replace(/^hivemindos[-\s]*/i, "").replace(/[^a-z0-9]+/g, "");
 }
@@ -336,9 +435,11 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
 
   if (activeView !== "my-apps") return null;
 
-  const apps = payload?.apps ?? [];
+  const apps = dedupeHostedApps(payload?.apps ?? []);
   const selectedApp = apps.find((app) => app.id === selectedAppId) ?? null;
   const checkedAt = payload?.checkedAt ? Date.parse(payload.checkedAt) : 0;
+  const appNameCounts = new Map<string, number>();
+  for (const app of apps) appNameCounts.set(app.name.toLowerCase(), (appNameCounts.get(app.name.toLowerCase()) ?? 0) + 1);
   const visibleMachineKeys = new Set<string>();
   const reportingMachineKeys = new Set<string>();
   for (const machine of payload?.machines ?? []) {
@@ -726,6 +827,11 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
               {!app.interactive ? <span className="absolute -left-2 -top-2 rounded-full border border-[rgba(94,234,212,0.32)] bg-[rgba(10,14,21,0.92)] px-1.5 py-0.5 text-[9px] font-black uppercase text-[var(--accent-strong)]">API</span> : null}
             </span>
             <span className="max-w-[7rem] text-sm font-bold leading-5">{app.name}</span>
+            {(appNameCounts.get(app.name.toLowerCase()) ?? 0) > 1 ? (
+              <span className="max-w-[8rem] text-[11px] font-bold leading-4 text-[var(--muted)]">
+                {app.local ? "This Mac" : app.machineName} · {app.port}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>

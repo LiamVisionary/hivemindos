@@ -352,11 +352,57 @@ export function isAutomationChatTranscript(messages: ChatMessage[] = []) {
   return false;
 }
 
+function normalizedChatMessageContent(message: Pick<ChatMessage, "content">) {
+  return message.content.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function sameVisibleChatMessage(left: ChatMessage | undefined, right: ChatMessage | undefined) {
+  if (!left || !right) return false;
+  return left.role === right.role && normalizedChatMessageContent(left) === normalizedChatMessageContent(right);
+}
+
+function findLastChatMessageIndex(messages: ChatMessage[], predicate: (message: ChatMessage) => boolean) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (predicate(messages[index])) return index;
+  }
+  return -1;
+}
+
+function dedupeChatTranscript(messages: ChatMessage[]) {
+  const output: ChatMessage[] = [];
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index];
+    if (sameVisibleChatMessage(output.at(-1), message)) continue;
+    if (message.role === "user" && message.content.trim()) {
+      const previousUserIndex = findLastChatMessageIndex(output, (item) => sameVisibleChatMessage(item, message));
+      const between = previousUserIndex >= 0 ? output.slice(previousUserIndex + 1) : [];
+      const nextAssistant = messages[index + 1];
+      const previousAssistant = [...between].reverse().find((item) => item.role === "assistant" && item.content.trim());
+      if (
+        nextAssistant?.role === "assistant"
+        && previousAssistant
+        && sameVisibleChatMessage(previousAssistant, nextAssistant)
+      ) {
+        index += 1;
+        continue;
+      }
+    }
+    if (message.role === "assistant" && message.content.trim()) {
+      const previousAssistantIndex = findLastChatMessageIndex(output, (item) => sameVisibleChatMessage(item, message));
+      const previousUser = [...output.slice(0, previousAssistantIndex)].reverse().find((item) => item.role === "user");
+      const currentUser = [...output].reverse().find((item) => item.role === "user");
+      if (previousAssistantIndex >= 0 && sameVisibleChatMessage(previousUser, currentUser)) continue;
+    }
+    output.push(message);
+  }
+  return output;
+}
+
 export function compactChatMessagesForStorage(messagesByAgent: Record<string, ChatMessage[]>) {
   return Object.fromEntries(Object.entries(messagesByAgent)
     .map(([agentId, messages]) => [
       agentId,
-      messages
+      dedupeChatTranscript(messages)
         .filter((message) => message.role !== "system" && (message.content.trim() || message.attachments?.length))
         .slice(-120),
     ])

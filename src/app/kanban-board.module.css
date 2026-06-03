@@ -416,42 +416,50 @@
   gap: 12px;
   width: 100%;
   min-height: 0;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid transparent;
   border-radius: 8px;
   background:
-    linear-gradient(180deg, rgba(20, 29, 42, 0.9), rgba(10, 15, 23, 0.92)),
-    rgba(12, 18, 27, 0.86);
+    linear-gradient(180deg, rgba(21, 25, 33, 0.98), rgba(14, 17, 24, 0.98)),
+    rgba(16, 19, 26, 0.96);
+  box-shadow:
+    0 0 14px rgba(0, 0, 0, 0.18),
+    0 8px 18px rgba(0, 0, 0, 0.15);
   color: var(--foreground);
   padding: 12px;
   text-align: left;
   touch-action: manipulation;
   cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+  transition: background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
 .kanbanCard:hover,
 .kanbanCard:focus-visible {
-  border-color: rgba(94, 234, 212, 0.34);
-  background: rgba(18, 28, 39, 0.94);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  background: rgba(21, 25, 33, 0.98);
+  box-shadow:
+    0 0 16px rgba(0, 0, 0, 0.2),
+    0 10px 20px rgba(0, 0, 0, 0.18);
   outline: none;
+  transform: translateY(-1px);
 }
 
 .kanbanCard.working {
-  border-color: rgba(250, 204, 21, 0.42);
-  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.08), 0 0 18px rgba(250, 204, 21, 0.06);
+  box-shadow:
+    0 0 16px rgba(0, 0, 0, 0.2),
+    0 9px 20px rgba(0, 0, 0, 0.17);
 }
 
 .kanbanCard.stale {
-  border-color: rgba(251, 146, 60, 0.58);
   background: linear-gradient(180deg, rgba(251, 146, 60, 0.1), rgba(17, 23, 34, 0.96));
-  box-shadow: inset 0 0 0 1px rgba(251, 146, 60, 0.08), 0 0 18px rgba(251, 146, 60, 0.08);
+  box-shadow:
+    0 0 16px rgba(0, 0, 0, 0.2),
+    0 9px 20px rgba(0, 0, 0, 0.17);
 }
 
 .kanbanCard.active {
-  border-color: rgba(45, 212, 191, 0.76);
-  background: rgba(16, 34, 31, 0.92);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.18);
+  border-color: rgba(240, 202, 114, 0.5);
+  box-shadow:
+    0 0 16px rgba(0, 0, 0, 0.2),
+    0 10px 20px rgba(0, 0, 0, 0.18);
 }
 
 .kanbanCardHeader,
@@ -749,6 +757,80 @@
   font-weight: 850;
   line-height: 1.28 !important;
   letter-spacing: 0;
+}
+
+.codeProofRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.codeProofStatusPill {
+  position: relative;
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  border-radius: 999px;
+  color: #f8fafc;
+  font-size: 10.5px;
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1.1;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.codeProofStatusPill {
+  gap: 6px;
+  border: 1px solid rgba(110, 231, 183, 0.28);
+  background: rgba(6, 78, 59, 0.88);
+  color: #dcfce7;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 6px 14px rgba(5, 150, 105, 0.1);
+  padding: 4px 9px;
+  text-shadow: none;
+}
+
+.codeProofStatusPill.ready,
+.codeProofStatusPill.linked,
+.codeProofStatusPill.unavailable {
+  border-color: rgba(148, 163, 184, 0.24);
+  background: rgba(15, 23, 42, 0.7);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.codeProofStatusPill.unavailable {
+  color: #cbd5e1;
+}
+
+.codeProofStatusPill.ready::before,
+.codeProofStatusPill.ready::after,
+.codeProofStatusPill.linked::before,
+.codeProofStatusPill.linked::after,
+.codeProofStatusPill.unavailable::before,
+.codeProofStatusPill.unavailable::after {
+  display: none;
+}
+
+.codeProofStatusPill::before {
+  content: "✓";
+  display: inline-flex;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(187, 247, 208, 0.5);
+  border-radius: 999px;
+  background: rgba(236, 253, 245, 0.1);
+  color: #bbf7d0;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .kanbanMessageRow {
@@ -1421,7 +1503,7 @@
   gap: 8px;
   min-height: 0;
   overflow-y: auto;
-  padding: 2px 2px 2px 0;
+  padding: 12px 12px 20px;
 }
 
 .workBoardPanel .kanbanColumn:has(.kanbanInlineAdd [aria-expanded="true"]) {
@@ -1436,33 +1518,44 @@
 
 .workBoardPanel .kanbanCard {
   gap: 9px;
-  border: 1px solid rgba(170, 179, 193, 0.1);
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: var(--kb-card);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12);
+  background:
+    linear-gradient(180deg, rgba(23, 27, 35, 0.98), rgba(14, 17, 23, 0.98)),
+    var(--kb-card);
+  box-shadow:
+    0 0 14px rgba(0, 0, 0, 0.18),
+    0 8px 18px rgba(0, 0, 0, 0.15);
   padding: 13px;
 }
 
 .workBoardPanel .kanbanCard:hover,
 .workBoardPanel .kanbanCard:focus-visible {
-  border-color: rgba(var(--lane-accent-rgb), 0.28);
-  background: var(--kb-card-hover);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
+  background:
+    linear-gradient(180deg, rgba(25, 30, 39, 0.99), rgba(16, 20, 27, 0.99)),
+    var(--kb-card-hover);
+  box-shadow:
+    0 0 16px rgba(0, 0, 0, 0.2),
+    0 10px 20px rgba(0, 0, 0, 0.18);
 }
 
 .workBoardPanel .kanbanCard.working {
-  border-color: rgba(240, 202, 114, 0.26);
-  box-shadow: inset 2px 0 0 rgba(240, 202, 114, 0.55), 0 8px 22px rgba(0, 0, 0, 0.12);
+  box-shadow:
+    0 0 16px rgba(0, 0, 0, 0.2),
+    0 9px 20px rgba(0, 0, 0, 0.17);
 }
 
 .workBoardPanel .kanbanCard.stale {
-  border-color: rgba(229, 115, 134, 0.38);
-  box-shadow: inset 2px 0 0 rgba(229, 115, 134, 0.62), 0 8px 22px rgba(0, 0, 0, 0.12);
+  box-shadow:
+    0 0 16px rgba(0, 0, 0, 0.2),
+    0 9px 20px rgba(0, 0, 0, 0.17);
 }
 
 .workBoardPanel .kanbanCard.active {
-  border-color: rgba(var(--lane-accent-rgb), 0.42);
-  box-shadow: inset 2px 0 0 var(--lane-accent), 0 14px 34px rgba(0, 0, 0, 0.18);
+  border-color: rgba(240, 202, 114, 0.52);
+  box-shadow:
+    0 0 16px rgba(0, 0, 0, 0.2),
+    0 10px 20px rgba(0, 0, 0, 0.18);
 }
 
 .kanbanSkeletonShell {
@@ -3564,7 +3657,6 @@
 :global(:root[data-theme="hive-light"]) .kanbanCard.active,
 :global(:root[data-theme="hive-light"]) .kanbanInlineAdd,
 :global(:root[data-theme="hive-light"]) .kanbanFirstRun {
-  border-color: rgba(185, 139, 47, 0.34);
   background: rgba(212, 180, 111, 0.16);
 }
 
@@ -3662,9 +3754,11 @@
 }
 
 :global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanCard {
-  border-color: rgba(79, 68, 52, 0.1);
+  border-color: transparent;
   background: var(--kb-card);
-  box-shadow: 0 10px 28px rgba(83, 70, 48, 0.08);
+  box-shadow:
+    0 0 14px rgba(83, 70, 48, 0.08),
+    0 8px 18px rgba(83, 70, 48, 0.08);
 }
 
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardControls,

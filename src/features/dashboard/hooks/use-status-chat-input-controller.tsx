@@ -4,7 +4,7 @@
 
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveDashboardSlashCommand } from "@/features/chat/dashboard-slash-commands";
 import { runtimeChatFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
@@ -14,6 +14,7 @@ export function useStatusChatInputController(props: any) {
   const [chatKanbanGeneration, setChatKanbanGeneration] = useState(null);
   const [chatQueue, setChatQueue] = useState([]);
   const [flushingChatQueueId, setFlushingChatQueueId] = useState("");
+  const chatSubmitGuardRef = useRef({ signature: "", at: 0 });
   const queuedChatMessages = selectedAgent
     ? chatQueue.filter((item: any) => item.agentId === selectedAgent.id && item.leafKey === selectedChatLeafKey)
     : [];
@@ -83,7 +84,7 @@ export function useStatusChatInputController(props: any) {
     });
   }
 
-  function appendChatProcess(storageKey: string, label: string, detail?: string) {
+  function appendChatProcess(storageKey: string, label: string, detail?: string, status?: string) {
     const cleanLabel = label.trim();
     if (!cleanLabel) return;
     setChatProcessByKey?.((current) => {
@@ -92,12 +93,12 @@ export function useStatusChatInputController(props: any) {
       if (last?.label === cleanLabel && last?.detail === detail) {
         return {
           ...current,
-          [storageKey]: [...existing.slice(0, -1), { ...last, at: Date.now() }],
+          [storageKey]: [...existing.slice(0, -1), { ...last, at: Date.now(), status }],
         };
       }
       return {
         ...current,
-        [storageKey]: [...existing, { at: Date.now(), label: cleanLabel, detail }].slice(-80),
+        [storageKey]: [...existing, { at: Date.now(), label: cleanLabel, detail, status }].slice(-80),
       };
     });
   }
@@ -168,14 +169,16 @@ export function useStatusChatInputController(props: any) {
     if (/thinking|reasoning/i.test(type)) {
       return { label: type.includes("reason") ? "Reasoning" : "Thinking", detail: message || undefined };
     }
+    const rawStatus = String(source?.status ?? "").trim().toLowerCase();
+    const status = rawStatus === "completed" || rawStatus === "failed" || rawStatus === "running" ? rawStatus : undefined;
     if (/tool\.(generating|start|started|pending)/i.test(type)) {
-      return { label: toolName ? `Starting ${toolName}` : "Starting tool", detail: message || undefined };
+      return { label: toolName ? `Starting ${toolName}` : "Starting tool", detail: message || undefined, status: status ?? "running" };
     }
     if (/tool\.(progress|running)/i.test(type)) {
-      return { label: toolName ? `${toolName} running` : "Tool running", detail: message || undefined };
+      return { label: toolName ? `${toolName} running` : "Tool running", detail: message || undefined, status: status ?? "running" };
     }
     if (/tool\.(done|completed|failed|error)/i.test(type)) {
-      return { label: toolName ? `${toolName} finished` : "Tool finished", detail: message || undefined };
+      return { label: toolName ? `${toolName} finished` : "Tool finished", detail: message || undefined, status: status ?? (/failed|error/i.test(type) ? "failed" : "completed") };
     }
     if (parsed?.tool_call && typeof parsed.tool_call === "object") {
       const tool = parsed.tool_call;
@@ -206,10 +209,7 @@ export function useStatusChatInputController(props: any) {
     const role = String(message?.role ?? "").trim().toLowerCase();
     const content = String(message?.content ?? "").trim();
     if (!content) return null;
-    if (role === "user") return null;
-    if (role === "assistant") {
-      return { label: "Assistant wrote in session", detail: compactProcessDetail(content) };
-    }
+    if (role === "user" || role === "assistant") return null;
     if (role === "tool") {
       if (/\[Command interrupted\]/i.test(content)) return { label: "Command interrupted" };
       if (/Tool execution skipped/i.test(content)) return { label: "Tool execution skipped", detail: compactProcessDetail(content) };
@@ -224,6 +224,30 @@ export function useStatusChatInputController(props: any) {
 
   function yieldChatPaint() {
     return new Promise<void>((resolve) => window.setTimeout(resolve, 16));
+  }
+
+  function nextChatTextDelta(incoming: string, current: string) {
+    if (!incoming) return "";
+    if (!current) return incoming;
+    if (incoming.startsWith(current)) return incoming.slice(current.length);
+    if (current.endsWith(incoming)) return "";
+    return incoming;
+  }
+
+  function compactRepeatedAssistantText(value: string) {
+    const text = value.replace(/\r\n/g, "\n");
+    const draftMatches = [...text.matchAll(/(?:^|\n)draft:\s*\n/gi)];
+    if (draftMatches.length < 2) return value;
+    const firstStart = draftMatches[0].index ?? 0;
+    const secondStart = draftMatches[1].index ?? 0;
+    const normalized = (content: string) => content.replace(/\s+/g, " ").trim().toLowerCase();
+    const firstBody = normalized(text.slice(firstStart, secondStart));
+    const secondBody = normalized(text.slice(secondStart));
+    if (!firstBody || !secondBody) return value;
+    if (firstBody.startsWith(secondBody) || secondBody.startsWith(firstBody)) {
+      return text.slice(0, secondStart).trimEnd();
+    }
+    return value;
   }
 
   function extractGeneratedKanbanTask(rawText: string, fallbackTitle: string) {
@@ -907,13 +931,26 @@ export function useStatusChatInputController(props: any) {
       stopAudioRecording();
       return;
     }
-    const prompt = text.trim();
+    const prompt = (text ?? "").trim();
     const form = event.currentTarget as HTMLFormElement | null;
     const submittedAgentMode = String(form ? new FormData(form).get("agentMode") ?? "" : "");
     const agentMode = submittedAgentMode === "plan" ? "plan" : "act";
     const outgoingAttachments = chatAttachments;
     const outgoingDirectories = chatDirectories;
     if (!selectedAgent || (!prompt && outgoingAttachments.length === 0 && outgoingDirectories.length === 0)) return;
+    const submitSignature = [
+      selectedAgent.id,
+      selectedChatLeafKey,
+      agentMode,
+      prompt,
+      outgoingAttachments.map((attachment: any) => `${attachment.name ?? ""}:${attachment.size ?? ""}:${attachment.kind ?? ""}`).join("|"),
+      outgoingDirectories.map((directory: any) => directory.path ?? directory.id ?? linkedDirectoryLabel(directory)).join("|"),
+    ].join("\n");
+    const now = Date.now();
+    if (chatSubmitGuardRef.current.signature === submitSignature && now - chatSubmitGuardRef.current.at < 2_000) {
+      return;
+    }
+    chatSubmitGuardRef.current = { signature: submitSignature, at: now };
     const queuedMessage = {
       id: `chat-queue-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       agent: selectedAgent,
@@ -942,6 +979,38 @@ export function useStatusChatInputController(props: any) {
     const agentMode = queuedMessage.agentMode === "plan" ? "plan" : "act";
     const outgoingAttachments = queuedMessage.attachments ?? [];
     const outgoingDirectories = queuedMessage.directories ?? [];
+    const sameChatMessage = (left: ChatMessage | undefined, right: ChatMessage) => (
+      Boolean(left)
+      && left?.role === right.role
+      && (left?.content ?? "").trim() === (right.content ?? "").trim()
+      && (left?.attachments?.length ?? 0) === (right.attachments?.length ?? 0)
+      && Boolean(left?.agentPrompt) === Boolean(right.agentPrompt)
+    );
+    const appendPreviewMessages = (agentId: string, leafKey: string, appendedMessages: ChatMessage[]) => {
+      setSelectedChatPreview((current) => {
+        if (!current || current.agentId !== agentId || current.leafKey !== leafKey) return current;
+        const next = [...current.messages];
+        for (const message of appendedMessages) {
+          if (sameChatMessage(next.at(-1), message)) continue;
+          let previousUserIndex = -1;
+          for (let index = next.length - 1; index >= 0; index -= 1) {
+            if (next[index].role === "user" && next[index].content.trim() === message.content.trim()) {
+              previousUserIndex = index;
+              break;
+            }
+          }
+          const between = previousUserIndex >= 0 ? next.slice(previousUserIndex + 1) : [];
+          const duplicateActiveUser = message.role === "user" && between.length > 0 && between.every((item) => (
+            item.role === "assistant"
+            && !(item.content ?? "").trim()
+            && !item.agentPrompt
+          ));
+          if (duplicateActiveUser) continue;
+          next.push(message);
+        }
+        return { ...current, messages: next };
+      });
+    };
     const dashboardCommand = outgoingAttachments.length === 0 && outgoingDirectories.length === 0
       ? resolveDashboardSlashCommand(prompt)
       : null;
@@ -951,11 +1020,7 @@ export function useStatusChatInputController(props: any) {
       const assistantMessage = { role: "assistant", content: dashboardCommand.reply, surface: "chat" };
       appendMessage(selectedAgent.id, userMessage, selectedStorageKey);
       appendMessage(selectedAgent.id, assistantMessage, selectedStorageKey);
-      setSelectedChatPreview((current) => (
-        current && current.agentId === selectedAgent.id && current.leafKey === selectedChatLeafKey
-          ? { ...current, messages: [...current.messages, userMessage, assistantMessage] }
-          : current
-      ));
+      appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [userMessage, assistantMessage]);
       setText("");
       setAttachmentError("");
       setAttachmentMenuOpen(false);
@@ -1017,11 +1082,7 @@ export function useStatusChatInputController(props: any) {
     const pendingAssistantMessage: ChatMessage = { role: "assistant", content: "", surface: "chat" };
     appendMessage(selectedAgent.id, outgoingUserMessage, selectedStorageKey);
     appendMessage(selectedAgent.id, pendingAssistantMessage, selectedStorageKey);
-    setSelectedChatPreview((current) => (
-      current && current.agentId === selectedAgent.id && current.leafKey === selectedChatLeafKey
-        ? { ...current, messages: [...current.messages, outgoingUserMessage, pendingAssistantMessage] }
-        : current
-    ));
+    appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [outgoingUserMessage, pendingAssistantMessage]);
 
     const replacePendingAssistant = (message: ChatMessage) => {
       setMessagesByAgent((current) => {
@@ -1053,6 +1114,7 @@ export function useStatusChatInputController(props: any) {
     let currentRuntimeSessionId = requestRuntimeSessionId || "";
     let attachedRuntimeSessionId = "";
     let recoveredAssistantText = "";
+    let streamedAssistantText = "";
     let latestSessionSummary = "";
     const seenSessionMessageKeys = new Set<string>();
     const runtimeLabel = runtimeChatFeature(selectedAgent.runtime).label || selectedAgent.runtime || "runtime";
@@ -1198,7 +1260,7 @@ export function useStatusChatInputController(props: any) {
             continue;
           }
           const processEvent = processLabelFromRuntimeEvent(parsed);
-          if (processEvent) appendChatProcess(selectedStorageKey, processEvent.label, processEvent.detail);
+          if (processEvent) appendChatProcess(selectedStorageKey, processEvent.label, processEvent.detail, processEvent.status);
           if (parsed.session?.id) {
             appendChatProcess(selectedStorageKey, `Attached ${runtimeLabel} session`, parsed.session.id);
             setChatRuntimeSessionIdsByKey((current) => ({ ...current, [selectedStorageKey]: parsed.session.id }));
@@ -1221,7 +1283,10 @@ export function useStatusChatInputController(props: any) {
           }
           const chunk = parsed.choices?.[0]?.delta?.content;
           if (chunk) {
-            if (!sawAssistantContent) appendChatProcess(selectedStorageKey, "Assistant started writing");
+            const textDelta = nextChatTextDelta(chunk, streamedAssistantText);
+            if (!textDelta) continue;
+            streamedAssistantText += textDelta;
+            if (!sawAssistantContent) appendChatProcess(selectedStorageKey, "Assistant started writing", undefined, "completed");
             markChatStreamChunk(selectedStorageKey);
             sawAssistantContent = true;
             let nextTaskMessage = "";
@@ -1230,10 +1295,13 @@ export function useStatusChatInputController(props: any) {
               const next = [...existing];
               const last = next[next.length - 1];
               if (!last) {
-                nextTaskMessage = chunk;
-                next.push({ role: "assistant", content: chunk, surface: "chat" });
+                nextTaskMessage = textDelta;
+                next.push({ role: "assistant", content: textDelta, surface: "chat" });
               } else {
-                nextTaskMessage = last.content + chunk;
+                const existingText = last.content ?? "";
+                const localDelta = nextChatTextDelta(textDelta, existingText);
+                if (!localDelta) return current;
+                nextTaskMessage = compactRepeatedAssistantText(existingText + localDelta);
                 next[next.length - 1] = { ...last, content: nextTaskMessage };
               }
               return { ...current, [selectedStorageKey]: next };
@@ -1242,11 +1310,17 @@ export function useStatusChatInputController(props: any) {
               if (!current || current.agentId !== selectedAgent.id || current.leafKey !== selectedChatLeafKey) return current;
               const next = [...current.messages];
               const last = next[next.length - 1];
-              if (!last) next.push({ role: "assistant", content: chunk, surface: "chat" });
-              else next[next.length - 1] = { ...last, content: (last.content ?? "") + chunk };
+              if (!last) {
+                next.push({ role: "assistant", content: textDelta, surface: "chat" });
+              } else {
+                const existingText = last.content ?? "";
+                const localDelta = nextChatTextDelta(textDelta, existingText);
+                if (!localDelta) return current;
+                next[next.length - 1] = { ...last, content: compactRepeatedAssistantText(existingText + localDelta) };
+              }
               return { ...current, messages: next };
             });
-            updateTask(taskId, { lastMessage: nextTaskMessage || chunk });
+            updateTask(taskId, { lastMessage: nextTaskMessage || streamedAssistantText });
             contentEventsSincePaint += 1;
             if (contentEventsSincePaint >= 8) {
               contentEventsSincePaint = 0;

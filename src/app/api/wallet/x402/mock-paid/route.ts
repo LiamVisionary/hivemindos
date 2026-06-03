@@ -13,6 +13,15 @@ const mockRequirement = {
   accepts: [
     {
       scheme: "exact",
+      network: "eip155:8453",
+      amount: "10000",
+      asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      payTo: "0x0000000000000000000000000000000000000001",
+      maxTimeoutSeconds: 300,
+      extra: { name: "USDC", version: "2" },
+    },
+    {
+      scheme: "exact",
       network: "eip155:84532",
       amount: "10000",
       asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",

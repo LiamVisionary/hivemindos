@@ -47,8 +47,8 @@ function taskRetrievalQueries(query: string) {
   if (/telegram|message|send|deliver|delivery|notify|notification/.test(normalized)) {
     queries.push({ label: "delivery channel", query: "telegram message send notification delivery channel configure access bot" });
   }
-  if (/\b(wallet|payment|pay|paid|spend|crypto|usdc|x402|usepod|moneyclaw|bankr|trade|trading|fund|funding)\b/.test(normalized)) {
-    queries.push({ label: "wallet and payment rails", query: "agent wallet tools payment rails x402 fetch paid api crypto usdc usepod moneyclaw bankr send balance approval" });
+  if (/\b(wallet|payment|pay|paid|spend|crypto|usdc|x402|usepod|moneyclaw|bankr|trade|trading|fund|funding|private|privately|privacy)\b/.test(normalized)) {
+    queries.push({ label: "wallet and payment rails", query: "agent wallet tools payment rails private transfer privacy x402 fetch paid api crypto usdc usepod moneyclaw bankr send balance approval" });
   }
   if (/agent|worker|specialist|runtime|workflow|skill/.test(normalized)) {
     queries.push({ label: "agent and workflow routing", query: "agent worker runtime capabilities skill action workflow social posting xSearch writer" });

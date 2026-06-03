@@ -212,7 +212,7 @@ function deepRedact(value: unknown): unknown {
   if (!value || typeof value !== "object") return value;
   const next: Record<string, unknown> = {};
   for (const [key, raw] of Object.entries(value)) {
-    if (/private|secret|token|password|tailnetIp|vaultPath/i.test(key)) {
+    if (/private|secret|token|password|tailnetIp|vault(?:Note)?Path|localPath/i.test(key)) {
       next[key] = REDACTED;
     } else {
       next[key] = deepRedact(raw);
@@ -225,8 +225,8 @@ function redactString(value: string) {
   return value
     .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, REDACTED)
     .replace(/\b100\.(?:6[4-9]|7[0-9]|8[0-9]|9[0-9]|1[0-1][0-9]|12[0-7])(?:\.\d{1,3}){2}\b/g, REDACTED)
+    .replace(/(?:\/Users\/[^/\s]+|~)\/Documents\/Obsidian\/[^\s]+/g, REDACTED)
     .replace(new RegExp(escapeRegExp(homedir()), "g"), "~")
-    .replace(/\/Users\/[^/\s]+\/Documents\/Obsidian\/[^/\s]+/g, REDACTED)
     .replace(/[A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PRIVATE_KEY)=[^\s,;]+/gi, (match) => `${match.split("=")[0]}=${REDACTED}`);
 }
 

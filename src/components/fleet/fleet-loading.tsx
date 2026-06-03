@@ -1,11 +1,96 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { axialToPixel, HEX_H, HEX_W, hexSpiral } from "./hex-math";
 import styles from "./fleet-tokens.module.css";
 
 type FleetLoadingShellProps = {
   mastheadMode?: "all" | "mobile" | "none";
 };
+
+type FleetLoadingCellTone = "default" | "active" | "ghost";
+
+type FleetLoadingCell = {
+  q: number;
+  r: number;
+  tone: FleetLoadingCellTone;
+  kind?: "agent" | "machine" | "add";
+};
+
+type FleetLoadingCluster = {
+  id: string;
+  x: number;
+  y: number;
+  agentCount: number;
+  addCell?: [number, number];
+};
+
+const LOADING_HEX_POINTS = [
+  `${HEX_W / 2},1`,
+  `${HEX_W - 1},${HEX_H / 4}`,
+  `${HEX_W - 1},${(HEX_H * 3) / 4}`,
+  `${HEX_W / 2},${HEX_H - 1}`,
+  `1,${(HEX_H * 3) / 4}`,
+  `1,${HEX_H / 4}`,
+].join(" ");
+
+const FLEET_LOADING_CLUSTERS: FleetLoadingCluster[] = [
+  {
+    id: "remote-hive",
+    x: 220,
+    y: 318,
+    agentCount: 6,
+    addCell: [1, -2],
+  },
+  {
+    id: "local-hive",
+    x: 486,
+    y: 384,
+    agentCount: 6,
+    addCell: [2, -1],
+  },
+  {
+    id: "macbook-hive",
+    x: 520,
+    y: 166,
+    agentCount: 0,
+    addCell: [0, -1],
+  },
+  {
+    id: "new-hive",
+    x: 736,
+    y: 286,
+    agentCount: 0,
+    addCell: [0, -1],
+  },
+];
+
+function fleetLoadingCellPoint(cluster: FleetLoadingCluster, cell: FleetLoadingCell) {
+  const point = axialToPixel(cell.q, cell.r);
+  return {
+    x: cluster.x + point.x,
+    y: cluster.y + point.y,
+  };
+}
+
+function fleetLoadingClusterCells(cluster: FleetLoadingCluster) {
+  const occupiedCells = hexSpiral(cluster.agentCount + 1);
+  const defaultAddCell = hexSpiral(cluster.agentCount + 2)[cluster.agentCount + 1] ?? [0, 0];
+  return [
+    ...occupiedCells.map(([q, r], index): FleetLoadingCell => ({
+      q,
+      r,
+      kind: index === 0 ? "machine" : "agent",
+      tone: index === 0 || index === occupiedCells.length - 1 ? "default" : "active",
+    })),
+    {
+      q: cluster.addCell?.[0] ?? defaultAddCell[0],
+      r: cluster.addCell?.[1] ?? defaultAddCell[1],
+      kind: "add",
+      tone: "ghost",
+    } satisfies FleetLoadingCell,
+  ];
+}
 
 export function FleetViewLoadingShell({ mastheadMode = "mobile" }: FleetLoadingShellProps = {}) {
   const showMasthead = mastheadMode !== "none";
@@ -230,36 +315,55 @@ export function FleetRosterLoading() {
 }
 
 export function FleetConstellationLoading() {
-  const nodes = [
-    { left: "50%", top: "45%", size: 74, delay: 0 },
-    { left: "29%", top: "32%", size: 50, delay: 120 },
-    { left: "68%", top: "30%", size: 54, delay: 220 },
-    { left: "33%", top: "65%", size: 46, delay: 320 },
-    { left: "72%", top: "62%", size: 48, delay: 420 },
+  const edges = [
+    ["remote-hive", "macbook-hive"],
+    ["macbook-hive", "local-hive"],
+    ["macbook-hive", "new-hive"],
+    ["local-hive", "new-hive"],
   ];
+  const clusterById = Object.fromEntries(FLEET_LOADING_CLUSTERS.map((cluster) => [cluster.id, cluster]));
+
   return (
     <div className="relative h-full w-full" aria-live="polite" aria-busy="true">
-      <div className="absolute left-1/2 top-[45%] h-[min(58%,520px)] w-[min(58%,520px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[rgba(94,234,212,0.16)]" />
-      <div className="absolute left-1/2 top-[45%] h-[min(42%,380px)] w-[min(42%,380px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[rgba(255,212,90,0.14)]" />
-      <div className="absolute left-1/2 top-[45%] h-px w-[56%] -translate-x-1/2 rotate-[18deg] bg-gradient-to-r from-transparent via-[rgba(94,234,212,0.32)] to-transparent" />
-      <div className="absolute left-1/2 top-[45%] h-px w-[54%] -translate-x-1/2 -rotate-[22deg] bg-gradient-to-r from-transparent via-[rgba(255,212,90,0.28)] to-transparent" />
-      {nodes.map((node) => (
-        <span
-          key={`${node.left}-${node.top}`}
-          className="absolute grid animate-pulse place-items-center rounded-[22px] border border-[rgba(94,234,212,0.26)] bg-[rgba(16,20,29,0.74)] shadow-[0_18px_54px_rgba(45,212,191,0.12)]"
-          style={{
-            left: node.left,
-            top: node.top,
-            width: node.size,
-            height: node.size,
-            marginLeft: -node.size / 2,
-            marginTop: -node.size / 2,
-            animationDelay: `${node.delay}ms`,
-          }}
-        >
-          <span className="h-3 w-3 rounded-full bg-[rgba(94,234,212,0.65)] shadow-[0_0_18px_rgba(94,234,212,0.45)]" />
-        </span>
-      ))}
+      <svg
+        aria-hidden
+        className={styles.fleetLoadingGraph}
+        viewBox="92 72 760 430"
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <defs>
+          <radialGradient id="fleetLoadingMachineGlow" cx="50%" cy="52%" r="65%">
+            <stop offset="0%" stopColor="rgba(148,163,184,0.08)" />
+            <stop offset="58%" stopColor="rgba(71,85,105,0.05)" />
+            <stop offset="100%" stopColor="rgba(15,23,42,0)" />
+          </radialGradient>
+        </defs>
+        <ellipse cx="440" cy="312" rx="390" ry="238" fill="url(#fleetLoadingMachineGlow)" />
+        <g className={styles.fleetLoadingEdges}>
+          {edges.map(([from, to]) => {
+            const start = clusterById[from];
+            const end = clusterById[to];
+            if (!start || !end) return null;
+            return <line key={`${from}-${to}`} x1={start.x} y1={start.y} x2={end.x} y2={end.y} />;
+          })}
+        </g>
+        {FLEET_LOADING_CLUSTERS.map((cluster, clusterIndex) => (
+          <g key={cluster.id}>
+            {fleetLoadingClusterCells(cluster).map((cell, cellIndex) => {
+              const point = fleetLoadingCellPoint(cluster, cell);
+              return (
+                <FleetLoadingHexCell
+                  key={`${cluster.id}-${cell.kind}-${cell.q}-${cell.r}`}
+                  cell={cell}
+                  delay={(clusterIndex * 120) + (cellIndex * 45)}
+                  x={point.x}
+                  y={point.y}
+                />
+              );
+            })}
+          </g>
+        ))}
+      </svg>
       <div className="absolute inset-x-6 bottom-7 rounded-xl border border-[rgba(148,163,184,0.16)] bg-[rgba(8,13,22,0.72)] px-4 py-3 text-center shadow-[0_20px_70px_rgba(0,0,0,0.20)]">
         <div className={styles.monoCap} style={{ color: "var(--accent-strong)" }}>Scanning fleet discovery</div>
         <p className="m-0 mt-2 text-sm leading-6 text-[var(--muted)]">
@@ -267,6 +371,58 @@ export function FleetConstellationLoading() {
         </p>
       </div>
     </div>
+  );
+}
+
+function FleetLoadingHexCell({ cell, delay, x, y }: { cell: FleetLoadingCell; delay: number; x: number; y: number }) {
+  const isAdd = cell.kind === "add";
+  const isMachine = cell.kind === "machine";
+  const className = [
+    styles.fleetLoadingHiveCell,
+    styles[`fleetLoadingCell${cell.tone[0].toUpperCase()}${cell.tone.slice(1)}`],
+    isAdd ? styles.fleetLoadingAddCell : "",
+    isMachine ? styles.fleetLoadingMachineCell : "",
+  ].filter(Boolean).join(" ");
+
+  return (
+    <g
+      className={className}
+      style={{ "--fleet-loading-delay": `${delay}ms` } as CSSProperties}
+      transform={`translate(${x - HEX_W / 2} ${y - HEX_H / 2})`}
+    >
+      <polygon className={styles.fleetLoadingHexFill} points={LOADING_HEX_POINTS} />
+      <polygon className={styles.fleetLoadingHexStroke} points={LOADING_HEX_POINTS} />
+      {isAdd ? (
+        <g className={styles.fleetLoadingAddMark} transform={`translate(${HEX_W / 2} ${HEX_H / 2})`}>
+          <line x1="-9" y1="0" x2="9" y2="0" />
+          <line x1="0" y1="-9" x2="0" y2="9" />
+        </g>
+      ) : null}
+      {isMachine ? <FleetLoadingMachineGlyph /> : null}
+      {!isMachine && !isAdd ? <FleetLoadingAgentSkeleton /> : null}
+    </g>
+  );
+}
+
+function FleetLoadingMachineGlyph() {
+  return (
+    <g className={styles.fleetLoadingMachineGlyph} transform={`translate(${HEX_W / 2} ${HEX_H / 2 - 3})`}>
+      <rect x="-20" y="-16" width="40" height="26" rx="4" />
+      <line x1="0" y1="10" x2="0" y2="18" />
+      <line x1="-12" y1="18" x2="12" y2="18" />
+      <rect className={styles.fleetLoadingSkeletonBlock} x="-12" y="-8" width="24" height="3.2" rx="1.6" />
+      <rect className={styles.fleetLoadingSkeletonBlock} x="-9" y="0" width="18" height="3.2" rx="1.6" />
+    </g>
+  );
+}
+
+function FleetLoadingAgentSkeleton() {
+  return (
+    <g className={styles.fleetLoadingAgentSkeleton} transform={`translate(${HEX_W / 2} ${HEX_H / 2})`}>
+      <circle className={styles.fleetLoadingSkeletonBlock} cx="0" cy="-10" r="6.2" />
+      <rect className={styles.fleetLoadingSkeletonBlock} x="-17" y="3" width="34" height="3.8" rx="1.9" />
+      <rect className={styles.fleetLoadingSkeletonBlock} x="-13" y="12" width="26" height="3.4" rx="1.7" />
+    </g>
   );
 }
 

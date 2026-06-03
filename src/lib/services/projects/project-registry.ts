@@ -6,7 +6,7 @@ import { dirname, join, resolve } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
-import type { GitLawbRepoLink, HivemindProject, ProjectRegistry } from "@/lib/types/gitlawb";
+import type { GitLawbProof, GitLawbRepoLink, HivemindProject, ProjectRegistry } from "@/lib/types/gitlawb";
 
 const VAULT_PROJECTS_FILE = join("Operations", "Code Projects", "projects.json");
 const LOCAL_PROJECTS_FILE = join(homedir(), ".hivemindos", "projects.json");
@@ -73,6 +73,27 @@ function normalizeRepoLink(value: GitLawbRepoLink): GitLawbRepoLink {
     branch: cleanOptional(value.branch),
     linkedAt: positiveNumber(value.linkedAt) ?? Date.now(),
   };
+}
+
+export function gitLawbProofForProject(project: HivemindProject): GitLawbProof | null {
+  const repo = project.gitlawbRepo ? normalizeRepoLink(project.gitlawbRepo) : undefined;
+  if (!repo) return null;
+  return sanitizeGitLawbProof({
+    id: `project-${project.id}`,
+    kind: "task",
+    status: "linked",
+    repo: repo.repoName ?? repo.repoId,
+    branch: repo.branch,
+    title: project.name,
+    metadata: {
+      source: "project-registry",
+      projectId: project.id,
+      projectName: project.name,
+      linkedAt: repo.linkedAt,
+      repoId: repo.repoId,
+      remoteUrl: repo.remoteUrl,
+    },
+  }) as GitLawbProof;
 }
 
 function positiveNumber(value: unknown) {

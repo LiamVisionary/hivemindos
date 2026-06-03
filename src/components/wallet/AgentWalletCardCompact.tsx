@@ -38,6 +38,10 @@ function statusFor(wallet: AgentWalletConfig, survival: AgentSurvivalSnapshot, a
     const hasFundingDetails = Boolean(agentUsePod?.depositAddress || agentUsePod?.depositCode || agentUsePod?.dashboardUrl);
     return { tone: hasFundingDetails ? "muted" : "off", text: hasFundingDetails ? "Check funding" : "Set up UsePod" };
   }
+  if (wallet.provider === "veil") {
+    if (wallet.walletAddress || wallet.vaultAddress) return { tone: wallet.enabled ? "ok" : "muted", text: "Veil configured" };
+    return { tone: "off", text: "Set up Veil" };
+  }
   if (providerFeatures.localWalletRequired && !wallet.walletAddress && !wallet.vaultAddress) return { tone: "off", text: "Initialize rails" };
   if (!wallet.enabled) return { tone: "off", text: "Wallet off" };
   if (survival.tier === "critical" || survival.tier === "dead") {
@@ -54,6 +58,17 @@ function formatMoney(value: number): string {
   return `$${Math.max(0, value).toFixed(2)}`;
 }
 
+function hasUsePodSetupEvidence(agentUsePod?: AgentProfile["usePod"]): boolean {
+  const balance = getUsePodBalanceUsd(agentUsePod);
+  return Boolean(
+    agentUsePod?.depositAddress
+    || agentUsePod?.depositCode
+    || agentUsePod?.dashboardUrl
+    || agentUsePod?.lastTestStatus
+    || balance !== null,
+  );
+}
+
 export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, survival, onOpen, onInitialize }: AgentWalletCardCompactProps) {
   const tier = wallet.enabled ? survival.tier : "off";
   const safeBalance = getDisplayWalletBalanceUsd(wallet);
@@ -61,8 +76,18 @@ export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, surviva
   const providerFeatures = agentPaymentProviderFeatures(wallet.provider);
   const usePodBalanceUnknown = providerFeatures.balanceSource === "usepod-runtime" && getUsePodBalanceUsd(agentUsePod) === null;
   const usePodReadyBalanceUnknown = usePodBalanceUnknown && agentUsePod?.lastTestStatus === "ready";
+  const hasWalletFunds = safeBalance > 0;
   const [setupStage, setSetupStage] = useState<SetupStage>("idle");
   const needsInitialization = providerFeatures.localWalletRequired && !wallet.walletAddress && !wallet.vaultAddress;
+  const spendLabel = wallet.enabled ? "Spend on" : "Spend off";
+  const showsSpendStatus = providerFeatures.balanceSource === "usepod-runtime"
+    ? hasUsePodSetupEvidence(agentUsePod)
+    : wallet.provider === "veil"
+      ? Boolean(wallet.walletAddress || wallet.vaultAddress)
+      : !needsInitialization;
+  const walletLabel = showsSpendStatus
+    ? `Open ${agentName} wallet, ${spendLabel.toLowerCase()}`
+    : `Open ${agentName} wallet`;
 
   const openOrConfirm = () => {
     if (needsInitialization) {
@@ -121,8 +146,9 @@ export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, surviva
       type="button"
       className={styles.card}
       data-tier={tier}
+      data-funded={hasWalletFunds ? "true" : undefined}
       onClick={openOrConfirm}
-      aria-label={`Open ${agentName} wallet`}
+      aria-label={walletLabel}
     >
       <div className={styles.head}>
         <span className={styles.dot} aria-hidden="true" />
@@ -135,9 +161,17 @@ export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, surviva
       </div>
 
       <div className={styles.statusRow}>
-        <span className={styles.statusChip} data-tone={status.tone}>
-          {status.tone === "off" ? <Power aria-hidden="true" /> : null}
-          {status.text}
+        <span className={styles.statusChips}>
+          {showsSpendStatus ? (
+            <span className={styles.spendChip} data-on={wallet.enabled}>
+              {spendLabel}
+            </span>
+          ) : (
+            <span className={styles.statusChip} data-tone={status.tone}>
+              {status.tone === "off" ? <Power aria-hidden="true" /> : null}
+              {status.text}
+            </span>
+          )}
         </span>
         <span className={styles.openIcon} aria-hidden="true">
           <ChevronRight width={16} height={16} />

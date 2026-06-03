@@ -1,7 +1,7 @@
 import "server-only";
 
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction, sendAndConfirmTransaction } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
 import bs58 from "bs58";
 
 const USEPOD_BOND_PROGRAM_ID = new PublicKey("BBAdcqUkg68JXNiPQ1HR1wujfZuayyK3eQTQSYAh6FSW");
@@ -30,7 +30,7 @@ function configAddress() {
 async function escrowOwner(rpc: Connection) {
   const account = await rpc.getAccountInfo(configAddress());
   if (!account) throw new Error("UsePod bond program config was not found on Solana.");
-  return new PublicKey(account.data.slice(8, 40));
+  return new PublicKey(account.data.subarray(8, 40));
 }
 
 function depositCodeBytes(depositCode: string) {
@@ -44,13 +44,41 @@ function depositCodeBytes(depositCode: string) {
   if (!/^[0-9a-fA-F]{16}$/.test(depositCode)) {
     throw new Error("UsePod bond deposit code is invalid.");
   }
-  return new Uint8Array(Array.from({ length: 8 }, (_, index) => parseInt(depositCode.slice(index * 2, index * 2 + 2), 16)));
+  return new Uint8Array(Array.from({ length: 8 }, (_, index) => Number.parseInt(depositCode.slice(index * 2, index * 2 + 2), 16)));
 }
 
 function u64Le(value: bigint) {
   const buffer = new ArrayBuffer(8);
   new DataView(buffer).setBigUint64(0, value, true);
   return new Uint8Array(buffer);
+}
+
+async function transactionSucceeded(rpc: Connection, signature: string) {
+  const status = await rpc.getSignatureStatuses([signature], { searchTransactionHistory: true });
+  const value = status.value[0];
+  if (!value) return false;
+  if (value.err) {
+    throw new Error(`UsePod bond transaction failed on-chain: ${JSON.stringify(value.err)}`);
+  }
+  return value.confirmationStatus === "confirmed" || value.confirmationStatus === "finalized";
+}
+
+async function confirmUsePodBondTransaction(
+  rpc: Connection,
+  signature: string,
+  latestBlockhash: Awaited<ReturnType<Connection["getLatestBlockhash"]>>,
+) {
+  try {
+    const confirmation = await rpc.confirmTransaction({ signature, ...latestBlockhash }, "confirmed");
+    if (confirmation.value.err) {
+      throw new Error(`UsePod bond transaction failed on-chain: ${JSON.stringify(confirmation.value.err)}`);
+    }
+    return;
+  } catch (error) {
+    if (await transactionSucceeded(rpc, signature)) return;
+    const message = error instanceof Error ? error.message : "confirmation failed";
+    throw new Error(`UsePod bond transaction was submitted but did not confirm before the blockhash expired. Signature: ${signature}. ${message}`);
+  }
 }
 
 export function bondDepositCodeFromEnrollmentCode(enrollmentCode?: string) {
@@ -74,7 +102,9 @@ export async function postUsePodOperatorBond(params: {
 }): Promise<UsePodBondPostResult> {
   const rpc = connection();
   const payer = Keypair.fromSecretKey(bs58.decode(params.secret));
-  if (payer.publicKey.toBase58() !== params.fromAddress) throw new Error("Stored provider wallet key does not match the payout wallet address.");
+  if (payer.publicKey.toBase58() !== params.fromAddress) {
+    throw new Error("Stored provider wallet key does not match the payout wallet address.");
+  }
 
   const balanceUsdc = await getUsePodBondUsdcBalance(params.fromAddress);
   if (balanceUsdc < params.amountUsdc) {
@@ -89,8 +119,7 @@ export async function postUsePodOperatorBond(params: {
     ...depositCodeBytes(params.depositCode),
     ...u64Le(BigInt(Math.round(params.amountUsdc * 1_000_000))),
   ]);
-  const transaction = new Transaction();
-  transaction.add(new TransactionInstruction({
+  const transaction = new Transaction().add(new TransactionInstruction({
     programId: USEPOD_BOND_PROGRAM_ID,
     keys: [
       { pubkey: sourceAta, isSigner: false, isWritable: true },
@@ -103,6 +132,12 @@ export async function postUsePodOperatorBond(params: {
     ],
     data: Buffer.from(data),
   }));
-  const signature = await sendAndConfirmTransaction(rpc, transaction, [payer], { commitment: "confirmed" });
+
+  const latestBlockhash = await rpc.getLatestBlockhash("confirmed");
+  transaction.feePayer = payer.publicKey;
+  transaction.recentBlockhash = latestBlockhash.blockhash;
+  transaction.sign(payer);
+  const signature = await rpc.sendRawTransaction(transaction.serialize(), { skipPreflight: false });
+  await confirmUsePodBondTransaction(rpc, signature, latestBlockhash);
   return { status: "posted", signature, balanceUsdc };
 }

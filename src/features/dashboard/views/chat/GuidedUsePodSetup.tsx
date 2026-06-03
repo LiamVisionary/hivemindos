@@ -1,28 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, Check, ChevronDown, LoaderCircle, PlugZap, Plus, RefreshCcw, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { ArrowUpRight, Check, ChevronDown, Copy, Cpu, LoaderCircle, Plus, PlugZap, RefreshCcw, Search, ShieldCheck, X } from "lucide-react";
 import { Transaction } from "@solana/web3.js";
-import { Button } from "@/components/ui/button";
-import { ButtonGroup, ButtonGroupSeparator } from "@/components/ui/button-group";
-import { CopyableCodeLine } from "@/components/ui/copyable-code-line";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
-import { ModelPillSelector } from "./ModelPillSelector";
 import styles from "./UsePodSetup.module.css";
 
 type GuidedUsePodSetupProps = {
   agent?: AgentProfile | null;
   busy?: string;
   existingWallets?: AgentProfile[];
-  fleetClass: (...classes: string[]) => string;
+  fleetClass?: (...classes: string[]) => string;
   requireCurrentSetup?: boolean;
   recoverSavedSetup?: boolean;
   onCancel: () => void;
@@ -79,11 +68,11 @@ type SpendPreset = "cheapest" | "balanced" | "fast" | "none" | "custom";
 type SetupStep = 1 | 2 | 3;
 type SetupView = "wallets" | "setup";
 
-const SPEND_PRESETS: Array<{ id: SpendPreset; label: string; input: string; output: string }> = [
-  { id: "cheapest", label: "Cheapest", input: "250", output: "1000" },
-  { id: "balanced", label: "Balanced", input: "2000", output: "8000" },
-  { id: "fast", label: "Fast", input: "10000", output: "30000" },
-  { id: "none", label: "No cap", input: "", output: "" },
+const SPEND_PRESETS: Array<{ id: SpendPreset; label: string; sub: string; input: string; output: string }> = [
+  { id: "cheapest", label: "Cheapest", sub: "250 / 1k", input: "250", output: "1000" },
+  { id: "balanced", label: "Balanced", sub: "2k / 8k", input: "2000", output: "8000" },
+  { id: "fast", label: "Fast", sub: "10k / 30k", input: "10000", output: "30000" },
+  { id: "none", label: "No cap", sub: "off", input: "", output: "" },
 ];
 
 const FALLBACK_MODELS = [
@@ -99,6 +88,9 @@ const TOKEN_CREATION_STEPS = [
   "Saving local credentials",
   "Preparing funding link",
 ];
+
+const HEX_POINTS = "50,2 92,26 92,74 50,98 8,74 8,26";
+let hexId = 0;
 
 function presetForCaps(input = "", output = ""): SpendPreset {
   return SPEND_PRESETS.find((preset) => preset.input === input && preset.output === output)?.id ?? "custom";
@@ -195,11 +187,77 @@ function friendlyUsePodCheckError(error: unknown) {
   return rawMessage || "UsePod model discovery failed.";
 }
 
+function Hex({
+  size = 46,
+  image,
+  fill = "rgba(8, 12, 19, 0.9)",
+  stroke = "rgba(94, 234, 212, 0.4)",
+  strokeW = 1.3,
+  glow = "var(--cyan-glow)",
+  style,
+  children,
+}: {
+  size?: number;
+  image?: string;
+  fill?: string;
+  stroke?: string;
+  strokeW?: number;
+  glow?: string | null;
+  style?: CSSProperties;
+  children?: ReactNode;
+}) {
+  const id = useMemo(() => `usepod-hex-${++hexId}`, []);
+  return (
+    <span className={styles.hex} style={{ width: size, height: size, ...style }}>
+      <svg
+        viewBox="0 0 100 100"
+        style={{ filter: glow ? `drop-shadow(0 0 9px ${glow})` : undefined }}
+        aria-hidden="true"
+      >
+        {image ? (
+          <defs>
+            <clipPath id={id}>
+              <polygon points={HEX_POINTS} />
+            </clipPath>
+          </defs>
+        ) : null}
+        <polygon points={HEX_POINTS} fill={fill} />
+        {image ? <image href={image} width="100" height="100" preserveAspectRatio="xMidYMid slice" clipPath={`url(#${id})`} /> : null}
+        <polygon points={HEX_POINTS} fill="none" stroke={stroke} strokeWidth={strokeW} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      </svg>
+      {children ? <span className={styles.hexContent}>{children}</span> : null}
+    </span>
+  );
+}
+
+function CodeLine({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className={styles.field}>
+      <span className={styles.fieldLabel}>{label}</span>
+      <div className={styles.code}>
+        <code title={value}>{value}</code>
+        <button
+          type="button"
+          className={styles.copy}
+          aria-label={`Copy ${label}`}
+          onClick={() => {
+            void navigator.clipboard?.writeText(value);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1400);
+          }}
+        >
+          {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function GuidedUsePodSetup({
   agent,
   busy,
   existingWallets = [],
-  fleetClass,
   requireCurrentSetup = false,
   recoverSavedSetup = true,
   onCancel,
@@ -216,6 +274,7 @@ export function GuidedUsePodSetup({
     return [...wallets.values()];
   }, [existingWallets]);
   const shouldOfferWallets = !requireCurrentSetup && !hasUsePodSetup(agent?.usePod) && walletOptions.length > 0;
+
   const [setupView, setSetupView] = useState<SetupView>(shouldOfferWallets ? "wallets" : "setup");
   const [currentStep, setCurrentStep] = useState<SetupStep>(initialStep);
   const [registering, setRegistering] = useState(false);
@@ -237,12 +296,14 @@ export function GuidedUsePodSetup({
   const [browserOptions, setBrowserOptions] = useState<SystemBrowser[]>([]);
   const [browserMenuOpen, setBrowserMenuOpen] = useState(false);
   const [openingBrowser, setOpeningBrowser] = useState("");
+  const [modelSearch, setModelSearch] = useState("");
   const [depositAmount, setDepositAmount] = useState("5.00");
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   const [walletProviders, setWalletProviders] = useState<SolanaWalletProvider[]>([]);
   const [transferBusy, setTransferBusy] = useState("");
   const [showingSuccess, setShowingSuccess] = useState(false);
   const successTimerRef = useRef<number | null>(null);
+
   const discoveredModels = status?.models?.length ? status.models : [];
   const modelOptions = discoveredModels.length ? discoveredModels : FALLBACK_MODELS;
   const activePreset = SPEND_PRESETS.find((preset) => preset.id === spendPreset);
@@ -256,13 +317,16 @@ export function GuidedUsePodSetup({
   const selectedWalletProvider = walletProviders[0] ?? null;
   const walletSelectorLabel = selectedWalletProvider?.label ?? "No wallet";
   const isBusy = registering || checking || recovering || showingSuccess || Boolean(transferBusy) || busy === "usepod-register";
+  const showInlineFundingMessage = setupView === "setup" && currentStep === 2 && !showingSuccess && Boolean(message);
+  const filteredModels = modelOptions.filter((model) => model.id.toLowerCase().includes(modelSearch.toLowerCase()));
+
   const headerCopy = useMemo(() => {
     if (setupView === "wallets") return { title: "UsePod wallet", body: "Attach an existing wallet or create a new one." };
     if (registering) return { title: "Creating token", body: "Setting up UsePod for this agent." };
-    if (showingSuccess) return { title: "Success!", body: "Loading UsePod models." };
+    if (showingSuccess) return { title: "Success", body: "Loading UsePod models." };
     if (currentStep === 1) return { title: "Create UsePod token", body: "HivemindOS will create and save it automatically." };
-    if (currentStep === 2) return { title: "Fund UsePod", body: "Open the prefilled UsePod funding page, then check funding." };
-    return { title: "Choose model", body: "Pick the model this agent should use." };
+    if (currentStep === 2) return { title: "Fund UsePod", body: "Open the prefilled funding page, then check funding." };
+    return { title: "Choose model", body: "Pick the model and spend guardrails for this agent." };
   }, [currentStep, registering, setupView, showingSuccess]);
 
   useEffect(() => {
@@ -297,19 +361,17 @@ export function GuidedUsePodSetup({
         const data = await response.json().catch(() => null) as UsePodStatusResponse | null;
         if (cancelled || !data?.ok) return;
         setStatus(data);
-        await onComplete({
-          ...profilePatchFromState({
-            tokenEnvName: data.tokenEnvName ?? tokenEnvName,
-            depositAddress: data.depositAddress ?? "",
-            depositCode: data.depositCode ?? "",
-            dashboardUrl: data.dashboardUrl ?? "",
-            lastCheckedAt: data.checkedAt ?? "",
-            lastTestStatus: data.status ?? "",
-            lastModelCount: data.modelCount,
-            lastTokenPresent: data.tokenPresent,
-            lastTokenSource: data.tokenSource ?? "",
-          }),
-        });
+        await onComplete(profilePatchFromState({
+          tokenEnvName: data.tokenEnvName ?? tokenEnvName,
+          depositAddress: data.depositAddress ?? "",
+          depositCode: data.depositCode ?? "",
+          dashboardUrl: data.dashboardUrl ?? "",
+          lastCheckedAt: data.checkedAt ?? "",
+          lastTestStatus: data.status ?? "",
+          lastModelCount: data.modelCount,
+          lastTokenPresent: data.tokenPresent,
+          lastTokenSource: data.tokenSource ?? "",
+        }));
         if (data.dashboardUrl || data.depositCode || data.depositAddress) setCurrentStep(2);
       } catch {
         // Missing saved metadata is fine; the primary create action remains available.
@@ -480,7 +542,7 @@ export function GuidedUsePodSetup({
       const nextModel = data.models?.[0]?.id;
       const resolvedModel = data.models?.some((model) => model.id === selectedModel) ? selectedModel : nextModel || selectedModel;
       if (resolvedModel !== selectedModel) setSelectedModel(resolvedModel);
-      await onComplete({
+      const completionPatch = {
         ...profilePatchFromState({
           tokenEnvName: data.tokenEnvName ?? tokenEnvName,
           depositAddress: data.depositAddress ?? depositAddress,
@@ -497,7 +559,7 @@ export function GuidedUsePodSetup({
           lastTokenSource: data.tokenSource ?? "",
         }),
         model: resolvedModel,
-      });
+      };
       if (data.status === "ready" && data.models?.length) {
         setMessage("");
         setShowingSuccess(true);
@@ -506,10 +568,14 @@ export function GuidedUsePodSetup({
           setShowingSuccess(false);
           successTimerRef.current = null;
         }, 1250);
+        setChecking(false);
+        await onComplete(completionPatch);
         return;
       }
       if (data.status === "needs-funding") setCurrentStep(2);
       setMessage(data.message ?? "Funding may still be pending. Try again after UsePod confirms the top-up.");
+      setChecking(false);
+      await onComplete(completionPatch);
     } catch (error) {
       setMessage(friendlyUsePodCheckError(error));
     } finally {
@@ -545,6 +611,9 @@ export function GuidedUsePodSetup({
         models: current?.models ?? [],
         checkedAt: current?.checkedAt ?? new Date().toISOString(),
       }));
+      setFundingOpened(false);
+      setCurrentStep(2);
+      setRegistering(false);
       await onComplete(profilePatchFromState({
         tokenEnvName: data.tokenEnvName ?? "USEPOD_TOKEN",
         depositAddress: data.depositAddress ?? "",
@@ -552,8 +621,6 @@ export function GuidedUsePodSetup({
         dashboardUrl: nextFundingUrl,
         lastTestStatus: "registered",
       }));
-      setFundingOpened(false);
-      setCurrentStep(2);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "UsePod setup failed.");
     } finally {
@@ -631,214 +698,195 @@ export function GuidedUsePodSetup({
     }
   }
 
+  const steps = [
+    { n: 1, label: "Create token", tag: "credential" },
+    { n: 2, label: "Fund", tag: "usdc rail" },
+    { n: 3, label: "Model", tag: "route" },
+  ] as const;
+
   return (
-    <section className={fleetClass("guidedProviderSetup")} aria-label="UsePod setup">
-      <div className={fleetClass("guidedProviderHeader")}>
-        <span className={fleetClass("guidedProviderIcon")} aria-hidden="true">
-          <PlugZap />
-        </span>
-        <div>
-          <strong>{headerCopy.title}</strong>
+    <section className={styles.root} aria-label="UsePod setup">
+      <span className={`${styles.corner} ${styles.tl}`} />
+      <span className={`${styles.corner} ${styles.tr}`} />
+      <span className={`${styles.corner} ${styles.bl}`} />
+      <span className={`${styles.corner} ${styles.br}`} />
+
+      <header className={styles.head}>
+        <Hex size={46} image="/icons/runtimes/usepod.webp" stroke="rgba(94, 234, 212, 0.5)" />
+        <div className={styles.headText}>
+          <h2>{headerCopy.title}</h2>
           <p>{headerCopy.body}</p>
         </div>
-        <Button type="button" variant="ghost" size="icon" aria-label="Close UsePod setup" onClick={onCancel}>
+        <button type="button" className={styles.x} aria-label="Close UsePod setup" onClick={onCancel}>
           <X aria-hidden="true" />
-        </Button>
-      </div>
+        </button>
+      </header>
 
-      {setupView === "setup" ? (
-        <ol className={styles.stepRail} aria-label="UsePod setup steps">
-          {[1, 2, 3].map((step) => (
-            <li className={step <= currentStep ? `${styles.stepPill} ${styles.active}` : styles.stepPill} key={step}>
-              {step < currentStep ? <Check aria-hidden="true" /> : null}
-              <span>{step}</span>
-            </li>
+      {setupView === "setup" && !registering && !showingSuccess ? (
+        <div className={styles.steps} aria-label="UsePod setup steps">
+          {steps.map((step, index) => (
+            <span className={styles.stepSlot} key={step.n}>
+              <div className={`${styles.step} ${currentStep > step.n ? styles.done : currentStep === step.n ? styles.active : ""}`}>
+                <Hex
+                  size={30}
+                  strokeW={1.2}
+                  fill={currentStep === step.n ? "var(--cyan)" : currentStep > step.n ? "rgba(45, 212, 191, 0.12)" : "var(--bg3)"}
+                  stroke={currentStep === step.n ? "var(--cyan)" : currentStep > step.n ? "rgba(94, 234, 212, 0.6)" : "var(--line2)"}
+                  glow={currentStep === step.n ? "var(--cyan-glow)" : null}
+                >
+                  <span className={styles.stepNumber}>
+                    {currentStep > step.n ? <Check aria-hidden="true" /> : step.n}
+                  </span>
+                </Hex>
+                <div className={styles.stepLabel}>
+                  <b>{step.label}</b>
+                  <small>{step.tag}</small>
+                </div>
+              </div>
+              {index < steps.length - 1 ? <div className={`${styles.stepLine} ${currentStep > step.n ? styles.filled : ""}`} /> : null}
+            </span>
           ))}
-        </ol>
+        </div>
       ) : null}
 
-      {setupView === "wallets" ? (
-        <div className={styles.focusPanel}>
-          <div className={styles.walletChooserHeader}>
-            <strong>Choose wallet</strong>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className={styles.usePodActionButton}
-              onClick={() => {
-                setMessage("");
-                setSetupView("setup");
-                setCurrentStep(1);
-              }}
-            >
-              <Plus aria-hidden="true" />
-              New wallet
-            </Button>
-          </div>
-          <div className={styles.walletList} role="list" aria-label="Existing UsePod wallets">
+      <div className={styles.body}>
+        {setupView === "wallets" ? (
+          <div className={styles.wallets} role="list" aria-label="Existing UsePod wallets">
             {walletOptions.map((wallet) => {
               const walletUsePod = wallet.usePod ?? {};
               const deposit = walletUsePod.depositAddress || walletUsePod.depositCode || "";
               return (
-                <button
-                  type="button"
-                  className={styles.walletOption}
-                  key={walletKeyForUsePodAgent(wallet)}
-                  onClick={() => void attachWallet(wallet)}
-                >
-                  <span>
-                    <strong>{wallet.name}</strong>
+                <button type="button" className={styles.wallet} key={walletKeyForUsePodAgent(wallet)} onClick={() => void attachWallet(wallet)}>
+                  <span className={styles.wname}>
+                    <b>{wallet.name}</b>
                     <small>{wallet.machineName || walletUsePod.tokenEnvName || "UsePod"}</small>
                   </span>
-                  <span>
-                    <strong>{walletUsePod.lastBalanceRemaining || "Funded"}</strong>
+                  <span className={styles.wbal}>
+                    <b>{walletUsePod.lastBalanceRemaining || "Funded"}</b>
                     <small>{deposit ? shortUsePodValue(deposit) : `${walletUsePod.lastModelCount ?? 0} models`}</small>
                   </span>
                 </button>
               );
             })}
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {setupView === "setup" && currentStep === 1 ? (
-        <div className={styles.focusPanel}>
-          {registering ? (
-            <div className={styles.creationProgressPanel}>
-              <div className={styles.creationProgressCopy}>
-                <strong>Creating token</strong>
-                <div className={styles.creationSteps}>
-                  {TOKEN_CREATION_STEPS.map((step, index) => (
-                    <span className={index <= creationStage ? styles.done : ""} key={step}>
-                      {index < creationStage ? <Check aria-hidden="true" /> : index === creationStage ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : null}
-                      {step}
-                    </span>
-                  ))}
-                </div>
+        {setupView === "setup" && currentStep === 1 ? (
+          registering ? (
+            <div className={`${styles.panel} ${styles.accentCyan} ${styles.create}`}>
+              <div className={styles.prog}>
+                <span className={styles.eyebrow}>Provisioning</span>
+                {TOKEN_CREATION_STEPS.map((step, index) => (
+                  <div className={`${styles.progRow} ${index < creationStage ? styles.done : index === creationStage ? styles.active : ""}`} key={step}>
+                    <span>{index < creationStage ? <Check aria-hidden="true" /> : index === creationStage ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <PlugZap aria-hidden="true" />}</span>
+                    {step}
+                  </div>
+                ))}
               </div>
-              <div className={styles.creationViz} aria-hidden="true">
-                <span />
-                <span />
-                <PlugZap />
+              <div className={styles.core} aria-hidden="true">
+                <span className={`${styles.ring} ${styles.r1}`} />
+                <span className={`${styles.ring} ${styles.r2}`} />
+                <Hex size={70} style={{ zIndex: 1 }}>
+                  <PlugZap className={styles.coreIcon} />
+                </Hex>
               </div>
             </div>
           ) : (
-            <div className={styles.tokenStartPanel}>
-              <div className={styles.tokenStartCopy}>
-                <strong>{recovering ? "Checking saved token" : "Create token"}</strong>
-                <p>{recovering ? "Looking for an existing UsePod setup." : "HivemindOS creates and saves it for this agent."}</p>
-                <div className={styles.cardActions}>
-                  <Button type="button" size="sm" className={styles.usePodActionButton} onClick={() => void setUpUsePod()} disabled={isBusy}>
-                    {recovering ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <PlugZap aria-hidden="true" />}
-                    Create token
-                  </Button>
+            <div className={`${styles.panel} ${styles.accentCyan} ${styles.create}`}>
+              <div>
+                <span className={styles.eyebrow}>Prepaid compute rail</span>
+                <h3>{recovering ? "Checking saved token" : "Create token"}</h3>
+                <p>
+                  {recovering
+                    ? "Looking for an existing UsePod setup."
+                    : <>HivemindOS registers a UsePod token, saves it with <code className={styles.mono}>hive-env-add</code>, and attaches it to this agent.</>}
+                </p>
+                <div className={styles.actionRow}>
+                  <button type="button" className={`${styles.btn} ${styles.primary}`} onClick={() => void setUpUsePod()} disabled={isBusy}>
+                    {recovering ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <PlugZap aria-hidden="true" />}
+                    {recovering ? "Checking saved token" : "Create token"}
+                  </button>
                 </div>
               </div>
-              <div className={styles.tokenStatusPreview} aria-hidden="true">
-                <span className={styles.tokenStatusIcon}>
-                  <PlugZap />
-                </span>
-                <span className={styles.tokenStatusLine} />
-                <span className={styles.tokenStatusDot} />
+              <div className={styles.core} aria-hidden="true">
+                <span className={`${styles.ring} ${styles.r2}`} />
+                <Hex size={70} style={{ zIndex: 1 }}>
+                  <Cpu className={styles.coreIcon} />
+                </Hex>
               </div>
             </div>
-          )}
-        </div>
-      ) : null}
+          )
+        ) : null}
 
-      {setupView === "setup" && currentStep === 2 ? (
-        <div className={styles.focusPanel}>
-          {showingSuccess ? (
-            <div className={styles.successPanel} aria-live="polite">
+        {setupView === "setup" && currentStep === 2 ? (
+          showingSuccess ? (
+            <div className={`${styles.panel} ${styles.success}`} aria-live="polite">
               <div className={styles.successMark} aria-hidden="true">
                 <Check />
               </div>
-              <strong>Success!</strong>
-              <p>UsePod is funded. Loading models.</p>
+              <h3>Funded</h3>
+              <p>UsePod is topped up. Loading models.</p>
             </div>
           ) : (
             <>
-              <strong>{fundingOpened ? "Finish funding" : "Fund UsePod"}</strong>
-              <p>{fundingOpened ? "Use the hosted flow or send Solana USDC directly, then check funding." : "Open UsePod with this token already attached."}</p>
-              <div className={styles.fundingActions}>
-                <DropdownMenu open={browserMenuOpen} onOpenChange={setBrowserMenuOpen}>
-                  <ButtonGroup className={styles.fundingSplit}>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className={styles.fundingPrimary}
-                      disabled={!dashboardUrl || Boolean(openingBrowser)}
-                      onClick={() => void openFundingPage()}
-                    >
-                      {openingBrowser === "default" ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <ArrowUpRight aria-hidden="true" />}
-                      Fund via UsePod
-                    </Button>
-                    <ButtonGroupSeparator className={styles.fundingSeparator} />
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        className={styles.fundingCaret}
-                        aria-label="Choose browser"
-                        disabled={!dashboardUrl || Boolean(openingBrowser)}
-                      >
+              <div className={`${styles.panel} ${styles.accentCyan}`}>
+                <span className={styles.eyebrow}>Hosted funding</span>
+                <h3>{fundingOpened ? "Finish funding" : "Fund via UsePod"}</h3>
+                <p>{fundingOpened ? "Complete the top-up in the opened tab, then re-check." : "Open UsePod with this token already attached."}</p>
+                <div className={styles.fundingActions}>
+                  <div className={styles.menuWrap}>
+                    <div className={styles.split}>
+                      <button type="button" className={`${styles.btn} ${styles.honey}`} disabled={!dashboardUrl || Boolean(openingBrowser)} onClick={() => void openFundingPage()}>
+                        {openingBrowser === "default" ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}
+                        Fund via UsePod
+                      </button>
+                      <button type="button" className={`${styles.btn} ${styles.honey} ${styles.caret}`} aria-label="Choose browser" disabled={!dashboardUrl || Boolean(openingBrowser)} onClick={() => setBrowserMenuOpen((open) => !open)}>
                         <ChevronDown aria-hidden="true" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </ButtonGroup>
-                  <DropdownMenuContent align="end" className={styles.browserDropdown}>
-                    <DropdownMenuLabel className={styles.browserLabel}>Open In</DropdownMenuLabel>
-                    {browserOptions.length ? browserOptions.map((browser) => (
-                      <DropdownMenuItem
-                        className={styles.browserItem}
-                        disabled={Boolean(openingBrowser)}
-                        key={browser.id}
-                        onSelect={(event) => {
-                          event.preventDefault();
-                          void openFundingPage(browser.id);
-                        }}
-                      >
-                        {openingBrowser === browser.id ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : null}
-                        {browser.label}
-                      </DropdownMenuItem>
-                    )) : (
-                      <DropdownMenuItem className={styles.browserEmpty} disabled>
-                        No browsers detected
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button type="button" size="sm" variant="secondary" className={styles.usePodActionButton} onClick={() => void discoverModels()} disabled={isBusy}>
-                  {checking ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <RefreshCcw aria-hidden="true" />}
-                  Check funding
-                </Button>
-              </div>
-              <div className={styles.fundingDivider} aria-hidden="true">
-                <span />
-                <strong>OR</strong>
-                <span />
-              </div>
-              <div className={styles.directDepositPanel}>
-                <div className={styles.directDepositHeader}>
-                  <div>
-                    <strong>Deposit directly</strong>
-                    <p>UsePod accepts USDC on Solana mainnet. Copy the recipient address and keep the funding reference with the deposit.</p>
+                      </button>
+                    </div>
+                    {browserMenuOpen ? (
+                      <div className={styles.dropdown}>
+                        <div className={styles.dropdownLabel}>Open in</div>
+                        {browserOptions.length ? browserOptions.map((browser) => (
+                          <button type="button" key={browser.id} className={styles.dropdownItem} disabled={Boolean(openingBrowser)} onClick={() => void openFundingPage(browser.id)}>
+                            {openingBrowser === browser.id ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : null}
+                            {browser.label}
+                          </button>
+                        )) : <div className={styles.dropdownItem} data-empty="true">No browsers detected</div>}
+                      </div>
+                    ) : null}
                   </div>
-                  <span>USDC</span>
+                  <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={() => void discoverModels()} disabled={isBusy}>
+                    {checking ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <RefreshCcw aria-hidden="true" />}
+                    Check funding
+                  </button>
+                </div>
+                {showInlineFundingMessage ? (
+                  <p className={styles.fundingStatus} data-tone={status?.status === "needs-funding" ? "warn" : status?.status === "ready" ? "ok" : "info"}>
+                    {message}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className={styles.or} aria-hidden="true">
+                <span />
+                <b>OR</b>
+                <span />
+              </div>
+
+              <div className={`${styles.panel} ${styles.accentHoney} ${styles.deposit}`}>
+                <div className={styles.depositHead}>
+                  <div>
+                    <span className={`${styles.eyebrow} ${styles.eyebrowHoney}`}>Direct deposit</span>
+                    <p>Send USDC on Solana mainnet to the recipient address below.</p>
+                  </div>
+                  <span className={styles.badge}>USDC · SOL</span>
                 </div>
                 {depositAddress ? (
-                  <div className={styles.directDepositField}>
-                    <span>Recipient address</span>
-                    <CopyableCodeLine value={depositAddress} label="Copy recipient address" copiedLabel="Address copied" />
-                  </div>
-                ) : null}
-                {depositCode ? (
-                  <div className={styles.directDepositField}>
-                    <span>Funding reference</span>
-                    <CopyableCodeLine value={depositCode} label="Copy funding reference" copiedLabel="Reference copied" />
-                  </div>
-                ) : null}
+                  <CodeLine label="Recipient address" value={depositAddress} />
+                ) : (
+                  <p className={styles.mutedMono}>Create a token to reveal the recipient address.</p>
+                )}
                 {!nativeRuntime ? (
                   <>
                     <div className={styles.transferComposer}>
@@ -856,95 +904,85 @@ export function GuidedUsePodSetup({
                           <strong>USDC</strong>
                         </div>
                       </label>
-                      <DropdownMenu open={walletMenuOpen} onOpenChange={setWalletMenuOpen}>
-                        <ButtonGroup className={styles.transferSplit}>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className={styles.transferPrimary}
-                            disabled={!selectedWalletProvider || !depositCode || Boolean(transferBusy)}
-                            onClick={() => void transferWithWallet()}
-                          >
-                            {transferBusy ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <ArrowUpRight aria-hidden="true" />}
+                      <div className={styles.menuWrap}>
+                        <div className={styles.transferSplit}>
+                          <button type="button" className={`${styles.btn} ${styles.honey} ${styles.transferPrimary}`} disabled={!selectedWalletProvider || !depositCode || Boolean(transferBusy)} onClick={() => void transferWithWallet()}>
+                            {transferBusy ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}
                             Transfer
-                          </Button>
-                          <ButtonGroupSeparator className={styles.fundingSeparator} />
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              size="sm"
-                              className={styles.transferWalletButton}
-                              disabled={Boolean(transferBusy)}
-                              aria-label="Choose wallet extension"
-                            >
-                              {walletSelectorLabel}
-                              <ChevronDown aria-hidden="true" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                        </ButtonGroup>
-                        <DropdownMenuContent align="end" className={styles.browserDropdown}>
-                          <DropdownMenuLabel className={styles.browserLabel}>Wallet</DropdownMenuLabel>
-                          {walletProviders.length ? walletProviders.map((wallet) => (
-                            <DropdownMenuItem
-                              className={styles.browserItem}
-                              disabled={Boolean(transferBusy)}
-                              key={wallet.id}
-                              onSelect={(event) => {
-                                event.preventDefault();
-                                void transferWithWallet(wallet.id);
-                              }}
-                            >
-                              {transferBusy === wallet.id ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : null}
-                              {wallet.label}
-                            </DropdownMenuItem>
-                          )) : (
-                            <DropdownMenuItem className={styles.browserEmpty} disabled>
-                              No Solana wallet extension detected
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                          </button>
+                          <button type="button" className={`${styles.btn} ${styles.honey} ${styles.transferWalletButton}`} disabled={Boolean(transferBusy)} aria-label="Choose wallet extension" onClick={() => setWalletMenuOpen((open) => !open)}>
+                            {walletSelectorLabel}
+                            <ChevronDown aria-hidden="true" />
+                          </button>
+                        </div>
+                        {walletMenuOpen ? (
+                          <div className={styles.dropdown}>
+                            <div className={styles.dropdownLabel}>Wallet</div>
+                            {walletProviders.length ? walletProviders.map((wallet) => (
+                              <button type="button" className={styles.dropdownItem} disabled={Boolean(transferBusy)} key={wallet.id} onClick={() => void transferWithWallet(wallet.id)}>
+                                {transferBusy === wallet.id ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : null}
+                                {wallet.label}
+                              </button>
+                            )) : <div className={styles.dropdownItem} data-empty="true">No Solana wallet extension detected</div>}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                     {!walletProviders.length ? (
                       <p className={styles.walletUnavailableNote}>
-                        Install or unlock a Solana wallet extension, or use the hosted funding page.
+                        Use the hosted funding page, or open this dashboard in a browser with a Solana wallet extension to send USDC.
                       </p>
                     ) : null}
                   </>
                 ) : null}
               </div>
             </>
-          )}
-        </div>
-      ) : null}
+          )
+        ) : null}
 
-      {setupView === "setup" && currentStep === 3 ? (
-        <>
-          <div className={styles.focusPanel}>
-            <strong>Choose model</strong>
-            <ModelPillSelector
-              models={modelOptions}
-              selectedModelId={selectedModel}
-              disabled={isBusy}
-              searchPlaceholder="Search UsePod models"
-              onSelectModel={(modelId) => {
-                setSelectedModel(modelId);
-                void syncProfileChoice({ model: modelId });
-              }}
-            />
-          </div>
-          <details className={`${fleetClass("adaptiveAdvanced")} ${styles.spendCapDetails}`} title="Caps the maximum UsePod route price for this agent. Balanced is the default guardrail.">
-            <summary>
-              <span>Spend cap</span>
-              <small>{spendPreset === "custom" ? "Custom" : activePreset?.label ?? "Balanced"}</small>
-            </summary>
-            <div className={styles.spendPanel}>
-              <div className={styles.presetGroup} role="group" aria-label="UsePod spend cap preset">
+        {setupView === "setup" && currentStep === 3 ? (
+          <>
+            <div className={`${styles.panel} ${styles.accentCyan}`}>
+              <span className={styles.eyebrow}>Inference model</span>
+              <h3>Choose model</h3>
+              <label className={styles.search}>
+                <Search aria-hidden="true" />
+                <input placeholder="Search UsePod models" value={modelSearch} onChange={(event) => setModelSearch(event.target.value)} />
+              </label>
+              <div className={styles.models}>
+                {filteredModels.map((model) => (
+                  <button
+                    type="button"
+                    key={model.id}
+                    className={`${styles.model} ${selectedModel === model.id ? styles.sel : ""}`}
+                    disabled={isBusy}
+                    onClick={() => {
+                      setSelectedModel(model.id);
+                      void syncProfileChoice({ model: model.id });
+                    }}
+                  >
+                    <span className={styles.mdot} />
+                    {model.name || model.id}
+                    {selectedModel === model.id ? <Check aria-hidden="true" /> : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className={`${styles.panel} ${styles.spend}`}>
+              <div className={styles.spendHead}>
+                <span className={`${styles.eyebrow} ${styles.eyebrowViolet}`}>Spend cap · microunits</span>
+                <span className={styles.stat} data-tone="violet">
+                  <ShieldCheck aria-hidden="true" />
+                  <b>{activePreset?.label ?? "Custom"}</b>
+                </span>
+              </div>
+              <div className={styles.presets} role="group" aria-label="UsePod spend cap preset">
                 {SPEND_PRESETS.map((preset) => (
                   <button
                     type="button"
                     key={preset.id}
-                    className={spendPreset === preset.id ? `${styles.preset} ${styles.selected}` : styles.preset}
+                    className={`${styles.preset} ${spendPreset === preset.id ? styles.sel : ""}`}
                     aria-pressed={spendPreset === preset.id}
                     disabled={isBusy}
                     onClick={() => {
@@ -952,12 +990,13 @@ export function GuidedUsePodSetup({
                       void syncProfileChoice({ spendPreset: preset.id });
                     }}
                   >
-                    <strong>{preset.label}</strong>
+                    <b>{preset.label}</b>
+                    <small>{preset.sub}</small>
                   </button>
                 ))}
               </div>
-              <div className={styles.capGrid}>
-                <label className={styles.capField}>
+              <div className={styles.caps}>
+                <label className={styles.cap}>
                   <span>Input cap</span>
                   <input
                     type="number"
@@ -973,7 +1012,7 @@ export function GuidedUsePodSetup({
                     placeholder="Microunits"
                   />
                 </label>
-                <label className={styles.capField}>
+                <label className={styles.cap}>
                   <span>Output cap</span>
                   <input
                     type="number"
@@ -991,11 +1030,27 @@ export function GuidedUsePodSetup({
                 </label>
               </div>
             </div>
-          </details>
-        </>
-      ) : null}
 
-      {message ? <p className={fleetClass("guidedProviderMessage")}>{message}</p> : null}
+            <div className={styles.status}>
+              {status?.balanceRemaining ? <span className={styles.stat}><span className={styles.dot} />Balance <b>{status.balanceRemaining}</b></span> : null}
+              {status?.route ? <span className={styles.stat}>Route <b>{status.route}</b></span> : null}
+              <span className={styles.stat}>Models <b>{status?.modelCount ?? modelOptions.length}</b></span>
+            </div>
+          </>
+        ) : null}
+      </div>
+
+      <footer className={styles.foot}>
+        <span className={`${styles.msg} ${message.includes("pending") ? styles.warn : ""}`}>
+          {message || (setupView === "wallets" ? "Reusing a wallet copies its funded token and caps." : `${tokenEnvName} · api.usepod.ai`)}
+        </span>
+        <div className={styles.footActions}>
+          {setupView === "setup" && currentStep === 1 && walletOptions.length ? <button type="button" className={styles.link} onClick={() => setSetupView("wallets")}>Attach existing wallet</button> : null}
+          {setupView === "wallets" ? <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={() => { setMessage(""); setSetupView("setup"); setCurrentStep(1); }}><Plus aria-hidden="true" /> New wallet</button> : null}
+          {setupView === "setup" && currentStep > 1 && !registering && !showingSuccess ? <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={() => setCurrentStep((currentStep - 1) as SetupStep)}>Back</button> : null}
+          {setupView === "setup" && currentStep === 3 ? <button type="button" className={`${styles.btn} ${styles.primary}`} onClick={onCancel}><Check aria-hidden="true" /> Done</button> : null}
+        </div>
+      </footer>
     </section>
   );
 }

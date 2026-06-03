@@ -1,10 +1,13 @@
 export type NormalizedHostedApp = {
+  id: string;
   name: string;
   sourceName?: string;
   iconUrl?: string;
   machineName: string;
   machineHost: string;
   local: boolean;
+  interactive?: boolean;
+  serviceKind?: string;
   port: number;
   openUrl: string;
   apiBaseUrl?: string;
@@ -31,8 +34,13 @@ function proxiedServiceKey(app: NormalizedHostedApp) {
     if (!rawUrl) continue;
     try {
       const url = new URL(rawUrl);
+      const peerMatch = url.pathname.match(/\/peer\/([^/]+)\/app-proxy\/(\d+)(?:\/|$)/);
+      if (peerMatch) {
+        const peer = decodeURIComponent(peerMatch[1] ?? "").split(":")[0];
+        if (peer) return `${peer}:${peerMatch[2]}`;
+      }
       const match = url.pathname.match(/\/app-proxy\/(\d+)(?:\/|$)/);
-      if (match) return `${url.hostname}:${match[1]}`;
+      if (match) return `${app.machineHost.toLowerCase() || url.hostname}:${match[1]}`;
     } catch {
       continue;
     }
@@ -42,6 +50,45 @@ function proxiedServiceKey(app: NormalizedHostedApp) {
 
 function visibleAppKey(app: NormalizedHostedApp) {
   return proxiedServiceKey(app) || `${app.machineHost.toLowerCase() || app.machineName.toLowerCase()}:${app.port}`;
+}
+
+function sourceInstanceKey(app: NormalizedHostedApp) {
+  const idMatch = app.id.match(/:(\d+):([^:]+)$/);
+  return idMatch ? `${idMatch[1]}:${idMatch[2]}` : "";
+}
+
+function normalizedAppName(app: NormalizedHostedApp) {
+  return app.name.trim().toLowerCase();
+}
+
+function isGenericApiApp(app: NormalizedHostedApp) {
+  const name = normalizedAppName(app);
+  return /^(?:node|python(?:3(?:\.\d+)?)?|docker-pr|container|cloudflar|cloudflare|ssh|tailscale|syncthing|nginx|megasync|discord|controlce)(?: api)?$/.test(name)
+    || /^welcome to nginx!?$/.test(name);
+}
+
+function isInfrastructureApp(app: NormalizedHostedApp) {
+  const name = normalizedAppName(app);
+  const text = `${name} ${app.sourceName ?? ""}`.toLowerCase();
+  return name === "hivemind-linkd"
+    || name === "tailscale api"
+    || name === "syncthing api"
+    || name === "ssh api"
+    || /^welcome to nginx!?$/.test(name)
+    || /\b(?:cloudflar|cloudflare|container)\b/.test(text);
+}
+
+function isSpecificServiceApp(app: NormalizedHostedApp) {
+  const serviceKind = app.serviceKind?.trim().toLowerCase();
+  if (serviceKind && serviceKind !== "api") return true;
+  return !isGenericApiApp(app) && !isInfrastructureApp(app);
+}
+
+function displayAppKey(app: NormalizedHostedApp) {
+  const name = normalizedAppName(app);
+  if (name === "hivemindos") return name;
+  if (isGenericApiApp(app) || isInfrastructureApp(app)) return "";
+  return name;
 }
 
 function isGenericFallbackMachineName(name: string) {
@@ -103,8 +150,12 @@ export function dedupeVisibleApps<TApp extends NormalizedHostedApp>(apps: TApp[]
   const byEndpoint = new Map<string, TApp>();
   const score = (app: TApp) => (
     (/gateway/i.test(app.sourceName || "") ? -100 : 0)
+    + (isSpecificServiceApp(app) ? 40 : 0)
+    + (app.serviceKind && app.serviceKind !== "api" ? 30 : 0)
+    + (app.sourceName?.trim().toLowerCase() === app.name.trim().toLowerCase() ? 20 : 0)
     + (app.iconUrl ? 10 : 0)
     + ((app.apiRoutes?.length ?? 0) > 0 ? 8 : 0)
+    + (app.interactive ? 4 : 0)
     + (isGenericFallbackMachineName(app.machineName) ? -6 : 0)
     + (app.local ? 2 : 0)
   );
@@ -112,7 +163,6 @@ export function dedupeVisibleApps<TApp extends NormalizedHostedApp>(apps: TApp[]
   for (const app of apps) {
     const key = visibleAppKey(app);
     const previous = byEndpoint.get(key);
-    if (previous && app.name.toLowerCase() !== previous.name.toLowerCase()) continue;
     if (!previous || score(app) > score(previous) || (score(app) === score(previous) && app.openUrl.length < previous.openUrl.length)) {
       const iconSource = previous && iconScore(previous) > iconScore(app) ? previous : app;
       byEndpoint.set(key, { ...app, iconUrl: iconSource.iconUrl || app.iconUrl });
@@ -120,7 +170,32 @@ export function dedupeVisibleApps<TApp extends NormalizedHostedApp>(apps: TApp[]
     }
     if (iconScore(app) > iconScore(previous)) byEndpoint.set(key, { ...previous, iconUrl: app.iconUrl || previous.iconUrl });
   }
-  return [...byEndpoint.values()];
+  const bySourceInstance = new Map<string, TApp>();
+  for (const app of byEndpoint.values()) {
+    const key = sourceInstanceKey(app) || app.id;
+    const previous = bySourceInstance.get(key);
+    if (!previous || score(app) > score(previous) || (score(app) === score(previous) && app.openUrl.length < previous.openUrl.length)) {
+      bySourceInstance.set(key, app);
+    }
+  }
+  const launchableApps = [...bySourceInstance.values()].filter((app) => !isInfrastructureApp(app) && (!isGenericApiApp(app) || app.name.toLowerCase() === "hivemindos"));
+  const byDisplayApp = new Map<string, TApp>();
+  for (const app of launchableApps) {
+    const key = displayAppKey(app);
+    if (!key) continue;
+    const previous = byDisplayApp.get(key);
+    if (!previous || score(app) > score(previous) || (score(app) === score(previous) && app.openUrl.length < previous.openUrl.length)) {
+      byDisplayApp.set(key, app);
+    }
+  }
+  const byId = new Map<string, TApp>();
+  for (const app of byDisplayApp.values()) {
+    const previous = byId.get(app.id);
+    if (!previous || score(app) > score(previous) || (score(app) === score(previous) && app.openUrl.length < previous.openUrl.length)) {
+      byId.set(app.id, app);
+    }
+  }
+  return [...byId.values()];
 }
 
 export function normalizeAppsPayload<TPayload extends NormalizedAppsPayload<NormalizedHostedApp>>(payload: TPayload): TPayload {

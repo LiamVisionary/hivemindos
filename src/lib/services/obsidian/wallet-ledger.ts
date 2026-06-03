@@ -3,8 +3,8 @@ import { hostname } from "os";
 import { join } from "path";
 
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
-import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
-import { stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
+import type { AgentAssetSpendCaps, AgentSpendCapAsset, AgentWalletConfig } from "@/lib/types/agent-wallet";
+import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
 
 const WALLET_FOLDER = "Projects/HivemindOS/Wallets";
 
@@ -73,6 +73,22 @@ function parseFrontmatter(content: string): Record<string, string | number | boo
   return out;
 }
 
+function parseAssetSpendCaps(value: string | number | boolean | undefined): AgentAssetSpendCaps {
+  if (typeof value !== "string" || !value.trim()) return {};
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const caps: AgentAssetSpendCaps = {};
+    for (const asset of ["USDC", "ETH"] as const satisfies readonly AgentSpendCapAsset[]) {
+      const cap = Number((parsed as Record<string, unknown>)[asset]);
+      if (Number.isFinite(cap) && cap >= 0) caps[asset] = cap;
+    }
+    return caps;
+  } catch {
+    return {};
+  }
+}
+
 /* ─── Record (de)serialisation ──────────────────────────────────── */
 
 function networkLabel(network: string): string {
@@ -112,8 +128,11 @@ function renderRecordMarkdown(record: WalletLedgerRecord): string {
     ["currentBalanceUsd", record.wallet.currentBalanceUsd],
     ["dailyComputeBurnUsd", record.wallet.dailyComputeBurnUsd],
     ["maxPaymentUsd", record.wallet.maxPaymentUsd],
+    ["assetSpendCaps", record.wallet.assetSpendCaps],
     ["approvalRequiredOverUsd", record.wallet.approvalRequiredOverUsd],
     ["autoPayEnabled", record.wallet.autoPayEnabled],
+    ["duplicatePaymentGuardEnabled", record.wallet.duplicatePaymentGuardEnabled !== false],
+    ["duplicatePaymentGuardSeconds", record.wallet.duplicatePaymentGuardSeconds ?? DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS],
     ["clawCardEnvName", record.wallet.clawCardEnvName],
     ["moneyClawEnvName", record.wallet.moneyClawEnvName],
     ["x402BaseUrl", record.wallet.x402BaseUrl],
@@ -157,8 +176,14 @@ function parseRecordMarkdown(filename: string, content: string): WalletLedgerRec
     currentBalanceUsd: typeof fm.currentBalanceUsd === "number" ? fm.currentBalanceUsd : 0,
     dailyComputeBurnUsd: typeof fm.dailyComputeBurnUsd === "number" ? fm.dailyComputeBurnUsd : 0,
     maxPaymentUsd: typeof fm.maxPaymentUsd === "number" ? fm.maxPaymentUsd : 0,
+    assetSpendCaps: {
+      ETH: typeof fm.veilMaxTransferEth === "number" ? fm.veilMaxTransferEth : 0.01,
+      ...parseAssetSpendCaps(fm.assetSpendCaps),
+    },
     approvalRequiredOverUsd: typeof fm.approvalRequiredOverUsd === "number" ? fm.approvalRequiredOverUsd : 0,
     autoPayEnabled: Boolean(fm.autoPayEnabled),
+    duplicatePaymentGuardEnabled: typeof fm.duplicatePaymentGuardEnabled === "boolean" ? fm.duplicatePaymentGuardEnabled : true,
+    duplicatePaymentGuardSeconds: typeof fm.duplicatePaymentGuardSeconds === "number" ? Math.max(1, fm.duplicatePaymentGuardSeconds) : DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS,
     clawCardEnvName: typeof fm.clawCardEnvName === "string" ? fm.clawCardEnvName : "CLAWCARD_API_KEY",
     moneyClawEnvName: typeof fm.moneyClawEnvName === "string" ? fm.moneyClawEnvName : "MONEYCLAW_API_KEY",
     x402BaseUrl: typeof fm.x402BaseUrl === "string" ? fm.x402BaseUrl : "",

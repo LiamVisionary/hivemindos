@@ -357,6 +357,35 @@ function Set-EnvLocal($Key, $Value) {
   Protect-EnvLocal $envFile
 }
 
+function Save-SharedHiveEnvEntries($EntriesText) {
+  $hiveEnvAdd = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".local\bin\hive-env-add.cmd"
+  if (-not (Test-Path $hiveEnvAdd)) {
+    Warn "hive-env-add is unavailable; shared hive env keys were not refreshed"
+    return
+  }
+  try {
+    $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $processInfo.FileName = "cmd.exe"
+    $processInfo.Arguments = "/c `"$hiveEnvAdd`" --import-stdin --scope agent --runtime generic"
+    $processInfo.WorkingDirectory = $Root
+    $processInfo.UseShellExecute = $false
+    $processInfo.RedirectStandardInput = $true
+    $processInfo.RedirectStandardOutput = $true
+    $processInfo.RedirectStandardError = $true
+    $process = [System.Diagnostics.Process]::Start($processInfo)
+    $process.StandardInput.Write($EntriesText)
+    $process.StandardInput.Close()
+    $process.WaitForExit()
+    if ($process.ExitCode -eq 0) {
+      Ok "Saved dashboard auth keys to shared hive env"
+    } else {
+      Warn "Could not save dashboard auth keys to shared hive env; dashboard unlock still works from .env.local"
+    }
+  } catch {
+    Warn "Could not save dashboard auth keys to shared hive env: $($_.Exception.Message)"
+  }
+}
+
 function Get-EnvLocal($Key) {
   $envFile = Join-Path $Root ".env.local"
   if (-not (Test-Path $envFile)) { return "" }
@@ -431,6 +460,7 @@ if (-not $dashboardAuthSecret) { $dashboardAuthSecret = New-DashboardSecret }
 if (-not $dashboardDeviceToken) { $dashboardDeviceToken = New-DashboardSecret }
 Set-EnvLocal "HIVEMINDOS_DASHBOARD_AUTH_SECRET" $dashboardAuthSecret
 Set-EnvLocal "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN" $dashboardDeviceToken
+Save-SharedHiveEnvEntries ("HIVEMINDOS_DASHBOARD_AUTH_SECRET=$($dashboardAuthSecret | ConvertTo-Json -Compress)`nHIVEMINDOS_DASHBOARD_DEVICE_TOKEN=$($dashboardDeviceToken | ConvertTo-Json -Compress)`n")
 
 $vaultPath = if ($env:NEXT_PUBLIC_OBSIDIAN_VAULT_PATH) { $env:NEXT_PUBLIC_OBSIDIAN_VAULT_PATH } else { Join-Path ([Environment]::GetFolderPath("UserProfile")) "Documents\Obsidian\hivemindos-vault" }
 if ($vaultPath.StartsWith('~\') -or $vaultPath.StartsWith('~/')) {
@@ -629,7 +659,7 @@ Ok "Ready"
 Write-Host ""
 Write-Host "Dashboard:"
 Write-Host "  http://localhost:$Port"
-Write-Host "  Unlock token: stored in .env.local as HIVEMINDOS_DASHBOARD_DEVICE_TOKEN"
+Write-Host "  Unlock token: stored in .env.local and shared hive env as HIVEMINDOS_DASHBOARD_DEVICE_TOKEN"
 Write-Host "  Copy token later: pnpm dashboard-auth copy-token"
 Write-Host "  Reset lost token: pnpm dashboard-auth reset-token"
 Copy-DashboardTokenIfRequested

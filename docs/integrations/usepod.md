@@ -57,7 +57,7 @@ The primary presets are:
 
 ## Provider Hosting
 
-Provider hosting is intentionally gated and not automated by HivemindOS setup. The audited `Sortis-AI/usepod-agent` repository shows a Rust provider agent that connects local backends such as vLLM, llama.cpp, LM Studio, Ollama, or BYOK providers to the UsePod coordinator over `wss://api.usepod.ai/provider/connect`.
+Provider hosting is available through the fleet `Rent out This Mac` flow. HivemindOS enrolls the provider, checks the Solana USDC bond wallet, posts the UsePod operator bond when the generated local provider wallet is funded, pairs `usepod-agent`, discovers a local LM Studio/OpenAI-compatible or Ollama backend through `/v1/models`, writes a real `agent.toml`, validates it with `usepod-agent validate`, and only then starts `usepod-agent --config <path> run`.
 
 Before running a provider agent, review:
 
@@ -67,7 +67,7 @@ Before running a provider agent, review:
 - Prometheus metrics exposure, commonly `127.0.0.1:9090`.
 - Systemd or Docker lifecycle ownership.
 
-Do not add pipe-to-shell provider install commands to HivemindOS automation. Prefer manual release downloads with checksums, Docker/systemd units reviewed by the operator, and private collector-only observability.
+The in-app flow writes its generated provider config under `~/.hivemindos/usepod-agent/` and refuses to go live when no local backend reports models. Service installation remains a separate reviewed operator choice.
 
 ## Code Paths
 

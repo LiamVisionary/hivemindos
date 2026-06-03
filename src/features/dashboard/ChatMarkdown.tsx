@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 
 import chatStyles from "@/app/chat.module.css";
 import { createStyleClass } from "@/features/dashboard/style-classes";
@@ -72,8 +72,34 @@ const jsonPropertyPattern = /"[^"\n]+"\s*:/g;
 
 function safeMarkdownHref(href: string) {
   const trimmed = href.trim();
-  if (/^(https?:|mailto:|#)/i.test(trimmed)) return trimmed;
+  if (/^https?:/i.test(trimmed)) return trimmed.replace(/\s+/g, "");
+  if (/^(mailto:|#)/i.test(trimmed)) return trimmed;
   return "#";
+}
+
+function externalHttpHref(href: string) {
+  return /^https?:\/\//i.test(href);
+}
+
+async function openHrefInChrome(href: string) {
+  try {
+    const response = await fetch("/api/system/browsers/open", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: href, browserId: "chrome" }),
+    });
+    const data = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+    if (!response.ok || !data?.ok) throw new Error(data?.error ?? "Could not open the external link.");
+  } catch {
+    window.open(href, "_blank", "noopener,noreferrer");
+  }
+}
+
+function handleMarkdownLinkClick(event: MouseEvent<HTMLAnchorElement>, href: string) {
+  event.stopPropagation();
+  if (!externalHttpHref(href)) return;
+  event.preventDefault();
+  void openHrefInChrome(href);
 }
 
 function splitTrailingUrlPunctuation(value: string) {
@@ -167,11 +193,43 @@ function trimJsonCandidate(value: string) {
   return value.trim().replace(/^[,:\s]+/, "").replace(/;\s*$/, "");
 }
 
+function extractBalancedJsonCandidate(value: string) {
+  const start = value.search(/[{\[]/);
+  if (start < 0) return "";
+  const open = value[start];
+  const close = open === "{" ? "}" : "]";
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < value.length; index += 1) {
+    const char = value[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === "\"") inString = false;
+      continue;
+    }
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+    if (char === open) depth += 1;
+    if (char === close) depth -= 1;
+    if (depth === 0) return value.slice(start, index + 1);
+  }
+  return "";
+}
+
 function formatJsonCandidate(value: string) {
   const trimmed = trimJsonCandidate(value);
   if (!trimmed) return "";
   const formatted = formatJsonBlock(trimmed);
   if (formatted) return formatted;
+  const balanced = extractBalancedJsonCandidate(trimmed);
+  if (balanced) {
+    const balancedFormatted = formatJsonBlock(balanced);
+    if (balancedFormatted) return balancedFormatted;
+  }
   if (/^"[^"]+"\s*:/.test(trimmed)) {
     const wrapped = `{${trimmed}}`;
     return formatJsonBlock(wrapped) || prettyPrintJsonish(wrapped);
@@ -263,15 +321,49 @@ function renderParagraphBlock(text: string, key: string, inlineOptions: { codeCo
   );
 }
 
+function splitLeadingDraftBlock(value: string) {
+  const trimmed = value.trim();
+  const match = /^draft:\s*\n?/i.exec(trimmed);
+  if (!match) return null;
+  const body = trimmed.slice(match[0].length).trimStart();
+  const separator = body.search(/\n\s*\n/);
+  if (separator < 0) return { draft: body.trim(), rest: "" };
+  return {
+    draft: body.slice(0, separator).trim(),
+    rest: body.slice(separator).trim(),
+  };
+}
+
+function renderDraftBlock(text: string, key: string, inlineOptions: { codeCopied?: string; onCopyCode?: (value: string) => void } = {}) {
+  const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+  return (
+    <section className={chatClass("draftMarkdown")} key={key}>
+      <strong className={chatClass("draftMarkdownLabel")}>Draft</strong>
+      <div className={chatClass("draftMarkdownBody")}>
+        {lines.map((line, index) => <p key={`${key}-${index}`}>{renderFieldLine(line, inlineOptions)}</p>)}
+      </div>
+    </section>
+  );
+}
+
+function pushTextWithBreaks(parts: ReactNode[], text: string, keyPrefix: string) {
+  if (!text) return;
+  const lines = text.split("\n");
+  lines.forEach((line, index) => {
+    if (index > 0) parts.push(<br key={`${keyPrefix}-br-${index}`} />);
+    if (line) parts.push(line);
+  });
+}
+
 
 function renderInlineMarkdown(text: string, options: { links?: "anchor" | "text"; codeCopied?: string; onCopyCode?: (value: string) => void } = {}): ReactNode[] {
   const parts: ReactNode[] = [];
-  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\)|(?:https?:\/\/|mailto:)[^\s<]+)/g;
+  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\s*\([^)]+\)|(?:https?:\/\/|mailto:)[^\s<]+)/g;
   let cursor = 0;
   for (const match of text.matchAll(pattern)) {
     const value = match[0];
     const index = match.index ?? 0;
-    if (index > cursor) parts.push(text.slice(cursor, index));
+    if (index > cursor) pushTextWithBreaks(parts, text.slice(cursor, index), `${index}-text`);
     if (value.startsWith("`")) {
       const codeValue = value.slice(1, -1);
       parts.push(
@@ -299,21 +391,29 @@ function renderInlineMarkdown(text: string, options: { links?: "anchor" | "text"
     } else if (value.startsWith("*")) {
       parts.push(<em key={`${index}-em`}>{value.slice(1, -1)}</em>);
     } else if (value.startsWith("[")) {
-      const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(value);
+      const link = /^\[\s*([^\]]*?)\s*\]\s*\(([^)]+)\)$/.exec(value);
+      const href = link ? safeMarkdownHref(link[2]) : "#";
       parts.push(link ? options.links === "text" ? link[1] : (
-        <a href={safeMarkdownHref(link[2])} key={`${index}-link`} onClick={(event) => event.stopPropagation()}>
+        <a
+          href={href}
+          key={`${index}-link`}
+          onClick={(event) => handleMarkdownLinkClick(event, href)}
+          rel={externalHttpHref(href) ? "noopener noreferrer" : undefined}
+          target={externalHttpHref(href) ? "_blank" : undefined}
+        >
           {link[1]}
         </a>
       ) : value);
     } else {
       const { href, trailing } = splitTrailingUrlPunctuation(value);
+      const safeHref = safeMarkdownHref(href);
       parts.push(options.links === "text" ? href : (
         <a
-          href={safeMarkdownHref(href)}
+          href={safeHref}
           key={`${index}-link`}
-          onClick={(event) => event.stopPropagation()}
-          rel="noopener noreferrer"
-          target={href.startsWith("#") ? undefined : "_blank"}
+          onClick={(event) => handleMarkdownLinkClick(event, safeHref)}
+          rel={externalHttpHref(safeHref) ? "noopener noreferrer" : undefined}
+          target={externalHttpHref(safeHref) ? "_blank" : undefined}
         >
           {href}
         </a>
@@ -322,7 +422,7 @@ function renderInlineMarkdown(text: string, options: { links?: "anchor" | "text"
     }
     cursor = index + value.length;
   }
-  if (cursor < text.length) parts.push(text.slice(cursor));
+  if (cursor < text.length) pushTextWithBreaks(parts, text.slice(cursor), `${cursor}-text`);
   return parts;
 }
 
@@ -359,16 +459,21 @@ export function ChatInlineMarkdown({ text }: { text: string }) {
 export function ChatMarkdown({ text, className, headingClassName }: { text: string; className?: string; headingClassName?: string }) {
   const [copiedCode, setCopiedCode] = useState("");
   if (!text.trim()) return null;
+  const leadingDraft = splitLeadingDraftBlock(text);
+  const displayText = leadingDraft?.rest || text;
   function handleCopyCode(value: string) {
     copyCodeText(value);
     setCopiedCode(value);
     window.setTimeout(() => setCopiedCode((current) => current === value ? "" : current), 1200);
   }
   const inlineOptions = { codeCopied: copiedCode, onCopyCode: handleCopyCode };
-  const lines = text.trim().split("\n");
+  const lines = displayText.trim().split("\n");
   const blocks: ReactNode[] = [];
   let index = 0;
   let previousBlockKind = "";
+  if (leadingDraft?.draft) {
+    blocks.push(renderDraftBlock(leadingDraft.draft, "draft-leading", inlineOptions));
+  }
 
   while (index < lines.length) {
     const line = lines[index];

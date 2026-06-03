@@ -9,7 +9,7 @@ import { runtimeUsesAgentEnvOverlay } from "@/lib/types/agent-runtime";
 import { getUsePodBalanceUsd, resolveAgentWallet } from "@/lib/utils/agent-wallet";
 
 export function useDashboardDerivedState(props: any) {
-  const { RUNTIME_LABELS, activeView, agentAliasMap, agentCreateDraft, agentCreateMachineKey, agentRoleModalId, agentSettingsPanel, agents, beeRoleLabel, brainGraph, brainGraphLayout, brainSkills, chatAutoScrollRef, chatDisplayContent, chatMessageStorageKey, chatMessageWindow, chatProcessByKey, chatStreamingByKey, cleanActivityTitle, collectorKey, createAgentProfile, createDefaultAgentWallet, dedupeAgents, discoveredMachines, displayMachineName, fleetAgentState, fleetMachineLocation, fleetMetric, fleetSnapshots, fleetVersionState, formatRelativeTime, getHoneyAgentRewards, getSurvivalSnapshot, groupKanbanTasks, groupNotifications, hermesUpdateRequiredDetail, hiveEnv, hiveEnvRuntimeSourceId, honeyTreasury, hydrated, inferCurrentTask, inferLatestAgentMessage, isChatSidebarTask, isLoopbackCollector, isManualAgentChatMessage, isMeaningfulActive, isMobileMachineOs, isStarterPlaceholder, isVisibleFleetMachine, isWorkView, kanbanAssignees, kanbanBoard, kanbanBoardScrollRef, kanbanError, kanbanIncludeArchived, kanbanLoading, kanbanTaskAssigneeAgent, machineIdentityFromParts, machineNameAliases, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineNetworkIssue, maintenanceReport, messagesByAgent, messagesScrollRef, mirosharkAnalysisAgentId, mirosharkStatus, moneyClawLoadingEnvName, moneyClawStatusByEnvName, normalizeAgentProfile, notificationActorMeta, notificationDisplayBody, notificationDisplayTitle, notificationSourceLabel, notificationSummary, notifications, parseEnvImportText, quickAddMachineTargets, refreshMoneyClawStatus, refreshRuntimeIntegrations, refreshSharedSchedulesFromVault, runtimeCan, runtimeCount, runtimeFileRoots, runtimeUsage, schedulerSkillSearch, schedules, selectedAgentId, selectedBrainNodeId, selectedChatLeafKey, selectedChatPreview, selectedKanbanTaskId, selectedKanbanTaskIds, setKanbanBoardScrollState, setMachineNameAliases, setScheduleDraft, setupMachineKey, sharedEnvImportText, sharedVault, skillBrowserSearch, skillBrowserSkills, tailscaleDevices, tailscaleStatus, tasks, updateStatusByMachine, walletExpanded, walletsByAgent, workPriority } = props;
+  const { RUNTIME_LABELS, activeView, agentAliasMap, agentCreateDraft, agentCreateMachineKey, agentRoleModalId, agentSettingsPanel, agents, beeRoleLabel, brainGraph, brainGraphLayout, brainSkills, chatAutoScrollRef, chatDisplayContent, chatMessageStorageKey, chatMessageWindow, chatProcessByKey, chatStreamingByKey, cleanActivityTitle, collectorKey, createAgentProfile, createDefaultAgentWallet, dedupeAgents, discoveredMachines, displayMachineName, fleetAgentState, fleetMachineLocation, fleetMetric, fleetSnapshots, fleetVersionState, formatRelativeTime, getHoneyAgentRewards, getSurvivalSnapshot, groupKanbanTasks, groupNotifications, hermesUpdateRequiredDetail, hiveEnv, hiveEnvRuntimeSourceId, honeyTreasury, hydrated, inferCurrentTask, inferLatestAgentMessage, isChatSidebarTask, isLoopbackCollector, isManualAgentChatMessage, isMeaningfulActive, isMobileMachineOs, isStarterPlaceholder, isVisibleFleetMachine, isWorkView, kanbanAssignees, kanbanBoard, kanbanBoardScrollRef, kanbanError, kanbanIncludeArchived, kanbanLoading, kanbanTaskAssigneeAgent, machineIdentityFromParts, machineNameAliases, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineNetworkIssue, maintenanceReport, messagesByAgent, messagesEndRef, messagesScrollRef, mirosharkAnalysisAgentId, mirosharkStatus, moneyClawLoadingEnvName, moneyClawStatusByEnvName, normalizeAgentProfile, notificationActorMeta, notificationDisplayBody, notificationDisplayTitle, notificationSourceLabel, notificationSummary, notifications, parseEnvImportText, quickAddMachineTargets, refreshMoneyClawStatus, refreshRuntimeIntegrations, refreshSharedSchedulesFromVault, runtimeCan, runtimeCount, runtimeFileRoots, runtimeUsage, schedulerSkillSearch, schedules, selectedAgentId, selectedBrainNodeId, selectedChatLeafKey, selectedChatPreview, selectedKanbanTaskId, selectedKanbanTaskIds, setKanbanBoardScrollState, setMachineNameAliases, setScheduleDraft, setupMachineKey, sharedEnvImportText, sharedVault, skillBrowserSearch, skillBrowserSkills, tailscaleDevices, tailscaleStatus, tasks, updateStatusByMachine, walletExpanded, walletsByAgent, workPriority } = props;
   const discoveredAgents = useMemo(
     () => discoveredMachines.flatMap((machine) => machine.agents ?? []).map(normalizeAgentProfile),
     [discoveredMachines],
@@ -225,12 +225,99 @@ export function useDashboardDerivedState(props: any) {
     [messages],
   );
 
+  function removeActiveTurnDuplicateMessages(items: ChatMessage[]) {
+    const output: ChatMessage[] = [];
+    const seenSourceKeys = new Set<string>();
+    const sourceMessageKey = (message: ChatMessage | undefined) => {
+      const sourceSessionId = String(message?.sourceSessionId ?? "").trim();
+      const sourceIndex = Number.isFinite(message?.sourceIndex) ? String(message?.sourceIndex) : "";
+      return sourceSessionId && sourceIndex
+        ? `${sourceSessionId}:${sourceIndex}:${message?.role ?? "message"}`
+        : "";
+    };
+    const sameMessage = (left: ChatMessage | undefined, right: ChatMessage | undefined) => (
+      Boolean(left)
+      && Boolean(right)
+      && left?.role === right?.role
+      && (left?.content ?? "").replace(/\s+/g, " ").trim().toLowerCase() === (right?.content ?? "").replace(/\s+/g, " ").trim().toLowerCase()
+    );
+    const findLastMessageIndex = (messagesToSearch: ChatMessage[], predicate: (message: ChatMessage) => boolean) => {
+      for (let index = messagesToSearch.length - 1; index >= 0; index -= 1) {
+        if (predicate(messagesToSearch[index])) return index;
+      }
+      return -1;
+    };
+    for (let index = 0; index < items.length; index += 1) {
+      const message = items[index];
+      const sourceKey = sourceMessageKey(message);
+      if (sourceKey && seenSourceKeys.has(sourceKey)) {
+        const previousIndex = findLastMessageIndex(output, (item) => sourceMessageKey(item) === sourceKey);
+        const previous = output[previousIndex];
+        if (
+          previousIndex >= 0
+          && !chatDisplayContent(previous).trim()
+          && chatDisplayContent(message).trim()
+        ) {
+          output[previousIndex] = message;
+        }
+        continue;
+      }
+      if (sameMessage(output.at(-1), message)) continue;
+      if (sourceKey) seenSourceKeys.add(sourceKey);
+      if (message.role === "user" && message.content.trim()) {
+        const previousUserIndex = findLastMessageIndex(output, (item) => sameMessage(item, message));
+        const between = previousUserIndex >= 0 ? output.slice(previousUserIndex + 1) : [];
+        const onlyPendingAssistantBetween = between.length > 0 && between.every((item) => (
+          item.role === "assistant"
+          && !chatDisplayContent(item).trim()
+          && !item.agentPrompt
+        ));
+        if (onlyPendingAssistantBetween) continue;
+        const nextAssistant = items[index + 1];
+        const previousAssistant = [...between].reverse().find((item) => (
+          item.role === "assistant"
+          && chatDisplayContent(item).trim()
+        ));
+        if (
+          nextAssistant?.role === "assistant"
+          && previousAssistant
+          && sameMessage(previousAssistant, nextAssistant)
+        ) {
+          index += 1;
+          continue;
+        }
+      }
+      if (message.role === "assistant" && chatDisplayContent(message).trim()) {
+        const previousAssistantIndex = findLastMessageIndex(output, (item) => sameMessage(item, message));
+        const previousUser = [...output.slice(0, previousAssistantIndex)].reverse().find((item) => item.role === "user");
+        const currentUser = [...output].reverse().find((item) => item.role === "user");
+        if (previousAssistantIndex >= 0 && sameMessage(previousUser, currentUser)) continue;
+      }
+      output.push(message);
+    }
+    return output;
+  }
+
   const visibleMessages = useMemo(
-    () => messages.filter((message) => (
-      message.role !== "system"
-      && (message.role !== "assistant" || selectedChatStreaming || chatDisplayContent(message).trim() || message.agentPrompt)
-    )),
-    [messages, selectedChatStreaming],
+    () => {
+      const lastAssistantIndex = (() => {
+        for (let index = messages.length - 1; index >= 0; index -= 1) {
+          if (messages[index]?.role === "assistant") return index;
+        }
+        return -1;
+      })();
+      return removeActiveTurnDuplicateMessages(messages.filter((message, index) => (
+        message.role !== "system"
+        && (
+          message.role !== "assistant"
+          || selectedChatStreaming
+          || chatDisplayContent(message).trim()
+          || message.agentPrompt
+          || (selectedChatProcess.length > 0 && index === lastAssistantIndex)
+        )
+      )));
+    },
+    [messages, selectedChatProcess.length, selectedChatStreaming],
   );
 
   const sessionNotice = useMemo(
@@ -239,14 +326,26 @@ export function useDashboardDerivedState(props: any) {
   );
 
   useEffect(() => {
+    chatAutoScrollRef.current = true;
+  }, [chatAutoScrollRef, selectedAgentId, selectedChatLeafKey]);
+
+  useEffect(() => {
     if (!chatAutoScrollRef.current) return;
     const element = messagesScrollRef.current;
     if (!element) return;
-    const frame = window.requestAnimationFrame(() => {
+    const scrollToBottom = () => {
       element.scrollTop = element.scrollHeight;
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [visibleMessages, selectedChatStreaming]);
+      messagesEndRef?.current?.scrollIntoView({ block: "end" });
+    };
+    const firstFrame = window.requestAnimationFrame(scrollToBottom);
+    const secondFrame = window.requestAnimationFrame(() => window.requestAnimationFrame(scrollToBottom));
+    const timeouts = [80, 250, 700, 1_500].map((delay) => window.setTimeout(scrollToBottom, delay));
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+      timeouts.forEach((timeout) => window.clearTimeout(timeout));
+    };
+  }, [messagesEndRef, messagesScrollRef, selectedAgentId, selectedChatLeafKey, visibleMessages, selectedChatStreaming]);
 
   const updateChatAutoScroll = useCallback(() => {
     const element = messagesScrollRef.current;

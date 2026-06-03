@@ -9,10 +9,12 @@ import { useEffect, useRef, useState } from "react";
 import { BrainGraphExplorer } from "./BrainGraphExplorer";
 import { BrainServiceOverview, BrainServiceRunResult, BrainServiceSegmentedNav, BrainServiceSettingsDeck } from "./brain-services-ui";
 import brainServiceStyles from "./brain-services.module.css";
+import { Btn } from "@/components/aeon/parts";
+import { AeonSkillBrowserSection, type UnifiedSkillBrowserItem } from "@/components/aeon/skill-browser-section";
 import { SectionModeHeader } from "./WorkSectionHeader";
 
 export function VaultPanel(props: any) {
-  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, Clock3, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, Image, KeyRound, LoaderCircle, MemoryCell, Network, PlugZap, RefreshCcw, Repeat2, Sparkles, activeView, brainGraph, brainGraphEdgePath, brainGraphLoading, brainGraphStats, brainGraphStatus, brainNodePoints, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, openSkillBrowser, pairSyncthingVaultSync, queryGbrainFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setGbrainQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, splitBrainLabel, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus } = props;
+  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, KeyRound, LoaderCircle, MemoryCell, Network, PlugZap, RefreshCcw, Repeat2, Sparkles, activeView, brainGraph, brainGraphEdgePath, brainGraphLoading, brainGraphStats, brainGraphStatus, brainNodePoints, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, openSkillBrowser, pairSyncthingVaultSync, queryGbrainFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setGbrainQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, splitBrainLabel, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus } = props;
   const brainClass = (...classes) => classes.map((className) => brainServiceStyles[className] || vaultClass(className)).filter(Boolean).join(" ");
   const gbrainMetric = (keys: string[]) => {
     const stats = gbrainStatus?.stats ?? {};
@@ -43,7 +45,29 @@ export function VaultPanel(props: any) {
     );
   };
   const sharedBrainSkills = brainSkills?.shared ?? [];
-  const filteredSharedBrainSkills = sharedBrainSkills.filter((skill) => skillMatchesBrowserSearch(skill, skill.providerLabel || "Shared brain"));
+  const sharedBrainBrowserItems: UnifiedSkillBrowserItem[] = sharedBrainSkills.map((skill) => {
+    const needsHermesUpdate = skillRequiresHermesUpdate(skill, hermesUpdateRequired);
+    const providerLabel = skill.providerLabel || "Shared brain";
+    return {
+      id: skill.id ?? skill.slug,
+      slug: skill.slug,
+      name: skill.name,
+      description: skill.description,
+      source: providerLabel,
+      sourceId: "shared-brain",
+      providerId: skill.providerId,
+      category: "Skill",
+      categoryId: "skill",
+      categoryColor: "var(--aeon)",
+      stateLabel: needsHermesUpdate ? "Needs Hermes" : "Shared Brain",
+      stateTone: needsHermesUpdate ? "honey" : "green",
+      stateIcon: needsHermesUpdate ? "refresh" : "check",
+      stateActive: !needsHermesUpdate,
+      sourceRef: skill.relativePath,
+      scheduleLabel: providerLabel,
+      requiresHermesUpdate: needsHermesUpdate,
+    };
+  });
   const providerSkillInventories = (brainSkills?.providers ?? BRAIN_SKILL_PROVIDER_FALLBACK).map((provider) => ({
     ...provider,
     skills: skillSearchQuery ? provider.skills.filter((skill) => skillMatchesBrowserSearch(skill, provider.label)) : provider.skills,
@@ -806,67 +830,31 @@ export function VaultPanel(props: any) {
             <p className={vaultClass("hermesUpdateNotice")}>Hermes update available: {hermesUpdateRequiredDetail}. Skills using the newest Hermes features are marked below.</p>
           ) : null}
 
-          <div className={vaultClass("brainSkillsSearch")}>
-            <input
-              value={skillBrowserSearch}
-              onChange={(event) => setSkillBrowserSearch(event.target.value)}
-              placeholder="Search skills, tools, runtimes, workflows..."
-              aria-label="Search shared skills"
-            />
-            {skillSearchQuery ? (
-              <Button type="button" size="sm" variant="secondary" onClick={() => setSkillBrowserSearch("")}>
-                Clear
-              </Button>
-            ) : null}
-          </div>
-
-          {sharedBrainSkills.length ? (
-            <div className={vaultClass("sharedSkillGrid")}>
-              <button type="button" className={vaultClass("sharedSkillAddCard")} onClick={openSkillBrowser}>
-                <Image src="/icons/worker-bee-general-v2.png" alt="" width={34} height={34} unoptimized />
-                <strong>Add skill</strong>
-                <p>Browse featured and community skills, then mirror the ones you trust into the shared brain.</p>
-              </button>
-              {filteredSharedBrainSkills.map((skill) => {
-                const needsHermesUpdate = skillRequiresHermesUpdate(skill, hermesUpdateRequired);
-                return (
-                  <article key={skill.id} className={vaultClass("sharedSkillCard")}>
-                    <div className={vaultClass("sharedSkillSourceLine")}>
-                      <span>Shared brain</span>
-                      <div className={vaultClass("sharedSkillBadges")}>
-                        {skill.providerLabel !== "Shared brain" ? <small>from {skill.providerLabel}</small> : null}
-                        {needsHermesUpdate ? <small className={vaultClass("skillUpdateBadge")}>Needs Hermes update</small> : null}
-                      </div>
-                    </div>
-                    <strong>{skill.name}</strong>
-                    <p>{skill.description || "No description in SKILL.md frontmatter yet."}</p>
-                    <small className={vaultClass("sharedSkillPath")}>{skill.relativePath}</small>
-                  </article>
-                );
-              })}
-              {skillSearchQuery && !filteredSharedBrainSkills.length ? (
-                <div className={vaultClass("brainSkillsEmpty", "searchEmpty")}>
-                  <Sparkles aria-hidden="true" />
-                  <div>
-                    <strong>No matching shared skills</strong>
-                    <p>Try a different search, or browse skills to add another recipe to the brain.</p>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className={vaultClass("brainSkillsEmpty")}>
-              <button type="button" className={vaultClass("sharedSkillAddCard", "emptyAddCard")} onClick={openSkillBrowser}>
-                <Image src="/icons/queen-bee-v2.png" alt="" width={36} height={36} unoptimized />
-                <strong>Browse skills</strong>
-                <p>Add the first shared skill to the brain.</p>
-              </button>
-              <div>
-                <strong>No shared skills yet</strong>
-                <p>The vault Skills folder is empty. Import every discovered provider skill, or choose one harness at a time.</p>
+          <AeonSkillBrowserSection
+            title={`${sharedBrainBrowserItems.length} available · ${brainSkills?.totals.importable ?? 0} importable`}
+            items={sharedBrainBrowserItems}
+            query={skillBrowserSearch}
+            onQueryChange={setSkillBrowserSearch}
+            searchPlaceholder="Search skills"
+            emptyTitle={skillSearchQuery ? "No matching shared skills" : "No shared skills yet"}
+            emptyDescription={skillSearchQuery ? "Try a different search, or browse skills to add another recipe to the brain." : "The vault Skills folder is empty. Import every discovered provider skill, or browse one skill at a time."}
+            sources={[
+              { id: "shared", label: "Shared Brain", predicate: (item) => item.sourceId === "shared-brain" },
+            ]}
+            controlledSourceId="shared"
+            action={(
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {skillSearchQuery ? (
+                  <Btn type="button" size="sm" variant="secondary" onClick={() => setSkillBrowserSearch("")}>
+                    Clear
+                  </Btn>
+                ) : null}
+                <Btn type="button" size="sm" variant="secondary" icon="sparkles" onClick={openSkillBrowser}>
+                  Add skill
+                </Btn>
               </div>
-            </div>
-          )}
+            )}
+          />
 
           <div className={vaultClass("providerSkillsToolbar")}>
             <div>

@@ -467,6 +467,94 @@
   background: rgba(94, 234, 212, 0.12);
 }
 
+.fleetLoadingGraph {
+  position: absolute;
+  inset: max(18px, 4%) max(12px, 3%) 104px;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  filter: drop-shadow(0 26px 80px rgba(0, 0, 0, 0.22));
+}
+
+.fleetLoadingEdges line {
+  stroke: rgba(100, 116, 139, 0.34);
+  stroke-width: 1.6;
+  stroke-dasharray: 7 7;
+  stroke-linecap: round;
+  opacity: 0.72;
+  animation: fleet-loading-edge-flow 1.9s linear infinite;
+}
+
+.fleetLoadingEdges line:nth-child(2n) {
+  stroke: rgba(148, 163, 184, 0.28);
+  animation-duration: 2.45s;
+}
+
+.fleetLoadingHiveCell {
+  --fleet-loading-delay: 0ms;
+  opacity: 0.82;
+  animation: fleet-loading-cell-glow 2.4s ease-in-out infinite;
+  animation-delay: var(--fleet-loading-delay);
+}
+
+.fleetLoadingHexFill {
+  fill: rgba(30, 41, 59, 0.46);
+}
+
+.fleetLoadingHexStroke {
+  fill: none;
+  stroke: rgba(148, 163, 184, 0.32);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.fleetLoadingCellActive .fleetLoadingHexFill {
+  fill: rgba(51, 65, 85, 0.48);
+}
+
+.fleetLoadingCellActive .fleetLoadingHexStroke {
+  stroke: rgba(148, 163, 184, 0.34);
+}
+
+.fleetLoadingCellGhost .fleetLoadingHexFill {
+  fill: rgba(15, 23, 42, 0.18);
+}
+
+.fleetLoadingCellGhost .fleetLoadingHexStroke {
+  stroke: rgba(148, 163, 184, 0.34);
+  stroke-dasharray: 6 6;
+}
+
+.fleetLoadingMachineCell {
+  filter: drop-shadow(0 0 18px rgba(148, 163, 184, 0.08));
+}
+
+.fleetLoadingAddMark {
+  stroke: rgba(148, 163, 184, 0.42);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.76;
+}
+
+.fleetLoadingMachineGlyph {
+  fill: none;
+  stroke: rgba(148, 163, 184, 0.72);
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fleetLoadingAgentSkeleton {
+  opacity: 0.92;
+}
+
+.fleetLoadingSkeletonBlock {
+  fill: rgba(148, 163, 184, 0.28);
+  stroke: none;
+  animation: fleet-loading-skeleton-shimmer 1.7s ease-in-out infinite;
+  animation-delay: var(--fleet-loading-delay);
+}
+
 .rosterUpdateButton {
   transition:
     border-color 160ms ease,
@@ -890,20 +978,39 @@
 .graphAgentCellContent {
   position: relative;
   z-index: 2;
-  width: 100%;
-  max-width: calc(100% - 12px);
+  width: 62px;
+  height: 72px;
+  max-width: none;
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
 }
 
 .graphAgentName {
-  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
   width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  text-align: center;
-  overflow-wrap: anywhere;
-  word-break: normal;
-  white-space: normal;
-  hyphens: auto;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  font-family: var(--f-mono);
+  letter-spacing: 0;
+  text-shadow: 0 1px 2px rgba(2, 6, 23, 0.58);
+  text-transform: none;
+}
+
+.graphAgentNameText {
+  fill: currentColor;
+  font-family: var(--f-mono);
+  font-weight: 750;
+  letter-spacing: 0;
+  paint-order: stroke;
+  stroke: rgba(2, 6, 23, 0.32);
+  stroke-linejoin: round;
+  stroke-width: 0.34px;
 }
 
 .listEntity {
@@ -940,6 +1047,20 @@
 @keyframes roster-loading-shimmer {
   0% { transform: translateX(-120%); }
   58%, 100% { transform: translateX(120%); }
+}
+
+@keyframes fleet-loading-cell-glow {
+  0%, 100% { opacity: 0.72; }
+  45% { opacity: 1; }
+}
+
+@keyframes fleet-loading-edge-flow {
+  to { stroke-dashoffset: -28; }
+}
+
+@keyframes fleet-loading-skeleton-shimmer {
+  0%, 100% { opacity: 0.34; }
+  45% { opacity: 0.82; }
 }
 
 @keyframes fleet-pulse {
@@ -1114,6 +1235,10 @@
     min-height: min(560px, 80vw);
   }
 
+  .fleetLoadingGraph {
+    inset: 18px 8px 112px;
+  }
+
   .stageToolbar {
     grid-template-columns: minmax(0, 1fr) auto;
   }
@@ -1122,5 +1247,17 @@
 @media (max-width: 720px) {
   .mobileOnlyMasthead {
     display: block;
+  }
+
+  .fleetLoadingGraph {
+    inset: 8px -54px 120px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fleetLoadingHiveCell,
+  .fleetLoadingEdges line,
+  .fleetLoadingSkeletonBlock {
+    animation: none;
   }
 }

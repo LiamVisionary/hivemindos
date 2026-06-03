@@ -395,13 +395,20 @@ if ask "Remove optional GBrain and Syntho config keys from .env.local?" "no"; th
   fi
 fi
 
-if ask "Remove dashboard auth secret and device token from .env.local?" "no"; then
+if ask "Remove dashboard auth secret and device token from .env.local and shared hive env?" "no"; then
   env_file="$ROOT/.env.local"
   if [[ -f "$env_file" ]]; then
     tmp_file="$(mktemp)"
     grep -Ev '^(HIVEMINDOS_DASHBOARD_AUTH_SECRET|HIVEMINDOS_DASHBOARD_DEVICE_TOKEN)=' "$env_file" > "$tmp_file" || true
     mv "$tmp_file" "$env_file"
     ok "Removed dashboard auth keys from .env.local"
+  fi
+  if [[ -x "$ROOT/scripts/hive-env-add" ]]; then
+    if printf "HIVEMINDOS_DASHBOARD_AUTH_SECRET=\nHIVEMINDOS_DASHBOARD_DEVICE_TOKEN=\n" | "$ROOT/scripts/hive-env-add" --import-stdin --scope agent --runtime generic >/dev/null 2>&1; then
+      ok "Removed dashboard auth keys from shared hive env"
+    else
+      warn "Could not remove dashboard auth keys from shared hive env"
+    fi
   fi
 fi
 

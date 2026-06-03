@@ -195,6 +195,7 @@ export function NetworkGraph({
     <div
       ref={viewportRef}
       className="relative h-full w-full overflow-hidden"
+      data-fleet-graph-viewport="true"
       style={{ cursor: dragging ? "grabbing" : "grab", touchAction: "none" }}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
@@ -224,6 +225,7 @@ export function NetworkGraph({
     >
       <div
         className="absolute left-0 top-0"
+        data-fleet-graph-layer="true"
         style={{
           width: w,
           height: h,

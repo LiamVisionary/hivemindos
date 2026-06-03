@@ -29,6 +29,21 @@ async function request(method, body = {}, params = {}) {
   return data;
 }
 
+async function projectRequest(path, body = {}, params = {}) {
+  const url = new URL(path, baseUrl);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
+  }
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ vaultPath, ...body }),
+  });
+  const data = await response.json().catch(() => null);
+  assert(response.ok && data?.ok, `POST ${url.pathname} failed: ${data?.error ?? response.status}`);
+  return data;
+}
+
 async function createTask(title, status, extra = {}) {
   const data = await request("POST", {
     title,
@@ -183,6 +198,45 @@ async function main() {
     });
     assert(timeoutAccepted.status === "needs-human", "Timeout-accepted runtime work without a session should fail closed to Needs Human.");
 
+    const project = await projectRequest("/api/projects", {
+      name: "Proof fixture",
+      localPath: "/Users/liam/Documents/code/projects/proof-fixture",
+      vaultNotePath: "Projects/Secret/Proof fixture.md",
+      preferredMachineKey: "this-mac",
+    });
+    const linkedProject = await projectRequest("/api/projects/link-gitlawb", {
+      projectId: project.project.id,
+      repo: {
+        repoId: "proof-fixture-repo",
+        repoName: "liam/proof-fixture",
+        remoteUrl: "gitlawb://proof-fixture-repo",
+        branch: "main",
+      },
+    });
+    assert(linkedProject.project?.gitlawbRepo?.repoName === "liam/proof-fixture", "Project should link to GitLawb repo metadata.");
+    let proofTask = await createTask("project proof hydration", "ready", {
+      projectId: project.project.id,
+      proofs: [{
+        id: "proof-verified-commit",
+        kind: "commit",
+        status: "verified",
+        title: "signed main commit",
+        commit: "abc123def456",
+        metadata: {
+          proofTitle: "signed main commit",
+          localPath: "/Users/liam/Documents/Obsidian/Private Vault/secret.md",
+          vaultNotePath: "Private/secret.md",
+        },
+      }],
+    });
+    proofTask = await request("GET", {}, { vaultPath, kanbanFolder, include_archived: "true" })
+      .then((data) => data.board.tasks.find((task) => task.id === proofTask.id));
+    assert(proofTask?.proofs?.some((proof) => proof.kind === "task" && proof.metadata?.projectId === project.project.id), "Project-linked tasks should carry hydrated project proof metadata.");
+    const verifiedProof = proofTask?.proofs?.find((proof) => proof.id === "proof-verified-commit");
+    assert(verifiedProof?.status === "verified", "Explicit verified proofs should survive task hydration.");
+    assert(verifiedProof?.metadata?.localPath === "[redacted]", "Proof metadata should redact private local paths.");
+    assert(verifiedProof?.metadata?.vaultNotePath === "[redacted]", "Proof metadata should redact private vault note paths.");
+
     const source = await readFile(new URL("../src/app/page.tsx", import.meta.url), "utf8");
     assert(
       /function isKanbanAwaitingAgentUpdate\(task: KanbanTask\) \{\s*return task\.status === "working"\s*&& Boolean\(task\.agentSession\?\.sessionId\);\s*\}/m.test(source),
@@ -198,6 +252,14 @@ async function main() {
       && source.includes("reverse it narrowly")
       && source.includes("Treat existing notes as authoritative retry context"),
       "Regression guard failed: explicit undo prompts must override stale retry context.",
+    );
+
+    const kanbanPanelSource = await readFile(new URL("../src/features/dashboard/views/KanbanPanel.tsx", import.meta.url), "utf8");
+    assert(
+      kanbanPanelSource.includes('if (status === "verified") return 4;')
+      && kanbanPanelSource.includes('const projectProofForTask = (task: any) => Array.isArray(task.proofs)')
+      && kanbanPanelSource.includes('const kindDelta = proofKindRank(proof.kind) - proofKindRank(best.kind);'),
+      "Regression guard failed: Work cards should prioritize verified GitLawb proofs while keeping project proof metadata available.",
     );
     assert(
       source.includes("const undoRequested = Boolean(task.undoRequestedAt);")

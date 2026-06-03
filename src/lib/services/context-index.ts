@@ -11,6 +11,12 @@ import {
   USEPOD_PROVIDER_EARN_SHARE,
   USEPOD_SUPPLY_MATRIX,
 } from "@/lib/config/usepod-features";
+import {
+  VEIL_CASH_CHAIN_ID,
+  VEIL_CASH_CONTRACTS,
+  VEIL_CASH_SDK_PACKAGE,
+  VEIL_CASH_TRANSFER_CONFIRMATION_LABEL,
+} from "@/lib/config/veil-cash";
 import { RUNTIME_DEFINITIONS } from "@/lib/types/agent-runtime";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 
@@ -459,8 +465,8 @@ function localCliToolItems(): ContextIndexItem[] {
       id: "tool-schema:wallet-actions",
       kind: "tool-schema",
       title: "agent wallet tools",
-      summary: "Dashboard wallet capability for read-only balance checks, local encrypted-wallet x402 paid fetches, UsePod prepaid status, and auto-use-gated USDC sends.",
-      tags: ["wallet", "payment", "crypto", "usdc", "x402", "usepod", "moneyclaw", "bankr", "spend", "balance", "agent", "tool"],
+      summary: "Dashboard wallet capability for read-only balance checks, local encrypted-wallet x402 paid fetches, UsePod prepaid status, Veil Cash privacy setup, and auto-use-gated USDC sends.",
+      tags: ["wallet", "payment", "crypto", "usdc", "x402", "usepod", "moneyclaw", "bankr", "veil", "privacy", "spend", "balance", "agent", "tool"],
       aliases: [
         "agent wallet",
         "wallet actions",
@@ -475,14 +481,18 @@ function localCliToolItems(): ContextIndexItem[] {
         "usepod wallet",
         "moneyclaw",
         "bankr trading",
+        "veil cash",
+        "privacy pool",
       ],
       retrievalText: [
-        "Use this capability when a workflow needs agent wallet, payment, crypto, x402, USDC, UsePod, MoneyClaw, Bankr, or paid API actions.",
+        "Use this capability when a workflow needs agent wallet, payment, crypto, x402, USDC, UsePod, MoneyClaw, Bankr, Veil Cash, privacy-pool setup, or paid API actions.",
         "Read-only checks: POST /api/wallet/balance for public wallet balance, GET /api/wallet/moneyclaw for MoneyClaw status, POST /api/usepod/status for UsePod token balance/models.",
         "Paid API path: x402_fetch uses POST /api/wallet/x402 with { agentId, url, method, headers, body, policy, confirmation } and signs from the encrypted local wallet vault.",
-        "Approval gate: when Allow auto-use is off, wait for explicit PAY_X402 from the user before x402_fetch. When Allow auto-use is on, x402_fetch can pay without another prompt while staying under the hard per-payment cap.",
+        "Approval gate: when Allow auto-use is off, present a concise payment draft and wait for plain explicit confirmation from the user before x402_fetch. When Allow auto-use is on, x402_fetch can pay without another prompt while staying under the hard per-payment cap.",
         "USDC sends use the same Allow auto-use policy: POST /api/wallet/send can send under the hard per-payment cap when auto-use is on, and requires SEND_USDC for the exact recipient and amount when auto-use is off.",
         "UsePod agents use their prepaid UsePod token balance for inference and provider-managed x402/paywall handling; do not require a separate local wallet for UsePod x402.",
+        `Veil Cash runs on Base chain ${VEIL_CASH_CHAIN_ID}; HivemindOS stores the visible funding wallet and setup copy, while registration, deposits, private transfers, withdrawals, and subaccounts use the Veil app or ${VEIL_CASH_SDK_PACKAGE} CLI/SDK with explicit approval. Entry contract ${VEIL_CASH_CONTRACTS.entry}; USDC queue ${VEIL_CASH_CONTRACTS.usdcQueue}. Current docs and deployed source require USDC deposits to clear a 20 USDC shielded minimum after the 0.3% deposit fee: the CLI deposit amount is the net shielded amount, so deposit USDC 20 requires about 20.06 USDC available plus Base gas. Live relay execution currently requires at least 5 USDC for public-recipient USDC withdrawals.`,
+        `Private send capability: when a user asks to "send privately" or make a private payment, select the active provider with privateTransferAssets instead of requiring the user to name the provider. Wallet spending must be on before any private-transfer endpoint executes; when Spend is off, prepare a draft only and ask the user to enable spending. Treat public/private/queued Veil state as internal rail inventory and present one agent spend balance to the user. The current Veil implementation supports private USDC and ETH sends through POST /api/wallet/veil/transfer only after the user confirms a reviewed transfer draft; use confirmation '${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL}' internally after the user confirms and include autoShield for USDC sends. By default it sends privately to any public Ethereum address; if ready private USDC is insufficient, HivemindOS can shield from the agent's encrypted local Base wallet first, subject to the 20 USDC shield minimum and queue acceptance delay, then complete the private withdrawal after acceptance. The wallet duplicate payment guard is on by default and replays a recently completed matching asset, amount, and recipient during its configured time window; if the user turns it off, the same private send may submit again after the previous transfer finishes, while in-flight duplicate locks still apply. Only use registered-recipient mode for an explicit in-pool shielded transfer to a registered Veil recipient. VEIL_KEY and the Veil CLI must be configured on the server. Veil private x402 is a private payment capability: natural chat prompts can draft and confirm it directly, while lower-level POST /api/wallet/veil/x402 maps internal confirmation to VEIL_X402; discover the x402 USDC price, enforce maxPaymentUsd, withdraw from the Veil USDC pool into a fresh derived payer EOA, then sign and settle x402 from that burner. Ask users for plain confirmation such as "confirm", not provider tokens. The dashboard does not expose or store VEIL_KEY in shared notes.`,
         `UsePod drop-in bases: ${USEPOD_COMPATIBILITY_MATRIX.openai.baseUrlTemplate} for OpenAI-compatible clients and ${USEPOD_COMPATIBILITY_MATRIX.anthropic.baseUrlTemplate} for Anthropic-compatible clients; never expose the actual token in shared notes.`,
         `UsePod direct deposits use ${USEPOD_FUNDING_MATRIX.USDC.label} on ${USEPOD_FUNDING_MATRIX.USDC.network} through the UsePod on-chain deposit instruction; do not use a plain SPL transfer memo.`,
         `UsePod provider hosting: ${USEPOD_SUPPLY_MATRIX["provider-agent"].commands?.join(" -> ")}. Enroll at ${USEPOD_SUPPLY_MATRIX["provider-agent"].actionUrl}; providers post a $${USEPOD_PROVIDER_BOND_USDC} USDC bond and earn ${(USEPOD_PROVIDER_EARN_SHARE * 100).toFixed(0)}% of settled inference.`,

@@ -1,7 +1,7 @@
 import type { BeeAgentRole, BeeWorkerClass } from "@/lib/types/agent-runtime";
 
 const WORKER_CLASS_ICON: Record<BeeWorkerClass, string> = {
-  general: "/icons/worker-bee-general-v2.png",
+  general: "/icons/worker-bee-general-v3.png",
   planner: "/icons/worker-bee-planner-v2.png",
   code: "/icons/worker-bee-code-v2.png",
   vision: "/icons/worker-bee-vision-v2.png",

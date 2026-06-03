@@ -28,6 +28,7 @@ artifacts/
 strix-results/
 strix_runs/
 .antvis-infographic/
+.veil-x402-receipts.json
 
 *.db
 *.sqlite

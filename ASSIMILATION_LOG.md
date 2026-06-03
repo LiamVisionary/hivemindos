@@ -4921,3 +4921,285 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
   - Decision: selected
   - Reason: user supplied local app and existing Remotion dependency; reused captured Fleet/Work dashboard UI plus GitLawb/AntV artifacts rather than importing external app code
   - Path: `src/features/dashboard,src/features/integrations/GitLawbIntegrationPanel.tsx,infographic/gitlawb-hivemindos/antv-gitlawb.png`
+## 2026-06-02T16:19:58.392299+00:00 - triage
+
+- Request: Replace UsePod section styling with pinned nextjs-usepod handoff while preserving wiring
+- Source: user-supplied-local
+- Selected backbone: /Users/liam/Downloads/nextjs-usepod
+
+### Candidates
+- /Users/liam/Downloads/nextjs-usepod
+  - Decision: selected
+  - Reason: pinned local handoff explicitly targets GuidedUsePodSetup and UsePodSetup.module.css
+  - Path: `src/features/dashboard/views/chat`
+## 2026-06-02T16:27:37.153844+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /Users/liam/Downloads/nextjs-usepod:src/features/dashboard/views/chat/GuidedUsePodSetup.tsx => src/features/dashboard/views/chat/GuidedUsePodSetup.tsx, /Users/liam/Downloads/nextjs-usepod:src/features/dashboard/views/chat/UsePodSetup.module.css => src/features/dashboard/views/chat/UsePodSetup.module.css
+- Verification: Wrote ASSIMILATION.json with 2 entries and custom_code_assessment=balanced.
+## 2026-06-02T16:28:03.545840+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /Users/liam/Downloads/nextjs-usepod:src/features/dashboard/views/chat/GuidedUsePodSetup.tsx => src/features/dashboard/views/chat/GuidedUsePodSetup.tsx, /Users/liam/Downloads/nextjs-usepod:src/features/dashboard/views/chat/GuidedUsePodSetup.tsx => src/features/dashboard/views/chat/GuidedUsePodSetup.tsx, /Users/liam/Downloads/nextjs-usepod:src/features/dashboard/views/chat/UsePodSetup.module.css => src/features/dashboard/views/chat/UsePodSetup.module.css, /Users/liam/Downloads/nextjs-usepod:src/features/dashboard/views/chat/UsePodSetup.module.css => src/features/dashboard/views/chat/UsePodSetup.module.css
+- Verification: Wrote ASSIMILATION.json with 4 entries and custom_code_assessment=balanced.
+## 2026-06-02T16:28:23.066492+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /Users/liam/Downloads/nextjs-usepod:src/features/dashboard/views/chat/GuidedUsePodSetup.tsx => src/features/dashboard/views/chat/GuidedUsePodSetup.tsx, /Users/liam/Downloads/nextjs-usepod:src/features/dashboard/views/chat/GuidedUsePodSetup.tsx => src/features/dashboard/views/chat/GuidedUsePodSetup.tsx, /Users/liam/Downloads/nextjs-usepod:src/features/dashboard/views/chat/GuidedUsePodSetup.tsx => src/features/dashboard/views/chat/GuidedUsePodSetup.tsx, /Users/liam/Downloads/nextjs-usepod:src/features/dashboard/views/chat/UsePodSetup.module.css => src/features/dashboard/views/chat/UsePodSetup.module.css
+- Verification: Wrote ASSIMILATION.json with 4 entries and custom_code_assessment=balanced.
+## 2026-06-02T17:31:28.377456+00:00 - local-search
+
+- Request: Implement Veil.cash into an existing TypeScript agent wallet system, Base EVM wallet privacy quick deposit integration
+- Source: local-index
+- Query: `Implement Veil.cash into an existing TypeScript agent wallet system, Base EVM wallet privacy quick deposit integration`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=5.69 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+2. score=4.39 LiamVisionary/claude-watch [repo-summary]
+   url: https://github.com/LiamVisionary/claude-watch
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
+3. score=4.39 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+4. score=2.50 LiamVisionary/ai-companion-website [repo-summary]
+   url: https://github.com/LiamVisionary/ai-companion-website
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
+5. score=2.50 LiamVisionary/ami-ai-companion-app [repo-summary]
+   url: https://github.com/LiamVisionary/ami-ai-companion-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   LiamVisionary/ami-ai-companion-app TypeScript
+6. score=2.50 LiamVisionary/language-learning-app [repo-summary]
+   url: https://github.com/LiamVisionary/language-learning-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   LiamVisionary/language-learning-app TypeScript
+7. score=2.00 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+8. score=1.65 LiamVisionary/Ad-Alchemist [repo-summary]
+   url: https://github.com/LiamVisionary/Ad-Alchemist
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-Ad-Alchemist.md
+   LiamVisionary/Ad-Alchemist TypeScript
+
+## 2026-06-02T17:31:31.693576+00:00 - prebuild-gate
+
+- Request: Implement Veil.cash into an existing TypeScript agent wallet system, Base EVM wallet privacy quick deposit integration
+- Source: public-github
+- Query: `Implement Veil.cash into an existing TypeScript agent wallet system, Base EVM wallet privacy quick deposit integration`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-06-02T17:32:10.346190+00:00 - triage
+
+- Request: Implement Veil.cash into existing agent wallet system
+- Source: local-index
+
+### Candidates
+- LiamVisionary/floradex
+  - Decision: rejected
+  - Reason: private/local index hit unrelated plant tracker; no wallet rail code to transplant
+- LiamVisionary/claude-watch
+  - Decision: rejected
+  - Reason: private/local index hit unrelated study-note app; no wallet rail code to transplant
+- LiamVisionary/claw-code-mobile
+  - Decision: rejected
+  - Reason: private/local index hit mobile agent UX; no Veil/Base payment provider code to transplant
+## 2026-06-02T17:32:10.346390+00:00 - rejection
+
+- Request: Implement Veil.cash into existing agent wallet system
+- Source: public-github
+
+### Candidates
+- Rastaman4e/-1
+  - Decision: rejected
+  - Reason: irrelevant NiceHash terms repository; no Veil Cash, Base wallet, or TypeScript integration code to reuse
+## 2026-06-02T17:32:44.120208+00:00 - public-search
+
+- Request: veildotcash-sdk Veil Cash TypeScript SDK
+- Source: public-github
+- Query: `veildotcash-sdk Veil Cash TypeScript SDK`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-06-02T17:32:44.879308+00:00 - public-search
+
+- Request: Veil Cash Base privacy pool TypeScript
+- Source: public-github
+- Query: `Veil Cash Base privacy pool TypeScript`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-06-02T17:33:10.257948+00:00 - triage
+
+- Request: Implement Veil.cash into existing agent wallet system
+- Source: public-github
+
+### Candidates
+- veildotcash/veildotcash-sdk
+  - Decision: selected
+  - Reason: official/referenced Veil SDK exists and may provide contract metadata or integration constants; inspect before implementation
+## 2026-06-02T17:37:17.455453+00:00 - assimilation
+
+- Request: Implement Veil.cash into existing agent wallet system
+- Source: public-github
+- Selected backbone: veildotcash/veildotcash-sdk
+
+### Candidates
+- veildotcash/veildotcash-sdk
+  - Decision: selected
+  - Reason: reused src/addresses.ts contract/relay constants, README.md/SDK.md setup workflow, and skills/veil/SKILL.md agent CLI safety model; did not import proving-key/prover/private-action execution code after audit review findings
+## 2026-06-02T17:54:49.869863+00:00 - assimilation
+
+- Request: Add Veil private transfer execution to existing agent wallet system
+- Source: public-github
+- Selected backbone: veildotcash/veildotcash-sdk
+
+### Candidates
+- veildotcash/veildotcash-sdk
+  - Decision: selected
+  - Reason: adapted src/cli/commands/transfer.ts command shape and validation semantics into a server-side allowlisted /api/wallet/veil/transfer wrapper; did not import SDK prover code or keys
+## 2026-06-02T18:06:18.581174+00:00 - reuse
+
+- Request: Add ETH-denominated cap and asset switcher for Veil private transfer execution
+- Source: public-github
+- Selected backbone: veildotcash/veildotcash-sdk
+
+### Candidates
+- veildotcash/veildotcash-sdk
+  - Decision: selected
+  - Reason: continuing from previous transfer CLI donor; reuse asset argument shape ETH|USDC from src/cli/commands/transfer.ts
+## 2026-06-02T19:47:51.876982+00:00 - assimilation-manifest
+
+- Request: Replace UsePod rent-compute success/follow-up views with compact nextjs-rent-mac 2 handoff
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /Users/liam/Downloads/nextjs-rent-mac 2:src/features/dashboard/views/host/RentThisMacModal.tsx => src/components/fleet/usepod-host-modal.tsx, /Users/liam/Downloads/nextjs-rent-mac 2:src/features/dashboard/views/host/RentThisMac.module.css => src/components/fleet/usepod-host-modal.module.css
+- Verification: Wrote ASSIMILATION.json with 2 entries and custom_code_assessment=balanced.
+## 2026-06-02T19:48:15.157337+00:00 - assimilation-manifest
+
+- Request: Replace UsePod rent-compute success/follow-up views with compact nextjs-rent-mac 2 handoff
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /Users/liam/Downloads/nextjs-rent-mac 2:src/features/dashboard/views/host/RentThisMacModal.tsx => src/components/fleet/usepod-host-modal.tsx, /Users/liam/Downloads/nextjs-rent-mac 2:src/features/dashboard/views/host/RentThisMacModal.tsx => src/components/fleet/usepod-host-modal.tsx, /Users/liam/Downloads/nextjs-rent-mac 2:src/features/dashboard/views/host/RentThisMacModal.tsx => src/components/fleet/usepod-host-modal.tsx, /Users/liam/Downloads/nextjs-rent-mac 2:src/features/dashboard/views/host/RentThisMac.module.css => src/components/fleet/usepod-host-modal.module.css
+- Verification: Wrote ASSIMILATION.json with 4 entries and custom_code_assessment=balanced.
+## 2026-06-03T03:04:06.052155+00:00 - triage
+
+- Request: Retune the GitLawb integration Remotion video to show richer GitLawb proof features using the existing app UI
+- Source: pinned-local
+- Selected backbone: hivemind-os/remotion/gitlawb-integration-video
+
+### Candidates
+- hivemind-os/remotion/gitlawb-integration-video
+  - Decision: selected
+  - Reason: existing local Remotion composition and Playwright capture scripts already match the requested video route and app UI
+  - Path: `remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx,remotion/gitlawb-integration-video/scripts`
+## 2026-06-03T03:33:12.810247+00:00 - triage
+
+- Request: Add Spend on/off indicator to compact wallet cards
+- Source: user-supplied-local
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: pinned local wallet card component already owns compact wallet status rendering
+  - Path: `src/components/wallet/AgentWalletCardCompact.tsx,src/components/wallet/AgentWalletCardCompact.module.css`
+## 2026-06-03T04:44:50.814314+00:00 - triage
+
+- Request: Replace wallet detail view advanced Veil section with supplied nextjs-veil UI
+- Source: user-supplied-local-source
+- Decision: selected
+- Selected backbone: /Users/liam/Downloads/nextjs-veil
+- Verification: Audited /Users/liam/Downloads/nextjs-veil with audit_candidate_repo.py --path src/components/wallet; PASS heuristic audit.
+
+### Candidates
+- /Users/liam/Downloads/nextjs-veil
+  - Decision: selected
+  - Reason: user-supplied local Veil advanced wallet UI with extractable React component and CSS
+  - Path: `src/components/wallet/VeilAdvancedSetup.tsx,src/components/wallet/AgentWalletCard.module.css`
+## 2026-06-03T04:44:50.814325+00:00 - assimilation-manifest
+
+- Request: Replace wallet detail view advanced Veil section with supplied nextjs-veil UI
+- Source: selected-local-code
+- Decision: assimilated
+- Assimilated: /Users/liam/Downloads/nextjs-veil:src/components/wallet/VeilAdvancedSetup.tsx => src/components/wallet/VeilAdvancedSetup.tsx; /Users/liam/Downloads/nextjs-veil:src/components/wallet/AgentWalletCard.module.css => src/components/wallet/VeilAdvancedSetup.module.css
+- Verification: Updated ASSIMILATION.json while preserving existing entries; focused eslint passed; browser smoke test confirmed Check setup wiring.
+## 2026-06-03T10:02:48.710780+00:00 - triage
+
+- Request: replace the work history screen with /Users/liam/Downloads/nextjs-work-history
+- Source: user-supplied-local
+- Selected backbone: /Users/liam/Downloads/nextjs-work-history
+
+### Candidates
+- /Users/liam/Downloads/nextjs-work-history
+  - Decision: selected
+  - Reason: pinned local handoff contains the exact Work History React component and CSS module
+  - Path: `src/features/dashboard/views/WorkHistoryView.tsx,src/features/dashboard/views/WorkHistoryView.module.css`
+## 2026-06-03T10:02:48.744788+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /Users/liam/Downloads/nextjs-work-history:src/features/dashboard/views/WorkHistoryView.tsx => src/features/dashboard/views/WorkHistoryView.tsx, /Users/liam/Downloads/nextjs-work-history:src/features/dashboard/views/WorkHistoryView.module.css => src/features/dashboard/views/WorkHistoryView.module.css
+- Verification: Wrote ASSIMILATION.json with 2 entries and custom_code_assessment=balanced.
+## 2026-06-03T10:03:25.972104+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /Users/liam/Downloads/nextjs-work-history:README.md => src/features/dashboard/views/KanbanPanel.tsx
+- Verification: Wrote ASSIMILATION.json with 1 entries and custom_code_assessment=balanced.
+## 2026-06-03T10:03:49.892711+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /Users/liam/Downloads/nextjs-work-history:src/features/dashboard/views/WorkHistoryView.tsx => src/features/dashboard/views/WorkHistoryView.tsx, /Users/liam/Downloads/nextjs-work-history:src/features/dashboard/views/WorkHistoryView.module.css => src/features/dashboard/views/WorkHistoryView.module.css, /Users/liam/Downloads/nextjs-work-history:README.md => src/features/dashboard/views/KanbanPanel.tsx
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-03T10:04:19.237784+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /Users/liam/Downloads/nextjs-work-history:src/features/dashboard/views/WorkHistoryView.tsx => src/features/dashboard/views/WorkHistoryView.tsx, /Users/liam/Downloads/nextjs-work-history:src/features/dashboard/views/WorkHistoryView.module.css => src/features/dashboard/views/WorkHistoryView.module.css, /Users/liam/Downloads/nextjs-work-history:README.md => src/features/dashboard/views/KanbanPanel.tsx
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-03T15:09:47.982169+00:00 - triage
+
+- Request: Replace HivemindOS chat route with supplied nextjs-chat route while preserving existing composer, bee tooltip, message actions, chat names, agent selector, and hive background
+- Source: user-supplied-local
+- Selected backbone: /Users/liam/Downloads/nextjs-chat
+
+### Candidates
+- /Users/liam/Downloads/nextjs-chat
+  - Decision: selected
+  - Reason: pinned user-supplied Next.js chat route with transplantable route shell, nav, thread spacing, and hive token styling
+  - Path: `src/app/chat/page.tsx,src/components/chat/ChatView.tsx,src/components/chat/ChatNav.tsx,src/components/chat/ChatThread.tsx,src/components/chat/chat-tokens.module.css`
+## 2026-06-03T15:14:26.323114+00:00 - audit
+
+- Request: Replace HivemindOS chat route with supplied nextjs-chat route while preserving existing composer, bee tooltip, message actions, chat names, agent selector, and hive background
+- Source: user-supplied-local
+
+### Candidates
+- /Users/liam/Downloads/nextjs-chat
+  - Decision: selected
+  - Reason: heuristic audit passed with high=0 medium=0 low=0 for route shell and chat component donor paths
+  - Path: `src/app/chat/page.tsx,src/components/chat/ChatView.tsx,src/components/chat/ChatNav.tsx,src/components/chat/ChatThread.tsx,src/components/chat/chat-tokens.module.css`
+## 2026-06-03T15:34:49.212750+00:00 - assimilation
+
+- Request: Replace HivemindOS chat route with supplied nextjs-chat route while preserving existing composer, bee tooltip, message actions, chat names, agent selector, and hive background
+- Source: user-supplied-local
+- Selected backbone: /Users/liam/Downloads/nextjs-chat
+
+### Candidates
+- /Users/liam/Downloads/nextjs-chat
+  - Decision: selected
+  - Reason: second pass transplanted donor primitives, route tokens, thread lane, nav shell, and shelf layout into live HivemindOS chat
+  - Path: `src/components/chat/glyph.tsx,src/components/chat/hex-tile.tsx,src/components/chat/bee-icon.tsx,src/components/chat/ChatThread.tsx,src/components/chat/ShelfPanels.tsx,src/components/chat/chat-tokens.module.css`

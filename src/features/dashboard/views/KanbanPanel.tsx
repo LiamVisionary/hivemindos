@@ -7,21 +7,10 @@ import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import type { WorkHistoryPayload } from "@/lib/types/work-history";
 import { WorkSectionHeader } from "./WorkSectionHeader";
+import { WorkHistoryView } from "./WorkHistoryView";
 
 const EMPTY_WORK_HISTORY: WorkHistoryPayload = { projects: [], entries: [] };
 const WORK_HISTORY_PAGE_SIZE = 10;
-const codeProofPillStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  minHeight: 22,
-  border: "1px solid rgba(94,234,212,0.28)",
-  borderRadius: 7,
-  background: "rgba(45,212,191,0.10)",
-  color: "#99f6e4",
-  padding: "3px 7px",
-  fontSize: 10.5,
-  fontWeight: 800,
-};
 
 export function KanbanPanel(props: any) {
   const { AttachmentListMenuContent, AttachmentMenuContent, CellMenu, ChatMarkdown, Check, ChevronDown, ChevronRight, ComposerField, DEFAULT_SHARED_VAULT, ExternalLink, Eye, FolderOpen, Image, KANBAN_COLUMNS, KANBAN_STEER_TARGETS, MessageAttachments, MessageSquare, Paperclip, Plus, RotateCcw, Search, Settings2, activeView, addKanbanComment, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, attachQuickAddDirectory, attachQuickAddRecentDirectory, bulkPatchKanbanTasks, chatClass, commentDraft, createKanbanBoard, createKanbanTask, displayAgents, editAndInterruptKanbanTask, expandedKanbanCards, formatDurationShort, formatMessageTimestamp, formatRelativeTime, handleKanbanCardFileChange, handleKanbanCardImageChange, handleKanbanSteerFileChange, handleKanbanSteerImageChange, handleQuickAddFileChange, handleQuickAddImageChange, importNoteIntake, initialWorkHistory, isKanbanStaleWorkingTask, isKanbanTerminalMessage, kanbanAssigneeFilter, kanbanAssigneeOptions, kanbanBoard, kanbanBoardScrollRef, kanbanBoardScrollState, kanbanBoardSlug, kanbanBoards, kanbanBulkAssignee, kanbanBulkPending, kanbanCardAttachmentListOpen, kanbanCardAttachmentMenuOpen, kanbanCardDeliverableMenuOpen, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanCardMachineMenuOpen, kanbanCardMessage, kanbanCardRecentsExpanded, kanbanClass, kanbanEditDraft, kanbanEditPendingTaskId, kanbanError, kanbanEventLabel, kanbanIncludeArchived, kanbanInitialLoading, kanbanLoading, kanbanMachineTargets, kanbanPickupPreviewByTask, kanbanSearch, kanbanStaleAge, kanbanSteerAttachmentError, kanbanSteerAttachmentMenuOpen, kanbanSteerAttachmentMenuRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerFileInputRef, kanbanSteerImageInputRef, kanbanSteerTargetMenuOpen, kanbanSteerTargetMenuRef, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanStorage, kanbanTaskBee, kanbanTaskMenuItems, kanbanTaskModal, kanbanTenantFilter, kanbanTenants, kanbanViewColumns, markKanbanTaskReviewed, moveKanbanTask, newBoardDraft, noteIntakePending, noteIntakePreview, noteIntakeStatus, openKanbanCardFilePicker, openKanbanTaskModal, patchKanbanTask, quickAddAttachmentError, quickAddAttachmentMenuOpen, quickAddAttachmentMenuRef, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddFileInputRef, quickAddImageInputRef, quickAddMachineMenuOpen, quickAddMachineMenuRef, quickAddMachineTarget, quickAddMachineTargets, quickAddStatus, recentDirectories, recentDirectoriesExpanded, recording, removeKanbanCardAttachment, removeKanbanCardDirectory, removeKanbanSteerAttachment, removeKanbanSteerDirectory, removeQuickAddAttachment, removeQuickAddDirectory, scanNoteIntake, selectedKanbanAgent, selectedKanbanAgentMessages, selectedKanbanBulkIds, selectedKanbanComments, selectedKanbanEvents, selectedKanbanTask, selectedKanbanTaskId, selectedKanbanTaskIds, setActiveView, setCommentDraft, setExpandedKanbanCards, setKanbanAssigneeFilter, setKanbanBoardSlug, setKanbanBulkAssignee, setKanbanCardAttachmentListOpen, setKanbanCardAttachmentMenuOpen, setKanbanCardDeliverableMenuOpen, setKanbanCardMachineMenuOpen, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanIncludeArchived, setKanbanLoading, setKanbanSearch, setKanbanSteerAttachmentMenuOpen, setKanbanSteerDraft, setKanbanSteerTargetMenuOpen, setKanbanSteerTargetStatus, setKanbanTaskModal, setKanbanTenantFilter, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddStatus, setRecentDirectoriesExpanded, setSelectedKanbanTaskId, setSelectedKanbanTaskIds, sharedVault, startAudioRecording, steerSelectedKanbanTask, stopAudioRecording, updateKanbanTaskMachine, updateSharedVault, voiceBands, voiceTarget, voiceTranscript, workBoardStats } = props;
@@ -96,15 +85,53 @@ export function KanbanPanel(props: any) {
     if (!response.ok || !data?.ok) throw new Error(data?.error || "Could not open deliverable.");
   };
   const codeProjectById = useMemo(() => new Map(codeProjects.map((project) => [project.id, project])), [codeProjects]);
+  const proofStatusRank = (status?: string) => {
+    if (status === "verified") return 4;
+    if (status === "linked") return 3;
+    if (status === "ready") return 2;
+    if (status === "unavailable") return 1;
+    return 0;
+  };
+  const proofKindRank = (kind?: string) => (kind === "task" ? 0 : 1);
+  const activeProofForTask = (task: any) => Array.isArray(task.proofs)
+    ? task.proofs.reduce((best: any, proof: any) => {
+      if (!proof?.status || proof.status === "unavailable" || proof.status === "failed") return best;
+      if (!best) return proof;
+      const statusDelta = proofStatusRank(proof.status) - proofStatusRank(best.status);
+      if (statusDelta !== 0) return statusDelta > 0 ? proof : best;
+      const kindDelta = proofKindRank(proof.kind) - proofKindRank(best.kind);
+      if (kindDelta !== 0) return kindDelta > 0 ? proof : best;
+      return best;
+    }, null)
+    : null;
+  const projectProofForTask = (task: any) => Array.isArray(task.proofs)
+    ? task.proofs.find((item: any) => item?.kind === "task")
+    : null;
+  const proofSummaryForTask = (task: any) => {
+    const proof = activeProofForTask(task);
+    const projectProof = projectProofForTask(task);
+    const project = task.projectId ? codeProjectById.get(task.projectId) : null;
+    const linkedRepo = project?.gitlawbRepo;
+    const repo = proof?.repo || projectProof?.repo || linkedRepo?.repoName || "";
+    const branch = proof?.branch || projectProof?.branch || linkedRepo?.branch || "";
+    const projectLabel = project?.name || projectProof?.metadata?.projectName || proof?.metadata?.projectName || repo || proof?.title || projectProof?.title || "";
+    return {
+      branch,
+      linkedAt: linkedRepo?.linkedAt,
+      projectLabel,
+      proof,
+      repo,
+      status: proof?.status || projectProof?.status || (linkedRepo ? "linked" : gitlawbStatus?.cli?.installed && gitlawbStatus?.identity?.source === "local" ? "ready" : "unavailable"),
+      title: proof?.title || proof?.metadata?.proofTitle || projectProof?.title || "",
+    };
+  };
   const proofLabelForTask = (task: any) => {
-    const proof = Array.isArray(task.proofs) ? task.proofs.find((item: any) => item?.status && item.status !== "unavailable" && item.status !== "failed") : null;
-    if (proof?.status === "verified") return "Code proof verified";
-    if (proof) return "Code proof linked";
-    if (!task.projectId) return "";
-    const project = codeProjectById.get(task.projectId);
-    if (project?.gitlawbRepo) return "Code proof linked";
-    if (gitlawbStatus?.cli?.installed && gitlawbStatus?.identity?.source === "local") return "Code proof ready";
-    return "Code proof unavailable";
+    const summary = proofSummaryForTask(task);
+    if (summary.status === "verified") return "verified";
+    if (summary.status === "linked") return "linked";
+    if (summary.status === "ready") return "ready";
+    if (summary.status === "unavailable") return summary.projectLabel ? "unavailable" : "";
+    return summary.projectLabel ? "linked" : "";
   };
 
   useEffect(() => {
@@ -504,8 +531,6 @@ export function KanbanPanel(props: any) {
                       const taskAttachmentCount = (task.attachments?.length ?? 0) + (task.linkedDirectories?.length ?? 0);
                       const deliverables = task.status === "done" ? (task.deliverables ?? []) : [];
                       const undoInProgress = Boolean(task.undoRequestedAt && (task.status === "ready" || task.status === "working"));
-                      const taskProject = task.projectId ? codeProjectById.get(task.projectId) : null;
-                      const taskProof = Array.isArray(task.proofs) ? task.proofs.find((proof: any) => proof?.repo || proof?.title) : null;
                       const proofLabel = proofLabelForTask(task);
                       return (
                         <article className={kanbanClass("kanbanCardShell")} key={task.id}>
@@ -550,24 +575,17 @@ export function KanbanPanel(props: any) {
                                   className={kanbanClass("kanbanPickupPreview")}
                                   title={`${pickupPreview.assignee} is claiming this task`}
                                 >
-                                  <Image src={pickupPreview.icon || "/icons/worker-bee-general-v2.png"} alt="" width={26} height={26} aria-hidden="true" unoptimized />
+                                  <Image src={pickupPreview.icon || "/icons/worker-bee-general-v3.png"} alt="" width={26} height={26} aria-hidden="true" unoptimized />
                                   <small>{pickupPreview.label}</small>
                                 </span>
                               ) : null}
                             </div>
                             <strong className={kanbanClass("kanbanCardTitle")}>{task.title}</strong>
                             {proofLabel ? (
-                              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-                                {taskProject ? (
-                                  <span style={codeProofPillStyle} title={taskProject.gitlawbRepo?.repoName || taskProject.name}>
-                                    {taskProject.name}
-                                  </span>
-                                ) : taskProof?.repo || taskProof?.title ? (
-                                  <span style={codeProofPillStyle} title={taskProof.repo || taskProof.title}>
-                                    {taskProof.repo || taskProof.title}
-                                  </span>
-                                ) : null}
-                                <span style={codeProofPillStyle}>{proofLabel}</span>
+                              <div className={kanbanClass("codeProofRow")}>
+                                <span className={kanbanClass("codeProofStatusPill", proofLabel)}>
+                                  <span>{proofLabel === "verified" ? "Code proof verified" : `code proof ${proofLabel}`}</span>
+                                </span>
                               </div>
                             ) : null}
                             <div className={kanbanClass("kanbanCardMeta")}>
@@ -706,7 +724,7 @@ export function KanbanPanel(props: any) {
                               <time dateTime={new Date(task.updatedAt).toISOString()}>{formatRelativeTime(task.updatedAt)}</time>
                               {workingWithAgent ? (
                                 <span className={kanbanClass("kanbanWorkingBee", "compact")} title={`${task.assignee} is working`}>
-                                  <Image src={bee.icon || "/icons/worker-bee-general-v2.png"} alt="" width={18} height={18} aria-hidden="true" unoptimized />
+                                  <Image src={bee.icon || "/icons/worker-bee-general-v3.png"} alt="" width={18} height={18} aria-hidden="true" unoptimized />
                                 </span>
                               ) : null}
                               {staleWorking ? <span className={kanbanClass("priorityPill", "stale")}>quiet {formatDurationShort(kanbanStaleAge(task))}</span> : null}
@@ -882,107 +900,26 @@ export function KanbanPanel(props: any) {
       {activeView === "history" ? (
       <section className={kanbanClass("workBoardPanel", "tabPanel", "workHistoryPanel")}>
         <div className={kanbanClass("workBoardShell", "workHistoryShell")}>
-          <WorkSectionHeader
+          <WorkHistoryView
+            workHistory={workHistory}
             activeView={activeView}
-            onSelect={selectWorkMode}
-            title="History"
-            subtitle="Dynamic changelog"
-            stats={[
-              { value: workHistory.entries.length, label: "shown", tone: "cyan" },
-              { value: workHistory.projects.length, label: "projects", tone: "honey" },
-              { value: workHistoryOpenCount, label: "open", tone: "danger" },
-              { value: workHistory.totalEntries ?? workHistory.entries.length, label: "total" },
-            ]}
-          />
-
-          <section className={kanbanClass("workBoardControls", "workHistoryControls")} aria-label="History filters">
-            <label>
-              <span>project</span>
-              <select value={workHistoryProject} onChange={(event) => setWorkHistoryProject(event.target.value)}>
-                <option value="">all projects</option>
-                {workHistory.projects.map((project) => (
-                  <option value={project.id} key={project.id}>{project.name}</option>
-                ))}
-              </select>
-            </label>
-            <label className={kanbanClass("workBoardSearch")}>
-              <span>search</span>
-              <div>
-                <Search aria-hidden="true" />
-                <input value={workHistoryQuery} onChange={(event) => setWorkHistoryQuery(event.target.value)} placeholder="title, summary, status..." />
-              </div>
-            </label>
-            <span
-              className={kanbanClass("kanbanSyncPill", workHistoryShowingLoading ? "loading" : "synced")}
-              title={workHistory.generatedAt ? `Refreshed ${new Date(workHistory.generatedAt).toLocaleString()}` : undefined}
-            >
-              <span className={kanbanClass("liveDot")} aria-hidden="true" />
-              {workHistoryShowingLoading ? "scanning" : "changelog feed"}
-            </span>
-          </section>
-
-          {workHistoryError ? <p className={kanbanClass("kanbanError")}>{workHistoryError}</p> : null}
-
-          <section className={kanbanClass("workHistoryList")} aria-label="Project changelog history">
-            {workHistoryShowingLoading && !workHistory.entries.length ? (
-              <>
-                <article className={kanbanClass("workHistoryLoadingNotice")} aria-live="polite">
-                  <strong>Scanning project changelogs</strong>
-                  <p>Looking across local projects and the shared brain vault.</p>
-                </article>
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <article className={kanbanClass("workHistoryItem", "loading")} key={`history-loading-${index}`} aria-hidden="true">
-                    <span />
-                    <strong />
-                    <p />
-                  </article>
-                ))}
-              </>
-            ) : workHistory.entries.length ? (
-              <>
-              {workHistory.entries.map((entry) => (
-                <article className={kanbanClass("workHistoryItem")} key={entry.id}>
-                  <div>
-                    <span className={kanbanClass("workHistoryMeta")}>
-                      {entry.timestamp ? <time dateTime={new Date(entry.sortTime).toISOString()}>{entry.timestamp}</time> : null}
-                      <span>{entry.projectName}</span>
-                      {entry.status ? <span>{entry.status}</span> : null}
-                      <span>{entry.source}</span>
-                    </span>
-                    <strong>{entry.title}</strong>
-                    {entry.areas ? <small className={kanbanClass("workHistoryAreas")}>{entry.areas}</small> : null}
-                    {entry.summary ? (
-                      <ChatMarkdown
-                        text={entry.summary}
-                        className={kanbanClass("workHistoryMarkdown")}
-                        headingClassName={kanbanClass("kanbanCardMarkdownHeading")}
-                      />
-                    ) : null}
-                  </div>
-                  <div className={kanbanClass("workHistoryActions")}>
-                    {entry.commitSummary ? <span className={kanbanClass("kanbanReviewBadge", "reviewed")}>{entry.commitSummary}</span> : null}
-                    {entry.verification ? <span className={kanbanClass("kanbanReviewBadge")}>verified</span> : null}
-                  </div>
-                </article>
-              ))}
-              {workHistory.hasMore ? (
-                <button
-                  type="button"
-                  className={kanbanClass("workHistoryLoadMore")}
-                  disabled={workHistoryLoadingMore}
-                  onClick={() => void loadWorkHistory({ append: true })}
-                >
-                  {workHistoryLoadingMore ? "Loading more..." : `Load 10 more (${workHistory.entries.length}/${workHistory.totalEntries ?? workHistory.entries.length})`}
-                </button>
-              ) : null}
-              </>
-            ) : (
-              <div className={kanbanClass("workHistoryEmpty")}>
-                <strong>No changelog entries found</strong>
-                <p>No matching project updates are available yet.</p>
-              </div>
+            onSelectMode={selectWorkMode}
+            project={workHistoryProject}
+            onProjectChange={setWorkHistoryProject}
+            query={workHistoryQuery}
+            onQueryChange={setWorkHistoryQuery}
+            loading={workHistoryShowingLoading}
+            loadingMore={workHistoryLoadingMore}
+            error={workHistoryError}
+            openCount={workHistoryOpenCount}
+            onLoadMore={() => void loadWorkHistory({ append: true })}
+            renderSummary={(text) => (
+              <ChatMarkdown
+                text={text}
+                headingClassName={kanbanClass("kanbanCardMarkdownHeading")}
+              />
             )}
-          </section>
+          />
         </div>
       </section>
       ) : null}
