@@ -5,13 +5,44 @@ description: HivemindOS paid feature boundaries and premium service notes.
 
 # Monetization
 
-HivemindOS should be useful before anyone pays for a cloud feature.
+HivemindOS should be useful before anyone pays for a cloud feature. Start here when you want to understand what stays free, what becomes paid, and how Honey and HIVE fit around the product without blocking it.
 
 The line is simple: local-first control room features stay available by default, and paid services cover infrastructure that costs real money to run or maintain for users.
 
 The ecosystem plan keeps that boundary explicit: HivemindOS remains free and open source, while optional premium services fund company operations, growth, treasury reserves, and HIVE buybacks.
 
-## Ecosystem Plan
+## Recommended Path
+
+<ol class="routePath" aria-label="Recommended monetization reading path">
+  <li>
+    <span>1</span>
+    <a href="ecosystem-plan.html">Ecosystem Plan</a>
+    <small>Free product, premium services, revenue allocation, and value loop.</small>
+  </li>
+  <li>
+    <span>2</span>
+    <a href="honey-hive-treasury.html">Honey, HIVE, And Treasury</a>
+    <small>Contribution, ownership, treasury, buybacks, staking, and rewards.</small>
+  </li>
+  <li>
+    <span>3</span>
+    <a href="paid-features/">Paid Features</a>
+    <small>The rule for paid infrastructure and the current paid-feature shelf.</small>
+  </li>
+  <li>
+    <span>4</span>
+    <a href="paid-features/hivemind-cloud-agent-calls.html">Cloud Agent Calls</a>
+    <small>The first concrete paid feature example.</small>
+  </li>
+</ol>
+
+## Start With The Boundary
+
+If a feature can run locally with the user's own keys and machine, keep it free by default.
+
+If a feature needs HivemindOS to provide hosted infrastructure, shared room orchestration, reliability work, or ongoing third-party usage, put it in the paid-feature shelf and say so plainly.
+
+## Strategy Pages
 
 <div class="docGrid">
   <section class="docCard">
@@ -24,6 +55,11 @@ The ecosystem plan keeps that boundary explicit: HivemindOS remains free and ope
     <p>The contribution and ownership layers: Honey earning paths, HIVE claims, treasury strategy, buybacks, future burns, and staking.</p>
     <a href="honey-hive-treasury.html">Open token model</a>
   </section>
+</div>
+
+## Paid-Service Pages
+
+<div class="docGrid">
   <section class="docCard">
     <h3>Paid Features</h3>
     <p>The current paid-feature shelf. Start here when a capability needs managed infrastructure, hosted reliability, or premium orchestration.</p>
@@ -35,12 +71,6 @@ The ecosystem plan keeps that boundary explicit: HivemindOS remains free and ope
     <a href="paid-features/hivemind-cloud-agent-calls.html">Open cloud calls</a>
   </section>
 </div>
-
-## Default Rule
-
-If a feature can run locally with the user's own keys and machine, keep it free by default.
-
-If a feature needs HivemindOS to provide hosted infrastructure, shared room orchestration, reliability work, or ongoing third-party usage, put it in the paid-feature shelf and say so plainly.
 
 ## Current Boundary
 

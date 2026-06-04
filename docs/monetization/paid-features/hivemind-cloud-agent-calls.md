@@ -11,6 +11,11 @@ The free call path is BYOK: one user, one selected agent, the user's OpenAI Real
 
 Cloud Agent Calls are for the version that needs an actual room.
 
+<nav class="nextNav" aria-label="Monetization reading path">
+  <a href="./">Previous: Paid Features</a>
+  <a href="../ecosystem-plan.html">Review: Ecosystem Plan</a>
+</nav>
+
 ## What Makes It Paid
 
 LiveKit/SFU calls require managed voice infrastructure.
@@ -95,3 +100,8 @@ In local development, `pnpm tauri:dev` starts the worker when the required envir
 - `src/app/api/phone/route.ts`
 - `scripts/hivemindos-call-agent-worker.mjs`
 - `scripts/tauri-next-dev.mjs`
+
+<nav class="nextNav" aria-label="Monetization reading path">
+  <a href="./">Back to paid features</a>
+  <a href="../">Back to monetization</a>
+</nav>

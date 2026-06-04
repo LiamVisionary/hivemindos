@@ -9,6 +9,11 @@ Paid features are for infrastructure, not for basic agency.
 
 The free product should let someone run HivemindOS, connect their own keys, talk to their own agents, and operate their own local hive. Paid features are where HivemindOS takes on the expensive parts: hosted rooms, managed routing, reliability, and orchestration that would otherwise become a setup project.
 
+<nav class="nextNav" aria-label="Monetization reading path">
+  <a href="../honey-hive-treasury.html">Previous: Honey, HIVE, And Treasury</a>
+  <a href="hivemind-cloud-agent-calls.html">Next: Cloud Agent Calls</a>
+</nav>
+
 ## Current Paid Features
 
 <div class="docGrid">
@@ -38,3 +43,8 @@ Charge when HivemindOS is operating something on their behalf: cloud rooms, shar
 | Managed compute   | Agent and swarm runtime capacity                       |
 | Agent Marketplace | Paid agents, swarms, workflows, and templates          |
 | Enterprise        | SSO, compliance, private deployments, and support      |
+
+<nav class="nextNav" aria-label="Monetization reading path">
+  <a href="../">Back to monetization</a>
+  <a href="hivemind-cloud-agent-calls.html">Open current example: Cloud Agent Calls</a>
+</nav>

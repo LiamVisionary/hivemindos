@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-05 01:17:23 WITA - Improve Monetization Routing And Value Wheels
+
+- Status: Pushed
+- Areas changed: GitHub Pages monetization docs, shared docs routing/value-wheel styling, changelog
+- Summary: Turn the Monetization landing page from a flat card directory into a guided path with a recommended reading route, strategy vs paid-service card groups, and next/previous handoff links across Ecosystem Plan, Honey/HIVE, Paid Features, and Cloud Agent Calls. Replace the oversized Mermaid value loops with compact responsive value-wheel strips.
+- Verification: `pnpm exec prettier --check docs/monetization/index.md docs/monetization/ecosystem-plan.md docs/monetization/honey-hive-treasury.md docs/monetization/paid-features/index.md docs/monetization/paid-features/hivemind-cloud-agent-calls.md docs/assets/css/site.css`; `git diff --check -- docs/monetization docs/assets/css/site.css CHANGELOG.md`; local relative-link check for all monetization `href` targets; in-app Browser harness on `http://127.0.0.1:5099/hivemindos-value-wheel-harness.html` measured a 449px viewport with zero page overflow, route steps at 389px, doc cards at 411px, value-wheel cards at 190px, and next-link buttons fitting inside the viewport.
+- Intended commit message: `Improve monetization routing and value wheels`
+
 ## 2026-06-05 00:43:56 WITA - Use Current Hub Port In Phone Pairing QR
 
 - Status: Pushed

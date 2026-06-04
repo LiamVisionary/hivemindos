@@ -143,25 +143,21 @@ Potential future benefits:
 
 ## Ecosystem Loop
 
-```mermaid
-flowchart TD
-  Usage["Use HivemindOS"]
-  Honey["Earn Honey"]
-  Claim["Claim HIVE"]
-  Stake["Hold or stake"]
-  Strengthen["Strengthen ecosystem"]
-  Adoption["More adoption"]
-  Revenue["More revenue"]
-  Buybacks["Treasury and buybacks"]
-  Rewards["Fund Honey rewards"]
+<ol class="valueWheel" aria-label="Honey and HIVE ecosystem loop">
+  <li><span>1</span><strong>Use HivemindOS</strong></li>
+  <li><span>2</span><strong>Earn Honey</strong></li>
+  <li><span>3</span><strong>Claim HIVE</strong></li>
+  <li><span>4</span><strong>Hold or stake</strong></li>
+  <li><span>5</span><strong>Strengthen ecosystem</strong></li>
+  <li><span>6</span><strong>More adoption</strong></li>
+  <li><span>7</span><strong>More revenue</strong></li>
+  <li><span>8</span><strong>Treasury and buybacks</strong></li>
+  <li><span>9</span><strong>Fund Honey rewards</strong></li>
+</ol>
 
-  Usage --> Honey
-  Honey --> Claim
-  Claim --> Stake
-  Stake --> Strengthen
-  Strengthen --> Adoption
-  Adoption --> Revenue
-  Revenue --> Buybacks
-  Buybacks --> Rewards
-  Rewards --> Usage
-```
+Funded Honey rewards feed back into product usage: people use HivemindOS, earn Honey for useful participation, and push more activity into the ecosystem.
+
+<nav class="nextNav" aria-label="Monetization reading path">
+  <a href="ecosystem-plan.html">Previous: Ecosystem Plan</a>
+  <a href="paid-features/">Next: Paid Features</a>
+</nav>

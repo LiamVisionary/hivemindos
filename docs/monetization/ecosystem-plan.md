@@ -98,31 +98,26 @@ Buybacks are used to acquire HIVE from the open market.
 
 ## Value Wheel
 
-```mermaid
-flowchart TD
-  Product["Use HivemindOS"]
-  Honey["Earn Honey"]
-  Hive["Claim HIVE"]
-  Hold["Hold or stake"]
-  Strength["Strengthen ecosystem"]
-  Adoption["More adoption"]
-  Revenue["More revenue"]
-  Treasury["Treasury and buybacks"]
-  Rewards["Fund Honey rewards"]
-  Usage["More usage"]
+<ol class="valueWheel" aria-label="HivemindOS value wheel">
+  <li><span>1</span><strong>Use HivemindOS</strong></li>
+  <li><span>2</span><strong>Earn Honey</strong></li>
+  <li><span>3</span><strong>Claim HIVE</strong></li>
+  <li><span>4</span><strong>Hold or stake</strong></li>
+  <li><span>5</span><strong>Strengthen ecosystem</strong></li>
+  <li><span>6</span><strong>More adoption</strong></li>
+  <li><span>7</span><strong>More revenue</strong></li>
+  <li><span>8</span><strong>Treasury and buybacks</strong></li>
+  <li><span>9</span><strong>Fund Honey rewards</strong></li>
+  <li><span>10</span><strong>More usage</strong></li>
+</ol>
 
-  Product --> Honey
-  Honey --> Hive
-  Hive --> Hold
-  Hold --> Strength
-  Strength --> Adoption
-  Adoption --> Revenue
-  Revenue --> Treasury
-  Treasury --> Rewards
-  Rewards --> Usage
-  Usage --> Product
-```
+Step 10 feeds back into Step 1: more usage makes the product more useful, gives more people a reason to participate, and restarts the loop.
 
 ## One-Sentence Pitch
 
 HivemindOS is a free and open-source operating system for AI agents. Users earn Honey by participating in the ecosystem through usage, creation, contribution, and growth. Honey can be claimed for HIVE, while revenue from optional premium services funds operations, ecosystem growth, treasury reserves, and HIVE buybacks, creating a sustainable flywheel between product adoption and token value.
+
+<nav class="nextNav" aria-label="Monetization reading path">
+  <a href="index.html">Back to monetization</a>
+  <a href="honey-hive-treasury.html">Next: Honey, HIVE, And Treasury</a>
+</nav>

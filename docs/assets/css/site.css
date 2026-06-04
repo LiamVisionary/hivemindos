@@ -15,8 +15,10 @@
   --amber: #b87319;
   --code-bg: #ece7dc;
   --shadow: 0 18px 48px rgba(31, 39, 36, 0.12);
-  --mono: "SFMono-Regular", "Cascadia Code", "Liberation Mono", Menlo, monospace;
-  --sans: Avenir, "Avenir Next", "Gill Sans", Corbel, "Trebuchet MS", sans-serif;
+  --mono:
+    "SFMono-Regular", "Cascadia Code", "Liberation Mono", Menlo, monospace;
+  --sans:
+    Avenir, "Avenir Next", "Gill Sans", Corbel, "Trebuchet MS", sans-serif;
   --serif: Charter, "Bitstream Charter", "Sitka Text", Cambria, serif;
 }
 
@@ -342,16 +344,72 @@ a:hover {
   border: 1px solid var(--line);
   background:
     linear-gradient(135deg, rgba(10, 143, 166, 0.06), transparent 38%),
-    linear-gradient(315deg, rgba(184, 115, 25, 0.08), transparent 42%),
-    #fffdf8;
+    linear-gradient(315deg, rgba(184, 115, 25, 0.08), transparent 42%), #fffdf8;
   margin: 1.4rem 0;
   padding: 18px;
 }
 
 .mermaid svg {
   display: block;
+  width: min(920px, 100%);
   min-width: 680px;
-  max-width: none !important;
+  max-width: 100% !important;
+  height: auto;
+  margin: 0 auto;
+}
+
+.valueWheel {
+  counter-reset: value-wheel;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  list-style: none;
+  margin: 1.4rem 0;
+  padding: 0;
+}
+
+.valueWheel li {
+  align-items: center;
+  background: #fffdf8;
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto 1fr;
+  min-height: 68px;
+  padding: 12px;
+  position: relative;
+}
+
+.valueWheel li:not(:last-child)::after {
+  color: var(--green);
+  content: "->";
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  font-weight: 800;
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  transform: translate(50%, -50%);
+}
+
+.valueWheel span {
+  align-items: center;
+  background: var(--green);
+  color: #fffdf8;
+  display: inline-flex;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 800;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.valueWheel strong {
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 0.96rem;
+  line-height: 1.25;
 }
 
 .mermaidError {
@@ -589,6 +647,88 @@ a:hover {
   font-size: 0.82rem;
   font-weight: 800;
   padding: 7px 10px;
+}
+
+.routePath {
+  counter-reset: route-path;
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 1.4rem 0 2rem;
+  padding: 0;
+}
+
+.routePath li {
+  align-items: start;
+  background: #fff;
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 4px 12px;
+  grid-template-columns: auto 1fr;
+  padding: 14px;
+  position: relative;
+}
+
+.routePath li:not(:last-child)::after {
+  background: var(--green);
+  bottom: -11px;
+  content: "";
+  left: 27px;
+  position: absolute;
+  top: calc(100% - 1px);
+  width: 2px;
+}
+
+.routePath span {
+  align-items: center;
+  background: var(--charcoal);
+  color: #fffdf8;
+  display: inline-flex;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 800;
+  grid-row: span 2;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.routePath a {
+  color: var(--ink);
+  font-weight: 900;
+  text-decoration-color: rgba(30, 39, 36, 0.32);
+  text-underline-offset: 3px;
+}
+
+.routePath small {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.nextNav {
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 2rem 0;
+  padding-top: 14px;
+}
+
+.nextNav a {
+  align-items: center;
+  border: 1px solid var(--charcoal);
+  color: var(--charcoal);
+  display: inline-flex;
+  font-weight: 900;
+  min-height: 42px;
+  padding: 0 14px;
+  text-decoration: none;
+}
+
+.nextNav a:last-child {
+  background: var(--charcoal);
+  color: #fffdf8;
 }
 
 .siteFooter {
