@@ -82,10 +82,9 @@ export function dashboardRouteForView(view: DashboardView) {
 export function dashboardTargetFromSearch(search: string): DashboardRouteTarget | null {
   const params = new URLSearchParams(search);
   const viewParam = params.get("view");
-  const view = viewParam === "demo" ? "fusion" : viewParam;
-  if (!view || !isDashboardView(view)) return null;
+  if (!viewParam || !isDashboardView(viewParam)) return null;
   return {
-    view,
+    view: viewParam,
     vaultPanel: params.get("vaultPanel") ?? undefined,
     agentId: params.get("agent") ?? undefined,
     taskId: params.get("task") ?? undefined,

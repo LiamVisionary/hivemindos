@@ -23,7 +23,7 @@ export type NoteTaskIntakeOptions = KanbanStorageOptions & {
   limit?: number;
 };
 
-const DEFAULT_FOLDERS = ["Projects", "Inbox"];
+const DEFAULT_FOLDERS = ["Projects", "Intake", "Memory"];
 const SKIPPED_SECTIONS = new Set(["maintenance checklist", "related notes", "activity log", "decisions"]);
 const CHECKBOX_RE = /^\s*[-*]\s+\[\s\]\s+(.+?)\s*$/;
 const COMPLETE_CHECKBOX_RE = /^\s*[-*]\s+\[[xX]\]\s+/;

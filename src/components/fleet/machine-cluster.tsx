@@ -2,12 +2,36 @@
 "use client";
 
 import * as React from "react";
+import {
+  BarChart3,
+  Bot,
+  CalendarClock,
+  FolderOpen,
+  Globe2,
+  MessageCircle,
+  Network,
+  PlugZap,
+  Rocket,
+  Send,
+  Terminal,
+  WalletCards,
+  Workflow,
+  type LucideIcon,
+} from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AddHexCell } from "./add-hex-cell";
 import { BeeIcon } from "./bee-icon";
 import { HexTile, type HexTone } from "./hex-tile";
-import { axialToPixel, HEX_H, HEX_W, hexSpiral } from "./hex-math";
-import { isFleetMachineMobile, type AgentState, type FleetActiveApp, type FleetAgent, type FleetMachine } from "./fleet-data";
+import { axialToPixel, FLEET_GRAPH_CELL_SCALE, HEX_H, HEX_W, hexSpiral } from "./hex-math";
+import {
+  isFleetMachineMobile,
+  type AgentState,
+  type FleetActiveApp,
+  type FleetAgent,
+  type FleetAgentCapabilityBadge,
+  type FleetAgentCapabilityIcon,
+  type FleetMachine,
+} from "./fleet-data";
 import styles from "./fleet-tokens.module.css";
 
 const STATE_TONE: Record<AgentState, HexTone> = {
@@ -45,39 +69,139 @@ function compactMachineLabel(name: string) {
 
 const GRAPH_AGENT_COMPACT_WORDS: Record<string, string> = {
   capability: "Cap",
+  probe: "Pro",
 };
 
-function graphAgentNameWords(name: string) {
-  return name
+const graphScale = (value: number) => value * FLEET_GRAPH_CELL_SCALE;
+
+function mergeGraphAgentNameWords(words: string[]) {
+  const merged: string[] = [];
+  for (let index = 0; index < words.length; index++) {
+    const word = words[index] ?? "";
+    const nextWord = words[index + 1] ?? "";
+    if (word.toLowerCase() === "use" && nextWord.toLowerCase() === "pod") {
+      merged.push("UsePod");
+      index++;
+      continue;
+    }
+    merged.push(word);
+  }
+  return merged;
+}
+
+function graphAgentNameSegments(name: string) {
+  const words = name
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .split(/[^a-zA-Z0-9]+/)
     .filter(Boolean)
-    .map((word) => GRAPH_AGENT_COMPACT_WORDS[word.toLowerCase()] ?? word)
-    .slice(0, 2);
+    .map((word) => GRAPH_AGENT_COMPACT_WORDS[word.toLowerCase()] ?? word);
+  const mergedWords = mergeGraphAgentNameWords(words);
+
+  if (mergedWords.length <= 2) return mergedWords;
+
+  const candidates = [
+    [mergedWords.slice(0, 1), mergedWords.slice(1, 3)],
+    [mergedWords.slice(0, 2), mergedWords.slice(2, 4)],
+  ];
+  const [leftWords, rightWords] = candidates.reduce((best, candidate) => {
+    const bestScore = Math.abs(best[0].join(" ").length - best[1].join(" ").length);
+    const candidateScore = Math.abs(candidate[0].join(" ").length - candidate[1].join(" ").length);
+    return candidateScore < bestScore ? candidate : best;
+  });
+
+  return [leftWords.join(" "), rightWords.join(" ")].filter(Boolean);
 }
 
-const GRAPH_AGENT_EDGE_LABEL_FONT_SIZE = 7;
-const GRAPH_AGENT_EDGE_LABEL_COMPACT_FONT_SIZE = 6.1;
-const GRAPH_AGENT_EDGE_LABEL_DENSE_FONT_SIZE = 5.3;
+const GRAPH_AGENT_EDGE_LABEL_FONT_SIZE = graphScale(7);
+const GRAPH_AGENT_EDGE_LABEL_COMPACT_FONT_SIZE = graphScale(6.1);
+const GRAPH_AGENT_EDGE_LABEL_DENSE_FONT_SIZE = graphScale(5.3);
 const GRAPH_AGENT_EDGE_LABEL_COMPACT_THRESHOLD = 13;
 const GRAPH_AGENT_EDGE_LABEL_DENSE_THRESHOLD = 16;
-const GRAPH_AGENT_EDGE_LABEL_ANCHOR_INSET = 5;
-const GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET = 3;
+const GRAPH_AGENT_LEFT_EDGE_LABEL_ANCHOR_INSET = graphScale(0.75);
+const GRAPH_AGENT_RIGHT_EDGE_LABEL_ANCHOR_INSET = graphScale(0.75);
+const GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET = graphScale(3);
+const GRAPH_AGENT_SINGLE_EDGE_LABEL_Y_NUDGE = graphScale(1);
+const GRAPH_AGENT_EDGE_LABEL_INNER_PADDING = graphScale(2.2);
+const GRAPH_AGENT_CENTER_EDGE_WORD_MAX_LENGTH = 5;
+const GRAPH_AGENT_PHRASE_PAIR_CENTER_GAP = graphScale(7.2);
+const GRAPH_AGENT_CAPABILITY_BADGE_LIMIT = 4;
+const SHOW_GRAPH_AGENT_CAPABILITY_BADGES = false;
 
-function GraphAgentEdgeLabel({ words, selected }: { words: string[]; selected: boolean }) {
+const CAPABILITY_ICON: Record<FleetAgentCapabilityIcon, LucideIcon> = {
+  analytics: BarChart3,
+  background: Bot,
+  browser: Globe2,
+  chat: MessageCircle,
+  deployment: Rocket,
+  filesystem: FolderOpen,
+  http: Network,
+  mcp: PlugZap,
+  publishing: Send,
+  scheduler: CalendarClock,
+  shell: Terminal,
+  wallet: WalletCards,
+  workflow: Workflow,
+};
+
+const CAPABILITY_TONE_CLASS: Record<FleetAgentCapabilityBadge["tone"], string> = {
+  aqua: styles.graphAgentCapabilityBadgeToneAqua,
+  blue: styles.graphAgentCapabilityBadgeToneBlue,
+  gold: styles.graphAgentCapabilityBadgeToneGold,
+  green: styles.graphAgentCapabilityBadgeToneGreen,
+  pink: styles.graphAgentCapabilityBadgeTonePink,
+  purple: styles.graphAgentCapabilityBadgeTonePurple,
+  slate: styles.graphAgentCapabilityBadgeToneSlate,
+};
+
+export type GraphAgentCapabilityBadgeVariant = "side-rails" | "top-inner-edges";
+
+const CAPABILITY_BADGE_SLOTS_BY_VARIANT: Record<GraphAgentCapabilityBadgeVariant, ReadonlyArray<{ side: string; x: number; y: number; angle: number }>> = {
+  "side-rails": [
+    { side: "left", x: graphScale(7.8), y: graphScale(24), angle: 0 },
+    { side: "left", x: graphScale(7.8), y: graphScale(38), angle: 0 },
+    { side: "right", x: HEX_W - graphScale(7.8), y: graphScale(24), angle: 0 },
+    { side: "right", x: HEX_W - graphScale(7.8), y: graphScale(38), angle: 0 },
+  ],
+  "top-inner-edges": [
+    { side: "top-left", x: graphScale(22), y: graphScale(10.4), angle: -30 },
+    { side: "top-left", x: graphScale(14.6), y: graphScale(14.7), angle: -30 },
+    { side: "top-right", x: HEX_W - graphScale(22), y: graphScale(10.4), angle: 30 },
+    { side: "top-right", x: HEX_W - graphScale(14.6), y: graphScale(14.7), angle: 30 },
+  ],
+};
+
+function GraphAgentEdgeLabel({ segments, selected }: { segments: string[]; selected: boolean }) {
   const color = selected ? "var(--hex-honey-border)" : "var(--foreground)";
-  const labelLength = words.reduce((total, word) => total + word.length, 0);
+  const labelLength = segments.reduce((total, segment) => total + segment.length, 0);
   const fontSize = labelLength > GRAPH_AGENT_EDGE_LABEL_DENSE_THRESHOLD
     ? GRAPH_AGENT_EDGE_LABEL_DENSE_FONT_SIZE
     : labelLength >= GRAPH_AGENT_EDGE_LABEL_COMPACT_THRESHOLD
       ? GRAPH_AGENT_EDGE_LABEL_COMPACT_FONT_SIZE
       : GRAPH_AGENT_EDGE_LABEL_FONT_SIZE;
-  const lowerEdgeAnchorY = (HEX_H * 3) / 4 + GRAPH_AGENT_EDGE_LABEL_ANCHOR_INSET / Math.sqrt(3);
-  const lowerEdgeInnerY = lowerEdgeAnchorY - GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET * (Math.sqrt(3) / 2);
-  const lowerLeftX = GRAPH_AGENT_EDGE_LABEL_ANCHOR_INSET + GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET / 2;
-  const lowerLeftY = lowerEdgeInnerY;
-  const lowerRightX = HEX_W - GRAPH_AGENT_EDGE_LABEL_ANCHOR_INSET - GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET / 2;
-  const lowerRightY = lowerEdgeInnerY;
+  const lowerLeftX = GRAPH_AGENT_LEFT_EDGE_LABEL_ANCHOR_INSET * (Math.sqrt(3) / 2) + GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET / 2;
+  const lowerLeftY = (HEX_H * 3) / 4 + GRAPH_AGENT_LEFT_EDGE_LABEL_ANCHOR_INSET / 2 - GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET * (Math.sqrt(3) / 2) - GRAPH_AGENT_EDGE_LABEL_INNER_PADDING;
+  const lowerRightX = HEX_W - GRAPH_AGENT_RIGHT_EDGE_LABEL_ANCHOR_INSET * (Math.sqrt(3) / 2) - GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET / 2;
+  const lowerRightY = (HEX_H * 3) / 4 + GRAPH_AGENT_RIGHT_EDGE_LABEL_ANCHOR_INSET / 2 - GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET * (Math.sqrt(3) / 2) - GRAPH_AGENT_EDGE_LABEL_INNER_PADDING;
+  const lowerLeftCenterX = HEX_W / 4 + GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET / 2;
+  const lowerLeftCenterY = (HEX_H * 7) / 8 - GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET * (Math.sqrt(3) / 2) - GRAPH_AGENT_EDGE_LABEL_INNER_PADDING;
+  const lowerRightCenterX = (HEX_W * 3) / 4 - GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET / 2;
+  const lowerRightCenterY = lowerLeftCenterY;
+  const lowerSingleX = HEX_W / 2 + GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET / 2;
+  const lowerSingleY = HEX_H - GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET * (Math.sqrt(3) / 2) - GRAPH_AGENT_SINGLE_EDGE_LABEL_Y_NUDGE;
+  const singleWord = segments.length === 1;
+  const phrasePair = segments.some((segment) => segment.includes(" "));
+  const centerFirstWord = !singleWord && !phrasePair && (segments[0]?.length ?? 0) <= GRAPH_AGENT_CENTER_EDGE_WORD_MAX_LENGTH;
+  const centerSecondWord = !singleWord && !phrasePair && (segments[1]?.length ?? 0) <= GRAPH_AGENT_CENTER_EDGE_WORD_MAX_LENGTH;
+  const lowerLeftPairX = HEX_W / 2 - GRAPH_AGENT_PHRASE_PAIR_CENTER_GAP / 2;
+  const lowerLeftPairY = HEX_H - GRAPH_AGENT_EDGE_LABEL_INNER_OFFSET * (Math.sqrt(3) / 2) - GRAPH_AGENT_PHRASE_PAIR_CENTER_GAP / (2 * Math.sqrt(3)) - GRAPH_AGENT_EDGE_LABEL_INNER_PADDING;
+  const lowerRightPairX = HEX_W / 2 + GRAPH_AGENT_PHRASE_PAIR_CENTER_GAP / 2;
+  const lowerRightPairY = lowerLeftPairY;
+  const firstWordX = singleWord ? lowerSingleX : phrasePair ? lowerLeftPairX : centerFirstWord ? lowerLeftCenterX : lowerLeftX;
+  const firstWordY = singleWord ? lowerSingleY : phrasePair ? lowerLeftPairY : centerFirstWord ? lowerLeftCenterY : lowerLeftY;
+  const firstWordAnchor = singleWord ? "end" : phrasePair ? "end" : centerFirstWord ? "middle" : "start";
+  const secondWordX = phrasePair ? lowerRightPairX : centerSecondWord ? lowerRightCenterX : lowerRightX;
+  const secondWordY = phrasePair ? lowerRightPairY : centerSecondWord ? lowerRightCenterY : lowerRightY;
+  const secondWordAnchor = phrasePair ? "start" : centerSecondWord ? "middle" : "end";
 
   return (
     <svg
@@ -86,33 +210,71 @@ function GraphAgentEdgeLabel({ words, selected }: { words: string[]; selected: b
       viewBox={`0 0 ${HEX_W} ${HEX_H}`}
       style={{ color }}
     >
-      {words[0] ? (
+      {segments[0] ? (
         <text
           className={styles.graphAgentNameText}
           dominantBaseline="middle"
           fontSize={fontSize}
-          textAnchor="start"
-          x={lowerLeftX}
-          y={lowerLeftY}
-          transform={`rotate(30 ${lowerLeftX} ${lowerLeftY})`}
+          textAnchor={firstWordAnchor}
+          x={firstWordX}
+          y={firstWordY}
+          transform={`rotate(30 ${firstWordX} ${firstWordY})`}
         >
-          {words[0]}
+          {segments[0]}
         </text>
       ) : null}
-      {words[1] ? (
+      {segments[1] ? (
         <text
           className={styles.graphAgentNameText}
           dominantBaseline="middle"
           fontSize={fontSize}
-          textAnchor="end"
-          x={lowerRightX}
-          y={lowerRightY}
-          transform={`rotate(-30 ${lowerRightX} ${lowerRightY})`}
+          textAnchor={secondWordAnchor}
+          x={secondWordX}
+          y={secondWordY}
+          transform={`rotate(-30 ${secondWordX} ${secondWordY})`}
         >
-          {words[1]}
+          {segments[1]}
         </text>
       ) : null}
     </svg>
+  );
+}
+
+function GraphAgentCapabilityBadges({
+  capabilities,
+  variant,
+}: {
+  capabilities?: FleetAgentCapabilityBadge[];
+  variant: GraphAgentCapabilityBadgeVariant;
+}) {
+  const visibleCapabilities = capabilities?.slice(0, GRAPH_AGENT_CAPABILITY_BADGE_LIMIT) ?? [];
+  const slots = CAPABILITY_BADGE_SLOTS_BY_VARIANT[variant] ?? CAPABILITY_BADGE_SLOTS_BY_VARIANT["side-rails"];
+  if (visibleCapabilities.length === 0) return null;
+
+  return (
+    <div className={styles.graphAgentCapabilityLayer} aria-hidden="true">
+      {visibleCapabilities.map((capability, index) => {
+        const slot = slots[index];
+        if (!slot) return null;
+        const Icon = CAPABILITY_ICON[capability.icon] ?? Bot;
+        return (
+          <span
+            key={capability.id}
+            className={`${styles.graphAgentCapabilityBadge} ${CAPABILITY_TONE_CLASS[capability.tone]}`}
+            data-capability-id={capability.id}
+            data-capability-side={slot.side}
+            title={capability.label}
+            style={{
+              "--capability-badge-x": `${slot.x}px`,
+              "--capability-badge-y": `${slot.y}px`,
+              "--capability-badge-angle": `${slot.angle}deg`,
+            } as React.CSSProperties}
+          >
+            <Icon aria-hidden="true" />
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
@@ -128,8 +290,8 @@ function MachineScreenIcon({ name, selected, muted, mobile }: { name: string; se
     <div
       aria-hidden="true"
       style={{
-        width: 54,
-        height: 54,
+        width: graphScale(54),
+        height: graphScale(54),
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -140,11 +302,11 @@ function MachineScreenIcon({ name, selected, muted, mobile }: { name: string; se
       <div
         className="grid place-items-center text-center"
         style={{
-          width: mobile ? 31 : 46,
-          minHeight: mobile ? 42 : 28,
-          padding: mobile ? "4px 3px" : "3px 4px",
+          width: mobile ? graphScale(31) : graphScale(46),
+          minHeight: mobile ? graphScale(42) : graphScale(28),
+          padding: mobile ? `${graphScale(4)}px ${graphScale(3)}px` : `${graphScale(3)}px ${graphScale(4)}px`,
           border: `2px solid ${color}`,
-          borderRadius: mobile ? 8 : 4,
+          borderRadius: mobile ? graphScale(8) : graphScale(4),
           boxShadow: muted ? undefined : "0 0 12px rgba(94,234,212,0.16)",
         }}
       >
@@ -153,7 +315,7 @@ function MachineScreenIcon({ name, selected, muted, mobile }: { name: string; se
           style={{
             color: selected ? "var(--hex-honey-border)" : "var(--foreground)",
             fontFamily: "var(--f-mono)",
-            fontSize: mobile ? 8.6 : 9,
+            fontSize: mobile ? graphScale(8.6) : graphScale(9),
             lineHeight: 0.95,
             letterSpacing: 0,
             whiteSpace: "normal",
@@ -171,15 +333,15 @@ function MachineScreenIcon({ name, selected, muted, mobile }: { name: string; se
         <>
           <div
             style={{
-              width: 2,
-              height: 5,
+              width: graphScale(2),
+              height: graphScale(5),
               background: color,
             }}
           />
           <div
             style={{
-              width: 18,
-              height: 2,
+              width: graphScale(18),
+              height: graphScale(2),
               borderRadius: 999,
               background: color,
             }}
@@ -213,6 +375,7 @@ interface MachineClusterProps {
   cx: number;
   cy: number;
   addCell?: [number, number];
+  capabilityBadgeVariant?: GraphAgentCapabilityBadgeVariant;
   selected: boolean;
   selectedAgentId: string | null;
   onSelectMachine: () => void;
@@ -229,6 +392,7 @@ interface MachineClusterProps {
 export function MachineCluster({
   machine,
   cx, cy, addCell,
+  capabilityBadgeVariant = "side-rails",
   selected, selectedAgentId,
   onSelectMachine, onSelectAgent, onAddAgent,
 }: MachineClusterProps) {
@@ -245,7 +409,7 @@ export function MachineCluster({
         const { x, y } = axialToPixel(q, r);
         const agent = !isMachine && !isAdd ? machine.agents[i - 1] : null;
         const isAgentSelected = !!(agent && selectedAgentId === agent.id);
-        const agentNameWords = agent ? graphAgentNameWords(agent.name) : [];
+        const agentNameSegments = agent ? graphAgentNameSegments(agent.name) : [];
 
         const tone: HexTone | null = isAdd
           ? null
@@ -306,11 +470,13 @@ export function MachineCluster({
                   width: isMachine ? "100%" : undefined,
                   height: isMachine ? "100%" : undefined,
                   maxWidth: isMachine ? HEX_W : undefined,
-                  paddingInline: isMachine ? 0 : 4,
+                  minHeight: isMachine ? undefined : HEX_H,
+                  paddingInline: isMachine ? 0 : graphScale(4),
                   alignContent: isMachine ? "center" : "center",
-                  gap: isMachine ? 0 : 1,
+                  gap: isMachine ? 0 : graphScale(1),
                   transform: undefined,
-                }}
+                  "--graph-agent-scale": FLEET_GRAPH_CELL_SCALE,
+                } as React.CSSProperties}
               >
                 {isMachine ? (
                   <MachineScreenIcon
@@ -321,13 +487,19 @@ export function MachineCluster({
                   />
                 ) : (
                   <>
+                    {SHOW_GRAPH_AGENT_CAPABILITY_BADGES ? (
+                      <GraphAgentCapabilityBadges
+                        capabilities={agent!.capabilities}
+                        variant={capabilityBadgeVariant}
+                      />
+                    ) : null}
                     <BeeIcon
                       role={agent!.beeRole === "queen" ? "queen" : "worker"}
                       workerClass={agent!.workerClass}
-                      size={48}
+                      size={graphScale(48)}
                       dim={agent!.state === "ready" && !isAgentSelected}
                     />
-                    <GraphAgentEdgeLabel words={agentNameWords} selected={isAgentSelected} />
+                    <GraphAgentEdgeLabel segments={agentNameSegments} selected={isAgentSelected} />
                   </>
                 )}
               </div>

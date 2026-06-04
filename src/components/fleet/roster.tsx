@@ -52,9 +52,11 @@ interface RosterRowProps {
   onToggle: () => void;
   onAddAgent: () => void;
   onOpenUsePodHost?: () => void;
+  onOpenCodeProof?: () => void;
   onUpdateMachine?: () => void;
   onRenameMachine?: (name: string) => void;
   onOpenNetworkIssue?: () => void;
+  onFixSyncIssue?: () => void | Promise<void>;
   onOpenChat?: (a: FleetAgent) => void;
   onOpenTaskChat?: (a: FleetAgent, chat?: FleetAgentChat) => void;
   onCallAgent?: (a: FleetAgent) => void;
@@ -70,13 +72,19 @@ function RosterRow({
   updateDetail,
   onSelectMachine, onSelectAgent, onToggle, onAddAgent,
   onOpenUsePodHost,
+  onOpenCodeProof,
   onUpdateMachine,
   onRenameMachine,
   onOpenNetworkIssue,
+  onFixSyncIssue,
   onOpenChat, onOpenTaskChat, onCallAgent, onOpenWallet, onEditSettings, onDuplicate, onRemove,
 }: RosterRowProps) {
   const [expandedTaskIds, setExpandedTaskIds] = React.useState<Set<string>>(() => new Set());
   const [successDismissed, setSuccessDismissed] = React.useState(false);
+  const [syncFixState, setSyncFixState] = React.useState<{
+    status: "idle" | "running" | "done" | "failed";
+    message: string;
+  }>({ status: "idle", message: "" });
   const [editingName, setEditingName] = React.useState(false);
   const [nameDraft, setNameDraft] = React.useState(machine.name);
   const roleIconDim = (state: AgentState) => state === "ready" || state === "setup" || state === "failed";
@@ -107,6 +115,17 @@ function RosterRow({
   }, [updateStatus]);
 
   React.useEffect(() => {
+    if (syncFixState.status !== "done") return;
+    const timeout = window.setTimeout(() => setSyncFixState({ status: "idle", message: "" }), 12000);
+    return () => window.clearTimeout(timeout);
+  }, [syncFixState.status]);
+
+  React.useEffect(() => {
+    const timeout = window.setTimeout(() => setSyncFixState({ status: "idle", message: "" }), 0);
+    return () => window.clearTimeout(timeout);
+  }, [machine.syncIssue?.deviceID]);
+
+  React.useEffect(() => {
     if (editingName) return;
     const timeout = window.setTimeout(() => setNameDraft(machine.name), 0);
     return () => window.clearTimeout(timeout);
@@ -128,6 +147,29 @@ function RosterRow({
 	      ),
 	  );
   const updateDisabled = updateStatus === "updating" || updateStatus === "updated";
+  const syncFixRunning = syncFixState.status === "running";
+  const syncFixButtonLabel = syncFixRunning
+    ? "Fixing sync..."
+    : syncFixState.status === "done"
+      ? "Sync repair sent"
+      : syncFixState.status === "failed"
+        ? "Sync fix failed"
+        : machine.syncIssue?.label ?? "Sync error. Fix?";
+  const syncFixTooltip = [syncFixState.message, machine.syncIssue?.detail].filter(Boolean).join("\n\n");
+  const runSyncFix = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (!onFixSyncIssue || syncFixRunning) return;
+    setSyncFixState({ status: "running", message: "" });
+    try {
+      await onFixSyncIssue();
+      setSyncFixState({ status: "done", message: "Repair request sent. Fleet will refresh the sync state shortly." });
+    } catch (error) {
+      setSyncFixState({
+        status: "failed",
+        message: error instanceof Error ? error.message : "Syncthing repair failed.",
+      });
+    }
+  };
   const MachineIcon = isFleetMachineMobile(machine) ? Smartphone : Monitor;
   const codeNode = machine.gitlawb;
   const codeNodeLabel = codeNode?.healthy
@@ -137,6 +179,27 @@ function RosterRow({
       : codeNode
         ? "Code proof"
         : "";
+  const codeNodeTitle = [
+    onOpenCodeProof ? "Open Code Proof setup" : "",
+    codeNode?.nodeUrl,
+    codeNode?.repoCount !== undefined ? `${codeNode.repoCount} repo${codeNode.repoCount === 1 ? "" : "s"}` : "",
+    codeNode?.peerCount !== undefined ? `${codeNode.peerCount} peer${codeNode.peerCount === 1 ? "" : "s"}` : "",
+  ].filter(Boolean).join(" · ");
+  const codeNodeStyle: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    width: "fit-content",
+    maxWidth: "100%",
+    border: `1px solid ${codeNode?.healthy ? "rgba(94,234,212,0.38)" : "rgba(148,163,184,0.22)"}`,
+    borderRadius: 7,
+    background: codeNode?.healthy ? "rgba(45,212,191,0.12)" : "rgba(148,163,184,0.10)",
+    color: codeNode?.healthy ? "var(--accent-strong)" : "var(--muted)",
+    padding: "4px 7px",
+    fontFamily: "var(--f-mono)",
+    fontSize: 9.5,
+    fontWeight: 800,
+  };
 
   return (
     <div
@@ -339,32 +402,56 @@ function RosterRow({
               <span>{machine.networkIssue.label}</span>
             </button>
           ) : null}
+          {machine.syncIssue ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={(event) => void runSyncFix(event)}
+                  disabled={syncFixRunning}
+                  className={styles.rosterNetworkIssue}
+                  style={{
+                    border: syncFixState.status === "done"
+                      ? "1px solid rgba(94,234,212,0.46)"
+                      : "1px solid rgba(251,113,133,0.46)",
+                    background: syncFixState.status === "done"
+                      ? "rgba(45,212,191,0.13)"
+                      : "rgba(251,113,133,0.13)",
+                    color: syncFixState.status === "done" ? "var(--accent-strong)" : "#fecdd3",
+                    cursor: syncFixRunning ? "wait" : onFixSyncIssue ? "pointer" : "default",
+                    opacity: syncFixRunning ? 0.72 : 1,
+                  }}
+                >
+                  {syncFixRunning ? <LoaderCircle size={10} className="animate-spin" aria-hidden="true" /> : <AlertTriangle size={10} aria-hidden="true" />}
+                  <span>{syncFixButtonLabel}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" style={{ maxWidth: 320, whiteSpace: "pre-wrap" }}>
+                {syncFixTooltip}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
           {codeNodeLabel ? (
-            <span
-              title={[
-                codeNode?.nodeUrl,
-                codeNode?.repoCount !== undefined ? `${codeNode.repoCount} repo${codeNode.repoCount === 1 ? "" : "s"}` : "",
-                codeNode?.peerCount !== undefined ? `${codeNode.peerCount} peer${codeNode.peerCount === 1 ? "" : "s"}` : "",
-              ].filter(Boolean).join(" · ")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                width: "fit-content",
-                maxWidth: "100%",
-                border: `1px solid ${codeNode?.healthy ? "rgba(94,234,212,0.38)" : "rgba(148,163,184,0.22)"}`,
-                borderRadius: 7,
-                background: codeNode?.healthy ? "rgba(45,212,191,0.12)" : "rgba(148,163,184,0.10)",
-                color: codeNode?.healthy ? "var(--accent-strong)" : "var(--muted)",
-                padding: "4px 7px",
-                fontFamily: "var(--f-mono)",
-                fontSize: 9.5,
-                fontWeight: 800,
-              }}
-            >
-              <GitBranch size={10} aria-hidden="true" />
-              <span>{codeNodeLabel}</span>
-            </span>
+            onOpenCodeProof ? (
+              <button
+                type="button"
+                title={codeNodeTitle}
+                aria-label={`Open Code Proof setup for ${machine.name}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenCodeProof();
+                }}
+                style={{ ...codeNodeStyle, cursor: "pointer" }}
+              >
+                <GitBranch size={10} aria-hidden="true" />
+                <span>{codeNodeLabel}</span>
+              </button>
+            ) : (
+              <span title={codeNodeTitle} style={codeNodeStyle}>
+                <GitBranch size={10} aria-hidden="true" />
+                <span>{codeNodeLabel}</span>
+              </span>
+            )
           ) : null}
           {selected && onOpenUsePodHost ? (
             <Tooltip>
@@ -824,6 +911,8 @@ interface RosterProps {
   onAddAgent: (m: FleetMachine) => void;
   onUpdateMachine?: (m: FleetMachine) => void;
   onRenameMachine?: (machineId: string, name: string) => void;
+  onOpenCodeProof?: (m: FleetMachine) => void;
+  onFixSyncIssue?: (m: FleetMachine) => void | Promise<void>;
   onOpenChat?: (m: FleetMachine, a: FleetAgent) => void;
   onOpenTaskChat?: (m: FleetMachine, a: FleetAgent, chat?: FleetAgentChat) => void;
   onCallAgent?: (m: FleetMachine, a: FleetAgent) => void;
@@ -845,6 +934,8 @@ export function Roster({
   onSelectMachine, onSelectAgent, onToggleExpand, onAddAgent,
   onUpdateMachine,
   onRenameMachine,
+  onOpenCodeProof,
+  onFixSyncIssue,
   onOpenChat, onOpenTaskChat, onCallAgent, onOpenWallet, onEditSettings, onDuplicate, onRemove,
 }: RosterProps) {
   const [activeIssueMachine, setActiveIssueMachine] = React.useState<FleetMachine | null>(null);
@@ -972,9 +1063,11 @@ export function Roster({
           onToggle={() => onToggleExpand(m.id)}
           onAddAgent={() => onAddAgent(m)}
           onOpenUsePodHost={() => setUsePodHostMachine(m)}
+          onOpenCodeProof={onOpenCodeProof ? () => onOpenCodeProof(m) : undefined}
           onUpdateMachine={onUpdateMachine ? () => onUpdateMachine(m) : undefined}
           onRenameMachine={onRenameMachine ? (name) => onRenameMachine(m.id, name) : undefined}
           onOpenNetworkIssue={m.networkIssue ? () => setActiveIssueMachine(m) : undefined}
+          onFixSyncIssue={m.syncIssue && onFixSyncIssue ? () => onFixSyncIssue(m) : undefined}
           onOpenChat={(a) => onOpenChat?.(m, a)}
           onOpenTaskChat={(a, chat) => onOpenTaskChat?.(m, a, chat)}
           onCallAgent={(a) => onCallAgent?.(m, a)}

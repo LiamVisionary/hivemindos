@@ -231,12 +231,12 @@ export function UtilityPanels(props: UtilityPanelsProps) {
           <div>
             <p className="eyebrow">Shared env</p>
             <h2>Environment variables</h2>
-            <p>One shared sync store first. Runtime-specific keys only appear below when they are not already shared.</p>
+            <p>One Hivemind Sync env store first. Runtime-specific keys only appear below when they are not already shared.</p>
           </div>
 		          <div className="flex flex-wrap gap-2">
 		            <Button type="button" size="sm" variant="secondary" onClick={() => void syncSharedEnvMachines()} disabled={hiveEnvSyncing || sharedEnvCount === 0}>
 		              {hiveEnvSyncing ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
-		              Sync machines
+              Hivemind Sync
 		            </Button>
 		            <Button type="button" size="sm" variant="secondary" onClick={() => void restoreSharedEnvBackup()} disabled={hiveEnvRestoring || !sharedBackupStatus?.backupExists || !sharedBackupStatus?.gpgAvailable}>
 	              {hiveEnvRestoring ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />}
@@ -256,11 +256,11 @@ export function UtilityPanels(props: UtilityPanelsProps) {
 	            <div className="flex flex-wrap items-end justify-between gap-3">
 		              <div>
 		                <p className="eyebrow">hive-env-add</p>
-		                <h3 className="m-0 text-base font-bold">Shared sync store</h3>
+		                <h3 className="m-0 text-base font-bold">Hivemind Sync env</h3>
 	                <p className="m-0 mt-1 text-xs text-[var(--muted)]">
 	                  {sharedBackupStatus?.backupExists
-	                    ? "Encrypted backup ready. Saves use hive-env-add sync."
-	                    : "Saves use hive-env-add sync. Encrypted backup will appear after the next successful save."}
+	                    ? "Encrypted backup ready. Saves use Hivemind Sync."
+	                    : "Saves use Hivemind Sync. Encrypted backup will appear after the next successful save."}
 	                </p>
 	              </div>
 	              <div className="flex flex-wrap items-center gap-2">

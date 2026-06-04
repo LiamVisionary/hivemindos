@@ -151,6 +151,10 @@ copy_provider_skill() {
   local from_dir="$1"
   local provider="$2"
   local slug
+  if [[ -f "$from_dir/.hivemind-skill-source.json" ]] \
+    && grep -Eq '"provider"[[:space:]]*:[[:space:]]*"shared-brain"|"managedBy"[[:space:]]*:[[:space:]]*"hivemindos"' "$from_dir/.hivemind-skill-source.json"; then
+    return 1
+  fi
   slug="$(basename "$from_dir" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+|-+$//g')"
   [[ -n "$slug" ]] || slug="skill"
   local destination="$skills_folder/$slug"

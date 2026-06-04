@@ -1047,15 +1047,15 @@ export function VaultPanel(props: any) {
                 <div className="rounded-lg border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.45)] p-3">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
 		                    <div>
-		                      <strong className="block text-xs text-[var(--foreground)]">Vault sync provider</strong>
-		                      <small className="text-[var(--muted)]">Choose one owner for realtime vault syncing. Manual repair uses rsync and writes explicit conflict copies.</small>
+		                      <strong className="block text-xs text-[var(--foreground)]">Hivemind Sync provider</strong>
+		                      <small className="text-[var(--muted)]">Choose one owner for realtime brain-file syncing. Handoff transfers use .hivemindos-transfers in the vault. Manual repair uses rsync and writes explicit conflict copies.</small>
 		                    </div>
 		                    <span className="rounded-full border border-[rgba(20,184,166,0.3)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#99f6e4]">
 		                      {sharedVault.syncProvider === "syncthing" ? "Syncthing" : sharedVault.syncProvider === "manual" ? "Manual repair" : "External sync"}
 		                    </span>
 	                  </div>
 	                  <label className="mb-3 flex flex-col gap-1 text-xs text-[var(--muted)]">
-	                    Sync owner
+	                    Brain sync owner
 	                    <select
 	                      value={sharedVault.syncProvider}
 	                      onChange={(event) => {
@@ -1077,7 +1077,7 @@ export function VaultPanel(props: any) {
 	                      {sharedVault.syncProvider === "external"
 	                        ? "HivemindOS will not auto-pair Syncthing for this vault."
 	                        : sharedVault.syncProvider === "syncthing"
-	                          ? "Syncthing owns realtime sync. Syncthing conflict files appear in the vault and Syncthing UI."
+	                          ? "Syncthing owns realtime Hivemind Sync for brain files. Syncthing conflict files appear in the vault and Syncthing UI."
 	                          : "Realtime sync is handled elsewhere or off; rsync repair can create .conflict-host-timestamp copies."}
 	                    </small>
 	                  </label>
@@ -1109,7 +1109,7 @@ export function VaultPanel(props: any) {
 	                          checked={sharedVault.syncthingAutoPairEnabled}
 	                          onChange={(event) => updateSharedVault({ syncthingAutoPairEnabled: event.target.checked })}
 	                        />
-	                        Auto-pair Syncthing with reachable Tailnet agent bridges
+	                        Auto-pair Syncthing with reachable Hivemind Sync agent bridges
 	                      </label>
 	                    ) : null}
 	                    <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
@@ -1140,7 +1140,7 @@ export function VaultPanel(props: any) {
 		                    <p className={`mt-3 text-xs ${vaultSyncStatus.ok ? "text-[#86efac]" : "text-[#fecdd3]"}`}>
 		                      {vaultSyncStatus.ok
 		                        ? vaultSyncStatus.message ?? `${vaultSyncStatus.dryRun ? "Dry run" : "Repair sync"} finished. ${vaultSyncStatus.direction === "bidirectional" ? "Merged with" : vaultSyncStatus.direction === "pull" ? "Pulled from" : "Pushed to"} ${sharedVault.tailnetSyncHost || "Tailnet machine"}.${vaultSyncStatus.conflicts?.length ? ` rsync conflict copies: ${vaultSyncStatus.conflicts.length}. Look for .conflict-host-timestamp files in the vault.` : ""}`
-		                        : vaultSyncStatus.error ?? vaultSyncStatus.stderr ?? "Tailnet sync failed."}
+		                        : vaultSyncStatus.error ?? vaultSyncStatus.stderr ?? "Hivemind Sync repair failed."}
 	                    </p>
                   ) : null}
                 </div>

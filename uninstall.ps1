@@ -97,6 +97,7 @@ $synthesisFolder = if ($env:NEXT_PUBLIC_OBSIDIAN_SYNTHESIS_FOLDER) { $env:NEXT_P
 $scheduledFolder = if ($env:NEXT_PUBLIC_OBSIDIAN_SCHEDULED_FOLDER) { $env:NEXT_PUBLIC_OBSIDIAN_SCHEDULED_FOLDER } else { "Operations/Automations" }
 $kanbanFolder = if ($env:NEXT_PUBLIC_OBSIDIAN_KANBAN_FOLDER) { $env:NEXT_PUBLIC_OBSIDIAN_KANBAN_FOLDER } else { "Operations/Work Board" }
 $notificationsFolder = if ($env:NEXT_PUBLIC_OBSIDIAN_NOTIFICATIONS_FOLDER) { $env:NEXT_PUBLIC_OBSIDIAN_NOTIFICATIONS_FOLDER } else { "Operations/Agent Notifications" }
+$secureFolder = if ($env:HIVE_NOTE_SECURE_FOLDER) { $env:HIVE_NOTE_SECURE_FOLDER } else { "Operations/Secure" }
 $gbrainInstallPath = if ($env:NEXT_PUBLIC_GBRAIN_INSTALL_PATH) { $env:NEXT_PUBLIC_GBRAIN_INSTALL_PATH } else { Join-Path $UserHome "gbrain" }
 if ($gbrainInstallPath.StartsWith('~\') -or $gbrainInstallPath.StartsWith('~/')) {
   $gbrainInstallPath = Join-Path $UserHome $gbrainInstallPath.Substring(2)
@@ -225,6 +226,15 @@ if (Ask-YesNo "Remove optional GBrain and Syntho config keys from .env.local?" $
     $next = Get-Content $envLocal | Where-Object { $_ -notmatch '^(NEXT_PUBLIC_GBRAIN_|NEXT_PUBLIC_SYNTO_|NEXT_PUBLIC_HIVE_GBRAIN_SURFACE_ENABLED=)' }
     Set-Content -Path $envLocal -Value $next
     Ok "Removed optional GBrain and Syntho config keys from .env.local"
+  }
+}
+
+if (Ask-YesNo "Remove shared vault secure-folder config key from .env.local?" $false) {
+  $envLocal = Join-Path $Root ".env.local"
+  if (Test-Path $envLocal) {
+    $next = Get-Content $envLocal | Where-Object { $_ -notmatch '^HIVE_NOTE_SECURE_FOLDER=' }
+    Set-Content -Path $envLocal -Value $next
+    Ok "Removed shared vault secure-folder config key from .env.local"
   }
 }
 
@@ -377,6 +387,8 @@ if (Ask-YesNo "Remove empty canonical HivemindOS vault folders created by setup?
     "$synthesisFolder/raw",
     $synthesisFolder,
     "Operations/Code Projects",
+    $secureFolder,
+    "Operations/Runtime Mirrors",
     "Operations",
     "Archive/Processed Requests",
     "Archive",
@@ -391,6 +403,7 @@ if (Ask-YesNo "Remove empty canonical HivemindOS vault folders created by setup?
     "Memory/Daily Briefings",
     "Memory/Book Notes",
     "Memory",
+    ".hivemindos-transfers",
     "Intake/Sources",
     "Intake/Requests",
     "Intake"
@@ -410,7 +423,7 @@ if (Ask-YesNo "Remove .env.local from this checkout?" $false) {
 
 if (Ask-YesNo "Remove hive env, transfer, and update commands from ~/.local/bin if they point to this checkout?" $true) {
   $binDir = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".local\bin"
-  foreach ($commandName in @("hive-env-add", "hive-env-run", "hive-env-check", "hive-transfer", "hive-update")) {
+  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-update")) {
     $shimPath = Join-Path $binDir "$commandName.cmd"
     if (Test-Path $shimPath) {
       $content = Get-Content $shimPath -Raw

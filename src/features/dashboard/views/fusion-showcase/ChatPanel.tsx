@@ -1,4 +1,4 @@
-// src/components/fusion/ChatPanel.tsx
+// src/features/dashboard/views/fusion-showcase/ChatPanel.tsx
 "use client";
 
 import * as React from "react";
@@ -7,6 +7,7 @@ import { CheckCircle2, Send, RefreshCcw, GitBranch, Search, type LucideIcon } fr
 import { TONE, type Tone } from "./fusion-data";
 import { HexNode } from "./hex-node";
 import type { Stage } from "./use-fusion-stage";
+import type { FusionSkillResult } from "@/lib/services/fusion/fusion-skill";
 import styles from "./fusion.module.css";
 
 function ChatLine({ icon: Icon, tone, text, active, done, spinner }: {
@@ -38,6 +39,10 @@ export function ChatPanel({
   stage,
   started,
   submittedPrompt,
+  fusionResult,
+  fusionError,
+  capabilityCount,
+  machineCount,
 }: {
   draft: string;
   onDraftChange: (value: string) => void;
@@ -45,28 +50,40 @@ export function ChatPanel({
   stage: Stage;
   started: boolean;
   submittedPrompt: string;
+  fusionResult?: FusionSkillResult | null;
+  fusionError?: string;
+  capabilityCount: number;
+  machineCount: number;
 }) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const attachmentMenuRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const imageInputRef = React.useRef<HTMLInputElement>(null);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = React.useState(false);
+  const statusText = machineCount > 0 ? `live · ${machineCount} machines connected` : "live · awaiting prompt";
   type L = { key: string; icon: LucideIcon; tone: Tone; text: string; active: boolean; done?: boolean; spinner?: boolean };
   const lines: L[] = [];
   if (stage.at("discover"))
-    lines.push({ key: "d", icon: Search, tone: "teal", text: "Discovered 10 capabilities across 3 machines", active: stage.is("discover") || stage.is("carry") });
+    lines.push({ key: "d", icon: Search, tone: "teal", text: `Discovered ${fusionResult?.discoveredCount ?? capabilityCount} capabilities across ${fusionResult?.machineCount ?? machineCount} machines`, active: stage.is("discover") || stage.is("carry") });
   if (stage.at("fuse")) {
     const fusing = stage.is("fuse");
     lines.push({
       key: "f", icon: fusing ? RefreshCcw : GitBranch, tone: "gold", spinner: fusing,
-      text: fusing ? "Fusing 5 parts…" : "Fused 5 parts → one skill · hive-skill-fusion",
+      text: fusing ? "Fusing selected live results…" : `Fused ${fusionResult?.fusedCount ?? 0} parts → ${fusionResult?.skill.slug ?? "shared brain skill"}`,
       active: fusing || stage.is("fused"), done: stage.at("verify"),
     });
   }
   if (stage.at("verify"))
-    lines.push({ key: "v", icon: CheckCircle2, tone: "violet", text: "Verified artifacts + delivery receipt", active: stage.is("verify"), done: stage.at("reveal") });
+    lines.push({
+      key: "v",
+      icon: CheckCircle2,
+      tone: "violet",
+      text: fusionError ? `Could not save skill: ${fusionError}` : fusionResult ? "Saved SKILL.md, manifest, and shared brain index" : "Saving generated skill to shared brain…",
+      active: stage.is("verify") || (!fusionResult && !fusionError),
+      done: Boolean(fusionResult) && stage.at("reveal"),
+    });
   if (stage.at("reveal"))
-    lines.push({ key: "s", icon: Send, tone: "teal", text: "Sent to Telegram · receipt #A1F2-93C", active: true });
+    lines.push({ key: "s", icon: Send, tone: "teal", text: fusionResult ? `Ready in shared brain · ${fusionResult.skill.slug}` : "Fusion run finished", active: true });
 
   React.useEffect(() => {
     const scrollEl = scrollRef.current;
@@ -89,7 +106,7 @@ export function ChatPanel({
         <HexNode tone="gold" image="/icons/queen-bee-v2.png" imageScale={0.72} size={34} />
         <div style={{ display: "grid", gap: 1 }}>
           <span style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 14, color: "var(--fz-fg)" }}>Hive · fusion agent</span>
-          <span className={styles.monoCap} style={{ color: "var(--fz-teal-2)", fontSize: 9 }}>live · 3 machines connected</span>
+          <span className={styles.monoCap} style={{ color: "var(--fz-teal-2)", fontSize: 9 }}>{statusText}</span>
         </div>
         <span className={`${styles.dot} ${styles.dotLive}`} style={{ color: "var(--fz-teal)", marginLeft: "auto" }} />
       </div>
@@ -141,8 +158,8 @@ export function ChatPanel({
           }}>
             <HexNode tone="gold" size={40}><span style={{ color: "var(--fz-gold)", fontFamily: "var(--f-mono)", fontSize: 16 }}>✦</span></HexNode>
             <div style={{ display: "grid", gap: 2 }}>
-              <span style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 14, color: "var(--fz-fg)" }}>Unified skill ready</span>
-              <code style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fz-gold-2)" }}>hive-skill-fusion · reusable</code>
+              <span style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 14, color: "var(--fz-fg)" }}>{fusionResult?.skill.name ?? "Unified skill ready"}</span>
+              <code style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fz-gold-2)" }}>{fusionResult?.skill.slug ?? "shared brain skill"} · reusable</code>
             </div>
           </div>
         ) : null}

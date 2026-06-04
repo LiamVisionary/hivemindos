@@ -1,10 +1,14 @@
 # Wallets, Tokens, Honey, HIVE, And x402
 
-Wallets let agents hold controlled budgets, token balances, prepaid inference deposits, and paid-request rails. Honey and HIVE provide optional reward and compute loops on top of those wallet/token surfaces.
+Wallets give agents controlled money rails.
+
+They can hold capped budgets, token balances, prepaid inference deposits, and paid-request paths. Honey and HIVE sit on top as optional reward and compute loops.
+
+For the ecosystem-level plan behind Honey, HIVE, premium services, treasury reserves, and buybacks, see [Honey, HIVE, And Treasury](../monetization/honey-hive-treasury.html).
 
 <figure class="imagePlate">
   <img src="../assets/img/diagrams/wallet-token-rails.jpg" alt="Generated wallet and token rails infographic with separate lanes for x402 paid APIs, UsePod prepaid runtime deposits, and Honey to Bankr HIVE claims.">
-  <figcaption>Wallets, UsePod prepaid runtime deposits, and Honey/Bankr HIVE claims are separate rails with different trust and funding semantics.</figcaption>
+  <figcaption>Wallets, UsePod prepaid runtime deposits, and Honey/Bankr HIVE claims are separate rails. They have different trust and funding rules.</figcaption>
 </figure>
 
 ## How It Works
@@ -19,7 +23,7 @@ Wallets let agents hold controlled budgets, token balances, prepaid inference de
 - Official Honey ledger worker lives in `workers/honey-ledger`.
 - Reward compute gateway lives in `workers/compute-gateway`.
 
-## Capabilities
+## What Wallets Can Do
 
 - Create Base and Solana wallet secrets for agent-scoped token rails.
 - Read native/token balances.
@@ -45,18 +49,18 @@ Token-facing surfaces:
 
 - Base and Solana addresses are treated as operational agent wallets, not user custody wallets.
 - UsePod deposit addresses are shown as prepaid inference token rails when the selected agent uses the UsePod provider.
-- Honey is tracked as usage-earned accounting; HIVE can be ledger-only legacy balance or an actual Bankr transfer when the claim path is configured.
+- Honey is tracked as usage-earned accounting. HIVE can be a ledger-only legacy balance or an actual Bankr transfer when the claim path is configured.
 - x402 uses token/payment policy around requests instead of giving runtimes unrestricted wallet access.
 
 ## Wallet Vault Backup
 
-HivemindOS stores local wallet key material under `~/.hivemindos/wallet-vault`. The backup route keeps that local-first but recoverable:
+HivemindOS stores local wallet key material under `~/.hivemindos/wallet-vault`. The backup route keeps that local, but still recoverable:
 
 - `GET /api/wallet/vault-backup` reports whether the vault, key material, encrypted backup, GPG, and recipient are available.
 - `POST /api/wallet/vault-backup` refreshes or restores the encrypted backup.
 - Backup placement prefers `HIVE_WALLET_VAULT_BACKUP_DIR`, then `HIVE_ENV_BACKUP_DIR`, then the configured secure notes folder.
 - Recipients can come from `HIVE_WALLET_GPG_RECIPIENT`, `HIVE_ENV_GPG_RECIPIENT`, or public-key files in the secure folder.
-- Restore requires local GPG and a supported backup format; the route does not silently invent missing key material.
+- Restore requires local GPG and a supported backup format. The route does not silently invent missing key material.
 
 ## Honey Paths
 

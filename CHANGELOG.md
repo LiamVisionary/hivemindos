@@ -3,6 +3,438 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-05 00:43:56 WITA - Use Current Hub Port In Phone Pairing QR
+
+- Status: Pushed
+- Areas changed: Agent call settings phone pairing QR, connect-phone QR route, phone pairing URL helper, Tauri dev proxy binding, changelog
+- Summary: Stop hardcoding `:5020` in Claw Code Mobile pairing QR codes; derive the paired hub URL from the current dashboard/Tauri port so `localhost:5021` generates a `http://<tailnet-ip>:5021` mobile hub URL, keep the desktop WebView on `localhost` for microphone permissions, and bind the Tauri dev proxy on a reachable interface so the paired phone can call `/api/phone?action=agent-targets`.
+- Verification: `rg -n "5020|clawcodemobile://pair|hubUrlForPairingHost|currentHubPort|phoneHubUrl" src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx src/app/connect-phone/page.tsx src/lib/phone/pairing-url.ts scripts/tauri-next-dev.mjs src-tauri/tauri.conf.json src-tauri/src/lib.rs`; `pnpm exec eslint src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx src/app/connect-phone/page.tsx src/lib/phone/pairing-url.ts scripts/tauri-next-dev.mjs --max-warnings=999`; `node --check scripts/tauri-next-dev.mjs`; local `curl --max-time 20 http://localhost:5021/api/phone?action=agent-targets` returned HTTP 200 with 19 agents in about 0.12s.
+- Intended commit message: `Use current hub port in phone pairing QR`
+
+## 2026-06-05 00:31:18 WITA - Bound Chat Process Drawer And Preserve JSON Formatting
+
+- Status: Pushed
+- Areas changed: Chat process rendering, chat markdown/code rendering, changelog
+- Summary: Keep the expanded chat Process drawer to a four-row scroll viewport that auto-scrolls to the newest event, and ensure code blocks inside chat markdown preserve preformatted whitespace so pretty-printed JSON renders with line breaks.
+- Verification: `pnpm exec eslint src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/ChatMarkdown.tsx --quiet`; `git diff --check -- src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/ChatMarkdown.tsx src/app/chat.module.css CHANGELOG.md`; in-app Browser loaded the chat route on `localhost:5021` with zero console errors, while the original `127.0.0.1:5021` route was unavailable because this dev server is currently listening on IPv6 loopback.
+- Intended commit message: `Bound chat process drawer and preserve json formatting`
+
+## 2026-06-05 00:10:46 WITA - Add Ecosystem Plan Docs
+
+- Status: Pushed
+- Areas changed: GitHub Pages monetization docs, paid feature docs, docs navigation, docs preview navigator, wallet/token docs, changelog
+- Summary: Add a separated HivemindOS Ecosystem Plan page for the free/open-source promise, optional premium services, revenue allocation, and value wheel. Add a Honey, HIVE, And Treasury page for Honey earning paths, HIVE claims, treasury uses, buybacks, future burns, and staking. Link the new pages from Monetization, Paid Features, the global sidebar, the local docs preview, the docs home, and the wallet/token feature page.
+- Verification: `pnpm exec prettier --check docs/monetization/ecosystem-plan.md docs/monetization/honey-hive-treasury.md docs/monetization/index.md docs/monetization/paid-features/index.md docs/features/wallets-honey-and-x402.md docs/index.md`; `git diff --check -- docs/monetization/ecosystem-plan.md docs/monetization/honey-hive-treasury.md docs/monetization/index.md docs/monetization/paid-features/index.md docs/_layouts/default.html docs/preview.html docs/features/wallets-honey-and-x402.md docs/index.md`; front matter validation for `docs/monetization/ecosystem-plan.md`, `docs/monetization/honey-hive-treasury.md`, `docs/monetization/index.md`, and `docs/monetization/paid-features/index.md`; `rg -n "ecosystem-plan|honey-hive-treasury|HivemindOS Ecosystem Plan|Honey, HIVE, And Treasury|Future Premium Services" docs/monetization docs/_layouts/default.html docs/preview.html docs/features/wallets-honey-and-x402.md docs/index.md`.
+- Intended commit message: `Add ecosystem plan docs`
+
+## 2026-06-04 23:50:34 WITA - Name Hivemind Sync
+
+- Status: Pushed
+- Areas changed: GitHub Pages docs, README, setup and collector setup copy, shared vault initializer, shared vault AGENTS map, dashboard sync copy, env helper output, project agent instructions, vault structure contract test, changelog
+- Summary: Introduce Hivemind Sync as the user-facing cross-machine movement layer for shared brain files, shared env, and `.hivemindos-transfers` handoff transfers. Clarify that env pushes use ready collector `/env` endpoints while peer pulls and repair paths can still use Tailscale SSH. Seed `.hivemindos-transfers` as a canonical vault folder and mirror it in setup/uninstall/test/docs.
+- Verification: `pnpm test:vault-structure`; `bash -n setup.sh && bash -n uninstall.sh && bash -n scripts/install-telemetry-collector.sh`; `node --check scripts/seed-vault-foundation.mjs && node --check scripts/test-vault-structure-contract.mjs && python3 -m py_compile scripts/hive-env-add`; `pnpm exec eslint src/app/api/env/route.ts src/app/api/obsidian/sync/route.ts src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/UtilityPanels.tsx src/features/dashboard/dashboard-display-helpers.tsx src/features/dashboard/views/VaultPanel.tsx src/features/native/NativeFirstRunOnboarding.tsx src/lib/services/chat/shared-vault-context.ts src/features/dashboard/views/DashboardModals.tsx src/features/dashboard/hooks/use-status-chat-input-controller.tsx src/lib/services/obsidian/tailnet-vault-sync.ts --max-warnings=999` passed with existing warnings only; `node --check scripts/hive-transfer.mjs && pnpm test:hive-transfer`; `git diff --check -- AGENTS.md README.md CHANGELOG.md setup.sh setup.ps1 uninstall.sh uninstall.ps1 scripts/seed-vault-foundation.mjs scripts/hive-env-add scripts/install-telemetry-collector.sh scripts/test-vault-structure-contract.mjs docs/index.md docs/_layouts/default.html docs/features/index.md docs/features/hivemind-sync.md docs/features/brain-vault-and-skills.md docs/features/env-files-notifications-maintenance.md docs/whole-brain docs/targeted-file-transfers.md docs/architecture/api-and-storage.md docs/architecture/index.md docs/architecture/syncing-and-tailscale.md docs/syncing-and-tailscale.md src/app/api/env/route.ts src/app/api/obsidian/sync/route.ts src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/UtilityPanels.tsx src/features/dashboard/dashboard-display-helpers.tsx src/features/dashboard/views/VaultPanel.tsx src/features/native/NativeFirstRunOnboarding.tsx src/lib/services/chat/shared-vault-context.ts src/features/dashboard/views/DashboardModals.tsx src/features/dashboard/hooks/use-status-chat-input-controller.tsx src/lib/services/obsidian/tailnet-vault-sync.ts`; docs front matter validation for `docs/whole-brain/*.md` and `docs/features/hivemind-sync.md`; stale wording sweep for old Tailscale-SSH-only env sync phrasing returned no matches.
+- Intended commit message: `Name hivemind sync`
+
+## 2026-06-04 23:46:30 WITA - Add Calling And Monetization Docs
+
+- Status: Pushed
+- Areas changed: GitHub Pages docs, Calling feature docs, Monetization docs, paid feature docs, docs navigation, changelog
+- Summary: Add a Calling feature page that explains dashboard and mobile agent calls, BYOK Agent Calls as the free default, and HivemindOS Cloud Agent Calls as the paid LiveKit/SFU path; add a Monetization section with a paid-features shelf and a dedicated Cloud Agent Calls page; wire the new docs into the GitHub Pages landing page, feature guide, sidebar, and related runtime/integration docs.
+- Verification: `pnpm exec prettier --check docs/features/calling.md docs/monetization/index.md docs/monetization/paid-features/index.md docs/monetization/paid-features/hivemind-cloud-agent-calls.md docs/index.md docs/features/index.md docs/features/runtimes-and-chat.md docs/features/integrations-and-work-history.md`; `git diff --check -- docs/features/calling.md docs/monetization docs/index.md docs/features/index.md docs/features/runtimes-and-chat.md docs/features/integrations-and-work-history.md docs/_layouts/default.html CHANGELOG.md`; `rg -n "features/calling|monetization|hivemind-cloud-agent-calls|BYOK Agent Calls|HivemindOS Cloud Agent Calls|LiveKit|SFU|premium|paid" docs/features/calling.md docs/monetization docs/index.md docs/features/index.md docs/_layouts/default.html docs/features/runtimes-and-chat.md docs/features/integrations-and-work-history.md CHANGELOG.md`.
+- Intended commit message: `Add calling and monetization docs`
+
+## 2026-06-04 23:42:43 WITA - Rewrite GitHub Pages Docs In Liam Style
+
+- Status: Pushed
+- Areas changed: GitHub Pages docs outside `docs/whole-brain/**` and outside `docs/features/hive-fusion.md`, changelog
+- Summary: Rewrite the visible docs prose to sound more like Liam: direct, practical, lower fluff, less formal reference-manual language, while preserving technical route names, storage paths, tables, diagrams, code blocks, and the skipped Whole Brain and Hive Fusion pages.
+- Verification: `rg -n ";" docs -g '*.md' -g '!docs/whole-brain/**' -g '!docs/features/hive-fusion.md'`; `rg -n "profound|tapestry|journey|multifaceted|elevate|unlock|crucial role|plays an important role|fast-paced|delve into|serves as a testament|transformative power|deeply resonates|meaningful connection|rich and vibrant|at its core" docs -g '*.md' -g '!docs/whole-brain/**' -g '!docs/features/hive-fusion.md'`; `git diff --check -- docs CHANGELOG.md`
+- Intended commit message: `Rewrite docs in Liam style`
+
+## 2026-06-04 23:41:46 WITA - Add Hive Env Remove Commands
+
+- Status: Pushed
+- Areas changed: Shared env helper scripts, setup and uninstall installers, GitHub Pages docs, README, project agent instructions, vault structure contract test, changelog
+- Summary: Add `hive-env-remove KEY` as the primary shared env removal command and `hive-env-delete KEY` as an alias, install both helpers through shell and PowerShell setup, remove both through uninstall, document both commands in the shared env docs and README, and make AEON one-off GitHub secret sync delete secrets when a key is removed.
+- Verification: `python3 -m py_compile scripts/hive-env-add scripts/hive-env-remove scripts/hive-env-delete`; `node --check scripts/test-hive-env-remove.mjs && pnpm test:hive-env-remove`; `node scripts/test-aeon-env-auto-sync.mjs`; `bash -n setup.sh && bash -n uninstall.sh`; `pnpm test:vault-structure`; `git diff --check -- AGENTS.md README.md CHANGELOG.md package.json setup.sh setup.ps1 uninstall.sh uninstall.ps1 scripts/hive-env-add scripts/hive-env-remove scripts/hive-env-delete scripts/test-hive-env-remove.mjs scripts/test-vault-structure-contract.mjs docs/whole-brain docs/features/env-files-notifications-maintenance.md docs/targeted-file-transfers.md docs/architecture/api-and-storage.md docs/architecture/index.md docs/architecture/syncing-and-tailscale.md`; `hive-env-remove --help >/dev/null && hive-env-delete --help >/dev/null`; local `pwsh` is not installed, so PowerShell parser validation was skipped.
+- Intended commit message: `Add hive env remove commands`
+
+## 2026-06-04 23:23:38 WITA - Add GitLawb Docs Story
+
+- Status: Pushed
+- Areas changed: GitHub Pages docs home, feature guide, integrations landing, GitLawb integration docs, changelog
+- Summary: Add a clearer GitLawb Code Proof section to the GitHub Pages docs in Liam's writing style, explaining the split between HivemindOS as the private work trail and GitLawb as signed code proof, with links into the integration and Work docs.
+- Verification: `git diff --check -- docs/index.md docs/features/index.md docs/integrations/index.md docs/integrations/gitlawb.md`
+- Intended commit message: `Add GitLawb docs story`
+
+## 2026-06-04 23:31:18 WITA - Document Hive Fusion
+
+- Status: Pushed
+- Areas changed: GitHub Pages docs, feature guide, brain and vault docs, docs navigation, changelog
+- Summary: Add a Hive Fusion docs page explaining capability search, generated shared-brain skills, connected app discovery, the three Fusion skill types, safety rules, and the core code paths; link it from the feature guide, brain docs, and sidebar navigation.
+- Verification: `rg -n "—|;" docs/features/hive-fusion.md` returned no matches; `git diff --check -- docs/features/hive-fusion.md docs/features/index.md docs/features/brain-vault-and-skills.md docs/_layouts/default.html CHANGELOG.md`; `rg -n "Hive Fusion|hive-fusion" docs/features/index.md docs/features/brain-vault-and-skills.md docs/_layouts/default.html docs/index.md`; `pnpm exec prettier --check docs/features/hive-fusion.md docs/features/index.md docs/features/brain-vault-and-skills.md` passed. Broader Prettier still flags existing `docs/_layouts/default.html` and `CHANGELOG.md` formatting in the dirty worktree.
+- Intended commit message: `Document hive fusion`
+
+## 2026-06-04 23:19:02 WITA - Collapse Completed Chat Process History
+
+- Status: Pushed
+- Areas changed: Chat process rendering, changelog
+- Summary: Keep chat process history attached for later review while collapsing completed process rows behind the Process disclosure by default, and treat finished, settled, complete, and failed process text as inactive so completed private x402 runs no longer show the live bee indicator.
+- Verification: `pnpm exec eslint src/features/dashboard/views/ChatPanel.tsx --quiet`; `git diff --check -- src/features/dashboard/views/ChatPanel.tsx CHANGELOG.md`; in-app Browser reloaded the chat route on `5021` with zero console errors.
+- Intended commit message: `Collapse completed chat process history`
+
+## 2026-06-04 23:15 WITA - Add Whole Brain GitHub Pages Docs
+
+- Status: Pushed
+- Areas changed: GitHub Pages docs, whole-brain documentation, project agent instructions, vault structure contract test, README, changelog
+- Summary: Add a dedicated `docs/whole-brain/` documentation section with separated pages for the brain overview, vault map, actual directory structure, brain services, shared skills, shared env, sync and health, architecture sync rules, and code map. Link the section from the GitHub Pages docs index, feature guide, existing brain feature page, env feature page, and README. Update `AGENTS.md` so brain architecture changes must update the Pages docs and contract test in the same change.
+- Verification: `pnpm test:vault-structure`; `git diff --check -- AGENTS.md README.md CHANGELOG.md docs scripts/test-vault-structure-contract.mjs`; validated all `docs/whole-brain/*.md` files have GitHub Pages front matter; confirmed local `jekyll` is not installed, so no local Pages render was run.
+- Intended commit message: `Add whole brain docs`
+
+## 2026-06-04 23:07:06 WITA - Keep Live Process Above Chat Reply
+
+- Status: Pushed
+- Areas changed: Chat process rendering, changelog
+- Summary: Treat live, not-yet-persisted process events as belonging to the latest assistant message, so the process panel renders above that reply instead of as a detached later bubble underneath it.
+- Verification: `pnpm exec eslint src/features/dashboard/views/ChatPanel.tsx --quiet`; `git diff --check -- src/features/dashboard/views/ChatPanel.tsx CHANGELOG.md`; in-app Browser reloaded the chat route on `5021` with no console errors and no stale `Agent started writing` process text.
+- Intended commit message: `Keep live process above chat reply`
+
+## 2026-06-04 23:06 WITA - Add Vault Structure Doctor
+
+- Status: Pushed
+- Areas changed: Shared Obsidian vault structure, vault doctor tooling, vault structure contract test, setup/uninstall vault initializers, secure backup defaults, E2E skill cleanup, foundation workflow seeder, shared vault AGENTS map, changelog
+- Summary: Add a conservative `vault-doctor` audit/fix command, add a static vault-structure contract test, migrate legacy `Notes/` content into canonical Intake/Memory/Synthesis/Operations homes, move secure backups to `Operations/Secure`, move the hidden AEON runtime mirror to `Operations/Runtime Mirrors`, clean old `hive-e2e-*` shared skills, merge legacy root `Scheduled/` state into `Operations/Automations`, and make real-fleet E2E tests remove their shared-brain test skills after propagation checks.
+- Verification: `pnpm test:vault-structure`; `pnpm test:gbrain-foundation`; `node --check scripts/vault-doctor.mjs && node --check scripts/test-vault-structure-contract.mjs && node --check scripts/e2e-real-fleet.mjs && node --check scripts/seed-vault-foundation.mjs && bash -n setup.sh && bash -n uninstall.sh && python3 -m py_compile scripts/hive-env-add`; `pnpm exec eslint scripts/e2e-real-fleet.mjs scripts/vault-doctor.mjs scripts/test-vault-structure-contract.mjs scripts/test-gbrain-foundation.mjs scripts/seed-vault-foundation.mjs src/lib/services/obsidian/agent-profiles.ts src/lib/services/wallet/wallet-vault-backup.ts --max-warnings=999`; `cargo check --manifest-path src-tauri/Cargo.toml`; `git diff --check -- CHANGELOG.md AGENTS.md package.json scripts/vault-doctor.mjs scripts/test-vault-structure-contract.mjs scripts/test-gbrain-foundation.mjs scripts/e2e-real-fleet.mjs scripts/seed-vault-foundation.mjs scripts/hive-env-add setup.sh setup.ps1 uninstall.sh uninstall.ps1 src/lib/services/obsidian/agent-profiles.ts src/lib/services/wallet/wallet-vault-backup.ts src-tauri/src/env.rs`; `node scripts/vault-doctor.mjs --vault /Users/liam/Documents/Obsidian/hivemindos-vault --fix --json` moved `77` items on the Notes/E2E/runtime pass, `6` on the legacy `Scheduled/` pass, and `3` hidden `.aeon` profile-stub artifacts after identifying the app mirror source; final `node scripts/vault-doctor.mjs --vault /Users/liam/Documents/Obsidian/hivemindos-vault --json` reported zero duplicate skills, conflict artifacts, legacy root items, E2E skills, runtime mirrors, hidden profile stubs, root moves, and note moves.
+- Intended commit message: `Add vault structure doctor`
+
+## 2026-06-04 22:49:27 WITA - Require Vault Structure Setup Mirrors
+
+- Status: Pushed
+- Areas changed: Project agent instructions, changelog
+- Summary: Add an `AGENTS.md` rule requiring any shared Obsidian brain structure, canonical folder, generated vault file, or agent-facing vault instruction change to be mirrored in the app's shell and Tauri/desktop setup initializer paths in the same commit.
+- Verification: Read the existing setup/uninstall mirror and shared skill rules; updated `AGENTS.md`; `git diff --check -- AGENTS.md CHANGELOG.md`.
+- Intended commit message: `Require vault structure setup mirrors`
+
+## 2026-06-04 22:46:55 WITA - Flatten Legacy Inbox Into Intake
+
+- Status: Pushed
+- Areas changed: Shared Obsidian vault Intake structure, shared vault AGENTS map, cleanup manifest, changelog
+- Summary: Move the preserved `Intake/Legacy Inbox` contents directly into `Intake/`, remove the now-empty holding folder, and update the vault map so future agents treat `Intake/` as the single raw-capture surface.
+- Verification: Moved `20` legacy inbox items into `/Users/liam/Documents/Obsidian/hivemindos-vault/Intake`, removed `/Users/liam/Documents/Obsidian/hivemindos-vault/Intake/Legacy Inbox`, appended trace entries to `/Users/liam/Documents/Obsidian/hivemindos-vault/Operations/Vault Migrations/2026-06-04-vault-structure-cleanup/manifest.jsonl`, and verified `find /Users/liam/Documents/Obsidian/hivemindos-vault/Intake -maxdepth 1 -name 'Legacy Inbox'` returns nothing.
+- Intended commit message: `Flatten legacy inbox into intake`
+
+## 2026-06-04 22:42:13 WITA - Clean Shared Vault Structure
+
+- Status: Pushed
+- Areas changed: Shared Obsidian vault structure, shared skill import loop guards, vault initialization fallbacks, dashboard notification fallbacks, Kanban note-intake UI, shared skill index, changelog
+- Summary: Stop HivemindOS-managed AEON shared-skill mirrors from being re-imported as fresh provider skills, retire the legacy Inbox note-task fallback, align agent vault context and note-task UI with `Operations/Agent Notifications`, `Operations/Work Board`, `Intake`, and `Memory`, archive exact duplicate shared skill folders and sync/merge backup artifacts, move legacy Inbox content into `Intake/Legacy Inbox`, and preserve obsolete root operational folders under `Operations/Vault Migrations/2026-06-04-vault-structure-cleanup`.
+- Verification: Inspected app vault initialization in `setup.sh`, `scripts/seed-vault-foundation.mjs`, `src/lib/types/agent-runtime.ts`, and `src/features/dashboard/dashboard-storage.ts`; rebuilt `/Users/liam/Documents/Obsidian/hivemindos-vault/Skills/README.md`; cleanup manifest recorded `503` duplicate skill dirs, `275` conflict/backup artifacts, `5` legacy root dirs, `2` legacy root notes, and `1` legacy Inbox move; active shared skills now `260`, active duplicate `SKILL.md` hash groups now `0`, root legacy folders/files now gone, and live conflict/backup artifact sweep outside the cleanup archive now returns `0`; `pnpm exec eslint src/lib/services/obsidian/brain-skills.ts src/lib/services/notes/note-task-intake.ts src/lib/services/chat/shared-vault-context.ts src/features/dashboard/views/KanbanPanel.tsx src/features/dashboard/hooks/use-fleet-notifications-controller.tsx src/features/dashboard/hooks/use-miroshark-brain-controller.tsx --max-warnings=999` passed with existing warnings only; `bash -n scripts/seed-shared-skills.sh`; `cargo check --manifest-path src-tauri/Cargo.toml`; `git diff --check -- src/lib/services/obsidian/brain-skills.ts src/lib/services/notes/note-task-intake.ts src/lib/services/chat/shared-vault-context.ts src/features/dashboard/views/KanbanPanel.tsx src/features/dashboard/hooks/use-fleet-notifications-controller.tsx src/features/dashboard/hooks/use-miroshark-brain-controller.tsx src-tauri/src/brain.rs scripts/seed-shared-skills.sh CHANGELOG.md`.
+- Intended commit message: `Clean shared vault structure`
+
+## 2026-06-04 22:30:18 WITA - Render Live Chat Session Replies Without Reload
+
+- Status: Pushed
+- Areas changed: Chat runtime stream handling, chat process rendering, changelog
+- Summary: Render assistant text discovered by live Hermes session polling into the active chat bubble immediately, remove the synthetic `Assistant started writing` process row, and show the bee animation on the latest real process step while a chat run is active.
+- Verification: `pnpm exec eslint src/features/dashboard/hooks/use-status-chat-input-controller.tsx src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/DashboardApp.tsx --quiet`; `git diff --check -- src/features/dashboard/hooks/use-status-chat-input-controller.tsx src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; inspected the latest Hermes session `hermes-adaptiveagent-ec9dbd-1780583077312` and local telemetry to confirm the assistant reply existed in the session store while the live UI stayed on a process-only bubble; in-app Browser fresh-tab smoke on `http://127.0.0.1:5021/?view=chat...` loaded with no console errors and no `Agent started writing` process text.
+- Intended commit message: `Render live chat session replies without reload`
+
+## 2026-06-04 22:14:01 WITA - Open Code Proof From Fleet Roster
+
+- Status: Pushed
+- Areas changed: Fleet roster machine card, Fleet view action props, Agents dashboard routing, changelog
+- Summary: Turn the Code Proof roster chip into a real button when the dashboard can handle it, and route clicks to the existing Integrations view where the Code Proof setup/status panel lives.
+- Verification: `pnpm exec eslint src/components/fleet/roster.tsx src/components/fleet/FleetView.tsx src/features/dashboard/views/AgentsPanel.tsx --quiet`; `git diff --check -- src/components/fleet/roster.tsx src/components/fleet/FleetView.tsx src/features/dashboard/views/AgentsPanel.tsx CHANGELOG.md`; in-app Browser loaded `http://127.0.0.1:5021/?view=agents`, confirmed the roster exposes `Code proof` as a button named `Open Code Proof setup for This Mac`, clicked it, and verified the dashboard moved to `http://127.0.0.1:5021/?view=integrations` with the Code Proof panel and CLI action visible.
+- Intended commit message: `Open code proof from fleet roster`
+
+## 2026-06-04 22:06:37 WITA - Stop Chat Process Flicker During Private X402
+
+- Status: Pushed
+- Areas changed: Chat runtime polling, active chat run state, chat process rendering, chat message storage, changelog
+- Summary: Break the runtime poller feedback loop that restarted every time it updated chat/streaming state, preserve the current run start time so old draft replies cannot end an active payment run, and attach process events to completed assistant messages so the process history stays visible for later review.
+- Verification: `pnpm exec eslint src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/dashboard-storage.ts src/features/dashboard/dashboard-types.ts src/features/dashboard/hooks/use-status-chat-input-controller.tsx --quiet`; `git diff --check -- src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/dashboard-storage.ts src/features/dashboard/dashboard-types.ts src/features/dashboard/hooks/use-status-chat-input-controller.tsx CHANGELOG.md`; inspected the latest private x402 runtime session and local chat telemetry to confirm repeated poll restarts were being triggered by stateful polling dependencies and an old session `startedAt`; in-app Browser smoke on `http://127.0.0.1:5021/?view=chat...` hydrated the chat route with no console errors.
+- Intended commit message: `Stop chat process flicker during private x402`
+
+## 2026-06-04 22:04:12 WITA - Make Hive Fusion Create Real Shared Skills
+
+- Status: Pushed
+- Areas changed: Hive Fusion dashboard view, Fusion skill creation API, shared-brain skill generation service, dashboard routing, changelog
+- Summary: Remove the old demo-mode Fusion shell and route alias, wire the Fusion view to live capability search plus shared-brain `SKILL.md` creation, pause the animation until real search results are ready, render the finished card from the actual saved skill, upsert repeated Fusion runs into the same skill slug, sanitize durable skill candidate references, and boost required intent slots so Kanban/task, Telegram delivery, and Obsidian/brain requirements are not crowded out by generic matches.
+- Verification: `pnpm exec eslint src/lib/services/obsidian/brain-skills.ts src/lib/services/fusion/fusion-skill.ts src/features/dashboard/views/FusionPanel.tsx src/features/dashboard/views/fusion-showcase/FusionShowcase.tsx src/features/dashboard/views/fusion-showcase/ConstellationHero.tsx src/features/dashboard/views/fusion-showcase/ChatPanel.tsx src/features/dashboard/views/fusion-showcase/fusion-data.ts src/features/dashboard/views/fusion-showcase/use-fusion-stage.ts src/app/api/fusion/skill/route.ts src/features/dashboard/dashboard-navigation.ts src/features/dashboard/hooks/use-dashboard-navigation-controller.ts --max-warnings=999`; `git diff --check -- src/features/dashboard/views/FusionPanel.tsx src/features/dashboard/views/DemoPanel.tsx src/features/dashboard/views/fusion-showcase/FusionShowcase.tsx src/features/dashboard/views/fusion-showcase/ConstellationHero.tsx src/features/dashboard/views/fusion-showcase/ChatPanel.tsx src/features/dashboard/views/fusion-showcase/fusion-data.ts src/features/dashboard/views/fusion-showcase/use-fusion-stage.ts src/lib/services/fusion/fusion-skill.ts src/lib/services/obsidian/brain-skills.ts src/app/api/fusion/skill/route.ts src/features/dashboard/dashboard-navigation.ts src/features/dashboard/hooks/use-dashboard-navigation-controller.ts src/features/dashboard/DashboardApp.tsx CHANGELOG.md`; in-app Browser E2E on `http://127.0.0.1:5025/?view=fusion` submitted `Turn the latest Base news into an X post with a matching image, and send it to my Telegram.` through the actual Fusion composer and reached `Discovered 10 capabilities across 3 machines`, `Fused 5 parts → base-news-broadcast-skill`, `Saved SKILL.md, manifest, and shared brain index`, and `Ready in shared brain · base-news-broadcast-skill` with no console errors; second in-app Browser E2E submitted `watch my shared obsidian brain for unfinished project notes turn the top three into a prioritized action brief create kanban tasks for each and send me a telegram summary` through the actual Fusion composer and reached `Discovered 10 capabilities across 1 machines`, `Fused 5 parts → watch-shared-obsidian-brain-skill`, `Saved SKILL.md, manifest, and shared brain index`, and `Ready in shared brain · watch-shared-obsidian-brain-skill`; verified `/Users/liam/Documents/Obsidian/hivemindos-vault/Skills/watch-shared-obsidian-brain-skill/SKILL.md` selected `kanban-orchestrator`, `hermes send CLI`, `kanban-worker`, `kanban-codex-lane`, and `obsidian-cli-workspace-and-navigation`; direct route regeneration after the locator-sanitizer fix returned `ok: true` and rewrote `/Users/liam/Documents/Obsidian/hivemindos-vault/Skills/base-news-broadcast-skill/SKILL.md`; verified the saved skills have no raw Tailnet URLs, loopback proxy URLs, or absolute local paths and that no duplicate `shared-base-news-broadcast-skill` folder remains. `pnpm exec tsc --noEmit --pretty false --skipLibCheck` remains blocked only by the pre-existing `remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx(306,13)` `pathLength` prop type error.
+- Intended commit message: `Make hive fusion create real shared skills`
+
+## 2026-06-04 21:49:17 WITA - Hide Fleet Capability Badges
+
+- Status: Pushed
+- Areas changed: Fleet graph capability badge rendering, changelog
+- Summary: Hide agent capability icons in the Fleet graph for now behind a single `SHOW_GRAPH_AGENT_CAPABILITY_BADGES` toggle while keeping the badge implementation available for future tuning.
+- Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- CHANGELOG.md src/components/fleet/machine-cluster.tsx`; in-app Browser reload of `http://127.0.0.1:5021/?view=agents` stayed in fleet discovery scanning state, but confirmed `document.querySelectorAll("[data-capability-id]").length` is `0`.
+- Intended commit message: `Hide fleet capability badges`
+
+## 2026-06-04 21:39:23 WITA - Scale Fleet Graph Hive Spacing
+
+- Status: Pushed
+- Areas changed: Fleet graph virtual canvas sizing, changelog
+- Summary: Undo the badge-specific bleed workaround and scale the Fleet graph virtual canvas with `FLEET_GRAPH_CELL_SCALE` so separate machine hives keep proportional spacing when hex size changes.
+- Verification: `pnpm exec eslint src/components/fleet/network-graph.tsx src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- CHANGELOG.md src/components/fleet/network-graph.tsx src/components/fleet/machine-cluster.tsx src/components/fleet/fleet-tokens.module.css`; confirmed the aborted badge-side suppression and badge clipping changes were removed; in-app Browser loaded `http://127.0.0.1:5021/?view=agents`, hydrated live graph cells, and measured the graph layer at `1053 × 1053`, matching `900 * FLEET_GRAPH_CELL_SCALE`; screenshot capture timed out before a final crop.
+- Intended commit message: `Scale fleet graph hive spacing`
+
+## 2026-06-04 16:20:59 WITA - Stabilize Private X402 Chat Process UX
+
+- Status: Pushed
+- Areas changed: Chat process rendering, Veil MCP tool result parsing, private x402 route telemetry, changelog
+- Summary: Keep active chat process events visible across brief history/runtime loading handoffs, stop the detached process panel from disappearing during an active private x402 run, surface non-JSON Veil MCP failures as actionable tool errors, and record failed private x402 route telemetry.
+- Verification: `pnpm exec eslint src/features/dashboard/views/ChatPanel.tsx src/lib/services/wallet/veil-mcp.ts src/app/api/chat/agent-runtime/route.ts --quiet`; `git diff --check -- src/features/dashboard/views/ChatPanel.tsx src/lib/services/wallet/veil-mcp.ts src/app/api/chat/agent-runtime/route.ts CHANGELOG.md`; inspected runtime session `hermes-adaptiveagent-ec9dbd-1780560392032` and local telemetry to confirm the failed run ended with Veil MCP text `fetch failed` being misreported as a JSON syntax error. In-app Browser smoke on `http://127.0.0.1:5021/?view=chat...` showed no console errors before the chat route stayed in its loading shell and the tab stopped responding; `127.0.0.1:5025` was not listening.
+- Intended commit message: `Stabilize private x402 chat process UX`
+
+## 2026-06-04 15:41:22 WITA - Surface Fleet Syncthing Sync Errors
+
+- Status: Pushed
+- Areas changed: Fleet roster machine cards, Syncthing collector status payloads, dashboard Syncthing health polling, assimilation log, changelog
+- Summary: Detect shared-vault Syncthing peers that are incomplete, stalled, or not sharing, show a machine-level `Sync error. Fix?` warning in the Fleet roster, route the fix button through the existing Syncthing pairing repair flow, and show inline fixing/sent/failed feedback with a bounded timeout on the clicked roster button.
+- Verification: `node --check scripts/agent-telemetry-collector.mjs`; `pnpm exec eslint src/components/fleet/fleet-data.ts src/components/fleet/roster.tsx src/components/fleet/FleetView.tsx src/features/dashboard/views/AgentsPanel.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx src/features/dashboard/DashboardApp.tsx --quiet`; `git diff --check -- src/components/fleet/fleet-data.ts src/components/fleet/roster.tsx src/components/fleet/FleetView.tsx src/features/dashboard/views/AgentsPanel.tsx src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx scripts/agent-telemetry-collector.mjs CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; local collector smoke for `hivemindos-vault` reported `hivemindos-liams-macbook-pro-local-2` at `67.9%` with `2291` pending items; in-app Browser loaded `http://127.0.0.1:5021/?view=agents`, showed `Sync error. Fix?` on the remote Tailnet node roster card while leaving `This Mac` and setup placeholders clean, and clicking the button changed it to `Fixing sync...` immediately.
+- Intended commit message: `Surface fleet Syncthing sync errors`
+
+## 2026-06-04 15:29:49 WITA - Open UsePod Host Modal From Ready State
+
+- Status: Pushed
+- Areas changed: UsePod host modal, changelog
+- Summary: Treat a persisted `UsePod provider bond is active` preflight as setup-complete when opening the rent-compute modal, show a real status-checking state while the initial preflight loads, and hide the Bond/Earn/Mode row plus Manual setup unless the modal is truly before setup.
+- Verification: `pnpm exec eslint src/components/fleet/usepod-host-modal.tsx --max-warnings=0`; `git diff --check -- src/components/fleet/usepod-host-modal.tsx CHANGELOG.md`; code inspection confirmed `providerPreflight.status === "ready"` now drives the post-setup shell even when `setupStarted` is false, the initial modal state shows a disabled checking panel until the real preflight response arrives, and pre-setup affordances are hidden during checking and completed states.
+- Intended commit message: `Open UsePod host modal from ready state`
+
+## 2026-06-04 15:27:26 WITA - Scale Fleet Graph Collision Margins
+
+- Status: Pushed
+- Areas changed: Fleet graph collision spacing, add-cell placement search, add-machine graph label spacing, changelog
+- Summary: Scale Fleet graph add-cell/add-machine collision clearances, viewport margins, and add-machine label height with `FLEET_GRAPH_CELL_SCALE`, and widen the add-agent placement search so resized hive cells do not fall back into overlapping positions.
+- Verification: `pnpm exec eslint src/components/fleet/network-graph.tsx --max-warnings=999`; `git diff --check -- CHANGELOG.md src/components/fleet/network-graph.tsx`; in-app Browser loaded `http://127.0.0.1:5021/?view=agents`, hydrated 5 add cells and 22 occupied graph cells, and a hex-polygon intersection check found zero add-cell-to-occupied-cell overlaps after the scaled clearance fix.
+- Intended commit message: `Scale fleet graph collision margins`
+
+## 2026-06-04 15:21:10 WITA - Limit Fleet Capability Badges Per Side
+
+- Status: Pushed
+- Areas changed: Fleet graph capability badge slots, changelog
+- Summary: Limit agent capability badges to four total, with two badges on the upper portion of the left side rail and two on the upper portion of the right side rail so the badges stay clear of the lower edge name labels, while keeping the alternate top-edge variant to two badges per upper edge.
+- Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- CHANGELOG.md src/components/fleet/machine-cluster.tsx`; in-app Browser loaded `http://127.0.0.1:5021/?view=agents`, hydrated 16 current agent cells with 61 capability badges, confirmed no agent rendered more than four badges, and measured the first full cell at two left plus two right badges with scaled center positions `28.1px` and `44.5px`.
+- Intended commit message: `Limit fleet capability badges per side`
+
+## 2026-06-04 15:13:57 WITA - Centralize Fleet Graph Scale
+
+- Status: Pushed
+- Areas changed: Fleet graph sizing constants, Fleet graph content scaling, changelog
+- Summary: Reduce the enlarged Fleet graph hive content by 10% and replace scattered scale calculations with the single `FLEET_GRAPH_CELL_SCALE` value in `hex-math.ts` so future graph size tweaks happen in one place.
+- Verification: `pnpm exec eslint src/components/fleet/hex-math.ts src/components/fleet/network-graph.tsx src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- CHANGELOG.md src/components/fleet/hex-math.ts src/components/fleet/network-graph.tsx src/components/fleet/machine-cluster.tsx src/components/fleet/fleet-tokens.module.css`; in-app Browser loaded `http://127.0.0.1:5021/?view=agents`, hydrated 22 graph cells and 98 capability badges, confirmed badges remain on the left/right side rails, and measured the agent cell at `72.5 × 84.2` with bee icons at `56.2 × 56.2`, matching the new `FLEET_GRAPH_CELL_SCALE = 1.17`.
+- Intended commit message: `Centralize fleet graph scale`
+
+## 2026-06-04 15:03:03 WITA - Enlarge Fleet Graph Hive Cells
+
+- Status: Pushed
+- Areas changed: Fleet graph hex sizing, Fleet graph agent content scaling, Fleet graph badge variant preview, changelog
+- Summary: Return the Fleet graph to the default side-rail capability badge placement and scale graph hexes, bee icons, agent names, machine glyphs, capability badges, roaming bees, and add-machine graph label by 30%.
+- Verification: `pnpm exec eslint src/components/fleet/FleetView.tsx src/components/fleet/hex-math.ts src/components/fleet/network-graph.tsx src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- CHANGELOG.md src/components/fleet/FleetView.tsx src/components/fleet/hex-math.ts src/components/fleet/network-graph.tsx src/components/fleet/machine-cluster.tsx src/components/fleet/fleet-tokens.module.css`; in-app Browser loaded `http://127.0.0.1:5021/?view=agents`, hydrated 22 graph cells and 98 capability badges, confirmed badges are back on left/right side rails, measured the agent cell at `80.6 × 93.6` and the bee icon at `62.4 × 62.4`, matching a 30% increase from the previous graph sizing.
+- Intended commit message: `Enlarge fleet graph hive cells`
+
+## 2026-06-04 14:58 WITA - Ignore Placeholder Agent Bridges
+
+- Status: Pushed
+- Areas changed: Agent telemetry URL normalization, fleet snapshot bridge polling, shared vault Brain Sync profile, changelog
+- Summary: Treat reserved `.invalid` telemetry hosts as placeholder profile data so saved capture/demo profiles are not polled as live agent bridges, and clear the stale Brain Sync `honeycomb.capture.invalid` telemetry URL in the shared vault profile while preserving its local runtime gateway.
+- Verification: `pnpm exec eslint src/lib/utils/agent-telemetry-url.ts src/features/dashboard/dashboard-storage.ts src/app/api/fleet/snapshot/route.ts --max-warnings=999` passed with one pre-existing `ScheduleDraft` warning; `git diff --check -- CHANGELOG.md src/lib/utils/agent-telemetry-url.ts src/features/dashboard/dashboard-storage.ts src/app/api/fleet/snapshot/route.ts`; shared vault Brain Sync profile now has `telemetryUrl: ""`. Live `/api/fleet/snapshot` smoke was blocked because `127.0.0.1:5020` was not listening, and whole-repo `tsc --noEmit` remains blocked by the pre-existing `remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx(306,13)` `pathLength` type error.
+- Intended commit message: `Ignore placeholder agent bridge URLs`
+
+## 2026-06-04 14:53:59 WITA - Preview Top-Edge Capability Badges
+
+- Status: Pushed
+- Areas changed: Fleet graph capability badge placement variants, Fleet graph preview wiring, changelog
+- Summary: Keep the original side-rail capability badge placement as the default `side-rails` variant, add a `top-inner-edges` placement variant that follows the upper-left and upper-right inner hex edges, rotate the top-edge badge tiles parallel to the hex edges, and set the Fleet graph preview to show the new top-edge layout.
+- Verification: `pnpm exec eslint src/components/fleet/FleetView.tsx src/components/fleet/network-graph.tsx src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- CHANGELOG.md src/components/fleet/FleetView.tsx src/components/fleet/network-graph.tsx src/components/fleet/machine-cluster.tsx src/components/fleet/fleet-tokens.module.css`; in-app Browser reload of `http://127.0.0.1:5021/?view=agents` stayed in fleet discovery scanning state, so live badge pixel inspection was blocked.
+- Intended commit message: `Preview top-edge capability badges`
+
+## 2026-06-04 14:47:55 WITA - Add Fleet Agent Capability Badges
+
+- Status: Pushed
+- Areas changed: Fleet graph agent data, Fleet graph hive cell badges, capability badge styling, changelog
+- Summary: Derive up to six agent capability badges from the runtime capability matrix and render them as small app-icon style badges arranged in three-slot rails along the inner left and right sides of each agent hive cell.
+- Verification: `pnpm exec eslint src/components/fleet/fleet-data.ts src/components/fleet/machine-cluster.tsx src/components/fleet/fleet-tokens.module.css src/features/dashboard/hooks/use-dashboard-derived-state.tsx --max-warnings=999` passed with existing derived-state hook warnings and CSS config warning; `git diff --check -- CHANGELOG.md src/components/fleet/fleet-data.ts src/components/fleet/machine-cluster.tsx src/components/fleet/fleet-tokens.module.css src/features/dashboard/hooks/use-dashboard-derived-state.tsx`; in-app Browser loaded `http://127.0.0.1:5021/?view=agents`, rendered 98 capability badge elements across the current 18-agent fleet, confirmed first-slot badge centers at 7.8px/54.2px on the inner left/right rails, and reported no console errors.
+- Intended commit message: `Add fleet agent capability badges`
+
+## 2026-06-04 14:39:16 WITA - Collapse Chat Load Autoscroll Burst
+
+- Status: Pushed
+- Areas changed: ChatPanel scroll scheduling, dashboard chat route loading, server/static chat route props, Brain graph loader SVG coordinates, runtime history fallback, runtime poll deduplication, chat load telemetry, changelog
+- Summary: Replace overlapping node-bound, agent-change, and message-count delayed scroll timers with a single cancellable auto-scroll scheduler, remove the hidden derived-state autoscroll effect, pass URL chat agent/leaf values through deterministic route props instead of first-render `window` reads, keep the selected chat behind one stable route loader until the initial history resolves, preserve cached URL transcripts across reloads for runtime-session fallback, mark failed runtime history leaves resolved when no cached transcript exists, round Brain graph loader SVG coordinates to avoid server/client float-string hydration warnings, and dedupe identical in-flight runtime history polls.
+- Verification: `pnpm exec eslint src/app/DashboardServerHome.tsx src/app/DashboardNativeFrame.tsx src/app/StaticNativeHome.tsx src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx src/features/dashboard/dashboard-display-helpers.tsx src/features/dashboard/DashboardApp.tsx --max-warnings=999` passed with existing DashboardApp/derived-state/ChatPanel warnings; `git diff --check -- src/app/DashboardServerHome.tsx src/app/DashboardNativeFrame.tsx src/app/StaticNativeHome.tsx src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/hooks/use-dashboard-derived-state.tsx src/features/dashboard/dashboard-display-helpers.tsx CHANGELOG.md`; in-app Browser reloaded the exact Tauri chat URL and sampled the first load: one visible route-loader phase, one final chat mount with `messageLike=207`, no chat-history skeleton phase, no significant scroll changes after the chat container appeared, final scroll `top=42546`, `height=43199`, `client=653`, `bottomGap=1`, and zero new console errors, hydration mismatches, or pasted Brain loader SVG coordinate warnings.
+- Intended commit message: `Collapse chat load autoscroll burst`
+
+## 2026-06-04 14:23:07 WITA - Guard Tauri Cleanup And Route Chat Target
+
+- Status: Pushed
+- Areas changed: Tauri event listener cleanup helpers, dashboard native navigation listener, native first-run listener, URL chat route state, chat route loading guard, changelog
+- Summary: Make Tauri event unlisten callbacks idempotent and catch stale listener cleanup races, ensure dashboard navigation listeners unregister even if the React effect cleans up before async Tauri registration resolves, seed chat route agent/leaf/session state from the URL on first render, and keep the chat route loader up during the pre-hydration route-agent gap.
+- Verification: `pnpm exec eslint src/features/dashboard/DashboardApp.tsx src/lib/native/tauri-event-listeners.ts src/lib/native/desktop-navigation.ts src/features/native/NativeFirstRunOnboarding.tsx src/features/dashboard/hooks/use-dashboard-navigation-controller.ts --max-warnings=999` passed with existing DashboardApp warnings; `git diff --check -- src/features/dashboard/DashboardApp.tsx src/lib/native/tauri-event-listeners.ts src/lib/native/desktop-navigation.ts src/features/native/NativeFirstRunOnboarding.tsx src/features/dashboard/hooks/use-dashboard-navigation-controller.ts CHANGELOG.md`; in-app Browser reloaded the exact Tauri chat URL with no console errors, no stuck route loader, and exact-thread telemetry for the Hermes URL leaf showed 21 events all keyed to `hermes-liams-macbook-pro-9-local`, one session request, one runtime poll, and zero poll failures.
+- Intended commit message: `Guard Tauri cleanup and route chat target`
+
+## 2026-06-04 14:08:45 WITA - Stabilize Chat History Scroll After Telemetry
+
+- Status: Pushed
+- Areas changed: Chat history runtime polling, chat loading fallback, ChatPanel auto-scroll dependencies, changelog
+- Summary: Use the new chat telemetry trace to identify repeated failed Hermes history polling and unstable selected-machine object dependencies as the chat-open jank source, then stop polling a runtime history leaf after falling back to a cached multi-message transcript and key the initial auto-scroll effect by stable machine identity instead of object identity.
+- Verification: `pnpm exec eslint src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/ChatPanel.tsx --max-warnings=999` passed with existing DashboardApp/ChatPanel warnings; `git diff --check -- src/features/dashboard/DashboardApp.tsx src/features/dashboard/views/ChatPanel.tsx CHANGELOG.md`; telemetry query for the reported Hermes chat showed repeated `chat.runtime.poll.failed status=502` and `chat.scroll.autoscroll reason=agent_or_machine_changed` bursts while `selectedChatHistoryLoading=true`, confirming the targeted fix.
+- Intended commit message: `Stabilize chat history scroll after telemetry`
+
+## 2026-06-04 14:08:14 WITA - Preserve Syncthing Vault Peers
+
+- Status: Pushed
+- Areas changed: HivemindOS telemetry collector Syncthing pairing, setup-time Syncthing verification, telemetry collector installer, changelog
+- Summary: Make `/syncthing/configure` preserve existing folder device membership when pairing a new HivemindOS peer, make setup verify every ready Syncthing peer instead of only the first one, and keep collector installer guard clauses from exiting under `set -e`, so automatic setup/dashboard pairing adds machines to `hivemindos-vault` without dropping or skipping other peers.
+- Verification: `node --check scripts/agent-telemetry-collector.mjs`; `bash -n setup.sh scripts/install-telemetry-collector.sh`; `AGENT_TELEMETRY_HERMES_RESTART=ask ./scripts/install-telemetry-collector.sh`; local collector health at `127.0.0.1:8787` and Hivemind Link collector health at this machine's Tailnet port advertised Syncthing with default sync path `/Users/liam/Documents/Obsidian/hivemindos-vault`; local Syncthing `hivemindos-vault` folder now includes the missing Mac device `ECCAXP2...`, this Mac, and Ubuntu, and reports the missing Mac as `remoteState: valid`; `git diff --check -- scripts/agent-telemetry-collector.mjs setup.sh scripts/install-telemetry-collector.sh CHANGELOG.md`.
+- Intended commit message: `Preserve Syncthing vault peers`
+
+## 2026-06-04 14:02:41 WITA - Add Chat Load Dev Telemetry
+
+- Status: Pushed
+- Areas changed: Chat dev telemetry endpoint, local telemetry snapshots, chat session route telemetry, runtime route telemetry, chat open hydration telemetry, chat scroll telemetry, changelog
+- Summary: Add a local-dev chat telemetry trace surface at `/api/dev/chat-telemetry`, capture URL chat hydration, runtime session fetch/poll/merge decisions, selected chat message snapshots, scroll/auto-scroll events, agent-session raw session payloads, and runtime route/tool/status events keyed by chat storage key or runtime session id so chat-open jank can be inspected live from Codex.
+- Verification: `pnpm exec eslint src/lib/services/telemetry/chat-dev-telemetry.ts src/app/api/dev/chat-telemetry/route.ts src/app/api/chat/agent-session/route.ts src/app/api/chat/agent-runtime/route.ts src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-chat-tree-controller.tsx src/features/dashboard/views/ChatPanel.tsx --max-warnings=999` passed with existing DashboardApp/controller/ChatPanel warnings; `git diff --check -- src/lib/services/telemetry/chat-dev-telemetry.ts src/app/api/dev/chat-telemetry/route.ts src/app/api/chat/agent-session/route.ts src/app/api/chat/agent-runtime/route.ts src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-chat-tree-controller.tsx src/features/dashboard/views/ChatPanel.tsx CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `curl -sS 'http://127.0.0.1:5021/api/dev/chat-telemetry?limit=5'` returned `{ ok: true, enabled: true }` with events from `/Users/liam/.hivemindos/telemetry/events.jsonl`; exact chat-key query for `hermes-liams-macbook-pro-9-local::task-hermes-liams-macbook-pro-9-local-hermes-state:20260603_233902_523f54-hermes-state-1780549659880.3608` returned an empty trace before a fresh instrumented reload, as expected.
+- Intended commit message: `Add chat load dev telemetry`
+
+## 2026-06-04 12:38:09 WITA - Stabilize Fleet Graph Discovery Layout
+
+- Status: Pushed
+- Areas changed: Fleet discovery state merging, Fleet graph layout, changelog
+- Summary: Keep Fleet in its loading shell until collector discovery returns, merge fresh fleet discovery into the current discovered-machine set, and preserve assigned graph slots for machines that already appeared so live collector details can hydrate without rearranging the Fleet graph view.
+- Verification: `pnpm exec eslint src/features/dashboard/DashboardApp.tsx src/components/fleet/network-graph.tsx --max-warnings=999` passed with existing DashboardApp warnings; `git diff --check -- src/features/dashboard/DashboardApp.tsx src/components/fleet/network-graph.tsx CHANGELOG.md`; post-patch visual recheck was blocked because the in-app browser attach timed out and headless Playwright hit the dashboard lock screen without Liam's local session token.
+- Intended commit message: `Stabilize fleet graph discovery layout`
+
+## 2026-06-04 12:34:27 WITA - Load Runtime Chat History Once
+
+- Status: Pushed
+- Areas changed: Dashboard URL chat hydration, runtime session polling, chat tree controller, Hermes chat seed helper, changelog
+- Summary: Open runtime-backed previous/task chats only after the full runtime session transcript has hydrated, seed URL chat agent/leaf state during localStorage hydration, fetch URL-loaded Hermes state chats by their embedded session id, skip restoring the selected Hermes URL leaf's cached localStorage transcript, keep cached preview messages hidden behind the existing history loader until a real transcript arrives, prevent Hermes history tasks from synthesizing a one-message `lastMessage` transcript before hydration, and allow old Hermes history sessions to load without the active-run recency gate.
+- Verification: `pnpm exec eslint src/features/env/env-components.tsx src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-chat-tree-controller.tsx --max-warnings=999` passed with existing DashboardApp/controller warnings; `git diff --check -- src/features/env/env-components.tsx src/features/dashboard/DashboardApp.tsx src/features/dashboard/hooks/use-chat-tree-controller.tsx CHANGELOG.md`; in-app Browser confirmed the exact `http://127.0.0.1:5021/?view=chat&agent=hermes-liams-macbook-pro-9-local&chatLeaf=task-hermes-liams-macbook-pro-9-local-hermes-state%3A20260603_233902_523f54-hermes-state-1780549659880.3608` Tauri dev route is the active route and, in the empty browser session, shows the route/chat loading state rather than a one-message transcript while waiting for app data.
+- Intended commit message: `Load runtime chat history once`
+
+## 2026-06-04 12:32:54 WITA - Add Mobile Computer-Agent Voice Calls
+
+- Status: Pushed
+- Areas changed: Phone API, HivemindOS call gateway bridge, HivemindOS internal LiveKit voice service, dashboard agent call modal, dashboard agent call E2E harness, Tauri macOS microphone metadata, Tauri localhost dev/native origin, Tauri dev supervisor, HivemindOS LiveKit call worker, package dependencies, Claw Code Mobile voice metadata/UI helpers
+- Summary: Let the paired mobile app list HivemindOS agent targets from the hub, start BYOK OpenAI Realtime calls by default for selected computer agents, keep HivemindOS Cloud/LiveKit calls as an explicit room-based mode, keep dashboard BYOK calls in the calling state until audio actually connects, allow speaker-only Realtime calls when the desktop webview lacks microphone capture, clear the dashboard agent caption at each new Realtime response instead of gluing replies together, add macOS microphone permission metadata for Tauri, load Tauri dev and packaged native dashboards from `localhost` so WebKit exposes microphone capture and prompts, and have `pnpm tauri:dev` run the HivemindOS LiveKit call worker for Cloud calls without requiring the private mobile backend at runtime.
+- Verification: `pnpm exec eslint src/app/api/phone/route.ts src/lib/services/phone/call-gateway.ts src/lib/services/phone/realtime-voice.ts scripts/hivemindos-call-agent-worker.mjs --max-warnings=999`; `pnpm exec eslint src/features/dashboard/views/AgentsPanel.tsx src/components/fleet/agent-call-modal.tsx src/lib/services/phone/call-gateway.ts --max-warnings=999`; `pnpm exec eslint scripts/e2e-dashboard-agent-call.mjs src/app/e2e/agent-call/AgentCallE2EHarness.tsx src/app/e2e/agent-call/page.tsx src/components/fleet/agent-call-modal.tsx src/features/dashboard/views/AgentsPanel.tsx scripts/tauri-next-dev.mjs --max-warnings=999`; `pnpm exec eslint scripts/e2e-dashboard-agent-call.mjs src/components/fleet/agent-call-modal.tsx --max-warnings=999`; `HIVE_E2E_BASE_URL=http://localhost:5021 pnpm test:e2e:agent-call` verifies BYOK reaches `talking` after audio connects, clears the caption between two consecutive mocked agent responses, and the missing-microphone path reaches `talking` in `Speaker-only` mode without `answered. Connecting audio...`; `plutil -lint src-tauri/Info.plist src-tauri/Entitlements.plist`; `pnpm exec tauri info` reports `devUrl: http://localhost:5021/`; `cargo check --manifest-path src-tauri/Cargo.toml`; `git diff --check -- scripts/e2e-dashboard-agent-call.mjs src/app/e2e/agent-call/AgentCallE2EHarness.tsx src/app/e2e/agent-call/page.tsx src/components/fleet/agent-call-modal.tsx src/features/dashboard/views/AgentsPanel.tsx package.json CHANGELOG.md src-tauri/tauri.conf.json src-tauri/Info.plist src-tauri/Entitlements.plist src-tauri/src/lib.rs scripts/tauri-next-dev.mjs`; mobile `npx eslint components/settings/AgentCallsTab.tsx components/OpenAIRealtimeCall.tsx hooks/useRealtimeCall.ts store/hivemindAgentCalls.ts store/realtimeCall.ts store/realtimeCall.test.ts`; mobile `./backend/node_modules/.bin/tsx --test --test-reporter=spec store/realtimeCall.test.ts`; mobile `git diff --check -- components/settings/AgentCallsTab.tsx components/OpenAIRealtimeCall.tsx hooks/useRealtimeCall.ts store/hivemindAgentCalls.ts store/realtimeCall.ts store/realtimeCall.test.ts`; HivemindOS `pnpm exec tsc --noEmit --pretty false --incremental false` remains blocked by existing unrelated `remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx(306,13)` `pathLength` typing error; `node scripts/check-file-sizes.mjs` remains blocked by existing oversized files outside this call change, including `scripts/agent-telemetry-collector.mjs`, dashboard CSS, `DashboardApp.tsx`, `src/app/api/chat/agent-runtime/route.ts`, `src/features/dashboard/hooks/use-status-chat-input-controller.tsx`, and `src/components/wallet/AgentWalletCard.tsx`; mobile `npx tsc --noEmit --pretty false` remains blocked by existing unrelated baseline TypeScript errors in action renderers, backend services, AI demo components, map/movie/UI modules, and native bridge typings.
+- Intended commit message: `Add mobile computer-agent voice calls`
+
+## 2026-06-04 12:29:48 WITA - Strengthen General Bee Top Wings
+
+- Status: Pushed
+- Areas changed: General worker bee icon asset, bee role icon mapping, dashboard icon fallbacks, changelog
+- Summary: Add `worker-bee-general-v5.png` with stronger upper wing fill behind the bee head and wire general worker bee references to the new filename so the top wing lobes remain visible at hive size.
+- Verification: `file public/icons/worker-bee-general-v5.png`; `pnpm exec eslint src/lib/config/bee-role-icons.ts src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/views/KanbanPanel.tsx src/components/fleet/machine-cluster.tsx --max-warnings=999` passed with the existing ChatPanel `<img>` warning; `git diff --check -- CHANGELOG.md src/lib/config/bee-role-icons.ts src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/views/KanbanPanel.tsx src/components/fleet/machine-cluster.tsx`; in-app Browser visual crop on existing dev server `http://127.0.0.1:5021/?view=fleet` confirmed the general worker bee loads from `/icons/worker-bee-general-v5.png` at 48px with stronger filled upper wing lobes.
+- Intended commit message: `Strengthen general bee top wings`
+
+## 2026-06-04 12:10:21 WITA - Replace General Bee With Solid Wing Asset
+
+- Status: Pushed
+- Areas changed: General worker bee icon asset, bee role icon mapping, dashboard icon fallbacks, changelog
+- Summary: Add `worker-bee-general-v4.png` with stronger filled white-blue wings and wire general worker bee references to the new filename so cached `v3` assets do not keep showing broken transparent wings.
+- Verification: `file public/icons/worker-bee-general-v4.png`; `pnpm exec eslint src/lib/config/bee-role-icons.ts src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/views/KanbanPanel.tsx src/components/fleet/machine-cluster.tsx --max-warnings=999` passed with the existing ChatPanel `<img>` warning; `git diff --check -- CHANGELOG.md src/lib/config/bee-role-icons.ts src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/views/KanbanPanel.tsx src/components/fleet/machine-cluster.tsx`; in-app Browser visual crop on existing dev server `http://127.0.0.1:5021/?view=fleet` confirmed the general worker bee loads from `/icons/worker-bee-general-v4.png` at 48px with filled wings.
+- Intended commit message: `Replace general bee with solid wing asset`
+
+## 2026-06-04 11:29:33 WITA - Repair General Bee Wing Alpha
+
+- Status: Pushed
+- Areas changed: General worker bee icon asset, changelog
+- Summary: Strengthen pale wing-fill alpha in the generated general worker bee icon so the white-blue wings remain visible on Fleet graph hive backgrounds.
+- Verification: `file public/icons/worker-bee-general-v3.png`; `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- CHANGELOG.md src/components/fleet/machine-cluster.tsx`; in-app Browser visual crop on existing dev server `http://127.0.0.1:5021/?view=fleet` confirmed the repaired general bee wings remain visible on hive backgrounds at 48px, and page-side image checks confirmed `/icons/worker-bee-general-v3.png` loads complete at 256x256 natural size.
+- Intended commit message: `Repair general bee wing alpha`
+
+## 2026-06-04 11:16:50 WITA - Compact Fleet Graph Probe Labels
+
+- Status: Pushed
+- Areas changed: Fleet graph machine cluster agent labels, changelog
+- Summary: Compact `Probe` to `Pro` in Fleet graph edge labels so packed labels such as `Runtime / Cap Pro` stay within the hex.
+- Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- src/components/fleet/machine-cluster.tsx CHANGELOG.md`; in-app Browser visual crop on existing dev server `http://127.0.0.1:5021/?view=fleet` confirmed `Runtime / Cap Pro` stays inside the hex after compacting `Probe` to `Pro`, and DOM checks reported no overlapping edge-label pairs.
+- Intended commit message: `Compact fleet graph probe labels`
+
+## 2026-06-04 11:14:53 WITA - Add Fleet Graph Wheel Zoom
+
+- Status: Pushed
+- Areas changed: Fleet graph viewport, changelog
+- Summary: Add bounded scroll-wheel zooming to the Fleet graph canvas with unclamped mouse-anchored zoom, a live transform ref, an explicit matrix, requestAnimationFrame-batched wheel updates, and a native non-passive wheel listener that prevents page scroll.
+- Verification: `pnpm exec eslint src/components/fleet/network-graph.tsx --max-warnings=999`; `git diff --check -- src/components/fleet/network-graph.tsx CHANGELOG.md`; authenticated Playwright smoke test on existing dev server `http://127.0.0.1:5021/?view=fleet` confirmed wheel-in scale `1 -> 1.26364`, page scroll stayed at `0,0`, body top stayed `0`, and no transform transition (`all 0s`) to avoid wheel flicker.
+- Intended commit message: `Add fleet graph wheel zoom`
+
+## 2026-06-04 11:13:42 WITA - Pad All Fleet Graph Edge Labels
+
+- Status: Pushed
+- Areas changed: Fleet graph machine cluster agent labels, changelog
+- Summary: Apply the same inward padding to ordinary two-word Fleet graph labels as packed phrase labels so labels such as `Open / Claw` do not sit directly on the hex border.
+- Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- src/components/fleet/machine-cluster.tsx CHANGELOG.md`; in-app Browser visual crop on existing dev server `http://127.0.0.1:5021/?view=fleet` confirmed packed labels such as `Aeon on / This Mac` and `Ida B / Wells` sit inward from the lower hex corner with label-box bounds intact.
+- Intended commit message: `Pad all fleet graph edge labels`
+
+## 2026-06-04 11:11:54 WITA - Pad Multiword Fleet Graph Edge Phrases
+
+- Status: Pushed
+- Areas changed: Fleet graph machine cluster agent labels, changelog
+- Summary: Raise packed multiword Fleet graph edge phrases slightly inward from the lower hex corner so phrase labels keep padding instead of sitting directly on the border.
+- Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- src/components/fleet/machine-cluster.tsx CHANGELOG.md`; in-app Browser visual crop on existing dev server `http://127.0.0.1:5021/?view=fleet` confirmed packed phrase pairs such as `Aeon on / This Mac` balance around the lower hex point with a controlled center gap, and DOM checks reported no overlapping edge-label pairs after the final gap adjustment.
+- Intended commit message: `Pad multiword fleet graph edge phrases`
+
+## 2026-06-04 11:07:37 WITA - Balance Multiword Fleet Graph Edge Phrases
+
+- Status: Pushed
+- Areas changed: Fleet graph machine cluster agent labels, changelog
+- Summary: Balance packed multiword Fleet graph edge phrases around the lower hex point with a controlled center gap so phrase pairs read as one label instead of unevenly spaced independent edges.
+- Verification: Pending targeted checks and visual preview.
+- Intended commit message: `Balance multiword fleet graph edge phrases`
+
+## 2026-06-04 11:04:01 WITA - Pack Multiword Fleet Graph Edge Labels
+
+- Status: Pushed
+- Areas changed: Fleet graph machine cluster agent labels, changelog
+- Summary: Build Fleet graph labels as two edge phrases instead of only two words, packing short 3+ word names across both lower edges and preserving `UsePod` as one compact display word.
+- Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- src/components/fleet/machine-cluster.tsx CHANGELOG.md`; in-app Browser visual crop on existing dev server `http://127.0.0.1:5021/?view=fleet` confirmed `Aeon on` renders on the left edge with `This Mac` on the right edge, `Mr. UsePod` remains `Mr / UsePod` instead of splitting into `Use / Pod`, and DOM checks reported no overlapping two-word label pairs.
+- Intended commit message: `Pack multiword fleet graph edge labels`
+
+## 2026-06-04 11:00:27 WITA - Center Short Fleet Graph Edge Words
+
+- Status: Pushed
+- Areas changed: Fleet graph machine cluster agent labels, changelog
+- Summary: Center short first and second words on their lower hex edge guides so compact names read more like paired text while longer words keep edge-end anchoring for fit.
+- Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- src/components/fleet/machine-cluster.tsx CHANGELOG.md`; in-app Browser visual crop on existing dev server `http://127.0.0.1:5021/?view=fleet` confirmed short words such as `Ada`, `Frida`, `Kahlo`, and `Henry` center on their edge guides while longer words such as `Lovelace` keep edge-end anchoring, and DOM checks confirmed the target labels remain inside their SVG label boxes with no overlapping two-word pairs.
+- Intended commit message: `Center short fleet graph edge words`
+
+## 2026-06-04 10:58:04 WITA - Keep Left Fleet Graph Labels On Edge
+
+- Status: Pushed
+- Areas changed: Fleet graph machine cluster agent labels, changelog
+- Summary: Start first-word Fleet graph labels from a tighter lower-left inner edge endpoint so they use the available left-side edge space with the same inset as right-edge labels.
+- Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- src/components/fleet/machine-cluster.tsx CHANGELOG.md`; in-app Browser visual crop on existing dev server `http://127.0.0.1:5021/?view=fleet` confirmed first words such as `Runtime`, `Henry`, `Frida`, and `Ada` start closer to the lower-left edge line, and DOM checks confirmed the target labels remain inside their SVG label boxes with no overlapping two-word pairs.
+- Intended commit message: `Keep left fleet graph labels on edge`
+
+## 2026-06-04 10:42:18 WITA - Keep Right Fleet Graph Labels On Edge
+
+- Status: Pushed
+- Areas changed: Fleet graph machine cluster agent labels, changelog
+- Summary: End-anchor second-word Fleet graph labels to a tighter lower-right inner edge endpoint so they sit on the guide line, use the available right-side space, and stop at the edge instead of extending past it.
+- Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- src/components/fleet/machine-cluster.tsx CHANGELOG.md`; in-app Browser focused crop on existing dev server `http://127.0.0.1:5021/?view=fleet` confirmed `Lovelace` sits on the lower-right edge line while using the extra right-side space, and DOM checks confirmed it remains inside its SVG label box with no overlapping two-word label pairs.
+- Intended commit message: `Keep right fleet graph labels on edge`
+
+## 2026-06-04 10:35:24 WITA - Anchor Right Fleet Graph Edge Labels
+
+- Status: Pushed
+- Areas changed: Fleet graph machine cluster agent labels, changelog
+- Summary: Start second-word Fleet graph labels from the lower-right inner edge point so longer words use the available right-edge space instead of crowding back toward the center.
+- Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- src/components/fleet/machine-cluster.tsx CHANGELOG.md`; in-app Browser visual crop on existing dev server `http://127.0.0.1:5021/?view=fleet` confirmed second words such as `Lovelace`, `Kahlo`, and `Matisse` start farther into the lower-right edge lane, and a DOM bounding-box overlap check reported no overlapping two-word label pairs.
+- Intended commit message: `Anchor right fleet graph edge labels`
+
+## 2026-06-04 10:28:43 WITA - Anchor Single Fleet Graph Edge Labels
+
+- Status: Pushed
+- Areas changed: Fleet graph machine cluster agent labels, changelog
+- Summary: Right-anchor single-word Fleet graph labels to the lower-left inner edge guide so longer names use available space inside the hex instead of extending past the lower point.
+- Verification: `pnpm exec eslint src/components/fleet/machine-cluster.tsx --max-warnings=999`; `git diff --check -- src/components/fleet/machine-cluster.tsx CHANGELOG.md`; in-app Browser visual crop on existing dev server `http://127.0.0.1:5021/?view=fleet` confirmed the single-word `Aeonitis` label grows back into the available lower-left hex space instead of spilling to the right, and a DOM bounds check confirmed it stays inside its SVG label box.
+- Intended commit message: `Anchor single fleet graph edge labels`
+
 ## 2026-06-04 01:43:11 WITA - Publish Dashboard Wallet And Fleet Worktree
 
 - Status: Pushed

@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import type { ComponentType, Dispatch, ElementType, MutableRefObject, SetStateAction } from "react";
-import { AgentCallModal, type AgentCallLiveKit, type AgentCallPhase } from "@/components/fleet/agent-call-modal";
+import { AgentCallModal, type AgentCallLiveKit, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent } from "@/components/fleet/agent-call-modal";
 import type { FleetViewProps } from "@/components/fleet/FleetView";
 import type { AeonDeleteDepth, AeonDeleteProgress, AeonDeleteResult } from "@/components/fleet/roster";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
@@ -50,6 +50,7 @@ type AgentsPanelProps = {
   machineGroups: MachineGroup[];
   markNotificationRead: (id: string) => void;
   openMachineInitModal: () => void;
+  onFixSyncIssue: NonNullable<FleetViewProps["onFixSyncIssue"]>;
   renameMachine: NonNullable<FleetViewProps["onRenameMachine"]>;
   requestDuplicateAgent: (agentId: string) => void;
   runMachineUpdate: (machine: MachineGroup) => void | Promise<void>;
@@ -82,6 +83,9 @@ type AgentPhoneCallResult = {
       callerName?: string;
       dashboardToken?: string;
       livekitUrl?: string;
+      mode?: "byok" | "cloud";
+      realtime?: AgentCallRealtime;
+      runtimeAgent?: AgentCallRuntimeAgent;
       room?: string;
       voiceReady?: boolean;
     };
@@ -143,6 +147,7 @@ export function AgentsPanel(props: AgentsPanelProps) {
     machineGroups,
     markNotificationRead,
     openMachineInitModal,
+    onFixSyncIssue,
     renameMachine,
     requestDuplicateAgent,
     runMachineUpdate,
@@ -170,6 +175,8 @@ export function AgentsPanel(props: AgentsPanelProps) {
     error?: string;
     notice?: string;
     livekit?: AgentCallLiveKit;
+    realtime?: AgentCallRealtime;
+    runtimeAgent?: AgentCallRuntimeAgent;
   } | null>(null);
 
   const callAgentOnDashboard = useCallback(async (machine: FleetPanelMachine, fleetAgent: FleetPanelAgent): Promise<AgentPhoneCallResult> => {
@@ -212,9 +219,9 @@ export function AgentsPanel(props: AgentsPanelProps) {
     const data = await response.json().catch(() => null) as AgentPhoneCallResult | null;
     if (!response.ok || data?.ok === false) {
       if (resultHasDashboardVoice(data)) {
-        return { ...data, error: data?.error ?? `Phone gateway returned HTTP ${response.status}.` };
+        return { ...data, error: data?.error ?? `HivemindOS call service returned HTTP ${response.status}.` };
       }
-      throw new Error(data?.error ?? `Phone gateway returned HTTP ${response.status}.`);
+      throw new Error(data?.error ?? `HivemindOS call service returned HTTP ${response.status}.`);
     }
     return data ?? { ok: true };
   }, [agents, displayAgents, machineGroups]);
@@ -227,11 +234,20 @@ export function AgentsPanel(props: AgentsPanelProps) {
       const livekit: AgentCallLiveKit | undefined = call?.livekitUrl && call.dashboardToken
         ? { serverUrl: call.livekitUrl, token: call.dashboardToken, ...(call.room ? { room: call.room } : {}) }
         : undefined;
+      if (call?.mode === "byok" && call.realtime?.clientSecret) {
+        setAgentCallSession((current) => current?.agent.id === fleetAgent.id ? {
+          ...current,
+          phase: "ringing",
+          realtime: call.realtime,
+          runtimeAgent: call.runtimeAgent,
+        } : current);
+        return;
+      }
       if (livekit) {
         const notice = result.error ? "Dashboard audio joined the agent room, but setup reported a warning." : undefined;
         setAgentCallSession((current) => current?.agent.id === fleetAgent.id ? { ...current, livekit, notice, phase: "ringing" } : current);
       } else {
-        throw new Error("The gateway did not return a dashboard audio room.");
+        throw new Error("HivemindOS did not return dashboard call credentials.");
       }
     } catch (error) {
       setAgentCallSession({
@@ -319,6 +335,8 @@ export function AgentsPanel(props: AgentsPanelProps) {
                 }
               }}
               onRenameMachine={renameMachine}
+              onOpenCodeProof={() => setActiveView("integrations")}
+              onFixSyncIssue={onFixSyncIssue}
               onOpenChat={(_, agent) => startAgentChat(agent.id, { fresh: true })}
               onOpenTaskChat={(_, agent, chat) => startAgentWorkChat(agent.id, chat?.id ?? chat?.task ?? agent.task)}
               onCallAgent={openAgentPhoneCall}
@@ -348,9 +366,11 @@ export function AgentsPanel(props: AgentsPanelProps) {
               error={agentCallSession.error}
               notice={agentCallSession.notice}
               livekit={agentCallSession.livekit}
+              realtime={agentCallSession.realtime}
+              runtimeAgent={agentCallSession.runtimeAgent}
               onVoiceConnected={() => {
                 setAgentCallSession((current) => (
-                  current?.agent.id === agentCallSession.agent.id && current.phase === "ringing"
+                  current?.agent.id === agentCallSession.agent.id && (current.phase === "ringing" || current.phase === "answered")
                     ? { ...current, phase: "talking" }
                     : current
                 ));

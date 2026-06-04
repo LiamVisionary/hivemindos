@@ -1,10 +1,12 @@
 # Architecture
 
-This page describes the current HivemindOS architecture as implemented in the repository. It is meant for contributors who need to understand where features live, how data moves, and which boundaries are safety-sensitive.
+This is the map of how HivemindOS actually runs.
+
+Use it when you need to know where a feature lives, how data moves, and which boundaries are sensitive. The app has a lot of surface area, but the shape is simple: local dashboard, local APIs, private collectors, shared vault, runtime adapters, and explicit rails for anything risky.
 
 ## System Goals
 
-HivemindOS is built around five design constraints:
+HivemindOS is built around five constraints:
 
 - Local-first operation: the dashboard, collector, runtime homes, and vault are local files and local services by default.
 - Private fleet networking: cross-machine discovery and control happen through Tailscale or the app-managed Hivemind Link sidecar, not public ports.
@@ -14,7 +16,7 @@ HivemindOS is built around five design constraints:
 
 <figure class="imagePlate">
   <img src="../assets/img/diagrams/security-trust-boundaries.jpg" alt="Generated security and trust boundaries infographic showing Public Docs, Browser, Local API, Private Vault, Wallet Keys, Tailnet, and Workers.">
-  <figcaption>Architecture boundaries are intentionally uneven: public docs are public, browser/API surfaces are local, vault and wallet material stay private, and Tailnet/Workers are explicit external edges.</figcaption>
+<figcaption>The boundaries are intentionally uneven. Public docs are public. Browser and API surfaces are local. Vault and wallet material stay private. Tailnet and Workers are explicit external edges.</figcaption>
 </figure>
 
 ## Main Components
@@ -27,7 +29,7 @@ HivemindOS is built around five design constraints:
 | Runtime adapters | `src/lib/services/runtime-adapters/**` | Common runtime interface for status, skills, schedules, runs, outputs, sessions, env sync, integrations, and model selection |
 | Local services | `src/lib/services/**` | File-backed state, Obsidian services, telemetry, wallets, brain services, runtime utilities, integrations |
 | Native bridge | `src/lib/native/**`, `src-tauri/src/lib.rs` | Tauri-only desktop status, local directory listing/creation/display, and native folder picker fallbacks |
-| Collector | `scripts/agent-telemetry-collector.mjs` | Small Node HTTP service on each machine for health, snapshots, runtime chat/session bridges, env sync, skills, directories, Syncthing, and E2E hooks |
+| Collector | `scripts/agent-telemetry-collector.mjs` | Small Node HTTP service on each machine for health, snapshots, runtime chat/session bridges, Hivemind Sync env movement, skills, directories, Syncthing, transfers, and E2E hooks |
 | Setup scripts | `setup.sh`, `setup.ps1`, `uninstall.sh`, `uninstall.ps1`, `scripts/install-telemetry-collector.sh` | Installation, collector/Link service registration, helper CLI installation, uninstall mirror |
 | Workers | `workers/honey-ledger`, `workers/compute-gateway` | Optional Cloudflare D1-backed Honey ledger and trusted OpenAI-compatible compute gateway |
 
@@ -52,13 +54,13 @@ flowchart TD
   Native --> LocalPicker["Local folder picker / filesystem"]
 ```
 
-The dashboard talks to local App Router APIs. Those APIs either perform local filesystem work directly, call the runtime adapter registry, or proxy to a local or remote collector. The collector is intentionally small and machine-local: it reads runtime state, exposes selected actions, and reports capabilities.
+The dashboard talks to local App Router APIs. Those APIs either touch local files, call the runtime adapter registry, or proxy to a local or remote collector. The collector stays small on purpose. It reads runtime state, exposes selected actions, and reports capabilities.
 
 ## Dashboard Architecture
 
 The dashboard route is `src/app/page.tsx`. It accepts `view` and `vaultPanel` query parameters and renders `DashboardApp` with any server-prefetched work history needed for the History view.
 
-`DashboardApp` is the main client orchestrator. It owns persisted local UI state, fleet polling, runtime availability, env state, wallets, chat state, scheduler state, MiroShark/Swarm state, brain services, AEON state, app version/status, and feature wiring. Much of the behavior is delegated into focused hooks and view components:
+`DashboardApp` is the main client orchestrator. It owns persisted local UI state, fleet polling, runtime availability, env state, wallets, chat state, scheduler state, MiroShark and Swarm state, brain services, AEON state, app status, and feature wiring. Most of the real behavior is pushed into focused hooks and view components:
 
 - `src/features/dashboard/hooks/use-dashboard-polling-effects.tsx`: repeated polling for fleet, Kanban, and MiroShark state.
 - `src/features/dashboard/hooks/use-kanban-task-controller.tsx`: board CRUD, task state changes, review/undo, and git status checks.
@@ -75,7 +77,7 @@ The active top-level navigation exposes Fleet, Work, Brain, Chat, Wallet, and Mo
 
 ## API Facade
 
-The app uses Next.js route handlers under `src/app/api`. They form the dashboard's local trust boundary. Major route families are:
+The app uses Next.js route handlers under `src/app/api`. That is the dashboard's local trust boundary. Major route families are:
 
 - `/api/fleet/*`: machine discovery, snapshots, updates, provisioning helpers.
 - `/api/fleet/apps` and `/api/fleet/app-icon`: hivenet app/service discovery, icon proxying, health checks, and API route catalogs.
@@ -107,29 +109,29 @@ Known runtimes:
 | Aeon | Background | status, skills, schedules, runs, outputs, memory, background tasks, notifications, setup |
 | OpenAI-compatible | Interactive | status, chat, model selection |
 
-Adapters let the dashboard ask a runtime for status, skills, schedules, runs, outputs, env sync, sessions, and model options without hard-coding every feature path into the UI. OpenClaw is intentionally limited to the generic Hivemind runtime bridge here.
+Adapters let the dashboard ask a runtime for status, skills, schedules, runs, outputs, env sync, sessions, and model options without baking every runtime path into the UI. OpenClaw stays on the generic Hivemind runtime bridge here.
 
 ## Native Desktop Bridge
 
-The browser and desktop app share the same Next.js UI. The Tauri shell adds a narrow native command surface instead of forking views:
+The browser and desktop app share the same Next.js UI. The Tauri shell adds a narrow native command surface. It does not fork the product:
 
 - `desktop_status`: returns build commit, branch, dirty flag, runtime phase, native host, and native server port.
 - `list_local_directories`: lists local directories for This Mac without routing through the collector.
 - `create_local_folder`: creates a local child folder after cleaning the requested name.
 - `display_local_path`: normalizes expanded home paths for display.
 
-Frontend adapters live in `src/lib/native/desktop-status.ts` and `src/lib/native/filesystem.ts`. Browser users keep using the existing API routes; desktop users can call native commands first and fall back to the API path when the target is remote or when native access is unavailable.
+Frontend adapters live in `src/lib/native/desktop-status.ts` and `src/lib/native/filesystem.ts`. Browser users keep using the existing API routes. Desktop users can call native commands first, then fall back to the API path when the target is remote or native access is unavailable.
 
 ## Collector Architecture
 
-`scripts/agent-telemetry-collector.mjs` is the machine-local collector. It defaults to `AGENT_TELEMETRY_PORT=8787` and `AGENT_TELEMETRY_HOST=0.0.0.0`, though Link mode binds the collector privately and exposes it through the Hivemind Link sidecar.
+`scripts/agent-telemetry-collector.mjs` is the machine-local collector. It defaults to `AGENT_TELEMETRY_PORT=8787` and `AGENT_TELEMETRY_HOST=0.0.0.0`. In Link mode, the collector binds privately and Hivemind Link exposes it through the sidecar.
 
 Collector responsibilities include:
 
 - `/health`: host, app version, env sync readiness, and capability advertisement.
 - `/snapshot`: local runtime/machine snapshot data used by Fleet.
 - `/agents`: local runtime agent inventory and creation/deletion.
-- `/env`: read/import shared or runtime-specific env through `hive-env-add`.
+- `/env`: read, import, or remove shared and runtime-specific env through the hive env helpers and Hivemind Sync.
 - `/directories`: safe directory browsing for target selection.
 - `/apps` and `/app-proxy/<port>`: local app/service discovery and proxying for hivenet launchers.
 - `/skills` and `/skills/auto-sync`: skill inventory and provider auto-sync.
@@ -138,7 +140,7 @@ Collector responsibilities include:
 - `/e2e/*`: real-fleet E2E hooks for env, skills, and encrypted file sharing.
 - `/update`: start a checkout update on a remote HivemindOS machine.
 
-The collector is designed to be private to the Tailnet or Hivemind Link path. Do not expose it publicly by default.
+The collector is private infrastructure. Keep it on the Tailnet or Hivemind Link path. Do not expose it publicly by default.
 
 ## State And Storage
 
@@ -151,7 +153,9 @@ flowchart LR
   Api --> Workers["Cloudflare D1 workers"]
   Collector["Collector"] --> RuntimeHomes
   Collector --> HiveHome
-  Vault --> SyncOwner["External sync / HivemindOS Syncthing / manual rsync"]
+  Vault --> SyncOwner["Hivemind Sync"]
+  SyncOwner --> VaultOwner["External sync / HivemindOS Syncthing / manual rsync"]
+  SyncOwner --> Handoff[".hivemindos-transfers handoffs"]
 ```
 
 Important storage locations:
@@ -164,7 +168,7 @@ Important storage locations:
 
 ## Shared Brain Model
 
-The shared brain is a normal markdown folder, usually `~/Documents/Obsidian/hivemindos-vault`. The app can auto-detect common vault paths or use `NEXT_PUBLIC_OBSIDIAN_VAULT_PATH`.
+The shared brain is a normal markdown folder, usually `~/Documents/Obsidian/hivemindos-vault`. The app can detect common vault paths or use `NEXT_PUBLIC_OBSIDIAN_VAULT_PATH`.
 
 The vault is not the transport. Sync is owned by exactly one selected owner:
 
@@ -174,21 +178,23 @@ The vault is not the transport. Sync is owned by exactly one selected owner:
 
 See [Syncing And Tailscale Architecture](syncing-and-tailscale.md).
 
+For the full user-facing brain architecture, folder map, service split, shared-skill model, vault health flow, and docs/setup sync rule, see [Whole Brain](../whole-brain/).
+
 ## Fleet Networking
 
-Fleet discovery combines local state, Tailscale device data, Link metadata, and collector health checks. Hivemind Link is the default setup path for app-managed networking: it uses the user's own Tailscale account through an embedded `tsnet` sidecar, while keeping the collector bound to localhost.
+Fleet discovery combines local state, Tailscale device data, Link metadata, and collector health checks. Hivemind Link is the default app-managed networking path. It uses the user's own Tailscale account through an embedded `tsnet` sidecar while keeping the collector bound to localhost.
 
 Security posture:
 
 - Keep collectors private to Tailscale or Link.
 - Prefer read-only inspection by default.
-- Remote update and env sync are explicit actions.
+- Remote update and Hivemind Sync env movement are explicit actions.
 - Secret values move through helper commands and request bodies, not shared notes.
 - Vault sync repair is explicit and writes conflict copies rather than silently overwriting.
 
 ## Wallet, Honey, And Compute
 
-Local wallet state is managed through `src/lib/services/wallet/**`. Agent wallet secrets are stored in a local encrypted vault under `~/.hivemindos`, and optional backup records can be written into the shared vault when configured.
+Local wallet state is managed through `src/lib/services/wallet/**`. Agent wallet secrets stay in a local encrypted vault under `~/.hivemindos`. Optional backup records can be written into the shared vault when configured.
 
 Honey has two paths:
 

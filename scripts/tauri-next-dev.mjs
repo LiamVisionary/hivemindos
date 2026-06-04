@@ -12,7 +12,9 @@ const tauriDevServerInfoPath = fileURLToPath(new URL("../.next-tauri/dev-server.
 const loadingDir = fileURLToPath(new URL("../src-tauri/loading/", import.meta.url));
 const loadingHtmlPath = fileURLToPath(new URL("../src-tauri/loading/index.html", import.meta.url));
 const loadingIconPath = fileURLToPath(new URL("../src-tauri/loading/icon-192.png", import.meta.url));
-const host = "127.0.0.1";
+const upstreamHost = "localhost";
+const proxyBindHost = process.env.HIVEMINDOS_TAURI_PROXY_BIND_HOST || "0.0.0.0";
+const browserHost = "localhost";
 
 function readPort(value, fallback, name) {
   const port = Number(value || fallback);
@@ -23,7 +25,7 @@ function readPort(value, fallback, name) {
   return port;
 }
 
-function isPortAvailable(port) {
+function isPortAvailable(port, host = upstreamHost) {
   return new Promise((resolve) => {
     const server = createNetServer();
     server.once("error", () => resolve(false));
@@ -44,8 +46,8 @@ async function findAvailablePort(startPort) {
 const proxyPort = readPort(process.env.PORT, "5021", "PORT");
 const requestedNextPort = readPort(process.env.HIVEMINDOS_TAURI_NEXT_PORT, String(proxyPort + 100), "HIVEMINDOS_TAURI_NEXT_PORT");
 
-if (!(await isPortAvailable(proxyPort))) {
-  console.error(`Tauri loading proxy port ${host}:${proxyPort} is already in use. Stop the existing Tauri dev shell, then run pnpm tauri:dev again.`);
+if (!(await isPortAvailable(proxyPort, proxyBindHost))) {
+  console.error(`Tauri loading proxy port ${browserHost}:${proxyPort} is already in use. Stop the existing Tauri dev shell, then run pnpm tauri:dev again.`);
   process.exit(1);
 }
 
@@ -99,10 +101,11 @@ function restoreGeneratedTypeReferences() {
 function writeDevServerInfo() {
   mkdirSync(tauriNextRootDir, { recursive: true });
   writeFileSync(tauriDevServerInfoPath, JSON.stringify({
-    backendUrl: `http://${host}:${nextPort}`,
+    backendUrl: `http://${upstreamHost}:${nextPort}`,
+    bindHost: proxyBindHost,
     nextPort,
     proxyPort,
-    proxyUrl: `http://${host}:${proxyPort}`,
+    proxyUrl: `http://${browserHost}:${proxyPort}`,
   }, null, 2) + "\n");
 }
 
@@ -236,7 +239,7 @@ function checkBackendReady(response) {
     response.writeHead(status, { "Cache-Control": "no-store" });
     response.end();
   };
-  const socket = connect(nextPort, host, () => {
+  const socket = connect(nextPort, upstreamHost, () => {
     socket.destroy();
     finish(204);
   });
@@ -255,7 +258,7 @@ function checkRouteReady(response) {
     response.writeHead(status, { "Cache-Control": "no-store" });
     response.end();
   };
-  const readinessRequest = httpRequest({ hostname: host, port: nextPort, path: "/", method: "HEAD" }, (readinessResponse) => {
+  const readinessRequest = httpRequest({ hostname: upstreamHost, port: nextPort, path: "/", method: "HEAD" }, (readinessResponse) => {
     finish(readinessResponse.statusCode && readinessResponse.statusCode < 500 ? 204 : 503);
     readinessResponse.resume();
   });
@@ -294,13 +297,13 @@ function proxyHttp(clientRequest, clientResponse) {
 
   const proxyRequest = httpRequest(
     {
-      hostname: host,
+      hostname: upstreamHost,
       port: nextPort,
       method: clientRequest.method,
       path: clientRequest.url,
       headers: {
         ...clientRequest.headers,
-        host: `${host}:${nextPort}`,
+        host: `${upstreamHost}:${nextPort}`,
       },
     },
     (proxyResponse) => {
@@ -348,13 +351,13 @@ const proxyServer = createServer((request, response) => {
 });
 
 proxyServer.on("upgrade", (request, socket, head) => {
-  const upstream = connect(nextPort, host, () => {
+  const upstream = connect(nextPort, upstreamHost, () => {
     upstream.write(`${request.method} ${request.url} HTTP/${request.httpVersion}\r\n`);
     for (const [key, value] of Object.entries(request.headers)) {
       if (key.toLowerCase() === "host") continue;
       upstream.write(`${key}: ${Array.isArray(value) ? value.join(", ") : value}\r\n`);
     }
-    upstream.write(`host: ${host}:${nextPort}\r\n\r\n`);
+    upstream.write(`host: ${upstreamHost}:${nextPort}\r\n\r\n`);
     upstream.write(head);
     upstream.pipe(socket);
     socket.pipe(upstream);
@@ -372,39 +375,71 @@ const child = spawn(process.execPath, ["scripts/dev-server.mjs"], {
   env: {
     ...process.env,
     PORT: String(nextPort),
+    HIVEMINDOS_DASHBOARD_HOST: upstreamHost,
     HIVEMINDOS_TAURI_DEV: "1",
     HIVEMINDOS_TAURI_NEXT_DIST_DIR: tauriNextDistDir,
   },
 });
 
+const voiceWorkerEnabled = process.env.HIVEMINDOS_VOICE_WORKER !== "0";
+const voiceWorker = voiceWorkerEnabled
+  ? spawn(process.execPath, ["scripts/hivemindos-call-agent-worker.mjs", "dev"], {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      HIVEMINDOS_TAURI_DEV: "1",
+      LIVEKIT_AGENT_NAME: process.env.LIVEKIT_AGENT_NAME || "hivemindos-call-agent",
+      LIVEKIT_WORKER_PORT: process.env.LIVEKIT_WORKER_PORT || "8386",
+    },
+  })
+  : null;
+
+function stopChildren(signal = "SIGTERM") {
+  child.kill(signal);
+  if (voiceWorker && !voiceWorker.killed) voiceWorker.kill(signal);
+}
+
 proxyServer.on("error", (error) => {
-  child.kill("SIGTERM");
+  stopChildren("SIGTERM");
   restoreGeneratedTypeReferences();
   console.error(error);
   process.exit(1);
 });
 
-proxyServer.listen(proxyPort, host, () => {
-  console.log(`HivemindOS Tauri loading proxy listening on http://${host}:${proxyPort} -> Next ${nextPort}`);
+proxyServer.listen(proxyPort, proxyBindHost, () => {
+  console.log(`HivemindOS Tauri loading proxy listening on http://${browserHost}:${proxyPort} and ${proxyBindHost}:${proxyPort} -> Next ${nextPort}`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.once(signal, () => {
     proxyServer.close();
-    child.kill(signal);
+    stopChildren(signal);
     restoreGeneratedTypeReferences();
   });
 }
 
 child.on("exit", (code) => {
   proxyServer.close();
+  if (voiceWorker && !voiceWorker.killed) voiceWorker.kill("SIGTERM");
   restoreGeneratedTypeReferences();
   process.exit(code ?? 0);
 });
 
 child.on("error", (error) => {
   proxyServer.close();
+  if (voiceWorker && !voiceWorker.killed) voiceWorker.kill("SIGTERM");
   restoreGeneratedTypeReferences();
   console.error(error);
   process.exit(1);
+});
+
+voiceWorker?.on("exit", (code) => {
+  if (code && code !== 0) {
+    console.warn(`HivemindOS call agent worker exited with status ${code}. Next/Tauri dev is still running.`);
+  }
+});
+
+voiceWorker?.on("error", (error) => {
+  console.warn("HivemindOS call agent worker could not start. Next/Tauri dev is still running.");
+  console.warn(error);
 });

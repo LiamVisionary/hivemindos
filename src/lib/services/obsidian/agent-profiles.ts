@@ -48,7 +48,11 @@ export function repoNameFromAgent(agent: AgentProfile) {
   const repo = agent.aeonRepo?.trim().replace(/\.git$/i, "");
   if (repo) return slug(repo.split(/[/:]/).filter(Boolean).slice(-2).join("-"), "Local AEON");
   const local = agent.aeonLocalPath || agent.localDataDir || "~/.aeon";
-  return slug(basename(expandHome(local)) || "Local AEON", "Local AEON");
+  const localName = basename(expandHome(local));
+  if (!localName || localName.startsWith(".")) {
+    return slug(agent.name || agent.agentId || agent.id || "Local AEON", "Local AEON");
+  }
+  return slug(localName, "Local AEON");
 }
 
 function agentProfileParts(agent: AgentProfile) {

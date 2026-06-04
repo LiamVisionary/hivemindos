@@ -1,11 +1,10 @@
 # Tailscale Fleet Telemetry
 
-HivemindOS can monitor agents across machines by polling a tiny read-only
-collector over your private Tailscale network.
+HivemindOS monitors agents across machines by polling a tiny read-only collector over a private Tailscale or Hivemind Link path.
 
 <figure class="imagePlate">
   <img src="../assets/img/diagrams/fleet-tailnet-topology.jpg" alt="Generated Fleet and Tailnet topology infographic showing dashboard, local collector, Tailnet link, remote collectors, machine health, apps, and runtimes.">
-  <figcaption>The telemetry collector is the per-machine read surface; Tailnet or Hivemind Link keeps that collector path private between the dashboard and remote machines.</figcaption>
+  <figcaption>The telemetry collector is the per-machine read surface. Tailnet or Hivemind Link keeps that path private between the dashboard and remote machines.</figcaption>
 </figure>
 
 ## How It Works
@@ -22,7 +21,7 @@ The collector exposes:
 POST /snapshot
 ```
 
-It reads local agent state only:
+It only reads local agent state:
 
 - Hermes: `~/.hermes/state.db`, `~/.hermes/sessions`, `~/.hermes/logs`
 - Generic runtime dirs: `tasks`, `inbox`, `outbox`, `cron`, `logs`, `sessions`
@@ -51,7 +50,7 @@ Paste that into an agent card's `Telemetry URL` field.
 Recommended shape:
 
 - Install Tailscale on each agent machine.
-- Keep the collector private to the Tailnet; do not use Funnel by default.
+- Keep the collector private to the Tailnet. Do not use Funnel by default.
 - Use Tailscale ACLs so only the control-room device can reach port `8787`.
 - Use tagged devices such as `tag:agent-node` and `tag:agent-control-room`.
 
@@ -71,8 +70,7 @@ Minimal ACL idea:
 
 ## Hivemind Link Setup
 
-Normal setup uses the app-managed Link sidecar by default. For collector-only
-installs on additional machines, run:
+Normal setup uses the app-managed Link sidecar by default. For collector-only installs on additional machines, run:
 
 ```bash
 HIVE_LINK_ENABLED=true ./scripts/install-telemetry-collector.sh
@@ -96,14 +94,9 @@ Keep these URL shapes distinct:
 - Local Hivemind Link sidecar: `http://127.0.0.1:8788/status`
 - Remote collector through Link: `http://127.0.0.1:8788/peer/<tailnet-host%3A8787>/...`
 
-Only the local collector port may move, for example from `8787` to `8789` when
-`8787` is already occupied. The active local collector port is recorded in
-`~/.hivemindos/collector.env`. Do not rewrite Link `/peer/...` URLs to that
-collector port: `/peer/...` belongs to `hivemind-linkd` on `8788`, and rewriting
-it makes remote chat look like a missing Hermes chat bridge with a fast `404`.
+Only the local collector port may move, for example from `8787` to `8789` when `8787` is already occupied. The active local collector port is recorded in `~/.hivemindos/collector.env`. Do not rewrite Link `/peer/...` URLs to that collector port. `/peer/...` belongs to `hivemind-linkd` on `8788`, and rewriting it makes remote chat look like a missing Hermes chat bridge with a fast `404`.
 
-If the embedded node needs authorization, setup prints a Tailscale sign-in URL.
-No HivemindOS server proxies model or collector traffic.
+If the embedded node needs authorization, setup prints a Tailscale sign-in URL. No HivemindOS server proxies model or collector traffic.
 
 Use `./setup.sh --system-tailscale` only when you want the full system Tailscale
 setup surface for Tailscale SSH, rsync repair, and HivemindOS-managed Syncthing

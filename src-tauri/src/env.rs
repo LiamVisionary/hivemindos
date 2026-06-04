@@ -298,7 +298,7 @@ fn backup_dir() -> Option<PathBuf> {
             note_root().map(|root| {
                 root.join(
                     env_or_local("HIVE_NOTE_SECURE_FOLDER")
-                        .unwrap_or_else(|| "Notes/Secure".to_string()),
+                        .unwrap_or_else(|| "Operations/Secure".to_string()),
                 )
             })
         })

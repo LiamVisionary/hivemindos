@@ -330,7 +330,7 @@ function spawnRsync(args: string[]) {
     let stderr = "";
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
-      reject(new Error("Tailnet vault sync timed out."));
+      reject(new Error("Hivemind Sync repair timed out."));
     }, 180_000);
     child.stdout.on("data", (chunk) => {
       stdout += chunk.toString("utf8");

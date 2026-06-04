@@ -49,19 +49,20 @@ export function useStatusChatInputController(props: any) {
   }
 
   function startChatStream(storageKey: string, agentId: string, leafKey: string, requestLabel?: string) {
+    const startedAt = Date.now();
     setChatStreamingByKey((current) => {
-      return { ...current, [storageKey]: { agentId, leafKey, hasChunk: false } };
+      return { ...current, [storageKey]: { agentId, leafKey, hasChunk: false, startedAt } };
     });
     setChatProcessByKey?.((current) => ({
       ...current,
-      [storageKey]: [{ at: Date.now(), label: "Queued chat request", detail: "Preparing the runtime bridge." }],
+      [storageKey]: [{ at: startedAt, label: "Queued chat request", detail: "Preparing the runtime bridge." }],
     }));
     recordActiveChatRun?.({
       storageKey,
       agentId,
       leafKey,
-      startedAt: Date.now(),
-      updatedAt: Date.now(),
+      startedAt,
+      updatedAt: startedAt,
       requestLabel,
       status: "active",
     });
@@ -377,7 +378,7 @@ export function useStatusChatInputController(props: any) {
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as VaultSyncStatus | null;
     setVaultSyncPending("");
-    setVaultSyncStatus(data ?? { ok: false, error: "Tailnet vault sync request failed." });
+    setVaultSyncStatus(data ?? { ok: false, error: "Hivemind Sync repair request failed." });
   }, [
     sharedVault.tailnetSyncDirection,
     sharedVault.tailnetSyncHost,
@@ -1100,6 +1101,16 @@ export function useStatusChatInputController(props: any) {
         return { ...current, messages: next };
       });
     };
+    const renderAssistantText = (content: string) => {
+      const nextText = compactRepeatedAssistantText(content).trim();
+      if (!nextText) return;
+      if (sawAssistantContent && nextText === streamedAssistantText.trim()) return;
+      streamedAssistantText = nextText;
+      sawAssistantContent = true;
+      markChatStreamChunk(selectedStorageKey);
+      replacePendingAssistant({ role: "assistant", content: nextText, surface: "chat" });
+      updateTask(taskId, { lastMessage: nextText });
+    };
     const abortController = new AbortController();
     let stallTimer = window.setTimeout(() => abortController.abort("chat-response-stall"), CHAT_RESPONSE_STALL_TIMEOUT_MS);
     const refreshStallTimer = () => {
@@ -1158,7 +1169,9 @@ export function useStatusChatInputController(props: any) {
           appendChatProcess(selectedStorageKey, processEvent.label, processEvent.detail);
         }
         if (String(sessionMessage?.role ?? "").toLowerCase() === "assistant") {
-          recoveredAssistantText += String(sessionMessage?.content ?? "");
+          const assistantText = String(sessionMessage?.content ?? "");
+          recoveredAssistantText += assistantText;
+          renderAssistantText(assistantText);
         }
       }
     };
@@ -1286,7 +1299,6 @@ export function useStatusChatInputController(props: any) {
             const textDelta = nextChatTextDelta(chunk, streamedAssistantText);
             if (!textDelta) continue;
             streamedAssistantText += textDelta;
-            if (!sawAssistantContent) appendChatProcess(selectedStorageKey, "Assistant started writing", undefined, "completed");
             markChatStreamChunk(selectedStorageKey);
             sawAssistantContent = true;
             let nextTaskMessage = "";

@@ -26,7 +26,7 @@ type HiveEnvBackupStatus = {
   error?: string;
 };
 
-const SHARED_SOURCE = { id: "shared", label: "Shared sync store", scope: "agent", runtime: "generic" } as const;
+const SHARED_SOURCE = { id: "shared", label: "Hivemind Sync env", scope: "agent", runtime: "generic" } as const;
 const RUNTIME_SOURCES = [
   { id: "runtime-openclaw", label: "OpenClaw", scope: "agent", runtime: "openclaw" },
   { id: "runtime-hermes", label: "Hermes", scope: "agent", runtime: "hermes" },
@@ -252,7 +252,7 @@ function syncSharedEnvMachines() {
     let errorText = "";
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
-      reject(new Error("Timed out while syncing env variables."));
+      reject(new Error("Timed out while running Hivemind Sync env reconciliation."));
     }, 90_000);
     child.stderr.on("data", (chunk) => {
       errorText += chunk.toString();
@@ -267,7 +267,7 @@ function syncSharedEnvMachines() {
         resolve();
         return;
       }
-      reject(new Error(errorText.trim() || "hive-env-add could not sync env variables."));
+      reject(new Error(errorText.trim() || "hive-env-add could not run Hivemind Sync env reconciliation."));
     });
   });
 }
@@ -303,7 +303,7 @@ export async function POST(request: Request) {
     } catch (error) {
       return Response.json({
         ok: false,
-        error: error instanceof Error ? error.message : "Could not sync env variables.",
+        error: error instanceof Error ? error.message : "Could not run Hivemind Sync env reconciliation.",
       }, { status: 500 });
     }
   }

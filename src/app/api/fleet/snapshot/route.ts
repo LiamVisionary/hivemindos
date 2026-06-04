@@ -10,6 +10,7 @@ import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime"
 import { getRuntimeUrl } from "@/lib/types/agent-runtime";
 import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
 import type { RuntimeRun } from "@/lib/services/runtime-adapters/types";
+import { normalizeAgentTelemetryUrl } from "@/lib/utils/agent-telemetry-url";
 
 export const runtime = "nodejs";
 
@@ -83,7 +84,7 @@ function normalizeCollectorUrl(url: string) {
 }
 
 async function readRemoteSnapshot(agent: AgentWithLocal): Promise<AgentSnapshot | null> {
-  const baseUrl = agent.telemetryUrl?.trim();
+  const baseUrl = normalizeAgentTelemetryUrl(agent.telemetryUrl);
   if (!baseUrl) return null;
   try {
     const response = await fetch(`${normalizeCollectorUrl(baseUrl)}/snapshot`, {

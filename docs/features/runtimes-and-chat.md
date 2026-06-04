@@ -1,17 +1,19 @@
 # Agents, Runtimes, And Chat
 
-Agents are local profiles that point at a runtime, gateway URL, token, model/provider settings, shared vault settings, optional collector metadata, wallet settings, and phone-call context. Chat bridges the dashboard to supported runtimes while preserving machine, runtime, agent, directory, and session context.
+Agents are local profiles with enough context to do real work.
+
+An agent points at a runtime, model settings, env, vault context, optional collector metadata, wallet settings, and phone-call context. Chat is the bridge into those runtimes. It keeps the machine, runtime, agent, directory, and session context attached instead of treating every message like a blank prompt.
 
 ## Runtime Model
 
 Known runtimes are defined in `src/lib/types/agent-runtime.ts`:
 
-| Runtime | Kind | Main capabilities |
-|---|---|---|
-| OpenClaw | Gateway | status, chat, model selection |
-| Hermes | Interactive | status, chat, runs, memory, sessions, background tasks, X search, video generation, Codex runtime, Kanban decomposition, model selection |
-| Aeon | Background | status, skills, schedules, runs, outputs, memory, background tasks, notifications |
-| OpenAI-compatible | Interactive | status, chat, model selection |
+| Runtime           | Kind        | Main capabilities                                                                                                                        |
+| ----------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenClaw          | Gateway     | status, chat, model selection                                                                                                            |
+| Hermes            | Interactive | status, chat, runs, memory, sessions, background tasks, X search, video generation, Codex runtime, Kanban decomposition, model selection |
+| Aeon              | Background  | status, skills, schedules, runs, outputs, memory, background tasks, notifications                                                        |
+| OpenAI-compatible | Interactive | status, chat, model selection                                                                                                            |
 
 ## How Runtime Settings Work
 
@@ -32,27 +34,17 @@ Known runtimes are defined in `src/lib/types/agent-runtime.ts`:
 
 ### Collector And Link URLs
 
-Hermes agents discovered through Fleet usually store a collector URL in
-`agent.telemetryUrl`. In system Tailnet mode that may be a direct remote
-collector such as `http://100.x.y.z:8787`. In Hivemind Link mode, remote agents
-use the local Link sidecar proxy:
+Hermes agents discovered through Fleet usually store a collector URL in `agent.telemetryUrl`. In system Tailnet mode, that may be a direct remote collector such as `http://100.x.y.z:8787`. In Hivemind Link mode, remote agents use the local Link sidecar proxy:
 
 ```text
 http://127.0.0.1:8788/peer/100.x.y.z%3A8787
 ```
 
-That URL is still remote. Preserve the `/peer/...` prefix and port `8788` when
-sending chat, reading sessions, browsing files, or checking capabilities. Only
-plain local collector URLs such as `http://127.0.0.1:8787` should be
-canonicalized to the active local collector port from
-`~/.hivemindos/collector.env`.
+That URL is still remote. Preserve the `/peer/...` prefix and port `8788` when sending chat, reading sessions, browsing files, or checking capabilities. Only plain local collector URLs such as `http://127.0.0.1:8787` should be normalized to the active local collector port from `~/.hivemindos/collector.env`.
 
-If a remote Hermes agent fails immediately with "does not have the Hermes chat
-bridge" or a fast `404`, check whether a Link `/peer/...` URL was accidentally
-rewritten to the collector port. The healthy path keeps `/peer/...` on
-`127.0.0.1:8788` and appends collector endpoints under that prefix.
+If a remote Hermes agent fails immediately with "does not have the Hermes chat bridge" or a fast `404`, check whether a Link `/peer/...` URL was accidentally rewritten to the collector port. The healthy path keeps `/peer/...` on `127.0.0.1:8788` and appends collector endpoints under that prefix.
 
-## Capabilities
+## What Agents And Chat Can Do
 
 - Runtime/provider/model selection where supported.
 - Streaming runtime responses where available.
@@ -64,6 +56,8 @@ rewritten to the collector port. The healthy path keeps `/peer/...` on
 - Dashboard agent calls that start through `/api/phone` using the gateway's in-app voice path instead of ringing the phone.
 - Scheduled/ring-agent calls that can ring the paired mobile device when explicitly triggered.
 - AEON call briefings with repository, branch, workspace, A2A, memory, skills, and recent MiroShark deliverable context.
+
+For the full product split between free BYOK calls and paid Cloud/LiveKit rooms, see [Calling](calling.html).
 
 ## Phone And Voice Bridge
 

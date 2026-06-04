@@ -1,6 +1,7 @@
 import type { DashboardRouteTarget } from "@/features/dashboard/dashboard-navigation";
 import { DESKTOP_NAVIGATE_EVENT, DESKTOP_OPEN_PALETTE_EVENT, DESKTOP_OPEN_POPOUT_EVENT, dashboardTargetFromSearch, dashboardUrlForTarget } from "@/features/dashboard/dashboard-navigation";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { createSafeTauriUnlistenAll } from "@/lib/native/tauri-event-listeners";
 
 export type DesktopNavigationEvent = DashboardRouteTarget & {
   action?: "navigate" | "palette" | "popout";
@@ -25,11 +26,7 @@ export async function listenForDesktopNavigation(
         : dashboardTargetFromSearch(window.location.search);
       if (target?.view) void openNativeRouteWindow(target);
     });
-    return () => {
-      unlistenNavigate();
-      unlistenPalette();
-      unlistenPopout();
-    };
+    return createSafeTauriUnlistenAll([unlistenNavigate, unlistenPalette, unlistenPopout]);
   } catch {
     return () => {};
   }

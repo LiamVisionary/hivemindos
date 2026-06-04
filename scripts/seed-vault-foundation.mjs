@@ -9,6 +9,7 @@ const DEFAULTS = {
   scheduledFolder: "Operations/Automations",
   synthesisFolder: "Synthesis",
   brainServicesFolder: "Operations/Brain Services",
+  secureFolder: "Operations/Secure",
   kanbanFolder: "Operations/Work Board",
   notificationsFolder: "Operations/Agent Notifications",
 };
@@ -87,7 +88,7 @@ This vault is the shared brain for HivemindOS agents. It should stay useful to h
 | Synthesis | Drafts, connection reports, research summaries, reviewed analysis, and generated outputs. |
 | Memory | Durable daily briefings, weekly reviews, decisions, meetings, book notes, imported sources, and distillations. |
 | Projects | Project overviews, status deltas, plans, decisions, and reusable project context. |
-| Operations | Machine-readable HivemindOS state: automations, work board, notifications, access logs, and brain-service status. |
+| Operations | Machine-readable HivemindOS state: automations, work board, notifications, runtime mirrors, secure backups, access logs, and brain-service status. |
 | Skills | Reusable agent procedures. Read \`Skills/README.md\` first, then the relevant \`Skills/<slug>/SKILL.md\`. |
 | Archive | Preserved inactive or processed material. |
 
@@ -107,7 +108,7 @@ This vault is the shared brain for HivemindOS agents. It should stay useful to h
 - Prefer appending dated status deltas over rewriting project history.
 - Never silently delete notes. Archive or create explicit conflict copies when needed.
 - Summarize automation writes in \`${folders.scheduledFolder}/Foundation Workflows/OPERATIONS-LOG.md\` or in the scheduled run note.
-- Treat \`${folders.kanbanFolder}\` and \`${folders.scheduledFolder}\` as operational state, not permanent knowledge.`;
+- Treat \`${folders.kanbanFolder}\`, \`${folders.scheduledFolder}\`, and \`${folders.secureFolder}\` as operational state, not permanent knowledge.`;
 }
 
 function templatesReadme() {
@@ -415,7 +416,8 @@ function workflowPrompt(workflow, folders) {
     "Never delete files. Move or archive only when the task explicitly says to do so.",
     `Treat ${folders.kanbanFolder} and ${folders.scheduledFolder} as operational state, not permanent knowledge.`,
     `Treat ${folders.synthesisFolder} as generated or reviewed synthesis, not raw intake.`,
-    "Do not store provider secrets in the vault.",
+    `Use ${folders.secureFolder} only for explicitly encrypted backup artifacts and public-key reference notes.`,
+    "Do not store provider secrets in plaintext in the vault.",
     `Summarize every write in ${operationLogPath} or in the scheduled run note.`,
   ].join("\n- ");
   return `${workflow.intent}
@@ -548,6 +550,7 @@ const folders = {
   scheduledFolder: safeVaultFolder(args.scheduledFolder ?? process.env.NEXT_PUBLIC_OBSIDIAN_SCHEDULED_FOLDER, DEFAULTS.scheduledFolder),
   synthesisFolder: safeVaultFolder(args.synthesisFolder ?? process.env.NEXT_PUBLIC_OBSIDIAN_SYNTHESIS_FOLDER, DEFAULTS.synthesisFolder),
   brainServicesFolder: safeVaultFolder(args.brainServicesFolder ?? process.env.NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER, DEFAULTS.brainServicesFolder),
+  secureFolder: safeVaultFolder(args.secureFolder ?? process.env.HIVE_NOTE_SECURE_FOLDER, DEFAULTS.secureFolder),
   kanbanFolder: safeVaultFolder(args.kanbanFolder ?? process.env.NEXT_PUBLIC_OBSIDIAN_KANBAN_FOLDER, DEFAULTS.kanbanFolder),
   notificationsFolder: safeVaultFolder(args.notificationsFolder ?? process.env.NEXT_PUBLIC_OBSIDIAN_NOTIFICATIONS_FOLDER, DEFAULTS.notificationsFolder),
 };
@@ -708,18 +711,19 @@ const workflows = [
     name: "Vault Health Check",
     every: "monthly first Monday 09:00",
     skills: ["vault-synthesis", "vault-linker"],
-    paths: ["Intake", "Memory", "Projects", "Skills", folders.synthesisFolder],
+    paths: ["Intake", "Memory", "Projects", "Skills", folders.synthesisFolder, "Operations/Vault Migrations"],
     intent: "Audit the shared brain for stale projects, orphan notes, inconsistent metadata, and notes that need human review.",
     read: [
-      "recent and stale notes across `Intake/`, `Memory/`, `Projects/`, `Skills/`, and generated synthesis",
+      "recent and stale notes across `Intake/`, `Memory/`, `Projects/`, `Skills/`, generated synthesis, and Operations/Vault Migrations manifests",
       "frontmatter fields such as type, status, project, review_after, and tags",
       "wikilinks and backlinks when available",
+      "the dry-run output of `node scripts/vault-doctor.mjs --vault <vault>` when repository access is available",
     ],
     write: [
       `\`${folders.synthesisFolder}/wiki/synthesis/Vault-Health-YYYY-MM-DD.md\``,
       "`Intake/Requests/` only for maintenance tasks that need human approval",
     ],
-    outputStandard: "Report stale projects, orphan notes, missing metadata, inconsistent tags, risky generated notes, and a prioritized maintenance checklist. Do not mutate source notes.",
+    outputStandard: "Report stale projects, orphan notes, missing metadata, inconsistent tags, risky generated notes, duplicate skills, legacy root folders, conflict artifacts, and a prioritized maintenance checklist. Do not mutate source notes unless a human explicitly approves `vault-doctor.mjs --fix`.",
   },
   {
     slug: "decision-journal-review",
@@ -798,6 +802,7 @@ await Promise.all([
   "Intake",
   "Intake/Requests",
   "Intake/Sources",
+  ".hivemindos-transfers",
   "Memory",
   "Memory/Book Notes",
   "Memory/Daily Briefings",
@@ -810,6 +815,8 @@ await Promise.all([
   "Operations",
   "Templates",
   "Templates/HivemindOS",
+  folders.secureFolder,
+  "Operations/Runtime Mirrors",
   folders.scheduledFolder,
   join(folders.scheduledFolder, WORKFLOW_ROOT),
   folders.kanbanFolder,

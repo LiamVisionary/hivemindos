@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""Remove HivemindOS shared env keys without printing values."""
+from __future__ import annotations
+
+import argparse
+import os
+import pathlib
+import re
+import subprocess
+import sys
+
+SCRIPT_PATH = pathlib.Path(__file__).resolve()
+ROOT = pathlib.Path(os.path.expanduser(os.environ.get("HIVE_ENV_PROJECT_ROOT", ""))).resolve() if os.environ.get("HIVE_ENV_PROJECT_ROOT") else SCRIPT_PATH.parents[1]
+HIVE_ENV_ADD = ROOT / "scripts" / "hive-env-add"
+KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Remove one or more HivemindOS env keys from the selected shared env store.",
+    )
+    parser.add_argument("keys", nargs="+", help="Environment variable names to remove")
+    parser.add_argument("--env-file", default="")
+    parser.add_argument("--agent-env-file", default="")
+    parser.add_argument("--scope", choices=("all", "app", "agent"), default="agent")
+    parser.add_argument(
+        "--runtime",
+        choices=("generic", "hermes", "aeon", "openclaw"),
+        default=os.environ.get("HIVE_AGENT_RUNTIME", "generic"),
+        help="Compatibility target for --scope agent. Default generic removes from the canonical shared hive env.",
+    )
+    parser.add_argument("--no-backup", action="store_true", help="Skip encrypted shared-note backup refresh")
+    parser.add_argument("--no-tailnet-sync", action="store_true", help="Do not replicate this removal to ready Tailnet collectors")
+    parser.add_argument("--no-aeon-auto-sync", action="store_true", help="Do not sync changed shared env values to managed private AEON GitHub repos")
+    parser.add_argument("--aeon-repo", default="", help="owner/repo target for --sync-aeon-github-secret")
+    parser.add_argument(
+        "--sync-aeon-github-secret",
+        action="store_true",
+        help="When --runtime aeon is selected, also remove the key as a GitHub Actions secret on the Aeon repo.",
+    )
+    return parser.parse_args()
+
+
+def hive_env_add_base_args(args: argparse.Namespace) -> list[str]:
+    command = [
+        sys.executable,
+        str(HIVE_ENV_ADD),
+        "--scope",
+        args.scope,
+        "--runtime",
+        args.runtime,
+    ]
+    if args.env_file:
+        command.extend(["--env-file", args.env_file])
+    if args.agent_env_file:
+        command.extend(["--agent-env-file", args.agent_env_file])
+    if args.no_backup:
+        command.append("--no-backup")
+    if args.no_tailnet_sync:
+        command.append("--no-tailnet-sync")
+    if args.no_aeon_auto_sync:
+        command.append("--no-aeon-auto-sync")
+    if args.aeon_repo:
+        command.extend(["--aeon-repo", args.aeon_repo])
+    if args.sync_aeon_github_secret:
+        command.append("--sync-aeon-github-secret")
+    return command
+
+
+def main() -> int:
+    args = parse_args()
+    invalid = [key for key in args.keys if not KEY_RE.match(key)]
+    if invalid:
+        print("Invalid env key: " + ", ".join(repr(key) for key in invalid), file=sys.stderr)
+        return 2
+    if not HIVE_ENV_ADD.exists():
+        print(f"hive-env-add is unavailable: {HIVE_ENV_ADD}", file=sys.stderr)
+        return 127
+
+    base_command = hive_env_add_base_args(args)
+    exit_code = 0
+    for key in args.keys:
+        proc = subprocess.run(
+            [*base_command, f"{key}="],
+            text=True,
+            check=False,
+        )
+        if proc.returncode != 0 and exit_code == 0:
+            exit_code = proc.returncode
+    return exit_code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

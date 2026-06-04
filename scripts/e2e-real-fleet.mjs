@@ -2,7 +2,7 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { randomBytes, createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -61,6 +61,10 @@ function envKeyFor(machine, runtime = "GENERIC") {
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function expandHomePath(path) {
+  return path === "~" || path.startsWith("~/") ? join(homedir(), path.slice(2)) : path;
 }
 
 async function readEnvValue(filePath, key) {
@@ -485,6 +489,7 @@ async function testSkillSync(machines) {
     const providers = (inventory.providers || []).filter((provider) => ["hermes", "openclaw", "aeon"].includes(provider.id) && provider.installed);
     for (const provider of providers) {
       const skillSlug = `${runId}-${slug(machine.device?.name)}-${provider.id}`;
+      let sharedSkillPath = "";
       const body1 = skillMarkdown(skillSlug, `Real fleet E2E skill created on ${machine.device?.name} for ${provider.id}.`);
       const body2 = skillMarkdown(skillSlug, `Real fleet E2E skill updated on ${machine.device?.name} for ${provider.id}.`);
       await collector(machine, "/e2e/skills", {
@@ -493,7 +498,9 @@ async function testSkillSync(machines) {
       });
       await poll(`shared skill import ${skillSlug}`, async () => {
         const reconciled = await reconcileSkillProvider(machine, provider, policies, e2eSkillSummary(machine, provider, skillSlug, body1));
-        return (reconciled.shared || []).find((skill) => skill.slug === skillSlug && skill.checksum === sha256(body1));
+        const shared = (reconciled.shared || []).find((skill) => skill.slug === skillSlug && skill.checksum === sha256(body1));
+        if (shared?.path) sharedSkillPath = shared.path;
+        return shared;
       }, 120_000);
       await collector(machine, "/e2e/skills", {
         method: "POST",
@@ -501,7 +508,9 @@ async function testSkillSync(machines) {
       });
       await poll(`shared skill update ${skillSlug}`, async () => {
         const reconciled = await reconcileSkillProvider(machine, provider, policies, e2eSkillSummary(machine, provider, skillSlug, body2));
-        return (reconciled.shared || []).find((skill) => skill.slug === skillSlug && skill.checksum === sha256(body2));
+        const shared = (reconciled.shared || []).find((skill) => skill.slug === skillSlug && skill.checksum === sha256(body2));
+        if (shared?.path) sharedSkillPath = shared.path;
+        return shared;
       }, 120_000);
       await collector(machine, "/e2e/skills", {
         method: "POST",
@@ -509,12 +518,19 @@ async function testSkillSync(machines) {
       });
       await poll(`shared skill removal tracked ${skillSlug}`, async () => {
         const reconciled = await reconcileSkillProvider(machine, provider, policies);
+        const shared = (reconciled.shared || []).find((skill) => skill.slug === skillSlug && skill.path);
+        if (shared?.path) sharedSkillPath = shared.path;
         return (reconciled.markedMissing || []).some((skill) => skill.slug === skillSlug)
           || (reconciled.shared || []).some((skill) => skill.slug === skillSlug && skill.sourceStatus === "missing-upstream")
           || await sharedSkillMarkedMissing(reconciled, skillSlug)
           || (reconciled.skipped || []).some((skill) => skill.slug === skillSlug && /deletion freeze/i.test(skill.reason || ""))
           || !(reconciled.shared || []).some((skill) => skill.slug === skillSlug);
       }, 120_000);
+      const sharedCleanup = await cleanupSharedE2eSkill(sharedSkillPath, skillSlug);
+      if (sharedCleanup.removed) {
+        await reconcileSkillProvider(machine, provider, policies);
+      }
+      summary.cleanup.push({ type: "shared-skill", ok: sharedCleanup.removed, machine: machine.device?.name, provider: provider.id, slug: skillSlug, path: sharedCleanup.path || "" });
       summary.cleanup.push({ type: "skill", ok: true, machine: machine.device?.name, provider: provider.id, slug: skillSlug });
       completed.push({ machine: machine.device?.name, provider: provider.id, slug: skillSlug });
     }
@@ -569,6 +585,25 @@ async function sharedSkillMarkedMissing(reconciled, slug) {
   } catch {
     return false;
   }
+}
+
+async function cleanupSharedE2eSkill(sharedPath, slug) {
+  if (!/^hive-e2e-[a-z0-9-]{8,}$/i.test(slug)) return { removed: false, path: "" };
+  const candidates = [];
+  if (sharedPath) {
+    const skillDir = basename(sharedPath) === "SKILL.md" ? dirname(sharedPath) : sharedPath;
+    candidates.push(skillDir);
+  }
+  const configuredVault = vaultPath
+    || process.env.NEXT_PUBLIC_OBSIDIAN_VAULT_PATH
+    || join(homedir(), "Documents", "Obsidian", "hivemindos-vault");
+  candidates.push(join(expandHomePath(configuredVault), "Skills", slug));
+  for (const candidate of [...new Set(candidates)]) {
+    if (basename(candidate) !== slug || !candidate.split(/[\\/]+/).includes("Skills")) continue;
+    await rm(candidate, { recursive: true, force: true });
+    return { removed: true, path: candidate };
+  }
+  return { removed: false, path: "" };
 }
 
 function machineHasRuntime(machine, runtime) {

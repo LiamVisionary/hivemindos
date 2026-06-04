@@ -224,6 +224,7 @@ export type ChatMessage = {
   surface?: "chat" | "kanban" | "scheduler";
   sourceSessionId?: string;
   sourceIndex?: number;
+  processEvents?: Array<{ at?: number; label: string; detail?: string; status?: string }>;
   attachments?: ChatAttachment[];
   agentPrompt?: {
     id: string;

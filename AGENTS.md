@@ -104,6 +104,8 @@ Agents are senior software engineers in this codebase and must follow these rule
 ## Setup / Uninstall Mirror
 
 - Any install prompt, package, service, generated file, shell profile edit, agent instruction edit, shared-skill mirror, or optional third-party app added to `setup.sh` or `setup.ps1` must have a matching one-by-one removal prompt in `uninstall.sh` and `uninstall.ps1`.
+- Any change to the shared Obsidian brain's structure, canonical folders, generated vault files, or agent-facing vault instructions must be mirrored in the app's vault initializer paths in the same commit. Check and update the shell setup scripts (`setup.sh`, `setup.ps1`, and matching uninstall surfaces when relevant), `scripts/seed-vault-foundation.mjs`, and the Tauri/desktop first-run setup flow so a fresh install creates the same structure agents expect.
+- Any change to whole brain architecture must also update the GitHub Pages docs in `docs/whole-brain/` and the static guard in `scripts/test-vault-structure-contract.mjs` in the same commit. The docs are the user facing source of truth for vault routing, brain services, shared skills, sync health, and architecture sync rules.
 - The uninstall prompt should name the same thing the install prompt created and should be conservative by default for destructive or third-party removals.
 - If setup starts or registers a service, uninstall must offer to stop and unregister that exact service label/unit.
 - If setup writes a managed block into an agent/runtime file, uninstall must remove only that managed block and preserve surrounding user-authored content.
@@ -126,8 +128,13 @@ Agents are senior software engineers in this codebase and must follow these rule
 
 ## Shared Skills
 
+- Whole brain GitHub Pages docs live under `docs/whole-brain/`. Start at `docs/whole-brain/index.md` for the current brain map, and keep that section synchronized with `AGENTS.md`, setup initializers, the vault doctor, and `scripts/test-vault-structure-contract.mjs`.
+- Canonical vault routing is documented in `docs/whole-brain/vault-map.md`: `Intake/`, `Memory/`, `Synthesis/`, `Ideas/`, `Projects/`, `Operations/`, `Skills/`, `Templates/HivemindOS/`, and `Archive/`.
+- Brain service docs live in `docs/whole-brain/brain-services.md`. Shared skill docs live in `docs/whole-brain/shared-skills.md`. Hivemind Sync, vault doctor, secure backup, and migration behavior live in `docs/whole-brain/sync-and-health.md` and `docs/features/hivemind-sync.md`.
+- Shared env docs live in `docs/whole-brain/shared-env.md`. Shared secrets belong in `~/.hivemindos/.env` through `hive-env-add`, not in Obsidian notes or project files. Use `hive-env-remove KEY` or `hive-env-delete KEY` to remove a shared key, and use `hive-env-check KEY` to verify presence without printing values.
 - The shared skill shelf lives at `Skills/` inside the configured shared notes vault/folder.
 - Current HivemindOS shared vault: `/Users/liam/Documents/Obsidian/hivemindos-vault`.
 - Current HivemindOS shared skill index: `/Users/liam/Documents/Obsidian/hivemindos-vault/Skills/README.md`.
 - Read `Skills/README.md` for the index, then read the relevant `Skills/<slug>/SKILL.md` before using a shared skill.
 - Setup seeds `karpathy-guidelines` from `multica-ai/andrej-karpathy-skills` into the shared shelf and can mirror/import skills through common local runtime skill folders for Codex, Claude, Hermes, Gemini, OpenClaw, and Aeon.
+- Encrypted backup artifacts belong in `Operations/Secure/`. Operational runtime mirrors such as the hidden AEON `.aeon` mirror belong in `Operations/Runtime Mirrors/`. Cleanup manifests belong in `Operations/Vault Migrations/`.

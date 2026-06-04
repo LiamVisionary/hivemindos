@@ -135,6 +135,7 @@ synthesis_folder="${NEXT_PUBLIC_OBSIDIAN_SYNTHESIS_FOLDER:-Synthesis}"
 scheduled_folder="${NEXT_PUBLIC_OBSIDIAN_SCHEDULED_FOLDER:-Operations/Automations}"
 kanban_folder="${NEXT_PUBLIC_OBSIDIAN_KANBAN_FOLDER:-Operations/Work Board}"
 notifications_folder="${NEXT_PUBLIC_OBSIDIAN_NOTIFICATIONS_FOLDER:-Operations/Agent Notifications}"
+secure_folder="${HIVE_NOTE_SECURE_FOLDER:-Operations/Secure}"
 gbrain_install_path="${NEXT_PUBLIC_GBRAIN_INSTALL_PATH:-$HOME/gbrain}"
 gbrain_data_dir="${NEXT_PUBLIC_GBRAIN_DATA_DIR:-$HOME/.gbrain}"
 if [[ "$gbrain_install_path" == "~/"* ]]; then
@@ -395,6 +396,16 @@ if ask "Remove optional GBrain and Syntho config keys from .env.local?" "no"; th
   fi
 fi
 
+if ask "Remove shared vault secure-folder config key from .env.local?" "no"; then
+  env_file="$ROOT/.env.local"
+  if [[ -f "$env_file" ]]; then
+    tmp_file="$(mktemp)"
+    grep -Ev '^HIVE_NOTE_SECURE_FOLDER=' "$env_file" > "$tmp_file" || true
+    mv "$tmp_file" "$env_file"
+    ok "Removed shared vault secure-folder config key from .env.local"
+  fi
+fi
+
 if ask "Remove dashboard auth secret and device token from .env.local and shared hive env?" "no"; then
   env_file="$ROOT/.env.local"
   if [[ -f "$env_file" ]]; then
@@ -507,6 +518,8 @@ if ask "Remove empty canonical HivemindOS vault folders created by setup?" "no";
     "$vault_path/$synthesis_folder/raw" \
     "$vault_path/$synthesis_folder" \
     "$vault_path/Operations/Code Projects" \
+    "$vault_path/$secure_folder" \
+    "$vault_path/Operations/Runtime Mirrors" \
     "$vault_path/Operations" \
     "$vault_path/Archive/Processed Requests" \
     "$vault_path/Archive" \
@@ -522,6 +535,7 @@ if ask "Remove empty canonical HivemindOS vault folders created by setup?" "no";
     "$vault_path/Memory/Daily Briefings" \
     "$vault_path/Memory/Book Notes" \
     "$vault_path/Memory" \
+    "$vault_path/.hivemindos-transfers" \
     "$vault_path/Intake/Sources" \
     "$vault_path/Intake/Requests" \
     "$vault_path/Intake"; do
@@ -544,7 +558,7 @@ if ask "Remove .env.local from this checkout?" "no"; then
 fi
 
 if ask "Remove hive env, transfer, and update commands from ~/.local/bin if they point to this checkout?" "yes"; then
-  for command_name in hive-env-add hive-env-run hive-env-check hive-transfer hive-update; do
+  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-update; do
     command_path="$HOME/.local/bin/$command_name"
     script_path="$ROOT/scripts/$command_name"
     if [[ -L "$command_path" && "$(readlink "$command_path")" == "$script_path" ]]; then

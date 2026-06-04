@@ -353,6 +353,11 @@ async function readManagedMetadata(skillDir: string): Promise<Record<string, unk
   }
 }
 
+async function isManagedSharedSkillMirror(skillPath: string) {
+  const metadata = await readManagedMetadata(dirname(skillPath));
+  return metadata?.provider === "shared-brain" || metadata?.managedBy === "hivemindos";
+}
+
 function githubHeaders(): HeadersInit {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
@@ -665,7 +670,11 @@ export async function getBrainSkillInventory(
       sharedByChecksum,
       sharedBySlug,
     })));
+    const managedMirrorPaths = new Set((await Promise.all(skillFiles.map(async (skillPath) => (
+      await isManagedSharedSkillMirror(skillPath) ? skillPath : ""
+    )))).filter(Boolean));
     const skills = summaries
+      .filter((skill) => !managedMirrorPaths.has(skill.path))
       .filter((skill) => !skill.path.startsWith(skillsFolder))
       .sort((a, b) => a.name.localeCompare(b.name));
     return {
@@ -1091,6 +1100,8 @@ export async function importGitHubBrainSkill(input: {
 export async function writeBrainSkill(input: {
   vaultPath?: string;
   markdown: string;
+  slug?: string;
+  replaceExisting?: boolean;
 }): Promise<BrainSkillInventory> {
   const rawMarkdown = input.markdown.trim();
   if (!rawMarkdown) throw new Error("Write the skill content before adding it.");
@@ -1100,13 +1111,12 @@ export async function writeBrainSkill(input: {
   await mkdir(before.skillsFolder, { recursive: true });
 
   const sharedBySlug = new Map(before.shared.map((item) => [item.slug, item]));
-  const destinationSlug = await nextDestinationSlug(
-    before.skillsFolder,
-    sanitizeSlug(skillNameFromMarkdown(markdown)),
-    "shared",
-    sharedBySlug,
-  );
+  const slug = sanitizeSlug(input.slug || skillNameFromMarkdown(markdown));
+  const destinationSlug = input.replaceExisting
+    ? slug
+    : await nextDestinationSlug(before.skillsFolder, slug, "shared", sharedBySlug);
   const destinationDir = join(before.skillsFolder, destinationSlug);
+  if (input.replaceExisting) await rm(destinationDir, { recursive: true, force: true });
   await mkdir(destinationDir, { recursive: true });
   const audit = await auditSkillInput({ slug: destinationSlug, markdown, sourceRef: "written" });
   if (audit.status === "blocked") throw new Error(`Skill audit blocked this draft: ${audit.findings.map((finding) => finding.title).join(", ")}`);

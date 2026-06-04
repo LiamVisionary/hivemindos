@@ -1,6 +1,8 @@
 # Integrations And Work History
 
-The Integrations, My Apps, Phone, and Work History surfaces connect external accounts, expose local/Tailnet apps, and summarize work that has happened across the control room.
+Integrations connect HivemindOS to outside systems without letting those systems own the local control room.
+
+Work History is the local receipt trail. It keeps product work, changelog entries, and agent-visible changes close to the board instead of buried in git commands or terminal output.
 
 ## Integrations
 
@@ -13,7 +15,7 @@ How it works:
 - Routes: `/api/integrations/nango`, `/api/integrations/nango/setup`, `/api/gitlawb/*`, and `/api/projects/*`.
 - Remote collector setup can proxy through `/integrations/nango/setup`.
 
-Capabilities:
+What Integrations can do:
 
 - Read and update local Nango host config.
 - Check Nango host health.
@@ -36,7 +38,7 @@ How it works:
 - Shared-vault project storage: `Operations/Code Projects/projects.json`.
 - Local fallback project storage: `~/.hivemindos/projects.json`.
 
-Capabilities:
+What GitLawb support can do:
 
 - Detect `gl`, `git-remote-gitlawb`, and `gitlawb-node`.
 - Detect or create a local DID.
@@ -58,7 +60,7 @@ How it works:
 - Service: `src/lib/services/integrations/github-oauth.ts`.
 - The callback stores the token as `GH_GLOBAL` through `hive-env-add`.
 
-Capabilities:
+What GitHub OAuth can do:
 
 - Detect missing OAuth app config and return an operator-readable setup page.
 - Use signed OAuth state cookies to guard the callback.
@@ -76,7 +78,7 @@ How it works:
 - Icon proxy route: `/api/fleet/app-icon`.
 - Collector support: `/apps`, `/app-proxy/<port>`, and service health probes.
 
-Capabilities:
+What My Apps can do:
 
 - Show local and remote app cards with icons, machine names, online state, and launch URLs.
 - Detect API-only services and show service details instead of treating them as broken web apps.
@@ -94,13 +96,15 @@ How it works:
 - API route: `/api/phone`.
 - Gateway service: `src/lib/services/phone/call-gateway.ts`.
 
-Capabilities:
+What Phone can do:
 
 - Read voice gateway config and device status.
 - Pair a mobile device through the gateway's pairing flow.
 - Ring stored prompts or selected agents.
 - Start dashboard in-app agent calls without also ringing the mobile device.
 - Build AEON-specific private call context from repo/workspace/memory/skills and recent MiroShark deliverables.
+
+The full Calling guide separates free BYOK Agent Calls from paid HivemindOS Cloud Agent Calls: [Calling](calling.html).
 
 ## Work History
 
@@ -112,7 +116,7 @@ How it works:
 - API route: `/api/work-history`.
 - `src/app/page.tsx` prefetches recent history when the History view is requested.
 
-Capabilities:
+What Work History can do:
 
 - List recent work items.
 - Filter by project.

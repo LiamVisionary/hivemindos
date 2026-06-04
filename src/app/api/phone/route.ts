@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mkdir, readdir, readFile, unlink, writeFile } from "fs/promises";
 import { join, resolve, sep } from "path";
+import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
-import { readGatewayVoiceConfig, readGatewayVoiceDeviceStatus, ringAgentCall, ringStoredPrompt, startAgentDashboardCall } from "@/lib/services/phone/call-gateway";
+import { readVaultAgentProfiles } from "@/lib/services/obsidian/agent-profiles";
+import { readGatewayVoiceConfig, readGatewayVoiceDeviceStatus, ringAgentCall, ringStoredPrompt, startAgentDashboardCall, startAgentMobileCall } from "@/lib/services/phone/call-gateway";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +28,12 @@ type CallPrompt = {
   instructions: string;
   path: string;
 };
+
+type MobileAgentTarget = Pick<AgentProfile,
+  "id" | "name" | "runtime" | "workerClass" | "beeRole" | "machineName" | "skillProfilePrompt" |
+  "preferredSkillSlugs" | "aeonRepo" | "aeonRepoName" | "aeonBranch" | "aeonLocalPath" |
+  "aeonMode" | "a2aUrl" | "localDataDir"
+>;
 
 function safeVoiceConfigPayload(result: Awaited<ReturnType<typeof readGatewayVoiceConfig>>) {
   if (!result.ok || !result.result || typeof result.result !== "object") return result;
@@ -98,6 +106,105 @@ function safeVoiceDeviceStatusPayload(result: Awaited<ReturnType<typeof readGate
       } : { configured: false, missing },
     },
   };
+}
+
+function mobileSafeAgentTarget(agent: AgentProfile): MobileAgentTarget {
+  return {
+    id: agent.id,
+    name: agent.name,
+    runtime: agent.runtime,
+    workerClass: agent.workerClass,
+    beeRole: agent.beeRole,
+    machineName: agent.machineName,
+    skillProfilePrompt: agent.skillProfilePrompt,
+    preferredSkillSlugs: agent.preferredSkillSlugs,
+    aeonRepo: agent.aeonRepo,
+    aeonRepoName: agent.aeonRepoName,
+    aeonBranch: agent.aeonBranch,
+    aeonLocalPath: agent.aeonLocalPath,
+    aeonMode: agent.aeonMode,
+    a2aUrl: agent.a2aUrl,
+    localDataDir: agent.localDataDir,
+  };
+}
+
+function hubUrlFromRequest(request: NextRequest, explicit?: unknown) {
+  const value = typeof explicit === "string" ? explicit.trim() : "";
+  if (value) return value.replace(/\/+$/, "");
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  if (forwardedHost) return `${forwardedProto || request.nextUrl.protocol.replace(/:$/, "")}://${forwardedHost}`.replace(/\/+$/, "");
+  return request.nextUrl.origin.replace(/\/+$/, "");
+}
+
+function sseTextFromPayload(raw: string) {
+  if (!raw || raw === "[DONE]") return "";
+  try {
+    const parsed = JSON.parse(raw) as {
+      choices?: Array<{ delta?: { content?: string }; message?: { content?: string } }>;
+      error?: string;
+    };
+    return parsed.choices?.map((choice) => choice.delta?.content || choice.message?.content || "").join("") || parsed.error || "";
+  } catch {
+    return "";
+  }
+}
+
+async function readRuntimeResponseText(response: Response) {
+  if (!response.body) {
+    const data = await response.json().catch(() => null) as { error?: string; message?: string } | null;
+    if (!response.ok) throw new Error(data?.error || data?.message || `Runtime returned HTTP ${response.status}.`);
+    return data?.message || "";
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const frames = buffer.split(/\n\n/);
+    buffer = frames.pop() ?? "";
+    for (const frame of frames) {
+      const data = frame.split(/\n/).filter((line) => line.startsWith("data: ")).map((line) => line.slice(6)).join("\n");
+      text += sseTextFromPayload(data);
+    }
+  }
+  if (buffer) {
+    const data = buffer.split(/\n/).filter((line) => line.startsWith("data: ")).map((line) => line.slice(6)).join("\n");
+    text += sseTextFromPayload(data);
+  }
+  if (!response.ok && !text.trim()) throw new Error(`Runtime returned HTTP ${response.status}.`);
+  return text.trim();
+}
+
+async function runAgentVoiceTurn(request: NextRequest, body: Record<string, unknown>) {
+  const rawAgent = body.agent && typeof body.agent === "object" ? body.agent as AgentProfile : null;
+  const message = typeof body.message === "string" ? body.message.trim() : "";
+  const agent = rawAgent ? await resolveVoiceCallAgent(rawAgent) : null;
+  if (!agent?.id || !agent.runtime) throw new Error("A voice-call agent target is required.");
+  if (!message) throw new Error("A spoken request is required.");
+  const runtimeResponse = await fetch(new URL("/api/chat/agent-runtime", request.url), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      agent,
+      messages: [{ role: "user", content: message }],
+      runtimeSessionId: typeof body.runtimeSessionId === "string" ? body.runtimeSessionId : `voice-${agent.id}`,
+      agentMode: "act",
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(120_000),
+  });
+  const text = await readRuntimeResponseText(runtimeResponse);
+  return { ok: true, text: text || "The agent completed the request without a spoken response." };
+}
+
+async function resolveVoiceCallAgent(agent: AgentProfile): Promise<AgentProfile> {
+  const profiles = await readVaultAgentProfiles().catch(() => []);
+  const match = profiles.find((profile) => profile.id === agent.id || (agent.agentId && profile.agentId === agent.agentId));
+  return match ? { ...match, ...agent } : agent;
 }
 
 // title.toLowerCase(), strip quotes, non-alnum -> "-", trim leading/trailing "-".
@@ -274,6 +381,11 @@ export async function GET(request: NextRequest) {
 
     const vaultPath = resolveObsidianVaultPath(request.nextUrl.searchParams.get("vaultPath") ?? undefined);
 
+    if (action === "agent-targets") {
+      const agents = (await readVaultAgentProfiles(vaultPath)).map(mobileSafeAgentTarget);
+      return NextResponse.json({ ok: true, agents, vaultPath });
+    }
+
     if (action === "sync-status") {
       const status = await syncStatus(request, vaultPath);
       return NextResponse.json({ ...status, vaultPath });
@@ -289,9 +401,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const vaultPath = resolveObsidianVaultPath(body.vaultPath ?? request.nextUrl.searchParams.get("vaultPath") ?? undefined, { requireWritable: true });
+    const writableVaultPath = () => resolveObsidianVaultPath(body.vaultPath ?? request.nextUrl.searchParams.get("vaultPath") ?? undefined, { requireWritable: true });
 
     if (body.action === "save") {
+      const vaultPath = writableVaultPath();
       const title = String(body.title ?? "").trim();
       if (!title) throw new Error("A title is required.");
       const time = String(body.time ?? "").trim();
@@ -316,6 +429,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.action === "delete") {
+      const vaultPath = writableVaultPath();
       const id = String(body.id ?? "").trim();
       if (!id) throw new Error("An id is required.");
       const filePath = await findPromptFile(vaultPath, id);
@@ -324,6 +438,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.action === "toggle") {
+      const vaultPath = writableVaultPath();
       const id = String(body.id ?? "").trim();
       if (!id) throw new Error("An id is required.");
       const filePath = await findPromptFile(vaultPath, id);
@@ -351,11 +466,25 @@ export async function POST(request: NextRequest) {
     if (body.action === "dashboard-agent-call") {
       const agent = body.agent && typeof body.agent === "object" ? body.agent : {};
       const machine = body.machine && typeof body.machine === "object" ? body.machine : undefined;
-      const result = await startAgentDashboardCall({ agent, machine });
+      const result = await startAgentDashboardCall({ agent, machine }, hubUrlFromRequest(request, body.hubUrl));
       return NextResponse.json(result, { status: result.ok ? 200 : 502 });
     }
 
+    if (body.action === "mobile-agent-call") {
+      const rawAgent = body.agent && typeof body.agent === "object" ? body.agent as AgentProfile : {} as AgentProfile;
+      const agent = rawAgent.id ? await resolveVoiceCallAgent(rawAgent) : rawAgent;
+      const machine = body.machine && typeof body.machine === "object" ? body.machine : undefined;
+      const callMode = body.callMode === "cloud" ? "cloud" : "byok";
+      const result = await startAgentMobileCall({ agent, machine }, hubUrlFromRequest(request, body.hubUrl), callMode);
+      return NextResponse.json(result, { status: result.ok ? 200 : 502 });
+    }
+
+    if (body.action === "agent-voice-turn") {
+      return NextResponse.json(await runAgentVoiceTurn(request, body));
+    }
+
     if (body.action === "rescan") {
+      const vaultPath = writableVaultPath();
       const collectorBase = collectorBaseFromRequest(request);
       try {
         const payload = await fetchCollectorJson(collectorBase, "/syncthing/rescan", {

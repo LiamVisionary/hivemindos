@@ -367,13 +367,13 @@ export function DashboardModals(props: DashboardModalsProps) {
                   design philosophy's Setup Rules section. */}
               <SetupCell
                 title="Add this machine"
-                subtitle="Run setup locally; add Tailscale only for multi-machine sync."
+                subtitle="Run setup locally. Add Tailscale or Hivemind Link when this machine should join Hivemind Sync."
                 steps={((): SetupStep[] => {
                   const tailscaleReady = Boolean((setupMachine?.ip && setupMachine.ip !== "127.0.0.1") || setupMachine?.dnsName);
                   const steps: SetupStep[] = [
                     {
                       label: "Optional: Install Tailscale",
-                      hint: "Install Tailscale if you want multi-machine collaboration and shared memory; it creates a private network for your machines.",
+                      hint: "Install Tailscale if you want Hivemind Sync over your private machine network.",
                       state: tailscaleReady ? "done" : "pending",
                     },
                     {

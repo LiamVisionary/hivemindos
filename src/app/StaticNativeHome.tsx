@@ -26,6 +26,15 @@ export default function StaticNativeHome() {
       ? vaultPanel as DashboardVaultPanelMode
       : undefined;
   }, [searchParams]);
+  const initialChatAgentId = initialView === "chat" ? searchParams.get("agent") ?? undefined : undefined;
+  const initialChatLeaf = initialView === "chat" ? searchParams.get("chatLeaf") ?? undefined : undefined;
 
-  return <DashboardNativeFrame initialView={initialView} initialVaultPanelMode={initialVaultPanelMode} />;
+  return (
+    <DashboardNativeFrame
+      initialChatAgentId={initialChatAgentId}
+      initialChatLeaf={initialChatLeaf}
+      initialView={initialView}
+      initialVaultPanelMode={initialVaultPanelMode}
+    />
+  );
 }

@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createNativeLocalFolder } from "@/lib/native/filesystem";
 import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
+import { chatTelemetryMessages, chatTelemetrySession } from "@/lib/services/telemetry/chat-dev-telemetry";
 
 function isAutomationHydratedTranscript(messages: Array<{ content?: string }> = []) {
   const transcript = messages.slice(0, 8).map((message) => message.content ?? "").join("\n");
@@ -80,7 +81,16 @@ export function useChatTreeController(props: any) {
     return firstUserMessage ? firstUserMessage.slice(0, 56) : "Previous chat";
   }, [messagesByAgent]);
 
-  const loadRuntimeSessionMessages = useCallback(async (agent: AgentProfile, sessionId: string) => {
+  const loadRuntimeSessionMessages = useCallback(async (agent: AgentProfile, sessionId: string, context: { leafKey?: string; storageKey?: string; reason?: string } = {}) => {
+    const startedAt = Date.now();
+    logClientTelemetry("chat.runtime_session.fetch.start", {
+      agentId: agent.id,
+      agentName: agent.name,
+      runtime: agent.runtime,
+      sessionId,
+      leafKey: context.leafKey ?? null,
+      reason: context.reason ?? null,
+    }, { threadId: context.storageKey, runId: sessionId });
     const response = await fetch("/api/chat/agent-session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -93,7 +103,7 @@ export function useChatTreeController(props: any) {
         messages?: Array<{ role?: string; content?: string; createdAt?: number; index?: number }>;
       };
     } | null;
-    return (data?.session?.messages ?? [])
+    const messages = (data?.session?.messages ?? [])
       .filter((message) => (
         (message.role === "user" || message.role === "assistant")
         && typeof message.content === "string"
@@ -106,7 +116,20 @@ export function useChatTreeController(props: any) {
         sourceSessionId: data?.session?.sessionId ?? sessionId,
         sourceIndex: Number.isFinite(Number(message.index)) ? Number(message.index) : undefined,
       }));
-  }, []);
+    logClientTelemetry("chat.runtime_session.fetch.response", {
+      agentId: agent.id,
+      sessionId,
+      leafKey: context.leafKey ?? null,
+      reason: context.reason ?? null,
+      ok: Boolean(response?.ok && data?.ok),
+      status: response?.status ?? null,
+      elapsedMs: Date.now() - startedAt,
+      visibleMessageCount: messages.length,
+      visibleMessages: chatTelemetryMessages(messages),
+      session: chatTelemetrySession(data?.session),
+    }, { threadId: context.storageKey, runId: sessionId });
+    return messages;
+  }, [logClientTelemetry]);
 
   function hasLocalInFlightChat(existing: ChatMessage[], hydratedMessages: ChatMessage[]) {
     const hydratedUser = hydratedMessages.find((message) => message.role === "user" && message.content.trim());
@@ -127,14 +150,37 @@ export function useChatTreeController(props: any) {
   const hydrateRuntimeSessionChat = useCallback(async (agent: AgentProfile, sessionId: string, leafKey: string) => {
     const startedAt = Date.now();
     const storageKey = chatMessageStorageKey(agent.id, leafKey);
+    logClientTelemetry("chat.runtime_session.hydrate.start", {
+      agentId: agent.id,
+      sessionId,
+      leafKey,
+      storageKey,
+    }, { threadId: storageKey, runId: sessionId });
     setChatHistoryLoadingByKey?.((current: Record<string, boolean>) => (
       current[storageKey] ? current : { ...current, [storageKey]: true }
     ));
     try {
-      const hydratedMessages = await loadRuntimeSessionMessages(agent, sessionId);
-      if (!hydratedMessages.length) return;
+      const hydratedMessages = await loadRuntimeSessionMessages(agent, sessionId, { leafKey, storageKey, reason: "hydrate" });
+      if (!hydratedMessages.length) {
+        logClientTelemetry("chat.runtime_session.hydrate.empty", {
+          agentId: agent.id,
+          sessionId,
+          leafKey,
+          storageKey,
+          elapsedMs: Date.now() - startedAt,
+        }, { threadId: storageKey, runId: sessionId });
+        return;
+      }
 
       if (isAutomationHydratedTranscript(hydratedMessages)) {
+        logClientTelemetry("chat.runtime_session.hydrate.automation_skipped", {
+          agentId: agent.id,
+          sessionId,
+          leafKey,
+          storageKey,
+          messageCount: hydratedMessages.length,
+          elapsedMs: Date.now() - startedAt,
+        }, { threadId: storageKey, runId: sessionId });
         setMessagesByAgent((current) => {
           if (!current[storageKey]) return current;
           const next = { ...current };
@@ -151,8 +197,20 @@ export function useChatTreeController(props: any) {
         const userSentAfterOpen = existing.some((message) => (
           message.role === "user"
           && !message.sourceSessionId
-          && Number(message.createdAt || 0) >= startedAt
+            && Number(message.createdAt || 0) >= startedAt
         ));
+        logClientTelemetry("chat.runtime_session.hydrate.replace_decision", {
+          agentId: agent.id,
+          sessionId,
+          leafKey,
+          storageKey,
+          existingMessageCount: existing.length,
+          hydratedMessageCount: hydratedMessages.length,
+          userSentAfterOpen,
+          hasLocalInFlightChat: hasLocalInFlightChat(existing, hydratedMessages),
+          existingMessages: chatTelemetryMessages(existing),
+          hydratedMessages: chatTelemetryMessages(hydratedMessages),
+        }, { threadId: storageKey, runId: sessionId });
         return userSentAfterOpen || hasLocalInFlightChat(existing, hydratedMessages)
           ? current
           : { ...current, [storageKey]: hydratedMessages };
@@ -162,6 +220,14 @@ export function useChatTreeController(props: any) {
           ? hasLocalInFlightChat(current.messages, hydratedMessages) ? current : { ...current, messages: hydratedMessages }
           : current
       ));
+      logClientTelemetry("chat.runtime_session.hydrate.completed", {
+        agentId: agent.id,
+        sessionId,
+        leafKey,
+        storageKey,
+        messageCount: hydratedMessages.length,
+        elapsedMs: Date.now() - startedAt,
+      }, { threadId: storageKey, runId: sessionId });
       return hydratedMessages;
     } finally {
       setChatHistoryLoadingByKey?.((current: Record<string, boolean>) => {
@@ -203,6 +269,18 @@ export function useChatTreeController(props: any) {
     }
   }, [displayAgents, machineGroups]);
 
+  const openRuntimeSessionChat = useCallback((agent: AgentProfile, sessionId: string, options: { seedMessages?: ChatMessage[]; chatLeafKey: string; workingDirectoryPath?: string }) => {
+    void (async () => {
+      const hydratedMessages = await hydrateRuntimeSessionChat(agent, sessionId, options.chatLeafKey);
+      startAgentChat(agent.id, {
+        seedMessages: hydratedMessages?.length ? hydratedMessages : options.seedMessages,
+        chatLeafKey: options.chatLeafKey,
+        workingDirectoryPath: options.workingDirectoryPath,
+        runtimeSessionId: sessionId,
+      });
+    })();
+  }, [hydrateRuntimeSessionChat, startAgentChat]);
+
   const chatHistoryByAgent = useMemo(() => {
     const byAgent = new Map<string, ChatTreeItem[]>();
     for (const [storageKey, storedMessages] of Object.entries(messagesByAgent)) {
@@ -241,27 +319,21 @@ export function useChatTreeController(props: any) {
     const leafKey = taskChatLeafKey(agentId, task, taskIndex);
     const runtimeSessionId = runtimeSessionIdFromTask(task);
     const seedMessages = chatSeedMessagesForTask(task);
-    if (agent && runtimeSessionId && !task.messages?.some((message: ChatMessage) => message.content.trim())) {
-      void (async () => {
-        const hydratedMessages = await hydrateRuntimeSessionChat(agent, runtimeSessionId, leafKey);
-        startAgentChat(agentId, {
-          seedMessages: hydratedMessages?.length ? hydratedMessages : seedMessages,
-          chatLeafKey: leafKey,
-          workingDirectoryPath: task.workingDirectory,
-          runtimeSessionId,
-        });
-      })();
+    if (agent && runtimeSessionId) {
+      openRuntimeSessionChat(agent, runtimeSessionId, {
+        seedMessages,
+        chatLeafKey: leafKey,
+        workingDirectoryPath: task.workingDirectory,
+      });
       return;
     }
     startAgentChat(agentId, {
-      messageLimit: runtimeSessionId ? undefined : 5,
+      messageLimit: 5,
       seedMessages,
       chatLeafKey: leafKey,
       workingDirectoryPath: task.workingDirectory,
-      runtimeSessionId,
     });
-    if (agent && runtimeSessionId) void hydrateRuntimeSessionChat(agent, runtimeSessionId, leafKey);
-  }, [agentWorkById, displayAgents, hydrateRuntimeSessionChat, startAgentChat]);
+  }, [agentWorkById, displayAgents, openRuntimeSessionChat, startAgentChat]);
 
   function openChatFolderCreator(machine: MachineGroup) {
     const chatAgents = machine.agents.filter((agent) => runtimeCan(agent, "chat"));
@@ -561,26 +633,20 @@ export function useChatTreeController(props: any) {
             active: selectedChatLeafKey === taskChatKey,
             onOpen: () => {
               const runtimeSessionId = runtimeSessionIdFromTask(task);
-              if (!runtimeSessionId || task.messages?.length) {
-                startAgentChat(agent.id, {
-                  messageLimit: runtimeSessionId ? undefined : 5,
+              if (runtimeSessionId) {
+                openRuntimeSessionChat(agent, runtimeSessionId, {
                   seedMessages,
                   chatLeafKey: taskChatKey,
                   workingDirectoryPath: task.workingDirectory,
-                  runtimeSessionId,
                 });
-                if (runtimeSessionId) void hydrateRuntimeSessionChat(agent, runtimeSessionId, taskChatKey);
                 return;
               }
-              void (async () => {
-                const hydratedMessages = await hydrateRuntimeSessionChat(agent, runtimeSessionId, taskChatKey);
-                startAgentChat(agent.id, {
-                  seedMessages: hydratedMessages?.length ? hydratedMessages : seedMessages,
-                  chatLeafKey: taskChatKey,
-                  workingDirectoryPath: task.workingDirectory,
-                  runtimeSessionId,
-                });
-              })();
+              startAgentChat(agent.id, {
+                messageLimit: 5,
+                seedMessages,
+                chatLeafKey: taskChatKey,
+                workingDirectoryPath: task.workingDirectory,
+              });
             },
           });
         }
@@ -624,7 +690,7 @@ export function useChatTreeController(props: any) {
           )),
       };
     })
-  ), [agentWorkById, chatCustomFolders, chatHistoryByAgent, chatMessageWindow, conversationTitle, hasConversation, hydrateRuntimeSessionChat, machineGroups, messagesByAgent, selectedAgent?.id, selectedChatDirectoryPath, selectedChatLeafKey, startAgentChat]);
+  ), [agentWorkById, chatCustomFolders, chatHistoryByAgent, chatMessageWindow, conversationTitle, hasConversation, machineGroups, messagesByAgent, openRuntimeSessionChat, selectedAgent?.id, selectedChatDirectoryPath, selectedChatLeafKey, startAgentChat]);
 
   useEffect(() => {
     if (activeView !== "chat" || selectedChatLeafKey) return;

@@ -438,6 +438,7 @@ export function UsePodHostModal({ machine, onClose }: { machine: FleetMachine; o
   const [hostingStarted, setHostingStarted] = React.useState(false);
   const [providerPreflight, setProviderPreflight] = React.useState<UsePodProviderPreflight | null>(null);
   const [hostContext, setHostContext] = React.useState<UsePodHostContext | null>(null);
+  const [initialPreflightDone, setInitialPreflightDone] = React.useState(false);
   const [postSetupStage, setPostSetupStage] = React.useState<UsePodPostSetupStage>("success");
   const [hostMarkdown, setHostMarkdown] = React.useState(20);
   const [hostConcurrency, setHostConcurrency] = React.useState(4);
@@ -447,8 +448,14 @@ export function UsePodHostModal({ machine, onClose }: { machine: FleetMachine; o
   const [hostCap, setHostCap] = React.useState(25);
   const needsFunding = providerPreflight?.status === "needs-bond" || providerPreflight?.status === "funded";
   const providerFunded = providerPreflight?.status === "funded";
+  const providerReady = providerPreflight?.status === "ready";
   const displayBondUsdc = hostContext?.bondAmountUsdc ?? providerPreflight?.bondAmountUsdc ?? USEPOD_PROVIDER_BOND_USDC;
-  const setupComplete = setupStarted && !needsFunding && setupStep >= HOST_SETUP_STEPS.length && !setupRunning;
+  const setupComplete = !needsFunding && (
+    providerReady ||
+    (setupStarted && setupStep >= HOST_SETUP_STEPS.length && !setupRunning)
+  );
+  const initialPreflightPending = !initialPreflightDone && !providerPreflight && !setupStarted && !setupRunning;
+  const showPreSetupAffordances = !initialPreflightPending && !setupComplete && !needsFunding && !setupStarted;
   const canGoLive = Boolean(hostContext?.backend.reachable && hostContext.models.length);
   const toggleHostGuard = (key: "battery" | "activity") => setHostGuards((current) => ({ ...current, [key]: !current[key] }));
   const hostConfig = React.useMemo<UsePodProviderConfig>(() => ({
@@ -532,6 +539,10 @@ export function UsePodHostModal({ machine, onClose }: { machine: FleetMachine; o
         .catch((error) => {
           if (cancelled) return;
           setSetupError(error instanceof Error ? error.message : "UsePod provider preflight failed.");
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setInitialPreflightDone(true);
         });
     }, 0);
     return () => {
@@ -747,7 +758,21 @@ export function UsePodHostModal({ machine, onClose }: { machine: FleetMachine; o
             <span />
             <Image src={USEPOD_RUNTIME_ICON_PATH} alt="" width={44} height={44} unoptimized />
           </div>
-          {needsFunding ? (
+          {initialPreflightPending ? (
+            <div className={styles.fundingPanel} aria-live="polite">
+              <div className={styles.fundingHeader}>
+                <div>
+                  <strong>Checking UsePod provider</strong>
+                  <p>Loading the real bond, pairing, and local backend state for this machine.</p>
+                </div>
+                <span>LIVE</span>
+              </div>
+              <Button type="button" size="default" disabled>
+                <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
+                Checking
+              </Button>
+            </div>
+          ) : needsFunding ? (
             <div className={styles.fundingPanel} aria-live="polite">
               <div className={styles.fundingHeader}>
                 <div>
@@ -835,7 +860,7 @@ export function UsePodHostModal({ machine, onClose }: { machine: FleetMachine; o
               ) : null}
             </div>
           ) : null}
-          {!needsFunding && !setupStarted ? <div className={styles.stats}>
+          {showPreSetupAffordances ? <div className={styles.stats}>
             <div>
               <span>Bond</span>
               <strong>${displayBondUsdc} USDC</strong>
@@ -854,24 +879,26 @@ export function UsePodHostModal({ machine, onClose }: { machine: FleetMachine; o
           )}
         </div>
 
-        <details className={styles.manual}>
-          <summary>Manual setup</summary>
-          <div className={styles.commands}>
-            {commands.map((command) => (
-              <code key={command}>{command}</code>
-            ))}
-          </div>
-          <div className={styles.actions}>
-            <button type="button" onClick={copyCommands}>
-              <Copy size={13} aria-hidden="true" />
-              Copy commands
-            </button>
-            <button type="button" onClick={() => window.open(keyRelay.docsUrl, "_blank", "noopener,noreferrer")}>
-              <ArrowUpRight size={13} aria-hidden="true" />
-              Key relay docs
-            </button>
-          </div>
-        </details>
+        {showPreSetupAffordances ? (
+          <details className={styles.manual}>
+            <summary>Manual setup</summary>
+            <div className={styles.commands}>
+              {commands.map((command) => (
+                <code key={command}>{command}</code>
+              ))}
+            </div>
+            <div className={styles.actions}>
+              <button type="button" onClick={copyCommands}>
+                <Copy size={13} aria-hidden="true" />
+                Copy commands
+              </button>
+              <button type="button" onClick={() => window.open(keyRelay.docsUrl, "_blank", "noopener,noreferrer")}>
+                <ArrowUpRight size={13} aria-hidden="true" />
+                Key relay docs
+              </button>
+            </div>
+          </details>
+        ) : null}
       </section>
     </div>
   );

@@ -1,6 +1,8 @@
 # MiroShark And Runtime Gateways
 
-MiroShark is an optional companion for scenario rehearsal and swarm simulation. HivemindOS also keeps a minimal runtime-gateway layer for runtimes such as OpenClaw when they are used as agents in the Fleet and Chat views.
+MiroShark is the rehearsal room.
+
+It is optional, but useful when a swarm plan needs simulation before real execution. HivemindOS also keeps a small runtime gateway layer for runtimes such as OpenClaw when they are used as agents in Fleet and Chat.
 
 ## MiroShark
 
@@ -10,7 +12,7 @@ How it works:
 - Dashboard routes: `/api/miroshark/status`, `/api/miroshark/manage`, `/api/miroshark/swarm`, `/api/miroshark/runs`, `/api/miroshark/analysis`.
 - Swarm transformations live in `src/features/swarm`.
 
-Capabilities:
+What MiroShark support can do:
 
 - Detect, install, start, and open MiroShark.
 - List templates and run metadata.
@@ -33,7 +35,7 @@ The Swarm view is the dashboard's MiroShark workbench. It combines:
 - Output panels for X threads, Reddit, Polymarket, research, ops, and integration views.
 - Analysis-agent selection backed by dashboard runtime/model selections.
 
-The view is intentionally Hivemind-owned. MiroShark remains an optional companion service; HivemindOS owns the Fleet badge matching, route catalog fallback, archive routing, and shared-vault artifact handoff.
+The view is intentionally Hivemind-owned. MiroShark remains an optional companion service. HivemindOS owns the Fleet badge matching, route catalog fallback, archive routing, and shared-vault artifact handoff.
 
 ## API Service Catalog
 
@@ -50,7 +52,7 @@ How it works:
 - The OpenClaw runtime adapter participates in the generic runtime adapter registry.
 - Chat is routed through the generic agent runtime path when an OpenClaw runtime profile is selected.
 
-Capabilities:
+What runtime gateway support can do:
 
 - Runtime profile detection.
 - Runtime model selection from local config.

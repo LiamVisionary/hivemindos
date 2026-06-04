@@ -53,6 +53,8 @@ export interface FleetViewProps {
   updateDetailByMachine?: Record<string, MachineUpdateButtonDetail>;
   onUpdateMachine?: (m: FleetMachine) => void;
   onRenameMachine?: (machineId: string, name: string) => void;
+  onOpenCodeProof?: (m: FleetMachine) => void;
+  onFixSyncIssue?: (m: FleetMachine) => void | Promise<void>;
   onOpenChat?: (m: FleetMachine, a: FleetAgent) => void;
   onOpenTaskChat?: (m: FleetMachine, a: FleetAgent, chat?: FleetAgentChat) => void;
   onCallAgent?: (m: FleetMachine, a: FleetAgent) => Promise<void> | void;
@@ -83,6 +85,8 @@ export function FleetView({
   updateDetailByMachine,
   onUpdateMachine,
   onRenameMachine,
+  onOpenCodeProof,
+  onFixSyncIssue,
   onOpenChat,
   onOpenTaskChat,
   onCallAgent,
@@ -344,6 +348,8 @@ export function FleetView({
                   updateDetailByMachine={updateDetailByMachine}
                   onUpdateMachine={onUpdateMachine}
                   onRenameMachine={onRenameMachine}
+                  onOpenCodeProof={onOpenCodeProof}
+                  onFixSyncIssue={onFixSyncIssue}
                   onOpenChat={onOpenChat}
                   onOpenTaskChat={onOpenTaskChat}
                   onCallAgent={handleCallAgent}

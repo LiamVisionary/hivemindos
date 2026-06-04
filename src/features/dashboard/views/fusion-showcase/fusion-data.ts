@@ -1,13 +1,14 @@
-// src/components/fusion/fusion-data.ts
+// src/features/dashboard/views/fusion-showcase/fusion-data.ts
 // Real Hive Fusion content: capabilities scattered across machines, the tested
 // workflow parts, packaged skills, and copy. Brand marks / bee subclass icons
 // are referenced by their existing public paths.
 import type { LucideIcon } from "lucide-react";
 import {
-  Bot, CheckCircle2, Clock3, Cloud, Cpu, Database, Filter, GitBranch,
-  MessageSquare, Network, Search, Send, Server, ShieldCheck,
-  Sparkles, Wrench,
+  Bot, BrainCircuit, CheckCircle2, Clock3, Cloud, Code2, Cpu, Database, FileText, Filter, GitBranch,
+  Globe2, MessageSquare, Network, Search, Send, Server, ShieldCheck,
+  Sparkles, Terminal, WalletCards, Wrench,
 } from "lucide-react";
+import type { FusionCapabilityIcon, FusionCapabilityRecord } from "@/lib/services/fusion/fusion-skill";
 
 export type Tone = "teal" | "gold" | "violet" | "blue" | "black";
 export const TONE: Record<Tone, string> = {
@@ -33,7 +34,7 @@ export const MACHINES: Machine[] = [
   { id: "gpu", name: "gpu-rig", kind: "gpu host", icon: Server },
 ];
 
-// `used` marks the parts that compose the demo's unified skill.
+// `used` marks the parts that compose the generated unified skill.
 export const CAPS: Capability[] = [
   { id: "x", label: "X research", machine: "nimbus", tone: "black", logo: "/fusion/logos/x.svg", icon: Search, used: true, meta: "source", detail: "Pull current social signal from the configured X-capable path." },
   { id: "obsidian", label: "Obsidian brain", machine: "studio", tone: "violet", logo: "/fusion/logos/obsidian.svg", icon: Network, used: true, meta: "RAG", detail: "Retrieve shared skills, style context, and hive memory." },
@@ -46,6 +47,53 @@ export const CAPS: Capability[] = [
   { id: "shield", label: "Safety proxy", machine: "nimbus", tone: "violet", icon: ShieldCheck, used: false, meta: "gate", detail: "Redaction + approval gate before any side effect." },
   { id: "code", label: "Code bee", machine: "gpu", tone: "teal", logo: "/icons/worker-bee-code-v2.png", icon: Wrench, used: false, meta: "agent", detail: "Build + verify steps when a task needs real code." },
 ];
+
+const CAPABILITY_ICONS: Record<FusionCapabilityIcon, LucideIcon> = {
+  bot: Bot,
+  brain: BrainCircuit,
+  code: Code2,
+  database: Database,
+  file: FileText,
+  globe: Globe2,
+  image: Sparkles,
+  network: Network,
+  search: Search,
+  send: Send,
+  shield: ShieldCheck,
+  sparkles: Sparkles,
+  terminal: Terminal,
+  wallet: WalletCards,
+};
+
+export function capabilitiesFromFusionRecords(records?: FusionCapabilityRecord[] | null): Capability[] {
+  if (!records?.length) return [];
+  return records.map((record) => ({
+    id: record.id,
+    label: record.label,
+    machine: record.machine,
+    tone: record.tone,
+    logo: record.logo,
+    icon: CAPABILITY_ICONS[record.icon] ?? Network,
+    used: record.used,
+    meta: record.meta,
+    detail: record.detail,
+  }));
+}
+
+export function machinesFromFusionRecords(records?: FusionCapabilityRecord[] | null): Machine[] {
+  if (!records?.length) return [];
+  const machines = new Map<string, Machine>();
+  for (const record of records) {
+    if (machines.has(record.machine)) continue;
+    machines.set(record.machine, {
+      id: record.machine,
+      name: record.machineLabel || record.machine,
+      kind: record.kind === "connected-app" || record.kind === "app-endpoint" ? "connected app host" : record.kind,
+      icon: record.machine === "this-mac" ? Cpu : record.machine === "runtime" ? Bot : Server,
+    });
+  }
+  return [...machines.values()];
+}
 
 export const STEPS: FusionStep[] = [
   { key: "prompt", label: "Prompt", detail: "Goal, constraints, side effects", icon: MessageSquare, tone: "teal" },

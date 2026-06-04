@@ -1,9 +1,8 @@
 # Tailnet Generation Skills
 
-HivemindOS can document private generation services as shared skills. These
-skills are not the services themselves; they are reusable operating recipes that
-tell agents how to call a local or Tailnet generation endpoint, how to verify the
-output, and where to add future providers.
+HivemindOS can document private generation services as shared skills.
+
+These skills are not the services themselves. They are reusable operating recipes. They tell agents how to call a local or Tailnet generation endpoint, how to verify the output, and where to add future providers.
 
 The bundled templates live in the app repo under:
 
@@ -41,14 +40,11 @@ HivemindOS currently bundles three generation-skill templates:
   - includes a basic endpoint contract: `/health`, `/v1/models`, `GET /v1/voices`, `/voices`, `/v1/voices/<voice-id>`, `POST /v1/voices`, `/v1/audio/speech`, `/tts/synthesize`, `/synthesize`, `/api/tts`, `/openapi.json`, and `/docs`
   - includes a Qwen3-TTS provider template
 
-These are deliberately abstract. The app bundle should not ship a user's private
-Tailnet IPs, personal machine names, prompts, voice samples, or local filesystem
-paths. Those details belong in the user's shared vault copy after setup.
+These templates are deliberately abstract. The app bundle should not ship a user's private Tailnet IPs, personal machine names, prompts, voice samples, or local filesystem paths. Those details belong in the user's shared vault copy after setup.
 
 ## Category Routing
 
-Generation providers should be organized by output type, not by individual
-model or machine.
+Generation providers should be organized by output type, not by individual model or machine.
 
 Use these homes:
 
@@ -62,18 +58,15 @@ Use these homes:
   - for example `local-3d-generation`
 - Music/song generation: use a separate music/audio-generation skill, not TTS
 
-Avoid creating one skill per model when a category skill exists. Add a provider
-block to the category skill instead.
+Avoid creating one skill per model when a category skill exists. Add a provider block to the category skill instead.
 
 ## Local And Tailnet Modes
 
-The same category skill should cover both local and Tailnet variants of the same
-output type.
+The same category skill should cover both local and Tailnet variants of the same output type.
 
 ### Tailnet mode
 
-Use this when the generator runs on a different HivemindOS machine and clients
-connect over Tailscale.
+Use this when the generator runs on a different HivemindOS machine and clients connect over Tailscale.
 
 The client should only need:
 
@@ -103,8 +96,7 @@ Local mode can document:
 - hardware constraints
 - local logs
 
-Local mode should be clearly labeled so agents do not mistakenly run service-host
-diagnostics on a client machine.
+Local mode should be clearly labeled so agents do not mistakenly run service host diagnostics on a client machine.
 
 ## Provider Block Shape
 
@@ -128,7 +120,7 @@ Use this block for ...
 - Required URL: `<BASE_URL>`
 - Model/default preset: `<MODEL_ID>`
 - Output extension: `.png`, `.wav`, `.mp4`, `.glb`, etc.
-- Auth, if any: environment variable name only; never include secret values.
+- Auth, if any: environment variable name only. Never include secret values.
 
 **Tailnet client preflight**
 
@@ -179,26 +171,17 @@ file /tmp/output.ext
 scripts/seed-shared-skills.sh
 ```
 
-That script copies every bundled skill under `skills/*/SKILL.md` into the shared
-vault Skills shelf if the skill is not already present. It keeps existing shared
-skill files intact, but writes `.hivemind-skill-source.json` metadata so the
-shelf knows the skill came from the HivemindOS bundle.
+That script copies every bundled skill under `skills/*/SKILL.md` into the shared vault Skills shelf if the skill is not already present. It keeps existing shared skill files intact, but writes `.hivemind-skill-source.json` metadata so the shelf knows the skill came from the HivemindOS bundle.
 
-The runtime baseline skill remains `karpathy-guidelines`. Setup may mirror that
-baseline skill into local agent runtime folders, while the full shared shelf is
-advertised through managed instructions.
+The runtime baseline skill remains `karpathy-guidelines`. Setup may mirror that baseline skill into local agent runtime folders, while the full shared shelf is advertised through managed instructions.
 
 `setup.ps1` mirrors the bundled-skill seeding behavior for Windows setup.
 
 ## Privacy And Reliability
 
-Do not commit private Tailnet IPs, real personal machine names, private prompts,
-voice samples, transcripts, or machine-specific paths into bundled app skills.
-Use placeholders in bundled templates and let each user's shared vault copy store
-their deployment-specific values.
+Do not commit private Tailnet IPs, real personal machine names, private prompts, voice samples, transcripts, or machine-specific paths into bundled app skills. Use placeholders in bundled templates and let each user's shared vault copy store their deployment-specific values.
 
-Raw `100.x` Tailscale IPs are useful examples but not permanent identifiers.
-Prefer MagicDNS or a stable Tailscale Serve name when available.
+Raw `100.x` Tailscale IPs are useful examples, but they are not permanent identifiers. Prefer MagicDNS or a stable Tailscale Serve name when available.
 
 Keep generation services private to the Tailnet unless the user explicitly asks
 for a public exposure model.

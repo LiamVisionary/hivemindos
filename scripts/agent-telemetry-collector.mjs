@@ -1467,6 +1467,7 @@ async function syncthingFolderStatus(input = {}) {
         deviceID,
         name: deviceNames.get(deviceID) || deviceID.slice(0, 7),
         completion: typeof completion?.completion === "number" ? completion.completion : null,
+        remoteState: typeof completion?.remoteState === "string" ? completion.remoteState : null,
         needBytes: typeof completion?.needBytes === "number" ? completion.needBytes : null,
         needItems: typeof completion?.needItems === "number" ? completion.needItems : null,
       };
@@ -1521,9 +1522,22 @@ function mergeDevice(existing, defaults, peer) {
   return device;
 }
 
-function folderDevices(config, peerDeviceID) {
-  const ids = [config.myID, peerDeviceID].filter(Boolean);
-  return ids.map((deviceID) => ({ deviceID }));
+function folderDevices(config, existingDevices, peerDeviceID) {
+  const devices = [];
+  const seen = new Set();
+  const addDevice = (device) => {
+    const deviceID = String(device?.deviceID || "").trim();
+    if (!deviceID || seen.has(deviceID)) return;
+    seen.add(deviceID);
+    devices.push({ ...device, deviceID });
+  };
+
+  for (const device of Array.isArray(existingDevices) ? existingDevices : []) {
+    addDevice(device);
+  }
+  addDevice({ deviceID: config.myID });
+  addDevice({ deviceID: peerDeviceID });
+  return devices;
 }
 
 function mergeFolder(existing, defaults, input, config) {
@@ -1539,7 +1553,7 @@ function mergeFolder(existing, defaults, input, config) {
     fsWatcherDelayS: existing?.fsWatcherDelayS ?? defaults?.fsWatcherDelayS ?? 10,
     rescanIntervalS: existing?.rescanIntervalS ?? defaults?.rescanIntervalS ?? 30,
     ignorePerms: true,
-    devices: folderDevices(config, input.peerDeviceID),
+    devices: folderDevices(config, existing?.devices, input.peerDeviceID),
   };
   delete folder._editing;
   return folder;

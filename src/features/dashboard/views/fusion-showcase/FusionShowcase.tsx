@@ -1,14 +1,13 @@
-// src/components/fusion/FusionShowcase.tsx
-// Full Hive Fusion showcase page: top bar + animated Constellation hero +
-// lower sections that reveal 1s after the created-skill card first appears.
+// src/features/dashboard/views/fusion-showcase/FusionShowcase.tsx
+// Full Hive Fusion page: prompt → live capability search → shared-brain skill.
 "use client";
 
 import * as React from "react";
-import { COPY } from "./fusion-data";
+import { capabilitiesFromFusionRecords, COPY, machinesFromFusionRecords } from "./fusion-data";
 import { Chip, HexNode } from "./hex-node";
 import { ConstellationHero } from "./ConstellationHero";
-import { SectionHead, SkillCards, TestedWorkflow, FooterCta } from "./sections";
 import { useFusionStage } from "./use-fusion-stage";
+import type { FusionSkillResult } from "@/lib/services/fusion/fusion-skill";
 import { Link as LinkIcon } from "lucide-react";
 import styles from "./fusion.module.css";
 
@@ -40,32 +39,54 @@ function TopBar() {
   );
 }
 
-export function FusionShowcase({ embedded = false }: { embedded?: boolean } = {}) {
+type FusionSkillResponse = (FusionSkillResult & { ok: true }) | { ok?: false; error?: string };
+
+export function FusionShowcase({ embedded = false, vaultPath }: { embedded?: boolean; vaultPath?: string } = {}) {
   const [draft, setDraft] = React.useState("");
   const [submittedPrompt, setSubmittedPrompt] = React.useState("");
   const [runId, setRunId] = React.useState(0);
-  const stage = useFusionStage(submittedPrompt || COPY.prompt, runId);
-  const [bottomReady, setBottomReady] = React.useState(false);
-  const fired = React.useRef(false);
+  const [fusionResult, setFusionResult] = React.useState<FusionSkillResult | null>(null);
+  const [fusionError, setFusionError] = React.useState("");
+  const requestId = React.useRef(0);
   const started = runId > 0;
+  const capabilities = React.useMemo(() => capabilitiesFromFusionRecords(fusionResult?.capabilities), [fusionResult]);
+  const machines = React.useMemo(() => machinesFromFusionRecords(fusionResult?.capabilities), [fusionResult]);
+  const discoveryReady = Boolean(fusionResult || fusionError);
+  const stage = useFusionStage(submittedPrompt || COPY.prompt, runId, capabilities.length, discoveryReady);
 
   const sendPrompt = React.useCallback(() => {
     const prompt = draft.trim();
     if (!prompt) return;
-    fired.current = false;
-    setBottomReady(false);
+    const nextRequestId = requestId.current + 1;
+    requestId.current = nextRequestId;
+    setFusionResult(null);
+    setFusionError("");
     setSubmittedPrompt(prompt);
     setDraft("");
     setRunId((current) => current + 1);
-  }, [draft]);
 
-  React.useEffect(() => {
-    if (stage.at("reveal") && !fired.current) {
-      fired.current = true;
-      const id = setTimeout(() => setBottomReady(true), 1000);
-      return () => clearTimeout(id);
-    }
-  }, [stage.name]); // eslint-disable-line react-hooks/exhaustive-deps
+    void fetch("/api/fusion/skill", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        vaultPath: vaultPath?.trim() || undefined,
+      }),
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => null) as FusionSkillResponse | null;
+        if (!response.ok || !data?.ok) {
+          const message = data && "error" in data ? data.error : undefined;
+          throw new Error(message || "Could not create the fusion skill.");
+        }
+        if (requestId.current !== nextRequestId) return;
+        setFusionResult(data);
+      })
+      .catch((error: unknown) => {
+        if (requestId.current !== nextRequestId) return;
+        setFusionError(error instanceof Error ? error.message : "Could not create the fusion skill.");
+      });
+  }, [draft, vaultPath]);
 
   return (
     <div className={`${styles.root} ${styles.bgHoneycomb} ${styles.scrollbar}`} data-embedded={embedded ? "true" : undefined}>
@@ -83,24 +104,11 @@ export function FusionShowcase({ embedded = false }: { embedded?: boolean } = {}
           stage={stage}
           started={started}
           submittedPrompt={submittedPrompt}
+          capabilities={capabilities}
+          machines={machines}
+          fusionResult={fusionResult}
+          fusionError={fusionError}
         />
-        <div style={{
-          display: "grid", gap: 30,
-          opacity: bottomReady ? 1 : 0,
-          transform: bottomReady ? "translateY(0)" : "translateY(26px)",
-          transition: "opacity .75s ease, transform .75s cubic-bezier(.2,.7,.3,1)",
-          pointerEvents: bottomReady ? "auto" : "none",
-        }}>
-          <section style={{ display: "grid", gap: 18 }}>
-            <SectionHead eyebrow="Specific tested workflow" title={COPY.workflowTitle} lede={COPY.workflowLede} />
-            <TestedWorkflow />
-          </section>
-          <section style={{ display: "grid", gap: 18 }}>
-            <SectionHead eyebrow="Hive fusion skills" title="Three packaged skills turn loose intent into executable agent systems." />
-            <SkillCards />
-          </section>
-          <FooterCta tone="teal" />
-        </div>
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentCreateDraft } from "@/features/dashboard/agent-settings-types";
 import type { MachineGroup } from "@/features/dashboard/dashboard-types";
 import { buildAgentCallPreferences } from "@/lib/types/agent-runtime";
+import { clawMobilePairingUrl, hubUrlForPairingHost } from "@/lib/phone/pairing-url";
 import styles from "./AgentCallsSettingsPanel.module.css";
 
 const VOICE_RUNTIME_LABELS: Record<string, string> = {
@@ -197,9 +198,9 @@ export function AgentCallsSettingsPanel(props: AgentCallsSettingsPanelProps) {
         setPhoneConnectError("Couldn't determine this machine's tailnet address. Is Tailscale up?");
         return;
       }
-      const hubUrl = `http://${host}:5020`;
+      const hubUrl = hubUrlForPairingHost(host);
       const name = (self?.dnsName ? String(self.dnsName).split(".")[0] : "") || host;
-      const pairUrl = `clawcodemobile://pair?hub=${encodeURIComponent(hubUrl)}&name=${encodeURIComponent(name)}`;
+      const pairUrl = clawMobilePairingUrl({ hubUrl, name });
       setPhoneHubUrl(hubUrl);
       setPhoneQr(await QRCode.toDataURL(pairUrl, { width: 320, margin: 2 }));
       setPhoneConnectError("");

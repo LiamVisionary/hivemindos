@@ -303,9 +303,10 @@ function collectLooseJsonBlock(lines: string[], startIndex: number) {
 }
 
 function renderDataBlock(value: string, key: string) {
+  const formatted = formatJsonCandidate(value) || value;
   return (
     <pre className={chatClass("jsonBlock")} key={key}>
-      <code>{value}</code>
+      <code>{formatted}</code>
     </pre>
   );
 }

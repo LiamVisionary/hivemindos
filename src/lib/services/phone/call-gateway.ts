@@ -2,6 +2,14 @@ import { readFile } from "fs/promises";
 import { homedir } from "os";
 import { isAbsolute, join, relative, resolve } from "path";
 import { listArchivedMiroSharkRuns } from "@/lib/services/miroshark/archive";
+import {
+  createByokAgentCall,
+  createInAppCall,
+  readManagedVoiceConfig,
+  resolveVoice,
+  voiceConfigPayload,
+  voiceProvidersFromManagedConfig,
+} from "@/lib/services/phone/realtime-voice";
 
 const GATEWAY_PORTS = [5000, 5001, 5002];
 
@@ -11,6 +19,7 @@ export type GatewayCallPayload = {
   briefing?: string;
   returnAfterRoomReady?: boolean;
   voiceProviderId?: string;
+  runtimeAgent?: RuntimeAgentVoiceBridge;
 };
 
 export type GatewayCallResult = {
@@ -19,8 +28,6 @@ export type GatewayCallResult = {
   result?: unknown;
   error?: string;
 };
-
-type GatewayJsonObject = Record<string, unknown>;
 
 const RECENT_MIROSHARK_RUN_LIMIT = 2;
 const MIROSHARK_RUN_SCAN_LIMIT = 12;
@@ -40,6 +47,16 @@ export type AgentCallIdentity = {
   aeonLocalPath?: string;
   aeonMode?: string;
   a2aUrl?: string;
+  gatewayUrl?: string;
+  token?: string;
+  agentId?: string;
+  sessionKey?: string;
+  chatPath?: string;
+  statusPath?: string;
+  telemetryUrl?: string;
+  runtimeKind?: string;
+  runtimeCapabilities?: unknown;
+  collectorCapabilities?: unknown;
   localDataDir?: string;
 };
 
@@ -52,6 +69,14 @@ export type AgentCallInput = {
   agent: AgentCallIdentity;
   machine?: AgentCallMachine;
 };
+
+export type RuntimeAgentVoiceBridge = {
+  hubUrl: string;
+  agent: AgentCallIdentity;
+  machine?: AgentCallMachine;
+};
+
+export type AgentCallMode = "byok" | "cloud";
 
 async function gatewayBases(): Promise<string[]> {
   const live: string[] = [];
@@ -335,6 +360,16 @@ export async function buildAgentCallPayload(input: AgentCallInput): Promise<Gate
   };
 }
 
+export function buildRuntimeAgentVoiceBridge(input: AgentCallInput, hubUrl: string): RuntimeAgentVoiceBridge | undefined {
+  const cleanHubUrl = clean(hubUrl).replace(/\/+$/, "");
+  if (!cleanHubUrl) return undefined;
+  return {
+    hubUrl: cleanHubUrl,
+    agent: input.agent,
+    machine: input.machine,
+  };
+}
+
 async function gatewayJson(path: string, init?: RequestInit): Promise<GatewayCallResult> {
   const bases = await gatewayBases();
   if (bases.length === 0) {
@@ -377,47 +412,116 @@ export async function ringGatewayCall(payload: GatewayCallPayload): Promise<Gate
   });
 }
 
-function asGatewayObject(value: unknown): GatewayJsonObject {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as GatewayJsonObject : {};
-}
-
-export async function startAgentDashboardCall(input: AgentCallInput): Promise<GatewayCallResult> {
+async function startInternalAgentCall(
+  input: AgentCallInput,
+  options: { hubUrl?: string; tokenField: "token" | "dashboardToken"; idPrefix: string },
+): Promise<GatewayCallResult> {
   const payload = await buildAgentCallPayload(input);
-  const response = await gatewayJson("/voice/calls/inapp", {
-    method: "POST",
-    body: JSON.stringify({
-      briefing: payload.briefing,
-      voiceProviderId: payload.voiceProviderId,
-    }),
-  });
-  if (!response.ok) return response;
-  const result = asGatewayObject(response.result);
-  const livekitUrl = clean(result.livekitUrl);
-  const room = clean(result.room);
-  const token = clean(result.token);
+  const managed = readManagedVoiceConfig();
+  const voiceProviders = voiceProvidersFromManagedConfig(managed);
+  const call = await createInAppCall({
+    briefing: payload.briefing || "",
+    voice: resolveVoice(payload.voiceProviderId, voiceProviders, managed),
+    callId: `${options.idPrefix}_${Date.now()}`,
+    runtimeAgent: options.hubUrl ? buildRuntimeAgentVoiceBridge(input, options.hubUrl) : undefined,
+  }, managed);
+  if (!call.ok) {
+    return {
+      ok: false,
+      error: call.reason === "voice_transport_not_configured"
+        ? `HivemindOS voice is missing ${call.missing.join(", ")}. Add those keys to ~/.hivemindos/.env, ~/.hivemindos/claw/voice.env, or .env.local, then rerun pnpm tauri:dev.`
+        : call.reason,
+      result: call,
+    };
+  }
+  const token = options.tokenField === "dashboardToken" ? call.dashboardToken : call.token;
   return {
-    ...response,
+    ok: true,
+    gateway: "hivemindos",
     result: {
       ok: true,
       call: {
-        id: room || `dashboard_${Date.now()}`,
+        id: call.room || `${options.idPrefix}_${Date.now()}`,
         callerName: payload.title,
-        voiceReady: Boolean(livekitUrl && token),
-        livekitUrl,
-        room,
-        dashboardToken: token,
+        voiceReady: Boolean(call.livekitUrl && token),
+        livekitUrl: call.livekitUrl,
+        room: call.room,
+        [options.tokenField]: token,
       },
-      voice: result.voice,
+      voice: call.voice,
     },
   };
 }
 
+export async function startAgentDashboardCall(input: AgentCallInput, hubUrl?: string): Promise<GatewayCallResult> {
+  return startAgentByokCall(input, hubUrl || "", "dashboard");
+}
+
+async function startAgentByokCall(input: AgentCallInput, hubUrl: string, idPrefix: string): Promise<GatewayCallResult> {
+  const payload = await buildAgentCallPayload(input);
+  const managed = readManagedVoiceConfig();
+  const voiceProviders = voiceProvidersFromManagedConfig(managed);
+  const runtimeAgent = buildRuntimeAgentVoiceBridge(input, hubUrl);
+  const call = await createByokAgentCall({
+    briefing: payload.briefing || "",
+    voice: resolveVoice(payload.voiceProviderId, voiceProviders, managed),
+    runtimeAgent,
+  });
+  if (!call.ok) {
+    return {
+      ok: false,
+      gateway: "hivemindos",
+      error: call.reason === "openai_realtime_not_configured"
+        ? `BYOK Agent Calls need ${call.missing.join(", ")} in HivemindOS. Add it in HivemindOS env, then try again.`
+        : call.reason,
+      result: call,
+    };
+  }
+  return {
+    ok: true,
+    gateway: "hivemindos",
+    result: {
+      ok: true,
+      call: {
+        id: `${idPrefix}_byok_${Date.now()}`,
+        mode: "byok",
+        callerName: payload.title,
+        voiceReady: true,
+        realtime: {
+          provider: "openai-realtime",
+          model: call.model,
+          voice: call.voice,
+          clientSecret: call.clientSecret,
+          expiresAt: call.expiresAt,
+          instructions: call.instructions,
+          tools: call.tools,
+        },
+        runtimeAgent,
+      },
+    },
+  };
+}
+
+export async function startAgentMobileCall(input: AgentCallInput, hubUrl: string, mode: AgentCallMode = "byok"): Promise<GatewayCallResult> {
+  if (mode === "cloud") return startInternalAgentCall(input, { hubUrl, tokenField: "token", idPrefix: "mobile" });
+  return startAgentByokCall(input, hubUrl, "mobile");
+}
+
 export async function readGatewayVoiceConfig(): Promise<GatewayCallResult> {
-  return gatewayJson("/voice/config", { method: "GET" });
+  return { ok: true, gateway: "hivemindos", result: voiceConfigPayload() };
 }
 
 export async function readGatewayVoiceDeviceStatus(): Promise<GatewayCallResult> {
-  return gatewayJson("/voice/devices/status", { method: "GET" });
+  return {
+    ok: true,
+    gateway: "hivemindos",
+    result: {
+      ok: true,
+      count: 0,
+      device: null,
+      apns: { configured: false, missing: ["HivemindOS in-app agent calls do not require the Claw gateway APNs device registry."] },
+    },
+  };
 }
 
 export function ringStoredPrompt(scriptId: string) {

@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { readRuntimeChatSession } from "@/lib/services/chat/runtime-session-store";
+import { chatTelemetrySession } from "@/lib/services/telemetry/chat-dev-telemetry";
+import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -91,6 +93,24 @@ function sessionMatchesRequest(session: { chatStorageKey?: unknown; id?: unknown
   return !chatStorageKey || String(session.chatStorageKey ?? "") === chatStorageKey;
 }
 
+async function recordAgentSessionTelemetry(type: string, body: { agent?: AgentProfile; sessionId?: string; sinceMs?: number; chatStorageKey?: string }, payload: Record<string, unknown> = {}) {
+  await recordTelemetryBatch([{
+    source: "route",
+    type,
+    threadId: body.chatStorageKey || undefined,
+    runId: body.sessionId || undefined,
+    payload: {
+      agentId: body.agent?.id ?? body.agent?.agentId ?? null,
+      agentName: body.agent?.name ?? null,
+      runtime: body.agent?.runtime ?? null,
+      sessionId: body.sessionId || null,
+      chatStorageKey: body.chatStorageKey || null,
+      sinceMs: body.sinceMs || null,
+      ...payload,
+    },
+  }]).catch(() => undefined);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as { agent?: AgentProfile; sessionId?: string; sinceMs?: number; chatStorageKey?: string };
@@ -98,7 +118,9 @@ export async function POST(request: NextRequest) {
     const sessionId = body.sessionId?.trim();
     const sinceMs = Number(body.sinceMs || 0);
     const chatStorageKey = body.chatStorageKey?.trim();
+    await recordAgentSessionTelemetry("chat.agent_session.request", body);
     if (!body.agent || (!sessionId && !sinceMs && !chatStorageKey)) {
+      await recordAgentSessionTelemetry("chat.agent_session.invalid", body);
       return NextResponse.json({ ok: false, error: "Expected { agent, sessionId }, { agent, sinceMs }, or { agent, chatStorageKey }." }, { status: 400 });
     }
     const fallbackSession = () => readRuntimeChatSession({
@@ -111,7 +133,11 @@ export async function POST(request: NextRequest) {
     const fallbackLocalSession = async () => await readLocalHermesSession(body.agent, sessionId) ?? await fallbackSession();
     if (!telemetryUrl) {
       const session = await fallbackLocalSession();
-      if (session) return NextResponse.json({ ok: true, session });
+      if (session) {
+        await recordAgentSessionTelemetry("chat.agent_session.response", body, { via: "local-fallback", session: chatTelemetrySession(session) });
+        return NextResponse.json({ ok: true, session });
+      }
+      await recordAgentSessionTelemetry("chat.agent_session.not_found", body, { via: "local-fallback", status: 404 });
       return NextResponse.json({ ok: false, error: "No runtime session found." }, { status: 404 });
     }
     const buildUrl = (pathname: string) => {
@@ -134,21 +160,34 @@ export async function POST(request: NextRequest) {
       response = await fetch(buildUrl("/sessions"), { cache: "no-store", signal: AbortSignal.timeout(8_000) }).catch(() => null);
       if (!response) {
         const session = await fallbackLocalSession();
-        if (session) return NextResponse.json({ ok: true, session });
+        if (session) {
+          await recordAgentSessionTelemetry("chat.agent_session.response", body, { via: "bridge-unavailable-fallback", session: chatTelemetrySession(session) });
+          return NextResponse.json({ ok: true, session });
+        }
+        await recordAgentSessionTelemetry("chat.agent_session.bridge_unavailable", body);
         return NextResponse.json({ ok: false, error: "Agent bridge unavailable." }, { status: 502 });
       }
       data = await response.json().catch(() => null);
     }
     if (!response.ok || !data?.ok) {
       const session = await fallbackLocalSession();
-      if (session) return NextResponse.json({ ok: true, session });
+      if (session) {
+        await recordAgentSessionTelemetry("chat.agent_session.response", body, { via: "bridge-error-fallback", bridgeStatus: response.status, session: chatTelemetrySession(session) });
+        return NextResponse.json({ ok: true, session });
+      }
+      await recordAgentSessionTelemetry("chat.agent_session.bridge_error", body, { bridgeStatus: response.status, error: data?.error || null });
       return NextResponse.json({ ok: false, error: data?.error || `Agent bridge returned ${response.status}` }, { status: response.ok ? 502 : response.status });
     }
     if (!sessionMatchesRequest(data.session, sessionId, chatStorageKey)) {
       const session = await fallbackLocalSession();
-      if (session) return NextResponse.json({ ok: true, session });
+      if (session) {
+        await recordAgentSessionTelemetry("chat.agent_session.response", body, { via: "mismatch-fallback", session: chatTelemetrySession(session) });
+        return NextResponse.json({ ok: true, session });
+      }
+      await recordAgentSessionTelemetry("chat.agent_session.mismatch", body, { bridgeSession: chatTelemetrySession(data.session) });
       return NextResponse.json({ ok: false, error: "No runtime session found for this chat." }, { status: 404 });
     }
+    await recordAgentSessionTelemetry("chat.agent_session.response", body, { via: "bridge", session: chatTelemetrySession(data.session) });
     return NextResponse.json({ ok: true, session: data.session });
   } catch (error) {
     return NextResponse.json({

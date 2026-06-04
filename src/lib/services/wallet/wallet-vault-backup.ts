@@ -15,7 +15,7 @@ import {
 } from "@/lib/services/wallet/local-wallet-vault";
 
 const execFileAsync = promisify(execFile);
-const DEFAULT_SECURE_FOLDER = "Notes/Secure";
+const DEFAULT_SECURE_FOLDER = "Operations/Secure";
 const BACKUP_FILE = "hive.wallet-vault.gpg";
 const REFERENCE_FILE = "hive.wallet-vault.md";
 

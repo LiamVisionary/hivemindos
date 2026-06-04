@@ -5203,3 +5203,92 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
   - Decision: selected
   - Reason: second pass transplanted donor primitives, route tokens, thread lane, nav shell, and shelf layout into live HivemindOS chat
   - Path: `src/components/chat/glyph.tsx,src/components/chat/hex-tile.tsx,src/components/chat/bee-icon.tsx,src/components/chat/ChatThread.tsx,src/components/chat/ShelfPanels.tsx,src/components/chat/chat-tokens.module.css`
+## 2026-06-04T04:35:54Z - assimilation
+
+- Request: Modify Claw Code Mobile and the HivemindOS hub/gateway so the mobile app can call computer agents directly.
+- Source: user-supplied-local
+- Selected backbone: `/Users/liam/Documents/code/projects/hivemind-os` and `/Users/liam/Documents/code/projects/claw-code-mobile-private`
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: pinned HivemindOS hub source already exposes `/api/phone`, agent call briefings, and runtime chat bridge paths that can be extended without adding another transport.
+  - Path: `src/app/api/phone/route.ts,src/lib/services/phone/call-gateway.ts`
+- /Users/liam/Documents/code/projects/claw-code-mobile-private
+  - Decision: selected
+  - Reason: pinned mobile/gateway source already contains the LiveKit in-app call route, call worker, mobile in-app call modal, and iOS-safe gateway networking helper.
+  - Path: `backend/src/routes/voice.ts,backend/src/services/realtimeVoiceService.ts,backend/src/voice/callAgentWorker.ts,components/settings/AgentCallsTab.tsx,components/InAppCall.tsx,store/gatewayNetwork.ts`
+
+- Assimilated code: Existing HivemindOS phone actions and call briefing payloads were adapted into mobile-safe agent target, mobile call, and voice-turn actions. Existing Claw Code Mobile LiveKit in-app call route, metadata dispatch, worker tools, settings UI, and gateway networking patterns were adapted into the mobile computer-agent call path.
+- Verification: Heuristic audits passed for both pinned repos with high=0 medium=0 low=0; focused lint/test/diff checks are recorded in `CHANGELOG.md`.
+
+## 2026-06-04T12:55:45+08:00 - assimilation-correction
+
+- Request: Make mobile computer-agent calls work inside `pnpm tauri:dev` without requiring the private Claw Code Mobile backend or worker at runtime.
+- Source: user-supplied-local
+- Selected backbone: `/Users/liam/Documents/code/projects/hivemind-os`
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: HivemindOS owns the Tauri dev supervisor, phone hub API, runtime chat bridge, and package graph, so it is the correct runtime home for room creation and the LiveKit call worker.
+  - Path: `scripts/tauri-next-dev.mjs,scripts/hivemindos-call-agent-worker.mjs,src/lib/services/phone/realtime-voice.ts,src/lib/services/phone/call-gateway.ts,src/app/api/phone/route.ts`
+- /Users/liam/Documents/code/projects/claw-code-mobile-private
+  - Decision: donor-only
+  - Reason: Its LiveKit in-app room and worker patterns were useful source context, but requiring that repo at runtime violates the requested `pnpm tauri:dev` ownership model.
+  - Path: `backend/src/services/realtimeVoiceService.ts,backend/src/voice/callAgentWorker.ts,backend/src/voice/hivemindAgentBridge.ts`
+
+- Assimilated code: The LiveKit room creation, dispatch metadata, and `ask_computer_agent` worker tool patterns were moved into HivemindOS as an internal voice service and Node worker launched by the Tauri dev supervisor.
+- Verification: Focused HivemindOS lint/syntax/diff checks are recorded in `CHANGELOG.md`; repo-wide typecheck remains blocked only by an existing Remotion `pathLength` error.
+
+## 2026-06-04T15:20:33+08:00 - assimilation
+
+- Request: Integrate BYOK Agent Calls and HivemindOS Cloud Agent Calls, defaulting to BYOK Agent Calls.
+- Source: user-supplied-local
+- Selected backbone: `/Users/liam/Documents/code/projects/hivemind-os` and `/Users/liam/Documents/code/projects/claw-code-mobile-private`
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: HivemindOS owns the paired hub API and can mint short-lived OpenAI Realtime client secrets using the user's desktop-side OpenAI key.
+  - Path: `src/lib/services/phone/realtime-voice.ts,src/lib/services/phone/call-gateway.ts,src/app/api/phone/route.ts`
+- /Users/liam/Documents/code/projects/claw-code-mobile-private
+  - Decision: selected
+  - Reason: The mobile app already has a direct OpenAI Realtime WebRTC engine and modal, so BYOK agent calls can reuse that instead of adding another call stack.
+  - Path: `store/realtimeCall.ts,hooks/useRealtimeCall.ts,components/OpenAIRealtimeCall.tsx,store/hivemindAgentCalls.ts,components/settings/AgentCallsTab.tsx`
+
+- Assimilated code: HivemindOS mobile agent calls now default to BYOK OpenAI Realtime client secrets with an `ask_computer_agent` tool; mobile computer-agent calls render the direct Realtime modal and execute tool calls back through the paired HivemindOS hub. Cloud/LiveKit remains available as an explicit `callMode: "cloud"` response path.
+- Verification: Focused HivemindOS and mobile lint/test/diff checks are recorded in `CHANGELOG.md`; broad typechecks remain blocked by existing unrelated baseline errors.
+## 2026-06-04T05:55:04.977790+00:00 - pinned-source
+
+- Request: Add local dev chat-open telemetry for Tauri ?view=chat load debugging
+- Source: local-repo
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: user-pinned local app source; existing telemetry and chat session code are the reusable source
+  - Path: `src/features/dashboard,src/app/api,src/lib/services/chat`
+## 2026-06-04T06:04:10.142960+00:00 - implementation
+
+- Request: Add local dev chat-open telemetry for Tauri ?view=chat load debugging
+- Source: local-repo
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: reused existing local telemetry service, runtime session store, chat session route, runtime stream route, and dashboard chat controllers instead of public donor code
+  - Path: `src/lib/services/telemetry/local-telemetry.ts,src/lib/services/chat/runtime-session-store.ts,src/app/api/telemetry/events/route.ts,src/app/api/chat/agent-session/route.ts,src/app/api/chat/agent-runtime/route.ts,src/features/dashboard`
+## 2026-06-04T07:47:07.642178+00:00 - implementation
+
+- Request: Detect shared-vault Syncthing sync issues in Fleet roster machine cards and add Sync error Fix action
+- Source: user-supplied-local-repo
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: pinned HivemindOS repo already contains Fleet roster warning UI, Syncthing status APIs, and pairing repair flow
+  - Path: `src/components/fleet/roster.tsx,src/features/dashboard/DashboardApp.tsx,scripts/agent-telemetry-collector.mjs`

@@ -1427,6 +1427,8 @@ details[open] > summary .treeDisclosure::before {
   border: 0;
   background: transparent;
   padding: 0;
+  display: block;
+  white-space: pre-wrap;
 }
 
 .messageMarkdown a {
@@ -1599,15 +1601,16 @@ details[open] > summary .treeDisclosure::before {
 }
 
 .processScroll {
-  max-height: 320px;
+  max-height: calc(88px * 4);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 4px 0;
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
 }
 
 .processPanel.expanded .processScroll {
-  max-height: min(560px, 58vh);
+  max-height: calc(88px * 4);
 }
 
 .processRow {
@@ -1615,6 +1618,8 @@ details[open] > summary .treeDisclosure::before {
   grid-template-columns: 70px 28px minmax(0, 1fr);
   align-items: start;
   gap: 10px;
+  box-sizing: border-box;
+  min-height: 88px;
   padding: 9px 10px;
   border-top: 1px solid rgba(148, 163, 184, 0.07);
 }
@@ -3089,8 +3094,10 @@ details[open] > summary .treeDisclosure::before {
 }
 
 .messageMarkdown pre code {
+  display: block;
   cursor: text;
   color: inherit;
+  white-space: pre-wrap;
 }
 
 .messageMarkdown .markdownHeading {

@@ -24,6 +24,28 @@ export interface FleetActiveApp {
   openUrl?: string;
 }
 
+export type FleetAgentCapabilityIcon =
+  | "analytics"
+  | "background"
+  | "browser"
+  | "chat"
+  | "deployment"
+  | "filesystem"
+  | "http"
+  | "mcp"
+  | "publishing"
+  | "scheduler"
+  | "shell"
+  | "wallet"
+  | "workflow";
+
+export interface FleetAgentCapabilityBadge {
+  id: string;
+  label: string;
+  icon: FleetAgentCapabilityIcon;
+  tone: "aqua" | "blue" | "gold" | "green" | "pink" | "purple" | "slate";
+}
+
 export interface FleetAgent {
   id: string;
   name: string;
@@ -40,6 +62,7 @@ export interface FleetAgent {
   currentTaskUpdatedAt?: number;
   activeApp?: FleetActiveApp;
   activityStatus?: FleetAgentActivityStatus;
+  capabilities?: FleetAgentCapabilityBadge[];
   since: string;      // formatted e.g. "2m", "5h"
   recentChats?: FleetAgentChat[];
 }
@@ -60,6 +83,19 @@ export interface FleetMachineNetworkIssue {
   commands: string[];
 }
 
+export interface FleetMachineSyncIssue {
+  label: string;
+  title: string;
+  detail: string;
+  deviceID: string;
+  deviceName: string;
+  completion?: number | null;
+  needItems?: number | null;
+  needBytes?: number | null;
+  remoteState?: string | null;
+  stalled?: boolean;
+}
+
 export interface FleetMachine {
   id: string;
   name: string;
@@ -68,6 +104,7 @@ export interface FleetMachine {
   os: string;
   tailnet: string;
   ip: string;
+  collectorUrl?: string;
   ping: number;          // ms
   cpu: number;           // %
   ram: number;           // %
@@ -81,6 +118,7 @@ export interface FleetMachine {
   lon: number;
   uptime: string;
   networkIssue?: FleetMachineNetworkIssue;
+  syncIssue?: FleetMachineSyncIssue;
   gitlawb?: GitLawbNodeStatus;
   agents: FleetAgent[];
 }

@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return Response.json({
       ok: false,
-      error: error instanceof Error ? error.message : "Tailnet vault sync failed.",
+      error: error instanceof Error ? error.message : "Hivemind Sync repair failed.",
     }, { status: 400 });
   }
 }

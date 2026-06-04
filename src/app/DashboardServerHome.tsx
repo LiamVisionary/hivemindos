@@ -35,6 +35,10 @@ export default async function Home({ searchParams }: HomeProps) {
   const initialView = rawView && isDashboardView(rawView)
     ? rawView
     : undefined;
+  const rawAgent = Array.isArray(params?.agent) ? params?.agent[0] : params?.agent;
+  const rawChatLeaf = Array.isArray(params?.chatLeaf) ? params?.chatLeaf[0] : params?.chatLeaf;
+  const initialChatAgentId = initialView === "chat" && rawAgent ? rawAgent : undefined;
+  const initialChatLeaf = initialView === "chat" && rawChatLeaf ? rawChatLeaf : undefined;
   const rawVaultPanel = Array.isArray(params?.vaultPanel) ? params?.vaultPanel[0] : params?.vaultPanel;
   const initialVaultPanelMode = rawVaultPanel && DASHBOARD_VAULT_PANEL_MODES.has(rawVaultPanel as DashboardVaultPanelMode)
     ? rawVaultPanel as DashboardVaultPanelMode
@@ -43,7 +47,15 @@ export default async function Home({ searchParams }: HomeProps) {
     ? await listDynamicWorkHistory({ limit: 10 }).catch(() => undefined)
     : undefined;
 
-  return <DashboardNativeFrame initialView={initialView} initialVaultPanelMode={initialVaultPanelMode} initialWorkHistory={initialWorkHistory} />;
+  return (
+    <DashboardNativeFrame
+      initialChatAgentId={initialChatAgentId}
+      initialChatLeaf={initialChatLeaf}
+      initialView={initialView}
+      initialVaultPanelMode={initialVaultPanelMode}
+      initialWorkHistory={initialWorkHistory}
+    />
+  );
 }
 
 function DashboardUnlock({ params }: { params?: Record<string, string | string[] | undefined> }) {

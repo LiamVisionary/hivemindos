@@ -118,7 +118,11 @@ async function veilMcpEnv(): Promise<NodeJS.ProcessEnv> {
 function parseMcpToolResult<T>(result: McpToolTextResult): T {
   const text = result.content?.map((item) => item.text).filter(Boolean).join("\n") ?? "";
   if (!text.trim()) return result as T;
-  return JSON.parse(text) as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(redactSecrets(text.trim() || "Veil MCP returned non-JSON output."));
+  }
 }
 
 function parseJsonRecord(line: string): Record<string, unknown> | null {

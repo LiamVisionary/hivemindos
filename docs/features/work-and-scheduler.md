@@ -1,6 +1,8 @@
 # Work Board And Scheduler
 
-The Work board is a shared Kanban system for human and agent tasks. Scheduler manages background automations and runtime schedules.
+The Work board is where intent turns into agent work.
+
+It gives humans and agents the same shared task surface. Scheduler handles the work that should happen later or repeat in the background.
 
 <figure class="imagePlate">
   <img src="../assets/img/diagrams/workboard-scheduler-loop.jpg" alt="Generated workboard and scheduler loop infographic showing Ideas, Ready, Working, Done, Scheduler, Deliverables, and History.">
@@ -29,7 +31,7 @@ Columns:
 | Done | Completed with notes, evidence, result, or deliverables |
 | Archived | Hidden from the main board but retained |
 
-Capabilities:
+What the Work board can do:
 
 - Create and switch named boards.
 - Create, update, move, archive, and delete tasks.
@@ -61,7 +63,7 @@ The Work surface also acts as an audit and intake console:
 
 ## Project Provenance
 
-The Work board can link tasks to Hivemind projects without requiring every task to be part of a repo.
+The Work board can link tasks to Hivemind projects without forcing every task to be part of a repo.
 
 How it works:
 
@@ -70,7 +72,7 @@ How it works:
 - `POST /api/projects/link-gitlawb` links a project to GitLawb repo metadata.
 - Kanban task records can include `projectId` and sanitized `proofs`.
 
-This lets one machine work across many projects and many GitLawb repos. The shared Brain keeps private task/memory context; GitLawb carries public-key code provenance.
+This lets one machine work across many projects and many GitLawb repos. The shared Brain keeps private task and memory context. GitLawb carries public-key code provenance.
 
 ## Scheduler
 
@@ -82,7 +84,7 @@ How it works:
 - Skill-backed actions use `/api/scheduler/skill-action`.
 - Local folder browsing can use the Tauri native filesystem bridge through `src/lib/native/filesystem.ts` before falling back to `/api/scheduler/browse-folder`.
 
-Capabilities:
+What Scheduler can do:
 
 - Create and import schedules.
 - Run, pause, resume, and inspect runtime schedules where supported.

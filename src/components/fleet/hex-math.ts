@@ -2,7 +2,8 @@
 // Axial-coord helpers for pointy-top hexagons. Used by MachineCluster to
 // tessellate cells (machine center + agent ring) and by HexTile sizing.
 
-export const HEX_W = 62;
+export const FLEET_GRAPH_CELL_SCALE = 1.17;
+export const HEX_W = 62 * FLEET_GRAPH_CELL_SCALE;
 export const HEX_H = (HEX_W * 2) / Math.sqrt(3);   // pointy-top bbox height
 export const Y_STEP = (HEX_W * Math.sqrt(3)) / 2;  // diagonal neighbor y offset
 

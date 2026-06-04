@@ -1,6 +1,8 @@
 # API And Storage Reference
 
-This reference documents the main local API surfaces, collector endpoints, persistent files, and verification commands.
+This is the practical map for APIs and storage.
+
+Use it when you need to know which route owns a workflow, where state lands on disk, and which checks prove the system is still wired correctly.
 
 ## Dashboard API Route Groups
 
@@ -47,7 +49,7 @@ All routes below are served by the Next.js app under `src/app/api`.
 
 ## Fleet App And API Service Discovery
 
-`/api/fleet/apps` turns collector app reports and known service probes into the My Apps launcher. It merges local and remote collector data, distinguishes interactive apps from API services, and keeps known API services usable even when a generic root page would otherwise look non-interactive.
+`/api/fleet/apps` turns collector app reports and service probes into the My Apps launcher. It merges local and remote collector data, separates browser apps from API services, and keeps known API services usable even when their root page is not interactive.
 
 Important behavior:
 
@@ -55,7 +57,7 @@ Important behavior:
 - App icons can be proxied through `/api/fleet/app-icon` so browser security does not block collector-hosted assets.
 - API services expose `apiBaseUrl`, `healthUrl`, `serviceKind`, `interactive: false`, and optional route catalogs.
 - Route catalogs prefer OpenAPI/Swagger documents discovered at common endpoints such as `/openapi.json`, `/api/openapi.yaml`, and `/swagger.json`.
-- If no OpenAPI document is found, Hivemind-owned service signatures can provide a fallback catalog. MiroShark currently has a Hivemind catalog covering templates, simulation lifecycle, run data, graph, observability, and config endpoints.
+- If no OpenAPI document is found, Hivemind-owned service signatures can provide a fallback catalog. MiroShark currently has a Hivemind catalog for templates, simulation lifecycle, run data, graph, observability, and config endpoints.
 - My Apps renders grouped route cards with method badges, copy actions, and open buttons only for safe GET routes without path parameters.
 
 Main files:
@@ -85,7 +87,7 @@ Known runtime ids are `openclaw`, `hermes`, `aeon`, and `openai-compatible`.
 
 ## GitLawb Code Proof
 
-GitLawb routes are advisory and non-blocking. Missing GitLawb should return safe status payloads, not break normal HivemindOS setup or Work board execution.
+GitLawb routes are advisory. Missing GitLawb should return safe status payloads, not break setup or the Work board.
 
 | Route | Purpose |
 |---|---|
@@ -97,11 +99,11 @@ GitLawb routes are advisory and non-blocking. Missing GitLawb should return safe
 | `POST /api/projects` | Create or update a Hivemind project |
 | `POST /api/projects/link-gitlawb` | Link project metadata to a GitLawb repo and degrade gracefully when a node is unavailable |
 
-Default node probes use `http://127.0.0.1:7545`. Full node hosting is not part of default setup; it requires the user to opt into local repo hosting and normally means a Docker/Postgres-backed GitLawb node.
+Default node probes use `http://127.0.0.1:7545`. Full node hosting is not part of default setup. It only makes sense after the user opts into local repo hosting, and it normally means a Docker/Postgres-backed GitLawb node.
 
 ## Native Desktop Command Surface
 
-Tauri desktop builds use native commands for host-local operations and keep API fallbacks for browser and remote-machine use.
+Tauri desktop builds use native commands for local machine operations. Browser users and remote machines keep using API fallbacks.
 
 | Command | Frontend helper | Purpose |
 |---|---|---|
@@ -114,7 +116,7 @@ Native helpers are used by AEON workspace linking, chat folder creation, schedul
 
 ## Collector Endpoints
 
-The local collector lives at `scripts/agent-telemetry-collector.mjs`. It is installed on agent machines by `scripts/install-telemetry-collector.sh`.
+The local collector lives at `scripts/agent-telemetry-collector.mjs`. Agent machines install it through `scripts/install-telemetry-collector.sh`.
 
 Common endpoints:
 
@@ -139,20 +141,20 @@ Common endpoints:
 | `POST /e2e/skills` | Real-fleet skill sync test hook |
 | `POST /e2e/file-share` | Real-fleet encrypted file share test hook |
 
-The collector also exposes runtime session, chat, schedule, run, output, env-sync, Syncthing, and OpenClaw/Hermes/Aeon helper endpoints used by the dashboard and runtime adapter layer. Treat every collector endpoint as private Tailnet or Link-only infrastructure.
+The collector also exposes runtime session, chat, schedule, run, output, env sync, Syncthing, and OpenClaw/Hermes/Aeon helper endpoints used by the dashboard and runtime adapter layer. Treat every collector endpoint as private Tailnet or Link-only infrastructure.
 
 ## Persistent Storage
 
 ### Browser Storage
 
-The dashboard uses browser `localStorage` for UI-side preferences and cache:
+The dashboard uses browser `localStorage` for UI preferences and cache:
 
 - Agent profile configuration.
 - Shared vault UI configuration.
 - Recent task, schedule, wallet, chat, folder, and discovered-machine state.
 - Theme and Honey opt-in flags.
 
-This state helps the dashboard start quickly, but durable shared collaboration should use the vault or runtime-backed services.
+This helps the dashboard start quickly. Durable shared collaboration should use the vault or runtime-backed services.
 
 ### HivemindOS Home
 
@@ -167,7 +169,7 @@ Important files and folders:
 | Path | Purpose |
 |---|---|
 | `~/.hivemindos/install-id` | Workspace id used by Honey and compute flows |
-| `~/.hivemindos/.env` | Canonical shared env store managed by `hive-env-add` |
+| `~/.hivemindos/.env` | Canonical shared env store managed by Hivemind Sync helpers: `hive-env-add`, `hive-env-remove`, and `hive-env-delete` |
 | `~/.hivemindos/collector.env` | Persisted collector/Link runtime settings such as selected port |
 | `~/.hivemindos/gitlawb/status.json` | Short-lived GitLawb status cache with no private keys |
 | `~/.hivemindos/gitlawb/installed-by-hivemindos.json` | Marker for GitLawb CLI binaries installed by HivemindOS setup |

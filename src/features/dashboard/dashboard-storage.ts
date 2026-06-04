@@ -2,6 +2,7 @@ import { DEFAULT_SHARED_VAULT, RUNTIME_CAPABILITIES, RUNTIME_KINDS, buildAgentCa
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { beeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import { createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
+import { normalizeAgentTelemetryUrl } from "@/lib/utils/agent-telemetry-url";
 import type { AgentWalletConfig, HoneyTreasuryConfig } from "@/lib/types/agent-wallet";
 import type { AgentSchedule, AgentSnapshot, AgentTask, ChatCustomFolder, ChatMessage, DiscoveredMachine, HermesUpdateSkillLike, RuntimeIntegrationKey, RuntimeIntegrationStatus, RuntimeSetupDefinition, ScheduleDraft, StoredSharedVaultConfig, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
 
@@ -82,6 +83,7 @@ export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
     runtimeKind: agent.runtimeKind ?? runtimeKindsByRuntime[agent.runtime],
     runtimeCapabilities: mergeRuntimeCapabilities(agent.runtime, agent.runtimeCapabilities),
     a2aUrl: agent.runtime === "aeon" ? agent.a2aUrl ?? agent.gatewayUrl : agent.a2aUrl,
+    telemetryUrl: normalizeAgentTelemetryUrl(agent.telemetryUrl),
     aeonBranch: agent.runtime === "aeon" ? agent.aeonBranch ?? "main" : agent.aeonBranch,
     aeonMode: agent.runtime === "aeon" ? agent.aeonMode ?? "github" : agent.aeonMode,
     beeRole: agent.beeRole ?? (inferredQueen ? "queen" : "worker"),
@@ -438,6 +440,16 @@ export function parseStoredChatMessages(): Record<string, ChatMessage[]> {
           surface: message.surface === "chat" || message.surface === "kanban" || message.surface === "scheduler" ? message.surface : undefined,
           sourceSessionId: typeof message.sourceSessionId === "string" ? message.sourceSessionId : undefined,
           sourceIndex: typeof message.sourceIndex === "number" ? message.sourceIndex : undefined,
+          processEvents: Array.isArray(message.processEvents)
+            ? message.processEvents
+              .filter((event) => event && typeof event.label === "string" && event.label.trim())
+              .map((event) => ({
+                at: typeof event.at === "number" ? event.at : undefined,
+                label: event.label.trim(),
+                detail: typeof event.detail === "string" ? event.detail : undefined,
+                status: typeof event.status === "string" ? event.status : undefined,
+              }))
+            : undefined,
           attachments: Array.isArray(message.attachments) ? message.attachments : undefined,
           agentPrompt: message.agentPrompt && typeof message.agentPrompt === "object" && typeof message.agentPrompt.question === "string"
             ? {

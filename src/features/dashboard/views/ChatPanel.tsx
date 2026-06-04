@@ -81,7 +81,7 @@ function selectedAgentIcon(agent?: any, beeRoleIconPath?: (role?: string, worker
     ?? agent.customWorkerClass;
   return customWorkerClass?.imageSrc
     || beeRoleIconPath?.("worker", agent.workerClass ?? "general")
-    || "/icons/worker-bee-general-v3.png";
+    || "/icons/worker-bee-general-v5.png";
 }
 
 function agentMenuIcon(agent?: any, beeRoleIconPath?: (role?: string, workerClass?: string) => string) {
@@ -168,7 +168,6 @@ function processFileTarget(event: any) {
 
 function processDisplayLabel(event: any) {
   const label = String(event?.label ?? "Runtime event").trim();
-  if (/assistant started writing/i.test(label)) return "Agent started writing";
   if (/tool output/i.test(label)) return "Tool output";
   return label;
 }
@@ -210,43 +209,55 @@ function processEventsAreActive(events: any[] = []) {
   const lastEvent = visibleEvents[visibleEvents.length - 1];
   const lastStatus = String(lastEvent?.status ?? "").trim().toLowerCase();
   const lastLabel = String(lastEvent?.label ?? "").trim().toLowerCase();
+  const lastText = `${lastLabel} ${String(lastEvent?.detail ?? "").trim().toLowerCase()}`;
   if (/assistant started writing|assistant wrote in session|agent replied/.test(lastLabel)) return false;
+  if (/\b(done|complete|completed|failed|failure|finished|settled|succeeded|cancelled|canceled)\b/.test(lastText)) return false;
   return lastStatus !== "completed" && lastStatus !== "failed";
 }
 
 function processDisplayEvents(events: any[] = []) {
-  return events.filter((event) => !/assistant wrote in session|agent replied/i.test(String(event?.label ?? "")));
+  return events.filter((event) => !/assistant started writing|assistant wrote in session|agent replied/i.test(String(event?.label ?? "")));
 }
 
-function AgentProcessPanel({ Activity, ChevronDown, ChevronUp, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal, agentIconSrc, agentInitials, chatClass, events = [] }: any) {
+function AgentProcessPanel({ Activity, ChevronDown, ChevronUp, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal, active = false, agentIconSrc, agentInitials, chatClass, events = [] }: any) {
   const [expanded, setExpanded] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const visibleEvents = processDisplayEvents(events);
+  const latestActive = active && processEventsAreActive(visibleEvents);
+  const open = latestActive || expanded;
+  const latestEvent = visibleEvents[visibleEvents.length - 1];
+  const latestEventSignature = [
+    visibleEvents.length,
+    latestEvent?.at ?? "",
+    latestEvent?.label ?? "",
+    latestEvent?.detail ?? "",
+    latestEvent?.status ?? "",
+  ].join("|");
   useEffect(() => {
     const node = scrollRef.current;
     if (!node) return;
     node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
-  }, [visibleEvents.length, expanded]);
+  }, [open, latestEventSignature]);
   if (!visibleEvents.length) return null;
-  const Icon = expanded ? ChevronUp : ChevronDown;
+  const Icon = open ? ChevronUp : ChevronDown;
   const iconProps = { Activity, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal };
   return (
-    <section className={chatClass("processPanel", expanded && "expanded")} aria-label="Agent process">
+    <section className={chatClass("processPanel", open && "expanded")} aria-label="Agent process">
       <button
         type="button"
         className={chatClass("processToggle")}
         onClick={() => setExpanded((current) => !current)}
-        aria-expanded={expanded}
+        aria-expanded={open}
       >
         <span>Process</span>
         <small>{visibleEvents.length} event{visibleEvents.length === 1 ? "" : "s"}</small>
         {Icon ? <Icon aria-hidden="true" /> : null}
       </button>
-      <div className={chatClass("processScroll")} ref={scrollRef}>
+      {open ? <div className={chatClass("processScroll")} ref={scrollRef}>
         {visibleEvents.map((event: any, index: number) => {
           const toolKey = processToolKey(event);
           const isAssistant = toolKey === "assistant";
-          const isActive = event?.status === "running" && index === visibleEvents.length - 1;
+          const isActive = index === visibleEvents.length - 1 && latestActive;
           const meta = PROCESS_TOOL_META[toolKey] ?? PROCESS_TOOL_META.unknown;
           const BadgeIcon = processIconComponent(meta.icon, iconProps);
           const fileTarget = processFileTarget(event);
@@ -274,7 +285,7 @@ function AgentProcessPanel({ Activity, ChevronDown, ChevronUp, CircleAlert, File
           </div>
           );
         })}
-      </div>
+      </div> : null}
     </section>
   );
 }
@@ -297,12 +308,20 @@ function ChatHistorySkeleton() {
 }
 
 export function ChatPanel(props: any) {
-  const { Activity, AgentResponseLoader, AlignLeft, Button, ChatMarkdown, Check, ChevronDown, ChevronUp, CircleAlert, ComposerField, Copy, FileText, Folder, GitBranch, Hammer, Image, KanbanSquare, LoaderCircle, MessageAttachments, MessageSquare, Monitor, Pencil, RUNTIME_LABELS, Search, Send, Sparkles, Terminal, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Upload, activeView, aeonEnvKeys, aeonEnvSyncStatus, aeonEnvSyncing, attachChatDirectory, attachChatRecentDirectory, attachmentError, attachmentMenuOpen, attachmentMenuRef, beeRoleIconPath, busy, changeChatWorkingDirectory, chatAttachments, chatAutoScrollRef, chatClass, chatContextMenu, chatContextMenuRef, chatDirectories, chatDisplayContent, chatFileInputRef, chatImageInputRef, chatKanbanGeneration, chatSidebarTree, checkStatus, dismissChatKanbanGeneration, displayAgents, expandedChatFolders, fleetClass, flushingChatQueueId, formatAgentEnvText, formatRelativeTime, generateKanbanTaskFromChat, handleChatFileChange, handleChatImageChange, hasStreamingChunk, lastAssistant, machineGroups, messagesEndRef, messagesScrollRef, parseAgentEnvText, queuedChatMessages = [], recentDirectories, recentDirectoriesExpanded, recording, refreshRuntimeIntegrations, removeChatAttachment, removeChatDirectory, removeQueuedChatMessage, runRuntimeIntegrationAction, runtimeIntegrationBusy, runtimeModelSelection, runtimeModelSelectionsByRuntime, selectedAgent, selectedChatDirectory, selectedChatHistoryLoading, selectedChatMachine, selectedChatProcess, sendMessage, sendQueuedChatMessageNow, sessionNotice, setAeonEnvKeys, setAttachmentMenuOpen, setChatContextMenu, setExpandedChatFolders, setRecentDirectoriesExpanded, setStatus, setStatusAgentId, setText, startAgentChat, startAudioRecording, status, statusAgentId, stopAudioRecording, switchRuntime, syncAeonEnvToGitHub, text, updateAgent, updateChatAutoScroll, vaultClass, visibleMessages, voiceBands, voiceTarget, voiceTranscript } = props;
+  const { Activity, AgentResponseLoader, AlignLeft, Button, ChatMarkdown, Check, ChevronDown, ChevronUp, CircleAlert, ComposerField, Copy, FileText, Folder, GitBranch, Hammer, Image, KanbanSquare, LoaderCircle, MessageAttachments, MessageSquare, Monitor, Pencil, RUNTIME_LABELS, Search, Send, Sparkles, Terminal, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Upload, activeView, aeonEnvKeys, aeonEnvSyncStatus, aeonEnvSyncing, attachChatDirectory, attachChatRecentDirectory, attachmentError, attachmentMenuOpen, attachmentMenuRef, beeRoleIconPath, busy, changeChatWorkingDirectory, chatAttachments, chatAutoScrollRef, chatClass, chatContextMenu, chatContextMenuRef, chatDirectories, chatDisplayContent, chatFileInputRef, chatImageInputRef, chatKanbanGeneration, chatSidebarTree, checkStatus, dismissChatKanbanGeneration, displayAgents, expandedChatFolders, fleetClass, flushingChatQueueId, formatAgentEnvText, formatRelativeTime, generateKanbanTaskFromChat, handleChatFileChange, handleChatImageChange, hasStreamingChunk, lastAssistant, logClientTelemetry, machineGroups, messagesEndRef, messagesScrollRef, parseAgentEnvText, queuedChatMessages = [], recentDirectories, recentDirectoriesExpanded, recording, refreshRuntimeIntegrations, removeChatAttachment, removeChatDirectory, removeQueuedChatMessage, runRuntimeIntegrationAction, runtimeIntegrationBusy, runtimeModelSelection, runtimeModelSelectionsByRuntime, selectedAgent, selectedChatDirectory, selectedChatHistoryLoading, selectedChatLeafKey, selectedChatMachine, selectedChatProcess, selectedChatStorageKey, sendMessage, sendQueuedChatMessageNow, sessionNotice, setAeonEnvKeys, setAttachmentMenuOpen, setChatContextMenu, setExpandedChatFolders, setRecentDirectoriesExpanded, setStatus, setStatusAgentId, setText, startAgentChat, startAudioRecording, status, statusAgentId, stopAudioRecording, switchRuntime, syncAeonEnvToGitHub, text, updateAgent, updateChatAutoScroll, vaultClass, visibleMessages, voiceBands, voiceTarget, voiceTranscript } = props;
   const [openKanbanTaskMenuKey, setOpenKanbanTaskMenuKey] = useState("");
   const [copiedMessageKey, setCopiedMessageKey] = useState("");
   const [agentMode, setAgentMode] = useState<"plan" | "act">("act");
   const [chatHistoryOpen, setChatHistoryOpen] = useState(false);
   const [statusCheckingAgentId, setStatusCheckingAgentId] = useState("");
+  const lastScrollTelemetryRef = useRef({ at: 0, top: -1, height: -1 });
+  const chatScrollTelemetryStateRef = useRef<Record<string, unknown>>({});
+  const pendingAutoScrollRef = useRef<{ frame: number | null; timeouts: number[] }>({ frame: null, timeouts: [] });
+  const lastAutoScrollSignatureRef = useRef("");
+  const previousAutoScrollTargetRef = useRef("");
+  const previousHistoryLoadingRef = useRef(Boolean(selectedChatHistoryLoading));
+  const [stickyChatProcess, setStickyChatProcess] = useState<any[]>([]);
+  const stickyChatProcessSignatureRef = useRef("");
   const runtimeLabel = selectedAgent ? RUNTIME_LABELS[selectedAgent.runtime] ?? headerValueLabel(selectedAgent.runtime) : "Not set";
   const providerLabel = selectedAgent ? headerValueLabel(selectedAgent.provider ?? runtimeModelSelection?.provider) : "Not set";
   const modelLabel = selectedAgent ? modelValueLabel(selectedAgent.model ?? runtimeModelSelection?.model) : "Not set";
@@ -315,29 +334,141 @@ export function ChatPanel(props: any) {
     () => chatMessageRenderKeys(visibleMessages ?? []),
     [visibleMessages],
   );
+  useEffect(() => {
+    if (selectedChatProcess?.length) {
+      const signature = selectedChatProcess
+        .map((event: any) => [event?.at, event?.label, event?.detail, event?.status].join("\u001f"))
+        .join("\u001e");
+      if (stickyChatProcessSignatureRef.current !== signature) {
+        stickyChatProcessSignatureRef.current = signature;
+        setStickyChatProcess(selectedChatProcess);
+      }
+      return undefined;
+    }
+    if (busy) return undefined;
+    const timeout = window.setTimeout(() => {
+      stickyChatProcessSignatureRef.current = "";
+      setStickyChatProcess([]);
+    }, 1_500);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [busy, selectedChatProcess]);
+  const processEventsForDisplay = selectedChatProcess?.length ? selectedChatProcess : stickyChatProcess;
   const latestVisibleDisplay = latestVisibleMessage ? chatDisplayContent(latestVisibleMessage) : "";
+  const latestVisibleHasMessageProcess = Boolean(
+    latestVisibleMessage?.role === "assistant"
+    && Array.isArray(latestVisibleMessage.processEvents)
+    && latestVisibleMessage.processEvents.length,
+  );
   const latestVisibleHasInlineProcess = Boolean(
     latestVisibleMessage?.role === "assistant"
     && !latestVisibleDisplay.trim()
-    && selectedChatProcess?.length,
+    && processEventsForDisplay.length,
   );
-  const processIsActive = processEventsAreActive(selectedChatProcess);
+  const latestVisibleCanHostLiveProcess = Boolean(
+    latestVisibleMessage?.role === "assistant"
+    && processEventsForDisplay.length
+    && !latestVisibleHasMessageProcess,
+  );
+  const processIsActive = processEventsAreActive(processEventsForDisplay);
   const showDetachedProcess = Boolean(
-    selectedChatProcess?.length
+    processEventsForDisplay.length
     && !latestVisibleHasInlineProcess
-    && (busy || processIsActive || latestVisibleMessage?.role === "user"),
+    && !latestVisibleHasMessageProcess
+    && !latestVisibleCanHostLiveProcess
+    && (busy || processIsActive || latestVisibleMessage?.role === "user" || latestVisibleMessage?.role === "assistant" || selectedChatHistoryLoading),
   );
+  const selectedChatMachineKey = selectedChatMachine
+    ? [
+      selectedChatMachine.key,
+      selectedChatMachine.name,
+      selectedChatMachine.collectorUrl,
+      selectedChatMachine.version?.appDir,
+    ].filter(Boolean).join("|")
+    : "";
+  useEffect(() => {
+    chatScrollTelemetryStateRef.current = {
+      agentId: selectedAgent?.id ?? null,
+      agentName: selectedAgent?.name ?? null,
+      runtime: selectedAgent?.runtime ?? null,
+      leafKey: selectedChatLeafKey ?? null,
+      storageKey: selectedChatStorageKey ?? null,
+      messageCount: visibleMessages.length,
+      selectedChatHistoryLoading: Boolean(selectedChatHistoryLoading),
+    };
+  }, [selectedAgent?.id, selectedAgent?.name, selectedAgent?.runtime, selectedChatHistoryLoading, selectedChatLeafKey, selectedChatStorageKey, visibleMessages.length]);
+  const logChatScrollTelemetry = useCallback((type: string, element: HTMLDivElement, payload: Record<string, unknown> = {}) => {
+    const state = chatScrollTelemetryStateRef.current;
+    const storageKey = typeof state.storageKey === "string" ? state.storageKey : undefined;
+    logClientTelemetry?.(type, {
+      ...state,
+      scrollTop: element.scrollTop,
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+      autoScroll: Boolean(chatAutoScrollRef?.current),
+      ...payload,
+    }, { threadId: storageKey });
+  }, [chatAutoScrollRef, logClientTelemetry]);
+  const clearPendingAutoScroll = useCallback(() => {
+    const pending = pendingAutoScrollRef.current;
+    if (pending.frame !== null) window.cancelAnimationFrame(pending.frame);
+    pending.timeouts.forEach((timeout) => window.clearTimeout(timeout));
+    pendingAutoScrollRef.current = { frame: null, timeouts: [] };
+  }, []);
+  const scheduleChatAutoScroll = useCallback((reason: string) => {
+    const signature = [
+      selectedChatStorageKey,
+      selectedChatLeafKey,
+      selectedAgent?.id ?? "",
+      selectedChatMachineKey,
+      visibleMessages.length,
+      selectedChatHistoryLoading ? "loading" : "ready",
+      busy ? "busy" : "idle",
+      reason,
+    ].join("|");
+    if (lastAutoScrollSignatureRef.current === signature) return;
+    const element = messagesScrollRef?.current;
+    if (!element || (selectedChatHistoryLoading && visibleMessages.length === 0)) return;
+    lastAutoScrollSignatureRef.current = signature;
+    clearPendingAutoScroll();
+    const scrollToBottom = () => {
+      const current = messagesScrollRef?.current;
+      if (!current) return;
+      current.scrollTop = current.scrollHeight;
+      logChatScrollTelemetry("chat.scroll.autoscroll", current, { reason });
+    };
+    pendingAutoScrollRef.current = {
+      frame: window.requestAnimationFrame(scrollToBottom),
+      timeouts: [],
+    };
+  }, [busy, clearPendingAutoScroll, logChatScrollTelemetry, messagesScrollRef, selectedAgent?.id, selectedChatHistoryLoading, selectedChatLeafKey, selectedChatMachineKey, selectedChatStorageKey, visibleMessages.length]);
   const setMessagesScrollNode = useCallback((node: HTMLDivElement | null) => {
     messagesScrollRef.current = node;
-    if (!node) return;
+    if (!node) {
+      clearPendingAutoScroll();
+      return;
+    }
     chatAutoScrollRef.current = true;
-    const scrollToBottom = () => {
+    if (!selectedChatHistoryLoading && visibleMessages.length > 0) {
       node.scrollTop = node.scrollHeight;
-      messagesEndRef?.current?.scrollIntoView({ block: "end" });
-    };
-    window.requestAnimationFrame(scrollToBottom);
-    [120, 360, 900].forEach((delay) => window.setTimeout(scrollToBottom, delay));
-  }, [chatAutoScrollRef, messagesEndRef, messagesScrollRef]);
+    }
+    logChatScrollTelemetry("chat.scroll.node_bound", node);
+  }, [chatAutoScrollRef, clearPendingAutoScroll, logChatScrollTelemetry, messagesScrollRef, selectedChatHistoryLoading, visibleMessages.length]);
+  const handleMessagesScroll = useCallback((event: { currentTarget: HTMLDivElement }) => {
+    updateChatAutoScroll?.(event);
+    const element = event.currentTarget;
+    const now = Date.now();
+    const last = lastScrollTelemetryRef.current;
+    const topDelta = Math.abs(element.scrollTop - last.top);
+    const heightDelta = Math.abs(element.scrollHeight - last.height);
+    if (now - last.at < 250 && topDelta < 24 && heightDelta < 24) return;
+    lastScrollTelemetryRef.current = { at: now, top: element.scrollTop, height: element.scrollHeight };
+    logChatScrollTelemetry("chat.scroll.event", element, {
+      topDelta: last.top < 0 ? null : element.scrollTop - last.top,
+      heightDelta: last.height < 0 ? null : element.scrollHeight - last.height,
+    });
+  }, [logChatScrollTelemetry, updateChatAutoScroll]);
   async function handleCheckStatus() {
     if (!selectedAgent || selectedStatusChecking) return;
     setStatusCheckingAgentId(selectedAgent.id);
@@ -399,36 +530,24 @@ export function ChatPanel(props: any) {
   }, [chatKanbanGeneration, dismissChatKanbanGeneration]);
 
   useEffect(() => {
-    const element = messagesScrollRef?.current;
-    if (!element) return undefined;
+    const targetKey = [selectedAgent?.id ?? "", selectedChatMachineKey, selectedChatStorageKey].join("|");
+    if (previousAutoScrollTargetRef.current === targetKey) return;
+    previousAutoScrollTargetRef.current = targetKey;
+    lastAutoScrollSignatureRef.current = "";
     chatAutoScrollRef.current = true;
-    const scrollToBottom = () => {
-      element.scrollTop = element.scrollHeight;
-      messagesEndRef?.current?.scrollIntoView({ block: "end" });
-    };
-    const frame = window.requestAnimationFrame(scrollToBottom);
-    const timeouts = [180, 600, 1_200].map((delay) => window.setTimeout(scrollToBottom, delay));
-    return () => {
-      window.cancelAnimationFrame(frame);
-      timeouts.forEach((timeout) => window.clearTimeout(timeout));
-    };
-  }, [chatAutoScrollRef, messagesEndRef, messagesScrollRef, selectedAgent?.id, selectedChatMachine]);
+    if (!selectedChatHistoryLoading && visibleMessages.length > 0) {
+      scheduleChatAutoScroll("agent_or_machine_changed");
+    }
+  }, [chatAutoScrollRef, scheduleChatAutoScroll, selectedAgent?.id, selectedChatHistoryLoading, selectedChatMachineKey, selectedChatStorageKey, visibleMessages.length]);
 
   useEffect(() => {
-    if (!chatAutoScrollRef?.current) return undefined;
-    const element = messagesScrollRef?.current;
-    if (!element) return undefined;
-    const scrollToBottom = () => {
-      element.scrollTop = element.scrollHeight;
-      messagesEndRef?.current?.scrollIntoView({ block: "end" });
-    };
-    const frame = window.requestAnimationFrame(scrollToBottom);
-    const timeouts = [120, 360, 900].map((delay) => window.setTimeout(scrollToBottom, delay));
-    return () => {
-      window.cancelAnimationFrame(frame);
-      timeouts.forEach((timeout) => window.clearTimeout(timeout));
-    };
-  }, [busy, chatAutoScrollRef, messagesEndRef, messagesScrollRef, selectedAgent?.id, visibleMessages.length]);
+    const wasLoading = previousHistoryLoadingRef.current;
+    previousHistoryLoadingRef.current = Boolean(selectedChatHistoryLoading);
+    if (!chatAutoScrollRef?.current || selectedChatHistoryLoading || visibleMessages.length === 0) return;
+    scheduleChatAutoScroll(wasLoading ? "history_loaded" : "message_count_or_busy_changed");
+  }, [busy, chatAutoScrollRef, scheduleChatAutoScroll, selectedChatHistoryLoading, visibleMessages.length]);
+
+  useEffect(() => clearPendingAutoScroll, [clearPendingAutoScroll]);
 
   function dismissKanbanPopover(messageKey: string) {
     dismissChatKanbanGeneration?.(messageKey);
@@ -870,7 +989,7 @@ export function ChatPanel(props: any) {
             <div
               className={chatClass("messages", selectedChatHistoryLoading ? "loading" : visibleMessages.length === 0 && "empty")}
               ref={setMessagesScrollNode}
-              onScroll={updateChatAutoScroll}
+              onScroll={handleMessagesScroll}
             >
               {selectedChatHistoryLoading ? (
                 <ChatHistorySkeleton />
@@ -883,11 +1002,14 @@ export function ChatPanel(props: any) {
               {!selectedChatHistoryLoading ? visibleMessages.map((message, index) => {
                 const messageKey = visibleMessageKeys[index] ?? chatMessageBaseRenderKey(message, index);
                 const displayContent = chatDisplayContent(message);
+                const messageProcessEvents = Array.isArray(message.processEvents) ? message.processEvents : [];
                 const generationForMessage = chatKanbanGeneration?.key === messageKey ? chatKanbanGeneration : null;
                 const generating = generationForMessage && ["generating", "creating"].includes(generationForMessage.phase);
                 const isStreamingAssistant = message.role === "assistant" && busy && index === visibleMessages.length - 1;
                 const isLatestAssistant = message.role === "assistant" && index === visibleMessages.length - 1;
-                const showLatestProcess = isLatestAssistant && selectedChatProcess?.length > 0;
+                const showMessageProcess = message.role === "assistant" && messageProcessEvents.length > 0;
+                const showLiveProcessOnMessage = isLatestAssistant && processEventsForDisplay.length > 0 && !showMessageProcess;
+                const inlineProcessEvents = showMessageProcess ? messageProcessEvents : showLiveProcessOnMessage ? processEventsForDisplay : [];
                 const canGenerateKanbanTask = message.role === "assistant" && !isStreamingAssistant && displayContent?.trim() && generateKanbanTaskFromChat;
                 const copied = copiedMessageKey === messageKey;
                 const agentPrompt = message.agentPrompt;
@@ -906,6 +1028,9 @@ export function ChatPanel(props: any) {
                         </div>
                       ) : null}
                       <MessageAttachments attachments={message.attachments} />
+                      {inlineProcessEvents.length ? (
+                        <AgentProcessPanel {...{ Activity, ChevronDown, ChevronUp, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal, active: isLatestAssistant && (busy || processIsActive), agentIconSrc: selectedAgentIconSrc, agentInitials: selectedAgentInitials, chatClass, events: inlineProcessEvents }} />
+                      ) : null}
                       {agentPrompt ? (
                         <div className={chatClass("agentPromptCard")}>
                           <div className={chatClass("agentPromptHeader")}>
@@ -931,10 +1056,9 @@ export function ChatPanel(props: any) {
                       ) : displayContent ? (
                         <ChatMarkdown text={displayContent} />
                       ) : (
-                        message.role === "assistant" && (busy || showLatestProcess) ? (
+                        message.role === "assistant" && busy ? (
                           <>
                             {busy ? <AgentResponseLoader /> : null}
-                            {showLatestProcess ? <AgentProcessPanel {...{ Activity, ChevronDown, ChevronUp, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal, agentIconSrc: selectedAgentIconSrc, agentInitials: selectedAgentInitials, chatClass, events: selectedChatProcess }} /> : null}
                           </>
                         ) : <p />
                       )}
@@ -1030,7 +1154,7 @@ export function ChatPanel(props: any) {
                   </div>
                 );
               }) : null}
-              {!selectedChatHistoryLoading && showDetachedProcess ? (
+              {showDetachedProcess ? (
                 <div className={chatClass("message", "assistant", busy && "streaming")} key="detached-process">
                   {renderAgentAvatar("messageAvatar")}
                   <div className={chatClass("messageBody")}>
@@ -1040,7 +1164,7 @@ export function ChatPanel(props: any) {
                       <small>{runtimeIdentity}</small>
                     </div>
                     {busy ? <AgentResponseLoader /> : null}
-                    <AgentProcessPanel {...{ Activity, ChevronDown, ChevronUp, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal, agentIconSrc: selectedAgentIconSrc, agentInitials: selectedAgentInitials, chatClass, events: selectedChatProcess }} />
+                    <AgentProcessPanel {...{ Activity, ChevronDown, ChevronUp, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal, active: busy || processIsActive, agentIconSrc: selectedAgentIconSrc, agentInitials: selectedAgentInitials, chatClass, events: processEventsForDisplay }} />
                   </div>
                 </div>
               ) : null}

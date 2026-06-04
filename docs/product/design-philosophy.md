@@ -4,7 +4,7 @@ For the short implementation checklist, see [UI Rules](ui-rules.md).
 
 ## Core Idea
 
-HivemindOS should feel like a digital beehive: private, coordinated, efficient, modular, and alive.
+HivemindOS should feel like a digital hive: private, coordinated, efficient, modular, and alive.
 
 But before it feels powerful, it must feel calm, obvious, and usable.
 
@@ -12,13 +12,13 @@ A beehive is beautiful because every part works. HivemindOS should follow the sa
 
 > Beauty comes from clarity, coordination, trust, and function.
 
-This is not a generic AI dashboard. It is a local-first control room for agent fleets across private machines.
+This is not a generic AI dashboard. It is a local control room for agent fleets across private machines.
 
 The app may control complex agent systems, wallets, runtimes, memory layers, and machine networks, but the user should not have to carry that complexity in their head.
 
 Assume the user is a layman.
 
-They may be smart, capable, and ambitious, but they should not need to understand agent runtime internals, Tailnet topology, API routes, environment variables, crypto payment protocols, provider keys, or model orchestration just to use the product safely.
+They may be smart, capable, and ambitious, but they should not need to understand agent runtime internals, Tailnet topology, API routes, env variables, crypto payment protocols, provider keys, or model orchestration just to use the product safely.
 
 ## Core Principle
 
@@ -54,7 +54,7 @@ If something does not clarify the fleet, agents, memory, security, wallet state,
 
 HivemindOS should not look intelligent because it says "AI." It should feel intelligent because the whole system is organized.
 
-### 2. Machine-First, Agent-Second
+### 2. Machines First, Agents Second
 
 Agents live on real machines.
 
@@ -137,7 +137,7 @@ Base wallet
 Where this agent receives and spends funds.
 ```
 
-### 5. Private by Default
+### 5. Private By Default
 
 HivemindOS's trust model should be visible everywhere.
 
@@ -157,7 +157,7 @@ Keep dangerous or money-moving controls separate from read-only status.
 
 Never expose private keys, full card details, secret tokens, billing identity, or high-risk payment execution controls in broad overview UI.
 
-### 6. Collective Intelligence With Attribution
+### 6. Coordination With Attribution
 
 The swarm should feel coordinated, but never anonymous.
 
@@ -185,9 +185,9 @@ The user should understand:
 - What needs approval?
 - What happens next?
 
-### 7. Progressive Disclosure
+### 7. Simple First, Deep When Needed
 
-Complex features are welcome, but they must be partitioned.
+Complex features are welcome, but they need clear layers.
 
 Use this hierarchy:
 
@@ -299,7 +299,7 @@ The interface should feel like:
 
 > Private Swarm Command
 
-Use subtle hive-inspired structure without becoming cartoonish.
+Use subtle hive structure without becoming cartoonish.
 
 Prefer:
 

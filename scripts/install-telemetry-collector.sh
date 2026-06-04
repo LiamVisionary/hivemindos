@@ -80,7 +80,7 @@ install_rsync_if_missing() {
   if command -v rsync >/dev/null 2>&1; then
     return
   fi
-  echo "rsync is missing; trying to install it for Tailnet vault sync"
+  echo "rsync is missing; trying to install it for Hivemind Sync vault repair"
   if [[ "$(uname -s)" == "Darwin" ]] && command -v brew >/dev/null 2>&1; then
     brew install rsync
   elif command -v apt-get >/dev/null 2>&1; then
@@ -90,7 +90,7 @@ install_rsync_if_missing() {
   elif command -v yum >/dev/null 2>&1; then
     yum_install rsync
   else
-    echo "Install rsync to use Tailnet vault sync." >&2
+    echo "Install rsync to use Hivemind Sync vault repair." >&2
   fi
 }
 
@@ -98,7 +98,7 @@ install_syncthing_if_missing() {
   if command -v syncthing >/dev/null 2>&1; then
     return
   fi
-  echo "Syncthing is missing; trying to install it for realtime folder sync"
+  echo "Syncthing is missing; trying to install it for Hivemind Sync folder sync"
   if [[ "$(uname -s)" == "Darwin" ]] && command -v brew >/dev/null 2>&1; then
     brew install syncthing
   elif command -v apt-get >/dev/null 2>&1; then
@@ -108,7 +108,7 @@ install_syncthing_if_missing() {
   elif command -v yum >/dev/null 2>&1; then
     yum_install syncthing
   else
-    echo "Install Syncthing to use realtime folder sync." >&2
+    echo "Install Syncthing to use Hivemind Sync folder sync." >&2
   fi
 }
 
@@ -466,12 +466,12 @@ enable_tailscale_ssh() {
 }
 
 maybe_enable_system_tailnet_collector_serve() {
-  [[ "$SYSTEM_TAILNET_SERVE_ACTIVE" == "true" ]] || return
-  tailscale_status_connected || return
+  [[ "$SYSTEM_TAILNET_SERVE_ACTIVE" == "true" ]] || return 0
+  tailscale_status_connected || return 0
 
   local cli output=""
   cli="$(tailscale_cli_candidates | awk '!seen[$0]++ { print; exit }')"
-  [[ -n "$cli" ]] || return
+  [[ -n "$cli" ]] || return 0
 
   if output="$(run_tailscale_cli "$cli" serve --bg --http "$TAILNET_COLLECTOR_PORT" "http://localhost:$PORT" 2>&1)"; then
     echo "Tailnet collector URL: http://<this-machine>:$TAILNET_COLLECTOR_PORT"
@@ -597,8 +597,8 @@ choose_link_local_collector_port() {
 }
 
 choose_system_tailnet_collector_port() {
-  [[ "$LINK_ACTIVE" != "true" && "$TAILNET_SYNC_ENABLED" == "true" ]] || return
-  [[ "$PORT" == "$TAILNET_COLLECTOR_PORT" ]] || return
+  [[ "$LINK_ACTIVE" != "true" && "$TAILNET_SYNC_ENABLED" == "true" ]] || return 0
+  [[ "$PORT" == "$TAILNET_COLLECTOR_PORT" ]] || return 0
 
   local candidate
   candidate="$(choose_nearest_available_port "$((TAILNET_COLLECTOR_PORT + 2))" 200 "$TAILNET_COLLECTOR_PORT" || true)"
@@ -614,7 +614,7 @@ choose_system_tailnet_collector_port() {
 }
 
 choose_link_control_port() {
-  [[ "$LINK_ACTIVE" == "true" ]] || return
+  [[ "$LINK_ACTIVE" == "true" ]] || return 0
   local host="${LINK_CONTROL%:*}"
   local port="${LINK_CONTROL##*:}"
   if [[ -z "$host" || "$host" == "$LINK_CONTROL" || -z "$port" ]]; then
@@ -647,7 +647,7 @@ choose_link_control_port() {
 }
 
 choose_link_tailnet_port() {
-  [[ "$LINK_ACTIVE" == "true" ]] || return
+  [[ "$LINK_ACTIVE" == "true" ]] || return 0
   local listener
   listener="$(port_listener_pids "$LINK_TAILNET_PORT")"
   if [[ -z "$listener" ]]; then
@@ -1026,7 +1026,7 @@ elif [[ "$NETWORK_MANAGED_BY_SETUP" == "true" ]]; then
 elif ensure_tailscale_connected; then
   TAILNET_SYNC_ENABLED="true"
 else
-  echo "Tailscale setup was not completed; multi-machine collaboration and shared memory sync are disabled for this run. Local collector features will still work." >&2
+  echo "Tailscale setup was not completed; Hivemind Sync is disabled for this run. Local collector features will still work." >&2
 fi
 choose_system_tailnet_collector_port
 choose_link_local_collector_port
@@ -1071,7 +1071,7 @@ PLIST
       launchctl_bounded 5 kickstart -k "gui/$(id -u)/com.hivemindos.syncthing" >/dev/null 2>&1 || true
       echo "Installed Syncthing macOS LaunchAgent on 127.0.0.1:8384"
     else
-      echo "Syncthing is unavailable; Tailnet shared memory sync is disabled." >&2
+      echo "Syncthing is unavailable; Hivemind Sync shared-brain folder sync is disabled." >&2
     fi
   fi
 
@@ -1167,7 +1167,7 @@ SERVICE
       systemctl --user restart hivemindos-syncthing.service
       echo "Installed Syncthing systemd user service on 127.0.0.1:8384"
     else
-      echo "Syncthing is unavailable; Tailnet shared memory sync is disabled." >&2
+      echo "Syncthing is unavailable; Hivemind Sync shared-brain folder sync is disabled." >&2
     fi
   fi
 

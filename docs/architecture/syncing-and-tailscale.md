@@ -1,9 +1,10 @@
-# Syncing And Tailscale Architecture
+# Hivemind Sync And Tailscale Architecture
 
-HivemindOS treats the shared brain as a normal local markdown folder. Obsidian is
-the editor, not the transport layer. The app reads and writes files in the
-configured vault path, while a selected sync owner decides how those files move
-between machines.
+HivemindOS treats the shared brain as a normal local markdown folder.
+
+Obsidian is the editor. It is not the transport layer. The app reads and writes files in the configured vault path, while one selected sync owner decides how those files move between machines.
+
+The user-facing name for that cross-machine movement layer is Hivemind Sync.
 
 ## Shared Brain Storage
 
@@ -17,26 +18,21 @@ The app can also use `NEXT_PUBLIC_OBSIDIAN_VAULT_PATH`, or auto-detect common
 Obsidian locations. The shared brain contains agent inboxes, handoffs, Kanban
 state, notifications, scheduled-run files, reusable skills, and shared context.
 
-When the vault is unavailable, some features can fall back to local app storage.
-For example, Kanban falls back to:
+When the vault is unavailable, some features fall back to local app storage. For example, Kanban falls back to:
 
 ```text
 ~/.hivemindos/kanban
 ```
 
-That fallback keeps the dashboard usable, but it is not the shared brain. Other
-machines and agents only see the same state once the vault path is reachable and
-the chosen sync owner is moving the files.
+That fallback keeps the dashboard usable, but it is not the shared brain. Other machines and agents only see the same state after the vault path is reachable and the chosen sync owner is moving files.
 
-## Sync Owner Modes
+## Hivemind Sync Owner Modes
 
-The Brain view has a `Sync owner` setting. Pick one owner for realtime sync so
-the same vault is not being actively managed by two sync systems at once.
+The Brain view has a `Sync owner` setting. Pick one owner for realtime sync. Do not let two sync systems actively manage the same vault.
 
 ### External Provider
 
-Use this when Obsidian Sync, iCloud Drive, Dropbox, Git, Syncthing configured
-outside HivemindOS, or another folder sync tool already owns the vault.
+Use this when Obsidian Sync, iCloud Drive, Dropbox, Git, external Syncthing, or another folder sync tool already owns the vault.
 
 In this mode HivemindOS:
 
@@ -45,14 +41,11 @@ In this mode HivemindOS:
 - leaves realtime replication to the external provider
 - still allows manual rsync repair if the user explicitly runs it
 
-This is the safest mode for users who already pay for Obsidian Sync or keep the
-vault in another synced folder.
+This is the safest mode for users who already pay for Obsidian Sync or keep the vault in another synced folder.
 
 ### HivemindOS Syncthing
 
-Use this when HivemindOS should provide realtime folder sync for the shared
-brain. The app pairs local and remote Syncthing instances through the local
-collector API.
+Use this when HivemindOS should provide Hivemind Sync folder movement for the shared brain. The app pairs local and remote Syncthing instances through the collector API.
 
 The pairing flow is:
 
@@ -71,8 +64,7 @@ set, and a discovered remote collector reports `capabilities.syncthing`.
 
 ### Manual Repair Only
 
-Use this when realtime sync is off or handled elsewhere, but the user still wants
-a one-shot repair path between trusted machines.
+Use this when realtime sync is off or handled elsewhere, but the user still wants a one-shot repair path between trusted machines.
 
 The `Dry run` and `Sync now` buttons call `/api/obsidian/sync`, which uses
 `rsync -e "tailscale ssh"` to push, pull, or bidirectionally reconcile the vault.
@@ -103,21 +95,17 @@ under:
 ~/.hivemindos/vault-sync/
 ```
 
-Do not run Obsidian Sync and HivemindOS Syncthing as two independent realtime
-owners for the same vault. It may work for a while, but double-sync setups make
-conflicts harder to understand because each provider has its own conflict
-format, timing, and retry behavior.
+Do not run Obsidian Sync and HivemindOS Syncthing as two independent realtime owners for the same vault. It may work for a while, then it gets confusing. Each provider has its own conflict format, timing, and retry behavior.
 
 ## How Tailscale Fits
 
-Tailscale gives HivemindOS a private machine network. The app uses it for several
-separate jobs:
+Tailscale gives HivemindOS a private machine network. The app uses it for several separate jobs:
 
 - Fleet discovery
 - Collector access
 - Hivemind Link app-managed collector access
 - Syncthing peer addressing
-- Tailscale SSH env sync
+- Hivemind Sync env pull and SSH fallback
 - Tailscale SSH vault repair
 - Tailscale SSH fleet update fallback
 
@@ -125,10 +113,7 @@ These features share the same Tailnet, but they are not the same protocol.
 
 ## Hivemind Link
 
-Hivemind Link is the default app-managed path for users who want Fleet and remote chat
-without installing the system Tailscale VPN client. The `hivemind-linkd` sidecar
-uses Tailscale's embedded `tsnet` library to join the user's own Tailscale
-account as a HivemindOS app node.
+Hivemind Link is the default app-managed path for users who want Fleet and remote chat without installing the system Tailscale VPN client. The `hivemind-linkd` sidecar uses Tailscale's embedded `tsnet` library to join the user's own Tailscale account as a HivemindOS app node.
 
 In Link mode:
 
@@ -142,10 +127,7 @@ In Link mode:
 - prompts, responses, model listings, and collector calls still travel over
   Tailscale's WireGuard-encrypted device links
 
-Hivemind Link intentionally exposes only HivemindOS app traffic. It does not
-replace system Tailscale for Tailscale SSH, rsync repair, or Syncthing peer
-addresses. Run `./setup.sh --system-tailscale` when those full Tailnet extras
-are needed.
+Hivemind Link intentionally exposes only HivemindOS app traffic. It does not replace system Tailscale for Tailscale SSH, rsync repair, or Syncthing peer addresses. Run `./setup.sh --system-tailscale` when those full Tailnet extras are needed.
 
 ## Fleet Discovery
 
@@ -156,8 +138,7 @@ peer list to build candidate collector URLs:
 http://100.x.y.z:8787
 ```
 
-The collector should stay private to the Tailnet. HivemindOS does not need
-Tailscale Funnel for normal operation.
+The collector should stay private to the Tailnet. HivemindOS does not need Tailscale Funnel for normal operation.
 
 When Hivemind Link is enabled and the system `tailscale` CLI is absent, the
 dashboard asks the local Link sidecar for the same peer status shape and uses
@@ -165,12 +146,7 @@ local URLs like `http://127.0.0.1:8788/peer/100.x.y.z%3A8787/...`. The sidecar
 then dials the remote collector through `tsnet`, so the operating system does
 not need a Tailnet route.
 
-Do not treat those `/peer/...` URLs as local collector URLs. In Link mode the
-local collector itself may run on another localhost port, recorded in
-`~/.hivemindos/collector.env`, but `/peer/...` must stay on the Link sidecar at
-`127.0.0.1:8788`. If it is rewritten to the collector port, remote machine chat
-will fail immediately with a misleading "does not have the Hermes chat bridge"
-or `404` response even when the remote collector is healthy.
+Do not treat those `/peer/...` URLs as local collector URLs. In Link mode, the local collector itself may run on another localhost port, recorded in `~/.hivemindos/collector.env`, but `/peer/...` must stay on the Link sidecar at `127.0.0.1:8788`. If it is rewritten to the collector port, remote machine chat fails fast with a misleading "does not have the Hermes chat bridge" or `404`, even when the remote collector is healthy.
 
 ## Collector Access
 
@@ -180,8 +156,7 @@ Each agent machine can run:
 AGENT_TELEMETRY_PORT=8787 node scripts/agent-telemetry-collector.mjs
 ```
 
-The collector exposes local status and controlled helper endpoints over the
-Tailnet. Important endpoints include:
+The collector exposes local status and controlled helper endpoints over the Tailnet. Important endpoints include:
 
 - `/health`
 - `/agents`
@@ -195,23 +170,18 @@ capability detection, Syncthing pairing, and setup-time sync verification.
 
 ## Syncthing Over Tailscale
 
-Syncthing still does the actual file replication. Tailscale supplies a private
-network route and stable peer addresses. When HivemindOS configures Syncthing, it
-can give each side a peer address such as:
+Syncthing still does the actual file replication. Tailscale supplies a private network route and stable peer addresses. When HivemindOS configures Syncthing, it can give each side a peer address such as:
 
 ```text
 tcp://100.x.y.z:22000
 ```
 
-Syncthing can also fall back to `dynamic` discovery if available. The important
-point is that HivemindOS does not implement a realtime file sync engine; it
-coordinates Syncthing setup and lets Syncthing own the continuous replication
-loop.
+Syncthing can also fall back to `dynamic` discovery if available. The important point is that HivemindOS does not implement a realtime file sync engine. It coordinates Syncthing setup and lets Syncthing own the continuous replication loop.
 
-## Targeted File Transfers
+## Hivemind Sync Handoff Transfers
 
 For agent-to-agent files, images, reports, and generated artifacts, use the
-vault-backed `hive-transfer` helper. It creates explicit transfer envelopes under
+vault-backed `hive-transfer` helper. It creates explicit Hivemind Sync envelopes under
 `.hivemindos-transfers/<transfer-id>/` with machine/runtime/agent targeting,
 payload hashes, and receiver acknowledgement files.
 
@@ -225,7 +195,7 @@ File Transfers](../targeted-file-transfers.md).
 Some operations need command execution on a trusted peer. Those use Tailscale SSH
 instead of raw public SSH:
 
-- `hive-env-add` pushes env keys to ready peers.
+- `hive-env-add --pull-from` can pull env keys from a trusted peer.
 - `/api/obsidian/sync` runs rsync repair.
 - Fleet update fallback can run update commands on a remote checkout.
 - Remote directory browsing can fall back to shell listing when a collector is
@@ -241,14 +211,13 @@ macOS daemon or the normal Linux service.
 
 Tailscale is optional. Without Tailscale, HivemindOS can still run as a local
 dashboard and use a local vault folder. Cross-machine discovery, collector
-access, HivemindOS-managed Syncthing pairing, env sync to peers, and rsync repair
+access, HivemindOS-managed Syncthing pairing, Hivemind Sync env movement, and rsync repair
 are disabled until the machine joins a Tailnet and the relevant services are
 running.
 
 ## Safety Boundaries
 
-Secrets do not belong in the shared vault. Env sync uses `hive-env-add` and
-Tailscale SSH so secret values travel through stdin rather than shared notes.
+Secrets do not belong in the shared vault. Hivemind Sync env movement uses hive env helpers and ready collectors for pushes. Peer pulls and some repair paths can use Tailscale SSH.
 
 The collector should be reachable only on trusted private networks. Keep it on
 Tailscale, bind it to the expected port, and use Tailnet ACLs when a deployment

@@ -151,12 +151,20 @@ export function useDashboardNavigationController({
   useEffect(() => {
     if (!hydrated) return;
 
+    let cancelled = false;
     let cleanup: (() => void) | undefined;
     void listenForDesktopNavigation(navigateDashboardTarget, () => setCommandPaletteOpen(true)).then((unlisten) => {
+      if (cancelled) {
+        unlisten();
+        return;
+      }
       cleanup = unlisten;
     });
 
-    return () => cleanup?.();
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
   }, [hydrated, navigateDashboardTarget]);
 
   return {
@@ -197,6 +205,5 @@ function initialNavigationRecents(): DashboardRouteTarget[] {
 }
 
 function normalizeStoredDashboardView(value: unknown): DashboardView | null {
-  if (value === "demo") return "fusion";
   return typeof value === "string" && isDashboardView(value) ? value : null;
 }

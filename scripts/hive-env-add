@@ -340,6 +340,11 @@ def sync_aeon_github_secret(args: argparse.Namespace, key: str, value: str, quie
         raise RuntimeError("Aeon GitHub secret sync requested, but no --aeon-repo or AEON_REPO is configured.")
     if shutil.which("gh") is None:
         raise RuntimeError("Aeon GitHub secret sync requested, but gh is not installed.")
+    if value == "":
+        gh_delete_secret(repo, key)
+        if not quiet:
+            print(f"removed Aeon GitHub secret {key} from {repo}")
+        return True
     proc = subprocess.run(
         ["gh", "secret", "set", key, "-R", repo],
         input=value,
@@ -657,7 +662,7 @@ def backup_dir() -> pathlib.Path | None:
     folder = (
         os.environ.get("HIVE_NOTE_SECURE_FOLDER")
         or local_setting("HIVE_NOTE_SECURE_FOLDER")
-        or "Notes/Secure"
+        or "Operations/Secure"
     )
     return root / folder
 
@@ -985,7 +990,7 @@ def sync_tailnet_updates(args: argparse.Namespace, updates: dict[str, str]) -> N
         return
     targets = tailscale_peer_targets()
     if not targets:
-        print("tailnet env sync enabled, but no online Tailscale peers were found")
+        print("Hivemind Sync env sync is enabled, but no online ready peers were found")
         return
 
     synced = 0
@@ -1000,18 +1005,18 @@ def sync_tailnet_updates(args: argparse.Namespace, updates: dict[str, str]) -> N
             failed.append(f"{target['host']}: {detail}")
 
     if synced:
-        print(f"tailnet env sync updated {synced} peer{'s' if synced != 1 else ''}")
+        print(f"Hivemind Sync env updated {synced} peer{'s' if synced != 1 else ''}")
     if failed:
         if truthy(os.environ.get("HIVE_ENV_TAILNET_VERBOSE") or local_setting("HIVE_ENV_TAILNET_VERBOSE")):
             print(
-                "tailnet env sync skipped "
+                "Hivemind Sync env skipped "
                 + ", ".join(failed)
                 + " (run setup on that machine and ensure the telemetry collector is reachable)",
                 file=sys.stderr,
             )
         else:
             print(
-                f"tailnet env sync: {len(failed)} of {attempted_targets} peer{'s' if attempted_targets != 1 else ''} not ready; set HIVE_ENV_TAILNET_VERBOSE=true for details",
+                f"Hivemind Sync env: {len(failed)} of {attempted_targets} peer{'s' if attempted_targets != 1 else ''} not ready; set HIVE_ENV_TAILNET_VERBOSE=true for details",
                 file=sys.stderr,
             )
 

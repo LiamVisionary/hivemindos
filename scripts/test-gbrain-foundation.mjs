@@ -96,13 +96,13 @@ has("src/features/dashboard/views/VaultPanel.tsx", "tradingBrainEnabled", "Tradi
 has("src/features/dashboard/views/VaultPanel.tsx", "Model backend needs attention", "Syntho model repair guidance");
 has("src/features/dashboard/brain-modules.tsx", "Advanced actions", "Brain module advanced disclosure");
 has("src/features/dashboard/brain-modules.tsx", "brainServicePrimaryActions", "Brain module primary actions");
-has("src/features/dashboard/DashboardApp.tsx", "Loading Brain Services", "Vault panel loading fallback");
+has("src/features/dashboard/DashboardApp.tsx", 'vaultPanelMode !== "brain-services"', "Brain Services status refresh gate");
 has("src/features/dashboard/views/brain-services.module.css", "brainServiceSegmented", "Brain Services segmented pill styling");
 has("src/features/dashboard/views/brain-services.module.css", "brainServiceOverviewGrid", "Brain Services overview card grid");
 has("src/features/dashboard/views/VaultPanel.tsx", "Synthesis is the curated layer", "Synthesis service card");
 has("src/features/dashboard/DashboardApp.tsx", "/api/brain/gbrain/status", "GBrain status API call");
 has("src/features/dashboard/DashboardApp.tsx", "/api/brain/synto/status", "Syntho status API call");
-has("src/app/page.tsx", "vaultPanel", "Vault panel deep link query");
+has("src/app/DashboardServerHome.tsx", "vaultPanel", "Vault panel deep link query");
 has("src/features/dashboard/DashboardApp.tsx", "schedulerVaultAutoSyncKeyRef", "Automations vault auto-sync guard");
 has("src/features/dashboard/DashboardApp.tsx", 'activeView !== "scheduler"', "Automations view auto-sync condition");
 has("src/features/dashboard/DashboardApp.tsx", "Syncing shared vault automations...", "Automations auto-sync status");
@@ -136,6 +136,8 @@ for (const token of [
   "Memory/Meetings",
   "Memory/Weekly Reviews",
   "Memory/Distillations",
+  "Operations/Secure",
+  "Operations/Runtime Mirrors",
   "Archive/Processed Requests",
   "agentName: \"Queen Bee\"",
   "machineName: \"Foundation Workflows\"",
@@ -154,6 +156,8 @@ for (const [path, content] of [["setup.sh", setupSh], ["setup.ps1", setupPs]]) {
     "Operations/Automations",
     "Operations/Work Board",
     "Operations/Brain Services",
+    "Operations/Secure",
+    "Operations/Runtime Mirrors",
     "Templates/HivemindOS",
     'NEXT_PUBLIC_HIVE_GBRAIN_SURFACE_ENABLED" "true"',
     "NEXT_PUBLIC_SYNTO_CLI_PATH",
@@ -169,6 +173,7 @@ for (const [path, content] of [["setup.sh", setupSh], ["setup.ps1", setupPs]]) {
 for (const [path, content] of [["uninstall.sh", uninstallSh], ["uninstall.ps1", uninstallPs]]) {
   for (const token of [
     "Remove optional GBrain and Syntho config keys from .env.local?",
+    "Remove shared vault secure-folder config key from .env.local?",
     "Remove optional GBrain service note from the Obsidian vault?",
     "Remove optional Syntho service note from the Obsidian vault?",
     "Uninstall global Syntho CLI installed by uv?",
@@ -187,6 +192,8 @@ for (const [path, content] of [["uninstall.sh", uninstallSh], ["uninstall.ps1", 
     "Memory/Meetings",
     "Memory/Weekly Reviews",
     "Memory/Distillations",
+    "Operations/Secure",
+    "Operations/Runtime Mirrors",
     "Archive/Processed Requests",
   ]) {
     assert.ok(content.includes(token), `${path} missing uninstall mirror ${token}`);

@@ -1,4 +1,4 @@
-// src/components/fusion/ConstellationHero.tsx
+// src/features/dashboard/views/fusion-showcase/ConstellationHero.tsx
 // The animated Constellation hero: chat prompt → capabilities bounce onto a
 // sunken shelf → bees carry them into orbit → beams fuse into the core →
 // checkmark → the field clears to a single created-skill card.
@@ -7,11 +7,12 @@
 import * as React from "react";
 import Image from "next/image";
 import { Search, GitBranch, CheckCircle2 } from "lucide-react";
-import { CAPS, MACHINES, TONE, COPY, CORE_EMBLEM, type Capability } from "./fusion-data";
+import { CAPS, MACHINES, TONE, COPY, CORE_EMBLEM, type Capability, type Machine } from "./fusion-data";
 import { Asset, Chip, Corners, Eyebrow, HexNode, MachineTag } from "./hex-node";
 import { ChatPanel } from "./ChatPanel";
 import { LottieBee } from "./lottie-bee";
 import type { Stage } from "./use-fusion-stage";
+import type { FusionSkillResult } from "@/lib/services/fusion/fusion-skill";
 import styles from "./fusion.module.css";
 
 const SW = 600, CX = 300, CY = 206, CORE = 150, AS = 52;
@@ -24,6 +25,7 @@ function orbitPos(i: number, n: number) {
   return { x: CX + Math.cos(ang) * r, y: CY + Math.sin(ang) * r };
 }
 function shelfPos(i: number, n: number) {
+  if (n <= 1) return { x: CX, y: SHELF_Y };
   return { x: 50 + (500 / (n - 1)) * i, y: SHELF_Y };
 }
 
@@ -46,9 +48,9 @@ function createdSkillCopy(prompt: string) {
   };
 }
 
-function CreatedSkillCard({ prompt }: { prompt: string }) {
-  const used = CAPS.filter((c) => c.used);
-  const skill = createdSkillCopy(prompt);
+function CreatedSkillCard({ prompt, capabilities, result }: { prompt: string; capabilities: Capability[]; result?: FusionSkillResult | null }) {
+  const used = capabilities.filter((c) => c.used);
+  const skill = result?.skill ?? createdSkillCopy(prompt);
   return (
     <div className={styles.shell} style={{
       position: "relative", zIndex: 6, width: 252, padding: "26px 22px 22px",
@@ -76,14 +78,16 @@ function CreatedSkillCard({ prompt }: { prompt: string }) {
   );
 }
 
-function StatusChips() {
+function StatusChips({ result, capabilities }: { result?: FusionSkillResult | null; capabilities: Capability[] }) {
+  const discovered = result?.discoveredCount ?? capabilities.length;
+  const fused = result?.fusedCount ?? capabilities.filter((capability) => capability.used).length;
   return (
     <div style={{
       display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap",
       animation: "fz-rise 360ms ease 680ms both",
     }}>
-      <Chip tone="teal" icon={Search}>10 discovered</Chip>
-      <Chip tone="gold" icon={GitBranch}>5 fused</Chip>
+      <Chip tone="teal" icon={Search}>{discovered} discovered</Chip>
+      <Chip tone="gold" icon={GitBranch}>{fused} fused</Chip>
       <Chip tone="violet" icon={CheckCircle2}>proved</Chip>
     </div>
   );
@@ -110,6 +114,10 @@ export function ConstellationHero({
   stage,
   started,
   submittedPrompt,
+  capabilities = CAPS,
+  machines = MACHINES,
+  fusionResult,
+  fusionError,
 }: {
   draft: string;
   onDraftChange: (value: string) => void;
@@ -117,8 +125,14 @@ export function ConstellationHero({
   stage: Stage;
   started: boolean;
   submittedPrompt: string;
+  capabilities?: Capability[];
+  machines?: Machine[];
+  fusionResult?: FusionSkillResult | null;
+  fusionError?: string;
 }) {
-  const caps = CAPS, n = caps.length;
+  const caps = capabilities;
+  const activeMachines = machines;
+  const n = caps.length;
   const carrying = stage.at("carry");
   const showConn = stage.at("fuse") && !stage.at("reveal");
   const coreGone = stage.at("verify");
@@ -143,6 +157,10 @@ export function ConstellationHero({
           stage={stage}
           started={started}
           submittedPrompt={submittedPrompt}
+          fusionResult={fusionResult}
+          fusionError={fusionError}
+          capabilityCount={caps.length}
+          machineCount={activeMachines.length}
         />
 
         <div className={styles.shell} style={{
@@ -154,13 +172,13 @@ export function ConstellationHero({
           <Corners />
           {reveal ? (
             <div style={{ display: "grid", gap: 16, justifyItems: "center" }}>
-              <CreatedSkillCard prompt={submittedPrompt} />
-              <StatusChips />
+              <CreatedSkillCard prompt={submittedPrompt} capabilities={caps} result={fusionResult} />
+              <StatusChips result={fusionResult} capabilities={caps} />
             </div>
           ) : (
             <>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-                {MACHINES.map((m) => <MachineTag key={m.id} m={m} active={stage.at("discover")} />)}
+                {activeMachines.map((m) => <MachineTag key={m.id} m={m} active={stage.at("discover")} />)}
               </div>
 
               <div style={{ position: "relative", width: SW, height: 580, maxWidth: "100%", margin: "0 auto", transform: `translateY(${SCENE_OFFSET_Y}px)` }}>

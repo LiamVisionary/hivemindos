@@ -47,14 +47,39 @@ description: Local-first agent fleet control room documentation.
     <a href="features/wallets-honey-and-x402.html">Open wallet docs</a>
   </section>
   <section class="docCard">
+    <h3>GitLawb Code Proof</h3>
+    <p>See how HivemindOS keeps the private agent work trail while GitLawb proves the code that shipped.</p>
+    <a href="integrations/gitlawb.html">Open GitLawb docs</a>
+  </section>
+  <section class="docCard">
     <h3>Architecture</h3>
     <p>Follow the process boundaries, route groups, collector responsibilities, storage model, and safety-sensitive networking paths.</p>
     <a href="architecture/">Open architecture</a>
   </section>
   <section class="docCard">
+    <h3>Whole Brain</h3>
+    <p>Understand the shared Obsidian vault, canonical folder map, brain services, shared skills, sync health, and architecture sync rules.</p>
+    <a href="whole-brain/">Open whole brain</a>
+  </section>
+  <section class="docCard">
+    <h3>Hivemind Sync</h3>
+    <p>See how shared brain files, shared env, and handoff transfers move between trusted machines.</p>
+    <a href="features/hivemind-sync.html">Open sync docs</a>
+  </section>
+  <section class="docCard">
     <h3>Runtime Guides</h3>
     <p>Review runtime-specific setup and behavior for Hermes, AEON, and the adapter layer that keeps runtime surfaces consistent.</p>
     <a href="runtimes/">Open runtimes</a>
+  </section>
+  <section class="docCard">
+    <h3>Calling</h3>
+    <p>Call HivemindOS agents from the dashboard or paired mobile app, with BYOK Realtime calls by default and Cloud/LiveKit rooms as the paid path.</p>
+    <a href="features/calling.html">Open calling docs</a>
+  </section>
+  <section class="docCard">
+    <h3>Monetization</h3>
+    <p>See the free-vs-paid boundary, ecosystem plan, Honey and HIVE model, treasury strategy, and premium service paths.</p>
+    <a href="monetization/">Open monetization docs</a>
   </section>
   <section class="docCard">
     <h3>Product Guidance</h3>
@@ -70,12 +95,35 @@ The codebase now spans more than the original Fleet, Work, Brain, Chat, and Wall
 - My Apps: hivenet app and API-service discovery with icon proxying, health checks, service-kind signatures, OpenAPI/Hivemind route catalogs, route copy actions, and safe open links.
 - AEON: repository/workspace management, local clone/link flows, GitHub-backed duplicates, scheduler handoff, brain access, and deliverable discovery/download/transfer.
 - Swarm: MiroShark template-driven simulations, scenario helpers, archive loading, X/polymarket/reddit-style outputs, run intelligence, publish actions, and analysis-agent selection.
-- Brain Services: Obsidian graph, shared skills, GBrain, Syntho, trading-brain install/status, service notes, Synthesis-folder configuration, and source-access policy controls.
+- Brain Services: Obsidian graph, shared skills, GBrain, Syntho, trading brain install/status, service notes, Synthesis folder configuration, source access policy controls, vault doctor, and whole brain architecture docs.
 - Wallets, Tokens, and Usage: per-agent wallets, Base/Solana token rails, MoneyClaw key validation, UsePod prepaid status, x402 smoke tests, encrypted wallet-vault backup/restore, Honey observation, and Bankr HIVE claims.
 - GitLawb Code Proof: lightweight CLI/DID setup, project registry, task proof badges, Fleet Code Node status, and lazy local repo node hosting.
 - Work History and Maintenance: dynamic changelog history, note-to-Kanban intake, bulk task triage, process/heap memory telemetry, and conservative local repair actions.
 - Native Desktop: a Tauri shell that can read desktop status directly and use native local folder browsing/creation while preserving the browser API fallbacks.
 - Phone: gateway-backed phone pairing, scheduled/ring-agent calls, dashboard LiveKit calls, AEON call context, and mobile push readiness checks.
+
+## GitLawb Code Proof
+
+AI agents need more than a place to put tasks. They need memory, project context, machine routing, work history, and a way to prove what code actually shipped.
+
+That is the split between HivemindOS and GitLawb. HivemindOS is the private control room. It keeps the agent trail, the project map, the machine context, and the operator workflow. GitLawb is the signed proof layer. It gives code work a local identity, repo provenance, and an optional code node when a project needs local repo hosting.
+
+The default stays simple. Setup can make Code Proof ready with the lightweight GitLawb CLI and a local DID, while the heavier node path waits until it is actually useful. Most users should just see that their code work can be linked and proven without becoming protocol experts.
+
+One machine can work across many projects. Each project can link to its own GitLawb repo, and Work tasks inherit the right proof context from the project. The private Brain stays private. The code proof stays clean.
+
+<div class="docGrid">
+  <section class="docCard">
+    <h3>How It Fits</h3>
+    <p>HivemindOS remembers the work. GitLawb proves the code. That is the trust layer for agent shipped software.</p>
+    <a href="integrations/gitlawb.html">Read the integration</a>
+  </section>
+  <section class="docCard">
+    <h3>Where It Shows Up</h3>
+    <p>Setup prepares Code Proof, Work shows proof badges, Fleet can show Code Node status, and Integrations keeps the deeper controls out of the daily workflow.</p>
+    <a href="features/work-and-scheduler.html">See the Work loop</a>
+  </section>
+</div>
 
 ## Repository Overview
 

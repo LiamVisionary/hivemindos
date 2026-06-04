@@ -6,8 +6,8 @@ description: Visual atlas for HivemindOS architecture, wallets, runtimes, fleet,
 # Diagrams And Maps
 
 <section class="atlasHero">
-  <strong>A visual atlas for the local-first agent control room.</strong>
-  <p>These generated plates and diagrams compress the main product and engineering surfaces into fast operator maps: what talks to what, where state lives, which rails move money or tokens, and where trust boundaries sit.</p>
+  <strong>A visual atlas for the local agent control room.</strong>
+  <p>These plates and diagrams are quick maps for the hive: what talks to what, where state lives, which rails move money or tokens, and where the trust boundaries sit.</p>
 </section>
 
 ## Generated Infographic Plates
@@ -64,7 +64,7 @@ description: Visual atlas for HivemindOS architecture, wallets, runtimes, fleet,
 ## Operator Signals
 
 <div class="signalGrid">
-  <section class="signalCard"><strong>Primary State</strong><span>Shared Obsidian vault, `~/.hivemindos`, runtime homes, browser preferences.</span></section>
+  <section class="signalCard"><strong>Primary State</strong><span>Shared Obsidian vault, `~/.hivemindos`, runtime homes, and browser preferences.</span></section>
   <section class="signalCard"><strong>Private Network</strong><span>Collectors, Link proxy, app proxies, Syncthing, and Tailnet services stay private.</span></section>
   <section class="signalCard"><strong>Money Surface</strong><span>Agent wallets, UsePod deposits, Honey/HIVE accounting, x402, and Bankr claims are explicit rails.</span></section>
 </div>

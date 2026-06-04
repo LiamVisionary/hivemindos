@@ -85,7 +85,7 @@ export function machineNetworkIssue(machine: MachineGroup, tailscaleStatus: stri
     return {
       label: "Tailscale not configured. Fix?",
       title: "Tailscale is not configured",
-      detail: "This dashboard is running locally. That is fine for single-machine use, but Fleet discovery, env sync, remote updates, and shared-brain pairing need this machine signed in to Tailscale.",
+      detail: "This dashboard is running locally. That is fine for single-machine use, but Fleet discovery, Hivemind Sync, remote updates, and shared-brain pairing need this machine signed in to Tailscale or connected through Hivemind Link.",
       commands: [
         "# macOS GUI/VPN only",
         "brew install --cask tailscale",
@@ -211,8 +211,8 @@ export function machineNetworkIssue(machine: MachineGroup, tailscaleStatus: stri
   }
   if (machine.envSync && machine.envSync.ready === false) {
     return {
-      label: "Env sync not ready. Fix?",
-      title: "Tailscale SSH / env sync is not ready",
+      label: "Hivemind Sync env not ready. Fix?",
+      title: "Hivemind Sync env is not ready",
       detail: machine.envSync.error || "The local agent bridge is online, but it does not report a working hive-env-add command for env reconciliation.",
       commands: [
         "cd ~/hivemindos",
@@ -423,7 +423,7 @@ export function formatBrainDate(value?: string) {
 export function brainNodePoints(cx: number, cy: number, radius: number) {
   return Array.from({ length: 6 }, (_, index) => {
     const angle = (Math.PI / 3) * index + Math.PI / 6;
-    return `${cx + Math.cos(angle) * radius},${cy + Math.sin(angle) * radius}`;
+    return `${formatBrainSvgNumber(cx + Math.cos(angle) * radius)},${formatBrainSvgNumber(cy + Math.sin(angle) * radius)}`;
   }).join(" ");
 }
 
@@ -507,7 +507,13 @@ export function BrainGraphLoader({
         </g>
         <g className={vaultClass("brainLoaderEdges")}>
           {BRAIN_LOADER_EDGES.map((edge) => (
-            <line key={edge.key} x1={edge.a.x} y1={edge.a.y} x2={edge.b.x} y2={edge.b.y} />
+            <line
+              key={edge.key}
+              x1={formatBrainSvgNumber(edge.a.x)}
+              y1={formatBrainSvgNumber(edge.a.y)}
+              x2={formatBrainSvgNumber(edge.b.x)}
+              y2={formatBrainSvgNumber(edge.b.y)}
+            />
           ))}
         </g>
       </svg>
@@ -535,6 +541,11 @@ export function brainHexVertex(center: BrainPoint, radius: number, index: number
 
 export function brainPointKey(point: BrainPoint) {
   return `${Math.round(point.x * 1000) / 1000},${Math.round(point.y * 1000) / 1000}`;
+}
+
+export function formatBrainSvgNumber(value: number) {
+  const rounded = Math.round(value * 1000) / 1000;
+  return Object.is(rounded, -0) ? "0" : String(rounded);
 }
 
 export function brainGraphEdgePath(

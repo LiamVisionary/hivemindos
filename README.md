@@ -11,7 +11,7 @@
 
 > **A virtual private network for your agents.**
 >
-> HivemindOS lets agents collaborate across all of your machines through one private control room. Connect agents over Tailscale, give them a shared Obsidian brain, sync environment variables safely, assign work, monitor progress, and manage the whole fleet from one simple dashboard.
+> HivemindOS lets agents collaborate across all of your machines through one private control room. Connect agents over trusted machine links, give them a shared Obsidian brain, move env and handoff files with Hivemind Sync, assign work, monitor progress, and manage the whole fleet from one simple dashboard.
 >
 > It supports modern agent runtimes like Hermes, OpenClaw, and Aeon, includes full MiroShark simulation integration, and can provision agent wallets on Base and Solana so agents can hold funds, pay for tools, and operate with their own controlled budgets.
 
@@ -34,8 +34,8 @@ Clone it, run one setup command, and get a local-first dashboard for the agents 
 - **See every agent from one dashboard** across this machine and trusted Tailscale-connected machines.
 - **Cross-machine agent discovery and connection via Tailscale VPN** so agents can collaborate without public exposure.
 - **Share one Obsidian brain** for memory, handoffs, skills, work boards, and shared context.
-- **Share environment variables across agent machines** with `hive-env-add`, without copying secrets by hand.
-- **Send targeted files to a machine, runtime, or agent** with `hive-transfer` envelopes in the shared vault.
+- **Move shared env between agent machines** with Hivemind Sync helpers, without copying secrets by hand.
+- **Send handoff files to a machine, runtime, or agent** with `hive-transfer` envelopes in the shared vault.
 - **Assign work to agents** through a shared Kanban board with retries, stale-work recovery, and human handoff.
 - **Attach signed code provenance** with GitLawb Code Proof for project-linked work.
 - **Create and import schedules** so supported runtimes can keep working in the background.
@@ -49,8 +49,8 @@ By default, setup uses **Hivemind Link**: an app-managed Tailscale node that use
 
 - For local-only use, you can skip Tailscale completely.
 - For app-managed Fleet/chat access, run normal setup. Hivemind Link keeps the collector bound to localhost and exposes it only through the embedded Link sidecar.
-- For full Tailnet extras such as Tailscale SSH env sync, rsync repair, and HivemindOS-managed Syncthing peer addressing, run `./setup.sh --system-tailscale`, then install/sign in to system Tailscale.
-- On macOS, the App Store/sandboxed GUI build can join your Tailnet, but it cannot host the Tailscale SSH server. That is fine for VPN and Syncthing, but `hive-env-add` peer env sync and rsync repair from that Mac need a Tailscale SSH-capable host. Tailscale documents the macOS build differences here: [Three ways to run Tailscale on macOS](https://tailscale.com/docs/concepts/macos-variants).
+- For full Tailnet extras such as Tailscale SSH pulls, rsync repair, and HivemindOS-managed Syncthing peer addressing, run `./setup.sh --system-tailscale`, then install/sign in to system Tailscale.
+- On macOS, the App Store/sandboxed GUI build can join your Tailnet, but it cannot host the Tailscale SSH server. That is fine for VPN, collector env pushes, and Syncthing, but `hive-env-add --pull-from` and rsync repair from that Mac need a Tailscale SSH-capable host. Tailscale documents the macOS build differences here: [Three ways to run Tailscale on macOS](https://tailscale.com/docs/concepts/macos-variants).
 - To make a macOS machine host Tailscale SSH, install the open-source `tailscale` + `tailscaled` CLI/daemon build from the [Tailscaled on macOS guide](https://github.com/tailscale/tailscale/wiki/Tailscaled-on-macOS), or use Homebrew:
 
 ```bash
@@ -102,11 +102,11 @@ pnpm dashboard-auth rotate-secret
 
 Use `copy-token` when you need to paste the token into the unlock screen again. Use `reset-token` if the token is lost, then restart the dashboard so it reloads `.env.local`. Use `rotate-secret` when you also want to invalidate existing browser sessions after restart.
 
-Setup checks Node.js and pnpm/Corepack, installs dependencies, installs `hive-env-add`, installs the lightweight machine monitor where supported, prepares GitLawb Code Proof where available, starts the dashboard when possible, and can open the dashboard for you. Production dashboard builds are skipped by default; use `./setup.sh --build` when you explicitly want one. On macOS/Linux use `setup.sh`; on native Windows use `setup.ps1`.
+Setup checks Node.js and pnpm/Corepack, installs dependencies, installs the hive env helpers, installs the lightweight machine monitor where supported, prepares GitLawb Code Proof where available, starts the dashboard when possible, and can open the dashboard for you. Production dashboard builds are skipped by default; use `./setup.sh --build` when you explicitly want one. On macOS/Linux use `setup.sh`; on native Windows use `setup.ps1`.
 
 GitLawb setup is proof-ready by default, not full node hosting by default. On macOS/Linux, interactive setup offers to install `gl`, `git-remote-gitlawb`, and the `gitlawb-node` binary, then offers to create a local DID without registering with a public node. HivemindOS does not start a GitLawb node, install Docker/Postgres, expose repo hosting, or enable federation/IPFS/Arweave/staking during first setup. Full local node setup stays lazy and is surfaced from Integrations or project linking when a project needs local GitLawb repo hosting.
 
-To remove HivemindOS later, run the matching uninstaller. It asks one prompt at a time before removing services, generated files, GitLawb Code Proof cache/managed binaries, `hive-env-add`, shared-skill agent hints, or optional apps such as Tailscale, Syncthing, pnpm, GnuPG, and Obsidian:
+To remove HivemindOS later, run the matching uninstaller. It asks one prompt at a time before removing services, generated files, GitLawb Code Proof cache/managed binaries, hive env helpers, shared-skill agent hints, or optional apps such as Tailscale, Syncthing, pnpm, GnuPG, and Obsidian:
 
 ```bash
 ./uninstall.sh
@@ -129,6 +129,7 @@ powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
 ```bash
 hive-env-add OPENAI_API_KEY
 hive-env-add ANTHROPIC_API_KEY=...
+hive-env-remove OLD_API_KEY
 ```
 
 ## Honey, HIVE, And Compute
@@ -178,8 +179,8 @@ The adapter calls `POST /v1/chat/completions` for chat and `GET /v1/models` for 
 | **Runtime adapters** | Supports Hermes, OpenClaw, Aeon, MiroShark, and generic machine-backed agents through a neutral adapter layer |
 | **Local model runtimes** | Adds a generic OpenAI-compatible adapter for LM Studio, Ollama, vLLM, llama.cpp server, LocalAI, and similar `/v1/chat/completions` services |
 | **Shared Obsidian brain** | Stores memory, handoffs, shared context, Kanban state, and reusable skills in a local markdown vault |
-| **Shared env sync** | Adds keys once with `hive-env-add` and syncs them to trusted machines over Tailscale SSH |
-| **Targeted file transfers** | Routes artifacts through the shared vault to a specific machine, runtime, or agent with payload hashes and acknowledgements |
+| **Hivemind Sync** | Moves shared brain files, shared env, and handoff transfers between trusted machines |
+| **Handoff transfers** | Routes artifacts through `.hivemindos-transfers/` to a specific machine, runtime, or agent with payload hashes and acknowledgements |
 | **Work board** | Gives agents a shared Kanban queue for tasks, delegation, retries, stale work, and human handoff |
 | **GitLawb Code Proof** | Links projects and tasks to signed GitLawb provenance while keeping local node hosting optional |
 | **Scheduler studio** | Creates, imports, pauses, resumes, and runs background schedules where runtimes support them |
@@ -211,19 +212,24 @@ HivemindOS uses Tailscale in a few specific ways:
 
 - **Agent connection:** the dashboard finds and connects to agent machines through your Tailscale VPN.
 - **Hivemind Link:** optional app-managed Link nodes use Tailscale's embedded `tsnet` library to expose only the local HivemindOS collector over your own Tailscale account, without requiring the system Tailscale VPN client.
-- **Env sync:** `hive-env-add` sends env updates to trusted peer machines over Tailscale SSH. Secret values travel through stdin, not command arguments, logs, or shared notes.
-- **Brain sync:** the shared Obsidian vault is a local folder. In Brain, choose whether an external provider such as Obsidian Sync, iCloud Drive, Dropbox, Git, or another folder sync tool owns realtime sync, or let HivemindOS pair Syncthing over Tailscale.
+- **Hivemind Sync env:** `hive-env-add` and `hive-env-remove` send env changes to trusted ready peers through collector `/env` endpoints. `--pull-from` still uses Tailscale SSH because it asks a peer to export its local env set.
+- **Hivemind Sync brain:** the shared Obsidian vault is a local folder. In Brain, choose whether an external provider such as Obsidian Sync, iCloud Drive, Dropbox, Git, or another folder sync tool owns realtime sync, or let HivemindOS pair Syncthing over Tailscale.
+- **Hivemind Sync handoffs:** `hive-transfer` writes routed file envelopes into `.hivemindos-transfers/` inside the vault. Syncthing or the selected vault sync owner moves those files to the receiver.
 - **Vault repair:** rsync over Tailscale SSH is available as an advanced fallback for one-shot push, pull, or bidirectional repair jobs. rsync repair conflicts are written as explicit `.conflict-host-timestamp` copies; Syncthing conflicts are handled by Syncthing in the vault and Syncthing UI.
 
 Plaintext secrets do not belong in the shared vault. If GPG is configured, `hive-env-add` can refresh an encrypted `hive.env.gpg` backup in your chosen notes folder.
 
 ## Shared Env
 
-Setup installs `hive-env-add`, `hive-env-check`, and `hive-env-run` into `~/.local/bin`. GnuPG is optional; when it is installed and a recipient or public key is configured, `hive-env-add` refreshes the encrypted `hive.env.gpg` backup in the shared notes folder.
+For the focused docs page, see [Shared Env](docs/whole-brain/shared-env.md).
+
+Setup installs `hive-env-add`, `hive-env-remove`, `hive-env-delete`, `hive-env-check`, and `hive-env-run` into `~/.local/bin`. GnuPG is optional; when it is installed and a recipient or public key is configured, `hive-env-add` refreshes the encrypted `hive.env.gpg` backup in the shared notes folder.
 
 ```bash
 hive-env-add KEY=value
 hive-env-add KEY
+hive-env-remove KEY
+hive-env-delete KEY
 hive-env-add --import-env
 hive-env-add --reconcile
 hive-env-add --pull-from root@ubuntu.tailnet.ts.net
@@ -231,7 +237,7 @@ hive-env-check KEY
 hive-env-run -- command arg...
 ```
 
-By default `hive-env-add` updates the canonical shared hive env at `~/.hivemindos/.env`. Apps, scripts, and agents should consume that shared env at runtime instead of copying secrets into project `.env` files or runtime-specific secret stores. Use `hive-env-check KEY` to verify presence without printing values, and use `hive-env-run -- <command>` to execute any command with the shared env loaded into the child process.
+By default `hive-env-add` updates the canonical shared hive env at `~/.hivemindos/.env`. `hive-env-remove KEY` removes a key from that same store and syncs the removal through the same path. `hive-env-delete KEY` is an alias for people who reach for delete first. Apps, scripts, and agents should consume that shared env at runtime instead of copying secrets into project `.env` files or runtime-specific secret stores. Use `hive-env-check KEY` to verify presence without printing values, and use `hive-env-run -- <command>` to execute any command with the shared env loaded into the child process.
 
 Runtime-specific compatibility writes remain explicit for legacy/runtime-native stores:
 
@@ -241,7 +247,7 @@ hive-env-add --runtime aeon OPENAI_API_KEY
 hive-env-add --runtime openclaw TAVILY_API_KEY
 ```
 
-When Tailscale SSH is available and env sync is enabled, HivemindOS updates trusted peer machines that report they are ready for env sync. Setup offers to pull missing keys from an existing ready peer and push this machine's keys to peers. `--reconcile` does the same push later, which is useful after adding a new device. `--pull-from USER@HOST` imports missing keys from a trusted peer and preserves local conflicts by default; use `--conflict remote-wins` or `--conflict fail` when you need a stricter merge. Advanced users can set `HIVE_ENV_TAILNET_TARGETS` to choose exact target machines.
+When Hivemind Sync is enabled, HivemindOS updates trusted peer machines that report they are ready for env sync. Setup offers to pull missing keys from an existing ready peer and push this machine's keys to peers. `--reconcile` does the same push later through collector `/env` endpoints, which is useful after adding a new device. `--pull-from USER@HOST` imports missing keys from a trusted peer over Tailscale SSH and preserves local conflicts by default; use `--conflict remote-wins` or `--conflict fail` when you need a stricter merge. Advanced users can set `HIVE_ENV_TAILNET_TARGETS` to choose exact target machines.
 
 ## Shared Obsidian Brain
 
@@ -250,8 +256,8 @@ The Brain workspace can hold:
 - agent inboxes
 - shared context
 - handoff notes
-- AI-ready note templates and vault-writing conventions
-- targeted file-transfer envelopes
+- AI ready note templates and vault writing conventions
+- Hivemind Sync handoff transfer envelopes in `.hivemindos-transfers/`
 - memory files
 - Kanban board state
 - reusable skills
@@ -259,11 +265,11 @@ The Brain workspace can hold:
 
 HivemindOS can auto-detect common local Obsidian vault locations, validate an explicit vault path, and fall back to local Kanban storage at `~/.hivemindos/kanban` if the vault is unavailable.
 
-Setup also seeds a first-run shared-brain foundation: an AI-ready vault contract under `Operations/`, reusable note templates under `Templates/HivemindOS/`, optional Obsidian CLI and plugin-pack status notes under `Operations/Brain Services/`, and disabled workflow schedules for morning context, meetings, research ingestion, weekly review, vault health checks, decision review, project updates, argument building, book notes, feedback-loop capture, and durable knowledge distillation.
+Setup also seeds the first brain foundation: an AI ready vault contract under `Operations/`, reusable note templates under `Templates/HivemindOS/`, optional Obsidian CLI and plugin-pack status notes under `Operations/Brain Services/`, encrypted backup references under `Operations/Secure/`, runtime mirrors under `Operations/Runtime Mirrors/`, vault cleanup manifests under `Operations/Vault Migrations/`, and disabled workflow schedules for morning context, meetings, research ingestion, weekly review, vault health checks, decision review, project updates, argument building, book notes, feedback capture, and durable knowledge distillation.
 
-For multi-machine sharing, the built-in path pairs Syncthing over Tailscale so trusted machines each keep a local copy of the same vault. No Obsidian Sync subscription is required. If you already use Obsidian Sync, iCloud Drive, Dropbox, Git, or another provider, select that external sync owner in Brain so HivemindOS does not auto-pair Syncthing on top of it. When setup finds another Syncthing-capable collector and the Brain setting allows HivemindOS Syncthing, it can pair the shared vault and write/read a small test note to verify that sync is actually flowing.
+For multi-machine sharing, Hivemind Sync can pair Syncthing over Tailscale so trusted machines each keep a local copy of the same vault. No Obsidian Sync subscription is required. If you already use Obsidian Sync, iCloud Drive, Dropbox, Git, or another provider, select that external sync owner in Brain so HivemindOS does not auto-pair Syncthing on top of it. When setup finds another Syncthing-capable collector and the Brain setting allows HivemindOS Syncthing, it can pair the shared vault and write/read a small test note to verify that sync is actually flowing.
 
-For the full sync and networking model, see [Syncing And Tailscale Architecture](docs/syncing-and-tailscale.md). For artifact handoffs, see [Targeted Hive File Transfers](docs/targeted-file-transfers.md).
+For the full brain model, see [Whole Brain](docs/whole-brain/index.md). For the sync and networking model, see [Hivemind Sync](docs/features/hivemind-sync.md) and [Syncing And Tailscale Architecture](docs/syncing-and-tailscale.md). For artifact handoffs, see [Hivemind Sync Handoff Transfers](docs/targeted-file-transfers.md).
 
 ## Multi-Machine Setup
 
@@ -275,7 +281,7 @@ cd hivemindos
 ./scripts/install-telemetry-collector.sh
 ```
 
-The script installs the lightweight machine monitor and starts the services needed for dashboard discovery, env sync readiness, and optional Syncthing brain sync.
+The script installs the lightweight machine monitor and starts the services needed for dashboard discovery, Hivemind Sync env readiness, and optional Syncthing brain sync.
 
 For app-managed Link mode instead of a system Tailscale install, use either normal setup or the collector-only command:
 
@@ -290,7 +296,7 @@ In Link mode, remote collectors are reached through the local sidecar URL shape
 URL on port `8788`; only plain local collector URLs should use the active
 collector port from `~/.hivemindos/collector.env`.
 
-Use `./setup.sh --system-tailscale` only when you want the older full Tailnet setup surface: macOS firewall allow-listing, Tailscale SSH, rsync repair, and Syncthing pairing.
+Use `./setup.sh --system-tailscale` only when you want the older full Tailnet setup surface: macOS firewall allow-listing, Tailscale SSH, rsync repair, and Hivemind Sync Syncthing pairing.
 
 ## Private By Default
 

@@ -1,10 +1,12 @@
 # Fleet
 
-Fleet is the machine-first control room. It shows local and Tailnet-reachable machines, runtimes, agents, health signals, version drift, setup gaps, update actions, active app badges, and hivenet app/API services.
+Fleet is the machine view.
+
+It shows what is online, what is reachable, which agents are running, which apps exist on the hive, and which machines need attention. The point is simple: before you ask an agent to do work, you should know where it lives and whether that machine is healthy.
 
 <figure class="imagePlate">
   <img src="../assets/img/diagrams/fleet-tailnet-topology.jpg" alt="Generated Fleet and Tailnet topology infographic showing dashboard, local collector, Tailnet link, remote collectors, machine health, apps, and runtimes.">
-  <figcaption>Fleet reads this Mac through the local collector, then reaches remote collectors over the private Tailnet or Hivemind Link path.</figcaption>
+  <figcaption>Fleet reads This Mac through the local collector, then reaches remote collectors over the private Tailnet or Hivemind Link path.</figcaption>
 </figure>
 
 ## How It Works
@@ -18,7 +20,7 @@ Fleet is the machine-first control room. It shows local and Tailnet-reachable ma
 - Collector data comes from `scripts/agent-telemetry-collector.mjs`, usually through Tailscale or Hivemind Link.
 - Connected-app notifications are coordinated by `use-fleet-notifications-controller.tsx`, active app matching in `src/components/fleet/active-apps.ts`, and app details in `MyAppsPanel.tsx`.
 
-## Capabilities
+## What Fleet Can Do
 
 - Local and remote machine cards.
 - Runtime and agent visibility.
@@ -35,7 +37,7 @@ Fleet is the machine-first control room. It shows local and Tailnet-reachable ma
 
 ## My Apps And Route Catalogs
 
-My Apps treats remote services as first-class hivenet resources:
+My Apps treats remote services as real hivenet resources:
 
 - Interactive apps get launch cards with icons, machine labels, online state, and local/remote markers.
 - API services are marked non-interactive and show health/base URLs instead of pretending they are browser apps.
@@ -43,7 +45,7 @@ My Apps treats remote services as first-class hivenet resources:
 - Hivemind-owned signatures can recognize services from `/health` payloads or known ports and attach route catalogs.
 - MiroShark's catalog includes template routes, simulation lifecycle, run-data exports, graph endpoints, observability endpoints, settings, and MCP status.
 
-This keeps API-only companions visible without requiring those companions to expose a marketing page or Hivemind-shaped UI.
+This keeps API-only companions visible without requiring every service to ship a marketing page or a Hivemind-shaped UI.
 
 ## Main Code Paths
 

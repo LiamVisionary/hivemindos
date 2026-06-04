@@ -53,6 +53,7 @@ export function isChatSidebarTask(task: AgentTask) {
 
 export function chatSeedMessagesForTask(task: AgentTask): ChatMessage[] {
   if (task.messages?.some((message: ChatMessage) => message.content.trim())) return task.messages;
+  if (task.source === "hermes-state") return [];
   const placeholderOnly = !task.lastMessage
     || task.lastMessage === HERMES_EMPTY_TRANSCRIPT_MESSAGE
     || /no readable message was stored/i.test(task.lastMessage);

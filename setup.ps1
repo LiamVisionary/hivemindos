@@ -129,10 +129,10 @@ function Ensure-Tailscale {
       return $true
     }
     Warn "Tailscale is installed but not connected"
-    Warn "Multi-machine collaboration and shared memory sync are disabled until you open Tailscale and sign in, or run: tailscale up"
+    Warn "Hivemind Sync is disabled until you open Tailscale and sign in, or run: tailscale up"
     return $false
   }
-  if (Ask-YesNo "Tailscale is missing. Install it for multi-machine collaboration and shared memory sync?" $true) {
+  if (Ask-YesNo "Tailscale is missing. Install it for Hivemind Sync between machines?" $true) {
     Install-WingetPackage "Tailscale" "Tailscale.Tailscale" | Out-Null
     Refresh-Path
   }
@@ -141,8 +141,8 @@ function Ensure-Tailscale {
     Warn "Open Tailscale and sign in, or run: tailscale up"
   } else {
     Warn "Tailscale is optional and not installed."
-    Warn "Multi-machine collaboration and shared memory sync are disabled. Local-only dashboard, agents, and local vault features will still work."
-    Warn "To enable multi-machine sync later: winget install --id Tailscale.Tailscale"
+    Warn "Hivemind Sync is disabled. Local-only dashboard, agents, and local vault features will still work."
+    Warn "To enable Hivemind Sync later: winget install --id Tailscale.Tailscale"
   }
   return $false
 }
@@ -153,7 +153,7 @@ function Ensure-Syncthing([bool]$TailnetSyncEnabled) {
     return
   }
   if (-not (Test-Command syncthing)) {
-    if (Ask-YesNo "Syncthing is missing. Install it for realtime shared-brain folder sync?" $true) {
+    if (Ask-YesNo "Syncthing is missing. Install it for Hivemind Sync shared-brain folder sync?" $true) {
       Install-WingetPackage "Syncthing" "Syncthing.Syncthing" | Out-Null
       Refresh-Path
     }
@@ -171,7 +171,7 @@ function Ensure-Syncthing([bool]$TailnetSyncEnabled) {
       Ok "Syncthing started on 127.0.0.1:8384"
     }
   } else {
-    Warn "Syncthing is unavailable; realtime shared-brain folder sync is disabled."
+    Warn "Syncthing is unavailable; Hivemind Sync shared-brain folder sync is disabled."
   }
 }
 
@@ -231,7 +231,7 @@ function Ensure-HiveEnvAdd {
     Warn "Python is missing; hive env shims installed but will need Python to run."
     $pythonCommand = "python"
   }
-  foreach ($commandName in @("hive-env-add", "hive-env-run", "hive-env-check", "hive-transfer", "hive-update")) {
+  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-update")) {
     $shimPath = Join-Path $binDir "$commandName.cmd"
     $scriptPath = Join-Path $Root "scripts\$commandName"
     if ($commandName -eq "hive-transfer") {
@@ -251,7 +251,7 @@ function Ensure-HiveEnvAdd {
       Refresh-Path
       Ok "Added $binDir to user PATH"
     } else {
-      Warn "Add $binDir to PATH to run hive-env-add, hive-env-run, hive-env-check, hive-transfer, and hive-update from any folder"
+      Warn "Add $binDir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, and hive-update from any folder"
     }
   } else {
     Refresh-Path
@@ -448,6 +448,7 @@ Set-EnvLocal "NEXT_PUBLIC_OBSIDIAN_NOTIFICATIONS_FOLDER" $(if ($env:NEXT_PUBLIC_
 Set-EnvLocal "NEXT_PUBLIC_OBSIDIAN_SCHEDULED_FOLDER" $(if ($env:NEXT_PUBLIC_OBSIDIAN_SCHEDULED_FOLDER) { $env:NEXT_PUBLIC_OBSIDIAN_SCHEDULED_FOLDER } else { "Operations/Automations" })
 Set-EnvLocal "NEXT_PUBLIC_OBSIDIAN_SYNTHESIS_FOLDER" $(if ($env:NEXT_PUBLIC_OBSIDIAN_SYNTHESIS_FOLDER) { $env:NEXT_PUBLIC_OBSIDIAN_SYNTHESIS_FOLDER } else { "Synthesis" })
 Set-EnvLocal "NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER" $(if ($env:NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER) { $env:NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER } else { "Operations/Brain Services" })
+Set-EnvLocal "HIVE_NOTE_SECURE_FOLDER" $(if ($env:HIVE_NOTE_SECURE_FOLDER) { $env:HIVE_NOTE_SECURE_FOLDER } else { "Operations/Secure" })
 Set-EnvLocal "NEXT_PUBLIC_GBRAIN_CLI_PATH" $(if ($env:NEXT_PUBLIC_GBRAIN_CLI_PATH) { $env:NEXT_PUBLIC_GBRAIN_CLI_PATH } else { "gbrain" })
 Set-EnvLocal "NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION" $(if ($env:NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION) { $env:NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION } else { "Skills/GBrain" })
 Set-EnvLocal "NEXT_PUBLIC_SYNTO_CLI_PATH" $(if ($env:NEXT_PUBLIC_SYNTO_CLI_PATH) { $env:NEXT_PUBLIC_SYNTO_CLI_PATH } else { "synto" })
@@ -473,17 +474,26 @@ $synthesisFolder = if ($env:NEXT_PUBLIC_OBSIDIAN_SYNTHESIS_FOLDER) { $env:NEXT_P
 $brainServicesFolder = if ($env:NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER) { $env:NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER } else { "Operations/Brain Services" }
 foreach ($folder in @(
   "Intake",
+  "Intake/Requests",
   "Intake/Sources",
+  ".hivemindos-transfers",
   "Memory",
   "Memory/Book Notes",
+  "Memory/Daily Briefings",
   "Memory/Decision Journal",
   "Memory/Meetings",
+  "Memory/Weekly Reviews",
+  "Memory/Imported Sources",
+  "Memory/Distillations",
   "Projects",
   "Operations",
   "Operations/Code Projects",
+  "Operations/Runtime Mirrors",
+  "Operations/Secure",
   "Skills",
   "Templates/HivemindOS",
   "Archive",
+  "Archive/Processed Requests",
   "$synthesisFolder/raw",
   "$synthesisFolder/wiki/.drafts",
   "$synthesisFolder/wiki/sources",
@@ -676,9 +686,9 @@ if (Test-Command gl) {
 Write-Host "  GitLawb node: lazy; not started by setup"
 Write-Host ""
 if ($tailnetSyncEnabled) {
-  Write-Host "Tailscale is connected. Syncthing can sync shared-brain folders over your Tailnet."
+  Write-Host "Tailscale is connected. Hivemind Sync can move shared brain folders, shared env, and handoff transfers between machines."
 } else {
-  Write-Host "Local-only mode is ready. Install and log in to Tailscale later to enable multi-machine collaboration and shared memory sync."
+  Write-Host "Local-only mode is ready. Install and log in to Tailscale later to enable Hivemind Sync."
 }
 Write-Host ""
 if ($dashboardOpenable) {

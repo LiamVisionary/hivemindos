@@ -11,6 +11,8 @@ const NativeFirstRunOnboarding = dynamic(
 );
 
 type DashboardNativeFrameProps = {
+  initialChatAgentId?: string;
+  initialChatLeaf?: string;
   initialView?: DashboardView;
   initialVaultPanelMode?: DashboardVaultPanelMode;
   initialWorkHistory?: WorkHistoryPayload;

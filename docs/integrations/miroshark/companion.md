@@ -1,7 +1,8 @@
 # MiroShark Companion Integration
 
-MiroShark support is optional. HivemindOS owns real fleet coordination; MiroShark
-can run beside it as a scenario rehearsal and swarm simulation engine.
+MiroShark support is optional.
+
+HivemindOS owns real fleet coordination. MiroShark can run beside it as a rehearsal and swarm simulation engine.
 
 ## Integration Model
 
@@ -42,8 +43,7 @@ is supported for local convenience.
 
 ## Zero-Friction Flow
 
-The Swarm tab should never stop at "companion not running." It should show one
-of these states:
+The Swarm tab should never stop at "companion not running." It should show one of these states:
 
 - **Connected**: open MiroShark or inspect setup details.
 - **Detected**: start the local install from the dashboard.
@@ -51,8 +51,7 @@ of these states:
   API key are available.
 - **Needs configuration**: show exactly which prerequisite or key is missing.
 
-Manual fallback commands remain visible in setup details, but they are a backup,
-not the primary path.
+Manual fallback commands remain visible in setup details, but they are a backup, not the primary path.
 
 ## Strategy
 

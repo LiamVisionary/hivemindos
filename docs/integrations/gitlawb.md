@@ -1,12 +1,16 @@
 # GitLawb Code Proof
 
-GitLawb integration gives HivemindOS a signed code-provenance layer without making GitLawb own the private Brain, Work board, or machine routing model.
+GitLawb gives HivemindOS a signed code proof layer.
 
-HivemindOS remains the operator UX and private audit surface. GitLawb provides public-key identity, signed code metadata, optional repo hosting, and future decentralized transport hooks.
+The split is simple. HivemindOS remembers the work. GitLawb proves the code.
+
+HivemindOS stays the private control room for agents, projects, machines, tasks, memory, and operator decisions. GitLawb handles the code provenance side: local identity, signed repo metadata, optional repo hosting, and future transport hooks.
+
+That matters because autonomous coding cannot just be “an agent changed a file.” The operator needs to know what task caused the work, which project it belonged to, where it ran, and whether the code trail can be verified. HivemindOS keeps the private story. GitLawb gives the code a proof surface.
 
 ## Default Setup
 
-HivemindOS uses a proof-ready default:
+HivemindOS uses a proof ready default:
 
 - GitLawb CLI and remote helper are recommended during macOS/Linux setup.
 - A local DID can be created during setup with `gl identity new`.
@@ -14,13 +18,13 @@ HivemindOS uses a proof-ready default:
 - A GitLawb node is not started by default.
 - Public federation, staking, IPFS, Arweave, and public exposure remain explicit opt-in work.
 
-The Tauri first-run wizard opens a user-approved Terminal command that runs `setup.sh --interactive ...`. That setup path prompts for Code Proof from the terminal. The wizard itself does not silently install GitLawb in the background.
+The Tauri first-run wizard opens a user-approved Terminal command that runs `setup.sh --interactive ...`. That setup path prompts for Code Proof in the terminal. The wizard itself does not silently install GitLawb in the background.
 
 Windows setup currently detects an existing `gl` and can create a DID if present, but it does not run the macOS/Linux static installer automatically.
 
 ## Full Node Weight
 
-The full local GitLawb node is lazy because it is heavier than CLI proof readiness.
+The full local GitLawb node stays lazy because it is heavier than CLI proof readiness.
 
 The upstream Docker Compose stack starts:
 
@@ -41,13 +45,13 @@ The first setup can be meaningfully heavier because Docker builds the Rust node 
 | Integrations | Shows Code Proof status, setup actions, DID status, and lazy node guidance |
 | Work | Lets tasks optionally attach a project and displays a compact proof badge |
 | Fleet | Shows a compact Code Node/Code Proof chip on the primary machine |
-| Agents | Agent profiles may carry public-only DID status; private keys are never mirrored |
+| Agents | Agent profiles may carry public DID status. Private keys are never mirrored |
 
 Advanced GitLawb protocol details belong in Integrations, not the primary Work or Fleet surfaces.
 
 ## Project Model
 
-Projects are independent records. A machine can work on many projects and each project can link to its own GitLawb repo.
+Projects are independent records. One machine can work on many projects, and each project can link to its own GitLawb repo.
 
 Project registry storage:
 

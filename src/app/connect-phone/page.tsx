@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
+import { clawMobilePairingUrl, hubUrlForPairingHost } from "@/lib/phone/pairing-url";
 
 // "Connect phone" page: shows a QR encoding a clawcodemobile://pair deep link for
 // this machine's HivemindOS hub. The companion app scans it (Settings →
 // Connection → "Scan a pairing QR") to save this machine — no typing. Reuses the
 // existing /api/tailscale/devices to find this machine's stable tailnet address.
-const DASHBOARD_PORT = 5020;
 
 export default function ConnectPhonePage() {
   const [qr, setQr] = useState<string | null>(null);
@@ -30,10 +30,10 @@ export default function ConnectPhonePage() {
           setError("Couldn't determine this machine's tailnet address. Is Tailscale up?");
           return;
         }
-        const url = `http://${host}:${DASHBOARD_PORT}`;
+        const url = hubUrlForPairingHost(host);
         const name = (self?.dnsName ? String(self.dnsName).split(".")[0] : "") || host;
         setHubUrl(url);
-        const pair = `clawcodemobile://pair?hub=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}`;
+        const pair = clawMobilePairingUrl({ hubUrl: url, name });
         setQr(await QRCode.toDataURL(pair, { width: 320, margin: 2 }));
       } catch (e: any) {
         setError(e?.message || "Failed to build the pairing code.");

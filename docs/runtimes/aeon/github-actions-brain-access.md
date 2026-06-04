@@ -1,9 +1,8 @@
 # AEON GitHub Actions Brain Access
 
-AEON GitHub Actions runs can join the HivemindOS tailnet as short-lived clients
-and call any online HivemindOS brain peer. The runner does not become a
-Syncthing peer and does not receive raw filesystem access. It calls the
-policy-enforced endpoint:
+AEON GitHub Actions runs can join the HivemindOS tailnet as short-lived clients and call any online HivemindOS brain peer.
+
+The runner does not become a Syncthing peer. It does not receive raw filesystem access. It calls the policy enforced endpoint:
 
 ```text
 POST /api/runtimes/aeon/brain
@@ -18,8 +17,7 @@ visibility against GitHub, and chooses a policy server-side:
 - private repositories: unrestricted vault list, read, search, append, and bulk
 - internal repositories: unrestricted by default, configurable in policy
 
-If GitHub visibility cannot be verified, the repository is treated as unknown
-and receives the restricted policy.
+If GitHub visibility cannot be verified, the repository is treated as unknown and receives the restricted policy.
 
 Restricted mode excludes private paths such as:
 
@@ -89,9 +87,7 @@ port from the runner tag to the brain-peer tag:
 
 ## Workflow
 
-This follows the OIDC shape used by short-lived Tailscale/GitHub Actions
-workflows: get a GitHub OIDC identity for the job, let Tailscale enroll the
-runner as `tag:aeon-ci`, then call the HivemindOS brain endpoint.
+This follows the OIDC shape used by short-lived Tailscale and GitHub Actions workflows: get a GitHub OIDC identity for the job, let Tailscale enroll the runner as `tag:aeon-ci`, then call the HivemindOS brain endpoint.
 
 ```yaml
 permissions:
@@ -125,11 +121,7 @@ jobs:
           HIVE_AEON_BRAIN_OIDC_AUDIENCE: ${{ vars.HIVE_AEON_BRAIN_OIDC_AUDIENCE }}
 ```
 
-Each HivemindOS brain peer should set the same
-`HIVE_AEON_BRAIN_OIDC_AUDIENCE` expected from the workflow token. If it is not
-set, the endpoint expects `hivemindos-aeon-brain`. The endpoint uses
-`GITHUB_TOKEN`, `GH_TOKEN`, or `GH_GLOBAL` only to verify private repository
-visibility through GitHub's repository API.
+Each HivemindOS brain peer should set the same `HIVE_AEON_BRAIN_OIDC_AUDIENCE` expected from the workflow token. If it is not set, the endpoint expects `hivemindos-aeon-brain`. The endpoint uses `GITHUB_TOKEN`, `GH_TOKEN`, or `GH_GLOBAL` only to verify private repository visibility through GitHub's repository API.
 
 The dashboard can populate `GH_GLOBAL` through the GitHub OAuth fallback routes
 under `/api/integrations/github/oauth/*`. That path is useful when AEON needs
@@ -138,9 +130,7 @@ repository visibility checks but Nango is not configured.
 
 ## Verification
 
-The local end-to-end test starts a real Next server on port `5021` or higher,
-calls GitHub's live repository API for one public repo and one private repo,
-and verifies the endpoint against a real temporary vault:
+The local end-to-end test starts a real Next server on port `5021` or higher, calls GitHub's live repository API for one public repo and one private repo, and verifies the endpoint against a real temporary vault:
 
 ```bash
 pnpm test:aeon-brain

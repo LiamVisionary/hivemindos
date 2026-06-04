@@ -278,7 +278,7 @@ export function useFleetNotificationsController(props: any) {
         unread: data.unread ?? 0,
         highUnread: data.highUnread ?? 0,
         urgentUnread: data.urgentUnread ?? 0,
-        folder: data.folder ?? sharedVault.notificationsFolder ?? "agent-notifications",
+        folder: data.folder ?? sharedVault.notificationsFolder ?? DEFAULT_SHARED_VAULT.notificationsFolder,
         settings: data.settings!,
       });
     }
@@ -423,7 +423,7 @@ export function useFleetNotificationsController(props: any) {
         unread: data.unread ?? 0,
         highUnread: data.highUnread ?? 0,
         urgentUnread: data.urgentUnread ?? 0,
-        folder: data.folder ?? sharedVault.notificationsFolder ?? "agent-notifications",
+        folder: data.folder ?? sharedVault.notificationsFolder ?? DEFAULT_SHARED_VAULT.notificationsFolder,
         settings: data.settings!,
       });
     }

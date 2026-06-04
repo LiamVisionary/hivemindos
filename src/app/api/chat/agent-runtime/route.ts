@@ -25,6 +25,7 @@ import { summarizeX402Policy } from "@/lib/services/wallet/x402-agent-fetch";
 import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
 import { recordHoneyUsage } from "@/lib/services/wallet/honey-ledger";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
+import { chatTelemetrySession, chatTelemetryValue } from "@/lib/services/telemetry/chat-dev-telemetry";
 import { normalizeRuntimeStreamEvent, RUNTIME_STREAM_EVENT_TYPES, type RuntimeStreamEvent } from "@/lib/services/runtime-stream-events";
 import { isUsePodProfile, resolveUsePodRuntimeConfig, summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
 import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS } from "@/lib/utils/agent-wallet";
@@ -55,6 +56,8 @@ type IncomingMessage = {
 type RuntimeRouteTelemetry = {
   request: NextRequest;
   routeStartedAt: number;
+  runtimeSessionId?: string;
+  chatStorageKey?: string;
 };
 
 type AgentMode = "plan" | "act";
@@ -135,10 +138,16 @@ function telemetryPayloadForProfile(profile?: AgentProfile) {
 }
 
 async function recordRouteTelemetry(request: NextRequest, type: string, payload: Record<string, unknown> = {}) {
-  const runId = request.headers.get("x-hivemind-run-id");
+  const runId = typeof payload.runtimeSessionId === "string" && payload.runtimeSessionId
+    ? payload.runtimeSessionId
+    : request.headers.get("x-hivemind-run-id");
+  const threadId = typeof payload.chatStorageKey === "string" && payload.chatStorageKey
+    ? payload.chatStorageKey
+    : request.headers.get("x-hivemind-chat-storage-key");
   await recordTelemetryBatch([{
     source: "route",
     type,
+    threadId,
     runId,
     payload,
   }]).catch(() => undefined);
@@ -147,6 +156,8 @@ async function recordRouteTelemetry(request: NextRequest, type: string, payload:
 function recordRuntimeTelemetry(telemetry: RuntimeRouteTelemetry | undefined, type: string, payload: Record<string, unknown> = {}) {
   if (!telemetry) return;
   void recordRouteTelemetry(telemetry.request, type, {
+    runtimeSessionId: telemetry.runtimeSessionId ?? null,
+    chatStorageKey: telemetry.chatStorageKey ?? null,
     ...payload,
     elapsedMs: Date.now() - telemetry.routeStartedAt,
   });
@@ -656,6 +667,15 @@ function privateX402ExecutionSse(input: {
         const message = noPaymentRequested
           ? `No x402 payment was requested by that endpoint, so no funds were withdrawn.\n\nEndpoint \`${input.draft.url}\``
           : `Private x402 failed: ${errorMessage}`;
+        await recordRouteTelemetry(input.request, "agent_runtime.wallet.private_x402.failed", {
+          ...telemetryPayloadForProfile(input.profile),
+          url: input.draft.url,
+          method: input.draft.method,
+          maxPayment: input.draft.maxPayment,
+          error: errorMessage,
+          noPaymentRequested,
+          elapsedMs: Date.now() - input.routeStartedAt,
+        }).catch(() => undefined);
         await sendTool(
           RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
           noPaymentRequested ? "No x402 payment requested" : "Private x402 failed",
@@ -773,6 +793,7 @@ function privateX402ErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : "Veil private x402 payment failed.";
   if (message === "VEIL_MCP_MISSING") return "Veil MCP is not installed. Run Setup Veil to install @veil-cash/mcp before private x402 payments.";
   if (message === "VEIL_CLI_MISSING" || /ENOENT/.test(message)) return "Veil CLI is not installed. Run Setup Veil before private x402 payments.";
+  if (/^fetch failed$/i.test(message)) return "Veil MCP fetch failed while reaching the x402 endpoint or payment service.";
   return message.replace(/0x[a-fA-F0-9]{64,}/g, "[redacted]");
 }
 
@@ -2277,6 +2298,9 @@ export async function POST(request: NextRequest) {
     messageCount: messages.length,
     workingDirectorySet: Boolean(workingDirectory?.trim()),
     runtimeSessionIdSet: Boolean(runtimeSessionId.trim()),
+    runtimeSessionId: runtimeSessionId || null,
+    chatStorageKey: chatStorageKey || null,
+    clientRunId: clientRunId || null,
     agentMode,
     sharedVaultEnabled: Boolean(sharedVault?.enabled),
     honeyLedgerEnabled,
@@ -2306,13 +2330,20 @@ export async function POST(request: NextRequest) {
   const vault = activeSharedVault(profile, sharedVault);
   runtimeSessionId = createRuntimeChatSessionId(profile, runtimeSessionId || clientRunId);
   const taskRetrievalContext = await buildTaskRetrievalContext({ origin: request.url, query: userPrompt, sharedVault: vault });
-  await startRuntimeChatSession({
+  const runtimeSession = await startRuntimeChatSession({
     sessionId: runtimeSessionId,
     agent: profile,
     chatStorageKey,
     userContent: userPrompt,
     startedAt: routeStartedAt,
-  }).catch(() => undefined);
+  }).catch(() => null);
+  await recordRouteTelemetry(request, "agent_runtime.session.started", {
+    ...telemetryPayloadForProfile(profile),
+    runtimeSessionId,
+    chatStorageKey: chatStorageKey || null,
+    session: chatTelemetrySession(runtimeSession),
+    elapsedMs: Date.now() - routeStartedAt,
+  });
   const confirmedPrivateX402 = await maybeExecuteConfirmedPrivateX402({
     request,
     routeStartedAt,
@@ -2398,12 +2429,16 @@ export async function POST(request: NextRequest) {
       ...telemetryPayloadForProfile(effectiveProfile),
       promptLength: userPrompt.length,
       contextLength: runtimeContexts.length,
+      runtimeSessionId,
+      chatStorageKey: chatStorageKey || null,
       agentMode,
       elapsedMs: Date.now() - routeStartedAt,
     });
     return streamHttpRuntime(effectiveProfile, messages, promptCheck.text, vault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, {
       request,
       routeStartedAt,
+      runtimeSessionId,
+      chatStorageKey,
     }, taskRetrievalContext);
   }
 
@@ -2422,6 +2457,8 @@ export async function POST(request: NextRequest) {
     ...telemetryPayloadForProfile(profile),
     promptLength: userPrompt.length,
     contextLength: runtimeContexts.length,
+    runtimeSessionId,
+    chatStorageKey: chatStorageKey || null,
     agentMode,
     elapsedMs: Date.now() - routeStartedAt,
   });
@@ -2463,6 +2500,8 @@ export async function POST(request: NextRequest) {
             if (contentChunkCount === 1 || contentChunkCount % 5 === 0) {
               void recordRouteTelemetry(request, "agent_runtime.openclaw.content", {
                 ...telemetryPayloadForProfile(profile),
+                runtimeSessionId,
+                chatStorageKey: chatStorageKey || null,
                 contentChunkCount,
                 outputLength: fullText.length,
                 elapsedMs: Date.now() - routeStartedAt,
@@ -2476,8 +2515,11 @@ export async function POST(request: NextRequest) {
             toolEventCount += 1;
             void recordRouteTelemetry(request, "agent_runtime.openclaw.tool_call", {
               ...telemetryPayloadForProfile(profile),
+              runtimeSessionId,
+              chatStorageKey: chatStorageKey || null,
               toolEventCount,
               toolName: typeof toolData.name === "string" ? toolData.name : typeof toolData.tool === "string" ? toolData.tool : null,
+              toolData: chatTelemetryValue(toolData),
               elapsedMs: Date.now() - routeStartedAt,
             });
             queueSessionWrite(() => appendRuntimeChatSessionEvent(
@@ -2492,8 +2534,11 @@ export async function POST(request: NextRequest) {
             statusEventCount += 1;
             void recordRouteTelemetry(request, "agent_runtime.openclaw.status", {
               ...telemetryPayloadForProfile(profile),
+              runtimeSessionId,
+              chatStorageKey: chatStorageKey || null,
               statusEventCount,
               statusType: status.type,
+              status: chatTelemetryValue(status),
               elapsedMs: Date.now() - routeStartedAt,
             });
             queueSessionWrite(() => appendRuntimeChatSessionEvent(
@@ -2509,6 +2554,8 @@ export async function POST(request: NextRequest) {
         if (event) controller.enqueue(encoder.encode(ssePayload({ honey: event })));
         await recordRouteTelemetry(request, "agent_runtime.openclaw.completed", {
           ...telemetryPayloadForProfile(profile),
+          runtimeSessionId,
+          chatStorageKey: chatStorageKey || null,
           outputLength: fullText.length,
           contentChunkCount,
           statusEventCount,
@@ -2523,6 +2570,8 @@ export async function POST(request: NextRequest) {
         queueSessionWrite(() => finishRuntimeChatSession(runtimeSessionId, "failed"));
         await recordRouteTelemetry(request, "agent_runtime.openclaw.failed", {
           ...telemetryPayloadForProfile(profile),
+          runtimeSessionId,
+          chatStorageKey: chatStorageKey || null,
           errorName: error instanceof Error ? error.name : "unknown",
           message,
           elapsedMs: Date.now() - routeStartedAt,

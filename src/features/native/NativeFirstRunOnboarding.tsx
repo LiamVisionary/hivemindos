@@ -6,6 +6,7 @@ import { Check, ChevronLeft, Clipboard, Copy, HelpCircle, LoaderCircle, Network,
 import { Button } from "@/components/ui/button";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
 import { NATIVE_SETUP_DEMO_ENABLED, NATIVE_SETUP_RERUN_EVENT, readNativeSetupStatus, runNativeSetup, type NativeDetectedAgentRuntime, type NativeSetupStatus } from "@/lib/native/setup";
 import { runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode } from "@/lib/config/runtime-icons";
 
@@ -42,19 +43,19 @@ const INSTALL_MODES: Array<{
   {
     id: "link",
     title: "Private Hive Link",
-    detail: "Your devices share memories, skills, and env inside HivemindOS, without a separate folder sync app.",
+    detail: "Your devices share memories, skills, env, and handoffs through Hivemind Sync, without a separate folder sync app.",
     highlights: ["Easiest multi-device", "No folder sync app"],
-    capabilities: ["Share across devices", "HivemindOS handles the link", "No always-on vault folder sync"],
+    capabilities: ["Hivemind Sync across devices", "HivemindOS handles the link", "No always-on vault folder sync"],
     info: "Best default for most people. HivemindOS manages remote app access through its private bridge, so you can add machines without first configuring Tailscale, Syncthing, SSH, or background sync services. It does not install Syncthing-style always-on vault folder sync.",
     command: "./setup.sh --link",
   },
   {
     id: "system-tailscale",
     title: "Full Tailnet Hive",
-    detail: "Your devices share memories, skills, and env inside HivemindOS, plus always-on vault folder sync.",
+    detail: "Your devices share memories, skills, env, and handoffs through Hivemind Sync, plus always-on vault folder sync.",
     highlights: ["Most complete", "Always-on sync"],
     capabilities: ["Share across devices", "Sync vault folders", "Best for power users"],
-    info: "Choose this if you already use Tailscale or want the full system-level setup: Syncthing folder sync, SSH/env sync, collector services, and persistent remote access between your machines.",
+    info: "Choose this if you already use Tailscale or want the full system-level setup: Syncthing folder sync, SSH pull/repair fallback, collector services, and persistent remote access between your machines.",
     command: "./setup.sh --system-tailscale",
   },
 ];
@@ -147,11 +148,12 @@ export function NativeFirstRunOnboarding() {
       setOpen(true);
       void refreshStatus();
     })).then((unlisten) => {
+      const safeUnlisten = createSafeTauriUnlisten(unlisten);
       if (cancelled) {
-        unlisten();
+        safeUnlisten();
         return;
       }
-      cleanup = unlisten;
+      cleanup = safeUnlisten;
     }).catch(() => undefined);
     return () => {
       cancelled = true;

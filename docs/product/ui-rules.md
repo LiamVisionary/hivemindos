@@ -1,6 +1,6 @@
 # HivemindOS UI Rules
 
-These are the short rules. For the full rationale and screen-by-screen guidance, see [UI/UX Philosophy](design-philosophy.md).
+These are the short rules. For the full rationale and screen guidance, see [UI/UX Philosophy](design-philosophy.md).
 
 1. Simple first. Depth on demand.
 2. Every screen answers: what is happening, what needs attention, what is the next safe action?

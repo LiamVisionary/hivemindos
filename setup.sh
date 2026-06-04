@@ -258,7 +258,7 @@ Options:
   --skip-collector              Skip collector service installation/restart.
   --skip-dashboard              Skip starting/restarting the dashboard dev server.
   --link                        Use app-managed Hivemind Link. This is the default.
-  --system-tailscale            Use full system Tailscale setup for Syncthing, SSH, and rsync.
+  --system-tailscale            Use full system Tailscale setup for Hivemind Sync Syncthing, SSH, and rsync.
   --local-only                  Skip all multi-machine networking.
   --force                       Re-run setup work even when cached checks say it is current.
   -h, --help                    Show this help.
@@ -367,14 +367,14 @@ install_rsync_if_missing() {
     return
   fi
   if ! setup_is_interactive; then
-    warn "rsync is missing; skipping optional Tailnet repair sync install in non-interactive setup"
+    warn "rsync is missing; skipping optional Hivemind Sync repair install in non-interactive setup"
     return
   fi
-  if ! prompt_yes_no "rsync is missing. Install it for Tailnet vault repair sync?" "yes"; then
-    warn "Skipping rsync install; Tailnet rsync repair sync is disabled"
+  if ! prompt_yes_no "rsync is missing. Install it for Hivemind Sync vault repair?" "yes"; then
+    warn "Skipping rsync install; Hivemind Sync rsync repair is disabled"
     return
   fi
-  warn "rsync is missing; trying to install it for Tailnet vault sync"
+  warn "rsync is missing; trying to install it for Hivemind Sync vault repair"
   if [[ "$(uname -s)" == "Darwin" ]] && { command -v brew >/dev/null 2>&1 || ensure_homebrew; }; then
     brew install rsync
   elif command -v apt-get >/dev/null 2>&1; then
@@ -384,7 +384,7 @@ install_rsync_if_missing() {
   elif command -v yum >/dev/null 2>&1; then
     yum_install rsync
   else
-    missing+=("Install rsync for Tailnet vault sync")
+    missing+=("Install rsync for Hivemind Sync vault repair")
     fail "rsync is missing"
     return
   fi
@@ -397,14 +397,14 @@ install_syncthing_if_missing() {
     return
   fi
   if ! setup_is_interactive; then
-    warn "Syncthing is missing; skipping optional realtime shared-brain sync install in non-interactive setup"
+    warn "Syncthing is missing; skipping optional Hivemind Sync shared-brain folder sync in non-interactive setup"
     return
   fi
-  if ! prompt_yes_no "Syncthing is missing. Install it for realtime shared-brain folder sync?" "yes"; then
-    warn "Skipping Syncthing install; realtime shared-brain folder sync is disabled"
+  if ! prompt_yes_no "Syncthing is missing. Install it for Hivemind Sync shared-brain folder sync?" "yes"; then
+    warn "Skipping Syncthing install; Hivemind Sync shared-brain folder sync is disabled"
     return
   fi
-  warn "Syncthing is missing; trying to install it for realtime folder sync"
+  warn "Syncthing is missing; trying to install it for Hivemind Sync folder sync"
   if [[ "$(uname -s)" == "Darwin" ]] && { command -v brew >/dev/null 2>&1 || ensure_homebrew; }; then
     brew install syncthing
   elif command -v apt-get >/dev/null 2>&1; then
@@ -414,7 +414,7 @@ install_syncthing_if_missing() {
   elif command -v yum >/dev/null 2>&1; then
     yum_install syncthing
   else
-    missing+=("Install Syncthing for realtime folder sync")
+    missing+=("Install Syncthing for Hivemind Sync folder sync")
     fail "Syncthing is missing"
     return
   fi
@@ -879,7 +879,7 @@ enable_tailscale_ssh() {
     fi
   elif command -v sudo >/dev/null 2>&1 && run_tailscale_set_ssh_sudo_noninteractive; then
     ok "Tailscale SSH advertised by this machine"
-  elif command -v sudo >/dev/null 2>&1 && setup_is_interactive && prompt_yes_no "Enable optional env sync over Tailscale SSH now?" "yes"; then
+  elif command -v sudo >/dev/null 2>&1 && setup_is_interactive && prompt_yes_no "Enable optional Hivemind Sync fallback over Tailscale SSH now?" "yes"; then
     if run_tailscale_set_ssh true; then
       ok "Tailscale SSH advertised by this machine"
     else
@@ -907,16 +907,16 @@ install_tailscale_if_missing() {
   if ! setup_is_interactive; then
     return 1
   fi
-  if ! prompt_yes_no "Tailscale is missing. Install it for multi-machine collaboration and shared memory sync?" "yes"; then
+  if ! prompt_yes_no "Tailscale is missing. Install it for Hivemind Sync between machines?" "yes"; then
     return 1
   fi
 
   if [[ "$(uname -s)" == "Darwin" ]] && { command -v brew >/dev/null 2>&1 || ensure_homebrew; }; then
-    warn "Tailscale is not installed; trying to install it for multi-machine sync"
+    warn "Tailscale is not installed; trying to install it for Hivemind Sync"
     HOMEBREW_NO_INSTALL_CLEANUP=1 brew install --formula tailscale || true
   elif command -v apt-get >/dev/null 2>&1; then
     if command -v curl >/dev/null 2>&1; then
-      warn "Tailscale is not installed; trying to install it for multi-machine sync"
+      warn "Tailscale is not installed; trying to install it for Hivemind Sync"
       curl -fsSL https://tailscale.com/install.sh | sh || true
     else
       warn "Install curl first, then run: curl -fsSL https://tailscale.com/install.sh | sh"
@@ -1043,7 +1043,7 @@ install_hive_env_add() {
   local bin_dir="${HOME}/.local/bin"
   local command_name command_path script_path
   mkdir -p "$bin_dir"
-  for command_name in hive-env-add hive-env-run hive-env-check hive-transfer hive-update; do
+  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-update; do
     command_path="$bin_dir/$command_name"
     script_path="$ROOT/scripts/$command_name"
     chmod +x "$script_path"
@@ -1083,7 +1083,7 @@ EOF
   done
   case ":$PATH:" in
     *":$bin_dir:"*) ;;
-    *) warn "Add $bin_dir to PATH to run hive-env-add, hive-env-run, hive-env-check, hive-transfer, and hive-update from any folder" ;;
+    *) warn "Add $bin_dir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, and hive-update from any folder" ;;
   esac
 }
 install_pnpm_if_missing() {
@@ -1341,17 +1341,26 @@ verify_syncthing_with_peer() {
 configure_syncthing_verification() {
   [[ "$tailnet_sync_enabled" == "true" ]] || return 0
   setup_is_interactive || return 0
-  local name url ip ready first_name="" first_url="" first_ip="" count=0
+  local name url ip ready count=0
+  local peers=()
   while IFS=$'\t' read -r name url ip; do
     [[ -n "$url" ]] || continue
     ready="$(collector_json_field "$url" "capabilities.syncthing")"
     [[ "$ready" == "true" ]] || continue
     count=$((count + 1))
-    [[ -n "$first_url" ]] || { first_name="$name"; first_url="$url"; first_ip="$ip"; }
+    peers+=("$name"$'\t'"$url"$'\t'"$ip")
   done < <(tailnet_peer_collector_urls)
   (( count > 0 )) || return 0
-  if prompt_yes_no "Verify Syncthing shared-brain sync with $first_name now?" "yes"; then
-    verify_syncthing_with_peer "$first_name" "$first_url" "$first_ip" || warn "Syncthing verification did not complete; the dashboard can retry pairing later"
+  if prompt_yes_no "Verify Syncthing shared-brain sync with $count ready peer$( (( count == 1 )) && echo "" || echo "s" ) now?" "yes"; then
+    local failures=0
+    for peer in "${peers[@]}"; do
+      IFS=$'\t' read -r name url ip <<< "$peer"
+      verify_syncthing_with_peer "$name" "$url" "$ip" || {
+        failures=$((failures + 1))
+        warn "Syncthing verification did not complete with $name; the dashboard can retry pairing later"
+      }
+    done
+    (( failures == 0 )) || warn "Syncthing shared-brain sync verified with $(( count - failures )) of $count ready peers"
   fi
 }
 
@@ -1419,7 +1428,7 @@ case "$network_mode" in
       fi
     else
       warn "Tailscale setup was not completed"
-      warn "Multi-machine collaboration and shared memory sync are disabled for this run. Local-only dashboard, agents, and local vault features will still work."
+    warn "Hivemind Sync is disabled for this run. Local-only dashboard, agents, and local vault features will still work."
     fi
     ;;
   local)
@@ -1607,6 +1616,7 @@ set_env_local "NEXT_PUBLIC_OBSIDIAN_NOTIFICATIONS_FOLDER" "${NEXT_PUBLIC_OBSIDIA
 set_env_local "NEXT_PUBLIC_OBSIDIAN_SCHEDULED_FOLDER" "${NEXT_PUBLIC_OBSIDIAN_SCHEDULED_FOLDER:-Operations/Automations}"
 set_env_local "NEXT_PUBLIC_OBSIDIAN_SYNTHESIS_FOLDER" "${NEXT_PUBLIC_OBSIDIAN_SYNTHESIS_FOLDER:-Synthesis}"
 set_env_local "NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER" "${NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER:-Operations/Brain Services}"
+set_env_local "HIVE_NOTE_SECURE_FOLDER" "${HIVE_NOTE_SECURE_FOLDER:-Operations/Secure}"
 set_env_local "NEXT_PUBLIC_GBRAIN_CLI_PATH" "${NEXT_PUBLIC_GBRAIN_CLI_PATH:-gbrain}"
 set_env_local "NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION" "${NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION:-Skills/GBrain}"
 set_env_local "NEXT_PUBLIC_SYNTO_CLI_PATH" "${NEXT_PUBLIC_SYNTO_CLI_PATH:-synto}"
@@ -1635,14 +1645,22 @@ brain_services_folder="${NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER:-Operations/
 
 mkdir -p \
   "$shared_vault_path/Intake" \
+  "$shared_vault_path/Intake/Requests" \
   "$shared_vault_path/Intake/Sources" \
+  "$shared_vault_path/.hivemindos-transfers" \
   "$shared_vault_path/Memory" \
   "$shared_vault_path/Memory/Book Notes" \
+  "$shared_vault_path/Memory/Daily Briefings" \
   "$shared_vault_path/Memory/Decision Journal" \
   "$shared_vault_path/Memory/Meetings" \
+  "$shared_vault_path/Memory/Weekly Reviews" \
+  "$shared_vault_path/Memory/Imported Sources" \
+  "$shared_vault_path/Memory/Distillations" \
   "$shared_vault_path/Projects" \
   "$shared_vault_path/Operations" \
   "$shared_vault_path/Operations/Code Projects" \
+  "$shared_vault_path/Operations/Runtime Mirrors" \
+  "$shared_vault_path/Operations/Secure" \
   "$shared_vault_path/Agents" \
   "$shared_vault_path/Skills" \
   "$shared_vault_path/Templates/HivemindOS" \
@@ -1653,6 +1671,7 @@ mkdir -p \
   "$shared_vault_path/$synthesis_folder/wiki/synthesis" \
   "$shared_vault_path/$synthesis_folder/pack" \
   "$shared_vault_path/Archive" \
+  "$shared_vault_path/Archive/Processed Requests" \
   "$shared_vault_path/$scheduled_folder" \
   "$shared_vault_path/$kanban_folder" \
   "$shared_vault_path/$notifications_folder" \
@@ -1973,10 +1992,10 @@ elif [[ "$tailnet_sync_enabled" == "true" ]]; then
   echo "On other Tailscale machines that run agents, clone the repo and run only:"
   echo "  ./scripts/install-telemetry-collector.sh"
   echo
-  echo "The dashboard will discover collectors automatically. Realtime folder sync uses Syncthing over your Tailnet by default; Tailscale SSH + rsync remains an advanced fallback."
+  echo "The dashboard will discover collectors automatically. Hivemind Sync can move shared brain files with Syncthing, env through collector endpoints, and handoff transfers through the vault."
 else
   echo "Local-only mode is ready because Tailscale setup was not completed during this run."
-  echo "Multi-machine collaboration and shared memory sync require completing the guided Tailscale step."
+  echo "Hivemind Sync requires completing the guided Tailscale or Hivemind Link step."
 fi
 echo
 if [[ "$dashboard_openable" == "true" ]]; then

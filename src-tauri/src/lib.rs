@@ -31,7 +31,9 @@ use std::process::Stdio;
 
 #[cfg(all(not(debug_assertions), target_os = "windows"))]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
-const NATIVE_HOST: &str = "127.0.0.1";
+#[cfg(not(debug_assertions))]
+const NATIVE_BIND_HOST: &str = "localhost";
+const NATIVE_BROWSER_HOST: &str = "localhost";
 const NATIVE_CACHE_TTL: Duration = Duration::from_secs(30);
 
 struct NativeCacheEntry {
@@ -351,8 +353,8 @@ fn desktop_status(state: tauri::State<NativeServerState>) -> serde_json::Value {
         } else {
             "phase-3-static"
         },
-        "devUrl": if cfg!(debug_assertions) { Some("http://127.0.0.1:5021") } else { None },
-        "nativeHost": NATIVE_HOST,
+        "devUrl": if cfg!(debug_assertions) { Some("http://localhost:5021") } else { None },
+        "nativeHost": NATIVE_BROWSER_HOST,
         "nativePort": port
     })
 }
@@ -481,7 +483,7 @@ fn dashboard_bootstrap(
 
 #[cfg(not(debug_assertions))]
 fn reserve_local_port() -> Result<u16, Box<dyn std::error::Error>> {
-    let listener = TcpListener::bind((NATIVE_HOST, 0))?;
+    let listener = TcpListener::bind((NATIVE_BIND_HOST, 0))?;
     let port = listener.local_addr()?.port();
     drop(listener);
     Ok(port)
@@ -492,7 +494,7 @@ fn wait_for_native_server(port: u16) -> Result<(), String> {
     let deadline = Instant::now() + Duration::from_secs(25);
 
     while Instant::now() < deadline {
-        if TcpStream::connect((NATIVE_HOST, port)).is_ok() {
+        if TcpStream::connect((NATIVE_BIND_HOST, port)).is_ok() {
             return Ok(());
         }
         std::thread::sleep(Duration::from_millis(150));
@@ -543,7 +545,7 @@ fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16), Box<dyn st
     command
         .arg(&server_js)
         .current_dir(&server_dir)
-        .env("HOSTNAME", NATIVE_HOST)
+        .env("HOSTNAME", NATIVE_BIND_HOST)
         .env("PORT", port.to_string())
         .env("NODE_ENV", "production")
         .env("NEXT_TELEMETRY_DISABLED", "1")
@@ -602,7 +604,7 @@ pub fn run() {
                     let window = app
                         .get_webview_window("main")
                         .ok_or("Missing main HivemindOS window")?;
-                    let url = url::Url::parse(&format!("http://{NATIVE_HOST}:{port}/"))?;
+                    let url = url::Url::parse(&format!("http://{NATIVE_BROWSER_HOST}:{port}/"))?;
                     window.navigate(url)?;
                 }
             }

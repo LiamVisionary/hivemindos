@@ -319,7 +319,7 @@ export function KanbanPanel(props: any) {
                       value={sharedVault.noteTaskImportFolders || DEFAULT_SHARED_VAULT.noteTaskImportFolders}
                       onChange={(event) => updateSharedVault({ noteTaskImportFolders: event.target.value })}
                       rows={3}
-                      placeholder="Projects&#10;Inbox"
+                      placeholder="Projects&#10;Intake&#10;Memory"
                     />
                   </label>
                   <div className={kanbanClass("kanbanNoteActions")}>
@@ -575,7 +575,7 @@ export function KanbanPanel(props: any) {
                                   className={kanbanClass("kanbanPickupPreview")}
                                   title={`${pickupPreview.assignee} is claiming this task`}
                                 >
-                                  <Image src={pickupPreview.icon || "/icons/worker-bee-general-v3.png"} alt="" width={26} height={26} aria-hidden="true" unoptimized />
+                                  <Image src={pickupPreview.icon || "/icons/worker-bee-general-v5.png"} alt="" width={26} height={26} aria-hidden="true" unoptimized />
                                   <small>{pickupPreview.label}</small>
                                 </span>
                               ) : null}
@@ -724,7 +724,7 @@ export function KanbanPanel(props: any) {
                               <time dateTime={new Date(task.updatedAt).toISOString()}>{formatRelativeTime(task.updatedAt)}</time>
                               {workingWithAgent ? (
                                 <span className={kanbanClass("kanbanWorkingBee", "compact")} title={`${task.assignee} is working`}>
-                                  <Image src={bee.icon || "/icons/worker-bee-general-v3.png"} alt="" width={18} height={18} aria-hidden="true" unoptimized />
+                                  <Image src={bee.icon || "/icons/worker-bee-general-v5.png"} alt="" width={18} height={18} aria-hidden="true" unoptimized />
                                 </span>
                               ) : null}
                               {staleWorking ? <span className={kanbanClass("priorityPill", "stale")}>quiet {formatDurationShort(kanbanStaleAge(task))}</span> : null}

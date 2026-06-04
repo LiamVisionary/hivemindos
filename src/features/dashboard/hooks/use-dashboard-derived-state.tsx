@@ -5,11 +5,44 @@
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
 import { useCallback, useEffect, useMemo } from "react";
-import { runtimeUsesAgentEnvOverlay } from "@/lib/types/agent-runtime";
+import { RUNTIME_CAPABILITIES, runtimeUsesAgentEnvOverlay } from "@/lib/types/agent-runtime";
 import { getUsePodBalanceUsd, resolveAgentWallet } from "@/lib/utils/agent-wallet";
+import type { FleetAgentCapabilityBadge, FleetAgentCapabilityIcon } from "@/components/fleet/fleet-data";
+
+const FLEET_CAPABILITY_META: Record<string, { label: string; icon: FleetAgentCapabilityIcon; tone: FleetAgentCapabilityBadge["tone"] }> = {
+  chat: { label: "Chat", icon: "chat", tone: "aqua" },
+  background: { label: "Background tasks", icon: "background", tone: "purple" },
+  scheduler: { label: "Scheduler", icon: "scheduler", tone: "gold" },
+  shell: { label: "Shell", icon: "shell", tone: "green" },
+  browser: { label: "Browser", icon: "browser", tone: "blue" },
+  mcp: { label: "MCP tools", icon: "mcp", tone: "pink" },
+  http: { label: "HTTP tools", icon: "http", tone: "slate" },
+  filesystem: { label: "Filesystem", icon: "filesystem", tone: "purple" },
+  wallet: { label: "Wallet tools", icon: "wallet", tone: "gold" },
+  publishing: { label: "Publishing", icon: "publishing", tone: "pink" },
+  deployment: { label: "Deployment", icon: "deployment", tone: "green" },
+  analytics: { label: "Analytics", icon: "analytics", tone: "blue" },
+  "aeon-workflow": { label: "AEON workflow", icon: "workflow", tone: "aqua" },
+};
+
+function fleetAgentCapabilityBadges(agent: any): FleetAgentCapabilityBadge[] {
+  const runtime = String(agent?.runtime ?? "").toLowerCase();
+  const matrixCapabilities = RUNTIME_CAPABILITIES[runtime]?.skillCapabilities ?? [];
+  const agentCapabilities = agent?.runtimeCapabilities?.skillCapabilities ?? [];
+  const capabilityIds = [...matrixCapabilities, ...agentCapabilities];
+
+  return [...new Set(capabilityIds)]
+    .map((id) => {
+      const meta = FLEET_CAPABILITY_META[id];
+      if (!meta) return null;
+      return { id, ...meta };
+    })
+    .filter(Boolean)
+    .slice(0, 6);
+}
 
 export function useDashboardDerivedState(props: any) {
-  const { RUNTIME_LABELS, activeView, agentAliasMap, agentCreateDraft, agentCreateMachineKey, agentRoleModalId, agentSettingsPanel, agents, beeRoleLabel, brainGraph, brainGraphLayout, brainSkills, chatAutoScrollRef, chatDisplayContent, chatMessageStorageKey, chatMessageWindow, chatProcessByKey, chatStreamingByKey, cleanActivityTitle, collectorKey, createAgentProfile, createDefaultAgentWallet, dedupeAgents, discoveredMachines, displayMachineName, fleetAgentState, fleetMachineLocation, fleetMetric, fleetSnapshots, fleetVersionState, formatRelativeTime, getHoneyAgentRewards, getSurvivalSnapshot, groupKanbanTasks, groupNotifications, hermesUpdateRequiredDetail, hiveEnv, hiveEnvRuntimeSourceId, honeyTreasury, hydrated, inferCurrentTask, inferLatestAgentMessage, isChatSidebarTask, isLoopbackCollector, isManualAgentChatMessage, isMeaningfulActive, isMobileMachineOs, isStarterPlaceholder, isVisibleFleetMachine, isWorkView, kanbanAssignees, kanbanBoard, kanbanBoardScrollRef, kanbanError, kanbanIncludeArchived, kanbanLoading, kanbanTaskAssigneeAgent, machineIdentityFromParts, machineNameAliases, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineNetworkIssue, maintenanceReport, messagesByAgent, messagesEndRef, messagesScrollRef, mirosharkAnalysisAgentId, mirosharkStatus, moneyClawLoadingEnvName, moneyClawStatusByEnvName, normalizeAgentProfile, notificationActorMeta, notificationDisplayBody, notificationDisplayTitle, notificationSourceLabel, notificationSummary, notifications, parseEnvImportText, quickAddMachineTargets, refreshMoneyClawStatus, refreshRuntimeIntegrations, refreshSharedSchedulesFromVault, runtimeCan, runtimeCount, runtimeFileRoots, runtimeUsage, schedulerSkillSearch, schedules, selectedAgentId, selectedBrainNodeId, selectedChatLeafKey, selectedChatPreview, selectedKanbanTaskId, selectedKanbanTaskIds, setKanbanBoardScrollState, setMachineNameAliases, setScheduleDraft, setupMachineKey, sharedEnvImportText, sharedVault, skillBrowserSearch, skillBrowserSkills, tailscaleDevices, tailscaleStatus, tasks, updateStatusByMachine, walletExpanded, walletsByAgent, workPriority } = props;
+  const { RUNTIME_LABELS, activeView, agentAliasMap, agentCreateDraft, agentCreateMachineKey, agentRoleModalId, agentSettingsPanel, agents, beeRoleLabel, brainGraph, brainGraphLayout, brainSkills, chatAutoScrollRef, chatDisplayContent, chatMessageStorageKey, chatMessageWindow, chatProcessByKey, chatStreamingByKey, cleanActivityTitle, collectorKey, createAgentProfile, createDefaultAgentWallet, dedupeAgents, discoveredMachines, displayMachineName, fleetAgentState, fleetMachineLocation, fleetMetric, fleetSnapshots, fleetVersionState, formatRelativeTime, getHoneyAgentRewards, getSurvivalSnapshot, groupKanbanTasks, groupNotifications, hermesUpdateRequiredDetail, hiveEnv, hiveEnvRuntimeSourceId, honeyTreasury, hydrated, inferCurrentTask, inferLatestAgentMessage, isChatSidebarTask, isLoopbackCollector, isManualAgentChatMessage, isMeaningfulActive, isMobileMachineOs, isStarterPlaceholder, isVisibleFleetMachine, isWorkView, kanbanAssignees, kanbanBoard, kanbanBoardScrollRef, kanbanError, kanbanIncludeArchived, kanbanLoading, kanbanTaskAssigneeAgent, machineIdentityFromParts, machineNameAliases, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineNetworkIssue, maintenanceReport, messagesByAgent, messagesScrollRef, mirosharkAnalysisAgentId, mirosharkStatus, moneyClawLoadingEnvName, moneyClawStatusByEnvName, normalizeAgentProfile, notificationActorMeta, notificationDisplayBody, notificationDisplayTitle, notificationSourceLabel, notificationSummary, notifications, parseEnvImportText, quickAddMachineTargets, refreshMoneyClawStatus, refreshRuntimeIntegrations, refreshSharedSchedulesFromVault, runtimeCan, runtimeCount, runtimeFileRoots, runtimeUsage, schedulerSkillSearch, schedules, selectedAgentId, selectedBrainNodeId, selectedChatLeafKey, selectedChatPreview, selectedKanbanTaskId, selectedKanbanTaskIds, setKanbanBoardScrollState, setMachineNameAliases, setScheduleDraft, setupMachineKey, sharedEnvImportText, sharedVault, skillBrowserSearch, skillBrowserSkills, tailscaleDevices, tailscaleStatus, tasks, updateStatusByMachine, walletExpanded, walletsByAgent, workPriority } = props;
   const discoveredAgents = useMemo(
     () => discoveredMachines.flatMap((machine) => machine.agents ?? []).map(normalizeAgentProfile),
     [discoveredMachines],
@@ -329,24 +362,6 @@ export function useDashboardDerivedState(props: any) {
     chatAutoScrollRef.current = true;
   }, [chatAutoScrollRef, selectedAgentId, selectedChatLeafKey]);
 
-  useEffect(() => {
-    if (!chatAutoScrollRef.current) return;
-    const element = messagesScrollRef.current;
-    if (!element) return;
-    const scrollToBottom = () => {
-      element.scrollTop = element.scrollHeight;
-      messagesEndRef?.current?.scrollIntoView({ block: "end" });
-    };
-    const firstFrame = window.requestAnimationFrame(scrollToBottom);
-    const secondFrame = window.requestAnimationFrame(() => window.requestAnimationFrame(scrollToBottom));
-    const timeouts = [80, 250, 700, 1_500].map((delay) => window.setTimeout(scrollToBottom, delay));
-    return () => {
-      window.cancelAnimationFrame(firstFrame);
-      window.cancelAnimationFrame(secondFrame);
-      timeouts.forEach((timeout) => window.clearTimeout(timeout));
-    };
-  }, [messagesEndRef, messagesScrollRef, selectedAgentId, selectedChatLeafKey, visibleMessages, selectedChatStreaming]);
-
   const updateChatAutoScroll = useCallback(() => {
     const element = messagesScrollRef.current;
     if (!element) return;
@@ -574,6 +589,7 @@ export function useDashboardDerivedState(props: any) {
         os: mobile ? machine.os ?? "Mobile" : machine.version?.branch ? `${machine.version.branch} · ${machine.version.shortCommit ?? "local"}` : machine.collector === "ready" ? "Agent bridge online" : "Agent bridge pending",
         tailnet: machine.dnsName || machine.collectorUrl || machine.address || "not connected",
         ip: machine.ip || machine.address || "—",
+        collectorUrl: machine.collectorUrl,
         ping: machine.online ? fleetMetric(machine.key, 4, 68) : 0,
         cpu: fleetMetric(`${machine.key}:cpu`, machine.collector === "ready" ? 12 : 2, machine.collector === "ready" ? 82 : 18),
         ram: fleetMetric(`${machine.key}:ram`, 18, 86),
@@ -639,6 +655,7 @@ export function useDashboardDerivedState(props: any) {
             currentTaskId: primaryWork?.id,
             currentTaskUpdatedAt: primaryWork?.updatedAt,
             activityStatus,
+            capabilities: fleetAgentCapabilityBadges(agent),
             since: primaryWork?.updatedAt ? formatRelativeTime(primaryWork.updatedAt) : snapshot?.checkedAt ? formatRelativeTime(snapshot.checkedAt) : "—",
             recentChats,
           };

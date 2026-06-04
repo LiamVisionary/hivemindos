@@ -4,10 +4,10 @@
 import * as React from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AddHexCell } from "./add-hex-cell";
-import { MachineCluster } from "./machine-cluster";
+import { MachineCluster, type GraphAgentCapabilityBadgeVariant } from "./machine-cluster";
 import { LottieBee } from "./lottie-bee";
 import { type FleetAgent, type FleetMachine } from "./fleet-data";
-import { axialToPixel, HEX_H, HEX_W, hexSpiral } from "./hex-math";
+import { axialToPixel, FLEET_GRAPH_CELL_SCALE, HEX_H, HEX_W, hexSpiral } from "./hex-math";
 
 interface NetworkGraphProps {
   width?: number;
@@ -20,6 +20,7 @@ interface NetworkGraphProps {
   onSelectAgent: (m: FleetMachine, a: FleetAgent) => void;
   onAddAgent: (m: FleetMachine) => void;
   onAddMachine?: () => void;
+  agentCapabilityBadgeVariant?: GraphAgentCapabilityBadgeVariant;
 }
 
 const CLUSTER_LAYOUT: Record<string, [number, number]> = {
@@ -40,9 +41,17 @@ const FALLBACK_LAYOUT_SLOTS: Array<[number, number]> = [
   [0.16, 0.80],
   [0.88, 0.78],
 ];
-const ADD_MACHINE_LABEL_HEIGHT = 26;
-const ADD_MACHINE_CLEARANCE = 44;
-const ADD_AGENT_CLEARANCE = 18;
+const GRAPH_MIN_ZOOM = 0.55;
+const GRAPH_MAX_ZOOM = 1.9;
+const GRAPH_WHEEL_ZOOM_SENSITIVITY = 0.00065;
+const graphScale = (value: number) => value * FLEET_GRAPH_CELL_SCALE;
+const ADD_MACHINE_LABEL_HEIGHT = graphScale(26);
+const ADD_MACHINE_CLEARANCE = graphScale(44);
+const ADD_AGENT_CLEARANCE = graphScale(18);
+const GRAPH_CELL_MARGIN = graphScale(16);
+const ADD_AGENT_SEARCH_EXTRA_CELLS = 60;
+const FLEET_GRAPH_BASE_SIZE = 900;
+const FLEET_GRAPH_SIZE = FLEET_GRAPH_BASE_SIZE * FLEET_GRAPH_CELL_SCALE;
 
 type AxialCell = [number, number];
 
@@ -62,25 +71,39 @@ interface GraphRect {
   maxY: number;
 }
 
+type GraphViewTransform = {
+  x: number;
+  y: number;
+  zoom: number;
+};
+
 /**
  * Constellation view — every machine is a tessellated cluster of hex cells;
  * dashed Tailscale arcs connect clusters; 1–2 honey bees roam those arcs.
  */
 export function NetworkGraph({
-  width = 900, height = 900,
+  width = FLEET_GRAPH_SIZE, height = FLEET_GRAPH_SIZE,
   machines, edges,
   selected, selectedAgentId,
   onSelectMachine, onSelectAgent, onAddAgent, onAddMachine,
+  agentCapabilityBadgeVariant = "side-rails",
 }: NetworkGraphProps) {
   const w = width, h = height;
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
+  const graphLayerRef = React.useRef<HTMLDivElement | null>(null);
+  const graphViewRef = React.useRef<GraphViewTransform>({ x: 0, y: 0, zoom: 1 });
+  const wheelDeltaRef = React.useRef(0);
+  const wheelFrameRef = React.useRef(0);
+  const wheelPointerRef = React.useRef({ x: 0, y: 0 });
   const boundsRef = React.useRef(contentBounds([], undefined));
   const centeredViewportRef = React.useRef({ width: 0, height: 0 });
   const dragRef = React.useRef<{ pointerId: number; x: number; y: number; panX: number; panY: number } | null>(null);
   const [viewport, setViewport] = React.useState({ width: 0, height: 0 });
-  const [pan, setPan] = React.useState({ x: 0, y: 0 });
+  const [graphView, setGraphView] = React.useState<GraphViewTransform>({ x: 0, y: 0, zoom: 1 });
   const [dragging, setDragging] = React.useState(false);
-  const layout = makeClusterLayout(machines);
+  const graphTransform = graphTransformValue(graphView);
+  const [initialLayout] = React.useState(() => makeClusterLayout(machines));
+  const layout = React.useMemo(() => makeClusterLayout(machines, initialLayout), [initialLayout, machines]);
   const clusters = assignAddCells(machines.map((m) => ({
     m,
     cx: layout[m.id][0] * w,
@@ -95,12 +118,18 @@ export function NetworkGraph({
   const latestBeeGraphRef = React.useRef({ edges, pos });
   const bounds = React.useMemo(() => contentBounds(clusters, addMachinePoint), [clusters, addMachinePoint]);
 
-  const clampPan = React.useCallback((next: { x: number; y: number }) => {
+  const clampPan = React.useCallback((next: { x: number; y: number }, nextZoom: number) => {
     return {
-      x: clampAxis(next.x, viewport.width, bounds.minX, bounds.maxX),
-      y: clampAxis(next.y, viewport.height, bounds.minY, bounds.maxY),
+      x: clampAxis(next.x, viewport.width, bounds.minX, bounds.maxX, nextZoom),
+      y: clampAxis(next.y, viewport.height, bounds.minY, bounds.maxY, nextZoom),
     };
   }, [bounds.maxX, bounds.maxY, bounds.minX, bounds.minY, viewport.height, viewport.width]);
+
+  const applyGraphView = React.useCallback((next: GraphViewTransform) => {
+    graphViewRef.current = next;
+    if (graphLayerRef.current) graphLayerRef.current.style.transform = graphTransformValue(next);
+    setGraphView(next);
+  }, []);
 
   React.useLayoutEffect(() => {
     latestBeeGraphRef.current = { edges, pos };
@@ -126,15 +155,67 @@ export function NetworkGraph({
     if (centeredViewport.width === viewport.width && centeredViewport.height === viewport.height) return;
     centeredViewportRef.current = viewport;
     const nextBounds = boundsRef.current;
+    const current = graphViewRef.current;
     const nextPan = {
-      x: viewport.width / 2 - (nextBounds.minX + nextBounds.maxX) / 2,
-      y: viewport.height / 2 - (nextBounds.minY + nextBounds.maxY) / 2,
+      x: viewport.width / 2 - ((nextBounds.minX + nextBounds.maxX) / 2) * current.zoom,
+      y: viewport.height / 2 - ((nextBounds.minY + nextBounds.maxY) / 2) * current.zoom,
     };
-    setPan({
-      x: clampAxis(nextPan.x, viewport.width, nextBounds.minX, nextBounds.maxX),
-      y: clampAxis(nextPan.y, viewport.height, nextBounds.minY, nextBounds.maxY),
+    applyGraphView({
+      ...current,
+      x: clampAxis(nextPan.x, viewport.width, nextBounds.minX, nextBounds.maxX, current.zoom),
+      y: clampAxis(nextPan.y, viewport.height, nextBounds.minY, nextBounds.maxY, current.zoom),
     });
-  }, [viewport]);
+  }, [applyGraphView, viewport]);
+
+  const zoomGraphWithWheel = React.useCallback((event: WheelEvent) => {
+    event.preventDefault();
+    const element = viewportRef.current;
+    if (!element) return;
+    const rect = element.getBoundingClientRect();
+    wheelDeltaRef.current += event.deltaY;
+    wheelPointerRef.current = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
+    if (wheelFrameRef.current) return;
+    wheelFrameRef.current = requestAnimationFrame(() => {
+      wheelFrameRef.current = 0;
+      const deltaY = wheelDeltaRef.current;
+      wheelDeltaRef.current = 0;
+      const viewportElement = viewportRef.current;
+      if (!viewportElement || !deltaY) return;
+      const pointer = wheelPointerRef.current;
+      const current = graphViewRef.current;
+      const nextZoom = clampNumber(
+        current.zoom * Math.exp(-deltaY * GRAPH_WHEEL_ZOOM_SENSITIVITY),
+        GRAPH_MIN_ZOOM,
+        GRAPH_MAX_ZOOM,
+      );
+      if (nextZoom === current.zoom) return;
+      const contentPoint = {
+        x: (pointer.x - current.x) / current.zoom,
+        y: (pointer.y - current.y) / current.zoom,
+      };
+      const nextPan = {
+        x: pointer.x - contentPoint.x * nextZoom,
+        y: pointer.y - contentPoint.y * nextZoom,
+      };
+      applyGraphView({
+        ...nextPan,
+        zoom: nextZoom,
+      });
+    });
+  }, [applyGraphView]);
+
+  React.useEffect(() => {
+    const element = viewportRef.current;
+    if (!element) return;
+    element.addEventListener("wheel", zoomGraphWithWheel, { passive: false });
+    return () => {
+      element.removeEventListener("wheel", zoomGraphWithWheel);
+      if (wheelFrameRef.current) cancelAnimationFrame(wheelFrameRef.current);
+    };
+  }, [zoomGraphWithWheel]);
 
   // 2 bees roam the network — each picks an edge at random, traverses it,
   // then picks another. Position is mutated via refs (no React re-renders).
@@ -151,7 +232,7 @@ export function NetworkGraph({
 
   React.useEffect(() => {
     let raf = 0;
-    const SZ = 44;
+    const SZ = graphScale(44);
     const tick = (now: number) => {
       const { edges: currentEdges, pos: currentPos } = latestBeeGraphRef.current;
       for (let i = 0; i < BEE_COUNT; i++) {
@@ -196,22 +277,27 @@ export function NetworkGraph({
       ref={viewportRef}
       className="relative h-full w-full overflow-hidden"
       data-fleet-graph-viewport="true"
-      style={{ cursor: dragging ? "grabbing" : "grab", touchAction: "none" }}
+      style={{ cursor: dragging ? "grabbing" : "grab", overscrollBehavior: "contain", touchAction: "none" }}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         const target = event.target;
         if (target instanceof Element && target.closest("button, [data-fleet-cell-control]")) return;
-        dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
+        const current = graphViewRef.current;
+        dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, panX: current.x, panY: current.y };
         setDragging(true);
         event.currentTarget.setPointerCapture(event.pointerId);
       }}
       onPointerMove={(event) => {
         const drag = dragRef.current;
         if (!drag || drag.pointerId !== event.pointerId) return;
-        setPan(clampPan({
-          x: drag.panX + event.clientX - drag.x,
-          y: drag.panY + event.clientY - drag.y,
-        }));
+        const current = graphViewRef.current;
+        applyGraphView({
+          ...current,
+          ...clampPan({
+            x: drag.panX + event.clientX - drag.x,
+            y: drag.panY + event.clientY - drag.y,
+          }, current.zoom),
+        });
       }}
       onPointerUp={(event) => {
         if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
@@ -221,15 +307,17 @@ export function NetworkGraph({
         dragRef.current = null;
         setDragging(false);
       }}
-      aria-label="Fleet graph canvas. Drag to pan across machines."
+      aria-label="Fleet graph canvas. Drag to pan across machines. Scroll to zoom in and out."
     >
       <div
+        ref={graphLayerRef}
         className="absolute left-0 top-0"
         data-fleet-graph-layer="true"
         style={{
           width: w,
           height: h,
-          transform: `translate(${pan.x}px, ${pan.y}px)`,
+          transform: graphTransform,
+          transformOrigin: "0 0",
           willChange: "transform",
         }}
       >
@@ -271,6 +359,7 @@ export function NetworkGraph({
           cx={c.cx}
           cy={c.cy}
           addCell={c.addCell}
+          capabilityBadgeVariant={agentCapabilityBadgeVariant}
           selected={c.selected}
           selectedAgentId={c.selectedAgentId}
           onSelectMachine={() => onSelectMachine(c.m.id)}
@@ -286,7 +375,7 @@ export function NetworkGraph({
             left: addMachinePoint.x - HEX_W / 2,
             top: addMachinePoint.y - HEX_H / 2,
             width: HEX_W,
-            gap: 6,
+            gap: graphScale(6),
           }}
         >
           <Tooltip>
@@ -307,7 +396,7 @@ export function NetworkGraph({
             style={{
               color: "var(--muted)",
               fontFamily: "var(--f-mono)",
-              fontSize: 10,
+              fontSize: graphScale(10),
               lineHeight: 1.2,
             }}
           >
@@ -325,13 +414,13 @@ export function NetworkGraph({
             className="absolute pointer-events-none"
             style={{
               top: 0, left: 0,
-              width: 44, height: 44,
+              width: graphScale(44), height: graphScale(44),
               opacity: 0,
               willChange: "transform, opacity",
               filter: "drop-shadow(0 2px 6px rgba(255, 200, 60, 0.45))",
             }}
           >
-            <LottieBee size={44} />
+            <LottieBee size={graphScale(44)} />
           </div>
         ))}
       </div>
@@ -340,52 +429,82 @@ export function NetworkGraph({
   );
 }
 
-function makeClusterLayout(machines: FleetMachine[]) {
+function makeClusterLayout(machines: FleetMachine[], previousLayout: Record<string, [number, number]> = {}) {
   const fallback: Record<string, [number, number]> = {};
   const usedSlots = new Set<number>();
   [...machines].sort((left, right) => (
     layoutSortKey(left).localeCompare(layoutSortKey(right))
   )).forEach((machine) => {
+    const previousSlot = previousLayoutSlot(machine, previousLayout);
+    if (previousSlot !== null && !usedSlots.has(previousSlot)) {
+      usedSlots.add(previousSlot);
+      fallback[machine.id] = FALLBACK_LAYOUT_SLOTS[previousSlot];
+      fallback[machineLayoutIdentity(machine)] = FALLBACK_LAYOUT_SLOTS[previousSlot];
+      return;
+    }
     const slotIndex = nextAvailableLayoutSlot(preferredLayoutSlot(machine), usedSlots);
     usedSlots.add(slotIndex);
     fallback[machine.id] = FALLBACK_LAYOUT_SLOTS[slotIndex];
+    fallback[machineLayoutIdentity(machine)] = FALLBACK_LAYOUT_SLOTS[slotIndex];
   });
   return { ...fallback, ...CLUSTER_LAYOUT };
+}
+
+function previousLayoutSlot(machine: FleetMachine, previousLayout: Record<string, [number, number]>) {
+  const candidates = [machine.id, machineLayoutIdentity(machine)];
+  for (const key of candidates) {
+    const slot = fallbackLayoutSlotIndex(previousLayout[key]);
+    if (slot !== null) return slot;
+  }
+  return null;
+}
+
+function fallbackLayoutSlotIndex(slot?: [number, number]) {
+  if (!slot) return null;
+  const index = FALLBACK_LAYOUT_SLOTS.findIndex(([x, y]) => x === slot[0] && y === slot[1]);
+  return index >= 0 ? index : null;
 }
 
 function layoutSortKey(machine: FleetMachine) {
   return machine.id;
 }
 
+function machineLayoutIdentity(machine: FleetMachine) {
+  return [
+    machine.name,
+    machine.tailnet,
+    machine.ip,
+  ].join("|").toLowerCase();
+}
+
 function preferredLayoutSlot(machine: FleetMachine) {
-  const fingerprint = [
+  const identity = [
     machine.id,
     machine.name,
-    machine.kind,
-    machine.role,
-    machine.os,
+    machine.tailnet,
+    machine.ip,
   ].join(" ").toLowerCase();
 
-  if (machine.id === "unassigned" || fingerprint.includes("saved profiles")) return 3;
+  if (machine.id === "unassigned" || identity.includes("saved profiles")) return 3;
   if (
     machine.role === "Primary" ||
-    fingerprint.includes("this mac")
+    identity.includes("this mac")
   ) {
     return 0;
   }
   if (
-    fingerprint.includes("ubuntu") ||
-    fingerprint.includes("linux") ||
-    fingerprint.includes("server") ||
-    fingerprint.includes("vps")
+    identity.includes("ubuntu") ||
+    identity.includes("linux") ||
+    identity.includes("server") ||
+    identity.includes("vps")
   ) {
     return 2;
   }
   if (
-    fingerprint.includes("mbp") ||
-    fingerprint.includes("macbook") ||
-    fingerprint.includes("mac") ||
-    fingerprint.includes("laptop")
+    identity.includes("mbp") ||
+    identity.includes("macbook") ||
+    identity.includes("mac") ||
+    identity.includes("laptop")
   ) {
     return 1;
   }
@@ -420,7 +539,7 @@ function assignAddCells(clusters: GraphCluster[]) {
       ...existingRects.filter((_, rectIndex) => rectIndex !== index),
       ...assignedAddRects,
     ];
-    const candidates = hexSpiral(existingCount + 24).slice(existingCount);
+    const candidates = hexSpiral(existingCount + ADD_AGENT_SEARCH_EXTRA_CELLS).slice(existingCount);
     const addCell = candidates.find(([q, r]) => {
       const rect = cellRect(cluster.cx, cluster.cy, q, r);
       return otherRects.every((otherRect) => !rectsOverlap(rect, otherRect, ADD_AGENT_CLEARANCE));
@@ -440,10 +559,10 @@ function findAddMachinePoint(clusters: GraphCluster[], width: number, height: nu
 }
 
 function addMachineCandidates(preferred: { x: number; y: number }, width: number, height: number) {
-  const minX = HEX_W / 2 + 16;
-  const maxX = width - HEX_W / 2 - 16;
-  const minY = HEX_H / 2 + 16;
-  const maxY = height - HEX_H / 2 - ADD_MACHINE_LABEL_HEIGHT - 16;
+  const minX = HEX_W / 2 + GRAPH_CELL_MARGIN;
+  const maxX = width - HEX_W / 2 - GRAPH_CELL_MARGIN;
+  const minY = HEX_H / 2 + GRAPH_CELL_MARGIN;
+  const maxY = height - HEX_H / 2 - ADD_MACHINE_LABEL_HEIGHT - GRAPH_CELL_MARGIN;
   const stepX = HEX_W * 0.82;
   const stepY = HEX_H * 0.72;
   const points: Array<{ x: number; y: number }> = [];
@@ -546,6 +665,10 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function graphTransformValue(transform: GraphViewTransform) {
+  return `matrix(${transform.zoom}, 0, 0, ${transform.zoom}, ${transform.x}, ${transform.y})`;
+}
+
 function contentBounds(clusters: GraphCluster[], addMachinePoint?: { x: number; y: number }) {
   const padding = 140;
   if (!clusters.length) return { minX: -padding, minY: -padding, maxX: padding, maxY: padding };
@@ -566,7 +689,7 @@ function contentBounds(clusters: GraphCluster[], addMachinePoint?: { x: number; 
     minX = Math.min(minX, addMachinePoint.x - HEX_W / 2);
     maxX = Math.max(maxX, addMachinePoint.x + HEX_W / 2);
     minY = Math.min(minY, addMachinePoint.y - HEX_H / 2);
-    maxY = Math.max(maxY, addMachinePoint.y + HEX_H / 2 + 26);
+    maxY = Math.max(maxY, addMachinePoint.y + HEX_H / 2 + ADD_MACHINE_LABEL_HEIGHT);
   }
 
   return {
@@ -577,11 +700,11 @@ function contentBounds(clusters: GraphCluster[], addMachinePoint?: { x: number; 
   };
 }
 
-function clampAxis(value: number, viewportSize: number, minContent: number, maxContent: number) {
+function clampAxis(value: number, viewportSize: number, minContent: number, maxContent: number, zoom = 1) {
   if (!viewportSize) return value;
-  const contentSize = maxContent - minContent;
-  if (contentSize <= viewportSize) return viewportSize / 2 - (minContent + maxContent) / 2;
-  const min = viewportSize - maxContent;
-  const max = -minContent;
+  const contentSize = (maxContent - minContent) * zoom;
+  if (contentSize <= viewportSize) return viewportSize / 2 - ((minContent + maxContent) / 2) * zoom;
+  const min = viewportSize - maxContent * zoom;
+  const max = -minContent * zoom;
   return Math.min(max, Math.max(min, value));
 }

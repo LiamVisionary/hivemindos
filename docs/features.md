@@ -1,5 +1,5 @@
 # Feature Guide
 
-The feature guide has moved into a more navigable section:
+The feature guide moved here:
 
 - [Feature Guide Index](features/index.md)

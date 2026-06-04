@@ -192,6 +192,20 @@ fn source_provider_label(skill_dir: &Path) -> Option<String> {
     parsed.get("providerLabel").and_then(serde_json::Value::as_str).map(str::to_string)
 }
 
+fn is_managed_shared_skill_mirror(skill_path: &Path) -> bool {
+    let Some(skill_dir) = skill_path.parent() else {
+        return false;
+    };
+    let Ok(raw) = fs::read_to_string(skill_dir.join(SOURCE_METADATA_FILE)) else {
+        return false;
+    };
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return false;
+    };
+    parsed.get("provider").and_then(serde_json::Value::as_str) == Some("shared-brain")
+        || parsed.get("managedBy").and_then(serde_json::Value::as_str) == Some("hivemindos")
+}
+
 fn skill_summary(
     skill_path: &Path,
     provider: &str,
@@ -292,6 +306,7 @@ pub(crate) fn brain_skill_inventory(vault_path: Option<String>, shared_only: Opt
             let mut skills = skill_paths
                 .iter()
                 .filter(|path| !path.starts_with(&skills_folder))
+                .filter(|path| !is_managed_shared_skill_mirror(path))
                 .filter_map(|path| skill_summary(path, id, label, &base_path, &shared_by_checksum, &shared_by_slug))
                 .collect::<Vec<_>>();
             skills.sort_by(|left, right| left.name.cmp(&right.name));

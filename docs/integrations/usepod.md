@@ -1,10 +1,12 @@
 # UsePod
 
-UsePod is an OpenAI-compatible inference marketplace. In HivemindOS it is treated as a prepaid runtime rail for demand-side inference first, with provider-hosting documented separately because it exposes local compute to a marketplace.
+UsePod is an OpenAI-compatible inference marketplace.
+
+In HivemindOS, it is treated as a prepaid runtime rail first. Provider hosting is documented separately because that path exposes local compute to a marketplace and deserves more care.
 
 <figure class="imagePlate">
   <img src="../assets/img/diagrams/wallet-token-rails.jpg" alt="Generated wallet and token rails infographic with a UsePod prepaid lane from Agent Wallet to UsePod Prepaid, Deposit Address, and Proxy Runtime.">
-  <figcaption>UsePod is modeled as a prepaid runtime rail. It shares wallet funding context, but it is not the same path as x402 paid requests or Honey rewards.</figcaption>
+  <figcaption>UsePod is modeled as a prepaid runtime rail. It can share wallet funding context, but it is not the same path as x402 paid requests or Honey rewards.</figcaption>
 </figure>
 
 ## Demand-Side Inference
@@ -19,7 +21,7 @@ HivemindOS agents can use UsePod through the OpenAI-compatible runtime.
 - Optional input cap: `USEPOD_MAX_PRICE_INPUT_MICRO_USDC`
 - Optional output cap: `USEPOD_MAX_PRICE_OUTPUT_MICRO_USDC`
 
-The dashboard UsePod setup action registers a token through UsePod, saves the token and deposit address with `scripts/hive-env-add`, and configures the selected OpenAI-compatible agent with provider `usepod`. Runtime calls do not send a bearer token; the token lives in the UsePod proxy URL path.
+The dashboard UsePod setup action registers a token through UsePod, saves the token and deposit address with `scripts/hive-env-add`, and configures the selected OpenAI-compatible agent with provider `usepod`. Runtime calls do not send a bearer token. The token lives in the UsePod proxy URL path.
 
 UsePod response metadata is recorded in runtime telemetry when present:
 
