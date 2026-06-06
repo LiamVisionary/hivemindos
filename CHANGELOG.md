@@ -5,10 +5,10 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-06-06 15:32:26 WITA - Add Cross-Platform Tauri Release Workflow
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: GitHub Actions release builds
 - Summary: Add a manually-triggered `Tauri Cross-Platform Release` workflow that checks out a release tag, builds macOS Intel, Windows x64, and Linux x64 Tauri bundles on GitHub-hosted runners, collects generated installers, and uploads them to the selected GitHub release.
-- Verification: Pending
+- Verification: `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/tauri-cross-platform-release.yml"); puts "workflow yaml ok"'`; `git diff --check -- .github/workflows/tauri-cross-platform-release.yml CHANGELOG.md`.
 - Intended commit message: `Add cross-platform Tauri release workflow`
 
 ## 2026-06-06 15:19:26 WITA - Fix Production Tauri Route Window Build
