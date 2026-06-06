@@ -10,7 +10,7 @@ use tauri::{
 
 use crate::NativeServerState;
 #[cfg(not(debug_assertions))]
-use crate::NATIVE_HOST;
+use crate::NATIVE_BROWSER_HOST;
 
 const NAVIGATE_EVENT: &str = "hivemindos:navigate";
 const OPEN_PALETTE_EVENT: &str = "hivemindos:open-command-palette";
@@ -345,7 +345,7 @@ fn route_url(app: &AppHandle, state: &NativeServerState, route: &str) -> Result<
     {
         if let Ok(port) = state.port.lock() {
             if let Some(port) = *port {
-                let url = url::Url::parse(&format!("http://{NATIVE_HOST}:{port}{route}")).map_err(|error| error.to_string())?;
+                let url = url::Url::parse(&format!("http://{NATIVE_BROWSER_HOST}:{port}{route}")).map_err(|error| error.to_string())?;
                 return Ok(WebviewUrl::External(url));
             }
         }

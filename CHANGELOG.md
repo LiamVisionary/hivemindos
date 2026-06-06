@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-06 15:19:26 WITA - Fix Production Tauri Route Window Build
+
+- Status: Pushed
+- Areas changed: Tauri desktop route-window navigation
+- Summary: Fix the production Tauri build by replacing the removed `NATIVE_HOST` route-window import with the existing `NATIVE_BROWSER_HOST` constant used by the native server browser URL path.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml --release`; `git diff --check -- CHANGELOG.md src-tauri/src/desktop_navigation.rs next-env.d.ts`.
+- Intended commit message: `Fix production Tauri route window build`
+
 ## 2026-06-06 14:49:05 WITA - Draft And Execute Public x402 Server-Side
 
 - Status: Pushed
