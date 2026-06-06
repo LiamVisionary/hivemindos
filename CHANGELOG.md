@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-06 16:30:55 WITA - Allow Windows Tauri Static Build
+
+- Status: Uncommitted
+- Areas changed: Tauri production build preparation
+- Summary: Use the POSIX memory-limit wrapper only on non-Windows platforms and run the Next static export directly on Windows so the Windows release runner can execute `pnpm tauri:build`.
+- Verification: `node --check scripts/tauri-build.mjs`; `git diff --check -- scripts/tauri-build.mjs CHANGELOG.md`; `wc -l scripts/tauri-build.mjs CHANGELOG.md`; `pnpm check-sizes` still reports existing oversized legacy files unrelated to this release-script change.
+- Intended commit message: `Allow Windows Tauri static build`
+
 ## 2026-06-06 15:53:14 WITA - Revert Website Download Section
 
 - Status: Pushed

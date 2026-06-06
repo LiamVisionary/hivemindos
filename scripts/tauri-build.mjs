@@ -52,6 +52,28 @@ function run(command, args, options = {}) {
   }
 }
 
+function runStaticNextBuild() {
+  const env = {
+    HIVEMINDOS_TAURI_STATIC_BUILD: "1",
+  };
+  const nextBuildArgs = ["exec", "next", "build", "--webpack"];
+
+  if (process.platform === "win32") {
+    run("pnpm", nextBuildArgs, { env });
+    return;
+  }
+
+  run("scripts/run-with-memory-limit.sh", [
+    "--limit-mb",
+    buildMemoryMb,
+    "--timeout-seconds",
+    buildTimeoutSeconds,
+    "--",
+    "pnpm",
+    ...nextBuildArgs,
+  ], { env });
+}
+
 function restoreStaticHiddenApiRoutes() {
   if (existsSync(staticHiddenApiDir) && !existsSync(appApiDir)) {
     mkdirSync(dirname(appApiDir), { recursive: true });
@@ -475,22 +497,7 @@ function buildStaticNativeResources() {
   hideApiRoutesForStaticBuild();
   try {
     writeBuildNextEnv();
-    run("scripts/run-with-memory-limit.sh", [
-      "--limit-mb",
-      buildMemoryMb,
-      "--timeout-seconds",
-      buildTimeoutSeconds,
-      "--",
-      "pnpm",
-      "exec",
-      "next",
-      "build",
-      "--webpack",
-    ], {
-      env: {
-        HIVEMINDOS_TAURI_STATIC_BUILD: "1",
-      },
-    });
+    runStaticNextBuild();
   } finally {
     restoreStaticHiddenApiRoutes();
     restoreNextEnv();
