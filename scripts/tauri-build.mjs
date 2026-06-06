@@ -35,6 +35,7 @@ const buildMemoryMb = process.env.TAURI_NEXT_BUILD_MEMORY_MB || "9000";
 const buildTimeoutSeconds = process.env.TAURI_NEXT_BUILD_TIMEOUT_SECONDS || "1800";
 const embeddedNextMode = process.env.HIVEMINDOS_TAURI_EMBEDDED_NEXT === "1";
 const originalNextEnv = existsSync(nextEnvPath) ? readFileSync(nextEnvPath, "utf8") : null;
+const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -46,6 +47,10 @@ function run(command, args, options = {}) {
       ...options.env,
     },
   });
+
+  if (result.error) {
+    throw new Error(`${command} ${args.join(" ")} failed to start: ${result.error.message}`);
+  }
 
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(" ")} failed with exit code ${result.status ?? 1}`);
@@ -59,7 +64,7 @@ function runStaticNextBuild() {
   const nextBuildArgs = ["exec", "next", "build", "--webpack"];
 
   if (process.platform === "win32") {
-    run("pnpm", nextBuildArgs, { env });
+    run(pnpmCommand, nextBuildArgs, { env });
     return;
   }
 

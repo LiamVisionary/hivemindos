@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-06 16:36:14 WITA - Resolve Windows PNPM Build Command
+
+- Status: Uncommitted
+- Areas changed: Tauri production build preparation
+- Summary: Resolve `pnpm.cmd` when the Tauri build helper spawns the Windows static export from Node and include spawn errors in the build helper failure message.
+- Verification: `node --check scripts/tauri-build.mjs`; `git diff --check -- scripts/tauri-build.mjs CHANGELOG.md`; `wc -l scripts/tauri-build.mjs CHANGELOG.md`; `pnpm check-sizes` still reports existing oversized legacy files unrelated to this release-script change.
+- Intended commit message: `Resolve Windows PNPM build command`
+
 ## 2026-06-06 16:30:55 WITA - Allow Windows Tauri Static Build
 
 - Status: Pushed
