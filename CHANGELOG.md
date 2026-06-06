@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-06 16:40:39 WITA - Run Windows PNPM Through Command Shell
+
+- Status: Uncommitted
+- Areas changed: Tauri production build preparation
+- Summary: Invoke the Windows static Next export through `cmd.exe /c pnpm ...` from the Tauri build helper so GitHub-hosted Windows runners can execute the pnpm shim without `spawnSync` EINVAL failures.
+- Verification: `node --check scripts/tauri-build.mjs`; `git diff --check -- scripts/tauri-build.mjs CHANGELOG.md`; `wc -l scripts/tauri-build.mjs CHANGELOG.md`; `pnpm check-sizes` still reports existing oversized legacy files unrelated to this release-script change.
+- Intended commit message: `Run Windows PNPM through command shell`
+
 ## 2026-06-06 16:36:14 WITA - Resolve Windows PNPM Build Command
 
 - Status: Pushed
