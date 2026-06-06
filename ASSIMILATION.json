@@ -1,90 +1,55 @@
 {
-  "created_at": "2026-06-03T10:04:19.183998+00:00",
+  "created_at": "2026-06-06T04:10:12.570046+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
-      "source_repo": "/Users/liam/Downloads/nextjs-work-history",
-      "source_path": "src/features/dashboard/views/WorkHistoryView.tsx",
-      "target_path": "src/features/dashboard/views/WorkHistoryView.tsx",
-      "reuse_type": "adapted_code",
-      "note": "day-grouped Work History timeline component"
+      "source_repo": "kepano/obsidian-skills",
+      "source_path": "skills/obsidian-markdown",
+      "target_path": "packaged-skills/auto-install/obsidian-markdown",
+      "reuse_type": "copied_code",
+      "note": "Obsidian Flavored Markdown shared skill and references"
     },
     {
-      "source_repo": "/Users/liam/Downloads/nextjs-work-history",
-      "source_path": "src/features/dashboard/views/WorkHistoryView.module.css",
-      "target_path": "src/features/dashboard/views/WorkHistoryView.module.css",
-      "reuse_type": "adapted_code",
-      "note": "scoped timeline CSS module adapted for project wrapping and radius rules"
+      "source_repo": "kepano/obsidian-skills",
+      "source_path": "skills/obsidian-bases",
+      "target_path": "packaged-skills/auto-install/obsidian-bases",
+      "reuse_type": "copied_code",
+      "note": "Obsidian Bases shared skill and function reference"
     },
     {
-      "source_repo": "/Users/liam/Downloads/nextjs-work-history",
-      "source_path": "README.md",
-      "target_path": "src/features/dashboard/views/KanbanPanel.tsx",
-      "reuse_type": "adapted_code",
-      "note": "documented WorkHistoryView prop wiring transplanted into the existing history branch"
+      "source_repo": "kepano/obsidian-skills",
+      "source_path": "skills/json-canvas",
+      "target_path": "packaged-skills/auto-install/json-canvas",
+      "reuse_type": "copied_code",
+      "note": "JSON Canvas shared skill and examples"
     },
     {
-      "source_repo": "/Users/liam/Downloads/nextjs-chat",
-      "source_path": "src/app/chat/page.tsx",
-      "target_path": "src/app/chat/page.tsx",
-      "reuse_type": "adapted_code",
-      "note": "standalone chat route adapted to open the authenticated HivemindOS dashboard chat view"
+      "source_repo": "kepano/obsidian-skills",
+      "source_path": "skills/defuddle",
+      "target_path": "packaged-skills/auto-install/defuddle",
+      "reuse_type": "copied_code",
+      "note": "Defuddle markdown extraction shared skill"
     },
     {
-      "source_repo": "/Users/liam/Downloads/nextjs-chat",
-      "source_path": "src/components/chat/ChatView.tsx",
+      "source_repo": "hivemind-os",
+      "source_path": "src/features/dashboard/views/ChatPanel.tsx",
       "target_path": "src/features/dashboard/views/ChatPanel.tsx",
       "reuse_type": "adapted_code",
-      "note": "donor chat shell concepts adapted into the live dashboard chat panel without replacing runtime wiring"
+      "note": "Extended the existing AgentProcessPanel and assistant message rendering flow for MiroShark x402 progress and result cards."
     },
     {
-      "source_repo": "/Users/liam/Downloads/nextjs-chat",
-      "source_path": "src/components/chat/ChatNav.tsx",
-      "target_path": "src/features/dashboard/views/ChatPanel.tsx",
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/miroshark/x402-buyer.ts",
+      "target_path": "src/features/dashboard/views/chat/MiroSharkSimulationCard.tsx",
       "reuse_type": "adapted_code",
-      "note": "donor left rail new-chat/header/footer patterns adapted to real chatSidebarTree machines and folders"
+      "note": "Reused the MiroShark x402 run/status/report vocabulary to parse run ids, payment state, report markdown, and upstream links in chat output."
     },
     {
-      "source_repo": "/Users/liam/Downloads/nextjs-chat",
-      "source_path": "src/components/chat/glyph.tsx",
-      "target_path": "src/features/dashboard/views/chat/ChatRoutePrimitives.tsx",
+      "source_repo": "hivemind-os",
+      "source_path": "src/features/dashboard/views/chat/HiveChatView.module.css",
+      "target_path": "src/features/dashboard/views/chat/MiroSharkSimulationCard.module.css",
       "reuse_type": "adapted_code",
-      "note": "donor route glyph paths adapted into local chat route primitives"
-    },
-    {
-      "source_repo": "/Users/liam/Downloads/nextjs-chat",
-      "source_path": "src/components/chat/hex-tile.tsx",
-      "target_path": "src/features/dashboard/views/chat/ChatRoutePrimitives.tsx",
-      "reuse_type": "adapted_code",
-      "note": "donor hex tile primitive adapted for the standalone chat rail and agent header"
-    },
-    {
-      "source_repo": "/Users/liam/Downloads/nextjs-chat",
-      "source_path": "src/components/chat/bee-icon.tsx",
-      "target_path": "src/features/dashboard/views/chat/ChatRoutePrimitives.tsx",
-      "reuse_type": "adapted_code",
-      "note": "donor bee icon wrapper adapted to existing HivemindOS bee image assets"
-    },
-    {
-      "source_repo": "/Users/liam/Downloads/nextjs-chat",
-      "source_path": "src/components/chat/ChatThread.tsx",
-      "target_path": "src/features/dashboard/views/ChatPanel.tsx",
-      "reuse_type": "adapted_code",
-      "note": "donor centered thread lane, boxless assistant turns, and teal user bubble treatment adapted around live chat messages"
-    },
-    {
-      "source_repo": "/Users/liam/Downloads/nextjs-chat",
-      "source_path": "src/components/chat/ShelfPanels.tsx",
-      "target_path": "src/features/dashboard/views/ChatPanel.tsx",
-      "reuse_type": "adapted_code",
-      "note": "donor collapsible right shelf and section layout adapted to live runtime, scope, process, and quick action data"
-    },
-    {
-      "source_repo": "/Users/liam/Downloads/nextjs-chat",
-      "source_path": "src/components/chat/chat-tokens.module.css",
-      "target_path": "src/features/dashboard/views/chat/ChatRouteShell.module.css",
-      "reuse_type": "style_adapted",
-      "note": "donor scoped hive tokens, route grid, thread, rail, shelf, and tooltip treatments adapted into a focused route-shell CSS module"
+      "note": "Adapted the existing dark Hivemind chat panel visual language, process pulses, and responsive wrapping rules for the MiroShark card styling."
     }
   ]
 }

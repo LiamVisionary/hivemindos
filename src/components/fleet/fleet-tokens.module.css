@@ -713,9 +713,25 @@
   animation: call-ring-orbit 1.15s linear infinite;
 }
 
+.callWorkOrbit {
+  position: absolute;
+  inset: 4px;
+  border: 1px dashed rgba(255, 212, 90, 0.62);
+  border-radius: 999px;
+  border-left-color: rgba(94, 234, 212, 0.78);
+  border-bottom-color: rgba(148, 163, 184, 0.2);
+  box-shadow: 0 0 28px rgba(255, 212, 90, 0.16), inset 0 0 22px rgba(45, 212, 191, 0.1);
+  animation: call-work-orbit 1.7s linear infinite;
+}
+
 .callAgentIconRinging .callAgentHalo {
   opacity: 0.42;
   animation: call-ring-halo 1.35s ease-in-out infinite;
+}
+
+.callAgentIconWorking .callAgentHalo {
+  opacity: 0.86;
+  animation: call-work-halo 1.2s ease-in-out infinite;
 }
 
 .callAgentOrb {
@@ -856,6 +872,34 @@
   gap: 8px;
 }
 
+.callWorkNotice {
+  display: inline-flex;
+  width: min(100%, 310px);
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 212, 90, 0.28);
+  border-radius: 10px;
+  background:
+    linear-gradient(90deg, rgba(255, 212, 90, 0.1), rgba(45, 212, 191, 0.08)),
+    rgba(15, 23, 42, 0.56);
+  color: var(--foreground);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.callWorkNotice svg {
+  flex: 0 0 auto;
+  color: var(--accent-strong);
+  animation: call-work-spin 980ms linear infinite;
+}
+
 .callTelemetry span {
   display: inline-flex;
   min-height: 26px;
@@ -919,14 +963,27 @@
   to { transform: rotate(360deg); }
 }
 
+@keyframes call-work-orbit {
+  to { transform: rotate(-360deg); }
+}
+
 @keyframes call-ring-halo {
   0%, 100% { transform: scale(0.84); opacity: 0.32; }
   50% { transform: scale(1.05); opacity: 0.72; }
 }
 
+@keyframes call-work-halo {
+  0%, 100% { transform: scale(0.92); opacity: 0.48; }
+  50% { transform: scale(1.08); opacity: 0.92; }
+}
+
 @keyframes call-ring-dot {
   0%, 100% { transform: translateY(0) scale(0.86); opacity: 0.45; }
   50% { transform: translateY(-5px) scale(1.08); opacity: 1; }
+}
+
+@keyframes call-work-spin {
+  to { transform: rotate(360deg); }
 }
 
 @keyframes call-answered-pop {

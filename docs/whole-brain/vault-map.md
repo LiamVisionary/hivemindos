@@ -27,6 +27,7 @@ hivemindos-vault/
 |   |-- Daily Briefings/
 |   |-- Decision Journal/
 |   |-- Distillations/
+|   |   `-- Agent Memory/
 |   |-- Imported Sources/
 |   |-- Meetings/
 |   `-- Weekly Reviews/
@@ -47,9 +48,14 @@ hivemindos-vault/
 |   |   |-- Foundation Workflows/
 |   |   `-- Project Autopilot/
 |   |-- Brain Services/
+|   |   |-- Agent Memory.base
 |   |   |-- GBrain.md
 |   |   |-- Obsidian CLI.md
+|   |   |-- Obsidian Native Brain Pack.md
 |   |   |-- Obsidian Plugin Pack.md
+|   |   |-- Project Brain.base
+|   |   |-- Secure References.base
+|   |   |-- Whole Brain.canvas
 |   |   `-- Syntho.md
 |   |-- Code Projects/
 |   |-- Runtime Mirrors/
@@ -92,8 +98,8 @@ The exact project, skill, and migration folders will vary. The top level shape s
 | `Operations/Automations/` | Scheduler records and seeded foundation workflow schedules. |
 | `Operations/Work Board/` | Kanban/work-board state. |
 | `Operations/Agent Notifications/` | Shared notification notes and dashboard notification state. |
-| `Operations/Brain Services/` | GBrain, Syntho, Trading Brain, Obsidian CLI, plugin-pack, and context-index service notes. |
-| `Operations/Secure/` | Encrypted backup artifacts and public-key reference notes only. No plaintext secrets. |
+| `Operations/Brain Services/` | GBrain, Syntho, Trading Brain, Obsidian CLI, plugin-pack, context-index service notes, the private Agent Memory index, and optional hash-only memory proof receipts. |
+| `Operations/Secure/` | Encrypted backup artifacts, credential-name status notes, and public-key reference notes only. Searchable by shared-brain recall for set/missing context, but no plaintext secrets. |
 | `Operations/Runtime Mirrors/` | Runtime-local mirrors that are operational state, such as the hidden AEON `.aeon` mirror. |
 | `Operations/Vault Migrations/` | Cleanup manifests and archived duplicate/conflict artifacts. |
 
@@ -107,14 +113,31 @@ Setup also seeds these child paths because agents and workflows expect them to e
 - `Memory/Weekly Reviews`
 - `Memory/Imported Sources`
 - `Memory/Distillations`
+- `Memory/Distillations/Agent Memory`
 - `Operations/Automations`
 - `Operations/Work Board`
 - `Operations/Agent Notifications`
 - `Operations/Brain Services`
+- `Operations/Brain Services/Agent Memory.base`
+- `Operations/Brain Services/Project Brain.base`
+- `Operations/Brain Services/Secure References.base`
+- `Operations/Brain Services/Whole Brain.canvas`
 - `Operations/Secure`
 - `Operations/Runtime Mirrors`
 - `Templates/HivemindOS`
 - `Archive/Processed Requests`
+
+## Memory Routing
+
+Shared Brain Memory has two recall layers:
+
+- Typed durable memories live in `Memory/Distillations/Agent Memory/`.
+- The private hot-path index lives in `Operations/Brain Services/Agent Memory Index.jsonl`.
+- Optional hash-only GitLawb receipts live in `Operations/Brain Services/Agent Memory Proofs.jsonl`.
+- Broad recall can search regular markdown notes across the vault when the typed memory layer is weak or when callers force `--scope full-vault`.
+- Obsidian-native views live at `Operations/Brain Services/Agent Memory.base`, `Project Brain.base`, `Secure References.base`, and `Whole Brain.canvas` so humans can inspect memory, projects, credential status references, and recall topology in Obsidian.
+
+Agents should use `/api/brain/memory` when they are app-routed and `hive-brain answer "<query>"` when they are raw/non-managed. Claude Code also gets a `hive-brain-hook` prompt hook during setup so raw Claude prompts can receive relevant shared-brain context automatically.
 
 ## Retired Roots
 

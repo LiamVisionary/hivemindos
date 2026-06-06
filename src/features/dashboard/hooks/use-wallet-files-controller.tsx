@@ -551,7 +551,7 @@ export function useWalletFilesController(props: any) {
     const action = walletActionsByAgent[agentId] ?? {};
     const localX402Url = typeof window !== "undefined" ? `${window.location.origin}/api/wallet/x402/mock-paid` : "http://127.0.0.1:5025/api/wallet/x402/mock-paid";
     const url = (action.x402Url || wallet.x402BaseUrl || (wallet.provider === "veil" ? VEIL_CASH_DEFAULT_X402_URL : localX402Url)).trim();
-    const privateVeilX402 = wallet.provider === "veil";
+    const privateVeilX402 = wallet.provider === "veil" && wallet.veilAutoPrivateX402 !== false;
     updateWalletAction(agentId, { busy: true, error: "", message: privateVeilX402 ? "Calling private Veil x402 endpoint..." : "Calling paid x402 endpoint..." });
     const response = await fetch(privateVeilX402 ? "/api/wallet/veil/x402" : "/api/wallet/x402", {
       method: "POST",

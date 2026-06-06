@@ -11,7 +11,7 @@ It is not one magic database. The real anchor is a normal Obsidian markdown vaul
 
 <section class="atlasHero">
   <strong>Short version:</strong>
-  <p>The vault is the durable shared brain. Brain services can index, compile, visualize, or repair it. They do not replace it.</p>
+  <p>The vault is the durable shared brain. Shared Brain Memory gives agents private millisecond typed-memory recall first, then broader full-vault context retrieval when distilled memory is not enough. The Obsidian Native Brain Pack gives agents shared skills for Markdown, Bases, and Canvas, while the other brain services can index, compile, visualize, or repair the vault without replacing it.</p>
 </section>
 
 ## Component Pages
@@ -24,7 +24,7 @@ It is not one magic database. The real anchor is a normal Obsidian markdown vaul
   </section>
   <section class="docCard">
     <h3>Brain Services</h3>
-    <p>GBrain, Syntho, Trading Brain, the Brain Graph, the context index, and service notes.</p>
+    <p>Shared Brain Memory, GBrain, Syntho, Trading Brain, the Brain Graph, the context index, and service notes.</p>
     <a href="brain-services.html">Open services</a>
   </section>
   <section class="docCard">
@@ -59,10 +59,21 @@ It is not one magic database. The real anchor is a normal Obsidian markdown vaul
 ```mermaid
 flowchart TD
   User["User and agents"] --> Dashboard["HivemindOS dashboard"]
+  User --> RawAgents["Raw runtime CLIs"]
   Dashboard --> Vault["Shared Obsidian vault"]
   Dashboard --> ContextIndex["Context index"]
+  Dashboard --> BrainMemory["Shared Brain Memory"]
   Dashboard --> BrainGraph["Brain graph"]
   Dashboard --> Skills["Shared skills"]
+  RawAgents --> HiveBrain["hive-brain CLI"]
+  RawAgents --> ClaudeHook["Claude UserPromptSubmit hook"]
+  HiveBrain --> BrainMemory
+  ClaudeHook --> HiveBrain
+  BrainMemory --> VaultMarkdown["Full vault markdown recall"]
+  BrainMemory --> MemoryNotes["Memory/Distillations/Agent Memory"]
+  BrainMemory --> MemoryIndex["Private memory index"]
+  BrainMemory --> Proofs["Hash-only GitLawb receipts"]
+  Vault --> NativeViews["Obsidian Bases and Canvas views"]
   Vault --> SyncOwner["Hivemind Sync"]
   SyncOwner --> VaultOwner["External sync / HivemindOS Syncthing / manual repair"]
   SyncOwner --> Transfers[".hivemindos-transfers handoffs"]
@@ -72,6 +83,14 @@ flowchart TD
   Skills --> RuntimeProviders["Codex / Claude / Hermes / Gemini / OpenClaw / Aeon"]
   Operations --> Doctor["Vault doctor and migration manifests"]
 ```
+
+The important split is access path, not storage path:
+
+- HivemindOS-managed chats inject Shared Brain Memory through the dashboard runtime context.
+- Raw or non-managed runtimes use `hive-brain`, which tries `/api/brain/memory` first and falls back to local vault/index search.
+- Claude Code also gets `hive-brain-hook` as a `UserPromptSubmit` hook, so raw Claude prompts can receive relevant full-vault context before answering.
+- Durable memory writes still go to typed Agent Memory notes; broad recall can read normal vault notes when the typed layer is not enough.
+- The Obsidian Native Brain Pack lets agents write durable notes, `.base` views, and `.canvas` maps in formats Obsidian can open directly.
 
 ## Source Of Truth
 

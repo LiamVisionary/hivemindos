@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { Mic2, PhoneCall, PhoneOff, Waves } from "lucide-react";
+import { Loader2, Mic2, PhoneCall, PhoneOff, Waves } from "lucide-react";
 import { Room, RoomEvent, Track } from "livekit-client";
 import type {
   AudioCaptureOptions,
@@ -67,6 +67,7 @@ export type AgentCallRuntimeAgent = {
 };
 
 type DashboardVoiceStatus = "idle" | "connecting" | "connected" | "blocked" | "failed";
+type DashboardAgentWorkStage = "idle" | "tool" | "answer";
 
 const ECHO_CANCELLED_AUDIO: AudioCaptureOptions & MediaTrackConstraints = {
   autoGainControl: true,
@@ -233,6 +234,7 @@ function useDashboardLiveKit(connection: AgentCallLiveKit | undefined, active: b
   return {
     agentCaption: connected ? agentCaption : "",
     agentSpeaking: connected ? agentSpeaking : false,
+    agentWorkStage: "idle" as DashboardAgentWorkStage,
     error: connected ? error : "",
     localMicrophoneTrack: connected ? localMicrophoneTrack : null,
     participantCount: connected ? participantCount : 0,
@@ -279,6 +281,36 @@ function realtimeSessionIdFor(target?: AgentCallRuntimeAgent) {
   return `voice-${id}`.replace(/[^A-Za-z0-9._-]+/g, "-");
 }
 
+function playCallToolChime() {
+  if (typeof window === "undefined") return;
+  const audioWindow = window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext };
+  const AudioContextClass = audioWindow.AudioContext || audioWindow.webkitAudioContext;
+  if (!AudioContextClass) return;
+  try {
+    const context = new AudioContextClass();
+    const gain = context.createGain();
+    const now = context.currentTime;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.045, now + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
+    gain.connect(context.destination);
+
+    [660, 880].forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const startAt = now + index * 0.095;
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(frequency, startAt);
+      oscillator.connect(gain);
+      oscillator.start(startAt);
+      oscillator.stop(startAt + 0.16);
+    });
+    void context.resume?.().catch(() => undefined);
+    window.setTimeout(() => void context.close().catch(() => undefined), 520);
+  } catch {
+    // Audio feedback is best-effort; the visual working state is the source of truth.
+  }
+}
+
 async function askComputerAgent(target: AgentCallRuntimeAgent | undefined, message: string) {
   const hubUrl = String(target?.hubUrl || "").replace(/\/+$/, "");
   if (!hubUrl) return "The paired HivemindOS hub URL was not attached to this call.";
@@ -304,6 +336,7 @@ function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtime
   const [error, setError] = React.useState("");
   const [agentCaption, setAgentCaption] = React.useState("");
   const [agentSpeaking, setAgentSpeaking] = React.useState(false);
+  const [agentWorkStage, setAgentWorkStage] = React.useState<DashboardAgentWorkStage>("idle");
   const [userTranscript, setUserTranscript] = React.useState("");
   const [remoteAudioActive, setRemoteAudioActive] = React.useState(false);
   const [localMicrophoneTrack, setLocalMicrophoneTrack] = React.useState<MediaStreamTrack | null>(null);
@@ -329,6 +362,7 @@ function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtime
     let startFallback = 0;
     let connectTimeout = 0;
     let localStream: MediaStream | null = null;
+    const handledFunctionCalls = new Set<string>();
     const audio = document.createElement("audio");
     audio.autoplay = true;
     audio.dataset.agentCallAudio = "true";
@@ -419,12 +453,17 @@ function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtime
         captionResponseOpen = true;
         setAgentCaption("");
       }
-      if (record.type === "response.output_audio.delta" || record.type === "response.audio.delta") setAgentSpeaking(true);
+      if (record.type === "response.output_audio.delta" || record.type === "response.audio.delta") {
+        setAgentWorkStage("idle");
+        setAgentSpeaking(true);
+      }
       if (record.type === "response.done") {
         captionResponseOpen = false;
         setAgentSpeaking(false);
+        setAgentWorkStage("idle");
       }
       if (typeof record.delta === "string" && (record.type === "response.audio_transcript.delta" || record.type === "response.output_audio_transcript.delta")) {
+        setAgentWorkStage("idle");
         if (!captionResponseOpen) {
           captionResponseOpen = true;
           setAgentCaption(record.delta.slice(-500));
@@ -435,10 +474,16 @@ function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtime
       if (record.type === "conversation.item.input_audio_transcription.completed" && typeof record.transcript === "string") setUserTranscript(record.transcript);
       const call = parseRealtimeFunctionCall(payload);
       if (call) {
+        if (handledFunctionCalls.has(call.callId)) return;
+        handledFunctionCalls.add(call.callId);
         const message = typeof call.args.message === "string" ? call.args.message.trim() : "";
+        setAgentSpeaking(false);
+        setAgentWorkStage("tool");
+        playCallToolChime();
         const output = call.name === "ask_computer_agent" && message
           ? await askComputerAgent(runtimeAgent, message)
           : `Unknown or incomplete tool call: ${call.name}`;
+        setAgentWorkStage("answer");
         send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: call.callId, output } });
         send({ type: "response.create", response: { output_modalities: ["audio"] } });
       }
@@ -494,6 +539,7 @@ function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtime
       peer.close();
       localStream?.getTracks().forEach((track) => track.stop());
       setLocalMicrophoneTrack(null);
+      setAgentWorkStage("idle");
       audio.pause();
       audio.removeAttribute("src");
       audio.load();
@@ -505,6 +551,7 @@ function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtime
   return {
     agentCaption: connected ? agentCaption : "",
     agentSpeaking: connected ? agentSpeaking : false,
+    agentWorkStage: connected ? agentWorkStage : "idle",
     error: connected ? error : "",
     localMicrophoneTrack: connected ? localMicrophoneTrack : null,
     participantCount: connected ? 1 : 0,
@@ -662,12 +709,16 @@ export function AgentCallModal({ agent, machine, phase, error, notice, livekit, 
   const transcriptStatusLabel = dashboardVoice.status === "connected"
     ? dashboardVoice.agentSpeaking ? "Transcript paused" : "Transcript live"
     : speechStatus === "listening" ? "Transcript live" : speechStatus === "paused" ? "Transcript paused" : "Transcript idle";
+  const isAgentWorking = dashboardVoice.agentWorkStage !== "idle";
   const voiceConnectedCalled = React.useRef(false);
   const [ringingCycle, setRingingCycle] = React.useState({ agentId: agent.id, step: 0 });
   const ringingStep = ringingCycle.agentId === agent.id ? ringingCycle.step : 0;
   const ringingMessage = realtime
     ? ringingStep % 2 === 0 ? `Calling ${agent.name}` : "Connecting Realtime audio"
     : ringingStep % 2 === 0 ? `Calling ${agent.name}` : "Creating agent room";
+  const workingMessage = dashboardVoice.agentWorkStage === "answer"
+    ? `${agent.name} is preparing the reply...`
+    : `${agent.name} is checking ${machine.name}...`;
 
   React.useEffect(() => {
     const voiceReady = realtime
@@ -710,6 +761,7 @@ export function AgentCallModal({ agent, machine, phase, error, notice, livekit, 
             isRinging ? styles.callAgentIconRinging : "",
             isAnsweredTransition ? styles.callAgentIconAnswered : "",
             isAgentSpeaking ? styles.callAgentIconTalking : "",
+            isAgentWorking ? styles.callAgentIconWorking : "",
             isListening ? styles.callAgentIconListening : "",
           ].filter(Boolean).join(" ")}
           style={{ "--call-volume": String(Math.max(0.18, volume)) } as React.CSSProperties}
@@ -721,6 +773,7 @@ export function AgentCallModal({ agent, machine, phase, error, notice, livekit, 
           ) : null}
           <div className={styles.callAgentHalo} />
           {isRinging ? <div className={styles.callRingOrbit} aria-hidden="true" /> : null}
+          {isAgentWorking ? <div className={styles.callWorkOrbit} aria-hidden="true" /> : null}
           <div className={`${styles.callAgentOrb} ${visualPhase === "failed" ? styles.callAgentOrbDanger : ""}`}>
             <BeeIcon
               role={agent.beeRole === "queen" ? "queen" : "worker"}
@@ -755,6 +808,13 @@ export function AgentCallModal({ agent, machine, phase, error, notice, livekit, 
                 />
               ))}
             </div>
+
+            {isAgentWorking ? (
+              <div className={styles.callWorkNotice} aria-live="polite" data-testid="agent-call-work-notice">
+                <Loader2 size={14} aria-hidden="true" />
+                <span>{workingMessage}</span>
+              </div>
+            ) : null}
 
             <div className={styles.callTelemetry}>
               <span><Mic2 size={13} aria-hidden="true" /> {micStatus === "listening" ? "Mic live" : "Mic idle"}</span>

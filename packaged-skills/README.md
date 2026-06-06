@@ -24,6 +24,11 @@ Skills in `auto-install/` are copied into the user's shared HivemindOS brain `Sk
 
 Keep this folder small and foundational. These skills become part of the default shared context for HivemindOS users.
 
+Current auto-install set:
+
+- `hive-capability-search`, `hive-skill-fusion`, `hive-workflow-fusion`, and `hive-aeon-fusion` for capability discovery and reusable hive workflows.
+- Obsidian Native Brain Pack: `obsidian-markdown`, `obsidian-bases`, `json-canvas`, and optional `defuddle`, curated from `kepano/obsidian-skills` so agents can write Obsidian-native notes, Bases, Canvas maps, and clean web-source markdown.
+
 ## Optional
 
 Skills in `optional/` are a store/catalog for later one-click install. They must not be automatically copied into the shared brain, mirrored into runtime skill folders, or injected into agent context.

@@ -8,6 +8,8 @@ HivemindOS stays the private control room for agents, projects, machines, tasks,
 
 That matters because autonomous coding cannot just be “an agent changed a file.” The operator needs to know what task caused the work, which project it belonged to, where it ran, and whether the code trail can be verified. HivemindOS keeps the private story. GitLawb gives the code a proof surface.
 
+Shared Brain Memory can also write GitLawb memory receipts. These receipts prove the write trail, not the memory body: they store hashes, actor DID when available, machine/Tailnet provenance, and the previous proof hash in `Operations/Brain Services/Agent Memory Proofs.jsonl`. The memory content stays in the private Obsidian note and private memory search index.
+
 ## Default Setup
 
 HivemindOS uses a proof ready default:
@@ -44,6 +46,7 @@ The first setup can be meaningfully heavier because Docker builds the Rust node 
 | Setup | Detects/offers CLI and DID, never starts a node by default |
 | Integrations | Shows Code Proof status, setup actions, DID status, and lazy node guidance |
 | Work | Lets tasks optionally attach a project and displays a compact proof badge |
+| Brain Memory | Writes optional hash-only GitLawb receipts for durable shared-brain memory writes |
 | Fleet | Shows a compact Code Node/Code Proof chip on the primary machine |
 | Agents | Agent profiles may carry public DID status. Private keys are never mirrored |
 
@@ -64,6 +67,8 @@ Kanban tasks may include:
 - `proofs`
 
 Proof metadata is sanitized before storage. HivemindOS must not store private keys, secret env values, Tailnet IPs, or exact private vault paths inside GitLawb proof metadata.
+
+Memory proof receipts follow the same rule. They include `contentHash`, `recordHash`, `previousProofHash`, actor DID when available, and sanitized agent/machine metadata. They do not include the memory body.
 
 ## API Routes
 

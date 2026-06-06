@@ -54,34 +54,13 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS, assetSpendCapFor, getDisplayWalletBalanceUsd, getUsePodBalanceUsd } from "@/lib/utils/agent-wallet";
 
+import type { MoneyClawSaveOptions, MoneyClawStatus, ProviderCopy, WalletActionState } from "./wallet-card-types";
 import { VeilAdvancedSetup, type VeilSetupAction } from "./VeilAdvancedSetup";
+import { PaymentMethodSelector } from "./PaymentMethodSelector";
 import styles from "./AgentWalletCard.module.css";
 
-type WalletActionState = {
-  busy?: boolean;
-  sendTo?: string;
-  sendAmount?: string;
-  sendAsset?: AgentSpendCapAsset;
-  confirmation?: string;
-  x402Url?: string;
-  x402Method?: string;
-  x402Confirmation?: string;
-  message?: string;
-  error?: string;
-};
-
-type ProviderCopy = { label: string; summary: string; setup: string };
 type RailState = "ready" | "setup" | "blocked";
 type UsePodAdvancedSection = "status" | "connect" | "routing" | "repair";
-type MoneyClawStatus = {
-  configured: boolean;
-  apiKeyEnvName: string;
-  balance?: unknown;
-  depositAddress?: unknown;
-  paymentIntents?: unknown;
-  errors?: Record<string, string>;
-};
-type MoneyClawSaveOptions = { shareWithAllAgents: boolean };
 type VeilSetupStatus = {
   cliInstalled?: boolean;
   cliPath?: string;
@@ -259,6 +238,7 @@ export function AgentWalletCard({
   const providerFeatures = agentPaymentProviderFeatures(wallet.provider);
   const usePodRail = providerFeatures.balanceSource === "usepod-runtime";
   const veilRail = wallet.provider === "veil";
+  const veilAutoPrivateX402 = wallet.veilAutoPrivateX402 !== false;
   const usePodBalanceValue = usePodRail ? getUsePodBalanceUsd(agentUsePod) : null;
   const usePodStatus = agentUsePod?.lastTestStatus || "not checked";
   const usePodReadyBalanceUnknown = usePodRail && usePodStatus === "ready" && usePodBalanceValue === null;
@@ -342,16 +322,19 @@ export function AgentWalletCard({
   const hasUsePodAdvanced = usePodAdvancedTabs.length > 0;
 
   const handleProviderChange = (provider: AgentPaymentProvider) => {
+    const providerSelectedAt = Date.now();
     if (provider === "veil") {
       onUpdateWallet({
         provider,
+        providerSelectedAt,
+        enabled: wallet.enabled,
         network: VEIL_CASH_NETWORK,
         tokenSymbol: "USDC",
         autoPayEnabled: false,
       });
       return;
     }
-    onUpdateWallet({ provider });
+    onUpdateWallet({ provider, providerSelectedAt, enabled: wallet.enabled });
   };
 
   const copyVeilCliQuickStart = async () => {
@@ -712,45 +695,6 @@ export function AgentWalletCard({
         )}
       </section>
 
-      {usePodRail ? (
-        <section className={styles.usePodRail} aria-label="UsePod prepaid rail">
-          <div className={styles.usePodRailHeader}>
-            <div>
-              <strong>UsePod prepaid</strong>
-              <span>{usePodStatus === "ready"
-                ? `${typeof usePodModelCount === "number" ? `${usePodModelCount} models` : "Models ready"} · provider-managed x402`
-                : "Prepaid Solana USDC for inference and paywalls"}</span>
-            </div>
-            <small>{usePodStatus}</small>
-          </div>
-          <div className={styles.usePodPrimaryBalance}>
-            <div>
-              <span>Balance</span>
-              <strong>{usePodBalance || "After test"}</strong>
-            </div>
-            {visibleUsePodStatusMessage && usePodStatus !== "ready" ? <p data-tone="error">{visibleUsePodStatusMessage}</p> : null}
-          </div>
-          <div className={styles.usePodActionRow}>
-            <button type="button" className={styles.sheetCopy} onClick={onRefreshBalance}>
-              <RefreshCcw aria-hidden="true" width={14} height={14} />
-              Refresh
-            </button>
-            {agentUsePod?.dashboardUrl ? (
-              <button type="button" className={styles.sheetCopy} onClick={() => window.open(agentUsePod.dashboardUrl, "_blank", "noopener,noreferrer")}>
-                <ArrowUpRight aria-hidden="true" width={14} height={14} />
-                Dashboard
-              </button>
-            ) : null}
-            {usePodDepositAddress ? (
-              <button type="button" className={styles.sheetCopy} onClick={() => void navigator.clipboard.writeText(usePodDepositAddress).catch(() => undefined)}>
-                <Copy aria-hidden="true" width={14} height={14} />
-                Copy receiver
-              </button>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-
       {sheet === "send" ? (
         <div className={styles.sheet}>
           <div className={styles.sheetTitle}>
@@ -1105,6 +1049,13 @@ export function AgentWalletCard({
       <details className={styles.advanced}>
         <summary>Advanced setup</summary>
         <div className={styles.advancedBody}>
+          <PaymentMethodSelector
+            provider={wallet.provider}
+            providerOptions={providerOptions}
+            providerCopy={providerCopy}
+            onChangeProvider={handleProviderChange}
+          />
+
           {hasUsePodAdvanced ? (
             <>
               <div className={styles.usePodAdvancedSegmented} role="tablist" aria-label="UsePod advanced sections">
@@ -1124,11 +1075,42 @@ export function AgentWalletCard({
 
               {showAdvancedSection("usepod-status") && usePodAdvancedSection === "status" ? (
                 <>
-                  <div className={styles.sheetField}>
-                    <span className={styles.fieldLabel}>Payment method</span>
-                    <div className={styles.readOnlyField}>UsePod prepaid</div>
-                    <p className={styles.sheetHelp}>{providerCopy.summary}</p>
-                  </div>
+                  <section className={styles.usePodRail} aria-label="UsePod prepaid rail">
+                    <div className={styles.usePodRailHeader}>
+                      <div>
+                        <strong>UsePod prepaid</strong>
+                        <span>{usePodStatus === "ready"
+                          ? `${typeof usePodModelCount === "number" ? `${usePodModelCount} models` : "Models ready"} · provider-managed x402`
+                          : "Prepaid Solana USDC for inference and paywalls"}</span>
+                      </div>
+                      <small>{usePodStatus}</small>
+                    </div>
+                    <div className={styles.usePodPrimaryBalance}>
+                      <div>
+                        <span>Balance</span>
+                        <strong>{usePodBalance || "After test"}</strong>
+                      </div>
+                      {visibleUsePodStatusMessage && usePodStatus !== "ready" ? <p data-tone="error">{visibleUsePodStatusMessage}</p> : null}
+                    </div>
+                    <div className={styles.usePodActionRow}>
+                      <button type="button" className={styles.sheetCopy} onClick={onRefreshBalance}>
+                        <RefreshCcw aria-hidden="true" width={14} height={14} />
+                        Refresh
+                      </button>
+                      {agentUsePod?.dashboardUrl ? (
+                        <button type="button" className={styles.sheetCopy} onClick={() => window.open(agentUsePod.dashboardUrl, "_blank", "noopener,noreferrer")}>
+                          <ArrowUpRight aria-hidden="true" width={14} height={14} />
+                          Dashboard
+                        </button>
+                      ) : null}
+                      {usePodDepositAddress ? (
+                        <button type="button" className={styles.sheetCopy} onClick={() => void navigator.clipboard.writeText(usePodDepositAddress).catch(() => undefined)}>
+                          <Copy aria-hidden="true" width={14} height={14} />
+                          Copy receiver
+                        </button>
+                      ) : null}
+                    </div>
+                  </section>
 
                   <div className={styles.usePodAdvancedGrid}>
                     <div>
@@ -1282,15 +1264,13 @@ export function AgentWalletCard({
                   signerAddress={wallet.walletAddress}
                   networkLabel="Base mainnet"
                   assetsLabel="ETH and USDC"
-                  provider={wallet.provider}
-                  providerOptions={providerOptions}
-                  providerCopy={providerCopy}
                   contracts={veilContracts}
                   setupStatus={veilSetupStatus}
                   setupAction={veilSetupAction}
                   setupMessage={veilSetupMessage}
-                  onChangeProvider={handleProviderChange}
+                  autoPrivateX402={veilAutoPrivateX402}
                   onChangeSignerAddress={(walletAddress) => onUpdateWallet({ walletAddress })}
+                  onChangeAutoPrivateX402={(veilAutoPrivateX402) => onUpdateWallet({ veilAutoPrivateX402 })}
                   onCheckSetup={refreshVeilSetupStatus}
                   onSetupVeil={setupVeilOperator}
                   onCopyPrompt={onCopyPaymentPrompt}
@@ -1300,22 +1280,6 @@ export function AgentWalletCard({
                 />
               ) : (
                 <>
-                  {showAdvancedSection("provider") ? (
-                    <div className={styles.sheetField}>
-                      <label htmlFor="wallet-provider">Payment method</label>
-                      <select
-                        id="wallet-provider"
-                        value={wallet.provider}
-                        onChange={(event) => handleProviderChange(event.target.value as AgentPaymentProvider)}
-                      >
-                        {providerOptions.map(([provider, copy]) => (
-                          <option key={provider} value={provider}>{copy.label}</option>
-                        ))}
-                      </select>
-                      <p className={styles.sheetHelp}>{providerCopy.summary}</p>
-                    </div>
-                  ) : null}
-
                   {showAdvancedSection("wallet-address") ? (
                     <div className={styles.sheetField}>
                       <label htmlFor="wallet-address">Wallet address</label>
@@ -1388,7 +1352,7 @@ export function AgentWalletCard({
                       id="wallet-x402-confirm"
                       value={walletAction.x402Confirmation ?? ""}
                       onChange={(event) => onUpdateAction({ x402Confirmation: event.target.value })}
-                      placeholder={veilRail ? VEIL_CASH_X402_CONFIRMATION : "PAY_X402"}
+                      placeholder={veilRail && veilAutoPrivateX402 ? VEIL_CASH_X402_CONFIRMATION : "PAY_X402"}
                     />
                   </div>
                 </div>
@@ -1439,7 +1403,7 @@ export function AgentWalletCard({
                 {showAdvancedSection("test-x402") ? (
                   <Button type="button" size="sm" variant="secondary" disabled={walletAction.busy} onClick={onCallX402}>
                     <Send aria-hidden="true" />
-                    {veilRail ? "Test private x402" : "Test x402"}
+                    {veilRail && veilAutoPrivateX402 ? "Test private x402" : "Test x402"}
                   </Button>
                 ) : null}
               </div>

@@ -10,6 +10,11 @@ export function hubUrlForPairingHost(host: string) {
   return port ? `http://${cleanHost}:${port}` : `http://${cleanHost}`;
 }
 
-export function clawMobilePairingUrl(input: { hubUrl: string; name: string }) {
-  return `clawcodemobile://pair?hub=${encodeURIComponent(input.hubUrl)}&name=${encodeURIComponent(input.name)}`;
+export function clawMobilePairingUrl(input: { hubUrl: string; name: string; machineId?: string }) {
+  const params = new URLSearchParams({
+    hub: input.hubUrl,
+    name: input.name,
+  });
+  if (input.machineId) params.set("machineId", input.machineId);
+  return `clawcodemobile://pair?${params.toString()}`;
 }

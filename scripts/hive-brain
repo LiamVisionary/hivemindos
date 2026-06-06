@@ -1,0 +1,452 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import http from "node:http";
+
+const MEMORY_FOLDER = "Memory/Distillations/Agent Memory";
+const INDEX_PATH = "Operations/Brain Services/Agent Memory Index.jsonl";
+const MAX_VAULT_FILES = 5000;
+const MAX_VAULT_BYTES = 256 * 1024;
+const LOW_SIGNAL_WORDS = new Set(["agent", "agents", "brain", "hivemindos", "memory", "memories", "note", "notes", "shared", "vault"]);
+const EXCLUDE_PARTS = new Set([".git", ".obsidian", ".trash", ".hivemindos-transfers", "node_modules"]);
+const EXCLUDE_PREFIXES = [
+  "Operations/Runtime Mirrors/",
+  "Operations/Brain Services/Agent Memory Index.jsonl",
+  "Operations/Brain Services/Agent Memory Proofs.jsonl",
+  "Operations/Vault Migrations/",
+  "Archive/",
+];
+
+function usage() {
+  console.error(`Usage:
+  hive-brain answer "query" [--limit N] [--scope tiered|agent-memory|full-vault] [--json]
+  hive-brain recall "query" [--limit N] [--scope tiered|agent-memory|full-vault] [--json]
+  hive-brain remember --type TYPE --title TITLE --content TEXT [--tag TAG] [--source TEXT]
+
+Examples:
+  hive-brain answer "what fruit does liam like?"
+  hive-brain recall "BYOK Agent Calls" --scope full-vault --limit 5
+  hive-brain answer "query" --no-api
+`);
+}
+
+function expandHome(value) {
+  if (!value) return value;
+  if (value === "~") return os.homedir();
+  if (value.startsWith("~/") || value.startsWith("~\\")) return path.join(os.homedir(), value.slice(2));
+  return value;
+}
+
+function defaultVaultPath() {
+  return expandHome(process.env.NEXT_PUBLIC_OBSIDIAN_VAULT_PATH)
+    || path.join(os.homedir(), "Documents", "Obsidian", "hivemindos-vault");
+}
+
+function parseArgs(argv) {
+  const input = {
+    action: argv[2] || "answer",
+    queryParts: [],
+    tags: [],
+    limit: 5,
+    scope: undefined,
+    json: false,
+    vaultPath: defaultVaultPath(),
+  };
+  for (let index = 3; index < argv.length; index += 1) {
+    const arg = argv[index];
+    const next = argv[index + 1];
+    if (arg === "--help" || arg === "-h") {
+      input.help = true;
+    } else if (arg === "--json") {
+      input.json = true;
+    } else if (arg === "--no-api") {
+      input.noApi = true;
+    } else if (arg === "--limit" || arg === "-n") {
+      input.limit = Number(next || input.limit);
+      index += 1;
+    } else if (arg === "--scope") {
+      input.scope = next;
+      index += 1;
+    } else if (arg === "--vault") {
+      input.vaultPath = expandHome(next);
+      index += 1;
+    } else if (arg === "--type") {
+      input.type = next;
+      index += 1;
+    } else if (arg === "--title") {
+      input.title = next;
+      index += 1;
+    } else if (arg === "--content") {
+      input.content = next;
+      index += 1;
+    } else if (arg === "--source") {
+      input.source = next;
+      index += 1;
+    } else if (arg === "--agent-name") {
+      input.agentName = next;
+      index += 1;
+    } else if (arg === "--agent-id") {
+      input.agentId = next;
+      index += 1;
+    } else if (arg === "--runtime") {
+      input.runtime = next;
+      index += 1;
+    } else if (arg === "--machine-name") {
+      input.machineName = next;
+      index += 1;
+    } else if (arg === "--machine-id") {
+      input.machineId = next;
+      index += 1;
+    } else if (arg === "--tailnet-id") {
+      input.tailnetId = next;
+      index += 1;
+    } else if (arg === "--tailnet-name") {
+      input.tailnetName = next;
+      index += 1;
+    } else if (arg === "--tailnet-dns-name") {
+      input.tailnetDnsName = next;
+      index += 1;
+    } else if (arg === "--collector-url") {
+      input.collectorUrl = next;
+      index += 1;
+    } else if (arg === "--session-id") {
+      input.sessionId = next;
+      index += 1;
+    } else if (arg === "--project") {
+      input.project = next;
+      index += 1;
+    } else if (arg === "--tag" || arg === "--tags") {
+      input.tags.push(...String(next || "").split(",").map((tag) => tag.trim()).filter(Boolean));
+      index += 1;
+    } else if (arg.startsWith("--")) {
+      throw new Error(`Unknown option: ${arg}`);
+    } else {
+      input.queryParts.push(arg);
+    }
+  }
+  input.query = input.queryParts.join(" ").trim();
+  return input;
+}
+
+function candidateApiBases() {
+  const values = [];
+  if (process.env.HIVEMINDOS_BRAIN_URL) values.push(process.env.HIVEMINDOS_BRAIN_URL);
+  if (process.env.HIVEMINDOS_APP_URL) values.push(process.env.HIVEMINDOS_APP_URL);
+  if (process.env.NEXT_PUBLIC_APP_URL) values.push(process.env.NEXT_PUBLIC_APP_URL);
+  if (process.env.PORT) values.push(`http://127.0.0.1:${process.env.PORT}`);
+  for (const port of [5020, 5021, 5022, 5023, 5024, 5025]) values.push(`http://127.0.0.1:${port}`);
+  return [...new Set(values.map((value) => value.replace(/\/+$/, "")))];
+}
+
+function requestJson(base, method, body, searchParams) {
+  return new Promise((resolve, reject) => {
+    const url = new URL("/api/brain/memory", base);
+    for (const [key, value] of Object.entries(searchParams || {})) {
+      if (value !== undefined && value !== "") url.searchParams.set(key, String(value));
+    }
+    const payload = body ? JSON.stringify(body) : "";
+    const req = http.request(url, {
+      method,
+      headers: payload ? {
+        "content-type": "application/json",
+        "content-length": Buffer.byteLength(payload),
+      } : undefined,
+      timeout: 4500,
+    }, (res) => {
+      let data = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => { data += chunk; });
+      res.on("end", () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`${base} returned HTTP ${res.statusCode}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(data));
+        } catch {
+          reject(new Error(`${base} returned non-JSON memory response`));
+        }
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error(`${base} timed out`)));
+    req.on("error", reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+async function callApi(input) {
+  if (input.noApi || /^(1|true|yes|on)$/i.test(process.env.HIVE_BRAIN_NO_API || "")) {
+    throw new Error("API disabled by --no-api/HIVE_BRAIN_NO_API.");
+  }
+  const bases = candidateApiBases();
+  let lastError = null;
+  for (const base of bases) {
+    try {
+      if (input.action === "remember") {
+        return await requestJson(base, "POST", {
+          action: "remember",
+          type: input.type,
+          title: input.title,
+          content: input.content,
+          tags: input.tags,
+          source: input.source || "hive-brain cli",
+          vaultPath: input.vaultPath,
+          agentName: input.agentName,
+          agentId: input.agentId,
+          runtime: input.runtime,
+          machineName: input.machineName,
+          machineId: input.machineId,
+          tailnetId: input.tailnetId,
+          tailnetName: input.tailnetName,
+          tailnetDnsName: input.tailnetDnsName,
+          collectorUrl: input.collectorUrl,
+          sessionId: input.sessionId,
+          project: input.project,
+          proof: "auto",
+        });
+      }
+      return await requestJson(base, "GET", null, {
+        mode: input.action === "recall" ? "recall" : "answer",
+        q: input.query,
+        limit: input.limit,
+        scope: input.scope,
+        vaultPath: input.vaultPath,
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("No HivemindOS memory API base could be reached.");
+}
+
+function parseFrontmatter(markdown) {
+  const match = markdown.match(/^---\n([\s\S]*?)\n---\n?/);
+  const fields = new Map();
+  if (!match) return { fields, body: markdown };
+  for (const line of match[1].split("\n")) {
+    const field = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (!field) continue;
+    const raw = field[2].trim();
+    try {
+      fields.set(field[1], JSON.parse(raw));
+    } catch {
+      fields.set(field[1], raw.replace(/^["']|["']$/g, ""));
+    }
+  }
+  return { fields, body: markdown.slice(match[0].length) };
+}
+
+function bodyContent(body) {
+  return body.replace(/^#\s+.+$/m, "").replace(/^## Metadata[\s\S]*$/m, "").trim();
+}
+
+function compact(value, max = 260) {
+  const redacted = redactSecrets(String(value || "").replace(/\s+/g, " ").trim());
+  if (redacted.length <= max) return redacted;
+  return `${redacted.slice(0, Math.max(0, max - 3)).trim()}...`;
+}
+
+function redactSecrets(text) {
+  return text
+    .replace(/\b(sk|pk|rk|ak)-[A-Za-z0-9]{20,}\b/g, "[REDACTED_API_KEY]")
+    .replace(/Bearer\s+[A-Za-z0-9\-._~+/]{20,}/gi, "Bearer [REDACTED]")
+    .replace(/eyJ[A-Za-z0-9\-_]{10,}\.[A-Za-z0-9\-_]{10,}\.[A-Za-z0-9\-_]{10,}/g, "[REDACTED_JWT]")
+    .replace(/-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----[\s\S]+?-----END\s+(RSA\s+)?PRIVATE\s+KEY-----/g, "[REDACTED_PRIVATE_KEY]")
+    .replace(/(password|passwd|secret|api_key|apikey|token)\s*[:=]\s*["']?[A-Za-z0-9!@#$%^&*\-_+]{8,}["']?/gi, "$1=[REDACTED]")
+    .replace(/https?:\/\/100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])(?:\.\d{1,3}){2}(?::\d+)?(?:\/[^\s"'`<>)\]]*)?/g, "[REDACTED_TAILNET_URL]")
+    .replace(/\b100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])(?:\.\d{1,3}){2}\b/g, "[REDACTED_TAILNET_IP]");
+}
+
+function words(value) {
+  return String(value || "")
+    .toLowerCase()
+    .split(/[^a-z0-9_-]+/)
+    .filter((word) => word.length > 2 && !LOW_SIGNAL_WORDS.has(word));
+}
+
+function score(record, query) {
+  const queryText = query.trim().toLowerCase();
+  const queryWords = words(query);
+  const haystack = [record.title, record.content, record.type, record.tags?.join(" "), record.source, record.notePath].filter(Boolean).join(" ").toLowerCase();
+  const title = record.title.toLowerCase();
+  const content = record.content.toLowerCase();
+  const matched = new Set();
+  let value = 0;
+  if (queryText && haystack.includes(queryText)) {
+    value += 30;
+    matched.add("exact-query");
+  }
+  for (const word of queryWords) {
+    if (title.includes(word)) { value += 8; matched.add(word); }
+    if ((record.tags || []).some((tag) => tag.includes(word))) { value += 6; matched.add(word); }
+    if (content.includes(word)) { value += 4; matched.add(word); }
+    if ((record.source || "").toLowerCase().includes(word) || record.notePath.toLowerCase().includes(word)) { value += 2; matched.add(word); }
+  }
+  value += Math.round((record.confidence || 0.62) * 10);
+  if (record.notePath.startsWith(`${MEMORY_FOLDER}/`)) value += 4;
+  return { score: value, matched: [...matched] };
+}
+
+function rel(root, file) {
+  return path.relative(root, file).split(path.sep).join("/");
+}
+
+function shouldSkip(root, file, isDir) {
+  const notePath = rel(root, file);
+  const name = path.basename(file);
+  if (EXCLUDE_PARTS.has(name)) return true;
+  if (name.startsWith(".")) return true;
+  if (isDir && EXCLUDE_PREFIXES.some((prefix) => prefix.endsWith("/") && (notePath === prefix.slice(0, -1) || notePath.startsWith(prefix)))) return true;
+  if (!isDir && EXCLUDE_PREFIXES.some((prefix) => notePath === prefix || notePath.startsWith(prefix))) return true;
+  return false;
+}
+
+function walk(root, dir = root, output = []) {
+  if (output.length >= MAX_VAULT_FILES) return output;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (output.length >= MAX_VAULT_FILES) break;
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!shouldSkip(root, file, true)) walk(root, file, output);
+    } else if (entry.isFile() && entry.name.endsWith(".md") && !shouldSkip(root, file, false)) {
+      output.push(file);
+    }
+  }
+  return output;
+}
+
+function recordsFromIndex(root) {
+  const file = path.join(root, INDEX_PATH);
+  if (!fs.existsSync(file)) return [];
+  const byId = new Map();
+  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const entry = JSON.parse(line);
+      if (entry.action !== "remember" || !entry.id || !entry.title || !entry.content || !entry.notePath) continue;
+      byId.set(entry.id, {
+        id: entry.id,
+        title: entry.title,
+        content: entry.content,
+        type: entry.memoryType || "context",
+        confidence: Number(entry.confidence || 0.7),
+        tags: Array.isArray(entry.tags) ? entry.tags : [],
+        source: entry.source,
+        notePath: entry.notePath,
+      });
+    } catch {
+      // Ignore corrupt JSONL rows.
+    }
+  }
+  return [...byId.values()];
+}
+
+function recordFromMarkdown(root, file, typedOnly = false) {
+  const st = fs.statSync(file);
+  if (st.size > MAX_VAULT_BYTES) return null;
+  const markdown = fs.readFileSync(file, "utf8");
+  const { fields, body } = parseFrontmatter(markdown);
+  const notePath = rel(root, file);
+  if (typedOnly && fields.get("type") !== "agent-memory") return null;
+  const title = String(fields.get("title") || (body.match(/^#\s+(.+)$/m) || [])[1] || path.basename(file, ".md")).trim();
+  const content = bodyContent(body) || markdown.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
+  if (!content) return null;
+  return {
+    id: notePath,
+    title,
+    content,
+    type: fields.get("memoryType") || fields.get("type") || "context",
+    confidence: typedOnly ? Number(fields.get("confidence") || 0.7) : 0.62,
+    tags: Array.isArray(fields.get("tags")) ? fields.get("tags") : notePath.split("/").slice(0, 3).map((part) => part.toLowerCase()),
+    source: `Vault note: ${notePath}`,
+    notePath,
+  };
+}
+
+function fallbackRecall(input) {
+  const root = path.resolve(input.vaultPath);
+  if (!fs.existsSync(root)) throw new Error(`Vault path not found: ${root}`);
+  const limit = Math.min(Math.max(Math.trunc(Number(input.limit || 5)), 1), 50);
+  const scope = String(input.scope || "tiered").toLowerCase();
+  let memoryRecords = recordsFromIndex(root);
+  if (!memoryRecords.length) {
+    const folder = path.join(root, MEMORY_FOLDER);
+    if (fs.existsSync(folder)) memoryRecords = walk(folder).map((file) => recordFromMarkdown(root, file, true)).filter(Boolean);
+  }
+  const memoryHits = rank(memoryRecords, input.query, limit);
+  const strong = memoryHits[0] && (memoryHits[0].score >= 32 || (memoryHits[0].score >= 24 && memoryHits[0].confidence >= 0.85 && memoryHits[0].matched.length >= 2));
+  if (scope === "agent-memory" || (scope !== "full-vault" && strong)) {
+    return { ok: true, source: "local-fallback", recallScope: "agent-memory", augmentedFromVault: false, hits: memoryHits };
+  }
+  const byPath = new Map();
+  for (const file of walk(root)) {
+    if (rel(root, file).startsWith(`${MEMORY_FOLDER}/`)) continue;
+    const record = recordFromMarkdown(root, file, false);
+    if (record) byPath.set(record.notePath, record);
+  }
+  for (const record of memoryRecords) byPath.set(record.notePath, record);
+  return {
+    ok: true,
+    source: "local-fallback",
+    recallScope: "full-vault",
+    augmentedFromVault: scope !== "full-vault",
+    memoryHitCount: memoryHits.length,
+    hits: rank([...byPath.values()], input.query, limit),
+  };
+}
+
+function rank(records, query, limit) {
+  return records
+    .map((record) => {
+      const scored = score(record, query);
+      return { ...record, score: scored.score, matched: scored.matched, excerpt: compact(record.content) };
+    })
+    .filter((hit) => !query.trim() || hit.matched.length)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, limit);
+}
+
+function formatResult(result, action) {
+  if (action === "recall") {
+    return result.hits.map((hit, index) => `${index + 1}. ${hit.title}\n   path: ${hit.notePath}\n   score: ${hit.score}; matched: ${(hit.matched || []).join(", ") || "none"}\n   ${hit.excerpt}`).join("\n\n")
+      || "No matching shared-brain memories or vault notes were found.";
+  }
+  return [
+    `Recall scope: ${result.recallScope || "unknown"}${result.augmentedFromVault ? " (augmented from full vault)" : ""}`,
+    ...(result.hits || []).slice(0, 6).map((hit, index) => `${index + 1}. ${hit.title} (${hit.type || "context"}, score ${hit.score})\n   Path: ${hit.notePath}\n   ${hit.excerpt}`),
+  ].join("\n") || "No matching shared-brain memories or vault notes were found.";
+}
+
+async function main() {
+  const input = parseArgs(process.argv);
+  if (input.help || !["answer", "recall", "remember"].includes(input.action)) {
+    usage();
+    process.exit(input.help ? 0 : 2);
+  }
+  if (input.action !== "remember" && !input.query) throw new Error("A query is required.");
+  if (input.action === "remember" && !input.content) throw new Error("remember requires --content.");
+  let result;
+  try {
+    result = await callApi(input);
+    result.source = result.source || "api";
+  } catch (error) {
+    if (input.action === "remember") throw error;
+    result = fallbackRecall(input);
+    result.apiError = error instanceof Error ? error.message : String(error);
+  }
+  if (input.json) {
+    console.log(JSON.stringify(result, null, 2));
+  } else if (input.action === "remember") {
+    console.log(`Remembered: ${result.record?.title || input.title || compact(input.content, 80)}`);
+    if (result.record?.notePath) console.log(`Path: ${result.record.notePath}`);
+  } else {
+    console.log(formatResult(result, input.action));
+  }
+}
+
+main().catch((error) => {
+  console.error(`hive-brain: ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(1);
+});

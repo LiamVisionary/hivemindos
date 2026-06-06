@@ -30,7 +30,7 @@ async function execSqliteJson<T>(dbPath: string, sql: string, fallback: T): Prom
   }
 }
 
-async function readLocalHermesSession(agent: AgentProfile | undefined, sessionId = "") {
+async function readLocalHermesSession(agent: AgentProfile | undefined, sessionId = "", sinceMs = 0) {
   if (agent?.runtime !== "hermes" || !sessionId.trim()) return null;
   const dbCandidates = [
     agent.localDataDir ? join(agent.localDataDir, "state.db") : "",
@@ -64,6 +64,15 @@ async function readLocalHermesSession(agent: AgentProfile | undefined, sessionId
       order by timestamp asc
       limit 200;
     `, []);
+    const mappedMessages = messages
+      .filter((message) => typeof message.content === "string" && message.content.trim())
+      .map((message) => ({
+        role: message.role,
+        content: message.content ?? "",
+        createdAt: Math.round(Number(message.timestamp || 0) * 1000),
+        index: message.id,
+      }))
+      .filter((message) => !sinceMs || message.createdAt >= sinceMs);
     return {
       sessionId: session.id,
       id: session.id,
@@ -74,14 +83,7 @@ async function readLocalHermesSession(agent: AgentProfile | undefined, sessionId
       updatedAt: Math.round(Number(messages.at(-1)?.timestamp ?? session.ended_at ?? session.started_at ?? 0) * 1000),
       endedAt: session.ended_at ? Math.round(Number(session.ended_at) * 1000) : undefined,
       endReason: session.end_reason ?? undefined,
-      messages: messages
-        .filter((message) => typeof message.content === "string" && message.content.trim())
-        .map((message) => ({
-          role: message.role,
-          content: message.content ?? "",
-          createdAt: Math.round(Number(message.timestamp || 0) * 1000),
-          index: message.id,
-        })),
+      messages: mappedMessages,
     };
   }
   return null;
@@ -130,7 +132,7 @@ export async function POST(request: NextRequest) {
       runtime: body.agent?.runtime?.trim(),
       agentId: body.agent?.id?.trim() || body.agent?.agentId?.trim(),
     });
-    const fallbackLocalSession = async () => await readLocalHermesSession(body.agent, sessionId) ?? await fallbackSession();
+    const fallbackLocalSession = async () => await readLocalHermesSession(body.agent, sessionId, sinceMs) ?? await fallbackSession();
     if (!telemetryUrl) {
       const session = await fallbackLocalSession();
       if (session) {

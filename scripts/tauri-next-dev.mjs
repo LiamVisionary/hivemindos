@@ -103,6 +103,8 @@ function writeDevServerInfo() {
   writeFileSync(tauriDevServerInfoPath, JSON.stringify({
     backendUrl: `http://${upstreamHost}:${nextPort}`,
     bindHost: proxyBindHost,
+    dashboardPort: proxyPort,
+    dashboardUrl: `http://${browserHost}:${proxyPort}`,
     nextPort,
     proxyPort,
     proxyUrl: `http://${browserHost}:${proxyPort}`,
@@ -375,6 +377,8 @@ const child = spawn(process.execPath, ["scripts/dev-server.mjs"], {
   env: {
     ...process.env,
     PORT: String(nextPort),
+    HIVEMINDOS_DASHBOARD_PORT: String(proxyPort),
+    HIVEMINDOS_DASHBOARD_URL: `http://${browserHost}:${proxyPort}`,
     HIVEMINDOS_DASHBOARD_HOST: upstreamHost,
     HIVEMINDOS_TAURI_DEV: "1",
     HIVEMINDOS_TAURI_NEXT_DIST_DIR: tauriNextDistDir,
@@ -388,6 +392,8 @@ const voiceWorker = voiceWorkerEnabled
     env: {
       ...process.env,
       HIVEMINDOS_TAURI_DEV: "1",
+      HIVEMINDOS_DASHBOARD_PORT: String(proxyPort),
+      HIVEMINDOS_DASHBOARD_URL: `http://${browserHost}:${proxyPort}`,
       LIVEKIT_AGENT_NAME: process.env.LIVEKIT_AGENT_NAME || "hivemindos-call-agent",
       LIVEKIT_WORKER_PORT: process.env.LIVEKIT_WORKER_PORT || "8386",
     },

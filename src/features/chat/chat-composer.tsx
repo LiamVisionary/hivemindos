@@ -1,5 +1,5 @@
 import { ArrowUp, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Mic, Minus, Paperclip, Plus, RefreshCcw } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 
 import chatStyles from "@/app/chat.module.css";
 import kanbanStyles from "@/app/kanban-board.module.css";
@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { DASHBOARD_SLASH_COMMANDS } from "@/features/chat/dashboard-slash-commands";
 import { attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
 import { createStyleClass } from "@/features/dashboard/style-classes";
+import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
 import type { KanbanLinkedDirectory, KanbanTaskAttachment } from "@/lib/types/kanban";
 import type { RecentDirectory } from "@/lib/types/recent-directories";
 
@@ -138,6 +139,81 @@ const RESPONSE_LOADING_PHRASES = [
 function shouldKeepEnterAsNewline() {
   if (typeof window === "undefined") return true;
   return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+}
+
+type TauriRuntimeWindow = Window & {
+  __TAURI_INTERNALS__?: unknown;
+};
+
+type TauriDropPosition = {
+  x: number;
+  y: number;
+};
+
+type TauriDragDropPayload =
+  | { type: "enter"; paths: string[]; position: TauriDropPosition }
+  | { type: "over"; position: TauriDropPosition }
+  | { type: "drop"; paths: string[]; position: TauriDropPosition }
+  | { type: "leave" };
+
+type TauriDragDropEvent = {
+  payload: TauriDragDropPayload;
+};
+
+type TauriWebviewApi = {
+  getCurrentWebview: () => {
+    onDragDropEvent: (handler: (event: TauriDragDropEvent) => void) => Promise<() => void>;
+  };
+};
+
+function basenameFromPath(path: string) {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) || "Dropped file";
+}
+
+function fileReferenceFromPath(path: string) {
+  const cleanPath = path.trim();
+  if (!cleanPath) return null;
+  const file = new File([], basenameFromPath(cleanPath), { type: "application/octet-stream" }) as File & { path?: string };
+  Object.defineProperty(file, "path", { value: cleanPath, configurable: true });
+  return file;
+}
+
+function fileFromReferenceText(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("#")) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "file:") return null;
+    return fileReferenceFromPath(decodeURIComponent(parsed.pathname));
+  } catch {
+    return trimmed.startsWith("/") || trimmed.startsWith("~/")
+      ? fileReferenceFromPath(trimmed)
+      : null;
+  }
+}
+
+function filesFromDataTransfer(dataTransfer: DataTransfer) {
+  const directFiles = Array.from(dataTransfer.files ?? []);
+  if (directFiles.length) return directFiles;
+  const itemFiles = Array.from(dataTransfer.items ?? [])
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
+  if (itemFiles.length) return itemFiles;
+  const textReferences = [
+    dataTransfer.getData("text/uri-list"),
+    dataTransfer.getData("text/plain"),
+  ].filter(Boolean).join("\n");
+  return textReferences
+    .split(/\r?\n/)
+    .map(fileFromReferenceText)
+    .filter((file): file is File => Boolean(file));
+}
+
+function filesFromReferencePaths(paths: string[]) {
+  return Array.from(new Set(paths))
+    .map(fileReferenceFromPath)
+    .filter((file): file is File => Boolean(file));
 }
 
 type ChatAttachment = KanbanTaskAttachment;
@@ -346,11 +422,35 @@ export function attachmentSummary(attachments: ChatAttachment[]) {
   ].filter(Boolean).join(", ");
 }
 
+function attachmentReferenceTarget(attachment: ChatAttachment) {
+  return attachment.referencePath?.trim() || attachment.name;
+}
+
+function attachmentReferenceText(attachments: ChatAttachment[]) {
+  return [
+    "Attached file references:",
+    ...attachments.map((attachment) => {
+      const target = attachmentReferenceTarget(attachment);
+      const details = [
+        target && target !== attachment.name ? `path: ${target}` : "",
+        attachment.mimeType ? `type: ${attachment.mimeType}` : "",
+        Number.isFinite(attachment.size) ? `size: ${attachmentSizeLabel(attachment.size)}` : "",
+      ].filter(Boolean);
+      return `- ${attachment.name}${details.length ? ` (${details.join("; ")})` : ""}`;
+    }),
+  ].join("\n");
+}
+
 export function messageContentParts(text: string, attachments: ChatAttachment[]): string | ChatContentPart[] {
   if (attachments.length === 0) return text;
   const parts: ChatContentPart[] = [];
   if (text.trim()) parts.push({ type: "text", text: text.trim() });
+  const referenceAttachments: ChatAttachment[] = [];
   attachments.forEach((attachment) => {
+    if (!attachment.dataUrl) {
+      referenceAttachments.push(attachment);
+      return;
+    }
     if (attachment.kind === "image") {
       parts.push({ type: "image_url", image_url: { url: attachment.dataUrl } });
       return;
@@ -373,6 +473,9 @@ export function messageContentParts(text: string, attachments: ChatAttachment[])
       },
     });
   });
+  if (referenceAttachments.length) {
+    parts.push({ type: "text", text: attachmentReferenceText(referenceAttachments) });
+  }
   return parts;
 }
 
@@ -662,6 +765,7 @@ export function ComposerField({
   imageInputRef,
   onFileChange,
   onImageChange,
+  onDropFileReferences,
   onRemoveAttachment,
   onAttachDirectory,
   directoryPickerDisabled = false,
@@ -704,6 +808,7 @@ export function ComposerField({
   imageInputRef: RefObject<HTMLInputElement | null>;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onImageChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onDropFileReferences?: (files: FileList | File[]) => void;
   onRemoveAttachment: (id: string) => void;
   onAttachDirectory?: () => void;
   directoryPickerDisabled?: boolean;
@@ -728,8 +833,12 @@ export function ComposerField({
   onAgentModeChange?: (mode: "plan" | "act") => void;
   modelPicker?: ComposerModelPicker;
 }) {
+  const composerFieldRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const composerDragDepthRef = useRef(0);
+  const composerDropActiveRef = useRef(false);
   const composerValue = value ?? "";
+  const [composerDropActive, setComposerDropActive] = useState(false);
   const [selectedSlashCommandIndex, setSelectedSlashCommandIndex] = useState(0);
   const [agentModeMenuOpen, setAgentModeMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
@@ -805,8 +914,183 @@ export function ComposerField({
     event.currentTarget.form?.requestSubmit();
   }
 
+  const canDropFileReferences = Boolean(onDropFileReferences && !disabled);
+
+  function setComposerDropActiveValue(active: boolean) {
+    composerDropActiveRef.current = active;
+    setComposerDropActive((current) => current === active ? current : active);
+  }
+
+  function resetComposerDropState() {
+    composerDragDepthRef.current = 0;
+    setComposerDropActiveValue(false);
+  }
+
+  useEffect(() => {
+    if (!canDropFileReferences) return;
+
+    function isInsideComposer(event: Pick<DragEvent, "clientX" | "clientY">) {
+      const node = composerFieldRef.current;
+      if (!node) return false;
+      const rect = node.getBoundingClientRect();
+      return event.clientX >= rect.left
+        && event.clientX <= rect.right
+        && event.clientY >= rect.top
+        && event.clientY <= rect.bottom;
+    }
+
+    function handleDocumentDragEnter(event: DragEvent) {
+      if (!isInsideComposer(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      composerDragDepthRef.current += 1;
+      setComposerDropActiveValue(true);
+    }
+
+    function handleDocumentDragOver(event: DragEvent) {
+      if (!isInsideComposer(event)) {
+        if (composerDropActiveRef.current) setComposerDropActiveValue(false);
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+      setComposerDropActiveValue(true);
+    }
+
+    function handleDocumentDragLeave(event: DragEvent) {
+      if (isInsideComposer(event)) return;
+      composerDragDepthRef.current = 0;
+      setComposerDropActiveValue(false);
+    }
+
+    function handleDocumentDrop(event: DragEvent) {
+      if (!isInsideComposer(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      composerDragDepthRef.current = 0;
+      setComposerDropActiveValue(false);
+      onDropFileReferences?.(event.dataTransfer ? filesFromDataTransfer(event.dataTransfer) : []);
+    }
+
+    document.addEventListener("dragenter", handleDocumentDragEnter, true);
+    document.addEventListener("dragover", handleDocumentDragOver, true);
+    document.addEventListener("dragleave", handleDocumentDragLeave, true);
+    document.addEventListener("drop", handleDocumentDrop, true);
+    return () => {
+      document.removeEventListener("dragenter", handleDocumentDragEnter, true);
+      document.removeEventListener("dragover", handleDocumentDragOver, true);
+      document.removeEventListener("dragleave", handleDocumentDragLeave, true);
+      document.removeEventListener("drop", handleDocumentDrop, true);
+    };
+  }, [canDropFileReferences, onDropFileReferences]);
+
+  useEffect(() => {
+    if (!canDropFileReferences) return;
+    if (typeof window === "undefined" || !(window as TauriRuntimeWindow).__TAURI_INTERNALS__) return;
+
+    let disposed = false;
+    let safeUnlisten = createSafeTauriUnlisten();
+
+    function isInsideComposerPosition(position: TauriDropPosition) {
+      const node = composerFieldRef.current;
+      if (!node) return false;
+      const rect = node.getBoundingClientRect();
+      const contains = (x: number, y: number) => x >= rect.left
+        && x <= rect.right
+        && y >= rect.top
+        && y <= rect.bottom;
+      const scale = window.devicePixelRatio || 1;
+      return contains(position.x, position.y)
+        || (scale > 1 && contains(position.x / scale, position.y / scale));
+    }
+
+    function handleTauriDragDrop(event: TauriDragDropEvent) {
+      const payload = event.payload;
+      if (payload.type === "leave") {
+        composerDragDepthRef.current = 0;
+        setComposerDropActiveValue(false);
+        return;
+      }
+      const insideComposer = isInsideComposerPosition(payload.position);
+      if (!insideComposer) {
+        if (composerDropActiveRef.current) setComposerDropActiveValue(false);
+        return;
+      }
+      if (payload.type === "drop") {
+        composerDragDepthRef.current = 0;
+        setComposerDropActiveValue(false);
+        onDropFileReferences?.(filesFromReferencePaths(payload.paths));
+        return;
+      }
+      setComposerDropActiveValue(true);
+    }
+
+    void import("@tauri-apps/api/webview")
+      .then((module) => {
+        if (disposed) return undefined;
+        const webviewApi = module as TauriWebviewApi;
+        return webviewApi.getCurrentWebview().onDragDropEvent(handleTauriDragDrop);
+      })
+      .then((unlisten) => {
+        if (!unlisten) return;
+        safeUnlisten = createSafeTauriUnlisten(unlisten);
+        if (disposed) safeUnlisten();
+      })
+      .catch(() => {
+        if (!disposed) {
+          composerDragDepthRef.current = 0;
+          setComposerDropActiveValue(false);
+        }
+      });
+
+    return () => {
+      disposed = true;
+      safeUnlisten();
+    };
+  }, [canDropFileReferences, onDropFileReferences]);
+
+  function handleComposerDragEnter(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canDropFileReferences) return;
+    event.preventDefault();
+    event.stopPropagation();
+    composerDragDepthRef.current += 1;
+    setComposerDropActiveValue(true);
+  }
+
+  function handleComposerDragOver(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canDropFileReferences) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    setComposerDropActiveValue(true);
+  }
+
+  function handleComposerDragLeave(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canDropFileReferences) return;
+    event.preventDefault();
+    event.stopPropagation();
+    composerDragDepthRef.current = Math.max(0, composerDragDepthRef.current - 1);
+    if (composerDragDepthRef.current === 0) setComposerDropActiveValue(false);
+  }
+
+  function handleComposerDrop(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canDropFileReferences) return;
+    event.preventDefault();
+    event.stopPropagation();
+    resetComposerDropState();
+    onDropFileReferences?.(event.dataTransfer ? filesFromDataTransfer(event.dataTransfer) : []);
+  }
+
   return (
-    <div className={chatClass("chatComposerField", floating && "floatingComposer", compact && "compactComposer", className)}>
+    <div
+      ref={composerFieldRef}
+      className={chatClass("chatComposerField", floating && "floatingComposer", compact && "compactComposer", composerDropActive && "dropActive", className)}
+      onDragEnter={handleComposerDragEnter}
+      onDragOver={handleComposerDragOver}
+      onDragLeave={handleComposerDragLeave}
+      onDrop={handleComposerDrop}
+    >
       {agentMode ? <input type="hidden" name="agentMode" value={agentMode} /> : null}
       <input
         ref={fileInputRef}
@@ -825,6 +1109,14 @@ export function ComposerField({
         onChange={onImageChange}
         disabled={disabled}
       />
+      {composerDropActive ? (
+        <div className={chatClass("composerDropOverlay")} aria-live="polite">
+          <span className={chatClass("composerDropIcon")}>
+            <FileUp aria-hidden="true" />
+          </span>
+          <strong>Drop item here to attach to chat</strong>
+        </div>
+      ) : null}
       {attachments.length > 0 || directories.length > 0 ? (
         <div className={chatClass("attachmentTray")}>
           {directories.map((directory) => (
@@ -841,7 +1133,7 @@ export function ComposerField({
             <div className={chatClass("attachmentPill")} key={attachment.id}>
               <span>{attachment.kind === "image" ? "Image" : attachment.kind === "audio" ? "Audio" : "File"}</span>
               <strong>{attachment.name}</strong>
-              <small>{attachmentSizeLabel(attachment.size)}</small>
+              <small>{attachment.referenceOnly ? "reference" : attachmentSizeLabel(attachment.size)}</small>
               <CloseIconButton size="sm" aria-label={`Remove ${attachment.name}`} onClick={() => onRemoveAttachment(attachment.id)} disabled={disabled} />
             </div>
           ))}
@@ -1181,14 +1473,19 @@ export function MessageAttachments({ attachments }: { attachments?: ChatAttachme
         <figure className={chatClass("messageAttachment", attachment.kind)} key={attachment.id}>
           {attachment.kind === "image" ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={attachment.dataUrl} alt={attachment.name} />
-          ) : attachment.kind === "audio" ? (
+            attachment.dataUrl ? <img src={attachment.dataUrl} alt={attachment.name} /> : null
+          ) : attachment.kind === "audio" && attachment.dataUrl ? (
             <audio src={attachment.dataUrl} controls preload="metadata" />
-          ) : (
+          ) : attachment.dataUrl ? (
             <a href={attachment.dataUrl} download={attachment.name}>
               <FileText aria-hidden="true" />
               {attachment.name}
             </a>
+          ) : (
+            <div className={chatClass("messageAttachmentReference")}>
+              <FileText aria-hidden="true" />
+              <span>{attachmentReferenceTarget(attachment)}</span>
+            </div>
           )}
           <figcaption>{attachment.name}</figcaption>
         </figure>

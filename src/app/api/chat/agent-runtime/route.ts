@@ -21,7 +21,8 @@ import { veilEnvValue } from "@/lib/services/wallet/veil-cli";
 import { callVeilMcpTool } from "@/lib/services/wallet/veil-mcp";
 import { executeVeilPrivateTransfer, veilPrivateTransferErrorMessage } from "@/lib/services/wallet/veil-private-transfer";
 import { getWalletBalance } from "@/lib/services/wallet/chain-wallet";
-import { summarizeX402Policy } from "@/lib/services/wallet/x402-agent-fetch";
+import { executeX402Fetch, summarizeX402Policy, type X402FetchPolicy, type X402FetchResult } from "@/lib/services/wallet/x402-agent-fetch";
+import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
 import { recordHoneyUsage } from "@/lib/services/wallet/honey-ledger";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
@@ -30,6 +31,7 @@ import { normalizeRuntimeStreamEvent, RUNTIME_STREAM_EVENT_TYPES, type RuntimeSt
 import { isUsePodProfile, resolveUsePodRuntimeConfig, summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
 import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS } from "@/lib/utils/agent-wallet";
 import { activeSharedVault, buildVaultContext } from "@/lib/services/chat/shared-vault-context";
+import { buildSharedBrainMemoryContext } from "@/lib/services/chat/shared-brain-memory-context";
 import { buildTaskRetrievalContext } from "@/lib/services/chat/task-retrieval-context";
 import { resolveAdaptiveOpenRouterModel, resolveAdaptiveOpenRouterModels } from "@/lib/services/chat/adaptive-openrouter-models";
 import {
@@ -74,6 +76,7 @@ const execFileAsync = promisify(execFile);
 
 type PrivateTransferDraft = { asset: "USDC"; amount: string; recipient: string };
 type PrivateX402Draft = { url: string; method: "GET" | "POST"; maxPayment: string };
+type PublicX402Draft = { url: string; method: "GET" | "POST"; maxPayment: string };
 type VeilMcpX402Quote = {
   requiresPayment?: boolean;
   supported?: boolean;
@@ -255,6 +258,7 @@ function buildWalletToolContext(wallet?: AgentWalletConfig): string {
   if (!wallet) return "";
   const walletFeatures = agentPaymentProviderFeatures(wallet.provider);
   const privateTransferAssets = walletFeatures.privateTransferAssets.join(" | ");
+  const veilAutoPrivateX402 = wallet.provider === "veil" && wallet.veilAutoPrivateX402 !== false;
   const lines = [
     "Agent wallet/payment context:",
     summarizeX402Policy(wallet),
@@ -277,7 +281,7 @@ function buildWalletToolContext(wallet?: AgentWalletConfig): string {
       ? `- Duplicate payment guard is on: recently completed matching private sends are replay-protected for ${Math.max(1, Math.round(duplicatePaymentGuardSeconds(wallet) / 60))} minutes.`
       : "- Duplicate payment guard is off: the same private send may be intentionally submitted again after the previous transfer finishes.",
     wallet.provider === "usepod" ? "- UsePod rail: use the prepaid UsePod balance for inference and provider-managed x402/paywalls; do not require a separate local wallet for UsePod x402." : "",
-    wallet.provider === "veil" ? `- Selected private-send implementation: call walletTools.privateTransfer with { agentId, enabled: true, provider: 'veil', network: 'eip155:8453', asset: 'USDC' | 'ETH', recipientAddress, amount, maxAssetAmount, confirmation: '${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL}', autoShield: true, duplicateGuardEnabled, duplicateGuardSeconds }. Treat public/private/queued Veil balances as internal rail state; tell the user they have one agent spend balance. By default this sends privately to any public Ethereum address, unlinking the funding wallet from the recipient. If ready private USDC is insufficient, HivemindOS can shield from the agent's encrypted local Base wallet first, subject to Veil's 20 USDC shield minimum and queue acceptance delay, then complete the withdrawal after acceptance. Current public-recipient USDC withdrawals require at least ${VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM} USDC. Only include recipientMode: 'registered' when the user explicitly asks for an in-pool shielded transfer to a registered Veil recipient. Before execution, present a concise draft with asset, amount, recipient, network, cap, and "private send"; ask for a plain confirmation such as "Reply confirm to send." Private x402 calls walletTools.x402Fetch with { provider: 'veil', agentId, url, policy, confirmation: 'VEIL_X402' }; it withdraws USDC from the private Veil pool into a fresh derived payer EOA before x402 settlement. Ask for a plain confirmation such as "confirm", not a magic token, unless a lower-level API rejects the plain confirmation. Never execute private payment actions from an ambiguous recipient, amount, or asset.` : "",
+    wallet.provider === "veil" ? `- Selected private-send implementation: call walletTools.privateTransfer with { agentId, enabled: true, provider: 'veil', network: 'eip155:8453', asset: 'USDC' | 'ETH', recipientAddress, amount, maxAssetAmount, confirmation: '${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL}', autoShield: true, duplicateGuardEnabled, duplicateGuardSeconds }. Treat public/private/queued Veil balances as internal rail state; tell the user they have one agent spend balance. By default this sends privately to any public Ethereum address, unlinking the funding wallet from the recipient. If ready private USDC is insufficient, HivemindOS can shield from the agent's encrypted local Base wallet first, subject to Veil's 20 USDC shield minimum and queue acceptance delay, then complete the withdrawal after acceptance. Current public-recipient USDC withdrawals require at least ${VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM} USDC. Only include recipientMode: 'registered' when the user explicitly asks for an in-pool shielded transfer to a registered Veil recipient. Before execution, present a concise draft with asset, amount, recipient, network, cap, and "private send"; ask for a plain confirmation such as "Reply confirm to send." ${veilAutoPrivateX402 ? "Auto Always Private is on: ordinary x402/pay-this endpoint requests use Veil private x402; call walletTools.x402Fetch with { provider: 'veil', agentId, url, policy, confirmation: 'VEIL_X402' } after confirmation." : "Auto Always Private is off: ordinary x402/pay-this endpoint requests use the basic public x402 route through walletTools.x402Fetch; only explicit private wording such as privately, in private, private, or Veil should use the private x402 draft path."} Private x402 withdraws USDC from the private Veil pool into a fresh derived payer EOA before x402 settlement. Ask for a plain confirmation such as "confirm", not a magic token, unless a lower-level API rejects the plain confirmation. Never execute private payment actions from an ambiguous recipient, amount, or asset.` : "",
     "- Hard rule: never ask for or reveal private keys; the dashboard signs from its encrypted local vault.",
   ].filter(Boolean);
   return lines.join("\n");
@@ -287,8 +291,11 @@ function buildWalletTools(wallet?: AgentWalletConfig) {
   if (!wallet) return undefined;
   if (!wallet.enabled) return undefined;
   const walletFeatures = agentPaymentProviderFeatures(wallet.provider);
+  const x402Endpoint = wallet.provider === "veil" && wallet.veilAutoPrivateX402 === false
+    ? "/api/wallet/x402"
+    : walletFeatures.x402Endpoint ?? "/api/wallet/x402";
   return {
-    x402Fetch: walletFeatures.x402Endpoint ?? "/api/wallet/x402",
+    x402Fetch: x402Endpoint,
     ...(walletFeatures.privateTransferEndpoint ? { privateTransfer: walletFeatures.privateTransferEndpoint } : {}),
   };
 }
@@ -477,22 +484,128 @@ async function maybeExecuteConfirmedPrivateX402(input: {
   return privateX402ExecutionSse({ ...input, draft, executionKey });
 }
 
+async function maybeExecuteConfirmedPublicX402(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const latest = latestUserMessage(input.messages);
+  const latestText = messageText(latest).trim().toLowerCase();
+  if (!/^(confirm|confirmed|yes|yes,? confirm|go ahead|pay it|run it|execute)$/i.test(latestText)) return null;
+
+  const draft = findPublicX402Draft(input.messages);
+  if (!draft) return null;
+  return publicX402ExecutionSse({ ...input, draft });
+}
+
+async function maybePrepareNaturalPublicX402(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const draft = findLatestPublicX402Request(input.messages, input.wallet);
+  if (!draft) return null;
+
+  const validation = validatePublicX402Draft(input.wallet, draft);
+  const message = publicX402DraftMessage(draft, input.wallet, validation);
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, validation ? "failed" : "completed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.wallet.public_x402.draft", {
+    ...telemetryPayloadForProfile(input.profile),
+    url: draft.url,
+    method: draft.method,
+    maxPayment: draft.maxPayment,
+    hasValidationError: Boolean(validation),
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
 function findLatestPrivateX402Request(messages: IncomingMessage[], wallet?: AgentWalletConfig): PrivateX402Draft | null {
   const latest = latestUserMessage(messages);
   return parsePrivateX402Request(messageText(latest), wallet);
 }
 
+function findLatestPublicX402Request(messages: IncomingMessage[], wallet?: AgentWalletConfig): PublicX402Draft | null {
+  const latest = latestUserMessage(messages);
+  return parsePublicX402Request(messageText(latest), wallet);
+}
+
 function findPrivateX402Draft(messages: IncomingMessage[], wallet?: AgentWalletConfig): PrivateX402Draft | null {
   for (let index = messages.length - 2; index >= 0; index -= 1) {
-    const draft = parsePrivateX402Request(messageText(messages[index]), wallet);
-    if (draft) return draft;
+    const message = messages[index];
+    if (message.role !== "assistant") continue;
+    const text = messageText(message);
+    if (isPublicX402DraftText(text)) return null;
+    if (!isPrivateX402DraftText(text)) continue;
+    return parsePrivateX402Request(text, wallet);
   }
   return null;
 }
 
-function parsePrivateX402Request(text: string, wallet?: AgentWalletConfig): PrivateX402Draft | null {
+function findPublicX402Draft(messages: IncomingMessage[]): PublicX402Draft | null {
+  for (let index = messages.length - 2; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "assistant") continue;
+    const text = messageText(message);
+    if (isPrivateX402DraftText(text)) return null;
+    if (!isPublicX402DraftText(text)) continue;
+    return parsePublicX402Draft(text);
+  }
+  return null;
+}
+
+function isPrivateX402DraftText(text: string) {
+  return /\*{0,2}Private x402 ready\*{0,2}/i.test(text) || /Reply\s+`?confirm`?\s+to\s+pay\s+privately/i.test(text);
+}
+
+function isPublicX402DraftText(text: string) {
+  if (!/(x402|paid endpoint|paywall|paid-content)/i.test(text)) return false;
+  if (/\*{0,2}Private x402 ready\*{0,2}|Reply\s+`?confirm`?\s+to\s+pay\s+privately|private x402/i.test(text)) return false;
+  return /\*{0,2}Public x402 ready\*{0,2}/i.test(text)
+    || /Draft:\s*x402 payment to\s+https?:\/\//i.test(text)
+    || /Reply\s*:?\s*`?confirm`?(?:\s|$)/i.test(text)
+    || /Reply\s+`?confirm`?\s+to\s+pay\.(?:\s|$)/i.test(text);
+}
+
+function parsePublicX402Draft(text: string): PublicX402Draft | null {
+  const url = sanitizePrivateX402Url(text.match(/https?:\/\/[^\s<>"'`)\]]+/i)?.[0]);
+  if (!url) return null;
+  const maxMatch = text.match(/\bmax(?:imum)?(?:\s+(?:cap|spend|payment|of))?\s*(?:is|:|=)?\s*\$?(\d+(?:\.\d{1,6})?)\s*(?:USDC|USD)?/i)
+    ?? text.match(/\bcap(?:ped)?(?:\s+at)?\s*(?:is|:|=)?\s*\$?(\d+(?:\.\d{1,6})?)\s*(?:USDC|USD)?/i);
+  return {
+    url,
+    method: /\bPOST\b/i.test(text) ? "POST" : "GET",
+    maxPayment: maxMatch?.[1] ?? "0.5",
+  };
+}
+
+function parsePublicX402Request(text: string, wallet?: AgentWalletConfig): PublicX402Draft | null {
   if (!/(x402|paid endpoint|paywall|paid-content)/i.test(text)) return null;
-  if (!/(private|privately|veil)/i.test(text)) return null;
+  if (/(private|privately|veil)/i.test(text)) return null;
+  if (wallet?.provider === "veil" && wallet.veilAutoPrivateX402 !== false) return null;
+  const url = sanitizePrivateX402Url(text.match(/https?:\/\/[^\s<>"'`)\]]+/i)?.[0]);
+  if (!url) return null;
+  const maxMatch = text.match(/\bmax(?:imum)?(?:\s+(?:cap|spend|payment|of))?\s*(?:is|:|=)?\s*\$?(\d+(?:\.\d{1,6})?)\s*(?:USDC|USD)?/i)
+    ?? text.match(/\bcap(?:ped)?(?:\s+at)?\s*(?:is|:|=)?\s*\$?(\d+(?:\.\d{1,6})?)\s*(?:USDC|USD)?/i);
+  const maxPayment = maxMatch?.[1] ?? formatMoney(Math.max(0, Number(wallet?.maxPaymentUsd) || 0.5));
+  return {
+    url,
+    method: /\bPOST\b/i.test(text) ? "POST" : "GET",
+    maxPayment,
+  };
+}
+
+function parsePrivateX402Request(text: string, wallet?: AgentWalletConfig): PrivateX402Draft | null {
+  if (isPublicX402DraftText(text)) return null;
+  if (!/(x402|paid endpoint|paywall|paid-content)/i.test(text)) return null;
+  if (!/(private|privately|veil)/i.test(text) && !(wallet?.provider === "veil" && wallet.veilAutoPrivateX402 !== false)) return null;
   const url = sanitizePrivateX402Url(text.match(/https?:\/\/[^\s<>"'`)\]]+/i)?.[0]);
   if (!url) return null;
   const maxMatch = text.match(/\bmax(?:imum)?(?:\s+(?:spend|payment|of|cap))?\s*(?:is|:|=)?\s*\$?(\d+(?:\.\d{1,6})?)\s*(?:USDC|USD)?/i)
@@ -520,6 +633,39 @@ async function validatePrivateX402(wallet: AgentWalletConfig | undefined, draft:
   if (maxPayment > wallet.maxPaymentUsd) return `Max payment exceeds this agent's USDC spend cap ($${wallet.maxPaymentUsd.toFixed(2)}).`;
   if (!await veilEnvValue("VEIL_KEY")) return "VEIL_KEY is not configured. Run Veil setup before private x402 payments.";
   return "";
+}
+
+function validatePublicX402Draft(wallet: AgentWalletConfig | undefined, draft: PublicX402Draft) {
+  if (!wallet) return "No wallet is configured for this agent.";
+  if (!wallet.enabled) return "";
+  if (!/^https?:\/\//i.test(draft.url)) return "x402 requires a valid HTTP(S) endpoint URL.";
+  const maxPayment = Number(draft.maxPayment);
+  if (!Number.isFinite(maxPayment) || maxPayment <= 0) return "Max payment must be a positive USDC value.";
+  if (maxPayment > wallet.maxPaymentUsd) return `Max payment exceeds this agent's USDC spend cap ($${wallet.maxPaymentUsd.toFixed(2)}).`;
+  return "";
+}
+
+function publicX402DraftMessage(draft: PublicX402Draft, wallet: AgentWalletConfig | undefined, validation?: string) {
+  if (validation) {
+    return [
+      "**Public x402 unavailable**",
+      "",
+      validation,
+      "",
+      "Fix this blocker, then send the payment request again.",
+    ].join("\n");
+  }
+  return [
+    "**Public x402 ready**",
+    "",
+    `Endpoint \`${draft.url}\``,
+    `Max cap **${draft.maxPayment} USDC**`,
+    "Network `base`",
+    "",
+    wallet?.enabled
+      ? "Reply `confirm` to pay."
+      : "Wallet spending is off for this agent, so I prepared the draft only. Turn Spend on before execution.",
+  ].filter(Boolean).join("\n");
 }
 
 async function readPrivateX402Quote(draft: PrivateX402Draft) {
@@ -700,6 +846,128 @@ function privateX402ExecutionSse(input: {
       "X-Accel-Buffering": "no",
     },
   });
+}
+
+function publicX402ExecutionSse(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  draft: PublicX402Draft;
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}) {
+  const encoder = new TextEncoder();
+  const readable = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (payload: unknown) => controller.enqueue(encoder.encode(ssePayload(payload)));
+      const sendTool = async (type: string, label: string, detail?: string, status: "running" | "completed" | "failed" = "running") => {
+        const event = { type, toolName: "x402Fetch", name: "x402Fetch", message: label, detail, status };
+        send(event);
+        await appendRuntimeChatSessionEvent(input.runtimeSessionId, label, detail, event).catch(() => undefined);
+      };
+      try {
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_START, "Preparing public x402 payment", input.draft.url);
+        const wallet = input.wallet;
+        if (!wallet) throw new Error("No wallet is configured for this agent.");
+        const approvedMax = Number(input.draft.maxPayment);
+        if (!Number.isFinite(approvedMax) || approvedMax <= 0) throw new Error("Confirmed x402 draft has no valid max payment.");
+        const stored = await getWalletSecret(input.profile.id);
+        if (!stored) throw new Error("No local wallet exists for this agent.");
+        const policy = publicX402Policy(wallet, stored.info.network, approvedMax);
+        await sendTool(
+          RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS,
+          "Validate spend policy",
+          `Spend ${policy.enabled ? "on" : "off"}; cap ${formatMoney(policy.maxPaymentUsd)} USDC; public x402.`,
+          "completed",
+        );
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS, "Execute public x402 payment", "Signing from the local wallet vault.", "running");
+        const startedAt = Date.now();
+        const result = await executeX402Fetch({
+          agentId: input.profile.id,
+          network: stored.info.network,
+          secret: stored.secret,
+          url: input.draft.url,
+          method: input.draft.method,
+          policy,
+          confirmation: "PAY_X402",
+        });
+        const message = publicX402ResultMessage(result, Date.now() - startedAt);
+        await recordRouteTelemetry(input.request, "agent_runtime.wallet.public_x402.completed", {
+          ...telemetryPayloadForProfile(input.profile),
+          url: input.draft.url,
+          method: input.draft.method,
+          maxPayment: input.draft.maxPayment,
+          amountUsd: result.amountUsd,
+          status: result.status,
+          paid: result.paid,
+          elapsedMs: Date.now() - input.routeStartedAt,
+        });
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE, "Public x402 finished", `Total ${formatDuration(Date.now() - input.routeStartedAt)}.`, "completed");
+        await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message, result).catch(() => undefined);
+        await finishRuntimeChatSession(input.runtimeSessionId, "completed").catch(() => undefined);
+        send({ choices: [{ delta: { content: message } }] });
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      } catch (error) {
+        const message = `Public x402 failed: ${publicX402ErrorMessage(error)}`;
+        await recordRouteTelemetry(input.request, "agent_runtime.wallet.public_x402.failed", {
+          ...telemetryPayloadForProfile(input.profile),
+          url: input.draft.url,
+          method: input.draft.method,
+          maxPayment: input.draft.maxPayment,
+          error: publicX402ErrorMessage(error),
+          elapsedMs: Date.now() - input.routeStartedAt,
+        }).catch(() => undefined);
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE, "Public x402 failed", publicX402ErrorMessage(error), "failed");
+        await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+        await finishRuntimeChatSession(input.runtimeSessionId, "failed").catch(() => undefined);
+        send({ choices: [{ delta: { content: message } }] });
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
+function publicX402Policy(wallet: AgentWalletConfig, storedNetwork: string, approvedMax: number): X402FetchPolicy {
+  const provider = wallet.provider === "veil" && wallet.veilAutoPrivateX402 === false ? "x402" : wallet.provider;
+  return {
+    enabled: wallet.enabled,
+    provider,
+    network: wallet.network || storedNetwork,
+    maxPaymentUsd: Math.max(0, Math.min(wallet.maxPaymentUsd, approvedMax)),
+    approvalRequiredOverUsd: wallet.approvalRequiredOverUsd,
+    autoPayEnabled: false,
+    x402BaseUrl: wallet.x402BaseUrl,
+  };
+}
+
+function publicX402ResultMessage(result: X402FetchResult, executionMs: number) {
+  const body = summarizePaidContent(result.bodyJson ?? result.bodyPreview);
+  return [
+    `**Public x402 complete** · **${formatMoney(result.amountUsd)} USDC**`,
+    "",
+    `Endpoint \`${result.url}\``,
+    result.paid ? "Payment settled from the local wallet." : "No payment was required.",
+    `HTTP status \`${result.status}\``,
+    "",
+    body ? `Content received:\n${body}` : "Content received.",
+    "",
+    `Timing **${formatDuration(executionMs)}**`,
+  ].filter(Boolean).join("\n");
+}
+
+function publicX402ErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function privateX402ResultMessage(result: VeilMcpX402Result, draft: PrivateX402Draft, executionMs: number) {
@@ -1485,18 +1753,19 @@ async function streamHttpRuntime(
   runtimeSessionId = "",
   telemetry?: RuntimeRouteTelemetry,
   taskRetrievalContext = "",
+  sharedBrainMemoryContext = "",
 ) {
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
     return Response.json({ error: inputCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
   }
   if (isOpenAICompatibleRuntime(profile)) {
-    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext);
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext);
   }
   if (isOpenRouterProvider(profile) && !isAdaptiveOpenRouterProfile(profile)) {
     try {
       const openRouterProfile = await openRouterCompatibleProfile(profile);
-      return streamOpenAICompatibleRuntime(openRouterProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext);
+      return streamOpenAICompatibleRuntime(openRouterProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext);
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "OpenRouter model selection failed." }, { status: 502 });
     }
@@ -1524,7 +1793,7 @@ async function streamHttpRuntime(
   const vaultContext = buildVaultContext(sharedVault);
   const walletContext = buildWalletToolContext(wallet);
   const modeContext = buildAgentModeContext(agentMode);
-  const context = [buildAgentProfileContext(runtimeProfile), modeContext, buildWorkingDirectoryContext(workingDirectory), vaultContext, taskRetrievalContext, walletContext].filter(Boolean).join("\n\n");
+  const context = [buildAgentProfileContext(runtimeProfile), modeContext, buildWorkingDirectoryContext(workingDirectory), vaultContext, sharedBrainMemoryContext, taskRetrievalContext, walletContext].filter(Boolean).join("\n\n");
   const hermesSlashCommand = profile.runtime === "hermes" && /^\/[^\s/]*(?:\s|$)/.test(inputCheck.text.trim());
   const runtimeMessages = context && !hermesSlashCommand ? [{ role: "system", content: context }, ...messages] : messages;
   const runtimeMessage = inputCheck.text;
@@ -1929,6 +2198,7 @@ async function streamOpenAICompatibleRuntime(
   runtimeSessionId = "",
   telemetry?: RuntimeRouteTelemetry,
   taskRetrievalContext = "",
+  sharedBrainMemoryContext = "",
 ) {
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
@@ -1972,7 +2242,7 @@ async function streamOpenAICompatibleRuntime(
   }
   const modelMessagesFor = (candidateModel: string) => {
     const candidateProfile = profileWithResolvedModel(runtimeProfile, candidateModel);
-    const context = [buildAgentProfileContext(candidateProfile), buildAdaptiveOpenRouterResolvedModelContext(runtimeProfile, candidateModel), buildAgentModeContext(agentMode), buildWorkingDirectoryContext(workingDirectory), buildVaultContext(sharedVault), taskRetrievalContext, buildWalletToolContext(wallet)].filter(Boolean).join("\n\n");
+    const context = [buildAgentProfileContext(candidateProfile), buildAdaptiveOpenRouterResolvedModelContext(runtimeProfile, candidateModel), buildAgentModeContext(agentMode), buildWorkingDirectoryContext(workingDirectory), buildVaultContext(sharedVault), sharedBrainMemoryContext, taskRetrievalContext, buildWalletToolContext(wallet)].filter(Boolean).join("\n\n");
     return context ? [{ role: "system" as const, content: context }, ...messages] : messages;
   };
   let candidateModels: string[];
@@ -2329,7 +2599,10 @@ export async function POST(request: NextRequest) {
   }
   const vault = activeSharedVault(profile, sharedVault);
   runtimeSessionId = createRuntimeChatSessionId(profile, runtimeSessionId || clientRunId);
-  const taskRetrievalContext = await buildTaskRetrievalContext({ origin: request.url, query: userPrompt, sharedVault: vault });
+  const [taskRetrievalContext, sharedBrainMemoryContext] = await Promise.all([
+    buildTaskRetrievalContext({ origin: request.url, query: userPrompt, sharedVault: vault }),
+    buildSharedBrainMemoryContext(vault, userPrompt),
+  ]);
   const runtimeSession = await startRuntimeChatSession({
     sessionId: runtimeSessionId,
     agent: profile,
@@ -2353,6 +2626,15 @@ export async function POST(request: NextRequest) {
     runtimeSessionId,
   });
   if (confirmedPrivateX402) return confirmedPrivateX402;
+  const confirmedPublicX402 = await maybeExecuteConfirmedPublicX402({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (confirmedPublicX402) return confirmedPublicX402;
   const naturalPrivateX402 = await maybePrepareNaturalPrivateX402({
     request,
     routeStartedAt,
@@ -2362,6 +2644,15 @@ export async function POST(request: NextRequest) {
     runtimeSessionId,
   });
   if (naturalPrivateX402) return naturalPrivateX402;
+  const naturalPublicX402 = await maybePrepareNaturalPublicX402({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (naturalPublicX402) return naturalPublicX402;
   const naturalPrivateTransfer = await maybeExecuteNaturalPrivateTransfer({
     request,
     routeStartedAt,
@@ -2380,7 +2671,7 @@ export async function POST(request: NextRequest) {
     runtimeSessionId,
   });
   if (confirmedPrivateTransfer) return confirmedPrivateTransfer;
-  const runtimeContexts = [buildAgentProfileContext(profile), buildAgentModeContext(agentMode), buildWorkingDirectoryContext(workingDirectory), buildVaultContext(vault), taskRetrievalContext, buildWalletToolContext(wallet)].filter(Boolean).join("\n\n");
+  const runtimeContexts = [buildAgentProfileContext(profile), buildAgentModeContext(agentMode), buildWorkingDirectoryContext(workingDirectory), buildVaultContext(vault), sharedBrainMemoryContext, taskRetrievalContext, buildWalletToolContext(wallet)].filter(Boolean).join("\n\n");
   const textWithVaultContext = runtimeContexts
     ? `${runtimeContexts}\n\nUser message:\n${userPrompt}`
     : promptCheck.text;
@@ -2439,7 +2730,7 @@ export async function POST(request: NextRequest) {
       routeStartedAt,
       runtimeSessionId,
       chatStorageKey,
-    }, taskRetrievalContext);
+    }, taskRetrievalContext, sharedBrainMemoryContext);
   }
 
   const token = await getGatewayAuthToken(profile.token);

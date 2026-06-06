@@ -110,7 +110,7 @@ type WalletPanelProps = {
 };
 
 export function WalletPanel(props: WalletPanelProps) {
-  const { AGENT_PAYMENT_PROVIDER_COPY, AgentWalletCard, AgentWalletCardCompact, Button, ChevronLeft, Download, HandCoins, LoaderCircle, RUNTIME_LABELS, RefreshCcw, activeView, claimAllHoneyToBankrHive, copyPaymentPrompt, createDefaultAgentWallet, createLocalWallet, displayAgents, enableHoneyLedger, formatHiveAmount, formatRelativeTime, getSurvivalSnapshot, honeyLedgerEnabled, honeyStats, initializeCoreWalletRails, moneyClawStatusByEnvName, refreshRuntimeIntegrations, refreshRuntimeUsage, refreshWalletBalance, renderAgentKey, resetWalletBurnClock, returnAllHiveToHoney, runWalletVaultBackupAction, runtimeUsage, runtimeUsageLoading, saveMoneyClawKey, selectedAgent, selectedHoneyReward, selectedWallet, selectedWalletSnapshot, sendWalletUsdc, setSelectedAgentId, setWalletExpanded, setWalletPanelMode, testX402Fetch, updateAgentProfile, updateWallet, updateWalletAction, vaultClass, walletActionsByAgent, walletClass, walletExpanded, walletPanelMode, walletStats, walletVaultBackupBusy, walletVaultBackupMessage, walletVaultBackupStatus, walletsByAgent } = props;
+  const { AGENT_PAYMENT_PROVIDER_COPY, AgentWalletCard, AgentWalletCardCompact, Button, ChevronLeft, Download, HandCoins, LoaderCircle, RUNTIME_LABELS, RefreshCcw, activeView, claimAllHoneyToBankrHive, copyPaymentPrompt, createLocalWallet, displayAgents, enableHoneyLedger, formatHiveAmount, formatRelativeTime, getSurvivalSnapshot, honeyLedgerEnabled, honeyStats, initializeCoreWalletRails, moneyClawStatusByEnvName, refreshRuntimeIntegrations, refreshRuntimeUsage, refreshWalletBalance, renderAgentKey, resetWalletBurnClock, returnAllHiveToHoney, runWalletVaultBackupAction, runtimeUsage, runtimeUsageLoading, saveMoneyClawKey, selectedAgent, selectedHoneyReward, selectedWallet, selectedWalletSnapshot, sendWalletUsdc, setSelectedAgentId, setWalletExpanded, setWalletPanelMode, testX402Fetch, updateAgentProfile, updateWallet, updateWalletAction, vaultClass, walletActionsByAgent, walletClass, walletExpanded, walletPanelMode, walletStats, walletVaultBackupBusy, walletVaultBackupMessage, walletVaultBackupStatus, walletsByAgent } = props;
   const refreshedUsePodAgentIds = useRef<Set<string>>(new Set());
   const [bankrClaimBusy, setBankrClaimBusy] = useState(false);
   const [bankrConnectBusy, setBankrConnectBusy] = useState(false);
@@ -351,7 +351,7 @@ export function WalletPanel(props: WalletPanelProps) {
           ) : displayAgents.length > 0 ? (
             <div className={walletClass("walletGridList")} role="list" aria-label="Agent wallets">
               {displayAgents.map((agent, agentIndex) => {
-                const wallet = resolveAgentWallet(agent, walletsByAgent[agent.id] ?? createDefaultAgentWallet(agent.id));
+                const wallet = resolveAgentWallet(agent, walletsByAgent[agent.id]);
                 const snapshot = getSurvivalSnapshot(wallet);
                 return (
                   <div role="listitem" key={renderAgentKey(agent, agentIndex)}>

@@ -17,13 +17,9 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import type { AgentPaymentProvider } from "@/lib/types/agent-wallet";
-import { cn } from "@/lib/utils/cn";
 
 import walletStyles from "./AgentWalletCard.module.css";
 import styles from "./VeilAdvancedSetup.module.css";
-
-type ProviderCopy = { label: string; summary: string; setup: string };
 
 export type VeilContract = {
   key: string;
@@ -51,15 +47,13 @@ export type VeilAdvancedSetupProps = {
   signerAddress: string;
   networkLabel: string;
   assetsLabel: string;
-  provider: AgentPaymentProvider;
-  providerOptions: Array<[AgentPaymentProvider, ProviderCopy]>;
-  providerCopy: ProviderCopy;
   contracts: VeilContract[];
   setupStatus: VeilSetupStatus | null;
   setupAction: VeilSetupAction;
   setupMessage: string;
-  onChangeProvider: (provider: AgentPaymentProvider) => void;
+  autoPrivateX402: boolean;
   onChangeSignerAddress: (address: string) => void;
+  onChangeAutoPrivateX402: (enabled: boolean) => void;
   onCheckSetup: () => Promise<void> | void;
   onSetupVeil: () => Promise<void> | void;
   onCopyPrompt: () => void;
@@ -69,6 +63,7 @@ export type VeilAdvancedSetupProps = {
 };
 
 const HEX_POINTS = "50,3 91,26 91,74 50,97 9,74 9,26";
+const VEIL_SETUP_HELP = "Run Setup Veil once, keep a funded Base wallet for the agent, and let HivemindOS use ready private funds or shield from the local wallet before completing reviewed private sends.";
 
 function shortAddress(value: string): string {
   if (!value) return "";
@@ -81,24 +76,6 @@ function contractIcon(kind?: VeilContract["kind"]) {
   if (kind === "eth") return <Layers aria-hidden="true" />;
   if (kind === "relay") return <Globe aria-hidden="true" />;
   return <Boxes aria-hidden="true" />;
-}
-
-function methodIcon(value: string) {
-  if (/veil/i.test(value)) return <ShieldCheck aria-hidden="true" />;
-  if (/usepod/i.test(value)) return <Coins aria-hidden="true" />;
-  if (/x402/i.test(value)) return <ArrowUpRight aria-hidden="true" />;
-  return <KeyRound aria-hidden="true" />;
-}
-
-function methodLabel(value: string, fallback: string) {
-  const normalized = value.toLowerCase();
-  if (normalized.includes("veil")) return "Veil";
-  if (normalized.includes("usepod")) return "UsePod";
-  if (normalized.includes("x402")) return "x402";
-  if (normalized.includes("claw") || normalized.includes("card")) return "Card";
-  if (normalized.includes("crypto") || normalized.includes("wallet")) return "Crypto";
-  if (normalized.includes("trad")) return "Trade";
-  return fallback.split(/\s+/)[0];
 }
 
 function statusState(value: boolean | undefined, checked: boolean): "ok" | "idle" {
@@ -114,15 +91,13 @@ export function VeilAdvancedSetup({
   signerAddress,
   networkLabel,
   assetsLabel,
-  provider,
-  providerOptions,
-  providerCopy,
   contracts,
   setupStatus,
   setupAction,
   setupMessage,
-  onChangeProvider,
+  autoPrivateX402,
   onChangeSignerAddress,
+  onChangeAutoPrivateX402,
   onCheckSetup,
   onSetupVeil,
   onCopyPrompt,
@@ -143,31 +118,6 @@ export function VeilAdvancedSetup({
 
   return (
     <>
-      <div className={walletStyles.sheetField}>
-        <span className={walletStyles.fieldLabel}>Payment method</span>
-        <div className={styles.veilMethods} role="radiogroup" aria-label="Payment method">
-          {providerOptions.map(([value, copy]) => {
-            const active = value === provider;
-            return (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                title={copy.label}
-                className={cn(styles.veilMethod, active && styles.veilMethodActive)}
-                onClick={() => onChangeProvider(value)}
-              >
-                <span className={styles.veilMethodIcon}>{methodIcon(value)}</span>
-                <span className={styles.veilMethodBody}><b>{methodLabel(value, copy.label)}</b></span>
-                <span className={styles.veilMethodCheck}><Check aria-hidden="true" /></span>
-              </button>
-            );
-          })}
-        </div>
-        <p className={walletStyles.sheetHelp}>{providerCopy.summary}</p>
-      </div>
-
       <div className={walletStyles.sheetField}>
         <label htmlFor="wallet-veil-signer">Base signer address</label>
         <input
@@ -245,6 +195,19 @@ export function VeilAdvancedSetup({
         </Button>
       </div>
 
+      <label className={styles.veilMode}>
+        <span className={styles.veilModeCopy}>
+          <span><Globe aria-hidden="true" /> Auto Always Private</span>
+          <small>{autoPrivateX402 ? "Plain pay/x402 requests use Veil private x402." : "Plain pay/x402 requests use basic public x402."}</small>
+        </span>
+        <input
+          type="checkbox"
+          checked={autoPrivateX402}
+          onChange={(event) => onChangeAutoPrivateX402(event.target.checked)}
+        />
+        <span className={styles.veilSwitch} aria-hidden="true" />
+      </label>
+
       {setting ? (
         <div className={styles.veilProgress}>
           <div className={styles.veilProgressTitle}><ShieldCheck aria-hidden="true" /> Setting up Veil</div>
@@ -298,7 +261,7 @@ export function VeilAdvancedSetup({
         </Button>
       </div>
 
-      <p className={walletStyles.sheetStatus} data-tone={ready ? "ok" : "muted"}>{providerCopy.setup}</p>
+      <p className={walletStyles.sheetStatus} data-tone={ready ? "ok" : "muted"}>{VEIL_SETUP_HELP}</p>
     </>
   );
 }

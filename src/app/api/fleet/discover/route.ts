@@ -47,6 +47,7 @@ type Device = {
   online: boolean;
   ip: string;
   collectorUrl: string;
+  collectorUrlCandidates?: string[];
   lastSeen?: string;
   lastHandshake?: string;
   curAddr?: string;
@@ -98,7 +99,7 @@ const BACKGROUND_COLLECTOR_FETCH_TIMEOUT_MS = 8_000;
 const SNAPSHOT_FETCH_TIMEOUT_MS = 4_000;
 const DISCOVERY_CACHE_MS = 15_000;
 const DISCOVERY_REQUEST_TIMEOUT_MS = 20_000;
-const DISCOVERY_CACHE_VERSION = "v3";
+const DISCOVERY_CACHE_VERSION = "v4";
 const TAILSCALE_STATUS_TIMEOUT_MS = 6_000;
 const TAILSCALE_LOCAL_API_TIMEOUT_MS = 2_000;
 const TAILSCALE_CLI_CANDIDATES = [
@@ -287,13 +288,28 @@ function machineIdentityKey(machine: { device: Device; collector: string; machin
   return machineId || deviceIdentityKey(machine.device);
 }
 
-function linkCollectorUrl(ip: string) {
-  return `${hivemindLinkControlUrl()}/peer/${encodeURIComponent(`${ip}:8787`)}`;
+const REMOTE_COLLECTOR_PORT_CANDIDATES = Array.from({ length: 24 }, (_, index) => 8787 + index);
+
+function linkCollectorUrlForPort(ip: string, port: number) {
+  return `${hivemindLinkControlUrl()}/peer/${encodeURIComponent(`${ip}:${port}`)}`;
+}
+
+function directCollectorUrlForPort(ip: string, port: number) {
+  return `http://${ip}:${port}`;
+}
+
+function remoteCollectorUrlCandidates(ip: string, viaLink: boolean) {
+  if (!ip) return [];
+  const direct = REMOTE_COLLECTOR_PORT_CANDIDATES.map((port) => directCollectorUrlForPort(ip, port));
+  if (!viaLink) return direct;
+  const link = REMOTE_COLLECTOR_PORT_CANDIDATES.map((port) => linkCollectorUrlForPort(ip, port));
+  return [...link, ...direct];
 }
 
 function simplifyDevice(peer: TailscalePeer, self = false, viaLink = false): Device {
   const ip = peer.TailscaleIPs?.find((value) => /^\d+\.\d+\.\d+\.\d+$/.test(value)) ?? peer.TailscaleIPs?.[0] ?? "";
   const dnsName = peer.DNSName?.replace(/\.$/, "") ?? "";
+  const collectorUrlCandidates = self ? [localCollectorUrl()] : remoteCollectorUrlCandidates(ip, viaLink);
   return {
     self,
     name: self ? "This Mac" : displayNameForPeer(peer, dnsName, ip),
@@ -301,7 +317,8 @@ function simplifyDevice(peer: TailscalePeer, self = false, viaLink = false): Dev
     os: peer.OS ?? "unknown",
     online: self ? true : Boolean(peer.Online),
     ip,
-    collectorUrl: self ? localCollectorUrl() : ip ? (viaLink ? linkCollectorUrl(ip) : `http://${ip}:8787`) : "",
+    collectorUrl: self ? localCollectorUrl() : "",
+    collectorUrlCandidates,
     lastSeen: peer.LastSeen,
     lastHandshake: peer.LastHandshake,
     curAddr: peer.CurAddr ?? "",
@@ -485,8 +502,6 @@ type CollectorProbeResult = {
   machineId?: string;
 };
 
-const REMOTE_COLLECTOR_PORT_CANDIDATES = Array.from({ length: 8 }, (_, index) => 8787 + index);
-
 function collectorUrlWithPort(rawUrl: string, port: number) {
   try {
     const url = new URL(rawUrl);
@@ -510,8 +525,12 @@ function collectorUrlForHost(host: string, port: number) {
 }
 
 function collectorUrlCandidates(device: Device) {
-  const primary = device.collectorUrl?.replace(/\/+$/, "");
-  if (!primary || device.self) return primary ? [primary] : [];
+  const configuredCandidates = [
+    device.collectorUrl,
+    ...(device.collectorUrlCandidates ?? []),
+  ].map((value) => value?.replace(/\/+$/, "") ?? "").filter(Boolean);
+  const primary = configuredCandidates[0] ?? "";
+  if (device.self) return configuredCandidates;
   const dnsName = device.dnsName?.replace(/\.$/, "");
   const dnsShortName = dnsName ? dnsLabel(dnsName) : "";
   const dnsCandidates = dnsName
@@ -521,8 +540,8 @@ function collectorUrlCandidates(device: Device) {
     ])
     : [];
   return [
-    primary,
-    ...REMOTE_COLLECTOR_PORT_CANDIDATES.map((port) => collectorUrlWithPort(primary, port)),
+    ...configuredCandidates,
+    ...(primary ? REMOTE_COLLECTOR_PORT_CANDIDATES.map((port) => collectorUrlWithPort(primary, port)) : []),
     ...dnsCandidates,
   ].filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index);
 }
@@ -574,6 +593,9 @@ async function probeCollector(device: Device, collectorUrl: string, options: Dis
     capabilities?: CollectorCapabilities;
     envSync?: CollectorEnvSync;
   };
+  if (!isHivemindCollectorHealth(healthData)) {
+    throw new Error("Health endpoint is not a HivemindOS collector.");
+  }
   const capabilities = healthData.capabilities ?? { chat: false, runtimes: [] };
   const agents = (await agentsPromise).map((agent) => ({
     ...agent,
@@ -588,6 +610,20 @@ async function probeCollector(device: Device, collectorUrl: string, options: Dis
     collectorHost: healthData.host,
     machineId: healthData.machineId,
   };
+}
+
+function isHivemindCollectorHealth(payload: {
+  version?: CollectorVersion;
+  capabilities?: CollectorCapabilities;
+  machineId?: string;
+}) {
+  return Boolean(
+    payload.version?.appDir
+    || payload.machineId?.startsWith("hivemind-machine-")
+    || Array.isArray(payload.capabilities?.runtimes)
+    || payload.capabilities?.hostedApps === true
+    || payload.capabilities?.runtimeAgentCreation === true
+  );
 }
 
 async function probeCollectorViaTailscale(device: Device, options: DiscoveryProbeOptions): Promise<CollectorProbeResult> {
@@ -622,7 +658,7 @@ async function readDiscovery(includeSnapshots: boolean, options: DiscoveryProbeO
   const fleetStatus = await tailscaleDevices().catch((): FleetDeviceStatus => ({ devices: [localDevice()], source: "local" }));
   const devices = fleetStatus.devices;
   const discovered = await Promise.all(devices.map(async (device): Promise<DiscoveredMachine> => {
-    if (!device.collectorUrl) {
+    if (collectorUrlCandidates(device).length === 0) {
       return { device, collector: "missing", agents: [], snapshots: [] };
     }
 

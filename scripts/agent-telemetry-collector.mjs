@@ -43,6 +43,7 @@ const defaultSyncPath = expandHome(
 const runLogRoot = join(homedir(), ".hivemindos", "runtime-runs");
 const machineIdPath = join(homedir(), ".hivemindos", "machine-id");
 const runtimeAgentRegistryPath = join(homedir(), ".hivemindos", "runtime-agents.json");
+const tauriDevServerInfoPath = join(appDir, ".next-tauri", "dev-server.json");
 const e2eFileShareRoot = join(homedir(), ".hivemindos", "e2e-file-share");
 const skillAutoSyncConfigPath = join(homedir(), ".hivemindos", "skill-auto-sync.json");
 const hermesProfilesDir = join(defaultHermesDir, "profiles");
@@ -93,6 +94,42 @@ const hostedAppAssetUrls = new Map();
 
 function expandHome(path) {
   return path?.replace(/^~(?=$|\/)/, homedir());
+}
+
+function validPort(value) {
+  const portNumber = Number(value);
+  return Number.isInteger(portNumber) && portNumber > 0 && portNumber <= 65535 ? portNumber : 0;
+}
+
+function portFromUrl(value) {
+  try {
+    const url = new URL(value);
+    return validPort(url.port || (url.protocol === "https:" ? 443 : 80));
+  } catch {
+    return 0;
+  }
+}
+
+async function dashboardPortForMdns() {
+  const explicitPort = validPort(process.env.HIVEMINDOS_DASHBOARD_PORT);
+  if (explicitPort) return explicitPort;
+
+  const explicitUrlPort = process.env.HIVEMINDOS_DASHBOARD_URL
+    ? portFromUrl(process.env.HIVEMINDOS_DASHBOARD_URL)
+    : 0;
+  if (explicitUrlPort) return explicitUrlPort;
+
+  try {
+    const info = JSON.parse(await readFile(tauriDevServerInfoPath, "utf8"));
+    return validPort(info?.dashboardPort)
+      || portFromUrl(info?.dashboardUrl)
+      || validPort(info?.proxyPort)
+      || portFromUrl(info?.proxyUrl)
+      || validPort(info?.nextPort)
+      || 5020;
+  } catch {
+    return 5020;
+  }
 }
 
 async function stableMachineId() {
@@ -4251,7 +4288,7 @@ telemetryServer.on("upgrade", (request, socket, head) => {
 async function advertiseHubMdns() {
   if (process.env.HIVEMINDOS_MDNS_DISABLE === "1") return;
   try {
-    const dashboardPort = Number(process.env.HIVEMINDOS_DASHBOARD_PORT || 5020);
+    const dashboardPort = await dashboardPortForMdns();
     let magicDnsSuffix = "";
     let magicDnsName = ""; // the full stable tailnet name (Self.DNSName)
     try {

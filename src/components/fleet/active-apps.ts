@@ -41,6 +41,7 @@ function appMatchesMachine(machine: FleetMachine, app: FleetHostedApp) {
 }
 
 function appMatchScore(searchText: string, app: FleetHostedApp) {
+  if (isSelfDashboardApp(app)) return 0;
   if (isMiroSharkApp(app)) {
     if (!miroSharkTaskMatch(searchText)) return 0;
     return 20 + (app.iconUrl ? 5 : 0) + (app.interactive ? 2 : 0);
@@ -49,6 +50,10 @@ function appMatchScore(searchText: string, app: FleetHostedApp) {
   const exactNameMatch = names.some((name) => searchText.includes(name));
   if (!exactNameMatch) return 0;
   return 20 + (app.iconUrl ? 5 : 0) + (app.interactive ? 2 : 0);
+}
+
+function isSelfDashboardApp(app: FleetHostedApp) {
+  return normalize(app.name) === "hivemindos";
 }
 
 function isMiroSharkApp(app: FleetHostedApp) {

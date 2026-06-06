@@ -83,8 +83,15 @@ function normalizeCollectorUrl(url: string) {
   return url.replace(/\/+$/, "");
 }
 
+function collectorUrlForSnapshot(agent: AgentWithLocal) {
+  const telemetryUrl = normalizeAgentTelemetryUrl(agent.telemetryUrl);
+  if (telemetryUrl) return telemetryUrl;
+  if (!agent.collectorCapabilities) return "";
+  return normalizeAgentTelemetryUrl(agent.gatewayUrl);
+}
+
 async function readRemoteSnapshot(agent: AgentWithLocal): Promise<AgentSnapshot | null> {
-  const baseUrl = normalizeAgentTelemetryUrl(agent.telemetryUrl);
+  const baseUrl = collectorUrlForSnapshot(agent);
   if (!baseUrl) return null;
   try {
     const response = await fetch(`${normalizeCollectorUrl(baseUrl)}/snapshot`, {

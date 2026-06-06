@@ -36,6 +36,7 @@ export const DEFAULT_AGENT_WALLET: Omit<AgentWalletConfig, "agentId"> = {
   clawCardEnvName: "CLAWCARD_API_KEY",
   moneyClawEnvName: "MONEYCLAW_API_KEY",
   x402BaseUrl: "",
+  veilAutoPrivateX402: true,
   survivalStartedAt: 0,
   updatedAt: 0,
   notes: "",
@@ -125,28 +126,52 @@ export function getUsePodBalanceUsd(config?: UsePodAgentConfig): number | null {
   return parseWalletBalanceUsd(config?.lastBalanceRemaining);
 }
 
+function hasUsePodWalletEvidence(config?: UsePodAgentConfig, balance = getUsePodBalanceUsd(config)) {
+  return Boolean(
+    config?.tokenEnvName
+      || config?.depositAddress
+      || config?.depositCode
+      || config?.dashboardUrl
+      || config?.lastTestStatus
+      || config?.lastStatusMessage
+      || typeof config?.lastModelCount === "number"
+      || balance !== null
+  );
+}
+
+function hasExplicitWalletProvider(wallet?: AgentWalletConfig) {
+  if (!wallet) return false;
+  if (wallet.providerSelectedAt) return true;
+  if (wallet.provider !== DEFAULT_AGENT_WALLET.provider) return true;
+  return Boolean(
+    wallet.walletAddress.trim()
+      || wallet.vaultAddress?.trim()
+      || wallet.notes.trim()
+      || wallet.x402BaseUrl.trim()
+      || wallet.currentBalanceUsd > 0
+      || wallet.seedBalanceUsd > 0
+      || (wallet.onchainBalanceUsd ?? 0) > 0
+      || (wallet.lastOnchainSyncAt ?? 0) > 0
+  );
+}
+
 export function resolveAgentWallet(agent: Pick<AgentProfile, "id" | "provider" | "usePod">, wallet?: AgentWalletConfig): AgentWalletConfig {
   const base = wallet ?? createDefaultAgentWallet(agent.id);
-  const provider = agent.provider === "usepod" ? "usepod" : base.provider;
+  const usePodBalance = getUsePodBalanceUsd(agent.usePod);
+  const provider = hasExplicitWalletProvider(wallet)
+    ? base.provider
+    : agent.provider === "usepod" || hasUsePodWalletEvidence(agent.usePod, usePodBalance)
+      ? "usepod"
+      : base.provider;
   const providerFeatures = agentPaymentProviderFeatures(provider);
   if (providerFeatures.balanceSource !== "usepod-runtime") {
     return base.provider === provider ? base : { ...base, provider };
   }
 
   const usePod = agent.usePod ?? {};
-  const usePodBalance = getUsePodBalanceUsd(usePod);
   const checkedAtMs = Date.parse(usePod.lastCheckedAt ?? "");
   const hasCheckedAt = Number.isFinite(checkedAtMs);
-  const setupVisible = Boolean(
-    usePod.tokenEnvName
-      || usePod.depositAddress
-      || usePod.depositCode
-      || usePod.dashboardUrl
-      || usePod.lastTestStatus
-      || usePod.lastStatusMessage
-      || typeof usePod.lastModelCount === "number"
-      || usePodBalance !== null,
-  );
+  const setupVisible = hasUsePodWalletEvidence(usePod, usePodBalance);
   return {
     ...base,
     provider: "usepod",
@@ -328,6 +353,7 @@ export function maxAmount(maxBaseUnits: bigint | number): X402Policy {
 }
 
 export function buildAgentPaymentPrompt(config: AgentWalletConfig, snapshot = getSurvivalSnapshot(config)): string {
+  const veilAutoPrivateX402 = config.veilAutoPrivateX402 !== false;
   const duplicateGuardSeconds = Number.isFinite(Number(config.duplicatePaymentGuardSeconds))
     ? Math.max(0, Number(config.duplicatePaymentGuardSeconds))
     : DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS;
@@ -355,7 +381,7 @@ export function buildAgentPaymentPrompt(config: AgentWalletConfig, snapshot = ge
     `Survival tier: ${snapshot.tier}; effective balance $${snapshot.effectiveBalanceUsd.toFixed(2)}; compute burn $${config.dailyComputeBurnUsd.toFixed(2)}/day.`,
     `Use ${snapshot.modelHint} model behavior and ${snapshot.heartbeatHint} heartbeat behavior.`,
     config.provider === "veil"
-      ? `Capability: private sends are available for USDC and ETH on Base. If the user asks to send privately, make a private payment, or privately pay an x402 endpoint, infer this active private rail automatically; do not require the user to name Veil Cash. Present one agent spend balance; public, queued, and ready private Veil balances are internal rail state. Dashboard execution uses POST /api/wallet/veil/transfer after the user confirms a reviewed transfer draft; use ${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL} as the internal route confirmation and autoShield for USDC sends. Private x402 drafts and confirmations are handled directly by the chat wallet capability; ask the user for plain confirmation such as "confirm" and map provider-specific confirmation tokens internally. By default private sends go to any public Ethereum address; current public-recipient USDC withdrawals require at least ${VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM} USDC. If ready private USDC is short, HivemindOS can shield from the agent's encrypted local Base wallet first and finish after Veil accepts the deposit. Only use registered-recipient mode for an explicit in-pool shielded transfer to a registered Veil recipient. VEIL_KEY and the Veil CLI must be configured on the server. Do not execute private actions without explicit setup and approval.`
+      ? `Capability: private sends are available for USDC and ETH on Base. If the user asks to send privately, make a private payment, or privately pay an x402 endpoint, infer this active private rail automatically; do not require the user to name Veil Cash. ${veilAutoPrivateX402 ? "Auto Always Private is on: ordinary x402/pay-this endpoint requests should use Veil private x402 by default." : "Auto Always Private is off: ordinary x402/pay-this endpoint requests use the basic public x402 route, and only explicit private language such as privately, in private, private, or Veil should use Veil private x402."} Present one agent spend balance; public, queued, and ready private Veil balances are internal rail state. Dashboard execution uses POST /api/wallet/veil/transfer after the user confirms a reviewed transfer draft; use ${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL} as the internal route confirmation and autoShield for USDC sends. Private x402 drafts and confirmations are handled directly by the chat wallet capability; ask the user for plain confirmation such as "confirm" and map provider-specific confirmation tokens internally. By default private sends go to any public Ethereum address; current public-recipient USDC withdrawals require at least ${VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM} USDC. If ready private USDC is short, HivemindOS can shield from the agent's encrypted local Base wallet first and finish after Veil accepts the deposit. Only use registered-recipient mode for an explicit in-pool shielded transfer to a registered Veil recipient. VEIL_KEY and the Veil CLI must be configured on the server. Do not execute private actions without explicit setup and approval.`
       : "",
     "Never expose private keys, card PAN/CVV, or billing identity in chat or durable shared notes.",
   ].filter(Boolean).join("\n");

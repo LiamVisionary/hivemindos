@@ -56,8 +56,8 @@ export function tailnetPeerTrafficLooksStalled(machine: MachineGroup) {
 function collectorHealthCommand(machine: MachineGroup) {
   const collectorUrl = machine.collectorUrl?.replace(/\/+$/, "");
   if (collectorUrl) return `curl --max-time 5 '${collectorUrl}/health'`;
-  const tailnetTarget = machine.dnsName || machine.ip || "<tailnet-ip>";
-  return `curl --max-time 5 http://${machine.ip || tailnetTarget}:8787/health`;
+  if (machine.self) return "source ~/.hivemindos/collector.env && curl --max-time 5 \"http://127.0.0.1:${AGENT_TELEMETRY_PORT}/health\"";
+  return "# No verified collector URL yet; run the collector health command on the target machine after sourcing ~/.hivemindos/collector.env";
 }
 
 export function machineNetworkIssue(machine: MachineGroup, tailscaleStatus: string): FleetMachine["networkIssue"] {
@@ -123,13 +123,14 @@ export function machineNetworkIssue(machine: MachineGroup, tailscaleStatus: stri
       return {
         label: "Agent bridge not reachable. Fix?",
         title: "Local agent bridge is not reachable",
-        detail: "This dashboard cannot reach the local agent bridge on this Mac at localhost:8787. Start or reinstall the local agent bridge, then refresh Fleet.",
+        detail: "This dashboard cannot reach the local agent bridge on this Mac at its configured collector URL. Start or reinstall the local agent bridge, then refresh Fleet.",
         commands: [
           "# On this Mac",
           "cd ~/hivemindos",
           "git pull --ff-only",
           "./scripts/install-telemetry-collector.sh",
-          "curl http://127.0.0.1:8787/health",
+          "source ~/.hivemindos/collector.env",
+          "curl \"http://127.0.0.1:${AGENT_TELEMETRY_PORT}/health\"",
         ],
       };
     }
@@ -182,7 +183,7 @@ export function machineNetworkIssue(machine: MachineGroup, tailscaleStatus: stri
     return {
       label: "Agent bridge not reachable. Fix?",
       title: "Agent bridge is not reachable",
-      detail: "Tailscale lists this machine, but this dashboard cannot reach its agent bridge on port 8787. The automatic fix restarts local Tailnet connectivity on this dashboard Mac only. If the bridge is still unreachable after that, run the remote-machine commands below for Shields Up, service install, or firewall repair.",
+      detail: "Tailscale lists this machine, but this dashboard cannot reach a verified HivemindOS agent bridge for it. The automatic fix restarts local Tailnet connectivity on this dashboard Mac only. If the bridge is still unreachable after that, run the remote-machine commands below for Shields Up, service install, or firewall repair.",
       fixAction: "restart-local-tailnet",
       fixLabel: "Restart local Tailnet",
       commands: [
@@ -199,9 +200,9 @@ export function machineNetworkIssue(machine: MachineGroup, tailscaleStatus: stri
         "git pull --ff-only",
         "./scripts/install-telemetry-collector.sh",
         "source ~/.hivemindos/collector.env",
-        "curl \"http://127.0.0.1:${AGENT_TELEMETRY_PORT:-8787}/health\"",
+        "curl \"http://127.0.0.1:${AGENT_TELEMETRY_PORT}/health\"",
         "curl \"http://${HIVE_LINK_CONTROL:-127.0.0.1:8788}/status\"",
-        "lsof -nP -iTCP:8787 -sTCP:LISTEN",
+        "lsof -nP -iTCP:${AGENT_TELEMETRY_PORT} -sTCP:LISTEN",
         "",
         "# If local health works but remote curl times out on macOS",
         "sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add \"$(command -v node)\"",

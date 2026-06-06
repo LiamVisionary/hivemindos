@@ -195,7 +195,8 @@ function installScriptForCheckout() {
   return [
     "if ! command -v pnpm >/dev/null 2>&1 && command -v corepack >/dev/null 2>&1; then corepack enable; corepack prepare pnpm@latest --activate; fi",
     "pnpm install --frozen-lockfile",
-    "AGENT_TELEMETRY_PORT=\"${AGENT_TELEMETRY_PORT:-8787}\" ./scripts/install-telemetry-collector.sh",
+    "if [ -f \"$HOME/.hivemindos/collector.env\" ]; then . \"$HOME/.hivemindos/collector.env\"; fi",
+    "./scripts/install-telemetry-collector.sh",
   ].join("\n");
 }
 
@@ -472,7 +473,8 @@ async function tryDetachedTailscaleSsh(body: UpdateBody) {
     "  CI=true NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-deprecation\" pnpm install --frozen-lockfile",
     "  pnpm build",
     "  ./setup.sh",
-    "  AGENT_TELEMETRY_PORT=\"${AGENT_TELEMETRY_PORT:-8787}\" ./scripts/install-telemetry-collector.sh",
+    "  if [ -f \"$HOME/.hivemindos/collector.env\" ]; then . \"$HOME/.hivemindos/collector.env\"; fi",
+    "  ./scripts/install-telemetry-collector.sh",
     "} >> .next/agent-update.log 2>&1 &",
     "echo 'Detached HivemindOS update started.'",
   ].join("\n");

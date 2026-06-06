@@ -17,7 +17,11 @@ This rule applies to changes in:
 - generated vault files
 - setup-created brain notes
 - shared skills layout
+- packaged auto-install skill defaults
+- Obsidian-native `.base` and `.canvas` generated views
 - brain service defaults
+- shared memory access paths, including API, CLI, runtime prompt injection, and hooks
+- shared memory indexes, proof receipts, and full-vault fallback behavior
 - runtime mirror placement
 - vault doctor cleanup behavior
 - agent-facing write policy
@@ -34,10 +38,24 @@ When a brain architecture change lands, check and update:
 | `README.md` | Repository quick-start and operator overview. |
 | `AGENTS.md` | Agent rules for future changes. |
 | `setup.sh` and `setup.ps1` | Fresh install shell initializers. |
-| `uninstall.sh` and `uninstall.ps1` | Conservative mirror of setup-created files/folders/keys. |
+| `uninstall.sh` and `uninstall.ps1` | Conservative mirror of setup-created files/folders/keys/hooks. |
 | `scripts/seed-vault-foundation.mjs` | Vault foundation seeder. |
+| `scripts/seed-shared-skills.sh` | Runtime instruction seeder and shared-skill mirror. |
 | `scripts/vault-doctor.mjs` | Cleanup and migration behavior. |
 | `scripts/test-vault-structure-contract.mjs` | Static guard that catches drift. |
+| `packaged-skills/auto-install/` | Product-shipped shared skills that setup copies into the vault. |
+
+For Shared Brain Memory specifically, the required set also includes:
+
+- `/api/brain/memory`
+- `src/lib/services/obsidian/agent-memory.ts`
+- `src/lib/services/chat/shared-brain-memory-context.ts`
+- `src/lib/services/chat/shared-vault-context.ts`
+- `src/lib/services/context-index.ts`
+- `scripts/hive-brain`
+- `scripts/hive-brain-hook`
+- `docs/whole-brain/brain-services.md`
+- `docs/features/brain-vault-and-skills.md`
 
 ## Fresh Install Rule
 
@@ -46,6 +64,8 @@ If a folder or generated note should exist in a clean vault, it must be created 
 ## Cleanup Rule
 
 If setup creates something, uninstall must offer a matching conservative removal prompt. If the doctor migrates or archives something, it must write a manifest.
+
+This includes runtime files and hooks. For example, when setup registers a Claude `UserPromptSubmit` hook, uninstall must remove only the HivemindOS-managed hook entry and leave unrelated Claude settings intact.
 
 ## Docs Rule
 

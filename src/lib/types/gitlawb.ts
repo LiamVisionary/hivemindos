@@ -42,7 +42,7 @@ export type GitLawbProofStatus = "ready" | "linked" | "verified" | "unavailable"
 
 export type GitLawbProof = {
   id: string;
-  kind: "issue" | "pull-request" | "commit" | "ref" | "task";
+  kind: "issue" | "pull-request" | "commit" | "ref" | "task" | "agent-memory";
   status: GitLawbProofStatus;
   actorDid?: string;
   repo?: string;

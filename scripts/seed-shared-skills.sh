@@ -217,12 +217,19 @@ write_packaged_auto_install_metadata() {
   local dir="$1"
   local slug="$2"
   local source_path="$3"
+  local upstream_line=""
+  case "$slug" in
+    obsidian-markdown|obsidian-bases|json-canvas|defuddle)
+      upstream_line='  "upstreamSourceUrl": "https://github.com/kepano/obsidian-skills",'
+      ;;
+  esac
   cat > "$dir/.hivemind-skill-source.json" <<JSON
 {
   "provider": "packaged-auto-install",
   "providerLabel": "HivemindOS auto-installed packaged skills",
   "sourcePath": "$source_path",
   "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/auto-install/$slug",
+$upstream_line
   "importedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 JSON
@@ -257,12 +264,60 @@ write_managed_block() {
     printf "%s\n" "- Skills index: \`$skills_folder/README.md\`"
     printf "%s\n\n" "- Skill files: \`$skills_folder/<slug>/SKILL.md\`"
     printf "Before using a shared skill, read \`%s/README.md\` for the index, then read the relevant \`SKILL.md\`. The bundled baseline skill is \`karpathy-guidelines\`.\n\n" "$skills_folder"
+    printf "## Shared Brain Memory\n\n"
+    printf "Use \`hive-brain answer \"<query>\"\` before relying on prior preferences, decisions, instructions, goals, commitments, artifacts, lessons, credential status, or project context. The CLI tries the running HivemindOS \`/api/brain/memory\` route first, then falls back to local vault/index search, so raw/non-managed agents can recall shared memory without being app-routed. Setup also installs \`hive-brain-hook\` as a Claude Code \`UserPromptSubmit\` hook when Claude is targeted, so raw Claude prompts receive relevant shared-brain context automatically. Default recall/answer is tiered: check typed Agent Memory first, return it when the distilled hit is strong, and otherwise augment with relevant markdown from the full shared vault. Pass \`--scope agent-memory\` for typed/proven memory only, or \`--scope full-vault\` to force broad vault recall. For durable writes, use \`hive-brain remember --type <type> --title <title> --content <content>\` or POST \`/api/brain/memory\`; remember only durable reviewed facts, decisions, preferences, goals, instructions, commitments, artifacts, errors, learnings, or reusable context.\n\n"
+    printf "Memory writes live under \`Memory/Distillations/Agent Memory/\`; the private search index lives at \`Operations/Brain Services/Agent Memory Index.jsonl\`; optional GitLawb receipts live at \`Operations/Brain Services/Agent Memory Proofs.jsonl\` and store hashes/provenance instead of memory bodies. Include available \`agentName\`, \`agentId\`, \`runtime\`, \`machineName\`, \`machineId\`, \`tailnetId\`, \`tailnetName\`, \`tailnetDnsName\`, \`collectorUrl\`, \`sessionId\`, and \`project\` fields when writing. Use \`proof: \"auto\"\` unless explicit proof is requested. Do not store raw Tailnet IPs or secrets in shared memory. \`Operations/Secure/\` reference/status notes are searchable during full-vault recall so agents can know which credential names exist or are set, but plaintext secret values must stay out of notes and responses.\n\n"
     printf "## Shared Hive Env\n\n"
-    printf "Shared credentials live in \`~/.hivemindos/.env\`. Use \`hive-env-check KEY\` to verify presence and \`hive-env-run -- <command>\` to run tools/apps with the shared env loaded. Do not read, print, summarize, or copy secret values; refer to credentials by variable name only. When making a project consume shared credentials, load the \`shared-hive-env\` skill and default project runtime loading to \`~/.hivemindos/.env\` without persisting secrets into project files.\n"
+    printf "Shared credentials live in \`~/.hivemindos/.env\`. Use \`hive-env-check KEY\` to verify presence and \`hive-env-run -- <command>\` to run tools/apps with the shared env loaded. Do not read, print, summarize, or copy secret values; refer to credentials by variable name and set/missing status only. When making a project consume shared credentials, load the \`shared-hive-env\` skill and default project runtime loading to \`~/.hivemindos/.env\` without persisting secrets into project files.\n"
     printf "%s\n" "$end"
   } > "$file"
 
   rm -f "$tmp_file"
+}
+
+install_claude_brain_hook() {
+  if [[ "${HIVE_CLAUDE_BRAIN_HOOK:-1}" == "0" ]]; then
+    return 0
+  fi
+  local settings_file="$HOME/.claude/settings.json"
+  local hook_command="$HOME/.local/bin/hive-brain-hook"
+  mkdir -p "$(dirname "$settings_file")"
+  node - "$settings_file" "$hook_command" <<'NODE'
+const fs = require("fs");
+const path = require("path");
+const [settingsFile, hookCommand] = process.argv.slice(2);
+let settings = {};
+try {
+  settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+} catch {
+  settings = {};
+}
+if (!settings || typeof settings !== "object" || Array.isArray(settings)) settings = {};
+const hooks = settings.hooks && typeof settings.hooks === "object" && !Array.isArray(settings.hooks)
+  ? settings.hooks
+  : {};
+const groups = Array.isArray(hooks.UserPromptSubmit) ? hooks.UserPromptSubmit : [];
+const filteredGroups = groups
+  .map((group) => {
+    if (!group || typeof group !== "object" || !Array.isArray(group.hooks)) return group;
+    const nextHooks = group.hooks.filter((hook) => !String(hook?.command || "").includes("hive-brain-hook"));
+    return { ...group, hooks: nextHooks };
+  })
+  .filter((group) => !group || typeof group !== "object" || !Array.isArray(group.hooks) || group.hooks.length > 0);
+filteredGroups.push({
+  hooks: [
+    {
+      type: "command",
+      command: `${hookCommand} claude-user-prompt`,
+      timeout: 20,
+    },
+  ],
+});
+settings.hooks = { ...hooks, UserPromptSubmit: filteredGroups };
+fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+fs.writeFileSync(settingsFile, `${JSON.stringify(settings, null, 2)}\n`);
+NODE
+  ok "Installed Claude shared-brain UserPromptSubmit hook"
 }
 
 write_skills_readme() {
@@ -445,6 +500,9 @@ for agent in "${agent_ids[@]}"; do
   while IFS= read -r instruction_file; do
     write_managed_block "$instruction_file"
   done < <(agent_instruction_files "$agent")
+  if [[ "$agent" == "claude" ]]; then
+    install_claude_brain_hook
+  fi
 done
 
 ok "Runtime skill hints installed for selected agents"

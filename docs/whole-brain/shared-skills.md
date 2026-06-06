@@ -38,6 +38,28 @@ Policies can auto import, auto update, track removals, and optionally allow prov
 
 Shared brain managed mirrors must not get imported again as brand new provider skills. That is how duplicate loops start.
 
+## Auto-Installed Brain Skills
+
+Setup copies a small default pack from `packaged-skills/auto-install/` into the shared vault `Skills/` shelf.
+
+The Obsidian Native Brain Pack is included by default:
+
+| Skill | Why it exists |
+| --- | --- |
+| `obsidian-markdown` | Write Obsidian Flavored Markdown with wikilinks, embeds, callouts, properties, tags, math, Mermaid, and footnotes. |
+| `obsidian-bases` | Create and edit native `.base` YAML views over vault notes. |
+| `json-canvas` | Create and edit Obsidian `.canvas` maps, boards, and flowcharts. |
+| `defuddle` | Optionally extract clean markdown from web pages when the local Defuddle CLI is installed. |
+
+These are curated from [`kepano/obsidian-skills`](https://github.com/kepano/obsidian-skills). HivemindOS does not auto-install the upstream `obsidian-cli` skill because the shared vault already carries safer, HivemindOS-aware Obsidian CLI skills and write policy.
+
+The native pack pairs with seeded vault views under `Operations/Brain Services/`:
+
+- `Agent Memory.base`
+- `Project Brain.base`
+- `Secure References.base`
+- `Whole Brain.canvas`
+
 ## AEON Mirror Rule
 
 The hidden AEON runtime mirror belongs here:

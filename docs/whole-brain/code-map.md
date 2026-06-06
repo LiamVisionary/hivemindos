@@ -32,6 +32,10 @@ Basically: do not change the docs from memory if the code is sitting right here.
 
 ## Shared Skills
 
+- `packaged-skills/auto-install/obsidian-markdown/SKILL.md`
+- `packaged-skills/auto-install/obsidian-bases/SKILL.md`
+- `packaged-skills/auto-install/json-canvas/SKILL.md`
+- `packaged-skills/auto-install/defuddle/SKILL.md`
 - `src/lib/services/obsidian/brain-skills.ts`
 - `src/app/api/obsidian/skills/route.ts`
 - `src/app/api/obsidian/skills/reconcile/route.ts`
@@ -44,10 +48,15 @@ Basically: do not change the docs from memory if the code is sitting right here.
 ## Brain Services
 
 - `src/lib/services/context-index.ts`
+- `src/lib/services/obsidian/agent-memory.ts`
 - `src/lib/services/brain/gbrain.ts`
 - `src/lib/services/brain/synto.ts`
 - `src/lib/services/brain/trading-brain.ts`
 - `src/app/api/context-index/route.ts`
+- `src/app/api/brain/memory/route.ts`
+- `scripts/hive-brain`
+- `scripts/hive-brain-hook`
+- `scripts/seed-vault-foundation.mjs`
 - `src/app/api/brain/gbrain/**`
 - `src/app/api/brain/synto/**`
 - `src/app/api/brain/trading-brain/**`

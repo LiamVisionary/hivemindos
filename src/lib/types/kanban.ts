@@ -53,6 +53,9 @@ export type KanbanTaskAttachment = {
   mimeType: string;
   size: number;
   dataUrl: string;
+  referencePath?: string;
+  referenceOnly?: boolean;
+  lastModified?: number;
 };
 
 export type KanbanLinkedDirectory = {

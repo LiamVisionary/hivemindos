@@ -4,6 +4,7 @@
 
 import { useMemo, useState } from "react";
 import { brainGraphLayout } from "@/features/dashboard/dashboard-display-helpers";
+import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
 import styles from "./BrainGraphExplorer.module.css";
 
 const graphClass = (...classes) => classes.map((className) => styles[className]).filter(Boolean).join(" ");
@@ -358,7 +359,13 @@ export function BrainGraphExplorer(props: any) {
             <>
               <h3>{selectedBrainNode.label}</h3>
               <p>{selectedBrainNode.folder}</p>
-              {selectedBrainNode.preview ? <p className={graphClass("preview")}>{selectedBrainNode.preview}</p> : null}
+              {selectedBrainNode.preview ? (
+                <ChatMarkdown
+                  text={selectedBrainNode.preview}
+                  className={graphClass("preview", "previewMarkdown")}
+                  headingClassName={graphClass("previewHeading")}
+                />
+              ) : null}
               <dl>
                 <div><dt>Incoming</dt><dd>{selectedBrainNode.incoming}</dd></div>
                 <div><dt>Outgoing</dt><dd>{selectedBrainNode.outgoing}</dd></div>

@@ -38,6 +38,8 @@ Seeded structure:
 - `Templates/HivemindOS/` contains durable templates for daily briefings, weekly reviews, meetings, research sources, decisions, projects, book notes, distillations, and AI outputs.
 - `Operations/Brain Services/Obsidian CLI.md` records detected CLI status when setup runs.
 - `Operations/Brain Services/Obsidian Plugin Pack.md` lists optional manual Obsidian plugins for templates, tasks, Dataview, retrieval, calendar, Kanban, and Git.
+- `Operations/Brain Services/Obsidian Native Brain Pack.md` records the auto-installed Obsidian-native skill pack for Markdown, Bases, Canvas, and optional Defuddle extraction.
+- `Operations/Brain Services/Agent Memory.base`, `Project Brain.base`, `Secure References.base`, and `Whole Brain.canvas` give humans native Obsidian views over typed memory, project context, safe credential references, and the recall topology.
 - `Operations/Automations/Foundation Workflows/` contains disabled workflow schedules for context synthesis, intake processing, meeting processing, research ingestion, vault health checks, decision review, argument building, book notes, feedback capture, project updates, weekly synthesis, connection finding, and distillation.
 - `Operations/Code Projects/projects.json` stores Hivemind project records and optional GitLawb repo links. This is private coordination metadata. GitLawb proof records should not contain private keys, secrets, Tailnet IPs, or exact private vault paths.
 
@@ -56,6 +58,7 @@ What the brain services can do:
 
 - Build a lightweight context index over shared/runtime skills, tool-call surfaces, API routes, connected Tailnet apps, app endpoint catalogs, runtime capability definitions, docs, and workspace files.
 - Retrieve the most relevant index records for a task before loading full files or schemas, including connected-app capability aliases such as image generation, simulation, graph, exports, monitoring, settings, and API docs.
+- Save typed shared-brain memories through `/api/brain/memory` or the installed `hive-brain` CLI using `remember`, `recall`, `answer`, and `rebuild-index` actions. Raw/non-managed agents can run `hive-brain answer "<query>"`; it discovers the running API and falls back to local vault/index search. Setup also installs `hive-brain-hook` for Claude Code and registers it as a `UserPromptSubmit` hook so raw Claude prompts receive relevant shared-brain context before answering. Default `recall`/`answer` is tiered: check typed Agent Memory first, return it when the distilled hit is strong, and otherwise augment with relevant markdown from the full shared vault. `scope: "agent-memory"` or `--scope agent-memory` narrows recall to the typed/proven memory layer, while `scope: "full-vault"` or `--scope full-vault` forces broad vault recall. Memory writes live under `Memory/Distillations/Agent Memory/`, the private append-only search index lives at `Operations/Brain Services/Agent Memory Index.jsonl`, optional hash-only GitLawb memory receipts live at `Operations/Brain Services/Agent Memory Proofs.jsonl`, and provenance fields can identify the writing agent, runtime, machine id, Tailnet id/name, Tailnet DNS name, and collector URL.
 - Optionally ask GBrain for semantic retrieval alongside the lightweight index when a caller posts `semantic: true` to `/api/context-index`.
 - Write a managed connected-app retrieval snapshot into `Operations/Brain Services/Connected Apps Context Index.md` and refresh GBrain import/embed when a caller posts `syncConnectedAppsToGbrain: true`.
 - Build a graph from markdown notes and access logs.
@@ -70,6 +73,37 @@ What the brain services can do:
 - Keep Syntho raw source MCP access denied by default unless the user explicitly changes the source access policy.
 - Attach trading-brain status to selected runtimes where configured.
 - Write service notes back into the vault.
+
+### Shared Brain Memory Summary
+
+HivemindOS gives every local agent a shared, private, Obsidian-native memory layer. Agents write durable memories as typed markdown notes, retrieve typed memories and regular vault notes through a local API, and keep a fast private JSONL index for the typed Agent Memory hot path so recall does not depend on an external vector database or hosted memory service.
+
+What makes it different:
+
+- Shared across agents: Claude, Codex, Hermes, Gemini, Aeon, OpenClaw, and any shell-capable runtime can write and recall from the same brain through the API or `hive-brain`.
+- Typed by intent: instructions, facts, decisions, goals, commitments, preferences, relationships, context, events, learnings, observations, artifacts, and errors each keep their own route through memory.
+- Provenance-aware: memories can carry `agentName`, `agentId`, `runtime`, `machineName`, `machineId`, `tailnetId`, `tailnetName`, `tailnetDnsName`, `collectorUrl`, `sessionId`, and `project`, so the team can tell exactly which agent on which machine wrote a note without storing raw Tailnet IPs.
+- Proof-ready: optional GitLawb receipts hash the memory record, chain proof hashes, and store sanitized provenance without copying the memory body into the proof log.
+- Local-first and private: the durable notes, search index, and receipts live in the user's vault. Retrieval is network-free unless the user separately enables a sync or brain service.
+- Full-vault aware when needed: tiered recall can augment from the user's `Memory`, `Projects`, `Synthesis`, `Ideas`, `Operations`, `Skills`, templates, shared context, and `Operations/Secure` reference/status notes without moving plaintext secrets into notes.
+- Raw-agent ready: setup installs runtime instruction blocks plus `hive-brain`; Claude Code also gets a `hive-brain-hook` `UserPromptSubmit` hook so raw Claude prompts can recall full-vault context without being routed through the app.
+- Import-friendly: `rebuild-index` scans existing markdown memories once and appends rich searchable entries, so first cold indexing is a one-time catch-up pass. New writes update the index incrementally.
+
+Benchmarks from the live local API route:
+
+| Memory count | Recall p50 | Recall p95 | First indexed recall p50 | Answer p50 | Top-1 / Top-3 / MRR |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 100 | 2.69ms | 3.15ms | 2.72ms | 2.83ms | 1.0 / 1.0 / 1.0 |
+| 500 | 4.37ms | 5.26ms | 4.68ms | 4.18ms | 1.0 / 1.0 / 1.0 |
+| 1500 | 19.20ms | 31.33ms | 19.37ms | 21.04ms | 1.0 / 1.0 / 1.0 |
+
+Those benchmark rows measure `scope: "agent-memory"`, the typed/proven memory hot path. On Liam's current 4,848-note vault, forced full-vault recall has 2,685 eligible markdown notes after generated/runtime/archive exclusions; a live local route smoke test measured about 2.35s for one cold full-vault answer, then warm cached full-vault answers around 0.20s-0.35s depending on the query, with one dev-server reload outlier. Under default tiered recall, strong distilled memories can return from the typed index without paying that full-vault scan.
+
+Before the private index hot path, markdown scanning measured recall p50 of 99.51ms at 100 memories, 293.49ms at 500, 562.38ms at 1000, and 784.03ms at 1500. The indexed path keeps rich memory retrieval in milliseconds while preserving perfect synthetic relevance in the benchmark set.
+
+Marketing copy:
+
+> HivemindOS agents share an incredibly rich, typed, provenance-aware memory that stays local to your vault. It delivers network-free recall in milliseconds, a fraction of the latency of network-bound memory stacks, while remaining 100% private by default.
 
 ### Syntho Model
 
@@ -99,6 +133,7 @@ What shared skills can do:
 - Import runtime skills into the shared brain.
 - Write new shared skills.
 - Save Hive Fusion generated skills into the shared brain for later retrieval.
+- Auto-install the Obsidian Native Brain Pack: `obsidian-markdown`, `obsidian-bases`, `json-canvas`, and optional `defuddle`, curated from `kepano/obsidian-skills`.
 - Reconcile shared-vault skills with local runtime providers.
 - Auto-import, auto-update, and optionally track removals per provider.
 - Sync shared skills to Aeon.
@@ -108,6 +143,7 @@ See also: [Hive Fusion](hive-fusion.html), which explains how capability search 
 ## Main Code Paths
 
 - `src/lib/services/obsidian/vault-path.ts`
+- `src/lib/services/obsidian/agent-memory.ts`
 - `src/lib/services/context-index.ts`
 - `src/lib/services/obsidian/brain-graph.ts`
 - `src/lib/services/obsidian/brain-skills.ts`

@@ -45,9 +45,12 @@ export async function POST(request: NextRequest) {
 }
 
 function normalizePolicy(policy: Partial<AgentWalletConfig> | undefined, network: string): X402FetchPolicy {
+  const provider = policy?.provider === "veil" && policy.veilAutoPrivateX402 === false
+    ? "x402"
+    : policy?.provider ?? "manual";
   return {
     enabled: Boolean(policy?.enabled),
-    provider: policy?.provider ?? "manual",
+    provider,
     network: policy?.network || network,
     maxPaymentUsd: positiveMoney(policy?.maxPaymentUsd, 0.5),
     approvalRequiredOverUsd: positiveMoney(policy?.approvalRequiredOverUsd, 0),

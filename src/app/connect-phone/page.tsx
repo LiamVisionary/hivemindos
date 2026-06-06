@@ -33,7 +33,7 @@ export default function ConnectPhonePage() {
         const url = hubUrlForPairingHost(host);
         const name = (self?.dnsName ? String(self.dnsName).split(".")[0] : "") || host;
         setHubUrl(url);
-        const pair = clawMobilePairingUrl({ hubUrl: url, name });
+        const pair = clawMobilePairingUrl({ hubUrl: url, name, machineId: self?.machineId });
         setQr(await QRCode.toDataURL(pair, { width: 320, margin: 2 }));
       } catch (e: any) {
         setError(e?.message || "Failed to build the pairing code.");

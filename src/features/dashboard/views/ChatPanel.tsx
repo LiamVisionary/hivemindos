@@ -4,10 +4,18 @@
 
 import { ChatFolderModal } from "@/features/dashboard/views/chat/ChatFolderModal";
 import { ChatInlineMarkdown } from "@/features/dashboard/ChatMarkdown";
-import { CloseIconButton } from "@/components/ui/close-icon-button";
+import hiveChatStyles from "@/features/dashboard/views/chat/HiveChatView.module.css";
+import {
+  extractMiroSharkSimulationCard,
+  getMiroSharkProcessSummary,
+  MiroSharkProcessCard,
+  MiroSharkSimulationCard,
+} from "@/features/dashboard/views/chat/MiroSharkSimulationCard";
+import { createStyleClass } from "@/features/dashboard/style-classes";
 import { LottiePlayer } from "@/components/ui/lottie-player";
-import chatQueueStyles from "@/features/dashboard/views/chat/ChatQueue.module.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+
+const hiveClass = createStyleClass(hiveChatStyles);
 
 const PROVIDER_LABELS: Record<string, string> = {
   "openai-codex": "OpenAI Codex",
@@ -21,7 +29,16 @@ const PROVIDER_LABELS: Record<string, string> = {
   ollama: "Ollama",
 };
 
-function headerValueLabel(value?: string) {
+const MODEL_SWITCHABLE_RUNTIMES = ["hermes", "openclaw", "openai-compatible"];
+
+const STATE_LABEL: Record<string, { tone: string; label: string }> = {
+  working: { tone: "cyan", label: "working" },
+  ready: { tone: "muted", label: "ready" },
+  setup: { tone: "honey", label: "setup" },
+  failed: { tone: "danger", label: "blocked" },
+};
+
+function titleCaseLabel(value?: string) {
   const trimmed = value?.trim();
   if (!trimmed) return "Not set";
   const known = PROVIDER_LABELS[trimmed.toLowerCase()];
@@ -34,15 +51,6 @@ function headerValueLabel(value?: string) {
     .join(" ");
 }
 
-function modelValueLabel(value?: string) {
-  const trimmed = value?.trim();
-  if (!trimmed) return "Not set";
-  if (trimmed.toLowerCase() === "adaptive") return "Adaptive";
-  return trimmed;
-}
-
-// Compact label for the composer model button: drop the provider prefix
-// from ids like "anthropic/hermes-3" so the pill stays readable.
 function shortModelLabel(value?: string) {
   const trimmed = value?.trim();
   if (!trimmed) return "Model";
@@ -51,27 +59,15 @@ function shortModelLabel(value?: string) {
   return slash >= 0 ? trimmed.slice(slash + 1) : trimmed;
 }
 
-const MODEL_SWITCHABLE_RUNTIMES = ["hermes", "openclaw", "openai-compatible"];
-
-function runtimeIdentityLabel(agent?: any, runtimeModelSelection?: any, runtimeModelSelectionsByRuntime?: Record<string, any>) {
-  if (!agent) return "not-set";
-  const runtime = agent.runtime?.trim() || "not-set";
-  const runtimeSelection = runtimeModelSelectionsByRuntime?.[runtime];
-  const provider = agent.provider?.trim() || runtimeModelSelection?.provider?.trim() || runtimeSelection?.provider?.trim();
-  const model = agent.model?.trim() || runtimeModelSelection?.model?.trim() || runtimeSelection?.model?.trim();
-  return provider && model ? `${runtime} • ${provider}/${model}` : runtime;
-}
-
 function agentInitials(agent?: any) {
   if (agent?.beeRole === "queen") return "QB";
   const name = agent?.name?.trim() ?? "";
-  const initials = name
+  return name
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((part: string) => part.slice(0, 1).toUpperCase())
-    .join("");
-  return initials || "A";
+    .join("") || "A";
 }
 
 function selectedAgentIcon(agent?: any, beeRoleIconPath?: (role?: string, workerClass?: string) => string) {
@@ -84,8 +80,9 @@ function selectedAgentIcon(agent?: any, beeRoleIconPath?: (role?: string, worker
     || "/icons/worker-bee-general-v5.png";
 }
 
-function agentMenuIcon(agent?: any, beeRoleIconPath?: (role?: string, workerClass?: string) => string) {
-  return selectedAgentIcon(agent, beeRoleIconPath);
+function isFixtureChatMachine(machine: any) {
+  const identity = `${machine?.key ?? ""} ${machine?.name ?? ""}`.toLowerCase();
+  return /\b(?:hivemindos-)?e2e[-_0-9]/i.test(identity);
 }
 
 function agentMenuMachineLabel(machine: any, agent: any) {
@@ -100,30 +97,102 @@ function agentMenuMachineLabel(machine: any, agent: any) {
 function agentMenuStatusLabel(machine: any, agent: any) {
   if (machine?.key !== "unassigned") return agent?.name ?? "";
   if (agent?.telemetryUrl?.trim() || agent?.gatewayUrl?.trim() || agent?.a2aUrl?.trim()) {
-    return `${agent?.name ?? "Agent"} · chat route saved`;
+    return `${agent?.name ?? "Agent"} / chat route saved`;
   }
-  return `${agent?.name ?? "Agent"} · needs chat URL`;
+  return `${agent?.name ?? "Agent"} / needs chat URL`;
+}
+
+function messageKey(message: any, index: number) {
+  const role = String(message?.role ?? "message");
+  const source = String(message?.sourceSessionId ?? "");
+  const sourceIndex = Number.isFinite(message?.sourceIndex) ? String(message.sourceIndex) : "";
+  const createdAt = Number.isFinite(message?.createdAt) ? String(message.createdAt) : "";
+  return [source, sourceIndex, role, createdAt, index].filter(Boolean).join(":");
+}
+
+function messageText(message: any, chatDisplayContent?: (message: any) => string) {
+  const display = chatDisplayContent?.(message);
+  if (typeof display === "string" && display.trim()) return display;
+  return String(message?.content ?? message?.text ?? message?.body ?? "").trim();
+}
+
+function markdownText(text: string) {
+  return text
+    .replace(/^``([A-Za-z0-9_-]+)\s*$/gm, "```$1")
+    .replace(/^``\s*$/gm, "```");
+}
+
+function processText(events: any[] = []) {
+  return events
+    .slice(-12)
+    .map((event) => {
+      const label = String(event?.label ?? "event").trim();
+      const detail = String(event?.detail ?? "").trim();
+      return detail ? `${label}: ${detail}` : label;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+function normalizeSearchText(value?: string) {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function chatSearchSnippet(text: string, query: string) {
+  const trimmed = text.replace(/\s+/g, " ").trim();
+  if (!trimmed) return "";
+  const normalizedText = normalizeSearchText(trimmed);
+  const normalizedQuery = normalizeSearchText(query);
+  const queryIndex = normalizedQuery ? normalizedText.indexOf(normalizedQuery) : -1;
+  const start = queryIndex >= 0 ? Math.max(0, queryIndex - 56) : 0;
+  const end = Math.min(trimmed.length, start + 150);
+  return `${start > 0 ? "... " : ""}${trimmed.slice(start, end)}${end < trimmed.length ? " ..." : ""}`;
 }
 
 const PROCESS_TOOL_META: Record<string, { icon: string; color: string }> = {
-  bash: { icon: "terminal", color: "#A855F7" },
-  command: { icon: "terminal", color: "#A855F7" },
-  read: { icon: "file", color: "#94A3B8" },
-  file: { icon: "file", color: "#94A3B8" },
-  image: { icon: "image", color: "#38BDF8" },
-  edit: { icon: "edit", color: "#60A5FA" },
-  write: { icon: "edit", color: "#60A5FA" },
-  search: { icon: "search", color: "#FB923C" },
-  skill: { icon: "sparkles", color: "#2DD4BF" },
-  git: { icon: "git", color: "#F59E0B" },
-  status: { icon: "activity", color: "#2DD4BF" },
-  error: { icon: "alert", color: "#F87171" },
-  unknown: { icon: "hammer", color: "#94A3B8" },
+  bash: { icon: "terminal", color: "#a78bfa" },
+  command: { icon: "terminal", color: "#a78bfa" },
+  read: { icon: "file", color: "#94a3b8" },
+  file: { icon: "file", color: "#94a3b8" },
+  image: { icon: "image", color: "#38bdf8" },
+  edit: { icon: "edit", color: "#60a5fa" },
+  write: { icon: "edit", color: "#60a5fa" },
+  search: { icon: "search", color: "#fb923c" },
+  skill: { icon: "sparkles", color: "#2dd4bf" },
+  git: { icon: "git", color: "#f59e0b" },
+  status: { icon: "activity", color: "#2dd4bf" },
+  error: { icon: "alert", color: "#fb7185" },
+  unknown: { icon: "hammer", color: "#94a3b8" },
 };
+
+function normalizeProcessEvents(value: any) {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.events)) return value.events;
+  if (Array.isArray(value?.steps)) return value.steps;
+  return [];
+}
+
+function processDisplayEvents(events: any[] = []) {
+  return events.filter((event) => !/assistant started writing|assistant wrote in session|agent replied/i.test(String(event?.label ?? "")));
+}
+
+function processEventsAreActive(events: any[] = []) {
+  const visibleEvents = processDisplayEvents(events);
+  if (!visibleEvents.length) return false;
+  const lastEvent = visibleEvents[visibleEvents.length - 1];
+  const lastStatus = String(lastEvent?.status ?? "").trim().toLowerCase();
+  const lastText = `${String(lastEvent?.label ?? "").trim()} ${String(lastEvent?.detail ?? "").trim()}`.toLowerCase();
+  if (/\b(done|complete|completed|failed|failure|finished|settled|succeeded|cancelled|canceled)\b/.test(lastText)) return false;
+  return lastStatus !== "completed" && lastStatus !== "failed";
+}
 
 function processToolKey(event: any) {
   const text = `${event?.label ?? ""} ${event?.detail ?? ""}`.toLowerCase();
-  if (/assistant (wrote|started)|agent replied/.test(text)) return "assistant";
   if (/error|failed|interrupted|timed out/.test(text)) return "error";
   if (/git|commit|branch|origin\//.test(text)) return "git";
   if (/image|screenshot|vision/.test(text)) return "image";
@@ -132,7 +201,6 @@ function processToolKey(event: any) {
   if (/edit|write|patch|created|updated/.test(text)) return "edit";
   if (/grep|search|rg\b|find/.test(text)) return "search";
   if (/command|bash|shell|terminal|exit\s+\d+/.test(text)) return "bash";
-  if (/queued|attached|runtime|session|stream|waiting/.test(text)) return "status";
   if (/tool/.test(text)) return "unknown";
   return "status";
 }
@@ -162,8 +230,7 @@ function processFileTarget(event: any) {
   const mentioned = haystack.match(/(?:^|\s)([~./A-Za-z0-9_-]+\/[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)*\.[A-Za-z0-9]{1,8})\b/)?.[1]
     ?? haystack.match(/`([^`]+\.[A-Za-z0-9]{1,8})`/)?.[1];
   const target = structured ?? gitStatus ?? mentioned ?? "";
-  if (!target) return "";
-  return target.split(/[)\],]/)[0].replace(/^["'`]+|["'`]+$/g, "");
+  return target ? target.split(/[)\],]/)[0].replace(/^["'`]+|["'`]+$/g, "") : "";
 }
 
 function processDisplayLabel(event: any) {
@@ -172,58 +239,33 @@ function processDisplayLabel(event: any) {
   return label;
 }
 
-function stableMessageHash(value: string) {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
-  }
-  return Math.abs(hash).toString(36);
+function processTimeLabel(value: unknown) {
+  const timestamp = typeof value === "number" ? value : Date.now();
+  return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-function chatMessageBaseRenderKey(message: any, index: number) {
-  const sourceSessionId = String(message?.sourceSessionId ?? "").trim();
-  const sourceIndex = Number.isFinite(message?.sourceIndex) ? String(message.sourceIndex) : "";
-  const role = String(message?.role ?? "message");
-  const content = String(message?.content ?? "").replace(/\s+/g, " ").trim();
-  const contentHash = stableMessageHash(content);
-  if (sourceSessionId && sourceIndex) return `${sourceSessionId}:${sourceIndex}:${role}:${contentHash}`;
-  const createdAt = Number.isFinite(message?.createdAt) ? String(message.createdAt) : "";
-  if (createdAt) return `${role}:${createdAt}:${index}:${contentHash}`;
-  return `${role}:${index}:${contentHash}`;
-}
-
-function chatMessageRenderKeys(messages: any[]) {
-  const seen = new Map<string, number>();
-  return messages.map((message, index) => {
-    const baseKey = chatMessageBaseRenderKey(message, index);
-    const occurrence = seen.get(baseKey) ?? 0;
-    seen.set(baseKey, occurrence + 1);
-    return occurrence ? `${baseKey}:duplicate-${occurrence}` : baseKey;
-  });
-}
-
-function processEventsAreActive(events: any[] = []) {
-  if (!events.length) return false;
-  const visibleEvents = processDisplayEvents(events);
-  if (!visibleEvents.length) return false;
-  const lastEvent = visibleEvents[visibleEvents.length - 1];
-  const lastStatus = String(lastEvent?.status ?? "").trim().toLowerCase();
-  const lastLabel = String(lastEvent?.label ?? "").trim().toLowerCase();
-  const lastText = `${lastLabel} ${String(lastEvent?.detail ?? "").trim().toLowerCase()}`;
-  if (/assistant started writing|assistant wrote in session|agent replied/.test(lastLabel)) return false;
-  if (/\b(done|complete|completed|failed|failure|finished|settled|succeeded|cancelled|canceled)\b/.test(lastText)) return false;
-  return lastStatus !== "completed" && lastStatus !== "failed";
-}
-
-function processDisplayEvents(events: any[] = []) {
-  return events.filter((event) => !/assistant started writing|assistant wrote in session|agent replied/i.test(String(event?.label ?? "")));
-}
-
-function AgentProcessPanel({ Activity, ChevronDown, ChevronUp, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal, active = false, agentIconSrc, agentInitials, chatClass, events = [] }: any) {
+function AgentProcessPanel(props: any) {
+  const {
+    Activity,
+    ChevronDown,
+    ChevronUp,
+    CircleAlert,
+    FileText,
+    GitBranch,
+    Hammer,
+    Image,
+    Pencil,
+    Search,
+    Sparkles,
+    Terminal,
+    active = false,
+    events = [],
+  } = props;
   const [expanded, setExpanded] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const visibleEvents = processDisplayEvents(events);
   const latestActive = active && processEventsAreActive(visibleEvents);
+  const mirosharkProcess = getMiroSharkProcessSummary(visibleEvents, latestActive);
   const open = latestActive || expanded;
   const latestEvent = visibleEvents[visibleEvents.length - 1];
   const latestEventSignature = [
@@ -233,266 +275,263 @@ function AgentProcessPanel({ Activity, ChevronDown, ChevronUp, CircleAlert, File
     latestEvent?.detail ?? "",
     latestEvent?.status ?? "",
   ].join("|");
+
   useEffect(() => {
     const node = scrollRef.current;
     if (!node) return;
     node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
   }, [open, latestEventSignature]);
+
   if (!visibleEvents.length) return null;
-  const Icon = open ? ChevronUp : ChevronDown;
+
+  const ToggleIcon = open ? ChevronUp : ChevronDown;
   const iconProps = { Activity, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal };
+
   return (
-    <section className={chatClass("processPanel", open && "expanded")} aria-label="Agent process">
+    <section className={hiveClass("hiveProcessPanel", open && "expanded")} aria-label="Agent process">
       <button
         type="button"
-        className={chatClass("processToggle")}
+        className={hiveClass("hiveProcessToggle")}
         onClick={() => setExpanded((current) => !current)}
         aria-expanded={open}
       >
-        <span>Process</span>
+        <span>{mirosharkProcess ? "MiroShark" : "Process"}</span>
         <small>{visibleEvents.length} event{visibleEvents.length === 1 ? "" : "s"}</small>
-        {Icon ? <Icon aria-hidden="true" /> : null}
+        {ToggleIcon ? <ToggleIcon aria-hidden="true" /> : null}
       </button>
-      {open ? <div className={chatClass("processScroll")} ref={scrollRef}>
-        {visibleEvents.map((event: any, index: number) => {
-          const toolKey = processToolKey(event);
-          const isAssistant = toolKey === "assistant";
-          const isActive = index === visibleEvents.length - 1 && latestActive;
-          const meta = PROCESS_TOOL_META[toolKey] ?? PROCESS_TOOL_META.unknown;
-          const BadgeIcon = processIconComponent(meta.icon, iconProps);
-          const fileTarget = processFileTarget(event);
-          return (
-          <div className={chatClass("processRow", isAssistant && "assistant", isActive && "active")} key={`${event.at}-${index}`}>
-            <time>{new Date(event.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time>
-            <div className={chatClass("processBadge", isAssistant && agentIconSrc && "avatar", isActive && "active")} style={{ "--process-accent": meta.color, ...(isAssistant && agentIconSrc ? { backgroundImage: `url(${agentIconSrc})` } : {}) } as any} aria-hidden="true">
-              {isActive ? (
-                <LottiePlayer src="/animations/Honey%20bee.lottie" size={24} ariaLabel="Active tool running" />
-              ) : isAssistant && agentIconSrc ? (
-                null
-              ) : isAssistant ? (
-                <b>{agentInitials}</b>
-              ) : BadgeIcon ? (
-                <BadgeIcon />
-              ) : null}
-            </div>
-            <div className={chatClass("processBody")}>
-              <div className={chatClass("processMetaLine")}>
-                <strong>{processDisplayLabel(event)}</strong>
-                {fileTarget ? <code>{fileTarget}</code> : null}
+      {open ? (
+        <>
+        {mirosharkProcess ? <MiroSharkProcessCard summary={mirosharkProcess} /> : null}
+        <div className={hiveClass("hiveProcessScroll")} ref={scrollRef}>
+          {visibleEvents.map((event: any, index: number) => {
+            const toolKey = processToolKey(event);
+            const meta = PROCESS_TOOL_META[toolKey] ?? PROCESS_TOOL_META.unknown;
+            const BadgeIcon = processIconComponent(meta.icon, iconProps);
+            const isActive = index === visibleEvents.length - 1 && latestActive;
+            const fileTarget = processFileTarget(event);
+            return (
+              <div className={hiveClass("hiveProcessRow", isActive && "active")} key={`${event.at ?? "event"}-${index}`}>
+                <time>{processTimeLabel(event.at)}</time>
+                <div className={hiveClass("hiveProcessBadge", isActive && "active")} style={{ "--process-accent": meta.color } as any} aria-hidden="true">
+                  {BadgeIcon ? <BadgeIcon /> : null}
+                </div>
+                <div className={hiveClass("hiveProcessBody")}>
+                  <div className={hiveClass("hiveProcessMetaLine")}>
+                    <strong>{processDisplayLabel(event)}</strong>
+                    {fileTarget ? <code>{fileTarget}</code> : null}
+                  </div>
+                  {event.detail ? <span>{event.detail}</span> : null}
+                </div>
               </div>
-              {event.detail ? <span>{event.detail}</span> : null}
-            </div>
-          </div>
-          );
-        })}
-      </div> : null}
+            );
+          })}
+        </div>
+        </>
+      ) : null}
     </section>
   );
 }
 
-function ChatHistorySkeleton() {
-  return (
-    <div className="grid min-h-[360px] w-full max-w-[min(100%,1080px)] gap-6" aria-label="Loading chat history" aria-busy="true">
-      {[0, 1, 2, 3].map((index) => (
-        <div className={`flex w-full items-start gap-3.5 ${index % 2 === 1 ? "justify-end" : ""}`} key={index} aria-hidden="true">
-          {index % 2 === 0 ? <span className="h-9 w-9 shrink-0 animate-pulse rounded-[14px] bg-white/10" /> : null}
-          <span className={`grid min-h-24 gap-2.5 rounded-3xl border border-white/10 bg-white/5 p-4.5 ${index % 2 === 1 ? "w-[min(58%,620px)] rounded-tr-[7px] border-teal-300/15 bg-teal-300/10" : "w-[min(72%,760px)] rounded-tl-[7px]"}`}>
-            <span className="h-2.5 w-[68%] animate-pulse rounded-full bg-white/10" />
-            <span className="h-2.5 w-[92%] animate-pulse rounded-full bg-white/10" />
-            <span className="h-2.5 w-[42%] animate-pulse rounded-full bg-white/10" />
-          </span>
-        </div>
-      ))}
-    </div>
-  );
+function friendlyThreadLabel(rawLabel: string, directoryLabel?: string) {
+  const label = rawLabel.trim();
+  if (directoryLabel?.trim()) return directoryLabel.trim();
+  if (!label) return "agent chat";
+  if (label.startsWith("task-")) return "task chat";
+  if (label.startsWith("folder-")) return "folder chat";
+  if (label.startsWith("machine-")) return "machine chat";
+  if (label.startsWith("agent-")) return "agent chat";
+  return "agent chat";
+}
+
+function renderInline(text: string) {
+  const out: any[] = [];
+  const re = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  let last = 0;
+  let key = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text))) {
+    if (match.index > last) out.push(text.slice(last, match.index));
+    const token = match[0];
+    if (token.startsWith("**")) {
+      out.push(<strong key={`strong-${key++}`}>{token.slice(2, -2)}</strong>);
+    } else {
+      out.push(<code key={`code-${key++}`}>{token.slice(1, -1)}</code>);
+    }
+    last = re.lastIndex;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+function makeMetricRows(selectedAgent: any, runtimeLabel: string, providerLabel: string, modelLabel: string, machineLabel: string) {
+  return [
+    ["Runtime", runtimeLabel],
+    ["Provider", providerLabel],
+    ["Model", modelLabel],
+    ["Machine", machineLabel],
+    ["Agent", selectedAgent?.name ?? "No agent selected"],
+  ];
 }
 
 export function ChatPanel(props: any) {
-  const { Activity, AgentResponseLoader, AlignLeft, Button, ChatMarkdown, Check, ChevronDown, ChevronUp, CircleAlert, ComposerField, Copy, FileText, Folder, GitBranch, Hammer, Image, KanbanSquare, LoaderCircle, MessageAttachments, MessageSquare, Monitor, Pencil, RUNTIME_LABELS, Search, Send, Sparkles, Terminal, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Upload, activeView, aeonEnvKeys, aeonEnvSyncStatus, aeonEnvSyncing, attachChatDirectory, attachChatRecentDirectory, attachmentError, attachmentMenuOpen, attachmentMenuRef, beeRoleIconPath, busy, changeChatWorkingDirectory, chatAttachments, chatAutoScrollRef, chatClass, chatContextMenu, chatContextMenuRef, chatDirectories, chatDisplayContent, chatFileInputRef, chatImageInputRef, chatKanbanGeneration, chatSidebarTree, checkStatus, dismissChatKanbanGeneration, displayAgents, expandedChatFolders, fleetClass, flushingChatQueueId, formatAgentEnvText, formatRelativeTime, generateKanbanTaskFromChat, handleChatFileChange, handleChatImageChange, hasStreamingChunk, lastAssistant, logClientTelemetry, machineGroups, messagesEndRef, messagesScrollRef, parseAgentEnvText, queuedChatMessages = [], recentDirectories, recentDirectoriesExpanded, recording, refreshRuntimeIntegrations, removeChatAttachment, removeChatDirectory, removeQueuedChatMessage, runRuntimeIntegrationAction, runtimeIntegrationBusy, runtimeModelSelection, runtimeModelSelectionsByRuntime, selectedAgent, selectedChatDirectory, selectedChatHistoryLoading, selectedChatLeafKey, selectedChatMachine, selectedChatProcess, selectedChatStorageKey, sendMessage, sendQueuedChatMessageNow, sessionNotice, setAeonEnvKeys, setAttachmentMenuOpen, setChatContextMenu, setExpandedChatFolders, setRecentDirectoriesExpanded, setStatus, setStatusAgentId, setText, startAgentChat, startAudioRecording, status, statusAgentId, stopAudioRecording, switchRuntime, syncAeonEnvToGitHub, text, updateAgent, updateChatAutoScroll, vaultClass, visibleMessages, voiceBands, voiceTarget, voiceTranscript } = props;
-  const [openKanbanTaskMenuKey, setOpenKanbanTaskMenuKey] = useState("");
-  const [copiedMessageKey, setCopiedMessageKey] = useState("");
+  const {
+    Activity,
+    AgentResponseLoader,
+    AlignLeft,
+    Check,
+    ChevronDown,
+    ChevronRight,
+    ChevronUp,
+    CircleAlert,
+    FileText,
+    Folder,
+    FolderOpen,
+    GitBranch,
+    Hammer,
+    Image,
+    LoaderCircle,
+    MessageSquare,
+    Monitor,
+    Pencil,
+    Plus,
+    RefreshCcw,
+    Search,
+    Send,
+    Sparkles,
+    Terminal,
+    activeView,
+    attachChatDirectory,
+    attachChatRecentDirectory,
+    attachmentError,
+    attachmentMenuOpen,
+    attachmentMenuRef,
+    beeRoleIconPath,
+    busy,
+    changeChatWorkingDirectory,
+    chatAttachments = [],
+    chatAutoScrollRef,
+    chatDirectories = [],
+    chatDisplayContent,
+    chatFileInputRef,
+    chatImageInputRef,
+    chatKanbanGeneration,
+    chatSidebarTree = [],
+    chatStreamingByKey = {},
+    checkStatus,
+    dismissChatKanbanGeneration,
+    expandedChatFolders,
+    flushingChatQueueId,
+    formatRelativeTime,
+    handleChatFileChange,
+    handleChatFileReferenceDrop,
+    handleChatImageChange,
+    hasStreamingChunk,
+    messagesEndRef,
+    messagesScrollRef,
+    machineGroups = [],
+    queuedChatMessages = [],
+    recentDirectories,
+    recentDirectoriesExpanded,
+    recording,
+    refreshRuntimeIntegrations,
+    removeChatAttachment,
+    removeChatDirectory,
+    removeQueuedChatMessage,
+    runRuntimeIntegrationAction,
+    runtimeIntegrationBusy,
+    runtimeModelSelectionsByRuntime,
+    selectedAgent,
+    selectedChatDirectory,
+    selectedChatHistoryLoading,
+    selectedChatLeafKey,
+    selectedChatMachine,
+    selectedChatProcess,
+    selectedChatStorageKey,
+    sendMessage,
+    sendQueuedChatMessageNow,
+    startAgentChat,
+    setAttachmentMenuOpen,
+    setExpandedChatFolders,
+    setRecentDirectoriesExpanded,
+    setStatusAgentId,
+    setText,
+    startAudioRecording,
+    status,
+    statusAgentId,
+    stopAudioRecording,
+    text,
+    updateAgent,
+    updateChatAutoScroll,
+    visibleMessages = [],
+    voiceBands,
+    voiceTarget,
+    voiceTranscript,
+    ChatMarkdown,
+    ComposerField,
+  } = props;
+
+  const [shelfOpen, setShelfOpen] = useState(false);
+  const [generalOpen, setGeneralOpen] = useState(true);
+  const [machinesOpen, setMachinesOpen] = useState(true);
+  const [openMachines, setOpenMachines] = useState<Record<string, boolean>>({});
+  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
+  const [statusChecking, setStatusChecking] = useState(false);
   const [agentMode, setAgentMode] = useState<"plan" | "act">("act");
-  const [chatHistoryOpen, setChatHistoryOpen] = useState(false);
-  const [statusCheckingAgentId, setStatusCheckingAgentId] = useState("");
-  const lastScrollTelemetryRef = useRef({ at: 0, top: -1, height: -1 });
-  const chatScrollTelemetryStateRef = useRef<Record<string, unknown>>({});
-  const pendingAutoScrollRef = useRef<{ frame: number | null; timeouts: number[] }>({ frame: null, timeouts: [] });
-  const lastAutoScrollSignatureRef = useRef("");
-  const previousAutoScrollTargetRef = useRef("");
-  const previousHistoryLoadingRef = useRef(Boolean(selectedChatHistoryLoading));
+  const [agentMenuOpen, setAgentMenuOpen] = useState(false);
+  const [chatSearchOpen, setChatSearchOpen] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [stickyChatProcess, setStickyChatProcess] = useState<any[]>([]);
+  const [stickyChatProcessTargetKey, setStickyChatProcessTargetKey] = useState("");
+  const scrollNodeRef = useRef<HTMLDivElement | null>(null);
+  const agentMenuRef = useRef<HTMLDivElement | null>(null);
+  const chatSearchInputRef = useRef<HTMLInputElement | null>(null);
   const stickyChatProcessSignatureRef = useRef("");
-  const runtimeLabel = selectedAgent ? RUNTIME_LABELS[selectedAgent.runtime] ?? headerValueLabel(selectedAgent.runtime) : "Not set";
-  const providerLabel = selectedAgent ? headerValueLabel(selectedAgent.provider ?? runtimeModelSelection?.provider) : "Not set";
-  const modelLabel = selectedAgent ? modelValueLabel(selectedAgent.model ?? runtimeModelSelection?.model) : "Not set";
-  const runtimeIdentity = runtimeIdentityLabel(selectedAgent, runtimeModelSelection, runtimeModelSelectionsByRuntime);
-  const selectedAgentInitials = agentInitials(selectedAgent);
-  const selectedAgentIconSrc = selectedAgentIcon(selectedAgent, beeRoleIconPath);
-  const selectedStatusChecking = Boolean(selectedAgent?.id && statusCheckingAgentId === selectedAgent.id);
-  const latestVisibleMessage = visibleMessages?.[visibleMessages.length - 1];
-  const visibleMessageKeys = useMemo(
-    () => chatMessageRenderKeys(visibleMessages ?? []),
-    [visibleMessages],
-  );
+  const deferredChatSearchQuery = useDeferredValue(chatSearchQuery);
+  const liveProcessEvents = normalizeProcessEvents(selectedChatProcess);
+  const liveProcessSignature = liveProcessEvents
+    .map((event: any) => [event?.at, event?.label, event?.detail, event?.status].join("\u001f"))
+    .join("\u001e");
+  const chatProcessScopeKey = `${selectedChatStorageKey || ""}\u001f${selectedChatLeafKey || ""}`;
+  const activeTurnProcessTargetKey = (() => {
+    for (let index = visibleMessages.length - 1; index >= 0; index -= 1) {
+      if (visibleMessages[index]?.role === "user") {
+        return `${chatProcessScopeKey}\u001fuser\u001f${messageKey(visibleMessages[index], index)}`;
+      }
+    }
+    for (let index = visibleMessages.length - 1; index >= 0; index -= 1) {
+      const message = visibleMessages[index];
+      if (message?.role === "assistant") return `${chatProcessScopeKey}\u001fassistant\u001f${messageKey(message, index)}`;
+    }
+    return "";
+  })();
+
   useEffect(() => {
-    if (selectedChatProcess?.length) {
-      const signature = selectedChatProcess
-        .map((event: any) => [event?.at, event?.label, event?.detail, event?.status].join("\u001f"))
-        .join("\u001e");
-      if (stickyChatProcessSignatureRef.current !== signature) {
-        stickyChatProcessSignatureRef.current = signature;
-        setStickyChatProcess(selectedChatProcess);
+    const events = normalizeProcessEvents(selectedChatProcess);
+    if (events.length) {
+      if (stickyChatProcessSignatureRef.current !== liveProcessSignature) {
+        stickyChatProcessSignatureRef.current = liveProcessSignature;
+        setStickyChatProcess(events);
+        setStickyChatProcessTargetKey(activeTurnProcessTargetKey);
       }
       return undefined;
     }
-    if (busy) return undefined;
-    const timeout = window.setTimeout(() => {
-      stickyChatProcessSignatureRef.current = "";
-      setStickyChatProcess([]);
-    }, 1_500);
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [busy, selectedChatProcess]);
-  const processEventsForDisplay = selectedChatProcess?.length ? selectedChatProcess : stickyChatProcess;
-  const latestVisibleDisplay = latestVisibleMessage ? chatDisplayContent(latestVisibleMessage) : "";
-  const latestVisibleHasMessageProcess = Boolean(
-    latestVisibleMessage?.role === "assistant"
-    && Array.isArray(latestVisibleMessage.processEvents)
-    && latestVisibleMessage.processEvents.length,
-  );
-  const latestVisibleHasInlineProcess = Boolean(
-    latestVisibleMessage?.role === "assistant"
-    && !latestVisibleDisplay.trim()
-    && processEventsForDisplay.length,
-  );
-  const latestVisibleCanHostLiveProcess = Boolean(
-    latestVisibleMessage?.role === "assistant"
-    && processEventsForDisplay.length
-    && !latestVisibleHasMessageProcess,
-  );
-  const processIsActive = processEventsAreActive(processEventsForDisplay);
-  const showDetachedProcess = Boolean(
-    processEventsForDisplay.length
-    && !latestVisibleHasInlineProcess
-    && !latestVisibleHasMessageProcess
-    && !latestVisibleCanHostLiveProcess
-    && (busy || processIsActive || latestVisibleMessage?.role === "user" || latestVisibleMessage?.role === "assistant" || selectedChatHistoryLoading),
-  );
-  const selectedChatMachineKey = selectedChatMachine
-    ? [
-      selectedChatMachine.key,
-      selectedChatMachine.name,
-      selectedChatMachine.collectorUrl,
-      selectedChatMachine.version?.appDir,
-    ].filter(Boolean).join("|")
-    : "";
-  useEffect(() => {
-    chatScrollTelemetryStateRef.current = {
-      agentId: selectedAgent?.id ?? null,
-      agentName: selectedAgent?.name ?? null,
-      runtime: selectedAgent?.runtime ?? null,
-      leafKey: selectedChatLeafKey ?? null,
-      storageKey: selectedChatStorageKey ?? null,
-      messageCount: visibleMessages.length,
-      selectedChatHistoryLoading: Boolean(selectedChatHistoryLoading),
-    };
-  }, [selectedAgent?.id, selectedAgent?.name, selectedAgent?.runtime, selectedChatHistoryLoading, selectedChatLeafKey, selectedChatStorageKey, visibleMessages.length]);
-  const logChatScrollTelemetry = useCallback((type: string, element: HTMLDivElement, payload: Record<string, unknown> = {}) => {
-    const state = chatScrollTelemetryStateRef.current;
-    const storageKey = typeof state.storageKey === "string" ? state.storageKey : undefined;
-    logClientTelemetry?.(type, {
-      ...state,
-      scrollTop: element.scrollTop,
-      scrollHeight: element.scrollHeight,
-      clientHeight: element.clientHeight,
-      autoScroll: Boolean(chatAutoScrollRef?.current),
-      ...payload,
-    }, { threadId: storageKey });
-  }, [chatAutoScrollRef, logClientTelemetry]);
-  const clearPendingAutoScroll = useCallback(() => {
-    const pending = pendingAutoScrollRef.current;
-    if (pending.frame !== null) window.cancelAnimationFrame(pending.frame);
-    pending.timeouts.forEach((timeout) => window.clearTimeout(timeout));
-    pendingAutoScrollRef.current = { frame: null, timeouts: [] };
-  }, []);
-  const scheduleChatAutoScroll = useCallback((reason: string) => {
-    const signature = [
-      selectedChatStorageKey,
-      selectedChatLeafKey,
-      selectedAgent?.id ?? "",
-      selectedChatMachineKey,
-      visibleMessages.length,
-      selectedChatHistoryLoading ? "loading" : "ready",
-      busy ? "busy" : "idle",
-      reason,
-    ].join("|");
-    if (lastAutoScrollSignatureRef.current === signature) return;
-    const element = messagesScrollRef?.current;
-    if (!element || (selectedChatHistoryLoading && visibleMessages.length === 0)) return;
-    lastAutoScrollSignatureRef.current = signature;
-    clearPendingAutoScroll();
-    const scrollToBottom = () => {
-      const current = messagesScrollRef?.current;
-      if (!current) return;
-      current.scrollTop = current.scrollHeight;
-      logChatScrollTelemetry("chat.scroll.autoscroll", current, { reason });
-    };
-    pendingAutoScrollRef.current = {
-      frame: window.requestAnimationFrame(scrollToBottom),
-      timeouts: [],
-    };
-  }, [busy, clearPendingAutoScroll, logChatScrollTelemetry, messagesScrollRef, selectedAgent?.id, selectedChatHistoryLoading, selectedChatLeafKey, selectedChatMachineKey, selectedChatStorageKey, visibleMessages.length]);
-  const setMessagesScrollNode = useCallback((node: HTMLDivElement | null) => {
-    messagesScrollRef.current = node;
-    if (!node) {
-      clearPendingAutoScroll();
-      return;
-    }
-    chatAutoScrollRef.current = true;
-    if (!selectedChatHistoryLoading && visibleMessages.length > 0) {
-      node.scrollTop = node.scrollHeight;
-    }
-    logChatScrollTelemetry("chat.scroll.node_bound", node);
-  }, [chatAutoScrollRef, clearPendingAutoScroll, logChatScrollTelemetry, messagesScrollRef, selectedChatHistoryLoading, visibleMessages.length]);
-  const handleMessagesScroll = useCallback((event: { currentTarget: HTMLDivElement }) => {
-    updateChatAutoScroll?.(event);
-    const element = event.currentTarget;
-    const now = Date.now();
-    const last = lastScrollTelemetryRef.current;
-    const topDelta = Math.abs(element.scrollTop - last.top);
-    const heightDelta = Math.abs(element.scrollHeight - last.height);
-    if (now - last.at < 250 && topDelta < 24 && heightDelta < 24) return;
-    lastScrollTelemetryRef.current = { at: now, top: element.scrollTop, height: element.scrollHeight };
-    logChatScrollTelemetry("chat.scroll.event", element, {
-      topDelta: last.top < 0 ? null : element.scrollTop - last.top,
-      heightDelta: last.height < 0 ? null : element.scrollHeight - last.height,
-    });
-  }, [logChatScrollTelemetry, updateChatAutoScroll]);
-  async function handleCheckStatus() {
-    if (!selectedAgent || selectedStatusChecking) return;
-    setStatusCheckingAgentId(selectedAgent.id);
-    try {
-      await checkStatus();
-    } finally {
-      setStatusCheckingAgentId("");
-    }
-  }
-  const selectedAgentIsQueen = selectedAgent?.beeRole === "queen";
+    return undefined;
+  }, [activeTurnProcessTargetKey, liveProcessSignature, selectedChatProcess]);
+
   const selectedRuntimeModelSelection = selectedAgent ? runtimeModelSelectionsByRuntime?.[selectedAgent.runtime] : undefined;
   const chatModelProviders = selectedRuntimeModelSelection?.providers ?? [];
   const chatCurrentProvider = selectedAgent ? (selectedAgent.provider?.trim() || selectedRuntimeModelSelection?.provider || "") : "";
   const chatCurrentModel = selectedAgent ? (selectedAgent.model?.trim() || selectedRuntimeModelSelection?.model || "") : "";
   const modelPickerEnabled = Boolean(selectedAgent) && MODEL_SWITCHABLE_RUNTIMES.includes(selectedAgent?.runtime);
+
   function selectChatModel(provider: string, model: string) {
     if (!selectedAgent) return;
-    updateAgent({ provider, model });
-    // Hermes/OpenClaw keep the active model in their own runtime config, so push
-    // the change through set-model too; other runtimes read it from the profile.
+    updateAgent?.({ provider, model });
     if (selectedAgent.runtime === "hermes" || selectedAgent.runtime === "openclaw") {
       void runRuntimeIntegrationAction?.("set-model", { provider, model }, { ...selectedAgent, provider, model });
     }
   }
+
   const modelPicker = modelPickerEnabled ? {
     label: shortModelLabel(chatCurrentModel),
     provider: chatCurrentProvider,
@@ -509,729 +548,696 @@ export function ChatPanel(props: any) {
       if (selectedAgent) void refreshRuntimeIntegrations?.(selectedAgent);
     },
   } : undefined;
-  const shouldLoadRuntimeIdentity = selectedAgent
-    && activeView === "chat"
-    && !selectedAgent.provider?.trim()
-    && !selectedAgent.model?.trim()
-    && !selectedRuntimeModelSelection
-    && ["hermes", "openclaw"].includes(selectedAgent.runtime);
+
   useEffect(() => {
-    if (!shouldLoadRuntimeIdentity) return;
+    if (!selectedAgent || selectedAgent.provider?.trim() || selectedAgent.model?.trim() || selectedRuntimeModelSelection) return;
+    if (!["hermes", "openclaw"].includes(selectedAgent.runtime)) return;
     void refreshRuntimeIntegrations?.(selectedAgent);
-  }, [refreshRuntimeIntegrations, selectedAgent, shouldLoadRuntimeIdentity]);
-  useEffect(() => {
-    if (chatKanbanGeneration?.phase !== "done") return undefined;
-    const key = chatKanbanGeneration.key;
-    const timer = window.setTimeout(() => {
-      dismissChatKanbanGeneration?.(key);
-      setOpenKanbanTaskMenuKey((current) => current === key ? "" : current);
-    }, 2600);
-    return () => window.clearTimeout(timer);
-  }, [chatKanbanGeneration, dismissChatKanbanGeneration]);
+  }, [refreshRuntimeIntegrations, selectedAgent, selectedRuntimeModelSelection]);
 
   useEffect(() => {
-    const targetKey = [selectedAgent?.id ?? "", selectedChatMachineKey, selectedChatStorageKey].join("|");
-    if (previousAutoScrollTargetRef.current === targetKey) return;
-    previousAutoScrollTargetRef.current = targetKey;
-    lastAutoScrollSignatureRef.current = "";
-    chatAutoScrollRef.current = true;
-    if (!selectedChatHistoryLoading && visibleMessages.length > 0) {
-      scheduleChatAutoScroll("agent_or_machine_changed");
-    }
-  }, [chatAutoScrollRef, scheduleChatAutoScroll, selectedAgent?.id, selectedChatHistoryLoading, selectedChatMachineKey, selectedChatStorageKey, visibleMessages.length]);
-
-  useEffect(() => {
-    const wasLoading = previousHistoryLoadingRef.current;
-    previousHistoryLoadingRef.current = Boolean(selectedChatHistoryLoading);
-    if (!chatAutoScrollRef?.current || selectedChatHistoryLoading || visibleMessages.length === 0) return;
-    scheduleChatAutoScroll(wasLoading ? "history_loaded" : "message_count_or_busy_changed");
-  }, [busy, chatAutoScrollRef, scheduleChatAutoScroll, selectedChatHistoryLoading, visibleMessages.length]);
-
-  useEffect(() => clearPendingAutoScroll, [clearPendingAutoScroll]);
-
-  function dismissKanbanPopover(messageKey: string) {
-    dismissChatKanbanGeneration?.(messageKey);
-    setOpenKanbanTaskMenuKey((current) => current === messageKey ? "" : current);
-  }
-
-  function copyAssistantResponse(messageKey: string, content: string) {
-    void navigator.clipboard?.writeText(content).then(() => {
-      setCopiedMessageKey(messageKey);
-      window.setTimeout(() => setCopiedMessageKey((current) => current === messageKey ? "" : current), 1400);
+    const node = scrollNodeRef.current;
+    if (!node || selectedChatHistoryLoading) return;
+    if (chatAutoScrollRef) chatAutoScrollRef.current = true;
+    window.requestAnimationFrame(() => {
+      node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
     });
+  }, [busy, chatAutoScrollRef, selectedChatHistoryLoading, selectedChatLeafKey, selectedChatStorageKey, visibleMessages.length]);
+
+  useEffect(() => {
+    if (!agentMenuOpen) return undefined;
+    function closeOnOutsidePointer(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (agentMenuRef.current?.contains(target)) return;
+      setAgentMenuOpen(false);
+    }
+    window.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => window.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [agentMenuOpen]);
+
+  useEffect(() => {
+    if (!chatSearchOpen) return;
+    window.requestAnimationFrame(() => chatSearchInputRef.current?.focus());
+  }, [chatSearchOpen]);
+
+  const runtimeLabel = titleCaseLabel(selectedAgent?.runtime);
+  const providerLabel = titleCaseLabel(chatCurrentProvider);
+  const modelLabel = chatCurrentModel?.trim() || "Not set";
+  const machineLabel = selectedChatMachine?.name ?? selectedAgent?.machineName ?? "This Mac";
+  const runtimeIdentity = selectedAgent ? [
+    selectedAgent.runtime?.trim() || "runtime",
+    chatCurrentProvider && chatCurrentModel ? `${chatCurrentProvider}/${chatCurrentModel}` : "",
+  ].filter(Boolean).join(" / ") : "no runtime";
+  const stateKey = !selectedAgent
+    ? "setup"
+    : statusAgentId === selectedAgent.id && status && status.ok === false
+      ? "failed"
+      : busy
+        ? "working"
+        : "ready";
+  const state = STATE_LABEL[stateKey] ?? STATE_LABEL.ready;
+  const iconSrc = selectedAgentIcon(selectedAgent, beeRoleIconPath);
+  const activeThreadLabel = selectedChatLeafKey || selectedChatStorageKey || "agent chat";
+  const displayThreadLabel = friendlyThreadLabel(activeThreadLabel, selectedChatDirectory);
+  const headerMetaLabel = selectedAgent
+    ? [runtimeIdentity, machineLabel].filter(Boolean).join(" / ")
+    : "Connect a machine and choose an agent to start chatting.";
+  const hasQueued = queuedChatMessages.length > 0;
+  const processEventsForDisplay = liveProcessEvents.length ? liveProcessEvents : stickyChatProcess;
+  const processEventsTargetKey = liveProcessEvents.length ? activeTurnProcessTargetKey : stickyChatProcessTargetKey;
+  const activeChatTaskRunning = busy || processEventsAreActive(processEventsForDisplay);
+  const runningChatStorageKeys = useMemo(() => new Set(Object.keys(chatStreamingByKey ?? {})), [chatStreamingByKey]);
+  const runningChatIdentityKeys = useMemo(() => new Set(Object.values(chatStreamingByKey ?? {})
+    .map((stream: any) => `${stream?.agentId ?? ""}\u001f${stream?.leafKey || `agent-${stream?.agentId ?? ""}`}`)
+    .filter((key) => !key.startsWith("\u001f"))), [chatStreamingByKey]);
+  const liveOutput = processText(processEventsForDisplay);
+  const pendingAssistantBubbleVisible = busy && !hasStreamingChunk && visibleMessages.some((message: any, index: number) => (
+    index === visibleMessages.length - 1
+    && message?.role === "assistant"
+    && !messageText(message, chatDisplayContent)
+  ));
+  const metrics = makeMetricRows(selectedAgent, runtimeLabel, providerLabel, modelLabel, machineLabel);
+  const generalMachine = useMemo(() => chatSidebarTree.find((machine: any) => machine.key === "unassigned"), [chatSidebarTree]);
+  const generalChats = useMemo(() => (
+    (generalMachine?.folders ?? [])
+      .flatMap((folder: any) => (folder.chats ?? []).map((chat: any) => ({ ...chat, folder, machine: generalMachine })))
+      .slice(0, 8)
+  ), [generalMachine]);
+  const machinesWithChats = useMemo(() => (
+    chatSidebarTree
+      .filter((machine: any) => machine.key !== "unassigned")
+      .map((machine: any) => {
+        const folders = (machine.folders ?? []).filter((folder: any) => folder.active || folder.onStartChat || (folder.chats?.length ?? 0) > 0);
+        const rosterAgentCount = machineGroups.find((group: any) => group.key === machine.key)?.agents?.length ?? 0;
+        return { ...machine, folders, rosterAgentCount };
+      })
+      .filter((machine: any) => !isFixtureChatMachine(machine) && ((machine.folders?.length ?? 0) > 0 || Boolean(machine.onStartChat) || machine.rosterAgentCount > 0))
+  ), [chatSidebarTree, machineGroups]);
+  const defaultChatMachine = machinesWithChats.find((machine: any) => machine.key === selectedChatMachine?.key && machine.onStartChat)
+    ?? machinesWithChats.find((machine: any) => machine.name === "This Mac" && machine.onStartChat)
+    ?? machinesWithChats.find((machine: any) => machine.onStartChat)
+    ?? generalMachine;
+  const agentMenuMachines = machinesWithChats
+    .map((machine: any) => ({
+      machine,
+      agents: (machineGroups.find((group: any) => group.key === machine.key)?.agents ?? []).filter((agent: any) => agent?.id),
+    }))
+    .filter((item: any) => item.agents.length > 0);
+  const chatSearchIndex = useMemo(() => {
+    if (!chatSearchOpen) return [];
+    const indexed = new Map<string, any>();
+    function addChat(chat: any, machine: any, folder: any) {
+      const cacheKey = `${chat.agentId ?? ""}:${chat.key ?? ""}`;
+      if (indexed.has(cacheKey)) return;
+      const content = String(chat.searchText ?? "").slice(0, 24000);
+      const title = String(chat.title ?? "");
+      const subtitle = String(chat.subtitle ?? "");
+      const machineName = String(machine?.name ?? "");
+      const folderLabel = String(folder?.label ?? "");
+      indexed.set(cacheKey, {
+        chat,
+        content,
+        folderLabel,
+        machineName,
+        normalizedContent: normalizeSearchText(content),
+        normalizedLabel: normalizeSearchText([title, subtitle, machineName, folderLabel].join(" ")),
+        subtitle,
+        title,
+        updatedAt: Number(chat.updatedAt || 0),
+      });
+    }
+    for (const chat of generalChats) addChat(chat, chat.machine, chat.folder);
+    for (const machine of machinesWithChats) {
+      for (const folder of machine.folders ?? []) {
+        for (const chat of folder.chats ?? []) addChat(chat, machine, folder);
+      }
+    }
+    return [...indexed.values()];
+  }, [chatSearchOpen, generalChats, machinesWithChats]);
+  const normalizedChatSearchQuery = normalizeSearchText(deferredChatSearchQuery);
+  const chatSearchResults = useMemo(() => {
+    if (!normalizedChatSearchQuery) return [];
+    const tokens = normalizedChatSearchQuery.split(" ").filter(Boolean).slice(0, 8);
+    return chatSearchIndex
+      .map((row) => {
+        const labelHit = row.normalizedLabel.includes(normalizedChatSearchQuery);
+        const contentHit = row.normalizedContent.includes(normalizedChatSearchQuery);
+        const tokenHits = tokens.reduce((count, token) => (
+          count + (row.normalizedLabel.includes(token) || row.normalizedContent.includes(token) ? 1 : 0)
+        ), 0);
+        const score = (labelHit ? 80 : 0) + (contentHit ? 42 : 0) + (tokenHits * 9);
+        return { ...row, contentHit, score, snippet: chatSearchSnippet(row.content || row.subtitle || row.title, deferredChatSearchQuery) };
+      })
+      .filter((row) => row.score > 0)
+      .sort((left, right) => right.score - left.score || right.updatedAt - left.updatedAt || left.title.localeCompare(right.title))
+      .slice(0, 40);
+  }, [chatSearchIndex, deferredChatSearchQuery, normalizedChatSearchQuery]);
+
+  if (activeView !== "chat") {
+    return <ChatFolderModal {...props} />;
   }
 
-  function renderAgentAvatar(className: string) {
-    return (
-      <div className={chatClass("agentAvatar", className, selectedAgentIsQueen && "queenAvatar")} aria-hidden="true">
-        <span className={chatClass("agentAvatarFallback")}>{selectedAgentInitials}</span>
-        {selectedAgentIconSrc ? (
-          <img
-            className={chatClass("agentAvatarImage")}
-            src={selectedAgentIconSrc}
-            alt=""
-            onError={(event) => {
-              event.currentTarget.style.display = "none";
-            }}
-          />
-        ) : null}
-      </div>
+  async function handleCheckStatus() {
+    if (!selectedAgent || !checkStatus) return;
+    setStatusAgentId?.(selectedAgent.id);
+    setStatusChecking(true);
+    try {
+      await checkStatus();
+    } finally {
+      setStatusChecking(false);
+    }
+  }
+
+  function handleScroll(event: any) {
+    messagesScrollRef.current = event.currentTarget;
+    const node = event.currentTarget;
+    const nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 96;
+    if (chatAutoScrollRef) chatAutoScrollRef.current = nearBottom;
+    updateChatAutoScroll?.();
+  }
+
+  function attachScrollNode(node: HTMLDivElement | null) {
+    scrollNodeRef.current = node;
+    messagesScrollRef.current = node;
+  }
+
+  function renderThinkingLoader() {
+    return AgentResponseLoader ? (
+      <AgentResponseLoader />
+    ) : (
+      <span className={hiveClass("hiveTypingDots")} aria-label="Agent is thinking">
+        <i />
+        <i />
+        <i />
+      </span>
     );
   }
 
-  return (<>
-      {activeView === "chat" ? (
-        <section className={chatClass("workspace", "tabPanel", chatHistoryOpen && "historyOpen")}>
-          <aside className={chatClass("settings")}>
-            <div className={chatClass("settingsHeader")}>
-              <div>
-                <p className="eyebrow">Chat</p>
-                <h2>Machines</h2>
-              </div>
+  function renderTaskBee(active?: boolean) {
+    return active ? (
+      <span className={hiveClass("hiveTaskBee")} aria-label="Task running">
+        <LottiePlayer src="/animations/Honey%20bee.lottie" size={18} ariaLabel="Task running" />
+      </span>
+    ) : null;
+  }
+
+  function chatRowStorageKey(chat: any) {
+    const agentId = String(chat?.agentId ?? "");
+    const leafKey = String(chat?.key ?? "");
+    if (!agentId) return "";
+    if (!leafKey || leafKey === `agent-${agentId}`) return agentId;
+    return `${agentId}::${leafKey}`;
+  }
+
+  function chatRowIdentityKey(chat: any) {
+    const agentId = String(chat?.agentId ?? "");
+    const leafKey = String(chat?.key || (agentId ? `agent-${agentId}` : ""));
+    return agentId && leafKey ? `${agentId}\u001f${leafKey}` : "";
+  }
+
+  function chatRowIsRunning(chat: any) {
+    const storageKey = chatRowStorageKey(chat);
+    const identityKey = chatRowIdentityKey(chat);
+    return Boolean(
+      (storageKey && runningChatStorageKeys.has(storageKey))
+      || (identityKey && runningChatIdentityKeys.has(identityKey)),
+    );
+  }
+
+  function openChat(chat: any) {
+    chat.onOpen?.();
+  }
+
+  function startMachineChat(machine: any) {
+    machine.onStartChat?.();
+  }
+
+  function startFolderChat(folder: any) {
+    folder.onStartChat?.();
+  }
+
+  function revealFolder(folderKey: string) {
+    setExpandedChatFolders?.((current: Set<string>) => new Set(current).add(folderKey));
+  }
+
+  return (
+    <>
+      <section className={hiveClass("hiveChatRoot", shelfOpen && "shelfOpen")} aria-label="Agent chat">
+        <div className={hiveClass("hiveGridBackdrop")} aria-hidden="true" />
+        <div className={hiveClass("hiveHeaderControls")}>
+          <button type="button" className={hiveClass("hiveHeaderButton")} onClick={handleCheckStatus} disabled={statusChecking || !selectedAgent}>
+            {statusChecking && LoaderCircle ? <LoaderCircle aria-hidden="true" className={hiveClass("spinIcon")} /> : Activity ? <Activity aria-hidden="true" /> : null}
+            <span>{statusChecking ? "checking" : "status"}</span>
+          </button>
+          <button
+            type="button"
+            className={hiveClass("hiveShelfToggle")}
+            aria-label={shelfOpen ? "Collapse info panel" : "Expand info panel"}
+            aria-pressed={shelfOpen}
+            onClick={() => setShelfOpen((current) => !current)}
+          >
+            {AlignLeft ? <AlignLeft aria-hidden="true" /> : null}
+          </button>
+        </div>
+
+        <aside className={hiveClass("hiveChatRail")} aria-label="Chats">
+          <header className={hiveClass("hiveRailHeader")}>
+            <div className={hiveClass("hiveRailToolbar")}>
+              <button type="button" className={hiveClass("hiveNewChatButton")} onClick={() => startMachineChat(defaultChatMachine)} disabled={!defaultChatMachine?.onStartChat}>
+                {Plus ? <Plus aria-hidden="true" /> : null}
+                <span>New chat</span>
+              </button>
               <button
                 type="button"
-                className={chatClass("historyCloseButton")}
-                aria-label="Close chat history"
-                onClick={() => setChatHistoryOpen(false)}
+                className={hiveClass("hiveRailIconButton")}
+                aria-label={chatSearchOpen ? "Close chat search" : "Search chat history"}
+                aria-pressed={chatSearchOpen}
+                onClick={() => {
+                  setChatSearchOpen((current) => {
+                    const next = !current;
+                    if (!next) setChatSearchQuery("");
+                    return next;
+                  });
+                }}
               >
-                Close
+                {Search ? <Search aria-hidden="true" /> : null}
               </button>
-              <span className={chatClass("runtimeBadge")}>{displayAgents.length} agents</span>
             </div>
-
-            <TooltipProvider>
-              <div className={chatClass("machineTree")}>
-                {chatSidebarTree.length > 0 ? chatSidebarTree.map((machine) => (
-                  <details className={chatClass("machineTreeNode")} key={machine.key} open>
-                    <summary>
-                      <span className={chatClass("treeDisclosure")} aria-hidden="true" />
-                      <Monitor className={chatClass("treeIcon")} aria-hidden="true" />
-                      <span className={chatClass("treeLabel")}>{machine.name}</span>
-                      {machine.onCreateFolder ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              className={chatClass("treeChatButton")}
-                              aria-label={`Choose directory on ${machine.name}`}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                machine.onCreateFolder?.();
-                              }}
-                            >
-                              <Folder aria-hidden="true" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">{`Choose directory on ${machine.name}`}</TooltipContent>
-                        </Tooltip>
-                      ) : null}
-                      {machine.onStartChat ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              className={chatClass("treeChatButton")}
-                              aria-label={`Start chat on ${machine.name}`}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                machine.onStartChat?.();
-                                setChatHistoryOpen(false);
-                              }}
-                            >
-                              <MessageSquare aria-hidden="true" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">{`New chat in ${machine.name}`}</TooltipContent>
-                        </Tooltip>
-                      ) : null}
-                    </summary>
-                    <div className={chatClass("machineTreeChildren")}>
-                      {machine.folders.length > 0 ? machine.folders.map((folder) => (
-                        <details className={chatClass("machineFolderNode")} key={folder.key} open>
-                          <summary>
-                            <span className={chatClass("treeDisclosure")} aria-hidden="true" />
-                            <Folder className={chatClass("treeIcon")} aria-hidden="true" />
-                            <span className={chatClass("treeLabel")}>{folder.label}</span>
-                            {folder.onStartChat ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    className={chatClass("treeChatButton")}
-                                    aria-label={`Start chat in ${folder.label}`}
-                                    onClick={(event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      folder.onStartChat?.();
-                                      setChatHistoryOpen(false);
-                                    }}
-                                  >
-                                    <MessageSquare aria-hidden="true" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">{`New chat in ${folder.label}`}</TooltipContent>
-                              </Tooltip>
-                            ) : null}
-                          </summary>
-                          <div className={chatClass("machineChatLeaves")}>
-                            {(expandedChatFolders.has(folder.key) ? folder.chats : folder.chats.slice(0, 4)).map((chat) => (
-                              <button
-                                type="button"
-                                key={chat.key}
-                                className={chatClass(chat.active && "active")}
-                                aria-current={chat.active ? "true" : undefined}
-                                onClick={() => {
-                                  chat.onOpen?.();
-                                  setChatHistoryOpen(false);
-                                }}
-                              >
-                                <span><ChatInlineMarkdown text={chat.title} /></span>
-                                {chat.updatedAt ? <time>{formatRelativeTime(chat.updatedAt)}</time> : null}
-                                <small><ChatInlineMarkdown text={chat.subtitle} /></small>
-                              </button>
-                            ))}
-                            {!expandedChatFolders.has(folder.key) && folder.chats.length > 4 ? (
-                              <button
-                                type="button"
-                                className={chatClass("machineChatShowMore")}
-                                onClick={() => setExpandedChatFolders((current) => new Set(current).add(folder.key))}
-                              >
-                                Show {folder.chats.length - 4} more
-                              </button>
-                            ) : null}
-                            {folder.chats.length === 0 ? (
-                              <span className={chatClass("machineTreeEmpty")}>No chats yet</span>
-                            ) : null}
-                          </div>
-                        </details>
-                      )) : (
-                        <div className={chatClass("machineTreeEmpty")}>No chats yet</div>
-                      )}
-                    </div>
-                  </details>
-                )) : (
-                  <div className={chatClass("emptyMachineChat")}>
-                    <strong>No machines yet</strong>
-                    <p>Connect a machine from Agents, then come back here to start chatting.</p>
-                  </div>
-                )}
-              </div>
-            </TooltipProvider>
-
-            {selectedAgent ? (
-            <>
-            <details className={chatClass("advancedSettings")}>
-              <summary>Manual setup</summary>
-              <div className={chatClass("advancedFields")}>
-                <label>
-                  Name
-                  <input value={selectedAgent.name} onChange={(event) => updateAgent({ name: event.target.value })} />
-                </label>
-
-                <label>
-                  Runtime
-                  <select value={selectedAgent.runtime} onChange={(event) => switchRuntime(event.target.value as AgentRuntime)}>
-                    {Object.entries(RUNTIME_LABELS).map(([runtime, label]) => (
-                      <option value={runtime} key={runtime}>{label}</option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className={fleetClass("toggleRow")}>
-                  <input
-                    type="checkbox"
-                    checked={selectedAgent.useSharedVault !== false}
-                    onChange={(event) => updateAgent({ useSharedVault: event.target.checked })}
-                  />
-                  Use shared Obsidian vault
-                </label>
-
-                <label>
-                  Agent-specific env
-                  <textarea
-                    value={formatAgentEnvText(selectedAgent.agentEnv)}
-                    onChange={(event) => updateAgent({ agentEnv: parseAgentEnvText(event.target.value) })}
-                    rows={4}
-                    placeholder={"WRITER_STYLE=concise\nRESEARCH_REGION=US"}
-                  />
-                  <small>These overlay shared hive-env-add runtime env values for dashboard-dispatched runs.</small>
-                </label>
-
-                <label>
-                  {selectedAgent.runtime === "aeon" ? "A2A Gateway URL" : selectedAgent.runtime === "openclaw" ? "Gateway URL" : "Runtime URL"}
-                  <input
-                    value={selectedAgent.runtime === "aeon" ? selectedAgent.a2aUrl ?? selectedAgent.gatewayUrl ?? "" : selectedAgent.gatewayUrl ?? ""}
-                    onChange={(event) => updateAgent(selectedAgent.runtime === "aeon"
-                      ? { gatewayUrl: event.target.value, a2aUrl: event.target.value }
-                      : { gatewayUrl: event.target.value })}
-                  />
-                </label>
-
-                <label>
-                  Agent ID
-                  <input value={selectedAgent.agentId ?? ""} onChange={(event) => updateAgent({ agentId: event.target.value })} placeholder="main, researcher, writer..." />
-                </label>
-
-                <label>
-                  Token
-                  <input value={selectedAgent.token ?? ""} onChange={(event) => updateAgent({ token: event.target.value })} placeholder="Optional if runtime config has one" />
-                </label>
-
-                {selectedAgent.runtime === "aeon" ? (
-                  <>
-                    <label>
-                      Aeon Repo
-                      <input value={selectedAgent.aeonRepo ?? ""} onChange={(event) => updateAgent({ aeonRepo: event.target.value })} placeholder="owner/repo" />
-                    </label>
-                    <label>
-                      Aeon Local Path
-                      <input value={selectedAgent.aeonLocalPath ?? selectedAgent.localDataDir ?? ""} onChange={(event) => updateAgent({ aeonLocalPath: event.target.value, localDataDir: event.target.value })} placeholder="~/aeon" />
-                    </label>
-	                    <label>
-	                      Aeon Branch
-	                      <input value={selectedAgent.aeonBranch ?? "main"} onChange={(event) => updateAgent({ aeonBranch: event.target.value })} />
-	                    </label>
-	                    <label>
-	                      GitHub secret keys
-	                      <textarea
-	                        value={aeonEnvKeys}
-	                        onChange={(event) => setAeonEnvKeys(event.target.value)}
-	                        rows={4}
-	                        placeholder="ANTHROPIC_API_KEY&#10;BANKR_LLM_KEY&#10;GH_GLOBAL"
-	                      />
-	                    </label>
-	                    <div className={fleetClass("setupActions")}>
-	                      <Button type="button" size="sm" variant="secondary" onClick={() => void syncAeonEnvToGitHub()} disabled={aeonEnvSyncing || !selectedAgent.aeonRepo?.trim()}>
-	                        {aeonEnvSyncing ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Upload aria-hidden="true" />}
-	                        {aeonEnvSyncing ? "Syncing secrets" : "Sync env to GitHub"}
-	                      </Button>
-	                      {aeonEnvSyncStatus ? <small>{aeonEnvSyncStatus}</small> : <small>Push selected local HivemindOS/Aeon env keys to this Aeon repo as GitHub Actions secrets.</small>}
-	                    </div>
-	                  </>
-                ) : selectedAgent.runtime !== "openclaw" ? (
-                  <>
-                    <label>
-                      Chat Path
-                      <input value={selectedAgent.chatPath ?? "/chat"} onChange={(event) => updateAgent({ chatPath: event.target.value })} />
-                    </label>
-                    <label>
-                      Status Path
-                      <input value={selectedAgent.statusPath ?? "/health"} onChange={(event) => updateAgent({ statusPath: event.target.value })} />
-                    </label>
-                  </>
-                ) : (
-                  <label>
-                    Session Key
-                    <input value={selectedAgent.sessionKey ?? ""} onChange={(event) => updateAgent({ sessionKey: event.target.value })} placeholder="Optional OpenClaw session override" />
-                  </label>
-                )}
-
-                <label>
-                  Runtime Data Dir
-                  <input
-                    value={selectedAgent.localDataDir ?? ""}
-                    onChange={(event) => updateAgent({ localDataDir: event.target.value })}
-                    placeholder="~/.hermes, /srv/hermes-seo/data, mounted runtime path..."
-                  />
-                </label>
-
-                <label>
-                  Telemetry URL
-                  <input
-                    value={selectedAgent.telemetryUrl ?? ""}
-                    onChange={(event) => updateAgent({ telemetryUrl: event.target.value })}
-                    placeholder="http://100.x.y.z:8787"
-                  />
-                </label>
-
-                <label>
-                  Machine Name
-                  <input
-                    value={selectedAgent.machineName ?? ""}
-                    onChange={(event) => updateAgent({ machineName: event.target.value })}
-                    placeholder="local, vps-1, macbook, workstation..."
-                  />
-                </label>
-              </div>
-            </details>
-
-            </>
-            ) : null}
-          </aside>
-
-          {selectedAgent ? (
-          <section className={chatClass("chat")}>
-            <button
-              type="button"
-              className={chatClass("historyOpenButton")}
-              aria-label="Open chat history"
-              aria-expanded={chatHistoryOpen}
-              onClick={() => setChatHistoryOpen(true)}
-            >
-              <AlignLeft aria-hidden="true" />
-            </button>
-            <div className={chatClass("chatHeader")}>
-              <div className={chatClass("chatContextControls", "chatIdentityMenu")} ref={chatContextMenuRef}>
-                <button
-                  type="button"
-                  className={chatClass("chatIdentity", "chatIdentityTrigger")}
-                  title="Choose the machine and agent for this chat"
-                  aria-haspopup="menu"
-                  aria-expanded={chatContextMenu === "machine"}
-                  onClick={() => setChatContextMenu((current) => current === "machine" ? "" : "machine")}
-                >
-                  {renderAgentAvatar("agentAvatarLarge")}
-                  <span className={chatClass("chatIdentityCopy")}>
-                    <span className={chatClass("chatTitleRow")}>
-                      <span className={chatClass("chatIdentityTitle")}>{selectedAgent.name}</span>
-                      <span className={chatClass("livePill")}><span aria-hidden="true" />{busy ? "working" : "ready"}</span>
-                    </span>
-                    <span className={chatClass("chatIdentityMeta")}>
-                      <span className={chatClass("chatHeaderMetaFull")}>{runtimeIdentity} · {selectedChatMachine?.name ?? selectedAgent.machineName ?? "This Mac"}</span>
-                      <span className={chatClass("chatHeaderMetaMobile")}>{runtimeLabel} · {selectedChatMachine?.name ?? selectedAgent.machineName ?? "This Mac"}</span>
-                    </span>
-                  </span>
-                  <ChevronDown aria-hidden="true" className={chatClass("chatIdentityChevron")} />
-                </button>
-                {chatContextMenu === "machine" ? (
-                  <div className={chatClass("chatContextMenu")} role="menu">
-                    {chatSidebarTree.flatMap((machine) => {
-                      const group = machineGroups.find((item) => item.key === machine.key);
-                      return (group?.agents ?? []).map((agent) => {
-                        const iconSrc = agentMenuIcon(agent, beeRoleIconPath);
-                        const machineLabel = agentMenuMachineLabel(machine, agent);
-                        const statusLabel = agentMenuStatusLabel(machine, agent);
-                        return (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            key={`${machine.key}-${agent.id}`}
-                            onClick={() => {
-                              startAgentChat(agent.id, { fresh: true, chatLeafKey: `machine-${machine.key}-${agent.id}` });
-                              setChatContextMenu("");
-                            }}
-                          >
-                            <span
-                              className={chatClass("chatContextAgentIcon", iconSrc && "hasImage")}
-                              style={iconSrc ? { backgroundImage: `url(${iconSrc})` } : undefined}
-                              aria-hidden="true"
-                            >
-                              {iconSrc ? null : <b>{agentInitials(agent)}</b>}
-                            </span>
-                            <span>{agent.name}</span>
-                            <small>{machineLabel}{statusLabel && statusLabel !== agent.name ? ` · ${statusLabel.replace(`${agent.name} · `, "")}` : ""}</small>
-                          </button>
-                        );
-                      });
-                    })}
-                  </div>
-                ) : null}
-              </div>
-              <div className={chatClass("chatHeaderActions")}>
-                <Button type="button" variant="secondary" onClick={handleCheckStatus} disabled={selectedStatusChecking}>
-                  {selectedStatusChecking ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Activity aria-hidden="true" />}
-                  {selectedStatusChecking ? "Checking" : "Check status"}
-                </Button>
-                <details className={chatClass("runtimeDetails")}>
-                  <summary>System</summary>
-                  <dl className={chatClass("chatRuntimeMeta")} aria-label="Agent runtime details">
-                    <div>
-                      <dt>Runtime</dt>
-                      <dd>{runtimeLabel}</dd>
-                    </div>
-                    <div>
-                      <dt>Provider</dt>
-                      <dd>{providerLabel}</dd>
-                    </div>
-                    <div>
-                      <dt>Model</dt>
-                      <dd>{modelLabel}</dd>
-                    </div>
-                  </dl>
-                </details>
-              </div>
-            </div>
-            {sessionNotice && visibleMessages.length > 0 ? (
-              <div className={chatClass("chatSessionNote")}>
-                <MessageSquare aria-hidden="true" />
-                <span>{sessionNotice}</span>
-              </div>
-            ) : null}
-            {status && statusAgentId === selectedAgent.id ? (
-              // Plain-English status summary in place of raw runtime JSON (rule 6).
-              <div className="flex items-center gap-2 rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.55)] px-3 py-2 text-xs">
-                <strong className={status.ok ? "text-[#bbf7d0]" : "text-[#fecdd3]"}>
-                  {status.ok ? "Runtime is responding." : "Runtime did not respond."}
-                </strong>
-                <span className="text-[var(--muted)]">
-                  {status.runtime ? `${RUNTIME_LABELS[status.runtime]} agent` : "Unknown runtime"}
-                  {status.status ? ` · code ${status.status}` : ""}
-                  {status.error ? ` · ${status.error}` : ""}
-                </span>
-                <details className="ml-auto" onClick={(event) => event.stopPropagation()}>
-                  <summary className="cursor-pointer text-[0.65rem] uppercase tracking-[0.12em] text-[var(--muted)]">
-                    Raw payload
-                  </summary>
-                  <pre className="mt-2 max-w-full overflow-auto text-[0.7rem] text-[var(--muted)]">{JSON.stringify(status, null, 2)}</pre>
-                </details>
-                <CloseIconButton
-                  aria-label="Dismiss status message"
-                  size="sm"
-                  onClick={() => {
-                    setStatus?.(null);
-                    setStatusAgentId?.("");
-                  }}
+            {chatSearchOpen ? (
+              <label className={hiveClass("hiveRailSearch")}>
+                {Search ? <Search aria-hidden="true" /> : null}
+                <input
+                  ref={chatSearchInputRef}
+                  type="search"
+                  value={chatSearchQuery}
+                  onChange={(event) => setChatSearchQuery(event.target.value)}
+                  placeholder="Search chats and messages"
+                  aria-label="Search chat history by title and message content"
                 />
-              </div>
+              </label>
             ) : null}
-            <div
-              className={chatClass("messages", selectedChatHistoryLoading ? "loading" : visibleMessages.length === 0 && "empty")}
-              ref={setMessagesScrollNode}
-              onScroll={handleMessagesScroll}
-            >
-              {selectedChatHistoryLoading ? (
-                <ChatHistorySkeleton />
-              ) : visibleMessages.length === 0 ? (
-                <div className={chatClass("chatEmptyPrompt")}>
-                  <strong>No messages yet</strong>
-                  <p>Messages with {selectedAgent.name} will appear here.</p>
+          </header>
+
+          <nav className={hiveClass("hiveRailBody")} aria-label="Chat history">
+            {chatSearchOpen && normalizedChatSearchQuery ? (
+              <section className={hiveClass("hiveNavSection", "hiveSearchResults")}>
+                <div className={hiveClass("hiveSearchSummary")}>
+                  <span>{chatSearchResults.length} result{chatSearchResults.length === 1 ? "" : "s"}</span>
+                  <small>titles + message text</small>
+                </div>
+                {chatSearchResults.length ? chatSearchResults.map((result: any) => (
+                  <button
+                    type="button"
+                    key={`${result.chat.agentId ?? ""}-${result.chat.key}`}
+                    className={hiveClass("hiveNavRow", "chatLeaf", "searchResult", result.chat.active && "active")}
+                    aria-current={result.chat.active ? "true" : undefined}
+                    title={[result.title, result.subtitle, result.snippet].filter(Boolean).join("\n")}
+                    onClick={() => {
+                      openChat(result.chat);
+                      setChatSearchOpen(false);
+                      setChatSearchQuery("");
+                    }}
+                  >
+                    {renderTaskBee(chatRowIsRunning(result.chat))}
+                    <span className={hiveClass("hiveNavCopy")}>
+                      <strong><ChatInlineMarkdown text={result.title || "Previous chat"} /></strong>
+                      <small><ChatInlineMarkdown text={[result.machineName, result.folderLabel].filter(Boolean).join(" / ")} /></small>
+                      {result.snippet ? <small className={hiveClass("hiveSearchSnippet")}>{result.snippet}</small> : null}
+                    </span>
+                  </button>
+                )) : <p className={hiveClass("hiveEmptyText")}>No matching chats</p>}
+              </section>
+            ) : (
+              <Fragment>
+              <section className={hiveClass("hiveNavSection")}>
+              <button type="button" className={hiveClass("hiveNavGroupHeader")} onClick={() => setGeneralOpen((current) => !current)} aria-expanded={generalOpen}>
+                {ChevronRight ? <ChevronRight aria-hidden="true" className={hiveClass(generalOpen && "openChevron")} /> : null}
+                {MessageSquare ? <MessageSquare aria-hidden="true" /> : null}
+                <span>general</span>
+                <small>{generalChats.length}</small>
+              </button>
+              {generalOpen ? (
+                <div className={hiveClass("hiveNavChildren")}>
+                  {generalChats.length ? generalChats.map((chat: any) => (
+                    <button
+                      type="button"
+                      key={chat.key}
+                      className={hiveClass("hiveNavRow", chat.active && "active")}
+                      aria-current={chat.active ? "true" : undefined}
+                      title={[chat.title, chat.subtitle].filter(Boolean).join("\n")}
+                      onClick={() => openChat(chat)}
+                    >
+                      {chatRowIsRunning(chat) ? renderTaskBee(true) : <span className={hiveClass("hiveNavIcon")}>{MessageSquare ? <MessageSquare aria-hidden="true" /> : null}</span>}
+                      <span className={hiveClass("hiveNavCopy")}>
+                        <strong><ChatInlineMarkdown text={chat.title ?? ""} /></strong>
+                        {chat.subtitle ? <small><ChatInlineMarkdown text={chat.subtitle} /></small> : null}
+                      </span>
+                    </button>
+                  )) : <p className={hiveClass("hiveEmptyText")}>No general chats yet</p>}
                 </div>
               ) : null}
-              {!selectedChatHistoryLoading ? visibleMessages.map((message, index) => {
-                const messageKey = visibleMessageKeys[index] ?? chatMessageBaseRenderKey(message, index);
-                const displayContent = chatDisplayContent(message);
-                const messageProcessEvents = Array.isArray(message.processEvents) ? message.processEvents : [];
-                const generationForMessage = chatKanbanGeneration?.key === messageKey ? chatKanbanGeneration : null;
-                const generating = generationForMessage && ["generating", "creating"].includes(generationForMessage.phase);
-                const isStreamingAssistant = message.role === "assistant" && busy && index === visibleMessages.length - 1;
-                const isLatestAssistant = message.role === "assistant" && index === visibleMessages.length - 1;
-                const showMessageProcess = message.role === "assistant" && messageProcessEvents.length > 0;
-                const showLiveProcessOnMessage = isLatestAssistant && processEventsForDisplay.length > 0 && !showMessageProcess;
-                const inlineProcessEvents = showMessageProcess ? messageProcessEvents : showLiveProcessOnMessage ? processEventsForDisplay : [];
-                const canGenerateKanbanTask = message.role === "assistant" && !isStreamingAssistant && displayContent?.trim() && generateKanbanTaskFromChat;
-                const copied = copiedMessageKey === messageKey;
-                const agentPrompt = message.agentPrompt;
+            </section>
+
+            <section className={hiveClass("hiveNavSection")}>
+              <button type="button" className={hiveClass("hiveNavGroupHeader")} onClick={() => setMachinesOpen((current) => !current)} aria-expanded={machinesOpen}>
+                {ChevronRight ? <ChevronRight aria-hidden="true" className={hiveClass(machinesOpen && "openChevron")} /> : null}
+                {Monitor ? <Monitor aria-hidden="true" /> : null}
+                <span>machines</span>
+                <small>{machinesWithChats.length}</small>
+              </button>
+              {machinesOpen ? machinesWithChats.map((machine: any) => {
+                const machineOpen = openMachines[machine.key] ?? true;
                 return (
-                  <div className={chatClass("message", message.role, isStreamingAssistant && "streaming")} key={messageKey}>
-                    {message.role === "assistant" ? (
-                      renderAgentAvatar("messageAvatar")
-                    ) : null}
-                    <div className={chatClass("messageBody")}>
-                      {message.role === "user" ? <span className={chatClass("messageRole")}>You</span> : null}
-                      {message.role === "assistant" ? (
-                        <div className={chatClass("assistantByline")}>
-                          {renderAgentAvatar("messageBylineAvatar")}
-                          <span>{selectedAgent.name}</span>
-                          <small>{runtimeIdentity}</small>
-                        </div>
-                      ) : null}
-                      <MessageAttachments attachments={message.attachments} />
-                      {inlineProcessEvents.length ? (
-                        <AgentProcessPanel {...{ Activity, ChevronDown, ChevronUp, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal, active: isLatestAssistant && (busy || processIsActive), agentIconSrc: selectedAgentIconSrc, agentInitials: selectedAgentInitials, chatClass, events: inlineProcessEvents }} />
-                      ) : null}
-                      {agentPrompt ? (
-                        <div className={chatClass("agentPromptCard")}>
-                          <div className={chatClass("agentPromptHeader")}>
-                            <Sparkles aria-hidden="true" />
-                            <span>{agentPrompt.type === "approval" ? "Approval needed" : agentPrompt.type === "secret" ? "Secret needed" : agentPrompt.type === "sudo" ? "Local prompt" : "Agent question"}</span>
-                          </div>
-                          <p>{agentPrompt.question}</p>
-                          {agentPrompt.choices?.length ? (
-                            <div className={chatClass("agentPromptChoices")}>
-                              {agentPrompt.choices.map((choice) => (
-                                <button
-                                  type="button"
-                                  key={choice}
-                                  onClick={() => setText(choice)}
-                                >
-                                  {choice}
-                                </button>
-                              ))}
-                            </div>
-                          ) : null}
-                          {agentPrompt.allowFreeText ? <small>Choose a reply or type your answer below.</small> : null}
-                        </div>
-                      ) : displayContent ? (
-                        <ChatMarkdown text={displayContent} />
-                      ) : (
-                        message.role === "assistant" && busy ? (
-                          <>
-                            {busy ? <AgentResponseLoader /> : null}
-                          </>
-                        ) : <p />
-                      )}
-                      {isStreamingAssistant && displayContent?.trim() ? (
-                        <div className={chatClass("streamingStatus")} aria-live="polite">
-                          <span aria-hidden="true" />
-                          <small>Still writing</small>
-                        </div>
-                      ) : null}
-                      {message.role === "assistant" && !isStreamingAssistant && displayContent?.trim() ? (
-                        <TooltipProvider>
-                          <div className={chatClass("messageActions")}>
-                            <Tooltip open={copied ? true : undefined}>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  className={chatClass("messageActionButton", copied && "active", copied && "copied")}
-                                  aria-label={copied ? "Copied response" : "Copy response"}
-                                  onClick={() => copyAssistantResponse(messageKey, displayContent)}
-                                >
-                                  {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom">{copied ? "Copied!" : "Copy response"}</TooltipContent>
-                            </Tooltip>
-                            {canGenerateKanbanTask ? (
-                              <>
-                                <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    className={chatClass("messageActionButton", openKanbanTaskMenuKey === messageKey && "active")}
-                                    aria-label="Generate Kanban task from this response"
-                                    onClick={() => setOpenKanbanTaskMenuKey((current) => current === messageKey ? "" : messageKey)}
-                                    disabled={Boolean(generating)}
-                                  >
-                                    {generating ? <LoaderCircle aria-hidden="true" /> : <KanbanSquare aria-hidden="true" />}
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom">Send to Kanban</TooltipContent>
-                              </Tooltip>
-                              {openKanbanTaskMenuKey === messageKey || generationForMessage ? (
-                                <div className={chatClass("generateKanbanPopover", generationForMessage && `phase-${generationForMessage.phase}`)}>
-                                  <div className={chatClass("generateKanbanHeader")}>
-                                    {generationForMessage?.phase === "done"
-                                      ? <Check className={chatClass("generateKanbanStatusIcon")} aria-hidden="true" />
-                                      : <Sparkles className={chatClass("generateKanbanStatusIcon")} aria-hidden="true" />}
-                                    <span>{generationForMessage ? generationForMessage.message : "Generate and send to:"}</span>
-                                    {generationForMessage && ["done", "error"].includes(generationForMessage.phase) ? (
-                                      <CloseIconButton
-                                        className={chatClass("generateKanbanClose")}
-                                        size="sm"
-                                        aria-label="Close Kanban status"
-                                        onClick={() => dismissKanbanPopover(messageKey)}
-                                      />
-                                    ) : null}
-                                  </div>
-                                  {generationForMessage ? (
-                                    <div className={chatClass("generateKanbanProgress")}>
-                                      <span aria-hidden="true" />
-                                      <small>{generationForMessage.taskTitle || (generationForMessage.status === "ready" ? "Ready lane" : "Ideas lane")}</small>
-                                    </div>
-                                  ) : (
-                                    <div className={chatClass("generateKanbanActions")}>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setOpenKanbanTaskMenuKey(messageKey);
-                                          void generateKanbanTaskFromChat("ideas", { key: messageKey, content: displayContent });
-                                        }}
-                                      >
-                                        Ideas
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setOpenKanbanTaskMenuKey(messageKey);
-                                          void generateKanbanTaskFromChat("ready", { key: messageKey, content: displayContent });
-                                        }}
-                                      >
-                                        Ready
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              ) : null}
-                            </>
-                          ) : null}
-                          </div>
-                        </TooltipProvider>
+                  <div className={hiveClass("hiveMachineGroup")} key={machine.key}>
+                    <div className={hiveClass("hiveNavRowWrap")}>
+                      <button
+                        type="button"
+                        className={hiveClass("hiveNavRow", "machine")}
+                        onClick={() => setOpenMachines((current) => ({ ...current, [machine.key]: !machineOpen }))}
+                        aria-expanded={machineOpen}
+                      >
+                        {ChevronRight ? <ChevronRight aria-hidden="true" className={hiveClass(machineOpen && "openChevron")} /> : null}
+                        <span className={hiveClass("hiveNavIcon")}>{Monitor ? <Monitor aria-hidden="true" /> : null}</span>
+                        <span className={hiveClass("hiveNavCopy")}>
+                          <strong>{machine.name}</strong>
+                          <small>{machine.folders?.length ?? 0} folder{machine.folders?.length === 1 ? "" : "s"}</small>
+                        </span>
+                      </button>
+                      {machine.onStartChat ? (
+                        <button type="button" className={hiveClass("hiveRowAction")} aria-label={`New chat on ${machine.name}`} onClick={() => startMachineChat(machine)}>
+                          {MessageSquare ? <MessageSquare aria-hidden="true" /> : null}
+                        </button>
                       ) : null}
                     </div>
+                    {machineOpen ? (
+                      <div className={hiveClass("hiveNavNested")}>
+                        {(machine.folders ?? []).map((folder: any) => {
+                          const folderOpen = openFolders[folder.key] ?? true;
+                          const folderExpanded = expandedChatFolders?.has?.(folder.key);
+                          const visibleFolderChats = folderExpanded ? folder.chats : folder.chats?.slice(0, 5);
+                          return (
+                            <div className={hiveClass("hiveFolderGroup")} key={folder.key}>
+                              <div className={hiveClass("hiveNavRowWrap")}>
+                                <button
+                                  type="button"
+                                  className={hiveClass("hiveNavRow", "folder")}
+                                  onClick={() => setOpenFolders((current) => ({ ...current, [folder.key]: !folderOpen }))}
+                                  aria-expanded={folderOpen}
+                                >
+                                  {ChevronRight ? <ChevronRight aria-hidden="true" className={hiveClass(folderOpen && "openChevron")} /> : null}
+                                  <span className={hiveClass("hiveNavIcon")}>{folderOpen && FolderOpen ? <FolderOpen aria-hidden="true" /> : Folder ? <Folder aria-hidden="true" /> : null}</span>
+                                  <span className={hiveClass("hiveNavCopy")}>
+                                    <strong>{folder.label}</strong>
+                                    <small>{folder.chats?.length ?? 0} chat{folder.chats?.length === 1 ? "" : "s"}</small>
+                                  </span>
+                                </button>
+                                {folder.onStartChat ? (
+                                  <button type="button" className={hiveClass("hiveRowAction")} aria-label={`New chat in ${folder.label}`} onClick={() => startFolderChat(folder)}>
+                                    {MessageSquare ? <MessageSquare aria-hidden="true" /> : null}
+                                  </button>
+                                ) : null}
+                              </div>
+                              {folderOpen ? (
+                                <div className={hiveClass("hiveNavLeafList")}>
+                                  {visibleFolderChats?.length ? visibleFolderChats.map((chat: any) => (
+                                    <button
+                                      type="button"
+                                      key={chat.key}
+                                      className={hiveClass("hiveNavRow", "chatLeaf", chat.active && "active")}
+                                      aria-current={chat.active ? "true" : undefined}
+                                      title={[chat.title, chat.subtitle].filter(Boolean).join("\n")}
+                                      onClick={() => openChat(chat)}
+                                    >
+                                      {renderTaskBee(chatRowIsRunning(chat))}
+                                      <span className={hiveClass("hiveNavCopy")}>
+                                        <strong><ChatInlineMarkdown text={chat.title ?? ""} /></strong>
+                                        <small><ChatInlineMarkdown text={[chat.updatedAt ? formatRelativeTime?.(chat.updatedAt) : "", chat.subtitle].filter(Boolean).join(" / ")} /></small>
+                                      </span>
+                                    </button>
+                                  )) : <p className={hiveClass("hiveEmptyText")}>No chats yet</p>}
+                                  {!folderExpanded && folder.chats?.length > 5 ? (
+                                    <button type="button" className={hiveClass("hiveShowMoreButton")} onClick={() => revealFolder(folder.key)}>
+                                      Show {folder.chats.length - 5} more
+                                    </button>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </div>
                 );
               }) : null}
-              {showDetachedProcess ? (
-                <div className={chatClass("message", "assistant", busy && "streaming")} key="detached-process">
-                  {renderAgentAvatar("messageAvatar")}
-                  <div className={chatClass("messageBody")}>
-                    <div className={chatClass("assistantByline")}>
-                      {renderAgentAvatar("messageBylineAvatar")}
-                      <span>{selectedAgent.name}</span>
-                      <small>{runtimeIdentity}</small>
-                    </div>
-                    {busy ? <AgentResponseLoader /> : null}
-                    <AgentProcessPanel {...{ Activity, ChevronDown, ChevronUp, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal, active: busy || processIsActive, agentIconSrc: selectedAgentIconSrc, agentInitials: selectedAgentInitials, chatClass, events: processEventsForDisplay }} />
-                  </div>
+            </section>
+              </Fragment>
+            )}
+          </nav>
+
+          <footer className={hiveClass("hiveRailFooter")}>
+            <small>{machineLabel}</small>
+          </footer>
+        </aside>
+
+        <main className={hiveClass("hiveChatMain")} aria-label="Current chat">
+          <header className={hiveClass("hiveChatHeader")}>
+            <div className={hiveClass("hiveAgentPicker")} ref={agentMenuRef}>
+              <button
+                type="button"
+                className={hiveClass("hiveAgentCard")}
+                title="Choose the machine and agent for this chat"
+                aria-haspopup="menu"
+                aria-expanded={agentMenuOpen}
+                onClick={() => setAgentMenuOpen((current) => !current)}
+              >
+                <span className={hiveClass("hiveAgentAvatar")}>
+                  {iconSrc ? (
+                    <span className={hiveClass("hiveAgentIconImage")} style={{ backgroundImage: `url(${iconSrc})` }} aria-hidden="true" />
+                  ) : (
+                    <span>{agentInitials(selectedAgent)}</span>
+                  )}
+                </span>
+                <span className={hiveClass("hiveHeaderCopy")}>
+                  <span className={hiveClass("hiveTitleRow")}>
+                    <h1>{selectedAgent?.name ?? "Choose an agent"}</h1>
+                    <span className={hiveClass("hiveStatePill", state.tone)}>
+                      <span aria-hidden="true" />
+                      {state.label}
+                    </span>
+                  </span>
+                  <span className={hiveClass("hiveHeaderMeta")} title={selectedAgent ? activeThreadLabel : undefined}>{headerMetaLabel}</span>
+                </span>
+                {ChevronDown ? <ChevronDown aria-hidden="true" className={hiveClass("hiveAgentChevron", agentMenuOpen && "openChevron")} /> : null}
+              </button>
+              {agentMenuOpen ? (
+                <div className={hiveClass("hiveAgentMenu")} role="menu">
+                  {agentMenuMachines.length ? agentMenuMachines.flatMap(({ machine, agents }: any) => agents.map((agent: any) => {
+                    const agentIconSrc = selectedAgentIcon(agent, beeRoleIconPath);
+                    const machineMenuLabel = agentMenuMachineLabel(machine, agent);
+                    const statusLabel = agentMenuStatusLabel(machine, agent);
+                    return (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        key={`${machine.key}-${agent.id}`}
+                        className={hiveClass(agent.id === selectedAgent?.id && "active")}
+                        onClick={() => {
+                          startAgentChat?.(agent.id, { fresh: true, chatLeafKey: `machine-${machine.key}-${agent.id}` });
+                          setAgentMenuOpen(false);
+                        }}
+                      >
+                        <span
+                          className={hiveClass("hiveAgentMenuIcon", agentIconSrc && "hasImage")}
+                          style={agentIconSrc ? { backgroundImage: `url(${agentIconSrc})` } : undefined}
+                          aria-hidden="true"
+                        >
+                          {agentIconSrc ? null : <b>{agentInitials(agent)}</b>}
+                        </span>
+                        <span>
+                          <strong>{agent.name}</strong>
+                          <small>{machineMenuLabel}{statusLabel && statusLabel !== agent.name ? ` / ${statusLabel.replace(`${agent.name} / `, "")}` : ""}</small>
+                        </span>
+                      </button>
+                    );
+                  })) : <p className={hiveClass("hiveEmptyText")}>No chat agents found</p>}
                 </div>
               ) : null}
-              <div ref={messagesEndRef} className={chatClass("messagesEnd")} aria-hidden="true" />
             </div>
-            {!selectedChatHistoryLoading && visibleMessages.length === 0 ? (
-              <div className={chatClass("chatSuggestions")} aria-label="Suggested prompts">
-                {[
-                  "What are you working on?",
-                  "Summarize latest task",
-                  "Check workspace status",
-                ].map((prompt) => (
-                  <button type="button" key={prompt} onClick={() => setText(prompt)}>
-                    {prompt}
-                  </button>
-                ))}
+          </header>
+
+          <div
+            ref={attachScrollNode}
+            className={hiveClass("hiveChatMessages")}
+            onScroll={handleScroll}
+            aria-busy={selectedChatHistoryLoading}
+          >
+            <div className={hiveClass("hiveMessageThread")}>
+              <div className={hiveClass("hiveThreadDivider")}>
+                <span />
+                <small title={activeThreadLabel}>{displayThreadLabel}</small>
+                <span />
               </div>
-            ) : null}
-            {queuedChatMessages.length ? (
-              <section className={chatQueueStyles.chatQueue} aria-label="Queued chat messages">
-                <div className={chatQueueStyles.chatQueueHeader}>
-                  <span>{queuedChatMessages.length} queued</span>
-                  <small>{busy ? "Runs after the current task" : "Ready to send"}</small>
+
+              {selectedChatHistoryLoading ? (
+                <div className={hiveClass("hiveLoaderRow")}>
+                  {LoaderCircle ? <LoaderCircle aria-hidden="true" className={hiveClass("spinIcon")} /> : null}
+                  <span>Loading history</span>
                 </div>
-                <div className={chatQueueStyles.chatQueueList}>
-                  {queuedChatMessages.map((item: any, index: number) => {
-                    const attachmentCount = item.attachments?.length ?? 0;
-                    const directoryCount = item.directories?.length ?? 0;
-                    const flushing = flushingChatQueueId === item.id;
-                    const meta = [
-                      attachmentCount ? `${attachmentCount} file${attachmentCount === 1 ? "" : "s"}` : "",
-                      directoryCount ? `${directoryCount} folder${directoryCount === 1 ? "" : "s"}` : "",
-                      item.queuedAt ? new Date(item.queuedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
-                    ].filter(Boolean).join(" · ");
-                    return (
-                      <article className={chatQueueStyles.chatQueueItem} key={item.id}>
-                        <MessageSquare aria-hidden="true" />
-                        <div className={chatQueueStyles.chatQueueBody}>
-                          <strong>{item.label || `Queued message ${index + 1}`}</strong>
-                          {meta ? <small>{meta}</small> : null}
+              ) : visibleMessages.length ? visibleMessages.map((message: any, index: number) => {
+                const content = messageText(message, chatDisplayContent);
+                const isUser = message.role === "user";
+                const mirosharkCard = !isUser && content ? extractMiroSharkSimulationCard(content) : null;
+                const timeLabel = Number.isFinite(message.createdAt) ? formatRelativeTime?.(message.createdAt) : "";
+                const attachments = message.attachments ?? [];
+                const messageEvents = normalizeProcessEvents(message.processEvents ?? message.events);
+                const isPendingAssistant = !isUser && !content && busy && index === visibleMessages.length - 1;
+                const renderKey = messageKey(message, index);
+                const userProcessRenderKey = `${chatProcessScopeKey}\u001fuser\u001f${renderKey}`;
+                const assistantProcessRenderKey = `${chatProcessScopeKey}\u001fassistant\u001f${renderKey}`;
+                const liveEvents = !isUser && assistantProcessRenderKey === processEventsTargetKey && !messageEvents.length
+                  ? processEventsForDisplay
+                  : [];
+                const nextAssistantHasProcessEvents = isUser ? (() => {
+                  for (let nextIndex = index + 1; nextIndex < visibleMessages.length; nextIndex += 1) {
+                    const candidate = visibleMessages[nextIndex];
+                    if (candidate?.role === "user") return false;
+                    if (candidate?.role === "assistant" && normalizeProcessEvents(candidate.processEvents ?? candidate.events).length > 0) return true;
+                  }
+                  return false;
+                })() : false;
+                const userLiveEvents = isUser && userProcessRenderKey === processEventsTargetKey && !nextAssistantHasProcessEvents
+                  ? processEventsForDisplay
+                  : [];
+                const events = messageEvents.length ? messageEvents : liveEvents;
+                return isUser ? (
+                  <Fragment key={renderKey}>
+                    <article className={hiveClass("hiveUserTurn")}>
+                      <div className={hiveClass("hiveUserBubble")}>
+                        {ChatMarkdown
+                          ? <ChatMarkdown text={markdownText(content || "(sent attachments)")} className={hiveClass("hiveMarkdown")} />
+                          : renderInline(content || "(sent attachments)")}
+                      </div>
+                      {attachments.length ? (
+                        <div className={hiveClass("hiveAttachmentList")}>
+                          {attachments.map((attachment: any, attachmentIndex: number) => (
+                            <span className={hiveClass("hiveMetaPill")} key={`${attachment.name ?? attachmentIndex}-${attachmentIndex}`}>
+                              {FileText ? <FileText aria-hidden="true" /> : null}
+                              {attachment.name ?? attachment.label ?? "Attachment"}
+                            </span>
+                          ))}
                         </div>
-                        <button
-                          type="button"
-                          className={chatQueueStyles.chatQueueAction}
-                          onClick={() => sendQueuedChatMessageNow?.(item.id)}
-                          disabled={busy || Boolean(flushingChatQueueId)}
-                        >
-                          {flushing ? <LoaderCircle aria-hidden="true" className={chatClass("spinIcon")} /> : Send ? <Send aria-hidden="true" /> : null}
-                          <span>{flushing ? "Sending" : "Send"}</span>
-                        </button>
-                        <CloseIconButton
-                          className={chatQueueStyles.chatQueueRemove}
-                          onClick={() => removeQueuedChatMessage?.(item.id)}
-                          disabled={flushing}
-                          aria-label="Remove queued message"
-                        />
+                      ) : null}
+                      {timeLabel ? <time>{timeLabel}</time> : null}
+                    </article>
+                    {userLiveEvents.length ? (
+                      <AgentProcessPanel
+                        Activity={Activity}
+                        ChevronDown={ChevronDown}
+                        ChevronUp={ChevronUp}
+                        CircleAlert={CircleAlert}
+                        FileText={FileText}
+                        GitBranch={GitBranch}
+                        Hammer={Hammer}
+                        Image={Image}
+                        Pencil={Pencil}
+                        Search={Search}
+                        Sparkles={Sparkles}
+                        Terminal={Terminal}
+                        active={busy || processEventsAreActive(userLiveEvents)}
+                        events={userLiveEvents}
+                      />
+                    ) : null}
+                  </Fragment>
+                ) : (
+                  <Fragment key={renderKey}>
+                    {events.length ? (
+                      <AgentProcessPanel
+                        Activity={Activity}
+                        ChevronDown={ChevronDown}
+                        ChevronUp={ChevronUp}
+                        CircleAlert={CircleAlert}
+                        FileText={FileText}
+                        GitBranch={GitBranch}
+                        Hammer={Hammer}
+                        Image={Image}
+                        Pencil={Pencil}
+                        Search={Search}
+                        Sparkles={Sparkles}
+                        Terminal={Terminal}
+                        active={liveEvents.length ? busy || processEventsAreActive(liveEvents) : processEventsAreActive(messageEvents)}
+                        events={events}
+                      />
+                    ) : null}
+                    {isPendingAssistant ? (
+                      <article className={hiveClass("hiveAssistantTurn")} aria-label="Agent is thinking">
+                        <div className={hiveClass("hiveAssistantText")}>
+                          {renderThinkingLoader()}
+                        </div>
                       </article>
+                    ) : content ? (
+                      <article className={hiveClass("hiveAssistantTurn")}>
+                        <div className={hiveClass("hiveAssistantByline")}>
+                          {renderTaskBee(activeChatTaskRunning && index === visibleMessages.length - 1)}
+                          <strong>{selectedAgent?.name ?? "Agent"}</strong>
+                          {timeLabel ? <time>{timeLabel}</time> : null}
+                        </div>
+                        <div className={hiveClass("hiveAssistantText")}>
+                          {mirosharkCard ? <MiroSharkSimulationCard card={mirosharkCard} ChatMarkdown={ChatMarkdown} /> : null}
+                          {mirosharkCard?.hideRawContent ? null : ChatMarkdown
+                            ? <ChatMarkdown text={markdownText(content)} className={hiveClass("hiveMarkdown")} />
+                            : renderInline(content)}
+                        </div>
+                      </article>
+                    ) : null}
+                  </Fragment>
+                );
+              }) : (
+                <div className={hiveClass("hiveEmptyConversation")}>
+                  <strong>{selectedAgent ? `Start with ${selectedAgent.name}` : "No agent selected"}</strong>
+                  <p>{selectedAgent ? "Send a message from the composer below." : "Use the rail to select a chat or start a new one."}</p>
+                </div>
+              )}
+
+              {(busy && !hasStreamingChunk && !pendingAssistantBubbleVisible) ? (
+                <div className={hiveClass("hiveTypingRow")}>
+                  {renderThinkingLoader()}
+                </div>
+              ) : null}
+              <div ref={messagesEndRef} />
+            </div>
+          </div>
+
+          <section className={hiveClass("hiveComposerDock")} aria-label="Message composer">
+            {hasQueued ? (
+              <div className={hiveClass("hiveQueueStrip")} aria-label="Queued messages">
+                <strong>{queuedChatMessages.length} queued</strong>
+                <div>
+                  {queuedChatMessages.slice(0, 3).map((item: any, index: number) => {
+                    const flushing = flushingChatQueueId === item.id;
+                    return (
+                      <span className={hiveClass("hiveQueueItem")} key={item.id}>
+                        {MessageSquare ? <MessageSquare aria-hidden="true" /> : null}
+                        <span>{item.label || `Queued ${index + 1}`}</span>
+                        <button type="button" onClick={() => sendQueuedChatMessageNow?.(item.id)} disabled={busy || Boolean(flushingChatQueueId)}>
+                          {flushing && LoaderCircle ? <LoaderCircle aria-hidden="true" className={hiveClass("spinIcon")} /> : Send ? <Send aria-hidden="true" /> : null}
+                        </button>
+                        <button type="button" onClick={() => removeQueuedChatMessage?.(item.id)} disabled={flushing}>x</button>
+                      </span>
                     );
                   })}
                 </div>
-              </section>
+              </div>
             ) : null}
+
             <form onSubmit={sendMessage}>
+              {selectedAgent && ComposerField ? (
                 <ComposerField
+                  className={hiveClass("hiveComposerField")}
                   value={text ?? ""}
                   onChange={setText}
-                  placeholder={`Ask ${selectedAgent.name} to do something...`}
+                  placeholder={`Message ${selectedAgent.name}...`}
                   disabled={false}
                   busy={busy && !hasStreamingChunk}
                   attachments={chatAttachments}
@@ -1243,9 +1249,10 @@ export function ChatPanel(props: any) {
                   fileInputRef={chatFileInputRef}
                   imageInputRef={chatImageInputRef}
                   onFileChange={handleChatFileChange}
+                  onDropFileReferences={handleChatFileReferenceDrop}
                   onImageChange={handleChatImageChange}
                   onRemoveAttachment={removeChatAttachment}
-                  onAttachDirectory={() => void attachChatDirectory()}
+                  onAttachDirectory={() => void attachChatDirectory?.()}
                   recentDirectories={recentDirectories}
                   recentDirectoriesExpanded={recentDirectoriesExpanded}
                   setRecentDirectoriesExpanded={setRecentDirectoriesExpanded}
@@ -1256,7 +1263,7 @@ export function ChatPanel(props: any) {
                   recording={recording && voiceTarget === "chat"}
                   voiceBands={voiceBands}
                   voiceTranscript={voiceTranscript}
-                  onToggleRecording={recording ? stopAudioRecording : () => void startAudioRecording("chat")}
+                  onToggleRecording={recording ? stopAudioRecording : () => void startAudioRecording?.("chat")}
                   canSend={Boolean((text ?? "").trim() || chatAttachments.length || chatDirectories.length)}
                   submitOnEnter
                   hermesSlashCommands
@@ -1264,30 +1271,64 @@ export function ChatPanel(props: any) {
                   onAgentModeChange={setAgentMode}
                   modelPicker={modelPicker}
                 />
+              ) : null}
             </form>
-            <p className={chatClass("composerHint")}>
-              <span>{runtimeIdentity} active</span>
-              <span>Enter to send · Shift Enter for a new line</span>
-              {lastAssistant ? <span>Last reply ready</span> : null}
-            </p>
           </section>
-          ) : (
-          <section className={chatClass("chat", "chatEmptyState")}>
-            <button
-              type="button"
-              className={chatClass("historyOpenButton")}
-              aria-label="Open chat history"
-              aria-expanded={chatHistoryOpen}
-              onClick={() => setChatHistoryOpen(true)}
-            >
-              <AlignLeft aria-hidden="true" />
-            </button>
-            <strong>No machine selected</strong>
-            <p>Choose a connected machine on the left to start a chat.</p>
-          </section>
-          )}
-        </section>
-      ) : null}
+        </main>
+
+        <aside className={hiveClass("hiveChatShelf")} aria-label="Chat details">
+          <div className={hiveClass("hiveShelfInner")}>
+            <section className={hiveClass("hiveShelfPanel")}>
+              <div className={hiveClass("hiveShelfLabel")}>current task</div>
+              <h2>{selectedAgent?.name ?? "No agent selected"}</h2>
+              <p>{selectedChatDirectory ? `Working in ${selectedChatDirectory}` : selectedAgent ? "Ready for a new instruction." : "Pick a chat from the rail."}</p>
+              {chatKanbanGeneration?.phase === "done" ? (
+                <button type="button" className={hiveClass("hiveActionButton")} onClick={() => dismissChatKanbanGeneration?.(chatKanbanGeneration.key)}>
+                  {Check ? <Check aria-hidden="true" /> : null}
+                  <span>Kanban task created</span>
+                </button>
+              ) : null}
+            </section>
+
+            <section className={hiveClass("hiveShelfPanel")}>
+              <div className={hiveClass("hiveShelfLabel")}>telemetry</div>
+              <dl className={hiveClass("hiveShelfMeta")}>
+                {metrics.map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+
+            <section className={hiveClass("hiveShelfPanel")}>
+              <div className={hiveClass("hiveShelfLabel")}>live stdout</div>
+              <pre className={hiveClass("hiveTerminalBlock")}>{liveOutput || "No recent runtime output."}</pre>
+            </section>
+
+            <section className={hiveClass("hiveShelfPanel")}>
+              <div className={hiveClass("hiveShelfLabel")}>quick actions</div>
+              <div className={hiveClass("hiveQuickActions")}>
+                <button type="button" onClick={handleCheckStatus} disabled={statusChecking || !selectedAgent}>
+                  {Activity ? <Activity aria-hidden="true" /> : null}
+                  <span>Check status</span>
+                </button>
+                <button type="button" onClick={() => startMachineChat(chatSidebarTree[0])} disabled={!chatSidebarTree[0]?.onStartChat}>
+                  {MessageSquare ? <MessageSquare aria-hidden="true" /> : null}
+                  <span>New chat</span>
+                </button>
+                <button type="button" onClick={() => void refreshRuntimeIntegrations?.(selectedAgent)} disabled={!selectedAgent}>
+                  {RefreshCcw ? <RefreshCcw aria-hidden="true" /> : null}
+                  <span>Refresh runtime</span>
+                </button>
+              </div>
+              {statusAgentId === selectedAgent?.id && status?.message ? <p className={hiveClass("hiveStatusNote")}>{status.message}</p> : null}
+            </section>
+          </div>
+        </aside>
+      </section>
       <ChatFolderModal {...props} />
-  </>);
+    </>
+  );
 }

@@ -5292,3 +5292,345 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
   - Decision: selected
   - Reason: pinned HivemindOS repo already contains Fleet roster warning UI, Syncthing status APIs, and pairing repair flow
   - Path: `src/components/fleet/roster.tsx,src/features/dashboard/DashboardApp.tsx,scripts/agent-telemetry-collector.mjs`
+## 2026-06-05T03:50:20.965018+00:00 - triage
+
+- Request: Replace the current chat view with /Users/liam/Downloads/nextjs-chat while wiring everything in correctly
+- Source: user-supplied-local
+- Selected backbone: /Users/liam/Downloads/nextjs-chat
+
+### Candidates
+- /Users/liam/Downloads/nextjs-chat
+  - Decision: selected
+  - Reason: pinned chat view source with shell, rail, message thread, composer, shelf, and scoped CSS tokens
+  - Path: `src/components/chat`
+## 2026-06-05T03:53:42.621649+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /Users/liam/Downloads/nextjs-chat:src/components/chat/ChatView.tsx => src/features/dashboard/views/ChatPanel.tsx, /Users/liam/Downloads/nextjs-chat:src/components/chat/chat-tokens.module.css => src/features/dashboard/views/chat/HiveChatView.module.css, /Users/liam/Downloads/nextjs-chat:src/components/chat/ShelfPanels.tsx => src/features/dashboard/views/ChatPanel.tsx
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-05T04:10:08.167814+00:00 - local-search
+
+- Request: Add a Memanto-style typed persistent memory layer for HivemindOS shared Obsidian brain with remember, recall, answer primitives for Codex Claude Cursor
+- Source: local-index
+- Query: `Add a Memanto-style typed persistent memory layer for HivemindOS shared Obsidian brain with remember, recall, answer primitives for Codex Claude Cursor`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=10.12 LiamVisionary/exercise-db [repo-summary]
+   url: https://github.com/LiamVisionary/exercise-db
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
+2. score=9.54 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+3. score=9.54 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+4. score=9.18 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+5. score=5.93 LiamVisionary/claude-watch [repo-summary]
+   url: https://github.com/LiamVisionary/claude-watch
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
+6. score=4.99 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+7. score=4.63 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+8. score=1.31 LiamVisionary/claw-code-mobile-private [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile-private
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile-private.md
+   LiamVisionary/claw-code-mobile-private Private fork: on-device inference + experimental features Rust
+
+## 2026-06-05T04:10:11.665337+00:00 - prebuild-gate
+
+- Request: Add a Memanto-style typed persistent memory layer for HivemindOS shared Obsidian brain with remember, recall, answer primitives for Codex Claude Cursor
+- Source: public-github
+- Query: `Add a Memanto-style typed persistent memory layer for HivemindOS shared Obsidian brain with remember, recall, answer primitives for Codex Claude Cursor`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-06-05T04:12:43.019041+00:00 - triage
+
+- Request: Add Memanto-style typed persistent memory layer for HivemindOS shared Obsidian brain
+- Source: public-github
+- Selected backbone: theDakshJaitly/mex
+
+### Candidates
+- MemTensor/MemOS
+  - Decision: rejected
+  - Reason: highest-star memory candidate but whole-repo audit blocked on destructive-command findings and large dependency surface
+- AVIDS2/memorix
+  - Decision: rejected
+  - Reason: whole-repo audit blocked on destructive-command findings
+- Goldentrii/AgentRecall-MCP
+  - Decision: rejected
+  - Reason: whole-repo audit blocked on destructive-command findings
+- theDakshJaitly/mex
+  - Decision: selected
+  - Reason: MIT TypeScript project-memory scaffold with audited append-only event and scoring patterns
+  - Path: `src/events.ts,src/drift/frontmatter.ts,src/drift/scoring.ts`
+## 2026-06-05T04:17:47.449115+00:00 - assimilation-manifest
+
+- Request: Add Memanto-style typed persistent memory layer for HivemindOS shared Obsidian brain
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /Users/liam/.codex/github-assimilator/candidates/theDakshJaitly-mex:src/events.ts => src/lib/services/obsidian/agent-memory.ts, /Users/liam/.codex/github-assimilator/candidates/theDakshJaitly-mex:src/drift/frontmatter.ts => src/lib/services/obsidian/agent-memory.ts, /Users/liam/.codex/github-assimilator/candidates/theDakshJaitly-mex:src/drift/scoring.ts => src/lib/services/obsidian/agent-memory.ts
+- Verification: Appended three concrete mex donor mappings to ASSIMILATION.json without removing existing uncommitted chat-shell mappings.
+## 2026-06-05T05:02:00+00:00 - assimilation-correction
+
+- Request: Replace the whole chat view with `/Users/liam/Downloads/nextjs-chat`, preserving only the existing chat input style
+- Source: user-supplied-local
+- Decision: assimilated
+- Assimilated: /Users/liam/Downloads/nextjs-chat:src/components/chat/ChatView.tsx => src/features/dashboard/views/ChatPanel.tsx, /Users/liam/Downloads/nextjs-chat:src/components/chat/ChatNav.tsx => src/features/dashboard/views/ChatPanel.tsx, /Users/liam/Downloads/nextjs-chat:src/components/chat/ChatThread.tsx => src/features/dashboard/views/ChatPanel.tsx, /Users/liam/Downloads/nextjs-chat:src/components/chat/ShelfPanels.tsx => src/features/dashboard/views/ChatPanel.tsx, /Users/liam/Downloads/nextjs-chat:src/components/chat/chat-tokens.module.css => src/features/dashboard/views/chat/HiveChatView.module.css
+- Not assimilated: /Users/liam/Downloads/nextjs-chat:src/components/chat/Composer.tsx, because the existing HivemindOS composer/input style was the only preserved old chat UI.
+- Verification: Updated ASSIMILATION.json to record the whole-panel donor shell replacement and documented the intentionally unused donor composer in this log.
+## 2026-06-05T04:38:37.002843+00:00 - triage
+
+- Request: Add GitLawb memory writing proof receipts for shared brain memory
+- Source: local-pinned
+- Selected backbone: hivemind-os local GitLawb proof services
+
+### Candidates
+- src/lib/services/gitlawb/gitlawb-service.ts
+  - Decision: selected
+  - Reason: existing safe GitLawb status, DID detection, and proof sanitizer reused for memory receipts
+  - Path: `sanitizeGitLawbProof readGitLawbStatus`
+- src/lib/types/gitlawb.ts
+  - Decision: selected
+  - Reason: existing GitLawbProof shape extended locally for agent-memory receipts
+  - Path: `GitLawbProof`
+- src/lib/services/projects/project-registry.ts
+  - Decision: selected
+  - Reason: existing sanitized project proof construction used as local pattern for memory proof metadata
+  - Path: `gitLawbProofForProject`
+## 2026-06-05T04:43:34.608338+00:00 - assimilation-manifest
+
+- Request: Add GitLawb memory writing proof receipts for shared brain memory
+- Source: local-pinned
+- Selected backbone: hivemind-os local GitLawb proof services
+
+### Candidates
+- src/lib/services/gitlawb/gitlawb-service.ts=>src/lib/services/obsidian/agent-memory.ts
+  - Decision: adapted_code
+  - Reason: GitLawb status detection and proof sanitizer adapted into optional memory receipt generation
+- src/lib/types/gitlawb.ts=>src/lib/services/obsidian/agent-memory.ts
+  - Decision: adapted_code
+  - Reason: GitLawbProof kind extended/reused for agent-memory receipts
+- src/lib/services/projects/project-registry.ts=>src/lib/services/obsidian/agent-memory.ts
+  - Decision: adapted_code
+  - Reason: sanitized proof metadata pattern adapted for memory receipts
+## 2026-06-05T05:00:06.388764+00:00 - triage
+
+- Request: Optimize shared brain memory retrieval with JSONL hot index
+- Source: local-pinned
+- Selected backbone: existing agent-memory JSONL index pattern
+
+### Candidates
+- src/lib/services/obsidian/agent-memory.ts
+  - Decision: selected
+  - Reason: existing append-only JSONL memory index writer extended into a materialized search index and cache
+- /Users/liam/.codex/github-assimilator/candidates/theDakshJaitly-mex/src/events.ts
+  - Decision: selected
+  - Reason: previously audited append-only JSONL event log pattern remains the donor pattern for the optimized index
+
+## 2026-06-05T13:07:37+00:00 - triage
+
+- Request: Surface Realtime call tool waits with animation and chime
+- Source: local-pinned
+- Selected backbone: existing in-app call Realtime bridge
+
+### Candidates
+- src/components/fleet/agent-call-modal.tsx
+  - Decision: selected
+  - Reason: existing dashboard Realtime data-channel parser already receives OpenAI function-call events and owns the computer-agent delegation flow
+  - Path: `parseRealtimeFunctionCall`, `useDashboardRealtime`, `askComputerAgent`
+- src/components/fleet/fleet-tokens.module.css
+  - Decision: selected
+  - Reason: existing call modal visual states and keyframes were the safest place to add a working orbit and notice without introducing a new UI surface
+  - Path: `callAgentIcon*`, `callRingOrbit`, `callTelemetry`
+## 2026-06-05T13:14:31.250406+00:00 - local-search
+
+- Request: Implement MiroShark x402 paid API run client in TypeScript with EIP-3009 USDC Base using @x402/fetch @x402/evm
+- Source: local-index
+- Query: `Implement MiroShark x402 paid API run client in TypeScript with EIP-3009 USDC Base using @x402/fetch @x402/evm`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=10.21 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+2. score=6.99 LiamVisionary/exercise-db [repo-summary]
+   url: https://github.com/LiamVisionary/exercise-db
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
+3. score=5.70 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+4. score=5.35 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+5. score=4.39 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+6. score=2.50 LiamVisionary/coaching-scheduler [repo-summary]
+   url: https://github.com/LiamVisionary/coaching-scheduler
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-coaching-scheduler.md
+   LiamVisionary/coaching-scheduler TypeScript
+7. score=2.50 LiamVisionary/Inworld-LLM-TTS-Graph [repo-summary]
+   url: https://github.com/LiamVisionary/Inworld-LLM-TTS-Graph
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-Inworld-LLM-TTS-Graph.md
+   LiamVisionary/Inworld-LLM-TTS-Graph TypeScript
+8. score=2.50 LiamVisionary/inworld-nodejs-generate-token [repo-summary]
+   url: https://github.com/LiamVisionary/inworld-nodejs-generate-token
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-inworld-nodejs-generate-token.md
+   LiamVisionary/inworld-nodejs-generate-token TypeScript
+
+## 2026-06-05T13:14:34.150497+00:00 - public-search
+
+- Request: Implement MiroShark x402 paid API run client in TypeScript with EIP-3009 USDC Base using @x402/fetch @x402/evm
+- Source: public-github
+- Query: `Implement MiroShark x402 paid API run client in TypeScript with EIP-3009 USDC Base using @x402/fetch @x402/evm`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-06-05T13:14:34.230601+00:00 - prebuild-gate
+
+- Request: Implement MiroShark x402 paid API run client in TypeScript with EIP-3009 USDC Base using @x402/fetch @x402/evm
+- Source: public-github
+- Query: `Implement MiroShark x402 paid API run client in TypeScript with EIP-3009 USDC Base using @x402/fetch @x402/evm`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: warn: query failed: Implement MiroShark x402 paid API run client in TypeScript with EIP-3009 USDC Base using @x402/fetch @x402/evm: Invalid search query "Implement MiroShark x402 paid API run client in TypeScript with EIP-3009 USDC Base using @x402/fetch @x402/evm archived:false fork:false is:public".
+The listed users and repositories cannot be searched either because the resources do not exist or you do not have permission to view them.
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
+/Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
+cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+
+## 2026-06-05T13:15:10.304971+00:00 - public-search
+
+- Request: x402 fetch evm exact client typescript
+- Source: public-github
+- Query: `x402 fetch evm exact client typescript`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-06-05T13:15:39.596439+00:00 - triage
+
+- Request: Implement MiroShark x402 paid API buyer endpoint support
+- Source: existing-project-plus-public-search
+- Selected backbone: coinbase/x402 via installed @x402/fetch and @x402/evm
+- Verification: Inspected existing x402-agent-fetch implementation and wallet API route; identified missing JSON body UI/action support and MiroShark discovery copy.
+
+### Candidates
+- coinbase/x402
+  - Decision: selected
+  - Reason: official SDK semantics already implemented in src/lib/services/wallet/x402-agent-fetch.ts through wrapFetchWithPaymentFromConfig and ExactEvmScheme
+  - Path: `packages/x402-fetch packages/x402-evm`
+- public GitHub searches
+  - Decision: rejected
+  - Reason: search_github_public found no additional extractable candidates beyond official SDK package already depended on by the project
+## 2026-06-05T13:21:13.529974+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: /Users/liam/Documents/code/projects/hivemind-os:src/lib/services/wallet/x402-agent-fetch.ts => src/lib/services/miroshark/x402-buyer.ts, /Users/liam/Documents/code/projects/hivemind-os:src/app/api/wallet/x402/route.ts => src/app/api/miroshark/x402/route.ts
+- Verification: Wrote ASSIMILATION.json with 2 entries and custom_code_assessment=balanced.
+## 2026-06-06T04:05:07.262262+00:00 - triage
+
+- Request: Use kepano/obsidian-skills to improve HivemindOS brain
+- Source: user-supplied-github
+- Selected backbone: kepano/obsidian-skills
+
+### Candidates
+- kepano/obsidian-skills
+  - Decision: selected
+  - Reason: pinned source for Obsidian-native agent skills; selected obsidian-markdown, obsidian-bases, json-canvas, defuddle paths
+  - Path: `skills/obsidian-markdown,skills/obsidian-bases,skills/json-canvas,skills/defuddle`
+## 2026-06-06T04:10:12.697030+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: kepano/obsidian-skills:skills/obsidian-markdown => packaged-skills/auto-install/obsidian-markdown, kepano/obsidian-skills:skills/obsidian-bases => packaged-skills/auto-install/obsidian-bases, kepano/obsidian-skills:skills/json-canvas => packaged-skills/auto-install/json-canvas, kepano/obsidian-skills:skills/defuddle => packaged-skills/auto-install/defuddle
+- Verification: Wrote ASSIMILATION.json with 4 entries and custom_code_assessment=balanced.
+## 2026-06-06T05:21:50.678881+00:00 - local-search
+
+- Request: Add cool chat UI animations and running feedback for MiroShark x402 simulations in a Next.js React TypeScript dashboard
+- Source: local-index
+- Query: `Add cool chat UI animations and running feedback for MiroShark x402 simulations in a Next.js React TypeScript dashboard`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=15.69 react-native-google-signin/google-signin-next [repo-summary]
+   url: https://github.com/react-native-google-signin/google-signin-next
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
+2. score=14.22 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+3. score=11.58 nativelaunch/expolaunch-template [repo-summary]
+   url: https://github.com/nativelaunch/expolaunch-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
+4. score=11.58 nativelaunch/nativelaunch-monorepo-template [repo-summary]
+   url: https://github.com/nativelaunch/nativelaunch-monorepo-template
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
+5. score=10.04 LiamVisionary/exercise-db [repo-summary]
+   url: https://github.com/LiamVisionary/exercise-db
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
+6. score=9.18 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+7. score=8.58 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+8. score=6.69 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+
+## 2026-06-06T05:21:56.709994+00:00 - prebuild-gate
+
+- Request: Add cool chat UI animations and running feedback for MiroShark x402 simulations in a Next.js React TypeScript dashboard
+- Source: public-github
+- Query: `Add cool chat UI animations and running feedback for MiroShark x402 simulations in a Next.js React TypeScript dashboard`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-06-06T05:23:13.745742+00:00 - triage
+
+- Request: Add chat UI animations and result cards for MiroShark x402 simulations
+- Source: local-repo
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: existing ChatPanel process-event renderer and HiveChatView CSS are the native chat backbone for this app
+  - Path: `src/features/dashboard/views/ChatPanel.tsx,src/features/dashboard/views/chat/HiveChatView.module.css`
+- running-elephant/datart
+  - Decision: rejected
+  - Reason: public search highest relevant TypeScript dashboard, but data-viz dashboard components are too broad and mismatched for this existing chat surface
+- themesseselection/materio-mui-nextjs-admin-template-free
+  - Decision: rejected
+  - Reason: generic admin template; no extractable MiroShark/chat process card behavior
+## 2026-06-06T05:36:15.362187+00:00 - assimilation-manifest
+
+- Request: Add chat UI animations and result cards for MiroShark x402 simulations
+- Source: local-repo
+- Decision: assimilated
+- Assimilated: hivemind-os:src/features/dashboard/views/ChatPanel.tsx => src/features/dashboard/views/ChatPanel.tsx; hivemind-os:src/lib/services/miroshark/x402-buyer.ts => src/features/dashboard/views/chat/MiroSharkSimulationCard.tsx; hivemind-os:src/features/dashboard/views/chat/HiveChatView.module.css => src/features/dashboard/views/chat/MiroSharkSimulationCard.module.css
+- Verification: Updated ASSIMILATION.json without removing existing uncommitted entries.

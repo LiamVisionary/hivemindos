@@ -1,0 +1,1476 @@
+.hiveChatRoot {
+  --hive-bg-0: #06080d;
+  --hive-bg-1: #0a0e16;
+  --hive-bg-2: #10151f;
+  --hive-bg-3: #161c2a;
+  --hive-bg-4: #1d2334;
+  --hive-line: rgba(148, 163, 184, 0.12);
+  --hive-line-2: rgba(148, 163, 184, 0.22);
+  --hive-hex-line: rgba(94, 234, 212, 0.18);
+  --hive-fg: #f4f7fb;
+  --hive-fg-2: #c6d1df;
+  --hive-fg-3: #8e9bb1;
+  --hive-fg-4: #5a6478;
+  --hive-cyan: #2dd4bf;
+  --hive-cyan-2: #5eead4;
+  --hive-cyan-3: #99f6e4;
+  --hive-honey: #f2b705;
+  --hive-honey-2: #ffd45a;
+  --hive-danger: #fb7185;
+  --hive-danger-2: #fecdd3;
+  --hive-panel: linear-gradient(180deg, rgba(16, 20, 29, 0.78), rgba(6, 8, 13, 0.6));
+  --hive-panel-card: linear-gradient(180deg, rgba(22, 28, 42, 0.72), rgba(16, 21, 31, 0.62));
+
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr) 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--hive-bg-0);
+  color: var(--hive-fg);
+  font-family: "Geist", "Inter", system-ui, sans-serif;
+  transition: grid-template-columns 340ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.shelfOpen {
+  grid-template-columns: 264px minmax(0, 1fr) 336px;
+}
+
+.hiveGridBackdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    linear-gradient(var(--hive-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hive-line) 1px, transparent 1px);
+  background-size: 62px 62px;
+  mask-image: radial-gradient(circle at 50% 0%, #000 0%, transparent 70%);
+}
+
+.hiveHeaderButton,
+.hiveShelfToggle,
+.hiveActionButton,
+.hiveQuickActions button,
+.hiveNewChatButton,
+.hiveShowMoreButton,
+.hiveQueueItem button {
+  border: 1px solid var(--hive-line-2);
+  border-radius: 9px;
+  background: var(--hive-bg-2);
+  color: var(--hive-fg-2);
+  cursor: pointer;
+}
+
+.hiveHeaderButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hiveHeaderButton svg,
+.hiveShelfToggle svg,
+.hiveNewChatButton svg,
+.hiveNavGroupHeader svg,
+.hiveNavRow svg,
+.hiveRowAction svg,
+.hiveMetaPill svg,
+.hiveActionButton svg,
+.hiveQuickActions svg,
+.hiveQueueItem svg {
+  width: 15px;
+  height: 15px;
+}
+
+.hiveShelfToggle {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+}
+
+.hiveShelfToggle[aria-pressed="true"] {
+  border-color: rgba(94, 234, 212, 0.45);
+  background: rgba(45, 212, 191, 0.12);
+  color: var(--hive-cyan-2);
+}
+
+.hiveChatRail,
+.hiveChatMain,
+.hiveChatShelf {
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.hiveChatRail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border-right: 1px solid var(--hive-line);
+  background: rgba(10, 14, 22, 0.94);
+}
+
+.hiveRailHeader {
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid var(--hive-line);
+  padding: 10px;
+}
+
+.hiveRailToolbar { display: flex; align-items: center; gap: 8px; }
+
+.hiveRailIconButton { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; color: var(--hive-fg-3); }
+
+.hiveRailIconButton[aria-pressed="true"] { border-color: rgba(94, 234, 212, 0.45); background: rgba(45, 212, 191, 0.12); color: var(--hive-cyan-2); }
+
+.hiveRailSearch { display: flex; align-items: center; gap: 7px; min-width: 0; border: 1px solid var(--hive-line-2); border-radius: 8px; background: rgba(5, 9, 15, 0.86); padding: 7px 9px; color: var(--hive-fg-4); }
+
+.hiveRailSearch input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--hive-fg); font: inherit; }
+
+.hiveRailFooter,
+.hiveNavGroupHeader,
+.hiveNavCopy small,
+.hiveThreadDivider small,
+.hiveShelfLabel,
+.hiveShelfMeta,
+.hiveMetaPill,
+.hiveQueueStrip,
+.hiveStatusNote {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.hiveShelfLabel {
+  color: var(--hive-fg-4);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.hiveRailBody {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 10px 16px;
+  scrollbar-width: thin;
+}
+
+.hiveRailBody::-webkit-scrollbar,
+.hiveChatMessages::-webkit-scrollbar,
+.hiveShelfInner::-webkit-scrollbar,
+.hiveTerminalBlock::-webkit-scrollbar,
+.hiveProcessScroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.hiveRailBody::-webkit-scrollbar-thumb,
+.hiveChatMessages::-webkit-scrollbar-thumb,
+.hiveShelfInner::-webkit-scrollbar-thumb,
+.hiveTerminalBlock::-webkit-scrollbar-thumb,
+.hiveProcessScroll::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: var(--hive-line-2);
+}
+
+.hiveNewChatButton {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 11px;
+  border-color: rgba(94, 234, 212, 0.28);
+  background: rgba(45, 212, 191, 0.06);
+  color: var(--hive-cyan-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hiveRailToolbar .hiveNewChatButton { flex: 1; }
+
+.hiveNavSection,
+.hiveMachineGroup,
+.hiveFolderGroup,
+.hiveNavChildren,
+.hiveNavLeafList {
+  display: grid;
+  gap: 2px;
+}
+
+.hiveNavGroupHeader,
+.hiveNavRow {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--hive-fg-3);
+  text-align: left;
+}
+
+.hiveNavGroupHeader {
+  min-height: 32px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.hiveNavGroupHeader span {
+  flex: 1;
+}
+
+.hiveNavGroupHeader small {
+  color: var(--hive-fg-4);
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.openChevron {
+  transform: rotate(90deg);
+}
+
+.hiveNavRowWrap {
+  position: relative;
+}
+
+.hiveNavRow {
+  position: relative;
+  min-height: 38px;
+  padding: 6px 34px 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 130ms ease, color 130ms ease;
+}
+
+.hiveNavRow:hover,
+.hiveNavRow.active {
+  background: var(--hive-bg-2);
+}
+
+.hiveNavRow.machine {
+  padding-left: 10px;
+}
+
+.hiveNavRow.folder {
+  min-height: 34px;
+  padding-left: 10px;
+}
+
+.hiveNavRow.chatLeaf {
+  min-height: 36px;
+  padding-left: 11px;
+}
+
+.hiveNavRow.searchResult { align-items: start; padding-top: 8px; padding-bottom: 8px; }
+
+.hiveNavIcon {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--hive-cyan-2);
+}
+
+.hiveNavCopy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.hiveNavCopy > strong {
+  color: var(--hive-fg-2);
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hiveNavRow.active .hiveNavCopy > strong {
+  color: var(--hive-fg);
+}
+
+.hiveNavCopy small {
+  color: var(--hive-fg-4);
+  font-size: 9.5px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hiveNavCopy .hiveSearchSnippet { white-space: normal; }
+
+.hiveNavCopy small strong {
+  color: var(--hive-fg-3);
+  font-size: inherit;
+  font-weight: 700;
+  line-height: inherit;
+}
+
+.hiveSearchSummary { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 8px; color: var(--hive-fg-4); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
+
+.hiveRowAction {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  z-index: 3;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid var(--hive-line-2);
+  border-radius: 7px;
+  background: var(--hive-bg-3);
+  color: var(--hive-cyan-2);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.hiveNavRowWrap:hover .hiveRowAction,
+.hiveRowAction:focus-visible {
+  opacity: 1;
+}
+
+.hiveRowAction:hover {
+  border-color: rgba(94, 234, 212, 0.4);
+  background: rgba(45, 212, 191, 0.16);
+}
+
+.hiveNavNested {
+  display: grid;
+  gap: 1px;
+  margin: 1px 0 2px 20px;
+  border-left: 1px solid var(--hive-line);
+}
+
+.hiveNavLeafList {
+  margin: 0 0 2px 18px;
+  padding-left: 9px;
+  border-left: 1px solid var(--hive-line);
+}
+
+.hiveEmptyText {
+  margin: 4px 8px 8px;
+  color: var(--hive-fg-4);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.hiveShowMoreButton {
+  justify-self: start;
+  margin: 4px 0 6px 11px;
+  padding: 5px 9px;
+  color: var(--hive-cyan-2);
+  font-size: 11px;
+}
+
+.hiveRailFooter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--hive-line);
+  padding: 11px 16px;
+  color: var(--hive-fg-3);
+  font-size: 10px;
+}
+
+.hiveTaskBee { display: inline-grid; width: 18px; height: 18px; flex: 0 0 18px; place-items: center; filter: drop-shadow(0 0 7px rgba(94, 234, 212, 0.34)); }
+
+.hiveChatMain {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  background: rgba(6, 8, 13, 0.5);
+}
+
+.hiveChatHeader {
+  position: relative;
+  display: block;
+  min-height: 62px;
+  border-bottom: 1px solid var(--hive-line);
+  padding: 10px 24px;
+  background: rgba(6, 8, 13, 0.32);
+}
+
+.hiveAgentPicker {
+  position: relative;
+  width: min(420px, calc(100% - 116px));
+  min-width: 0;
+  max-width: 100%;
+}
+
+.hiveHeaderControls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.hiveAgentCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  min-height: 42px;
+  gap: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 13px;
+  padding: 5px 9px 5px 6px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.62), rgba(8, 13, 22, 0.42));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.2);
+  color: inherit;
+  text-align: left;
+}
+
+.hiveAgentCard:hover,
+.hiveAgentCard:focus-visible {
+  border-color: rgba(94, 234, 212, 0.45);
+  background: linear-gradient(180deg, rgba(19, 29, 46, 0.74), rgba(10, 17, 28, 0.54));
+}
+
+.hiveAgentAvatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  color: var(--hive-fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.hiveAgentIconImage {
+  width: 30px;
+  height: 30px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.hiveHeaderCopy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding-right: 0;
+  transition: padding-right 340ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hiveTitleRow {
+  display: flex;
+  min-width: 0;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 9px;
+}
+
+.hiveTitleRow h1 {
+  min-width: 0;
+  margin: 0;
+  color: var(--hive-fg);
+  font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 740;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hiveHeaderMeta {
+  display: block;
+  min-width: 0;
+  color: var(--hive-fg-4);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hiveHeaderMeta span {
+  color: var(--hive-fg-3);
+}
+
+.hiveAgentChevron {
+  width: 16px;
+  height: 16px;
+  color: var(--hive-fg-4);
+  transition: transform 180ms ease, color 180ms ease;
+}
+
+.hiveAgentCard:hover .hiveAgentChevron,
+.hiveAgentCard:focus-visible .hiveAgentChevron {
+  color: var(--hive-cyan-2);
+}
+
+.hiveAgentMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  width: min(430px, 100%);
+  max-height: min(390px, calc(100vh - 190px));
+  overflow: auto;
+  gap: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 16px;
+  padding: 8px;
+  background: rgba(8, 12, 20, 0.96);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(18px);
+}
+
+.hiveAgentMenu button {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 8px;
+  background: transparent;
+  color: var(--hive-fg-3);
+  text-align: left;
+}
+
+.hiveAgentMenu button:hover,
+.hiveAgentMenu button:focus-visible,
+.hiveAgentMenu button.active {
+  border-color: rgba(94, 234, 212, 0.3);
+  background: rgba(45, 212, 191, 0.08);
+  color: var(--hive-fg);
+}
+
+.hiveAgentMenu button > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.hiveAgentMenu strong {
+  color: currentColor;
+  font-size: 12.5px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hiveAgentMenu small {
+  color: var(--hive-fg-4);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hiveAgentMenuIcon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.72);
+  color: var(--hive-cyan-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.hiveAgentMenuIcon.hasImage {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.hiveStatePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--hive-fg-3);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hiveStatePill > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.16);
+}
+
+.hiveStatePill.cyan {
+  color: var(--hive-cyan-2);
+}
+
+.hiveStatePill.honey {
+  color: var(--hive-honey-2);
+}
+
+.hiveStatePill.danger {
+  color: var(--hive-danger-2);
+}
+
+.hiveChatMessages {
+  min-height: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 24px 24px 10px;
+  scrollbar-width: thin;
+}
+
+.hiveMessageThread {
+  display: grid;
+  align-content: start;
+  gap: 26px;
+  width: min(720px, 100%);
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+}
+
+.hiveThreadDivider {
+  display: grid;
+  grid-template-columns: minmax(32px, 1fr) auto minmax(32px, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.hiveThreadDivider span {
+  height: 1px;
+  background: var(--hive-line);
+}
+
+.hiveThreadDivider small {
+  color: var(--hive-fg-4);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.hiveUserTurn {
+  display: grid;
+  min-width: 0;
+  justify-items: end;
+  gap: 5px;
+}
+
+.hiveUserBubble {
+  max-width: min(82%, 620px);
+  border: 1px solid rgba(94, 234, 212, 0.26);
+  border-radius: 16px 16px 5px 16px;
+  background: rgba(45, 212, 191, 0.1);
+  color: var(--hive-fg);
+  padding: 11px 15px;
+  font-size: 14.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.hiveUserTurn time {
+  color: var(--hive-fg-4);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+
+.hiveAssistantTurn {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.hiveAssistantByline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--hive-fg-4);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.hiveAssistantByline strong {
+  color: var(--hive-cyan-2);
+  font-weight: 650;
+}
+
+.hiveAssistantByline time {
+  color: var(--hive-fg-4);
+}
+
+.hiveAssistantText {
+  min-width: 0;
+  max-width: 100%;
+  padding-left: 14px;
+  color: var(--hive-fg-2);
+  font-size: 14.5px;
+  line-height: 1.68;
+  overflow-wrap: anywhere;
+}
+
+.hiveMarkdown {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  gap: 10px;
+  color: inherit;
+}
+
+.hiveMarkdown :global(p),
+.hiveMarkdown :global(pre),
+.hiveMarkdown :global(dl),
+.hiveMarkdown :global(ul),
+.hiveMarkdown :global(ol) {
+  margin: 0;
+}
+
+.hiveMarkdown :global(p) {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.hiveMarkdown :global(pre) {
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid var(--hive-line);
+  border-radius: 11px;
+  background: rgba(2, 6, 12, 0.62);
+  color: var(--hive-cyan-3);
+  padding: 12px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.hiveMarkdown :global(code) {
+  border: 1px solid var(--hive-line);
+  border-radius: 4px;
+  background: rgba(2, 6, 12, 0.5);
+  color: var(--hive-cyan-3);
+  padding: 1px 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.86em;
+}
+
+.hiveMarkdown :global(pre code) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.hiveMarkdown :global(button) {
+  border: 1px solid var(--hive-line-2);
+  border-radius: 7px;
+  background: var(--hive-bg-2);
+  color: var(--hive-fg-3);
+}
+
+.hiveMarkdown :global(strong) {
+  color: var(--hive-fg);
+  font-weight: 700;
+}
+
+.hiveMarkdown :global(a) {
+  color: var(--hive-cyan-3);
+  text-decoration: underline;
+  text-decoration-color: rgba(94, 234, 212, 0.55);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.hiveMarkdown :global(a:hover),
+.hiveMarkdown :global(a:focus-visible) {
+  color: var(--hive-fg);
+  text-decoration-color: var(--hive-cyan-2);
+}
+
+.hiveAttachmentList {
+  display: flex;
+  max-width: min(82%, 620px);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.hiveMetaPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--hive-line-2);
+  border-radius: 7px;
+  background: var(--hive-bg-2);
+  color: var(--hive-fg-3);
+  padding: 3px 8px;
+  font-size: 10.5px;
+}
+
+.hiveTerminalBlock {
+  max-width: 100%;
+  max-height: 190px;
+  margin: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid var(--hive-line);
+  border-radius: 11px;
+  background: rgba(2, 6, 12, 0.62);
+  color: var(--hive-cyan-3);
+  padding: 12px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.hiveProcessPanel {
+  display: grid;
+  width: min(560px, 100%);
+  min-width: 0;
+  margin-top: 8px;
+  margin-bottom: -12px;
+  overflow: hidden;
+  border: 1px solid rgba(45, 212, 191, 0.16);
+  border-radius: 12px;
+  background: rgba(5, 10, 18, 0.72);
+}
+
+.hiveProcessToggle {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: rgba(45, 212, 191, 0.08);
+  color: var(--hive-cyan-2);
+  padding: 9px 11px;
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: left;
+}
+
+.hiveProcessToggle span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.hiveProcessToggle small {
+  margin-left: auto;
+  color: var(--hive-fg-3);
+  font-size: 10px;
+}
+
+.hiveProcessToggle svg {
+  width: 15px;
+  height: 15px;
+}
+
+.hiveProcessScroll {
+  display: grid;
+  max-height: 352px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.hiveProcessRow {
+  display: grid;
+  grid-template-columns: 64px 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  border-top: 1px solid rgba(148, 163, 184, 0.09);
+  padding: 10px 11px;
+}
+
+.hiveProcessRow:first-child {
+  border-top: 0;
+}
+
+.hiveProcessRow time {
+  color: var(--hive-fg-4);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  line-height: 28px;
+  white-space: nowrap;
+}
+
+.hiveProcessBadge {
+  --process-accent: var(--hive-cyan);
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--process-accent) 52%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--process-accent) 12%, transparent);
+  color: var(--process-accent);
+}
+
+.hiveProcessBadge.active {
+  animation: hivePulse 1.6s ease-in-out infinite;
+}
+
+.hiveProcessBadge svg {
+  width: 14px;
+  height: 14px;
+}
+
+.hiveProcessBody {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.hiveProcessMetaLine {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.hiveProcessMetaLine strong {
+  color: var(--hive-fg-2);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.hiveProcessMetaLine code {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 5px;
+  background: rgba(15, 23, 42, 0.62);
+  color: var(--hive-cyan-3);
+  padding: 1px 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+
+.hiveProcessBody > span {
+  min-width: 0;
+  color: var(--hive-fg-3);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.hiveEmptyConversation,
+.hiveLoaderRow,
+.hiveTypingRow {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  color: var(--hive-fg-4);
+  text-align: center;
+}
+
+.hiveEmptyConversation strong {
+  color: var(--hive-fg-2);
+}
+
+.hiveEmptyConversation p {
+  max-width: 420px;
+  margin: 0;
+  line-height: 1.55;
+}
+
+.hiveLoaderRow,
+.hiveTypingRow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.hiveTypingDots {
+  display: flex;
+  gap: 5px;
+}
+
+.hiveTypingDots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--hive-fg-3);
+  animation: hiveTyping 1.1s ease-in-out infinite;
+}
+
+.hiveTypingDots i:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.hiveTypingDots i:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+.hiveComposerDock {
+  display: grid;
+  position: relative;
+  z-index: 20;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+  gap: 0;
+  padding: 8px 24px 18px;
+}
+
+.hiveComposerDock > form {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+}
+
+.hiveComposerDock .hiveComposerField,
+.hiveComposerDock :global([class*="chatComposerField"]) {
+  display: flex !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  min-height: 148px !important;
+  flex-direction: column !important;
+  overflow: visible !important;
+}
+
+.hiveComposerDock .hiveComposerField :global(textarea),
+.hiveComposerDock :global([class*="chatComposerField"] textarea) {
+  display: block !important;
+  min-height: 92px !important;
+  max-height: 180px !important;
+  flex: 1 1 auto !important;
+  padding: 18px 18px 10px !important;
+  resize: vertical !important;
+}
+
+.hiveComposerDock .hiveComposerField :global([class*="composerTools"]),
+.hiveComposerDock :global([class*="composerTools"]) {
+  position: static !important;
+  z-index: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  min-height: 44px !important;
+  flex: 0 0 auto !important;
+  flex-wrap: wrap !important;
+  margin-top: 0 !important;
+  padding: 0 12px 12px !important;
+}
+
+.hiveComposerDock :global([class*="attachmentMenuWrap"]),
+.hiveComposerDock :global([class*="composerActions"]) {
+  min-width: 0;
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.hiveComposerDock :global([class*="attachmentMenuWrap"]) {
+  position: relative;
+  z-index: 30;
+}
+
+.hiveComposerDock :global([class*="attachmentMenu"]) {
+  z-index: 80;
+}
+
+.hiveComposerDock :global(.dropActive), .hiveComposerDock :global([class*="dropActive"]) {
+  border-color: rgba(94, 234, 212, 0.66) !important;
+  border-style: dashed !important;
+  box-shadow:
+    0 20px 70px rgba(0, 0, 0, 0.44),
+    0 0 0 1px rgba(94, 234, 212, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+}
+
+.hiveComposerDock :global(.composerDropOverlay), .hiveComposerDock :global([class*="composerDropOverlay"]) {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  border-radius: inherit;
+  background: rgba(3, 7, 12, 0.82);
+  color: var(--hive-fg);
+  font-family: var(--hive-font);
+  pointer-events: none;
+}
+
+.hiveComposerDock :global(.composerDropIcon), .hiveComposerDock :global([class*="composerDropIcon"]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(94, 234, 212, 0.5);
+  border-radius: 999px;
+  background: rgba(94, 234, 212, 0.12);
+  color: var(--hive-accent);
+}
+
+.hiveComposerDock :global([class*="composerDirectoryButton"]),
+.hiveComposerDock :global([class*="composerModelButton"]),
+.hiveComposerDock :global([class*="composerModeButton"]) {
+  max-width: 100%;
+}
+
+.hiveComposerDock :global([class*="composerDirectoryButton"] span),
+.hiveComposerDock :global([class*="composerModelButton"] span),
+.hiveComposerDock :global([class*="composerModeButton"] span) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hiveQueueStrip {
+  display: flex;
+  width: min(720px, 100%);
+  margin: 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--hive-fg-3);
+  font-size: 10.5px;
+}
+
+.hiveQueueStrip > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.hiveQueueItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--hive-line-2);
+  border-radius: 8px;
+  background: var(--hive-bg-2);
+  padding: 4px 5px 4px 8px;
+}
+
+.hiveQueueItem button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.hiveChatShelf {
+  overflow: hidden;
+  border-left: 1px solid transparent;
+  background: rgba(10, 14, 22, 0.94);
+}
+
+.shelfOpen .hiveChatShelf {
+  border-left-color: var(--hive-line);
+}
+
+.hiveShelfInner {
+  display: grid;
+  width: 336px;
+  height: 100%;
+  align-content: start;
+  gap: 18px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 66px 16px 18px;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.shelfOpen .hiveShelfInner {
+  opacity: 1;
+  transition-delay: 120ms;
+}
+
+.hiveShelfPanel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--hive-line);
+  border-radius: 8px;
+  background: var(--hive-panel);
+  padding: 13px;
+}
+
+.hiveShelfPanel h2 {
+  margin: 0;
+  color: var(--hive-fg);
+  font-size: 14px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.hiveShelfPanel p {
+  margin: 0;
+  color: var(--hive-fg-3);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.hiveShelfMeta {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.hiveShelfMeta div {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.hiveShelfMeta dt {
+  color: var(--hive-fg-4);
+  font-size: 10px;
+}
+
+.hiveShelfMeta dd {
+  margin: 0;
+  color: var(--hive-fg-2);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.hiveActionButton,
+.hiveQuickActions button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 34px;
+  padding: 8px 10px;
+  color: var(--hive-fg-2);
+  font-size: 12px;
+}
+
+.hiveActionButton {
+  justify-self: start;
+  color: var(--hive-cyan-2);
+}
+
+.hiveQuickActions {
+  display: grid;
+  gap: 7px;
+}
+
+.hiveQuickActions button:hover,
+.hiveActionButton:hover,
+.hiveHeaderButton:hover,
+.hiveShelfToggle:hover,
+.hiveQueueItem button:hover,
+.hiveNewChatButton:hover {
+  border-color: rgba(94, 234, 212, 0.4);
+  background: rgba(45, 212, 191, 0.12);
+  color: var(--hive-cyan-2);
+}
+
+.hiveQuickActions button:disabled,
+.hiveActionButton:disabled,
+.hiveHeaderButton:disabled,
+.hiveQueueItem button:disabled,
+.hiveNewChatButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.hiveStatusNote {
+  border-top: 1px solid var(--hive-line);
+  padding-top: 10px;
+  color: var(--hive-fg-3);
+  font-size: 11px;
+}
+
+.spinIcon {
+  animation: hiveSpin 900ms linear infinite;
+}
+
+@keyframes hiveSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes hivePulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
+  }
+
+  50% {
+    box-shadow: 0 0 0 6px rgba(45, 212, 191, 0.06);
+  }
+}
+
+@keyframes hiveTyping {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@media (max-width: 980px) {
+  .hiveChatRoot,
+  .shelfOpen {
+    grid-template-columns: 264px minmax(0, 1fr) 0;
+  }
+
+  .hiveChatShelf {
+    display: none;
+  }
+
+  .hiveHeaderControls {
+    top: 16px;
+    right: 16px;
+  }
+
+  .hiveHeaderButton {
+    width: 34px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .hiveHeaderButton span {
+    display: none;
+  }
+
+  .hiveAgentPicker {
+    width: min(420px, calc(100% - 92px));
+  }
+
+  .hiveHeaderCopy {
+    padding-right: 0;
+  }
+
+  .hiveChatHeader,
+  .hiveChatMessages,
+  .hiveComposerDock {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+@media (max-width: 620px) {
+  .hiveProcessRow {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .hiveProcessRow time {
+    grid-column: 1 / -1;
+    line-height: 1;
+  }
+  .hiveProcessBadge {
+    grid-column: 1;
+  }
+  .hiveProcessBody {
+    grid-column: 2;
+  }
+  .hiveChatRoot,
+  .shelfOpen {
+    grid-template-columns: 264px minmax(0, 1fr) 0;
+  }
+  .hiveRailHeader {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .hiveRailBody {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .hiveChatHeader {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+  }
+
+  .hiveAgentPicker {
+    width: min(420px, calc(100% - 92px));
+    max-width: 100%;
+  }
+
+  .hiveAgentCard {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  .hiveHeaderCopy {
+    padding-right: 0;
+  }
+
+  .hiveUserBubble,
+  .hiveAttachmentList {
+    max-width: 100%;
+  }
+}

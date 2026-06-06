@@ -52,6 +52,7 @@ type PairingDevice = {
   self?: boolean;
   ip?: string;
   dnsName?: string;
+  machineId?: string;
 };
 
 type AgentCallsSettingsPanelProps = {
@@ -200,7 +201,7 @@ export function AgentCallsSettingsPanel(props: AgentCallsSettingsPanelProps) {
       }
       const hubUrl = hubUrlForPairingHost(host);
       const name = (self?.dnsName ? String(self.dnsName).split(".")[0] : "") || host;
-      const pairUrl = clawMobilePairingUrl({ hubUrl, name });
+      const pairUrl = clawMobilePairingUrl({ hubUrl, name, machineId: self?.machineId });
       setPhoneHubUrl(hubUrl);
       setPhoneQr(await QRCode.toDataURL(pairUrl, { width: 320, margin: 2 }));
       setPhoneConnectError("");

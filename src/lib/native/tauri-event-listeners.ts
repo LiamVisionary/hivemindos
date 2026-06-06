@@ -1,4 +1,10 @@
-export type TauriUnlisten = () => void;
+export type TauriUnlisten = () => void | Promise<void>;
+
+function warnStaleTauriCleanup(error: unknown) {
+  if (process.env.NODE_ENV === "development") {
+    console.warn("Ignored stale Tauri event listener cleanup.", error);
+  }
+}
 
 export function createSafeTauriUnlisten(unlisten?: TauriUnlisten): TauriUnlisten {
   let cleanedUp = false;
@@ -7,11 +13,10 @@ export function createSafeTauriUnlisten(unlisten?: TauriUnlisten): TauriUnlisten
     if (cleanedUp) return;
     cleanedUp = true;
     try {
-      unlisten?.();
+      const cleanupResult = unlisten?.();
+      if (cleanupResult) void cleanupResult.catch(warnStaleTauriCleanup);
     } catch (error) {
-      if (process.env.NODE_ENV === "development") {
-        console.warn("Ignored stale Tauri event listener cleanup.", error);
-      }
+      warnStaleTauriCleanup(error);
     }
   };
 }

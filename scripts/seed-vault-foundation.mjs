@@ -105,6 +105,14 @@ This vault is the shared brain for HivemindOS agents. It should stay useful to h
 ## Agent Write Policy
 
 - Read \`AGENTS.md\`, \`Shared Context.md\`, and this contract before durable edits.
+- Use \`hive-brain answer "<query>"\` or \`/api/brain/memory\` for shared-brain recall and durable shared memories. Raw/non-managed agents should prefer \`hive-brain\` because it discovers the running API and falls back to local vault/index search. Claude Code may also receive shared-brain context automatically through the setup-installed \`hive-brain-hook\` \`UserPromptSubmit\` hook.
+- Default recall/answer is tiered: check typed Agent Memory first, return it when the distilled hit is strong, and otherwise augment with relevant markdown from the full shared vault.
+- Use \`--scope agent-memory\` or \`scope: "agent-memory"\` for typed/proven memory only; use \`--scope full-vault\` or \`scope: "full-vault"\` to force broad vault recall.
+- Recall before relying on prior preferences, decisions, instructions, goals, commitments, artifacts, lessons, or project context.
+- Save shared memories under \`Memory/Distillations/Agent Memory/\` through the API, include available agent/runtime/machine/Tailnet provenance, and prefer \`proof: "auto"\` unless explicit proof is requested.
+- Never store raw Tailnet IPs, provider secrets, private keys, bearer tokens, or plaintext sensitive data in memory notes or proof receipts.
+- \`${folders.secureFolder}/\` reference/status notes are searchable during full-vault recall so agents can know which credential names exist or are set, but plaintext secret values must stay out of notes and responses.
+- Run the memory API \`rebuild-index\` action after importing or manually editing agent memory notes.
 - Prefer appending dated status deltas over rewriting project history.
 - Never silently delete notes. Archive or create explicit conflict copies when needed.
 - Summarize automation writes in \`${folders.scheduledFolder}/Foundation Workflows/OPERATIONS-LOG.md\` or in the scheduled run note.
@@ -409,14 +417,338 @@ Optional official Obsidian CLI surface for opening, searching, and managing the 
 - Keep destructive Sync, Publish, plugin, and workspace operations behind explicit user intent.`;
 }
 
+function obsidianNativeBrainPackNote() {
+  return `---
+type: brain-service
+service: obsidian-native-brain-pack
+enabled: true
+installMode: auto-installed-shared-skills
+source: kepano/obsidian-skills
+---
+
+# Obsidian Native Brain Pack
+
+HivemindOS seeds a small Obsidian-native skill pack into the shared Skills shelf so agents can write notes that render well for humans, not just for retrieval.
+
+## Auto-Installed Skills
+
+- \`obsidian-markdown\`: Obsidian Flavored Markdown, wikilinks, embeds, properties, callouts, comments, tags, math, Mermaid, and footnotes.
+- \`obsidian-bases\`: YAML \`.base\` files for native database-like views over vault notes.
+- \`json-canvas\`: Obsidian \`.canvas\` files for visual maps, project boards, flowcharts, and concept graphs.
+- \`defuddle\`: optional clean web-page-to-markdown extraction when the CLI is installed.
+
+## Seeded Native Views
+
+- \`Operations/Brain Services/Agent Memory.base\`
+- \`Operations/Brain Services/Project Brain.base\`
+- \`Operations/Brain Services/Secure References.base\`
+- \`Operations/Brain Services/Whole Brain.canvas\`
+
+## Policy
+
+- Use native Obsidian syntax when writing durable human-facing notes.
+- Keep Bases and Canvas files as views over the vault, not sources of private secret values.
+- Do not import the generic upstream \`obsidian-cli\` skill by default; HivemindOS uses its own safer Obsidian CLI skills and vault policy.`;
+}
+
+function agentMemoryBase() {
+  return `filters:
+  and:
+    - 'file.inFolder("Memory/Distillations/Agent Memory")'
+
+properties:
+  file.name:
+    displayName: "Memory"
+  type:
+    displayName: "Type"
+  status:
+    displayName: "Status"
+  project:
+    displayName: "Project"
+  runtime:
+    displayName: "Runtime"
+  agentName:
+    displayName: "Agent"
+  machineName:
+    displayName: "Machine"
+  tailnetName:
+    displayName: "Tailnet"
+  confidence:
+    displayName: "Confidence"
+  file.mtime:
+    displayName: "Updated"
+
+views:
+  - type: table
+    name: "Typed Memories"
+    order:
+      - file.name
+      - type
+      - status
+      - project
+      - runtime
+      - agentName
+      - machineName
+      - tailnetName
+      - confidence
+      - file.mtime
+  - type: cards
+    name: "By Project"
+    order:
+      - file.name
+      - type
+      - project
+      - agentName
+      - machineName
+    groupBy:
+      property: project
+      direction: ASC`;
+}
+
+function projectBrainBase() {
+  return `filters:
+  or:
+    - 'file.inFolder("Projects")'
+    - 'file.inFolder("Memory/Decision Journal")'
+    - 'file.inFolder("Memory/Weekly Reviews")'
+
+properties:
+  file.name:
+    displayName: "Note"
+  status:
+    displayName: "Status"
+  owner:
+    displayName: "Owner"
+  priority:
+    displayName: "Priority"
+  project:
+    displayName: "Project"
+  type:
+    displayName: "Type"
+  review_after:
+    displayName: "Review After"
+  file.mtime:
+    displayName: "Updated"
+
+views:
+  - type: table
+    name: "Project Context"
+    order:
+      - file.name
+      - status
+      - project
+      - owner
+      - priority
+      - type
+      - review_after
+      - file.mtime
+  - type: cards
+    name: "By Status"
+    order:
+      - file.name
+      - project
+      - owner
+      - priority
+      - file.mtime
+    groupBy:
+      property: status
+      direction: ASC`;
+}
+
+function secureReferencesBase(folders) {
+  return `filters:
+  and:
+    - 'file.inFolder("${folders.secureFolder}")'
+    - 'file.ext == "md"'
+
+properties:
+  file.name:
+    displayName: "Reference"
+  type:
+    displayName: "Type"
+  service:
+    displayName: "Service"
+  keyName:
+    displayName: "Key Name"
+  status:
+    displayName: "Status"
+  last_checked:
+    displayName: "Last Checked"
+  file.mtime:
+    displayName: "Updated"
+
+views:
+  - type: table
+    name: "Credential References"
+    order:
+      - file.name
+      - service
+      - keyName
+      - status
+      - last_checked
+      - file.mtime
+  - type: cards
+    name: "By Service"
+    order:
+      - file.name
+      - keyName
+      - status
+      - file.mtime
+    groupBy:
+      property: service
+      direction: ASC`;
+}
+
+function wholeBrainCanvas(folders) {
+  const canvas = {
+    nodes: [
+      {
+        id: "0f3c9a18b7e24d10",
+        type: "text",
+        x: -640,
+        y: -120,
+        width: 300,
+        height: 170,
+        color: "5",
+        text: "# Agent request\n\nRaw Codex, Claude, Hermes, Aeon, app-routed chat, or shell workflow asks a question.",
+      },
+      {
+        id: "c84d4b12e73a5019",
+        type: "text",
+        x: -260,
+        y: -120,
+        width: 320,
+        height: 170,
+        color: "4",
+        text: "# Typed Agent Memory\n\nFast durable recall from Memory/Distillations/Agent Memory plus the private JSONL index.",
+      },
+      {
+        id: "88f07ac903bd4f2a",
+        type: "text",
+        x: 140,
+        y: -120,
+        width: 320,
+        height: 170,
+        color: "3",
+        text: "# Full vault augmentation\n\nIf typed memory is weak, broaden to Projects, Memory, Synthesis, Ideas, Operations, Skills, and safe Secure references.",
+      },
+      {
+        id: "bd1a90573e4c8f21",
+        type: "text",
+        x: 540,
+        y: -120,
+        width: 320,
+        height: 170,
+        color: "2",
+        text: "# Answer or action\n\nReturn grounded context, then write durable memories through hive-brain remember or the memory API when the result should compound.",
+      },
+      {
+        id: "621f431b8a90d7ce",
+        type: "group",
+        x: -300,
+        y: 140,
+        width: 520,
+        height: 280,
+        color: "4",
+        label: "Durable memory proof layer",
+      },
+      {
+        id: "29d71a4c9b80f63e",
+        type: "text",
+        x: -260,
+        y: 210,
+        width: 440,
+        height: 150,
+        color: "4",
+        text: "Optional GitLawb receipts live at Operations/Brain Services/Agent Memory Proofs.jsonl. They store hashes and provenance, not memory bodies.",
+      },
+      {
+        id: "e7b2f6d1a03c48ab",
+        type: "group",
+        x: 300,
+        y: 140,
+        width: 520,
+        height: 280,
+        color: "6",
+        label: "Obsidian-native human views",
+      },
+      {
+        id: "a918fc03d4e67b25",
+        type: "text",
+        x: 340,
+        y: 210,
+        width: 440,
+        height: 150,
+        color: "6",
+        text: `Bases expose Agent Memory, Projects, and ${folders.secureFolder} status notes as native Obsidian views. Whole Brain.canvas maps the retrieval path for humans.`,
+      },
+    ],
+    edges: [
+      {
+        id: "6dbe4930182c74af",
+        fromNode: "0f3c9a18b7e24d10",
+        fromSide: "right",
+        toNode: "c84d4b12e73a5019",
+        toSide: "left",
+        toEnd: "arrow",
+        label: "hive-brain answer",
+      },
+      {
+        id: "3fa0b6d74e9c2185",
+        fromNode: "c84d4b12e73a5019",
+        fromSide: "right",
+        toNode: "88f07ac903bd4f2a",
+        toSide: "left",
+        toEnd: "arrow",
+        label: "weak hit",
+      },
+      {
+        id: "8c16a2f39d4b70e5",
+        fromNode: "88f07ac903bd4f2a",
+        fromSide: "right",
+        toNode: "bd1a90573e4c8f21",
+        toSide: "left",
+        toEnd: "arrow",
+        label: "grounded context",
+      },
+      {
+        id: "fd42a8b350169c7e",
+        fromNode: "bd1a90573e4c8f21",
+        fromSide: "bottom",
+        toNode: "29d71a4c9b80f63e",
+        toSide: "top",
+        toEnd: "arrow",
+        label: "proof:auto",
+      },
+      {
+        id: "73ea19c6b8042df5",
+        fromNode: "88f07ac903bd4f2a",
+        fromSide: "bottom",
+        toNode: "a918fc03d4e67b25",
+        toSide: "top",
+        toEnd: "arrow",
+        label: "human views",
+      },
+    ],
+  };
+  return JSON.stringify(canvas, null, 2);
+}
+
 function workflowPrompt(workflow, folders) {
   const operationLogPath = `${folders.scheduledFolder}/${WORKFLOW_ROOT}/OPERATIONS-LOG.md`;
   const rules = [
     "Read AGENTS.md and Shared Context.md before writing.",
+    "Use hive-brain answer \"<query>\" or /api/brain/memory for shared-brain recall and durable shared memories; raw/non-managed agents should prefer hive-brain because it discovers the API and falls back to local vault/index search.",
+    "Claude Code may also receive shared-brain context automatically through the setup-installed hive-brain-hook UserPromptSubmit hook.",
+    "Default recall/answer is tiered through typed Agent Memory first, then full shared vault when needed.",
+    "Use --scope agent-memory or scope: \"agent-memory\" for typed/proven memory only; use --scope full-vault or scope: \"full-vault\" to force broad vault recall.",
+    "Recall before depending on prior preferences, decisions, instructions, goals, commitments, artifacts, lessons, or project context.",
+    "When saving shared memories, include available agent/runtime/machine/Tailnet provenance and use proof: \"auto\" unless explicit proof is requested.",
     "Never delete files. Move or archive only when the task explicitly says to do so.",
     `Treat ${folders.kanbanFolder} and ${folders.scheduledFolder} as operational state, not permanent knowledge.`,
     `Treat ${folders.synthesisFolder} as generated or reviewed synthesis, not raw intake.`,
-    `Use ${folders.secureFolder} only for explicitly encrypted backup artifacts and public-key reference notes.`,
+    `Use ${folders.secureFolder} only for explicitly encrypted backup artifacts and credential/public-key reference or status notes.`,
+    `Treat ${folders.secureFolder} reference/status notes as searchable full-vault context for credential names and set/missing status only.`,
     "Do not store provider secrets in plaintext in the vault.",
     `Summarize every write in ${operationLogPath} or in the scheduled run note.`,
   ].join("\n- ");
@@ -811,6 +1143,7 @@ await Promise.all([
   "Memory/Meetings",
   "Memory/Imported Sources",
   "Memory/Distillations",
+  "Memory/Distillations/Agent Memory",
   "Projects",
   "Operations",
   "Templates",
@@ -846,6 +1179,11 @@ for (const template of ["daily-briefing", "weekly-review", "meeting", "research-
 }
 await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Obsidian Plugin Pack.md"), obsidianPluginPack());
 await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Obsidian CLI.md"), obsidianCliNote(obsidianCliPath));
+await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Obsidian Native Brain Pack.md"), obsidianNativeBrainPackNote());
+await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Agent Memory.base"), agentMemoryBase());
+await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Project Brain.base"), projectBrainBase());
+await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Secure References.base"), secureReferencesBase(folders));
+await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Whole Brain.canvas"), wholeBrainCanvas(folders));
 await writeIfMissing(join(vaultPath, folders.scheduledFolder, WORKFLOW_ROOT, "README.md"), workflowReadme(folders));
 await writeIfMissing(join(vaultPath, folders.scheduledFolder, WORKFLOW_ROOT, "OPERATIONS-LOG.md"), operationLog());
 

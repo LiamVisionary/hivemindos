@@ -1043,7 +1043,7 @@ install_hive_env_add() {
   local bin_dir="${HOME}/.local/bin"
   local command_name command_path script_path
   mkdir -p "$bin_dir"
-  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-update; do
+  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-update hive-brain hive-brain-hook; do
     command_path="$bin_dir/$command_name"
     script_path="$ROOT/scripts/$command_name"
     chmod +x "$script_path"
@@ -1083,7 +1083,7 @@ EOF
   done
   case ":$PATH:" in
     *":$bin_dir:"*) ;;
-    *) warn "Add $bin_dir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, and hive-update from any folder" ;;
+    *) warn "Add $bin_dir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-update, hive-brain, and hive-brain-hook from any folder" ;;
   esac
 }
 install_pnpm_if_missing() {
@@ -1656,6 +1656,7 @@ mkdir -p \
   "$shared_vault_path/Memory/Weekly Reviews" \
   "$shared_vault_path/Memory/Imported Sources" \
   "$shared_vault_path/Memory/Distillations" \
+  "$shared_vault_path/Memory/Distillations/Agent Memory" \
   "$shared_vault_path/Projects" \
   "$shared_vault_path/Operations" \
   "$shared_vault_path/Operations/Code Projects" \

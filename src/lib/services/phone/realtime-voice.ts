@@ -76,6 +76,8 @@ const OPENAI_REALTIME_TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
 
 const LANGUAGE_LOCK =
   "CRITICAL: Speak only English (US). Phone audio is often noisy or muffled. Never switch languages on your own, and stay in English for the whole call unless the user explicitly asks you to switch languages.";
+const TOOL_PROGRESS_INSTRUCTION =
+  " When you need to call a tool, briefly tell Liam what you are checking before the tool call, then speak the result when it returns.";
 
 export const ASK_COMPUTER_AGENT_TOOL: RealtimeToolSchema = {
   type: "function",
@@ -208,6 +210,7 @@ export function buildByokAgentCallInstructions(args: {
     LANGUAGE_LOCK +
     ` On the first assistant turn only, say exactly: "${openingLine}" ` +
     "After that first turn, never reintroduce yourself. Answer the user's latest question directly and concisely." +
+    TOOL_PROGRESS_INSTRUCTION +
     runtimeAgentNote +
     "\n\nPRIVATE BRIEFING CONTEXT:\n" +
     (args.briefing || "No briefing was provided.")

@@ -22,6 +22,7 @@ const canonicalFolders = [
   "Memory/Weekly Reviews",
   "Memory/Imported Sources",
   "Memory/Distillations",
+  "Memory/Distillations/Agent Memory",
   "Projects",
   "Operations/Automations",
   "Operations/Work Board",
@@ -64,15 +65,24 @@ for (const path of ["setup.sh", "setup.ps1"]) {
   has(path, "seed-vault-foundation.mjs", "vault foundation initializer");
   has(path, "hive-env-remove", "shared env remove command installer");
   has(path, "hive-env-delete", "shared env delete command installer");
+  has(path, "hive-brain", "shared brain command installer");
+  has(path, "hive-brain-hook", "shared brain hook command installer");
 }
 
 for (const path of ["uninstall.sh", "uninstall.ps1"]) {
   has(path, "hive-env-remove", "shared env remove command uninstaller");
   has(path, "hive-env-delete", "shared env delete command uninstaller");
+  has(path, "hive-brain", "shared brain command uninstaller");
+  has(path, "hive-brain-hook", "shared brain hook command uninstaller");
 }
 
 has("scripts/seed-vault-foundation.mjs", "vault-health-check");
 has("scripts/seed-vault-foundation.mjs", "vault-doctor.mjs");
+has("scripts/seed-vault-foundation.mjs", "Obsidian Native Brain Pack.md");
+has("scripts/seed-vault-foundation.mjs", "Agent Memory.base");
+has("scripts/seed-vault-foundation.mjs", "Project Brain.base");
+has("scripts/seed-vault-foundation.mjs", "Secure References.base");
+has("scripts/seed-vault-foundation.mjs", "Whole Brain.canvas");
 has("scripts/vault-doctor.mjs", "Operations/Vault Migrations");
 has("scripts/vault-doctor.mjs", "Operations/Runtime Mirrors/AEON/.aeon");
 has("scripts/vault-doctor.mjs", "hiddenProfileStubs");
@@ -84,6 +94,17 @@ has("scripts/vault-doctor.mjs", "Operations/Secure");
 has("scripts/e2e-real-fleet.mjs", "cleanupSharedE2eSkill");
 has("AGENTS.md", "docs/whole-brain/");
 has("AGENTS.md", "scripts/test-vault-structure-contract.mjs");
+has("AGENTS.md", "/api/brain/memory");
+has("AGENTS.md", "Operations/Brain Services/Agent Memory Index.jsonl");
+has("setup.ps1", "Write-HivemindManagedBlock");
+has("setup.ps1", "/api/brain/memory");
+has("setup.ps1", "hive-brain answer");
+has("setup.ps1", "UserPromptSubmit");
+has("scripts/seed-shared-skills.sh", "hive-brain-hook");
+has("scripts/seed-shared-skills.sh", "UserPromptSubmit");
+has("scripts/seed-shared-skills.sh", "timeout: 20");
+has("scripts/hive-brain-hook", "HIVE_BRAIN_HOOK_TIMEOUT_MS || 20000");
+has("setup.ps1", "Operations/Brain Services/Agent Memory Index.jsonl");
 has("docs/index.md", 'href="whole-brain/"');
 has("docs/index.md", 'href="features/hivemind-sync.html"');
 has("docs/features/index.md", 'href="../whole-brain/"');
@@ -112,10 +133,32 @@ for (const folder of canonicalFolders) {
 }
 has("docs/whole-brain/architecture-sync.md", "setup.sh");
 has("docs/whole-brain/architecture-sync.md", "scripts/test-vault-structure-contract.mjs");
+has("docs/whole-brain/architecture-sync.md", "hive-brain-hook");
+has("docs/whole-brain/architecture-sync.md", "shared memory access paths");
 has("docs/whole-brain/sync-and-health.md", "Operations/Vault Migrations");
 has("docs/whole-brain/sync-and-health.md", ".hivemindos-transfers");
 has("docs/whole-brain/shared-skills.md", "Operations/Runtime Mirrors/AEON/.aeon");
 has("docs/whole-brain/index.md", "shared-env.html");
+has("docs/whole-brain/index.md", "Shared Brain Memory");
+has("docs/whole-brain/index.md", "Raw runtime CLIs");
+has("docs/whole-brain/vault-map.md", "Agent Memory Proofs.jsonl");
+has("docs/whole-brain/vault-map.md", "hive-brain-hook");
+has("docs/whole-brain/brain-services.md", "Local-First Memory Benchmarks");
+has("docs/whole-brain/brain-services.md", "Obsidian Native Brain Pack");
+has("docs/whole-brain/brain-services.md", "Agent Memory.base");
+has("docs/whole-brain/brain-services.md", "19.20ms");
+has("docs/whole-brain/brain-services.md", "hive-brain answer");
+has("docs/whole-brain/brain-services.md", "hive-brain-hook");
+has("docs/whole-brain/brain-services.md", "Projects/Agent Calls - BYOK vs HivemindOS Cloud.md");
+has("docs/features/brain-vault-and-skills.md", "Shared Brain Memory Summary");
+has("docs/features/brain-vault-and-skills.md", "Obsidian Native Brain Pack");
+has("docs/whole-brain/shared-skills.md", "obsidian-markdown");
+has("docs/whole-brain/shared-skills.md", "obsidian-bases");
+has("docs/whole-brain/shared-skills.md", "json-canvas");
+has("docs/whole-brain/shared-skills.md", "defuddle");
+has("packaged-skills/README.md", "Obsidian Native Brain Pack");
+has("docs/features/brain-vault-and-skills.md", "UserPromptSubmit");
+has("README.md", "19.20ms/31.33ms");
 has("docs/whole-brain/shared-env.md", "~/.hivemindos/.env");
 has("docs/whole-brain/shared-env.md", "hive-env-add");
 has("docs/whole-brain/shared-env.md", "hive-env-remove");
@@ -140,6 +183,8 @@ for (const path of [
   "scripts/hive-env-add",
   "scripts/hive-env-remove",
   "scripts/hive-env-delete",
+  "scripts/hive-brain",
+  "scripts/hive-brain-hook",
   "setup.sh",
   "setup.ps1",
 ]) {

@@ -50,6 +50,38 @@ function Remove-ManagedBlock($Path) {
   }
 }
 
+function Remove-ClaudeBrainHook {
+  $home = [Environment]::GetFolderPath("UserProfile")
+  $settingsFile = Join-Path $home ".claude\settings.json"
+  if (-not (Test-Path $settingsFile)) { return }
+  $settings = $null
+  try { $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json -AsHashtable } catch { return }
+  if (-not $settings -or -not $settings.ContainsKey("hooks")) { return }
+  $hooks = $settings["hooks"]
+  if ($hooks -isnot [System.Collections.IDictionary] -or -not $hooks.ContainsKey("UserPromptSubmit")) { return }
+  $groups = @($hooks["UserPromptSubmit"])
+  $filteredGroups = New-Object System.Collections.Generic.List[object]
+  foreach ($group in $groups) {
+    if ($group -is [System.Collections.IDictionary] -and $group.ContainsKey("hooks") -and $group["hooks"] -is [array]) {
+      $nextHooks = @($group["hooks"] | Where-Object { -not ([string]($_.command)).Contains("hive-brain-hook") })
+      if ($nextHooks.Count -gt 0) {
+        $group["hooks"] = $nextHooks
+        $filteredGroups.Add($group)
+      }
+    } else {
+      $filteredGroups.Add($group)
+    }
+  }
+  if ($filteredGroups.Count -gt 0) {
+    $hooks["UserPromptSubmit"] = @($filteredGroups)
+  } else {
+    $hooks.Remove("UserPromptSubmit")
+  }
+  if ($hooks.Count -eq 0) { $settings.Remove("hooks") }
+  $settings | ConvertTo-Json -Depth 20 | Set-Content -Path $settingsFile -Encoding ASCII
+  Ok "Removed Claude shared-brain hook from $settingsFile"
+}
+
 function AgentInstructionFiles {
   $home = [Environment]::GetFolderPath("UserProfile")
   @(
@@ -206,6 +238,7 @@ if (Ask-YesNo "Stop/remove GitLawb node service or container only if HivemindOS 
 if (Ask-YesNo "Remove HivemindOS shared-skill instructions from agent files?" $true) {
   Remove-ManagedBlock (Join-Path $vaultPath "AGENTS.md")
   AgentInstructionFiles | ForEach-Object { Remove-ManagedBlock $_ }
+  Remove-ClaudeBrainHook
 }
 
 if (Ask-YesNo "Remove copied karpathy-guidelines skill from local agent skill folders?" $false) {
@@ -395,6 +428,7 @@ if (Ask-YesNo "Remove empty canonical HivemindOS vault folders created by setup?
     "Projects",
     "Templates/HivemindOS",
     "Templates",
+    "Memory/Distillations/Agent Memory",
     "Memory/Distillations",
     "Memory/Imported Sources",
     "Memory/Meetings",
@@ -421,9 +455,9 @@ if (Ask-YesNo "Remove .env.local from this checkout?" $false) {
   Ok "Removed .env.local"
 }
 
-if (Ask-YesNo "Remove hive env, transfer, and update commands from ~/.local/bin if they point to this checkout?" $true) {
+if (Ask-YesNo "Remove hive env, transfer, update, brain, and brain hook commands from ~/.local/bin if they point to this checkout?" $true) {
   $binDir = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".local\bin"
-  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-update")) {
+  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-update", "hive-brain", "hive-brain-hook")) {
     $shimPath = Join-Path $binDir "$commandName.cmd"
     if (Test-Path $shimPath) {
       $content = Get-Content $shimPath -Raw

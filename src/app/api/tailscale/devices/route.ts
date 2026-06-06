@@ -1,5 +1,8 @@
 import { execFile } from "child_process";
-import { readFile, readlink } from "fs/promises";
+import { randomBytes } from "crypto";
+import { mkdir, readFile, readlink, writeFile } from "fs/promises";
+import { homedir } from "os";
+import { dirname, join } from "path";
 import { promisify } from "util";
 import { hivemindLinkControlUrl, localTelemetryCollectorUrl } from "@/lib/services/hivemind-link-control";
 
@@ -52,6 +55,22 @@ type TailnetHealth = {
   detail?: string;
 };
 
+const machineIdPath = join(homedir(), ".hivemindos", "machine-id");
+let machineIdPromise: Promise<string> | null = null;
+
+async function stableMachineId() {
+  if (machineIdPromise) return machineIdPromise;
+  machineIdPromise = (async () => {
+    const existing = (await readFile(machineIdPath, "utf8").catch(() => "")).trim();
+    if (/^hivemind-machine-[a-f0-9]{32}$/.test(existing)) return existing;
+    const generated = `hivemind-machine-${randomBytes(16).toString("hex")}`;
+    await mkdir(dirname(machineIdPath), { recursive: true, mode: 0o700 });
+    await writeFile(machineIdPath, `${generated}\n`, { mode: 0o600 });
+    return generated;
+  })();
+  return machineIdPromise;
+}
+
 function localCollectorUrl() {
   return localTelemetryCollectorUrl();
 }
@@ -69,6 +88,13 @@ function localDevice() {
     online: true,
     ip: "127.0.0.1",
     collectorUrl: localCollectorUrl(),
+    collectorUrlCandidates: [localCollectorUrl()],
+    lastSeen: undefined,
+    lastHandshake: undefined,
+    curAddr: "",
+    rxBytes: 0,
+    txBytes: 0,
+    active: false,
     relay: "",
   };
 }
@@ -228,13 +254,28 @@ function dedupeDevices(devices: ReturnType<typeof simplifyDevice>[]) {
   return [...byIdentity.values()].filter((device) => isHivemindLinkDevice(device) || isMacDevice(device));
 }
 
-function linkCollectorUrl(ip: string) {
-  return `${hivemindLinkControlUrl()}/peer/${encodeURIComponent(`${ip}:8787`)}`;
+const REMOTE_COLLECTOR_PORT_CANDIDATES = Array.from({ length: 24 }, (_, index) => 8787 + index);
+
+function linkCollectorUrlForPort(ip: string, port: number) {
+  return `${hivemindLinkControlUrl()}/peer/${encodeURIComponent(`${ip}:${port}`)}`;
+}
+
+function directCollectorUrlForPort(ip: string, port: number) {
+  return `http://${ip}:${port}`;
+}
+
+function remoteCollectorUrlCandidates(ip: string, viaLink: boolean) {
+  if (!ip) return [];
+  const direct = REMOTE_COLLECTOR_PORT_CANDIDATES.map((port) => directCollectorUrlForPort(ip, port));
+  if (!viaLink) return direct;
+  const link = REMOTE_COLLECTOR_PORT_CANDIDATES.map((port) => linkCollectorUrlForPort(ip, port));
+  return [...link, ...direct];
 }
 
 function simplifyDevice(peer: TailscalePeer, self = false, viaLink = false) {
   const ip = peer.TailscaleIPs?.find((value) => /^\d+\.\d+\.\d+\.\d+$/.test(value)) ?? peer.TailscaleIPs?.[0] ?? "";
   const dnsName = peer.DNSName?.replace(/\.$/, "") ?? "";
+  const collectorUrlCandidates = self ? [localCollectorUrl()] : remoteCollectorUrlCandidates(ip, viaLink);
   return {
     self,
     name: self ? "This Mac" : displayNameForPeer(peer, dnsName, ip),
@@ -242,7 +283,8 @@ function simplifyDevice(peer: TailscalePeer, self = false, viaLink = false) {
     os: peer.OS ?? "unknown",
     online: self ? true : Boolean(peer.Online),
     ip,
-    collectorUrl: self ? localCollectorUrl() : ip ? (viaLink ? linkCollectorUrl(ip) : `http://${ip}:8787`) : "",
+    collectorUrl: self ? localCollectorUrl() : "",
+    collectorUrlCandidates,
     lastSeen: peer.LastSeen,
     lastHandshake: peer.LastHandshake,
     curAddr: peer.CurAddr ?? "",
@@ -322,6 +364,12 @@ function devicesFromStatus(status: TailscaleStatus | HivemindLinkStatus, viaLink
   return dedupeDevices([...(self ? [self] : []), ...peers]);
 }
 
+async function withLocalMachineId(devices: ReturnType<typeof devicesFromStatus>) {
+  const machineId = await stableMachineId().catch(() => "");
+  if (!machineId) return devices;
+  return devices.map((device) => device.self ? { ...device, machineId } : device);
+}
+
 export async function GET() {
   const link = await hivemindLinkStatus();
   if (link) {
@@ -334,7 +382,7 @@ export async function GET() {
       magicDnsSuffix: link.magicDnsSuffix,
       source: "hivemind-link",
       tailnetHealth: health,
-      devices: devicesFromStatus(link, true, status.error ? undefined : status.Self),
+      devices: await withLocalMachineId(devicesFromStatus(link, true, status.error ? undefined : status.Self)),
     });
   }
 
@@ -344,7 +392,7 @@ export async function GET() {
       ok: false,
       error: status.error,
       tailnetHealth: tailnetHealthFromStatus(null),
-      devices: [localDevice()],
+      devices: await withLocalMachineId([localDevice()]),
     });
   }
   const health = tailnetHealthFromStatus(status);
@@ -354,6 +402,6 @@ export async function GET() {
     magicDnsSuffix: status.MagicDNSSuffix,
     source: "tailscale-cli",
     tailnetHealth: health,
-    devices: devicesFromStatus(status),
+    devices: await withLocalMachineId(devicesFromStatus(status)),
   });
 }

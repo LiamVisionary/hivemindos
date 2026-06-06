@@ -34,6 +34,7 @@ Clone it, run one setup command, and get a local-first dashboard for the agents 
 - **See every agent from one dashboard** across this machine and trusted Tailscale-connected machines.
 - **Cross-machine agent discovery and connection via Tailscale VPN** so agents can collaborate without public exposure.
 - **Share one Obsidian brain** for memory, handoffs, skills, work boards, and shared context.
+- **Open native Obsidian memory views** with seeded Bases and Canvas files over Agent Memory, projects, secure references, and recall topology.
 - **Move shared env between agent machines** with Hivemind Sync helpers, without copying secrets by hand.
 - **Send handoff files to a machine, runtime, or agent** with `hive-transfer` envelopes in the shared vault.
 - **Assign work to agents** through a shared Kanban board with retries, stale-work recovery, and human handoff.
@@ -179,6 +180,7 @@ The adapter calls `POST /v1/chat/completions` for chat and `GET /v1/models` for 
 | **Runtime adapters** | Supports Hermes, OpenClaw, Aeon, MiroShark, and generic machine-backed agents through a neutral adapter layer |
 | **Local model runtimes** | Adds a generic OpenAI-compatible adapter for LM Studio, Ollama, vLLM, llama.cpp server, LocalAI, and similar `/v1/chat/completions` services |
 | **Shared Obsidian brain** | Stores memory, handoffs, shared context, Kanban state, and reusable skills in a local markdown vault |
+| **Obsidian-native brain views** | Seeds `.base` and `.canvas` files plus shared skills for Obsidian Markdown, Bases, Canvas, and clean web markdown extraction |
 | **Hivemind Sync** | Moves shared brain files, shared env, and handoff transfers between trusted machines |
 | **Handoff transfers** | Routes artifacts through `.hivemindos-transfers/` to a specific machine, runtime, or agent with payload hashes and acknowledgements |
 | **Work board** | Gives agents a shared Kanban queue for tasks, delegation, retries, stale work, and human handoff |
@@ -258,10 +260,14 @@ The Brain workspace can hold:
 - handoff notes
 - AI ready note templates and vault writing conventions
 - Hivemind Sync handoff transfer envelopes in `.hivemindos-transfers/`
-- memory files
+- typed shared memories under `Memory/Distillations/Agent Memory/`
+- a private local memory index under `Operations/Brain Services/Agent Memory Index.jsonl`
+- optional hash-only GitLawb memory receipts under `Operations/Brain Services/Agent Memory Proofs.jsonl`
 - Kanban board state
 - reusable skills
 - runtime instructions
+
+Shared Brain Memory gives agents a local-first remember/recall/answer layer through `/api/brain/memory` and the installed `hive-brain` CLI. Raw or non-managed agents can run `hive-brain answer "<query>"`; the CLI discovers the running local API when available and falls back to local vault/index search when it is not. Setup also installs `hive-brain-hook` and registers it as a Claude Code `UserPromptSubmit` hook, so raw Claude prompts can receive relevant shared-brain context even when they are not routed through the HivemindOS app. Default recall is tiered: it checks typed Agent Memory first, returns that distilled layer when the hit is strong, and otherwise augments with relevant markdown from the full shared vault. `--scope agent-memory` narrows recall to the typed/proven memory write layer, while `--scope full-vault` forces broad vault recall, including `Operations/Secure` reference/status notes for credential names and set/missing status without storing plaintext secret values. In live local typed-memory benchmarks, indexed recall measured p50/p95 of `2.69ms/3.15ms` at 100 memories, `4.37ms/5.26ms` at 500 memories, and `19.20ms/31.33ms` at 1500 memories with synthetic Top-1/Top-3/MRR relevance of `1.0`. On Liam's current 4,848-note vault, full-vault answer recall over 2,685 eligible markdown notes measured about `2.35s` cold and roughly `0.20s-0.35s` warm through the local API. That gives HivemindOS agents rich, provenance-aware memory and broad private vault context at a fraction of the latency and privacy cost of network-bound memory stacks.
 
 HivemindOS can auto-detect common local Obsidian vault locations, validate an explicit vault path, and fall back to local Kanban storage at `~/.hivemindos/kanban` if the vault is unavailable.
 

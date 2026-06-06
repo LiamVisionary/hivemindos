@@ -231,11 +231,13 @@ function Ensure-HiveEnvAdd {
     Warn "Python is missing; hive env shims installed but will need Python to run."
     $pythonCommand = "python"
   }
-  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-update")) {
+  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-update", "hive-brain", "hive-brain-hook")) {
     $shimPath = Join-Path $binDir "$commandName.cmd"
     $scriptPath = Join-Path $Root "scripts\$commandName"
     if ($commandName -eq "hive-transfer") {
       Set-Content -Path $shimPath -Value "@echo off`r`nnode `"$scriptPath.mjs`" %*`r`n" -Encoding ASCII
+    } elseif ($commandName -eq "hive-brain" -or $commandName -eq "hive-brain-hook") {
+      Set-Content -Path $shimPath -Value "@echo off`r`nnode `"$scriptPath`" %*`r`n" -Encoding ASCII
     } elseif ($commandName -eq "hive-update") {
       Set-Content -Path $shimPath -Value "@echo off`r`nbash `"$scriptPath`" %*`r`n" -Encoding ASCII
     } else {
@@ -251,7 +253,7 @@ function Ensure-HiveEnvAdd {
       Refresh-Path
       Ok "Added $binDir to user PATH"
     } else {
-      Warn "Add $binDir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, and hive-update from any folder"
+      Warn "Add $binDir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-update, hive-brain, and hive-brain-hook from any folder"
     }
   } else {
     Refresh-Path
@@ -485,6 +487,7 @@ foreach ($folder in @(
   "Memory/Weekly Reviews",
   "Memory/Imported Sources",
   "Memory/Distillations",
+  "Memory/Distillations/Agent Memory",
   "Projects",
   "Operations",
   "Operations/Code Projects",
@@ -561,7 +564,11 @@ function Seed-BundledSharedSkills {
       sourcePath = $skillFile.Directory.FullName
       sourceUrl = "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/auto-install/$slug"
       importedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-    } | ConvertTo-Json -Depth 3
+    }
+    if (@("obsidian-markdown", "obsidian-bases", "json-canvas", "defuddle") -contains $slug) {
+      $metadata["upstreamSourceUrl"] = "https://github.com/kepano/obsidian-skills"
+    }
+    $metadata = $metadata | ConvertTo-Json -Depth 3
     Set-Content -Path (Join-Path $destination ".hivemind-skill-source.json") -Value $metadata
   }
 
@@ -586,7 +593,123 @@ function Seed-BundledSharedSkills {
   if ($seeded -gt 0) { Ok "Seeded $seeded bundled/auto-install HivemindOS shared skill(s)" } else { Ok "Bundled and auto-install HivemindOS shared skills already present" }
 }
 
+function Get-AgentInstructionFiles {
+  $homeDir = [Environment]::GetFolderPath("UserProfile")
+  @(
+    "$homeDir\.codex\AGENTS.md",
+    "$homeDir\.claude\CLAUDE.md",
+    "$homeDir\.hermes\SOUL.md",
+    "$homeDir\.hermes\AGENTS.md",
+    "$homeDir\.gemini\GEMINI.md",
+    "$homeDir\.openclaw\AGENTS.md",
+    "$homeDir\.aeon\AGENTS.md"
+  )
+  Get-ChildItem "$homeDir\.openclaw" -Directory -Filter "workspace-*" -ErrorAction SilentlyContinue |
+    ForEach-Object { Join-Path $_.FullName "AGENTS.md" }
+}
+
+function Remove-HivemindManagedBlock {
+  param([string[]]$Lines)
+  $next = New-Object System.Collections.Generic.List[string]
+  $skip = $false
+  foreach ($line in $Lines) {
+    if ($line -eq "<!-- BEGIN HIVEMINDOS_SHARED_SKILLS -->" -or $line -eq "<!-- BEGIN OMNI_AGENT_HIVEMIND_SHARED_SKILLS -->") {
+      $skip = $true
+      continue
+    }
+    if ($line -eq "<!-- END HIVEMINDOS_SHARED_SKILLS -->" -or $line -eq "<!-- END OMNI_AGENT_HIVEMIND_SHARED_SKILLS -->") {
+      $skip = $false
+      continue
+    }
+    if (-not $skip) { $next.Add($line) }
+  }
+  return $next
+}
+
+function Write-HivemindManagedBlock {
+  param(
+    [string]$Path,
+    [string]$VaultPath
+  )
+  $skillsFolder = Join-Path $VaultPath "Skills"
+  $parent = Split-Path -Parent $Path
+  if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+  $existing = if (Test-Path $Path) { Get-Content $Path } else { @() }
+  $lines = Remove-HivemindManagedBlock -Lines $existing
+  while ($lines.Count -gt 0 -and [string]::IsNullOrWhiteSpace($lines[$lines.Count - 1])) {
+    $lines.RemoveAt($lines.Count - 1)
+  }
+  if ($lines.Count -gt 0) { $lines.Add("") }
+  $lines.Add("<!-- BEGIN HIVEMINDOS_SHARED_SKILLS -->")
+  $lines.Add("## HivemindOS Shared Skills")
+  $lines.Add("")
+  $lines.Add("A shared notes skill shelf is available at:")
+  $lines.Add("")
+  $lines.Add("- Vault: ``$VaultPath``")
+  $lines.Add("- Skills index: ``$(Join-Path $skillsFolder "README.md")``")
+  $lines.Add("- Skill files: ``$skillsFolder\<slug>\SKILL.md``")
+  $lines.Add("")
+  $lines.Add("Before using a shared skill, read ``$(Join-Path $skillsFolder "README.md")`` for the index, then read the relevant ``SKILL.md``. The bundled baseline skill is ``karpathy-guidelines``.")
+  $lines.Add("")
+  $lines.Add("## Shared Brain Memory")
+  $lines.Add("")
+  $lines.Add("Use ``hive-brain answer `"<query>`"`` before relying on prior preferences, decisions, instructions, goals, commitments, artifacts, lessons, credential status, or project context. The CLI tries the running HivemindOS ``/api/brain/memory`` route first, then falls back to local vault/index search, so raw/non-managed agents can recall shared memory without being app-routed. Setup also installs ``hive-brain-hook`` as a Claude Code ``UserPromptSubmit`` hook when Claude is targeted, so raw Claude prompts receive relevant shared-brain context automatically. Default recall/answer is tiered: check typed Agent Memory first, return it when the distilled hit is strong, and otherwise augment with relevant markdown from the full shared vault. Pass ``--scope agent-memory`` for typed/proven memory only, or ``--scope full-vault`` to force broad vault recall. For durable writes, use ``hive-brain remember --type <type> --title <title> --content <content>`` or POST ``/api/brain/memory``; remember only durable reviewed facts, decisions, preferences, goals, instructions, commitments, artifacts, errors, learnings, or reusable context.")
+  $lines.Add("")
+  $lines.Add("Memory writes live under ``Memory/Distillations/Agent Memory/``; the private search index lives at ``Operations/Brain Services/Agent Memory Index.jsonl``; optional GitLawb receipts live at ``Operations/Brain Services/Agent Memory Proofs.jsonl`` and store hashes/provenance instead of memory bodies. Include available ``agentName``, ``agentId``, ``runtime``, ``machineName``, ``machineId``, ``tailnetId``, ``tailnetName``, ``tailnetDnsName``, ``collectorUrl``, ``sessionId``, and ``project`` fields when writing. Use ``proof: `"auto`"`` unless explicit proof is requested. Do not store raw Tailnet IPs or secrets in shared memory. ``Operations/Secure/`` reference/status notes are searchable during full-vault recall so agents can know which credential names exist or are set, but plaintext secret values must stay out of notes and responses.")
+  $lines.Add("")
+  $lines.Add("## Shared Hive Env")
+  $lines.Add("")
+  $lines.Add("Shared credentials live in ``~/.hivemindos/.env``. Use ``hive-env-check KEY`` to verify presence and ``hive-env-run -- <command>`` to run tools/apps with the shared env loaded. Do not read, print, summarize, or copy secret values; refer to credentials by variable name and set/missing status only. When making a project consume shared credentials, load the ``shared-hive-env`` skill and default project runtime loading to ``~/.hivemindos/.env`` without persisting secrets into project files.")
+  $lines.Add("<!-- END HIVEMINDOS_SHARED_SKILLS -->")
+  Set-Content -Path $Path -Value $lines
+}
+
+function Install-ClaudeBrainHook {
+  if ($env:HIVE_CLAUDE_BRAIN_HOOK -eq "0") { return }
+  $home = [Environment]::GetFolderPath("UserProfile")
+  $settingsFile = Join-Path $home ".claude\settings.json"
+  $hookCommand = Join-Path $home ".local\bin\hive-brain-hook.cmd"
+  $parent = Split-Path -Parent $settingsFile
+  if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+  $settings = @{}
+  if (Test-Path $settingsFile) {
+    try { $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json -AsHashtable } catch { $settings = @{} }
+  }
+  if (-not $settings) { $settings = @{} }
+  if (-not $settings.ContainsKey("hooks") -or $settings["hooks"] -isnot [System.Collections.IDictionary]) {
+    $settings["hooks"] = @{}
+  }
+  $hooks = $settings["hooks"]
+  $groups = if ($hooks.ContainsKey("UserPromptSubmit") -and $hooks["UserPromptSubmit"] -is [array]) { @($hooks["UserPromptSubmit"]) } else { @() }
+  $filteredGroups = New-Object System.Collections.Generic.List[object]
+  foreach ($group in $groups) {
+    if ($group -is [System.Collections.IDictionary] -and $group.ContainsKey("hooks") -and $group["hooks"] -is [array]) {
+      $nextHooks = @($group["hooks"] | Where-Object { -not ([string]($_.command)).Contains("hive-brain-hook") })
+      if ($nextHooks.Count -gt 0) {
+        $group["hooks"] = $nextHooks
+        $filteredGroups.Add($group)
+      }
+    } else {
+      $filteredGroups.Add($group)
+    }
+  }
+  $filteredGroups.Add(@{
+    hooks = @(@{
+      type = "command"
+      command = "$hookCommand claude-user-prompt"
+      timeout = 20
+    })
+  })
+  $hooks["UserPromptSubmit"] = @($filteredGroups)
+  $settings | ConvertTo-Json -Depth 20 | Set-Content -Path $settingsFile -Encoding ASCII
+  Ok "Installed Claude shared-brain UserPromptSubmit hook"
+}
+
 Seed-BundledSharedSkills -VaultPath $vaultPath
+Write-HivemindManagedBlock -Path (Join-Path $vaultPath "AGENTS.md") -VaultPath $vaultPath
+Get-AgentInstructionFiles | ForEach-Object { Write-HivemindManagedBlock -Path $_ -VaultPath $vaultPath }
+Install-ClaudeBrainHook
+Ok "Runtime skill and memory hints installed for local agents"
 if (-not (Test-Path (Join-Path $vaultPath "$scheduledFolder/README.md"))) {
   Set-Content -Path (Join-Path $vaultPath "$scheduledFolder/README.md") -Value "# Automations`n`nShared schedule definitions and run history for HivemindOS agents.`n`n- ``<device>/<schedule>/schedule.md`` stores each schedule snapshot.`n- ``run0001-<agent>-<timestamp>.md`` files store execution history."
 }

@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveDashboardSlashCommand } from "@/features/chat/dashboard-slash-commands";
+import { createFileReferenceAttachments } from "@/features/chat/chat-file-references";
 import { runtimeChatFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
 
@@ -48,14 +49,13 @@ export function useStatusChatInputController(props: any) {
     };
   }
 
-  function startChatStream(storageKey: string, agentId: string, leafKey: string, requestLabel?: string) {
-    const startedAt = Date.now();
+  function startChatStream(storageKey: string, agentId: string, leafKey: string, requestLabel?: string, runId?: string, startedAt = Date.now()) {
     setChatStreamingByKey((current) => {
-      return { ...current, [storageKey]: { agentId, leafKey, hasChunk: false, startedAt } };
+      return { ...current, [storageKey]: { agentId, leafKey, hasChunk: false, startedAt, runId } };
     });
     setChatProcessByKey?.((current) => ({
       ...current,
-      [storageKey]: [{ at: startedAt, label: "Queued chat request", detail: "Preparing the runtime bridge." }],
+      [storageKey]: [{ at: startedAt, label: "Queued chat request", detail: "Preparing the runtime bridge.", runId }],
     }));
     recordActiveChatRun?.({
       storageKey,
@@ -64,6 +64,7 @@ export function useStatusChatInputController(props: any) {
       startedAt,
       updatedAt: startedAt,
       requestLabel,
+      runId,
       status: "active",
     });
   }
@@ -85,21 +86,23 @@ export function useStatusChatInputController(props: any) {
     });
   }
 
-  function appendChatProcess(storageKey: string, label: string, detail?: string, status?: string) {
+  function appendChatProcess(storageKey: string, label: string, detail?: string, status?: string, runId?: string) {
     const cleanLabel = label.trim();
     if (!cleanLabel) return;
     setChatProcessByKey?.((current) => {
-      const existing = current[storageKey] ?? [];
+      const existing = runId
+        ? (current[storageKey] ?? []).filter((entry: any) => entry.runId === runId)
+        : current[storageKey] ?? [];
       const last = existing[existing.length - 1];
       if (last?.label === cleanLabel && last?.detail === detail) {
         return {
           ...current,
-          [storageKey]: [...existing.slice(0, -1), { ...last, at: Date.now(), status }],
+          [storageKey]: [...existing.slice(0, -1), { ...last, at: Date.now(), status, runId: runId ?? last.runId }],
         };
       }
       return {
         ...current,
-        [storageKey]: [...existing, { at: Date.now(), label: cleanLabel, detail, status }].slice(-80),
+        [storageKey]: [...existing, { at: Date.now(), label: cleanLabel, detail, status, runId }].slice(-80),
       };
     });
   }
@@ -429,8 +432,18 @@ export function useStatusChatInputController(props: any) {
       || device.dnsName.toLowerCase().replace(/\.$/, "") === hostKey
       || device.collectorUrl.toLowerCase().includes(hostKey)
     ));
+    const remoteCollectorUrl = /^https?:\/\//.test(cleanHost) ? cleanHost : remoteDevice?.collectorUrl;
+    if (!remoteCollectorUrl) {
+      setVaultSyncPending("");
+      setVaultSyncStatus({
+        ok: false,
+        method: "syncthing",
+        error: "No verified agent bridge URL is available for that machine. Refresh Fleet after its collector reports ready, or enter the full collector URL.",
+      });
+      return;
+    }
     const data = await pairSyncthingCollector({
-      remoteCollectorUrl: /^https?:\/\//.test(cleanHost) ? cleanHost : `http://${cleanHost}:8787`,
+      remoteCollectorUrl,
       remoteName: cleanHost,
       remotePath,
       remoteTailscaleIp: remoteDevice?.ip || (cleanHost.startsWith("100.") ? cleanHost : undefined),
@@ -619,9 +632,24 @@ export function useStatusChatInputController(props: any) {
     }
   }
 
+  function addChatFileReferences(files: FileList | File[]) {
+    const incoming = Array.from(files);
+    if (!incoming.length) {
+      setAttachmentError("Drop at least one file.");
+      return;
+    }
+    setChatAttachments((current) => [...current, ...createFileReferenceAttachments(incoming)]);
+    setAttachmentError("");
+    setAttachmentMenuOpen(false);
+  }
+
   function handleChatFileChange(event: ChangeEvent<HTMLInputElement>) {
     if (event.target.files?.length) void addChatFiles(event.target.files, "file");
     event.target.value = "";
+  }
+
+  function handleChatFileReferenceDrop(files: FileList | File[]) {
+    addChatFileReferences(files);
   }
 
   function handleChatImageChange(event: ChangeEvent<HTMLInputElement>) {
@@ -980,6 +1008,7 @@ export function useStatusChatInputController(props: any) {
     const agentMode = queuedMessage.agentMode === "plan" ? "plan" : "act";
     const outgoingAttachments = queuedMessage.attachments ?? [];
     const outgoingDirectories = queuedMessage.directories ?? [];
+    let activeRunProcessEvents: Array<{ at: number; label: string; detail?: string; status?: string; runId?: string }> = [];
     const sameChatMessage = (left: ChatMessage | undefined, right: ChatMessage) => (
       Boolean(left)
       && left?.role === right.role
@@ -1011,6 +1040,65 @@ export function useStatusChatInputController(props: any) {
         }
         return { ...current, messages: next };
       });
+    };
+    const findActiveAssistantIndex = (items: ChatMessage[]) => {
+      let latestUserIndex = -1;
+      for (let index = items.length - 1; index >= 0; index -= 1) {
+        if (items[index]?.role === "user") {
+          latestUserIndex = index;
+          break;
+        }
+      }
+      for (let index = items.length - 1; index > latestUserIndex; index -= 1) {
+        if (items[index]?.role === "assistant") return index;
+      }
+      return -1;
+    };
+    const processEventSignature = (events: Array<{ at?: number; label?: string; detail?: string; status?: string; runId?: string }> = []) => (
+      events.map((event) => [event.at, event.label, event.detail ?? "", event.status ?? "", event.runId ?? ""].join("\u001f")).join("\u001e")
+    );
+    const activeProcessEventsForMessage = () => activeRunProcessEvents.map((event) => ({ ...event }));
+    const withActiveProcessEvents = (message: ChatMessage): ChatMessage => (
+      activeRunProcessEvents.length
+        ? { ...message, processEvents: activeProcessEventsForMessage() }
+        : message
+    );
+    const attachActiveProcessEventsToAssistant = (items: ChatMessage[]) => {
+      if (!activeRunProcessEvents.length) return items;
+      const assistantIndex = findActiveAssistantIndex(items);
+      if (assistantIndex < 0) return items;
+      const nextEvents = activeProcessEventsForMessage();
+      const assistant = items[assistantIndex];
+      if (processEventSignature(assistant.processEvents ?? []) === processEventSignature(nextEvents)) return items;
+      const next = [...items];
+      next[assistantIndex] = { ...assistant, processEvents: nextEvents };
+      return next;
+    };
+    const replaceActiveAssistantMessage = (items: ChatMessage[], message: ChatMessage) => {
+      const next = [...items];
+      const assistantIndex = findActiveAssistantIndex(next);
+      if (assistantIndex >= 0) next[assistantIndex] = withActiveProcessEvents(message);
+      else next.push(withActiveProcessEvents(message));
+      return next;
+    };
+    const appendActiveAssistantText = (items: ChatMessage[], fullText: string) => {
+      const next = [...items];
+      const assistantIndex = findActiveAssistantIndex(next);
+      if (assistantIndex < 0) {
+        const content = compactRepeatedAssistantText(fullText);
+        return {
+          changed: Boolean(content.trim()),
+          messages: content.trim() ? [...next, withActiveProcessEvents({ role: "assistant" as const, content, surface: "chat" as const })] : next,
+          text: content,
+        };
+      }
+      const assistant = next[assistantIndex];
+      const existingText = assistant.content ?? "";
+      const localDelta = nextChatTextDelta(fullText, existingText);
+      if (!localDelta) return { changed: false, messages: items, text: existingText };
+      const content = compactRepeatedAssistantText(existingText + localDelta);
+      next[assistantIndex] = withActiveProcessEvents({ ...assistant, role: "assistant", content, surface: "chat" });
+      return { changed: true, messages: next, text: content };
     };
     const dashboardCommand = outgoingAttachments.length === 0 && outgoingDirectories.length === 0
       ? resolveDashboardSlashCommand(prompt)
@@ -1054,7 +1142,8 @@ export function useStatusChatInputController(props: any) {
     const workingDirectory = selectedChatDirectoryPath || selectedAgent.localDataDir || "";
     const selectedStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
     const requestRuntimeSessionId = chatRuntimeSessionIdsByKey?.[selectedStorageKey] || selectedChatRuntimeSessionId;
-    startChatStream(selectedStorageKey, selectedAgent.id, selectedChatLeafKey, outgoingLabel);
+    activeRunProcessEvents = [{ at: requestStartedAt, label: "Queued chat request", detail: "Preparing the runtime bridge.", runId: taskId }];
+    startChatStream(selectedStorageKey, selectedAgent.id, selectedChatLeafKey, outgoingLabel, taskId, requestStartedAt);
     const requestAgentId = selectedAgent.id;
     const requestLeafKey = selectedChatLeafKey;
     const requestStillSelected = () => {
@@ -1069,6 +1158,35 @@ export function useStatusChatInputController(props: any) {
       ))
       .slice(-5);
     const outgoingContent = messageContentParts([prompt, outgoingDirectorySummary].filter(Boolean).join("\n\n"), outgoingAttachments);
+    const sessionMessageCreatedMs = (message: any) => {
+      const raw = Number(message?.createdAt ?? message?.timestamp ?? 0);
+      if (!Number.isFinite(raw) || raw <= 0) return 0;
+      return raw < 10_000_000_000 ? raw * 1000 : raw;
+    };
+    const normalizeSessionTurnText = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+    const currentRequestTexts = new Set(
+      [outgoingContent, outgoingLabel, prompt]
+        .map(normalizeSessionTurnText)
+        .filter(Boolean),
+    );
+    const findCurrentRequestSessionUserIndex = (sessionMessages: any[]) => {
+      let fallbackRecentUserIndex = -1;
+      for (let index = 0; index < sessionMessages.length; index += 1) {
+        const sessionMessage = sessionMessages[index];
+        if (String(sessionMessage?.role ?? "").toLowerCase() !== "user") continue;
+        const text = normalizeSessionTurnText(sessionMessage?.content);
+        const createdAt = sessionMessageCreatedMs(sessionMessage);
+        const isRecent = createdAt >= requestStartedAt - 2_000;
+        if (text && currentRequestTexts.has(text) && (!createdAt || isRecent)) fallbackRecentUserIndex = index;
+        else if (isRecent) fallbackRecentUserIndex = index;
+      }
+      return fallbackRecentUserIndex;
+    };
+    const sessionMessageBelongsToCurrentTurn = (sessionMessage: any, index: number, currentUserIndex: number) => {
+      if (currentUserIndex >= 0) return index > currentUserIndex;
+      const createdAt = sessionMessageCreatedMs(sessionMessage);
+      return createdAt >= requestStartedAt - 2_000;
+    };
     upsertTask({
       id: taskId,
       agentId: selectedAgent.id,
@@ -1080,25 +1198,49 @@ export function useStatusChatInputController(props: any) {
       workingDirectory,
     });
     const outgoingUserMessage: ChatMessage = { role: "user", content: outgoingLabel, attachments: outgoingAttachments, surface: "chat" };
-    const pendingAssistantMessage: ChatMessage = { role: "assistant", content: "", surface: "chat" };
+    const pendingAssistantMessage: ChatMessage = withActiveProcessEvents({ role: "assistant", content: "", surface: "chat" });
     appendMessage(selectedAgent.id, outgoingUserMessage, selectedStorageKey);
     appendMessage(selectedAgent.id, pendingAssistantMessage, selectedStorageKey);
     appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [outgoingUserMessage, pendingAssistantMessage]);
 
-    const replacePendingAssistant = (message: ChatMessage) => {
+    const persistActiveProcessEventsToAssistant = () => {
       setMessagesByAgent((current) => {
         const existing = current[selectedStorageKey] ?? [];
-        const next = [...existing];
-        if (next.length) next[next.length - 1] = message;
-        else next.push(message);
-        return { ...current, [selectedStorageKey]: next };
+        const next = attachActiveProcessEventsToAssistant(existing);
+        return next === existing ? current : { ...current, [selectedStorageKey]: next };
       });
       setSelectedChatPreview((current) => {
         if (!current || current.agentId !== selectedAgent.id || current.leafKey !== selectedChatLeafKey) return current;
-        const next = [...current.messages];
-        if (next.length) next[next.length - 1] = message;
-        else next.push(message);
-        return { ...current, messages: next };
+        const next = attachActiveProcessEventsToAssistant(current.messages);
+        return next === current.messages ? current : { ...current, messages: next };
+      });
+    };
+    const appendRunChatProcess = (label: string, detail?: string, status?: string) => {
+      const cleanLabel = label.trim();
+      if (!cleanLabel) return;
+      const last = activeRunProcessEvents[activeRunProcessEvents.length - 1];
+      if (last?.label === cleanLabel && last?.detail === detail) {
+        activeRunProcessEvents = [
+          ...activeRunProcessEvents.slice(0, -1),
+          { ...last, at: Date.now(), status, runId: taskId },
+        ];
+      } else {
+        activeRunProcessEvents = [
+          ...activeRunProcessEvents,
+          { at: Date.now(), label: cleanLabel, detail, status, runId: taskId },
+        ].slice(-80);
+      }
+      appendChatProcess(selectedStorageKey, cleanLabel, detail, status, taskId);
+      persistActiveProcessEventsToAssistant();
+    };
+    const replacePendingAssistant = (message: ChatMessage) => {
+      setMessagesByAgent((current) => {
+        const existing = current[selectedStorageKey] ?? [];
+        return { ...current, [selectedStorageKey]: replaceActiveAssistantMessage(existing, message) };
+      });
+      setSelectedChatPreview((current) => {
+        if (!current || current.agentId !== selectedAgent.id || current.leafKey !== selectedChatLeafKey) return current;
+        return { ...current, messages: replaceActiveAssistantMessage(current.messages, message) };
       });
     };
     const renderAssistantText = (content: string) => {
@@ -1145,15 +1287,19 @@ export function useStatusChatInputController(props: any) {
           updatedAt: Date.now(),
           requestLabel: outgoingLabel,
           sessionId,
+          runId: taskId,
           status: "active",
         });
         if (attachedRuntimeSessionId !== sessionId) {
           attachedRuntimeSessionId = sessionId;
-          appendChatProcess(selectedStorageKey, `Attached ${runtimeLabel} session`, sessionId);
+          appendRunChatProcess(`Attached ${runtimeLabel} session`, sessionId);
         }
       }
       const sessionMessages = Array.isArray(session.messages) ? session.messages : [];
-      for (const sessionMessage of sessionMessages) {
+      const currentUserIndex = findCurrentRequestSessionUserIndex(sessionMessages);
+      for (let index = 0; index < sessionMessages.length; index += 1) {
+        const sessionMessage = sessionMessages[index];
+        if (!sessionMessageBelongsToCurrentTurn(sessionMessage, index, currentUserIndex)) continue;
         const key = [
           sessionId,
           sessionMessage?.index ?? "",
@@ -1166,7 +1312,7 @@ export function useStatusChatInputController(props: any) {
         const processEvent = processLabelFromSessionMessage(sessionMessage);
         if (processEvent) {
           latestSessionSummary = processEvent.detail || processEvent.label;
-          appendChatProcess(selectedStorageKey, processEvent.label, processEvent.detail);
+          appendRunChatProcess(processEvent.label, processEvent.detail);
         }
         if (String(sessionMessage?.role ?? "").toLowerCase() === "assistant") {
           const assistantText = String(sessionMessage?.content ?? "");
@@ -1185,7 +1331,7 @@ export function useStatusChatInputController(props: any) {
       let response = await fetchSession({
         agent: selectedAgent,
         sessionId: currentRuntimeSessionId || undefined,
-        sinceMs: currentRuntimeSessionId ? undefined : requestStartedAt - 2_000,
+        sinceMs: requestStartedAt - 2_000,
         chatStorageKey: selectedStorageKey,
       });
       if (!response?.ok && currentRuntimeSessionId) {
@@ -1247,8 +1393,8 @@ export function useStatusChatInputController(props: any) {
         for (const eventText of events) {
           const line = eventText.split("\n").find((entry) => entry.startsWith("data: "));
           if (!line) {
-            const label = processLabelFromComment(eventText);
-            if (label) appendChatProcess(selectedStorageKey, label);
+              const label = processLabelFromComment(eventText);
+              if (label) appendRunChatProcess(label);
             continue;
           }
           const payload = line.slice(6);
@@ -1273,9 +1419,9 @@ export function useStatusChatInputController(props: any) {
             continue;
           }
           const processEvent = processLabelFromRuntimeEvent(parsed);
-          if (processEvent) appendChatProcess(selectedStorageKey, processEvent.label, processEvent.detail, processEvent.status);
+          if (processEvent) appendRunChatProcess(processEvent.label, processEvent.detail, processEvent.status);
           if (parsed.session?.id) {
-            appendChatProcess(selectedStorageKey, `Attached ${runtimeLabel} session`, parsed.session.id);
+            appendRunChatProcess(`Attached ${runtimeLabel} session`, parsed.session.id);
             setChatRuntimeSessionIdsByKey((current) => ({ ...current, [selectedStorageKey]: parsed.session.id }));
             if (requestStillSelected()) setSelectedChatRuntimeSessionId(parsed.session.id);
             continue;
@@ -1304,33 +1450,15 @@ export function useStatusChatInputController(props: any) {
             let nextTaskMessage = "";
             setMessagesByAgent((current) => {
               const existing = current[selectedStorageKey] ?? [];
-              const next = [...existing];
-              const last = next[next.length - 1];
-              if (!last) {
-                nextTaskMessage = textDelta;
-                next.push({ role: "assistant", content: textDelta, surface: "chat" });
-              } else {
-                const existingText = last.content ?? "";
-                const localDelta = nextChatTextDelta(textDelta, existingText);
-                if (!localDelta) return current;
-                nextTaskMessage = compactRepeatedAssistantText(existingText + localDelta);
-                next[next.length - 1] = { ...last, content: nextTaskMessage };
-              }
-              return { ...current, [selectedStorageKey]: next };
+              const result = appendActiveAssistantText(existing, streamedAssistantText);
+              if (!result.changed) return current;
+              nextTaskMessage = result.text;
+              return { ...current, [selectedStorageKey]: result.messages };
             });
             setSelectedChatPreview((current) => {
               if (!current || current.agentId !== selectedAgent.id || current.leafKey !== selectedChatLeafKey) return current;
-              const next = [...current.messages];
-              const last = next[next.length - 1];
-              if (!last) {
-                next.push({ role: "assistant", content: textDelta, surface: "chat" });
-              } else {
-                const existingText = last.content ?? "";
-                const localDelta = nextChatTextDelta(textDelta, existingText);
-                if (!localDelta) return current;
-                next[next.length - 1] = { ...last, content: compactRepeatedAssistantText(existingText + localDelta) };
-              }
-              return { ...current, messages: next };
+              const result = appendActiveAssistantText(current.messages, streamedAssistantText);
+              return result.changed ? { ...current, messages: result.messages } : current;
             });
             updateTask(taskId, { lastMessage: nextTaskMessage || streamedAssistantText });
             contentEventsSincePaint += 1;
@@ -1355,7 +1483,7 @@ export function useStatusChatInputController(props: any) {
     } catch (error) {
       const aborted = abortController.signal.aborted;
       if (aborted) {
-        appendChatProcess(selectedStorageKey, "Chat stream timed out", `Checking the ${runtimeLabel} session for late activity.`);
+        appendRunChatProcess("Chat stream timed out", `Checking the ${runtimeLabel} session for late activity.`);
         recordActiveChatRun?.({
           storageKey: selectedStorageKey,
           agentId: selectedAgent.id,
@@ -1364,6 +1492,7 @@ export function useStatusChatInputController(props: any) {
           updatedAt: Date.now(),
           requestLabel: outgoingLabel,
           sessionId: currentRuntimeSessionId || undefined,
+          runId: taskId,
           status: "stalled",
         });
         await pollRuntimeSession();
@@ -1557,5 +1686,5 @@ export function useStatusChatInputController(props: any) {
   }
   /* eslint-enable react-hooks/purity */
 
-  return { checkStatus, checkVaultStatus, checkControlRoomStatus, runVaultTailnetSync, pairSyncthingCollector, pairSyncthingVaultSync, inspectBrainNode, startBrainPan, moveBrainPan, endBrainPan, addChatFiles, handleChatFileChange, handleChatImageChange, removeChatAttachment, attachChatDirectory, attachChatRecentDirectory, removeChatDirectory, addQuickAddFiles, handleQuickAddFileChange, handleQuickAddImageChange, removeQuickAddAttachment, attachQuickAddDirectory, attachQuickAddRecentDirectory, removeQuickAddDirectory, addKanbanSteerFiles, handleKanbanSteerFileChange, handleKanbanSteerImageChange, removeKanbanSteerAttachment, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, removeKanbanSteerDirectory, updateVoiceTranscript, appendVoiceTranscriptToInput, cleanupVoiceCapture, startVoiceWaveform, startAudioRecording, stopAudioRecording, sendMessage, queuedChatMessages, flushingChatQueueId, removeQueuedChatMessage, sendQueuedChatMessageNow, generateKanbanTaskFromChat, dismissChatKanbanGeneration, chatKanbanGeneration };
+  return { checkStatus, checkVaultStatus, checkControlRoomStatus, runVaultTailnetSync, pairSyncthingCollector, pairSyncthingVaultSync, inspectBrainNode, startBrainPan, moveBrainPan, endBrainPan, addChatFiles, handleChatFileChange, handleChatFileReferenceDrop, handleChatImageChange, removeChatAttachment, attachChatDirectory, attachChatRecentDirectory, removeChatDirectory, addQuickAddFiles, handleQuickAddFileChange, handleQuickAddImageChange, removeQuickAddAttachment, attachQuickAddDirectory, attachQuickAddRecentDirectory, removeQuickAddDirectory, addKanbanSteerFiles, handleKanbanSteerFileChange, handleKanbanSteerImageChange, removeKanbanSteerAttachment, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, removeKanbanSteerDirectory, updateVoiceTranscript, appendVoiceTranscriptToInput, cleanupVoiceCapture, startVoiceWaveform, startAudioRecording, stopAudioRecording, sendMessage, queuedChatMessages, flushingChatQueueId, removeQueuedChatMessage, sendQueuedChatMessageNow, generateKanbanTaskFromChat, dismissChatKanbanGeneration, chatKanbanGeneration };
 }

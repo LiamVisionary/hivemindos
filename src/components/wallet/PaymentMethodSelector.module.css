@@ -1,0 +1,124 @@
+.selectorField {
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
+}
+
+.methods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  overflow-anchor: none;
+}
+
+.method {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  width: 72px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 10px;
+  background: rgba(15, 19, 27, 0.48);
+  color: inherit;
+  padding: 9px 5px 8px;
+  text-align: center;
+  touch-action: manipulation;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.method > * {
+  pointer-events: none;
+}
+
+.method:hover,
+.method:focus-visible {
+  border-color: rgba(148, 163, 184, 0.28);
+  outline: none;
+}
+
+.methodActive {
+  border-color: rgba(45, 212, 191, 0.45);
+  background: rgba(45, 212, 191, 0.07);
+}
+
+.methodIcon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  border-radius: 8px;
+  background: rgba(167, 139, 250, 0.08);
+  color: #a78bfa;
+}
+
+.methodIcon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.methodActive .methodIcon {
+  border-color: rgba(45, 212, 191, 0.4);
+  background: rgba(45, 212, 191, 0.1);
+  color: var(--accent-strong);
+}
+
+.methodBody b {
+  display: block;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.methodActive .methodBody b {
+  color: var(--foreground);
+}
+
+.methodCheck {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: none;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #042f2e;
+}
+
+.methodActive .methodCheck {
+  display: grid;
+}
+
+.methodCheck svg {
+  width: 9px;
+  height: 9px;
+}
+
+@media (max-width: 480px) {
+  .method {
+    width: 60px;
+    min-height: 58px;
+    gap: 5px;
+    padding: 8px 4px 7px;
+  }
+
+  .methodIcon {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+  }
+
+  .methodIcon svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .methodBody b {
+    font-size: 10px;
+  }
+}

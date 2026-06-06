@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
+import { localTelemetryCollectorUrl } from "@/lib/services/hivemind-link-control";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function collectorBase(url?: string | null) {
-  return (url?.trim() || "http://127.0.0.1:8787").replace(/\/+$/, "");
+  return (url?.trim() || localTelemetryCollectorUrl()).replace(/\/+$/, "");
 }
 
 // Trigger a Syncthing rescan of the vault folder so a just-edited call prompt

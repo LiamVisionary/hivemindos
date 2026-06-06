@@ -9,6 +9,7 @@ export type AgentPaymentProviderAdvancedSection =
   | "moneyclaw-env"
   | "clawcard-env"
   | "veil-setup"
+  | "veil-x402-mode"
   | "notes"
   | "copy-prompt"
   | "test-x402"
@@ -144,7 +145,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     privateTransferEndpoint: "/api/wallet/veil/transfer",
     x402Endpoint: "/api/wallet/veil/x402",
     advancedSetup: {
-      sections: ["provider", "wallet-address", "network-token", "x402-base-url", "veil-setup", "notes", "copy-prompt", "test-x402"],
+      sections: ["provider", "wallet-address", "network-token", "x402-base-url", "veil-setup", "veil-x402-mode", "notes", "copy-prompt", "test-x402"],
     },
   },
   manual: {

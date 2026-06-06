@@ -23,6 +23,17 @@ export type AgentWalletCardCompactProps = {
 type ChipTone = "ok" | "warn" | "danger" | "off" | "muted";
 type SetupStage = "idle" | "confirm" | "loading" | "done";
 
+function hasUsePodSetupEvidence(agentUsePod?: AgentProfile["usePod"]): boolean {
+  const balance = getUsePodBalanceUsd(agentUsePod);
+  return Boolean(
+    agentUsePod?.depositAddress
+    || agentUsePod?.depositCode
+    || agentUsePod?.dashboardUrl
+    || agentUsePod?.lastTestStatus
+    || balance !== null,
+  );
+}
+
 function statusFor(wallet: AgentWalletConfig, survival: AgentSurvivalSnapshot, agentUsePod?: AgentProfile["usePod"]): {
   tone: ChipTone;
   text: string;
@@ -42,7 +53,9 @@ function statusFor(wallet: AgentWalletConfig, survival: AgentSurvivalSnapshot, a
     if (wallet.walletAddress || wallet.vaultAddress) return { tone: wallet.enabled ? "ok" : "muted", text: "Veil configured" };
     return { tone: "off", text: "Set up Veil" };
   }
-  if (providerFeatures.localWalletRequired && !wallet.walletAddress && !wallet.vaultAddress) return { tone: "off", text: "Initialize rails" };
+  if (providerFeatures.localWalletRequired && !wallet.walletAddress && !wallet.vaultAddress) {
+    return hasUsePodSetupEvidence(agentUsePod) ? { tone: "muted", text: "Rail setup" } : { tone: "off", text: "Initialize rails" };
+  }
   if (!wallet.enabled) return { tone: "off", text: "Wallet off" };
   if (survival.tier === "critical" || survival.tier === "dead") {
     return { tone: "danger", text: "Needs funding" };
@@ -58,17 +71,6 @@ function formatMoney(value: number): string {
   return `$${Math.max(0, value).toFixed(2)}`;
 }
 
-function hasUsePodSetupEvidence(agentUsePod?: AgentProfile["usePod"]): boolean {
-  const balance = getUsePodBalanceUsd(agentUsePod);
-  return Boolean(
-    agentUsePod?.depositAddress
-    || agentUsePod?.depositCode
-    || agentUsePod?.dashboardUrl
-    || agentUsePod?.lastTestStatus
-    || balance !== null,
-  );
-}
-
 export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, survival, onOpen, onInitialize }: AgentWalletCardCompactProps) {
   const tier = wallet.enabled ? survival.tier : "off";
   const safeBalance = getDisplayWalletBalanceUsd(wallet);
@@ -78,7 +80,7 @@ export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, surviva
   const usePodReadyBalanceUnknown = usePodBalanceUnknown && agentUsePod?.lastTestStatus === "ready";
   const hasWalletFunds = safeBalance > 0;
   const [setupStage, setSetupStage] = useState<SetupStage>("idle");
-  const needsInitialization = providerFeatures.localWalletRequired && !wallet.walletAddress && !wallet.vaultAddress;
+  const needsInitialization = providerFeatures.localWalletRequired && !wallet.walletAddress && !wallet.vaultAddress && !hasUsePodSetupEvidence(agentUsePod);
   const spendLabel = wallet.enabled ? "Spend on" : "Spend off";
   const showsSpendStatus = providerFeatures.balanceSource === "usepod-runtime"
     ? hasUsePodSetupEvidence(agentUsePod)

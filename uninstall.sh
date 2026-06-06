@@ -89,6 +89,32 @@ remove_managed_block() {
   ok "Removed HivemindOS shared-skill block from $file"
 }
 
+remove_claude_brain_hook() {
+  local settings_file="$HOME/.claude/settings.json"
+  [[ -f "$settings_file" ]] || return 0
+  node - "$settings_file" <<'NODE'
+const fs = require("fs");
+const settingsFile = process.argv[2];
+let settings;
+try {
+  settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+} catch {
+  process.exit(0);
+}
+if (!settings?.hooks || !Array.isArray(settings.hooks.UserPromptSubmit)) process.exit(0);
+settings.hooks.UserPromptSubmit = settings.hooks.UserPromptSubmit
+  .map((group) => {
+    if (!group || typeof group !== "object" || !Array.isArray(group.hooks)) return group;
+    return { ...group, hooks: group.hooks.filter((hook) => !String(hook?.command || "").includes("hive-brain-hook")) };
+  })
+  .filter((group) => !group || typeof group !== "object" || !Array.isArray(group.hooks) || group.hooks.length > 0);
+if (settings.hooks.UserPromptSubmit.length === 0) delete settings.hooks.UserPromptSubmit;
+if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
+fs.writeFileSync(settingsFile, `${JSON.stringify(settings, null, 2)}\n`);
+NODE
+  ok "Removed Claude shared-brain hook from $settings_file"
+}
+
 agent_instruction_files() {
   local agent="$1"
   case "$agent" in
@@ -342,6 +368,7 @@ if ask "Remove HivemindOS shared-skill instructions from agent files?" "yes"; th
       remove_managed_block "$file"
     done < <(agent_instruction_files "$agent")
   done
+  remove_claude_brain_hook
 fi
 
 if ask "Remove copied karpathy-guidelines skill from local agent skill folders?" "no"; then
@@ -527,6 +554,7 @@ if ask "Remove empty canonical HivemindOS vault folders created by setup?" "no";
     "$vault_path/Projects" \
     "$vault_path/Templates/HivemindOS" \
     "$vault_path/Templates" \
+    "$vault_path/Memory/Distillations/Agent Memory" \
     "$vault_path/Memory/Distillations" \
     "$vault_path/Memory/Imported Sources" \
     "$vault_path/Memory/Meetings" \
@@ -557,8 +585,8 @@ if ask "Remove .env.local from this checkout?" "no"; then
   ok "Removed .env.local"
 fi
 
-if ask "Remove hive env, transfer, and update commands from ~/.local/bin if they point to this checkout?" "yes"; then
-  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-update; do
+if ask "Remove hive env, transfer, update, brain, and brain hook commands from ~/.local/bin if they point to this checkout?" "yes"; then
+  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-update hive-brain hive-brain-hook; do
     command_path="$HOME/.local/bin/$command_name"
     script_path="$ROOT/scripts/$command_name"
     if [[ -L "$command_path" && "$(readlink "$command_path")" == "$script_path" ]]; then

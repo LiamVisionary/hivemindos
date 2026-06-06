@@ -102,7 +102,7 @@ export function useDashboardNavigationController({
   useEffect(() => {
     if (!hydrated || initialRouteAppliedRef.current) return;
     initialRouteAppliedRef.current = true;
-    const target = dashboardTargetFromSearch(window.location.search);
+    const target = dashboardTargetFromSearch(window.location.search) ?? restoredDashboardTargetFromStorage();
     if (target) navigateDashboardTarget(target);
   }, [hydrated, navigateDashboardTarget]);
 
@@ -182,6 +182,33 @@ function dashboardViewFromLocation(): DashboardView | null {
 
   const view = new URLSearchParams(window.location.search).get("view");
   return normalizeStoredDashboardView(view);
+}
+
+function restoredDashboardTargetFromStorage(): DashboardRouteTarget | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const stored = window.localStorage.getItem(RESTORED_ROUTE_STORAGE_KEY);
+    return normalizeStoredDashboardTarget(stored ? JSON.parse(stored) : null);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeStoredDashboardTarget(value: unknown): DashboardRouteTarget | null {
+  if (!value || typeof value !== "object") return null;
+
+  const record = value as Record<string, unknown>;
+  const view = normalizeStoredDashboardView(record.view);
+  if (!view) return null;
+
+  return {
+    view,
+    agentId: typeof record.agentId === "string" ? record.agentId : undefined,
+    chatLeaf: typeof record.chatLeaf === "string" ? record.chatLeaf : undefined,
+    taskId: typeof record.taskId === "string" ? record.taskId : undefined,
+    vaultPanel: typeof record.vaultPanel === "string" ? record.vaultPanel : undefined,
+  };
 }
 
 function initialNavigationRecents(): DashboardRouteTarget[] {

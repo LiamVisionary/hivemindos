@@ -512,6 +512,7 @@ export type ChatTreeItem = {
   updatedAt?: number;
   rank: number;
   active: boolean;
+  searchText?: string;
   onOpen: () => void;
 };
 

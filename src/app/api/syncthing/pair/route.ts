@@ -1,3 +1,5 @@
+import { localTelemetryCollectorUrl } from "@/lib/services/hivemind-link-control";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -22,7 +24,7 @@ type SyncthingStatus = {
 };
 
 function collectorBase(value?: string | null) {
-  return (value?.trim() || "http://127.0.0.1:8787").replace(/\/+$/, "");
+  return (value?.trim() || localTelemetryCollectorUrl()).replace(/\/+$/, "");
 }
 
 async function collectorJson(base: string, path: string, init?: RequestInit) {

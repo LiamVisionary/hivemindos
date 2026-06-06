@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { RUNTIME_CAPABILITIES, runtimeUsesAgentEnvOverlay } from "@/lib/types/agent-runtime";
 import { getUsePodBalanceUsd, resolveAgentWallet } from "@/lib/utils/agent-wallet";
 import type { FleetAgentCapabilityBadge, FleetAgentCapabilityIcon } from "@/components/fleet/fleet-data";
+import { simpleStableHash } from "@/features/dashboard/dashboard-light-helpers";
 
 const FLEET_CAPABILITY_META: Record<string, { label: string; icon: FleetAgentCapabilityIcon; tone: FleetAgentCapabilityBadge["tone"] }> = {
   chat: { label: "Chat", icon: "chat", tone: "aqua" },
@@ -24,6 +25,49 @@ const FLEET_CAPABILITY_META: Record<string, { label: string; icon: FleetAgentCap
   analytics: { label: "Analytics", icon: "analytics", tone: "blue" },
   "aeon-workflow": { label: "AEON workflow", icon: "workflow", tone: "aqua" },
 };
+
+function combinedUserAssistantSplitIndex(content: string) {
+  const markers = [
+    /\*\*(?=(?:Private x402|[^*\n]{0,120}\b(?:ready|complete|unavailable|failed)\b))/i,
+    /\n(?=(?:Private x402|Endpoint\s+[`'"]?https?:\/\/|HTTP status|Content received:))/i,
+  ];
+  return markers.reduce((best, pattern) => {
+    const match = pattern.exec(content);
+    if (!match || !match.index) return best;
+    return best < 0 ? match.index : Math.min(best, match.index);
+  }, -1);
+}
+
+function assistantTailLooksLikeResponse(content: string) {
+  return /Private x402|Reply\s+`?confirm|Endpoint\s+[`'"]?https?:\/\/|HTTP status|Content received:|^\*\*[^*\n]{0,120}\b(?:ready|complete|unavailable|failed)\b/i.test(content.trim());
+}
+
+function splitCombinedUserAssistantMessage(message: ChatMessage): ChatMessage[] {
+  if (message.role !== "user") return [message];
+  const content = message.content ?? "";
+  const splitIndex = combinedUserAssistantSplitIndex(content);
+  if (splitIndex <= 0) return [message];
+  const userContent = content.slice(0, splitIndex).trimEnd();
+  const assistantContent = content.slice(splitIndex).trimStart();
+  if (!userContent || !assistantTailLooksLikeResponse(assistantContent)) return [message];
+  return [
+    { ...message, content: userContent },
+    {
+      role: "assistant",
+      content: assistantContent,
+      createdAt: Number(message.createdAt || 0) ? Number(message.createdAt) + 1 : undefined,
+      surface: "chat",
+    },
+  ];
+}
+
+function splitCombinedUserAssistantMessages(messages: ChatMessage[]) {
+  return messages.flatMap(splitCombinedUserAssistantMessage);
+}
+
+function fleetAlertFingerprint(value: string) {
+  return simpleStableHash(value.replace(/\s+/g, " ").trim().toLowerCase());
+}
 
 function fleetAgentCapabilityBadges(agent: any): FleetAgentCapabilityBadge[] {
   const runtime = String(agent?.runtime ?? "").toLowerCase();
@@ -42,7 +86,7 @@ function fleetAgentCapabilityBadges(agent: any): FleetAgentCapabilityBadge[] {
 }
 
 export function useDashboardDerivedState(props: any) {
-  const { RUNTIME_LABELS, activeView, agentAliasMap, agentCreateDraft, agentCreateMachineKey, agentRoleModalId, agentSettingsPanel, agents, beeRoleLabel, brainGraph, brainGraphLayout, brainSkills, chatAutoScrollRef, chatDisplayContent, chatMessageStorageKey, chatMessageWindow, chatProcessByKey, chatStreamingByKey, cleanActivityTitle, collectorKey, createAgentProfile, createDefaultAgentWallet, dedupeAgents, discoveredMachines, displayMachineName, fleetAgentState, fleetMachineLocation, fleetMetric, fleetSnapshots, fleetVersionState, formatRelativeTime, getHoneyAgentRewards, getSurvivalSnapshot, groupKanbanTasks, groupNotifications, hermesUpdateRequiredDetail, hiveEnv, hiveEnvRuntimeSourceId, honeyTreasury, hydrated, inferCurrentTask, inferLatestAgentMessage, isChatSidebarTask, isLoopbackCollector, isManualAgentChatMessage, isMeaningfulActive, isMobileMachineOs, isStarterPlaceholder, isVisibleFleetMachine, isWorkView, kanbanAssignees, kanbanBoard, kanbanBoardScrollRef, kanbanError, kanbanIncludeArchived, kanbanLoading, kanbanTaskAssigneeAgent, machineIdentityFromParts, machineNameAliases, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineNetworkIssue, maintenanceReport, messagesByAgent, messagesScrollRef, mirosharkAnalysisAgentId, mirosharkStatus, moneyClawLoadingEnvName, moneyClawStatusByEnvName, normalizeAgentProfile, notificationActorMeta, notificationDisplayBody, notificationDisplayTitle, notificationSourceLabel, notificationSummary, notifications, parseEnvImportText, quickAddMachineTargets, refreshMoneyClawStatus, refreshRuntimeIntegrations, refreshSharedSchedulesFromVault, runtimeCan, runtimeCount, runtimeFileRoots, runtimeUsage, schedulerSkillSearch, schedules, selectedAgentId, selectedBrainNodeId, selectedChatLeafKey, selectedChatPreview, selectedKanbanTaskId, selectedKanbanTaskIds, setKanbanBoardScrollState, setMachineNameAliases, setScheduleDraft, setupMachineKey, sharedEnvImportText, sharedVault, skillBrowserSearch, skillBrowserSkills, tailscaleDevices, tailscaleStatus, tasks, updateStatusByMachine, walletExpanded, walletsByAgent, workPriority } = props;
+  const { RUNTIME_LABELS, activeView, agentAliasMap, agentCreateDraft, agentCreateMachineKey, agentRoleModalId, agentSettingsPanel, agents, beeRoleLabel, brainGraph, brainGraphLayout, brainSkills, chatAutoScrollRef, chatDisplayContent, chatMessageStorageKey, chatMessageWindow, chatProcessByKey, chatStreamingByKey, cleanActivityTitle, collectorKey, createAgentProfile, dedupeAgents, discoveredMachines, displayMachineName, fleetAgentState, fleetMachineLocation, fleetMetric, fleetSnapshots, fleetVersionState, formatRelativeTime, getHoneyAgentRewards, getSurvivalSnapshot, groupKanbanTasks, groupNotifications, hermesUpdateRequiredDetail, hiveEnv, hiveEnvRuntimeSourceId, honeyTreasury, hydrated, inferCurrentTask, inferLatestAgentMessage, isChatSidebarTask, isLoopbackCollector, isManualAgentChatMessage, isMeaningfulActive, isMobileMachineOs, isStarterPlaceholder, isVisibleFleetMachine, isWorkView, kanbanAssignees, kanbanBoard, kanbanBoardScrollRef, kanbanError, kanbanIncludeArchived, kanbanLoading, kanbanTaskAssigneeAgent, machineIdentityFromParts, machineNameAliases, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineNetworkIssue, maintenanceReport, messagesByAgent, messagesScrollRef, mirosharkAnalysisAgentId, mirosharkStatus, moneyClawLoadingEnvName, moneyClawStatusByEnvName, normalizeAgentProfile, notificationActorMeta, notificationDisplayBody, notificationDisplayTitle, notificationSourceLabel, notificationSummary, notifications, parseEnvImportText, quickAddMachineTargets, refreshMoneyClawStatus, refreshRuntimeIntegrations, refreshSharedSchedulesFromVault, runtimeCan, runtimeCount, runtimeFileRoots, runtimeUsage, schedulerSkillSearch, schedules, selectedAgentId, selectedBrainNodeId, selectedChatLeafKey, selectedChatPreview, selectedKanbanTaskId, selectedKanbanTaskIds, setKanbanBoardScrollState, setMachineNameAliases, setScheduleDraft, setupMachineKey, sharedEnvImportText, sharedVault, skillBrowserSearch, skillBrowserSkills, tailscaleDevices, tailscaleStatus, tasks, updateStatusByMachine, walletExpanded, walletsByAgent, workPriority } = props;
   const discoveredAgents = useMemo(
     () => discoveredMachines.flatMap((machine) => machine.agents ?? []).map(normalizeAgentProfile),
     [discoveredMachines],
@@ -106,15 +150,26 @@ export function useDashboardDerivedState(props: any) {
 
   const effectiveSelectedAgentId = agentAliases.get(selectedAgentId) ?? selectedAgentId;
 
-  const selectedAgent = useMemo(
-    () => displayAgents.find((agent) => agent.id === effectiveSelectedAgentId) ?? displayAgents[0],
-    [displayAgents, effectiveSelectedAgentId],
-  );
+  const selectedAgent = useMemo(() => {
+    const matchedAgent = displayAgents.find((agent) => agent.id === effectiveSelectedAgentId);
+    if (matchedAgent) return matchedAgent;
+    if (activeView === "chat" && selectedChatLeafKey && effectiveSelectedAgentId) return null;
+    return displayAgents[0];
+  }, [activeView, displayAgents, effectiveSelectedAgentId, selectedChatLeafKey]);
   const selectedChatStorageKey = selectedAgent ? chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey) : "";
   const selectedChatStreamState = selectedChatStorageKey ? chatStreamingByKey?.[selectedChatStorageKey] : null;
   const selectedChatStreaming = Boolean(selectedChatStreamState);
   const selectedChatHasStreamingChunk = Boolean(selectedChatStreamState?.hasChunk);
-  const selectedChatProcess = selectedChatStorageKey ? chatProcessByKey?.[selectedChatStorageKey] ?? [] : [];
+  const selectedChatProcess = useMemo(() => {
+    if (!selectedChatStorageKey || !selectedChatStreamState) return [];
+    const processEvents = chatProcessByKey?.[selectedChatStorageKey] ?? [];
+    const runId = selectedChatStreamState.runId;
+    const startedAt = Number(selectedChatStreamState.startedAt || 0);
+    return processEvents.filter((event: any) => (
+      (!runId || !event.runId || event.runId === runId)
+      && (!startedAt || !event.at || event.at >= startedAt - 2_000)
+    ));
+  }, [chatProcessByKey, selectedChatStorageKey, selectedChatStreamState]);
 
   useEffect(() => {
     if (!hydrated || activeView !== "swarm") return;
@@ -222,18 +277,18 @@ export function useDashboardDerivedState(props: any) {
         && selectedChatPreview.agentId === selectedAgent.id
         && selectedChatPreview.leafKey === selectedChatLeafKey
       ) {
-        return chatMessageWindow?.agentId === selectedAgent.id
+        return splitCombinedUserAssistantMessages(chatMessageWindow?.agentId === selectedAgent.id
           ? selectedChatPreview.messages.slice(-chatMessageWindow.limit)
-          : selectedChatPreview.messages;
+          : selectedChatPreview.messages);
       }
       const selectedStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
       const selectedLeafMessages = selectedStorageKey !== selectedAgent.id
         ? messagesByAgent[selectedStorageKey]?.filter(isManualAgentChatMessage) ?? []
         : [];
       if (selectedLeafMessages.length) {
-        return chatMessageWindow?.agentId === selectedAgent.id
+        return splitCombinedUserAssistantMessages(chatMessageWindow?.agentId === selectedAgent.id
           ? selectedLeafMessages.slice(-chatMessageWindow.limit)
-          : selectedLeafMessages;
+          : selectedLeafMessages);
       }
       if (selectedStorageKey !== selectedAgent.id) return [];
       const relatedIds = [selectedAgent.id, ...[...agentAliases.entries()]
@@ -246,9 +301,9 @@ export function useDashboardDerivedState(props: any) {
         role: "system" as const,
         content: `Chatting with ${selectedAgent.name}. Pick a machine to start fresh, or resume a previous chat when one is listed.`,
       }];
-      return chatMessageWindow?.agentId === selectedAgent.id
+      return splitCombinedUserAssistantMessages(chatMessageWindow?.agentId === selectedAgent.id
         ? selectedMessages.slice(-chatMessageWindow.limit)
-        : selectedMessages;
+        : selectedMessages);
     },
     [agentAliases, chatMessageWindow, messagesByAgent, selectedAgent, selectedChatLeafKey, selectedChatPreview],
   );
@@ -274,6 +329,11 @@ export function useDashboardDerivedState(props: any) {
       && left?.role === right?.role
       && (left?.content ?? "").replace(/\s+/g, " ").trim().toLowerCase() === (right?.content ?? "").replace(/\s+/g, " ").trim().toLowerCase()
     );
+    const withPreservedProcessEvents = (nextMessage: ChatMessage, previousMessage?: ChatMessage) => (
+      (previousMessage?.processEvents?.length ?? 0) > 0 && !(nextMessage.processEvents?.length ?? 0)
+        ? { ...nextMessage, processEvents: previousMessage?.processEvents }
+        : nextMessage
+    );
     const findLastMessageIndex = (messagesToSearch: ChatMessage[], predicate: (message: ChatMessage) => boolean) => {
       for (let index = messagesToSearch.length - 1; index >= 0; index -= 1) {
         if (predicate(messagesToSearch[index])) return index;
@@ -291,11 +351,17 @@ export function useDashboardDerivedState(props: any) {
           && !chatDisplayContent(previous).trim()
           && chatDisplayContent(message).trim()
         ) {
-          output[previousIndex] = message;
+          output[previousIndex] = withPreservedProcessEvents(message, previous);
         }
         continue;
       }
-      if (sameMessage(output.at(-1), message)) continue;
+      if (sameMessage(output.at(-1), message)) {
+        const previous = output.at(-1);
+        if ((message.processEvents?.length ?? 0) > 0 && !(previous?.processEvents?.length ?? 0)) {
+          output[output.length - 1] = { ...previous, processEvents: message.processEvents } as ChatMessage;
+        }
+        continue;
+      }
       if (sourceKey) seenSourceKeys.add(sourceKey);
       if (message.role === "user" && message.content.trim()) {
         const previousUserIndex = findLastMessageIndex(output, (item) => sameMessage(item, message));
@@ -316,6 +382,10 @@ export function useDashboardDerivedState(props: any) {
           && previousAssistant
           && sameMessage(previousAssistant, nextAssistant)
         ) {
+          const previousAssistantIndex = findLastMessageIndex(output, (item) => sameMessage(item, previousAssistant));
+          if (previousAssistantIndex >= 0) {
+            output[previousAssistantIndex] = withPreservedProcessEvents(output[previousAssistantIndex], nextAssistant);
+          }
           index += 1;
           continue;
         }
@@ -324,7 +394,10 @@ export function useDashboardDerivedState(props: any) {
         const previousAssistantIndex = findLastMessageIndex(output, (item) => sameMessage(item, message));
         const previousUser = [...output.slice(0, previousAssistantIndex)].reverse().find((item) => item.role === "user");
         const currentUser = [...output].reverse().find((item) => item.role === "user");
-        if (previousAssistantIndex >= 0 && sameMessage(previousUser, currentUser)) continue;
+        if (previousAssistantIndex >= 0 && sameMessage(previousUser, currentUser)) {
+          output[previousAssistantIndex] = withPreservedProcessEvents(message, output[previousAssistantIndex]);
+          continue;
+        }
       }
       output.push(message);
     }
@@ -333,17 +406,24 @@ export function useDashboardDerivedState(props: any) {
 
   const visibleMessages = useMemo(
     () => {
-      const lastAssistantIndex = (() => {
-        for (let index = messages.length - 1; index >= 0; index -= 1) {
-          if (messages[index]?.role === "assistant") return index;
+      const displayMessages = messages.flatMap(splitCombinedUserAssistantMessage);
+      const latestUserIndex = (() => {
+        for (let index = displayMessages.length - 1; index >= 0; index -= 1) {
+          if (displayMessages[index]?.role === "user") return index;
         }
         return -1;
       })();
-      return removeActiveTurnDuplicateMessages(messages.filter((message, index) => (
+      const lastAssistantIndex = (() => {
+        for (let index = displayMessages.length - 1; index >= 0; index -= 1) {
+          if (displayMessages[index]?.role === "assistant") return index;
+        }
+        return -1;
+      })();
+      return removeActiveTurnDuplicateMessages(displayMessages.filter((message, index) => (
         message.role !== "system"
         && (
           message.role !== "assistant"
-          || selectedChatStreaming
+          || (selectedChatStreaming && index > latestUserIndex)
           || chatDisplayContent(message).trim()
           || message.agentPrompt
           || (selectedChatProcess.length > 0 && index === lastAssistantIndex)
@@ -618,7 +698,7 @@ export function useDashboardDerivedState(props: any) {
               since: work.updatedAt > 0 ? formatRelativeTime(work.updatedAt) : work.startedAt > 0 ? formatRelativeTime(work.startedAt) : "—",
             }));
           const hasMachineWiring = Boolean(agent.telemetryUrl || machine.self);
-          const wallet = resolveAgentWallet(agent, walletsByAgent[agent.id] ?? createDefaultAgentWallet(agent.id));
+          const wallet = resolveAgentWallet(agent, walletsByAgent[agent.id]);
           const survival = getSurvivalSnapshot(wallet);
           const primaryWorkFailed = primaryWork?.status === "failed";
           const primaryWorkFailureText = [
@@ -724,7 +804,7 @@ export function useDashboardDerivedState(props: any) {
         const machine = machineGroups.find((group) => group.agents.some((item) => item.id === agent.id));
         if (snapshot?.error) {
           return [{
-            id: `agent-${agent.id}`,
+            id: `agent-${agent.id}-${fleetAlertFingerprint(snapshot.error)}`,
             tone: "danger" as const,
             priority: "high" as const,
             title: /remote agent bridge unavailable/i.test(snapshot.error)
@@ -862,7 +942,7 @@ export function useDashboardDerivedState(props: any) {
 
   const selectedWallet = useMemo(() => {
     if (!selectedAgent) return null;
-    return resolveAgentWallet(selectedAgent, walletsByAgent[selectedAgent.id] ?? createDefaultAgentWallet(selectedAgent.id));
+    return resolveAgentWallet(selectedAgent, walletsByAgent[selectedAgent.id]);
   }, [selectedAgent, walletsByAgent]);
 
   const selectedWalletSnapshot = useMemo(
@@ -884,7 +964,7 @@ export function useDashboardDerivedState(props: any) {
   const walletStats = useMemo(() => {
     const walletRows = displayAgents.map((agent) => ({
       agent,
-      wallet: resolveAgentWallet(agent, walletsByAgent[agent.id] ?? createDefaultAgentWallet(agent.id)),
+      wallet: resolveAgentWallet(agent, walletsByAgent[agent.id]),
     }));
     const enabled = walletRows.filter(({ wallet }) => wallet.enabled);
     const survival = enabled.map(({ agent, wallet }) => ({

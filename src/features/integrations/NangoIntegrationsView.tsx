@@ -660,7 +660,7 @@ function machineChoices(machines: FleetMachine[], config: NangoHostConfig): Mach
       envReady: false,
       self: true,
       baseUrl: "http://127.0.0.1:3003",
-      collectorUrl: "http://127.0.0.1:8787",
+      collectorUrl: "",
       rank: 18,
       note: "current machine",
     });

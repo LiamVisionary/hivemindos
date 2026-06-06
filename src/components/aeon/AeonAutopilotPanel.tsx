@@ -328,9 +328,7 @@ function hydrateAgentWithRuntime(agent: AeonAgent, data?: AeonRuntimeData): Aeon
 }
 
 function aeonMachineCollectorUrl(machine: MachineGroup) {
-  if (machine.self) return machine.collectorUrl || "http://127.0.0.1:8787";
-  if (machine.ip) return `http://${machine.ip}:8787`;
-  return machine.collectorUrl;
+  return machine.collectorUrl || "";
 }
 
 function aeonAgentFromProfile(profile: AgentProfile): AeonAgent {
@@ -518,8 +516,9 @@ export function WorkspaceModal({
         key: machine.key,
         name: machine.self ? `${machine.name} (This Mac)` : machine.name,
         collectorUrl: aeonMachineCollectorUrl(machine),
-      }));
-    return targets.length ? targets : [{ key: "local", name: "This Mac", collectorUrl: "http://127.0.0.1" }];
+      }))
+      .filter((machine) => Boolean(machine.collectorUrl));
+    return targets.length ? targets : [{ key: "local", name: "This Mac", collectorUrl: "" }];
   }, [machineGroups]);
   const officialClonePath = joinDisplayPath(officialCloneLocation || "~/Documents", officialCloneName || "aeon");
   const officialCloneBusy = actionBusy === "github:fork" || actionBusy === "github:create" || actionBusy === "workspace:clone" || actionBusy === "sync-all-secrets" || actionBusy === "cache-refresh";

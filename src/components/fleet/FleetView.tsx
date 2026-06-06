@@ -26,6 +26,7 @@ import {
 import styles from "./fleet-tokens.module.css";
 
 type ViewMode = "graph" | "map" | "list";
+const DISMISSED_ALERTS_STORAGE_KEY = "hivemindos.fleet.dismissedAlerts.v1";
 
 type SettledFleetViewData = {
   machines: FleetMachine[];
@@ -71,6 +72,23 @@ function preferredInitialMachineId(machines: FleetMachine[]) {
     ?? "";
 }
 
+function readDismissedAlertIds() {
+  if (typeof window === "undefined") return new Set<string>();
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(DISMISSED_ALERTS_STORAGE_KEY) || "[]") as unknown;
+    return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function writeDismissedAlertIds(ids: Set<string>) {
+  if (typeof window === "undefined") return;
+  const values = [...ids].slice(-200);
+  if (values.length) window.localStorage.setItem(DISMISSED_ALERTS_STORAGE_KEY, JSON.stringify(values));
+  else window.localStorage.removeItem(DISMISSED_ALERTS_STORAGE_KEY);
+}
+
 export function FleetView({
   machines = MACHINES,
   tasks = TASKS,
@@ -101,7 +119,7 @@ export function FleetView({
   const [view, setView] = React.useState<ViewMode>("graph");
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set(["nimbus"]));
   const [dispatchIdx, setDispatchIdx] = React.useState(0);
-  const [dismissedAlertIds, setDismissedAlertIds] = React.useState<Set<string>>(() => new Set());
+  const [dismissedAlertIds, setDismissedAlertIds] = React.useState<Set<string>>(readDismissedAlertIds);
   const [selectedAlert, setSelectedAlert] = React.useState<FleetAlert | null>(null);
   const [gitlawbNode, setGitlawbNode] = React.useState<FleetMachine["gitlawb"] | null>(null);
   const [settledFleet, setSettledFleet] = React.useState<SettledFleetViewData>({
@@ -145,6 +163,10 @@ export function FleetView({
     const t = setInterval(() => setDispatchIdx((i) => displayTicker.length ? (i + 1) % displayTicker.length : 0), 2200);
     return () => clearInterval(t);
   }, [displayTicker.length]);
+
+  React.useEffect(() => {
+    writeDismissedAlertIds(dismissedAlertIds);
+  }, [dismissedAlertIds]);
 
   React.useEffect(() => {
     const controller = new AbortController();

@@ -8,6 +8,7 @@ export interface AgentWalletConfig {
   agentId: string;
   enabled: boolean;
   provider: AgentPaymentProvider;
+  providerSelectedAt?: number;
   walletAddress: string;
   network: string;
   tokenSymbol: string;
@@ -23,6 +24,7 @@ export interface AgentWalletConfig {
   clawCardEnvName: string;
   moneyClawEnvName: string;
   x402BaseUrl: string;
+  veilAutoPrivateX402?: boolean;
   survivalStartedAt: number;
   updatedAt: number;
   notes: string;
