@@ -11,6 +11,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Verification: `node --check scripts/tauri-build.mjs`; `git diff --check -- scripts/tauri-build.mjs CHANGELOG.md`.
 - Intended commit message: `Make Tauri static API hiding cross-platform`
 
+## 2026-06-06 15:41:24 WITA - Add Website Download Section
+
+- Status: Pushed
+- Areas changed: GitHub Pages docs layout, docs homepage, docs stylesheet, docs app icon asset, assimilation log
+- Summary: Add the supplied HivemindOS app icon to the docs site header and favicon, replace the primary homepage call-to-action with a platform-aware Download button, add a dedicated native app download section, and show a Windows/Linux coming-soon modal while macOS downloads the v0.1.5 beta DMG.
+- Verification: `git diff --check -- docs/_layouts/default.html docs/index.md docs/assets/css/site.css CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl ASSIMILATION.json`; `wc -l docs/_layouts/default.html docs/index.md docs/assets/css/site.css`; focused docs-path assimilation audit; `verify_assimilation_manifest.py --target-root /Users/liam/Documents/code/projects/hivemind-os`; local HTTP docs preview on `127.0.0.1:5024`; in-app browser verification confirmed macOS labels/hrefs resolve to the v0.1.5 DMG and the forced Windows path opens the exact coming-soon modal. Full Jekyll build was not run because the local Ruby environment does not have the `jekyll` gem installed.
+- Intended commit message: `Add website download section`
+
 ## 2026-06-06 15:32:26 WITA - Add Cross-Platform Tauri Release Workflow
 
 - Status: Pushed

@@ -5634,3 +5634,38 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Decision: assimilated
 - Assimilated: hivemind-os:src/features/dashboard/views/ChatPanel.tsx => src/features/dashboard/views/ChatPanel.tsx; hivemind-os:src/lib/services/miroshark/x402-buyer.ts => src/features/dashboard/views/chat/MiroSharkSimulationCard.tsx; hivemind-os:src/features/dashboard/views/chat/HiveChatView.module.css => src/features/dashboard/views/chat/MiroSharkSimulationCard.module.css
 - Verification: Updated ASSIMILATION.json without removing existing uncommitted entries.
+## 2026-06-06T07:41:18.166932+00:00 - triage
+
+- Request: Add a proper website download section with platform-aware HivemindOS beta download modal and app icon branding
+- Source: user-supplied-local-source
+- Decision: selected
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+- Verification: Focused audit of selected docs paths returned no high findings; broad repo audit high finding was confined to a bundled skill documentation example.
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: Pinned local repo contains the docs website layout, homepage, stylesheet, and supplied icon asset
+  - Path: `docs/_layouts/default.html, docs/index.md, docs/assets/css/site.css, public/app-icon-1024.png`
+## 2026-06-06T07:41:18.256497+00:00 - reuse
+
+- Request: Add a proper website download section with platform-aware HivemindOS beta download modal and app icon branding
+- Source: user-supplied-local-source
+- Decision: assimilated
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+- Assimilated: public/app-icon-1024.png => docs/assets/img/app-icon-1024.png; docs/_layouts/default.html => docs/_layouts/default.html; docs/index.md => docs/index.md; docs/assets/css/site.css => docs/assets/css/site.css
+- Verification: Implementation reuses the pinned docs layout/homepage/CSS conventions and copies the supplied app icon into the docs asset tree.
+## 2026-06-06T07:47:01.371973+00:00 - assimilation-manifest
+
+- Request: Add a proper website download section with platform-aware HivemindOS beta download modal and app icon branding
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:docs/_layouts/default.html => docs/_layouts/default.html, hivemind-os:docs/index.md => docs/index.md, hivemind-os:docs/assets/css/site.css => docs/assets/css/site.css, hivemind-os:public/app-icon-1024.png => docs/assets/img/app-icon-1024.png
+- Verification: Wrote ASSIMILATION.json with 4 entries and custom_code_assessment=balanced.
+## 2026-06-06T07:47:28.535702+00:00 - assimilation-manifest
+
+- Request: Add a proper website download section with platform-aware HivemindOS beta download modal and app icon branding
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:docs/_layouts/default.html => docs/_layouts/default.html, hivemind-os:docs/index.md => docs/index.md, hivemind-os:docs/assets/css/site.css => docs/assets/css/site.css, hivemind-os:public/app-icon-1024.png => docs/assets/img/app-icon-1024.png
+- Verification: Wrote ASSIMILATION.json with 4 entries and custom_code_assessment=balanced.

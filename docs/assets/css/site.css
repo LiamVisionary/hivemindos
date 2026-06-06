@@ -96,17 +96,13 @@ a:hover {
   text-decoration: none;
 }
 
-.brandGlyph {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border: 1px solid var(--charcoal);
-  background: var(--charcoal);
-  color: #f7efe1;
-  font-family: var(--serif);
-  font-size: 1.25rem;
-  line-height: 1;
+.brandIcon {
+  display: block;
+  width: 42px;
+  height: 42px;
+  border-radius: 9px;
+  object-fit: contain;
+  box-shadow: 0 6px 16px rgba(30, 39, 36, 0.18);
 }
 
 .brandMark strong,
@@ -151,6 +147,28 @@ a:hover {
 .topLinks .previewLink {
   border-color: var(--line-strong);
   background: rgba(255, 253, 248, 0.72);
+}
+
+.topLinks .downloadNavLink {
+  gap: 8px;
+  border-color: var(--charcoal);
+  background: var(--charcoal);
+  color: #fffdf8;
+  padding-right: 12px;
+}
+
+.topLinks .downloadNavLink:hover {
+  border-color: var(--charcoal);
+  background: #101615;
+  color: #fffdf8;
+}
+
+.downloadNavLink img {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  object-fit: contain;
 }
 
 .docFrame {
@@ -605,6 +623,19 @@ a:hover {
   text-decoration: none;
 }
 
+.actionRow a.downloadHeroLink {
+  gap: 10px;
+  color: #fffdf8;
+}
+
+.downloadHeroLink img {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
 .actionRow a + a {
   background: transparent;
   color: var(--charcoal);
@@ -647,6 +678,125 @@ a:hover {
   font-size: 0.82rem;
   font-weight: 800;
   padding: 7px 10px;
+}
+
+.downloadSection {
+  border: 1px solid var(--charcoal);
+  background:
+    linear-gradient(135deg, rgba(10, 143, 166, 0.08), transparent 42%),
+    linear-gradient(315deg, rgba(184, 115, 25, 0.1), transparent 46%),
+    #fffdf8;
+  box-shadow: 10px 10px 0 rgba(30, 39, 36, 0.08);
+  margin: 30px 0;
+  padding: clamp(18px, 4vw, 34px);
+}
+
+.downloadIntro {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: clamp(16px, 4vw, 28px);
+  align-items: center;
+}
+
+.downloadIcon {
+  width: clamp(86px, 18vw, 112px);
+  height: clamp(86px, 18vw, 112px);
+  border-radius: 22px;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 22px rgba(30, 39, 36, 0.22));
+}
+
+.downloadSection .eyebrow {
+  margin-bottom: 12px;
+}
+
+.downloadSection h2 {
+  max-width: none;
+  margin: 0 0 10px;
+  border: 0;
+  padding: 0;
+  font-family: var(--serif);
+  font-size: clamp(1.85rem, 4vw, 3rem);
+}
+
+.downloadSection p {
+  max-width: 62ch;
+  margin: 0;
+}
+
+.downloadActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.downloadPrimary,
+.downloadSecondary {
+  align-items: center;
+  border: 1px solid var(--charcoal);
+  display: inline-flex;
+  font-weight: 900;
+  min-height: 46px;
+  padding: 0 15px;
+  text-decoration: none;
+}
+
+.downloadPrimary {
+  gap: 10px;
+  background: var(--charcoal);
+  color: #fffdf8;
+}
+
+.downloadPrimary:hover {
+  background: #101615;
+  color: #fffdf8;
+}
+
+.downloadPrimary img {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  object-fit: contain;
+}
+
+.downloadSecondary {
+  background: transparent;
+  color: var(--charcoal);
+}
+
+.platformGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.platformGrid div {
+  min-height: 82px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.74);
+  padding: 13px;
+}
+
+.platformGrid strong,
+.platformGrid span {
+  display: block;
+}
+
+.platformGrid strong {
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.platformGrid span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .routePath {
@@ -748,6 +898,73 @@ a:hover {
   font-weight: 800;
 }
 
+.downloadModal[hidden] {
+  display: none;
+}
+
+.downloadModal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(20, 23, 22, 0.52);
+  backdrop-filter: blur(10px);
+}
+
+.downloadModalOpen {
+  overflow: hidden;
+}
+
+.downloadModalPanel {
+  position: relative;
+  width: min(100%, 440px);
+  border: 1px solid var(--charcoal);
+  background: var(--paper-strong);
+  box-shadow: 12px 12px 0 rgba(30, 39, 36, 0.18);
+  padding: 32px 26px 28px;
+  text-align: center;
+}
+
+.downloadModalPanel img {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 14px rgba(30, 39, 36, 0.2));
+}
+
+.downloadModalPanel h2 {
+  margin: 14px 0 8px;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.75rem;
+  line-height: 1.15;
+}
+
+.downloadModalPanel p {
+  margin: 0;
+  color: var(--charcoal-2);
+  line-height: 1.55;
+}
+
+.downloadModalClose {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--charcoal);
+  font-size: 1.45rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
 @media (max-width: 980px) {
   .siteHeader {
     position: static;
@@ -778,6 +995,15 @@ a:hover {
   .sideNav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .downloadIntro,
+  .platformGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .downloadIcon {
+    justify-self: start;
+  }
 }
 
 @media (max-width: 720px) {
@@ -800,6 +1026,8 @@ a:hover {
   .sideNav,
   .docGrid,
   .heroPanel,
+  .downloadIntro,
+  .platformGrid,
   .diagramIndex,
   .signalGrid,
   .infographicGrid,
