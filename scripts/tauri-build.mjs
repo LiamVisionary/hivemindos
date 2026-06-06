@@ -63,6 +63,7 @@ function hideApiRoutesForStaticBuild() {
   restoreStaticHiddenApiRoutes();
   rmSync(staticHiddenApiDir, { force: true, recursive: true });
   if (existsSync(appApiDir)) {
+    mkdirSync(dirname(staticHiddenApiDir), { recursive: true });
     renameSync(appApiDir, staticHiddenApiDir);
   }
   if (existsSync(appApiDir)) {

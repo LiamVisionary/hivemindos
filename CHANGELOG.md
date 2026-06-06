@@ -13,11 +13,19 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-06-06 15:46:34 WITA - Make Tauri Static API Hiding Cross-Platform
 
-- Status: Uncommitted
+- Status: Pushed
 - Areas changed: Tauri production build preparation
 - Summary: Move the temporary hidden `src/app/api` directory used during static Tauri export into the repository-local ignored `.next-tauri/` directory instead of the OS temp directory, avoiding Windows `EXDEV` cross-drive rename failures on GitHub-hosted runners.
 - Verification: `node --check scripts/tauri-build.mjs`; `git diff --check -- scripts/tauri-build.mjs CHANGELOG.md`.
 - Intended commit message: `Make Tauri static API hiding cross-platform`
+
+## 2026-06-06 16:16:30 WITA - Create Tauri Hidden API Parent Directory
+
+- Status: Uncommitted
+- Areas changed: Tauri production build preparation
+- Summary: Ensure the repository-local `.next-tauri/` directory exists before moving `src/app/api` aside for the static export so fresh Linux and Windows release runners do not fail before the app bundle build starts.
+- Verification: `node --check scripts/tauri-build.mjs`; `git diff --check -- scripts/tauri-build.mjs CHANGELOG.md`; `wc -l scripts/tauri-build.mjs CHANGELOG.md`; `pnpm check-sizes` still reports existing oversized legacy files unrelated to this release-script change (`scripts/agent-telemetry-collector.mjs`, dashboard/chat CSS, dashboard app, chat runtime route, and `use-status-chat-input-controller.tsx`).
+- Intended commit message: `Create Tauri hidden API parent directory`
 
 ## 2026-06-06 15:32:26 WITA - Add Cross-Platform Tauri Release Workflow
 
