@@ -15,7 +15,6 @@ import {
 import { basename, dirname, extname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { tmpdir } from "node:os";
 
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 const nextEnvPath = join(projectRoot, "next-env.d.ts");
@@ -24,7 +23,7 @@ const nextStaticBuildDir = join(projectRoot, ".next-tauri-static-build");
 const nextStaticOutDir = join(projectRoot, "out");
 const nextStaticExportDirs = [nextStaticBuildDir, nextStaticOutDir];
 const appApiDir = join(projectRoot, "src", "app", "api");
-const staticHiddenApiDir = join(tmpdir(), "hivemindos-tauri-static-hidden-app-api");
+const staticHiddenApiDir = join(projectRoot, ".next-tauri", "hidden-app-api");
 const resourcesDir = join(projectRoot, "src-tauri", "resources");
 const staticResourceDir = join(projectRoot, "src-tauri", "static");
 const serverResourceDir = join(resourcesDir, "hivemindos-next");
