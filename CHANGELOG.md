@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-06 20:35:26 WITA - Restore Generated Next Env Before Updates
+
+- Status: Pushed
+- Areas changed: update script
+- Summary: Teach the changelog-preserving update pull script to discard local tracked changes to the generated `next-env.d.ts` file before running `git pull --ff-only`, preventing collector-only installs from being blocked by Next.js rewriting that generated type file.
+- Verification: `node --check scripts/pull-with-changelog-preserve.mjs`; generated a dirty `next-env.d.ts` in a temporary clone and verified the script restores it before attempting the pull; `git diff --check -- scripts/pull-with-changelog-preserve.mjs CHANGELOG.md`.
+- Intended commit message: `Restore generated Next env before updates`
+
 ## 2026-06-06 16:40:39 WITA - Run Windows PNPM Through Command Shell
 
 - Status: Pushed
