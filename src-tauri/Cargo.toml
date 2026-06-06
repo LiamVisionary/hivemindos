@@ -1,6 +1,6 @@
 [package]
 name = "hivemindos-desktop"
-version = "0.1.8"
+version = "0.1.9"
 description = "HivemindOS desktop shell"
 authors = ["HivemindOS"]
 edition = "2021"
