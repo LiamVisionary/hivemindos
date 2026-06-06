@@ -9,10 +9,6 @@ description: Local-first agent fleet control room documentation.
     <h1>HivemindOS Documentation</h1>
     <p class="lede">A compact operator map for agent fleets: local machines, Tailnet collectors, shared Obsidian memory, runtime adapters, background work, wallets, token rails, Honey, HIVE, simulations, and integration surfaces.</p>
     <div class="actionRow">
-      <a href="https://github.com/LiamVisionary/hivemindos/releases/download/v0.1.5/HivemindOS_0.1.5_aarch64.dmg" class="downloadHeroLink" data-download-button>
-        <img src="assets/img/app-icon-1024.png" alt="" width="26" height="26">
-        <span data-download-label>Download</span>
-      </a>
       <a href="features/">Read the feature guide</a>
       <a href="architecture/">Trace the architecture</a>
     </div>
@@ -26,38 +22,6 @@ description: Local-first agent fleet control room documentation.
   <li>Tauri desktop target</li>
   <li>Collector-first fleet model</li>
 </ul>
-
-<section class="downloadSection" id="download">
-  <div class="downloadIntro">
-    <img class="downloadIcon" src="assets/img/app-icon-1024.png" alt="" width="112" height="112">
-    <div>
-      <p class="eyebrow">HivemindOS Beta</p>
-      <h2>Download The Native App</h2>
-      <p>Install the desktop control room for local agents, shared brain access, fleet monitoring, work boards, wallets, and native file actions.</p>
-      <div class="downloadActions">
-        <a class="downloadPrimary" href="https://github.com/LiamVisionary/hivemindos/releases/download/v0.1.5/HivemindOS_0.1.5_aarch64.dmg" data-download-button>
-          <img src="assets/img/app-icon-1024.png" alt="" width="30" height="30">
-          <span data-download-label>Download</span>
-        </a>
-        <a class="downloadSecondary" href="native-app.html">Native app notes</a>
-      </div>
-    </div>
-  </div>
-  <div class="platformGrid" aria-label="Platform availability">
-    <div>
-      <strong>macOS</strong>
-      <span>Beta DMG available now</span>
-    </div>
-    <div>
-      <strong>Windows</strong>
-      <span>Release in the coming days</span>
-    </div>
-    <div>
-      <strong>Linux</strong>
-      <span>Release in the coming days</span>
-    </div>
-  </div>
-</section>
 
 <figure class="imagePlate imagePlateHero">
   <img src="assets/img/diagrams/visual-atlas.jpg" alt="Generated HivemindOS visual atlas infographic showing Fleet, Agents, Brain, Work, Wallets, and Native around the dashboard.">

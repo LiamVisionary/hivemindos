@@ -6,7 +6,6 @@
   <meta name="color-scheme" content="light">
   <title>{% if page.title %}{{ page.title | escape }} | {% endif %}{{ site.title | escape }}</title>
   <meta name="description" content="{{ page.description | default: site.description | escape }}">
-  <link rel="icon" href="{{ '/assets/img/app-icon-1024.png' | relative_url }}">
   <link rel="stylesheet" href="{{ '/assets/css/site.css' | relative_url }}">
 </head>
 <body>
@@ -15,7 +14,7 @@
   <header class="siteHeader">
     <nav class="topNav" aria-label="Primary">
       <a class="brandMark" href="{{ '/' | relative_url }}" aria-label="HivemindOS Docs home">
-        <img class="brandIcon" src="{{ '/assets/img/app-icon-1024.png' | relative_url }}" alt="" width="42" height="42">
+        <span class="brandGlyph" aria-hidden="true">H</span>
         <span>
           <strong>HivemindOS</strong>
           <small>Docs</small>
@@ -30,10 +29,6 @@
         <a href="{{ '/integrations/' | relative_url }}">Integrations</a>
         <a href="{{ '/monetization/' | relative_url }}">Monetization</a>
         <a href="{{ '/runtimes/' | relative_url }}">Runtimes</a>
-        <a class="downloadNavLink" href="https://github.com/LiamVisionary/hivemindos/releases/download/v0.1.5/HivemindOS_0.1.5_aarch64.dmg" data-download-button>
-          <img src="{{ '/assets/img/app-icon-1024.png' | relative_url }}" alt="" width="22" height="22">
-          <span data-download-label>Download</span>
-        </a>
         <a class="previewLink" href="{{ '/preview.html' | relative_url }}">Preview</a>
       </div>
     </nav>
@@ -104,67 +99,6 @@
     <span>HivemindOS documentation</span>
     <a href="https://github.com/LiamVisionary/hivemindos">GitHub</a>
   </footer>
-  <div class="downloadModal" data-download-modal hidden>
-    <div class="downloadModalPanel" role="dialog" aria-modal="true" aria-labelledby="download-modal-title">
-      <button class="downloadModalClose" type="button" aria-label="Close download notice" data-download-modal-close>&times;</button>
-      <img src="{{ '/assets/img/app-icon-1024.png' | relative_url }}" alt="" width="64" height="64">
-      <h2 id="download-modal-title">HivemindOS Beta</h2>
-      <p>HivemindOS Beta is currently only on MacOS with Windows + Linux release in the coming days. Stay tuned!</p>
-    </div>
-  </div>
-  <script>
-    (() => {
-      const macDownloadUrl = "https://github.com/LiamVisionary/hivemindos/releases/download/v0.1.5/HivemindOS_0.1.5_aarch64.dmg";
-      const platformSource = [
-        navigator.userAgentData && navigator.userAgentData.platform,
-        navigator.platform,
-        navigator.userAgent,
-      ].filter(Boolean).join(" ");
-      const isMac = /Mac|Macintosh|Mac OS X/i.test(platformSource);
-      const isWindows = /Win/i.test(platformSource);
-      const isLinux = /Linux|X11/i.test(platformSource) && !/Android/i.test(platformSource);
-      const platformName = isMac ? "macOS" : isWindows ? "Windows" : isLinux ? "Linux" : "your platform";
-      const modal = document.querySelector("[data-download-modal]");
-      const closeButtons = document.querySelectorAll("[data-download-modal-close]");
-
-      const openModal = () => {
-        if (!modal) return;
-        modal.hidden = false;
-        document.body.classList.add("downloadModalOpen");
-        const closeButton = modal.querySelector("[data-download-modal-close]");
-        if (closeButton instanceof HTMLElement) closeButton.focus();
-      };
-
-      const closeModal = () => {
-        if (!modal) return;
-        modal.hidden = true;
-        document.body.classList.remove("downloadModalOpen");
-      };
-
-      document.querySelectorAll("[data-download-button]").forEach((button) => {
-        if (button instanceof HTMLAnchorElement) {
-          button.href = macDownloadUrl;
-          button.setAttribute("aria-label", isMac ? "Download HivemindOS for macOS" : `Download HivemindOS for ${platformName}`);
-        }
-        const label = button.querySelector("[data-download-label]");
-        if (label) label.textContent = isMac ? "Download for macOS" : `Download for ${platformName}`;
-        if (!isMac) {
-          button.addEventListener("click", (event) => {
-            event.preventDefault();
-            openModal();
-          });
-        }
-      });
-
-      closeButtons.forEach((button) => button.addEventListener("click", closeModal));
-      modal && modal.addEventListener("click", (event) => {
-        if (event.target === modal) closeModal();
-      });
-      document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && modal && !modal.hidden) closeModal();
-      });
-    })();
-  </script>
   <script type="module">
     import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
 
