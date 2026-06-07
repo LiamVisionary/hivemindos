@@ -7,6 +7,7 @@ const runId = process.env.QUEEN_BEE_E2E_RUN_ID || `queen-bee-real-e2e-${new Date
 const marker = `QUEEN_BEE_REAL_E2E_${runId}`.replace(/[^A-Z0-9_\-]/gi, "_");
 const pollMs = Number(process.env.QUEEN_BEE_E2E_POLL_MS || 2_000);
 const autoWaitMs = Number(process.env.QUEEN_BEE_E2E_AUTO_WAIT_MS || 60_000);
+const requireAutonomousPickup = process.env.QUEEN_BEE_E2E_REQUIRE_AUTONOMOUS === "1";
 const dashboardDeviceToken = process.env.HIVE_E2E_DASHBOARD_TOKEN
   || process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
   || await readEnvValue(new URL("../.env.local", import.meta.url), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN");
@@ -166,6 +167,38 @@ async function main() {
   summary.automaticPickup = autoResult.timedOut
     ? { observed: false, waitedMs: autoWaitMs, lastStatus: autoResult.task?.status || null, note: "No autonomous worker claimed/completed this Work Board card during the wait window." }
     : { observed: true, waitedMs: autoWaitMs, status: autoResult.task.status, assignee: autoResult.task.assignee };
+
+  if (requireAutonomousPickup) {
+    assert(summary.automaticPickup.observed === true, "Autonomous pickup was required but the task remained ready during the wait window.");
+    const autonomousDone = await waitForTask(taskId, (task) => task.status === "done" && String(task.result || "").includes(marker), Number(process.env.QUEEN_BEE_E2E_AUTONOMOUS_DONE_WAIT_MS || 300_000), "autonomous done verification");
+    assert(!autonomousDone.timedOut, `Autonomous pickup happened but completion with marker timed out; last status ${autonomousDone.task?.status || "missing"}.`);
+    summary.workerChat = {
+      ok: true,
+      autonomous: true,
+      markerSeen: String(autonomousDone.task.result || "").includes(marker),
+      textPreview: String(autonomousDone.task.result || "").slice(0, 500),
+    };
+    summary.completion = {
+      status: autonomousDone.task.status,
+      completedAt: autonomousDone.task.completedAt,
+      currentRunId: autonomousDone.task.currentRunId,
+      runsCompleted: autonomousDone.board?.runs?.filter((run) => run.taskId === taskId && run.status === "completed").length || 0,
+      autonomous: true,
+    };
+    summary.finalTask = {
+      id: autonomousDone.task.id,
+      title: autonomousDone.task.title,
+      status: autonomousDone.task.status,
+      assignee: autonomousDone.task.assignee,
+      targetMachine: autonomousDone.task.targetMachine,
+      completedAt: autonomousDone.task.completedAt,
+      resultHasMarker: String(autonomousDone.task.result || "").includes(marker),
+    };
+    summary.ok = true;
+    summary.finishedAt = new Date().toISOString();
+    console.log(JSON.stringify(summary, null, 2));
+    return;
+  }
 
   const selectedAgent = queenBee.route?.delegation?.agent;
   const selectedMachineKey = queenBee.route?.targetMachine?.key;

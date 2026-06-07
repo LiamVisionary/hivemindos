@@ -21,6 +21,7 @@
     "version:bump": "node scripts/bump-app-version.mjs",
     "test:kanban": "node scripts/test-kanban-workflow.mjs",
     "test:e2e:queen-bee": "node scripts/e2e-queen-bee-real-chat.mjs",
+    "test:queen-bee:autonomous": "node scripts/test-queen-bee-autonomous-pickup.mjs",
     "test:dashboard-nav": "node scripts/test-dashboard-nav.mjs",
     "test:fleet-local": "node scripts/test-fleet-local-collector.mjs",
     "test:e2e:real-fleet": "node scripts/e2e-real-fleet.mjs",

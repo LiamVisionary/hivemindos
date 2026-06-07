@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { createTask, readBoard } from "@/lib/services/kanban/local-kanban-store";
+import { scheduleQueenBeeAutonomousPickup } from "@/lib/services/queen-bee/autonomous-worker";
 import { chooseQueenBeeDelegate, type QueenBeeWorkerClass } from "@/lib/services/queen-bee/router";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import type { KanbanPriority } from "@/lib/types/kanban";
@@ -210,6 +211,12 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   };
   await appendJsonl(paths.receipts, receipt);
   await updateCurrentState(paths.currentState, { taskId: result.task.id, title, source, mode, createdAt, delegation });
+  const autonomousPickupScheduled = result.created && mode === "act" && scheduleQueenBeeAutonomousPickup({
+    task: result.task,
+    delegation,
+    vaultPath: input.vaultPath,
+    kanbanFolder: input.kanbanFolder,
+  });
 
   const board = await readBoard(null, { vaultPath: input.vaultPath, kanbanFolder: input.kanbanFolder });
   return {
@@ -223,6 +230,7 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
       assignee: result.task.assignee || "queen-bee",
       targetMachine: result.task.targetMachine,
       delegation: publicDelegation(delegation),
+      autonomousPickupScheduled,
       reason: delegation.reason,
     },
     fingerprint,
