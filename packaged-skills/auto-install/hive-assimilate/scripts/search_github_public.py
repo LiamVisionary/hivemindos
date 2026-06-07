@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-DEFAULT_VAULT = Path.home() / "Documents" / "github-assimilator-vault"
-DEFAULT_INDEX = Path.home() / ".codex" / "github-assimilator" / "index" / "public-candidates.jsonl"
+DEFAULT_VAULT = Path.home() / "Documents" / "hive-assimilate-vault"
+DEFAULT_INDEX = Path.home() / ".codex" / "hive-assimilate" / "index" / "public-candidates.jsonl"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 LOG_SCRIPT = SKILL_DIR / "scripts" / "log_assimilation_decision.py"
 

@@ -61,13 +61,13 @@ Never read, print, summarize, copy, or persist secrets. Use credential presence 
 
 ## Quick Commands
 
-Default compatibility locations:
+Default local index locations:
 
-- Legacy notes: `~/Documents/github-assimilator-vault`
-- Legacy machine-readable index: `~/.codex/github-assimilator/index`
-- Candidate cache: `~/.codex/github-assimilator/candidates`
+- Notes: `~/Documents/hive-assimilate-vault`
+- Machine-readable index: `~/.codex/hive-assimilate/index`
+- Candidate cache: `~/.codex/hive-assimilate/candidates`
 
-Those legacy paths remain valid so existing caches and project references do not break.
+Existing local caches can still be searched when present so project references do not break.
 
 Search the shared brain:
 

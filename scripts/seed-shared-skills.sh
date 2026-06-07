@@ -459,10 +459,6 @@ seed_packaged_auto_install_skills() {
     packaged_dir="$(dirname "$packaged_skill_md")"
     slug="$(basename "$packaged_dir")"
     destination="$skills_folder/$slug"
-    if [[ "$slug" == "hive-assimilate" && ! -f "$destination/SKILL.md" && -d "$skills_folder/github-assimilator" ]]; then
-      mv "$skills_folder/github-assimilator" "$destination"
-      ok "Renamed shared skill github-assimilator to hive-assimilate"
-    fi
     if [[ -f "$destination/SKILL.md" ]]; then
       write_packaged_auto_install_metadata "$destination" "$slug" "$packaged_dir"
       continue

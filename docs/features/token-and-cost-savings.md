@@ -11,34 +11,47 @@ The product is not just a dashboard that spends tokens more visibly. It gives ag
 
 ## Live Benchmark Chat
 
-**Prompt**
+**Prompt Under Test**
 
 ```text
-dude i want you to run the full actual benchmarks, i need real numbers not estimates.
+Explain how HivemindOS shared brain memory works and which command a raw agent should use before relying on prior context.
 ```
 
-**Chat**
+The harness sent that task twice to OpenRouter's OpenAI-compatible chat completions using `openai/gpt-4.1-mini`: once with a broad baseline context pack and once with a targeted Hive context pack.
 
-> **User:** Can we benchmark token savings with a set of without-Hive optimizations and with-Hive optimizations?
+**Baseline Chat**
+
+> **User:** Explain how HivemindOS shared brain memory works and which command a raw agent should use before relying on prior context.
 >
-> **Assistant:** Yes. I added two benchmark modes:
+> **Assistant:**
 >
-> - `pnpm benchmark:context-savings` for deterministic local context estimates.
-> - `pnpm benchmark:e2e-token-savings` for real provider calls with returned usage counters.
+> ```json
+> {"answer":"HivemindOS shared brain memory uses a local Obsidian markdown vault to store durable typed memories with provenance, indexed for fast local recall, and raw agents should use the `hive-brain answer \"<query>\"` CLI command before relying on prior context, which tries the local API first and falls back to vault/index search.","actions":["Use `hive-brain answer \"<query>\"` CLI command for recall"],"confidence":1}
+> ```
 >
-> **User:** Are these actual real E2E run benchmark results?
+> Usage: `43,655` prompt tokens, `99` completion tokens, `43,754` total tokens. Context: broad docs/source pack, `14` files, truncated to `180,000` sent characters.
+
+**Hive Chat**
+
+> **User:** Explain how HivemindOS shared brain memory works and which command a raw agent should use before relying on prior context.
 >
-> **Assistant:** The first benchmark was only a deterministic estimate. I then ran the full live benchmark through OpenRouter's OpenAI-compatible chat completions using `openai/gpt-4.1-mini`. It made six real provider calls: baseline and Hive-optimized prompts for three scenarios.
+> **Assistant:**
 >
-> | Scenario | Baseline prompt | Hive prompt | Prompt saved | Total saved | Truncated |
-> | --- | ---: | ---: | ---: | ---: | --- |
-> | `brain-recall` | 43,676 | 286 | 43,390, 99.3% | 43,426, 99.2% | baseline yes |
-> | `software-build` | 42,156 | 4,875 | 37,281, 88.4% | 37,275, 88.3% | baseline yes |
-> | `workflow-reuse` | 27,042 | 3,370 | 23,672, 87.5% | 23,673, 87.3% | no |
+> ```json
+> {"answer":"HivemindOS shared brain memory allows agents to recall context from a tiered memory system, starting with typed Agent Memory and then full-vault augmentation; raw agents should use the command `hive-brain answer \"<query>\"` before relying on prior context.","actions":["Use `hive-brain answer \"<query>\"` command"],"confidence":0.9}
+> ```
 >
-> Total provider-reported usage: baseline prompt tokens `112,874`, Hive prompt tokens `8,531`, prompt tokens saved `104,343` (`92.4%`), and total tokens saved `104,374` (`92.3%`).
->
-> The result artifact was written to `.outputs/benchmarks/e2e-token-savings-2026-06-07T13-54-02-022Z.json`. It stores usage counters, durations, response IDs, context hashes, and truncation flags, but not prompt bodies or secrets.
+> Usage: `286` prompt tokens, `84` completion tokens, `370` total tokens. Context: targeted Hive recall pack, `3` snippets, `2` sections, not truncated.
+
+**Result**
+
+| Run | Prompt tokens | Completion tokens | Total tokens |
+| --- | ---: | ---: | ---: |
+| Baseline | 43,655 | 99 | 43,754 |
+| Hive | 286 | 84 | 370 |
+| Saved | 43,369, 99.3% | 15, 15.2% | 43,384, 99.2% |
+
+This is provider-reported usage from a live run on June 7, 2026. The full `pnpm benchmark:e2e-token-savings` command writes redacted artifacts with usage counters, durations, response IDs, context hashes, and truncation flags, but not prompt bodies or secrets.
 
 ## Savings Model
 
@@ -91,7 +104,7 @@ That matters because many agent token spikes are not from the first implementati
 
 ## Hive Assimilate
 
-`hive-assimilate` replaces the older GitHub-only assimilator.
+`hive-assimilate` is the pre-build reuse workflow for HivemindOS software work.
 
 Before software creation, it searches:
 

@@ -11,7 +11,7 @@ These skills are auto-installed into the shared brain because they are foundatio
 
 | Skill | Purpose |
 | --- | --- |
-| `hive-assimilate` | Mandatory pre-build search across shared brain, user projects, local/private indexes, and public GitHub before software creation. Replaces the older `github-assimilator` name and expands it beyond GitHub. |
+| `hive-assimilate` | Mandatory pre-build search across shared brain, user projects, local/private indexes, and public GitHub before software creation. |
 | `hive-pulse` | Built-in last-30-days signal briefs across Reddit, X, YouTube, TikTok, Hacker News, Polymarket, GitHub, and web sources, powered by a pinned MIT licensed `last30days` engine. |
 | `hive-capability-search` | Discovers available tools, skills, apps, agents, credentials by key name, and delivery channels for a task. |
 | `hive-skill-fusion` | Turns a capability request into a reusable shared-brain skill. |
@@ -42,9 +42,9 @@ Agents using it should search in this order:
 5. Local/private assimilation indexes.
 6. Public GitHub candidates, star-sorted for broad discovery.
 
-The skill still writes `ASSIMILATION_LOG.md`, `ASSIMILATION_LOG.jsonl`, and optional `ASSIMILATION.json` in the target project. Those names stay compatible with the older GitHub-only workflow.
+The skill writes `ASSIMILATION_LOG.md`, `ASSIMILATION_LOG.jsonl`, and optional `ASSIMILATION.json` in the target project so agents can review what was searched, reused, or rejected.
 
-Legacy candidate caches under `~/.codex/github-assimilator/` remain valid so existing project references do not break.
+Existing local candidate caches remain valid so project references do not break.
 
 ## Hive Pulse
 
@@ -78,7 +78,7 @@ Skills/hive-assimilate/SKILL.md
 Skills/hive-pulse/SKILL.md
 ```
 
-The old shared-brain `Skills/github-assimilator/` folder should not be recreated. If an imported runtime still has that old name, import it only as a compatibility alias or replace it with `hive-assimilate`.
+Do not create duplicate shared-brain copies of the same Hive skill. If an imported runtime carries an equivalent workflow under another name, keep `hive-assimilate` as the canonical shared-brain skill.
 
 ## Token Savings
 

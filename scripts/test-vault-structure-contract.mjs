@@ -124,8 +124,6 @@ has("setup.ps1", "UserPromptSubmit");
 has("scripts/seed-shared-skills.sh", "hive-brain-hook");
 has("scripts/seed-shared-skills.sh", "UserPromptSubmit");
 has("scripts/seed-shared-skills.sh", "timeout: 20");
-has("scripts/seed-shared-skills.sh", "github-assimilator");
-has("scripts/seed-shared-skills.sh", "hive-assimilate");
 has("scripts/hive-brain-hook", "HIVE_BRAIN_HOOK_TIMEOUT_MS || 20000");
 has("setup.ps1", "Operations/Brain Services/Agent Memory Index.jsonl");
 has("docs/index.md", 'href="whole-brain/"');

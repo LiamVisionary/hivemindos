@@ -23,35 +23,35 @@
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=17.98 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 2. score=9.69 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 3. score=9.69 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 4. score=8.14 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 5. score=5.49 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 6. score=5.49 LiamVisionary/skills [repo-summary]
    url: https://github.com/LiamVisionary/skills
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-skills.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-skills.md
    LiamVisionary/skills All versions of all skills that are on clawhub.com archived
 7. score=1.75 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 8. score=1.31 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 
 ## 2026-05-27T08:36:18.637827+00:00 - prebuild-gate
@@ -85,35 +85,35 @@
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=20.10 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 2. score=11.73 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 3. score=10.28 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 4. score=8.64 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 5. score=8.64 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 6. score=8.64 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 7. score=5.49 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 8. score=1.31 LiamVisionary/ai-headshot-generator [repo-summary]
    url: https://github.com/LiamVisionary/ai-headshot-generator
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-headshot-generator.md
    LiamVisionary/ai-headshot-generator TypeScript
 
 ## 2026-05-27T17:14:24.424666+00:00 - local-search
@@ -125,19 +125,19 @@
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=4.04 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 2. score=4.04 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 3. score=0.88 LiamVisionary/chatterbox-tts-api-modal-deployed [repo-summary]
    url: https://github.com/LiamVisionary/chatterbox-tts-api-modal-deployed
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
    LiamVisionary/chatterbox-tts-api-modal-deployed Python Python
 4. score=0.44 LiamVisionary/character-model-maker [repo-summary]
    url: https://github.com/LiamVisionary/character-model-maker
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-character-model-maker.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-character-model-maker.md
    LiamVisionary/character-model-maker HTML
 
 ## 2026-05-27T17:14:26.994831+00:00 - prebuild-gate
@@ -156,35 +156,35 @@
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=17.99 LiamVisionary/skills [repo-summary]
    url: https://github.com/LiamVisionary/skills
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-skills.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-skills.md
    LiamVisionary/skills All versions of all skills that are on clawhub.com archived
 2. score=12.14 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 3. score=11.44 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 4. score=10.21 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 5. score=9.03 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 6. score=7.63 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 7. score=4.05 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 8. score=3.64 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 
 ## 2026-05-27T17:16:48.377635+00:00 - prebuild-gate
@@ -296,31 +296,31 @@
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=4.39 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 2. score=4.04 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 3. score=3.64 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 4. score=3.64 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 5. score=0.44 LiamVisionary/rdmorganiser_rdmo__fork__7cde0431 [repo-summary]
    url: https://github.com/LiamVisionary/rdmorganiser_rdmo__fork__7cde0431
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-rdmorganiser_rdmo__fork__7cde0431.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-rdmorganiser_rdmo__fork__7cde0431.md
    LiamVisionary/rdmorganiser_rdmo__fork__7cde0431
 6. score=0.35 LiamVisionary/claw-code-mobile-private [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile-private
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile-private.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile-private.md
    LiamVisionary/claw-code-mobile-private Private fork: on-device inference + experimental features Rust
 7. score=0.35 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 
 ## 2026-05-27T18:07:41.379776+00:00 - prebuild-gate
@@ -385,23 +385,23 @@
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=6.99 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 2. score=3.64 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 3. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 4. score=3.35 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 5. score=0.44 LiamVisionary/ai-chatbot [repo-summary]
    url: https://github.com/LiamVisionary/ai-chatbot
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-chatbot.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-chatbot.md
    LiamVisionary/ai-chatbot TypeScript
 
 ## 2026-05-28T03:03:58.394388+00:00 - public-search
@@ -420,7 +420,7 @@
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 ## 2026-05-28T03:04:35.381267+00:00 - triage
 
 - Request: Audit and fix HivemindOS chat runtime error display for SSE provider errors
@@ -472,35 +472,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=7.40 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 2. score=4.04 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 3. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 4. score=3.35 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 5. score=0.44 LiamVisionary/ai-chatbot [repo-summary]
    url: https://github.com/LiamVisionary/ai-chatbot
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-chatbot.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-chatbot.md
    LiamVisionary/ai-chatbot TypeScript
 6. score=0.44 LiamVisionary/ai-headshot-generator [repo-summary]
    url: https://github.com/LiamVisionary/ai-headshot-generator
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-headshot-generator.md
    LiamVisionary/ai-headshot-generator TypeScript
 7. score=0.44 LiamVisionary/character-model-maker [repo-summary]
    url: https://github.com/LiamVisionary/character-model-maker
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-character-model-maker.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-character-model-maker.md
    LiamVisionary/character-model-maker HTML
 8. score=0.44 LiamVisionary/chatterbox [repo-summary]
    url: https://github.com/LiamVisionary/chatterbox
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-chatterbox.md
    LiamVisionary/chatterbox SoTA open-source TTS Voice/TTS
 
 ## 2026-05-28T03:25:37.043407+00:00 - prebuild-gate
@@ -544,35 +544,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=7.40 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 2. score=4.39 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 3. score=4.04 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 4. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 5. score=3.35 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 6. score=3.35 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 7. score=3.35 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 8. score=3.35 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 
 ## 2026-05-28T04:02:07.465044+00:00 - public-search
@@ -591,7 +591,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-28T04:02:24.608855+00:00 - triage
 
@@ -709,31 +709,31 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=12.06 LiamVisionary/skills [repo-summary]
    url: https://github.com/LiamVisionary/skills
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-skills.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-skills.md
    LiamVisionary/skills All versions of all skills that are on clawhub.com archived
 2. score=4.04 LiamVisionary/claude-watch [repo-summary]
    url: https://github.com/LiamVisionary/claude-watch
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claude-watch.md
    LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
 3. score=0.70 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 4. score=0.44 LiamVisionary/coaching-scheduler [repo-summary]
    url: https://github.com/LiamVisionary/coaching-scheduler
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-coaching-scheduler.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-coaching-scheduler.md
    LiamVisionary/coaching-scheduler TypeScript
 5. score=0.35 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 6. score=0.35 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 7. score=0.35 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 
 ## 2026-05-29T16:14:52.056651+00:00 - public-search
@@ -752,7 +752,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-29T16:15:35.799297+00:00 - triage
 
@@ -778,23 +778,23 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=10.27 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 2. score=10.27 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 3. score=8.64 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 4. score=6.70 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 5. score=6.70 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 
 ## 2026-05-29T16:26:01.110963+00:00 - prebuild-gate
@@ -874,35 +874,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=8.21 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 2. score=7.52 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 3. score=6.91 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 4. score=6.91 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 5. score=0.88 LiamVisionary/ai-chatbot [repo-summary]
    url: https://github.com/LiamVisionary/ai-chatbot
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-chatbot.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-chatbot.md
    LiamVisionary/ai-chatbot TypeScript
 6. score=0.88 LiamVisionary/chatterbox [repo-summary]
    url: https://github.com/LiamVisionary/chatterbox
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-chatterbox.md
    LiamVisionary/chatterbox SoTA open-source TTS Voice/TTS
 7. score=0.88 LiamVisionary/chatterbox-tts-api-modal-deployed [repo-summary]
    url: https://github.com/LiamVisionary/chatterbox-tts-api-modal-deployed
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
    LiamVisionary/chatterbox-tts-api-modal-deployed Python Python
 8. score=0.88 LiamVisionary/Chatterbox-TTS-Server [repo-summary]
    url: https://github.com/LiamVisionary/Chatterbox-TTS-Server
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-Chatterbox-TTS-Server.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-Chatterbox-TTS-Server.md
    LiamVisionary/Chatterbox-TTS-Server Python Python
 
 ## 2026-05-30T04:33:09.245650+00:00 - prebuild-gate
@@ -939,35 +939,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=18.42 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 2. score=16.13 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 3. score=15.69 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 4. score=13.63 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 5. score=12.50 LiamVisionary/skills [repo-summary]
    url: https://github.com/LiamVisionary/skills
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-skills.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-skills.md
    LiamVisionary/skills All versions of all skills that are on clawhub.com archived
 6. score=11.58 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 7. score=10.87 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 8. score=10.04 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 
 ## 2026-05-30T04:43:44.184660+00:00 - public-search
@@ -986,7 +986,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 ## 2026-05-30T04:44:15.758391+00:00 - assimilation-manifest
 
 - Request: (not provided)
@@ -1018,35 +1018,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=24.13 LiamVisionary/skills [repo-summary]
    url: https://github.com/LiamVisionary/skills
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-skills.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-skills.md
    LiamVisionary/skills All versions of all skills that are on clawhub.com archived
 2. score=7.40 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 3. score=7.05 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 4. score=6.70 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 5. score=4.04 LiamVisionary/claude-watch [repo-summary]
    url: https://github.com/LiamVisionary/claude-watch
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claude-watch.md
    LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
 6. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 7. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 8. score=3.35 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 
 ## 2026-05-30T04:57:47.410925+00:00 - public-search
@@ -1065,7 +1065,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 ## 2026-05-30T05:23:22.702827+00:00 - local-search
 
 - Request: Change existing AEON skills React UI from grouped category columns into one wide list with category filter badges
@@ -1075,35 +1075,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=12.06 LiamVisionary/skills [repo-summary]
    url: https://github.com/LiamVisionary/skills
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-skills.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-skills.md
    LiamVisionary/skills All versions of all skills that are on clawhub.com archived
 2. score=10.62 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 3. score=10.27 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 4. score=8.21 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 5. score=4.04 LiamVisionary/claude-watch [repo-summary]
    url: https://github.com/LiamVisionary/claude-watch
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claude-watch.md
    LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
 6. score=3.48 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 7. score=3.35 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 8. score=0.35 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 ## 2026-05-30T06:00:53.424232+00:00 - local-search
 
@@ -1114,23 +1114,23 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=4.04 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 2. score=1.05 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 3. score=0.35 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 4. score=0.35 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 5. score=0.35 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 ## 2026-05-30T06:46:19.048986+00:00 - local-search
 
@@ -1141,19 +1141,19 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=6.85 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 2. score=4.04 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 3. score=0.70 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 4. score=0.44 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 
 ## 2026-05-30T06:46:22.491595+00:00 - prebuild-gate
@@ -1172,35 +1172,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=13.35 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 2. score=10.11 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 3. score=9.08 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 4. score=9.08 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 5. score=9.08 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 6. score=5.93 LiamVisionary/claude-watch [repo-summary]
    url: https://github.com/LiamVisionary/claude-watch
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claude-watch.md
    LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
 7. score=5.06 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 8. score=5.06 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 
 ## 2026-05-30T07:53:45.490005+00:00 - prebuild-gate
@@ -1243,15 +1243,15 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=6.85 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 2. score=0.44 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 3. score=0.35 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 
 ## 2026-05-30T08:14:16.144710+00:00 - prebuild-gate
@@ -1282,23 +1282,23 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=8.21 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 2. score=6.56 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 3. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 4. score=3.48 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 5. score=0.44 LiamVisionary/chatterbox-tts-api-modal-deployed [repo-summary]
    url: https://github.com/LiamVisionary/chatterbox-tts-api-modal-deployed
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
    LiamVisionary/chatterbox-tts-api-modal-deployed Python Python
 
 ## 2026-05-30T08:33:51.650494+00:00 - public-search
@@ -1317,7 +1317,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-30T09:21:36.286462+00:00 - local-search
 
@@ -1328,35 +1328,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=13.70 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 2. score=7.40 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 3. score=3.70 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 4. score=3.70 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 5. score=0.88 LiamVisionary/ai-companion-website [repo-summary]
    url: https://github.com/LiamVisionary/ai-companion-website
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-companion-website.md
    LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
 6. score=0.88 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 7. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 8. score=0.44 LiamVisionary/data-annotation [repo-summary]
    url: https://github.com/LiamVisionary/data-annotation
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-data-annotation.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-data-annotation.md
    LiamVisionary/data-annotation Python Python
 
 ## 2026-05-30T09:21:39.186547+00:00 - public-search
@@ -1375,7 +1375,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-30T09:21:50.601689+00:00 - public-search
 
@@ -1393,35 +1393,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=10.89 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 2. score=9.08 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 3. score=8.21 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 4. score=7.75 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 5. score=6.91 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 6. score=4.39 LiamVisionary/claude-watch [repo-summary]
    url: https://github.com/LiamVisionary/claude-watch
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claude-watch.md
    LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
 7. score=3.48 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 8. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 
 ## 2026-05-30T11:46:03.805834+00:00 - prebuild-gate
@@ -1457,35 +1457,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=9.24 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 2. score=5.06 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 3. score=4.19 LiamVisionary/skills [repo-summary]
    url: https://github.com/LiamVisionary/skills
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-skills.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-skills.md
    LiamVisionary/skills All versions of all skills that are on clawhub.com archived
 4. score=0.88 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 5. score=0.88 LiamVisionary/chatterbox-tts-api-modal-deployed [repo-summary]
    url: https://github.com/LiamVisionary/chatterbox-tts-api-modal-deployed
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
    LiamVisionary/chatterbox-tts-api-modal-deployed Python Python
 6. score=0.44 LiamVisionary/Ad-Alchemist [repo-summary]
    url: https://github.com/LiamVisionary/Ad-Alchemist
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-Ad-Alchemist.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-Ad-Alchemist.md
    LiamVisionary/Ad-Alchemist TypeScript
 7. score=0.44 LiamVisionary/ai-chatbot [repo-summary]
    url: https://github.com/LiamVisionary/ai-chatbot
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-chatbot.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-chatbot.md
    LiamVisionary/ai-chatbot TypeScript
 8. score=0.44 LiamVisionary/ai-companion-website [repo-summary]
    url: https://github.com/LiamVisionary/ai-companion-website
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-companion-website.md
    LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
 
 ## 2026-05-30T12:25:38.882167+00:00 - public-search
@@ -1504,7 +1504,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-30T12:26:09.786389+00:00 - public-search
 
@@ -1529,35 +1529,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=12.76 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 2. score=10.27 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 3. score=10.27 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 4. score=3.70 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 5. score=3.64 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 6. score=3.64 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 7. score=3.64 LiamVisionary/skills [repo-summary]
    url: https://github.com/LiamVisionary/skills
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-skills.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-skills.md
    LiamVisionary/skills All versions of all skills that are on clawhub.com archived
 8. score=3.48 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 
 ## 2026-05-30T12:34:41.470165+00:00 - prebuild-gate
@@ -1576,35 +1576,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=6.99 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 2. score=5.06 LiamVisionary/claw-code-mobile-private [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile-private
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile-private.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile-private.md
    LiamVisionary/claw-code-mobile-private Private fork: on-device inference + experimental features Rust
 3. score=4.04 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 4. score=3.64 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 5. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 6. score=3.35 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 7. score=0.44 LiamVisionary/ai-headshot-generator [repo-summary]
    url: https://github.com/LiamVisionary/ai-headshot-generator
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-headshot-generator.md
    LiamVisionary/ai-headshot-generator TypeScript
 8. score=0.44 LiamVisionary/fantom-survivor-testnet [repo-summary]
    url: https://github.com/LiamVisionary/fantom-survivor-testnet
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-fantom-survivor-testnet.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-fantom-survivor-testnet.md
    LiamVisionary/fantom-survivor-testnet
 
 ## 2026-05-30T14:28:13.135973+00:00 - prebuild-gate
@@ -1623,23 +1623,23 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=7.55 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 2. score=4.74 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 3. score=4.04 LiamVisionary/claude-watch [repo-summary]
    url: https://github.com/LiamVisionary/claude-watch
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claude-watch.md
    LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
 4. score=1.31 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 5. score=0.44 LiamVisionary/ai-headshot-generator [repo-summary]
    url: https://github.com/LiamVisionary/ai-headshot-generator
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-headshot-generator.md
    LiamVisionary/ai-headshot-generator TypeScript
 
 ## 2026-05-30T15:03:33.643443+00:00 - prebuild-gate
@@ -1658,35 +1658,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=23.05 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 2. score=11.42 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 3. score=10.12 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 4. score=9.68 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 5. score=9.68 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 6. score=9.61 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 7. score=5.50 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 8. score=4.99 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 
 ## 2026-05-31T05:09:10.119710+00:00 - prebuild-gate
@@ -1723,35 +1723,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=13.79 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 2. score=13.63 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 3. score=13.27 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 4. score=13.27 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 5. score=9.08 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 6. score=5.49 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 7. score=5.22 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 8. score=1.75 LiamVisionary/claude-watch [repo-summary]
    url: https://github.com/LiamVisionary/claude-watch
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claude-watch.md
    LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
 
 ## 2026-05-31T05:16:45.604352+00:00 - prebuild-gate
@@ -1785,35 +1785,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=4.63 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 2. score=3.70 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 3. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 4. score=3.35 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 5. score=3.35 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 6. score=3.35 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 7. score=0.44 LiamVisionary/data-annotation [repo-summary]
    url: https://github.com/LiamVisionary/data-annotation
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-data-annotation.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-data-annotation.md
    LiamVisionary/data-annotation Python Python
 8. score=0.35 LiamVisionary/ai-companion-website [repo-summary]
    url: https://github.com/LiamVisionary/ai-companion-website
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-companion-website.md
    LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
 
 ## 2026-05-31T06:29:25.938692+00:00 - public-search
@@ -1832,7 +1832,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-31T06:29:49.292086+00:00 - public-search
 
@@ -1890,35 +1890,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=13.70 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 2. score=10.20 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 3. score=5.06 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 4. score=5.06 LiamVisionary/claw-code-mobile-private [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile-private
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile-private.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile-private.md
    LiamVisionary/claw-code-mobile-private Private fork: on-device inference + experimental features Rust
 5. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 6. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 7. score=3.35 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 8. score=3.35 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 
 ## 2026-05-31T07:10:38.944170+00:00 - public-search
@@ -1939,7 +1939,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 The search is longer than 256 characters.
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-31T07:13:42.402967+00:00 - triage
 
@@ -1991,35 +1991,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=4.19 LiamVisionary/ai-companion-website [repo-summary]
    url: https://github.com/LiamVisionary/ai-companion-website
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-companion-website.md
    LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
 2. score=4.04 LiamVisionary/claude-watch [repo-summary]
    url: https://github.com/LiamVisionary/claude-watch
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claude-watch.md
    LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
 3. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 4. score=3.35 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 5. score=0.44 LiamVisionary/ai-chatbot [repo-summary]
    url: https://github.com/LiamVisionary/ai-chatbot
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-chatbot.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-chatbot.md
    LiamVisionary/ai-chatbot TypeScript
 6. score=0.44 LiamVisionary/ai-girlfriend-mobile [repo-summary]
    url: https://github.com/LiamVisionary/ai-girlfriend-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-girlfriend-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-girlfriend-mobile.md
    LiamVisionary/ai-girlfriend-mobile TypeScript
 7. score=0.44 LiamVisionary/ai-headshot-generator [repo-summary]
    url: https://github.com/LiamVisionary/ai-headshot-generator
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-headshot-generator.md
    LiamVisionary/ai-headshot-generator TypeScript
 8. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 
 ## 2026-05-31T07:41:56.873474+00:00 - public-search
@@ -2038,7 +2038,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-31T07:46:17.922273+00:00 - user-surfaced
 
@@ -2115,35 +2115,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=10.55 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 2. score=9.87 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 3. score=6.37 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 4. score=6.37 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 5. score=5.93 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 6. score=5.86 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 7. score=5.86 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 8. score=2.19 LiamVisionary/rdmorganiser_rdmo__fork__7cde0431 [repo-summary]
    url: https://github.com/LiamVisionary/rdmorganiser_rdmo__fork__7cde0431
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-rdmorganiser_rdmo__fork__7cde0431.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-rdmorganiser_rdmo__fork__7cde0431.md
    LiamVisionary/rdmorganiser_rdmo__fork__7cde0431
 
 ## 2026-05-31T08:05:41.224461+00:00 - prebuild-gate
@@ -2197,11 +2197,11 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=7.68 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 2. score=3.64 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 
 ## 2026-05-31T08:25:39.747975+00:00 - prebuild-gate
@@ -2237,35 +2237,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=19.80 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 2. score=19.79 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 3. score=14.24 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 4. score=10.05 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 5. score=9.69 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 6. score=7.17 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 7. score=6.37 LiamVisionary/skills [repo-summary]
    url: https://github.com/LiamVisionary/skills
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-skills.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-skills.md
    LiamVisionary/skills All versions of all skills that are on clawhub.com archived
 8. score=5.86 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 
 ## 2026-05-31T08:32:57.903966+00:00 - prebuild-gate
@@ -2319,27 +2319,27 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=6.85 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 2. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 3. score=0.44 LiamVisionary/Chatterbox-TTS-Server [repo-summary]
    url: https://github.com/LiamVisionary/Chatterbox-TTS-Server
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-Chatterbox-TTS-Server.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-Chatterbox-TTS-Server.md
    LiamVisionary/Chatterbox-TTS-Server Python Python
 4. score=0.44 LiamVisionary/inworld-nodejs-generate-token [repo-summary]
    url: https://github.com/LiamVisionary/inworld-nodejs-generate-token
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-inworld-nodejs-generate-token.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-inworld-nodejs-generate-token.md
    LiamVisionary/inworld-nodejs-generate-token TypeScript
 5. score=0.44 LiamVisionary/language-learning-app [repo-summary]
    url: https://github.com/LiamVisionary/language-learning-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-language-learning-app.md
    LiamVisionary/language-learning-app TypeScript
 6. score=0.35 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 
 ## 2026-05-31T09:28:40.122911+00:00 - prebuild-gate
@@ -2381,35 +2381,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=16.18 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 2. score=4.99 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 3. score=3.64 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 4. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 5. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 6. score=3.35 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 7. score=1.75 LiamVisionary/ai-headshot-generator [repo-summary]
    url: https://github.com/LiamVisionary/ai-headshot-generator
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-headshot-generator.md
    LiamVisionary/ai-headshot-generator TypeScript
 8. score=1.75 LiamVisionary/fantom-survivor-testnet [repo-summary]
    url: https://github.com/LiamVisionary/fantom-survivor-testnet
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-fantom-survivor-testnet.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-fantom-survivor-testnet.md
    LiamVisionary/fantom-survivor-testnet
 
 ## 2026-05-31T09:39:57.753293+00:00 - public-search
@@ -2428,7 +2428,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-31T09:40:10.954881+00:00 - public-search
 
@@ -2479,35 +2479,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=4.39 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 2. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 3. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 4. score=3.35 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 5. score=0.70 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 6. score=0.44 LiamVisionary/chatterbox-tts-api-modal-deployed [repo-summary]
    url: https://github.com/LiamVisionary/chatterbox-tts-api-modal-deployed
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
    LiamVisionary/chatterbox-tts-api-modal-deployed Python Python
 7. score=0.44 LiamVisionary/fantom-survivor-testnet [repo-summary]
    url: https://github.com/LiamVisionary/fantom-survivor-testnet
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-fantom-survivor-testnet.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-fantom-survivor-testnet.md
    LiamVisionary/fantom-survivor-testnet
 8. score=0.35 LiamVisionary/ai-companion-website [repo-summary]
    url: https://github.com/LiamVisionary/ai-companion-website
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-companion-website.md
    LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
 
 ## 2026-05-31T10:17:39.497863+00:00 - public-search
@@ -2526,7 +2526,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-31T10:41:33.631394+00:00 - assimilation-manifest
 
@@ -2544,35 +2544,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=10.12 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 2. score=7.40 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 3. score=7.34 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 4. score=4.04 LiamVisionary/chatterbox [repo-summary]
    url: https://github.com/LiamVisionary/chatterbox
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-chatterbox.md
    LiamVisionary/chatterbox SoTA open-source TTS Voice/TTS
 5. score=4.04 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 6. score=3.64 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 7. score=0.88 LiamVisionary/ai-companion-website [repo-summary]
    url: https://github.com/LiamVisionary/ai-companion-website
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-companion-website.md
    LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
 8. score=0.88 LiamVisionary/claw-code-mobile-private [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile-private
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile-private.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile-private.md
    LiamVisionary/claw-code-mobile-private Private fork: on-device inference + experimental features Rust
 
 ## 2026-05-31T12:13:42.866342+00:00 - public-search
@@ -2591,7 +2591,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-31T12:16:45.785371+00:00 - triage
 
@@ -2623,35 +2623,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=9.52 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 2. score=8.22 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 3. score=8.09 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 4. score=8.09 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 5. score=6.56 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 6. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 7. score=1.75 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 8. score=1.75 LiamVisionary/language-learning-app [repo-summary]
    url: https://github.com/LiamVisionary/language-learning-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-language-learning-app.md
    LiamVisionary/language-learning-app TypeScript
 ## 2026-05-31T14:01:04.972344+00:00 - local-search
 
@@ -2662,31 +2662,31 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=14.79 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 2. score=6.70 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 3. score=6.70 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 4. score=4.04 LiamVisionary/chatterbox [repo-summary]
    url: https://github.com/LiamVisionary/chatterbox
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-chatterbox.md
    LiamVisionary/chatterbox SoTA open-source TTS Voice/TTS
 5. score=4.04 LiamVisionary/claude-watch [repo-summary]
    url: https://github.com/LiamVisionary/claude-watch
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claude-watch.md
    LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
 6. score=0.70 LiamVisionary/ai-companion-website [repo-summary]
    url: https://github.com/LiamVisionary/ai-companion-website
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-companion-website.md
    LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
 7. score=0.70 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 
 ## 2026-05-31T14:01:08.600290+00:00 - public-search
@@ -2705,7 +2705,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 ## 2026-05-31T14:07:22.362622+00:00 - triage
 
 - Request: Feed AEON agent identity and context into voice call briefing
@@ -2758,35 +2758,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=9.08 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 2. score=6.91 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 3. score=6.91 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 4. score=6.16 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 5. score=3.83 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 6. score=3.64 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 7. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 8. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 
 ## 2026-05-31T16:49:38.124763+00:00 - public-search
@@ -2805,7 +2805,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-31T16:49:46.537441+00:00 - local-search
 
@@ -2816,19 +2816,19 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=8.21 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 2. score=6.56 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 3. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 4. score=3.83 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 
 ## 2026-05-31T16:49:48.874551+00:00 - public-search
@@ -2847,7 +2847,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-31T16:50:47.657242+00:00 - triage
 
@@ -2888,35 +2888,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=13.19 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 2. score=6.56 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 3. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 4. score=3.64 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 5. score=3.48 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 6. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 7. score=0.44 LiamVisionary/language-learning-app [repo-summary]
    url: https://github.com/LiamVisionary/language-learning-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-language-learning-app.md
    LiamVisionary/language-learning-app TypeScript
 8. score=0.44 LiamVisionary/rdmorganiser_rdmo__fork__7cde0431 [repo-summary]
    url: https://github.com/LiamVisionary/rdmorganiser_rdmo__fork__7cde0431
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-rdmorganiser_rdmo__fork__7cde0431.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-rdmorganiser_rdmo__fork__7cde0431.md
    LiamVisionary/rdmorganiser_rdmo__fork__7cde0431
 
 ## 2026-05-31T17:06:50.959923+00:00 - prebuild-gate
@@ -2950,19 +2950,19 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=4.04 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 2. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 3. score=0.44 LiamVisionary/language-learning-app [repo-summary]
    url: https://github.com/LiamVisionary/language-learning-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-language-learning-app.md
    LiamVisionary/language-learning-app TypeScript
 4. score=0.35 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 
 ## 2026-05-31T17:12:56.479536+00:00 - prebuild-gate
@@ -3000,35 +3000,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=8.64 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 2. score=6.56 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 3. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 4. score=4.04 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 5. score=3.48 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 6. score=0.44 LiamVisionary/ai-headshot-generator [repo-summary]
    url: https://github.com/LiamVisionary/ai-headshot-generator
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-headshot-generator.md
    LiamVisionary/ai-headshot-generator TypeScript
 7. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 8. score=0.44 LiamVisionary/fantom-survivor-testnet [repo-summary]
    url: https://github.com/LiamVisionary/fantom-survivor-testnet
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-fantom-survivor-testnet.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-fantom-survivor-testnet.md
    LiamVisionary/fantom-survivor-testnet
 
 ## 2026-05-31T17:18:15.004675+00:00 - public-search
@@ -3047,7 +3047,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-31T17:18:31.210959+00:00 - local-search
 
@@ -3058,27 +3058,27 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=9.08 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 2. score=6.56 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 3. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 4. score=3.48 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 5. score=0.88 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 6. score=0.88 LiamVisionary/language-learning-app [repo-summary]
    url: https://github.com/LiamVisionary/language-learning-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-language-learning-app.md
    LiamVisionary/language-learning-app TypeScript
 
 ## 2026-05-31T17:18:33.639297+00:00 - public-search
@@ -3097,7 +3097,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-31T17:18:49.628899+00:00 - rejection
 
@@ -3120,35 +3120,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=7.53 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 2. score=7.09 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 3. score=7.09 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 4. score=6.85 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 5. score=4.04 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 6. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 7. score=0.44 LiamVisionary/inworld-nodejs-generate-token [repo-summary]
    url: https://github.com/LiamVisionary/inworld-nodejs-generate-token
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-inworld-nodejs-generate-token.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-inworld-nodejs-generate-token.md
    LiamVisionary/inworld-nodejs-generate-token TypeScript
 8. score=0.44 LiamVisionary/language-learning-app [repo-summary]
    url: https://github.com/LiamVisionary/language-learning-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-language-learning-app.md
    LiamVisionary/language-learning-app TypeScript
 
 ## 2026-05-31T17:24:33.888065+00:00 - prebuild-gate
@@ -3204,31 +3204,31 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=8.64 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 2. score=7.17 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 3. score=6.56 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 4. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 5. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 6. score=0.44 LiamVisionary/chatterbox-tts-api-modal-deployed [repo-summary]
    url: https://github.com/LiamVisionary/chatterbox-tts-api-modal-deployed
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
    LiamVisionary/chatterbox-tts-api-modal-deployed Python Python
 7. score=0.44 LiamVisionary/language-learning-app [repo-summary]
    url: https://github.com/LiamVisionary/language-learning-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-language-learning-app.md
    LiamVisionary/language-learning-app TypeScript
 
 ## 2026-05-31T17:46:23.746629+00:00 - prebuild-gate
@@ -3274,31 +3274,31 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=4.04 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 2. score=3.35 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 3. score=3.35 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 4. score=3.35 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 5. score=0.44 LiamVisionary/character-model-maker [repo-summary]
    url: https://github.com/LiamVisionary/character-model-maker
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-character-model-maker.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-character-model-maker.md
    LiamVisionary/character-model-maker HTML
 6. score=0.44 LiamVisionary/fantom-survivor-testnet [repo-summary]
    url: https://github.com/LiamVisionary/fantom-survivor-testnet
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-fantom-survivor-testnet.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-fantom-survivor-testnet.md
    LiamVisionary/fantom-survivor-testnet
 7. score=0.35 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 
 ## 2026-05-31T17:56:37.990599+00:00 - public-search
@@ -3317,7 +3317,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-05-31T17:56:58.263349+00:00 - public-search
 
@@ -3367,27 +3367,27 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=12.76 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 2. score=6.56 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 3. score=6.56 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 4. score=4.04 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 5. score=3.64 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 6. score=3.48 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 
 ## 2026-05-31T18:08:17.874362+00:00 - prebuild-gate
@@ -3474,7 +3474,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 
 - Request: Simplify Brain Services with segmented card navigation
 - Source: public-github
-- Selected backbone: /Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives
+- Selected backbone: /Users/liam/.codex/hive-assimilate/candidates/radix-ui-primitives
 
 ### Candidates
 - radix-ui/primitives
@@ -3515,7 +3515,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 
 - Request: Improve Brain Services UX with vertical cards, enable toggles, and conditional tabs
 - Source: public-github
-- Selected backbone: /Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives
+- Selected backbone: /Users/liam/.codex/hive-assimilate/candidates/radix-ui-primitives
 
 ### Candidates
 - radix-ui/primitives
@@ -3571,35 +3571,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=11.28 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 2. score=11.28 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 3. score=7.53 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 4. score=4.63 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 5. score=4.04 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 6. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 7. score=3.35 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 8. score=3.35 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 
 ## 2026-05-31T19:57:22.664218+00:00 - prebuild-gate
@@ -3618,35 +3618,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=2.00 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 2. score=2.00 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 3. score=1.65 LiamVisionary/Ad-Alchemist [repo-summary]
    url: https://github.com/LiamVisionary/Ad-Alchemist
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-Ad-Alchemist.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-Ad-Alchemist.md
    LiamVisionary/Ad-Alchemist TypeScript
 4. score=1.65 LiamVisionary/ai-chatbot [repo-summary]
    url: https://github.com/LiamVisionary/ai-chatbot
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-chatbot.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-chatbot.md
    LiamVisionary/ai-chatbot TypeScript
 5. score=1.65 LiamVisionary/ai-companion-website [repo-summary]
    url: https://github.com/LiamVisionary/ai-companion-website
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-companion-website.md
    LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
 6. score=1.65 LiamVisionary/ai-girlfriend-mobile [repo-summary]
    url: https://github.com/LiamVisionary/ai-girlfriend-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-girlfriend-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-girlfriend-mobile.md
    LiamVisionary/ai-girlfriend-mobile TypeScript
 7. score=1.65 LiamVisionary/ai-headshot-generator [repo-summary]
    url: https://github.com/LiamVisionary/ai-headshot-generator
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-headshot-generator.md
    LiamVisionary/ai-headshot-generator TypeScript
 8. score=1.65 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 
 ## 2026-05-31T19:59:27.245888+00:00 - triage
@@ -3996,7 +3996,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Request: Add AEON automation counts and power controls to the HivemindOS AEON view
 - Source: selected-github-code
 - Decision: assimilated
-- Assimilated: /tmp/synto-inspect:src/synto/cli.py => src/lib/services/brain/synto.ts, /tmp/synto-inspect:src/synto/serve.py => src/lib/services/brain/synto.ts, /tmp/synto-inspect:src/synto/config.py => src/lib/services/brain/synto.ts, /tmp/synto-inspect:README.md => docs/features/brain-vault-and-skills.md, tashfeenahmed/freellmapi:server/src/providers/openai-compat.ts => src/lib/services/usepod.ts, tashfeenahmed/freellmapi:server/src/__tests__/providers/openai-compat.test.ts => src/app/api/usepod/status/route.ts, Sortis-AI/usepod-agent:agent.example.toml => src/features/dashboard/views/chat/AgentSettingsModal.tsx, Sortis-AI/usepod-agent:install/README.md => docs/integrations/usepod.md, /Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives:packages/react/collapsible/src/collapsible.tsx => src/features/dashboard/brain-modules.tsx, /Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives:packages/react/tabs/src/tabs.tsx => src/features/dashboard/views/VaultPanel.tsx, /Users/liam/.codex/github-assimilator/candidates/radix-ui-primitives:packages/react/tabs/src/tabs.tsx => src/features/dashboard/views/brain-services-ui.tsx, /Users/liam/Documents/code/projects/hivemind-os:src/features/dashboard/views/AeonAutopilotPanel.tsx => src/features/dashboard/views/AeonAutopilotPanel.tsx, /Users/liam/Documents/code/projects/hivemind-os:src/components/scheduler/jobs.tsx => src/features/dashboard/views/AeonAutopilotPanel.tsx, /Users/liam/Documents/code/projects/hivemind-os:src/features/dashboard/hooks/use-scheduler-controller.tsx => src/features/dashboard/views/AeonAutopilotPanel.tsx
+- Assimilated: /tmp/synto-inspect:src/synto/cli.py => src/lib/services/brain/synto.ts, /tmp/synto-inspect:src/synto/serve.py => src/lib/services/brain/synto.ts, /tmp/synto-inspect:src/synto/config.py => src/lib/services/brain/synto.ts, /tmp/synto-inspect:README.md => docs/features/brain-vault-and-skills.md, tashfeenahmed/freellmapi:server/src/providers/openai-compat.ts => src/lib/services/usepod.ts, tashfeenahmed/freellmapi:server/src/__tests__/providers/openai-compat.test.ts => src/app/api/usepod/status/route.ts, Sortis-AI/usepod-agent:agent.example.toml => src/features/dashboard/views/chat/AgentSettingsModal.tsx, Sortis-AI/usepod-agent:install/README.md => docs/integrations/usepod.md, /Users/liam/.codex/hive-assimilate/candidates/radix-ui-primitives:packages/react/collapsible/src/collapsible.tsx => src/features/dashboard/brain-modules.tsx, /Users/liam/.codex/hive-assimilate/candidates/radix-ui-primitives:packages/react/tabs/src/tabs.tsx => src/features/dashboard/views/VaultPanel.tsx, /Users/liam/.codex/hive-assimilate/candidates/radix-ui-primitives:packages/react/tabs/src/tabs.tsx => src/features/dashboard/views/brain-services-ui.tsx, /Users/liam/Documents/code/projects/hivemind-os:src/features/dashboard/views/AeonAutopilotPanel.tsx => src/features/dashboard/views/AeonAutopilotPanel.tsx, /Users/liam/Documents/code/projects/hivemind-os:src/components/scheduler/jobs.tsx => src/features/dashboard/views/AeonAutopilotPanel.tsx, /Users/liam/Documents/code/projects/hivemind-os:src/features/dashboard/hooks/use-scheduler-controller.tsx => src/features/dashboard/views/AeonAutopilotPanel.tsx
 - Verification: Wrote ASSIMILATION.json with 14 entries and custom_code_assessment=balanced.
 ## 2026-05-31T21:23:49.870268+00:00 - verification
 
@@ -4090,35 +4090,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=7.20 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 2. score=4.04 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 3. score=1.65 LiamVisionary/Ad-Alchemist [repo-summary]
    url: https://github.com/LiamVisionary/Ad-Alchemist
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-Ad-Alchemist.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-Ad-Alchemist.md
    LiamVisionary/Ad-Alchemist TypeScript
 4. score=1.65 LiamVisionary/ai-chatbot [repo-summary]
    url: https://github.com/LiamVisionary/ai-chatbot
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-chatbot.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-chatbot.md
    LiamVisionary/ai-chatbot TypeScript
 5. score=1.65 LiamVisionary/ai-companion-website [repo-summary]
    url: https://github.com/LiamVisionary/ai-companion-website
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-companion-website.md
    LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
 6. score=1.65 LiamVisionary/ai-girlfriend-mobile [repo-summary]
    url: https://github.com/LiamVisionary/ai-girlfriend-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-girlfriend-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-girlfriend-mobile.md
    LiamVisionary/ai-girlfriend-mobile TypeScript
 7. score=1.65 LiamVisionary/ai-headshot-generator [repo-summary]
    url: https://github.com/LiamVisionary/ai-headshot-generator
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-headshot-generator.md
    LiamVisionary/ai-headshot-generator TypeScript
 8. score=1.65 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 
 ## 2026-06-01T04:15:37.469035+00:00 - prebuild-gate
@@ -4580,19 +4580,19 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=14.19 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 2. score=14.19 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 3. score=14.19 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 4. score=8.09 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 
 ## 2026-06-01T20:08:12.346960+00:00 - prebuild-gate
@@ -4638,7 +4638,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 ## 2026-06-01T20:28:09.054821+00:00 - native-navigation-reuse
 
 - Request: Add native Tauri navigation improvements for HivemindOS
-- Source: github-assimilator
+- Source: hive-assimilate
 - Decision: selected audited donor patterns for Tauri navigation and React shortcuts
 - Reason: hilman2/4dy-client had compact Tauri 2 tray, menu/hotkey, and window-state patterns; kevinturpin97/react-ctrlk had a small keyboard shortcut hook pattern suitable for adaptation into the dashboard command palette.
 - Selected backbone: local HivemindOS dashboard/Tauri app
@@ -4675,19 +4675,19 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=0.44 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 2. score=0.44 LiamVisionary/language-learning-app [repo-summary]
    url: https://github.com/LiamVisionary/language-learning-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-language-learning-app.md
    LiamVisionary/language-learning-app TypeScript
 3. score=0.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 4. score=0.35 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 
 ## 2026-06-02T02:25:55.923035+00:00 - prebuild-gate
@@ -4700,7 +4700,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 ## 2026-06-02T02:38:19.838191+00:00 - native-about-triage
 
 - Request: Improve native About window with app icon, automatic/manual update check, and test update flow
-- Source: github-assimilator
+- Source: hive-assimilate
 - Query: `tauri native about update window menu`
 - Decision: selected local HivemindOS update/native window backbone; rejected public candidates as irrelevant
 - Selected backbone: LiamVisionary/hivemindos local checkout
@@ -4737,35 +4737,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=6.85 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 2. score=2.50 LiamVisionary/inworld-nodejs-generate-token [repo-summary]
    url: https://github.com/LiamVisionary/inworld-nodejs-generate-token
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-inworld-nodejs-generate-token.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-inworld-nodejs-generate-token.md
    LiamVisionary/inworld-nodejs-generate-token TypeScript
 3. score=1.65 LiamVisionary/Ad-Alchemist [repo-summary]
    url: https://github.com/LiamVisionary/Ad-Alchemist
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-Ad-Alchemist.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-Ad-Alchemist.md
    LiamVisionary/Ad-Alchemist TypeScript
 4. score=1.65 LiamVisionary/ai-chatbot [repo-summary]
    url: https://github.com/LiamVisionary/ai-chatbot
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-chatbot.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-chatbot.md
    LiamVisionary/ai-chatbot TypeScript
 5. score=1.65 LiamVisionary/ai-companion-website [repo-summary]
    url: https://github.com/LiamVisionary/ai-companion-website
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-companion-website.md
    LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
 6. score=1.65 LiamVisionary/ai-girlfriend-mobile [repo-summary]
    url: https://github.com/LiamVisionary/ai-girlfriend-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-girlfriend-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-girlfriend-mobile.md
    LiamVisionary/ai-girlfriend-mobile TypeScript
 7. score=1.65 LiamVisionary/ai-headshot-generator [repo-summary]
    url: https://github.com/LiamVisionary/ai-headshot-generator
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-headshot-generator.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-headshot-generator.md
    LiamVisionary/ai-headshot-generator TypeScript
 8. score=1.65 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 
 ## 2026-06-02T03:30:02.162253+00:00 - prebuild-gate
@@ -4826,35 +4826,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=6.85 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 2. score=3.70 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 3. score=3.35 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 4. score=3.35 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 5. score=1.31 LiamVisionary/chatterbox-tts-api-modal-deployed [repo-summary]
    url: https://github.com/LiamVisionary/chatterbox-tts-api-modal-deployed
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-chatterbox-tts-api-modal-deployed.md
    LiamVisionary/chatterbox-tts-api-modal-deployed Python Python
 6. score=0.88 LiamVisionary/ai-chatbot [repo-summary]
    url: https://github.com/LiamVisionary/ai-chatbot
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-chatbot.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-chatbot.md
    LiamVisionary/ai-chatbot TypeScript
 7. score=0.88 LiamVisionary/chatterbox [repo-summary]
    url: https://github.com/LiamVisionary/chatterbox
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-chatterbox.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-chatterbox.md
    LiamVisionary/chatterbox SoTA open-source TTS Voice/TTS
 8. score=0.88 LiamVisionary/Chatterbox-TTS-Server [repo-summary]
    url: https://github.com/LiamVisionary/Chatterbox-TTS-Server
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-Chatterbox-TTS-Server.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-Chatterbox-TTS-Server.md
    LiamVisionary/Chatterbox-TTS-Server Python Python
 
 ## 2026-06-02T08:17:02.991244+00:00 - public-search
@@ -4873,7 +4873,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Public search returned no usable candidates; broaden queries before implementing.
 - Note: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-06-02T08:17:52.820915+00:00 - public-search
 
@@ -4962,35 +4962,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=5.69 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 2. score=4.39 LiamVisionary/claude-watch [repo-summary]
    url: https://github.com/LiamVisionary/claude-watch
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claude-watch.md
    LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
 3. score=4.39 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 4. score=2.50 LiamVisionary/ai-companion-website [repo-summary]
    url: https://github.com/LiamVisionary/ai-companion-website
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-companion-website.md
    LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
 5. score=2.50 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 6. score=2.50 LiamVisionary/language-learning-app [repo-summary]
    url: https://github.com/LiamVisionary/language-learning-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-language-learning-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-language-learning-app.md
    LiamVisionary/language-learning-app TypeScript
 7. score=2.00 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 8. score=1.65 LiamVisionary/Ad-Alchemist [repo-summary]
    url: https://github.com/LiamVisionary/Ad-Alchemist
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-Ad-Alchemist.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-Ad-Alchemist.md
    LiamVisionary/Ad-Alchemist TypeScript
 
 ## 2026-06-02T17:31:31.693576+00:00 - prebuild-gate
@@ -5319,35 +5319,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=10.12 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 2. score=9.54 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 3. score=9.54 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 4. score=9.18 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 5. score=5.93 LiamVisionary/claude-watch [repo-summary]
    url: https://github.com/LiamVisionary/claude-watch
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claude-watch.md
    LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
 6. score=4.99 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 7. score=4.63 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 8. score=1.31 LiamVisionary/claw-code-mobile-private [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile-private
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile-private.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile-private.md
    LiamVisionary/claw-code-mobile-private Private fork: on-device inference + experimental features Rust
 
 ## 2026-06-05T04:10:11.665337+00:00 - prebuild-gate
@@ -5382,7 +5382,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Request: Add Memanto-style typed persistent memory layer for HivemindOS shared Obsidian brain
 - Source: selected-github-code
 - Decision: assimilated
-- Assimilated: /Users/liam/.codex/github-assimilator/candidates/theDakshJaitly-mex:src/events.ts => src/lib/services/obsidian/agent-memory.ts, /Users/liam/.codex/github-assimilator/candidates/theDakshJaitly-mex:src/drift/frontmatter.ts => src/lib/services/obsidian/agent-memory.ts, /Users/liam/.codex/github-assimilator/candidates/theDakshJaitly-mex:src/drift/scoring.ts => src/lib/services/obsidian/agent-memory.ts
+- Assimilated: /Users/liam/.codex/hive-assimilate/candidates/theDakshJaitly-mex:src/events.ts => src/lib/services/obsidian/agent-memory.ts, /Users/liam/.codex/hive-assimilate/candidates/theDakshJaitly-mex:src/drift/frontmatter.ts => src/lib/services/obsidian/agent-memory.ts, /Users/liam/.codex/hive-assimilate/candidates/theDakshJaitly-mex:src/drift/scoring.ts => src/lib/services/obsidian/agent-memory.ts
 - Verification: Appended three concrete mex donor mappings to ASSIMILATION.json without removing existing uncommitted chat-shell mappings.
 ## 2026-06-05T05:02:00+00:00 - assimilation-correction
 
@@ -5437,7 +5437,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - src/lib/services/obsidian/agent-memory.ts
   - Decision: selected
   - Reason: existing append-only JSONL memory index writer extended into a materialized search index and cache
-- /Users/liam/.codex/github-assimilator/candidates/theDakshJaitly-mex/src/events.ts
+- /Users/liam/.codex/hive-assimilate/candidates/theDakshJaitly-mex/src/events.ts
   - Decision: selected
   - Reason: previously audited append-only JSONL event log pattern remains the donor pattern for the optimized index
 
@@ -5465,35 +5465,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=10.21 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 2. score=6.99 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 3. score=5.70 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 4. score=5.35 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 5. score=4.39 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 6. score=2.50 LiamVisionary/coaching-scheduler [repo-summary]
    url: https://github.com/LiamVisionary/coaching-scheduler
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-coaching-scheduler.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-coaching-scheduler.md
    LiamVisionary/coaching-scheduler TypeScript
 7. score=2.50 LiamVisionary/Inworld-LLM-TTS-Graph [repo-summary]
    url: https://github.com/LiamVisionary/Inworld-LLM-TTS-Graph
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-Inworld-LLM-TTS-Graph.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-Inworld-LLM-TTS-Graph.md
    LiamVisionary/Inworld-LLM-TTS-Graph TypeScript
 8. score=2.50 LiamVisionary/inworld-nodejs-generate-token [repo-summary]
    url: https://github.com/LiamVisionary/inworld-nodejs-generate-token
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-inworld-nodejs-generate-token.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-inworld-nodejs-generate-token.md
    LiamVisionary/inworld-nodejs-generate-token TypeScript
 
 ## 2026-06-05T13:14:34.150497+00:00 - public-search
@@ -5514,7 +5514,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 The listed users and repositories cannot be searched either because the resources do not exist or you do not have permission to view them.
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.md
 /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION_LOG.jsonl
-cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
+cached 0 public candidates in /Users/liam/Documents/hive-assimilate-vault
 
 ## 2026-06-05T13:15:10.304971+00:00 - public-search
 
@@ -5572,35 +5572,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=15.69 react-native-google-signin/google-signin-next [repo-summary]
    url: https://github.com/react-native-google-signin/google-signin-next
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/react-native-google-signin-google-signin-next.md
    react-native-google-signin/google-signin-next Google Sign-in for your React Native applications TypeScript React React Native
 2. score=14.22 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 3. score=11.58 nativelaunch/expolaunch-template [repo-summary]
    url: https://github.com/nativelaunch/expolaunch-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-expolaunch-template.md
    nativelaunch/expolaunch-template NativeLaunch Starter – Expo SDK 55 + React Native template with Supabase, RevenueCat, OneSignal, UniWind + HeroUI Native. TypeScript Expo React React Native
 4. score=11.58 nativelaunch/nativelaunch-monorepo-template [repo-summary]
    url: https://github.com/nativelaunch/nativelaunch-monorepo-template
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md
    nativelaunch/nativelaunch-monorepo-template NativeLaunch Monorepo – Expo SDK 55 + React Native + Turborepo + UniWind + HeroUI Native. Monorepo template with shared packages. TypeScript Expo React React Native
 5. score=10.04 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 6. score=9.18 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 7. score=8.58 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 8. score=6.69 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 
 ## 2026-06-06T05:21:56.709994+00:00 - prebuild-gate
@@ -5643,35 +5643,35 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=15.48 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 2. score=9.98 LiamVisionary/claw-code [repo-summary]
    url: https://github.com/LiamVisionary/claw-code
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code.md
    LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
 3. score=5.49 LiamVisionary/claude-watch [repo-summary]
    url: https://github.com/LiamVisionary/claude-watch
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claude-watch.md
    LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
 4. score=5.49 LiamVisionary/claw-code-mobile-private [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile-private
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile-private.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile-private.md
    LiamVisionary/claw-code-mobile-private Private fork: on-device inference + experimental features Rust
 5. score=5.06 LiamVisionary/exercise-db [repo-summary]
    url: https://github.com/LiamVisionary/exercise-db
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-exercise-db.md
    LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
 6. score=4.63 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 7. score=4.63 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 8. score=1.31 LiamVisionary/ami-ai-companion-app [repo-summary]
    url: https://github.com/LiamVisionary/ami-ai-companion-app
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-ai-companion-app.md
    LiamVisionary/ami-ai-companion-app TypeScript
 
 ## 2026-06-06T10:59:14.972487+00:00 - prebuild-gate
@@ -5941,7 +5941,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
   - Path: `scripts`
 ## 2026-06-07T09:17:35.563933+00:00 - implementation
 
-- Request: Rename github assimilator to hive-assimilate and expand it across shared brain, user projects, docs, and slash commands
+- Request: Add hive-assimilate to hive-assimilate and expand it across shared brain, user projects, docs, and slash commands
 - Source: local-pinned
 - Selected backbone: local-project:hivemind-os
 - Note: Created packaged-skills/auto-install/hive-assimilate, mirrored to Codex local skills and the shared Obsidian Skills shelf, added packaged skill docs and slash-command docs.
@@ -5950,7 +5950,7 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - packaged-skills/auto-install/hive-capability-search/SKILL.md
   - Decision: selected
   - Reason: shared-brain capability search boundary reused in hive-assimilate instructions
-- /Users/liam/.codex/skills/github-assimilator/SKILL.md
+- /Users/liam/.codex/skills/hive-assimilate/SKILL.md
   - Decision: selected
   - Reason: renamed and expanded into hive-assimilate packaged skill
 ## 2026-06-07T13:02:11.828393+00:00 - documentation
@@ -6086,23 +6086,23 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Reason: Retrieved local/private-visible index hits.
 - Note: 1. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
    url: https://github.com/LiamVisionary/ami-revenue-optimizer
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
    LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
 2. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
    url: https://github.com/LiamVisionary/claw-code-mobile
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-claw-code-mobile.md
    LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
 3. score=3.35 LiamVisionary/floradex [repo-summary]
    url: https://github.com/LiamVisionary/floradex
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-floradex.md
    LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
 4. score=0.35 LiamVisionary/ai-companion-website [repo-summary]
    url: https://github.com/LiamVisionary/ai-companion-website
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-ai-companion-website.md
    LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
 5. score=0.35 LiamVisionary/maps-agency [repo-summary]
    url: https://github.com/LiamVisionary/maps-agency
-   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   note: /Users/liam/Documents/hive-assimilate-vault/Repos/LiamVisionary-maps-agency.md
    LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
 
 ## 2026-06-07T13:59:59.986465+00:00 - prebuild-gate

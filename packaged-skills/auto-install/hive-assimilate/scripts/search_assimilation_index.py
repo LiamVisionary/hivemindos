@@ -11,7 +11,7 @@ from collections import Counter
 from pathlib import Path
 
 
-DEFAULT_INDEX = Path.home() / ".codex" / "github-assimilator" / "index" / "chunks.jsonl"
+DEFAULT_INDEX = Path.home() / ".codex" / "hive-assimilate" / "index" / "chunks.jsonl"
 
 
 def tokenize(text: str) -> list[str]:

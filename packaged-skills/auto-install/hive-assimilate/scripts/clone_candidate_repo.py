@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 
-DEFAULT_CACHE = Path.home() / ".codex" / "github-assimilator" / "candidates"
+DEFAULT_CACHE = Path.home() / ".codex" / "hive-assimilate" / "candidates"
 
 
 def safe_name(repo: str) -> str:

@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import Iterable
 
 
-DEFAULT_VAULT = Path.home() / "Documents" / "github-assimilator-vault"
-DEFAULT_INDEX = Path.home() / ".codex" / "github-assimilator" / "index"
+DEFAULT_VAULT = Path.home() / "Documents" / "hive-assimilate-vault"
+DEFAULT_INDEX = Path.home() / ".codex" / "hive-assimilate" / "index"
 MANIFEST_NAMES = {
     "package.json",
     "app.json",
@@ -483,7 +483,7 @@ def collect_repos(args: argparse.Namespace) -> list[RepoRecord]:
 
 
 def enrich_repos(repos: list[RepoRecord], clone: bool, clone_timeout: int) -> None:
-    with tempfile.TemporaryDirectory(prefix="github-assimilator-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="hive-assimilate-") as tmp:
         clone_root = Path(tmp)
         for repo in repos:
             root = repo.local_path
