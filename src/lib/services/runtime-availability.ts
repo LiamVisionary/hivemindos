@@ -25,6 +25,9 @@ export async function readRuntimeAvailability(): Promise<RuntimeAvailability> {
 async function checkRuntimeAvailability(runtime: AgentRuntime) {
   if (runtime === "hermes") return checkHermes();
   if (runtime === "openclaw") return checkOpenClaw();
+  if (runtime === "opencode") return checkCliRuntime("OpenCode", process.env.OPENCODE_BIN, "opencode");
+  if (runtime === "codex") return checkCliRuntime("Codex", process.env.CODEX_BIN, "codex");
+  if (runtime === "claude-code") return checkCliRuntime("Claude Code", process.env.CLAUDE_CODE_BIN || process.env.CLAUDE_BIN, "claude");
   if (runtime === "aeon") return checkAeon();
   if (runtime === "openai-compatible") return checkOpenAICompatible();
   return { installed: false, detail: `${RUNTIME_LABELS[runtime] ?? runtime} is not installed.` };
@@ -49,6 +52,23 @@ async function checkCommand(command: string, args: string[], okDetail: string, f
     installed: Boolean(result),
     detail: result ? (version ? `${okDetail} ${version}` : okDetail) : failDetail,
   };
+}
+
+async function checkCliRuntime(label: string, envBin: string | undefined, command: string) {
+  const candidates = [
+    envBin,
+    join(homedir(), ".local", "bin", command),
+    join(homedir(), `.${command}`, "bin", command),
+    join(homedir(), ".nvm", "versions", "node", process.version, "bin", command),
+    "/opt/homebrew/bin/" + command,
+    "/usr/local/bin/" + command,
+    command,
+  ].filter(Boolean) as string[];
+  for (const bin of candidates) {
+    const status = await checkCommand(bin, ["--version"], `${label} is installed.`, `${label} is not installed.`);
+    if (status.installed) return status;
+  }
+  return { installed: false, detail: `${label} is not installed.` };
 }
 
 async function checkOpenClaw() {

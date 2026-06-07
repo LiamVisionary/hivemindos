@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDefaultStateDirIsHostnameIndependent(t *testing.T) {
@@ -64,6 +65,52 @@ func TestCappedLogWriterKeepsActiveLogUnderLimit(t *testing.T) {
 func TestDefaultLogMaxBytesIsAgentFriendly(t *testing.T) {
 	if defaultLogMaxBytes != 2*1024*1024 {
 		t.Fatalf("defaultLogMaxBytes = %d, want 2 MiB", defaultLogMaxBytes)
+	}
+}
+
+func TestDefaultStatusTimeoutFromEnv(t *testing.T) {
+	t.Setenv("HIVE_LINK_STATUS_TIMEOUT", "")
+	if got := defaultStatusTimeoutFromEnv(); got != defaultStatusTimeout {
+		t.Fatalf("defaultStatusTimeoutFromEnv = %v, want %v", got, defaultStatusTimeout)
+	}
+
+	t.Setenv("HIVE_LINK_STATUS_TIMEOUT", "1500ms")
+	if got := defaultStatusTimeoutFromEnv(); got != 1500*time.Millisecond {
+		t.Fatalf("defaultStatusTimeoutFromEnv = %v, want 1500ms", got)
+	}
+
+	t.Setenv("HIVE_LINK_STATUS_TIMEOUT", "2m")
+	if got := defaultStatusTimeoutFromEnv(); got != 30*time.Second {
+		t.Fatalf("defaultStatusTimeoutFromEnv cap = %v, want 30s", got)
+	}
+}
+
+func TestDefaultBoolFromEnv(t *testing.T) {
+	t.Setenv("HIVE_TEST_BOOL", "")
+	if !defaultBoolFromEnv("HIVE_TEST_BOOL", true) {
+		t.Fatal("expected empty env to use true fallback")
+	}
+	t.Setenv("HIVE_TEST_BOOL", "off")
+	if defaultBoolFromEnv("HIVE_TEST_BOOL", true) {
+		t.Fatal("expected off to parse false")
+	}
+	t.Setenv("HIVE_TEST_BOOL", "yes")
+	if !defaultBoolFromEnv("HIVE_TEST_BOOL", false) {
+		t.Fatal("expected yes to parse true")
+	}
+}
+
+func TestConfigureTailscaleEnvDisablesPortlistByDefault(t *testing.T) {
+	defer os.Unsetenv("TS_DEBUG_DISABLE_PORTLIST")
+
+	configureTailscaleEnv(config{disablePortlist: true})
+	if got := os.Getenv("TS_DEBUG_DISABLE_PORTLIST"); got != "true" {
+		t.Fatalf("TS_DEBUG_DISABLE_PORTLIST = %q, want true", got)
+	}
+
+	configureTailscaleEnv(config{disablePortlist: false})
+	if got := os.Getenv("TS_DEBUG_DISABLE_PORTLIST"); got != "false" {
+		t.Fatalf("TS_DEBUG_DISABLE_PORTLIST = %q, want false", got)
 	}
 }
 

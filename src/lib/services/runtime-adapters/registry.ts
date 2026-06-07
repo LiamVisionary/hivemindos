@@ -1,6 +1,7 @@
 import type { AgentRuntime, KnownAgentRuntime } from "@/lib/types/agent-runtime";
 import type { RuntimeAdapter } from "./types";
 import { aeonAdapter } from "./aeon";
+import { claudeCodeAdapter, codexAdapter, opencodeAdapter } from "./cli-runtimes";
 import { hermesAdapter } from "./hermes";
 import { openAICompatibleAdapter } from "./openai-compatible";
 import { openClawAdapter } from "./openclaw";
@@ -8,6 +9,9 @@ import { openClawAdapter } from "./openclaw";
 export const RUNTIME_ADAPTERS: Record<KnownAgentRuntime, RuntimeAdapter> = {
   openclaw: openClawAdapter,
   hermes: hermesAdapter,
+  opencode: opencodeAdapter,
+  codex: codexAdapter,
+  "claude-code": claudeCodeAdapter,
   aeon: aeonAdapter,
   "openai-compatible": openAICompatibleAdapter,
 };

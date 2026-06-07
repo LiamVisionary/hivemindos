@@ -31,7 +31,7 @@ Handoff files and artifacts live under:
 .hivemindos-transfers/
 ```
 
-This is the vault-backed handoff folder used by `hive-transfer`. Each transfer has a manifest, payload files, targeting metadata, hashes, and acknowledgement files.
+This is the vault-backed handoff folder used by `hive-transfer`. Agents and humans should usually call `hive-handoff`, `/api/handoff`, `/handoff-task`, or `hivemind-mcp` first so HivemindOS can fuzzy-match the target machine and select the best receiving agent. Each transfer has a manifest, payload files, targeting metadata, hashes, and acknowledgement files.
 
 The folder is safe to sync as vault data. It is not safe for secrets.
 

@@ -93,7 +93,7 @@ type CollectorEnvSync = {
   error?: string;
 };
 
-const QUEEN_RUNTIME_PRIORITY: AgentRuntime[] = ["hermes", "openclaw", "openai-compatible", "aeon"];
+const QUEEN_RUNTIME_PRIORITY: AgentRuntime[] = ["hermes", "openclaw", "opencode", "codex", "claude-code", "openai-compatible", "aeon"];
 const FOREGROUND_COLLECTOR_FETCH_TIMEOUT_MS = 2_500;
 const BACKGROUND_COLLECTOR_FETCH_TIMEOUT_MS = 8_000;
 const SNAPSHOT_FETCH_TIMEOUT_MS = 4_000;

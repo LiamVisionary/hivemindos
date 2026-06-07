@@ -5,8 +5,10 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { AgentProfile, AgentRuntime, RuntimeCapabilities } from "@/lib/types/agent-runtime";
+import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
 import { RUNTIME_CAPABILITIES } from "@/lib/types/agent-runtime";
 import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
+import { listBankrLlmModels } from "@/lib/services/bankr-llm";
 import { mergeRuntimeSessions, previewSessionText } from "@/lib/services/runtime-session-utils";
 import type { RuntimeModelSelection } from "./runtime-adapters/types";
 
@@ -101,6 +103,7 @@ export async function getRuntimeIntegrationStatus(runtime: AgentRuntime, agent?:
         diagnostics.push(error instanceof Error ? error.message : `${adapter.label} status check failed.`);
       }
     }
+    modelSelection = await augmentGatewayModelProviders(modelSelection, diagnostics, agent);
     return {
       runtime,
       capabilities,
@@ -112,7 +115,7 @@ export async function getRuntimeIntegrationStatus(runtime: AgentRuntime, agent?:
   }
 
   const diagnostics: string[] = [];
-  const [version, tools, config, modelSelection] = await Promise.all([
+  const [version, tools, config, baseModelSelection] = await Promise.all([
     runHermes(["--version"]).catch((error) => {
       diagnostics.push(error instanceof Error ? error.message : "Hermes version check failed.");
       return "";
@@ -124,6 +127,7 @@ export async function getRuntimeIntegrationStatus(runtime: AgentRuntime, agent?:
       return undefined;
     }),
   ]);
+  const modelSelection = await augmentGatewayModelProviders(baseModelSelection, diagnostics, agent);
   const toolEnabled = (name: string) => new RegExp(`✓\\s+enabled\\s+${escapeRegExp(name)}\\b`).test(tools);
   const codexConfigured = /provider:\s*openai-codex\b|codex_app_server|codex-runtime/i.test(config);
   const kanbanAuto = /auto_decompose:\s*true/i.test(config);
@@ -171,6 +175,34 @@ export async function getRuntimeIntegrationStatus(runtime: AgentRuntime, agent?:
       },
     },
     diagnostics,
+  };
+}
+
+async function augmentGatewayModelProviders(modelSelection: RuntimeModelSelection | undefined, diagnostics: string[], agent?: AgentProfile) {
+  if (!agent) return modelSelection;
+  const bankrGateway = MODEL_PROVIDER_GATEWAYS.bankr;
+  const bankr = await listBankrLlmModels(agent).catch((error) => ({
+    models: [],
+    error: error instanceof Error ? error.message : "Bankr LLM model discovery failed.",
+  }));
+  if (bankr.error) diagnostics.push(`Bankr LLM models unavailable: ${bankr.error}`);
+  const providers = [...(modelSelection?.providers ?? [])];
+  const bankrProvider = {
+    slug: "bankr",
+    name: bankrGateway.name,
+    models: bankr.models.map((id) => ({ id })),
+    totalModels: bankr.models.length,
+    isCurrent: agent.provider === "bankr",
+    isUserDefined: true,
+    source: `${bankrGateway.hermes?.baseUrl || "https://llm.bankr.bot/v1"}/models`,
+  };
+  const existingIndex = providers.findIndex((provider) => provider.slug === "bankr");
+  if (existingIndex >= 0) providers[existingIndex] = { ...providers[existingIndex], ...bankrProvider };
+  else providers.push(bankrProvider);
+  return {
+    provider: modelSelection?.provider || agent.provider || "",
+    model: modelSelection?.model || agent.model || "",
+    providers,
   };
 }
 
@@ -428,6 +460,7 @@ async function setOpenClawModel(provider: string, model: string) {
   const raw = await readFile(OPENCLAW_CONFIG, "utf8").catch(() => "{}");
   const config = parseJsonObject(raw.replace(/\/\/[^\n]*/g, "")) ?? {};
   const fullModel = `${provider}/${model}`;
+  ensureOpenClawProvider(config, provider, model);
   const agents = isRecord(config.agents) ? config.agents : {};
   const list = Array.isArray(agents.list) ? agents.list.filter(isRecord) : [];
   const agent = list.find((item) => item.default === true) ?? list[0];
@@ -437,6 +470,25 @@ async function setOpenClawModel(provider: string, model: string) {
   setNested(config, "agents.defaults.model.primary", fullModel);
   await mkdir(dirname(OPENCLAW_CONFIG), { recursive: true, mode: 0o700 });
   await writeFile(OPENCLAW_CONFIG, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+}
+
+function ensureOpenClawProvider(config: Record<string, unknown>, provider: string, model: string) {
+  const gateway = MODEL_PROVIDER_GATEWAYS[provider]?.hermes;
+  if (!gateway) return;
+  const providers = isRecord(config.models) && isRecord(config.models.providers)
+    ? config.models.providers
+    : {};
+  const entry = isRecord(providers[provider]) ? providers[provider] : {};
+  entry.name = typeof entry.name === "string" && entry.name ? entry.name : gateway.name;
+  if (gateway.baseUrl && !entry.base_url) entry.base_url = gateway.baseUrl;
+  if (gateway.keyEnv && !entry.key_env) entry.key_env = gateway.keyEnv;
+  const models = Array.isArray(entry.models)
+    ? entry.models.filter((item) => typeof item === "string") as string[]
+    : [];
+  entry.models = Array.from(new Set([model, ...gateway.models, ...models].filter(Boolean)));
+  providers[provider] = entry;
+  if (!isRecord(config.models)) config.models = {};
+  (config.models as Record<string, unknown>).providers = providers;
 }
 
 function parseJsonObject(raw: string): Record<string, unknown> | null {
@@ -526,7 +578,7 @@ print(json.dumps(payload.get("providers", [])))
     key_env?: string;
     warning?: string;
   }>;
-  return rows
+  const mapped = rows
     .filter((provider) => provider.slug)
     .map((provider) => ({
       slug: provider.slug ?? "",
@@ -540,12 +592,31 @@ print(json.dumps(payload.get("providers", [])))
       keyEnv: provider.key_env,
       warning: provider.warning,
     }));
+  const existing = new Set(mapped.map((provider) => provider.slug));
+  const env: Record<string, string | undefined> = await hermesProcessEnv();
+  for (const gateway of Object.values(MODEL_PROVIDER_GATEWAYS)) {
+    if (existing.has(gateway.slug) || !gateway.hermes) continue;
+    mapped.push({
+      slug: gateway.slug,
+      name: gateway.name,
+      models: gateway.hermes.models.map((id) => ({ id })),
+      totalModels: gateway.hermes.models.length,
+      authenticated: Boolean(env[gateway.hermes.keyEnv]),
+      authType: "api-key",
+      keyEnv: gateway.hermes.keyEnv,
+      warning: gateway.slug === "usepod"
+        ? "UsePod uses a tokenized proxy URL; finish UsePod setup in HivemindOS before using this provider."
+        : undefined,
+    });
+  }
+  return mapped;
 }
 
 async function addHermesProvider(provider: string, model: string) {
   const script = `
 from hermes_cli.config import load_config, save_config
 from hermes_cli.models import provider_model_ids
+import json
 try:
     from hermes_cli.auth import PROVIDER_REGISTRY
 except Exception:
@@ -560,6 +631,8 @@ provider_defaults = {
         "models": provider_model_ids("openrouter")[:24],
     },
 }
+gateway_defaults = json.loads(__GATEWAY_DEFAULTS__)
+provider_defaults.update(gateway_defaults)
 cfg_def = PROVIDER_REGISTRY.get(provider)
 if cfg_def:
     key_envs = list(getattr(cfg_def, "api_key_env_vars", ()) or ())
@@ -598,7 +671,19 @@ providers[provider] = entry
 cfg["providers"] = providers
 save_config(cfg)
 `;
-  await runHermesPython(script, { __PROVIDER__: provider, __MODEL__: model });
+  const gatewayDefaults = Object.fromEntries(Object.entries(MODEL_PROVIDER_GATEWAYS)
+    .filter(([, gateway]) => gateway.hermes)
+    .map(([slug, gateway]) => [slug, {
+      name: gateway.hermes?.name,
+      base_url: gateway.hermes?.baseUrl,
+      key_env: gateway.hermes?.keyEnv,
+      models: gateway.hermes?.models,
+    }]));
+  await runHermesPython(script, {
+    __PROVIDER__: provider,
+    __MODEL__: model,
+    __GATEWAY_DEFAULTS__: JSON.stringify(gatewayDefaults),
+  });
 }
 
 async function loadHiveEnv() {

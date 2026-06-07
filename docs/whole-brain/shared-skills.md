@@ -42,7 +42,17 @@ Shared brain managed mirrors must not get imported again as brand new provider s
 
 Setup copies a small default pack from `packaged-skills/auto-install/` into the shared vault `Skills/` shelf.
 
-The Obsidian Native Brain Pack is included by default:
+The HivemindOS Hive skills are included by default:
+
+| Skill | Why it exists |
+| --- | --- |
+| `hive-assimilate` | Replaces the older `github-assimilator` name and requires agents to search pinned sources, the shared brain, user projects, local/private indexes, and public GitHub before building software from scratch. |
+| `hive-capability-search` | Finds available tools, skills, apps, agents, credentials by key name, and delivery channels for a task. |
+| `hive-skill-fusion` | Turns a capability request into a reusable shared-brain skill. |
+| `hive-workflow-fusion` | Composes multi-step hive workflows from skills, apps, agents, and tools. |
+| `hive-aeon-fusion` | Converts reusable hive workflows into AEON-ready agent duties when appropriate. |
+
+The Obsidian Native Brain Pack is also included by default:
 
 | Skill | Why it exists |
 | --- | --- |
@@ -52,6 +62,8 @@ The Obsidian Native Brain Pack is included by default:
 | `defuddle` | Optionally extract clean markdown from web pages when the local Defuddle CLI is installed. |
 
 These are curated from [`kepano/obsidian-skills`](https://github.com/kepano/obsidian-skills). HivemindOS does not auto-install the upstream `obsidian-cli` skill because the shared vault already carries safer, HivemindOS-aware Obsidian CLI skills and write policy.
+
+GitHub Pages packaged-skill docs live under [`docs/packaged-skills/`](../packaged-skills/). That section splits HivemindOS-owned Hive skills from curated third-party packaged skills and optional catalog skills.
 
 The native pack pairs with seeded vault views under `Operations/Brain Services/`:
 

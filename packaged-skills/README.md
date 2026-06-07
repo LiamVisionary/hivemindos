@@ -26,8 +26,18 @@ Keep this folder small and foundational. These skills become part of the default
 
 Current auto-install set:
 
+- `hive-assimilate` for mandatory pre-build search across the shared brain, user projects, local/private indexes, and public GitHub before software creation. It replaces the older `github-assimilator` skill name.
 - `hive-capability-search`, `hive-skill-fusion`, `hive-workflow-fusion`, and `hive-aeon-fusion` for capability discovery and reusable hive workflows.
 - Obsidian Native Brain Pack: `obsidian-markdown`, `obsidian-bases`, `json-canvas`, and optional `defuddle`, curated from `kepano/obsidian-skills` so agents can write Obsidian-native notes, Bases, Canvas maps, and clean web-source markdown.
+
+## Catalog Subdivisions
+
+GitHub Pages docs split packaged skills into:
+
+- **Hive skills:** HivemindOS-native skills under `docs/packaged-skills/hive-skills.md`.
+- **Third-party packaged skills:** curated external or optional skills under `docs/packaged-skills/third-party-skills.md`.
+
+Any packaged skill addition, removal, rename, install-policy change, or source relocation must update this README and the GitHub Pages docs in `docs/packaged-skills/`.
 
 ## Optional
 

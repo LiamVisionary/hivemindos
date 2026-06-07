@@ -1,0 +1,224 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import http from "node:http";
+import os from "node:os";
+import path from "node:path";
+
+function usage() {
+  console.error(`Usage:
+  hive-handoff send --to MACHINE [--task TASK] [--note NOTE] FILE...
+  hive-handoff task --to MACHINE TASK
+  hive-handoff plan --to MACHINE [--task TASK] [FILE...]
+  hive-handoff machines
+
+Examples:
+  hive-handoff send --to ubuntu ./image.png
+  hive-handoff send --to ubuntu --task "edit the image and save a web version" ./image.png
+  hive-handoff task --to ubuntu "summarize the project state"
+`);
+}
+
+function parseArgs(argv) {
+  const input = {
+    command: argv[2] || "help",
+    target: "",
+    taskParts: [],
+    files: [],
+    note: "",
+    json: false,
+    dryRun: false,
+    allowAmbiguous: false,
+    dashboardUrl: "",
+  };
+  for (let index = 3; index < argv.length; index += 1) {
+    const arg = argv[index];
+    const next = argv[index + 1];
+    if (arg === "--help" || arg === "-h") input.help = true;
+    else if (arg === "--json") input.json = true;
+    else if (arg === "--dry-run") input.dryRun = true;
+    else if (arg === "--allow-ambiguous") input.allowAmbiguous = true;
+    else if (arg === "--dashboard-url" || arg === "--url") {
+      input.dashboardUrl = next || "";
+      index += 1;
+    } else if (arg === "--to" || arg === "--target" || arg === "--machine") {
+      input.target = next || "";
+      index += 1;
+    } else if (arg === "--task") {
+      input.taskParts.push(next || "");
+      index += 1;
+    } else if (arg === "--note") {
+      input.note = next || "";
+      index += 1;
+    } else if (arg.startsWith("--")) {
+      throw new Error(`Unknown option: ${arg}`);
+    } else if (input.command === "task") {
+      input.taskParts.push(arg);
+    } else {
+      input.files.push(expandHome(arg));
+    }
+  }
+  input.task = input.taskParts.join(" ").trim();
+  return input;
+}
+
+function expandHome(value) {
+  if (value === "~") return os.homedir();
+  if (value.startsWith("~/") || value.startsWith("~\\")) return path.join(os.homedir(), value.slice(2));
+  return value;
+}
+
+function readEnvValue(filePath, key) {
+  const raw = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : "";
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = raw.match(new RegExp(`^${escapedKey}=(.*)$`, "m"));
+  return match?.[1]?.trim().replace(/^['"]|['"]$/g, "") || "";
+}
+
+function candidateApiBases(input) {
+  const values = [];
+  if (input.dashboardUrl) values.push(input.dashboardUrl);
+  if (process.env.HIVEMINDOS_APP_URL) values.push(process.env.HIVEMINDOS_APP_URL);
+  if (process.env.NEXT_PUBLIC_APP_URL) values.push(process.env.NEXT_PUBLIC_APP_URL);
+  if (process.env.DASHBOARD_URL) values.push(process.env.DASHBOARD_URL);
+  if (process.env.PORT) values.push(`http://127.0.0.1:${process.env.PORT}`);
+  for (const port of [5020, 5021, 5022, 5023, 5024, 5025]) values.push(`http://127.0.0.1:${port}`);
+  return [...new Set(values.map((value) => String(value).replace(/\/+$/, "")))];
+}
+
+function dashboardToken() {
+  return process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
+    || process.env.HIVE_E2E_DASHBOARD_TOKEN
+    || readEnvValue(path.join(process.cwd(), ".env.local"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN");
+}
+
+function requestJson(base, route, method = "GET", body) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(route, base);
+    const payload = body ? JSON.stringify(body) : "";
+    const token = dashboardToken();
+    const headers = {
+      ...(payload ? { "content-type": "application/json", "content-length": Buffer.byteLength(payload) } : {}),
+      ...(token ? { "x-hivemindos-device-token": token } : {}),
+    };
+    const req = http.request(url, { method, headers, timeout: 190_000 }, (res) => {
+      let data = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => { data += chunk; });
+      res.on("end", () => {
+        let parsed = null;
+        try {
+          parsed = data ? JSON.parse(data) : {};
+        } catch {
+          reject(new Error(`${base} returned non-JSON response`));
+          return;
+        }
+        if (res.statusCode < 200 || res.statusCode >= 300 || parsed?.ok === false) {
+          const error = new Error(parsed?.error || `${base} returned HTTP ${res.statusCode}`);
+          error.payload = parsed;
+          reject(error);
+          return;
+        }
+        resolve(parsed);
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error(`${base} timed out`)));
+    req.on("error", reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+async function callDashboard(input, route, method, body) {
+  let lastError = null;
+  for (const base of candidateApiBases(input)) {
+    try {
+      return await requestJson(base, route, method, body);
+    } catch (error) {
+      lastError = error;
+      if (error?.payload?.needsUserInput) throw error;
+    }
+  }
+  throw lastError || new Error("No HivemindOS dashboard API could be reached.");
+}
+
+async function listMachines(input) {
+  const data = await callDashboard(input, "/api/fleet/discover?includeSnapshots=0&fresh=1", "GET");
+  const machines = (data.machines || [])
+    .filter((machine) => machine.collector === "ready")
+    .map((machine) => ({
+      name: machine.device?.name || machine.key,
+      os: machine.device?.os,
+      self: machine.device?.self === true,
+      runtimes: machine.capabilities?.runtimes || [],
+      agents: (machine.agents || []).map((agent) => `${agent.name} (${agent.runtime}/${agent.workerClass || "general"})`),
+    }));
+  if (input.json) console.log(JSON.stringify({ ok: true, machines }, null, 2));
+  else {
+    for (const machine of machines) {
+      console.log(`${machine.name}${machine.self ? " [this machine]" : ""} — ${(machine.runtimes || []).join(", ") || "no runtimes reported"}`);
+      for (const agent of machine.agents.slice(0, 6)) console.log(`  - ${agent}`);
+    }
+  }
+}
+
+async function runHandoff(input) {
+  const action = input.command === "plan"
+    ? "plan"
+    : input.files.length && input.task
+      ? "send-file-task"
+      : input.files.length
+        ? "send-file"
+        : "send-task";
+  if (!input.target) throw new Error("Missing --to MACHINE.");
+  if ((action === "send-task" || action === "send-file-task") && !input.task) {
+    throw new Error("Missing task text. Ask the user what the receiving agent should do, or run a plain file handoff with files only.");
+  }
+  const data = await callDashboard(input, "/api/handoff", "POST", {
+    action,
+    target: input.target,
+    files: input.files,
+    task: input.task,
+    note: input.note,
+    dryRun: input.dryRun || input.command === "plan",
+    allowAmbiguous: input.allowAmbiguous,
+  });
+  if (input.json) {
+    console.log(JSON.stringify(data, null, 2));
+    return;
+  }
+  const machine = data.machine?.name || input.target;
+  const transfer = data.transfer?.id ? ` transfer ${data.transfer.id}` : "";
+  const agent = data.selectedAgent?.name ? ` via ${data.selectedAgent.name}` : "";
+  const remote = data.remoteTask?.ok ? " and started the remote task" : "";
+  console.log(`Handoff ready for ${machine}${agent}${transfer}${remote}.`);
+  if (data.workerClass) console.log(`Task class: ${data.workerClass}`);
+  if (data.remoteTask?.preview) console.log(`Remote reply: ${data.remoteTask.preview}`);
+  for (const warning of data.warnings || []) console.log(`Warning: ${warning}`);
+}
+
+async function main() {
+  const input = parseArgs(process.argv);
+  if (input.help || input.command === "help") {
+    usage();
+    return;
+  }
+  if (input.command === "machines") {
+    await listMachines(input);
+    return;
+  }
+  if (!["send", "task", "plan"].includes(input.command)) throw new Error(`Unknown command: ${input.command}`);
+  await runHandoff(input);
+}
+
+main().catch((error) => {
+  const payload = error?.payload;
+  if (payload?.needsUserInput && Array.isArray(payload.candidates)) {
+    console.error(payload.error || error.message);
+    for (const candidate of payload.candidates) {
+      console.error(`- ${candidate.name}${candidate.os ? ` (${candidate.os})` : ""}`);
+    }
+  } else {
+    console.error(error instanceof Error ? error.message : String(error));
+  }
+  process.exit(1);
+});

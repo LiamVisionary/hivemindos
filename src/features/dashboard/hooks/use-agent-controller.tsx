@@ -328,6 +328,7 @@ export function useAgentController(props: UseAgentControllerProps) {
       provider: agentCreateDraft.provider,
       model: agentCreateDraft.model,
       adaptiveOpenRouter: agentCreateDraft.adaptiveOpenRouter,
+      adaptiveRouting: agentCreateDraft.adaptiveRouting,
       usePod: agentCreateDraft.usePod,
       calls: agentCreateDraft.calls,
       localDataDir: autopilotRuntime ? autopilotLocalPath : "",

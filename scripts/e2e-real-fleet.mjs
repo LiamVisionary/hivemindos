@@ -12,7 +12,7 @@ const dashboardUrl = (process.env.DASHBOARD_URL || "http://127.0.0.1:5020").repl
 const runId = process.env.HIVE_E2E_RUN_ID || `hive-e2e-${new Date().toISOString().replace(/\D/g, "").slice(0, 14)}-${randomBytes(3).toString("hex")}`;
 const artifactDir = join(process.cwd(), "artifacts", "e2e-real-fleet", runId);
 const suiteArg = process.argv.find((arg) => arg.startsWith("--suite="))?.split("=", 2)[1] || "all";
-const suites = suiteArg === "all" ? ["agents", "env", "skills", "file-share", "kanban", "adaptive-agent", "smoke"] : suiteArg.split(",").map((item) => item.trim()).filter(Boolean);
+const suites = suiteArg === "all" ? ["agents", "env", "skills", "file-share", "handoff", "kanban", "adaptive-agent", "smoke"] : suiteArg.split(",").map((item) => item.trim()).filter(Boolean);
 const useSshFleetFallback = process.env.HIVE_E2E_SSH_FALLBACK === "1";
 const pollMs = Number(process.env.HIVE_E2E_POLL_MS || 2_000);
 const timeoutMs = Number(process.env.HIVE_E2E_TIMEOUT_MS || 180_000);
@@ -20,6 +20,7 @@ const vaultPath = process.env.HIVE_E2E_VAULT_PATH || "";
 const kanbanFolder = process.env.HIVE_E2E_KANBAN_FOLDER || "";
 const kanbanBoard = process.env.HIVE_E2E_KANBAN_BOARD || "hivemindos-e2e";
 const adaptiveAgentName = process.env.HIVE_E2E_ADAPTIVE_AGENT_NAME || "AdaptiveAgent";
+const handoffTarget = process.env.HIVE_E2E_HANDOFF_TARGET || "ubuntu";
 const adaptiveCases = (process.env.HIVE_E2E_ADAPTIVE_AGENT_CASES || "auto,coding,writing,vision,research,tool-use")
   .split(",")
   .map((item) => item.trim())
@@ -664,6 +665,78 @@ async function testEncryptedFileShare(machines) {
   }
 }
 
+async function testHandoff(machines) {
+  const source = join(artifactDir, `${runId}-handoff.txt`);
+  const content = [
+    `run=${runId}`,
+    "suite=handoff",
+    "This file was created by the real HivemindOS handoff E2E harness.",
+  ].join("\n");
+  await mkdir(dirname(source), { recursive: true });
+  await writeFile(source, content, { mode: 0o600 });
+
+  const marker = `HIVE_HANDOFF_E2E_${runId.replace(/[^A-Za-z0-9]/g, "_")}`;
+  const result = await dashboard("/api/handoff", {
+    method: "POST",
+    body: JSON.stringify({
+      action: "send-file-task",
+      target: handoffTarget,
+      files: [source],
+      note: `Real handoff E2E ${runId}`,
+      task: `Real HivemindOS handoff E2E ${runId}. Reply immediately with ${marker} and one short acknowledgement; do not block this first reply while waiting for sync.`,
+      allowAmbiguous: process.env.HIVE_E2E_HANDOFF_ALLOW_AMBIGUOUS !== "0",
+    }),
+    timeoutMs: Number(process.env.HIVE_E2E_HANDOFF_TIMEOUT_MS || 240_000),
+  });
+  assert(result.transfer?.id, "Handoff did not create a transfer id.");
+  assert(result.machine?.machineId || result.machine?.name, "Handoff result did not include a target machine identity.");
+  assert(result.selectedAgent?.id, "Handoff did not select a receiving agent.");
+  assert(result.remoteTask?.ok, "Handoff did not start the remote task.");
+
+  const targetMachine = machines.find((machine) => (
+    machine.device?.machineId === result.machine.machineId
+    || machine.device?.name === result.machine.name
+    || machine.key === result.machine.key
+  ));
+  assert(targetMachine, `Resolved handoff target ${result.machine.name} was not present in the discovered machine set.`);
+
+  const transferId = result.transfer.id;
+  const inbox = await poll(`handoff transfer ${transferId} synced to ${result.machine.name}`, async () => {
+    const query = new URLSearchParams({
+      runtime: result.selectedAgent.runtime || "",
+      agentId: result.selectedAgent.agentId || result.selectedAgent.id,
+      all: "true",
+    });
+    if (result.machine.machineId) query.set("machineId", result.machine.machineId);
+    else query.set("host", result.machine.name);
+    const data = await collector(targetMachine, `/transfers?${query.toString()}`, {
+      timeoutMs: 30_000,
+    });
+    return (data.transfers || []).find((transfer) => transfer.id === transferId) ? data : null;
+  }, Number(process.env.HIVE_E2E_HANDOFF_SYNC_TIMEOUT_MS || 180_000));
+
+  await collector(targetMachine, "/transfers/ack", {
+    method: "POST",
+    body: JSON.stringify({
+      id: transferId,
+      machineId: result.machine.machineId || undefined,
+      host: result.machine.machineId ? undefined : result.machine.name,
+      runtime: result.selectedAgent.runtime,
+      agentId: result.selectedAgent.agentId || result.selectedAgent.id,
+    }),
+    timeoutMs: 30_000,
+  });
+
+  return {
+    target: result.machine.name,
+    selectedAgent: result.selectedAgent.name,
+    workerClass: result.workerClass,
+    transferId,
+    inboxCount: inbox.transfers?.length ?? 0,
+    remotePreview: result.remoteTask.preview,
+  };
+}
+
 async function encryptedFileShareTransfer({ senderMachine, senderRuntime, receiverMachine, receiverRuntime }) {
   const senderAgent = agentForRuntime(senderMachine, senderRuntime);
   const receiverAgent = agentForRuntime(receiverMachine, receiverRuntime);
@@ -960,6 +1033,7 @@ async function main() {
   if (suites.includes("env")) await withResult("env", () => testEnvSync(machines));
   if (suites.includes("skills")) await withResult("skills", () => testSkillSync(machines));
   if (suites.includes("file-share")) await withResult("file-share", () => testEncryptedFileShare(machines));
+  if (suites.includes("handoff")) await withResult("handoff", () => testHandoff(machines));
   if (suites.includes("kanban")) await withResult("kanban", () => testKanbanHandoff(machines));
   if (suites.includes("adaptive-agent")) await withResult("adaptive-agent", () => testAdaptiveAgent(machines));
   if (suites.includes("smoke")) await withResult("smoke", () => testSmoke());

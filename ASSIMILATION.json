@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-06-06T04:10:12.570046+00:00",
+  "created_at": "2026-06-07T04:55:28.255542+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
@@ -50,6 +50,76 @@
       "target_path": "src/features/dashboard/views/chat/MiroSharkSimulationCard.module.css",
       "reuse_type": "adapted_code",
       "note": "Adapted the existing dark Hivemind chat panel visual language, process pulses, and responsive wrapping rules for the MiroShark card styling."
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/features/dashboard/views/chat/AgentSettingsModal.tsx",
+      "target_path": "src/features/dashboard/views/chat/AgentSettingsModal.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the existing UsePod virtual runtime-card pattern for the Bankr LLM runtime card."
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/runtime-adapters/openai-compatible.ts",
+      "target_path": "src/lib/services/runtime-adapters/openai-compatible.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the OpenAI-compatible provider model discovery path for Bankr LLM model listing."
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/app/api/chat/agent-runtime/route.ts",
+      "target_path": "src/app/api/chat/agent-runtime/route.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the existing OpenAI-compatible provider request flow with a provider-specific Bankr LLM header helper."
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/app/api/chat/agent-runtime/route.ts",
+      "target_path": "src/app/api/chat/agent-runtime/route.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the existing wallet x402 SSE/session event flow into a native MiroShark chat execution branch."
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/miroshark/x402-buyer.ts",
+      "target_path": "src/lib/services/miroshark/x402-chat-run.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused the validated MiroShark x402 run/status/report executor shape for natural chat parsing, polling, and embedded card payloads."
+    },
+    {
+      "source_repo": "/Users/liam/Downloads/HivemindOS-19.zip",
+      "source_path": "nextjs-polymarket-modal/src/components/poly-modal",
+      "target_path": "src/features/dashboard/views/chat/poly-market-modal",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the user-supplied Polymarket modal draft to accept normalized live MiroShark result data instead of static preview data."
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/chat/adaptive-openrouter-models.ts",
+      "target_path": "src/lib/services/chat/adaptive-model-router.ts",
+      "reuse_type": "adapted_code",
+      "note": "Generalized the existing Adaptive OpenRouter use-case detection, free-model preference, cache pattern, and fallback inventory behavior into provider-agnostic adaptive routing."
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/app/api/chat/agent-runtime/route.ts",
+      "target_path": "src/app/api/chat/agent-runtime/route.ts",
+      "reuse_type": "adapted_code",
+      "note": "Extended the existing OpenAI-compatible adaptive retry loop to accept resolved provider route candidates across Adaptive provider plans."
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/features/dashboard/views/chat/AgentSettingsModal.tsx",
+      "target_path": "src/features/dashboard/views/chat/AdaptiveProviderSettings.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Extracted the existing provider tile and toggle-row settings patterns into a focused Adaptive provider settings component."
+    },
+    {
+      "source_repo": "/Users/liam/Downloads/bankr-symbol-full-color-rgb.svg",
+      "source_path": "bankr-symbol-full-color-rgb.svg",
+      "target_path": "public/icons/runtimes/bankr.svg",
+      "reuse_type": "asset_copied",
+      "note": "Copied the official user-supplied Bankr symbol into the runtime icon asset folder for the Bankr LLM card and provider tile."
     }
   ]
 }

@@ -113,6 +113,7 @@ This vault is the shared brain for HivemindOS agents. It should stay useful to h
 - Never store raw Tailnet IPs, provider secrets, private keys, bearer tokens, or plaintext sensitive data in memory notes or proof receipts.
 - \`${folders.secureFolder}/\` reference/status notes are searchable during full-vault recall so agents can know which credential names exist or are set, but plaintext secret values must stay out of notes and responses.
 - Run the memory API \`rebuild-index\` action after importing or manually editing agent memory notes.
+- Use \`hive-handoff\`, \`/api/handoff\`, \`/handoff-task\`, or \`hivemind-mcp\` for fleet-aware file and task handoffs. If a task handoff lacks the task, ask what the receiving agent should do; plain file handoff can proceed without a task.
 - Prefer appending dated status deltas over rewriting project history.
 - Never silently delete notes. Archive or create explicit conflict copies when needed.
 - Summarize automation writes in \`${folders.scheduledFolder}/Foundation Workflows/OPERATIONS-LOG.md\` or in the scheduled run note.
@@ -744,6 +745,7 @@ function workflowPrompt(workflow, folders) {
     "Use --scope agent-memory or scope: \"agent-memory\" for typed/proven memory only; use --scope full-vault or scope: \"full-vault\" to force broad vault recall.",
     "Recall before depending on prior preferences, decisions, instructions, goals, commitments, artifacts, lessons, or project context.",
     "When saving shared memories, include available agent/runtime/machine/Tailnet provenance and use proof: \"auto\" unless explicit proof is requested.",
+    "Use hive-handoff, /api/handoff, /handoff-task, or hivemind-mcp for fleet-aware file and task handoffs; ask for a missing task before using task handoff.",
     "Never delete files. Move or archive only when the task explicitly says to do so.",
     `Treat ${folders.kanbanFolder} and ${folders.scheduledFolder} as operational state, not permanent knowledge.`,
     `Treat ${folders.synthesisFolder} as generated or reviewed synthesis, not raw intake.`,

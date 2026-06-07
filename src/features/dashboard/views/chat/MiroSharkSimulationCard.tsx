@@ -1,6 +1,10 @@
-import type { ComponentType } from "react";
+"use client";
+
+import { useState, type ComponentType } from "react";
 import NextImage from "next/image";
 
+import { PolyMarketModal } from "./poly-market-modal";
+import type { MiroSharkPolymarketDetailData } from "@/lib/types/miroshark-polymarket";
 import styles from "./MiroSharkSimulationCard.module.css";
 
 type ChatMarkdownComponent = ComponentType<{ text: string; className?: string; headingClassName?: string }>;
@@ -19,6 +23,7 @@ export type MiroSharkSimulationCardData = {
   network?: string;
   paid?: boolean;
   paymentLabel?: string;
+  polymarketDetail?: MiroSharkPolymarketDetailData;
   reportMarkdown?: string;
   reportUrl?: string;
   runId?: string;
@@ -44,6 +49,7 @@ const MIROSHARK_HINT_PATTERN = /miroshark|\/api\/miroshark\/x402|x402\.miroshark
 const SIM_HINT_PATTERN = /\b(?:simulation|simulate|sim|report|status|x402|usdc|paid|wallet|deep research|prediction market)\b/i;
 const STEP_LABELS = ["Payment", "Launch", "Status", "Report"];
 const TERMINAL_STATUS_PATTERN = /\b(?:completed|complete|succeeded|success|failed|error|stopped|cancelled|canceled)\b/i;
+const SPACEX_POLYMARKET_URL = "https://polymarket.com/event/spacex-ipo-closing-market-cap-above";
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -109,6 +115,29 @@ function statusTone(value?: string) {
   if (/\b(?:complete|completed|success|succeeded|ready)\b/.test(status)) return styles.complete;
   if (/\b(?:queued|waiting|pending|draft|approval)\b/.test(status)) return styles.waiting;
   return styles.running;
+}
+
+function isCompleteStatus(value?: string) {
+  return /\b(?:complete|completed|success|succeeded|ready)\b/i.test(readableStatus(value));
+}
+
+function polymarketUrlFromCard(card: MiroSharkSimulationCardData) {
+  const detailUrl = optionalString(card.polymarketDetail?.marketUrl);
+  if (detailUrl) return detailUrl;
+  const haystack = [
+    card.seed,
+    card.reportMarkdown,
+    card.reportUrl,
+    card.statusUrl,
+    card.waitUrl,
+    card.title,
+  ].map((part) => optionalString(part)).join("\n");
+  if (/spacex-ipo-closing-market-cap-above/i.test(haystack)) return SPACEX_POLYMARKET_URL;
+  return haystack.match(/https:\/\/polymarket\.com\/event\/[A-Za-z0-9_-]+/i)?.[0] ?? "";
+}
+
+function hasPolymarketRunDetails(card: MiroSharkSimulationCardData) {
+  return isCompleteStatus(card.status) && Boolean(polymarketUrlFromCard(card) || card.polymarketDetail);
 }
 
 function eventText(event: MiroSharkEvent) {
@@ -257,6 +286,9 @@ function collectCardData(value: unknown, card: MiroSharkSimulationCardData, key 
     return;
   }
   if (!isRecord(value)) return;
+  if (normalizeKey(key) === "polymarketdetail") {
+    card.polymarketDetail ||= value as MiroSharkPolymarketDetailData;
+  }
   for (const [childKey, childValue] of Object.entries(value)) {
     collectCardData(childValue, card, childKey, depth + 1);
   }
@@ -368,50 +400,81 @@ export function MiroSharkProcessCard({ summary }: { summary: MiroSharkProcessSum
 }
 
 export function MiroSharkSimulationCard({ card, ChatMarkdown }: { card: MiroSharkSimulationCardData; ChatMarkdown?: ChatMarkdownComponent }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const hasReport = Boolean(card.reportMarkdown?.trim());
   const status = readableStatus(card.status);
   const reportOpen = hasReport && (card.reportMarkdown?.length ?? 0) < 1600;
   const reportMarkdown = reportMarkdownForDisplay(card);
   const title = displayTitle(card);
   const subtitle = card.seed && card.seed !== title ? card.seed : "";
+  const polymarketUrl = polymarketUrlFromCard(card);
+  const showMoreData = hasPolymarketRunDetails(card);
+  const openMarket = () => {
+    if (!polymarketUrl) return;
+    window.open(polymarketUrl, "_blank", "noopener,noreferrer");
+  };
   return (
-    <section className={cx(styles.card, statusTone(card.status))} aria-label="MiroShark simulation card">
-      <header className={styles.header}>
-        <span className={styles.iconWrap} aria-hidden="true">
-          <NextImage className={styles.icon} src={MIROSHARK_ICON_SRC} alt="" width={34} height={34} />
-        </span>
-        <span className={styles.titleBlock}>
-          <span className={styles.kicker}>MiroShark simulation</span>
-          <h3>{title}</h3>
-          {subtitle ? <p className={styles.subtitle}>{subtitle}</p> : null}
-        </span>
-        <span className={cx(styles.statusPill, statusTone(card.status))}>{status}</span>
-      </header>
+    <>
+      <section className={cx(styles.card, statusTone(card.status))} aria-label="MiroShark simulation card">
+        <header className={styles.header}>
+          <span className={styles.iconWrap} aria-hidden="true">
+            <NextImage className={styles.icon} src={MIROSHARK_ICON_SRC} alt="" width={34} height={34} />
+          </span>
+          <span className={styles.titleBlock}>
+            <span className={styles.kicker}>MiroShark simulation</span>
+            <h3>{title}</h3>
+            {subtitle ? <p className={styles.subtitle}>{subtitle}</p> : null}
+          </span>
+          <span className={cx(styles.statusPill, statusTone(card.status))}>{status}</span>
+        </header>
 
-      <div className={styles.metrics}>
-        {metric("Run", card.runId || "pending")}
-        {metric("Payment", card.paymentLabel || (card.paid ? "paid" : "x402"))}
-        {metric("Network", card.network || "Base USDC")}
-      </div>
+        <div className={styles.metrics}>
+          {metric("Run", card.runId || "pending")}
+          {metric("Payment", card.paymentLabel || (card.paid ? "paid" : "x402"))}
+          {metric("Network", card.network || "Base USDC")}
+        </div>
 
-      <div className={styles.actions}>
-        {card.reportUrl ? <a href={card.reportUrl} rel="noopener noreferrer" target="_blank">Open report</a> : null}
-        {card.statusUrl ? <a href={card.statusUrl} rel="noopener noreferrer" target="_blank">Check status</a> : null}
-        {card.waitUrl ? <a href={card.waitUrl} rel="noopener noreferrer" target="_blank">Watch run</a> : null}
-      </div>
+        <div className={styles.actions}>
+          {showMoreData ? (
+            <button
+              aria-haspopup="dialog"
+              className={styles.actionButton}
+              data-miroshark-more-data
+              onClick={() => setDetailsOpen(true)}
+              type="button"
+            >
+              More data
+            </button>
+          ) : null}
+          {card.reportUrl ? <a href={card.reportUrl} rel="noopener noreferrer" target="_blank">Open report</a> : null}
+          {card.statusUrl ? <a href={card.statusUrl} rel="noopener noreferrer" target="_blank">Check status</a> : null}
+          {card.waitUrl ? <a href={card.waitUrl} rel="noopener noreferrer" target="_blank">Watch run</a> : null}
+        </div>
 
-      <details className={styles.report} open={reportOpen}>
-        <summary>{hasReport ? "Report" : "Report retrieval"}</summary>
-        {hasReport ? (
-          ChatMarkdown ? (
-            <ChatMarkdown text={reportMarkdown} className={styles.reportMarkdown} />
+        <details className={styles.report} open={reportOpen}>
+          <summary>{hasReport ? "Report" : "Report retrieval"}</summary>
+          {hasReport ? (
+            ChatMarkdown ? (
+              <ChatMarkdown text={reportMarkdown} className={styles.reportMarkdown} />
+            ) : (
+              <pre className={styles.reportMarkdown}>{reportMarkdown}</pre>
+            )
           ) : (
-            <pre className={styles.reportMarkdown}>{reportMarkdown}</pre>
-          )
-        ) : (
-          <p className={styles.emptyReport}>The run is embedded here. Ask the agent to poll status and retrieve the report when MiroShark marks it complete.</p>
-        )}
-      </details>
-    </section>
+            <p className={styles.emptyReport}>The run is embedded here. Ask the agent to poll status and retrieve the report when MiroShark marks it complete.</p>
+          )}
+        </details>
+      </section>
+      {showMoreData ? (
+        <PolyMarketModal
+          marketUrl={polymarketUrl}
+          detail={card.polymarketDetail}
+          marketTitle={title}
+          onClose={() => setDetailsOpen(false)}
+          onOpenMarket={openMarket}
+          open={detailsOpen}
+          runId={card.runId}
+        />
+      ) : null}
+    </>
   );
 }

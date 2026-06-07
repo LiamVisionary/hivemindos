@@ -33,6 +33,11 @@ It is not one magic database. The real anchor is a normal Obsidian markdown vaul
     <a href="shared-skills.html">Open shared skills</a>
   </section>
   <section class="docCard">
+    <h3>Packaged Skills</h3>
+    <p>Repository-shipped Hive skills, third-party packaged skills, auto-install behavior, and optional skill boundaries.</p>
+    <a href="../packaged-skills/">Open packaged skills</a>
+  </section>
+  <section class="docCard">
     <h3>Shared Env</h3>
     <p>Where agent secrets live, how hive env helpers work, and why plaintext keys stay out of the vault.</p>
     <a href="shared-env.html">Open shared env</a>
@@ -113,6 +118,7 @@ The doctor is read only unless `--fix` is passed. Fixes move content into canoni
 
 - [Vault Map](vault-map.html)
 - [Brain Services](brain-services.html)
+- [Packaged Skills](../packaged-skills/)
 - [Shared Env](shared-env.html)
 - [Sync And Health](sync-and-health.html)
 - [Architecture Sync](architecture-sync.html)

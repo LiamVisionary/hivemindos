@@ -18,6 +18,8 @@ This rule applies to changes in:
 - setup-created brain notes
 - shared skills layout
 - packaged auto-install skill defaults
+- packaged skill catalog subdivisions, optional skill policy, and packaged skill docs
+- slash-command names, aliases, scope, and reference docs
 - Obsidian-native `.base` and `.canvas` generated views
 - brain service defaults
 - shared memory access paths, including API, CLI, runtime prompt injection, and hooks
@@ -44,6 +46,8 @@ When a brain architecture change lands, check and update:
 | `scripts/vault-doctor.mjs` | Cleanup and migration behavior. |
 | `scripts/test-vault-structure-contract.mjs` | Static guard that catches drift. |
 | `packaged-skills/auto-install/` | Product-shipped shared skills that setup copies into the vault. |
+| `packaged-skills/README.md` and `docs/packaged-skills/` | Packaged skill catalog, Hive skill subdivision, third-party packaged skill subdivision, and install policy. |
+| `docs/slash-commands.md` | User-facing reference for dashboard and runtime slash commands. |
 
 For Shared Brain Memory specifically, the required set also includes:
 

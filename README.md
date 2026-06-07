@@ -6,14 +6,14 @@
     <a href="https://github.com/LiamVisionary/hivemindos/network/members"><img alt="GitHub forks" src="https://img.shields.io/github/forks/LiamVisionary/hivemindos?style=for-the-badge&amp;logo=github&amp;label=forks&amp;color=0b8bdc&amp;labelColor=555555" /></a>
     <a href="https://bankr.bot/launches/0xa382c83e2a3b79368f372c2eb9b6925ffaf45ba3"><img alt="Launch on Bankr" src="https://img.shields.io/badge/Launch%20on-Bankr-ff6a2a?style=for-the-badge&amp;labelColor=1f2137" /></a>
   </p>
-  <p><b>HIVE Token:</b> 0xa382c83e2a3b79368f372c2eb9b6925ffaf45b</p>
+  <p><b>HIVE Token:</b> 0xa382c83e2a3b79368f372c2eb9b6925ffaf45ba3</p>
 </div>
 
 > **A virtual private network for your agents.**
 >
 > HivemindOS lets agents collaborate across all of your machines through one private control room. Connect agents over trusted machine links, give them a shared Obsidian brain, move env and handoff files with Hivemind Sync, assign work, monitor progress, and manage the whole fleet from one simple dashboard.
 >
-> It supports modern agent runtimes like Hermes, OpenClaw, and Aeon, includes full MiroShark simulation integration, and can provision agent wallets on Base and Solana so agents can hold funds, pay for tools, and operate with their own controlled budgets.
+> It supports modern agent runtimes like Hermes, OpenClaw, OpenCode, Codex, Claude Code, and Aeon, includes full MiroShark simulation integration, and can provision agent wallets on Base and Solana so agents can hold funds, pay for tools, and operate with their own controlled budgets.
 
 Clone it, run one setup command, and get a local-first dashboard for the agents already living on your laptop, desktop, VPS, or spare machines. No public ports required.
 
@@ -170,6 +170,16 @@ LOCAL_OPENAI_MODEL=<loaded-model-id>
 
 The adapter calls `POST /v1/chat/completions` for chat and `GET /v1/models` for model discovery. Point the same runtime at Ollama, vLLM, llama.cpp server, LocalAI, or another compatible service by changing the base URL and model.
 
+### Model Providers
+
+Runtimes are the agent shells that run work. Model providers are the inference backends those shells can use.
+
+- **Bankr LLM** is a model provider gateway for HIVE-funded compute. HivemindOS can use it from OpenAI-compatible profiles directly, and can select it as a provider for runtime-native model selectors such as Hermes and OpenClaw.
+- **UsePod** is a model provider for marketplace inference. HivemindOS keeps UsePod setup in provider settings so funded tokens, spend caps, and routing stay provider-specific instead of becoming a separate runtime.
+- **OpenRouter and runtime-native providers** remain selectable where the underlying runtime exposes them.
+
+Provider credentials belong in shared env keys such as `BANKR_LLM_KEY`, `BANKR_API_KEY`, `BANKR_KEY`, `USEPOD_TOKEN`, or the runtime's own configured key name. Use `hive-env-check KEY` to verify presence without printing secret values.
+
 ## Features
 
 | Feature | What it does |
@@ -177,10 +187,12 @@ The adapter calls `POST /v1/chat/completions` for chat and `GET /v1/models` for 
 | **Fleet dashboard** | Tracks machines, agents, runtimes, health, tasks, logs, and capabilities in one place |
 | **Tailscale agent network** | Connects agents across your machines through your private Tailscale VPN |
 | **Machine monitor** | Lightweight local service that reports agent status and runtime health to the dashboard |
-| **Runtime adapters** | Supports Hermes, OpenClaw, Aeon, MiroShark, and generic machine-backed agents through a neutral adapter layer |
+| **Runtime adapters** | Supports Hermes, OpenClaw, OpenCode, Codex, Claude Code, Aeon, MiroShark, and generic machine-backed agents through a neutral adapter layer |
 | **Local model runtimes** | Adds a generic OpenAI-compatible adapter for LM Studio, Ollama, vLLM, llama.cpp server, LocalAI, and similar `/v1/chat/completions` services |
+| **Model providers** | Lets model-selectable runtimes choose providers such as Bankr LLM, UsePod, OpenRouter, and runtime-native provider configs |
 | **Shared Obsidian brain** | Stores memory, handoffs, shared context, Kanban state, and reusable skills in a local markdown vault |
 | **Obsidian-native brain views** | Seeds `.base` and `.canvas` files plus shared skills for Obsidian Markdown, Bases, Canvas, and clean web markdown extraction |
+| **Packaged Hive skills** | Ships auto-installed Hive skills such as `hive-assimilate` plus optional third-party skill packs through the shared brain skill shelf |
 | **Hivemind Sync** | Moves shared brain files, shared env, and handoff transfers between trusted machines |
 | **Handoff transfers** | Routes artifacts through `.hivemindos-transfers/` to a specific machine, runtime, or agent with payload hashes and acknowledgements |
 | **Work board** | Gives agents a shared Kanban queue for tasks, delegation, retries, stale work, and human handoff |
@@ -200,6 +212,9 @@ The adapter calls `POST /v1/chat/completions` for chat and `GET /v1/models` for 
 |---|---|
 | **Hermes** | Local HTTP/runtime adapter, session visibility from `~/.hermes`, chat bridge, tasks, logs, and process snapshots |
 | **OpenClaw** | Gateway adapter with WebSocket chat and model selection through the generic runtime bridge |
+| **OpenCode** | CLI runtime profile with installed-status and provider/model selection; dashboard chat bridge is not enabled yet |
+| **Codex** | CLI runtime profile with installed-status and provider/model selection; dashboard chat bridge is not enabled yet |
+| **Claude Code** | CLI runtime profile with installed-status and provider/model selection; dashboard chat bridge is not enabled yet |
 | **Aeon** | Background-runtime adapter for `aeon.yml`, GitHub Actions-backed skills, run history, outputs, memory, and optional A2A skill calls |
 | **MiroShark** | Companion integration for simulation workflows and dashboard visibility |
 | **Generic machines** | Read-only machine snapshots through the local monitor |
@@ -268,6 +283,8 @@ The Brain workspace can hold:
 - runtime instructions
 
 Shared Brain Memory gives agents a local-first remember/recall/answer layer through `/api/brain/memory` and the installed `hive-brain` CLI. Raw or non-managed agents can run `hive-brain answer "<query>"`; the CLI discovers the running local API when available and falls back to local vault/index search when it is not. Setup also installs `hive-brain-hook` and registers it as a Claude Code `UserPromptSubmit` hook, so raw Claude prompts can receive relevant shared-brain context even when they are not routed through the HivemindOS app. Default recall is tiered: it checks typed Agent Memory first, returns that distilled layer when the hit is strong, and otherwise augments with relevant markdown from the full shared vault. `--scope agent-memory` narrows recall to the typed/proven memory write layer, while `--scope full-vault` forces broad vault recall, including `Operations/Secure` reference/status notes for credential names and set/missing status without storing plaintext secret values. In live local typed-memory benchmarks, indexed recall measured p50/p95 of `2.69ms/3.15ms` at 100 memories, `4.37ms/5.26ms` at 500 memories, and `19.20ms/31.33ms` at 1500 memories with synthetic Top-1/Top-3/MRR relevance of `1.0`. On Liam's current 4,848-note vault, full-vault answer recall over 2,685 eligible markdown notes measured about `2.35s` cold and roughly `0.20s-0.35s` warm through the local API. That gives HivemindOS agents rich, provenance-aware memory and broad private vault context at a fraction of the latency and privacy cost of network-bound memory stacks.
+
+Packaged skills ship from `packaged-skills/`. Setup auto-installs foundational Hive skills such as `hive-assimilate`, `hive-capability-search`, and the Hive Fusion skills into the shared brain, along with curated third-party Obsidian Native Brain Pack skills. Optional packaged skills stay in `packaged-skills/optional/` until the user installs them. See [Packaged Skills](docs/packaged-skills/index.md) and the [slash command reference](docs/slash-commands.md) for the agent-facing catalog surfaces.
 
 HivemindOS can auto-detect common local Obsidian vault locations, validate an explicit vault path, and fall back to local Kanban storage at `~/.hivemindos/kanban` if the vault is unavailable.
 

@@ -15,6 +15,8 @@ The shared vault is intentionally visible to trusted HivemindOS machines. That m
 
 `hive-transfer` fixes that by creating a small Hivemind Sync envelope with explicit routing metadata, payload checksums, and receiver acknowledgements.
 
+For normal agent use, prefer the higher-level `hive-handoff` command or `/api/handoff`. They resolve fuzzy machine names such as `ubuntu`, select the best matching receiving agent for a task using the dashboard's bee-role worker-class logic, and then use `hive-transfer` underneath for file payloads.
+
 ## Storage Layout
 
 Handoff transfers live under the configured vault path, defaulting to:
@@ -97,6 +99,38 @@ Prefer `machineId` for durable targeting because hostnames can collide or change
 ## CLI Usage
 
 Setup installs `hive-transfer` next to the shared env helpers in `~/.local/bin`.
+
+### Friendly handoff command
+
+Use this when an agent or human knows the destination by name but not exact machine ids:
+
+```bash
+hive-handoff send --to ubuntu ./screenshot.png
+```
+
+That creates a plain file handoff to the best matching connected Ubuntu-like machine. If the user also gives work for a receiving agent, include `--task`:
+
+```bash
+hive-handoff send --to ubuntu \
+  --task "edit this image and save a web-ready version" \
+  ./screenshot.png
+```
+
+For task-only delegation:
+
+```bash
+hive-handoff task --to ubuntu "summarize the local project state"
+```
+
+Agents should ask a follow-up question before using a task handoff if the user has not said what the receiving agent should do. Plain file handoff does not need that question.
+
+The dashboard chat command mirrors task-only delegation:
+
+```text
+/handoff-task ubuntu summarize the local project state
+```
+
+Use `hive-handoff plan --to ubuntu --task "..."` to resolve the machine and selected agent without side effects.
 
 ### Send files
 
@@ -230,6 +264,44 @@ Content-Type: application/json
 
 Keep collectors private to Tailscale or Hivemind Link. Do not expose these endpoints on the public internet.
 
+## Handoff Planner API
+
+The dashboard exposes a higher-level planner at `/api/handoff`.
+
+```http
+POST /api/handoff
+Content-Type: application/json
+
+{
+  "action": "send-file-task",
+  "target": "ubuntu",
+  "files": ["/absolute/path/to/screenshot.png"],
+  "task": "edit this image and save a web-ready version",
+  "note": "source asset from Mac"
+}
+```
+
+Actions:
+
+- `plan`: resolve the target and selected agent without side effects.
+- `send-file`: create a plain file transfer.
+- `send-task`: start a task on the best matching agent on the target machine.
+- `send-file-task`: create the transfer and start the remote task with inbox/ack instructions.
+
+The response includes the resolved machine, selected agent, worker class, transfer id when a file was sent, and a remote task preview when the collector chat bridge accepted the task.
+
+## Hivemind MCP
+
+Setup also installs `hivemind-mcp`, a small stdio MCP server for runtimes that prefer tools over shell commands. It exposes:
+
+- `list_hivemind_machines`
+- `plan_handoff`
+- `handoff_file`
+- `handoff_file_task`
+- `handoff_task`
+
+The MCP server calls the same `/api/handoff` route, so CLI, dashboard slash command, and MCP behavior stay aligned.
+
 ## How Receivers Know A File Is Waiting
 
 Receiving agents use polling, not push notifications:
@@ -247,14 +319,15 @@ This model keeps delivery local and robust. If the receiver is offline, the tran
 When changing this feature or diagnosing a delivery issue, verify all of the following before declaring success:
 
 1. `npm run test:hive-transfer` passes.
-2. `node --check scripts/hive-transfer.mjs` passes.
-3. `node --check scripts/agent-telemetry-collector.mjs` passes if collector code changed.
-4. Collector `/health` reports `capabilities.fileTransfers: true` on machines expected to serve HTTP inboxes.
-5. A wrong-machine, wrong-runtime, or wrong-agent inbox returns zero transfers.
-6. The intended receiver's inbox returns the transfer.
-7. The receiver can read the payload file from its local vault path.
-8. The receiver can acknowledge the transfer and the normal inbox hides it afterward.
-9. For cross-machine claims, verify the transfer directory exists on the receiving machine, not just on the sender.
+2. `pnpm test:e2e:handoff` passes when `HIVE_E2E_REAL_FLEET=1` and a real target machine such as `ubuntu` is connected.
+3. `node --check scripts/hive-transfer.mjs`, `node --check scripts/hive-handoff`, and `node --check scripts/hivemind-mcp` pass.
+4. `node --check scripts/agent-telemetry-collector.mjs` passes if collector code changed.
+5. Collector `/health` reports `capabilities.fileTransfers: true` on machines expected to serve HTTP inboxes.
+6. A wrong-machine, wrong-runtime, or wrong-agent inbox returns zero transfers.
+7. The intended receiver's inbox returns the transfer.
+8. The receiver can read the payload file from its local vault path.
+9. The receiver can acknowledge the transfer and the normal inbox hides it afterward.
+10. For cross-machine claims, verify the transfer directory exists on the receiving machine, not just on the sender.
 
 ## Troubleshooting
 

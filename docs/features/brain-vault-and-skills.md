@@ -19,7 +19,7 @@ How it works:
 - The default vault path is `~/Documents/Obsidian/hivemindos-vault`.
 - The app can use `NEXT_PUBLIC_OBSIDIAN_VAULT_PATH` or auto-detect common Obsidian locations.
 - Hivemind Sync moves brain files through the selected vault sync owner: external provider, HivemindOS Syncthing, or manual rsync repair.
-- Handoff transfers live in `.hivemindos-transfers/` and are routed with `hive-transfer`.
+- Handoff transfers live in `.hivemindos-transfers/` and are routed with `hive-transfer`; agents should usually use `hive-handoff`, `/api/handoff`, `/handoff-task`, or the `hivemind-mcp` handoff tools so fuzzy machine matching and best-agent selection stay consistent with Fleet.
 
 What the vault can do:
 
@@ -133,12 +133,13 @@ What shared skills can do:
 - Import runtime skills into the shared brain.
 - Write new shared skills.
 - Save Hive Fusion generated skills into the shared brain for later retrieval.
+- Auto-install HivemindOS Hive skills such as `hive-assimilate`, `hive-capability-search`, and the Hive Fusion skills from `packaged-skills/auto-install/`.
 - Auto-install the Obsidian Native Brain Pack: `obsidian-markdown`, `obsidian-bases`, `json-canvas`, and optional `defuddle`, curated from `kepano/obsidian-skills`.
 - Reconcile shared-vault skills with local runtime providers.
 - Auto-import, auto-update, and optionally track removals per provider.
 - Sync shared skills to Aeon.
 
-See also: [Hive Fusion](hive-fusion.html), which explains how capability search turns prompts into shared-brain skills.
+See also: [Hive Fusion](hive-fusion.html), which explains how capability search turns prompts into shared-brain skills, and [Packaged Skills](../packaged-skills/), which documents the Hive vs third-party packaged skill catalog.
 
 ## Main Code Paths
 

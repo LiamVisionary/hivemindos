@@ -61,7 +61,7 @@ import {
   Users,
   WalletCards,
 } from "lucide-react";
-import type { AdaptiveOpenRouterConfig, AgentProfile, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile, RuntimeCapabilities, SharedVaultConfig, UsePodAgentConfig } from "@/lib/types/agent-runtime";
+import type { AdaptiveOpenRouterConfig, AdaptiveRoutingConfig, AgentProfile, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile, RuntimeCapabilities, SharedVaultConfig, UsePodAgentConfig } from "@/lib/types/agent-runtime";
 import type { AgentNotification, AgentNotificationSettings, AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import { createAgentProfile, DEFAULT_SHARED_VAULT, RUNTIME_CAPABILITIES, RUNTIME_DEFAULTS, RUNTIME_KINDS, RUNTIME_LABELS } from "@/lib/types/agent-runtime";
 import type { AgentPaymentProvider, AgentWalletConfig, HoneyTreasuryConfig } from "@/lib/types/agent-wallet";
@@ -1096,6 +1096,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     provider?: string;
     model?: string;
     adaptiveOpenRouter?: AdaptiveOpenRouterConfig;
+    adaptiveRouting?: AdaptiveRoutingConfig;
     usePod?: UsePodAgentConfig;
     workerClass: BeeWorkerClass;
     customWorkerClass?: CustomWorkerClassProfile;
@@ -1109,6 +1110,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     runtime: "hermes",
     provider: "openai-codex",
     model: "",
+    adaptiveRouting: undefined,
     usePod: undefined,
     workerClass: "general",
     customWorkerClass: undefined,

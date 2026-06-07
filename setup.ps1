@@ -231,12 +231,12 @@ function Ensure-HiveEnvAdd {
     Warn "Python is missing; hive env shims installed but will need Python to run."
     $pythonCommand = "python"
   }
-  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-update", "hive-brain", "hive-brain-hook")) {
+  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook")) {
     $shimPath = Join-Path $binDir "$commandName.cmd"
     $scriptPath = Join-Path $Root "scripts\$commandName"
     if ($commandName -eq "hive-transfer") {
       Set-Content -Path $shimPath -Value "@echo off`r`nnode `"$scriptPath.mjs`" %*`r`n" -Encoding ASCII
-    } elseif ($commandName -eq "hive-brain" -or $commandName -eq "hive-brain-hook") {
+    } elseif ($commandName -eq "hive-handoff" -or $commandName -eq "hivemind-mcp" -or $commandName -eq "hive-brain" -or $commandName -eq "hive-brain-hook") {
       Set-Content -Path $shimPath -Value "@echo off`r`nnode `"$scriptPath`" %*`r`n" -Encoding ASCII
     } elseif ($commandName -eq "hive-update") {
       Set-Content -Path $shimPath -Value "@echo off`r`nbash `"$scriptPath`" %*`r`n" -Encoding ASCII
@@ -247,13 +247,13 @@ function Ensure-HiveEnvAdd {
   }
   $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
   if (($userPath -split ";") -notcontains $binDir) {
-    if (Ask-YesNo "Add $binDir to your user PATH for hive env and transfer commands?" $true) {
+    if (Ask-YesNo "Add $binDir to your user PATH for hive env, transfer, handoff, and MCP commands?" $true) {
       $nextPath = if ($userPath) { "$userPath;$binDir" } else { $binDir }
       [Environment]::SetEnvironmentVariable("Path", $nextPath, "User")
       Refresh-Path
       Ok "Added $binDir to user PATH"
     } else {
-      Warn "Add $binDir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-update, hive-brain, and hive-brain-hook from any folder"
+      Warn "Add $binDir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, and hive-brain-hook from any folder"
     }
   } else {
     Refresh-Path
@@ -656,6 +656,10 @@ function Write-HivemindManagedBlock {
   $lines.Add("Use ``hive-brain answer `"<query>`"`` before relying on prior preferences, decisions, instructions, goals, commitments, artifacts, lessons, credential status, or project context. The CLI tries the running HivemindOS ``/api/brain/memory`` route first, then falls back to local vault/index search, so raw/non-managed agents can recall shared memory without being app-routed. Setup also installs ``hive-brain-hook`` as a Claude Code ``UserPromptSubmit`` hook when Claude is targeted, so raw Claude prompts receive relevant shared-brain context automatically. Default recall/answer is tiered: check typed Agent Memory first, return it when the distilled hit is strong, and otherwise augment with relevant markdown from the full shared vault. Pass ``--scope agent-memory`` for typed/proven memory only, or ``--scope full-vault`` to force broad vault recall. For durable writes, use ``hive-brain remember --type <type> --title <title> --content <content>`` or POST ``/api/brain/memory``; remember only durable reviewed facts, decisions, preferences, goals, instructions, commitments, artifacts, errors, learnings, or reusable context.")
   $lines.Add("")
   $lines.Add("Memory writes live under ``Memory/Distillations/Agent Memory/``; the private search index lives at ``Operations/Brain Services/Agent Memory Index.jsonl``; optional GitLawb receipts live at ``Operations/Brain Services/Agent Memory Proofs.jsonl`` and store hashes/provenance instead of memory bodies. Include available ``agentName``, ``agentId``, ``runtime``, ``machineName``, ``machineId``, ``tailnetId``, ``tailnetName``, ``tailnetDnsName``, ``collectorUrl``, ``sessionId``, and ``project`` fields when writing. Use ``proof: `"auto`"`` unless explicit proof is requested. Do not store raw Tailnet IPs or secrets in shared memory. ``Operations/Secure/`` reference/status notes are searchable during full-vault recall so agents can know which credential names exist or are set, but plaintext secret values must stay out of notes and responses.")
+  $lines.Add("")
+  $lines.Add("## Shared Handoff")
+  $lines.Add("")
+  $lines.Add("Use ``hive-handoff``, ``/api/handoff``, ``/handoff-task``, or ``hivemind-mcp`` for fleet-aware file and task handoffs. These surfaces fuzzy-match connected HivemindOS machines, use Fleet's best-agent assignment, create Obsidian/Syncthing ``hive-transfer`` payloads for files, and start the remote agent when a task is present. If a task handoff lacks the task, ask what the receiving agent should do; plain file handoff can proceed without a task.")
   $lines.Add("")
   $lines.Add("## Shared Hive Env")
   $lines.Add("")

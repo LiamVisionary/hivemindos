@@ -3,6 +3,7 @@ export const RUNTIME_ICON_PATHS: Record<string, string> = {
   hermes: "/icons/runtimes/hermes.svg?v=20260526-runtime-icons-2",
   aeon: "/icons/runtimes/aeon.png?v=20260526-runtime-icons-2",
   "openai-compatible": "/icons/runtimes/openai.svg?v=20260526-runtime-icons-2",
+  codex: "/icons/runtimes/openai.svg?v=20260526-runtime-icons-2",
 };
 
 export const RUNTIME_ICON_RENDER_MODES: Record<string, "image" | "mask"> = {
@@ -10,6 +11,7 @@ export const RUNTIME_ICON_RENDER_MODES: Record<string, "image" | "mask"> = {
   hermes: "mask",
   aeon: "image",
   "openai-compatible": "mask",
+  codex: "mask",
 };
 
 export const RUNTIME_ICON_FALLBACKS: Record<string, string> = {
@@ -17,6 +19,9 @@ export const RUNTIME_ICON_FALLBACKS: Record<string, string> = {
   hermes: "H",
   aeon: "A",
   "openai-compatible": "AI",
+  opencode: "OP",
+  codex: "CX",
+  "claude-code": "CC",
 };
 
 export function runtimeIconPath(runtime?: string) {

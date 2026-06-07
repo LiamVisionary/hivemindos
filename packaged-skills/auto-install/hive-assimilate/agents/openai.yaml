@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hive Assimilate"
+  short_description: "Find reusable shared-brain, local-project, and GitHub parts before building software."
+  default_prompt: "Use this skill to search the shared brain, user projects, local/private indexes, and public GitHub for reusable code, templates, components, tests, workflows, and patterns before implementing a requested build."

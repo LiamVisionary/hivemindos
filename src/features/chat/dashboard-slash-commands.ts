@@ -20,6 +20,7 @@ export const DASHBOARD_SLASH_COMMANDS: DashboardSlashCommandAction[] = [
   { name: "alerts", aliases: ["notifications"], category: "HivemindOS", description: "Open the shared alert inbox", view: "notifications", reply: "Opened Alerts.", refresh: "notifications" },
   { name: "brain", aliases: ["vault"], category: "HivemindOS", description: "Open the shared brain", view: "vault", reply: "Opened Brain." },
   { name: "work", aliases: ["kanban"], category: "HivemindOS", description: "Open the work board", view: "kanban", reply: "Opened Work." },
+  { name: "handoff-task", category: "HivemindOS", description: "Send a task to the best agent on a target machine", argsHint: "<machine> <task>", view: "chat", reply: "Preparing handoff." },
 ];
 
 export function resolveDashboardSlashCommand(input: string): DashboardSlashCommandAction | null {

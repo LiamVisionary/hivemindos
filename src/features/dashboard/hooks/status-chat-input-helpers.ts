@@ -1,0 +1,186 @@
+export function runtimePromptFromPayload(parsed: any) {
+  const event = parsed?.event && typeof parsed.event === "object" ? parsed.event : null;
+  const source = parsed?.clarify ?? parsed?.prompt ?? event ?? parsed;
+  const type = String(event?.type ?? parsed?.type ?? source?.type ?? "");
+  if (!/clarify|approval|sudo|secret|prompt/i.test(type)) return null;
+  const question = String(source?.question ?? source?.message ?? source?.content ?? source?.text ?? "").trim();
+  if (!question) return null;
+  const rawChoices = source?.choices ?? source?.options;
+  const choices = Array.isArray(rawChoices)
+    ? rawChoices.map((choice) => typeof choice === "string" ? choice : String(choice?.label ?? choice?.value ?? "")).filter(Boolean)
+    : [];
+  const promptType = /approval/i.test(type)
+    ? "approval"
+    : /sudo/i.test(type)
+      ? "sudo"
+      : /secret/i.test(type)
+        ? "secret"
+        : /clarify/i.test(type)
+          ? "clarify"
+          : "prompt";
+  return {
+    id: String(source?.id ?? event?.id ?? `prompt-${Date.now()}`),
+    type: promptType,
+    question,
+    choices,
+    allowFreeText: source?.allowFreeText !== false,
+  };
+}
+
+export function processLabelFromComment(eventText: string) {
+  return eventText
+    .split("\n")
+    .map((line) => line.replace(/^:\s?/, "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function processLabelFromRuntimeEvent(parsed: any) {
+  const event = parsed?.event && typeof parsed.event === "object" ? parsed.event : null;
+  const type = String(event?.type ?? parsed?.type ?? "").trim();
+  const source = event ?? parsed;
+  const message = String(source?.message ?? source?.label ?? source?.title ?? source?.name ?? source?.content ?? source?.delta ?? "").trim();
+  const toolName = String(source?.tool ?? source?.toolName ?? source?.name ?? source?.command ?? "").trim();
+  if (/^chat\.(text|session|done)$/.test(type)) return null;
+  if (/thinking|reasoning/i.test(type)) return { label: type.includes("reason") ? "Reasoning" : "Thinking", detail: message || undefined };
+  const rawStatus = String(source?.status ?? "").trim().toLowerCase();
+  const status = rawStatus === "completed" || rawStatus === "failed" || rawStatus === "running" ? rawStatus : undefined;
+  if (/tool\.(generating|start|started|pending)/i.test(type)) {
+    return { label: toolName ? `Starting ${toolName}` : "Starting tool", detail: message || undefined, status: status ?? "running" };
+  }
+  if (/tool\.(progress|running)/i.test(type)) {
+    return { label: toolName ? `${toolName} running` : "Tool running", detail: message || undefined, status: status ?? "running" };
+  }
+  if (/tool\.(done|completed|failed|error)/i.test(type)) {
+    return { label: toolName ? `${toolName} finished` : "Tool finished", detail: message || undefined, status: status ?? (/failed|error/i.test(type) ? "failed" : "completed") };
+  }
+  if (parsed?.tool_call && typeof parsed.tool_call === "object") {
+    const tool = parsed.tool_call;
+    const label = String(tool.name ?? tool.tool ?? tool.command ?? "Tool call").trim();
+    const detail = String(tool.message ?? tool.summary ?? tool.result ?? "").trim();
+    return { label, detail: detail || undefined };
+  }
+  if (parsed?.status && typeof parsed.status === "object") {
+    const statusPayload = parsed.status;
+    const label = String(statusPayload.message ?? statusPayload.label ?? statusPayload.type ?? "Runtime status").trim();
+    const detail = String(statusPayload.detail ?? statusPayload.phase ?? "").trim();
+    return { label, detail: detail || undefined };
+  }
+  if (type && !/^chat\.text$/i.test(type)) {
+    return { label: message || type.replace(/^chat\./, "").replace(/[._-]+/g, " "), detail: message && message !== type ? type : undefined };
+  }
+  return null;
+}
+
+function compactProcessDetail(value: unknown, maxLength = 180) {
+  return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+export function processLabelFromSessionMessage(message: any) {
+  const role = String(message?.role ?? "").trim().toLowerCase();
+  const content = String(message?.content ?? "").trim();
+  if (!content) return null;
+  if (role === "user" || role === "assistant") return null;
+  if (role === "tool") {
+    if (/\[Command interrupted\]/i.test(content)) return { label: "Command interrupted" };
+    if (/Tool execution skipped/i.test(content)) return { label: "Tool execution skipped", detail: compactProcessDetail(content) };
+    if (/\bexit\s+\d+\b/i.test(content)) return { label: "Command finished", detail: compactProcessDetail(content) };
+    if (/Image loaded into your context/i.test(content)) return { label: "Image inspected", detail: compactProcessDetail(content.replace(/^Image loaded into your context\s*[—-]\s*/i, "")) };
+    if (/^\s*\d+\|/m.test(content)) return { label: "File content read", detail: compactProcessDetail(content) };
+    if (/^---\s*\nname:/i.test(content)) return { label: "Skill context loaded", detail: compactProcessDetail(content.match(/^name:\s*(.+)$/mi)?.[1] ?? content) };
+    return { label: "Tool output", detail: compactProcessDetail(content) };
+  }
+  return { label: `${role || "Session"} message`, detail: compactProcessDetail(content) };
+}
+
+export function yieldChatPaint() {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, 16));
+}
+
+export function nextChatTextDelta(incoming: string, current: string) {
+  if (!incoming) return "";
+  if (!current) return incoming;
+  if (incoming.startsWith(current)) return incoming.slice(current.length);
+  if (current.endsWith(incoming)) return "";
+  return incoming;
+}
+
+export function compactRepeatedAssistantText(value: string) {
+  const text = value.replace(/\r\n/g, "\n");
+  const draftMatches = [...text.matchAll(/(?:^|\n)draft:\s*\n/gi)];
+  if (draftMatches.length < 2) return value;
+  const firstStart = draftMatches[0].index ?? 0;
+  const secondStart = draftMatches[1].index ?? 0;
+  const normalized = (content: string) => content.replace(/\s+/g, " ").trim().toLowerCase();
+  const firstBody = normalized(text.slice(firstStart, secondStart));
+  const secondBody = normalized(text.slice(secondStart));
+  if (!firstBody || !secondBody) return value;
+  if (firstBody.startsWith(secondBody) || secondBody.startsWith(firstBody)) return text.slice(0, secondStart).trimEnd();
+  return value;
+}
+
+export function extractGeneratedKanbanTask(rawText: string, fallbackTitle: string) {
+  const fenced = rawText.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  const objectText = fenced ?? rawText.match(/\{[\s\S]*\}/)?.[0] ?? rawText;
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed = JSON.parse(objectText);
+  } catch {
+    const looseTitle = objectText.match(/["']title["']\s*:\s*["']([^"'\n\r]+)/i)?.[1]?.trim();
+    return { title: cleanGeneratedKanbanTitle(looseTitle, fallbackTitle), body: rawText.trim(), priority: "normal" };
+  }
+  const title = cleanGeneratedKanbanTitle(parsed.title, fallbackTitle);
+  const bodyParts = [
+    parsed.body,
+    Array.isArray(parsed.acceptanceCriteria) && parsed.acceptanceCriteria.length
+      ? `Acceptance criteria:\n${parsed.acceptanceCriteria.map((item) => `- ${String(item).trim()}`).filter(Boolean).join("\n")}`
+      : "",
+    Array.isArray(parsed.context) && parsed.context.length
+      ? `Context:\n${parsed.context.map((item) => `- ${String(item).trim()}`).filter(Boolean).join("\n")}`
+      : "",
+  ].map((value) => String(value ?? "").trim()).filter(Boolean);
+  return {
+    title,
+    body: bodyParts.join("\n\n") || String(parsed.summary ?? rawText).trim(),
+    priority: ["low", "normal", "high", "urgent"].includes(String(parsed.priority)) ? parsed.priority : "normal",
+  };
+}
+
+function cleanGeneratedKanbanTitle(value: unknown, fallbackTitle: string) {
+  const title = normalizeGeneratedKanbanTitle(String(value ?? ""));
+  const placeholder = /^(short imperative task title|specific action for the next agent|task title|untitled task)$/i.test(title);
+  return placeholder ? fallbackTitle || "Follow up from chat" : title || fallbackTitle || "Follow up from chat";
+}
+
+function normalizeGeneratedKanbanTitle(value: string) {
+  const title = value
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (/\s/.test(title) || !/^[A-Za-z]{16,80}$/.test(title)) return title;
+  const knownWords = [
+    "acceptance", "animation", "browser", "desktop", "dispatch", "emoji", "generate", "implement",
+    "interaction", "kanban", "mobile", "playful", "progress", "responsive", "tooltip", "website",
+    "build", "card", "chat", "copy", "create", "draft", "fix", "page", "plan", "send", "task", "test",
+    "add", "app", "ui",
+  ].sort((a, b) => b.length - a.length);
+  const words: string[] = [];
+  let remaining = title.toLowerCase();
+  while (remaining) {
+    const match = knownWords.find((word) => remaining.startsWith(word));
+    if (!match) return title;
+    words.push(match);
+    remaining = remaining.slice(match.length);
+  }
+  if (words.length < 2) return title;
+  return `${words[0].charAt(0).toUpperCase()}${words[0].slice(1)} ${words.slice(1).join(" ")}`;
+}
+
+export function kanbanBodyWithFullSource(taskBody: string, sourceContent: string) {
+  const body = taskBody.trim();
+  const source = sourceContent.trim();
+  if (!source) return body;
+  return [body, "Full source task from chat:", source].filter(Boolean).join("\n\n");
+}

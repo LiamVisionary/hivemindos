@@ -1,4 +1,4 @@
-export type KnownAgentRuntime = "openclaw" | "hermes" | "aeon" | "openai-compatible";
+export type KnownAgentRuntime = "openclaw" | "hermes" | "opencode" | "codex" | "claude-code" | "aeon" | "openai-compatible";
 export type AgentRuntime = KnownAgentRuntime | (string & {});
 export type AgentRuntimeKind = "interactive" | "background" | "gateway" | "collector";
 
@@ -77,7 +77,6 @@ export type RuntimeSettingsFeature = {
   hidesRuntimeSelectorWhenEditing?: boolean;
   modelSource: "runtime" | "skill";
   canAddModels?: boolean;
-  canUsePod?: boolean;
   runtimeSegmentSubcopy?: string;
   unavailableSubcopy?: string;
   createActionLabel?: string;
@@ -141,6 +140,16 @@ export type AdaptiveOpenRouterUseCase = "auto" | "coding" | "writing" | "vision"
 
 export interface AdaptiveOpenRouterConfig {
   useCase?: AdaptiveOpenRouterUseCase;
+  fallbackModel?: string;
+}
+
+export type AdaptiveRoutingMode = "best-free" | "free-then-fallback";
+
+export interface AdaptiveRoutingConfig {
+  mode?: AdaptiveRoutingMode;
+  useCase?: AdaptiveOpenRouterUseCase;
+  enabledRuntimes?: AgentRuntime[];
+  disabledProviders?: string[];
   fallbackModel?: string;
 }
 
@@ -242,6 +251,7 @@ export interface AgentProfile {
   provider?: string;
   model?: string;
   adaptiveOpenRouter?: AdaptiveOpenRouterConfig;
+  adaptiveRouting?: AdaptiveRoutingConfig;
   usePod?: UsePodAgentConfig;
   calls?: AgentCallPreferences;
   agentId?: string;
@@ -400,7 +410,7 @@ export const DEFAULT_SHARED_VAULT: SharedVaultConfig = {
   instructions: "Use this vault as the shared memory and handoff space for all local agents. Read AGENTS.md and Operations/AI-Ready Vault Contract.md before durable edits. Use /api/brain/memory for shared-brain recall and durable shared memories: default recall is tiered through typed Agent Memory first and full shared vault when needed, scope: \"agent-memory\" narrows to strict typed/proven memory, scope: \"full-vault\" forces broad vault recall, recall before relying on prior context, remember durable facts/decisions/preferences/goals/instructions with agent/runtime/machine/Tailnet provenance, and use proof: \"auto\" unless the user asks for explicit proof. Treat GBrain as the optional retrieval/graph brain service, Syntho as the optional compiled-wiki/MCP service for Synthesis, and Operations as machine-readable HivemindOS state.",
 };
 
-export const KNOWN_AGENT_RUNTIMES: KnownAgentRuntime[] = ["openclaw", "hermes", "aeon", "openai-compatible"];
+export const KNOWN_AGENT_RUNTIMES: KnownAgentRuntime[] = ["openclaw", "hermes", "opencode", "codex", "claude-code", "aeon", "openai-compatible"];
 
 const DEFAULT_RUNTIME_ENV_FEATURE: RuntimeEnvFeature = {
   kind: "agent-overlay",
@@ -426,6 +436,16 @@ const DEFAULT_RUNTIME_PROFILE_FEATURE: RuntimeProfileFeature = {
 };
 
 const DEFAULT_RUNTIME_INTEGRATION_FEATURE: RuntimeIntegrationFeature = {};
+
+const CLI_RUNTIME_SETTINGS: RuntimeSettingsFeature = {
+  ...DEFAULT_RUNTIME_SETTINGS_FEATURE,
+  unavailableSubcopy: "CLI missing",
+};
+
+const CLI_RUNTIME_CHAT: RuntimeChatFeature = {
+  kind: "background",
+  label: "CLI runtime",
+};
 
 export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> = {
   openclaw: {
@@ -507,6 +527,104 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
     integration: {
       updateRequirementDetail: "hermes",
     },
+  },
+  opencode: {
+    runtime: "opencode",
+    label: "OpenCode",
+    kind: "interactive",
+    defaults: {
+      gatewayUrl: "",
+      chatPath: "",
+      statusPath: "",
+    },
+    capabilities: {
+      status: true,
+      chat: false,
+      modelSelection: true,
+      skillCapabilities: ["chat", "shell", "filesystem"],
+    },
+    env: DEFAULT_RUNTIME_ENV_FEATURE,
+    settings: {
+      ...CLI_RUNTIME_SETTINGS,
+      defaultProvider: "openrouter",
+    },
+    chat: {
+      ...CLI_RUNTIME_CHAT,
+      label: "OpenCode",
+    },
+    scheduler: DEFAULT_RUNTIME_SCHEDULER_FEATURE,
+    profile: {
+      ...DEFAULT_RUNTIME_PROFILE_FEATURE,
+      firstAgentLocalDataDir: "~/.opencode",
+    },
+    integration: DEFAULT_RUNTIME_INTEGRATION_FEATURE,
+  },
+  codex: {
+    runtime: "codex",
+    label: "Codex",
+    kind: "interactive",
+    defaults: {
+      gatewayUrl: "",
+      chatPath: "",
+      statusPath: "",
+    },
+    capabilities: {
+      status: true,
+      chat: false,
+      codexRuntime: true,
+      modelSelection: true,
+      skillActionRuntimes: ["shell"],
+      skillCapabilities: ["chat", "shell", "filesystem"],
+    },
+    env: DEFAULT_RUNTIME_ENV_FEATURE,
+    settings: {
+      ...CLI_RUNTIME_SETTINGS,
+      defaultProvider: "openai-codex",
+    },
+    chat: {
+      ...CLI_RUNTIME_CHAT,
+      label: "Codex",
+    },
+    scheduler: DEFAULT_RUNTIME_SCHEDULER_FEATURE,
+    profile: {
+      ...DEFAULT_RUNTIME_PROFILE_FEATURE,
+      firstAgentLocalDataDir: "~/.codex",
+      defaultWorkerClass: "code",
+    },
+    integration: DEFAULT_RUNTIME_INTEGRATION_FEATURE,
+  },
+  "claude-code": {
+    runtime: "claude-code",
+    label: "Claude Code",
+    kind: "interactive",
+    defaults: {
+      gatewayUrl: "",
+      chatPath: "",
+      statusPath: "",
+    },
+    capabilities: {
+      status: true,
+      chat: false,
+      modelSelection: true,
+      skillActionRuntimes: ["shell"],
+      skillCapabilities: ["chat", "shell", "filesystem"],
+    },
+    env: DEFAULT_RUNTIME_ENV_FEATURE,
+    settings: {
+      ...CLI_RUNTIME_SETTINGS,
+      defaultProvider: "anthropic",
+    },
+    chat: {
+      ...CLI_RUNTIME_CHAT,
+      label: "Claude Code",
+    },
+    scheduler: DEFAULT_RUNTIME_SCHEDULER_FEATURE,
+    profile: {
+      ...DEFAULT_RUNTIME_PROFILE_FEATURE,
+      firstAgentLocalDataDir: "~/.claude",
+      defaultWorkerClass: "code",
+    },
+    integration: DEFAULT_RUNTIME_INTEGRATION_FEATURE,
   },
   aeon: {
     runtime: "aeon",
@@ -601,7 +719,6 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
     env: DEFAULT_RUNTIME_ENV_FEATURE,
     settings: {
       ...DEFAULT_RUNTIME_SETTINGS_FEATURE,
-      canUsePod: true,
       defaultProvider: "lm-studio",
       defaultModel: process.env.NEXT_PUBLIC_LOCAL_OPENAI_MODEL ?? "",
     },
@@ -719,7 +836,7 @@ type RuntimeAgentNameOptions = {
 
 function runtimeAgentNameLabel(runtime: AgentRuntime, labels: Record<string, string>, options: RuntimeAgentNameOptions = {}) {
   const provider = options.provider?.trim().toLowerCase() ?? "";
-  if (runtime === "openai-compatible" && provider === "usepod") return "UsePod";
+  if (provider === "adaptive") return "Adaptive";
   return labels[runtime] ?? runtime;
 }
 

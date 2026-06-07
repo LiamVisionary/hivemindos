@@ -1,0 +1,227 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import http from "node:http";
+import os from "node:os";
+import path from "node:path";
+import readline from "node:readline";
+
+const TOOLS = [
+  {
+    name: "list_hivemind_machines",
+    description: "List connected HivemindOS machines and their available agents.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "plan_handoff",
+    description: "Resolve a fuzzy machine name and select the best target agent without side effects.",
+    inputSchema: handoffSchema(["target"]),
+  },
+  {
+    name: "handoff_file",
+    description: "Copy local files into the Hivemind Sync handoff folder for a target machine.",
+    inputSchema: handoffSchema(["target", "files"]),
+  },
+  {
+    name: "handoff_file_task",
+    description: "Copy files to a target machine and start the best matching agent there on the task.",
+    inputSchema: handoffSchema(["target", "files", "task"]),
+  },
+  {
+    name: "handoff_task",
+    description: "Start the best matching agent on a target machine on a task, without files.",
+    inputSchema: handoffSchema(["target", "task"]),
+  },
+];
+
+function handoffSchema(required) {
+  return {
+    type: "object",
+    required,
+    properties: {
+      target: { type: "string", description: "Fuzzy machine name, such as ubuntu." },
+      files: { type: "array", items: { type: "string" }, description: "Local file paths available to the dashboard host." },
+      task: { type: "string", description: "Work the receiving agent should perform." },
+      note: { type: "string" },
+      allowAmbiguous: { type: "boolean" },
+    },
+  };
+}
+
+function readEnvValue(filePath, key) {
+  const raw = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : "";
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = raw.match(new RegExp(`^${escapedKey}=(.*)$`, "m"));
+  return match?.[1]?.trim().replace(/^['"]|['"]$/g, "") || "";
+}
+
+function dashboardToken() {
+  return process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
+    || process.env.HIVE_E2E_DASHBOARD_TOKEN
+    || readEnvValue(path.join(process.cwd(), ".env.local"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN");
+}
+
+function candidateApiBases() {
+  const values = [];
+  if (process.env.HIVEMINDOS_APP_URL) values.push(process.env.HIVEMINDOS_APP_URL);
+  if (process.env.NEXT_PUBLIC_APP_URL) values.push(process.env.NEXT_PUBLIC_APP_URL);
+  if (process.env.DASHBOARD_URL) values.push(process.env.DASHBOARD_URL);
+  if (process.env.PORT) values.push(`http://127.0.0.1:${process.env.PORT}`);
+  for (const port of [5020, 5021, 5022, 5023, 5024, 5025]) values.push(`http://127.0.0.1:${port}`);
+  return [...new Set(values.map((value) => String(value).replace(/\/+$/, "")))];
+}
+
+function requestJson(base, route, method = "GET", body) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(route, base);
+    const payload = body ? JSON.stringify(body) : "";
+    const token = dashboardToken();
+    const headers = {
+      ...(payload ? { "content-type": "application/json", "content-length": Buffer.byteLength(payload) } : {}),
+      ...(token ? { "x-hivemindos-device-token": token } : {}),
+    };
+    const req = http.request(url, { method, headers, timeout: 190_000 }, (res) => {
+      let data = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => { data += chunk; });
+      res.on("end", () => {
+        let parsed = null;
+        try {
+          parsed = data ? JSON.parse(data) : {};
+        } catch {
+          reject(new Error(`${base} returned non-JSON response`));
+          return;
+        }
+        if (res.statusCode < 200 || res.statusCode >= 300 || parsed?.ok === false) {
+          const error = new Error(parsed?.error || `${base} returned HTTP ${res.statusCode}`);
+          error.payload = parsed;
+          reject(error);
+          return;
+        }
+        resolve(parsed);
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error(`${base} timed out`)));
+    req.on("error", reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+async function callDashboard(route, method, body) {
+  let lastError = null;
+  for (const base of candidateApiBases()) {
+    try {
+      return await requestJson(base, route, method, body);
+    } catch (error) {
+      lastError = error;
+      if (error?.payload?.needsUserInput) throw error;
+    }
+  }
+  throw lastError || new Error("No HivemindOS dashboard API could be reached.");
+}
+
+async function callTool(name, args = {}) {
+  if (name === "list_hivemind_machines") {
+    const data = await callDashboard("/api/fleet/discover?includeSnapshots=0&fresh=1", "GET");
+    return {
+      ok: true,
+      machines: (data.machines || []).filter((machine) => machine.collector === "ready").map((machine) => ({
+        name: machine.device?.name || machine.key,
+        os: machine.device?.os,
+        self: machine.device?.self === true,
+        runtimes: machine.capabilities?.runtimes || [],
+        agents: (machine.agents || []).map((agent) => ({
+          name: agent.name,
+          runtime: agent.runtime,
+          workerClass: agent.workerClass || "general",
+          beeRole: agent.beeRole || "worker",
+        })),
+      })),
+    };
+  }
+  const actionByTool = {
+    plan_handoff: "plan",
+    handoff_file: "send-file",
+    handoff_file_task: "send-file-task",
+    handoff_task: "send-task",
+  };
+  const action = actionByTool[name];
+  if (!action) throw new Error(`Unknown tool: ${name}`);
+  return callDashboard("/api/handoff", "POST", {
+    action,
+    target: args.target,
+    files: Array.isArray(args.files) ? args.files.map(expandHome) : [],
+    task: args.task,
+    note: args.note,
+    dryRun: name === "plan_handoff",
+    allowAmbiguous: args.allowAmbiguous === true,
+  });
+}
+
+function expandHome(value) {
+  const text = String(value || "");
+  if (text === "~") return os.homedir();
+  if (text.startsWith("~/") || text.startsWith("~\\")) return path.join(os.homedir(), text.slice(2));
+  return text;
+}
+
+function respond(id, result) {
+  process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, result })}\n`);
+}
+
+function respondError(id, error) {
+  process.stdout.write(`${JSON.stringify({
+    jsonrpc: "2.0",
+    id,
+    error: {
+      code: -32000,
+      message: error?.payload?.error || error?.message || String(error),
+      data: error?.payload,
+    },
+  })}\n`);
+}
+
+async function handle(message) {
+  const id = message.id;
+  try {
+    if (message.method === "initialize") {
+      respond(id, {
+        protocolVersion: "2024-11-05",
+        serverInfo: { name: "hivemindos", version: "0.1.0" },
+        capabilities: { tools: {} },
+      });
+      return;
+    }
+    if (message.method === "tools/list") {
+      respond(id, { tools: TOOLS });
+      return;
+    }
+    if (message.method === "tools/call") {
+      const result = await callTool(message.params?.name, message.params?.arguments || {});
+      respond(id, {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      });
+      return;
+    }
+    if (message.method === "ping") {
+      respond(id, {});
+      return;
+    }
+    if (id !== undefined) respondError(id, new Error(`Unsupported method: ${message.method}`));
+  } catch (error) {
+    respondError(id, error);
+  }
+}
+
+const rl = readline.createInterface({ input: process.stdin, terminal: false });
+rl.on("line", (line) => {
+  if (!line.trim()) return;
+  let message = null;
+  try {
+    message = JSON.parse(line);
+  } catch {
+    return;
+  }
+  void handle(message);
+});

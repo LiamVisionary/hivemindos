@@ -62,6 +62,16 @@ description: Local-first agent fleet control room documentation.
     <a href="whole-brain/">Open whole brain</a>
   </section>
   <section class="docCard">
+    <h3>Packaged Skills</h3>
+    <p>Review HivemindOS Hive skills, third-party packaged skills, auto-install policy, and optional skill boundaries.</p>
+    <a href="packaged-skills/">Open packaged skills</a>
+  </section>
+  <section class="docCard">
+    <h3>Slash Commands</h3>
+    <p>See dashboard, Hermes, gateway, CLI-only, and dynamic skill slash commands in one reference.</p>
+    <a href="slash-commands.html">Open slash commands</a>
+  </section>
+  <section class="docCard">
     <h3>Hivemind Sync</h3>
     <p>See how shared brain files, shared env, and handoff transfers move between trusted machines.</p>
     <a href="features/hivemind-sync.html">Open sync docs</a>

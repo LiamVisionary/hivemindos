@@ -585,8 +585,8 @@ if ask "Remove .env.local from this checkout?" "no"; then
   ok "Removed .env.local"
 fi
 
-if ask "Remove hive env, transfer, update, brain, and brain hook commands from ~/.local/bin if they point to this checkout?" "yes"; then
-  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-update hive-brain hive-brain-hook; do
+if ask "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, and brain hook commands from ~/.local/bin if they point to this checkout?" "yes"; then
+  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-handoff hivemind-mcp hive-update hive-brain hive-brain-hook; do
     command_path="$HOME/.local/bin/$command_name"
     script_path="$ROOT/scripts/$command_name"
     if [[ -L "$command_path" && "$(readlink "$command_path")" == "$script_path" ]]; then

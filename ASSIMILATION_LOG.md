@@ -5634,3 +5634,322 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - Decision: assimilated
 - Assimilated: hivemind-os:src/features/dashboard/views/ChatPanel.tsx => src/features/dashboard/views/ChatPanel.tsx; hivemind-os:src/lib/services/miroshark/x402-buyer.ts => src/features/dashboard/views/chat/MiroSharkSimulationCard.tsx; hivemind-os:src/features/dashboard/views/chat/HiveChatView.module.css => src/features/dashboard/views/chat/MiroSharkSimulationCard.module.css
 - Verification: Updated ASSIMILATION.json without removing existing uncommitted entries.
+## 2026-06-06T10:59:12.153905+00:00 - local-search
+
+- Request: Make a professional grade Remotion app announcement video about 30 seconds announcing the HivemindOS desktop app and biggest features
+- Source: local-index
+- Query: `Make a professional grade Remotion app announcement video about 30 seconds announcing the HivemindOS desktop app and biggest features`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=15.48 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+2. score=9.98 LiamVisionary/claw-code [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code.md
+   LiamVisionary/claw-code The repo is finally unlocked. enjoy the party! The fastest repo in history to surpass 100K stars ⭐. Join Discord: https://discord.gg/5TUQKqFWd Built in Rust using oh-my-codex.
+3. score=5.49 LiamVisionary/claude-watch [repo-summary]
+   url: https://github.com/LiamVisionary/claude-watch
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claude-watch.md
+   LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
+4. score=5.49 LiamVisionary/claw-code-mobile-private [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile-private
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile-private.md
+   LiamVisionary/claw-code-mobile-private Private fork: on-device inference + experimental features Rust
+5. score=5.06 LiamVisionary/exercise-db [repo-summary]
+   url: https://github.com/LiamVisionary/exercise-db
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-exercise-db.md
+   LiamVisionary/exercise-db Open Public Domain Exercise Dataset in JSON format, over 800 exercises with a browsable public searchable frontend
+6. score=4.63 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+7. score=4.63 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+8. score=1.31 LiamVisionary/ami-ai-companion-app [repo-summary]
+   url: https://github.com/LiamVisionary/ami-ai-companion-app
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-ai-companion-app.md
+   LiamVisionary/ami-ai-companion-app TypeScript
+
+## 2026-06-06T10:59:14.972487+00:00 - prebuild-gate
+
+- Request: Make a professional grade Remotion app announcement video about 30 seconds announcing the HivemindOS desktop app and biggest features
+- Source: public-github
+- Query: `Make a professional grade Remotion app announcement video about 30 seconds announcing the HivemindOS desktop app and biggest features`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-06-06T11:19:03.124839+00:00 - triage
+
+- Request: Make a professional grade Remotion app announcement video about 30 seconds announcing the HivemindOS desktop app and biggest features
+- Source: local-pinned
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+
+### Candidates
+- /Users/liam/Documents/code/projects/hivemind-os
+  - Decision: selected
+  - Reason: existing HivemindOS desktop repo includes Remotion dependencies, prior Remotion composition scaffold, app icon assets, and authoritative feature copy
+  - Path: `remotion/gitlawb-integration-video/src,public`
+- Sfedfcv/redesigned-pancake
+  - Decision: rejected
+  - Reason: public search result unrelated to Remotion, HivemindOS, or app announcement video
+
+## 2026-06-06T11:55:49+00:00 - local-pinned-modal
+
+- Request: Add a More data modal to completed MiroShark Polymarket simulation cards and show it in the native chat capture
+- Source: local-download
+- Selected backbone: `/Users/liam/Downloads/HivemindOS-19.zip`
+- Decision: assimilated
+- Assimilated: `nextjs-polymarket-modal/src/components/poly-modal/*` => `src/features/dashboard/views/chat/poly-market-modal/*`; connected from `src/features/dashboard/views/chat/MiroSharkSimulationCard.tsx`
+- Verification: Inspected README and component files; scanned downloaded source for eval, DOM injection, storage, process, and network calls; focused ESLint passed for touched TS/TSX files.
+
+### Candidates
+- `/Users/liam/Downloads/HivemindOS-19.zip`
+  - Decision: selected
+  - Reason: user-supplied newest download containing the drafted controlled Polymarket modal UI and data math
+  - Path: `nextjs-polymarket-modal/src/components/poly-modal`
+- public GitHub search
+  - Decision: skipped
+  - Reason: user supplied an authoritative local source for the modal; no missing donor parts required public discovery
+
+## 2026-06-06T12:51:47Z - local-pinned-video
+
+- Request: Implement the HivemindOS Desktop announcement Remotion video plan with Mac, Windows, Linux, Fleet, Brain, Work, Fusion, MiroShark, and agent wallet rails
+- Source: local-pinned
+- Selected backbone: `/Users/liam/Documents/code/projects/hivemind-os`
+- Decision: assimilated
+- Assimilated: `remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx` and existing Remotion scaffold => `remotion/gitlawb-integration-video/src/HivemindDesktopAnnouncement.tsx`; `public/readme/screenshots/*`, `public/fusion/fusion-skill-balanced-line.png`, and `public/readme/hivemindos-hero.png` => `remotion/gitlawb-integration-video/public/assets/*`
+- Not assimilated: public GitHub search skipped for this implementation because the user supplied the local HivemindOS checkout and the repo already contained the Remotion scaffold, app assets, and authoritative product screenshots/copy.
+- Verification: Remotion compositions listed `HivemindDesktopAnnouncement` at 25fps, 1920x1080, 1125 frames/45.00s; rendered stills for all major scenes; rendered `remotion/gitlawb-integration-video/out/hivemindos-desktop-announcement.mp4`; `ffprobe` confirmed H.264 1920x1080, 25fps, 1125 frames, 45.000000s video duration, 18,139,921 bytes; focused TypeScript remains blocked only by the existing untouched GitLawb `pathLength` SVG prop error; `pnpm check-sizes` remains blocked by existing oversized legacy files.
+
+### Candidates
+- `/Users/liam/Documents/code/projects/hivemind-os`
+  - Decision: selected
+  - Reason: user-supplied local checkout includes Remotion dependencies, prior video composition code, local app icon assets, product screenshots, Fusion art, and wallet capability copy
+  - Path: `remotion/gitlawb-integration-video/src`, `remotion/gitlawb-integration-video/public/assets`, `public/readme`, `public/fusion`
+- public GitHub search
+  - Decision: skipped
+  - Reason: no missing donor parts after inspecting the pinned local checkout and existing Remotion scaffold
+
+## 2026-06-06T13:47:37Z - local-pinned-video-revision
+
+- Request: Revise the HivemindOS Desktop Remotion announcement video after review feedback on platform badges, Shared Brain, Scheduler, Hive Fusion, MiroShark, and Wallets
+- Source: local-pinned
+- Selected backbone: `/Users/liam/Documents/code/projects/hivemind-os`
+- Decision: assimilated
+- Assimilated: `src/features/dashboard/views/fusion-showcase/*` => revised Hive Fusion prompt/phase/capability/skill-created scene; `src/components/scheduler/scheduler-data.ts` => dense Scheduler automation queue; `src/features/dashboard/views/chat/MiroSharkSimulationCard.tsx` and `public/icons/miroshark.png` => MiroShark x402 process/report scene and icon asset; `src/features/dashboard/views/WalletPanel.tsx`, `src/components/wallet/AgentWalletCardCompact.tsx`, and `src/components/wallet/AgentWalletCard.tsx` => compact wallet grid opening into detailed wallet controls.
+- Not assimilated: public GitHub search skipped for the revision because the user critique was about fidelity to this product's real local UI, and the needed Fusion, Scheduler, MiroShark, and Wallet patterns were already in the pinned checkout.
+- Verification: Rendered revised stills for the complaint-targeted scenes plus close; split the Remotion composition styles into `HivemindDesktopAnnouncement.styles.ts` so both source files are under 1500 lines; rerendered `remotion/gitlawb-integration-video/out/hivemindos-desktop-announcement-v2.mp4`; `ffprobe` confirmed H.264 1920x1080, 25fps, 1125 frames, 45.000000s video duration, 17,943,339 bytes; Remotion compositions still list `HivemindDesktopAnnouncement` at 45.00s; focused TypeScript remains blocked only by the existing untouched GitLawb `pathLength` SVG prop error; `pnpm check-sizes` no longer flags the revised Remotion source and remains blocked by existing oversized legacy files.
+
+### Candidates
+- `/Users/liam/Documents/code/projects/hivemind-os`
+  - Decision: selected
+  - Reason: local product source contains the real Fusion, Scheduler, MiroShark, and Wallet UI/data patterns requested by the critique
+  - Path: `src/features/dashboard/views/fusion-showcase`, `src/components/scheduler`, `src/features/dashboard/views/chat`, `src/components/wallet`, `src/features/dashboard/views/WalletPanel.tsx`
+- public GitHub search
+  - Decision: skipped
+  - Reason: no missing donor parts after inspecting the pinned local checkout; fidelity to local product UI mattered more than external donor code
+## 2026-06-07T04:49:28.640973+00:00 - triage
+
+- Request: Add Bankr LLM runtime card backed by OpenAI-compatible provider in HivemindOS AgentSettingsModal
+- Source: local-pinned-repo
+- Selected backbone: hivemind-os local AgentSettingsModal UsePod runtime-card pattern
+
+### Candidates
+- local:hivemind-os
+  - Decision: selected
+  - Reason: current repo contains matching UsePod runtime-card pattern and OpenAI-compatible provider adapter to adapt surgically
+  - Path: `src/features/dashboard/views/chat/AgentSettingsModal.tsx,src/lib/services/runtime-adapters/openai-compatible.ts,src/lib/types/agent-runtime.ts`
+## 2026-06-07T04:55:28.293589+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local:hivemind-os:src/features/dashboard/views/chat/AgentSettingsModal.tsx => src/features/dashboard/views/chat/AgentSettingsModal.tsx, local:hivemind-os:src/lib/services/runtime-adapters/openai-compatible.ts => src/lib/services/runtime-adapters/openai-compatible.ts
+- Verification: Wrote ASSIMILATION.json with 2 entries and custom_code_assessment=balanced.
+## 2026-06-07T05:09:22.799229+00:00 - triage
+
+- Request: Add HivemindOS adaptive provider routing across configured runtimes and free models
+- Source: local-pinned
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: current repo already contains OpenRouter adaptive resolver, runtime adapter status, model settings UI, and chat dispatch paths to generalize
+  - Path: `src/lib/services/chat/adaptive-openrouter-models.ts,src/app/api/chat/agent-runtime/route.ts,src/features/dashboard/views/chat/AgentSettingsModal.tsx`
+## 2026-06-07T05:13:50.837524+00:00 - local-pinned-runtime
+
+- Request: Wire native MiroShark x402 chat runs into HivemindOS with live progress cards, completed cards, and real-data Polymarket modal
+- Source: local-pinned
+- Decision: assimilated
+- Reason: The current HivemindOS repo already had x402 SSE/session patterns and the user-supplied modal draft was authoritative for the detailed Polymarket UI.
+- Selected backbone: /Users/liam/Documents/code/projects/hivemind-os
+- Assimilated: src/app/api/chat/agent-runtime/route.ts x402 SSE helpers => native MiroShark runtime branch; src/lib/services/miroshark/x402-buyer.ts => src/lib/services/miroshark/x402-chat-run.ts; /Users/liam/Downloads/HivemindOS-19.zip nextjs-polymarket-modal/src/components/poly-modal/* => src/features/dashboard/views/chat/poly-market-modal/*
+- Not assimilated: Public GitHub search skipped because the required donors were pinned local sources: the live app runtime pattern and the user's drafted modal UI.
+- Verification: Focused ESLint passed; no-spend SSE smoke hit the MiroShark natural trigger and refused execution with Spend off; in-app browser rendered the real chat view with the native composer; full typecheck remains blocked by unrelated Remotion/adaptive router errors.
+
+### Candidates
+- local:hivemind-os
+  - Decision: selected
+  - Reason: Existing chat runtime x402 SSE/session flow matched the app integration surface
+  - Path: `src/app/api/chat/agent-runtime/route.ts,src/lib/services/miroshark/x402-buyer.ts`
+- /Users/liam/Downloads/HivemindOS-19.zip
+  - Decision: selected
+  - Reason: Newest user-supplied modal draft for the Polymarket detail UI
+  - Path: `nextjs-polymarket-modal/src/components/poly-modal`
+## 2026-06-07T05:19:25.052272+00:00 - implementation
+
+- Request: Add HivemindOS adaptive provider routing across configured runtimes and free models
+- Source: local-pinned
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: generalized existing OpenRouter adaptive use-case scoring, route retry loop, and model provider UI into provider-agnostic Adaptive routing
+  - Path: `src/lib/services/chat/adaptive-openrouter-models.ts,src/app/api/chat/agent-runtime/route.ts,src/features/dashboard/views/chat/runtime-model-registry.ts`
+- anomalyco/models.dev
+  - Decision: selected
+  - Reason: public catalog API used for provider/model metadata, free pricing, capabilities, and OpenAI-compatible endpoint discovery
+  - Path: `https://models.dev/api.json`
+- opencode
+  - Decision: selected
+  - Reason: provider/model routing behavior and Models.dev registry precedent used for design constraints
+  - Path: `https://opencode.ai/docs/models`
+## 2026-06-07T05:19:25.076576+00:00 - verification
+
+- Request: Add HivemindOS adaptive provider routing across configured runtimes and free models
+- Source: local-pinned
+
+### Candidates
+- hivemind-os
+  - Decision: verified
+  - Reason: targeted eslint passed with existing warnings; git diff whitespace check passed; tsc blocked by unrelated Remotion pathLength type error; file-size check still blocked by legacy oversized files outside extracted Adaptive modal
+  - Path: `src/lib/services/chat/adaptive-model-router.ts,src/features/dashboard/views/chat/AdaptiveProviderSettings.tsx`
+## 2026-06-07T05:29:50.649602+00:00 - triage
+
+- Request: Use official Bankr icon for Bankr LLM runtime card
+- Source: user-supplied-asset
+- Selected backbone: /Users/liam/Downloads/bankr-symbol-full-color-rgb.svg
+
+### Candidates
+- /Users/liam/Downloads/bankr-symbol-full-color-rgb.svg
+  - Decision: selected
+  - Reason: official Bankr SVG supplied by user for runtime/provider icon
+  - Path: `bankr-symbol-full-color-rgb.svg`
+## 2026-06-07T05:37:43.848105+00:00 - triage
+
+- Request: Move Bankr LLM and UsePod from runtime cards to model provider choices for Hermes/OpenAI-compatible agent settings
+- Source: local-pinned-repo
+- Selected backbone: hivemind-os AgentSettingsModal runtime/provider picker and runtime-integrations Hermes provider setup
+
+### Candidates
+- local:hivemind-os
+  - Decision: selected
+  - Reason: existing provider tiles, GuidedProviderSetup, GuidedUsePodSetup, and Hermes add-provider runtime action are the native backbone
+  - Path: `src/features/dashboard/views/chat/AgentSettingsModal.tsx,src/lib/services/runtime-integrations.ts,src/features/dashboard/hooks/use-agent-settings-controller.tsx,src/lib/types/agent-runtime.ts`
+## 2026-06-07T05:39:58.301586+00:00 - triage
+
+- Request: Refactor Bankr and UsePod into model providers across Hermes/OpenClaw/OpenAI-compatible and add OpenCode Codex Claude Code runtimes
+- Source: local-pinned-repo
+- Selected backbone: hivemind-os runtime definitions adapters settings modal provider setup
+
+### Candidates
+- local:hivemind-os
+  - Decision: selected
+  - Reason: existing runtime capability matrix, runtime adapters, OpenClaw/Hermes provider setup, AgentSettingsModal provider UI, and runtime availability checks are the native implementation backbone
+  - Path: `src/lib/types/agent-runtime.ts,src/lib/services/runtime-adapters,src/lib/services/runtime-integrations.ts,src/features/dashboard/views/chat/AgentSettingsModal.tsx,src/lib/services/runtime-availability.ts`
+## 2026-06-07T07:41:41.527839+00:00 - implementation
+
+- Request: Add reusable missing shared env API key setup component using hive-env-add save flow
+- Source: local-repo
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os:src/features/dashboard/views/UtilityPanels.tsx
+  - Decision: selected
+  - Reason: reused shared env input visual style and save semantics for hive-env-add
+  - Path: `src/features/dashboard/views/UtilityPanels.tsx`
+- hivemind-os:src/app/api/env/route.ts
+  - Decision: selected
+  - Reason: reused existing /api/env contract that invokes scripts/hive-env-add
+  - Path: `src/app/api/env/route.ts`
+## 2026-06-07T08:06:59.267320+00:00 - implementation
+
+- Request: Add reusable provider low-balance setup and Bankr LLM credit funding from wallet balances
+- Source: local-project
+- Selected backbone: hivemind-os current workspace
+
+### Candidates
+- src/features/dashboard/views/chat/MissingSharedEnvKeySetup.tsx
+  - Decision: selected
+  - Reason: reused setup-card composition and shared-provider setup UX boundaries
+  - Path: `src/features/dashboard/views/chat`
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: selected
+  - Reason: reused balance-card language and wallet funding safety expectations
+  - Path: `src/features/dashboard/views`
+- src/lib/services/usepod.ts
+  - Decision: selected
+  - Reason: reused provider status/low-balance diagnostic pattern
+  - Path: `src/lib/services`
+- public-github
+  - Decision: skipped
+  - Reason: current feature is an extension of pinned local HivemindOS settings/provider architecture
+## 2026-06-07T08:09:31.937884+00:00 - implementation
+
+- Request: Rename provider low-balance setup into a general reusable low-credit component
+- Source: local-project
+- Selected backbone: hivemind-os current workspace
+
+### Candidates
+- src/features/dashboard/views/chat/ProviderLowBalanceSetup.tsx
+  - Decision: selected
+  - Reason: rename/adapt existing generic component instead of adding parallel duplicate
+  - Path: `src/features/dashboard/views/chat`
+- src/features/dashboard/views/chat/BankrLowBalanceSetup.tsx
+  - Decision: selected
+  - Reason: kept as provider adapter feeding generic low-credit props
+  - Path: `src/features/dashboard/views/chat`
+## 2026-06-07T09:00:40.189809+00:00 - triage
+
+- Request: Fix hivemind-linkd CPU spin by disabling Tailscale portlist forks and bounding status
+- Source: local-pinned-repo
+- Selected backbone: hivemind-os
+
+### Candidates
+- hivemind-os
+  - Decision: selected
+  - Reason: current sidecar already contains linkd config, status endpoint, launch agent installer, and tests to adapt surgically
+  - Path: `cmd/hivemind-linkd/main.go,cmd/hivemind-linkd/main_test.go,scripts/install-telemetry-collector.sh`
+## 2026-06-07T09:03:11.506355+00:00 - implementation
+
+- Request: Fix hivemind-linkd CPU spin by disabling Tailscale portlist forks and bounding status
+- Source: local-pinned-repo
+- Selected backbone: hivemind-os
+
+### Candidates
+- cmd/hivemind-linkd/main.go
+  - Decision: selected
+  - Reason: adapted existing config/status/tsnet setup with low-power defaults and bounded status
+  - Path: `cmd/hivemind-linkd`
+- scripts/install-telemetry-collector.sh
+  - Decision: selected
+  - Reason: adapted existing launch agent and systemd templates to pass low-power Link env
+  - Path: `scripts`
+## 2026-06-07T09:17:35.563933+00:00 - implementation
+
+- Request: Rename github assimilator to hive-assimilate and expand it across shared brain, user projects, docs, and slash commands
+- Source: local-pinned
+- Selected backbone: local-project:hivemind-os
+- Note: Created packaged-skills/auto-install/hive-assimilate, mirrored to Codex local skills and the shared Obsidian Skills shelf, added packaged skill docs and slash-command docs.
+
+### Candidates
+- packaged-skills/auto-install/hive-capability-search/SKILL.md
+  - Decision: selected
+  - Reason: shared-brain capability search boundary reused in hive-assimilate instructions
+- /Users/liam/.codex/skills/github-assimilator/SKILL.md
+  - Decision: selected
+  - Reason: renamed and expanded into hive-assimilate packaged skill

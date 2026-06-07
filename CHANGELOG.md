@@ -3,6 +3,62 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-07 17:11:41 WITA - Rename GitHub Assimilator To Hive Assimilate
+
+- Status: Pushed
+- Areas changed: Packaged skills, shared brain skill shelf, Codex local skill home, GitHub Pages docs, slash command docs, agent instructions, shared-skill seeding, vault structure contract
+- Summary: Rename the GitHub-only assimilator workflow to `hive-assimilate`, expand it into a pre-build workflow that searches pinned sources, the shared brain, user projects, local/private indexes, and public GitHub, document packaged skills with Hive-owned and third-party subdivisions, add a slash command reference, and require future agents to keep those docs current when packaged skills or slash commands change.
+- Verification: `python3 -m py_compile packaged-skills/auto-install/hive-assimilate/scripts/*.py /Users/liam/.codex/skills/hive-assimilate/scripts/*.py` passed; `bash -n scripts/seed-shared-skills.sh` passed; `node scripts/test-vault-structure-contract.mjs` passed; `git diff --check` passed for the touched skill/docs/setup files; `./scripts/seed-shared-skills.sh --share-targets none --import-sources none` refreshed the shared brain skill shelf; shared vault `Skills/README.md` now indexes `hive-assimilate`; the shared vault and Codex local skill home no longer contain a `github-assimilator` skill folder.
+- Intended commit message: `Rename assimilator skill to hive assimilate`
+
+## 2026-06-07 17:02:36 WITA - Reduce Hivemind Link Battery Drain
+
+- Status: Pushed
+- Areas changed: Hivemind Link sidecar, embedded Tailscale defaults, telemetry collector install service templates
+- Summary: Stop Hivemind Link from spawning Tailscale's macOS port scanner helpers by default, keep the embedded Tailscale web client off unless explicitly enabled, and bound the Link `/status` endpoint so a wedged embedded Tailscale client cannot hang status checks indefinitely.
+- Verification: `go test ./cmd/hivemind-linkd` passed; `bash -n scripts/install-telemetry-collector.sh scripts/build-hivemind-linkd.sh` passed; `./scripts/build-hivemind-linkd.sh` rebuilt `bin/hivemind-linkd`; restarted `com.hivemindos.linkd.agent`; `/health` and `/status` returned ok within timeout; launchd showed the restarted Link agent running without a runaway child process; `hivemind-linkd` stayed at `0.0%` CPU after restart.
+- Intended commit message: `Reduce Hivemind Link battery drain`
+
+## 2026-06-07 13:43 WITA - Runtime Provider Split
+
+- Status: Pushed
+- Areas changed: Agent runtime definitions, runtime adapter registry, model provider gateway metadata, Hermes/OpenClaw provider setup, Agent Settings provider UI, reusable shared-env and low-credit setup UI, Bankr LLM credit funding API, fleet discovery priority, Bankr/UsePod docs and icon surfaces
+- Summary: Move Bankr LLM and UsePod out of the runtime grid into reusable model providers, expose them through runtime model-provider selection, add OpenCode, Codex, and Claude Code runtime definitions with CLI availability/status adapters, let Hermes/OpenClaw carry Bankr/UsePod provider selections through their existing model-selection paths, keep the generic Add provider sheet closed unless the user explicitly opens it, replace Bankr fallback models with live model discovery plus setup states when credentials or credits are missing, add a reusable missing shared-env API key setup component that saves through hive-env-add, and add a generic reusable LowCreditSetup component that can fund credit rails such as Bankr LLM from discovered wallet balances or an explicit token contract after typed confirmation.
+- Verification: `pnpm exec eslint src/lib/config/model-provider-gateways.ts src/lib/types/agent-runtime.ts src/lib/services/runtime-adapters/cli-runtimes.ts src/lib/services/runtime-adapters/registry.ts src/lib/services/runtime-availability.ts src/lib/services/runtime-integrations.ts src/features/dashboard/hooks/use-agent-settings-controller.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/app/api/fleet/discover/route.ts --max-warnings=999` passed with existing warnings; `pnpm exec eslint src/features/dashboard/views/chat/MissingSharedEnvKeySetup.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999` passed; `pnpm exec eslint src/app/api/bankr/llm-credits/route.ts src/features/dashboard/views/chat/LowCreditSetup.tsx src/features/dashboard/views/chat/BankrLowCreditSetup.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999` passed; focused TypeScript filters showed no touched-file errors; `git diff --check` passed; `bankr llm credits add --help` confirmed `--token <address>` funding support; direct CLI probes found OpenCode `1.14.39`, Codex CLI `0.132.0`, and Claude Code `2.1.123`. A read-only `bankr llm credits` balance probe timed out, so no funding/spend transaction was submitted. `pnpm typecheck` remains blocked only by the existing Remotion `pathLength` prop error in `remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx`; `pnpm check-sizes` remains blocked by existing oversized legacy files.
+- Intended commit message: `Split model providers from agent runtimes`
+
+## 2026-06-07 13:36 WITA - Keep Bankr Runtime Selection Stable
+
+- Status: Pushed
+- Areas changed: Agent settings provider selection, Bankr LLM runtime card behavior
+- Summary: Prevent explicit virtual providers such as Bankr LLM from falling back to the first discovered OpenAI-compatible provider when model discovery does not include that provider, fixing Bankr runtime clicks that appeared to auto-switch back to UsePod.
+- Verification: `pnpm exec eslint src/features/dashboard/hooks/use-agent-settings-controller.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999` passed with existing warnings in `use-agent-settings-controller.tsx`; focused `pnpm exec tsc --noEmit --pretty false | rg "src/features/dashboard/(hooks/use-agent-settings-controller|views/chat/AgentSettingsModal)"` returned no touched-file errors; `git diff --check -- src/features/dashboard/hooks/use-agent-settings-controller.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx CHANGELOG.md`; a local provider-selection reproduction confirmed explicit `bankr` no longer falls back to `usepod` while implicit fallback still works.
+- Intended commit message: `Keep Bankr runtime selection stable`
+
+## 2026-06-07 13:29 WITA - Use Official Bankr Runtime Icon
+
+- Status: Pushed
+- Areas changed: Agent settings runtime/provider cards, runtime icon assets
+- Summary: Replace the Bankr LLM `BK` fallback mark with the official full-color Bankr SVG supplied by the user and reuse it anywhere the Bankr provider tile appears.
+- Verification: `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999`; `python3 /Users/liam/.codex/skills/github-assimilator/scripts/verify_assimilation_manifest.py`; `git diff --check -- src/features/dashboard/views/chat/AgentSettingsModal.tsx public/icons/runtimes/bankr.svg CHANGELOG.md ASSIMILATION.json ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl`; `curl -fsSI --max-time 5 http://127.0.0.1:5021/icons/runtimes/bankr.svg` returned `200 OK` with `content-type: image/svg+xml`.
+- Intended commit message: `Use official Bankr runtime icon`
+
+## 2026-06-07 13:28:45 WITA - Document Release Changelog Rules
+
+- Status: Pushed
+- Areas changed: Agent project rules, changelog discipline
+- Summary: Clarify that feature updates and notable bug fixes should be written in release-note-friendly changelog language, Tauri release commits should summarize unreleased changelog entries as bullet points for the release body, and released entries should be archived before resetting the active changelog.
+- Verification: `git diff --check -- AGENTS.md CHANGELOG.md`; manual readback of the Changelog Discipline bullets in `AGENTS.md`.
+- Intended commit message: `Document release changelog rules`
+
+## 2026-06-07 13:19 WITA - Add Adaptive Provider Routing
+
+- Status: Pushed
+- Areas changed: Chat adaptive routing service, agent runtime chat route, agent settings provider/model UI, agent profile routing types, assimilation manifest/logs
+- Summary: Add an `adaptive` provider option that resolves the best ready free model across OpenRouter live inventory and Models.dev OpenAI-compatible providers with configured credentials, ranks by task/use-case capability, retries alternate resolved routes on transient provider failures, and exposes Adaptive settings with runtime/provider toggles plus ready/not-configured hints.
+- Verification: `pnpm exec eslint src/lib/services/chat/adaptive-model-router.ts src/features/dashboard/views/chat/AdaptiveProviderSettings.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx src/app/api/chat/agent-runtime/route.ts src/features/dashboard/hooks/use-agent-settings-controller.tsx src/features/dashboard/hooks/use-agent-controller.tsx src/lib/types/agent-runtime.ts --max-warnings=999` passed with two existing warnings in `use-agent-settings-controller.tsx`; `git diff --check` passed; `verify_assimilation_manifest.py` passed; `node --check scripts/agent-telemetry-collector.mjs` passed. `pnpm exec tsc --noEmit --pretty false --skipLibCheck` remains blocked by the unrelated existing Remotion `pathLength` prop error in `remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx`; `node scripts/check-file-sizes.mjs` remains blocked by existing oversized legacy files including `src/app/api/chat/agent-runtime/route.ts` and `src/features/dashboard/DashboardApp.tsx`, while the new Adaptive settings extraction keeps `AgentSettingsModal.tsx` under 1500 lines.
+- Intended commit message: `Add adaptive provider routing`
+
 ## 2026-06-07 13:16:16 WITA - Clarify Open Source Brand Policy
 
 - Status: Pushed
@@ -42,6 +98,62 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Summary: Use the POSIX memory-limit wrapper only on non-Windows platforms and run the Next static export directly on Windows so the Windows release runner can execute `pnpm tauri:build`.
 - Verification: `node --check scripts/tauri-build.mjs`; `git diff --check -- scripts/tauri-build.mjs CHANGELOG.md`; `wc -l scripts/tauri-build.mjs CHANGELOG.md`; `pnpm check-sizes` still reports existing oversized legacy files unrelated to this release-script change.
 - Intended commit message: `Allow Windows Tauri static build`
+
+## 2026-06-07 13:05:41 WITA - Wire Native MiroShark x402 Chat Runs
+
+- Status: Pushed
+- Areas changed: Chat runtime MiroShark x402 shortcut, MiroShark report card data model, Polymarket detail modal data binding, modal chart/row components
+- Summary: Make natural chat prompts like `run a sim on this polymarket: <url>` execute the real paid MiroShark x402 flow from the app when the selected agent has an enabled x402 wallet with Allow auto-use and a sufficient cap, stream MiroShark process events into the native running card, poll status/report, emit the completed embedded card, and pass normalized real Polymarket detail data into the modal button on completed runs.
+- Verification: `pnpm exec eslint src/lib/types/miroshark-polymarket.ts src/lib/services/miroshark/x402-chat-run.ts src/app/api/chat/agent-runtime/route.ts src/lib/services/context-index.ts src/lib/services/chat/task-retrieval-context.ts src/features/dashboard/views/chat/MiroSharkSimulationCard.tsx src/features/dashboard/views/chat/poly-market-modal/PolyMarketModal.tsx src/features/dashboard/views/chat/poly-market-modal/modal-chart.tsx src/features/dashboard/views/chat/poly-market-modal/modal-parts.tsx src/features/dashboard/views/chat/poly-market-modal/poly-data.ts src/features/dashboard/views/chat/poly-market-modal/index.ts --max-warnings=999` passed; `git diff --check` passed for the touched MiroShark/chat/modal/changelog/assimilation files; in-app browser smoke on `http://localhost:5021/?view=chat&agent=hermes-adaptiveagent-ec9dbd...` rendered the real native chat view with one composer control; no-spend SSE smoke against `/api/chat/agent-runtime` recognized `run a sim on this polymarket: https://polymarket.com/event/spacex-ipo-closing-market-cap-above` and correctly returned `MiroShark x402 unavailable` because wallet spending was off; Spend-on/Allow-auto-use-off SSE smoke recognized the same prompt and correctly returned `MiroShark x402 unavailable` before any wallet secret lookup or payment attempt; `verify_assimilation_manifest.py` passed. No paid MiroShark run was submitted. Full `pnpm exec tsc --noEmit --pretty false` remains blocked by unrelated existing errors in `remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx` (`pathLength`) and `src/lib/services/chat/adaptive-model-router.ts` (`unknown` provider/model narrowing).
+- Intended commit message: `Wire native MiroShark x402 chat runs`
+
+## 2026-06-07 12:53 WITA - Add Bankr LLM Runtime Card
+
+- Status: Pushed
+- Areas changed: Agent settings runtime picker, OpenAI-compatible runtime adapter, chat runtime route, Bankr LLM env guidance, README token badge text
+- Summary: Fix the displayed HIVE token address and add a user-facing Bankr LLM runtime card that stores an OpenAI-compatible Bankr profile, discovers Bankr models with user-owned `BANKR_LLM_KEY`/Bankr API credentials from shared env or the local Bankr CLI config, and sends Bankr chat requests with provider-specific auth headers.
+- Verification: `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx src/lib/services/bankr-llm.ts src/lib/services/runtime-adapters/openai-compatible.ts src/app/api/chat/agent-runtime/route.ts src/lib/types/agent-runtime.ts --max-warnings=999` passed with existing MiroShark unused-symbol warnings in the shared route; `git diff --check` passed; `verify_assimilation_manifest.py` passed; `curl -I --max-time 20 http://127.0.0.1:5021` returned `200 OK` from the already-running dev server. Live Bankr LLM probe reached `https://llm.bankr.bot/v1/models` through `~/.bankr/config.json` API-key fallback and returned HTTP `402` `insufficient_credits`; `bankr llm credits` reported `$0.00`, so no completion can be generated until LLM credits are topped up. Focused `pnpm exec tsc --noEmit --pretty false | rg "src/(features/dashboard/views/chat/AgentSettingsModal|lib/services/bankr-llm|lib/services/runtime-adapters/openai-compatible|app/api/chat/agent-runtime/route|lib/types/agent-runtime)"` is blocked by unrelated in-flight MiroShark work in `src/app/api/chat/agent-runtime/route.ts` (`miroSharkX402ExecutionSse` scope/name resolution). Full `pnpm exec tsc --noEmit --pretty false` also remains blocked by the existing Remotion `pathLength` prop error, and `pnpm check-sizes` remains blocked by existing oversized legacy files. `hive-env-check` was unavailable on PATH and at `/Users/liam/.local/bin/hive-env-check`, so credential presence was checked through redacted scripts only.
+- Intended commit message: `Add Bankr LLM runtime card`
+
+## 2026-06-06 21:47:37 WITA - Revise HivemindOS Desktop Announcement Video
+
+- Status: Pushed
+- Areas changed: Ignored Remotion desktop announcement composition, split Remotion style module, Remotion public MiroShark icon asset, revised still frames, rendered v2 MP4
+- Summary: Rework the announcement cut in response to review feedback: replace generic platform containers with download-style Mac/Windows/Linux badges and icons, rebuild the Shared Brain scene as a visual vault graph, expand the Scheduler scene to a dense multi-automation queue, show Hive Fusion typing a real reusable-skill prompt through staged discovery/fusion/verification into a `SKILL.md`, replace the MiroShark bar overlay with the x402 process/report card, and show Agent Wallets as compact fleet cards opening into a detailed MiroShark wallet view with MoneyClaw, Base/Solana, Veil, and x402 rails.
+- Verification: `pnpm exec remotion compositions remotion/gitlawb-integration-video/src/index.ts --config remotion/gitlawb-integration-video/remotion.config.ts`; rendered revised stills for hero, Fleet, Brain, Work, Fusion prompt, Fusion skill-created, MiroShark, wallet grid/detail, and close scenes under `remotion/gitlawb-integration-video/out/stills-v2/`; rerendered `remotion/gitlawb-integration-video/out/hivemindos-desktop-announcement-v2.mp4` after splitting the source/styles; `ffprobe` confirmed H.264 1920x1080, 25fps, 1125 frames, 45.000000s video duration, 17,943,339 bytes; focused `pnpm exec tsc --noEmit --pretty false | rg "remotion/gitlawb-integration-video/src/(HivemindDesktopAnnouncement|HivemindDesktopAnnouncement\\.styles|Root|GitLawbIntegrationVideo)"` is blocked only by the existing untouched `GitLawbIntegrationVideo.tsx` `pathLength` SVG prop error; `pnpm check-sizes` no longer flags the revised video source and remains blocked by existing oversized legacy files.
+- Intended commit message: `Revise HivemindOS desktop announcement video`
+
+## 2026-06-06 20:51:47 WITA - Render HivemindOS Desktop Announcement Video
+
+- Status: Pushed
+- Areas changed: Ignored Remotion desktop announcement composition, Remotion public video assets, rendered MP4 and still frames
+- Summary: Build a 45-second cinematic HivemindOS Desktop announcement cut covering Mac/Windows/Linux availability, Fleet, Shared Brain, Work Loop, Hive Fusion, MiroShark simulations, and agent wallet payment rails with MoneyClaw, Base/Solana, Veil private sends, and x402 paid API support while omitting Honey/HIVE.
+- Verification: `pnpm exec remotion compositions remotion/gitlawb-integration-video/src/index.ts --config remotion/gitlawb-integration-video/remotion.config.ts`; rendered stills for hero, Fleet, Brain, Work, Fusion, MiroShark, Wallets, and close scenes; `pnpm exec remotion render remotion/gitlawb-integration-video/src/index.ts HivemindDesktopAnnouncement remotion/gitlawb-integration-video/out/hivemindos-desktop-announcement.mp4 --config remotion/gitlawb-integration-video/remotion.config.ts --codec=h264 --crf=18`; `ffprobe` confirmed H.264 1920x1080, 25fps, 1125 frames, 45.000000s video duration, 18,139,921 bytes; focused `pnpm exec tsc --noEmit --pretty false | rg "remotion/gitlawb-integration-video/src/(HivemindDesktopAnnouncement|Root|GitLawbIntegrationVideo)"` is blocked only by the existing untouched `GitLawbIntegrationVideo.tsx` `pathLength` SVG prop error; `pnpm check-sizes` remains blocked by existing oversized legacy files.
+- Intended commit message: `Render HivemindOS desktop announcement video`
+
+## 2026-06-06 20:23:07 WITA - Fix Polymarket Detail Modal Clipping
+
+- Status: Pushed
+- Areas changed: MiroShark Polymarket detail modal rendering and modal viewport styling
+- Summary: Portal the completed MiroShark Polymarket detail modal to `document.body`, lock page scrolling while open, raise the overlay above app chrome, and cap the modal shell height with viewport-safe padding so the SpaceX title row is not clipped in chat or capture views.
+- Verification: `pnpm exec eslint src/app/miroshark-native-clip/page.tsx src/features/dashboard/views/chat/poly-market-modal/PolyMarketModal.tsx src/features/dashboard/views/chat/poly-market-modal/modal-chart.tsx src/features/dashboard/views/chat/poly-market-modal/modal-parts.tsx src/features/dashboard/views/chat/poly-market-modal/poly-data.ts src/features/dashboard/views/chat/poly-market-modal/index.ts src/features/dashboard/views/chat/MiroSharkSimulationCard.tsx --max-warnings=999`; `curl -I --max-time 20 'http://127.0.0.1:5021/miroshark-native-clip?capture=1'`; regenerated `/private/tmp/miroshark-x402-spacex-polymarket-chat-modal-clip.mp4`; `ffprobe` confirmed H.264 1920x1080 at 30fps, 41.633333s, 2203811 bytes; inspected `/private/tmp/miroshark-modal-open-fixed.png` and confirmed the modal title/header is fully visible with no top clipping; removed the temporary capture route and its stale generated Next type stub; final `pnpm typecheck` is blocked only by the existing Remotion `pathLength` prop error.
+- Intended commit message: `Fix Polymarket detail modal clipping`
+
+## 2026-06-06 19:55:49 WITA - Add MiroShark Polymarket Detail Modal
+
+- Status: Pushed
+- Areas changed: MiroShark chat simulation card, Polymarket detail modal components, chat card styling
+- Summary: Add a More data button to completed SpaceX Polymarket MiroShark cards and connect it to the drafted controlled modal with best-bet ranking, distribution chart, ladder, agent consensus, and risk sections.
+- Verification: Focused ESLint for touched chat/modal files; full `pnpm typecheck` blocked by pre-existing Remotion `pathLength` prop error; `pnpm check-sizes` blocked by existing oversized legacy files; regenerated `/private/tmp/miroshark-x402-spacex-polymarket-chat-modal-clip.mp4` and visually checked the completed-card-to-modal flow.
+- Intended commit message: `Add MiroShark Polymarket detail modal`
+
+## 2026-06-06 15:57:42 WITA - Create Tauri Hidden API Parent Directory
+
+- Status: Pushed
+- Areas changed: Tauri production build preparation
+- Summary: Ensure the repository-local `.next-tauri/` parent directory exists before moving `src/app/api` aside for static Tauri exports, fixing fresh GitHub-hosted Linux and Windows runners where the ignored directory has not been created yet.
+- Verification: Pending
+- Intended commit message: `Create Tauri hidden API parent directory`
 
 ## 2026-06-06 15:53:14 WITA - Revert Website Download Section
 

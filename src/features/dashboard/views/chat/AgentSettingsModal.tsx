@@ -27,16 +27,23 @@ import {
   X,
 } from "lucide-react";
 import { AgentCallsSettingsPanel } from "./AgentCallsSettingsPanel";
+import { AdaptiveProviderSettings } from "./AdaptiveProviderSettings";
+import { BankrLowCreditSetup } from "./BankrLowCreditSetup";
 import { GuidedProviderSetup } from "./GuidedProviderSetup";
 import { GuidedUsePodSetup } from "./GuidedUsePodSetup";
+import { MissingSharedEnvKeySetup } from "./MissingSharedEnvKeySetup";
 import { ModelPillSelector } from "./ModelPillSelector";
 import { selectBestRuntimeModel } from "./runtime-model-registry";
 import { AeonOrb, Btn, Eyebrow, Pill, aeonStyles as styles } from "@/components/aeon/parts";
 import { WorkspaceModal } from "@/components/aeon";
+import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
 import type { AgentRuntime } from "@/lib/types/agent-runtime";
 import { defaultAgentNameForRuntime, runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 
-const USEPOD_RUNTIME_ICON_PATH = "/icons/runtimes/usepod.webp";
+const USEPOD_PROVIDER = MODEL_PROVIDER_GATEWAYS.usepod;
+const BANKR_LLM_BASE_URL = "https://llm.bankr.bot";
+const BANKR_LLM_CHAT_PATH = "/v1/chat/completions";
+const BANKR_LLM_MODELS_PATH = "/v1/models";
 
 const PANEL_ICONS = {
   role: Sparkles,
@@ -406,14 +413,17 @@ export function AgentSettingsModal(props: any) {
   const activePanel = activePanels.includes(agentSettingsPanel) ? agentSettingsPanel : activePanels[0];
   const isAutopilotSettings = runtimeSettings.kind === "autopilot";
   const runtimeLabel = RUNTIME_LABELS[activeRuntime] ?? activeRuntime;
-  const selectedProviderSlug = selectedRuntimeProvider?.slug || agentSettingsProvider || "";
+  const selectedProviderSlug = agentSettingsProvider || selectedRuntimeProvider?.slug || "";
   const openRouterSelected = selectedProviderSlug === "openrouter";
   const usePodSelected = selectedProviderSlug === "usepod";
+  const bankrLlmSelected = selectedProviderSlug === "bankr";
+  const adaptiveProviderSelected = selectedProviderSlug === "adaptive";
   const defaultNameForRuntime = (runtime: AgentRuntime, provider = "") => defaultAgentNameForRuntime(displayAgents ?? [], runtime, RUNTIME_LABELS, { provider });
   const currentName = agentCreateMachine ? agentCreateDraft.name : roleModalAgent?.name ?? "";
   const displayName = currentName || defaultNameForRuntime(activeRuntime, selectedProviderSlug);
-  const adaptiveSelected = openRouterSelected && selectedRuntimeModelId === "adaptive";
+  const adaptiveOpenRouterSelected = openRouterSelected && selectedRuntimeModelId === "adaptive";
   const adaptiveOpenRouter = agentCreateMachine ? agentCreateDraft.adaptiveOpenRouter ?? {} : roleModalAgent?.adaptiveOpenRouter ?? {};
+  const adaptiveRouting = agentCreateMachine ? agentCreateDraft.adaptiveRouting ?? {} : roleModalAgent?.adaptiveRouting ?? {};
   const usePodConfig = agentCreateMachine ? agentCreateDraft.usePod ?? {} : roleModalAgent?.usePod ?? {};
   const usePodSetupStarted = hasUsePodSetup(usePodConfig);
   const usePodSetupComplete = isUsePodSetupReady(usePodConfig);
@@ -439,19 +449,25 @@ export function AgentSettingsModal(props: any) {
   const modelSelectableRuntime = Boolean(runtimeCapabilities(agentSettingsIntegrationTarget ?? roleModalAgent)?.modelSelection);
   const hasRuntimeProviders = runtimeModelProviders.length > 0;
   const runtimeCanAddModels = Boolean(runtimeSettings.canAddModels);
-  const runtimeCanAddUsePod = Boolean(runtimeSettings.canUsePod);
+  const runtimeCanAddGatewayProviders = runtimeSettings.modelSource === "runtime" && modelSelectableRuntime && activeRuntime !== "aeon";
   const runtimeCanAddCustomModel = runtimeCanAddModels && hasRuntimeProviders;
-  const runtimeModelOptions = openRouterSelected
+  const runtimeModelOptions = adaptiveProviderSelected
+    ? [{ id: "best-free", name: "Best free" }]
+    : openRouterSelected
     ? [{ id: "adaptive", name: "Adaptive" }, ...selectedRuntimeModels.filter((model) => model.id !== "adaptive")]
     : selectedRuntimeModels;
-  const runtimeModelProviderSlug = selectedRuntimeProvider?.slug ?? agentSettingsProvider;
+  const runtimeModelProviderSlug = selectedProviderSlug;
+  const bankrSetupRequired = bankrLlmSelected && selectedRuntimeModels.length === 0;
+  const bankrSetupDetail = runtimeIntegrationStatus?.diagnostics?.find((item) => /Bankr LLM models unavailable/i.test(item)) ?? "";
+  const bankrMissingKey = /BANKR_LLM_KEY.*(not configured|required|missing)|missing.*BANKR_LLM_KEY/i.test(bankrSetupDetail);
+  const bankrLowCredits = /insufficient_credits|credits exhausted|402|balance|fund/i.test(bankrSetupDetail);
   const runtimeModelPanelAvailable = runtimeSettings.modelSource === "runtime" && (
     runtimeModelProviders.length > 0
       || modelSelectableRuntime
       || runtimeIntegrationBusy === "status"
       || Boolean(runtimeIntegrationMessage)
   );
-  const showProviderDiscovery = !runtimeModelProviders.length && modelSelectableRuntime && !usePodSelected && !runtimeModelSelectionFresh && !runtimeIntegrationMessage;
+  const showProviderDiscovery = !runtimeModelProviders.length && !runtimeCanAddGatewayProviders && modelSelectableRuntime && !usePodSelected && !bankrLlmSelected && !adaptiveProviderSelected && !runtimeModelSelectionFresh && !runtimeIntegrationMessage;
   const hideRuntimeSection = !agentCreateMachine && Boolean(runtimeSettings.hidesRuntimeSelectorWhenEditing);
   const showWorkerClassSection = !isAutopilotSettings && !(usePodSelected && !usePodSetupComplete);
   const agentStatus = agentCreateMachine ? "New profile" : roleModalAgent?.telemetryUrl ? "Connected" : "Local profile";
@@ -467,7 +483,7 @@ export function AgentSettingsModal(props: any) {
   };
 
   useEffect(() => {
-    if (!modalOpen || !runtimeModelPanelAvailable || !selectedRuntimeProvider || usePodSelected || runtimeIntegrationBusy) return;
+    if (!modalOpen || !runtimeModelPanelAvailable || !selectedRuntimeProvider || usePodSelected || bankrLlmSelected || adaptiveProviderSelected || runtimeIntegrationBusy) return;
     const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
     const currentModelValid = currentModel === "adaptive" && selectedRuntimeProvider.slug === "openrouter"
       || selectedRuntimeModels.some((model) => model.id === currentModel);
@@ -492,6 +508,8 @@ export function AgentSettingsModal(props: any) {
     selectedRuntimeModels,
     selectedRuntimeProvider,
     updateAgentRuntimeModel,
+    adaptiveProviderSelected,
+    bankrLlmSelected,
     usePodSelected,
   ]);
 
@@ -522,6 +540,12 @@ export function AgentSettingsModal(props: any) {
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { adaptiveOpenRouter: next });
   };
 
+  const updateAdaptiveRouting = (patch: Record<string, unknown>) => {
+    const next = { ...adaptiveRouting, ...patch };
+    if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, adaptiveRouting: next }));
+    else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { adaptiveRouting: next });
+  };
+
   const applyUsePodProfile = async (patch: Record<string, unknown>) => {
     if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
@@ -548,6 +572,7 @@ export function AgentSettingsModal(props: any) {
 
   const updateSettingsRuntime = (runtime: AgentRuntime) => {
     if (runtime !== "aeon" && runtimeAvailability?.[runtime]?.installed === false) return;
+    setRuntimeModelSetupMode(null);
     const sameRuntime = runtime === activeRuntime;
     const currentProvider = agentCreateMachine ? agentCreateDraft.provider : roleModalAgent?.provider;
     const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
@@ -607,8 +632,9 @@ export function AgentSettingsModal(props: any) {
     }
   };
 
-  const selectUsePodRuntime = () => {
+  const selectUsePodProvider = () => {
     const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
+    const model = currentModel && currentModel !== "adaptive" ? currentModel : USEPOD_PROVIDER.defaultModel;
     const nextUsePod = {
       tokenEnvName: usePodConfig.tokenEnvName || "USEPOD_TOKEN",
       depositAddress: usePodConfig.depositAddress || "",
@@ -624,13 +650,82 @@ export function AgentSettingsModal(props: any) {
       lastModelCount: usePodConfig.lastModelCount,
     };
     const patch = {
-      runtime: "openai-compatible",
       provider: "usepod",
-      model: currentModel || "gpt-5.5",
-      gatewayUrl: "https://api.usepod.ai",
-      chatPath: "/v1/chat/completions",
-      statusPath: "/v1/models",
+      model,
+      ...(activeRuntime === "openai-compatible" ? {
+        gatewayUrl: "https://api.usepod.ai",
+        chatPath: "/v1/chat/completions",
+        statusPath: "/v1/models",
+      } : {}),
       usePod: nextUsePod,
+    };
+    updateAgentRuntimeModel("usepod", model);
+    if (agentCreateMachine) {
+      setAgentCreateDraft((current) => ({
+        ...current,
+        ...patch,
+        name: current.name.trim()
+          && current.name !== `${RUNTIME_LABELS[current.runtime] ?? current.runtime} on ${agentCreateMachine.name}`
+          && current.name !== defaultNameForRuntime(current.runtime, current.provider)
+          ? current.name
+          : defaultNameForRuntime(current.runtime, "usepod"),
+      }));
+      setRuntimeModelSetupMode(null);
+      return;
+    }
+    if (roleModalAgent) {
+      updateAgentProfile(roleModalAgent.id, patch);
+      setRuntimeModelSetupMode(null);
+    }
+  };
+
+  const selectBankrLlmProvider = () => {
+    const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
+    const bankrProvider = runtimeModelProviders.find((provider) => provider.slug === "bankr");
+    const bankrModels = bankrProvider?.models.map((modelOption) => modelOption.id) ?? [];
+    const model = currentModel && bankrModels.includes(currentModel) ? currentModel : bankrModels[0] || "";
+    const patch = {
+      provider: "bankr",
+      model,
+      ...(activeRuntime === "openai-compatible" ? {
+        gatewayUrl: BANKR_LLM_BASE_URL,
+        chatPath: BANKR_LLM_CHAT_PATH,
+        statusPath: BANKR_LLM_MODELS_PATH,
+        token: "",
+      } : {}),
+    };
+    updateAgentRuntimeModel("bankr", model);
+    if (agentCreateMachine) {
+      setAgentCreateDraft((current) => ({
+        ...current,
+        ...patch,
+        name: current.name.trim()
+          && current.name !== `${RUNTIME_LABELS[current.runtime] ?? current.runtime} on ${agentCreateMachine.name}`
+          && current.name !== defaultNameForRuntime(current.runtime, current.provider)
+          ? current.name
+          : defaultNameForRuntime(current.runtime, "bankr"),
+      }));
+      setRuntimeModelSetupMode(null);
+      void refreshRuntimeIntegrations({ ...(agentSettingsIntegrationTarget ?? {}), ...patch });
+      return;
+    }
+    if (roleModalAgent) {
+      updateAgentProfile(roleModalAgent.id, patch);
+      setRuntimeModelSetupMode(null);
+      void refreshRuntimeIntegrations({ ...roleModalAgent, ...patch });
+    }
+  };
+
+  const selectAdaptiveProvider = () => {
+    const patch = {
+      provider: "adaptive",
+      model: "best-free",
+      adaptiveRouting: {
+        mode: adaptiveRouting.mode || "best-free",
+        useCase: adaptiveRouting.useCase || "auto",
+        enabledRuntimes: adaptiveRouting.enabledRuntimes?.length ? adaptiveRouting.enabledRuntimes : ["hermes", "openai-compatible"],
+        disabledProviders: adaptiveRouting.disabledProviders ?? [],
+      },
     };
     if (agentCreateMachine) {
       setAgentCreateDraft((current) => ({
@@ -640,19 +735,15 @@ export function AgentSettingsModal(props: any) {
           && current.name !== `${RUNTIME_LABELS[current.runtime] ?? current.runtime} on ${agentCreateMachine.name}`
           && current.name !== defaultNameForRuntime(current.runtime, current.provider)
           ? current.name
-          : defaultNameForRuntime("openai-compatible", "usepod"),
+          : defaultNameForRuntime(current.runtime, "adaptive"),
       }));
-      setRuntimeModelSetupMode("provider");
       return;
     }
-    if (roleModalAgent) {
-      updateAgentProfile(roleModalAgent.id, patch);
-      setRuntimeModelSetupMode("provider");
-    }
+    if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
   };
 
   const renderRuntimeCard = (runtime: string, label: string) => {
-    const selected = runtime === activeRuntime && !(runtime === "openai-compatible" && usePodSelected);
+    const selected = runtime === activeRuntime;
     const runtimeFeature = runtimeSettingsFeature(runtime as AgentRuntime);
     const unavailable = runtimeAvailability?.[runtime]?.installed === false;
     const disabled = unavailable && runtimeFeature.kind !== "autopilot";
@@ -719,45 +810,48 @@ export function AgentSettingsModal(props: any) {
         <div>
           <GroupLabel>Provider</GroupLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(132px, 168px))", gap: 7, alignItems: "stretch" }}>
-            {runtimeCanAddUsePod ? (
-              <button
-                className={styles.interactive}
-                type="button"
-                aria-pressed={usePodSelected}
-                onClick={selectUsePodRuntime}
-                style={{
-                  display: "grid",
-                  gap: 5,
-                  padding: "9px 10px",
-                  minHeight: 62,
-                  borderRadius: 10,
-                  border: `1px solid ${usePodSelected ? "var(--aeon-line)" : "var(--line)"}`,
-                  background: usePodSelected ? "var(--aeon-soft)" : "var(--panel-bg-soft)",
-                  textAlign: "left",
-                  cursor: "pointer",
-                }}
-              >
-                <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  {iconMark({ label: "UsePod", iconPath: USEPOD_RUNTIME_ICON_PATH, iconMode: "image", size: 26 })}
-                  <strong style={{ color: usePodSelected ? "var(--cyan-3)" : "var(--fg)", fontSize: 13, lineHeight: 1.2 }}>UsePod</strong>
-                </span>
-                <small style={{ color: "var(--fg-4)", fontSize: 10.5, lineHeight: 1.3 }}>Marketplace inference</small>
-              </button>
-            ) : null}
+            <button
+              className={styles.interactive}
+              type="button"
+              aria-pressed={adaptiveProviderSelected}
+              onClick={selectAdaptiveProvider}
+              style={{
+                display: "grid",
+                gap: 5,
+                padding: "9px 10px",
+                minHeight: 62,
+                borderRadius: 10,
+                border: `1px solid ${adaptiveProviderSelected ? "var(--aeon-line)" : "var(--line)"}`,
+                background: adaptiveProviderSelected ? "var(--aeon-soft)" : "var(--panel-bg-soft)",
+                textAlign: "left",
+                cursor: "pointer",
+              }}
+            >
+              <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                {iconMark({ label: "Adaptive", fallback: "AD", size: 26 })}
+                <strong style={{ color: adaptiveProviderSelected ? "var(--cyan-3)" : "var(--fg)", fontSize: 13, lineHeight: 1.2 }}>Adaptive</strong>
+              </span>
+              <small style={{ color: "var(--fg-4)", fontSize: 10.5, lineHeight: 1.3 }}>Best free route</small>
+            </button>
             {runtimeModelProviders.map((provider) => {
-              const selected = provider.slug === selectedRuntimeProvider?.slug;
+              const selected = provider.slug === selectedProviderSlug;
               const bestProviderModel = selectBestRuntimeModel(provider, {
                 defaultModel: runtimeSettings.defaultModel,
                 runtimeSelectedModel: runtimeModelSelectionsByRuntime?.[activeRuntime]?.model,
                 preferAdaptive: true,
               });
+              const selectProvider = provider.slug === "usepod"
+                ? selectUsePodProvider
+                : provider.slug === "bankr"
+                  ? selectBankrLlmProvider
+                  : () => updateAgentRuntimeModel(bestProviderModel === "adaptive" ? "openrouter" : provider.slug, bestProviderModel);
               return (
                 <button
                   className={styles.interactive}
                   type="button"
                   key={provider.slug}
                   aria-pressed={selected}
-                  onClick={() => updateAgentRuntimeModel(bestProviderModel === "adaptive" ? "openrouter" : provider.slug, bestProviderModel)}
+                  onClick={selectProvider}
                   style={{
                     display: "grid",
                     gap: 5,
@@ -771,7 +865,13 @@ export function AgentSettingsModal(props: any) {
                   }}
                 >
                   <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                    {iconMark({ label: provider.name, iconPath: providerIconPath(provider), iconMode: providerIconRenderMode(provider), size: 26 })}
+                    {iconMark({
+                      label: provider.name,
+                      iconPath: MODEL_PROVIDER_GATEWAYS[provider.slug]?.iconPath ?? providerIconPath(provider),
+                      iconMode: MODEL_PROVIDER_GATEWAYS[provider.slug]?.iconMode ?? providerIconRenderMode(provider),
+                      fallback: MODEL_PROVIDER_GATEWAYS[provider.slug]?.fallback,
+                      size: 26,
+                    })}
                     <strong style={{ color: selected ? "var(--cyan-3)" : "var(--fg)", fontSize: 13, lineHeight: 1.2, overflowWrap: "anywhere" }}>{provider.name}</strong>
                   </span>
                   <small style={{ color: "var(--fg-4)", fontSize: 10.5, lineHeight: 1.3 }}>{provider.totalModels} model{provider.totalModels === 1 ? "" : "s"}</small>
@@ -797,19 +897,57 @@ export function AgentSettingsModal(props: any) {
             ) : null}
           </div>
         </div>
-        <div>
-          <GroupLabel>Model</GroupLabel>
-          <ModelPillSelector
-            models={runtimeModelOptions}
-            selectedModelId={selectedRuntimeModelId}
-            addModelDisabled={Boolean(runtimeIntegrationBusy)}
-            canAddModel={runtimeCanAddCustomModel}
-            emptyLabel={hasRuntimeProviders ? "No models configured." : "Add a provider first. Models appear after a provider is connected."}
-            onSelectModel={(modelId) => updateAgentRuntimeModel(modelId === "adaptive" ? "openrouter" : runtimeModelProviderSlug, modelId)}
-            onAddModel={() => setRuntimeModelSetupMode((current) => current === "model" ? null : "model")}
+        {bankrSetupRequired && bankrMissingKey ? (
+          <MissingSharedEnvKeySetup
+            apiKeyName="BANKR_LLM_KEY"
+            providerLabel="Bankr LLM"
+            detail={bankrSetupDetail}
+            onSaved={() => refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)}
           />
-        </div>
-        {adaptiveSelected ? (
+        ) : bankrSetupRequired && bankrLowCredits ? (
+          <BankrLowCreditSetup
+            diagnostic={bankrSetupDetail}
+            onFunded={() => refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)}
+          />
+        ) : bankrSetupRequired ? (
+          <div style={{ display: "grid", gap: 10, border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel-bg-soft)", padding: 13 }}>
+            <GroupLabel>Bankr setup</GroupLabel>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start", color: "var(--fg-3)", fontSize: 12.5, lineHeight: 1.45 }}>
+              <ShieldCheck size={18} color="var(--cyan-3)" aria-hidden="true" />
+              <div>
+                <strong style={{ display: "block", color: "var(--fg)", fontSize: 13 }}>No live Bankr models found</strong>
+                <span>Configure `BANKR_LLM_KEY` with funded Bankr LLM access, then reload providers.</span>
+                {bankrSetupDetail ? <span style={{ display: "block", marginTop: 5 }}>{bankrSetupDetail}</span> : null}
+              </div>
+            </div>
+            <Btn variant="ghost" disabled={Boolean(runtimeIntegrationBusy)} onClick={() => void refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)}>
+              <Repeat2 size={14} aria-hidden="true" /> Reload providers
+            </Btn>
+          </div>
+        ) : !adaptiveProviderSelected ? (
+          <div>
+            <GroupLabel>Model</GroupLabel>
+            <ModelPillSelector
+              models={runtimeModelOptions}
+              selectedModelId={selectedRuntimeModelId}
+              addModelDisabled={Boolean(runtimeIntegrationBusy)}
+              canAddModel={runtimeCanAddCustomModel}
+              emptyLabel={hasRuntimeProviders ? "No models configured." : "Add a provider first. Models appear after a provider is connected."}
+              onSelectModel={(modelId) => updateAgentRuntimeModel(modelId === "adaptive" ? "openrouter" : runtimeModelProviderSlug, modelId)}
+              onAddModel={() => setRuntimeModelSetupMode((current) => current === "model" ? null : "model")}
+            />
+          </div>
+        ) : null}
+        {adaptiveProviderSelected ? (
+          <AdaptiveProviderSettings
+            activeRuntime={activeRuntime}
+            adaptiveRouting={adaptiveRouting}
+            runtimeModelProviders={runtimeModelProviders}
+            usePodSetupComplete={usePodSetupComplete}
+            bankrLlmSelected={bankrLlmSelected}
+            onUpdate={updateAdaptiveRouting}
+          />
+        ) : adaptiveOpenRouterSelected ? (
           <details style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel-bg-soft)", padding: 12 }}>
             <summary style={{ color: "var(--fg)", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Adaptive OpenRouter</summary>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
@@ -974,13 +1112,6 @@ export function AgentSettingsModal(props: any) {
           <GroupLabel>Runtime</GroupLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(132px, 168px))", gap: 7, alignItems: "stretch" }}>
             {Object.entries(RUNTIME_LABELS).map(([runtime, label]) => renderRuntimeCard(runtime, label))}
-            <button className={styles.interactive} type="button" aria-pressed={activeRuntime === "openai-compatible" && usePodSelected} onClick={selectUsePodRuntime} style={{ display: "grid", gap: 5, minHeight: 62, alignContent: "start", textAlign: "left", padding: "9px 10px", borderRadius: 10, cursor: "pointer", border: `1px solid ${activeRuntime === "openai-compatible" && usePodSelected ? "var(--aeon-line)" : "var(--line)"}`, background: activeRuntime === "openai-compatible" && usePodSelected ? "var(--aeon-soft)" : "var(--panel-bg-soft)" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                {iconMark({ label: "UsePod", iconPath: USEPOD_RUNTIME_ICON_PATH, iconMode: "image", size: 26 })}
-                <strong style={{ color: activeRuntime === "openai-compatible" && usePodSelected ? "var(--cyan-3)" : "var(--fg)", fontSize: 13, lineHeight: 1.2 }}>UsePod</strong>
-              </span>
-              <small style={{ color: "var(--fg-4)", fontSize: 10.5, lineHeight: 1.3 }}>Marketplace inference</small>
-            </button>
           </div>
         </div>
       ) : null}

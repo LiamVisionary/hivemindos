@@ -94,6 +94,11 @@ The shared brain is a normal Obsidian vault, not a proprietary database. Hivemin
     <a href="hive-fusion.html">Open fusion docs</a>
   </section>
   <section class="docCard">
+    <h3>Packaged Skills</h3>
+    <p>HivemindOS-owned Hive skills, third-party packaged skills, auto-install policy, optional catalog rules, and skill maintenance contracts.</p>
+    <a href="../packaged-skills/">Open packaged skills</a>
+  </section>
+  <section class="docCard">
     <h3>Whole Brain</h3>
     <p>The separated GitHub Pages guide for vault structure, brain services, shared skills, sync health, and architecture sync rules.</p>
     <a href="../whole-brain/">Open whole brain</a>

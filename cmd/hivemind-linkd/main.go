@@ -25,24 +25,29 @@ import (
 	"time"
 
 	"tailscale.com/client/local"
+	"tailscale.com/envknob"
 	"tailscale.com/tsnet"
 )
 
 const appProxyContextCookie = "hivemind_link_app_proxy"
 const appProxyContextQuery = "__hive_app_proxy"
 const defaultLogMaxBytes = 2 * 1024 * 1024
+const defaultStatusTimeout = 3 * time.Second
 
 type config struct {
-	hostname   string
-	stateDir   string
-	listenAddr string
-	control    string
-	target     string
-	authKey    string
-	controlURL string
-	logFile    string
-	logMax     int64
-	tailDebug  bool
+	hostname        string
+	stateDir        string
+	listenAddr      string
+	control         string
+	target          string
+	authKey         string
+	controlURL      string
+	logFile         string
+	logMax          int64
+	tailDebug       bool
+	runWebClient    bool
+	disablePortlist bool
+	statusTimeout   time.Duration
 }
 
 func defaultHostname() string {
@@ -94,8 +99,26 @@ func parseConfig() config {
 	flag.StringVar(&cfg.logFile, "log-file", defaultLogFile(), "optional capped log file for daemon diagnostics")
 	flag.Int64Var(&cfg.logMax, "log-max-bytes", defaultLogMaxBytesFromEnv(), "maximum active daemon log size in bytes")
 	flag.BoolVar(&cfg.tailDebug, "tailscale-debug-logs", defaultTailscaleDebugLogs(), "include verbose embedded Tailscale logs")
+	flag.BoolVar(&cfg.runWebClient, "run-web-client", defaultBoolFromEnv("HIVE_LINK_RUN_WEB_CLIENT", false), "expose Tailscale's embedded web client for this app node")
+	flag.BoolVar(&cfg.disablePortlist, "disable-portlist", defaultBoolFromEnv("HIVE_LINK_DISABLE_PORTLIST", true), "disable Tailscale's macOS portlist polling helpers")
+	flag.DurationVar(&cfg.statusTimeout, "status-timeout", defaultStatusTimeoutFromEnv(), "maximum time spent waiting for embedded Tailscale status")
 	flag.Parse()
 	return cfg
+}
+
+func defaultBoolFromEnv(key string, fallback bool) bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if value == "" {
+		return fallback
+	}
+	switch value {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
 }
 
 func defaultTailscaleDebugLogs() bool {
@@ -128,6 +151,21 @@ func defaultLogMaxBytesFromEnv() int64 {
 	}
 	if parsed > defaultLogMaxBytes {
 		return defaultLogMaxBytes
+	}
+	return parsed
+}
+
+func defaultStatusTimeoutFromEnv() time.Duration {
+	value := strings.TrimSpace(os.Getenv("HIVE_LINK_STATUS_TIMEOUT"))
+	if value == "" {
+		return defaultStatusTimeout
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil || parsed <= 0 {
+		return defaultStatusTimeout
+	}
+	if parsed > 30*time.Second {
+		return 30 * time.Second
 	}
 	return parsed
 }
@@ -302,11 +340,16 @@ func newProxy(target *url.URL, lc *local.Client) http.Handler {
 	return proxy
 }
 
-func statusPayload(ctx context.Context, lc *local.Client) map[string]any {
+func statusPayload(ctx context.Context, lc *local.Client, timeout time.Duration) map[string]any {
 	if lc == nil {
 		return map[string]any{"ok": false, "error": "local tailscale client unavailable"}
 	}
-	status, err := lc.Status(ctx)
+	if timeout <= 0 {
+		timeout = defaultStatusTimeout
+	}
+	statusCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	status, err := lc.Status(statusCtx)
 	if err != nil {
 		return map[string]any{"ok": false, "error": err.Error()}
 	}
@@ -857,14 +900,14 @@ func appPortalScript(hostPort string, appProxyPrefix string) string {
 ` + `</script>`
 }
 
-func serveControl(ctx context.Context, ln net.Listener, lc *local.Client, ts *tsnet.Server) *http.Server {
+func serveControl(ctx context.Context, ln net.Listener, lc *local.Client, ts *tsnet.Server, statusTimeout time.Duration) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "hivemind-linkd"})
 	})
 	mux.HandleFunc("/status", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("content-type", "application/json")
-		_ = json.NewEncoder(w).Encode(statusPayload(ctx, lc))
+		_ = json.NewEncoder(w).Encode(statusPayload(ctx, lc, statusTimeout))
 	})
 	mux.HandleFunc("/peer/", servePeerProxy(ts))
 	mux.HandleFunc("/", servePeerRefererFallback(ts))
@@ -880,6 +923,7 @@ func serveControl(ctx context.Context, ln net.Listener, lc *local.Client, ts *ts
 func main() {
 	cfg := parseConfig()
 	configureLogging(cfg)
+	configureTailscaleEnv(cfg)
 	if err := os.MkdirAll(cfg.stateDir, 0o700); err != nil {
 		log.Fatalf("create state dir: %v", err)
 	}
@@ -897,7 +941,7 @@ func main() {
 		Hostname:     cfg.hostname,
 		Dir:          cfg.stateDir,
 		AuthKey:      cfg.authKey,
-		RunWebClient: true,
+		RunWebClient: cfg.runWebClient,
 		Logf:         tailscaleLogf(cfg.tailDebug),
 	}
 	if cfg.controlURL != "" {
@@ -915,7 +959,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("embedded tailscale local client: %v", err)
 	}
-	controlServer := serveControl(ctx, controlListener, lc, ts)
+	controlServer := serveControl(ctx, controlListener, lc, ts, cfg.statusTimeout)
 	defer controlServer.Shutdown(context.Background()) //nolint:errcheck
 
 	ln, err := ts.Listen("tcp", cfg.listenAddr)
@@ -933,4 +977,12 @@ func main() {
 	if err := http.Serve(ln, newProxy(target, lc)); err != nil && !strings.Contains(err.Error(), "use of closed network connection") && !errors.Is(err, net.ErrClosed) {
 		log.Fatalf("serve proxy: %v", err)
 	}
+}
+
+func configureTailscaleEnv(cfg config) {
+	if cfg.disablePortlist {
+		envknob.Setenv("TS_DEBUG_DISABLE_PORTLIST", "true")
+		return
+	}
+	envknob.Setenv("TS_DEBUG_DISABLE_PORTLIST", "false")
 }

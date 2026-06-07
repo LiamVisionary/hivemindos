@@ -1,4 +1,5 @@
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { bankrLlmAuthHeaders, isBankrLlmProfile } from "@/lib/services/bankr-llm";
 import { checkUsePodModels, isUsePodProfile, resolveUsePodRuntimeConfig } from "@/lib/services/usepod";
 import type { RuntimeAdapter } from "./types";
 
@@ -31,9 +32,14 @@ async function fetchModels(profile: AgentProfile): Promise<OpenAIModelList> {
   const runtimeProfile = usePodConfig
     ? { ...profile, gatewayUrl: usePodConfig.baseUrl, statusPath: usePodConfig.statusPath, token: "" }
     : profile;
+  const bankrHeaders = isBankrLlmProfile(runtimeProfile) ? await bankrLlmAuthHeaders(runtimeProfile) : {};
+  if (isBankrLlmProfile(runtimeProfile) && !bankrHeaders["X-API-Key"]) {
+    throw new Error("BANKR_LLM_KEY is required to list Bankr LLM models.");
+  }
   const response = await fetch(buildRuntimeUrl(runtimeProfile, runtimeProfile.statusPath || "/v1/models"), {
     headers: {
       ...(runtimeProfile.token ? { Authorization: `Bearer ${runtimeProfile.token}` } : {}),
+      ...bankrHeaders,
     },
     cache: "no-store",
     signal: AbortSignal.timeout(8_000),
@@ -72,15 +78,17 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
         .filter((model): model is string => Boolean(model)) ?? [];
     const providerName = isUsePodProfile(profile)
       ? "UsePod"
-      : profile.provider === "ollama"
-        ? "Ollama"
-        : profile.provider === "vllm"
-          ? "vLLM"
-          : profile.provider === "llamacpp"
-            ? "llama.cpp"
-            : profile.provider === "lm-studio"
-              ? "LM Studio"
-              : "OpenAI-compatible";
+      : isBankrLlmProfile(profile)
+        ? "Bankr LLM"
+        : profile.provider === "ollama"
+          ? "Ollama"
+          : profile.provider === "vllm"
+            ? "vLLM"
+            : profile.provider === "llamacpp"
+              ? "llama.cpp"
+              : profile.provider === "lm-studio"
+                ? "LM Studio"
+                : "OpenAI-compatible";
     return {
       baseUrl: cleanBaseUrl(runtimeProfile),
       chatPath: runtimeProfile.chatPath || "/v1/chat/completions",

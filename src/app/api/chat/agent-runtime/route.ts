@@ -29,11 +29,26 @@ import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
 import { chatTelemetrySession, chatTelemetryValue } from "@/lib/services/telemetry/chat-dev-telemetry";
 import { normalizeRuntimeStreamEvent, RUNTIME_STREAM_EVENT_TYPES, type RuntimeStreamEvent } from "@/lib/services/runtime-stream-events";
 import { isUsePodProfile, resolveUsePodRuntimeConfig, summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
+import {
+  bankrLlmModel,
+  isBankrLlmProfile,
+  resolveBankrLlmRuntimeProfile,
+} from "@/lib/services/bankr-llm";
+import {
+  buildMiroSharkChatCard,
+  executeMiroSharkChatRun,
+  extractMiroSharkRunId,
+  findMiroSharkChatRunRequest,
+  validateMiroSharkChatRun,
+  waitForMiroSharkCompletion,
+  type MiroSharkChatRunDraft,
+} from "@/lib/services/miroshark/x402-chat-run";
 import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS } from "@/lib/utils/agent-wallet";
 import { activeSharedVault, buildVaultContext } from "@/lib/services/chat/shared-vault-context";
 import { buildSharedBrainMemoryContext } from "@/lib/services/chat/shared-brain-memory-context";
 import { buildTaskRetrievalContext } from "@/lib/services/chat/task-retrieval-context";
 import { resolveAdaptiveOpenRouterModel, resolveAdaptiveOpenRouterModels } from "@/lib/services/chat/adaptive-openrouter-models";
+import { isAdaptiveProviderProfile, resolveAdaptiveRoutePlan, type AdaptiveRoutePlan } from "@/lib/services/chat/adaptive-model-router";
 import {
   appendRuntimeChatSessionEvent,
   appendRuntimeChatSessionText,
@@ -72,6 +87,7 @@ const HERMES_ENV_FILE = join(homedir(), ".hermes", ".env");
 const interactiveRuntimeLocks = new Map<string, number>();
 const privateTransferExecutions = new Map<string, { status: "running" | "completed"; startedAt: number; message?: string }>();
 const privateX402Executions = new Map<string, { status: "running" | "completed"; startedAt: number; message?: string }>();
+const MIROSHARK_TERMINAL_STATUS_PATTERN = /\b(?:complete|completed|success|succeeded|ready|failed|failure|error|cancelled|canceled|stopped)\b/i;
 const execFileAsync = promisify(execFile);
 
 type PrivateTransferDraft = { asset: "USDC"; amount: string; recipient: string };
@@ -527,6 +543,49 @@ async function maybePrepareNaturalPublicX402(input: {
   return privateTransferSse(message);
 }
 
+async function maybeExecuteNaturalMiroSharkX402(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}) {
+  const draft = findMiroSharkChatRunRequest(input.messages, input.wallet);
+  if (!draft) return null;
+
+  const validation = validateMiroSharkChatRun(input.wallet, draft);
+  if (validation) {
+    const message = [
+      "**MiroShark x402 unavailable**",
+      "",
+      validation,
+      "",
+      "Fix this blocker, then send the simulation request again.",
+    ].join("\n");
+    await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+    await finishRuntimeChatSession(input.runtimeSessionId, "failed").catch(() => undefined);
+    await recordRouteTelemetry(input.request, "agent_runtime.miroshark_x402.validation_failed", {
+      ...telemetryPayloadForProfile(input.profile),
+      seedKind: draft.seedKind,
+      hasMarketUrl: Boolean(draft.marketUrl),
+      maxPaymentUsd: draft.maxPaymentUsd,
+      validation,
+      elapsedMs: Date.now() - input.routeStartedAt,
+    });
+    return privateTransferSse(message);
+  }
+
+  return miroSharkX402ExecutionSse({
+    request: input.request,
+    routeStartedAt: input.routeStartedAt,
+    profile: input.profile,
+    draft,
+    wallet: input.wallet!,
+    runtimeSessionId: input.runtimeSessionId,
+  });
+}
+
 function findLatestPrivateX402Request(messages: IncomingMessage[], wallet?: AgentWalletConfig): PrivateX402Draft | null {
   const latest = latestUserMessage(messages);
   return parsePrivateX402Request(messageText(latest), wallet);
@@ -830,6 +889,111 @@ function privateX402ExecutionSse(input: {
         );
         await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
         await finishRuntimeChatSession(input.runtimeSessionId, noPaymentRequested ? "completed" : "failed").catch(() => undefined);
+        send({ choices: [{ delta: { content: message } }] });
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
+function miroSharkX402ExecutionSse(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  draft: MiroSharkChatRunDraft;
+  wallet: AgentWalletConfig;
+  runtimeSessionId: string;
+}) {
+  const encoder = new TextEncoder();
+  const readable = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (payload: unknown) => controller.enqueue(encoder.encode(ssePayload(payload)));
+      const sendTool = async (type: string, label: string, detail?: string, status: "running" | "completed" | "failed" = "running") => {
+        const event = { type, toolName: "MiroShark x402", name: "MiroShark x402", message: label, detail, status };
+        send(event);
+        await appendRuntimeChatSessionEvent(input.runtimeSessionId, label, detail, event).catch(() => undefined);
+      };
+      try {
+        send({ session: { id: input.runtimeSessionId, runtime: input.profile.runtime, source: "hivemindos-miroshark-x402", startedAt: input.routeStartedAt } });
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_START, "Preparing MiroShark simulation", `question: ${input.draft.title}`);
+        await sendTool(
+          RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS,
+          "Paying MiroShark x402 endpoint",
+          `Cap ${formatMoney(Math.min(input.wallet.maxPaymentUsd, Math.max(1, input.draft.maxPaymentUsd)))} USDC · ${input.draft.seedKind}`,
+        );
+        const paidStartedAt = Date.now();
+        const paidRun = await executeMiroSharkChatRun(input.profile.id, input.wallet, input.draft);
+        const runId = extractMiroSharkRunId(paidRun.miroshark, paidRun.result.bodyJson);
+        await recordRouteTelemetry(input.request, "agent_runtime.miroshark_x402.started", {
+          ...telemetryPayloadForProfile(input.profile),
+          seedKind: input.draft.seedKind,
+          hasMarketUrl: Boolean(input.draft.marketUrl),
+          maxPaymentUsd: input.draft.maxPaymentUsd,
+          amountUsd: paidRun.result.amountUsd,
+          paid: paidRun.result.paid,
+          runId: runId || null,
+          elapsedMs: Date.now() - input.routeStartedAt,
+        });
+        await sendTool(
+          RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS,
+          "MiroShark simulation started",
+          runId ? `Run ${runId} · paid in ${formatDuration(Date.now() - paidStartedAt)}` : "Paid run accepted; waiting for run id.",
+          "running",
+        );
+
+        const snapshot = runId
+          ? await waitForMiroSharkCompletion(runId, async (_status, statusLabel) => {
+            await sendTool(
+              RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS,
+              "MiroShark status",
+              statusLabel || `Polling ${runId}`,
+              MIROSHARK_TERMINAL_STATUS_PATTERN.test(statusLabel) ? "completed" : "running",
+            );
+          })
+          : { status: paidRun.miroshark, timedOut: true };
+        const card = buildMiroSharkChatCard({
+          draft: input.draft,
+          elapsedMs: Date.now() - input.routeStartedAt,
+          paidRun,
+          runId,
+          snapshot,
+        });
+        const completed = /\b(?:complete|completed|success|succeeded|ready)\b/i.test(card.miroshark.status);
+        await sendTool(
+          RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
+          completed ? "MiroShark report ready" : snapshot.timedOut ? "MiroShark still running" : "MiroShark run finished",
+          `Total ${formatDuration(Date.now() - input.routeStartedAt)}${runId ? ` · ${runId}` : ""}`,
+          completed ? "completed" : "running",
+        );
+        const message = JSON.stringify(card);
+        await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message, card).catch(() => undefined);
+        await finishRuntimeChatSession(input.runtimeSessionId, "completed").catch(() => undefined);
+        send({ choices: [{ delta: { content: message } }] });
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "MiroShark x402 run failed.";
+        const message = `MiroShark x402 failed: ${detail}`;
+        await recordRouteTelemetry(input.request, "agent_runtime.miroshark_x402.failed", {
+          ...telemetryPayloadForProfile(input.profile),
+          seedKind: input.draft.seedKind,
+          hasMarketUrl: Boolean(input.draft.marketUrl),
+          error: detail,
+          elapsedMs: Date.now() - input.routeStartedAt,
+        }).catch(() => undefined);
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE, "MiroShark x402 failed", detail, "failed");
+        await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+        await finishRuntimeChatSession(input.runtimeSessionId, "failed").catch(() => undefined);
         send({ choices: [{ delta: { content: message } }] });
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       } finally {
@@ -1547,6 +1711,7 @@ function buildOpenAICompatibleUrl(profile: AgentProfile) {
 }
 
 function openAICompatibleModel(profile: AgentProfile) {
+  if (isBankrLlmProfile(profile)) return bankrLlmModel(profile);
   return profile.model?.trim() || process.env.LOCAL_OPENAI_MODEL?.trim() || process.env.NEXT_PUBLIC_LOCAL_OPENAI_MODEL?.trim() || "local-model";
 }
 
@@ -1639,6 +1804,12 @@ function finalAdaptiveOpenRouterError(status: number, modelAttempts: string[]) {
     return `OpenRouter's free models are currently rate-limited or out of promo capacity. Adaptive tried ${modelAttempts.length} configured model${modelAttempts.length === 1 ? "" : "s"}${modelAttempts.length ? `, ending with ${modelAttempts.at(-1)}` : ""}. Try again shortly or choose an optional paid fallback model in Adaptive advanced settings.`;
   }
   return `OpenRouter could not complete this Adaptive request after trying ${modelAttempts.length || 1} configured model${modelAttempts.length === 1 ? "" : "s"}.`;
+}
+
+function finalAdaptiveProviderError(status: number, attempts: string[]) {
+  const attempted = attempts.length ? ` Adaptive tried ${attempts.length} route${attempts.length === 1 ? "" : "s"}, ending with ${attempts.at(-1)}.` : "";
+  if (status === 429) return `Adaptive free routing is currently rate-limited or out of free capacity.${attempted} Try again shortly or disable that provider in Adaptive settings.`;
+  return `Adaptive could not complete this request.${attempted}`;
 }
 
 async function recordChatHoney(profile: AgentProfile, inputText: string, outputText: string, enabled: boolean, source: "chat" | "kanban-chat" = "chat") {
@@ -1758,6 +1929,17 @@ async function streamHttpRuntime(
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
     return Response.json({ error: inputCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
+  }
+  if (isAdaptiveProviderProfile(profile)) {
+    try {
+      const adaptiveRoutePlan = await resolveAdaptiveRoutePlan(profile, messages);
+      if (adaptiveRoutePlan.profile.runtime === "openai-compatible") {
+        return streamOpenAICompatibleRuntime(adaptiveRoutePlan.profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, adaptiveRoutePlan);
+      }
+      profile = adaptiveRoutePlan.profile;
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : "Adaptive provider routing failed." }, { status: 502 });
+    }
   }
   if (isOpenAICompatibleRuntime(profile)) {
     return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext);
@@ -2199,6 +2381,7 @@ async function streamOpenAICompatibleRuntime(
   telemetry?: RuntimeRouteTelemetry,
   taskRetrievalContext = "",
   sharedBrainMemoryContext = "",
+  adaptiveRoutePlan?: AdaptiveRoutePlan,
 ) {
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
@@ -2206,6 +2389,7 @@ async function streamOpenAICompatibleRuntime(
   }
   let runtimeProfile = profile;
   let usePodHeaders: Record<string, string> = {};
+  let providerHeaders: Record<string, string> = {};
   const usePodEnabled = isUsePodProfile(profile);
   try {
     const usePodConfig = await resolveUsePodRuntimeConfig(profile);
@@ -2222,12 +2406,19 @@ async function streamOpenAICompatibleRuntime(
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "UsePod setup is incomplete." }, { status: 502 });
   }
+  if (isBankrLlmProfile(profile)) {
+    const resolved = await resolveBankrLlmRuntimeProfile(runtimeProfile);
+    if (resolved.error) return Response.json({ error: resolved.error }, { status: 400 });
+    runtimeProfile = resolved.profile;
+    providerHeaders = resolved.headers;
+  }
   const url = buildOpenAICompatibleUrl(runtimeProfile);
   const lockKey = interactiveRuntimeLockKey(runtimeProfile, url);
   if (!reserveInteractiveRuntime(lockKey)) {
     return Response.json({ error: `${runtimeProfile.name || runtimeProfile.runtime} is already running another interactive request at ${url}.` }, { status: 409 });
   }
 
+  const adaptiveProvider = Boolean(adaptiveRoutePlan);
   const adaptiveOpenRouter = isAdaptiveOpenRouterProfile(runtimeProfile) || (isOpenRouterProvider(runtimeProfile) && Boolean(runtimeProfile.adaptiveOpenRouter));
   if (usePodEnabled) {
     const capLabel = [
@@ -2240,8 +2431,7 @@ async function streamOpenAICompatibleRuntime(
       `UsePod · ${openAICompatibleModel(runtimeProfile)}${capLabel ? ` · ${capLabel}` : ""}`,
     ).catch(() => undefined);
   }
-  const modelMessagesFor = (candidateModel: string) => {
-    const candidateProfile = profileWithResolvedModel(runtimeProfile, candidateModel);
+  const modelMessagesFor = (candidateProfile: AgentProfile, candidateModel: string) => {
     const context = [buildAgentProfileContext(candidateProfile), buildAdaptiveOpenRouterResolvedModelContext(runtimeProfile, candidateModel), buildAgentModeContext(agentMode), buildWorkingDirectoryContext(workingDirectory), buildVaultContext(sharedVault), sharedBrainMemoryContext, taskRetrievalContext, buildWalletToolContext(wallet)].filter(Boolean).join("\n\n");
     return context ? [{ role: "system" as const, content: context }, ...messages] : messages;
   };
@@ -2260,25 +2450,50 @@ async function streamOpenAICompatibleRuntime(
   let lastStatus = 0;
   let lastFetchError: unknown = null;
   const attemptedModels: string[] = [];
-  for (const candidateModel of candidateModels) {
+  const adaptiveRouteCandidates = adaptiveRoutePlan?.candidates.filter((candidate) => candidate.runtime === "openai-compatible") ?? [];
+  const routeAttempts = adaptiveRouteCandidates.length
+    ? adaptiveRouteCandidates
+    : candidateModels.map((candidateModel) => ({
+      provider: runtimeProfile.provider || "openai-compatible",
+      providerName: runtimeProfile.provider || "OpenAI-compatible",
+      model: candidateModel,
+      gatewayUrl: runtimeProfile.gatewayUrl,
+      chatPath: runtimeProfile.chatPath || "/v1/chat/completions",
+      token: runtimeProfile.token,
+      headers: {} as Record<string, string>,
+    }));
+  for (const routeAttempt of routeAttempts) {
+    const candidateModel = routeAttempt.model;
     model = candidateModel;
-    attemptedModels.push(candidateModel);
-    const modelMessages = modelMessagesFor(candidateModel);
+    const candidateProfile = {
+      ...runtimeProfile,
+      provider: routeAttempt.provider,
+      model: candidateModel,
+      gatewayUrl: routeAttempt.gatewayUrl,
+      chatPath: routeAttempt.chatPath,
+      token: routeAttempt.token ?? runtimeProfile.token,
+    };
+    const candidateUrl = buildOpenAICompatibleUrl(candidateProfile);
+    attemptedModels.push(`${routeAttempt.provider}/${candidateModel}`);
+    const modelMessages = modelMessagesFor(candidateProfile, candidateModel);
     recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.fetch.start", {
-      ...telemetryPayloadForProfile(runtimeProfile),
-      url,
+      ...telemetryPayloadForProfile(candidateProfile),
+      url: candidateUrl,
       model,
       adaptiveOpenRouter,
+      adaptiveProvider,
       usePod: usePodEnabled,
       messageCount: modelMessages.length,
     });
     try {
-      upstream = await fetch(url, {
+      upstream = await fetch(candidateUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(runtimeProfile.token ? { Authorization: `Bearer ${runtimeProfile.token}` } : {}),
+          ...(candidateProfile.token ? { Authorization: `Bearer ${candidateProfile.token}` } : {}),
           ...usePodHeaders,
+          ...providerHeaders,
+          ...(routeAttempt.headers ?? {}),
         },
         body: JSON.stringify({
           model,
@@ -2290,41 +2505,43 @@ async function streamOpenAICompatibleRuntime(
     } catch (error) {
       lastFetchError = error;
       recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.fetch.failed", {
-        ...telemetryPayloadForProfile(runtimeProfile),
-        url,
+        ...telemetryPayloadForProfile(candidateProfile),
+        url: candidateUrl,
         model,
         adaptiveOpenRouter,
+        adaptiveProvider,
         usePod: usePodEnabled,
         errorName: error instanceof Error ? error.name : null,
         errorMessage: error instanceof Error ? error.message : String(error),
         attempt: attemptedModels.length,
-        remainingCandidates: Math.max(0, candidateModels.length - attemptedModels.length),
+        remainingCandidates: Math.max(0, routeAttempts.length - attemptedModels.length),
         elapsedMs: Date.now() - fetchStartedAt,
       });
-      if (adaptiveOpenRouter && attemptedModels.length < candidateModels.length) {
+      if ((adaptiveOpenRouter || adaptiveProvider) && attemptedModels.length < routeAttempts.length) {
         continue;
       }
-      await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible fetch failed", runtimeFetchError(runtimeProfile, url, error)).catch(() => undefined);
+      await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible fetch failed", runtimeFetchError(candidateProfile, candidateUrl, error)).catch(() => undefined);
       await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
       releaseInteractiveRuntime(lockKey);
-      return Response.json({ error: runtimeFetchError(runtimeProfile, url, error) }, { status: 502 });
+      return Response.json({ error: runtimeFetchError(candidateProfile, candidateUrl, error) }, { status: 502 });
     }
     if (upstream.ok) break;
     lastStatus = upstream.status;
     const errorText = await upstream.text().catch(() => "");
     recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.upstream_error", {
-      ...telemetryPayloadForProfile(runtimeProfile),
-      url,
+      ...telemetryPayloadForProfile(candidateProfile),
+      url: candidateUrl,
       model,
       adaptiveOpenRouter,
+      adaptiveProvider,
       usePod: usePodEnabled,
       status: upstream.status,
       bodyPreview: errorText.slice(0, 500),
       attempt: attemptedModels.length,
-      remainingCandidates: Math.max(0, candidateModels.length - attemptedModels.length),
+      remainingCandidates: Math.max(0, routeAttempts.length - attemptedModels.length),
       elapsedMs: Date.now() - fetchStartedAt,
     });
-    if (adaptiveOpenRouter && retryableAdaptiveOpenRouterStatus(upstream.status) && attemptedModels.length < candidateModels.length) {
+    if ((adaptiveOpenRouter || adaptiveProvider) && retryableAdaptiveOpenRouterStatus(upstream.status) && attemptedModels.length < routeAttempts.length) {
       continue;
     }
     await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible upstream error", providerErrorMessage(errorText, upstream.status, model)).catch(() => undefined);
@@ -2333,6 +2550,8 @@ async function streamOpenAICompatibleRuntime(
     return new Response(
       ssePayload({ error: adaptiveOpenRouter && retryableAdaptiveOpenRouterStatus(upstream.status)
         ? finalAdaptiveOpenRouterError(upstream.status, attemptedModels)
+        : adaptiveProvider && retryableAdaptiveOpenRouterStatus(upstream.status)
+          ? finalAdaptiveProviderError(upstream.status, attemptedModels)
         : providerErrorMessage(errorText, upstream.status, model) }) + "data: [DONE]\n\n",
       { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } },
     );
@@ -2344,7 +2563,9 @@ async function streamOpenAICompatibleRuntime(
     releaseInteractiveRuntime(lockKey);
     return new Response(
       ssePayload({ error: lastFetchError
-        ? `OpenRouter had a network issue while Adaptive was trying configured models. Adaptive tried ${attemptedModels.length || 1} model${attemptedModels.length === 1 ? "" : "s"}. Try again shortly or choose an optional paid fallback model in Adaptive advanced settings.`
+        ? `${adaptiveProvider ? "Adaptive" : "OpenRouter"} had a network issue while trying configured models. Adaptive tried ${attemptedModels.length || 1} route${attemptedModels.length === 1 ? "" : "s"}. Try again shortly or disable the failing provider in Adaptive settings.`
+        : adaptiveProvider
+          ? finalAdaptiveProviderError(lastStatus || 502, attemptedModels)
         : finalAdaptiveOpenRouterError(lastStatus || 502, attemptedModels) }) + "data: [DONE]\n\n",
       { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } },
     );
@@ -2617,6 +2838,15 @@ export async function POST(request: NextRequest) {
     session: chatTelemetrySession(runtimeSession),
     elapsedMs: Date.now() - routeStartedAt,
   });
+  const naturalMiroSharkX402 = await maybeExecuteNaturalMiroSharkX402({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (naturalMiroSharkX402) return naturalMiroSharkX402;
   const confirmedPrivateX402 = await maybeExecuteConfirmedPrivateX402({
     request,
     routeStartedAt,

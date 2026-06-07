@@ -4,6 +4,7 @@
 
 import { type ChangeEvent, type Dispatch, type SetStateAction, useMemo } from "react";
 import type { BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
 import type { AgentProfile, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile } from "@/lib/types/agent-runtime";
 import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 import type { BrainSkillSummary, HivemindLinkClientStatus, MachineGroup, RuntimeIntegrationStatus, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
@@ -86,6 +87,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
       provider: agentCreateDraft.provider,
       model: agentCreateDraft.model,
       adaptiveOpenRouter: agentCreateDraft.adaptiveOpenRouter,
+      adaptiveRouting: agentCreateDraft.adaptiveRouting,
       usePod: agentCreateDraft.usePod,
       telemetryUrl: agentCreateMachine.collectorUrl,
       machineName: agentCreateMachine.name,
@@ -97,10 +99,29 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
     : undefined;
   const runtimeModelSelectionFresh = Boolean(freshRuntimeModelSelection);
   const runtimeModelSelection = freshRuntimeModelSelection ?? runtimeModelSelectionsByRuntime[agentSettingsRuntime];
-  const runtimeModelProviders = runtimeModelSelection?.providers ?? [];
-  const selectedRuntimeProvider = runtimeModelProviders.find((provider) => provider.slug === agentSettingsProvider)
-    ?? runtimeModelProviders.find((provider) => provider.slug === runtimeModelSelection?.provider)
-    ?? runtimeModelProviders[0];
+  const runtimeModelProviders = (() => {
+    const baseProviders = runtimeModelSelection?.providers ?? [];
+    const modelSettings = runtimeSettingsFeature(agentSettingsRuntime);
+    if (modelSettings.modelSource !== "runtime" || agentSettingsRuntime === "aeon") return baseProviders;
+    const providersBySlug = new Map(baseProviders.map((provider) => [provider.slug, provider]));
+    for (const gateway of Object.values(MODEL_PROVIDER_GATEWAYS)) {
+      if (providersBySlug.has(gateway.slug)) continue;
+      const models = gateway.defaultModel ? [{ id: gateway.defaultModel }] : [];
+      providersBySlug.set(gateway.slug, {
+        slug: gateway.slug,
+        name: gateway.name,
+        models,
+        totalModels: models.length,
+        isUserDefined: true,
+        source: "HivemindOS provider gateway",
+      });
+    }
+    return [...providersBySlug.values()];
+  })();
+  const selectedRuntimeProvider = agentSettingsProvider
+    ? runtimeModelProviders.find((provider) => provider.slug === agentSettingsProvider)
+    : runtimeModelProviders.find((provider) => provider.slug === runtimeModelSelection?.provider)
+      ?? runtimeModelProviders[0];
   const selectedRuntimeModels = selectedRuntimeProvider?.models ?? [];
   const selectedRuntimeModelId = agentSettingsModel || selectBestRuntimeModel(selectedRuntimeProvider, {
     currentModel: runtimeModelSelection?.model,
@@ -114,7 +135,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
     if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
     const target = agentSettingsIntegrationTarget;
-    if (target && (target.runtime === "openclaw" || target.runtime === "hermes")) {
+    if (target && provider !== "adaptive" && (target.runtime === "openclaw" || target.runtime === "hermes")) {
       window.setTimeout(() => {
         void runRuntimeIntegrationAction("set-model", patch, { ...target, ...patch });
       }, 0);

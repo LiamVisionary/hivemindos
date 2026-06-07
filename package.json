@@ -27,6 +27,7 @@
     "test:e2e:env": "node scripts/e2e-real-fleet.mjs --suite=env",
     "test:e2e:skills": "node scripts/e2e-real-fleet.mjs --suite=skills",
     "test:e2e:file-share": "node scripts/e2e-real-fleet.mjs --suite=file-share",
+    "test:e2e:handoff": "node scripts/e2e-real-fleet.mjs --suite=handoff",
     "test:e2e:kanban": "node scripts/e2e-real-fleet.mjs --suite=kanban",
     "test:e2e:adaptive-agent": "node scripts/e2e-real-fleet.mjs --suite=adaptive-agent",
     "test:e2e:agent-call": "node scripts/e2e-dashboard-agent-call.mjs",

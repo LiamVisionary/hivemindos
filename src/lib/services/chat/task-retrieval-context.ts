@@ -51,7 +51,7 @@ function taskRetrievalQueries(query: string) {
     queries.push({ label: "wallet and payment rails", query: "agent wallet tools payment rails private transfer privacy x402 fetch paid api crypto usdc usepod moneyclaw bankr send balance approval" });
   }
   if (/\b(miroshark|simulation|simulate|rehearsal|social\s+sim|belief\s+drift|prediction\s+market|polymarket|reddit|twitter)\b/.test(normalized)) {
-    queries.push({ label: "MiroShark social simulation", query: "MiroShark x402 paid run social simulation rehearsal prompt url article deep research prediction market report status" });
+    queries.push({ label: "MiroShark social simulation", query: "MiroShark x402 paid run native chat card social simulation rehearsal prompt url article deep research prediction market report status modal" });
   }
   if (/agent|worker|specialist|runtime|workflow|skill/.test(normalized)) {
     queries.push({ label: "agent and workflow routing", query: "agent worker runtime capabilities skill action workflow social posting xSearch writer" });

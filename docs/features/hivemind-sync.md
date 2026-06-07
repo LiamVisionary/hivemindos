@@ -70,7 +70,17 @@ They live in the vault folder:
 
 Each transfer is an envelope with a manifest, payload files, targeting metadata, hashes, and acknowledgement files. The receiver sees the transfer after the selected vault sync owner has replicated the folder locally.
 
-Use:
+Agents should usually use the friendly planner command:
+
+```bash
+hive-handoff send --to ubuntu ./artifact.png
+hive-handoff send --to ubuntu --task "review this artifact" ./artifact.png
+hive-handoff task --to ubuntu "summarize the local project state"
+```
+
+It fuzzy-matches connected Fleet machines, selects the best target agent for task handoffs, then uses `hive-transfer` underneath.
+
+Low-level transfer commands remain available:
 
 ```bash
 hive-transfer send --toMachine MACHINE_ID ./artifact.png
