@@ -362,6 +362,22 @@ Before committing any feature or user-visible fix, add an entry to `CHANGELOG.md
 
 See [ROADMAP.md](ROADMAP.md).
 
+## License And Brand
+
+HivemindOS source code and documentation are open source under the
+[MIT License](LICENSE). You may use, modify, distribute, host, and sell the
+MIT-licensed code, including commercially.
+
+The HivemindOS name, logos, app icons, HIVE/Honey marks, official badges, domain
+names, and official visual identity are reserved. Forks and commercial services
+are welcome, but modified or hosted versions must not imply that they are the
+official HivemindOS app, token, Honey ledger, compute gateway, marketplace, or
+cloud service unless the project owner has authorized that use.
+
+If you ship a modified build, rename it, replace the prominent HivemindOS brand
+assets, and make the fork or service relationship clear. See
+[TRADEMARK.md](TRADEMARK.md) for the brand policy.
+
 ## Provenance
 
 HivemindOS packages agent-control patterns, runtime adapter code, HivemindOS workflow templates, MiroShark companion integration, and local-first fleet telemetry into a standalone open-source dashboard. The AI SDK route and chat UI patterns were adapted from public Next.js agent examples. Some workflow templates were inspired by `shannhk/hermes-agent-control-room`.

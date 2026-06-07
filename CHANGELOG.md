@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-07 13:16:16 WITA - Clarify Open Source Brand Policy
+
+- Status: Pushed
+- Areas changed: README license section, package license metadata, HivemindOS trademark and brand policy
+- Summary: Keep HivemindOS permissively open source under MIT while documenting that commercial code use is allowed, official names/logos/token marks/visual identity are reserved, and modified or hosted forks must clearly rebrand rather than imply official status.
+- Verification: `git diff --check -- README.md TRADEMARK.md package.json CHANGELOG.md`; `node -e 'JSON.parse(require("fs").readFileSync("package.json", "utf8")); console.log("package.json ok")'`; manual readback of `TRADEMARK.md` and the README license section.
+- Intended commit message: `Clarify open source brand policy`
+
 ## 2026-06-06 20:35:26 WITA - Restore Generated Next Env Before Updates
 
 - Status: Pushed

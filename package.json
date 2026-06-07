@@ -2,6 +2,7 @@
   "name": "hivemindos",
   "version": "0.1.9",
   "private": false,
+  "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@8.6.12",
   "scripts": {
