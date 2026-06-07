@@ -53,6 +53,16 @@ The Swarm tab should never stop at "companion not running." It should show one o
 
 Manual fallback commands remain visible in setup details, but they are a backup, not the primary path.
 
+## Chat Launch
+
+Dashboard chat can launch a lightweight simulation request with:
+
+```text
+/swarm-sim <scenario>
+```
+
+The command posts the scenario to HivemindOS' `/api/miroshark/swarm` route, queues the MiroShark run when the companion is connected, and writes the queued job/status link back into the chat. If the companion is missing or stopped, the chat reply should explain the setup problem instead of silently dropping the request. Use the Swarm tab for template fields, round/platform controls, archive loading, analysis-agent selection, and publishing.
+
 ## Strategy
 
 Use MiroShark for rehearsal:

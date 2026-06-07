@@ -1,0 +1,287 @@
+#!/usr/bin/env node
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const scriptPath = fileURLToPath(import.meta.url);
+const repoRoot = path.resolve(path.dirname(scriptPath), "..");
+
+function usage() {
+  console.error(`Usage:
+  hive-pulse <topic> [engine flags]
+  hive-pulse --diagnose
+  hive-pulse --help
+
+Examples:
+  hive-pulse "OpenAI agents"
+  hive-pulse "HivemindOS" --quick
+  hive-pulse "OpenClaw vs Hermes" --emit=html
+`);
+}
+
+function expandHome(value) {
+  if (!value) return value;
+  if (value === "~") return os.homedir();
+  if (value.startsWith("~/") || value.startsWith("~\\")) return path.join(os.homedir(), value.slice(2));
+  return value;
+}
+
+function defaultVaultPath() {
+  return expandHome(process.env.NEXT_PUBLIC_OBSIDIAN_VAULT_PATH)
+    || path.join(os.homedir(), "Documents", "Obsidian", "hivemindos-vault");
+}
+
+function parseEnvFile(envPath) {
+  try {
+    const raw = fs.readFileSync(envPath, "utf8");
+    const env = {};
+    for (const lineRaw of raw.split(/\r?\n/)) {
+      let line = lineRaw.trim();
+      if (!line || line.startsWith("#") || !line.includes("=")) continue;
+      if (line.startsWith("export ")) line = line.slice("export ".length).trim();
+      const separator = line.indexOf("=");
+      const key = line.slice(0, separator).trim();
+      let value = line.slice(separator + 1).trim();
+      if (!key) continue;
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      env[key] = value;
+    }
+    return env;
+  } catch {
+    return {};
+  }
+}
+
+function candidateSkillDirs() {
+  return [
+    process.env.HIVE_PULSE_SKILL_DIR,
+    path.join(defaultVaultPath(), "Skills", "hive-pulse"),
+    path.join(repoRoot, "packaged-skills", "auto-install", "hive-pulse"),
+    path.join(process.cwd(), "packaged-skills", "auto-install", "hive-pulse"),
+  ].filter(Boolean).map((item) => path.resolve(expandHome(item)));
+}
+
+function findSkillDir() {
+  for (const dir of candidateSkillDirs()) {
+    const engine = path.join(dir, "scripts", "last30days.py");
+    if (fs.existsSync(engine)) return dir;
+  }
+  return null;
+}
+
+function commandWorks(command, args = []) {
+  const result = spawnSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  return result.status === 0;
+}
+
+function isPython312(command, args = []) {
+  return commandWorks(command, [
+    ...args,
+    "-c",
+    "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)",
+  ]);
+}
+
+function findPython() {
+  const explicit = process.env.HIVE_PULSE_PYTHON || process.env.LAST30DAYS_PYTHON;
+  if (explicit && isPython312(explicit)) return { command: explicit, args: [] };
+
+  for (const command of ["python3.14", "python3.13", "python3.12"]) {
+    if (isPython312(command)) return { command, args: [] };
+  }
+
+  if (process.platform === "win32" && isPython312("py", ["-3.12"])) {
+    return { command: "py", args: ["-3.12"] };
+  }
+
+  if (isPython312("python3")) return { command: "python3", args: [] };
+  if (isPython312("python")) return { command: "python", args: [] };
+  return null;
+}
+
+function cleanEnv(env) {
+  const cleaned = {};
+  const skipped = [];
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value !== "string") continue;
+    if (key.includes("\0") || value.includes("\0")) {
+      skipped.push(key.replaceAll("\0", ""));
+      continue;
+    }
+    cleaned[key] = value;
+  }
+  if (skipped.length > 0) {
+    console.error(`hive-pulse: skipped env entries containing NUL bytes: ${skipped.sort().join(", ")}`);
+  }
+  return cleaned;
+}
+
+function hasEngineArg(argv, name) {
+  return argv.some((arg) => arg === name || arg.startsWith(`${name}=`));
+}
+
+const flagsWithValues = new Set([
+  "--emit",
+  "--search",
+  "--save-dir",
+  "--synthesis-file",
+  "--x-handle",
+  "--x-related",
+  "--web-backend",
+  "--plan",
+  "--save-suffix",
+  "--subreddits",
+  "--tiktok-hashtags",
+  "--tiktok-creators",
+  "--ig-creators",
+  "--days",
+  "--lookback-days",
+  "--github-user",
+  "--github-repo",
+  "--competitors-list",
+  "--polymarket-keywords",
+  "--competitors-plan",
+]);
+
+function topicFromArgs(argv) {
+  const topic = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--") {
+      topic.push(...argv.slice(index + 1));
+      break;
+    }
+    if (arg.startsWith("--")) {
+      const [flag] = arg.split("=", 1);
+      if (!arg.includes("=") && flagsWithValues.has(flag)) index += 1;
+      if (flag === "--competitors" && argv[index + 1] && !argv[index + 1].startsWith("-")) index += 1;
+      continue;
+    }
+    if (arg.startsWith("-")) continue;
+    topic.push(arg);
+  }
+  return topic.join(" ").trim();
+}
+
+function requestedSources(argv) {
+  const searchArg = argv.find((arg) => arg === "--search" || arg.startsWith("--search="));
+  if (!searchArg) return ["reddit", "hackernews", "polymarket", "github"];
+  const raw = searchArg === "--search" ? argv[argv.indexOf(searchArg) + 1] : searchArg.slice("--search=".length);
+  return raw.split(",").map((source) => source.trim()).filter(Boolean);
+}
+
+function sourceWeight(source) {
+  const weights = {
+    reddit: 1.2,
+    hackernews: 1.0,
+    polymarket: 0.9,
+    github: 1.1,
+    x: 1.2,
+    youtube: 1.1,
+    tiktok: 1.0,
+    grounding: 0.9,
+    web: 0.9,
+  };
+  return weights[source] || 1.0;
+}
+
+function defaultPlan(topic, sources) {
+  const sourceWeights = Object.fromEntries(sources.map((source) => [source, sourceWeight(source)]));
+  return {
+    intent: "concept",
+    freshness_mode: "balanced_recent",
+    cluster_mode: "story",
+    source_weights: sourceWeights,
+    subqueries: [
+      {
+        label: "primary-signal",
+        search_query: topic,
+        ranking_query: `${topic} recent public signal community engagement`,
+        sources,
+        weight: 1.0,
+      },
+      {
+        label: "recent-updates",
+        search_query: `${topic} update OR launch OR release OR changelog`,
+        ranking_query: `${topic} recent updates shipped changes last 30 days`,
+        sources,
+        weight: 0.9,
+      },
+      {
+        label: "community-discussion",
+        search_query: `${topic} discussion OR review OR opinion OR reaction`,
+        ranking_query: `${topic} community discussion reviews reactions`,
+        sources,
+        weight: 0.85,
+      },
+      {
+        label: "developer-market-signal",
+        search_query: `${topic} github OR pull request OR prediction OR odds`,
+        ranking_query: `${topic} developer activity prediction market signal`,
+        sources,
+        weight: 0.8,
+      },
+    ],
+  };
+}
+
+function engineArgs(argv) {
+  if (argv.includes("--help") || argv.includes("-h") || argv.includes("--diagnose")) return argv;
+  const nextArgs = hasEngineArg(argv, "--search")
+    ? [...argv]
+    : [...argv, "--search=reddit,hackernews,polymarket,github"];
+  if (hasEngineArg(nextArgs, "--plan")) return nextArgs;
+  const topic = topicFromArgs(nextArgs);
+  if (!topic) return nextArgs;
+  return [...nextArgs, "--plan", JSON.stringify(defaultPlan(topic, requestedSources(nextArgs)))];
+}
+
+function main(argv) {
+  if (argv.length === 0) {
+    usage();
+    return 2;
+  }
+
+  const skillDir = findSkillDir();
+  if (!skillDir) {
+    console.error("hive-pulse: could not find Skills/hive-pulse or the packaged Hive Pulse engine.");
+    console.error("Run HivemindOS setup again so the auto-installed skill is seeded into the shared brain.");
+    return 127;
+  }
+
+  const python = findPython();
+  if (!python) {
+    console.error("hive-pulse: Python 3.12+ is required by the bundled Hive Pulse engine.");
+    console.error("Install Python 3.12+ and rerun setup, or set HIVE_PULSE_PYTHON to a Python 3.12+ executable.");
+    return 127;
+  }
+
+  const sharedEnv = parseEnvFile(path.join(os.homedir(), ".hivemindos", ".env"));
+  const childEnv = cleanEnv({
+    ...sharedEnv,
+    ...process.env,
+    FROM_BROWSER: process.env.FROM_BROWSER || sharedEnv.FROM_BROWSER || "off",
+    LAST30DAYS_REASONING_PROVIDER:
+      process.env.LAST30DAYS_REASONING_PROVIDER || sharedEnv.LAST30DAYS_REASONING_PROVIDER || "local",
+    HIVE_PULSE_SKILL_DIR: skillDir,
+  });
+
+  const engine = path.join(skillDir, "scripts", "last30days.py");
+  const result = spawnSync(python.command, [...python.args, engine, ...engineArgs(argv)], {
+    cwd: skillDir,
+    env: childEnv,
+    stdio: "inherit",
+  });
+
+  if (result.signal) {
+    console.error(`hive-pulse: engine terminated by ${result.signal}`);
+    return 1;
+  }
+  return result.status ?? 1;
+}
+
+process.exitCode = main(process.argv.slice(2));

@@ -24,6 +24,7 @@ yarn-debug.log*
 yarn-error.log*
 coverage/
 artifacts/
+.outputs/
 .hermes/
 strix-results/
 strix_runs/

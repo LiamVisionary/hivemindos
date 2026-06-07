@@ -41,10 +41,13 @@
     "test:gbrain-foundation": "node scripts/test-gbrain-foundation.mjs",
     "test:vault-structure": "node scripts/test-vault-structure-contract.mjs",
     "test:hive-env-remove": "node scripts/test-hive-env-remove.mjs",
+    "benchmark:token-savings": "pnpm benchmark:context-savings",
+    "benchmark:e2e-token-savings": "node scripts/benchmark-e2e-token-savings.mjs",
     "vault:doctor": "node scripts/vault-doctor.mjs",
     "test:hive-transfer": "node scripts/test-hive-transfer.mjs",
     "check-sizes": "node scripts/check-file-sizes.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "benchmark:context-savings": "node scripts/benchmark-context-savings.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.77",

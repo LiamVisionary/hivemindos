@@ -1178,8 +1178,7 @@
 @media (max-width: 980px) {
   .walletWorkspace {
     grid-template-columns: 1fr;
-  }
-  .walletGridList {
+  }  .walletGridList {
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   }
   .hiveLedgerGrid,

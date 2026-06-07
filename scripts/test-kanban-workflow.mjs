@@ -110,6 +110,7 @@ async function main() {
     });
     needsHumanUnassigned = await moveTask(needsHumanUnassigned, "ready");
     assert(!needsHumanUnassigned.assignee, "Unassigned Needs Human task should go back to Ready for assignment.");
+    await moveTask(needsHumanUnassigned, "archived");
 
     const parent = await createTask("dependency parent", "ready");
     let child = await createTask("dependency child", "ready", { parents: [parent.id] });
@@ -123,6 +124,7 @@ async function main() {
     const afterParentDone = await request("GET", {}, { vaultPath, kanbanFolder, include_archived: "true" });
     child = afterParentDone.board.tasks.find((task) => task.id === child.id);
     assert(child?.status === "ready", "Completing a parent should promote ready children.");
+    await moveTask(child, "archived");
 
     let claimable = await createTask("structured worker verbs", "ready");
     const claimed = await request("POST", {
@@ -144,6 +146,57 @@ async function main() {
     });
     assert(completed.task?.status === "done", "Complete should finish claimed work.");
     assert(completed.board.runs.some((run) => run.id === claimable.currentRunId && run.status === "completed"), "Complete should close the active run.");
+
+    const queueTarget = { key: "queue-test-machine", name: "Queue Test Machine" };
+    await createTask("queue lower priority", "ready", { priority: "normal", targetMachine: queueTarget });
+    const queueUrgent = await createTask("queue retryable runtime failure", "ready", {
+      priority: "urgent",
+      targetMachine: queueTarget,
+      maxAttempts: 2,
+    });
+    const firstQueuedClaim = await request("POST", {
+      action: "claim-next",
+      targetMachineKey: queueTarget.key,
+      assignee: "Codex Queue Worker",
+      runtime: "codex",
+      ttlMs: 60_000,
+    });
+    assert(firstQueuedClaim.claimed === true, "claim-next should report a claimed task when a queue candidate exists.");
+    assert(firstQueuedClaim.task?.id === queueUrgent.id, "claim-next should prefer higher priority ready work.");
+    assert(firstQueuedClaim.task?.attempt === 1 && firstQueuedClaim.run?.attempt === 1, "First claim should record attempt 1 on task and run.");
+    const retryableFailure = await request("POST", {
+      action: "fail",
+      taskId: queueUrgent.id,
+      error: "runtime heartbeat timed out",
+      summary: "Runtime heartbeat timed out before the worker reported progress.",
+    });
+    assert(retryableFailure.retried === true, "Retryable infrastructure failures should requeue before maxAttempts is exhausted.");
+    assert(retryableFailure.task?.status === "ready" && retryableFailure.task?.attempt === 2, "Retryable failure should queue the next attempt.");
+    assert(retryableFailure.task?.lastFailureReason === "timeout", "Retryable failure should classify timeout reasons.");
+    const secondQueuedClaim = await request("POST", {
+      action: "claim-next",
+      targetMachineKey: queueTarget.key,
+      assignee: "Codex Queue Worker",
+      runtime: "codex",
+      ttlMs: 60_000,
+    });
+    assert(secondQueuedClaim.task?.id === queueUrgent.id && secondQueuedClaim.run?.attempt === 2, "Second claim should resume the retry attempt before lower-priority work.");
+    const exhaustedFailure = await request("POST", {
+      action: "fail",
+      taskId: queueUrgent.id,
+      error: "runtime heartbeat timed out again",
+      summary: "Runtime heartbeat timed out again.",
+    });
+    assert(exhaustedFailure.retried === false, "Retryable failures should stop after maxAttempts.");
+    assert(exhaustedFailure.task?.status === "needs-human" && exhaustedFailure.task?.attempt === 2, "Exhausted retries should fail closed to Needs You.");
+    const finalQueueClaim = await request("POST", {
+      action: "claim-next",
+      targetMachineKey: queueTarget.key,
+      assignee: "Codex Queue Worker",
+      runtime: "codex",
+      ttlMs: 60_000,
+    });
+    assert(finalQueueClaim.task?.title === "queue lower priority", "claim-next should continue to the next eligible task after retry exhaustion.");
 
     const bulkA = await createTask("bulk a", "ideas");
     const bulkB = await createTask("bulk b", "ideas");
@@ -237,20 +290,22 @@ async function main() {
     assert(verifiedProof?.metadata?.localPath === "[redacted]", "Proof metadata should redact private local paths.");
     assert(verifiedProof?.metadata?.vaultNotePath === "[redacted]", "Proof metadata should redact private vault note paths.");
 
-    const source = await readFile(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+    const helperSource = await readFile(new URL("../src/features/dashboard/dashboard-light-helpers.tsx", import.meta.url), "utf8");
+    const dispatchSource = await readFile(new URL("../src/features/dashboard/hooks/use-kanban-dispatch-controller.tsx", import.meta.url), "utf8");
+    const taskControllerSource = await readFile(new URL("../src/features/dashboard/hooks/use-kanban-task-controller.tsx", import.meta.url), "utf8");
     assert(
-      /function isKanbanAwaitingAgentUpdate\(task: KanbanTask\) \{\s*return task\.status === "working"\s*&& Boolean\(task\.agentSession\?\.sessionId\);\s*\}/m.test(source),
+      /function isKanbanAwaitingAgentUpdate\(task: KanbanTask\) \{\s*return task\.status === "working"\s*&& Boolean\(task\.agentSession\?\.sessionId\);\s*\}/m.test(helperSource),
       "Regression guard failed: unpollable accepted text must not count as an awaiting agent update.",
     );
     assert(
-      source.includes('logClientTelemetry("kanban.dispatch.no_progress_timeout"')
-      && source.includes("KANBAN_DISPATCH_NO_PROGRESS_MS"),
+      dispatchSource.includes('logClientTelemetry("kanban.dispatch.no_progress_timeout"')
+      && dispatchSource.includes("KANBAN_DISPATCH_NO_PROGRESS_MS"),
       "Regression guard failed: dispatches with no content/session need a bounded no-progress timeout.",
     );
     assert(
-      source.includes("This is an explicit undo request.")
-      && source.includes("reverse it narrowly")
-      && source.includes("Treat existing notes as authoritative retry context"),
+      helperSource.includes("This is an explicit undo request.")
+      && helperSource.includes("reverse it narrowly")
+      && helperSource.includes("Treat existing notes as authoritative retry context"),
       "Regression guard failed: explicit undo prompts must override stale retry context.",
     );
 
@@ -262,14 +317,15 @@ async function main() {
       "Regression guard failed: Work cards should prioritize verified GitLawb proofs while keeping project proof metadata available.",
     );
     assert(
-      source.includes("const undoRequested = Boolean(task.undoRequestedAt);")
-      && source.includes("preferQueen: !undoRequested"),
+      taskControllerSource.includes("const undoRequested = Boolean(task.undoRequestedAt);")
+      && taskControllerSource.includes("preferQueen: !undoRequested"),
       "Regression guard failed: undo requests should prefer worker routing before Queen fallback.",
     );
     assert(
-      source.includes('logClientTelemetry("kanban.dispatch.no_final_assistant"')
-      && source.includes('logClientTelemetry("kanban.dispatch.completed_from_session"')
-      && source.includes('await patchKanbanTask(task.id, {\n              status: "needs-human",\n              agentSession: null,'),
+      dispatchSource.includes('logClientTelemetry("kanban.dispatch.completed_from_session"')
+      && dispatchSource.includes('logClientTelemetry("kanban.dispatch.empty_without_session"')
+      && dispatchSource.includes('status: "needs-human"')
+      && dispatchSource.includes("agentSession: null"),
       "Regression guard failed: session-backed dispatches must finalize from assistant output or fail closed out of Working.",
     );
 

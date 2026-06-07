@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-06-07T04:55:28.255542+00:00",
+  "created_at": "2026-06-07T14:54:21.304043+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
@@ -120,6 +120,55 @@
       "target_path": "public/icons/runtimes/bankr.svg",
       "reuse_type": "asset_copied",
       "note": "Copied the official user-supplied Bankr symbol into the runtime icon asset folder for the Bankr LLM card and provider tile."
+    },
+    {
+      "source_repo": "mvanhorn/last30days-skill",
+      "source_path": "skills/last30days/scripts",
+      "target_path": "packaged-skills/auto-install/hive-pulse/scripts",
+      "reuse_type": "copied_code",
+      "note": "pinned bundled Hive Pulse research engine"
+    },
+    {
+      "source_repo": "mvanhorn/last30days-skill",
+      "source_path": "skills/last30days/references",
+      "target_path": "packaged-skills/auto-install/hive-pulse/references",
+      "reuse_type": "copied_code",
+      "note": "upstream references for saved HTML briefs"
+    },
+    {
+      "source_repo": "mvanhorn/last30days-skill",
+      "source_path": "LICENSE",
+      "target_path": "packaged-skills/auto-install/hive-pulse/LICENSE",
+      "reuse_type": "copied_code",
+      "note": "MIT license attribution"
+    },
+    {
+      "source_repo": "multica-ai/multica",
+      "source_path": "server/internal/service/task.go",
+      "target_path": "src/lib/services/kanban/local-kanban-store.ts",
+      "reuse_type": "translated_code",
+      "note": "failure classification retry cap and exhausted failure transition"
+    },
+    {
+      "source_repo": "multica-ai/multica",
+      "source_path": "server/migrations/055_task_lease_and_retry.up.sql",
+      "target_path": "src/lib/types/kanban.ts",
+      "reuse_type": "translated_code",
+      "note": "attempt maxAttempts and failure reason task-run fields"
+    },
+    {
+      "source_repo": "multica-ai/multica",
+      "source_path": "server/internal/service/issue.go",
+      "target_path": "src/lib/services/kanban/local-kanban-store.ts",
+      "reuse_type": "adapted_code",
+      "note": "eligible queue admission and claim-next behavior"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "scripts/test-kanban-workflow.mjs",
+      "target_path": "scripts/test-kanban-workflow.mjs",
+      "reuse_type": "test_adapted",
+      "note": "claim-next retry and retry-exhaustion workflow smoke"
     }
   ]
 }

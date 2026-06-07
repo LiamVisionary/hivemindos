@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { LoaderCircle, Plus, ShieldCheck } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, LoaderCircle, Plus, ShieldCheck } from "lucide-react";
 import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
 
 type MissingSharedEnvKeySetupProps = {
@@ -9,20 +9,55 @@ type MissingSharedEnvKeySetupProps = {
   providerLabel?: string;
   envPath?: string;
   detail?: string;
+  issue?: "missing" | "invalid";
   onSaved?: () => void | Promise<void>;
 };
+
+async function readEnvSaveResponse(response: Response | null, apiKeyName: string) {
+  if (!response) {
+    return { ok: false, error: `Could not reach the dashboard env API while saving ${apiKeyName}.` };
+  }
+  const text = await response.text().catch(() => "");
+  let data: { ok?: boolean; error?: string } | null = null;
+  try {
+    data = text ? JSON.parse(text) as { ok?: boolean; error?: string } : null;
+  } catch {
+    data = null;
+  }
+  if (response.ok && data?.ok) return { ok: true, error: "" };
+  if (typeof data?.error === "string" && data.error.trim()) {
+    return { ok: false, error: data.error.trim() };
+  }
+  const status = `${response.status} ${response.statusText || "HTTP error"}`.trim();
+  const safeText = text && !/<html|<!doctype/i.test(text) ? text.trim().slice(0, 280) : "";
+  return { ok: false, error: safeText || `${status} while saving ${apiKeyName}.` };
+}
 
 export function MissingSharedEnvKeySetup({
   apiKeyName,
   providerLabel = "This provider",
   envPath = "~/.hivemindos/.env",
   detail,
+  issue = "missing",
   onSaved,
 }: MissingSharedEnvKeySetupProps) {
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   const [explaining, setExplaining] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [successFading, setSuccessFading] = useState(false);
+  const fadeTimerRef = useRef<number | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
+
+  const clearSuccessTimers = useCallback(() => {
+    if (fadeTimerRef.current !== null) window.clearTimeout(fadeTimerRef.current);
+    if (refreshTimerRef.current !== null) window.clearTimeout(refreshTimerRef.current);
+    fadeTimerRef.current = null;
+    refreshTimerRef.current = null;
+  }, []);
+
+  useEffect(() => () => clearSuccessTimers(), [clearSuccessTimers]);
 
   const save = async () => {
     const trimmed = value.trim();
@@ -35,21 +70,63 @@ export function MissingSharedEnvKeySetup({
     try {
       const response = await fetch("/api/env", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify({ sourceId: "shared", key: apiKeyName, value: trimmed }),
       }).catch(() => null);
-      const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
-      if (!response?.ok || !data?.ok) {
-        setStatus(data?.error ?? `Could not save ${apiKeyName}.`);
+      const result = await readEnvSaveResponse(response, apiKeyName).catch((error: unknown) => ({
+        ok: false,
+        error: error instanceof Error ? error.message : `Could not read the save response for ${apiKeyName}.`,
+      }));
+      if (!result.ok) {
+        setStatus(result.error || `Could not save ${apiKeyName}.`);
         return;
       }
       setValue("");
-      setStatus(`Saved ${apiKeyName} with hive-env-add.`);
-      await onSaved?.();
+      setStatus("");
+      setExplaining(false);
+      setSaved(true);
+      setSuccessFading(false);
+      clearSuccessTimers();
+      fadeTimerRef.current = window.setTimeout(() => {
+        setSuccessFading(true);
+        fadeTimerRef.current = null;
+      }, 950);
+      refreshTimerRef.current = window.setTimeout(() => {
+        refreshTimerRef.current = null;
+        void Promise.resolve(onSaved?.()).catch((error: unknown) => {
+          setSaved(false);
+          setSuccessFading(false);
+          setStatus(error instanceof Error ? error.message : `Saved ${apiKeyName}, but could not reload providers.`);
+        });
+      }, 1350);
     } finally {
       setSaving(false);
     }
   };
+
+  if (saved) {
+    return (
+      <section
+        className={`grid gap-3 rounded-md border border-[rgba(94,234,212,0.22)] bg-[rgba(20,184,166,0.08)] p-4 transition duration-500 ${successFading ? "opacity-0 translate-y-1" : "opacity-100 translate-y-0"}`}
+        aria-live="polite"
+      >
+        <div className="flex items-start gap-3">
+          <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[rgba(94,234,212,0.38)] bg-[rgba(20,184,166,0.14)]">
+            <span className="absolute h-10 w-10 rounded-full border border-[rgba(94,234,212,0.28)] animate-ping" aria-hidden="true" />
+            <CheckCircle2 aria-hidden="true" className="relative h-5 w-5 text-[var(--accent-strong)] animate-pulse" />
+          </span>
+          <div>
+            <p className="eyebrow">Saved</p>
+            <h3 className="m-0 text-base font-bold text-[var(--foreground)]">{apiKeyName} saved to the shared hive brain</h3>
+            <p className="m-0 mt-1 text-xs leading-5 text-[var(--muted)]">
+              Reloading provider models with the updated shared env.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (explaining) {
     return (
@@ -60,7 +137,8 @@ export function MissingSharedEnvKeySetup({
             <p className="eyebrow">hive-env-add</p>
             <h3 className="m-0 text-base font-bold text-[var(--foreground)]">Shared env for all agents</h3>
             <p className="m-0 mt-1 text-xs leading-5 text-[var(--muted)]">
-              `hive-env-add` writes secrets to the HivemindOS shared env store at `{envPath}` without printing secret values. The dashboard, local agent bridge, and supported runtimes load that store so every user runtime and agent can reuse the same configured key instead of copying credentials into each profile.
+              <code className="font-mono text-[var(--foreground)]">hive-env-add</code> writes secrets to the HivemindOS shared env store at{" "}
+              <code className="font-mono text-[var(--foreground)]">{envPath}</code> without printing secret values. The dashboard, local agent bridge, and supported runtimes load that store so every user runtime and agent can reuse the same configured key instead of copying credentials into each profile.
             </p>
             <p className="m-0 mt-2 text-xs leading-5 text-[var(--muted)]">
               It also mirrors shared keys into runtime-specific compatibility stores where HivemindOS already supports that path, and Hivemind Sync can reconcile the same shared env across trusted machines.
@@ -74,14 +152,18 @@ export function MissingSharedEnvKeySetup({
     );
   }
 
+  const invalid = issue === "invalid";
+
   return (
     <section className="grid gap-3 rounded-md border border-[rgba(94,234,212,0.18)] bg-[rgba(20,184,166,0.06)] p-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="eyebrow">Missing API key</p>
-          <h3 className="m-0 text-base font-bold text-[var(--foreground)]">{apiKeyName} is missing</h3>
+          <p className="eyebrow">{invalid ? "API key setup" : "Missing API key"}</p>
+          <h3 className="m-0 text-base font-bold text-[var(--foreground)]">{invalid ? `${apiKeyName} needs attention` : `${apiKeyName} is missing`}</h3>
           <p className="m-0 mt-1 text-xs text-[var(--muted)]">
-            {apiKeyName} is missing from the shared hive brain. Enter it here for {providerLabel}.
+            {invalid
+              ? `${apiKeyName} in the shared hive brain could not be used. Enter a fresh key here for ${providerLabel}.`
+              : `${apiKeyName} is missing from the shared hive brain. Enter it here for ${providerLabel}.`}
           </p>
         </div>
         <span className="rounded-full border border-[rgba(94,234,212,0.22)] bg-[rgba(20,184,166,0.08)] px-3 py-1 text-xs font-bold text-[var(--accent-strong)]">

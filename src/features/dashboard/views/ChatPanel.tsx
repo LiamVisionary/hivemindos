@@ -1264,6 +1264,10 @@ export function ChatPanel(props: any) {
                   voiceBands={voiceBands}
                   voiceTranscript={voiceTranscript}
                   onToggleRecording={recording ? stopAudioRecording : () => void startAudioRecording?.("chat")}
+                  onSwarmCommand={() => {
+                    const current = (text ?? "").trim();
+                    setText(current && !current.toLowerCase().startsWith("/swarm") ? `/swarm ${current}` : "/swarm ");
+                  }}
                   canSend={Boolean((text ?? "").trim() || chatAttachments.length || chatDirectories.length)}
                   submitOnEnter
                   hermesSlashCommands

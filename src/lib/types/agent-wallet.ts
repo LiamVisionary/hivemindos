@@ -61,7 +61,19 @@ export interface AgentWalletBalance {
   tokenSymbol: string;
   tokenBalance: number;
   nativeBalance: number;
+  tokens?: AgentWalletTokenBalance[];
   fetchedAt: number;
+}
+
+export interface AgentWalletTokenBalance {
+  symbol: string;
+  name: string;
+  balance: number;
+  network: string;
+  priceUsd?: number | null;
+  valueUsd?: number | null;
+  priceChange24hPct?: number | null;
+  isNative?: boolean;
 }
 
 export interface AgentWalletVaultInfo {

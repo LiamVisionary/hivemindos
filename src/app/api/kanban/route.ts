@@ -7,10 +7,12 @@ import {
   blockTask,
   bulkPatchTasks,
   claimTask,
+  claimNextTask,
   completeTask,
   createBoard,
   createTask,
   deleteTask,
+  failTask,
   heartbeatTask,
   listBoards,
   moveTask,
@@ -94,6 +96,10 @@ export async function POST(request: NextRequest) {
       const result = await claimTask(boardSlug, body.taskId, body, storageOptions);
       return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
+    if (body.action === "claim-next") {
+      const result = await claimNextTask(boardSlug, body, storageOptions);
+      return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+    }
     if (body.action === "heartbeat") {
       const result = await heartbeatTask(boardSlug, body.taskId, body.note, body.claimLock, storageOptions);
       return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
@@ -104,6 +110,10 @@ export async function POST(request: NextRequest) {
     }
     if (body.action === "block") {
       const result = await blockTask(boardSlug, body.taskId, body.reason ?? body.summary ?? "Blocked.", storageOptions);
+      return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+    }
+    if (body.action === "fail") {
+      const result = await failTask(boardSlug, body.taskId, body, storageOptions);
       return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
     if (body.action === "unblock") {

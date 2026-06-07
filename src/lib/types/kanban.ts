@@ -4,6 +4,14 @@ export type KanbanStatus = "ideas" | "ready" | "working" | "needs-human" | "done
 
 export type KanbanPriority = "low" | "normal" | "high" | "urgent";
 
+export type KanbanFailureReason =
+  | "agent-error"
+  | "timeout"
+  | "runtime-offline"
+  | "runtime-recovery"
+  | "local-directory-error"
+  | "manual";
+
 export type KanbanColumn = {
   id: KanbanStatus;
   title: string;
@@ -108,6 +116,9 @@ export type KanbanTask = {
   lastHeartbeatAt?: number;
   currentRunId?: string;
   maxRuntimeMs?: number;
+  attempt?: number;
+  maxAttempts?: number;
+  lastFailureReason?: KanbanFailureReason;
   idempotencyKey?: string;
   reviewedAt?: number;
   reviewedBy?: string;
@@ -135,6 +146,9 @@ export type KanbanTaskRun = {
   summary?: string;
   metadata?: Record<string, unknown>;
   error?: string;
+  attempt?: number;
+  parentRunId?: string;
+  failureReason?: KanbanFailureReason;
 };
 
 export type KanbanBoardMeta = {

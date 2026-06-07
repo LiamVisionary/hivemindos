@@ -17,6 +17,7 @@ import type {
   KanbanDeliverable,
   KanbanDeliverableKind,
   KanbanEvent,
+  KanbanFailureReason,
   KanbanPriority,
   KanbanRunStatus,
   KanbanStatus,
@@ -24,7 +25,7 @@ import type {
   KanbanTaskRun,
 } from "@/lib/types/kanban";
 import { KANBAN_STATUSES } from "@/lib/types/kanban";
-import { moveTaskBetweenColumns } from "@/lib/utils/kanban-board";
+import { moveTaskBetweenColumns, priorityWeight } from "@/lib/utils/kanban-board";
 
 const ROOT_DIR = join(homedir(), ".hivemindos", "kanban");
 const BOARDS_DIR = join(ROOT_DIR, "boards");
@@ -32,6 +33,7 @@ const DEFAULT_BOARD = "default";
 const DEFAULT_VAULT_KANBAN_FOLDER = DEFAULT_SHARED_VAULT.kanbanFolder;
 const DEFAULT_CLAIM_TTL_MS = 15 * 60 * 1000;
 const DEFAULT_STALE_HEARTBEAT_MS = 60 * 60 * 1000;
+const DEFAULT_MAX_ATTEMPTS = 2;
 
 type CreateTaskInput = {
   title: string;
@@ -51,9 +53,10 @@ type CreateTaskInput = {
   parents?: string[];
   idempotencyKey?: string;
   maxRuntimeMs?: number;
+  maxAttempts?: number;
 };
 
-type PatchTaskInput = Partial<Pick<KanbanTask, "title" | "body" | "result" | "assignee" | "tenant" | "status" | "priority" | "workspace" | "skills" | "attachments" | "linkedDirectories" | "deliverables" | "targetMachine" | "projectId" | "proofs" | "agentSession" | "reviewedBy" | "undoRequestedBy">> & {
+type PatchTaskInput = Partial<Pick<KanbanTask, "title" | "body" | "result" | "assignee" | "tenant" | "status" | "priority" | "workspace" | "skills" | "attachments" | "linkedDirectories" | "deliverables" | "targetMachine" | "projectId" | "proofs" | "agentSession" | "reviewedBy" | "undoRequestedBy" | "maxAttempts">> & {
   reviewedAt?: number | null;
   undoRequestedAt?: number | null;
 };
@@ -63,6 +66,7 @@ type ClaimTaskInput = {
   runtime?: string;
   ttlMs?: number;
   claimer?: string;
+  tenant?: string;
 };
 
 type FinishRunInput = {
@@ -72,6 +76,13 @@ type FinishRunInput = {
   error?: string;
   reason?: string;
   runId?: string;
+  failureReason?: KanbanFailureReason;
+};
+
+type ClaimNextTaskInput = ClaimTaskInput & {
+  tenant?: string;
+  assignee?: string;
+  targetMachineKey?: string;
 };
 
 export type KanbanStorageOptions = {
@@ -294,6 +305,9 @@ function normalizeTask(task: KanbanTask): KanbanTask {
     proofs: Array.isArray(task.proofs) ? task.proofs.map((proof) => sanitizeGitLawbProof(proof)) : [],
     claimLock: cleanOptional(task.claimLock),
     currentRunId: cleanOptional(task.currentRunId),
+    attempt: positiveInteger(task.attempt) ?? 1,
+    maxAttempts: positiveInteger(task.maxAttempts) ?? DEFAULT_MAX_ATTEMPTS,
+    lastFailureReason: normalizeFailureReason(task.lastFailureReason),
   };
 }
 
@@ -319,6 +333,9 @@ function normalizeRun(run: KanbanTaskRun): KanbanTaskRun {
     ...run,
     status: normalizeRunStatus(run.status),
     outcome: run.outcome ? normalizeRunStatus(run.outcome) : run.outcome,
+    attempt: positiveInteger(run.attempt),
+    parentRunId: cleanOptional(run.parentRunId),
+    failureReason: normalizeFailureReason(run.failureReason),
   };
 }
 
@@ -394,6 +411,8 @@ export async function createTask(slug: string | null, input: CreateTaskInput, op
     projectId: cleanOptional(input.projectId),
     proofs: Array.isArray(input.proofs) ? input.proofs.map((proof) => sanitizeGitLawbProof(proof)) : [],
     maxRuntimeMs: positiveNumber(input.maxRuntimeMs),
+    attempt: 1,
+    maxAttempts: positiveInteger(input.maxAttempts) ?? DEFAULT_MAX_ATTEMPTS,
     idempotencyKey: cleanOptional(input.idempotencyKey),
     createdAt: now,
     updatedAt: now,
@@ -440,6 +459,7 @@ export async function patchTask(slug: string | null, taskId: string, patch: Patc
     reviewedBy: patch.reviewedBy === "" ? undefined : patch.reviewedBy ?? task.reviewedBy,
     undoRequestedAt: patch.undoRequestedAt === null ? undefined : patch.undoRequestedAt ?? task.undoRequestedAt,
     undoRequestedBy: patch.undoRequestedBy === "" ? undefined : patch.undoRequestedBy ?? task.undoRequestedBy,
+    maxAttempts: positiveInteger(patch.maxAttempts) ?? task.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
     updatedAt: Date.now(),
     completedAt: nextStatus ? (nextStatus === "done" ? Date.now() : undefined) : task.completedAt,
   };
@@ -536,6 +556,37 @@ export async function claimTask(slug: string | null, taskId: string, input: Clai
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
+  const result = await claimReadyTask(board, task, input, options);
+  await writeBoard(touch(board), options);
+  return result;
+}
+
+export async function claimNextTask(slug: string | null, input: ClaimNextTaskInput = {}, options: KanbanStorageOptions = {}) {
+  const board = await readBoard(slug, options);
+  const task = nextClaimCandidate(board, input);
+  if (!task) return { board, task: null, run: null, claimed: false };
+  const result = await claimReadyTask(board, task, input, options);
+  await writeBoard(touch(board), options);
+  return { ...result, claimed: true };
+}
+
+function nextClaimCandidate(board: KanbanBoard, input: ClaimNextTaskInput = {}) {
+  const tenant = cleanOptional(input.tenant);
+  const assignee = cleanOptional(input.assignee);
+  const targetMachineKey = cleanOptional(input.targetMachineKey);
+  return board.tasks
+    .filter((task) => task.status === "ready" && !task.claimLock)
+    .filter((task) => !tenant || task.tenant === tenant || !task.tenant)
+    .filter((task) => !assignee || task.assignee === assignee || !task.assignee)
+    .filter((task) => !targetMachineKey || task.targetMachine?.key === targetMachineKey || !task.targetMachine?.key)
+    .filter((task) => unfinishedParentIds(board, task.id).length === 0)
+    .sort((left, right) => {
+      const priorityDelta = priorityWeight(right.priority) - priorityWeight(left.priority);
+      return priorityDelta || left.createdAt - right.createdAt || left.updatedAt - right.updatedAt;
+    })[0];
+}
+
+async function claimReadyTask(board: KanbanBoard, task: KanbanTask, input: ClaimTaskInput = {}, options: KanbanStorageOptions = {}) {
   if (task.status !== "ready" || task.claimLock) throw new Error("Task is not ready to claim.");
   const blockingParents = unfinishedParentIds(board, task.id);
   if (blockingParents.length) {
@@ -546,9 +597,10 @@ export async function claimTask(slug: string | null, taskId: string, input: Clai
   }
   const now = Date.now();
   const claimLock = input.claimer?.trim() || `claim_${now.toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const attempt = positiveInteger(task.attempt) ?? 1;
   const run: KanbanTaskRun = {
     id: `r_${now.toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
-    taskId,
+    taskId: task.id,
     status: "running",
     assignee: cleanOptional(input.assignee) ?? task.assignee,
     runtime: cleanOptional(input.runtime),
@@ -556,21 +608,23 @@ export async function claimTask(slug: string | null, taskId: string, input: Clai
     claimExpiresAt: now + (positiveNumber(input.ttlMs) ?? task.maxRuntimeMs ?? DEFAULT_CLAIM_TTL_MS),
     startedAt: now,
     lastHeartbeatAt: now,
+    attempt,
   };
   board.runs.unshift(run);
   const changed: KanbanTask = {
     ...task,
     status: "working",
     assignee: run.assignee ?? task.assignee,
+    tenant: cleanOptional(input.tenant) ?? task.tenant,
     claimLock,
     claimExpiresAt: run.claimExpiresAt,
     lastHeartbeatAt: now,
     currentRunId: run.id,
+    attempt,
     updatedAt: now,
   };
-  board.tasks = board.tasks.map((item) => item.id === taskId ? changed : item);
+  board.tasks = board.tasks.map((item) => item.id === task.id ? changed : item);
   board.events.unshift(event("task.claimed", `Claimed ${task.title}`, task.id, { lock: claimLock, runId: run.id, expiresAt: run.claimExpiresAt }, run.id));
-  await writeBoard(touch(board), options);
   return { board, task: changed, run };
 }
 
@@ -623,6 +677,27 @@ export async function completeTask(slug: string | null, taskId: string, input: F
   promoteReadyChildren(board, "dependency.auto-promote");
   await writeBoard(touch(board), options);
   return { board, task: changed };
+}
+
+export async function failTask(slug: string | null, taskId: string, input: FinishRunInput = {}, options: KanbanStorageOptions = {}) {
+  const board = await readBoard(slug, options);
+  const task = board.tasks.find((item) => item.id === taskId);
+  if (!task) throw new Error("Task not found.");
+  const now = Date.now();
+  const failureReason = normalizeFailureReason(input.failureReason) ?? classifyKanbanFailure(input.error ?? input.reason ?? input.summary ?? input.result);
+  const summary = input.summary ?? input.error ?? input.reason ?? input.result ?? "Task failed.";
+  const run = finishActiveRun(board, taskId, "failed", { ...input, summary, failureReason });
+  const { task: changed, retried } = transitionTaskAfterFailure(task, failureReason, summary, now);
+  board.tasks = board.tasks.map((item) => item.id === taskId ? changed : item);
+  board.events.unshift(event(
+    retried ? "task.retry-queued" : "task.failed",
+    retried ? `Queued retry for ${task.title}` : `${task.title} needs human review after failure`,
+    task.id,
+    { failureReason, attempt: changed.attempt, maxAttempts: changed.maxAttempts, summary },
+    run?.id ?? input.runId ?? task.currentRunId,
+  ));
+  await writeBoard(touch(board), options);
+  return { board, task: changed, run, retried, failureReason };
 }
 
 export async function blockTask(slug: string | null, taskId: string, reason: string, options: KanbanStorageOptions = {}) {
@@ -700,22 +775,17 @@ export async function reclaimStaleTasks(slug: string | null, input: { staleMs?: 
     const expired = Boolean(task.claimExpiresAt && task.claimExpiresAt <= now);
     const quiet = now - lastProgress >= staleMs;
     if (!expired && !quiet) return task;
-    finishActiveRun(board, task.id, "reclaimed", { summary: `Reclaimed after ${Math.round((now - lastProgress) / 1000)}s without progress.` });
-    const changed: KanbanTask = {
-      ...task,
-      status: "ready",
-      assignee: undefined,
-      tenant: undefined,
-      agentSession: null,
-      claimLock: undefined,
-      claimExpiresAt: undefined,
-      lastHeartbeatAt: undefined,
-      currentRunId: undefined,
-      result: `Reclaimed after ${Math.round((now - lastProgress) / 1000)}s without worker progress.`,
-      updatedAt: now,
-    };
+    const summary = `Reclaimed after ${Math.round((now - lastProgress) / 1000)}s without worker progress.`;
+    finishActiveRun(board, task.id, "reclaimed", { summary, failureReason: "timeout" });
+    const { task: changed, retried } = transitionTaskAfterFailure(task, "timeout", summary, now);
     reclaimed.push(changed);
-    board.events.unshift(event("task.reclaimed", `Reclaimed stale task ${task.title}`, task.id, { staleMs, lastProgressAt: lastProgress }, task.currentRunId));
+    board.events.unshift(event(
+      retried ? "task.reclaimed" : "task.reclaim-exhausted",
+      retried ? `Reclaimed stale task ${task.title}` : `${task.title} exhausted stale-task retries`,
+      task.id,
+      { staleMs, lastProgressAt: lastProgress, attempt: changed.attempt, maxAttempts: changed.maxAttempts },
+      task.currentRunId,
+    ));
     return changed;
   });
   if (reclaimed.length) await writeBoard(touch(board), options);
@@ -834,6 +904,73 @@ function cleanOptional(value?: string | null) {
 function positiveNumber(value?: number | null) {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
+}
+
+function positiveInteger(value?: number | null) {
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : undefined;
+}
+
+function normalizeFailureReason(value?: string | null): KanbanFailureReason | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase().replace(/_/g, "-");
+  return ["agent-error", "timeout", "runtime-offline", "runtime-recovery", "local-directory-error", "manual"].includes(normalized)
+    ? normalized as KanbanFailureReason
+    : undefined;
+}
+
+function classifyKanbanFailure(value?: string | null): KanbanFailureReason {
+  const normalized = value?.toLowerCase() ?? "";
+  if (/local directory|workdir|workspace path|folder|enoent|permission denied/.test(normalized)) return "local-directory-error";
+  if (/orphan|recover|reclaim|daemon restart|runtime recovery/.test(normalized)) return "runtime-recovery";
+  if (/offline|unreachable|connection refused|network|econnrefused|not available/.test(normalized)) return "runtime-offline";
+  if (/timeout|timed out|expired|stale|heartbeat|no progress|without worker progress/.test(normalized)) return "timeout";
+  if (/manual|cancelled|canceled|user requested/.test(normalized)) return "manual";
+  return "agent-error";
+}
+
+function isRetryableFailureReason(reason: KanbanFailureReason) {
+  return ["timeout", "runtime-offline", "runtime-recovery", "local-directory-error"].includes(reason);
+}
+
+function transitionTaskAfterFailure(task: KanbanTask, failureReason: KanbanFailureReason, summary: string, now = Date.now()) {
+  const attempt = positiveInteger(task.attempt) ?? 1;
+  const maxAttempts = positiveInteger(task.maxAttempts) ?? DEFAULT_MAX_ATTEMPTS;
+  const nextAttempt = attempt + 1;
+  const retried = isRetryableFailureReason(failureReason) && attempt < maxAttempts;
+  const taskBase: KanbanTask = {
+    ...task,
+    assignee: retried ? undefined : task.assignee,
+    tenant: retried ? undefined : task.tenant,
+    agentSession: null,
+    claimLock: undefined,
+    claimExpiresAt: undefined,
+    lastHeartbeatAt: undefined,
+    currentRunId: undefined,
+    lastFailureReason: failureReason,
+    maxAttempts,
+    updatedAt: now,
+  };
+  if (retried) {
+    return {
+      retried,
+      task: {
+        ...taskBase,
+        status: "ready" as const,
+        attempt: nextAttempt,
+        result: `Auto-retry ${nextAttempt}/${maxAttempts} queued after ${failureReason}: ${summary}`,
+      },
+    };
+  }
+  return {
+    retried,
+    task: {
+      ...taskBase,
+      status: "needs-human" as const,
+      attempt,
+      result: `${summary} Failure reason: ${failureReason}. Attempts: ${attempt}/${maxAttempts}.`,
+    },
+  };
 }
 
 function simpleStableHash(value: string) {
@@ -1093,6 +1230,7 @@ function finishActiveRun(board: KanbanBoard, taskId: string, status: KanbanRunSt
       status: "running",
       assignee: task?.assignee,
       startedAt: task?.lastHeartbeatAt ?? task?.updatedAt ?? now,
+      attempt: task ? positiveInteger(task.attempt) ?? 1 : undefined,
     };
     board.runs.unshift(run);
   }
@@ -1105,6 +1243,8 @@ function finishActiveRun(board: KanbanBoard, taskId: string, status: KanbanRunSt
   run.summary = input.summary ?? input.result ?? input.reason ?? run.summary;
   run.metadata = input.metadata ?? run.metadata;
   run.error = input.error ?? (status === "blocked" ? input.reason : undefined) ?? run.error;
+  run.failureReason = normalizeFailureReason(input.failureReason) ?? run.failureReason;
+  run.attempt = positiveInteger(run.attempt) ?? (task ? positiveInteger(task.attempt) ?? 1 : undefined);
   return run;
 }
 

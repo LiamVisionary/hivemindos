@@ -27,6 +27,8 @@ When a dashboard command and runtime command share the same name, the dashboard 
 | `/brain` | `/vault` | Open the shared brain. |
 | `/work` | `/kanban` | Open the work board. |
 | `/handoff-task <machine> <task>` |  | Send a task to the best agent on a target machine. |
+| `/swarm [number] <task>` |  | Spawn a best-suited team of configured chat-capable agents to work on the task in parallel and return a combined swarm packet. Omit the number for automatic sizing. |
+| `/swarm-sim <scenario>` |  | Launch a MiroShark simulation from the chat input and return the queued run status. |
 
 ## Hermes And Gateway Commands
 

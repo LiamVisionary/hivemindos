@@ -32,6 +32,17 @@ Known runtimes are defined in `src/lib/types/agent-runtime.ts`:
 - Chat history and folders are cached in browser storage and supported by `/api/chat/folders`.
 - Chat folder creation and linked directory context use the same machine-aware directory helper as Kanban and Scheduler: native local folder picker in Tauri, Hivemind Link/collector directory browsing for remote machines, and API fallback in the browser.
 
+### Chat Swarm Commands
+
+Dashboard chat owns two HivemindOS swarm commands before the message reaches the selected runtime:
+
+- `/swarm [number] <task>` selects a team of configured chat-capable agents from the current Fleet roster, skips agents with known setup issues, matches the task against existing bee worker classes, asks each selected agent for a role-specific pass, and returns one combined swarm packet in the active chat. Omit the number for automatic sizing, or lead with a number such as `/swarm 2 verify this patch` to cap the pass count.
+- `/swarm-sim <scenario>` sends the scenario to the MiroShark swarm route and returns the queued simulation status so the run can be followed from chat or the Swarm view.
+
+The composer swarm button prepares `/swarm ` in the input. It does not run anything until the user sends the message. The command path records the user command, shows a pending assistant reply, and replaces it with either the swarm packet, the queued MiroShark run, or an actionable setup/error message.
+
+Test the command path with `node scripts/e2e-dashboard-swarm-command.mjs` for deterministic browser regression coverage, or `node scripts/e2e-dashboard-swarm-command.mjs --real` to discover real local Fleet agents and run the actual `/api/chat/agent-runtime` path without interception. Add `--require-completion` when the test should fail unless at least one real runtime returns assistant text.
+
 ### Collector And Link URLs
 
 Hermes agents discovered through Fleet usually store a collector URL in `agent.telemetryUrl`. In system Tailnet mode, that may be a direct remote collector such as `http://100.x.y.z:8787`. In Hivemind Link mode, remote agents use the local Link sidecar proxy:
@@ -48,6 +59,7 @@ If a remote Hermes agent fails immediately with "does not have the Hermes chat b
 
 - Runtime/provider/model selection where supported.
 - Streaming runtime responses where available.
+- `/swarm [number]` role-specific parallel passes across the best-suited configured chat-capable agents.
 - Session resume and session search.
 - Attachments and linked directories for task context.
 - Send-to-Kanban from chat messages.
@@ -78,6 +90,7 @@ Phone support is split between a settings surface and action routes:
 - `src/app/api/runtimes/**`
 - `src/app/api/chat/**`
 - `src/app/api/phone/route.ts`
+- `src/features/dashboard/hooks/dashboard-swarm-command.ts`
 - `src/features/dashboard/hooks/use-agent-controller.tsx`
 - `src/features/dashboard/hooks/use-status-chat-input-controller.tsx`
 - `src/features/dashboard/hooks/use-chat-tree-controller.tsx`

@@ -134,7 +134,7 @@ What shared skills can do:
 - Import runtime skills into the shared brain.
 - Write new shared skills.
 - Save Hive Fusion generated skills into the shared brain for later retrieval.
-- Auto-install HivemindOS Hive skills such as `hive-assimilate`, `hive-capability-search`, and the Hive Fusion skills from `packaged-skills/auto-install/`.
+- Auto-install HivemindOS Hive skills such as `hive-assimilate`, `hive-pulse`, `hive-capability-search`, and the Hive Fusion skills from `packaged-skills/auto-install/`.
 - Auto-install the Obsidian Native Brain Pack: `obsidian-markdown`, `obsidian-bases`, `json-canvas`, and optional `defuddle`, curated from `kepano/obsidian-skills`.
 - Reconcile shared-vault skills with local runtime providers.
 - Auto-import, auto-update, and optionally track removals per provider.

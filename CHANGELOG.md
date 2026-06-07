@@ -3,9 +3,105 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-07 23:13:03 WITA - Keep Chat Command Files Focused
+
+- Status: Pushed
+- Areas changed: chat composer slash-command registry, status chat input controller
+- Summary: Move the Hermes slash-command registry into a focused chat command module and trim the status chat input controller so newly touched files stay under the 1500-line code-size ceiling without changing chat behavior.
+- Verification: `pnpm exec eslint src/features/chat/chat-composer.tsx src/features/chat/hermes-slash-commands.ts src/features/dashboard/hooks/use-status-chat-input-controller.tsx --max-warnings=999` passed with three existing hook-dependency warnings; `node scripts/test-vault-structure-contract.mjs` passed; `git diff --check` passed; `wc -l` confirmed `chat-composer.tsx`, `hermes-slash-commands.ts`, and `use-status-chat-input-controller.tsx` are below 1500 lines. `node scripts/check-file-sizes.mjs` still fails only on existing oversized legacy files with stale/no-growth allowances.
+- Intended commit message: `Keep chat command files focused`
+
+## 2026-06-07 22:56:47 WITA - Show Shared Env Save Failures
+
+- Status: Pushed
+- Areas changed: shared env key setup component
+- Summary: Make `MissingSharedEnvKeySetup` send same-origin credentials to `/api/env`, surface the actual API, HTTP, or network save failure instead of collapsing failed Bankr key saves into the generic `Could not save BANKR_LLM_KEY.` message, and show an animated saved checkmark that fades out before provider models reload.
+- Verification: `pnpm exec eslint src/features/dashboard/views/chat/MissingSharedEnvKeySetup.tsx --max-warnings=999` passed after adding the saved checkmark state; focused `pnpm exec tsc --noEmit --pretty false | rg "src/features/dashboard/views/chat/MissingSharedEnvKeySetup"` returned no touched-file diagnostics; `git diff --check -- src/features/dashboard/views/chat/MissingSharedEnvKeySetup.tsx CHANGELOG.md` passed; direct `scripts/hive-env-add --stdin --scope agent --runtime generic HIVE_TMP_SAVE_PROBE` succeeded and the temporary probe key was removed with `scripts/hive-env-remove`.
+- Intended commit message: `Show shared env save failures`
+
+## 2026-06-07 22:53:21 WITA - Add Kanban Queue Retry Bones
+
+- Status: Pushed
+- Areas changed: Kanban task/run types, local Kanban store, Kanban API route, workflow smoke test, assimilation logs
+- Summary: Add Multica-inspired queue reliability to the Work board while keeping HivemindOS local-first. Workers can now claim the next eligible Ready task by queue order, failed runs classify timeout/runtime/local-directory/manual/agent failures, retryable infrastructure failures automatically requeue until the card's attempt cap is reached, and exhausted failures fail closed to Needs You with the failure reason visible on the card.
+- Verification: `KANBAN_TEST_BASE_URL=http://127.0.0.1:5021 pnpm test:kanban` passed against the existing dev server; `pnpm exec eslint scripts/test-kanban-workflow.mjs src/lib/types/kanban.ts src/lib/services/kanban/local-kanban-store.ts src/app/api/kanban/route.ts --max-warnings=999` passed; focused TypeScript filter found no touched-file errors; `node --check scripts/test-kanban-workflow.mjs` passed; `verify_assimilation_manifest.py` passed; `ASSIMILATION.json` and `ASSIMILATION_LOG.jsonl` parsed successfully; targeted `git diff --check` passed. Full `pnpm exec tsc --noEmit --pretty false` remains blocked by the existing Remotion `pathLength` prop error in `remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx`; `pnpm check-sizes` remains blocked by existing oversized legacy files.
+- Intended commit message: `Add Kanban queue retry bones`
+
+## 2026-06-07 22:49:23 WITA - Route Invalid Bankr Keys To Shared Env Setup
+
+- Status: Pushed
+- Areas changed: Agent Settings Bankr provider setup routing, shared env key setup component
+- Summary: Treat invalid, inactive, or unauthorized Bankr LLM API-key diagnostics as shared-env credential setup issues so Agent Settings shows the reusable `MissingSharedEnvKeySetup` save flow instead of the generic “No live Bankr models found” fallback. The setup component now distinguishes missing keys from invalid keys while preserving the same hive-env-add path, and its explanation view renders command/path snippets with real inline code styling instead of literal Markdown backticks.
+- Verification: `pnpm exec eslint src/features/dashboard/views/chat/MissingSharedEnvKeySetup.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999` passed after the inline-code rendering fix; focused `pnpm exec tsc --noEmit --pretty false | rg "src/features/dashboard/views/chat/(MissingSharedEnvKeySetup|AgentSettingsModal)"` returned no touched-file diagnostics; `git diff --check -- src/features/dashboard/views/chat/MissingSharedEnvKeySetup.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx CHANGELOG.md` passed; a safe grep confirmed the explanation view now renders `hive-env-add` and the shared env path with `<code>` elements; a local regex probe confirmed `Bankr LLM models unavailable: Invalid or inactive API key` routes to the shared-env setup path.
+- Intended commit message: `Route invalid Bankr keys to shared env setup`
+
+## 2026-06-07 22:38:16 WITA - Fix User Wallet Connect Feedback
+
+- Status: Pushed
+- Areas changed: Wallet dashboard user connector, personal-wallet styling
+- Summary: Make the My wallets `Connect` button visibly respond when no injected browser wallet is available by opening the add-wallet fallback form, switching it to public-address view-only mode, and showing a status message that explains the address/private-key fallback in plain language.
+- Verification: Playwright smoke on authenticated `http://127.0.0.1:5021/?view=wallet` clicked `Connect` and confirmed the no-browser-wallet status, public-address view-only mode, address field, and `Add view-only wallet` action render with no browser errors; `git diff --check -- src/features/dashboard/views/WalletPanel.tsx src/features/dashboard/views/PersonalWallets.module.css` passed; `pnpm exec eslint src/features/dashboard/views/WalletPanel.tsx --max-warnings=999` passed.
+- Intended commit message: `Fix user wallet connect feedback`
+
+## 2026-06-07 22:31:12 WITA - Add User Wallet Connector
+
+- Status: Pushed
+- Areas changed: Wallet dashboard, personal wallet import/create route, encrypted wallet vault integration, wallet balance token rows, personal-wallet styling
+- Summary: Add a “My wallets” user wallet connector above agent wallets. Users can add generated local wallets, import EVM private keys or EVM recovery phrases, import Solana exported private keys, add public addresses as view-only wallets, or connect a browser EVM wallet as view-only. Personal wallets show USDC/native holdings with token rows and 24h quote metadata when available, and spendable local wallets include a split Send button with searchable quick-send targets across user wallets and agent wallets.
+- Verification: `pnpm exec eslint src/features/dashboard/views/WalletPanel.tsx src/lib/services/wallet/chain-wallet.ts src/app/api/wallet/import/route.ts src/lib/types/agent-wallet.ts --max-warnings=999` passed; `git diff --check -- src/features/dashboard/views/WalletPanel.tsx src/features/dashboard/views/PersonalWallets.module.css src/lib/services/wallet/chain-wallet.ts src/app/api/wallet/import/route.ts src/lib/types/agent-wallet.ts src/app/wallets.module.css` passed; authenticated Playwright smoke on `http://127.0.0.1:5021/?view=wallet` found `My wallets`, `Add wallet`, `Agent spend rails`, and no browser errors; mobile Add Wallet smoke found import/generate/private-key controls and no browser errors; quick-send fixture smoke found a searchable same-network personal recipient and no browser errors. `pnpm exec tsc --noEmit --pretty false --skipLibCheck` remains blocked by the unrelated existing Remotion `pathLength` style prop error in `remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx`; `pnpm check-sizes` no longer flags wallet files, but remains blocked by existing oversized files outside this change.
+- Intended commit message: `Add user wallet connector`
+
+## 2026-06-07 22:30:15 WITA - Sort Agent Wallets By Setup Status
+
+- Status: Pushed
+- Areas changed: Dashboard wallet panel, assimilation logs
+- Summary: Show agent wallets that already have wallet setup evidence first in the Agent wallets section, then show agents whose wallets have not been made yet. Each group is sorted alphabetically by agent name so real wallets are easier to find while uncreated wallets stay organized below them.
+- Verification: `pnpm exec eslint src/features/dashboard/views/WalletPanel.tsx --max-warnings=999` passed; `git diff --check -- src/features/dashboard/views/WalletPanel.tsx CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl` passed; `pnpm exec tsc --noEmit --pretty false` remains blocked by the existing Remotion `pathLength` prop error in `remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx`.
+- Intended commit message: `Sort agent wallets by setup status`
+
+## 2026-06-07 22:06:12 WITA - Add Hive Pulse Packed Research Skill
+
+- Status: Pushed
+- Areas changed: Packaged Hive skills, bundled research engine, `hive-pulse` command shim, setup/uninstall installers, shared-skill docs, packaged-skill catalog docs, README, vault structure contract, skill catalog metadata
+- Summary: Add `hive-pulse` as an auto-installed HivemindOS packed skill for last-30-days signal briefs across Reddit, X, YouTube, TikTok, Hacker News, Polymarket, GitHub, and web sources. The skill bundles the pinned MIT licensed `mvanhorn/last30days-skill` runtime engine so users do not need a separate upstream install, installs a `hive-pulse` command shim, checks for Python 3.12+ during setup, defaults to browser-cookie reads off, supplies a deterministic query plan and local judging path for out-of-the-box use, and keeps upstream provenance, audit notes, credential boundaries, and read-only safety rules visible.
+- Verification: `/Users/liam/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 -m py_compile $(find packaged-skills/auto-install/hive-pulse/scripts -name '*.py' -type f | sort)` passed; scoped audit of `packaged-skills/auto-install/hive-pulse` returned `REVIEW` with two medium GitHub token/network hints and no high findings; manual AST/security scans found no `eval`, no `exec`, no `os.system`, no `shell=True`, no embedded secret patterns, no executable files in the shipped skill payload, and expected explicit subprocess/network/cookie/keychain/SQLite surfaces only; the shipped skill is 82 files / 1.1 MB after omitting upstream media and upstream developer/test/keychain setup helper scripts; `HIVE_PULSE_PYTHON=/Users/liam/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 FROM_BROWSER=off scripts/hive-pulse --help` passed; `HIVE_PULSE_PYTHON=/Users/liam/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 FROM_BROWSER=off scripts/hive-pulse "HivemindOS" --quick --emit=compact` completed in 3.5s with `source=external`, local reasoning, zero-config source defaults, and real GitHub evidence; `node --check scripts/hive-pulse` passed; `bash -n setup.sh uninstall.sh scripts/hive-pulse` passed; `pwsh -NoProfile -Command '[scriptblock]::Create((Get-Content -Raw setup.ps1)); [scriptblock]::Create((Get-Content -Raw uninstall.ps1))'` passed with PowerShell 7.6.2; `node scripts/test-vault-structure-contract.mjs` passed; `pnpm exec eslint src/lib/services/skills/skill-os.ts --max-warnings=999` passed; `git diff --check` passed for the touched Hive Pulse packaged skill, docs, catalog, setup/uninstall, contract, and changelog files; `verify_assimilation_manifest.py` passed; `node scripts/check-file-sizes.mjs` is still blocked by pre-existing or unrelated in-flight oversized files outside Hive Pulse.
+- Intended commit message: `Add hive pulse packed research skill`
+
+## 2026-06-07 22:00:26 WITA - Show Live Benchmark Chat
+
+- Status: Pushed
+- Areas changed: Token and cost savings docs, changelog
+- Summary: Add a chat-style live benchmark transcript near the top of the Token And Cost Savings guide, starting with the user's prompt and showing the real OpenRouter/OpenAI-compatible E2E token results for baseline versus Hive-optimized prompts.
+- Verification: `node scripts/test-vault-structure-contract.mjs` passed; `git diff --check -- docs/features/token-and-cost-savings.md CHANGELOG.md` passed; manual readback confirmed the new section appears below the intro body and before `Savings Model`.
+- Intended commit message: `Show live benchmark chat in token savings docs`
+
+## 2026-06-07 21:51:41 WITA - Add Live E2E Token Benchmark
+
+- Status: Pushed
+- Areas changed: E2E token benchmark script, package scripts, token savings docs, README, docs index, vault structure contract, generated-output ignore rules
+- Summary: Add `pnpm benchmark:e2e-token-savings`, a real OpenAI Chat Completions benchmark that sends representative baseline and Hive-optimized prompts, records provider-reported prompt/completion/total token usage, marks truncated oversized contexts, and writes a redacted artifact under `.outputs/benchmarks/`.
+- Verification: `./scripts/hive-env-run -- pnpm benchmark:e2e-token-savings -- --provider openrouter --model openai/gpt-4.1-mini --repeats 1 --max-output-tokens 220` completed six real OpenRouter/OpenAI-compatible chat completion calls and wrote `.outputs/benchmarks/e2e-token-savings-2026-06-07T13-54-02-022Z.json`; provider usage counters reported 112,874 baseline prompt tokens vs 8,531 Hive prompt tokens, saving 104,343 prompt tokens (92.4%) and 104,374 total tokens (92.3%); artifact validation confirmed six positive-usage records, JSON-parsed responses, and no stored prompt bodies; `pnpm benchmark:context-savings -- --scenario brain-recall` passed; `node scripts/test-vault-structure-contract.mjs` passed; `git diff --check` passed for touched benchmark/docs/changelog files.
+- Intended commit message: `Add live e2e token benchmark`
+
+## 2026-06-07 21:11:10 WITA - Add Chat Swarm Commands
+
+- Status: Pushed
+- Areas changed: Dashboard chat composer, dashboard slash commands, agent swarm command routing, MiroShark chat launch flow, swarm command regression scripts, GitHub Pages docs, slash command docs, assimilation logs
+- Summary: Add a swarm button to the chat input that prepares `/swarm`, add `/swarm [number] <task>` to run a best-suited team of configured chat-capable agents in parallel and return a combined swarm packet, and add `/swarm-sim <scenario>` to launch a MiroShark simulation directly from chat. A leading number such as `/swarm 2 verify this patch` fixes the requested subagent count, clamped to the available configured roster and the swarm safety limit. Swarm selection now skips agents with known chat setup issues, strongly prefers agents on the selected chat agent's same machine or collector, and gives each subagent pass a timeout so chat can return an actionable packet instead of staying stuck on the pending reply.
+- Verification: `pnpm exec eslint src/features/chat/dashboard-slash-commands.ts src/features/chat/chat-composer.tsx src/features/dashboard/views/ChatPanel.tsx src/features/dashboard/hooks/dashboard-handoff-command.ts src/features/dashboard/hooks/dashboard-swarm-command.ts src/features/dashboard/hooks/use-status-chat-input-controller.tsx scripts/test-dashboard-swarm-command.mjs scripts/e2e-dashboard-swarm-command.mjs --max-warnings=999` passed with existing hook warnings; focused `pnpm exec tsc --noEmit --pretty false` scan returned no touched-file diagnostics; `node scripts/test-dashboard-swarm-command.mjs` passed and proves an otherwise high-scoring unconfigured planner is skipped; `HIVEMINDOS_E2E_URL=http://127.0.0.1:5022 node scripts/e2e-dashboard-swarm-command.mjs` passed with deterministic intercepted `swarm-agent` runtime calls for `/swarm 2`; `HIVEMINDOS_E2E_URL=http://127.0.0.1:5022 node scripts/e2e-dashboard-swarm-command.mjs --real` passed the real Fleet orchestration path without intercepting `/api/chat/agent-runtime`, skipped the known-unconfigured OpenClaw path, selected real configured agents, and returned a real swarm packet showing runtime fetch/provider-health failures instead of fake output; `node scripts/test-vault-structure-contract.mjs` passed; `git diff --check` passed for touched files; `ASSIMILATION_LOG.jsonl` parsed successfully; direct MiroShark route smoke queued a real job and an empty `/api/miroshark/swarm` request returned `Scenario is required`.
+- Intended commit message: `Add chat swarm commands`
+
+## 2026-06-07 21:02:11 WITA - Document Token And Cost Savings
+
+- Status: Pushed
+- Areas changed: GitHub Pages feature docs, packaged Hive skills docs, docs navigation, README, package scripts, context-savings benchmark script, vault structure contract, assimilation logs
+- Summary: Add a Token And Cost Savings guide explaining how HivemindOS reduces repeated token spend through shared-brain recall, `hive-brain answer`/`recall`, context-index retrieval, `karpathy-guidelines`, `hive-assimilate`, `hive-capability-search`, Hive Fusion skills, provider routing, and runtime usage analytics. Clarify in the Hive skills docs that the canonical "hive find/search" surface is `hive-brain`, not a separate packaged skill. Add `pnpm benchmark:context-savings`, a deterministic context-budget benchmark that compares broad baseline context packs against targeted Hive recall/capability/assimilation packs and explicitly says it is not live E2E provider billing. Keep `pnpm benchmark:token-savings` as a compatibility alias.
+- Verification: `pnpm benchmark:context-savings` passed and reported 931,282 baseline estimated tokens vs 9,416 Hive estimated tokens across `brain-recall`, `software-build`, and `workflow-reuse`; `pnpm benchmark:token-savings -- --scenario workflow-reuse` passed as a compatibility alias; `node scripts/benchmark-context-savings.mjs --json` passed and reports `benchmarkType: "deterministic-context-budget"`, `isLiveE2EAgentRun: false`, and `usesProviderBilling: false`; `node scripts/test-vault-structure-contract.mjs` passed; `git diff --check` passed for touched benchmark/docs/changelog files; targeted `rg` confirmed the savings docs and Hive skills docs mention `hive-brain answer`/`recall`, `karpathy-guidelines`, `hive-assimilate`, `hive-capability-search`, and Hive Fusion.
+- Intended commit message: `Document token and cost savings`
+
 ## 2026-06-07 21:54 WITA - Route Queen Bee To Best Fleet Agent
 
-- Status: Committed
+- Status: Pushed
 - Areas changed: Queen Bee routing, Queen Bee API fleet discovery, Work Board assignment metadata, vault seed/contract docs, routing tests
 - Summary: Upgrade `/api/queen-bee` from a generic `queen-bee` queue marker into an actual fleet-aware delegation path: Queen Bee now infers the worker class from the request, ranks online chat-capable agents across every discovered machine, assigns the Work Board card to the best matching agent and target machine, and only falls back to `queen-bee` when no matching runtime is online.
 - Verification: `node --experimental-strip-types scripts/test-queen-bee-routing.mjs` passed after first failing RED run for missing router and then route-reason mismatch; `node --check scripts/seed-vault-foundation.mjs scripts/test-vault-structure-contract.mjs` passed; `node scripts/test-vault-structure-contract.mjs` passed; focused `pnpm exec eslint` on Queen Bee router/API/service passed; focused `pnpm exec tsc --noEmit --pretty false` filter showed no touched-file errors; `git diff --check` passed. `pnpm check-sizes` remains blocked by existing oversized legacy files.

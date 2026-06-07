@@ -1,0 +1,28 @@
+{
+  "upstreamName": "last30days",
+  "hiveName": "hive-pulse",
+  "sourceUrl": "https://github.com/mvanhorn/last30days-skill/tree/122158415ae421da83e739f2668032f6bc78d39c/skills/last30days",
+  "repository": "https://github.com/mvanhorn/last30days-skill",
+  "commit": "122158415ae421da83e739f2668032f6bc78d39c",
+  "license": "MIT",
+  "importedAt": "2026-06-07T14:06:12.000Z",
+  "provider": "packaged-auto-install",
+  "providerLabel": "HivemindOS auto-install packaged skills",
+  "sourcePath": "packaged-skills/auto-install/hive-pulse",
+  "status": "auto-install",
+  "hivemindAdaptations": [
+    "Adds the HivemindOS SKILL.md wrapper, source metadata, setup-installed hive-pulse command shim, and setup/uninstall dependency mirror.",
+    "Defaults the HivemindOS shim to FROM_BROWSER=off, zero-config sources, a generated deterministic JSON query plan, and local deterministic reasoning unless the user explicitly selects a configured LLM provider.",
+    "Adds explicit bundled-engine support for LAST30DAYS_REASONING_PROVIDER=local so stale shared LLM credentials do not break out-of-the-box operation.",
+    "Ships the runtime engine and required helper libraries, while omitting upstream media assets and upstream developer/test/keychain setup helper scripts from the auto-installed package."
+  ],
+  "audit": {
+    "fullRepo": "blocked-by-test-fixture-review",
+    "runtimePath": "review",
+    "notes": [
+      "Full repo scanner found a destructive shell deletion string inside tests/test_youtube_yt.py as an adversarial host-validation fixture.",
+      "Scoped skills/last30days scan found no high findings and medium review findings for network/secret handling and large upstream media assets.",
+      "HivemindOS ships the runtime engine and required helper libraries, omitting upstream media assets and upstream developer/test/keychain setup helper scripts."
+    ]
+  }
+}

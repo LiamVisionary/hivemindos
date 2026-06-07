@@ -17,6 +17,7 @@ What MiroShark support can do:
 - Detect, install, start, and open MiroShark.
 - List templates and run metadata.
 - Start scenario simulations.
+- Accept `/swarm-sim <scenario>` launches from dashboard chat through the same `/api/miroshark/swarm` route used by the Swarm view.
 - Fetch run status, summaries, reports, transcripts, exports, telemetry, market events, observability events, LLM calls, and intelligence where the companion exposes them.
 - Send simulation output back into agent or Kanban workflows.
 - Load archived runs from the shared vault.
@@ -36,6 +37,8 @@ The Swarm view is the dashboard's MiroShark workbench. It combines:
 - Analysis-agent selection backed by dashboard runtime/model selections.
 
 The view is intentionally Hivemind-owned. MiroShark remains an optional companion service. HivemindOS owns the Fleet badge matching, route catalog fallback, archive routing, and shared-vault artifact handoff.
+
+Dashboard chat also exposes `/swarm-sim <scenario>` for quick simulation launch. Use the Swarm view when the operator needs templates, fields, platform controls, analysis-agent selection, archive browsing, publishing, or deeper run inspection.
 
 ## API Service Catalog
 
@@ -63,6 +66,7 @@ What runtime gateway support can do:
 
 - `src/lib/services/miroshark/**`
 - `src/app/api/miroshark/**`
+- `src/features/dashboard/hooks/dashboard-swarm-command.ts`
 - `src/features/swarm/**`
 - `src/components/swarm/**`
 - `src/lib/services/openclaw/**`

@@ -1,19 +1,18 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 "use client";
-
-/* eslint-disable react-hooks/immutability, react-hooks/purity */
-
+/* eslint-disable react-hooks/immutability */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveDashboardSlashCommand } from "@/features/chat/dashboard-slash-commands";
 import { createFileReferenceAttachments } from "@/features/chat/chat-file-references";
 import { runtimeChatFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
 import { handleDashboardHandoffTaskCommand } from "./dashboard-handoff-command";
+import { handleDashboardSwarmCommand, handleDashboardSwarmSimCommand } from "./dashboard-swarm-command";
 import { compactRepeatedAssistantText, extractGeneratedKanbanTask, kanbanBodyWithFullSource, nextChatTextDelta, processLabelFromComment, processLabelFromRuntimeEvent, processLabelFromSessionMessage, runtimePromptFromPayload, yieldChatPaint } from "./status-chat-input-helpers";
 
 export function useStatusChatInputController(props: any) {
-  const { AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceBands, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent } = props;
+  const { AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceBands, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent } = props;
   const [chatKanbanGeneration, setChatKanbanGeneration] = useState(null);
   const [chatQueue, setChatQueue] = useState([]);
   const [flushingChatQueueId, setFlushingChatQueueId] = useState("");
@@ -41,7 +40,6 @@ export function useStatusChatInputController(props: any) {
       status: "active",
     });
   }
-
   function markChatStreamChunk(storageKey: string) {
     setChatStreamingByKey((current) => {
       if (!current[storageKey]?.hasChunk) {
@@ -50,7 +48,6 @@ export function useStatusChatInputController(props: any) {
       return current;
     });
   }
-
   function finishChatStream(storageKey: string) {
     setChatStreamingByKey((current) => {
       const next = { ...current };
@@ -58,7 +55,6 @@ export function useStatusChatInputController(props: any) {
       return next;
     });
   }
-
   function appendChatProcess(storageKey: string, label: string, detail?: string, status?: string, runId?: string) {
     const cleanLabel = label.trim();
     if (!cleanLabel) return;
@@ -754,7 +750,6 @@ export function useStatusChatInputController(props: any) {
     recognition.stop();
   }
 
-  /* eslint-disable react-hooks/purity */
   async function sendMessage(event: FormEvent) {
     event.preventDefault();
     if (recording) {
@@ -909,6 +904,14 @@ export function useStatusChatInputController(props: any) {
       const userMessage = { role: "user", content: prompt, surface: "chat" };
       if (dashboardCommand.name === "handoff-task") {
         await handleDashboardHandoffTaskCommand({ prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey, appendMessage, appendPreviewMessages, setText, setAttachmentError, setAttachmentMenuOpen, setMessagesByAgent, setSelectedChatPreview });
+        return;
+      }
+      if (dashboardCommand.name === "swarm") {
+        await handleDashboardSwarmCommand({ agents: agents ?? [], prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey, appendMessage, appendPreviewMessages, chatSetupIssue, setText, setAttachmentError, setAttachmentMenuOpen, setMessagesByAgent, setSelectedChatPreview, sharedVault, workingDirectory: selectedChatDirectoryPath, walletsByAgent, createDefaultAgentWallet, honeyLedgerEnabled });
+        return;
+      }
+      if (dashboardCommand.name === "swarm-sim") {
+        await handleDashboardSwarmSimCommand({ agents: agents ?? [], appOrigin: window.location.origin, prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey, appendMessage, appendPreviewMessages, chatSetupIssue, setText, setAttachmentError, setAttachmentMenuOpen, setMessagesByAgent, setSelectedChatPreview, sharedVault, workingDirectory: selectedChatDirectoryPath, walletsByAgent, createDefaultAgentWallet, honeyLedgerEnabled });
         return;
       }
       const assistantMessage = { role: "assistant", content: dashboardCommand.reply, surface: "chat" };
@@ -1489,7 +1492,5 @@ export function useStatusChatInputController(props: any) {
       return null;
     });
   }
-  /* eslint-enable react-hooks/purity */
-
   return { checkStatus, checkVaultStatus, checkControlRoomStatus, runVaultTailnetSync, pairSyncthingCollector, pairSyncthingVaultSync, inspectBrainNode, startBrainPan, moveBrainPan, endBrainPan, addChatFiles, handleChatFileChange, handleChatFileReferenceDrop, handleChatImageChange, removeChatAttachment, attachChatDirectory, attachChatRecentDirectory, removeChatDirectory, addQuickAddFiles, handleQuickAddFileChange, handleQuickAddImageChange, removeQuickAddAttachment, attachQuickAddDirectory, attachQuickAddRecentDirectory, removeQuickAddDirectory, addKanbanSteerFiles, handleKanbanSteerFileChange, handleKanbanSteerImageChange, removeKanbanSteerAttachment, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, removeKanbanSteerDirectory, updateVoiceTranscript, appendVoiceTranscriptToInput, cleanupVoiceCapture, startVoiceWaveform, startAudioRecording, stopAudioRecording, sendMessage, queuedChatMessages, flushingChatQueueId, removeQueuedChatMessage, sendQueuedChatMessageNow, generateKanbanTaskFromChat, dismissChatKanbanGeneration, chatKanbanGeneration };
 }

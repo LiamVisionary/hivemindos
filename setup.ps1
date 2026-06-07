@@ -223,6 +223,43 @@ function Ensure-Gpg {
   }
 }
 
+function Test-Python312Command($Command, [string[]]$Arguments = @()) {
+  if (-not (Test-Command $Command)) { return $false }
+  & $Command @Arguments -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)" 2>$null
+  return $LASTEXITCODE -eq 0
+}
+
+function Ensure-HivePulsePython {
+  if (Test-Python312Command "py" @("-3.12")) {
+    Ok "Hive Pulse Python found: py -3.12"
+    return
+  }
+  foreach ($candidate in @("python3.14", "python3.13", "python3.12", "python3", "python")) {
+    if (Test-Python312Command $candidate) {
+      $version = & $candidate --version 2>$null
+      Ok "Hive Pulse Python found: $version"
+      return
+    }
+  }
+  if (Ask-YesNo "Python 3.12+ is missing. Install Python 3.12 with winget so hive-pulse works out of the box?" $true) {
+    Install-WingetPackage "Python 3.12" "Python.Python.3.12" | Out-Null
+    Refresh-Path
+  }
+  if (Test-Python312Command "py" @("-3.12")) {
+    Ok "Hive Pulse Python ready: py -3.12"
+    return
+  }
+  foreach ($candidate in @("python3.14", "python3.13", "python3.12", "python3", "python")) {
+    if (Test-Python312Command $candidate) {
+      $version = & $candidate --version 2>$null
+      Ok "Hive Pulse Python ready: $version"
+      return
+    }
+  }
+  Warn "Python 3.12+ is still missing; install it or set HIVE_PULSE_PYTHON before running hive-pulse."
+  $Missing.Add("Python 3.12+ for hive-pulse")
+}
+
 function Ensure-HiveEnvAdd {
   $binDir = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".local\bin"
   New-Item -ItemType Directory -Force -Path $binDir | Out-Null
@@ -231,12 +268,12 @@ function Ensure-HiveEnvAdd {
     Warn "Python is missing; hive env shims installed but will need Python to run."
     $pythonCommand = "python"
   }
-  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook")) {
+  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-pulse")) {
     $shimPath = Join-Path $binDir "$commandName.cmd"
     $scriptPath = Join-Path $Root "scripts\$commandName"
     if ($commandName -eq "hive-transfer") {
       Set-Content -Path $shimPath -Value "@echo off`r`nnode `"$scriptPath.mjs`" %*`r`n" -Encoding ASCII
-    } elseif ($commandName -eq "hive-handoff" -or $commandName -eq "hivemind-mcp" -or $commandName -eq "hive-brain" -or $commandName -eq "hive-brain-hook") {
+    } elseif ($commandName -eq "hive-handoff" -or $commandName -eq "hivemind-mcp" -or $commandName -eq "hive-brain" -or $commandName -eq "hive-brain-hook" -or $commandName -eq "hive-pulse") {
       Set-Content -Path $shimPath -Value "@echo off`r`nnode `"$scriptPath`" %*`r`n" -Encoding ASCII
     } elseif ($commandName -eq "hive-update") {
       Set-Content -Path $shimPath -Value "@echo off`r`nbash `"$scriptPath`" %*`r`n" -Encoding ASCII
@@ -253,7 +290,7 @@ function Ensure-HiveEnvAdd {
       Refresh-Path
       Ok "Added $binDir to user PATH"
     } else {
-      Warn "Add $binDir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, and hive-brain-hook from any folder"
+      Warn "Add $binDir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, hive-brain-hook, and hive-pulse from any folder"
     }
   } else {
     Refresh-Path
@@ -424,6 +461,7 @@ Ensure-Syncthing $tailnetSyncEnabled
 Ensure-Unison
 Ensure-Obsidian
 Ensure-Gpg
+Ensure-HivePulsePython
 Ensure-HiveEnvAdd
 Ensure-GitLawbCodeProof
 

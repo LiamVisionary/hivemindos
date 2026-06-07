@@ -30,7 +30,7 @@ The product starts with machines and agents. Fleet tells you what is online, whi
   </section>
   <section class="docCard">
     <h3>Agents, Runtimes, And Chat</h3>
-    <p>Runtime profiles, model selection, adapter behavior, streaming chat, attachments, directory context, and phone-call handoff.</p>
+    <p>Runtime profiles, model selection, adapter behavior, streaming chat, `/swarm [number]` agent-team passes, attachments, directory context, and phone-call handoff.</p>
     <a href="runtimes-and-chat.html">Open agents</a>
   </section>
   <section class="docCard">
@@ -42,7 +42,7 @@ The product starts with machines and agents. Fleet tells you what is online, whi
 
 ## Work Loop
 
-Work is where operator intent turns into agent execution. The board captures rough ideas, promotes ready tasks, tracks claimed work, stores comments and run records, and turns finished output into deliverables. Scheduler adds repeated background work. Swarm and MiroShark handle rehearsal, simulation, and heavier analysis workflows.
+Work is where operator intent turns into agent execution. The board captures rough ideas, promotes ready tasks, tracks claimed work, stores comments and run records, and turns finished output into deliverables. Scheduler adds repeated background work. Chat can launch `/swarm [number]` agent-team passes for parallel role-specific analysis. Swarm and MiroShark handle rehearsal, `/swarm-sim` simulations, and heavier analysis workflows.
 
 <div class="docGrid">
   <section class="docCard">
@@ -52,7 +52,7 @@ Work is where operator intent turns into agent execution. The board captures rou
   </section>
   <section class="docCard">
     <h3>MiroShark And Runtime Gateways</h3>
-    <p>Simulation templates, swarm rehearsal, run intelligence, route catalogs, and the minimal runtime-gateway integration points HivemindOS owns.</p>
+    <p>Simulation templates, `/swarm-sim` chat launches, swarm rehearsal, run intelligence, route catalogs, and the minimal runtime-gateway integration points HivemindOS owns.</p>
     <a href="miroshark-and-openclaw.html">Open gateway docs</a>
   </section>
 </div>
@@ -112,6 +112,11 @@ The shared brain is a normal Obsidian vault, not a proprietary database. Hivemin
     <h3>Env, Files, Notifications, And Maintenance</h3>
     <p>Shared env, runtime file browsing, notification storage, process telemetry, and conservative repair checks.</p>
     <a href="env-files-notifications-maintenance.html">Open system docs</a>
+  </section>
+  <section class="docCard">
+    <h3>Token And Cost Savings</h3>
+    <p>How shared brain recall, Hive skills, assimilation, fusion workflows, model routing, and usage analytics reduce repeated token spend.</p>
+    <a href="token-and-cost-savings.html">Open savings docs</a>
   </section>
 </div>
 

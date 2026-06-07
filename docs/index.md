@@ -82,6 +82,11 @@ description: Local-first agent fleet control room documentation.
     <a href="runtimes/">Open runtimes</a>
   </section>
   <section class="docCard">
+    <h3>Token And Cost Savings</h3>
+    <p>Learn how HivemindOS reduces repeated context, blank-page coding, workflow rediscovery, and paid-model spend.</p>
+    <a href="features/token-and-cost-savings.html">Open savings docs</a>
+  </section>
+  <section class="docCard">
     <h3>Calling</h3>
     <p>Call HivemindOS agents from the dashboard or paired mobile app, with BYOK Realtime calls by default and Cloud/LiveKit rooms as the paid path.</p>
     <a href="features/calling.html">Open calling docs</a>
@@ -104,7 +109,7 @@ The codebase now spans more than the original Fleet, Work, Brain, Chat, and Wall
 
 - My Apps: hivenet app and API-service discovery with icon proxying, health checks, service-kind signatures, OpenAPI/Hivemind route catalogs, route copy actions, and safe open links.
 - AEON: repository/workspace management, local clone/link flows, GitHub-backed duplicates, scheduler handoff, brain access, and deliverable discovery/download/transfer.
-- Swarm: MiroShark template-driven simulations, scenario helpers, archive loading, X/polymarket/reddit-style outputs, run intelligence, publish actions, and analysis-agent selection.
+- Swarm: chat-launched `/swarm [number]` agent-team passes, `/swarm-sim` MiroShark simulation launches, MiroShark template-driven simulations, scenario helpers, archive loading, X/polymarket/reddit-style outputs, run intelligence, publish actions, and analysis-agent selection.
 - Brain Services: Obsidian graph, shared skills, GBrain, Syntho, trading brain install/status, service notes, Synthesis folder configuration, source access policy controls, vault doctor, and whole brain architecture docs.
 - Wallets, Tokens, and Usage: per-agent wallets, Base/Solana token rails, MoneyClaw key validation, UsePod prepaid status, x402 smoke tests, encrypted wallet-vault backup/restore, Honey observation, and Bankr HIVE claims.
 - GitLawb Code Proof: lightweight CLI/DID setup, project registry, task proof badges, Fleet Code Node status, and lazy local repo node hosting.
@@ -146,6 +151,8 @@ pnpm dev
 pnpm lint
 pnpm typecheck
 pnpm build
+pnpm benchmark:context-savings
+./scripts/hive-env-run -- pnpm benchmark:e2e-token-savings
 ```
 
 Port `5020` is the normal managed dashboard port. Project rules reserve that port for Liam's managed dev server, so ad hoc testing should use `5021` or higher unless explicitly directed otherwise.

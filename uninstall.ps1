@@ -462,9 +462,9 @@ if (Ask-YesNo "Remove .env.local from this checkout?" $false) {
   Ok "Removed .env.local"
 }
 
-if (Ask-YesNo "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, and brain hook commands from ~/.local/bin if they point to this checkout?" $true) {
+if (Ask-YesNo "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, brain hook, and Hive Pulse commands from ~/.local/bin if they point to this checkout?" $true) {
   $binDir = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".local\bin"
-  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook")) {
+  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-pulse")) {
     $shimPath = Join-Path $binDir "$commandName.cmd"
     if (Test-Path $shimPath) {
       $content = Get-Content $shimPath -Raw
@@ -475,6 +475,15 @@ if (Ask-YesNo "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, 
         Warn "Skipped $shimPath because it is not managed by this checkout"
       }
     }
+  }
+}
+
+if (Ask-YesNo "Uninstall winget Python 3.12 that HivemindOS setup may have installed for Hive Pulse?" $false) {
+  if (Test-Command winget) {
+    winget uninstall --id Python.Python.3.12 --exact
+    Ok "Requested Python 3.12 uninstall through winget"
+  } else {
+    Warn "winget is unavailable; skipped Python 3.12 uninstall"
   }
 }
 

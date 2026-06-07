@@ -5953,3 +5953,351 @@ cached 0 public candidates in /Users/liam/Documents/github-assimilator-vault
 - /Users/liam/.codex/skills/github-assimilator/SKILL.md
   - Decision: selected
   - Reason: renamed and expanded into hive-assimilate packaged skill
+## 2026-06-07T13:02:11.828393+00:00 - documentation
+
+- Request: Document how HivemindOS saves tokens and costs, including hive-brain search, hive-assimilate, capability search, fusion skills, and karpathy-guidelines
+- Source: shared-brain
+- Selected backbone: docs/features/token-and-cost-savings.md
+- Note: Added Token And Cost Savings docs and linked it from docs index, feature index, Hive skills docs, README, and static docs contract.
+
+### Candidates
+- Skills/hive-capability-search/SKILL.md
+  - Decision: selected
+  - Reason: capability search role in cost-control loop
+- Skills/hive-assimilate/SKILL.md
+  - Decision: selected
+  - Reason: pre-build reuse role in cost-control loop
+- scripts/hive-brain
+  - Decision: selected
+  - Reason: canonical hive search command is hive-brain answer/recall
+
+## 2026-06-07T13:11:10+00:00 - implementation
+
+- Request: Add a swarm button, `/swarm` agent-team command, and `/swarm-sim` MiroShark command to dashboard chat
+- Source: local-project
+- Selected backbone: local-project:hivemind-os chat command stack
+- Note: Shared-brain recall returned general implementation-plan context but no stronger task-specific donor. Public GitHub search returned unrelated/low-fit slash-command examples, so implementation reused local HivemindOS command, agent-role, and MiroShark modules.
+
+### Candidates
+- src/features/dashboard/hooks/dashboard-handoff-command.ts
+  - Decision: selected
+  - Reason: adapted the dashboard command transcript/pending-reply flow for new swarm commands
+  - Path: `src/features/dashboard/hooks`
+- src/features/chat/dashboard-slash-commands.ts
+  - Decision: selected
+  - Reason: existing dashboard slash-command registry extended with `/swarm` and `/swarm-sim`
+  - Path: `src/features/chat`
+- src/features/chat/chat-composer.tsx
+  - Decision: selected
+  - Reason: existing composer actions and slash autocomplete extended with a swarm command button
+  - Path: `src/features/chat`
+- src/lib/services/orchestration/bee-roles.ts and src/lib/config/bee-worker-presets.ts
+  - Decision: selected
+  - Reason: existing bee worker-class inference and role profiles drive best-suited swarm agent selection
+  - Path: `src/lib/services/orchestration, src/lib/config`
+- src/app/api/miroshark/swarm/route.ts and src/features/dashboard/views/chat/MiroSharkSimulationCard.tsx
+  - Decision: selected
+  - Reason: reused existing MiroShark launch and chat-card parsing behavior for `/swarm-sim`
+  - Path: `src/app/api/miroshark, src/features/dashboard/views/chat`
+- ambiversive/asg
+  - Decision: rejected
+  - Reason: old PHP CMS slash-command system; incompatible stack and no useful code path
+- navid-kianfar/acha-claude
+  - Decision: rejected
+  - Reason: Kotlin IDE assistant metadata only; no compatible dashboard command implementation
+- catbot-ai/catbot-chatbot
+  - Decision: rejected
+  - Reason: Rust Discord slash-command bot; unrelated execution model
+## 2026-06-07T13:14:35.051899+00:00 - implementation
+
+- Request: Benchmark token savings with and without Hive optimizations
+- Source: local-project
+- Selected backbone: scripts/benchmark-context-savings.mjs
+- Note: Added deterministic context savings benchmark comparing broad baseline context packs against targeted hive recall/capability/assimilation packs; exposed as pnpm benchmark:context-savings and documented in token savings docs.
+
+### Candidates
+- docs/features/token-and-cost-savings.md
+  - Decision: selected
+  - Reason: benchmark method and savings model documentation
+- src/lib/services/chat/task-retrieval-context.ts
+  - Decision: selected
+  - Reason: targeted context retrieval pattern used for optimized benchmark pack
+- scripts/hive-brain
+  - Decision: selected
+  - Reason: canonical shared-brain recall command represented in benchmark
+## 2026-06-07T13:37:54.392958+00:00 - clarification
+
+- Request: Rename token savings benchmark to context savings and make clear it is not real E2E provider billing
+- Source: local-project
+- Selected backbone: scripts/benchmark-context-savings.mjs
+- Note: Renamed benchmark-token-savings to benchmark-context-savings, made benchmark:context-savings the primary command, kept benchmark:token-savings as compatibility alias, and added JSON flags benchmarkType/isLiveE2EAgentRun/usesProviderBilling.
+
+### Candidates
+- scripts/benchmark-context-savings.mjs
+  - Decision: selected
+  - Reason: primary deterministic context-budget benchmark with explicit non-E2E flags
+- docs/features/token-and-cost-savings.md
+  - Decision: selected
+  - Reason: docs now state compatibility alias and non-E2E provider-billing boundary
+## 2026-06-07T13:55:17.356306+00:00 - implementation
+
+- Request: Add a real E2E token savings benchmark with provider usage counters
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- scripts/benchmark-context-savings.mjs
+  - Decision: selected
+  - Reason: existing deterministic benchmark scenarios and context-pack builder reused as the backbone for the live benchmark
+  - Path: `scripts/benchmark-context-savings.mjs`
+- docs/features/token-and-cost-savings.md
+  - Decision: selected
+  - Reason: existing token-savings documentation expanded to distinguish deterministic estimates from real provider runs
+  - Path: `docs/features/token-and-cost-savings.md`
+- scripts/test-vault-structure-contract.mjs
+  - Decision: selected
+  - Reason: existing docs/command contract extended so the new live benchmark remains discoverable
+  - Path: `scripts/test-vault-structure-contract.mjs`
+- OpenAI direct provider
+  - Decision: rejected
+  - Reason: OPENAI_API_KEY was present but rejected by upstream authentication during the live run
+- UsePod provider
+  - Decision: rejected
+  - Reason: USEPOD_TOKEN was present but model discovery returned unauthorized
+- OpenRouter provider
+  - Decision: selected
+  - Reason: OPENROUTER_API_KEY was present and model discovery succeeded, so the live benchmark ran through OpenRouter OpenAI-compatible chat completions
+## 2026-06-07T13:55:27.508435+00:00 - shared-brain-search
+
+- Request: Add a real E2E token savings benchmark with provider usage counters
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- hive-brain full-vault query
+  - Decision: rejected
+  - Reason: returned general benchmark/usepod/llama skill notes but no stronger reusable HivemindOS token benchmark source than the current project benchmark files
+## 2026-06-07T13:59:57.466794+00:00 - local-search
+
+- Request: HivemindOS dashboard /swarm number slash command and end-to-end command testing
+- Source: local-index
+- Query: `HivemindOS dashboard /swarm number slash command and end-to-end command testing`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+- Note: 1. score=3.35 LiamVisionary/ami-revenue-optimizer [repo-summary]
+   url: https://github.com/LiamVisionary/ami-revenue-optimizer
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ami-revenue-optimizer.md
+   LiamVisionary/ami-revenue-optimizer CrewAI-based revenue optimizer and ad management flows for Ami AI Companion Python Python
+2. score=3.35 LiamVisionary/claw-code-mobile [repo-summary]
+   url: https://github.com/LiamVisionary/claw-code-mobile
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-claw-code-mobile.md
+   LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+3. score=3.35 LiamVisionary/floradex [repo-summary]
+   url: https://github.com/LiamVisionary/floradex
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-floradex.md
+   LiamVisionary/floradex An AI powered plant scanner and collection tracker. TypeScript
+4. score=0.35 LiamVisionary/ai-companion-website [repo-summary]
+   url: https://github.com/LiamVisionary/ai-companion-website
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-ai-companion-website.md
+   LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
+5. score=0.35 LiamVisionary/maps-agency [repo-summary]
+   url: https://github.com/LiamVisionary/maps-agency
+   note: /Users/liam/Documents/github-assimilator-vault/Repos/LiamVisionary-maps-agency.md
+   LiamVisionary/maps-agency 7-agent solo web design agency: scouts narrow-niche local businesses on Google Maps, diagnoses, builds Lovable mockups, films Higgsfield videos, pitches by channel, books Zooms — single API key, file-system shared
+
+## 2026-06-07T13:59:59.986465+00:00 - prebuild-gate
+
+- Request: HivemindOS dashboard /swarm number slash command and end-to-end command testing
+- Source: public-github
+- Query: `HivemindOS dashboard /swarm number slash command and end-to-end command testing`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+
+## 2026-06-07T14:07:48Z - implementation
+
+- Request: Add `/swarm [number]` to control subagent count and find a reliable end-to-end `/swarm` test path
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/hooks/dashboard-swarm-command.ts
+  - Decision: selected
+  - Reason: existing swarm command handler was extended with a reusable parser, fixed-count agent selection, and exported planning helpers for regression coverage
+  - Path: `src/features/dashboard/hooks/dashboard-swarm-command.ts`
+- scripts/test-dashboard-swarm-command.mjs
+  - Decision: selected
+  - Reason: new focused command contract test follows the repo's existing small Node script style and validates parser, count clamping, agent selection, and packet formatting without live runtimes
+  - Path: `scripts/test-dashboard-swarm-command.mjs`
+- scripts/e2e-dashboard-swarm-command.mjs
+  - Decision: selected
+  - Reason: new Playwright smoke seeds a clean dashboard chat, authenticates through the existing dashboard session route, submits `/swarm 2 ...`, and supports both deterministic intercepted runtime coverage plus `--real` Fleet discovery coverage that does not stub `/api/chat/agent-runtime`
+  - Path: `scripts/e2e-dashboard-swarm-command.mjs`
+- docs/slash-commands.md and docs/features/runtimes-and-chat.md
+  - Decision: selected
+  - Reason: slash-command and GitHub Pages docs were updated to describe the optional leading number
+- public GitHub command-test candidates
+  - Decision: rejected
+  - Reason: broad external command-test frameworks were heavier than the repo's established Node-script and Playwright smoke pattern for this dashboard-specific command
+## 2026-06-07T14:31:57Z - implementation
+
+- Request: Replace fake-only `/swarm` testing with real Fleet orchestration coverage and make fixed-count swarms stay local when possible
+- Source: current-project
+- Selected backbone: local-project:hivemind-os dashboard chat command stack
+
+### Candidates
+- src/features/dashboard/hooks/dashboard-swarm-command.ts
+  - Decision: selected
+  - Reason: existing selector was tightened to skip agents with known chat setup issues, prefer the selected chat agent's same machine or collector, and bound each runtime pass with a timeout
+  - Path: `src/features/dashboard/hooks/dashboard-swarm-command.ts`
+- scripts/e2e-dashboard-swarm-command.mjs
+  - Decision: selected
+  - Reason: existing Playwright smoke was extended with `--real` to discover actual local Fleet agents and call `/api/chat/agent-runtime` without route interception, while keeping deterministic intercepted mode for regression coverage
+  - Path: `scripts/e2e-dashboard-swarm-command.mjs`
+- docs/features/runtimes-and-chat.md
+  - Decision: selected
+  - Reason: GitHub Pages runtime/chat docs now describe deterministic versus real `/swarm` smoke commands
+  - Path: `docs/features/runtimes-and-chat.md`
+- Runtime provider health
+  - Decision: observed
+  - Reason: real smoke reached configured agents and returned a swarm packet, while known-unconfigured OpenClaw setup was skipped and remaining runtime failures were fetch/provider-health failures rather than fake output
+
+## 2026-06-07T14:12:53.923789+00:00 - implementation
+
+- Request: Rebrand and package mvanhorn/last30days-skill as HivemindOS Hive Pulse functionality and vet malicious code
+- Source: pinned-github
+- Selected backbone: mvanhorn/last30days-skill@122158415ae421da83e739f2668032f6bc78d39c
+
+### Candidates
+- mvanhorn/last30days-skill
+  - Decision: selected
+  - Reason: MIT licensed multi-source last-30-days research engine copied into packaged-skills/auto-install/hive-pulse with Hive-facing SKILL.md and audit notes
+  - Path: `skills/last30days`
+- mvanhorn/last30days-skill full repo
+  - Decision: reviewed
+  - Reason: full audit high finding was adversarial test fixture; runtime path scoped audit returned review only
+  - Path: `tests/test_youtube_yt.py`
+## 2026-06-07T14:12:54.018587+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: mvanhorn/last30days-skill:skills/last30days/scripts => packaged-skills/auto-install/hive-pulse/scripts, mvanhorn/last30days-skill:skills/last30days/references => packaged-skills/auto-install/hive-pulse/references, mvanhorn/last30days-skill:LICENSE => packaged-skills/auto-install/hive-pulse/LICENSE
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-07T14:17:53.450544+00:00 - public-search
+
+- Request: React wallet dashboard import private key seed phrase token portfolio quick send
+- Source: public-github
+- Query: `React wallet dashboard import private key seed phrase token portfolio quick send`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-06-07T14:29:41.234629+00:00 - implementation
+
+- Request: Sort dashboard agent wallets by created wallet status and agent name
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: selected
+  - Reason: Agent wallets section already resolves wallet/card setup state locally
+  - Path: `src/features/dashboard/views/WalletPanel.tsx`
+- src/components/wallet/AgentWalletCardCompact.tsx
+  - Decision: selected
+  - Reason: Compact card defines wallet setup evidence and ready/setup display semantics
+  - Path: `src/components/wallet/AgentWalletCardCompact.tsx`
+- public GitHub wallet dashboard ordering candidates
+  - Decision: rejected
+  - Reason: ordering rule is specific to HivemindOS agent wallet state; no external code needed
+## 2026-06-07T14:29:48.729537+00:00 - public-search
+
+- Request: React wallet list sort configured wallets first alphabetically
+- Source: public-github
+- Query: `React wallet list sort configured wallets first alphabetically`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-06-07T14:32:41.307538+00:00 - triage
+
+- Request: Add user wallet connector before agent wallets with import, token view, and quick send
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: selected
+  - Reason: existing wallet panel and agent wallet ordering surface extended for personal wallets
+  - Path: `tsx`
+- src/lib/services/wallet/chain-wallet.ts
+  - Decision: selected
+  - Reason: existing generated wallet balance and send implementation reused for personal wallet import/send
+  - Path: `ts`
+- src/app/api/wallet/create/route.ts
+  - Decision: selected
+  - Reason: existing encrypted local wallet creation route reused for generated user wallets
+  - Path: `route`
+- Skills/hivemindos-wallet-rails/SKILL.md
+  - Decision: selected
+  - Reason: shared wallet spend/auth safety workflow used for route and verification constraints
+  - Path: `skill`
+- public-github-search
+  - Decision: rejected
+  - Reason: search returned no concrete compatible donor candidates, so local wallet rails were stronger and safer
+## 2026-06-07T14:32:41.357988+00:00 - verification
+
+- Request: Add user wallet connector before agent wallets with import, token view, and quick send
+- Source: local-implementation
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/PersonalWallets.module.css
+  - Decision: selected
+  - Reason: extracted personal wallet UI styles to keep wallet stylesheet under size guard
+  - Path: `css`
+- src/app/api/wallet/import/route.ts
+  - Decision: selected
+  - Reason: new route built around existing encrypted vault helper and auth gate
+  - Path: `route`
+- Playwright wallet smoke
+  - Decision: selected
+  - Reason: authenticated wallet, mobile add wallet, and quick-send fixture smokes passed without browser errors
+## 2026-06-07T14:53:34Z - implementation
+
+- Request: Steal the good bones from multica-ai/multica Kanban/task logic
+- Source: pinned-public-github
+- Selected backbone: local-project:hivemind-os Kanban store
+
+### Candidates
+- multica-ai/multica@83ac61e:server/internal/service/task.go
+  - Decision: assimilated
+  - Reason: Adapted failure handling shape: classify failed runs, retry infra failures, and fail closed when retries are exhausted.
+  - Path: `server/internal/service/task.go`
+- multica-ai/multica@83ac61e:server/internal/service/issue.go
+  - Decision: assimilated
+  - Reason: Adapted the queue admission idea that inert backlog/ready work should not execute until explicitly eligible, while preserving HivemindOS Ready semantics.
+  - Path: `server/internal/service/issue.go`
+- multica-ai/multica@83ac61e:server/migrations/055_task_lease_and_retry.up.sql
+  - Decision: assimilated
+  - Reason: Translated attempt/maxAttempts/failureReason lease-retry fields into HivemindOS JSON task/run types.
+  - Path: `server/migrations/055_task_lease_and_retry.up.sql`
+- multica-ai/multica@83ac61e:packages/core/types/issue.ts and packages/core/issues/config/status.ts
+  - Decision: reviewed
+  - Reason: Compared status model; rejected direct status rename because HivemindOS board language is intentionally local/Queen/agent specific.
+  - Path: `packages/core/types/issue.ts`, `packages/core/issues/config/status.ts`
+- multica-ai/multica full Postgres queue and daemon architecture
+  - Decision: rejected
+  - Reason: Too large for this local-first board pass; HivemindOS keeps Obsidian/local JSON storage and only ports the queue/retry semantics.
+
+### Assimilated Targets
+- `src/lib/types/kanban.ts`
+- `src/lib/services/kanban/local-kanban-store.ts`
+- `src/app/api/kanban/route.ts`
+- `scripts/test-kanban-workflow.mjs`
+
+### Verification
+- Pending focused typecheck, workflow/static smoke, assimilation manifest verification, and diff checks.
+## 2026-06-07T14:54:21.341812+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: multica-ai/multica:server/internal/service/task.go => src/lib/services/kanban/local-kanban-store.ts, multica-ai/multica:server/migrations/055_task_lease_and_retry.up.sql => src/lib/types/kanban.ts, multica-ai/multica:server/internal/service/issue.go => src/lib/services/kanban/local-kanban-store.ts, hivemind-os:scripts/test-kanban-workflow.mjs => scripts/test-kanban-workflow.mjs
+- Verification: Wrote ASSIMILATION.json with 4 entries and custom_code_assessment=balanced.

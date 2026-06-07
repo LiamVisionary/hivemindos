@@ -192,7 +192,8 @@ Provider credentials belong in shared env keys such as `BANKR_LLM_KEY`, `BANKR_A
 | **Model providers** | Lets model-selectable runtimes choose providers such as Bankr LLM, UsePod, OpenRouter, and runtime-native provider configs |
 | **Shared Obsidian brain** | Stores memory, handoffs, shared context, Kanban state, and reusable skills in a local markdown vault |
 | **Obsidian-native brain views** | Seeds `.base` and `.canvas` files plus shared skills for Obsidian Markdown, Bases, Canvas, and clean web markdown extraction |
-| **Packaged Hive skills** | Ships auto-installed Hive skills such as `hive-assimilate` plus optional third-party skill packs through the shared brain skill shelf |
+| **Packaged Hive skills** | Ships auto-installed Hive skills such as `hive-assimilate` and `hive-pulse` plus optional third-party skill packs through the shared brain skill shelf |
+| **Token and cost savings** | Uses shared-brain recall, capability search, assimilation, Karpathy-guided edits, Hive Fusion, provider routing, and usage analytics to reduce repeated token spend |
 | **Hivemind Sync** | Moves shared brain files, shared env, and handoff transfers between trusted machines |
 | **Handoff transfers** | Routes artifacts through `.hivemindos-transfers/` to a specific machine, runtime, or agent with payload hashes and acknowledgements |
 | **Work board** | Gives agents a shared Kanban queue for tasks, delegation, retries, stale work, and human handoff |
@@ -284,7 +285,7 @@ The Brain workspace can hold:
 
 Shared Brain Memory gives agents a local-first remember/recall/answer layer through `/api/brain/memory` and the installed `hive-brain` CLI. Raw or non-managed agents can run `hive-brain answer "<query>"`; the CLI discovers the running local API when available and falls back to local vault/index search when it is not. Setup also installs `hive-brain-hook` and registers it as a Claude Code `UserPromptSubmit` hook, so raw Claude prompts can receive relevant shared-brain context even when they are not routed through the HivemindOS app. Default recall is tiered: it checks typed Agent Memory first, returns that distilled layer when the hit is strong, and otherwise augments with relevant markdown from the full shared vault. `--scope agent-memory` narrows recall to the typed/proven memory write layer, while `--scope full-vault` forces broad vault recall, including `Operations/Secure` reference/status notes for credential names and set/missing status without storing plaintext secret values. In live local typed-memory benchmarks, indexed recall measured p50/p95 of `2.69ms/3.15ms` at 100 memories, `4.37ms/5.26ms` at 500 memories, and `19.20ms/31.33ms` at 1500 memories with synthetic Top-1/Top-3/MRR relevance of `1.0`. On Liam's current 4,848-note vault, full-vault answer recall over 2,685 eligible markdown notes measured about `2.35s` cold and roughly `0.20s-0.35s` warm through the local API. That gives HivemindOS agents rich, provenance-aware memory and broad private vault context at a fraction of the latency and privacy cost of network-bound memory stacks.
 
-Packaged skills ship from `packaged-skills/`. Setup auto-installs foundational Hive skills such as `hive-assimilate`, `hive-capability-search`, and the Hive Fusion skills into the shared brain, along with curated third-party Obsidian Native Brain Pack skills. Optional packaged skills stay in `packaged-skills/optional/` until the user installs them. See [Packaged Skills](docs/packaged-skills/index.md) and the [slash command reference](docs/slash-commands.md) for the agent-facing catalog surfaces.
+Packaged skills ship from `packaged-skills/`. Setup auto-installs foundational Hive skills such as `hive-assimilate`, `hive-pulse`, `hive-capability-search`, and the Hive Fusion skills into the shared brain, along with curated third-party Obsidian Native Brain Pack skills. `hive-pulse` bundles a pinned MIT licensed last-30-days research engine and installs a `hive-pulse` command shim so agents can run social, market, GitHub, and web signal briefs without a separate upstream install. Optional packaged skills stay in `packaged-skills/optional/` until the user installs them. See [Packaged Skills](docs/packaged-skills/index.md), [Token And Cost Savings](docs/features/token-and-cost-savings.md), and the [slash command reference](docs/slash-commands.md) for the agent-facing catalog surfaces.
 
 HivemindOS can auto-detect common local Obsidian vault locations, validate an explicit vault path, and fall back to local Kanban storage at `~/.hivemindos/kanban` if the vault is unavailable.
 
@@ -368,6 +369,8 @@ pnpm install
 pnpm typecheck
 pnpm lint
 pnpm build
+pnpm benchmark:context-savings
+./scripts/hive-env-run -- pnpm benchmark:e2e-token-savings
 pnpm start
 ```
 

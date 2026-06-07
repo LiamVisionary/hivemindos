@@ -70,7 +70,7 @@ export async function handleDashboardHandoffTaskCommand(input: HandoffCommandInp
   }
 }
 
-function appendCommandMessages(
+export function appendCommandMessages(
   context: Pick<HandoffCommandInput, "selectedAgent" | "selectedChatLeafKey" | "selectedStorageKey" | "appendMessage" | "appendPreviewMessages">,
   userMessage: ChatMessage,
   assistantMessage: ChatMessage,
@@ -80,13 +80,13 @@ function appendCommandMessages(
   context.appendPreviewMessages(context.selectedAgent.id, context.selectedChatLeafKey, [userMessage, assistantMessage]);
 }
 
-function clearComposer(input: Pick<HandoffCommandInput, "setText" | "setAttachmentError" | "setAttachmentMenuOpen">) {
+export function clearComposer(input: Pick<HandoffCommandInput, "setText" | "setAttachmentError" | "setAttachmentMenuOpen">) {
   input.setText("");
   input.setAttachmentError("");
   input.setAttachmentMenuOpen(false);
 }
 
-function replacePendingReply(
+export function replacePendingReply(
   context: Pick<HandoffCommandInput, "selectedAgent" | "selectedChatLeafKey" | "selectedStorageKey" | "setMessagesByAgent" | "setSelectedChatPreview">,
   pendingMessage: ChatMessage,
   reply: string,

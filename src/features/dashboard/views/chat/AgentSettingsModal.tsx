@@ -459,7 +459,8 @@ export function AgentSettingsModal(props: any) {
   const runtimeModelProviderSlug = selectedProviderSlug;
   const bankrSetupRequired = bankrLlmSelected && selectedRuntimeModels.length === 0;
   const bankrSetupDetail = runtimeIntegrationStatus?.diagnostics?.find((item) => /Bankr LLM models unavailable/i.test(item)) ?? "";
-  const bankrMissingKey = /BANKR_LLM_KEY.*(not configured|required|missing)|missing.*BANKR_LLM_KEY/i.test(bankrSetupDetail);
+  const bankrInvalidKey = /(?:invalid|inactive|unauthorized|401).*api key|api key.*(?:invalid|inactive|unauthorized)/i.test(bankrSetupDetail);
+  const bankrNeedsKeySetup = bankrInvalidKey || /BANKR_LLM_KEY.*(not configured|required|missing)|missing.*BANKR_LLM_KEY/i.test(bankrSetupDetail);
   const bankrLowCredits = /insufficient_credits|credits exhausted|402|balance|fund/i.test(bankrSetupDetail);
   const runtimeModelPanelAvailable = runtimeSettings.modelSource === "runtime" && (
     runtimeModelProviders.length > 0
@@ -897,11 +898,12 @@ export function AgentSettingsModal(props: any) {
             ) : null}
           </div>
         </div>
-        {bankrSetupRequired && bankrMissingKey ? (
+        {bankrSetupRequired && bankrNeedsKeySetup ? (
           <MissingSharedEnvKeySetup
             apiKeyName="BANKR_LLM_KEY"
             providerLabel="Bankr LLM"
             detail={bankrSetupDetail}
+            issue={bankrInvalidKey ? "invalid" : "missing"}
             onSaved={() => refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)}
           />
         ) : bankrSetupRequired && bankrLowCredits ? (

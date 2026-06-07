@@ -70,6 +70,8 @@ for (const path of ["setup.sh", "setup.ps1"]) {
   has(path, "hive-brain-hook", "shared brain hook command installer");
   has(path, "hive-handoff", "handoff command installer");
   has(path, "hivemind-mcp", "Hivemind MCP command installer");
+  has(path, "hive-pulse", "Hive Pulse command installer");
+  has(path, "Python 3.12+", "Hive Pulse Python dependency check");
 }
 
 for (const path of ["uninstall.sh", "uninstall.ps1"]) {
@@ -79,7 +81,11 @@ for (const path of ["uninstall.sh", "uninstall.ps1"]) {
   has(path, "hive-brain-hook", "shared brain hook command uninstaller");
   has(path, "hive-handoff", "handoff command uninstaller");
   has(path, "hivemind-mcp", "Hivemind MCP command uninstaller");
+  has(path, "hive-pulse", "Hive Pulse command uninstaller");
+  has(path, path.endsWith(".ps1") ? "Python.Python.3.12" : "python@3.12", "Hive Pulse Python uninstall mirror");
 }
+
+assert.ok(existsSync(join(root, "scripts/hive-pulse")), "missing Hive Pulse command shim");
 
 has("scripts/seed-vault-foundation.mjs", "vault-health-check");
 has("scripts/seed-vault-foundation.mjs", "vault-doctor.mjs");
@@ -126,17 +132,22 @@ has("docs/index.md", 'href="whole-brain/"');
 has("docs/index.md", 'href="features/hivemind-sync.html"');
 has("docs/index.md", 'href="packaged-skills/"');
 has("docs/index.md", 'href="slash-commands.html"');
+has("docs/index.md", 'href="features/token-and-cost-savings.html"');
 has("docs/features/index.md", 'href="../whole-brain/"');
 has("docs/features/index.md", 'href="hivemind-sync.html"');
 has("docs/features/index.md", 'href="../packaged-skills/"');
+has("docs/features/index.md", 'href="token-and-cost-savings.html"');
 has("docs/_layouts/default.html", "'/whole-brain/'");
 has("docs/_layouts/default.html", "'/features/hivemind-sync.html'");
 has("docs/_layouts/default.html", "'/packaged-skills/'");
 has("docs/_layouts/default.html", "'/slash-commands.html'");
+has("docs/_layouts/default.html", "'/features/token-and-cost-savings.html'");
 has("README.md", "docs/whole-brain/index.md");
 has("README.md", "docs/features/hivemind-sync.md");
 has("README.md", "docs/packaged-skills/index.md");
 has("README.md", "docs/slash-commands.md");
+has("README.md", "docs/features/token-and-cost-savings.md");
+has("README.md", "pnpm benchmark:context-savings");
 
 for (const path of [
   "docs/whole-brain/index.md",
@@ -183,14 +194,19 @@ has("docs/whole-brain/shared-skills.md", "obsidian-bases");
 has("docs/whole-brain/shared-skills.md", "json-canvas");
 has("docs/whole-brain/shared-skills.md", "defuddle");
 has("docs/whole-brain/shared-skills.md", "hive-assimilate");
+has("docs/whole-brain/shared-skills.md", "hive-pulse");
 has("packaged-skills/README.md", "Obsidian Native Brain Pack");
 has("packaged-skills/README.md", "hive-assimilate");
+has("packaged-skills/README.md", "hive-pulse");
 assert.ok(existsSync(join(root, "packaged-skills/auto-install/hive-assimilate/SKILL.md")), "missing hive-assimilate packaged skill");
+assert.ok(existsSync(join(root, "packaged-skills/auto-install/hive-pulse/SKILL.md")), "missing hive-pulse packaged skill");
+assert.ok(existsSync(join(root, "packaged-skills/auto-install/hive-pulse/scripts/last30days.py")), "missing bundled Hive Pulse engine");
 for (const path of [
   "docs/packaged-skills/index.md",
   "docs/packaged-skills/hive-skills.md",
   "docs/packaged-skills/third-party-skills.md",
   "docs/slash-commands.md",
+  "docs/features/token-and-cost-savings.md",
 ]) {
   assert.ok(existsSync(join(root, path)), `missing docs page: ${path}`);
   has(path, "title:", "GitHub Pages front matter");
@@ -198,9 +214,21 @@ for (const path of [
 has("docs/packaged-skills/index.md", "Hive skills");
 has("docs/packaged-skills/index.md", "Third-party packaged skills");
 has("docs/packaged-skills/hive-skills.md", "hive-assimilate");
+has("docs/packaged-skills/hive-skills.md", "hive-pulse");
+has("docs/packaged-skills/hive-skills.md", "hive-brain recall");
 has("docs/packaged-skills/third-party-skills.md", "Obsidian Native Brain Pack");
 has("docs/slash-commands.md", "/handoff-task");
 has("docs/slash-commands.md", "/reload-skills");
+has("docs/features/token-and-cost-savings.md", "hive-brain answer");
+has("docs/features/token-and-cost-savings.md", "karpathy-guidelines");
+has("docs/features/token-and-cost-savings.md", "hive-assimilate");
+has("docs/features/token-and-cost-savings.md", "pnpm benchmark:context-savings");
+has("docs/features/token-and-cost-savings.md", "pnpm benchmark:e2e-token-savings");
+has("docs/features/token-and-cost-savings.md", "not a live E2E provider-billing benchmark");
+has("package.json", "benchmark:context-savings");
+has("package.json", "benchmark:e2e-token-savings");
+assert.ok(existsSync(join(root, "scripts/benchmark-context-savings.mjs")), "missing context savings benchmark script");
+assert.ok(existsSync(join(root, "scripts/benchmark-e2e-token-savings.mjs")), "missing live e2e token savings benchmark script");
 has("docs/features/brain-vault-and-skills.md", "UserPromptSubmit");
 has("docs/features/brain-vault-and-skills.md", "Queen Bee control plane");
 has("README.md", "19.20ms/31.33ms");

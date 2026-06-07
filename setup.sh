@@ -1039,11 +1039,61 @@ install_gpg_if_missing() {
   fi
 }
 
+python312_command() {
+  local py
+  for py in python3.14 python3.13 python3.12 python3; do
+    command -v "$py" >/dev/null 2>&1 || continue
+    "$py" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)' >/dev/null 2>&1 || continue
+    printf "%s\n" "$py"
+    return 0
+  done
+  return 1
+}
+
+ensure_hive_pulse_python() {
+  local py
+  refresh_tool_paths
+  if py="$(python312_command)"; then
+    ok "Hive Pulse Python found: $($py --version 2>&1)"
+    return 0
+  fi
+  if ! setup_is_interactive; then
+    warn "Python 3.12+ is missing; hive-pulse will need Python 3.12+ before it can run"
+    missing+=("Python 3.12+ for hive-pulse")
+    return 0
+  fi
+  if [[ "$(uname -s)" == "Darwin" ]] && { command -v brew >/dev/null 2>&1 || ensure_homebrew; }; then
+    if prompt_yes_no "Python 3.12+ is missing. Install python@3.12 so hive-pulse works out of the box?" "yes"; then
+      HOMEBREW_NO_INSTALL_CLEANUP=1 brew install python@3.12
+      refresh_tool_paths
+    fi
+  elif command -v apt-get >/dev/null 2>&1; then
+    if prompt_yes_no "Python 3.12+ is missing. Try installing python3.12 with apt for hive-pulse?" "yes"; then
+      apt_install python3.12 || warn "apt could not install python3.12 from the configured repositories"
+    fi
+  elif command -v dnf >/dev/null 2>&1; then
+    if prompt_yes_no "Python 3.12+ is missing. Try installing python3.12 with dnf for hive-pulse?" "yes"; then
+      dnf_install python3.12 || warn "dnf could not install python3.12 from the configured repositories"
+    fi
+  elif command -v yum >/dev/null 2>&1; then
+    if prompt_yes_no "Python 3.12+ is missing. Try installing python3.12 with yum for hive-pulse?" "yes"; then
+      yum_install python3.12 || warn "yum could not install python3.12 from the configured repositories"
+    fi
+  fi
+  refresh_tool_paths
+  if py="$(python312_command)"; then
+    ok "Hive Pulse Python ready: $($py --version 2>&1)"
+  else
+    warn "Python 3.12+ is still missing; install it or set HIVE_PULSE_PYTHON before running hive-pulse"
+    missing+=("Python 3.12+ for hive-pulse")
+  fi
+}
+
 install_hive_env_add() {
   local bin_dir="${HOME}/.local/bin"
   local command_name command_path script_path
   mkdir -p "$bin_dir"
-  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-handoff hivemind-mcp hive-update hive-brain hive-brain-hook; do
+  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-handoff hivemind-mcp hive-update hive-brain hive-brain-hook hive-pulse; do
     command_path="$bin_dir/$command_name"
     script_path="$ROOT/scripts/$command_name"
     chmod +x "$script_path"
@@ -1083,7 +1133,7 @@ EOF
   done
   case ":$PATH:" in
     *":$bin_dir:"*) ;;
-    *) warn "Add $bin_dir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, and hive-brain-hook from any folder" ;;
+    *) warn "Add $bin_dir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, hive-brain-hook, and hive-pulse from any folder" ;;
   esac
 }
 install_pnpm_if_missing() {
@@ -1766,6 +1816,7 @@ node "$ROOT/scripts/seed-vault-foundation.mjs" \
   --kanban-folder "$kanban_folder" \
   --notifications-folder "$notifications_folder" >/dev/null
 
+ensure_hive_pulse_python
 install_hive_env_add
 
 configure_shared_skills

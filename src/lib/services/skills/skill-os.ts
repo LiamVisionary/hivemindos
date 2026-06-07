@@ -175,6 +175,28 @@ const CURATED_CATALOG: SkillCatalogEntry[] = [
     capabilities: ["aeon-workflow", "scheduler", "background"],
     envKeys: [],
   },
+  {
+    id: "hivemindos-hive-pulse",
+    slug: "hive-pulse",
+    name: "Hive Pulse",
+    description: "Run a packed last-30-days signal brief across Reddit, X, YouTube, TikTok, Hacker News, Polymarket, GitHub, and web sources.",
+    source: "HivemindOS packaged Hive skill",
+    sourceType: "curated",
+    category: "Research",
+    tags: ["research", "social-search", "last30days", "reddit", "x", "youtube", "tiktok", "hackernews", "polymarket", "github", "web"],
+    githubUrl: "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/auto-install/hive-pulse",
+    capabilities: ["chat", "shell", "http", "filesystem", "analytics"],
+    envKeys: [
+      "SCRAPECREATORS_API_KEY",
+      "XAI_API_KEY",
+      "AUTH_TOKEN",
+      "CT0",
+      "OPENROUTER_API_KEY",
+      "BRAVE_API_KEY",
+      "PARALLEL_API_KEY",
+      "GITHUB_TOKEN",
+    ],
+  },
 ];
 
 const BANKR_DIRECTORY_SKILLS: Array<{
