@@ -506,7 +506,12 @@ foreach ($folder in @(
   $scheduledFolder,
   $kanbanFolder,
   $notificationsFolder,
-  $brainServicesFolder
+  $brainServicesFolder,
+  "$brainServicesFolder/Queen Bee",
+  "$brainServicesFolder/Queen Bee/nodes",
+  "$brainServicesFolder/Queen Bee/inbox",
+  "$brainServicesFolder/Queen Bee/outbox",
+  "Operations/Brain Services/Queen Bee"
 )) {
   New-Item -ItemType Directory -Force -Path (Join-Path $vaultPath $folder) | Out-Null
 }

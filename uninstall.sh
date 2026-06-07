@@ -508,6 +508,8 @@ if ask "Remove seeded AI-ready shared-brain contract, templates, and Obsidian se
   rm -f "$vault_path/Operations/AI-Ready Vault Contract.md"
   rm -f "$vault_path/$brain_services_folder/Obsidian Plugin Pack.md"
   rm -f "$vault_path/$brain_services_folder/Obsidian CLI.md"
+  rm -rf "$vault_path/$brain_services_folder/Queen Bee"
+  rm -rf "$vault_path/Operations/Brain Services/Queen Bee"
   rm -rf "$vault_path/Templates/HivemindOS"
   ok "Removed seeded AI-ready shared-brain files"
 fi
@@ -535,6 +537,11 @@ if ask "Remove empty canonical HivemindOS vault folders created by setup?" "no";
     "$vault_path/$kanban_folder" \
     "$vault_path/$scheduled_folder/Foundation Workflows" \
     "$vault_path/$scheduled_folder" \
+    "$vault_path/$brain_services_folder/Queen Bee/outbox" \
+    "$vault_path/$brain_services_folder/Queen Bee/inbox" \
+    "$vault_path/$brain_services_folder/Queen Bee/nodes" \
+    "$vault_path/$brain_services_folder/Queen Bee" \
+    "$vault_path/Operations/Brain Services/Queen Bee" \
     "$vault_path/$brain_services_folder" \
     "$vault_path/$synthesis_folder/pack" \
     "$vault_path/$synthesis_folder/wiki/synthesis" \

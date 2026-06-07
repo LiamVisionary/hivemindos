@@ -15,6 +15,7 @@ const DEFAULTS = {
 };
 
 const WORKFLOW_ROOT = "Foundation Workflows";
+const QUEEN_BEE_CANONICAL_IDENTITY_PATH = "Operations/Brain Services/Queen Bee/Identity.md";
 
 function parseArgs(argv) {
   const args = {};
@@ -138,6 +139,65 @@ Recommended mapping:
 - Project -> \`Projects/<project>/overview.md\`
 - Distillation -> \`Memory/Distillations/YYYY-MM-DD-topic.md\`
 - AI output -> \`Synthesis/wiki/synthesis/YYYY-MM-DD-topic.md\``;
+}
+
+function queenBeeIdentityMarkdown() {
+  return `# Queen Bee Identity
+
+Queen Bee is Liam's single logical coordinator identity across HivemindOS machines, agents, tools, projects, and shared brain context.
+
+She may run from multiple machines, but all instances coordinate through this shared brain, the shared Work Board, Shared Brain Memory, Fleet discovery, and Handoff receipts.
+
+## Contract
+
+- Present one assistant identity to the user.
+- Keep per-machine coordinators as implementation details unless routing transparency is useful.
+- Use \`Operations/Work Board/\` for tasks.
+- Use \`Memory/Distillations/Agent Memory/\` and \`/api/brain/memory\` for durable memory.
+- Use \`/api/fleet/discover\`, \`/api/fleet/apps\`, and \`/api/handoff\` for live routing and cross-machine work.`;
+}
+
+function queenBeeRoutingPolicyMarkdown() {
+  return `# Queen Bee Routing Policy
+
+Queen Bee routes by reading the current request, Shared Brain Memory, Work Board state, Fleet discovery, connected-app context, project notes, and safety policy.
+
+## Canonical primitives
+
+- Tasks: \`Operations/Work Board/kanban.json\` and \`/api/kanban\`.
+- Durable memory: \`Memory/Distillations/Agent Memory/\` and \`/api/brain/memory\`.
+- Live machines: \`/api/fleet/discover\` and \`/api/fleet/apps\`.
+- Cross-machine delegation: \`/api/handoff\` and \`.hivemindos-transfers/\`.
+- Human attention: \`Operations/Agent Notifications/\`.
+
+Node files under this folder are snapshots/annotations, not the primary live source of truth.`;
+}
+
+function queenBeeSafetyPolicyMarkdown() {
+  return `# Queen Bee Safety Policy
+
+- Read-only lookup: no confirmation required.
+- Safe mutation directly requested by Liam: proceed after fresh prerequisite checks.
+- Risky mutation such as delete, deploy, send, spend, credentials, or irreversible external side effects: require explicit confirmation and write a receipt.
+- Sensitive data: never write raw secrets, tokens, passwords, keys, or connection strings into the vault; use credential names/status only.
+
+Vault state provides consistency and replay protection. Live APIs provide current execution truth. Human confirmation gates high-risk side effects.`;
+}
+
+function queenBeeCurrentStateMarkdown() {
+  return `# Queen Bee Current State
+
+Status: ready
+
+Queen Bee is backed by \`Operations/Brain Services/Queen Bee/\`, the shared Work Board, Shared Brain Memory, Fleet discovery, and Handoff. Runtime instances should check this file for compact state, then use live APIs for fresh status before executing work.`;
+}
+
+function queenBeeReadme() {
+  return `# Queen Bee Control Plane
+
+This folder stores the lightweight coordination state for the single logical Queen Bee identity.
+
+Use it for identity, routing and safety policy, dedupe records, leases, node annotations, and completion receipts. Do not fork durable memory or normal task storage here: use \`/api/brain/memory\` for memory and \`Operations/Work Board/\` for tasks.`;
 }
 
 function templateMarkdown(kind) {
@@ -1157,6 +1217,10 @@ await Promise.all([
   folders.kanbanFolder,
   folders.notificationsFolder,
   folders.brainServicesFolder,
+  join(folders.brainServicesFolder, "Queen Bee"),
+  join(folders.brainServicesFolder, "Queen Bee", "nodes"),
+  join(folders.brainServicesFolder, "Queen Bee", "inbox"),
+  join(folders.brainServicesFolder, "Queen Bee", "outbox"),
   folders.synthesisFolder,
   `${folders.synthesisFolder}/raw`,
   `${folders.synthesisFolder}/wiki/.drafts`,
@@ -1186,6 +1250,28 @@ await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Agent Memory.
 await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Project Brain.base"), projectBrainBase());
 await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Secure References.base"), secureReferencesBase(folders));
 await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Whole Brain.canvas"), wholeBrainCanvas(folders));
+const queenBeeFolder = join(vaultPath, folders.brainServicesFolder, "Queen Bee");
+await writeIfMissing(join(queenBeeFolder, "README.md"), queenBeeReadme());
+await writeIfMissing(join(queenBeeFolder, "Identity.md"), queenBeeIdentityMarkdown());
+await writeIfMissing(join(queenBeeFolder, "Routing Policy.md"), queenBeeRoutingPolicyMarkdown());
+await writeIfMissing(join(queenBeeFolder, "Safety Policy.md"), queenBeeSafetyPolicyMarkdown());
+await writeIfMissing(join(queenBeeFolder, "Current State.md"), queenBeeCurrentStateMarkdown());
+await writeIfMissing(join(queenBeeFolder, "state.json"), JSON.stringify({
+  protocol: "hivemind-queen-bee",
+  version: 1,
+  identity: "logical-queen-bee",
+  status: "ready",
+  workBoard: folders.kanbanFolder,
+  memory: "Memory/Distillations/Agent Memory + Operations/Brain Services/Agent Memory Index.jsonl",
+  fleet: "/api/fleet/discover + /api/fleet/apps",
+  handoff: "/api/handoff + .hivemindos-transfers/",
+}, null, 2));
+await writeIfMissing(join(queenBeeFolder, "nodes", "README.md"), "# Queen Bee Nodes\n\nOptional machine snapshots and annotations. Live availability comes from `/api/fleet/discover` and `/api/fleet/apps`.\n");
+await writeIfMissing(join(queenBeeFolder, "inbox", "README.md"), "# Queen Bee Inbox\n\nOptional append-only request intake for runtimes that cannot call `/api/queen-bee` directly.\n");
+await writeIfMissing(join(queenBeeFolder, "outbox", "README.md"), "# Queen Bee Outbox\n\nOptional response receipts for runtimes that cannot receive live API responses.\n");
+await writeIfMissing(join(queenBeeFolder, "intent-dedupe.jsonl"), "");
+await writeIfMissing(join(queenBeeFolder, "leases.jsonl"), "");
+await writeIfMissing(join(queenBeeFolder, "receipts.jsonl"), "");
 await writeIfMissing(join(vaultPath, folders.scheduledFolder, WORKFLOW_ROOT, "README.md"), workflowReadme(folders));
 await writeIfMissing(join(vaultPath, folders.scheduledFolder, WORKFLOW_ROOT, "OPERATIONS-LOG.md"), operationLog());
 

@@ -48,11 +48,13 @@ Basically: do not change the docs from memory if the code is sitting right here.
 ## Brain Services
 
 - `src/lib/services/context-index.ts`
+- `src/lib/services/queen-bee/control-plane.ts`
 - `src/lib/services/obsidian/agent-memory.ts`
 - `src/lib/services/brain/gbrain.ts`
 - `src/lib/services/brain/synto.ts`
 - `src/lib/services/brain/trading-brain.ts`
 - `src/app/api/context-index/route.ts`
+- `src/app/api/queen-bee/route.ts`
 - `src/app/api/brain/memory/route.ts`
 - `scripts/hive-brain`
 - `scripts/hive-brain-hook`

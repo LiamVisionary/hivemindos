@@ -28,6 +28,7 @@ const canonicalFolders = [
   "Operations/Work Board",
   "Operations/Agent Notifications",
   "Operations/Brain Services",
+  "Operations/Brain Services/Queen Bee",
   "Operations/Secure",
   "Operations/Runtime Mirrors",
   "Templates/HivemindOS",
@@ -87,6 +88,12 @@ has("scripts/seed-vault-foundation.mjs", "Agent Memory.base");
 has("scripts/seed-vault-foundation.mjs", "Project Brain.base");
 has("scripts/seed-vault-foundation.mjs", "Secure References.base");
 has("scripts/seed-vault-foundation.mjs", "Whole Brain.canvas");
+has("scripts/seed-vault-foundation.mjs", "Operations/Brain Services/Queen Bee/Identity.md");
+has("scripts/seed-vault-foundation.mjs", "intent-dedupe.jsonl");
+has("scripts/seed-vault-foundation.mjs", "receipts.jsonl");
+has("src/lib/services/chat/shared-vault-context.ts", "Operations/Brain Services/Queen Bee");
+has("src/lib/services/queen-bee/control-plane.ts", "QUEEN_BEE_FOLDER_NAME");
+has("src/app/api/queen-bee/route.ts", "protocol: \"hivemind-queen-bee\"");
 has("scripts/vault-doctor.mjs", "Operations/Vault Migrations");
 has("scripts/vault-doctor.mjs", "Operations/Runtime Mirrors/AEON/.aeon");
 has("scripts/vault-doctor.mjs", "hiddenProfileStubs");
@@ -162,6 +169,7 @@ has("docs/whole-brain/brain-services.md", "Agent Memory.base");
 has("docs/whole-brain/brain-services.md", "19.20ms");
 has("docs/whole-brain/brain-services.md", "hive-brain answer");
 has("docs/whole-brain/brain-services.md", "hive-brain-hook");
+has("docs/whole-brain/brain-services.md", "Operations/Brain Services/Queen Bee");
 has("docs/whole-brain/brain-services.md", "Projects/Agent Calls - BYOK vs HivemindOS Cloud.md");
 has("docs/features/brain-vault-and-skills.md", "Shared Brain Memory Summary");
 has("docs/features/brain-vault-and-skills.md", "Obsidian Native Brain Pack");
@@ -189,6 +197,7 @@ has("docs/packaged-skills/third-party-skills.md", "Obsidian Native Brain Pack");
 has("docs/slash-commands.md", "/handoff-task");
 has("docs/slash-commands.md", "/reload-skills");
 has("docs/features/brain-vault-and-skills.md", "UserPromptSubmit");
+has("docs/features/brain-vault-and-skills.md", "Queen Bee control plane");
 has("README.md", "19.20ms/31.33ms");
 has("docs/whole-brain/shared-env.md", "~/.hivemindos/.env");
 has("docs/whole-brain/shared-env.md", "hive-env-add");

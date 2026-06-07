@@ -54,6 +54,13 @@ hivemindos-vault/
 |   |   |-- Obsidian Native Brain Pack.md
 |   |   |-- Obsidian Plugin Pack.md
 |   |   |-- Project Brain.base
+|   |   |-- Queen Bee/
+|   |   |   |-- Identity.md
+|   |   |   |-- Routing Policy.md
+|   |   |   |-- Safety Policy.md
+|   |   |   |-- intent-dedupe.jsonl
+|   |   |   |-- leases.jsonl
+|   |   |   `-- receipts.jsonl
 |   |   |-- Secure References.base
 |   |   |-- Whole Brain.canvas
 |   |   `-- Syntho.md
@@ -87,6 +94,7 @@ The exact project, skill, and migration folders will vary. The top level shape s
 | `Ideas/` | Liam's original thinking, mental models, recurring questions, taste, and personal strategy. |
 | `Projects/` | Active work, project-specific context, status deltas, plans, and decisions. |
 | `Operations/` | HivemindOS operational state: automations, work board, notifications, runtime mirrors, secure encrypted backups, vault migrations, access logs, and brain service status. |
+| `Operations/Brain Services/Queen Bee/` | Queen Bee coordination state for one logical assistant identity: policy, current state, dedupe, leases, node annotations, and receipts. |
 | `Skills/` | Shared agent procedures. Read `Skills/README.md`, then `Skills/<slug>/SKILL.md`. |
 | `Templates/HivemindOS/` | Durable note templates for AI ready metadata and consistent note shapes. |
 | `Archive/` | Completed, inactive, processed, or deliberately preserved historical material. |

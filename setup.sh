@@ -1676,7 +1676,12 @@ mkdir -p \
   "$shared_vault_path/$scheduled_folder" \
   "$shared_vault_path/$kanban_folder" \
   "$shared_vault_path/$notifications_folder" \
-  "$shared_vault_path/$brain_services_folder"
+  "$shared_vault_path/$brain_services_folder" \
+  "$shared_vault_path/$brain_services_folder/Queen Bee" \
+  "$shared_vault_path/$brain_services_folder/Queen Bee/nodes" \
+  "$shared_vault_path/$brain_services_folder/Queen Bee/inbox" \
+  "$shared_vault_path/$brain_services_folder/Queen Bee/outbox" \
+  "$shared_vault_path/Operations/Brain Services/Queen Bee"
 
 if [[ ! -f "$shared_vault_path/Shared Context.md" ]]; then
   printf "# Shared Context\n\nCurrent cross-agent context for the HivemindOS vault.\n" > "$shared_vault_path/Shared Context.md"

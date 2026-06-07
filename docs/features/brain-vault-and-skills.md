@@ -26,8 +26,8 @@ What the vault can do:
 - Validate and open a configured Obsidian vault.
 - Record note access events.
 - Build a graph of notes and access history.
-- Store Kanban board state, project registry metadata, notifications, scheduled runs, wallet records, shared skills, and brain-service notes.
-- Seed an AI ready vault contract, durable note templates, optional Obsidian CLI/plugin-pack status notes, and disabled foundation workflows for common shared brain routines.
+- Store Kanban board state, project registry metadata, notifications, scheduled runs, wallet records, shared skills, Queen Bee coordination state, and brain-service notes.
+- Seed an AI ready vault contract, durable note templates, optional Obsidian CLI/plugin-pack status notes, Queen Bee control plane files, and disabled foundation workflows for common shared brain routines.
 
 Seeded structure:
 
@@ -38,7 +38,8 @@ Seeded structure:
 - `Templates/HivemindOS/` contains durable templates for daily briefings, weekly reviews, meetings, research sources, decisions, projects, book notes, distillations, and AI outputs.
 - `Operations/Brain Services/Obsidian CLI.md` records detected CLI status when setup runs.
 - `Operations/Brain Services/Obsidian Plugin Pack.md` lists optional manual Obsidian plugins for templates, tasks, Dataview, retrieval, calendar, Kanban, and Git.
-- `Operations/Brain Services/Obsidian Native Brain Pack.md` records the auto-installed Obsidian-native skill pack for Markdown, Bases, Canvas, and optional Defuddle extraction.
+- `Operations/Brain Services/Queen Bee/` stores the Queen Bee control plane: identity, routing/safety policy, current state, intent dedupe, leases, node annotations, and completion receipts. Tasks still live in the Work Board; durable memory still lives in Shared Brain Memory.
+- `Operations/Brain Services/Obsidian Native Brain Pack.md` tracks the optional Bases/Tasks/Dataview/Templater/Calendar/Kanban/Git plugin setup and generated `.base`/canvas files.
 - `Operations/Brain Services/Agent Memory.base`, `Project Brain.base`, `Secure References.base`, and `Whole Brain.canvas` give humans native Obsidian views over typed memory, project context, safe credential references, and the recall topology.
 - `Operations/Automations/Foundation Workflows/` contains disabled workflow schedules for context synthesis, intake processing, meeting processing, research ingestion, vault health checks, decision review, argument building, book notes, feedback capture, project updates, weekly synthesis, connection finding, and distillation.
 - `Operations/Code Projects/projects.json` stores Hivemind project records and optional GitLawb repo links. This is private coordination metadata. GitLawb proof records should not contain private keys, secrets, Tailnet IPs, or exact private vault paths.

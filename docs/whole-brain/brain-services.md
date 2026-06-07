@@ -9,6 +9,24 @@ Brain services add retrieval, graphing, synthesis, and domain tools around the v
 
 They should treat the vault like durable source material. Not cache. Not scratch space. Not a place to dump every half thought forever.
 
+## Queen Bee Control Plane
+
+The Queen Bee control plane is the vault-native coordination layer for one logical Queen Bee identity that may run from many machines. Its canonical folder is:
+
+```text
+Operations/Brain Services/Queen Bee/
+```
+
+That folder stores identity, routing policy, safety policy, compact current state, dedupe records, leases, node annotations, and completion receipts. It deliberately does **not** replace existing primitives:
+
+- Tasks stay in `Operations/Work Board/kanban.json` and `/api/kanban`.
+- Durable memories stay in `Memory/Distillations/Agent Memory/` and `/api/brain/memory`.
+- Live machine capability comes from `/api/fleet/discover` and `/api/fleet/apps`.
+- Cross-machine delegation uses `/api/handoff` and `.hivemindos-transfers/`.
+- Human attention uses `Operations/Agent Notifications/`.
+
+The runtime API is `/api/queen-bee`. `GET` initializes/returns the control-plane state. `POST` with a message computes an intent fingerprint, writes dedupe/receipt JSONL records, and creates or reuses an idempotent Work Board card so any Queen Bee runtime can claim it.
+
 ## Context Index
 
 The context index is the lightweight retrieval surface for code, tools, runtime capabilities, docs, connected apps, and shared skills.

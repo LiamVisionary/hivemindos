@@ -370,6 +370,8 @@ if (Ask-YesNo "Remove seeded AI-ready shared-brain contract, templates, and Obsi
   Remove-Item (Join-Path $vaultPath "Operations\AI-Ready Vault Contract.md") -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $vaultPath (Join-Path $brainServicesFolder "Obsidian Plugin Pack.md")) -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $vaultPath (Join-Path $brainServicesFolder "Obsidian CLI.md")) -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $vaultPath (Join-Path $brainServicesFolder "Queen Bee")) -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $vaultPath "Operations/Brain Services/Queen Bee") -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $vaultPath "Templates\HivemindOS") -Recurse -Force -ErrorAction SilentlyContinue
   Ok "Removed seeded AI-ready shared-brain files"
 }
@@ -410,6 +412,11 @@ if (Ask-YesNo "Remove empty canonical HivemindOS vault folders created by setup?
     $kanbanFolder,
     "$scheduledFolder/Foundation Workflows",
     $scheduledFolder,
+    "$brainServicesFolder/Queen Bee/outbox",
+    "$brainServicesFolder/Queen Bee/inbox",
+    "$brainServicesFolder/Queen Bee/nodes",
+    "$brainServicesFolder/Queen Bee",
+    "Operations/Brain Services/Queen Bee",
     $brainServicesFolder,
     "$synthesisFolder/pack",
     "$synthesisFolder/wiki/synthesis",
