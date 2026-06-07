@@ -5,7 +5,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## 2026-06-07 18:05 WITA - Add Queen Bee Control Plane
 
-- Status: Committed
+- Status: Pushed
 - Areas changed: Queen Bee API, shared vault seed/contract, Work Board integration, setup/uninstall surfaces, brain docs, agent instructions
 - Summary: Add a first-pass Queen Bee control plane at `Operations/Brain Services/Queen Bee/` so one logical coordinator identity can be shared across machines without duplicating the existing Work Board, Shared Brain Memory, Fleet discovery, or handoff systems. The new `/api/queen-bee` endpoint initializes the control plane, fingerprints requests for dedupe, writes receipts, and creates/reuses idempotent Work Board cards for real runtimes to claim.
 - Verification: `node scripts/test-vault-structure-contract.mjs` passed; `node --check scripts/seed-vault-foundation.mjs scripts/test-vault-structure-contract.mjs` passed; focused `pnpm exec eslint` on the new Queen Bee API/service and shared vault context passed; focused `pnpm exec tsc --noEmit --pretty false` filter showed no touched-file TypeScript errors; `git diff --check` passed for touched files; temporary-vault seed smoke verified Queen Bee policy/state/dedupe/lease/receipt files are created and `state.json` parses. `pnpm check-sizes` remains blocked by existing oversized legacy files.
