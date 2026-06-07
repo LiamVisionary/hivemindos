@@ -7,7 +7,10 @@ const runId = process.env.QUEEN_BEE_E2E_RUN_ID || `queen-bee-real-e2e-${new Date
 const marker = `QUEEN_BEE_REAL_E2E_${runId}`.replace(/[^A-Z0-9_\-]/gi, "_");
 const pollMs = Number(process.env.QUEEN_BEE_E2E_POLL_MS || 2_000);
 const autoWaitMs = Number(process.env.QUEEN_BEE_E2E_AUTO_WAIT_MS || 60_000);
-const requireAutonomousPickup = process.env.QUEEN_BEE_E2E_REQUIRE_AUTONOMOUS === "1";
+// Queen Bee E2E is autonomous by default: the harness must only create the task
+// and observe the Work Board. Set QUEEN_BEE_E2E_REQUIRE_AUTONOMOUS=0 only when
+// intentionally testing the legacy harness-assisted claim/chat/complete path.
+const requireAutonomousPickup = process.env.QUEEN_BEE_E2E_REQUIRE_AUTONOMOUS !== "0";
 const dashboardDeviceToken = process.env.HIVE_E2E_DASHBOARD_TOKEN
   || process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
   || await readEnvValue(new URL("../.env.local", import.meta.url), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN");
