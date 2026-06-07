@@ -25,7 +25,7 @@ That folder stores identity, routing policy, safety policy, compact current stat
 - Cross-machine delegation uses `/api/handoff` and `.hivemindos-transfers/`.
 - Human attention uses `Operations/Agent Notifications/`.
 
-The runtime API is `/api/queen-bee`. `GET` initializes/returns the control-plane state. `POST` with a message computes an intent fingerprint, writes dedupe/receipt JSONL records, and creates or reuses an idempotent Work Board card so any Queen Bee runtime can claim it.
+The runtime API is `/api/queen-bee`. `GET` initializes/returns the control-plane state. `POST` with a message computes an intent fingerprint, fetches fresh `/api/fleet/discover` data when the caller does not provide a `fleetSnapshot`, ranks online chat-capable agents across all machines by inferred worker class and machine/runtime fit, writes dedupe/receipt JSONL records, and creates or reuses an idempotent Work Board card assigned to the selected best available agent plus target machine. If no matching fleet agent is online, the card stays assigned to `queen-bee` so a Queen Bee runtime can review/delegate it later.
 
 ## Context Index
 

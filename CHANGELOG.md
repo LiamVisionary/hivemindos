@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-07 21:54 WITA - Route Queen Bee To Best Fleet Agent
+
+- Status: Committed
+- Areas changed: Queen Bee routing, Queen Bee API fleet discovery, Work Board assignment metadata, vault seed/contract docs, routing tests
+- Summary: Upgrade `/api/queen-bee` from a generic `queen-bee` queue marker into an actual fleet-aware delegation path: Queen Bee now infers the worker class from the request, ranks online chat-capable agents across every discovered machine, assigns the Work Board card to the best matching agent and target machine, and only falls back to `queen-bee` when no matching runtime is online.
+- Verification: `node --experimental-strip-types scripts/test-queen-bee-routing.mjs` passed after first failing RED run for missing router and then route-reason mismatch; `node --check scripts/seed-vault-foundation.mjs scripts/test-vault-structure-contract.mjs` passed; `node scripts/test-vault-structure-contract.mjs` passed; focused `pnpm exec eslint` on Queen Bee router/API/service passed; focused `pnpm exec tsc --noEmit --pretty false` filter showed no touched-file errors; `git diff --check` passed. `pnpm check-sizes` remains blocked by existing oversized legacy files.
+- Intended commit message: `Route Queen Bee to best fleet agent`
+
 ## 2026-06-07 18:05 WITA - Add Queen Bee Control Plane
 
 - Status: Pushed

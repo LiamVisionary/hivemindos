@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { createTask, readBoard } from "@/lib/services/kanban/local-kanban-store";
+import { chooseQueenBeeDelegate, type QueenBeeWorkerClass } from "@/lib/services/queen-bee/router";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import type { KanbanPriority } from "@/lib/types/kanban";
 
@@ -24,6 +25,37 @@ export type QueenBeeMessageInput = QueenBeeOptions & {
   taskTitle?: string | null;
   agentId?: string | null;
   machineId?: string | null;
+  fleetSnapshot?: QueenBeeFleetMachine[] | null;
+};
+
+export type QueenBeeFleetMachine = {
+  key?: string;
+  collector?: string;
+  device?: {
+    name?: string;
+    dnsName?: string;
+    os?: string;
+    online?: boolean;
+    collectorUrl?: string;
+    machineId?: string;
+    self?: boolean;
+  };
+  capabilities?: Record<string, unknown>;
+  agents?: Array<{
+    id?: string;
+    agentId?: string;
+    name?: string;
+    runtime?: string;
+    beeRole?: string;
+    workerClass?: string;
+    machineName?: string;
+    telemetryUrl?: string;
+    gatewayUrl?: string;
+    skillProfilePrompt?: string;
+    preferredSkillSlugs?: string[];
+    runtimeCapabilities?: Record<string, unknown>;
+    collectorCapabilities?: Record<string, unknown>;
+  }>;
 };
 
 export type QueenBeeState = {
@@ -125,15 +157,23 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   const idempotencyKey = `queen-bee:${fingerprint}`;
   const title = input.taskTitle?.trim() || taskTitleFromMessage(message);
   const createdAt = new Date().toISOString();
+  const delegation = chooseQueenBeeDelegate({ title, body: message, skills: [] }, input.fleetSnapshot ?? []);
+  const selectedAgentName = delegation.agent?.name || delegation.agent?.id || delegation.agent?.agentId;
+  const selectedMachineName = delegation.machine?.device?.name || delegation.machine?.key;
 
   const result = await createTask(null, {
     title,
-    body: queenBeeTaskBody({ message, source, mode, fingerprint }),
-    assignee: "queen-bee",
+    body: queenBeeTaskBody({ message, source, mode, fingerprint, delegation }),
+    assignee: selectedAgentName || "queen-bee",
     status: mode === "plan" ? "ideas" : "ready",
     priority: input.priority || "normal",
     workspace: "scratch",
-    skills: ["hivemindos-coordination"],
+    skills: ["hivemindos-coordination", delegation.workerClass],
+    targetMachine: delegation.machine ? {
+      key: delegation.machine.key || delegation.machine.device?.machineId || selectedMachineName || "unknown",
+      name: selectedMachineName || "Unknown machine",
+      collectorUrl: delegation.machine.device?.collectorUrl,
+    } : null,
     idempotencyKey,
   }, {
     vaultPath: input.vaultPath,
@@ -148,6 +188,9 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
     status: result.created ? "accepted" : "duplicate",
     source,
     mode,
+    workerClass: delegation.workerClass,
+    selectedAgent: selectedAgentName,
+    selectedMachine: selectedMachineName,
     createdAt,
   };
   await appendJsonl(paths.intentDedupe, dedupeRecord);
@@ -157,13 +200,16 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
     taskId: result.task.id,
     fingerprint,
     status: result.created ? "queued" : "already-queued",
+    delegation: publicDelegation(delegation),
     summary: result.created
-      ? "Queen Bee accepted the request and placed it on the shared Work Board."
+      ? delegation.status === "delegated"
+        ? `Queen Bee accepted the request and delegated it to ${selectedAgentName} on ${selectedMachineName}.`
+        : "Queen Bee accepted the request and queued it on the shared Work Board until a matching fleet agent is available."
       : "Queen Bee found an existing Work Board task for this request fingerprint.",
     createdAt,
   };
   await appendJsonl(paths.receipts, receipt);
-  await updateCurrentState(paths.currentState, { taskId: result.task.id, title, source, mode, createdAt });
+  await updateCurrentState(paths.currentState, { taskId: result.task.id, title, source, mode, createdAt, delegation });
 
   const board = await readBoard(null, { vaultPath: input.vaultPath, kanbanFolder: input.kanbanFolder });
   return {
@@ -174,8 +220,10 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
     board: { slug: board.meta.slug, taskCount: board.tasks.length, kanbanFolder: input.kanbanFolder || DEFAULT_SHARED_VAULT.kanbanFolder },
     route: {
       kind: "work-board",
-      assignee: "queen-bee",
-      reason: "MVP routes through the shared Work Board so any Queen Bee runtime can claim the task with the same identity, dedupe log, and receipts.",
+      assignee: result.task.assignee || "queen-bee",
+      targetMachine: result.task.targetMachine,
+      delegation: publicDelegation(delegation),
+      reason: delegation.reason,
     },
     fingerprint,
     receipt,
@@ -225,8 +273,9 @@ async function appendJsonl(path: string, record: Record<string, unknown>) {
   await writeFile(path, next, "utf8");
 }
 
-async function updateCurrentState(path: string, event: { taskId: string; title: string; source: string; mode: string; createdAt: string }) {
-  const content = `${queenBeeCurrentStateMarkdown().trim()}\n\n## Last Accepted Request\n\n- Time: ${event.createdAt}\n- Task: ${event.taskId}\n- Title: ${event.title}\n- Source: ${event.source}\n- Mode: ${event.mode}\n`;
+async function updateCurrentState(path: string, event: { taskId: string; title: string; source: string; mode: string; createdAt: string; delegation: ReturnType<typeof chooseQueenBeeDelegate> }) {
+  const delegation = publicDelegation(event.delegation);
+  const content = `${queenBeeCurrentStateMarkdown().trim()}\n\n## Last Accepted Request\n\n- Time: ${event.createdAt}\n- Task: ${event.taskId}\n- Title: ${event.title}\n- Source: ${event.source}\n- Mode: ${event.mode}\n- Worker class: ${delegation.workerClass}\n- Delegate: ${delegation.agent?.name || "pending"}\n- Machine: ${delegation.machine?.name || "pending"}\n- Routing reason: ${delegation.reason}\n`;
   await writeFile(path, content, "utf8");
 }
 
@@ -235,20 +284,51 @@ function taskTitleFromMessage(message: string) {
   return clean.length > 80 ? `${clean.slice(0, 77)}...` : clean;
 }
 
-function queenBeeTaskBody(input: { message: string; source: string; mode: string; fingerprint: string }) {
+function queenBeeTaskBody(input: { message: string; source: string; mode: string; fingerprint: string; delegation: ReturnType<typeof chooseQueenBeeDelegate> }) {
+  const delegation = publicDelegation(input.delegation);
   return [
     "Created by the Queen Bee control plane.",
     "",
     `Source: ${input.source}`,
     `Mode: ${input.mode}`,
     `Intent fingerprint: ${input.fingerprint}`,
+    `Worker class: ${delegation.workerClass}`,
+    `Delegated agent: ${delegation.agent?.name || "pending"}`,
+    `Target machine: ${delegation.machine?.name || "pending"}`,
     "",
     "## Request",
     input.message,
     "",
     "## Routing contract",
     "Use Shared Brain Memory for durable context, Fleet discovery for live capability, Handoff for cross-machine work, and receipts under Operations/Brain Services/Queen Bee/ for dedupe/audit.",
+    "",
+    "## Queen Bee delegation",
+    delegation.reason,
   ].join("\n");
+}
+
+function publicDelegation(delegation: ReturnType<typeof chooseQueenBeeDelegate>) {
+  return {
+    status: delegation.status,
+    workerClass: delegation.workerClass as QueenBeeWorkerClass,
+    score: delegation.score,
+    reason: delegation.reason,
+    agent: delegation.agent ? {
+      id: delegation.agent.id,
+      agentId: delegation.agent.agentId,
+      name: delegation.agent.name,
+      runtime: delegation.agent.runtime,
+      beeRole: delegation.agent.beeRole,
+      workerClass: delegation.agent.workerClass,
+    } : null,
+    machine: delegation.machine ? {
+      key: delegation.machine.key,
+      name: delegation.machine.device?.name,
+      os: delegation.machine.device?.os,
+      collectorUrl: delegation.machine.device?.collectorUrl,
+      machineId: delegation.machine.device?.machineId,
+    } : null,
+  };
 }
 
 function queenBeeIdentityMarkdown() {
@@ -284,6 +364,8 @@ Queen Bee routes requests by reading, in order: the user request, Shared Brain M
 - Vault writes go to a runtime with writable shared-vault access.
 - Mac-only UI or voice actions go to the Mac coordinator.
 - GPU/media work goes to a machine advertising those capabilities.
+- Rank online chat-capable agents across all machines, not just the local machine.
+- Assign Work Board cards to the best available matching agent and target machine; use \`queen-bee\` only when no matching runtime is online.
 - Risky actions require an explicit safety gate before execution.
 `;
 }

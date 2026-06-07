@@ -170,7 +170,14 @@ Queen Bee routes by reading the current request, Shared Brain Memory, Work Board
 - Cross-machine delegation: \`/api/handoff\` and \`.hivemindos-transfers/\`.
 - Human attention: \`Operations/Agent Notifications/\`.
 
-Node files under this folder are snapshots/annotations, not the primary live source of truth.`;
+Node files under this folder are snapshots/annotations, not the primary live source of truth.
+
+## Default routing
+
+- Infer the worker class from the request.
+- Rank online chat-capable agents across all machines, not just the local machine.
+- Assign the Work Board card to the best available matching agent and target machine.
+- If no matching runtime is online, keep the card assigned to \`queen-bee\` for later review/delegation.`;
 }
 
 function queenBeeSafetyPolicyMarkdown() {
