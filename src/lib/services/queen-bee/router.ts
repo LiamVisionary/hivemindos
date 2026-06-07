@@ -70,9 +70,9 @@ const CLASS_KEYWORDS: Array<{ workerClass: QueenBeeWorkerClass; priority: number
   { workerClass: "writer", priority: 70, keywords: [{ pattern: /linkedin|social post|social copy|thread|caption/i, weight: 4 }, { pattern: /\bpost\b|\bcopy\b|\bwrite\b|docs?|readme|summary|article|prompt|release notes/i, weight: 2 }, { pattern: /editorial|newsletter|announcement|launch copy|tone/i, weight: 2 }] },
   { workerClass: "research", priority: 60, keywords: [/research/i, /find/i, /compare/i, /latest/i, /source/i, /market/i, /investigate/i].map((pattern) => ({ pattern, weight: 1 })) },
   { workerClass: "artist", priority: 55, keywords: [{ pattern: /image gen|generate (?:an? )?image|create (?:an? )?image|illustrat|visual asset|poster|logo/i, weight: 4 }, { pattern: /\bart\b|style|image concept|art direction/i, weight: 2 }] },
-  { workerClass: "vision", priority: 50, keywords: [{ pattern: /screenshot|inspect|ui|ux|screen|visual qa|contrast/i, weight: 3 }, { pattern: /\bimage\b|visual/i, weight: 1 }] },
+  { workerClass: "vision", priority: 70, keywords: [{ pattern: /screenshot|screen|visual qa/i, weight: 6 }, { pattern: /inspect|ui|ux|contrast/i, weight: 4 }, { pattern: /\bimage\b|visual/i, weight: 1 }] },
   { workerClass: "ops", priority: 45, keywords: [/deploy/i, /server/i, /cron/i, /websocket/i, /mcp/i, /fleet/i, /tailscale/i, /collector/i, /docker/i, /render/i].map((pattern) => ({ pattern, weight: 1 })) },
-  { workerClass: "qa", priority: 40, keywords: [/qa/i, /verify/i, /review/i, /playwright/i, /lint/i, /typecheck/i, /screenshot test/i, /rigorous/i].map((pattern) => ({ pattern, weight: 1 })) },
+  { workerClass: "qa", priority: 85, keywords: [{ pattern: /\bqa\b|quality assurance/i, weight: 4 }, { pattern: /verify|verification|review|playwright|lint|typecheck|screenshot test|rigorous/i, weight: 2 }] },
 ];
 
 const RUNTIME_PRIORITY = ["hermes", "openclaw", "opencode", "codex", "claude-code", "openai-compatible", "aeon"];
