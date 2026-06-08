@@ -6,6 +6,7 @@ import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { createTask, readBoard } from "@/lib/services/kanban/local-kanban-store";
 import { scheduleQueenBeeAutonomousPickup } from "@/lib/services/queen-bee/autonomous-worker";
 import { chooseQueenBeeDelegate, type QueenBeeWorkerClass } from "@/lib/services/queen-bee/router";
+import { readProjectRegistry } from "@/lib/services/projects/project-registry";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import type { KanbanPriority } from "@/lib/types/kanban";
 
@@ -51,6 +52,40 @@ export type QueenBeeFleetMachine = {
     latestCommit?: string;
     latestShortCommit?: string;
     updateCommand?: string;
+    projects?: Array<{
+      projectId?: string;
+      name?: string;
+      slug?: string;
+      localPath?: string;
+      appDir?: string;
+      remoteUrl?: string;
+      gitlawbRepoId?: string;
+      gitlawbRepoName?: string;
+      branch?: string;
+      commit?: string;
+      shortCommit?: string;
+      dirty?: boolean;
+      latestCommit?: string;
+      latestShortCommit?: string;
+      updateCommand?: string;
+    }>;
+    projectCheckouts?: Array<{
+      projectId?: string;
+      name?: string;
+      slug?: string;
+      localPath?: string;
+      appDir?: string;
+      remoteUrl?: string;
+      gitlawbRepoId?: string;
+      gitlawbRepoName?: string;
+      branch?: string;
+      commit?: string;
+      shortCommit?: string;
+      dirty?: boolean;
+      latestCommit?: string;
+      latestShortCommit?: string;
+      updateCommand?: string;
+    }>;
   };
   agents?: Array<{
     id?: string;
@@ -168,7 +203,8 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   const idempotencyKey = `queen-bee:${fingerprint}`;
   const title = input.taskTitle?.trim() || taskTitleFromMessage(message);
   const createdAt = new Date().toISOString();
-  const delegation = chooseQueenBeeDelegate({ title, body: message, skills: [] }, input.fleetSnapshot ?? []);
+  const projectRegistry = await readQueenBeeProjectRegistry(input.vaultPath);
+  const delegation = chooseQueenBeeDelegate({ title, body: message, skills: [], projectRegistry }, input.fleetSnapshot ?? []);
   const selectedAgentName = delegation.agent?.name || delegation.agent?.id || delegation.agent?.agentId;
   const selectedMachineName = delegation.machine?.device?.name || delegation.machine?.key;
 
@@ -275,6 +311,15 @@ function defaultQueenBeeState(options: QueenBeeOptions = {}): QueenBeeState {
     fleet: "/api/fleet/discover + /api/fleet/apps",
     handoff: "/api/handoff + .hivemindos-transfers/",
   };
+}
+
+async function readQueenBeeProjectRegistry(vaultPath?: string | null) {
+  try {
+    const registry = await readProjectRegistry({ vaultPath });
+    return { projects: registry.projects, updatedAt: registry.updatedAt };
+  } catch {
+    return { projects: [], updatedAt: Date.now() };
+  }
 }
 
 async function writeIfMissing(path: string, content: string) {

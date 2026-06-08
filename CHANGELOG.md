@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-08 03:30:56 UTC - Route Queen Bee By GitLawb Project Graph
+
+- Status: Pushed
+- Areas changed: Queen Bee fleet router, Queen Bee control-plane project registry wiring, collector project checkout telemetry, routing regression test
+- Summary: Extend Queen Bee routing from the current HivemindOS checkout heuristic into a GitLawb/project-registry-aware project graph. The router now matches arbitrary named projects from the shared project registry, compares collector-reported per-project git checkouts by local path, GitLawb repo id/name, remote URL, branch, dirty state, and latest commit, and preserves local unpushed work/preferred-machine signals when choosing which machine should receive code work.
+- Verification: Added a RED routing regression for Maps Agency with a stale checkout, unrelated latest checkout, and dirty preferred GitLawb checkout; it failed before implementation on missing GitLawb project-registry routing evidence, then passed. `node --experimental-strip-types scripts/test-queen-bee-routing.mjs` passed; `node --experimental-strip-types scripts/test-queen-bee-autonomous-pickup.mjs` passed; `node scripts/test-vault-structure-contract.mjs` passed; `pnpm exec tsc --noEmit --pretty false` passed; `node --check scripts/agent-telemetry-collector.mjs` passed; `git diff --check` passed.
+- Intended commit message: `Route Queen Bee by GitLawb project graph`
+
 ## 2026-06-08 11:12:52 WITA - Prefer Latest Project Checkout For Queen Bee
 
 - Status: Pushed

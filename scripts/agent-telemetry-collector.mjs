@@ -46,6 +46,11 @@ const runtimeAgentRegistryPath = join(homedir(), ".hivemindos", "runtime-agents.
 const tauriDevServerInfoPath = join(appDir, ".next-tauri", "dev-server.json");
 const e2eFileShareRoot = join(homedir(), ".hivemindos", "e2e-file-share");
 const skillAutoSyncConfigPath = join(homedir(), ".hivemindos", "skill-auto-sync.json");
+const projectRegistryPaths = [
+  process.env.HIVEMINDOS_PROJECT_REGISTRY_PATH,
+  join(defaultSyncPath, "Operations", "Code Projects", "projects.json"),
+  join(homedir(), ".hivemindos", "projects.json"),
+].filter(Boolean);
 const hermesProfilesDir = join(defaultHermesDir, "profiles");
 const skillProviderRoots = [
   { id: "claude", label: "Claude", home: "~/.claude", roots: [{ path: "~/.claude/skills", maxDepth: 3 }, { path: "~/.claude/plugins", maxDepth: 8 }] },
@@ -1139,8 +1144,12 @@ async function execJson(cmd, args, fallback) {
 }
 
 async function execText(cmd, args, fallback = "") {
+  return execTextAt(appDir, cmd, args, fallback);
+}
+
+async function execTextAt(cwd, cmd, args, fallback = "") {
   const { stdout } = await execFileAsync(cmd, args, {
-    cwd: appDir,
+    cwd,
     timeout: 5000,
     maxBuffer: 300_000,
   }).catch(() => ({ stdout: fallback }));
@@ -1148,11 +1157,12 @@ async function execText(cmd, args, fallback = "") {
 }
 
 async function readAppVersion() {
-  const [commit, branch, dirty, remoteCommit] = await Promise.all([
+  const [commit, branch, dirty, remoteCommit, projects] = await Promise.all([
     execText("git", ["rev-parse", "HEAD"]),
     execText("git", ["rev-parse", "--abbrev-ref", "HEAD"]),
     execText("git", ["status", "--porcelain"]),
     execText("git", ["ls-remote", "origin", "main"]),
+    readProjectCheckouts(),
   ]);
   const latestCommit = remoteCommit.split(/\s+/)[0] || commit;
   return {
@@ -1164,6 +1174,59 @@ async function readAppVersion() {
     latestCommit,
     latestShortCommit: latestCommit.slice(0, 7),
     updateCommand: `cd ${JSON.stringify(appDir)} && git pull --ff-only && pnpm install --frozen-lockfile && ./scripts/install-telemetry-collector.sh`,
+    projects,
+  };
+}
+
+async function readProjectRegistryProjects() {
+  for (const file of projectRegistryPaths) {
+    const raw = await readFile(expandHome(file), "utf8").catch(() => "");
+    if (!raw.trim()) continue;
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed.projects)) return parsed.projects;
+    } catch {
+      // try next registry path
+    }
+  }
+  return [];
+}
+
+async function readProjectCheckouts() {
+  const projects = (await readProjectRegistryProjects()).slice(0, 25);
+  const checkouts = await Promise.all(projects.map(projectCheckoutStatus));
+  return checkouts.filter(Boolean);
+}
+
+async function projectCheckoutStatus(project) {
+  const localPath = expandHome(String(project?.localPath || "").trim());
+  if (!localPath) return null;
+  const inside = await execTextAt(localPath, "git", ["rev-parse", "--is-inside-work-tree"]);
+  if (inside !== "true") return null;
+  const repo = project?.gitlawbRepo && typeof project.gitlawbRepo === "object" ? project.gitlawbRepo : {};
+  const [commit, branch, dirty, remoteUrl] = await Promise.all([
+    execTextAt(localPath, "git", ["rev-parse", "HEAD"]),
+    execTextAt(localPath, "git", ["rev-parse", "--abbrev-ref", "HEAD"]),
+    execTextAt(localPath, "git", ["status", "--porcelain"]),
+    execTextAt(localPath, "git", ["config", "--get", "remote.origin.url"]),
+  ]);
+  const targetBranch = repo.branch || branch || "main";
+  const remoteCommit = await execTextAt(localPath, "git", ["ls-remote", "origin", targetBranch]);
+  const latestCommit = remoteCommit.split(/\s+/)[0] || commit;
+  return {
+    projectId: project.id,
+    name: project.name,
+    localPath,
+    remoteUrl: repo.remoteUrl || remoteUrl,
+    gitlawbRepoId: repo.repoId,
+    gitlawbRepoName: repo.repoName,
+    branch,
+    commit,
+    shortCommit: commit.slice(0, 7),
+    dirty: dirty.length > 0,
+    latestCommit,
+    latestShortCommit: latestCommit.slice(0, 7),
+    updateCommand: `cd ${JSON.stringify(localPath)} && git pull --ff-only`,
   };
 }
 

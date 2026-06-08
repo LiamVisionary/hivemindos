@@ -139,6 +139,98 @@ assert.equal(latestProjectRoute.machine?.key, "collector-latest");
 assert.match(latestProjectRoute.reason, /matching project checkout/i);
 assert.match(latestProjectRoute.reason, /up to date/i);
 
+const staleMapsAgencyMachine = machine("maps-stale", "Maps Stale", [{
+  ...baseAgent,
+  id: "maps-stale-code-worker",
+  name: "Maps Stale Code Bee",
+  runtime: "codex",
+  workerClass: "code",
+}], {
+  version: {
+    projects: [{
+      projectId: "maps-agency",
+      name: "Maps Agency",
+      localPath: "/Users/liam/maps-agency",
+      branch: "main",
+      remoteUrl: "gitlawb://repo/maps-agency",
+      gitlawbRepoId: "gl-maps-agency",
+      commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      latestCommit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      dirty: false,
+    }],
+  },
+});
+const dirtyMapsAgencyMachine = machine("maps-dirty", "Maps Dirty", [{
+  ...baseAgent,
+  id: "maps-dirty-code-worker",
+  name: "Maps Dirty Code Bee",
+  runtime: "codex",
+  workerClass: "code",
+}], {
+  version: {
+    projects: [{
+      projectId: "maps-agency",
+      name: "Maps Agency",
+      localPath: "/root/documents/maps-agency",
+      branch: "main",
+      remoteUrl: "gitlawb://repo/maps-agency",
+      gitlawbRepoId: "gl-maps-agency",
+      commit: "cccccccccccccccccccccccccccccccccccccccc",
+      latestCommit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      dirty: true,
+    }],
+  },
+});
+const unrelatedProjectMachine = machine("crm-latest", "CRM Latest", [{
+  ...baseAgent,
+  id: "crm-code-worker",
+  name: "CRM Code Bee",
+  runtime: "codex",
+  workerClass: "code",
+}], {
+  version: {
+    projects: [{
+      projectId: "crm",
+      name: "CRM",
+      localPath: "/root/crm",
+      branch: "main",
+      remoteUrl: "gitlawb://repo/crm",
+      gitlawbRepoId: "gl-crm",
+      commit: "dddddddddddddddddddddddddddddddddddddddd",
+      latestCommit: "dddddddddddddddddddddddddddddddddddddddd",
+      dirty: false,
+    }],
+  },
+});
+const gitLawbProjectRoute = chooseQueenBeeDelegate({
+  title: "Add preview booking to Maps Agency",
+  body: "Use the GitLawb project registry and continue on the machine with local unpushed work if it has that repo.",
+  projectRegistry: {
+    projects: [{
+      id: "maps-agency",
+      name: "Maps Agency",
+      localPath: "/root/documents/maps-agency",
+      preferredMachineKey: "maps-dirty",
+      gitlawbRepo: {
+        repoId: "gl-maps-agency",
+        repoName: "maps-agency",
+        remoteUrl: "gitlawb://repo/maps-agency",
+        branch: "main",
+        linkedAt: Date.now(),
+      },
+      allowedAgentIds: ["maps-dirty-code-worker", "maps-stale-code-worker"],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }],
+    updatedAt: Date.now(),
+  },
+}, [unrelatedProjectMachine, staleMapsAgencyMachine, dirtyMapsAgencyMachine]);
+assert.equal(gitLawbProjectRoute.status, "delegated");
+assert.equal(gitLawbProjectRoute.agent?.id, "maps-dirty-code-worker");
+assert.equal(gitLawbProjectRoute.machine?.key, "maps-dirty");
+assert.match(gitLawbProjectRoute.reason, /GitLawb project registry/i);
+assert.match(gitLawbProjectRoute.reason, /local changes/i);
+
 const pendingRoute = chooseQueenBeeDelegate({ title: "do work", body: "" }, [machine("offline", "Offline", [], { device: { online: false } })]);
 assert.equal(pendingRoute.status, "pending");
 assert.equal(pendingRoute.agent, undefined);

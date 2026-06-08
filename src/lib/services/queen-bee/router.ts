@@ -16,6 +16,24 @@ type QueenBeeAgent = {
   collectorCapabilities?: { chat?: boolean } & Record<string, unknown>;
 };
 
+type CollectorProjectCheckout = {
+  projectId?: string;
+  name?: string;
+  slug?: string;
+  localPath?: string;
+  appDir?: string;
+  remoteUrl?: string;
+  gitlawbRepoId?: string;
+  gitlawbRepoName?: string;
+  branch?: string;
+  commit?: string;
+  shortCommit?: string;
+  dirty?: boolean;
+  latestCommit?: string;
+  latestShortCommit?: string;
+  updateCommand?: string;
+};
+
 type CollectorVersion = {
   appDir?: string;
   commit?: string;
@@ -25,6 +43,24 @@ type CollectorVersion = {
   latestCommit?: string;
   latestShortCommit?: string;
   updateCommand?: string;
+  projects?: CollectorProjectCheckout[];
+  projectCheckouts?: CollectorProjectCheckout[];
+};
+
+type ProjectRegistryHint = {
+  projects?: Array<{
+    id?: string;
+    name?: string;
+    localPath?: string;
+    preferredMachineKey?: string;
+    allowedAgentIds?: string[];
+    gitlawbRepo?: {
+      repoId?: string;
+      repoName?: string;
+      remoteUrl?: string;
+      branch?: string;
+    };
+  }>;
 };
 
 type QueenBeeMachine = {
@@ -55,6 +91,7 @@ export type QueenBeeTaskIntent = {
   title: string;
   body?: string;
   skills?: string[];
+  projectRegistry?: ProjectRegistryHint | null;
 };
 
 export type QueenBeeDelegate = {
@@ -193,34 +230,137 @@ function taskAffinityScore(agent: QueenBeeAgent, machine: QueenBeeMachine, task:
     reasons.push("Linux/ops request matched Linux machine");
   }
   if (/repo|code|test|build|typecheck|lint/.test(text) && /codex|opencode|claude-code|hermes/.test(String(agent.runtime))) score += 10;
-  score += projectCheckoutScore(machine.version, text, reasons);
+  score += projectCheckoutScore(machine, agent, task, text, reasons);
   return score;
 }
 
-function projectCheckoutScore(version: CollectorVersion | undefined, taskText: string, reasons: string[]) {
-  const project = projectSlugFromAppDir(version?.appDir);
-  if (!project || !taskMentionsProject(taskText, project)) return 0;
+function projectCheckoutScore(machine: QueenBeeMachine, agent: QueenBeeAgent, task: QueenBeeTaskIntent, taskText: string, reasons: string[]) {
+  let score = 0;
+  const checkouts = projectCheckoutsForVersion(machine.version);
+  const registryMatches = matchingRegistryProjects(task.projectRegistry, taskText);
+  const matchedRegistry = registryMatches.find((project) => checkouts.some((checkout) => checkoutMatchesRegistryProject(checkout, project)));
+  if (matchedRegistry) {
+    const checkout = checkouts.find((candidate) => checkoutMatchesRegistryProject(candidate, matchedRegistry));
+    score += 95;
+    reasons.push(`GitLawb project registry matched ${matchedRegistry.name || matchedRegistry.id || "project"}`);
+    if (matchedRegistry.preferredMachineKey && machineKeyMatches(machine, matchedRegistry.preferredMachineKey)) {
+      score += 45;
+      reasons.push("preferred project machine");
+    }
+    if (Array.isArray(matchedRegistry.allowedAgentIds) && matchedRegistry.allowedAgentIds.length) {
+      const agentId = agent.id || agent.agentId;
+      if (agentId && matchedRegistry.allowedAgentIds.includes(agentId)) {
+        score += 25;
+        reasons.push("project allows selected agent");
+      } else {
+        score -= 80;
+        reasons.push("project registry does not list this agent as preferred");
+      }
+    }
+    if (checkout) score += checkoutFreshnessScore(checkout, "project checkout", reasons);
+    return score;
+  }
 
-  let score = 70;
-  reasons.push(`matching project checkout (${project})`);
+  const currentCheckout = checkouts.find((checkout) => checkout.project && taskMentionsProject(taskText, checkout.project));
+  if (!currentCheckout) return 0;
+  score += 70;
+  reasons.push(`matching project checkout (${currentCheckout.project})`);
+  score += checkoutFreshnessScore(currentCheckout, "matching project checkout", reasons);
+  return score;
+}
 
-  const commit = version?.commit?.trim();
-  const latestCommit = version?.latestCommit?.trim();
-  if (version?.dirty) {
-    score += 60;
-    reasons.push("matching project checkout has local changes");
+function projectCheckoutsForVersion(version?: CollectorVersion) {
+  const checkouts: Array<CollectorProjectCheckout & { project: string }> = [];
+  const primaryProject = projectSlugFromAppDir(version?.appDir);
+  if (primaryProject) {
+    checkouts.push({
+      project: primaryProject,
+      name: primaryProject,
+      localPath: version?.appDir,
+      appDir: version?.appDir,
+      branch: version?.branch,
+      commit: version?.commit,
+      shortCommit: version?.shortCommit,
+      dirty: version?.dirty,
+      latestCommit: version?.latestCommit,
+      latestShortCommit: version?.latestShortCommit,
+      updateCommand: version?.updateCommand,
+    });
+  }
+  for (const checkout of [...(version?.projects ?? []), ...(version?.projectCheckouts ?? [])]) {
+    const project = normalizeProjectSlug(checkout.slug || checkout.projectId || checkout.name || projectSlugFromAppDir(checkout.localPath || checkout.appDir));
+    if (project) checkouts.push({ ...checkout, project });
+  }
+  return checkouts;
+}
+
+function checkoutFreshnessScore(checkout: CollectorProjectCheckout, label: string, reasons: string[]) {
+  let score = 0;
+  const commit = checkout.commit?.trim();
+  const latestCommit = checkout.latestCommit?.trim();
+  if (checkout.dirty) {
+    score += 75;
+    reasons.push(`${label} has local changes`);
   }
   if (commit && latestCommit && commit === latestCommit) {
     score += 80;
-    reasons.push("matching project checkout is up to date");
+    reasons.push(`${label} is up to date`);
   } else if (commit && latestCommit) {
-    score -= 35;
-    reasons.push(`matching project checkout is behind ${version?.latestShortCommit || latestCommit.slice(0, 7)}`);
+    score -= checkout.dirty ? 10 : 35;
+    reasons.push(`${label} is behind ${checkout.latestShortCommit || latestCommit.slice(0, 7)}`);
   }
-  if (version?.branch) {
-    reasons.push(`project branch ${version.branch}`);
-  }
+  if (checkout.branch) reasons.push(`project branch ${checkout.branch}`);
   return score;
+}
+
+function matchingRegistryProjects(registry: ProjectRegistryHint | null | undefined, taskText: string) {
+  const text = normalizeProjectSlug(taskText);
+  if (!text) return [];
+  return (registry?.projects ?? []).filter((project) => {
+    const aliases = [
+      project.id,
+      project.name,
+      project.localPath && projectSlugFromAppDir(project.localPath),
+      project.gitlawbRepo?.repoId,
+      project.gitlawbRepo?.repoName,
+      project.gitlawbRepo?.remoteUrl && projectSlugFromRemote(project.gitlawbRepo.remoteUrl),
+    ].map((value) => normalizeProjectSlug(String(value || ""))).filter((value) => value.length >= 3);
+    return aliases.some((alias) => text.includes(alias));
+  });
+}
+
+function checkoutMatchesRegistryProject(checkout: CollectorProjectCheckout & { project: string }, project: NonNullable<ProjectRegistryHint["projects"]>[number]) {
+  const checkoutAliases = [
+    checkout.project,
+    checkout.projectId,
+    checkout.name,
+    checkout.localPath && projectSlugFromAppDir(checkout.localPath),
+    checkout.appDir && projectSlugFromAppDir(checkout.appDir),
+    checkout.gitlawbRepoId,
+    checkout.gitlawbRepoName,
+    checkout.remoteUrl && projectSlugFromRemote(checkout.remoteUrl),
+  ].map((value) => normalizeProjectSlug(String(value || ""))).filter(Boolean);
+  const registryAliases = [
+    project.id,
+    project.name,
+    project.localPath && projectSlugFromAppDir(project.localPath),
+    project.gitlawbRepo?.repoId,
+    project.gitlawbRepo?.repoName,
+    project.gitlawbRepo?.remoteUrl && projectSlugFromRemote(project.gitlawbRepo.remoteUrl),
+  ].map((value) => normalizeProjectSlug(String(value || ""))).filter(Boolean);
+  return checkoutAliases.some((alias) => registryAliases.includes(alias));
+}
+
+function machineKeyMatches(machine: QueenBeeMachine, preferred: string) {
+  const normalized = normalizeProjectSlug(preferred);
+  return [machine.key, machine.device?.machineId, machine.device?.name, machine.device?.dnsName]
+    .map((value) => normalizeProjectSlug(String(value || "")))
+    .includes(normalized);
+}
+
+function projectSlugFromRemote(remoteUrl?: string) {
+  const withoutGit = String(remoteUrl || "").trim().replace(/\.git$/i, "");
+  return withoutGit.split(/[/:]+/).filter(Boolean).pop() || "";
 }
 
 function projectSlugFromAppDir(appDir?: string) {
