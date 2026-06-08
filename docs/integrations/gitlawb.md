@@ -66,6 +66,21 @@ Kanban tasks may include:
 - `projectId`
 - `proofs`
 
+Queen Bee also consumes the same project graph when routing code work. The control plane reads the shared registry before choosing a delegate, and collectors report local git state for registered projects under `version.projects` or `version.projectCheckouts`. Those checkout entries are intentionally operational rather than proof records: they help Queen Bee decide which machine should receive work for a named project.
+
+Collector project-checkout fields can include:
+
+- project id/name/slug
+- `localPath` or `appDir`
+- branch
+- current commit
+- latest remote commit
+- dirty/local-change state
+- remote URL
+- GitLawb repo id/name
+
+Routing uses those fields to prefer a matching checkout, the registry's preferred machine or allowed agents, local dirty/unpushed work, and up-to-date commits. Behind checkouts are penalized but not mutated automatically; updating, pulling, branching, or rebasing remains a separate agent action with its own safety policy.
+
 Proof metadata is sanitized before storage. HivemindOS must not store private keys, secret env values, Tailnet IPs, or exact private vault paths inside GitLawb proof metadata.
 
 Memory proof receipts follow the same rule. They include `contentHash`, `recordHash`, `previousProofHash`, actor DID when available, and sanitized agent/machine metadata. They do not include the memory body.
@@ -99,8 +114,11 @@ The uninstall scripts mirror setup one prompt at a time:
 
 - `src/lib/services/gitlawb/gitlawb-service.ts`
 - `src/lib/services/projects/project-registry.ts`
+- `src/lib/services/queen-bee/control-plane.ts`
+- `src/lib/services/queen-bee/router.ts`
 - `src/app/api/gitlawb/**`
 - `src/app/api/projects/**`
+- `scripts/agent-telemetry-collector.mjs`
 - `src/features/integrations/GitLawbIntegrationPanel.tsx`
 - `src/features/dashboard/views/KanbanPanel.tsx`
 - `src/components/fleet/FleetView.tsx`

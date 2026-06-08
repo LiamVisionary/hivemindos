@@ -71,6 +71,7 @@ How it works:
 - `POST /api/projects` creates or updates a project.
 - `POST /api/projects/link-gitlawb` links a project to GitLawb repo metadata.
 - Kanban task records can include `projectId` and sanitized `proofs`.
+- Queen Bee uses the same registry plus collector-reported `version.projects` / `version.projectCheckouts` git state to assign code tasks to the machine with the matching and freshest checkout.
 
 This lets one machine work across many projects and many GitLawb repos. The shared Brain keeps private task and memory context. GitLawb carries public-key code provenance.
 

@@ -49,6 +49,8 @@ Basically: do not change the docs from memory if the code is sitting right here.
 
 - `src/lib/services/context-index.ts`
 - `src/lib/services/queen-bee/control-plane.ts`
+- `src/lib/services/queen-bee/router.ts`
+- `src/lib/services/projects/project-registry.ts`
 - `src/lib/services/obsidian/agent-memory.ts`
 - `src/lib/services/brain/gbrain.ts`
 - `src/lib/services/brain/synto.ts`
@@ -58,6 +60,7 @@ Basically: do not change the docs from memory if the code is sitting right here.
 - `src/app/api/brain/memory/route.ts`
 - `scripts/hive-brain`
 - `scripts/hive-brain-hook`
+- `scripts/agent-telemetry-collector.mjs`
 - `scripts/seed-vault-foundation.mjs`
 - `src/app/api/brain/gbrain/**`
 - `src/app/api/brain/synto/**`

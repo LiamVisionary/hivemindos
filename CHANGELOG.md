@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-08 04:21 UTC - Document Queen Bee GitLawb Project Routing
+
+- Status: Pushed
+- Areas changed: whole-brain docs, GitLawb integration docs, Work board docs, whole-brain code map, vault structure contract
+- Summary: Document that Queen Bee now uses the shared project registry and collector-reported `version.projects` / `version.projectCheckouts` git state to route named project code work to the machine with the matching and freshest checkout, including preferred-machine, allowed-agent, dirty-work, up-to-date, and behind-checkout signals.
+- Verification: `node scripts/test-vault-structure-contract.mjs` passed; `git diff --check` passed.
+- Intended commit message: `Document Queen Bee project routing`
+
 ## 2026-06-08 03:30:56 UTC - Route Queen Bee By GitLawb Project Graph
 
 - Status: Pushed
