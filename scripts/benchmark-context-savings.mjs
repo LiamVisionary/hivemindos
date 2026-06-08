@@ -77,6 +77,45 @@ export const scenarios = [
     },
   },
   {
+    id: "chatbot-build",
+    title: "Build a dashboard chatbot feature",
+    task: "Build a HivemindOS dashboard chatbot feature that lets a user ask project questions, recalls shared brain memory, selects an agent/runtime, streams responses with tool/status events, and includes a minimal API route plus React UI wiring. Return the implementation plan, key files, tests, and safety gates.",
+    e2e: {
+      responseKeys: ["answer", "files", "tests", "safety", "confidence"],
+      responseExample: '{"answer":"short implementation plan","files":["path"],"tests":["command"],"safety":["gate"],"confidence":0.5}',
+    },
+    baseline: {
+      label: "Naive current-project sweep",
+      paths: [
+        "AGENTS.md",
+        "README.md",
+        "docs",
+        "src/features/dashboard",
+        "src/lib/services",
+        "packaged-skills",
+      ],
+      maxFilesPerDirectory: 120,
+    },
+    hive: {
+      label: "Hive-assimilate plus focused capability map",
+      snippets: [
+        "Use hive-capability-search before implementing chatbot, streaming, shared-brain, runtime-selection, or agent-routing features.",
+        "Search the shared brain and context index for existing dashboard chat, task retrieval, runtime adapter, and streaming event surfaces.",
+        "Reuse concrete files, tests, API routes, schemas, and UI conventions from the current project before adding new glue.",
+      ],
+      sections: [
+        { path: "AGENTS.md", heading: "Shared Skills" },
+        { path: "docs/features/token-and-cost-savings.md", heading: "Practical Rule" },
+      ],
+      paths: [
+        "packaged-skills/auto-install/hive-assimilate/SKILL.md",
+        "packaged-skills/auto-install/hive-capability-search/SKILL.md",
+        "src/lib/services/chat/task-retrieval-context.ts",
+      ],
+      pathMaxChars: 14000,
+    },
+  },
+  {
     id: "workflow-reuse",
     title: "Turn repeated work into a reusable workflow",
     task: "Convert a repeated multi-step HivemindOS task into reusable agent knowledge.",

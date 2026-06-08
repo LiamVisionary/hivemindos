@@ -27,6 +27,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Verification: Added a RED routing regression for an older HivemindOS collector, an up-to-date HivemindOS collector, and an unrelated up-to-date project; the test failed before implementation on missing matching-project evidence, then passed after implementation. `node --experimental-strip-types scripts/test-queen-bee-routing.mjs` passed; `node --experimental-strip-types scripts/test-queen-bee-autonomous-pickup.mjs` passed; `node scripts/test-vault-structure-contract.mjs` passed; `pnpm exec tsc --noEmit --pretty false` passed; live Next API smoke on temporary `http://127.0.0.1:5021` posted a Queen Bee `mode: route` request with synthetic fleet metadata and returned task `t_mq4n2i0j_eeecw` targeting `latest`; touched files are under 1500 lines. `pnpm check-sizes` remains blocked by existing oversized legacy files outside this change.
 - Intended commit message: `Prefer latest project checkout for Queen Bee`
 
+## 2026-06-08 09:01:49 WITA - Add Complex Chatbot Token Benchmark
+
+- Status: Pushed
+- Areas changed: Token and cost savings docs, context benchmark scenarios, E2E benchmark artifact options
+- Summary: Add `chatbot-build` as a real benchmark scenario and add a second live benchmark transcript to the Token And Cost Savings guide using a more complex chatbot-build prompt. The new example compares a broad current-project sweep against a targeted Hive assimilation/capability context pack and shows provider-reported OpenRouter usage for both runs.
+- Verification: `./scripts/hive-env-run -- pnpm benchmark:e2e-token-savings -- --provider openrouter --model openai/gpt-4.1-mini --scenario chatbot-build --repeats 1 --max-output-tokens 520 --include-response-content` completed the official live E2E benchmark and wrote `.outputs/benchmarks/e2e-token-savings-2026-06-08T06-46-24-934Z.json`; provider usage reported 42,185 baseline prompt tokens vs 4,989 Hive prompt tokens, saving 37,196 prompt tokens (88.2%) and 37,264 total tokens (87.5%); `pnpm benchmark:context-savings -- --scenario chatbot-build` passed; `node --check scripts/benchmark-context-savings.mjs` and `node --check scripts/benchmark-e2e-token-savings.mjs` passed; `node scripts/test-vault-structure-contract.mjs` passed; `git diff --check -- docs/features/token-and-cost-savings.md CHANGELOG.md scripts/benchmark-context-savings.mjs scripts/benchmark-e2e-token-savings.mjs` passed; artifact validation confirmed positive provider usage and parsed JSON responses.
+- Intended commit message: `Add complex chatbot token benchmark`
+
 ## 2026-06-07 23:28:46 WITA - Remove Private Skill References
 
 - Status: Pushed

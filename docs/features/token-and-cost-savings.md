@@ -53,6 +53,50 @@ The harness sent that task twice to OpenRouter's OpenAI-compatible chat completi
 
 This is provider-reported usage from a live run on June 7, 2026. The full `pnpm benchmark:e2e-token-savings` command writes redacted artifacts with usage counters, durations, response IDs, context hashes, and truncation flags, but not prompt bodies or secrets.
 
+## Complex Chatbot Build Benchmark
+
+**Prompt Under Test**
+
+```text
+Build a HivemindOS dashboard chatbot feature that lets a user ask project questions, recalls shared brain memory, selects an agent/runtime, streams responses with tool/status events, and includes a minimal API route plus React UI wiring. Return the implementation plan, key files, tests, and safety gates.
+```
+
+The harness sent that task twice to OpenRouter's OpenAI-compatible chat completions using `openai/gpt-4.1-mini`: once with a broad current-project sweep and once with a targeted Hive assimilation/capability context pack.
+
+**Baseline Chat**
+
+> **User:** Build a HivemindOS dashboard chatbot feature that lets a user ask project questions, recalls shared brain memory, selects an agent/runtime, streams responses with tool/status events, and includes a minimal API route plus React UI wiring. Return the implementation plan, key files, tests, and safety gates.
+>
+> **Assistant:**
+>
+> ```json
+> {"answer":"Implement a new dashboard chatbot feature with these steps: 1) Create a React UI component for the chatbot input and streaming response display, integrating with existing dashboard state and runtime selection hooks. 2) Add a minimal Next.js API route under `/api/chat/dashboard` that accepts user queries, recalls shared brain memory via existing brain services API, selects the appropriate agent/runtime from the runtime adapter registry, and streams responses with tool and status events. 3) Use existing shared brain recall APIs to fetch relevant context before querying the runtime. 4) Stream runtime chat responses and emit tool/status events to the frontend for real-time UI updates. 5) Wire the React UI to the API route with streaming fetch and event handling. 6) Add focused unit and integration tests for the API route, React component, and streaming logic. 7) Enforce safety gates by sanitizing inputs, redacting secrets in outputs, and respecting user privacy and project rules. Key files include `src/app/api/chat/dashboard/route.ts` for the API, `src/features/dashboard/views/ChatbotPanel.tsx` for the UI, and hooks under `src/features/dashboard/hooks/use-chatbot-controller.tsx`. Tests can run via `pnpm test:e2e:dashboard-smoke` and `pnpm test:dashboard-nav`. Safety gates follow AGENTS.md rules: no secrets logged, input validation, and side-effect confirmation for tool calls.","files":["src/app/api/chat/dashboard/route.ts","src/features/dashboard/views/ChatbotPanel.tsx","src/features/dashboard/hooks/use-chatbot-controller.tsx"],"tests":["pnpm test:e2e:dashboard-smoke","pnpm test:dashboard-nav"],"safety":["sanitize user input","redact secrets in responses","confirm side effects before tool calls","adhere to AGENTS.md privacy and code style rules"],"confidence":0.9}
+> ```
+>
+> Usage: `42,185` prompt tokens, `386` completion tokens, `42,571` total tokens. Context: broad current-project sweep, `306` files, truncated to `180,000` sent characters.
+
+**Hive Chat**
+
+> **User:** Build a HivemindOS dashboard chatbot feature that lets a user ask project questions, recalls shared brain memory, selects an agent/runtime, streams responses with tool/status events, and includes a minimal API route plus React UI wiring. Return the implementation plan, key files, tests, and safety gates.
+>
+> **Assistant:**
+>
+> ```json
+> {"answer":"1. Use hive-capability-search to identify existing chatbot, streaming, shared brain, runtime selection, and agent routing capabilities. 2. Search shared brain and context index for dashboard chat, task retrieval, runtime adapter, and streaming event components. 3. Reuse existing concrete files, API routes, schemas, and UI components from the current project. 4. Implement a minimal API route to accept user questions, recall shared brain memory via context index, select an agent/runtime, and stream responses with tool/status events. 5. Wire a React UI component in the dashboard to send queries, display streaming chatbot responses, and show tool/status events. 6. Add tests for API route, streaming response handling, shared brain recall, runtime selection, and React UI interaction. 7. Include safety gates to validate user input, sanitize streaming events, and restrict agent/runtime selection to authorized options.","files":["src/pages/api/chatbot.ts","src/components/DashboardChatbot.tsx","src/lib/services/chat/task-retrieval-context.ts","src/lib/agents/runtimeSelector.ts","src/lib/hooks/useStreamingChat.ts","tests/api/chatbot.test.ts","tests/components/DashboardChatbot.test.ts"],"tests":["npm run test -- tests/api/chatbot.test.ts","npm run test -- tests/components/DashboardChatbot.test.ts"],"safety":["validate and sanitize user input in API route","restrict runtime/agent selection to authorized list","sanitize and limit streaming events to prevent injection","rate limit API usage to prevent abuse"],"confidence":0.9}
+> ```
+>
+> Usage: `4,989` prompt tokens, `318` completion tokens, `5,307` total tokens. Context: targeted Hive assimilation/capability pack, `3` files, `3` snippets, `2` sections, not truncated.
+
+**Result**
+
+| Run | Prompt tokens | Completion tokens | Total tokens |
+| --- | ---: | ---: | ---: |
+| Baseline | 42,185 | 386 | 42,571 |
+| Hive | 4,989 | 318 | 5,307 |
+| Saved | 37,196, 88.2% | 68, 17.6% | 37,264, 87.5% |
+
+This is provider-reported usage from a live `pnpm benchmark:e2e-token-savings -- --scenario chatbot-build` run on June 8, 2026. The artifact was written to `.outputs/benchmarks/e2e-token-savings-2026-06-08T06-46-24-934Z.json` with response content included for this docs transcript. The prompt is intentionally more like a real app-building request: the broad baseline loaded a large project sweep, while Hive used focused assimilation, capability, and context-index evidence.
+
 ## Savings Model
 
 | Layer | How it saves tokens and cost |

@@ -23,6 +23,7 @@ function parseArgs(argv) {
     timeoutMs: DEFAULT_TIMEOUT_MS,
     outputDir: ".outputs/benchmarks",
     json: false,
+    includeResponseContent: false,
     inputPricePerMillion: 0,
     outputPricePerMillion: 0,
   };
@@ -57,6 +58,8 @@ function parseArgs(argv) {
       index += 1;
     } else if (arg === "--json") {
       args.json = true;
+    } else if (arg === "--include-response-content") {
+      args.includeResponseContent = true;
     } else if (arg === "--input-price-per-million") {
       args.inputPricePerMillion = Number(next || 0);
       index += 1;
@@ -100,6 +103,7 @@ Options:
   --max-output-tokens N                 Completion cap, default ${DEFAULT_MAX_OUTPUT_TOKENS}
   --timeout-ms N                        Per-request timeout, default ${DEFAULT_TIMEOUT_MS}
   --output-dir PATH                     Result artifact folder, default .outputs/benchmarks
+  --include-response-content            Store assistant response text for docs/debug artifacts
   --input-price-per-million N           Optional price annotation for prompt tokens
   --output-price-per-million N          Optional price annotation for completion tokens
   --json                                Print artifact JSON after the run
@@ -182,13 +186,16 @@ function hashText(text) {
 }
 
 function buildMessages({ scenario, mode, label, context }) {
+  const responseExample = scenario.e2e?.responseExample
+    || '{"answer":"one sentence","actions":["one short action"],"confidence":0.5}';
+  const responseKeys = scenario.e2e?.responseKeys?.join(", ") || "answer, actions, and confidence";
   return [
     {
       role: "system",
       content: [
         "You are running a token benchmark for HivemindOS.",
         "Use only the provided context.",
-        "Return compact valid JSON only, with keys answer, actions, and confidence.",
+        `Return compact valid JSON only, with keys ${responseKeys}.`,
         "Keep the answer brief and do not include markdown.",
       ].join(" "),
     },
@@ -201,7 +208,7 @@ function buildMessages({ scenario, mode, label, context }) {
         `Task: ${scenario.task}`,
         "",
         "Return JSON shaped like:",
-        '{"answer":"one sentence","actions":["one short action"],"confidence":0.5}',
+        responseExample,
         "",
         "Context:",
         context,
@@ -374,6 +381,7 @@ async function runBenchmark(args) {
             parsedJson: parsed.ok,
             jsonKeys: parsed.keys,
             outputChars: content.length,
+            ...(args.includeResponseContent ? { content } : {}),
           },
           context: {
             files: pack.files.length,
@@ -427,6 +435,7 @@ async function runBenchmark(args) {
     repeats: args.repeats,
     maxContextChars: args.maxContextChars,
     maxOutputTokens: args.maxOutputTokens,
+    includesResponseContent: args.includeResponseContent,
     pricing: {
       inputPricePerMillion: args.inputPricePerMillion,
       outputPricePerMillion: args.outputPricePerMillion,
