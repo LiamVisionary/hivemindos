@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-08 11:12:52 WITA - Prefer Latest Project Checkout For Queen Bee
+
+- Status: Pushed
+- Areas changed: Queen Bee fleet router, Queen Bee control-plane fleet metadata types, routing regression test
+- Summary: Teach Queen Bee to prefer a matching project checkout when routing code work across machines. If the request names a project such as HivemindOS, or says "this project" from the HivemindOS Queen Bee context, and multiple collectors expose that checkout, Queen Bee now boosts the machine whose collector reports the project path and an up-to-date git commit, while preserving worker-class and chat-capability routing.
+- Verification: Added a RED routing regression for an older HivemindOS collector, an up-to-date HivemindOS collector, and an unrelated up-to-date project; the test failed before implementation on missing matching-project evidence, then passed after implementation. `node --experimental-strip-types scripts/test-queen-bee-routing.mjs` passed; `node --experimental-strip-types scripts/test-queen-bee-autonomous-pickup.mjs` passed; `node scripts/test-vault-structure-contract.mjs` passed; `pnpm exec tsc --noEmit --pretty false` passed; live Next API smoke on temporary `http://127.0.0.1:5021` posted a Queen Bee `mode: route` request with synthetic fleet metadata and returned task `t_mq4n2i0j_eeecw` targeting `latest`; touched files are under 1500 lines. `pnpm check-sizes` remains blocked by existing oversized legacy files outside this change.
+- Intended commit message: `Prefer latest project checkout for Queen Bee`
+
 ## 2026-06-07 23:28:46 WITA - Remove Private Skill References
 
 - Status: Pushed

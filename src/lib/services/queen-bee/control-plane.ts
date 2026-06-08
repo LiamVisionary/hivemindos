@@ -42,6 +42,16 @@ export type QueenBeeFleetMachine = {
     self?: boolean;
   };
   capabilities?: Record<string, unknown>;
+  version?: {
+    appDir?: string;
+    commit?: string;
+    shortCommit?: string;
+    branch?: string;
+    dirty?: boolean;
+    latestCommit?: string;
+    latestShortCommit?: string;
+    updateCommand?: string;
+  };
   agents?: Array<{
     id?: string;
     agentId?: string;

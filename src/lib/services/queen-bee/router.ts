@@ -16,6 +16,17 @@ type QueenBeeAgent = {
   collectorCapabilities?: { chat?: boolean } & Record<string, unknown>;
 };
 
+type CollectorVersion = {
+  appDir?: string;
+  commit?: string;
+  shortCommit?: string;
+  branch?: string;
+  dirty?: boolean;
+  latestCommit?: string;
+  latestShortCommit?: string;
+  updateCommand?: string;
+};
+
 type QueenBeeMachine = {
   key?: string;
   collector?: string;
@@ -36,6 +47,7 @@ type QueenBeeMachine = {
     skillInventory?: boolean;
     syncthing?: boolean;
   } & Record<string, unknown>;
+  version?: CollectorVersion;
   agents?: QueenBeeAgent[];
 };
 
@@ -76,6 +88,7 @@ const CLASS_KEYWORDS: Array<{ workerClass: QueenBeeWorkerClass; priority: number
 ];
 
 const RUNTIME_PRIORITY = ["hermes", "openclaw", "opencode", "codex", "claude-code", "openai-compatible", "aeon"];
+const CURRENT_APP_PROJECT_SLUGS = new Set(["hivemindos", "omniagenthivemind"]);
 
 export function inferQueenBeeWorkerClass(task: QueenBeeTaskIntent): QueenBeeWorkerClass {
   if (/^\s*(?:generate|create|make|design)\s+(?:an?\s+)?(?:image|visual|illustration|art|asset)\b/i.test(task.title)) return "artist";
@@ -180,7 +193,51 @@ function taskAffinityScore(agent: QueenBeeAgent, machine: QueenBeeMachine, task:
     reasons.push("Linux/ops request matched Linux machine");
   }
   if (/repo|code|test|build|typecheck|lint/.test(text) && /codex|opencode|claude-code|hermes/.test(String(agent.runtime))) score += 10;
+  score += projectCheckoutScore(machine.version, text, reasons);
   return score;
+}
+
+function projectCheckoutScore(version: CollectorVersion | undefined, taskText: string, reasons: string[]) {
+  const project = projectSlugFromAppDir(version?.appDir);
+  if (!project || !taskMentionsProject(taskText, project)) return 0;
+
+  let score = 70;
+  reasons.push(`matching project checkout (${project})`);
+
+  const commit = version?.commit?.trim();
+  const latestCommit = version?.latestCommit?.trim();
+  if (version?.dirty) {
+    score += 60;
+    reasons.push("matching project checkout has local changes");
+  }
+  if (commit && latestCommit && commit === latestCommit) {
+    score += 80;
+    reasons.push("matching project checkout is up to date");
+  } else if (commit && latestCommit) {
+    score -= 35;
+    reasons.push(`matching project checkout is behind ${version?.latestShortCommit || latestCommit.slice(0, 7)}`);
+  }
+  if (version?.branch) {
+    reasons.push(`project branch ${version.branch}`);
+  }
+  return score;
+}
+
+function projectSlugFromAppDir(appDir?: string) {
+  const tail = String(appDir || "").trim().split(/[\\/]+/).filter(Boolean).pop();
+  if (!tail) return "";
+  return normalizeProjectSlug(tail.replace(/^omni-agent-/, "").replace(/^my-/, ""));
+}
+
+function taskMentionsProject(taskText: string, projectSlug: string) {
+  const normalizedText = normalizeProjectSlug(taskText);
+  if (!normalizedText || !projectSlug || projectSlug.length < 3) return false;
+  if (normalizedText.includes(projectSlug)) return true;
+  return CURRENT_APP_PROJECT_SLUGS.has(projectSlug) && /\bthis\s+(?:project|repo|repository|codebase)\b/i.test(taskText);
+}
+
+function normalizeProjectSlug(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
 function isChatCapable(agent: QueenBeeAgent, machine: QueenBeeMachine) {

@@ -26,6 +26,7 @@ function machine(key, name, agents, extra = {}) {
       ...extra.device,
     },
     capabilities: { chat: true, runtimes: ["hermes", "codex"], ...extra.capabilities },
+    ...Object.fromEntries(Object.entries(extra).filter(([key]) => key !== "device" && key !== "capabilities")),
     agents,
   };
 }
@@ -82,6 +83,61 @@ assert.equal(fallbackRoute.status, "delegated");
 assert.equal(fallbackRoute.agent?.id, "queen-local");
 assert.equal(fallbackRoute.machine?.key, "mac");
 assert.match(fallbackRoute.reason, /only available/i);
+
+const olderHivemindMachine = machine("collector-old", "Collector Old", [{
+  ...baseAgent,
+  id: "old-code-worker",
+  name: "Old Code Bee",
+  runtime: "codex",
+  workerClass: "code",
+}], {
+  version: {
+    appDir: "/Users/liam/hivemindos",
+    branch: "main",
+    commit: "1111111111111111111111111111111111111111",
+    latestCommit: "3333333333333333333333333333333333333333",
+    dirty: false,
+  },
+});
+const latestHivemindMachine = machine("collector-latest", "Collector Latest", [{
+  ...baseAgent,
+  id: "latest-code-worker",
+  name: "Latest Code Bee",
+  runtime: "codex",
+  workerClass: "code",
+}], {
+  version: {
+    appDir: "/Users/liam/hivemindos",
+    branch: "main",
+    commit: "3333333333333333333333333333333333333333",
+    latestCommit: "3333333333333333333333333333333333333333",
+    dirty: false,
+  },
+});
+const unrelatedLatestMachine = machine("other-latest", "Other Latest", [{
+  ...baseAgent,
+  id: "other-code-worker",
+  name: "Other Code Bee",
+  runtime: "codex",
+  workerClass: "code",
+}], {
+  version: {
+    appDir: "/Users/liam/other-project",
+    branch: "main",
+    commit: "4444444444444444444444444444444444444444",
+    latestCommit: "4444444444444444444444444444444444444444",
+    dirty: false,
+  },
+});
+const latestProjectRoute = chooseQueenBeeDelegate({
+  title: "Add a toolbar button to this project",
+  body: "This is a repository code change; pick the machine with the latest checkout of that project.",
+}, [olderHivemindMachine, unrelatedLatestMachine, latestHivemindMachine]);
+assert.equal(latestProjectRoute.status, "delegated");
+assert.equal(latestProjectRoute.agent?.id, "latest-code-worker");
+assert.equal(latestProjectRoute.machine?.key, "collector-latest");
+assert.match(latestProjectRoute.reason, /matching project checkout/i);
+assert.match(latestProjectRoute.reason, /up to date/i);
 
 const pendingRoute = chooseQueenBeeDelegate({ title: "do work", body: "" }, [machine("offline", "Offline", [], { device: { online: false } })]);
 assert.equal(pendingRoute.status, "pending");
