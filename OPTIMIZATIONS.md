@@ -17,6 +17,16 @@ the engineering memory for optimization decisions and performance traps.
 - Note tradeoffs, cache freshness, fallback behavior, and when the optimization should be revisited.
 - If an optimization affects prompt injection or agent context, state what context is preserved and what is skipped, cached, compacted, or deferred.
 
+## 2026-06-10 19:16 WITA - Longer macOS Embedded Next Release Timeout
+
+- Problem: `v0.1.36` macOS release jobs reached the embedded Next build's 1800 second watchdog after webpack compilation finished. Apple Silicon timed out during page generation; Intel timed out during build trace collection. Windows builds do not use the embedded Next path, and Linux finished successfully.
+- Change: `.github/workflows/tauri-cross-platform-release.yml` now sets `TAURI_NEXT_BUILD_TIMEOUT_SECONDS=3600` only for macOS release jobs. Linux keeps the default 1800 second budget, and Windows remains on the static Tauri build path.
+- Preserved behavior: The memory limit and embedded-dashboard release behavior are unchanged. This only extends the wall-clock watchdog on macOS so signing/notarized builds can finish the expensive Next output work before Tauri bundles the app.
+- Tradeoff: A truly stuck macOS release job can now run for up to an hour before the watchdog kills the embedded Next build. Revisit if macOS build times stay above ~45 minutes after adding a persistent Next/cache strategy.
+- Files: `.github/workflows/tauri-cross-platform-release.yml`.
+- Verification: `v0.1.36` GitHub Actions logs showed `Timeout exceeded: 1800 seconds` on both macOS jobs while `Build Tauri app` was still running; `git diff --check` passed for the workflow, changelog, and optimization note.
+- Watch next: If `v0.1.37` reaches notarization and fails, keep the longer timeout and debug the signing/notarization issue separately.
+
 ## 2026-06-10 15:05 WITA - Retry Empty Boot Snapshots Instead Of Booting Empty
 
 - Problem: `loadDashboardStateSnapshot()` resolved to `{}` (and cached it) whenever the dashboard-state GET failed — including the routine case of a Tauri proxy 503 while the Next dev server restarted on its memory threshold. Hydration then seeded in-memory state from the empty snapshot, and the next debounced persist overwrote the server's stored values. This was the mechanism that wiped the saved chat history from ~5.5MB down to a couple of threads (orphaned `dashboard-state.json.*.tmp` files in `~/.hivemindos/` mark repeated mid-write kills; a Jun 9 22:56 tmp already held only 1 thread). The earlier save-retry/stash work covered failed saves but not this failed-load-then-overwrite path.

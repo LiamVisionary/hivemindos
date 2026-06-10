@@ -31,6 +31,7 @@
     "test:fleet-agent-suppression": "node scripts/test-fleet-agent-suppression.mjs",
     "test:dashboard-state-snapshot": "node scripts/test-dashboard-state-snapshot.mjs",
     "test:fleet-local": "node scripts/test-fleet-local-collector.mjs",
+    "test:fleet-app-icons": "node scripts/test-fleet-app-icons.mjs",
     "test:e2e:real-fleet": "node scripts/e2e-real-fleet.mjs",
     "test:e2e:agents": "node scripts/e2e-real-fleet.mjs --suite=agents",
     "test:e2e:env": "node scripts/e2e-real-fleet.mjs --suite=env",

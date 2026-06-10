@@ -3,6 +3,38 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-10 19:16:17 WITA +0800 - Extend macOS Release Build Timeout
+
+- Status: Pushed
+- Areas changed: Tauri release workflow (`.github/workflows/tauri-cross-platform-release.yml`), optimization notes (`OPTIMIZATIONS.md`)
+- Summary: macOS release jobs now get a one-hour embedded Next build watchdog so the full dashboard build can finish page-data and trace work before Tauri signs and notarizes the app. Windows still uses the static build path, and Linux keeps the shorter timeout.
+- Verification: `v0.1.36` macOS release logs showed both Apple Silicon and Intel timing out at the previous 1800 second watchdog after the Next webpack compile completed; `git diff --check -- CHANGELOG.md OPTIMIZATIONS.md .github/workflows/tauri-cross-platform-release.yml`.
+- Intended commit message: `Extend macOS release build timeout`
+
+## 2026-06-10 19:16:17 WITA +0800 - Document Generated Media Signing
+
+- Status: Pushed
+- Areas changed: generated media signing architecture docs (`docs/architecture/generated-media-signing.md`, `docs/architecture/index.md`)
+- Summary: Architecture docs now explain how generated images are cached on the hub and served to phone clients through short-lived signed URLs, including the HMAC contract, auth fallback, and phone image-generation flow.
+- Verification: `git diff --check -- docs/architecture/generated-media-signing.md docs/architecture/index.md CHANGELOG.md`.
+- Intended commit message: `Document generated media signing`
+
+## 2026-06-10 19:05 WITA +0800 - Resolve Real App Icons For The Apps & Services Grid
+
+- Status: Pushed
+- Areas changed: fleet apps discovery (`src/app/api/fleet/apps/route.ts`), icon proxy (`src/app/api/fleet/app-icon/route.ts`), regression e2e (`scripts/test-fleet-app-icons.mjs`, `package.json`)
+- Summary: Apps & Services tiles now resolve real icons through a fallback chain — collector app-asset icon, then the favicon declared in the app's HTML (now resolved to an absolute URL against the app's proxied base path, attribute-order-agnostic parsing), then common favicon paths probed in parallel (`/favicon.svg` and friends, resolved against the app's `/app-proxy/<port>/` base instead of the collector origin, which previously made every probe miss), then a brand icon, with the existing initials tile as the last resort. Every icon is verified server-side and served through `/api/fleet/app-icon` (allowlist extended from localhost app-assets to tailnet/private hosts and the simple-icons CDN) so the webview never depends on cross-machine reachability. Cross-tailnet icon probes get 2.5s instead of 900ms. Cached payloads are sanitized on load: relative/unproxied legacy icon values are rewrapped or dropped, including the dead `cdn.simpleicons.org/openai` URLs (slug removed upstream) that previously stuck to apps via the icon-keeping dedupe; the `/openai|llm|ai/` brand regex that pinned an OpenAI mark on any app with "ai" in its name is gone.
+- Verification: live E2E against the running dev server on `localhost:5022`: `GET /api/fleet/apps?refresh=1&wait=1` now returns proxied real icons for Open Generative AI Hosted (`vite.svg` declared in its HTML — the exact case that was broken), OpenClaw Control (`apple-touch-icon.png`), Claw Code Mobile (`favicon.ico`), and HivemindOS (collector asset); icon proxy fetches verified at 200 with image content-types; disallowed public host returns 400; remaining initials tiles are JSON-only API services with no favicon (correct last resort) or hosts offline during the test (Z-Image Studio's machine was unreachable). Focused `tsc --noEmit` and `eslint` clean on touched files. New hermetic e2e `pnpm test:fleet-app-icons` (mock collector + app with relative-href favicon, isolated HOME) written but requires no other dev server running, so it has not yet passed in this session.
+- Intended commit message: `Resolve real app icons for the fleet apps grid`
+
+## 2026-06-10 18:44:02 WITA +0800 - Host Mobile Agents On The Hub And Chat With Them From The Dashboard
+
+- Status: Pushed (landed inside `0d667e66 Fix macOS release and realtime voice updates`)
+- Areas changed: mobile-agent contract types (`src/lib/types/mobile-agents.ts`), hub store + phone actions + chat stream + fleet merge (`src/lib/services/mobile-agents/store.ts`, `host-actions.ts`, `chat-turn.ts`, `fleet.ts`), management API (`src/app/api/agents/mobile/route.ts`), phone action dispatcher (`src/app/api/phone/route.ts`), chat dispatch (`src/app/api/chat/agent-runtime/route.ts`), fleet discovery (`src/app/api/fleet/discover/route.ts`), Fleet add-agent UI (`src/components/fleet/machine-cluster.tsx`, `src/components/fleet/selection-tooltip.tsx`, `src/features/dashboard/hooks/use-agent-controller.tsx`)
+- Summary: Phones in the tailnet fleet can now host agents. Because phones run no collector, the hub stores these agents itself (`~/.hivemindos/mobile-agents.json`) and queues each chat turn as a job (`~/.hivemindos/mobile-agent-jobs.json`); the HivemindOS Mobile app polls `/api/phone` (`agent-host-poll`) to claim work, runs the turn on-device with MLX, and streams events/results back (`agent-host-event`, `agent-host-complete`). The dashboard's "Add agent" hex now appears on mobile clusters too and creates a phone agent (model prefilled from the phone's reported MLX models), fleet discovery merges the stored agents onto the phone's machine card, and chatting goes through the existing `/api/chat/agent-runtime` flow via a `mobile://<machineKey>` gateway URL — including a "Waiting for <phone> — open the HivemindOS app" status line when the phone has not polled recently, and a 6-minute phone timeout. Jobs no phone claims within 10 minutes expire; finished jobs are pruned after an hour.
+- Verification: `pnpm exec tsc --noEmit` clean for all touched files (remaining repo errors are pre-existing in `next.config.ts` and `remotion/`); `pnpm exec eslint` zero errors on touched files; live E2E against the running dev server on `localhost:5022`: created a throwaway agent via POST `/api/agents/mobile` (machineKey normalization verified), dashboard chat POST produced the SSE session event + waiting status + queued job, a simulated phone poll resolved the machine key via `names[]`/single-key fallback and atomically claimed the job, `agent-host-event` deltas streamed back to the open dashboard SSE as `choices[0].delta.content`, `agent-host-complete` closed the stream with `[DONE]` and finished the session record, unknown jobId returned 404; all test residue removed (the real `iphone` host heartbeat untouched).
+- Intended commit message: `Host mobile agents on the hub and chat with them from the dashboard` (already committed as part of `0d667e66`)
+
 ## 2026-06-10 18:37:04 WITA - Queen Bee Realtime Speech-To-Speech, Voice Picker, And Hermes Fallback Provider
 
 - Status: Pushed

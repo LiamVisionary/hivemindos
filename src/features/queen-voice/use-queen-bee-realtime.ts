@@ -162,9 +162,14 @@ export function useQueenBeeRealtime(
         ),
       );
     };
+    const dropTurn = (id: number) => {
+      setTurns((current) => current.filter((turn) => turn.id !== id));
+    };
 
     let liveQueenTurnId = 0;
     let liveQueenText = "";
+    let liveUserTurnId = 0;
+    let liveUserText = "";
     const fail = (message: string) => {
       if (cancelled) return;
       setPhase("error");
@@ -223,17 +228,36 @@ export function useQueenBeeRealtime(
       }
       if (payload.type === "input_audio_buffer.speech_started") {
         setSpeechDetected(true);
+        // Instant feedback: the live caption row appears as speech begins.
+        if (!liveUserTurnId) liveUserTurnId = addTurn("you", "...", true);
       }
       if (payload.type === "input_audio_buffer.speech_stopped") {
         setSpeechDetected(false);
       }
       if (
-        payload.type ===
-          "conversation.item.input_audio_transcription.completed" &&
-        typeof payload.transcript === "string" &&
-        payload.transcript.trim()
+        payload.type === "conversation.item.input_audio_transcription.delta" &&
+        typeof payload.delta === "string" &&
+        payload.delta
       ) {
-        addTurn("you", payload.transcript.trim());
+        liveUserText += payload.delta;
+        if (!liveUserTurnId) liveUserTurnId = addTurn("you", "", true);
+        updateTurn(liveUserTurnId, liveUserText.trim() || "...", true);
+      }
+      if (
+        payload.type === "conversation.item.input_audio_transcription.completed"
+      ) {
+        const finalTranscript = (
+          (typeof payload.transcript === "string" ? payload.transcript : "") ||
+          liveUserText
+        ).trim();
+        if (liveUserTurnId) {
+          if (finalTranscript) updateTurn(liveUserTurnId, finalTranscript);
+          else dropTurn(liveUserTurnId);
+        } else if (finalTranscript) {
+          addTurn("you", finalTranscript);
+        }
+        liveUserTurnId = 0;
+        liveUserText = "";
       }
       if (
         payload.type === "response.output_audio.delta" ||

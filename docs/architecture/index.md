@@ -21,17 +21,17 @@ HivemindOS is built around five constraints:
 
 ## Main Components
 
-| Layer | Primary files | Responsibility |
-|---|---|---|
-| Dashboard shell | `src/app/page.tsx`, `src/features/dashboard/DashboardApp.tsx` | Server-side view selection, client dashboard state, polling, navigation, and feature orchestration |
-| Dashboard views | `src/features/dashboard/views/**`, `src/components/**` | Fleet, My Apps, Work/Kanban, Scheduler, Swarm, Brain/Vault, Chat, Wallet, Phone, AEON, More, Notifications, Memory, Files, Env |
-| API facade | `src/app/api/**/route.ts` | Local HTTP boundary for dashboard actions, runtime calls, fleet polling, app discovery, vault access, wallets, Honey, phone calls, MiroShark, and maintenance |
-| Runtime adapters | `src/lib/services/runtime-adapters/**` | Common runtime interface for status, skills, schedules, runs, outputs, sessions, env sync, integrations, and model selection |
-| Local services | `src/lib/services/**` | File-backed state, Obsidian services, telemetry, wallets, brain services, runtime utilities, integrations |
-| Native bridge | `src/lib/native/**`, `src-tauri/src/lib.rs` | Tauri-only desktop status, local directory listing/creation/display, and native folder picker fallbacks |
-| Collector | `scripts/agent-telemetry-collector.mjs` | Small Node HTTP service on each machine for health, snapshots, runtime chat/session bridges, Hivemind Sync env movement, skills, directories, Syncthing, transfers, and E2E hooks |
-| Setup scripts | `setup.sh`, `setup.ps1`, `uninstall.sh`, `uninstall.ps1`, `scripts/install-telemetry-collector.sh` | Installation, collector/Link service registration, helper CLI installation, uninstall mirror |
-| Workers | `workers/honey-ledger`, `workers/compute-gateway` | Optional Cloudflare D1-backed Honey ledger and trusted OpenAI-compatible compute gateway |
+| Layer            | Primary files                                                                                      | Responsibility                                                                                                                                                                    |
+| ---------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dashboard shell  | `src/app/page.tsx`, `src/features/dashboard/DashboardApp.tsx`                                      | Server-side view selection, client dashboard state, polling, navigation, and feature orchestration                                                                                |
+| Dashboard views  | `src/features/dashboard/views/**`, `src/components/**`                                             | Fleet, My Apps, Work/Kanban, Scheduler, Swarm, Brain/Vault, Chat, Wallet, Phone, AEON, More, Notifications, Memory, Files, Env                                                    |
+| API facade       | `src/app/api/**/route.ts`                                                                          | Local HTTP boundary for dashboard actions, runtime calls, fleet polling, app discovery, vault access, wallets, Honey, phone calls, MiroShark, and maintenance                     |
+| Runtime adapters | `src/lib/services/runtime-adapters/**`                                                             | Common runtime interface for status, skills, schedules, runs, outputs, sessions, env sync, integrations, and model selection                                                      |
+| Local services   | `src/lib/services/**`                                                                              | File-backed state, Obsidian services, telemetry, wallets, brain services, runtime utilities, integrations                                                                         |
+| Native bridge    | `src/lib/native/**`, `src-tauri/src/lib.rs`                                                        | Tauri-only desktop status, local directory listing/creation/display, and native folder picker fallbacks                                                                           |
+| Collector        | `scripts/agent-telemetry-collector.mjs`                                                            | Small Node HTTP service on each machine for health, snapshots, runtime chat/session bridges, Hivemind Sync env movement, skills, directories, Syncthing, transfers, and E2E hooks |
+| Setup scripts    | `setup.sh`, `setup.ps1`, `uninstall.sh`, `uninstall.ps1`, `scripts/install-telemetry-collector.sh` | Installation, collector/Link service registration, helper CLI installation, uninstall mirror                                                                                      |
+| Workers          | `workers/honey-ledger`, `workers/compute-gateway`                                                  | Optional Cloudflare D1-backed Honey ledger and trusted OpenAI-compatible compute gateway                                                                                          |
 
 ## Runtime Process Model
 
@@ -87,14 +87,14 @@ The app uses Next.js route handlers under `src/app/api`. That is the dashboard's
 - `/api/kanban`: file-backed board CRUD, task moves, claims, completions, comments, events.
 - `/api/obsidian/*`: vault status, open/access notes, sync, graph, skills, wallets, machine aliases, recent directories.
 - `/api/scheduler/*`: shared schedule import, runtime actions, skill actions, folder browsing.
-- `/api/phone`: phone gateway pairing/status, scheduled phone rings, and dashboard agent-call starts.
+- `/api/phone`: phone gateway pairing/status, scheduled phone rings, dashboard agent-call starts, and phone image generation.
 - OpenClaw runtime support is kept inside the generic runtime and chat layers rather than standalone product routes.
 - `/api/miroshark/*`: companion status, install/start, swarm templates/runs, analysis.
 - `/api/wallet/*`: local wallet creation, balances, sends, MoneyClaw, backups, x402 calls.
 - `/api/brain/*`: GBrain, Syntho, and trading-brain status/install/query actions.
 - `/api/env`, `/api/runtime-files`, `/api/maintenance`, `/api/memory-telemetry`, `/api/telemetry/events`, `/api/work-history`: local utility surfaces.
 
-See [API And Storage Reference](api-and-storage.md) for route grouping details.
+See [API And Storage Reference](api-and-storage.md) for route grouping details, and [Generated Media Signing](generated-media-signing.md) for how generated images are cached hub-side and served to phone clients with signed URLs.
 
 ## Runtime Adapter Layer
 
@@ -102,12 +102,12 @@ Runtime adapters are registered in `src/lib/services/runtime-adapters/registry.t
 
 Known runtimes:
 
-| Runtime | Kind | Current capabilities |
-|---|---|---|
-| OpenClaw | Gateway | status, chat, model selection |
-| Hermes | Interactive | status, chat, runs, memory, session search, background tasks, X search, video generation, Codex runtime, Kanban decomposition, setup, wallet tools, model selection |
-| Aeon | Background | status, skills, schedules, runs, outputs, memory, background tasks, notifications, setup |
-| HivemindOS | Interactive | status, chat, model selection |
+| Runtime    | Kind        | Current capabilities                                                                                                                                                |
+| ---------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenClaw   | Gateway     | status, chat, model selection                                                                                                                                       |
+| Hermes     | Interactive | status, chat, runs, memory, session search, background tasks, X search, video generation, Codex runtime, Kanban decomposition, setup, wallet tools, model selection |
+| Aeon       | Background  | status, skills, schedules, runs, outputs, memory, background tasks, notifications, setup                                                                            |
+| HivemindOS | Interactive | status, chat, model selection                                                                                                                                       |
 
 Adapters let the dashboard ask a runtime for status, skills, schedules, runs, outputs, env sync, sessions, and model options without baking every runtime path into the UI. OpenClaw stays on the generic Hivemind runtime bridge here.
 

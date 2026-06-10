@@ -18,7 +18,10 @@ const ICON_PROBE_TIMEOUT_MS = 2_500;
 const SERVICE_SIGNATURE_TIMEOUT_MS = 2_500;
 const HIVEMIND_LINK_APP_TIMEOUT_MS = 4_000;
 const TAILSCALE_STATUS_TIMEOUT_MS = 3_000;
-const HIVEMIND_LINK_COLLECTOR_PORTS = Array.from({ length: 24 }, (_, index) => 8787 + index);
+const HIVEMIND_LINK_COLLECTOR_PORTS = Array.from(
+  { length: 24 },
+  (_, index) => 8787 + index,
+);
 const SERVICE_ROUTE_CATALOG_TIMEOUT_MS = 2_500;
 const SERVICE_ROUTE_LIMIT = 80;
 const OPENAPI_CATALOG_PATHS = [
@@ -193,13 +196,52 @@ let appsCacheGeneration = 0;
 
 type AppDiscoveryMode = "fast" | "full";
 
+// Older caches stored raw icon values (relative hrefs, unproxied remote URLs)
+// that cannot render from the dashboard origin; rewrap or drop them so the
+// icon-keeping dedupe logic never resurrects a broken icon over a fresh one.
+function sanitizeCachedApps(apps: HostedApp[]) {
+  return apps.map((app) => {
+    const rawIconUrl = app.iconUrl || "";
+    let decodedIconUrl = rawIconUrl;
+    try {
+      decodedIconUrl = decodeURIComponent(rawIconUrl);
+    } catch {
+      // keep the raw value
+    }
+    // simple-icons removed the openai slug, so cached URLs pointing at it 404
+    const legacyDeadIcon = /cdn\.simpleicons\.org\/openai\//.test(
+      decodedIconUrl,
+    );
+    return {
+      ...app,
+      iconUrl: legacyDeadIcon
+        ? undefined
+        : appIconDisplayUrl(rawIconUrl) || undefined,
+    };
+  });
+}
+
 async function readDiskAppsCache() {
   try {
-    const parsed = JSON.parse(await readFile(APPS_CACHE_FILE, "utf8")) as Partial<AppsCacheRecord>;
-    if (!parsed || typeof parsed.checkedAt !== "number" || parsed.payload?.ok !== true || !Array.isArray(parsed.payload.apps)) {
+    const parsed = JSON.parse(
+      await readFile(APPS_CACHE_FILE, "utf8"),
+    ) as Partial<AppsCacheRecord>;
+    if (
+      !parsed ||
+      typeof parsed.checkedAt !== "number" ||
+      parsed.payload?.ok !== true ||
+      !Array.isArray(parsed.payload.apps)
+    ) {
       return null;
     }
-    return { checkedAt: parsed.checkedAt, payload: normalizeAppsPayload(parsed.payload) };
+    const payload = {
+      ...parsed.payload,
+      apps: sanitizeCachedApps(parsed.payload.apps),
+    };
+    return {
+      checkedAt: parsed.checkedAt,
+      payload: normalizeAppsPayload(payload),
+    };
   } catch {
     return null;
   }
@@ -207,7 +249,10 @@ async function readDiskAppsCache() {
 
 async function writeDiskAppsCache(record: AppsCacheRecord) {
   await mkdir(dirname(APPS_CACHE_FILE), { recursive: true });
-  await writeFile(APPS_CACHE_FILE, `${JSON.stringify(record)}\n`, { encoding: "utf8", mode: 0o600 });
+  await writeFile(APPS_CACHE_FILE, `${JSON.stringify(record)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
 }
 
 function rememberAppsPayload(payload: AppsPayload) {
@@ -216,25 +261,39 @@ function rememberAppsPayload(payload: AppsPayload) {
 }
 
 function sortHostedApps(apps: HostedApp[]) {
-  return apps.sort((left, right) => Number(right.local) - Number(left.local) || left.machineName.localeCompare(right.machineName) || left.port - right.port);
+  return apps.sort(
+    (left, right) =>
+      Number(right.local) - Number(left.local) ||
+      left.machineName.localeCompare(right.machineName) ||
+      left.port - right.port,
+  );
 }
 
-function mergeMachineResults(current: AppsPayload["machines"], cached: AppsPayload["machines"]) {
+function mergeMachineResults(
+  current: AppsPayload["machines"],
+  cached: AppsPayload["machines"],
+) {
   const byName = new Map<string, AppsPayload["machines"][number]>();
   for (const machine of cached) {
     byName.set(machine.name, machine);
   }
   for (const machine of current) {
     const previous = byName.get(machine.name);
-    byName.set(machine.name, !previous || machine.appCount >= previous.appCount ? machine : previous);
+    byName.set(
+      machine.name,
+      !previous || machine.appCount >= previous.appCount ? machine : previous,
+    );
   }
   return [...byName.values()];
 }
 
 function cachedAppMerge(payload: AppsPayload): AppsPayload {
   const cached = appsCache?.payload;
-  if (!cached?.apps.length || cached.apps.length <= payload.apps.length) return payload;
-  const apps = sortHostedApps(dedupeVisibleApps([...payload.apps, ...cached.apps]));
+  if (!cached?.apps.length || cached.apps.length <= payload.apps.length)
+    return payload;
+  const apps = sortHostedApps(
+    dedupeVisibleApps([...payload.apps, ...cached.apps]),
+  );
   return normalizeAppsPayload({
     ...payload,
     source: `${payload.source}:cached-merge`,
@@ -244,12 +303,18 @@ function cachedAppMerge(payload: AppsPayload): AppsPayload {
 }
 
 function isSparsePayload(payload: AppsPayload) {
-  const readyMachines = payload.machines.filter((machine) => machine.collector === "ready").length;
+  const readyMachines = payload.machines.filter(
+    (machine) => machine.collector === "ready",
+  ).length;
   return payload.apps.length <= 1 && readyMachines > 1;
 }
 
-function payloadWithRefreshError(payload: AppsPayload, error: unknown): AppsPayload {
-  const message = error instanceof Error ? error.message : "Fleet app refresh failed.";
+function payloadWithRefreshError(
+  payload: AppsPayload,
+  error: unknown,
+): AppsPayload {
+  const message =
+    error instanceof Error ? error.message : "Fleet app refresh failed.";
   return {
     ...payload,
     source: `${payload.source}:stale-after-error`,
@@ -265,7 +330,14 @@ function payloadWithRefreshError(payload: AppsPayload, error: unknown): AppsPayl
   };
 }
 
-type AppKind = "ai" | "creative" | "code" | "dashboard" | "media" | "service" | "app";
+type AppKind =
+  | "ai"
+  | "creative"
+  | "code"
+  | "dashboard"
+  | "media"
+  | "service"
+  | "app";
 
 const PLUMBING_PROCESSES = [
   "syncthing",
@@ -292,7 +364,6 @@ const PLUMBING_TITLES = [
 const BRAND_ICON_SLUGS: Array<[RegExp, string]> = [
   [/github/i, "github"],
   [/discord/i, "discord"],
-  [/openai/i, "openai"],
 ];
 
 function normalizeBaseUrl(value?: string) {
@@ -314,13 +385,23 @@ function routeUrl(apiBaseUrl: string, path: string) {
 
 function routeCategory(path: string) {
   const normalized = normalizePath(path);
-  if (normalized === "/health" || normalized.includes("openapi") || normalized.includes("/docs")) return "Core";
+  if (
+    normalized === "/health" ||
+    normalized.includes("openapi") ||
+    normalized.includes("/docs")
+  )
+    return "Core";
   if (normalized.startsWith("/api/templates")) return "Templates";
   if (normalized.startsWith("/api/graph")) return "Graph";
   if (normalized.startsWith("/api/report")) return "Reports";
   if (normalized.includes("/observability")) return "Observability";
-  if (normalized.includes("/settings") || normalized.includes("/mcp")) return "Config";
-  if (normalized.includes("/simulation/") && /\.(json|jsonl|csv|md|txt|png|gif|svg|ipynb)$/i.test(normalized)) return "Exports";
+  if (normalized.includes("/settings") || normalized.includes("/mcp"))
+    return "Config";
+  if (
+    normalized.includes("/simulation/") &&
+    /\.(json|jsonl|csv|md|txt|png|gif|svg|ipynb)$/i.test(normalized)
+  )
+    return "Exports";
   if (normalized.startsWith("/api/simulation")) return "Simulations";
   return "API";
 }
@@ -336,19 +417,36 @@ function dedupeServiceRoutes(routes: ServiceRoute[]) {
 }
 
 function routeSummary(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const record = value as { summary?: unknown; description?: unknown; operationId?: unknown };
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
+  const record = value as {
+    summary?: unknown;
+    description?: unknown;
+    operationId?: unknown;
+  };
   const text = record.summary || record.description || record.operationId;
-  return typeof text === "string" ? text.trim().split("\n")[0]?.slice(0, 180) : undefined;
+  return typeof text === "string"
+    ? text.trim().split("\n")[0]?.slice(0, 180)
+    : undefined;
 }
 
-function parseOpenApiJsonRoutes(apiBaseUrl: string, payload: unknown): ServiceRoute[] {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+function parseOpenApiJsonRoutes(
+  apiBaseUrl: string,
+  payload: unknown,
+): ServiceRoute[] {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    return [];
   const paths = (payload as { paths?: unknown }).paths;
   if (!paths || typeof paths !== "object" || Array.isArray(paths)) return [];
   const routes: ServiceRoute[] = [];
   for (const [path, methods] of Object.entries(paths)) {
-    if (!path.startsWith("/") || !methods || typeof methods !== "object" || Array.isArray(methods)) continue;
+    if (
+      !path.startsWith("/") ||
+      !methods ||
+      typeof methods !== "object" ||
+      Array.isArray(methods)
+    )
+      continue;
     for (const [method, operation] of Object.entries(methods)) {
       if (!/^(get|post|put|patch|delete)$/i.test(method)) continue;
       routes.push({
@@ -364,7 +462,10 @@ function parseOpenApiJsonRoutes(apiBaseUrl: string, payload: unknown): ServiceRo
   return dedupeServiceRoutes(routes).slice(0, SERVICE_ROUTE_LIMIT);
 }
 
-function parseOpenApiYamlRoutes(apiBaseUrl: string, text: string): ServiceRoute[] {
+function parseOpenApiYamlRoutes(
+  apiBaseUrl: string,
+  text: string,
+): ServiceRoute[] {
   const routes: ServiceRoute[] = [];
   let currentPath = "";
   let currentRouteIndex = -1;
@@ -398,7 +499,9 @@ function parseOpenApiYamlRoutes(apiBaseUrl: string, text: string): ServiceRoute[
   return dedupeServiceRoutes(routes).slice(0, SERVICE_ROUTE_LIMIT);
 }
 
-async function discoverOpenApiRoutes(apiBaseUrl: string): Promise<ServiceRoute[]> {
+async function discoverOpenApiRoutes(
+  apiBaseUrl: string,
+): Promise<ServiceRoute[]> {
   for (const path of OPENAPI_CATALOG_PATHS) {
     try {
       const response = await fetch(routeUrl(apiBaseUrl, path), {
@@ -419,14 +522,21 @@ async function discoverOpenApiRoutes(apiBaseUrl: string): Promise<ServiceRoute[]
   return [];
 }
 
-async function serviceRouteCatalog(apiBaseUrl: string, serviceKind?: string): Promise<{ routes: ServiceRoute[]; source: ServiceRoute["source"] } | null> {
+async function serviceRouteCatalog(
+  apiBaseUrl: string,
+  serviceKind?: string,
+): Promise<{ routes: ServiceRoute[]; source: ServiceRoute["source"] } | null> {
   const openApiRoutes = await discoverOpenApiRoutes(apiBaseUrl);
-  if (openApiRoutes.length > 0) return { routes: openApiRoutes, source: "openapi" };
+  if (openApiRoutes.length > 0)
+    return { routes: openApiRoutes, source: "openapi" };
   void serviceKind;
   return null;
 }
 
-async function serviceRunningTasks(apiBaseUrl: string, serviceKind?: string): Promise<ServiceRunningTask[]> {
+async function serviceRunningTasks(
+  apiBaseUrl: string,
+  serviceKind?: string,
+): Promise<ServiceRunningTask[]> {
   void apiBaseUrl;
   void serviceKind;
   return [];
@@ -438,7 +548,12 @@ function dnsHost(value?: string) {
 
 function machineOpenHost(machine: FleetMachine) {
   if (isLocalMachine(machine)) return "localhost";
-  return dnsHost(machine.device?.dnsName) || machine.collectorHost || machine.device?.ip || "";
+  return (
+    dnsHost(machine.device?.dnsName) ||
+    machine.collectorHost ||
+    machine.device?.ip ||
+    ""
+  );
 }
 
 function isLocalMachine(machine: FleetMachine) {
@@ -453,7 +568,10 @@ function serviceUrl(app: CollectorApp, machine: FleetMachine) {
   return `${scheme}://${host}:${port}${normalizePath(app.path)}`;
 }
 
-function rewriteServiceAssetUrl(rawUrl: string | undefined, machine: FleetMachine) {
+function rewriteServiceAssetUrl(
+  rawUrl: string | undefined,
+  machine: FleetMachine,
+) {
   if (!rawUrl) return "";
   try {
     const url = new URL(rawUrl);
@@ -472,7 +590,11 @@ function rewriteCollectorUrl(rawUrl: string | undefined, collectorUrl: string) {
     raw.protocol = collector.protocol;
     raw.host = collector.host;
     const collectorPrefix = collector.pathname.replace(/\/+$/, "");
-    if (collectorPrefix && collectorPrefix !== "/" && raw.pathname.startsWith("/")) {
+    if (
+      collectorPrefix &&
+      collectorPrefix !== "/" &&
+      raw.pathname.startsWith("/")
+    ) {
       raw.pathname = `${collectorPrefix}${raw.pathname}`;
     }
     return raw.toString();
@@ -503,7 +625,7 @@ function appIconDisplayUrl(url: string) {
 function textFromHtml(value: string) {
   return value
     .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, "\"")
+    .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
@@ -512,7 +634,10 @@ function textFromHtml(value: string) {
 }
 
 function htmlMetaContent(html: string, name: string) {
-  const pattern = new RegExp(`<meta[^>]+(?:name|property)=["']${name}["'][^>]+content=["']([^"']+)["'][^>]*>`, "i");
+  const pattern = new RegExp(
+    `<meta[^>]+(?:name|property)=["']${name}["'][^>]+content=["']([^"']+)["'][^>]*>`,
+    "i",
+  );
   return textFromHtml(html.match(pattern)?.[1] ?? "");
 }
 
@@ -521,8 +646,15 @@ function htmlTitle(html: string) {
 }
 
 function htmlFaviconHref(html: string) {
-  const links = (html.match(/<link\b[^>]*>/gi) ?? []).filter((tag) => /\brel=["'][^"']*icon[^"']*["']/i.test(tag));
-  const rank = (tag: string) => (/apple-touch-icon/i.test(tag) ? 0 : /\.(?:svg|png|webp)\b/i.test(tag) ? 1 : 2);
+  const links = (html.match(/<link\b[^>]*>/gi) ?? []).filter((tag) =>
+    /\brel=["'][^"']*icon[^"']*["']/i.test(tag),
+  );
+  const rank = (tag: string) =>
+    /apple-touch-icon/i.test(tag)
+      ? 0
+      : /\.(?:svg|png|webp)\b/i.test(tag)
+        ? 1
+        : 2;
   const best = links.sort((a, b) => rank(a) - rank(b))[0];
   return best?.match(/\bhref=["']([^"']+)["']/i)?.[1] ?? "";
 }
@@ -532,7 +664,9 @@ function resolveIconHref(href: string | undefined, baseUrl: string) {
   if (href.startsWith("data:image/")) return href;
   try {
     const resolved = new URL(href, baseUrl);
-    return resolved.protocol === "http:" || resolved.protocol === "https:" ? resolved.toString() : "";
+    return resolved.protocol === "http:" || resolved.protocol === "https:"
+      ? resolved.toString()
+      : "";
   } catch {
     return "";
   }
@@ -540,7 +674,13 @@ function resolveIconHref(href: string | undefined, baseUrl: string) {
 
 function isGenericAppName(name: string, port: number) {
   const value = name.toLowerCase();
-  return value === `app ${port}` || /^(node|python|docker|container|nginx|http|api)(?: api| service)?$/i.test(name) || /\bon\s+\d+$/.test(value);
+  return (
+    value === `app ${port}` ||
+    /^(node|python|docker|container|nginx|http|api)(?: api| service)?$/i.test(
+      name,
+    ) ||
+    /\bon\s+\d+$/.test(value)
+  );
 }
 
 async function discoverAppMetadata(openUrl: string) {
@@ -550,11 +690,14 @@ async function discoverAppMetadata(openUrl: string) {
       signal: AbortSignal.timeout(SERVICE_SIGNATURE_TIMEOUT_MS),
     });
     const contentType = response.headers.get("content-type") || "";
-    if (!response.ok || !contentType.toLowerCase().includes("text/html")) return null;
+    if (!response.ok || !contentType.toLowerCase().includes("text/html"))
+      return null;
     const html = await response.text();
     return {
       title: htmlTitle(html),
-      description: htmlMetaContent(html, "description") || htmlMetaContent(html, "og:description"),
+      description:
+        htmlMetaContent(html, "description") ||
+        htmlMetaContent(html, "og:description"),
       iconUrl: resolveIconHref(htmlFaviconHref(html), openUrl),
     };
   } catch {
@@ -580,9 +723,11 @@ async function isImageUrl(url: string) {
       });
     }
     const contentType = response.headers.get("content-type") || "";
-    return response.ok && (
-      contentType.startsWith("image/")
-      || ((contentType === "" || contentType === "application/octet-stream") && /\.(?:ico|png|svg|webp|jpg|jpeg)(?:\?|$)/i.test(url))
+    return (
+      response.ok &&
+      (contentType.startsWith("image/") ||
+        ((contentType === "" || contentType === "application/octet-stream") &&
+          /\.(?:ico|png|svg|webp|jpg|jpeg)(?:\?|$)/i.test(url)))
     );
   } catch {
     return false;
@@ -618,10 +763,14 @@ function directAppIconCandidates(openUrl: string) {
 }
 
 async function firstReachableIcon(urls: Array<string | undefined>) {
-  const candidates = [...new Set(urls.filter((url): url is string => Boolean(url)))];
-  const checks = await Promise.all(candidates.map(async (url) => (
-    url.startsWith("data:image/") || (await isImageUrl(url)) ? url : ""
-  )));
+  const candidates = [
+    ...new Set(urls.filter((url): url is string => Boolean(url))),
+  ];
+  const checks = await Promise.all(
+    candidates.map(async (url) =>
+      url.startsWith("data:image/") || (await isImageUrl(url)) ? url : "",
+    ),
+  );
   return checks.find(Boolean) || "";
 }
 
@@ -638,20 +787,23 @@ function cleanAppName(value: string) {
 }
 
 function normalizeMachineName(value: string) {
-  return value
-    .replace(/^hivemindos-/i, "")
-    .replace(/-local-\d+$/i, "")
-    .replace(/-local$/i, "")
-    .replace(/-\d+$/i, "")
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase())
-    .trim() || value;
+  return (
+    value
+      .replace(/^hivemindos-/i, "")
+      .replace(/-local-\d+$/i, "")
+      .replace(/-local$/i, "")
+      .replace(/-\d+$/i, "")
+      .replace(/-/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase())
+      .trim() || value
+  );
 }
 
 function appKind(name: string): AppKind {
   const value = name.toLowerCase();
   if (/api service|\bapi\b|backend|server/.test(value)) return "service";
-  if (/image|studio|canvas|design|generative|creative/.test(value)) return "creative";
+  if (/image|studio|canvas|design|generative|creative/.test(value))
+    return "creative";
   if (/code|dev|editor|workspace|runtime/.test(value)) return "code";
   if (/\bai\b|llm|chat|assistant|agent/.test(value)) return "ai";
   if (/money|video|printer|media|audio|photo/.test(value)) return "media";
@@ -670,8 +822,15 @@ function appTheme(kind: AppKind) {
 }
 
 function appInitials(name: string) {
-  const words = name.replace(/[^a-z0-9 ]/gi, " ").split(/\s+/).filter(Boolean);
-  return (words.length > 1 ? `${words[0][0]}${words[1][0]}` : (words[0] || "A").slice(0, 2)).toUpperCase();
+  const words = name
+    .replace(/[^a-z0-9 ]/gi, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  return (
+    words.length > 1
+      ? `${words[0][0]}${words[1][0]}`
+      : (words[0] || "A").slice(0, 2)
+  ).toUpperCase();
 }
 
 function brandFallbackIconUrl(name: string) {
@@ -681,13 +840,16 @@ function brandFallbackIconUrl(name: string) {
 }
 
 function isPlumbingApp(name: string, app: CollectorApp) {
-  const value = `${name} ${app.process || ""} ${app.server || ""}`.toLowerCase();
+  const value =
+    `${name} ${app.process || ""} ${app.server || ""}`.toLowerCase();
   if (PLUMBING_PROCESSES.some((token) => value.includes(token))) return true;
   return PLUMBING_TITLES.some((token) => name.toLowerCase().includes(token));
 }
 
 function isInteractiveApp(name: string, app: CollectorApp) {
-  const statusCode = Number(app.statusCode ?? app.description?.match(/^(\d+)/)?.[1] ?? 0);
+  const statusCode = Number(
+    app.statusCode ?? app.description?.match(/^(\d+)/)?.[1] ?? 0,
+  );
   const contentType = (app.contentType || app.description || "").toLowerCase();
   if (statusCode >= 400) return false;
   return contentType.includes("text/html") && !isPlumbingApp(name, app);
@@ -705,12 +867,19 @@ function appDescription(kind: AppKind, machineName: string) {
 
 function shouldProbeHealthSignature(name: string, app: CollectorApp) {
   if (app.serviceKind || app.healthPath) return true;
-  const value = `${name} ${app.description || ""} ${app.process || ""} ${app.server || ""}`.toLowerCase();
-  return value.includes("404") || value.includes("not found") || value.includes("backend") || value.includes("api");
+  const value =
+    `${name} ${app.description || ""} ${app.process || ""} ${app.server || ""}`.toLowerCase();
+  return (
+    value.includes("404") ||
+    value.includes("not found") ||
+    value.includes("backend") ||
+    value.includes("api")
+  );
 }
 
 function healthServiceName(payload: ServiceHealthPayload | null) {
-  const value = payload?.service || payload?.name || payload?.app || payload?.application;
+  const value =
+    payload?.service || payload?.name || payload?.app || payload?.application;
   return typeof value === "string" ? value.trim() : "";
 }
 
@@ -721,10 +890,9 @@ function healthStatus(payload: ServiceHealthPayload | null) {
 }
 
 function healthPathsForApp(app: CollectorApp) {
-  const paths = [
-    app.healthPath,
-    "/health",
-  ].filter((path): path is string => Boolean(path));
+  const paths = [app.healthPath, "/health"].filter((path): path is string =>
+    Boolean(path),
+  );
   return [...new Set(paths.map(normalizePath))];
 }
 
@@ -738,18 +906,26 @@ async function probeHealthSignature(input: {
   if (!shouldProbeHealthSignature(input.name, input.app)) return null;
   const apiBaseUrl = input.apiProxyUrl || input.proxyUrl.replace(/\/+$/, "");
   if (!apiBaseUrl) return null;
-  const healthPaths = input.healthProxyUrl ? [new URL(input.healthProxyUrl).pathname] : healthPathsForApp(input.app);
+  const healthPaths = input.healthProxyUrl
+    ? [new URL(input.healthProxyUrl).pathname]
+    : healthPathsForApp(input.app);
   for (const healthPath of healthPaths) {
-    const healthUrl = input.healthProxyUrl || `${apiBaseUrl}${normalizePath(healthPath)}`;
+    const healthUrl =
+      input.healthProxyUrl || `${apiBaseUrl}${normalizePath(healthPath)}`;
     try {
-      const probe = await fetchServiceProbe(healthUrl, SERVICE_SIGNATURE_TIMEOUT_MS);
+      const probe = await fetchServiceProbe(
+        healthUrl,
+        SERVICE_SIGNATURE_TIMEOUT_MS,
+      );
       const payload = probe?.payload ?? null;
       const service = healthServiceName(payload);
       const status = healthStatus(payload);
       if (!probe || !service) continue;
       return {
         name: service,
-        description: status ? `API service · ${status}` : "API service · reachable",
+        description: status
+          ? `API service · ${status}`
+          : "API service · reachable",
         serviceKind: input.app.serviceKind?.trim() || "api",
         healthPath,
         healthUrl,
@@ -762,7 +938,12 @@ async function probeHealthSignature(input: {
   return null;
 }
 
-async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUrl: string, mode: AppDiscoveryMode = "full"): Promise<HostedApp | null> {
+async function toHostedApp(
+  app: CollectorApp,
+  machine: FleetMachine,
+  collectorUrl: string,
+  mode: AppDiscoveryMode = "full",
+): Promise<HostedApp | null> {
   const port = Number(app.port);
   const proxyUrl = rewriteCollectorUrl(app.proxyUrl, collectorUrl);
   const apiProxyUrl = rewriteCollectorUrl(app.apiProxyUrl, collectorUrl);
@@ -770,36 +951,71 @@ async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUr
   const directServiceUrl = serviceUrl(app, machine);
   const openUrl = proxyUrl || directServiceUrl;
   if (!openUrl || !Number.isInteger(port)) return null;
-  const machineName = normalizeMachineName(machine.device?.name || machine.collectorHost || machine.device?.ip || "Unknown machine");
+  const machineName = normalizeMachineName(
+    machine.device?.name ||
+      machine.collectorHost ||
+      machine.device?.ip ||
+      "Unknown machine",
+  );
   const fallbackName = appName(app, port);
-  const signature = mode === "full" ? await probeHealthSignature({ app, name: fallbackName, proxyUrl, apiProxyUrl, healthProxyUrl }) : null;
+  const signature =
+    mode === "full"
+      ? await probeHealthSignature({
+          app,
+          name: fallbackName,
+          proxyUrl,
+          apiProxyUrl,
+          healthProxyUrl,
+        })
+      : null;
   const metadata = mode === "full" ? await discoverAppMetadata(openUrl) : null;
-  const name = signature?.name || (metadata?.title && isGenericAppName(fallbackName, port) ? metadata.title : fallbackName);
-  const interactive = app.interactive ?? (isInteractiveApp(name, app) || Boolean(metadata?.title));
+  const name =
+    signature?.name ||
+    (metadata?.title && isGenericAppName(fallbackName, port)
+      ? metadata.title
+      : fallbackName);
+  const interactive =
+    app.interactive ??
+    (isInteractiveApp(name, app) || Boolean(metadata?.title));
   const serviceKind = signature?.serviceKind || app.serviceKind?.trim();
   const healthPath = signature?.healthPath || app.healthPath;
   if (!interactive && !serviceKind && !healthPath) return null;
   const kind = appKind(name);
   const local = isLocalMachine(machine);
-  const collectorIconUrl = rewriteCollectorUrl(app.iconUrl, collectorUrl) || rewriteServiceAssetUrl(app.iconUrl, machine);
-  const discoveredIconUrl = mode === "fast"
-    ? (collectorIconUrl || brandFallbackIconUrl(name))
-    : (/\/app-assets\//.test(collectorIconUrl)
-      ? collectorIconUrl
-      : await firstReachableIcon([
-        collectorIconUrl,
-        metadata?.iconUrl,
-        ...directAppIconCandidates(openUrl),
-      ]) || brandFallbackIconUrl(name) || metadata?.iconUrl || "");
+  const collectorIconUrl =
+    rewriteCollectorUrl(app.iconUrl, collectorUrl) ||
+    rewriteServiceAssetUrl(app.iconUrl, machine);
+  const discoveredIconUrl =
+    mode === "fast"
+      ? collectorIconUrl || brandFallbackIconUrl(name)
+      : /\/app-assets\//.test(collectorIconUrl)
+        ? collectorIconUrl
+        : (await firstReachableIcon([
+            collectorIconUrl,
+            metadata?.iconUrl,
+            ...directAppIconCandidates(openUrl),
+          ])) ||
+          brandFallbackIconUrl(name) ||
+          metadata?.iconUrl ||
+          "";
   const iconUrl = appIconDisplayUrl(discoveredIconUrl) || undefined;
-  const apiBaseUrl = signature?.apiBaseUrl || apiProxyUrl || proxyUrl.replace(/\/+$/, "") || appOriginUrl(directServiceUrl);
-  const routes = mode === "full" ? await serviceRouteCatalog(apiBaseUrl, serviceKind) : null;
-  const runningTasks = mode === "full" ? await serviceRunningTasks(apiBaseUrl, serviceKind) : [];
+  const apiBaseUrl =
+    signature?.apiBaseUrl ||
+    apiProxyUrl ||
+    proxyUrl.replace(/\/+$/, "") ||
+    appOriginUrl(directServiceUrl);
+  const routes =
+    mode === "full" ? await serviceRouteCatalog(apiBaseUrl, serviceKind) : null;
+  const runningTasks =
+    mode === "full" ? await serviceRunningTasks(apiBaseUrl, serviceKind) : [];
   return {
     id: `${local ? "local" : machineOpenHost(machine)}:${port}:${app.id || name}`,
     name,
     sourceName: app.name?.trim() || "",
-    description: signature?.description || metadata?.description || appDescription(kind, machineName),
+    description:
+      signature?.description ||
+      metadata?.description ||
+      appDescription(kind, machineName),
     kind,
     theme: appTheme(kind),
     initials: appInitials(name),
@@ -815,14 +1031,22 @@ async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUr
     path: normalizePath(app.path),
     openUrl,
     apiBaseUrl,
-    healthUrl: signature?.healthUrl || healthProxyUrl || (healthPath ? `${apiBaseUrl}${normalizePath(healthPath)}` : undefined),
+    healthUrl:
+      signature?.healthUrl ||
+      healthProxyUrl ||
+      (healthPath ? `${apiBaseUrl}${normalizePath(healthPath)}` : undefined),
     apiRoutes: routes?.routes,
     apiRoutesSource: routes?.source,
     runningTasks: runningTasks.length ? runningTasks : undefined,
   };
 }
 
-async function safeHostedApp(app: CollectorApp, machine: FleetMachine, collectorUrl: string, mode: AppDiscoveryMode) {
+async function safeHostedApp(
+  app: CollectorApp,
+  machine: FleetMachine,
+  collectorUrl: string,
+  mode: AppDiscoveryMode,
+) {
   try {
     return await toHostedApp(app, machine, collectorUrl, mode);
   } catch {
@@ -830,23 +1054,30 @@ async function safeHostedApp(app: CollectorApp, machine: FleetMachine, collector
   }
 }
 
-async function fetchJson<T>(url: string, timeoutMs = COLLECTOR_TIMEOUT_MS): Promise<T> {
+async function fetchJson<T>(
+  url: string,
+  timeoutMs = COLLECTOR_TIMEOUT_MS,
+): Promise<T> {
   const response = await fetch(url, {
     cache: "no-store",
     signal: AbortSignal.timeout(timeoutMs),
   });
-  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  if (!response.ok)
+    throw new Error(`${response.status} ${response.statusText}`);
   return response.json() as Promise<T>;
 }
 
-async function fetchJsonOrNull<T>(url: string, timeoutMs = HIVEMIND_LINK_APP_TIMEOUT_MS): Promise<T | null> {
+async function fetchJsonOrNull<T>(
+  url: string,
+  timeoutMs = HIVEMIND_LINK_APP_TIMEOUT_MS,
+): Promise<T | null> {
   try {
     const response = await fetch(url, {
       cache: "no-store",
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return null;
-    return await response.json() as T;
+    return (await response.json()) as T;
   } catch {
     return null;
   }
@@ -887,7 +1118,10 @@ function peerCollectorUrls(ip: string, collectorPort: number) {
   const linkBase = hivemindLinkControlUrl();
   const peer = encodeURIComponent(`${ip}:${collectorPort}`);
   return [
-    { collectorUrl: `http://${ip}:${collectorPort}`, collector: "tailnet-direct" },
+    {
+      collectorUrl: `http://${ip}:${collectorPort}`,
+      collector: "tailnet-direct",
+    },
     { collectorUrl: `${linkBase}/peer/${peer}`, collector: "hivemind-link" },
   ];
 }
@@ -899,33 +1133,61 @@ function discoveredPeerIps(machines: FleetMachine[]) {
     .filter((value) => /^\d+\.\d+\.\d+\.\d+$/.test(value));
 }
 
-async function readPeerCollectorApps(forceRefresh: boolean, machines: FleetMachine[], mode: AppDiscoveryMode): Promise<MachineResult[]> {
-  const peers = [...new Set([...discoveredPeerIps(machines), ...await tailscalePeerIps()])];
-  const probes = peers.flatMap((ip) => (
-    HIVEMIND_LINK_COLLECTOR_PORTS.flatMap((collectorPort) => peerCollectorUrls(ip, collectorPort).map(async ({ collectorUrl, collector }) => {
-      const payload = await fetchJsonOrNull<{ apps?: CollectorApp[] }>(collectorAppsUrl(collectorUrl, forceRefresh));
-      const collectorApps = payload?.apps ?? [];
-      if (collectorApps.length === 0) return null;
-      const machine: FleetMachine = {
-        collector: "ready",
-        collectorHost: ip,
-        device: {
-          self: false,
-          name: `Hivenet app host ${ip}`,
-          ip,
-          online: true,
-          collectorUrl,
+async function readPeerCollectorApps(
+  forceRefresh: boolean,
+  machines: FleetMachine[],
+  mode: AppDiscoveryMode,
+): Promise<MachineResult[]> {
+  const peers = [
+    ...new Set([...discoveredPeerIps(machines), ...(await tailscalePeerIps())]),
+  ];
+  const probes = peers.flatMap((ip) =>
+    HIVEMIND_LINK_COLLECTOR_PORTS.flatMap((collectorPort) =>
+      peerCollectorUrls(ip, collectorPort).map(
+        async ({ collectorUrl, collector }) => {
+          const payload = await fetchJsonOrNull<{ apps?: CollectorApp[] }>(
+            collectorAppsUrl(collectorUrl, forceRefresh),
+          );
+          const collectorApps = payload?.apps ?? [];
+          if (collectorApps.length === 0) return null;
+          const machine: FleetMachine = {
+            collector: "ready",
+            collectorHost: ip,
+            device: {
+              self: false,
+              name: `Hivenet app host ${ip}`,
+              ip,
+              online: true,
+              collectorUrl,
+            },
+          };
+          const apps = await Promise.all(
+            collectorApps.map((app) =>
+              safeHostedApp(app, machine, collectorUrl, mode),
+            ),
+          );
+          const visibleApps = apps.filter((app): app is HostedApp =>
+            Boolean(app),
+          );
+          return visibleApps.length > 0
+            ? { name: machine.device?.name ?? ip, collector, apps: visibleApps }
+            : null;
         },
-      };
-      const apps = await Promise.all(collectorApps.map((app) => safeHostedApp(app, machine, collectorUrl, mode)));
-      const visibleApps = apps.filter((app): app is HostedApp => Boolean(app));
-      return visibleApps.length > 0 ? { name: machine.device?.name ?? ip, collector, apps: visibleApps } : null;
-    }))
-  ));
-  return (await Promise.all(probes)).filter((result): result is { name: string; collector: string; apps: HostedApp[] } => Boolean(result));
+      ),
+    ),
+  );
+  return (await Promise.all(probes)).filter(
+    (
+      result,
+    ): result is { name: string; collector: string; apps: HostedApp[] } =>
+      Boolean(result),
+  );
 }
 
-async function readApps(request: NextRequest, mode: AppDiscoveryMode = "full"): Promise<AppsPayload> {
+async function readApps(
+  request: NextRequest,
+  mode: AppDiscoveryMode = "full",
+): Promise<AppsPayload> {
   const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
   const forceCollectors = forceRefresh && mode === "full";
   const fleetUrl = new URL("/api/fleet/discover", request.url);
@@ -941,46 +1203,73 @@ async function readApps(request: NextRequest, mode: AppDiscoveryMode = "full"): 
       forceCollectors ? 12_000 : COLLECTOR_TIMEOUT_MS,
     );
   } catch (error) {
-    fleetError = error instanceof Error ? error.message : "Fleet discovery did not return apps.";
+    fleetError =
+      error instanceof Error
+        ? error.message
+        : "Fleet discovery did not return apps.";
   }
   const machines = fleet.machines ?? [];
-  const results: MachineResult[] = await Promise.all(machines.map(async (machine) => {
-    const collectorUrl = normalizeBaseUrl(machine.device?.collectorUrl);
-    const name = machine.device?.name || machine.collectorHost || machine.device?.ip || "Unknown machine";
-    if (machine.collector !== "ready" || !collectorUrl) {
-      return { name, collector: machine.collector || "missing", apps: [] as HostedApp[] };
-    }
-    try {
-      const payload = await fetchJson<{ apps?: CollectorApp[] }>(collectorAppsUrl(collectorUrl, forceCollectors));
-      const apps = await Promise.all((payload.apps ?? []).map((app) => safeHostedApp(app, machine, collectorUrl, mode)));
-      return {
-        name,
-        collector: machine.collector,
-        apps: apps.filter((app): app is HostedApp => Boolean(app)),
-      };
-    } catch (error) {
-      return {
-        name,
-        collector: machine.collector,
-        apps: [] as HostedApp[],
-        error: error instanceof Error ? error.message : "Agent bridge did not return apps.",
-      };
-    }
-  }));
+  const results: MachineResult[] = await Promise.all(
+    machines.map(async (machine) => {
+      const collectorUrl = normalizeBaseUrl(machine.device?.collectorUrl);
+      const name =
+        machine.device?.name ||
+        machine.collectorHost ||
+        machine.device?.ip ||
+        "Unknown machine";
+      if (machine.collector !== "ready" || !collectorUrl) {
+        return {
+          name,
+          collector: machine.collector || "missing",
+          apps: [] as HostedApp[],
+        };
+      }
+      try {
+        const payload = await fetchJson<{ apps?: CollectorApp[] }>(
+          collectorAppsUrl(collectorUrl, forceCollectors),
+        );
+        const apps = await Promise.all(
+          (payload.apps ?? []).map((app) =>
+            safeHostedApp(app, machine, collectorUrl, mode),
+          ),
+        );
+        return {
+          name,
+          collector: machine.collector,
+          apps: apps.filter((app): app is HostedApp => Boolean(app)),
+        };
+      } catch (error) {
+        return {
+          name,
+          collector: machine.collector,
+          apps: [] as HostedApp[],
+          error:
+            error instanceof Error
+              ? error.message
+              : "Agent bridge did not return apps.",
+        };
+      }
+    }),
+  );
 
   const linkResults = await readPeerCollectorApps(forceRefresh, machines, mode);
 
-  const allResults = [
-    ...results,
-    ...linkResults,
-  ];
-  let apps = sortHostedApps(dedupeVisibleApps(allResults.flatMap((result) => result.apps)));
-  if (appsCache?.payload.apps.length) apps = sortHostedApps(dedupeVisibleApps([...apps, ...appsCache.payload.apps]));
+  const allResults = [...results, ...linkResults];
+  let apps = sortHostedApps(
+    dedupeVisibleApps(allResults.flatMap((result) => result.apps)),
+  );
+  if (appsCache?.payload.apps.length)
+    apps = sortHostedApps(
+      dedupeVisibleApps([...apps, ...appsCache.payload.apps]),
+    );
   const machineResults = allResults.map((result) => ({
     name: result.name,
     collector: result.collector,
     appCount: result.apps.length,
-    error: "error" in result && typeof result.error === "string" ? result.error : undefined,
+    error:
+      "error" in result && typeof result.error === "string"
+        ? result.error
+        : undefined,
   }));
   if (fleetError) {
     machineResults.unshift({
@@ -991,22 +1280,33 @@ async function readApps(request: NextRequest, mode: AppDiscoveryMode = "full"): 
     });
   }
 
-  return cachedAppMerge(normalizeAppsPayload({
-    ok: true,
-    checkedAt: new Date().toISOString(),
-    source: fleet.source || (fleetError ? "peer-service-fallback" : "fleet-discover"),
-    apps,
-    machines: machineResults,
-  }));
+  return cachedAppMerge(
+    normalizeAppsPayload({
+      ok: true,
+      checkedAt: new Date().toISOString(),
+      source:
+        fleet.source ||
+        (fleetError ? "peer-service-fallback" : "fleet-discover"),
+      apps,
+      machines: machineResults,
+    }),
+  );
 }
 
 export async function GET(request: NextRequest) {
   const now = Date.now();
   const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
-  const mode: AppDiscoveryMode = request.nextUrl.searchParams.get("fast") === "1" ? "fast" : "full";
+  const mode: AppDiscoveryMode =
+    request.nextUrl.searchParams.get("fast") === "1" ? "fast" : "full";
   const waitForRefresh = request.nextUrl.searchParams.get("wait") === "1";
   if (!appsCache) appsCache = await readDiskAppsCache();
-  if (forceRefresh && mode === "fast" && !waitForRefresh && appsCache && !isSparsePayload(appsCache.payload)) {
+  if (
+    forceRefresh &&
+    mode === "fast" &&
+    !waitForRefresh &&
+    appsCache &&
+    !isSparsePayload(appsCache.payload)
+  ) {
     if (!appsInFlight) {
       const generation = appsCacheGeneration;
       appsInFlight = readApps(request, "fast")
@@ -1051,8 +1351,11 @@ export async function GET(request: NextRequest) {
     try {
       payload = await readApps(request, mode);
     } catch (error) {
-      const fallbackCache = appsCache ?? await readDiskAppsCache();
-      if (fallbackCache) return Response.json(payloadWithRefreshError(fallbackCache.payload, error));
+      const fallbackCache = appsCache ?? (await readDiskAppsCache());
+      if (fallbackCache)
+        return Response.json(
+          payloadWithRefreshError(fallbackCache.payload, error),
+        );
       throw error;
     }
     if (generation === appsCacheGeneration) {
@@ -1077,21 +1380,33 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => null) as AppTaskActionBody | null;
+  const body = (await request
+    .json()
+    .catch(() => null)) as AppTaskActionBody | null;
   const action = body?.action;
   const appId = body?.appId?.trim();
   const taskId = body?.taskId?.trim();
   if (action !== "cancel-task" && action !== "kill-task") {
-    return Response.json({ ok: false, error: "Unsupported app task action." }, { status: 400 });
+    return Response.json(
+      { ok: false, error: "Unsupported app task action." },
+      { status: 400 },
+    );
   }
   if (!appId || !taskId) {
-    return Response.json({ ok: false, error: "appId and taskId are required." }, { status: 400 });
+    return Response.json(
+      { ok: false, error: "appId and taskId are required." },
+      { status: 400 },
+    );
   }
-  return Response.json({
-    ok: false,
-    action,
-    appId,
-    taskId,
-    error: "Managed app task actions require the app to publish a generic task-control endpoint.",
-  }, { status: 400 });
+  return Response.json(
+    {
+      ok: false,
+      action,
+      appId,
+      taskId,
+      error:
+        "Managed app task actions require the app to publish a generic task-control endpoint.",
+    },
+    { status: 400 },
+  );
 }

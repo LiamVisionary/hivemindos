@@ -6,7 +6,12 @@ const ICON_PROXY_TIMEOUT_MS = 10_000;
 const ALLOWED_REMOTE_HOSTS = new Set(["cdn.simpleicons.org"]);
 
 function isLocalHost(host: string) {
-  return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host === "[::1]"
+  );
 }
 
 function isPrivateOrTailnetHost(host: string) {
@@ -41,11 +46,17 @@ export async function GET(request: NextRequest) {
   try {
     target = new URL(rawUrl);
   } catch {
-    return Response.json({ ok: false, error: "Invalid icon URL" }, { status: 400 });
+    return Response.json(
+      { ok: false, error: "Invalid icon URL" },
+      { status: 400 },
+    );
   }
 
   if (!isAllowedIconTarget(target)) {
-    return Response.json({ ok: false, error: "Icon URL is not allowlisted" }, { status: 400 });
+    return Response.json(
+      { ok: false, error: "Icon URL is not allowlisted" },
+      { status: 400 },
+    );
   }
 
   const upstream = await fetch(target, {
@@ -53,19 +64,33 @@ export async function GET(request: NextRequest) {
     signal: AbortSignal.timeout(ICON_PROXY_TIMEOUT_MS),
   }).catch(() => null);
   if (!upstream?.ok) {
-    return Response.json({ ok: false, error: "Icon unavailable" }, { status: upstream?.status || 502 });
+    return Response.json(
+      { ok: false, error: "Icon unavailable" },
+      { status: upstream?.status || 502 },
+    );
   }
 
-  const contentType = upstream.headers.get("content-type") || "application/octet-stream";
-  const genericType = contentType === "application/octet-stream" || contentType.startsWith("text/plain");
-  if (!contentType.startsWith("image/") && !(genericType && looksLikeImagePath(target))) {
-    return Response.json({ ok: false, error: "Icon response is not an image" }, { status: 502 });
+  const contentType =
+    upstream.headers.get("content-type") || "application/octet-stream";
+  const genericType =
+    contentType === "application/octet-stream" ||
+    contentType.startsWith("text/plain");
+  if (
+    !contentType.startsWith("image/") &&
+    !(genericType && looksLikeImagePath(target))
+  ) {
+    return Response.json(
+      { ok: false, error: "Icon response is not an image" },
+      { status: 502 },
+    );
   }
 
   return new Response(upstream.body, {
     headers: {
       "Cache-Control": "private, max-age=3600",
-      "Content-Type": contentType.startsWith("image/") ? contentType : "image/x-icon",
+      "Content-Type": contentType.startsWith("image/")
+        ? contentType
+        : "image/x-icon",
     },
   });
 }

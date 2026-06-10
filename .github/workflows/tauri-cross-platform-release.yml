@@ -112,6 +112,11 @@ jobs:
           # (scripts/run-with-memory-limit.sh), so Windows stays on the static
           # build until that path gains a Windows branch.
           HIVEMINDOS_TAURI_EMBEDDED_NEXT: ${{ runner.os != 'Windows' && '1' || '' }}
+          # Standard macOS runners crossed the previous 30 minute embedded
+          # Next watchdog during page-data/build-trace work after the webpack
+          # compile finished. Keep Linux on the default budget while giving
+          # signed/notarized macOS bundles enough time to complete.
+          TAURI_NEXT_BUILD_TIMEOUT_SECONDS: ${{ runner.os == 'macOS' && '3600' || '1800' }}
         run: pnpm tauri:build
 
       - name: Collect bundle assets

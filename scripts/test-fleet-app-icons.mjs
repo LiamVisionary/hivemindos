@@ -118,10 +118,15 @@ function startMockCollector() {
   }));
 }
 
-async function waitForDashboard(baseUrl, timeoutMs) {
+async function waitForDashboard(dashboard, baseUrl, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   let lastError = "";
   while (Date.now() < deadline) {
+    if (dashboard.exitCode !== null) {
+      throw new Error(
+        "next dev exited early — if another dev server is already running for this project, stop it or run this test later (Next allows one dev server per project)",
+      );
+    }
     try {
       const response = await fetch(
         `${baseUrl}/api/fleet/app-icon?url=not-a-url`,
@@ -171,7 +176,7 @@ process.on("exit", cleanup);
 const baseUrl = `http://127.0.0.1:${dashPort}`;
 
 try {
-  await waitForDashboard(baseUrl, 180_000);
+  await waitForDashboard(dashboard, baseUrl, 180_000);
   console.log(`Dashboard ready at ${baseUrl}`);
 
   const response = await fetch(`${baseUrl}/api/fleet/apps?refresh=1&wait=1`, {
