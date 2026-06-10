@@ -14,7 +14,7 @@ const APPS_CACHE_MS = 60_000;
 const APPS_STALE_MS = 5 * 60_000;
 const APPS_CACHE_FILE = join(homedir(), ".hivemindos", "fleet-apps-cache.json");
 const COLLECTOR_TIMEOUT_MS = 4_500;
-const ICON_PROBE_TIMEOUT_MS = 900;
+const ICON_PROBE_TIMEOUT_MS = 2_500;
 const SERVICE_SIGNATURE_TIMEOUT_MS = 2_500;
 const HIVEMIND_LINK_APP_TIMEOUT_MS = 4_000;
 const TAILSCALE_STATUS_TIMEOUT_MS = 3_000;
@@ -292,7 +292,7 @@ const PLUMBING_TITLES = [
 const BRAND_ICON_SLUGS: Array<[RegExp, string]> = [
   [/github/i, "github"],
   [/discord/i, "discord"],
-  [/openai|llm|ai/i, "openai"],
+  [/openai/i, "openai"],
 ];
 
 function normalizeBaseUrl(value?: string) {
@@ -494,6 +494,12 @@ function dashboardIconProxyUrl(url: string) {
   return `/api/fleet/app-icon?url=${encodeURIComponent(url)}`;
 }
 
+function appIconDisplayUrl(url: string) {
+  if (!url) return "";
+  if (url.startsWith("data:image/") || url.startsWith("/api/")) return url;
+  return /^https?:\/\//i.test(url) ? dashboardIconProxyUrl(url) : "";
+}
+
 function textFromHtml(value: string) {
   return value
     .replace(/&amp;/g, "&")
@@ -514,6 +520,24 @@ function htmlTitle(html: string) {
   return textFromHtml(html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] ?? "");
 }
 
+function htmlFaviconHref(html: string) {
+  const links = (html.match(/<link\b[^>]*>/gi) ?? []).filter((tag) => /\brel=["'][^"']*icon[^"']*["']/i.test(tag));
+  const rank = (tag: string) => (/apple-touch-icon/i.test(tag) ? 0 : /\.(?:svg|png|webp)\b/i.test(tag) ? 1 : 2);
+  const best = links.sort((a, b) => rank(a) - rank(b))[0];
+  return best?.match(/\bhref=["']([^"']+)["']/i)?.[1] ?? "";
+}
+
+function resolveIconHref(href: string | undefined, baseUrl: string) {
+  if (!href) return "";
+  if (href.startsWith("data:image/")) return href;
+  try {
+    const resolved = new URL(href, baseUrl);
+    return resolved.protocol === "http:" || resolved.protocol === "https:" ? resolved.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
 function isGenericAppName(name: string, port: number) {
   const value = name.toLowerCase();
   return value === `app ${port}` || /^(node|python|docker|container|nginx|http|api)(?: api| service)?$/i.test(name) || /\bon\s+\d+$/.test(value);
@@ -531,7 +555,7 @@ async function discoverAppMetadata(openUrl: string) {
     return {
       title: htmlTitle(html),
       description: htmlMetaContent(html, "description") || htmlMetaContent(html, "og:description"),
-      iconUrl: html.match(/<link[^>]+rel=["'][^"']*(?:icon|apple-touch-icon)[^"']*["'][^>]+href=["']([^"']+)["'][^>]*>/i)?.[1] ?? "",
+      iconUrl: resolveIconHref(htmlFaviconHref(html), openUrl),
     };
   } catch {
     return null;
@@ -565,29 +589,40 @@ async function isImageUrl(url: string) {
   }
 }
 
-async function discoverDirectAppIcon(openUrl: string) {
-  const origin = appOriginUrl(openUrl);
-  if (!origin) return "";
-  const candidates = [
+function directAppIconCandidates(openUrl: string) {
+  // Resolve against the app's base path, not the host origin — proxied apps
+  // live under paths like /app-proxy/<port>/ where the origin is the collector.
+  let base: URL;
+  try {
+    base = new URL(openUrl);
+  } catch {
+    return [];
+  }
+  if (!base.pathname.endsWith("/")) base.pathname = `${base.pathname}/`;
+  return [
     "/apple-touch-icon.png",
+    "/apple-touch-icon-precomposed.png",
+    "/favicon.svg",
     "/favicon.png",
     "/favicon.ico",
     "/icon.png",
+    "/icon.svg",
+    "/logo.png",
+    "/logo.svg",
+    "/static/favicon.png",
+    "/static/favicon.ico",
     "/assets/images/favicon.png",
     "/assets/images/icon.png",
     "/assets/icons/claude-sprite-icon.png",
-  ].map((path) => `${origin}${path}`);
-  for (const candidate of candidates) {
-    if (await isImageUrl(candidate)) return candidate;
-  }
-  return "";
+  ].map((path) => new URL(path.replace(/^\//, ""), base).toString());
 }
 
 async function firstReachableIcon(urls: Array<string | undefined>) {
-  for (const url of urls) {
-    if (url && await isImageUrl(url)) return url;
-  }
-  return "";
+  const candidates = [...new Set(urls.filter((url): url is string => Boolean(url)))];
+  const checks = await Promise.all(candidates.map(async (url) => (
+    url.startsWith("data:image/") || (await isImageUrl(url)) ? url : ""
+  )));
+  return checks.find(Boolean) || "";
 }
 
 function appName(app: CollectorApp, port: number) {
@@ -747,14 +782,16 @@ async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUr
   const kind = appKind(name);
   const local = isLocalMachine(machine);
   const collectorIconUrl = rewriteCollectorUrl(app.iconUrl, collectorUrl) || rewriteServiceAssetUrl(app.iconUrl, machine);
-  const iconUrl = mode === "fast"
-    ? (collectorIconUrl ? (/\/app-assets\//.test(collectorIconUrl) ? dashboardIconProxyUrl(collectorIconUrl) : collectorIconUrl) : brandFallbackIconUrl(name) || undefined)
+  const discoveredIconUrl = mode === "fast"
+    ? (collectorIconUrl || brandFallbackIconUrl(name))
     : (/\/app-assets\//.test(collectorIconUrl)
-      ? dashboardIconProxyUrl(collectorIconUrl)
+      ? collectorIconUrl
       : await firstReachableIcon([
         collectorIconUrl,
-        await discoverDirectAppIcon(openUrl),
-      ]) || brandFallbackIconUrl(name) || undefined);
+        metadata?.iconUrl,
+        ...directAppIconCandidates(openUrl),
+      ]) || brandFallbackIconUrl(name) || metadata?.iconUrl || "");
+  const iconUrl = appIconDisplayUrl(discoveredIconUrl) || undefined;
   const apiBaseUrl = signature?.apiBaseUrl || apiProxyUrl || proxyUrl.replace(/\/+$/, "") || appOriginUrl(directServiceUrl);
   const routes = mode === "full" ? await serviceRouteCatalog(apiBaseUrl, serviceKind) : null;
   const runningTasks = mode === "full" ? await serviceRunningTasks(apiBaseUrl, serviceKind) : [];
@@ -766,7 +803,7 @@ async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUr
     kind,
     theme: appTheme(kind),
     initials: appInitials(name),
-    iconUrl: iconUrl || metadata?.iconUrl,
+    iconUrl,
     machineName,
     machineHost: machineOpenHost(machine),
     local,

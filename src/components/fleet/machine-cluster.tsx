@@ -580,8 +580,9 @@ export function MachineCluster({
   const agentCount = machine.agents.length;
   const occupiedCells = hexSpiral(agentCount + 1);
   const defaultAddCell = hexSpiral(agentCount + 2)[agentCount + 1] ?? [0, 0];
-  // Phones can't host agents — no "Add agent" hex on mobile clusters.
-  const hasAddCell = !isFleetMachineMobile(machine);
+  // Every machine gets an "Add agent" hex — phones host on-device agents
+  // through the hub's mobile-agent queue instead of a collector.
+  const hasAddCell = true;
   const cells = hasAddCell
     ? [...occupiedCells, addCell ?? defaultAddCell]
     : occupiedCells;

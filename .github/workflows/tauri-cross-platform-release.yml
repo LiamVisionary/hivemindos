@@ -33,7 +33,7 @@ jobs:
             app_arch: -arm64
             bundle_glob: src-tauri/target/release/bundle/macos/*.app src-tauri/target/release/bundle/dmg/*.dmg
           - label: macOS Intel
-            os: macos-13
+            os: macos-15-intel
             app_arch: -x64
             bundle_glob: src-tauri/target/release/bundle/macos/*.app src-tauri/target/release/bundle/dmg/*.dmg
           - label: Windows x64

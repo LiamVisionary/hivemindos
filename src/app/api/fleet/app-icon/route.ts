@@ -3,11 +3,36 @@ import { NextRequest } from "next/server";
 export const runtime = "nodejs";
 
 const ICON_PROXY_TIMEOUT_MS = 10_000;
+const ALLOWED_REMOTE_HOSTS = new Set(["cdn.simpleicons.org"]);
 
-function isAllowedCollectorAsset(url: URL) {
+function isLocalHost(host: string) {
+  return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+}
+
+function isPrivateOrTailnetHost(host: string) {
+  if (isLocalHost(host)) return true;
+  if (host.endsWith(".ts.net")) return true;
+  const v4 = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (!v4) return false;
+  const a = Number(v4[1]);
+  const b = Number(v4[2]);
+  if (a === 10 || a === 127) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  // Tailscale CGNAT range 100.64.0.0/10
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  return false;
+}
+
+function isAllowedIconTarget(url: URL) {
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
   const host = url.hostname.toLowerCase();
-  const localHost = host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
-  return localHost && url.pathname.includes("/app-assets/");
+  if (ALLOWED_REMOTE_HOSTS.has(host)) return true;
+  return isPrivateOrTailnetHost(host);
+}
+
+function looksLikeImagePath(url: URL) {
+  return /\.(?:ico|png|svg|webp|jpg|jpeg|gif)$/i.test(url.pathname);
 }
 
 export async function GET(request: NextRequest) {
@@ -19,7 +44,7 @@ export async function GET(request: NextRequest) {
     return Response.json({ ok: false, error: "Invalid icon URL" }, { status: 400 });
   }
 
-  if (!isAllowedCollectorAsset(target)) {
+  if (!isAllowedIconTarget(target)) {
     return Response.json({ ok: false, error: "Icon URL is not allowlisted" }, { status: 400 });
   }
 
@@ -32,14 +57,15 @@ export async function GET(request: NextRequest) {
   }
 
   const contentType = upstream.headers.get("content-type") || "application/octet-stream";
-  if (!contentType.startsWith("image/")) {
+  const genericType = contentType === "application/octet-stream" || contentType.startsWith("text/plain");
+  if (!contentType.startsWith("image/") && !(genericType && looksLikeImagePath(target))) {
     return Response.json({ ok: false, error: "Icon response is not an image" }, { status: 502 });
   }
 
   return new Response(upstream.body, {
     headers: {
-      "Cache-Control": "private, max-age=60",
-      "Content-Type": contentType,
+      "Cache-Control": "private, max-age=3600",
+      "Content-Type": contentType.startsWith("image/") ? contentType : "image/x-icon",
     },
   });
 }

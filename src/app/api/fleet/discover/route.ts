@@ -5,6 +5,7 @@ import {
   hivemindLinkControlUrl,
   localTelemetryCollectorUrl,
 } from "@/lib/services/hivemind-link-control";
+import { mobileAgentProfilesForMachine } from "@/lib/services/mobile-agents/fleet";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 
 export const runtime = "nodejs";
@@ -792,15 +793,25 @@ async function readDiscovery(
     (): FleetDeviceStatus => ({ devices: [localDevice()], source: "local" }),
   );
   const devices = fleetStatus.devices;
+  const mobileDeviceCount = devices.filter(isMobileDevice).length;
   const discovered = await Promise.all(
     devices.map(async (device): Promise<DiscoveredMachine> => {
       // Phones never run the agent bridge — don't port-scan them (or SSH-probe
-      // them via the fallback); they join the fleet as bridge-less members.
+      // them via the fallback); they join the fleet as bridge-less members and
+      // carry the hub-stored mobile agents the phone app runs on-device.
       if (isMobileDevice(device)) {
+        const agents = await mobileAgentProfilesForMachine({
+          machineName: device.name,
+          dnsName: device.dnsName,
+          // Phones expose no collector URL; the device's fleet name is the
+          // grouping key the dashboard matches agents onto machines with.
+          telemetryUrl: device.collectorUrl || device.name,
+          onlyMobileDeviceInFleet: mobileDeviceCount === 1,
+        }).catch(() => [] as AgentProfile[]);
         return {
           device,
           collector: device.online ? "not-installed" : "offline",
-          agents: [],
+          agents,
           snapshots: [],
         };
       }

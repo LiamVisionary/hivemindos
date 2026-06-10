@@ -1,6 +1,12 @@
 "use client";
 
 import * as React from "react";
+import {
+  closeRealtimeSttSocket,
+  pcm16ToBase64,
+  prepareRealtimeSttSession,
+  resampleToPcm16,
+} from "./realtime-stt";
 
 export type QueenVoicePhase =
   | "starting"
@@ -23,6 +29,13 @@ type VoiceTurnResponse = {
   error?: string;
 };
 
+type SttEvent = {
+  type?: string;
+  delta?: string;
+  transcript?: string;
+  error?: { message?: string };
+};
+
 const ECHO_CANCELLED_AUDIO: MediaTrackConstraints = {
   autoGainControl: true,
   echoCancellation: true,
@@ -37,9 +50,13 @@ const RECORDER_MIME_CANDIDATES = [
 ];
 
 const MIN_UTTERANCE_MS = 300;
-const COMMIT_SILENCE_MS = 800;
+const COMMIT_SILENCE_MS = 600;
 const MAX_UTTERANCE_MS = 20_000;
-const IDLE_RECORDER_RESTART_MS = 25_000;
+// Recorder fallback only: quiet stretches bloat the Whisper upload, so the
+// recording restarts when nothing has been said for a while.
+const IDLE_RECORDER_RESTART_MS = 10_000;
+// Realtime path: flush silently-accumulated server audio while idle.
+const IDLE_BUFFER_CLEAR_MS = 12_000;
 const ERROR_RESUME_DELAY_MS = 3_500;
 
 function pickRecorderMimeType() {
@@ -74,7 +91,14 @@ async function speakWithBrowserSynthesis(text: string, signal: AbortSignal) {
   });
 }
 
-async function playSpokenReply(text: string, signal: AbortSignal) {
+// WKWebView's autoplay policy blocks `new Audio().play()` without a user
+// gesture, so replies are decoded and played through the already-running VAD
+// AudioContext instead (the same approach the agent call modal relies on).
+async function playSpokenReply(
+  text: string,
+  signal: AbortSignal,
+  context: AudioContext | null,
+) {
   let response: Response | null = null;
   try {
     response = await fetch("/api/queen-bee/voice", {
@@ -90,38 +114,45 @@ async function playSpokenReply(text: string, signal: AbortSignal) {
   if (signal.aborted) return;
   if (
     !response?.ok ||
-    !response.headers.get("content-type")?.includes("audio/")
+    !response.headers.get("content-type")?.includes("audio/") ||
+    !context
   ) {
     await speakWithBrowserSynthesis(text, signal);
     return;
   }
-  const audioUrl = URL.createObjectURL(await response.blob());
   try {
+    const encoded = await response.arrayBuffer();
     if (signal.aborted) return;
-    await new Promise<void>((resolvePlayback, rejectPlayback) => {
-      const audio = new Audio(audioUrl);
+    const buffer = await context.decodeAudioData(encoded);
+    if (signal.aborted) return;
+    await context.resume().catch(() => undefined);
+    await new Promise<void>((resolvePlayback) => {
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(context.destination);
       const stop = () => {
-        audio.pause();
+        try {
+          source.stop();
+        } catch {
+          // The source may already have ended.
+        }
         resolvePlayback();
       };
       signal.addEventListener("abort", stop, { once: true });
-      audio.onended = () => resolvePlayback();
-      audio.onerror = () =>
-        rejectPlayback(new Error("Queen Bee reply audio could not be played."));
-      void audio.play().catch(rejectPlayback);
+      source.onended = () => resolvePlayback();
+      source.start();
     });
   } catch {
     await speakWithBrowserSynthesis(text, signal);
-  } finally {
-    URL.revokeObjectURL(audioUrl);
   }
 }
 
 /**
- * Hands-free Queen Bee voice loop: an energy-based VAD watches the
- * echo-cancelled microphone, records each utterance, sends it through
- * /api/queen-bee/voice (Whisper STT + Queen Bee submission), then voices the
- * receipt summary before listening again.
+ * Hands-free Queen Bee voice loop. Preferred path: microphone PCM streams
+ * into an OpenAI Realtime transcription session so the user's words appear on
+ * screen while they speak; an energy-based VAD commits each utterance and the
+ * final transcript goes straight to the conversational Queen Bee turn. When
+ * realtime STT is unavailable, falls back to MediaRecorder + Whisper.
  */
 export function useQueenBeeVoice(active: boolean, muted: boolean) {
   const [phase, setPhase] = React.useState<QueenVoicePhase>("starting");
@@ -141,12 +172,17 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
     let cancelled = false;
     let frame = 0;
     let resumeTimer = 0;
+    let restartTimer = 0;
     let nextTurnId = 1;
     let stream: MediaStream | null = null;
     let audioContext: AudioContext | null = null;
     let analyser: AnalyserNode | null = null;
+    let processor: ScriptProcessorNode | null = null;
     let recorder: MediaRecorder | null = null;
     let recorderChunks: Blob[] = [];
+    let sttSocket: WebSocket | null = null;
+    let preparedStt: Promise<WebSocket> | null = null;
+    let realtimeUnavailable = false;
     const abort = new AbortController();
     const mimeType = pickRecorderMimeType();
     // Finalized turns for this session, sent so Queen Bee keeps conversational context.
@@ -188,6 +224,23 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
       recorderChunks = [];
     };
 
+    const closeSttSocket = () => {
+      if (processor) processor.onaudioprocess = null;
+      closeRealtimeSttSocket(sttSocket);
+      sttSocket = null;
+    };
+
+    const prepareStt = () => {
+      if (realtimeUnavailable) return null;
+      if (!preparedStt) {
+        preparedStt = prepareRealtimeSttSession().catch((sttError) => {
+          preparedStt = null;
+          throw sttError;
+        });
+      }
+      return preparedStt;
+    };
+
     const failTurn = (message: string) => {
       if (cancelled) return;
       setPhase("error");
@@ -200,55 +253,72 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
       }, ERROR_RESUME_DELAY_MS);
     };
 
-    const runVoiceTurn = async (audio: Blob) => {
-      setPhase("thinking");
-      setSpeechDetected(false);
-      const youTurnId = addTurn("you", "Transcribing...", true);
-      // Drop the live caption if the session ends mid-request so a stale
-      // "Transcribing..." row never outlives the turn.
-      abort.signal.addEventListener("abort", () => dropTurn(youTurnId), {
-        once: true,
-      });
-      let transcriptShown = false;
-      try {
-        // Step 1: transcription only, so the user's words land on screen
-        // fast instead of waiting out the whole conversational turn.
-        const form = new FormData();
-        form.set(
-          "audio",
-          new File([audio], utteranceFileName(mimeType), {
-            type: audio.type || mimeType || "audio/webm",
-          }),
-        );
-        const transcribeResponse = await fetch("/api/queen-bee/voice", {
-          method: "POST",
-          body: form,
-          cache: "no-store",
-          // A stuck upstream should surface as an error pill, not an
-          // indefinitely live caption.
-          signal: AbortSignal.any([abort.signal, AbortSignal.timeout(60_000)]),
-        });
-        const transcribed = (await transcribeResponse
-          .json()
-          .catch(() => null)) as VoiceTurnResponse | null;
-        if (cancelled) return;
+    // VAD shared by both listening paths. Calls onSpeechDiscarded when a
+    // mid-utterance mute throws the fragment away, onCommit at end of speech.
+    const startVadLoop = (handlers: {
+      isActive: () => boolean;
+      onSpeechStart?: () => void;
+      onSpeechDiscarded?: () => void;
+      onCommit: () => void;
+      onIdle?: (idleMs: number) => boolean;
+    }) => {
+      if (!analyser) return;
+      const activeAnalyser = analyser;
+      const startedAt = performance.now();
+      let speechStartedAt = 0;
+      let lastSpeechAt = 0;
+      let noiseFloor = 0.012;
+      const samples = new Uint8Array(activeAnalyser.fftSize);
+      const tick = () => {
+        if (cancelled || !handlers.isActive()) return;
+        activeAnalyser.getByteTimeDomainData(samples);
+        let sum = 0;
+        for (const sample of samples) {
+          const normalized = (sample - 128) / 128;
+          sum += normalized * normalized;
+        }
+        const rms = mutedRef.current ? 0 : Math.sqrt(sum / samples.length);
+        const now = performance.now();
+        if (mutedRef.current && speechStartedAt) {
+          // Muting mid-utterance discards it instead of committing a fragment.
+          speechStartedAt = 0;
+          lastSpeechAt = 0;
+          setSpeechDetected(false);
+          handlers.onSpeechDiscarded?.();
+        }
+        const threshold = Math.max(0.018, noiseFloor * 3);
+        if (rms < threshold) noiseFloor = noiseFloor * 0.96 + rms * 0.04;
+        if (rms >= threshold) {
+          if (!speechStartedAt) {
+            speechStartedAt = now;
+            setSpeechDetected(true);
+            handlers.onSpeechStart?.();
+          }
+          lastSpeechAt = now;
+        }
+        const utteranceMs = speechStartedAt ? now - speechStartedAt : 0;
+        const silenceMs = lastSpeechAt ? now - lastSpeechAt : 0;
         if (
-          !transcribeResponse.ok ||
-          !transcribed?.ok ||
-          !transcribed.transcript
+          (speechStartedAt &&
+            utteranceMs > MIN_UTTERANCE_MS &&
+            silenceMs > COMMIT_SILENCE_MS) ||
+          utteranceMs > MAX_UTTERANCE_MS
         ) {
-          dropTurn(youTurnId);
-          failTurn(
-            transcribed?.error ||
-              `Queen Bee transcription returned HTTP ${transcribeResponse.status}.`,
-          );
+          handlers.onCommit();
           return;
         }
-        const transcript = transcribed.transcript;
-        updateTurn(youTurnId, transcript);
-        transcriptShown = true;
+        if (!speechStartedAt && handlers.onIdle?.(now - startedAt)) return;
+        frame = window.requestAnimationFrame(tick);
+      };
+      frame = window.requestAnimationFrame(tick);
+    };
 
-        // Step 2: the conversational Queen Bee reply (and any delegation).
+    // Step 2 of every turn: the conversational Queen Bee reply, captions,
+    // spoken playback, then back to listening.
+    const runConverseTurn = async (transcript: string) => {
+      setPhase("thinking");
+      setSpeechDetected(false);
+      try {
         const converseResponse = await fetch("/api/queen-bee/voice", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -275,11 +345,10 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
         addTurn("queen", data.reply);
         history.push({ who: "queen", text: data.reply });
         setPhase("speaking");
-        await playSpokenReply(data.reply, abort.signal);
+        await playSpokenReply(data.reply, abort.signal, audioContext);
         if (!cancelled) startListening();
       } catch (turnError) {
         if (cancelled) return;
-        if (!transcriptShown) dropTurn(youTurnId);
         failTurn(
           turnError instanceof Error
             ? turnError.message
@@ -288,7 +357,199 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
       }
     };
 
-    function startListening() {
+    // Realtime path: stream PCM while listening; partial transcripts caption
+    // the live turn as the user speaks.
+    async function startRealtimeListening() {
+      setPhase("listening");
+      setSpeechDetected(false);
+      const sessionPromise = prepareStt();
+      if (!sessionPromise) {
+        startRecorderListening();
+        return;
+      }
+      let socket: WebSocket;
+      try {
+        socket = await sessionPromise;
+      } catch (sttError) {
+        realtimeUnavailable = true;
+        console.warn(
+          "[queen-voice] realtime STT unavailable; falling back to Whisper:",
+          sttError instanceof Error ? sttError.message : sttError,
+        );
+        if (!cancelled) startRecorderListening();
+        return;
+      }
+      preparedStt = null;
+      if (cancelled) {
+        closeRealtimeSttSocket(socket);
+        return;
+      }
+      sttSocket = socket;
+
+      let committed = false;
+      let liveTranscript = "";
+      let youTurnId = 0;
+      let lastIdleClearAt = performance.now();
+      const ensureYouTurn = () => {
+        if (!youTurnId) youTurnId = addTurn("you", "...", true);
+        return youTurnId;
+      };
+      const send = (payload: unknown) => {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify(payload));
+        }
+      };
+
+      const messageHandler = (event: MessageEvent<string>) => {
+        let payload: SttEvent | null = null;
+        try {
+          payload = JSON.parse(event.data) as SttEvent;
+        } catch {
+          return;
+        }
+        if (
+          payload.type ===
+            "conversation.item.input_audio_transcription.delta" &&
+          payload.delta
+        ) {
+          liveTranscript += payload.delta;
+          updateTurn(ensureYouTurn(), liveTranscript.trim() || "...", true);
+        }
+        if (
+          payload.type ===
+          "conversation.item.input_audio_transcription.completed"
+        ) {
+          socket.removeEventListener("message", messageHandler);
+          closeSttSocket();
+          // Prewarm the next session while Queen Bee thinks and speaks.
+          void prepareStt()?.catch(() => undefined);
+          if (cancelled) return;
+          const finalTranscript = (payload.transcript || liveTranscript).trim();
+          if (finalTranscript) {
+            const turnId = ensureYouTurn();
+            updateTurn(turnId, finalTranscript);
+            void runConverseTurn(finalTranscript);
+          } else {
+            if (youTurnId) dropTurn(youTurnId);
+            restartTimer = window.setTimeout(startListening, 150);
+          }
+        }
+        if (payload.type === "error") {
+          socket.removeEventListener("message", messageHandler);
+          closeSttSocket();
+          failTurn(payload.error?.message || "Realtime STT returned an error.");
+        }
+      };
+      socket.addEventListener("message", messageHandler);
+      socket.addEventListener("close", () => {
+        // A dropped socket mid-listen should restart, not strand the session.
+        if (!cancelled && !committed && sttSocket === socket) {
+          sttSocket = null;
+          restartTimer = window.setTimeout(startListening, 250);
+        }
+      });
+
+      if (processor && audioContext) {
+        const activeContext = audioContext;
+        processor.onaudioprocess = (event) => {
+          if (cancelled || committed || mutedRef.current) return;
+          if (socket.readyState !== WebSocket.OPEN) return;
+          const pcm = resampleToPcm16(
+            event.inputBuffer.getChannelData(0),
+            activeContext.sampleRate,
+          );
+          if (pcm.byteLength) {
+            send({
+              type: "input_audio_buffer.append",
+              audio: pcm16ToBase64(pcm),
+            });
+          }
+        };
+      }
+
+      startVadLoop({
+        isActive: () => sttSocket === socket && !committed,
+        onSpeechDiscarded: () => {
+          send({ type: "input_audio_buffer.clear" });
+          liveTranscript = "";
+          if (youTurnId) {
+            dropTurn(youTurnId);
+            youTurnId = 0;
+          }
+        },
+        onCommit: () => {
+          if (committed) return;
+          committed = true;
+          setPhase("thinking");
+          if (!liveTranscript.trim()) {
+            updateTurn(ensureYouTurn(), "Transcribing...", true);
+          }
+          send({ type: "input_audio_buffer.commit" });
+        },
+        onIdle: () => {
+          // Drop silence the server has buffered so far; keeps the session lean.
+          const now = performance.now();
+          if (now - lastIdleClearAt > IDLE_BUFFER_CLEAR_MS && !liveTranscript) {
+            lastIdleClearAt = now;
+            send({ type: "input_audio_buffer.clear" });
+          }
+          return false;
+        },
+      });
+    }
+
+    // Fallback path: record the utterance and transcribe it with Whisper.
+    const runVoiceTurnFromRecording = async (audio: Blob) => {
+      setPhase("thinking");
+      setSpeechDetected(false);
+      const youTurnId = addTurn("you", "Transcribing...", true);
+      abort.signal.addEventListener("abort", () => dropTurn(youTurnId), {
+        once: true,
+      });
+      try {
+        const form = new FormData();
+        form.set(
+          "audio",
+          new File([audio], utteranceFileName(mimeType), {
+            type: audio.type || mimeType || "audio/webm",
+          }),
+        );
+        const transcribeResponse = await fetch("/api/queen-bee/voice", {
+          method: "POST",
+          body: form,
+          cache: "no-store",
+          signal: AbortSignal.any([abort.signal, AbortSignal.timeout(60_000)]),
+        });
+        const transcribed = (await transcribeResponse
+          .json()
+          .catch(() => null)) as VoiceTurnResponse | null;
+        if (cancelled) return;
+        if (
+          !transcribeResponse.ok ||
+          !transcribed?.ok ||
+          !transcribed.transcript
+        ) {
+          dropTurn(youTurnId);
+          failTurn(
+            transcribed?.error ||
+              `Queen Bee transcription returned HTTP ${transcribeResponse.status}.`,
+          );
+          return;
+        }
+        updateTurn(youTurnId, transcribed.transcript);
+        await runConverseTurn(transcribed.transcript);
+      } catch (turnError) {
+        if (cancelled) return;
+        dropTurn(youTurnId);
+        failTurn(
+          turnError instanceof Error
+            ? turnError.message
+            : "Queen Bee voice turn failed.",
+        );
+      }
+    };
+
+    function startRecorderListening() {
       if (cancelled || !stream || !analyser) return;
       setPhase("listening");
       setSpeechDetected(false);
@@ -313,12 +574,6 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
       };
       activeRecorder.start();
 
-      const recorderStartedAt = performance.now();
-      let speechStartedAt = 0;
-      let lastSpeechAt = 0;
-      let noiseFloor = 0.012;
-      const samples = new Uint8Array(analyser.fftSize);
-
       const commitUtterance = () => {
         if (!recorder || recorder.state === "inactive") return;
         recorder.onstop = () => {
@@ -326,60 +581,31 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
             type: mimeType || "audio/webm",
           });
           recorderChunks = [];
-          if (!cancelled && blob.size) void runVoiceTurn(blob);
+          if (!cancelled && blob.size) void runVoiceTurnFromRecording(blob);
         };
         recorder.stop();
         recorder = null;
       };
 
-      const tick = () => {
-        if (cancelled || !analyser || !recorder) return;
-        analyser.getByteTimeDomainData(samples);
-        let sum = 0;
-        for (const sample of samples) {
-          const normalized = (sample - 128) / 128;
-          sum += normalized * normalized;
-        }
-        const rms = mutedRef.current ? 0 : Math.sqrt(sum / samples.length);
-        const now = performance.now();
-        if (mutedRef.current && speechStartedAt) {
-          // Muting mid-utterance discards it instead of committing a fragment.
-          speechStartedAt = 0;
-          lastSpeechAt = 0;
-          setSpeechDetected(false);
-        }
-        const threshold = Math.max(0.018, noiseFloor * 3);
-        if (rms < threshold) noiseFloor = noiseFloor * 0.96 + rms * 0.04;
-        if (rms >= threshold) {
-          if (!speechStartedAt) {
-            speechStartedAt = now;
-            setSpeechDetected(true);
+      startVadLoop({
+        isActive: () => Boolean(recorder),
+        onCommit: commitUtterance,
+        onIdle: (idleMs) => {
+          // Bound idle recordings so quiet stretches never grow unbounded.
+          if (idleMs > IDLE_RECORDER_RESTART_MS) {
+            stopRecorder();
+            startRecorderListening();
+            return true;
           }
-          lastSpeechAt = now;
-        }
-        const utteranceMs = speechStartedAt ? now - speechStartedAt : 0;
-        const silenceMs = lastSpeechAt ? now - lastSpeechAt : 0;
-        if (
-          (speechStartedAt &&
-            utteranceMs > MIN_UTTERANCE_MS &&
-            silenceMs > COMMIT_SILENCE_MS) ||
-          utteranceMs > MAX_UTTERANCE_MS
-        ) {
-          commitUtterance();
-          return;
-        }
-        // Bound idle recordings so quiet stretches never grow unbounded.
-        if (
-          !speechStartedAt &&
-          now - recorderStartedAt > IDLE_RECORDER_RESTART_MS
-        ) {
-          stopRecorder();
-          startListening();
-          return;
-        }
-        frame = window.requestAnimationFrame(tick);
-      };
-      frame = window.requestAnimationFrame(tick);
+          return false;
+        },
+      });
+    }
+
+    function startListening() {
+      if (cancelled) return;
+      if (realtimeUnavailable) startRecorderListening();
+      else void startRealtimeListening();
     }
 
     async function connect() {
@@ -409,7 +635,15 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
         audioContext = new AudioContextClass();
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 1024;
-        audioContext.createMediaStreamSource(stream).connect(analyser);
+        const sourceNode = audioContext.createMediaStreamSource(stream);
+        sourceNode.connect(analyser);
+        // Silent processor chain keeps PCM flowing for realtime STT streaming.
+        processor = audioContext.createScriptProcessor(4096, 1, 1);
+        const silentGain = audioContext.createGain();
+        silentGain.gain.value = 0;
+        sourceNode.connect(processor);
+        processor.connect(silentGain);
+        silentGain.connect(audioContext.destination);
         startListening();
       } catch (connectError) {
         if (!cancelled) {
@@ -430,9 +664,19 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
       abort.abort();
       if (frame) window.cancelAnimationFrame(frame);
       if (resumeTimer) window.clearTimeout(resumeTimer);
+      if (restartTimer) window.clearTimeout(restartTimer);
       stopRecorder();
+      closeSttSocket();
+      void preparedStt
+        ?.then((socket) => closeRealtimeSttSocket(socket))
+        .catch(() => undefined);
       stream?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
+      try {
+        processor?.disconnect();
+      } catch {
+        // Audio nodes may already be detached.
+      }
       void audioContext?.close().catch(() => undefined);
       if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
     };

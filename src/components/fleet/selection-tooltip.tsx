@@ -538,7 +538,7 @@ function FleetMachineDetailPanel({
           </Tooltip>
         ) : null}
 
-        {onAddAgent && !isFleetMachineMobile(machine) ? (
+        {onAddAgent ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <button

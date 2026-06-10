@@ -66,7 +66,7 @@ export async function runQueenBeeVoiceTurn(options: {
   if (text) {
     const parsed = parseVoiceTurnJson(text);
     if (parsed?.task) {
-      const submitted = await submitTask(options, parsed.task);
+      const submitted = await submitQueenBeeVoiceTask(options, parsed.task);
       return {
         reply: joinSpeech(parsed.speech, submitted.summary),
         taskId: submitted.taskId,
@@ -80,7 +80,7 @@ export async function runQueenBeeVoiceTurn(options: {
   }
   // Last resort: treat the utterance as a direct work request so voice keeps
   // working even when no conversational model is reachable.
-  const submitted = await submitTask(options, {
+  const submitted = await submitQueenBeeVoiceTask(options, {
     title: "",
     message: options.transcript,
   });
@@ -330,7 +330,7 @@ function parseVoiceTurnJson(
   }
 }
 
-async function submitTask(
+export async function submitQueenBeeVoiceTask(
   options: {
     vaultPath?: string;
     brainServicesFolder?: string;

@@ -4,7 +4,14 @@ import * as React from "react";
 import styles from "./queen-voice.module.css";
 
 // Apple Intelligence palette from jacobamobin/AppleIntelligenceGlowEffect.
-const GLOW_COLORS = ["#BC82F3", "#F5B9EA", "#8D9FFF", "#FF6778", "#FFBA71", "#C686FF"];
+const GLOW_COLORS = [
+  "#BC82F3",
+  "#F5B9EA",
+  "#8D9FFF",
+  "#FF6778",
+  "#FFBA71",
+  "#C686FF",
+];
 
 // Ring stack from the original effect: width (px) / blur (px).
 const GLOW_LAYERS = [
@@ -19,11 +26,15 @@ const SMOOTHING_PER_FRAME = 0.055;
 const ROTATION_DEGREES_PER_SECOND = 6;
 
 function randomSortedStops() {
-  return Array.from({ length: GLOW_COLORS.length }, () => Math.random()).sort((a, b) => a - b);
+  return Array.from({ length: GLOW_COLORS.length }, () => Math.random()).sort(
+    (a, b) => a - b,
+  );
 }
 
 function gradientString(stops: number[], rotationDeg: number) {
-  const entries = stops.map((stop, index) => `${GLOW_COLORS[index]} ${(stop * 100).toFixed(2)}%`);
+  const entries = stops.map(
+    (stop, index) => `${GLOW_COLORS[index]} ${(stop * 100).toFixed(2)}%`,
+  );
   // Close the ring with the first color so the conic seam never shows.
   entries.push(`${GLOW_COLORS[0]} 100%`);
   return `conic-gradient(from ${rotationDeg.toFixed(2)}deg, ${entries.join(", ")})`;
@@ -56,9 +67,13 @@ export function QueenVoiceGlow({ active }: { active: boolean }) {
       lastFrameAt = now;
       rotation += ROTATION_DEGREES_PER_SECOND * deltaSeconds;
       for (let index = 0; index < current.length; index += 1) {
-        current[index] += (target[index] - current[index]) * SMOOTHING_PER_FRAME;
+        current[index] +=
+          (target[index] - current[index]) * SMOOTHING_PER_FRAME;
       }
-      root.style.setProperty("--queen-glow-gradient", gradientString(current, rotation));
+      root.style.setProperty(
+        "--queen-glow-gradient",
+        gradientString(current, rotation),
+      );
       frame = window.requestAnimationFrame(tick);
     };
     frame = window.requestAnimationFrame(tick);
@@ -70,15 +85,21 @@ export function QueenVoiceGlow({ active }: { active: boolean }) {
   }, [active]);
 
   return (
-    <div ref={rootRef} className={`${styles.glowRoot} ${active ? styles.glowRootActive : ""}`} aria-hidden="true">
+    <div
+      ref={rootRef}
+      className={`${styles.glowRoot} ${active ? styles.glowRootActive : ""}`}
+      aria-hidden="true"
+    >
       {GLOW_LAYERS.map((layer) => (
         <div
           key={`${layer.width}-${layer.blur}`}
           className={styles.glowLayer}
-          style={{
-            "--ring-width": `${layer.width}px`,
-            "--ring-blur": `${layer.blur}px`,
-          } as React.CSSProperties}
+          style={
+            {
+              "--ring-width": `${layer.width}px`,
+              "--ring-blur": `${layer.blur}px`,
+            } as React.CSSProperties
+          }
         />
       ))}
     </div>

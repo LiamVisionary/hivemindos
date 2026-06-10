@@ -3,6 +3,38 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-10 18:37:04 WITA - Queen Bee Realtime Speech-To-Speech, Voice Picker, And Hermes Fallback Provider
+
+- Status: Pushed
+- Areas changed: Queen Bee voice route (`src/app/api/queen-bee/voice/route.ts`), voice settings store (`src/lib/services/queen-bee/voice-settings.ts`), task submission export (`src/lib/services/queen-bee/voice-turn.ts`), realtime speech hook (`src/features/queen-voice/use-queen-bee-realtime.ts`), overlay mode switch + voice picker (`src/features/queen-voice/QueenBeeVoiceOverlay.tsx`, `queen-voice.module.css`), Hermes daemon config (`~/.hermes/config.yaml`, not in repo)
+- Summary: Queen Bee voice chat now defaults to full OpenAI Realtime speech-to-speech over WebRTC: semantic turn detection, live captions for both sides, replies that start speaking moments after you stop, and a `create_hive_task` tool the session calls to delegate real work through the Queen Bee control plane (the spoken confirmation uses the delegation receipt). The previous realtime-STT + conversational turn + TTS pipeline remains as an automatic fallback when a realtime session cannot be established. A new Voice button in the overlay opens a Queen Bee voice picker (marin default; cedar, alloy, ash, ballad, coral, echo, sage, shimmer, verse) stored in the shared dashboard state service and applied to both the realtime session and the TTS fallback (realtime-only voices map to a TTS equivalent); changing the voice restarts the live session so it applies immediately. Separately, the dead Hermes live chat was diagnosed: the daemon's active `bankr` provider key returns 401 (invalid/inactive) while the OpenRouter key is valid, so `fallback_providers: [openrouter]` was added to `~/.hermes/config.yaml` (backup saved) — the Hermes daemon needs a restart to pick this up.
+- Verification: focused TypeScript filter returned no diagnostics for touched files; `pnpm exec eslint` passed for touched voice, mobile-agent, MiroShark, and release files; live probes: GET voice settings returns marin + 10 voices, `set-voice` round-trips cedar and back, `realtime-session` mints a real `gpt-realtime` client secret with the configured voice; `node scripts/e2e-queen-voice-overlay.mjs` previously passed (overlay, glow, Voice button, realtime connecting state); direct curl to the Hermes daemon confirmed the 401 and OpenRouter 200. In-app spoken speech-to-speech E2E and the Hermes restart pending user action. Full TypeScript still fails on unrelated pre-existing diagnostics in `next.config.ts` and `remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx`.
+- Intended commit message: `Add Queen Bee realtime speech-to-speech with voice picker`
+
+## 2026-06-10 18:34:46 WITA +0800 - Fix macOS Release Notarization
+
+- Status: Pushed
+- Areas changed: Tauri release workflow (`.github/workflows/tauri-cross-platform-release.yml`), Tauri embedded Node staging (`scripts/tauri-build.mjs`)
+- Summary: macOS release builds now sign the embedded Node runtime with the configured Developer ID identity, timestamp, and hardened runtime before notarization, fixing Apple's rejection of the embedded dashboard server binary. The Intel macOS release leg also moves from the retired `macos-13` runner to GitHub's current `macos-15-intel` runner label.
+- Verification: Apple Silicon `v0.1.35` release log showed notarization rejected `Contents/Resources/resources/hivemindos-node/node` because it was not Developer ID signed, timestamped, or hardened-runtime enabled; GitHub runner docs confirm `macos-15-intel` is the current Intel macOS hosted runner label; `node --check scripts/tauri-build.mjs`; `git diff --check`; focused TypeScript filter returned no diagnostics for touched files.
+- Intended commit message: `Fix macOS release notarization`
+
+## 2026-06-10 18:30:40 WITA +0800 - Stop MiroShark Cards From Appearing In Ordinary Bankr Chat
+
+- Status: Pushed
+- Areas changed: MiroShark chat card parser/render split (`src/features/dashboard/views/chat/MiroSharkSimulationCard.tsx`, `src/features/dashboard/views/chat/miroshark-card-parser.ts`), parser regression test (`scripts/test-miroshark-card-parser.mjs`)
+- Summary: Chat now only shows the native MiroShark simulation card when a real MiroShark x402 payload or explicit MiroShark x402 runtime event is present. Ordinary Bankr capability answers and capability-search process text that merely mention MiroShark, wallet, status, paid APIs, or x402 stay as normal chat/process text instead of flashing a simulation card.
+- Verification: `node scripts/test-miroshark-card-parser.mjs` passed; focused `pnpm exec eslint src/features/dashboard/views/chat/MiroSharkSimulationCard.tsx src/features/dashboard/views/chat/miroshark-card-parser.ts scripts/test-miroshark-card-parser.mjs --max-warnings=999` passed; browser smoke on the saved BankrAgent capabilities chat passed with the Bankr reply visible and no MiroShark card labels in the DOM; `git diff --check` passed for touched files. Full TypeScript still fails on unrelated pre-existing diagnostics in `next.config.ts` and `remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx`.
+- Intended commit message: `Stop MiroShark cards in ordinary Bankr chat`
+
+## 2026-06-10 18:08:41 WITA - Stream Realtime Transcription In Queen Bee Voice Chat
+
+- Status: Pushed
+- Areas changed: Queen Bee voice hook (`src/features/queen-voice/use-queen-bee-voice.ts`), new realtime STT client helpers (`src/features/queen-voice/realtime-stt.ts`), headless overlay E2E unlock hardening (`scripts/e2e-queen-voice-overlay.mjs`)
+- Summary: Queen Bee voice chat now streams microphone PCM into an OpenAI Realtime transcription session (the same mechanism agent calls use), so the user's words appear on screen while they are speaking and the final transcript is ready almost immediately at end of speech — no more post-utterance audio upload and Whisper wait. The next realtime session is prewarmed while Queen Bee thinks and speaks, the shared energy-VAD now drives both listening paths, idle audio is periodically cleared server-side, and a dropped websocket mid-listen restarts listening instead of stranding the session. The MediaRecorder + Whisper path remains as an automatic fallback when realtime STT is unavailable. Reply audio continues to play through the live AudioContext (WKWebView autoplay-safe).
+- Verification: focused TypeScript filter returned no diagnostics for touched files; `pnpm exec eslint` zero errors on `src/features/queen-voice`; `node scripts/e2e-queen-voice-overlay.mjs` previously passed against the dev proxy with the realtime path active (overlay mounted, 4 glow layers, status `Listening...` with fake-device speech detected). In-app spoken E2E (live captions while speaking + audible reply) pending user confirmation. Full TypeScript still fails on unrelated pre-existing diagnostics in `next.config.ts` and `remotion/gitlawb-integration-video/src/GitLawbIntegrationVideo.tsx`.
+- Intended commit message: `Stream realtime transcription in Queen Bee voice chat`
+
 ## 2026-06-10 17:42:34 WITA - Speed Up Queen Bee Voice Turns And Fix Stuck Transcribing Caption
 
 - Status: Pushed

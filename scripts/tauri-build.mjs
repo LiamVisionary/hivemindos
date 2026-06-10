@@ -31,8 +31,14 @@ const serverResourceDir = join(resourcesDir, "hivemindos-next");
 const nodeResourceDir = join(resourcesDir, "hivemindos-node");
 const standaloneDir = join(nextBuildDir, "standalone");
 const standaloneServer = join(standaloneDir, "server.js");
-const embeddedFingerprintFile = join(nextBuildDir, ".hivemindos-embedded-fingerprint.json");
-const packagedFingerprintFile = join(serverResourceDir, ".hivemindos-embedded-fingerprint.json");
+const embeddedFingerprintFile = join(
+  nextBuildDir,
+  ".hivemindos-embedded-fingerprint.json",
+);
+const packagedFingerprintFile = join(
+  serverResourceDir,
+  ".hivemindos-embedded-fingerprint.json",
+);
 const nodeBinaryName = process.platform === "win32" ? "node.exe" : "node";
 const buildMemoryMb = process.env.TAURI_NEXT_BUILD_MEMORY_MB || "12000";
 // V8 old-space heap for the EMBEDDED build's `next build`. The embedded build
@@ -41,12 +47,17 @@ const buildMemoryMb = process.env.TAURI_NEXT_BUILD_MEMORY_MB || "12000";
 // it (e.g. on a small CI runner) via TAURI_NEXT_BUILD_HEAP_MB. Keep it well
 // under buildMemoryMb so the RSS watchdog above doesn't kill the build.
 const buildHeapMb = process.env.TAURI_NEXT_BUILD_HEAP_MB || "8192";
-const buildTimeoutSeconds = process.env.TAURI_NEXT_BUILD_TIMEOUT_SECONDS || "1800";
+const buildTimeoutSeconds =
+  process.env.TAURI_NEXT_BUILD_TIMEOUT_SECONDS || "1800";
 const embeddedNextMode = process.env.HIVEMINDOS_TAURI_EMBEDDED_NEXT === "1";
-const forceEmbeddedNextBuild = process.env.HIVEMINDOS_TAURI_FORCE_NEXT_BUILD === "1";
-const reuseEmbeddedNextBuild = process.env.HIVEMINDOS_TAURI_REUSE_EMBEDDED_NEXT !== "0";
+const forceEmbeddedNextBuild =
+  process.env.HIVEMINDOS_TAURI_FORCE_NEXT_BUILD === "1";
+const reuseEmbeddedNextBuild =
+  process.env.HIVEMINDOS_TAURI_REUSE_EMBEDDED_NEXT !== "0";
 const optimizePngAssets = process.env.HIVEMINDOS_TAURI_OPTIMIZE_PNGS === "1";
-const originalNextEnv = existsSync(nextEnvPath) ? readFileSync(nextEnvPath, "utf8") : null;
+const originalNextEnv = existsSync(nextEnvPath)
+  ? readFileSync(nextEnvPath, "utf8")
+  : null;
 
 const embeddedFingerprintInputs = [
   "components.json",
@@ -71,9 +82,7 @@ const skippedFingerprintDirs = new Set([
   "src-tauri/target",
 ]);
 
-const skippedFingerprintFileNames = new Set([
-  ".DS_Store",
-]);
+const skippedFingerprintFileNames = new Set([".DS_Store"]);
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -87,11 +96,15 @@ function run(command, args, options = {}) {
   });
 
   if (result.error) {
-    throw new Error(`${command} ${args.join(" ")} failed to start: ${result.error.message}`);
+    throw new Error(
+      `${command} ${args.join(" ")} failed to start: ${result.error.message}`,
+    );
   }
 
   if (result.status !== 0) {
-    throw new Error(`${command} ${args.join(" ")} failed with exit code ${result.status ?? 1}`);
+    throw new Error(
+      `${command} ${args.join(" ")} failed with exit code ${result.status ?? 1}`,
+    );
   }
 }
 
@@ -102,19 +115,27 @@ function runStaticNextBuild() {
   const nextBuildArgs = ["exec", "next", "build", "--webpack"];
 
   if (process.platform === "win32") {
-    run(process.env.ComSpec || "cmd.exe", ["/d", "/c", "pnpm", ...nextBuildArgs], { env });
+    run(
+      process.env.ComSpec || "cmd.exe",
+      ["/d", "/c", "pnpm", ...nextBuildArgs],
+      { env },
+    );
     return;
   }
 
-  run("scripts/run-with-memory-limit.sh", [
-    "--limit-mb",
-    buildMemoryMb,
-    "--timeout-seconds",
-    buildTimeoutSeconds,
-    "--",
-    "pnpm",
-    ...nextBuildArgs,
-  ], { env });
+  run(
+    "scripts/run-with-memory-limit.sh",
+    [
+      "--limit-mb",
+      buildMemoryMb,
+      "--timeout-seconds",
+      buildTimeoutSeconds,
+      "--",
+      "pnpm",
+      ...nextBuildArgs,
+    ],
+    { env },
+  );
 }
 
 function restoreStaticHiddenApiRoutes() {
@@ -141,20 +162,26 @@ function restoreNextEnv() {
     return;
   }
 
-  if (!existsSync(nextEnvPath) || readFileSync(nextEnvPath, "utf8") !== originalNextEnv) {
+  if (
+    !existsSync(nextEnvPath) ||
+    readFileSync(nextEnvPath, "utf8") !== originalNextEnv
+  ) {
     writeFileSync(nextEnvPath, originalNextEnv);
   }
 }
 
 function writeBuildNextEnv() {
-  writeFileSync(nextEnvPath, [
-    '/// <reference types="next" />',
-    '/// <reference types="next/image-types/global" />',
-    "",
-    "// NOTE: This file should not be edited",
-    "// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.",
-    "",
-  ].join("\n"));
+  writeFileSync(
+    nextEnvPath,
+    [
+      '/// <reference types="next" />',
+      '/// <reference types="next/image-types/global" />',
+      "",
+      "// NOTE: This file should not be edited",
+      "// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.",
+      "",
+    ].join("\n"),
+  );
 }
 
 function normalizePathForFingerprint(path) {
@@ -163,7 +190,10 @@ function normalizePathForFingerprint(path) {
 
 function fingerprintPathIsSkipped(path) {
   const relativePath = normalizePathForFingerprint(path);
-  return [...skippedFingerprintDirs].some((skipped) => relativePath === skipped || relativePath.startsWith(`${skipped}/`));
+  return [...skippedFingerprintDirs].some(
+    (skipped) =>
+      relativePath === skipped || relativePath.startsWith(`${skipped}/`),
+  );
 }
 
 function addFingerprintPath(hash, path, files) {
@@ -198,7 +228,11 @@ function buildEmbeddedFingerprint() {
     addFingerprintPath(hash, join(projectRoot, input), files);
   }
 
-  const sortedFiles = files.sort((left, right) => normalizePathForFingerprint(left).localeCompare(normalizePathForFingerprint(right)));
+  const sortedFiles = files.sort((left, right) =>
+    normalizePathForFingerprint(left).localeCompare(
+      normalizePathForFingerprint(right),
+    ),
+  );
   for (const file of sortedFiles) {
     const relativePath = normalizePathForFingerprint(file);
     const stats = statSync(file);
@@ -211,7 +245,9 @@ function buildEmbeddedFingerprint() {
     hash.update("\0");
   }
 
-  for (const [name, value] of Object.entries(process.env).sort(([left], [right]) => left.localeCompare(right))) {
+  for (const [name, value] of Object.entries(process.env).sort(
+    ([left], [right]) => left.localeCompare(right),
+  )) {
     if (!name.startsWith("NEXT_PUBLIC_")) continue;
     hash.update("env\0");
     hash.update(name);
@@ -258,7 +294,13 @@ function readJsonFile(path) {
 }
 
 function fingerprintsMatch(left, right) {
-  return Boolean(left && right && left.version === right.version && left.mode === right.mode && left.hash === right.hash);
+  return Boolean(
+    left &&
+    right &&
+    left.version === right.version &&
+    left.mode === right.mode &&
+    left.hash === right.hash,
+  );
 }
 
 function packagedEmbeddedResourcesAreReusable(fingerprint) {
@@ -266,7 +308,10 @@ function packagedEmbeddedResourcesAreReusable(fingerprint) {
     return false;
   }
 
-  if (!existsSync(join(serverResourceDir, "server.js")) || !existsSync(join(nodeResourceDir, nodeBinaryName))) {
+  if (
+    !existsSync(join(serverResourceDir, "server.js")) ||
+    !existsSync(join(nodeResourceDir, nodeBinaryName))
+  ) {
     return false;
   }
 
@@ -287,10 +332,17 @@ function standaloneBuildIsReusable(fingerprint) {
 
 function writeEmbeddedFingerprint(path, fingerprint) {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify({
-    ...fingerprint,
-    createdAt: new Date().toISOString(),
-  }, null, 2)}\n`);
+  writeFileSync(
+    path,
+    `${JSON.stringify(
+      {
+        ...fingerprint,
+        createdAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 function copyNodeBinary() {
@@ -298,7 +350,9 @@ function copyNodeBinary() {
   const nodeTarget = join(nodeResourceDir, nodeBinaryName);
 
   if (!existsSync(nodeSource) || !statSync(nodeSource).isFile()) {
-    throw new Error(`Unable to find the active Node.js binary at ${nodeSource}`);
+    throw new Error(
+      `Unable to find the active Node.js binary at ${nodeSource}`,
+    );
   }
 
   mkdirSync(dirname(nodeTarget), { recursive: true });
@@ -321,7 +375,8 @@ function runQuiet(command, args) {
   });
 
   if (result.status !== 0) {
-    const detail = result.stderr?.trim() || result.stdout?.trim() || "no output";
+    const detail =
+      result.stderr?.trim() || result.stdout?.trim() || "no output";
     throw new Error(`${command} ${args.join(" ")} failed: ${detail}`);
   }
 }
@@ -332,12 +387,29 @@ function optimizeMacosNodeBinary(path) {
   }
 
   runQuiet("/usr/bin/strip", ["-x", path]);
-  runQuiet("/usr/bin/codesign", ["--force", "--sign", "-", path]);
+  const signingIdentity = process.env.APPLE_SIGNING_IDENTITY?.trim();
+  const signArgs = signingIdentity
+    ? [
+        "--force",
+        "--timestamp",
+        "--options",
+        "runtime",
+        "--sign",
+        signingIdentity,
+        path,
+      ]
+    : ["--force", "--sign", "-", path];
+  runQuiet("/usr/bin/codesign", signArgs);
   chmodExecutable(path);
 }
 
 function scrubPackagedResources() {
-  for (const fileName of [".env", ".env.local", ".env.development", ".env.production"]) {
+  for (const fileName of [
+    ".env",
+    ".env.local",
+    ".env.development",
+    ".env.production",
+  ]) {
     rmSync(join(serverResourceDir, fileName), { force: true });
   }
   rmSync(join(serverResourceDir, "public", ".DS_Store"), { force: true });
@@ -390,7 +462,13 @@ function pruneNativeOnlyResources() {
     rmSync(join(serverResourceDir, path), { force: true, recursive: true });
   }
 
-  for (const fileName of ["components.json", "eslint.config.mjs", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.json"]) {
+  for (const fileName of [
+    "components.json",
+    "eslint.config.mjs",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "tsconfig.json",
+  ]) {
     rmSync(join(serverResourceDir, fileName), { force: true });
   }
 }
@@ -429,7 +507,10 @@ function prunePnpmPackages(prefixes) {
 }
 
 function pruneMaterializedPnpmStore() {
-  rmSync(join(serverResourceDir, "node_modules", ".pnpm"), { force: true, recursive: true });
+  rmSync(join(serverResourceDir, "node_modules", ".pnpm"), {
+    force: true,
+    recursive: true,
+  });
 }
 
 function removeNestedNodePackage(root, packageName) {
@@ -445,7 +526,10 @@ function removeNestedNodePackage(root, packageName) {
     }
 
     if (entry.name === "node_modules") {
-      rmSync(join(entryPath, ...packageParts), { force: true, recursive: true });
+      rmSync(join(entryPath, ...packageParts), {
+        force: true,
+        recursive: true,
+      });
     }
 
     removeNestedNodePackage(entryPath, packageName);
@@ -462,7 +546,10 @@ function pruneImageOptimizerRuntime() {
     "detect-libc",
     "sharp",
   ]) {
-    removeNestedNodePackage(join(serverResourceDir, "node_modules"), packageName);
+    removeNestedNodePackage(
+      join(serverResourceDir, "node_modules"),
+      packageName,
+    );
   }
 
   for (const path of [
@@ -482,21 +569,32 @@ function pruneImageOptimizerRuntime() {
 }
 
 function prunePackagedBuildArtifacts() {
-  rmSync(join(serverResourceDir, ".next-tauri-build", "cache"), { force: true, recursive: true });
-  rmSync(join(serverResourceDir, ".next-tauri-build", "diagnostics"), { force: true, recursive: true });
+  rmSync(join(serverResourceDir, ".next-tauri-build", "cache"), {
+    force: true,
+    recursive: true,
+  });
+  rmSync(join(serverResourceDir, ".next-tauri-build", "diagnostics"), {
+    force: true,
+    recursive: true,
+  });
   // Webpack persistent build caches (Remotion's bundler writes ~200 MB of
   // *.pack files into node_modules/.cache/webpack). They get traced into the
   // standalone copy but are build-time only — nothing reads them at runtime.
   // Dropping this roughly halves the packaged app size.
-  rmSync(join(serverResourceDir, "node_modules", ".cache"), { force: true, recursive: true });
+  rmSync(join(serverResourceDir, "node_modules", ".cache"), {
+    force: true,
+    recursive: true,
+  });
 
   for (const filePath of collectFiles(serverResourceDir, (candidate) => {
     const fileName = basename(candidate);
-    return fileName.endsWith(".map")
-      || fileName.endsWith(".d.ts")
-      || fileName.endsWith(".tsbuildinfo")
-      || fileName.endsWith(".nft.json")
-      || fileName === ".DS_Store";
+    return (
+      fileName.endsWith(".map") ||
+      fileName.endsWith(".d.ts") ||
+      fileName.endsWith(".tsbuildinfo") ||
+      fileName.endsWith(".nft.json") ||
+      fileName === ".DS_Store"
+    );
   })) {
     rmSync(filePath, { force: true });
   }
@@ -515,15 +613,22 @@ function optimizePackagedPngAssets(root = join(serverResourceDir, "public")) {
     return;
   }
 
-  const pngFiles = collectFiles(root, (filePath) => extname(filePath).toLowerCase() === ".png");
+  const pngFiles = collectFiles(
+    root,
+    (filePath) => extname(filePath).toLowerCase() === ".png",
+  );
   if (pngFiles.length === 0) {
     return;
   }
 
-  const result = spawnSync("oxipng", ["--strip", "safe", "-o", "4", ...pngFiles], {
-    cwd: projectRoot,
-    stdio: "inherit",
-  });
+  const result = spawnSync(
+    "oxipng",
+    ["--strip", "safe", "-o", "4", ...pngFiles],
+    {
+      cwd: projectRoot,
+      stdio: "inherit",
+    },
+  );
   if (result.status !== 0) {
     throw new Error(`oxipng failed with exit code ${result.status ?? 1}`);
   }
@@ -554,11 +659,17 @@ function pruneStaticNativeResources(root) {
     rmSync(join(root, path), { force: true, recursive: true });
   }
 
-  for (const filePath of collectFiles(root, (candidate) => basename(candidate) === ".DS_Store")) {
+  for (const filePath of collectFiles(
+    root,
+    (candidate) => basename(candidate) === ".DS_Store",
+  )) {
     rmSync(filePath, { force: true });
   }
 
-  writeFileSync(join(root, "README.md"), "# Static Tauri UI\n\nGenerated by `pnpm tauri:prepare`.\n");
+  writeFileSync(
+    join(root, "README.md"),
+    "# Static Tauri UI\n\nGenerated by `pnpm tauri:prepare`.\n",
+  );
 }
 
 function materializeResourceSymlinks(root) {
@@ -587,11 +698,23 @@ function materializeResourceSymlinks(root) {
 }
 
 function copyRequiredRuntimePackage(packageName) {
-  const source = join(projectRoot, "node_modules", ".pnpm", "node_modules", ...packageName.split("/"));
-  const target = join(serverResourceDir, "node_modules", ...packageName.split("/"));
+  const source = join(
+    projectRoot,
+    "node_modules",
+    ".pnpm",
+    "node_modules",
+    ...packageName.split("/"),
+  );
+  const target = join(
+    serverResourceDir,
+    "node_modules",
+    ...packageName.split("/"),
+  );
 
   if (!existsSync(source)) {
-    throw new Error(`Unable to find required runtime package ${packageName} at ${source}`);
+    throw new Error(
+      `Unable to find required runtime package ${packageName} at ${source}`,
+    );
   }
   if (existsSync(target)) {
     return;
@@ -616,43 +739,55 @@ function copyRequiredRuntimePackages() {
 
 function writeEmbeddedStaticStub() {
   mkdirSync(staticResourceDir, { recursive: true });
-  writeFileSync(join(staticResourceDir, "README.md"), "# Static Tauri UI\n\nRun `pnpm tauri:prepare` without `HIVEMINDOS_TAURI_EMBEDDED_NEXT=1` to regenerate this directory.\n");
+  writeFileSync(
+    join(staticResourceDir, "README.md"),
+    "# Static Tauri UI\n\nRun `pnpm tauri:prepare` without `HIVEMINDOS_TAURI_EMBEDDED_NEXT=1` to regenerate this directory.\n",
+  );
 }
 
 function runEmbeddedNextBuild(fingerprint) {
   if (standaloneBuildIsReusable(fingerprint)) {
-    console.log(`Reusing cached embedded Next standalone build (${fingerprint.hash.slice(0, 12)}). Set HIVEMINDOS_TAURI_FORCE_NEXT_BUILD=1 to rebuild it.`);
+    console.log(
+      `Reusing cached embedded Next standalone build (${fingerprint.hash.slice(0, 12)}). Set HIVEMINDOS_TAURI_FORCE_NEXT_BUILD=1 to rebuild it.`,
+    );
     return;
   }
 
   try {
     writeBuildNextEnv();
-    run("scripts/run-with-memory-limit.sh", [
-      "--limit-mb",
-      buildMemoryMb,
-      "--timeout-seconds",
-      buildTimeoutSeconds,
-      "--",
-      "pnpm",
-      "exec",
-      "next",
-      "build",
-      // Use webpack like the static build does. Turbopack rejects this
-      // codebase's `:global {}` CSS module block and the API routes' dynamic
-      // execFile/fs patterns; webpack tolerates them.
-      "--webpack",
-    ], {
-      env: {
-        HIVEMINDOS_TAURI_BUILD: "1",
-        NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${buildHeapMb}`.trim(),
+    run(
+      "scripts/run-with-memory-limit.sh",
+      [
+        "--limit-mb",
+        buildMemoryMb,
+        "--timeout-seconds",
+        buildTimeoutSeconds,
+        "--",
+        "pnpm",
+        "exec",
+        "next",
+        "build",
+        // Use webpack like the static build does. Turbopack rejects this
+        // codebase's `:global {}` CSS module block and the API routes' dynamic
+        // execFile/fs patterns; webpack tolerates them.
+        "--webpack",
+      ],
+      {
+        env: {
+          HIVEMINDOS_TAURI_BUILD: "1",
+          NODE_OPTIONS:
+            `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${buildHeapMb}`.trim(),
+        },
       },
-    });
+    );
   } finally {
     restoreNextEnv();
   }
 
   if (!existsSync(standaloneServer)) {
-    throw new Error(`Next standalone server was not generated at ${standaloneServer}`);
+    throw new Error(
+      `Next standalone server was not generated at ${standaloneServer}`,
+    );
   }
 
   writeEmbeddedFingerprint(embeddedFingerprintFile, fingerprint);
@@ -666,7 +801,9 @@ function copyEmbeddedNextResources(fingerprint) {
 
   const staticDir = join(nextBuildDir, "static");
   if (existsSync(staticDir)) {
-    cpSync(staticDir, join(serverResourceDir, ".next-tauri-build", "static"), { recursive: true });
+    cpSync(staticDir, join(serverResourceDir, ".next-tauri-build", "static"), {
+      recursive: true,
+    });
   }
 
   const publicDir = join(projectRoot, "public");
@@ -685,7 +822,9 @@ function copyEmbeddedNextResources(fingerprint) {
   copyNodeBinary();
   writeEmbeddedFingerprint(packagedFingerprintFile, fingerprint);
 
-  console.log(`Prepared embedded Tauri Next server resources in ${basename(resourcesDir)}/`);
+  console.log(
+    `Prepared embedded Tauri Next server resources in ${basename(resourcesDir)}/`,
+  );
 }
 
 function buildEmbeddedNextResources() {
@@ -695,7 +834,9 @@ function buildEmbeddedNextResources() {
   writeEmbeddedStaticStub();
 
   if (packagedEmbeddedResourcesAreReusable(fingerprint)) {
-    console.log(`Reusing prepared embedded Tauri Next resources (${fingerprint.hash.slice(0, 12)}). Set HIVEMINDOS_TAURI_FORCE_NEXT_BUILD=1 to rebuild them.`);
+    console.log(
+      `Reusing prepared embedded Tauri Next resources (${fingerprint.hash.slice(0, 12)}). Set HIVEMINDOS_TAURI_FORCE_NEXT_BUILD=1 to rebuild them.`,
+    );
     return;
   }
 
@@ -721,16 +862,22 @@ function buildStaticNativeResources() {
     restoreNextEnv();
   }
 
-  const exportDir = nextStaticExportDirs.find((candidate) => existsSync(join(candidate, "index.html")));
+  const exportDir = nextStaticExportDirs.find((candidate) =>
+    existsSync(join(candidate, "index.html")),
+  );
   if (!exportDir) {
-    throw new Error(`Next static export was not generated at ${nextStaticExportDirs.join(" or ")}`);
+    throw new Error(
+      `Next static export was not generated at ${nextStaticExportDirs.join(" or ")}`,
+    );
   }
 
   mkdirSync(staticResourceDir, { recursive: true });
   cpSync(exportDir, staticResourceDir, { recursive: true });
   pruneStaticNativeResources(staticResourceDir);
   optimizePackagedPngAssets(staticResourceDir);
-  console.log(`Prepared static Tauri UI resources in ${basename(staticResourceDir)}/`);
+  console.log(
+    `Prepared static Tauri UI resources in ${basename(staticResourceDir)}/`,
+  );
 }
 
 if (embeddedNextMode) {

@@ -23,6 +23,11 @@ import {
   createRealtimeTranscriptionClientSecret,
   transcribeAudioWithWhisper,
 } from "@/lib/services/phone/transcription";
+import {
+  handleMobileAgentHostComplete,
+  handleMobileAgentHostEvent,
+  handleMobileAgentHostPoll,
+} from "@/lib/services/mobile-agents/host-actions";
 import { runChatImageGeneration } from "@/lib/services/chat/image-generation";
 import { cacheGeneratedImageForPhone } from "@/lib/services/chat/generated-media-cache";
 import { signedGeneratedMediaUrl } from "@/lib/services/chat/generated-media-signing";
@@ -1163,6 +1168,23 @@ export async function POST(request: NextRequest) {
         callMode,
       );
       return NextResponse.json(result, { status: result.ok ? 200 : 502 });
+    }
+
+    // Phone-hosted mobile agents: the phone app heartbeats/claims queued chat
+    // jobs, streams run events, and posts the final result back to the hub.
+    if (body.action === "agent-host-poll") {
+      const result = await handleMobileAgentHostPoll(body);
+      return NextResponse.json(result.payload, { status: result.status });
+    }
+
+    if (body.action === "agent-host-event") {
+      const result = await handleMobileAgentHostEvent(body);
+      return NextResponse.json(result.payload, { status: result.status });
+    }
+
+    if (body.action === "agent-host-complete") {
+      const result = await handleMobileAgentHostComplete(body);
+      return NextResponse.json(result.payload, { status: result.status });
     }
 
     if (body.action === "image-generation") {

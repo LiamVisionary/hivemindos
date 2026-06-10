@@ -3,8 +3,10 @@
 import type { Dispatch, SetStateAction } from "react";
 import { openNativeDirectory } from "@/lib/native/filesystem";
 import type { BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { isMobileMachineOs } from "@/features/fleet/fleet-identity";
 import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeIntegrationFeature, runtimeLocalDataDirPatch, runtimePostCreateAction, runtimeProfileFeature, runtimeSettingsFeature, type AgentProfile, type AgentRuntime } from "@/lib/types/agent-runtime";
+import { DEFAULT_MOBILE_AGENT_MODEL, mobileAgentMachineKey, mobileAgentProfileFromRecord, type MobileAgentHostRecord, type MobileAgentRecord } from "@/lib/types/mobile-agents";
 import type { AgentCreateDraft, AgentSettingsPanel, AgentWorkerClassView, RuntimeModelDraft, RuntimeModelSetupMode } from "@/features/dashboard/agent-settings-types";
 import type { DashboardView, DiscoveredMachine, MachineGroup, RuntimeEnvSyncResponse, RuntimeIntegrationStatus, RuntimeModelSelection, RuntimeSessionSearchResult, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
 
@@ -152,12 +154,36 @@ export function useAgentController(props: UseAgentControllerProps) {
     setAeonEnvSyncStatus(`Synced ${synced} secret${synced === 1 ? "" : "s"} to ${data.result?.repo ?? selectedAgent.aeonRepo}${skipped ? `, skipped ${skipped}` : ""}.`);
   }
 
+  // Phones have no collector: their agents are stored on the hub and run
+  // on-device through the /api/phone job queue, keyed by the tailnet name.
+  function mobileMachineTailnetName(machine: MachineGroup) {
+    return (machine.dnsName?.split(".")[0] || machine.key || machine.name).trim();
+  }
+
+  function prefillMobileAgentModel(machine: MachineGroup) {
+    void fetch("/api/agents/mobile", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { ok?: boolean; hosts?: Record<string, MobileAgentHostRecord> } | null) => {
+        const hosts = data?.hosts ?? {};
+        const machineKeys = [mobileAgentMachineKey(mobileMachineTailnetName(machine)), mobileAgentMachineKey(machine.name)];
+        const host = machineKeys.map((key) => hosts[key]).find((entry) => entry?.models?.length)
+          ?? Object.values(hosts).find((entry) => entry.models?.length);
+        const hostModel = host?.models?.[0]?.id;
+        if (!hostModel) return;
+        setAgentCreateDraft((current) => (
+          current.model === DEFAULT_MOBILE_AGENT_MODEL ? { ...current, model: hostModel } : current
+        ));
+      })
+      .catch(() => undefined);
+  }
+
   function openAgentCreationModal(machine: MachineGroup, runtime?: AgentRuntime, name = "") {
-    if (machine.collector !== "ready" || !machine.collectorUrl) {
+    const mobileMachine = isMobileMachineOs(machine.os);
+    if (!mobileMachine && (machine.collector !== "ready" || !machine.collectorUrl)) {
       openSetupModal(machine);
       return;
     }
-    const selectedRuntime = runtime ?? selectedAgent?.runtime ?? "hermes";
+    const selectedRuntime = mobileMachine ? HIVEMIND_OS_RUNTIME : runtime ?? selectedAgent?.runtime ?? "hermes";
     setAgentRoleModalId("");
     setAgentRenameEditing(false);
     setAgentRuntimeFolderEditing(false);
@@ -181,12 +207,12 @@ export function useAgentController(props: UseAgentControllerProps) {
     const runtimeSettings = runtimeSettingsFeature(selectedRuntime);
     const runtimeProfile = runtimeProfileFeature(selectedRuntime);
     const autopilotDefaults = runtimeProfile.aeonDefaults;
-    const defaultProvider = runtimeSettings.defaultProvider || "";
+    const defaultProvider = mobileMachine ? "on-device" : runtimeSettings.defaultProvider || "";
     setAgentCreateDraft({
       name: name || defaultAgentNameForRuntime(displayAgents.length ? displayAgents : agents, selectedRuntime, RUNTIME_LABELS, { provider: defaultProvider }),
       runtime: selectedRuntime,
       provider: defaultProvider,
-      model: runtimeSettings.defaultModel || "",
+      model: mobileMachine ? DEFAULT_MOBILE_AGENT_MODEL : runtimeSettings.defaultModel || "",
       calls: baseAgent.calls,
       workerClass: baseAgent.workerClass ?? "general",
       customWorkerClass: undefined,
@@ -201,6 +227,7 @@ export function useAgentController(props: UseAgentControllerProps) {
       aeonMode: autopilotDefaults ? baseAgent.aeonMode || autopilotDefaults.mode : undefined,
       a2aUrl: autopilotDefaults ? baseAgent.a2aUrl || autopilotDefaults.a2aUrlFallback : undefined,
     });
+    if (mobileMachine) prefillMobileAgentModel(machine);
   }
 
   function closeAgentSettingsModal() {
@@ -345,7 +372,53 @@ export function useAgentController(props: UseAgentControllerProps) {
     setRuntimeSessionResults(data.sessions ?? []);
   }
 
+  async function createMobileAgentFromModal(machine: MachineGroup) {
+    const draftName = agentCreateDraft.name.trim()
+      || defaultAgentNameForRuntime(displayAgents.length ? displayAgents : agents, HIVEMIND_OS_RUNTIME, RUNTIME_LABELS, { provider: "on-device" });
+    setRuntimeIntegrationBusy("create-agent");
+    setRuntimeIntegrationMessage("");
+    const response = await fetch("/api/agents/mobile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        machineName: mobileMachineTailnetName(machine),
+        name: draftName,
+        model: agentCreateDraft.model?.trim() || DEFAULT_MOBILE_AGENT_MODEL,
+        systemPrompt: agentCreateDraft.skillProfilePrompt?.trim() || undefined,
+      }),
+    }).catch(() => null);
+    const data = await response?.json().catch(() => null) as { ok?: boolean; agent?: MobileAgentRecord; error?: string } | null;
+    setRuntimeIntegrationBusy("");
+    if (!response?.ok || !data?.ok || !data.agent) {
+      setRuntimeIntegrationMessage(data?.error ?? "Could not create the phone-hosted agent on that machine.");
+      return;
+    }
+    const next = normalizeAgentProfile(mobileAgentProfileFromRecord(data.agent, {
+      machineName: machine.name,
+      // Phones expose no collector URL; the machine key (the raw fleet device
+      // name) is what the dashboard groups agents onto machines with.
+      telemetryUrl: machine.collectorUrl || machine.key,
+    }));
+    setAgents((current) => [...current.filter((agent) => agent.id !== next.id), next]);
+    setDiscoveredMachines((current) => current.map((discovered) => (
+      discovered.device.name === machine.key || discovered.device.name === machine.name
+        ? {
+          ...discovered,
+          agents: [...discovered.agents.filter((agent) => agent.id !== next.id), next],
+          lastSeenAt: Date.now(),
+        }
+        : discovered
+    )));
+    setSelectedAgentId(next.id);
+    closeAgentSettingsModal();
+    void onAgentCreated?.(next);
+  }
+
   async function createAgentFromModal() {
+    if (agentCreateMachine && isMobileMachineOs(agentCreateMachine.os)) {
+      await createMobileAgentFromModal(agentCreateMachine);
+      return;
+    }
     if (!agentCreateMachine?.collectorUrl) return;
     const runtime = agentCreateDraft.runtime;
     const runtimeSettings = runtimeSettingsFeature(runtime);

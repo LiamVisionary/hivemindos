@@ -20,11 +20,18 @@
   position: absolute;
   inset: 0;
   border-radius: 16px;
-  background: var(--queen-glow-gradient, conic-gradient(#bc82f3, #8d9fff, #ffba71, #bc82f3));
+  background: var(
+    --queen-glow-gradient,
+    conic-gradient(#bc82f3, #8d9fff, #ffba71, #bc82f3)
+  );
   padding: var(--ring-width, 6px);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
   mask-composite: exclude;
   filter: blur(var(--ring-blur, 0px));
 }
@@ -164,7 +171,9 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 160ms ease, border-color 160ms ease;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
 }
 
 .controlButton:hover {
@@ -194,8 +203,66 @@
   max-width: 360px;
 }
 
+.voicePicker {
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: min(640px, calc(100vw - 96px));
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(8, 10, 15, 0.86);
+  border: 1px solid rgba(188, 130, 243, 0.35);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+}
+
+.voicePickerTitle {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(200, 208, 232, 0.62);
+  margin-right: 4px;
+}
+
+.voiceOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(141, 159, 255, 0.3);
+  background: rgba(141, 159, 255, 0.1);
+  color: rgba(235, 239, 250, 0.92);
+  font-size: 12px;
+  cursor: pointer;
+  text-transform: capitalize;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.voiceOption:hover {
+  background: rgba(141, 159, 255, 0.22);
+  border-color: rgba(141, 159, 255, 0.55);
+}
+
+.voiceOptionActive {
+  background: rgba(188, 130, 243, 0.22);
+  border-color: rgba(188, 130, 243, 0.6);
+}
+
+.voicePickerEmpty {
+  font-size: 12px;
+  color: rgba(200, 208, 232, 0.62);
+}
+
 @keyframes queenVoicePulse {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
     opacity: 1;
   }

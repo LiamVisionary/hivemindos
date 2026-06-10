@@ -71,6 +71,8 @@ import {
 } from "@/lib/services/chat/runtime-session-store";
 import { canonicalLocalCollectorUrl, isLocalCollectorUrl, remoteCollectorLocalServiceUrl } from "@/lib/services/local-collector-url";
 import { RUN_COMMAND_TOOL_NAME, runAgentCommand, runCommandToolDefinition } from "@/lib/services/agent-shell/command-tool";
+import { streamMobileAgentTurn } from "@/lib/services/mobile-agents/chat-turn";
+import { isMobileAgentGatewayUrl } from "@/lib/types/mobile-agents";
 
 export const runtime = "nodejs";
 export const maxDuration = 600;
@@ -3763,6 +3765,28 @@ export async function POST(request: NextRequest) {
   }
   const vault = activeSharedVault(profile, sharedVault);
   runtimeSessionId = createRuntimeChatSessionId(profile, runtimeSessionId || clientRunId);
+  if (isMobileAgentGatewayUrl(profile.gatewayUrl)) {
+    // Phone-hosted agent: the hub cannot call the phone, so the turn is queued
+    // as a job the phone app polls for (see lib/services/mobile-agents) and
+    // this stream replays the on-device run back to the dashboard.
+    await recordRouteTelemetry(request, "agent_runtime.dispatch.mobile", {
+      ...telemetryPayloadForProfile(profile),
+      promptLength: userPrompt.length,
+      runtimeSessionId,
+      chatStorageKey: chatStorageKey || null,
+      agentMode,
+      elapsedMs: Date.now() - routeStartedAt,
+    });
+    return streamMobileAgentTurn({
+      profile,
+      messages,
+      userPrompt,
+      runtimeSessionId,
+      chatStorageKey,
+      sharedVaultPath: vault?.vaultPath,
+      routeStartedAt,
+    });
+  }
   const lowLatencyVoiceTurn = latencyMode === "voice";
   if (lowLatencyVoiceTurn) {
     const effectiveProfile = isBankrLlmProfile(profile) ? profile : await collectorChatProfile(profile) ?? profile;

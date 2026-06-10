@@ -324,3 +324,31 @@
 - public-github
   - Decision: not-assimilated
   - Reason: no outside source needed because the pinned repos already contain the authoritative release and website surfaces
+## 2026-06-10T10:30:40+00:00 - triage
+
+- Request: Stop MiroShark cards from appearing in ordinary Bankr chat.
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/chat/MiroSharkSimulationCard.tsx
+  - Decision: selected
+  - Reason: existing chat renderer and parser surface that turned assistant/process text into native MiroShark cards
+  - Path: `src/features/dashboard/views/chat/MiroSharkSimulationCard.tsx`
+- src/features/dashboard/views/chat/AgentProcessPanel.tsx
+  - Decision: inspected
+  - Reason: confirmed process cards are driven by `getMiroSharkProcessSummary`
+  - Path: `src/features/dashboard/views/chat/AgentProcessPanel.tsx`
+- src/app/api/chat/agent-runtime/route.ts
+  - Decision: inspected
+  - Reason: actual MiroShark x402 runtime events use explicit `MiroShark x402` tool labels
+  - Path: `src/app/api/chat/agent-runtime/route.ts`
+- src/features/dashboard/hooks/use-status-chat-input-controller.tsx
+  - Decision: inspected
+  - Reason: SSE process labels are persisted onto the active assistant message
+  - Path: `src/features/dashboard/hooks/use-status-chat-input-controller.tsx`
+
+### Verification
+- `node scripts/test-miroshark-card-parser.mjs`
+- Focused ESLint on the touched MiroShark parser/render files and regression script
+- Browser smoke on the saved BankrAgent capabilities chat
