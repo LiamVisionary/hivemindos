@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-11 00:07:58 WITA +0800 - Start The 0.2 Release Line And Gate Release Tags On Successful Builds
+
+- Status: Pushed
+- Areas changed: app version metadata (`package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`), release workflows (`.github/workflows/tauri-cross-platform-release.yml`, `.github/workflows/bump-app-version.yml`), deployment notes (`DEPLOY_NOTES.md`)
+- Summary: HivemindOS now starts the `0.2.0` release line in checked-in app metadata, so local/native builds no longer report the stale `0.1.23` floor. Desktop release publishing is now success-gated: the cross-platform Tauri workflow builds all platform artifacts first, then creates the Git tag and GitHub Release only after every platform build succeeds. The previous push-to-main auto tagger is replaced with a manual "suggest next version" helper so failed deploy attempts do not consume release numbers or briefly become Latest.
+- Verification: JSON parsing passed for `package.json` and `src-tauri/tauri.conf.json`; version readback shows package, Tauri config, Cargo manifest, and `hivemindos-desktop` Cargo lock package at `0.2.0`; Ruby YAML parsing passed for both changed workflows; `git diff --check` passed for the touched version/workflow/note files; `node scripts/bump-app-version.mjs --next` now returns `0.2.1`. `actionlint` is not installed locally, so GitHub Actions semantic lint was skipped.
+- Intended commit message: `Start 0.2 release line and gate release tags`
+
 ## 2026-06-10 19:57:49 WITA +0800 - Import Apple Certificate Before macOS Release Prepare
 
 - Status: Pushed

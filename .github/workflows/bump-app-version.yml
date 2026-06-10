@@ -1,27 +1,17 @@
-name: Tag App Version
+name: Suggest Next App Version
 
-# Tags each human push to main as the next patch release (vX.Y.Z) instead of
-# committing version bumps back to main. main only moves when a person pushes,
-# so local checkouts no longer go "stale" behind bot commits. The release build
-# workflow injects the tag's version into package.json / tauri.conf.json /
-# Cargo.toml at build time — the checked-in versions are just a floor.
+# Release versions should be minted by a successful desktop release, not by
+# every push to main. This manual helper only prints the next patch candidate.
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
-  contents: write
-
-concurrency:
-  group: tag-app-version-main
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  tag:
-    name: Tag next patch version
-    if: ${{ github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip version bump]') }}
+  suggest:
+    name: Suggest next patch version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,16 +23,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Compute next version
-        id: next
-        run: echo "version=$(node scripts/bump-app-version.mjs --next)" >> "$GITHUB_OUTPUT"
-
-      - name: Push release tag
-        env:
-          VERSION: ${{ steps.next.outputs.version }}
+      - name: Print next version
         run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${VERSION}" -m "HivemindOS v${VERSION}"
-          git push origin "v${VERSION}"
+          version="$(node scripts/bump-app-version.mjs --next)"
+          echo "Next patch candidate: v${version}"
