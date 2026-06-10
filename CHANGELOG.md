@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-10 16:01:56 WITA +0800 - Stage Tauri Claw Sidecars On Release Runners
+
+- Status: Pushed
+- Areas changed: Tauri release preparation (`scripts/stage-tauri-claw-sidecar.mjs`, `package.json`)
+- Summary: Tauri desktop builds now stage the required Claw sidecar filename during release preparation instead of depending on ignored local build artifacts. Apple Silicon releases bundle the published Claw backend binary when available; other platforms get a small fallback launcher so cross-platform installers can still build while future native Claw backend artifacts are published.
+- Verification: `node --check scripts/stage-tauri-claw-sidecar.mjs`; `node scripts/stage-tauri-claw-sidecar.mjs` staged `src-tauri/binaries/claw-aarch64-apple-darwin` from the local release Claw binary; `pnpm exec prettier --check scripts/stage-tauri-claw-sidecar.mjs package.json`; `git diff --check -- scripts/stage-tauri-claw-sidecar.mjs package.json CHANGELOG.md`; `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized legacy files unrelated to this release-sidecar fix.
+- Intended commit message: `Stage Tauri Claw sidecars for release builds`
+
 ## 2026-06-10 15:40:26 WITA - Enable Webview Microphone In Dev Builds
 
 - Status: Pushed
