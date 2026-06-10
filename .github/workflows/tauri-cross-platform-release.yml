@@ -91,6 +91,43 @@ jobs:
           RELEASE_TAG: ${{ github.event.inputs.tag }}
         run: node scripts/bump-app-version.mjs --set "${RELEASE_TAG#v}"
 
+      - name: Import Apple signing certificate
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_CERTIFICATE:-}" ]; then
+            echo "APPLE_CERTIFICATE is not set; macOS build will continue unsigned."
+            exit 0
+          fi
+          if [ -z "${APPLE_CERTIFICATE_PASSWORD:-}" ]; then
+            echo "APPLE_CERTIFICATE_PASSWORD is required when APPLE_CERTIFICATE is set." >&2
+            exit 1
+          fi
+          certificate_path="$RUNNER_TEMP/hivemindos-signing-certificate.p12"
+          keychain_path="$RUNNER_TEMP/hivemindos-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$keychain_path"
+          security list-keychain -d user -s "$keychain_path"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain_path"
+
       - name: Build Tauri app
         env:
           # macOS Developer ID code signing + notarization. These are read by

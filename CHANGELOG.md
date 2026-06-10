@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-10 19:57:49 WITA +0800 - Import Apple Certificate Before macOS Release Prepare
+
+- Status: Pushed
+- Areas changed: Tauri release workflow (`.github/workflows/tauri-cross-platform-release.yml`)
+- Summary: macOS release jobs now import the Apple Developer ID certificate into a temporary keychain before `pnpm tauri:build`, so the embedded Node runtime can be Developer ID signed during Tauri's `beforeBuildCommand` instead of failing before the bundler's later signing phase.
+- Verification: Apple Silicon `v0.1.38` release log showed `codesign --timestamp --options runtime --sign ... src-tauri/resources/hivemindos-node/node` failing with `The specified item could not be found in the keychain`; `git diff --check -- CHANGELOG.md .github/workflows/tauri-cross-platform-release.yml`.
+- Intended commit message: `Import Apple certificate before macOS release prepare`
+
 ## 2026-06-10 19:22:52 WITA +0800 - Polish Fleet Icons And Realtime Captions
 
 - Status: Pushed
