@@ -221,13 +221,6 @@
   min-height: 24px;
 }
 
-.rosterMachineCount {
-  font-family: var(--f-mono);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-}
-
 .rosterPerfSection {
   display: grid;
   gap: 5px;

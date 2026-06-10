@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-10 16:06:39 WITA +0800 - Simplify Fleet Roster Agent Counts
+
+- Status: Pushed
+- Areas changed: Fleet roster rows (`src/components/fleet/roster.tsx`, `src/components/fleet/fleet-tokens.module.css`)
+- Summary: Fleet roster rows no longer show a standalone agent-count badge when no richer status tooltip is available, reducing visual clutter in the machine roster while preserving the primary machine and runtime details.
+- Verification: `pnpm exec eslint src/components/fleet/roster.tsx --max-warnings=999`; `git diff --check -- src/components/fleet/roster.tsx src/components/fleet/fleet-tokens.module.css`.
+- Intended commit message: `Simplify fleet roster agent counts`
+
 ## 2026-06-10 16:01:56 WITA +0800 - Stage Tauri Claw Sidecars On Release Runners
 
 - Status: Pushed

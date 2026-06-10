@@ -61,7 +61,7 @@ function ConnectedAppBadge({ app }: { app: FleetActiveApp }) {
             // eslint-disable-next-line @next/next/no-img-element -- collector-served icon URLs are not statically optimizable
             <img src={app.iconUrl} alt="" onError={() => setBroken(true)} />
           ) : (
-            <span>{app.initials}</span>
+            <span>{app.initials || app.name.slice(0, 2).toUpperCase()}</span>
           )}
         </span>
       </TooltipTrigger>
@@ -388,16 +388,7 @@ function RosterRow({
                     </TooltipContent>
                   ) : null}
                 </Tooltip>
-              ) : (
-                <span
-                  className={styles.rosterMachineCount}
-                  style={{
-                    color: selected ? "var(--hex-honey-border)" : "var(--accent-strong)",
-                  }}
-                >
-                  {machine.agents.length}
-                </span>
-              )}
+              ) : null}
             </div>
           </div>
           {updateStatus === "updating" ? (
