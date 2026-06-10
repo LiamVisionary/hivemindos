@@ -305,9 +305,11 @@ function joinSpeech(speech: string, summary: string) {
   const lead = speech.trim();
   if (!lead) return summary;
   // The model already confirmed the kickoff; add only the routing detail.
-  const detail = summary.replace(
-    /^Queen Bee accepted the request and\s*/i,
-    "It was ",
-  );
+  const detail = summary
+    .replace(
+      /^Queen Bee accepted the request and\s*delegated it to/i,
+      "It was delegated to",
+    )
+    .replace(/^Queen Bee accepted the request and\s*/i, "It was ");
   return `${lead} ${detail}`.trim();
 }

@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-10 16:43:58 WITA +0800 - Refine Queen Bee Voice Delegation Wording
+
+- Status: Pushed
+- Areas changed: Queen Bee voice turn service (`src/lib/services/queen-bee/voice-turn.ts`)
+- Summary: Queen Bee voice confirmations now avoid repeating "accepted the request" when adding delegation details, making spoken task handoff replies shorter and more natural.
+- Verification: `pnpm exec prettier --check src/lib/services/queen-bee/voice-turn.ts`; `pnpm exec eslint src/lib/services/queen-bee/voice-turn.ts --max-warnings=999`; focused `pnpm exec tsc --noEmit --pretty false --skipLibCheck` filter returned no diagnostics for `src/lib/services/queen-bee/voice-turn.ts`; `git diff --check -- src/lib/services/queen-bee/voice-turn.ts`.
+- Intended commit message: `Refine Queen Bee voice delegation wording`
+
 ## 2026-06-10 16:42:21 WITA +0800 - Add Queen Bee Voice Conversation Fallback
 
 - Status: Pushed
