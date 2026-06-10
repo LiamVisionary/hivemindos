@@ -26,6 +26,7 @@ type UpdateBody = {
 
 type CollectorHealth = {
   ok?: boolean;
+  mode?: string;
   collectorStartedAt?: string;
   collectorStartedAtMs?: number;
   capabilities?: {
@@ -263,7 +264,15 @@ function shellSingleQuote(value: string) {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
-function installScriptForCheckout() {
+function installScriptForCheckout(collectorOnly = false) {
+  if (collectorOnly) {
+    // Agent-bridge machines skip the workspace install; the installer fetches the
+    // collector's single npm dependency itself via ensure-collector-deps.sh.
+    return [
+      'if [ -f "$HOME/.hivemindos/collector.env" ]; then . "$HOME/.hivemindos/collector.env"; fi',
+      "HIVE_COLLECTOR_ONLY=true ./scripts/install-telemetry-collector.sh",
+    ].join("\n");
+  }
   return [
     "if ! command -v pnpm >/dev/null 2>&1 && command -v corepack >/dev/null 2>&1; then corepack enable; corepack prepare pnpm@latest --activate; fi",
     "pnpm install --frozen-lockfile",
@@ -320,7 +329,7 @@ function changelogPreservingPullScript() {
   ].join("\n");
 }
 
-function remoteUpdateScript() {
+function remoteUpdateScript(collectorOnly = false) {
   return [
     "repo_url=$(git remote get-url origin)",
     "branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)",
@@ -350,14 +359,15 @@ function remoteUpdateScript() {
     '  mv "$temp_dir" "$current_dir"',
     '  cd "$current_dir"',
     "fi",
-    installScriptForCheckout(),
+    installScriptForCheckout(collectorOnly),
   ].join("\n");
 }
 
-function localUpdateScript() {
-  return [changelogPreservingPullScript(), installScriptForCheckout()].join(
-    "\n",
-  );
+function localUpdateScript(collectorOnly = false) {
+  return [
+    changelogPreservingPullScript(),
+    installScriptForCheckout(collectorOnly),
+  ].join("\n");
 }
 
 function localUpdateRehearsalScript(appDir?: string) {
@@ -377,12 +387,18 @@ function localUpdateRehearsalScript(appDir?: string) {
   return script.join("\n");
 }
 
-function fallbackScript(appDir?: string, allowReclone = false) {
+function fallbackScript(
+  appDir?: string,
+  allowReclone = false,
+  collectorOnly = false,
+) {
   if (appDir?.trim()) {
     return [
       "set -euo pipefail",
       `cd ${shellSingleQuote(appDir.trim())}`,
-      allowReclone ? remoteUpdateScript() : localUpdateScript(),
+      allowReclone
+        ? remoteUpdateScript(collectorOnly)
+        : localUpdateScript(collectorOnly),
     ].join("\n");
   }
   const candidates = [
@@ -400,7 +416,9 @@ function fallbackScript(appDir?: string, allowReclone = false) {
     "  fi",
     "done",
     "[ -d .git ] || { echo 'Could not find hivemindos checkout'; exit 2; }",
-    allowReclone ? remoteUpdateScript() : localUpdateScript(),
+    allowReclone
+      ? remoteUpdateScript(collectorOnly)
+      : localUpdateScript(collectorOnly),
   ].join("\n");
 }
 
@@ -557,10 +575,10 @@ async function runRemoteShell(target: string, script: string) {
   }
 }
 
-async function tryTailscaleSsh(body: UpdateBody) {
+async function tryTailscaleSsh(body: UpdateBody, collectorOnly = false) {
   const target = body.dnsName || body.name || body.ip;
   if (!target) throw new Error("No Tailscale target was provided.");
-  const script = fallbackScript(body.appDir, true);
+  const script = fallbackScript(body.appDir, true, collectorOnly);
   const { stdout, stderr } = await runRemoteShell(target, script);
   return {
     ok: true,
@@ -573,9 +591,27 @@ async function tryTailscaleSsh(body: UpdateBody) {
   };
 }
 
-async function tryDetachedTailscaleSsh(body: UpdateBody) {
+async function tryDetachedTailscaleSsh(
+  body: UpdateBody,
+  collectorOnly = false,
+) {
   const target = body.dnsName || body.name || body.ip;
   if (!target) throw new Error("No Tailscale target was provided.");
+  const updateSteps = collectorOnly
+    ? [
+        changelogPreservingPullScript(),
+        '  if [ -f "$HOME/.hivemindos/collector.env" ]; then . "$HOME/.hivemindos/collector.env"; fi',
+        "  HIVE_COLLECTOR_ONLY=true ./scripts/install-telemetry-collector.sh",
+      ]
+    : [
+        changelogPreservingPullScript(),
+        "  if command -v corepack >/dev/null 2>&1; then corepack prepare pnpm@8.6.12 --activate; hash -r 2>/dev/null || true; fi",
+        '  CI=true NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--no-deprecation" pnpm install --frozen-lockfile',
+        "  pnpm build",
+        "  ./setup.sh",
+        '  if [ -f "$HOME/.hivemindos/collector.env" ]; then . "$HOME/.hivemindos/collector.env"; fi',
+        "  ./scripts/install-telemetry-collector.sh",
+      ];
   const updateScript = [
     "set -euo pipefail",
     body.appDir?.trim()
@@ -585,13 +621,7 @@ async function tryDetachedTailscaleSsh(body: UpdateBody) {
     "mkdir -p .next",
     "{",
     '  echo "--- update $(date -u +%Y-%m-%dT%H:%M:%SZ) ---"',
-    changelogPreservingPullScript(),
-    "  if command -v corepack >/dev/null 2>&1; then corepack prepare pnpm@8.6.12 --activate; hash -r 2>/dev/null || true; fi",
-    '  CI=true NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--no-deprecation" pnpm install --frozen-lockfile',
-    "  pnpm build",
-    "  ./setup.sh",
-    '  if [ -f "$HOME/.hivemindos/collector.env" ]; then . "$HOME/.hivemindos/collector.env"; fi',
-    "  ./scripts/install-telemetry-collector.sh",
+    ...updateSteps,
     "} >> .next/agent-update.log 2>&1 &",
     "echo 'Detached HivemindOS update started.'",
   ].join("\n");
@@ -607,12 +637,15 @@ async function tryDetachedTailscaleSsh(body: UpdateBody) {
   };
 }
 
-async function tryPreferredRemoteUpdate(body: UpdateBody) {
+async function tryPreferredRemoteUpdate(
+  body: UpdateBody,
+  collectorOnly = false,
+) {
   try {
-    return await tryDetachedTailscaleSsh(body);
+    return await tryDetachedTailscaleSsh(body, collectorOnly);
   } catch {
     if (body.collectorUrl) return tryCollectorUpdate(body);
-    return tryTailscaleSsh(body);
+    return tryTailscaleSsh(body, collectorOnly);
   }
 }
 
@@ -627,7 +660,7 @@ async function isLocalCheckout(appDir?: string) {
   }
 }
 
-async function tryLocalShell(body: UpdateBody) {
+async function tryLocalShell(body: UpdateBody, collectorOnly = false) {
   if (body.simulate) {
     const script = localUpdateRehearsalScript(body.appDir);
     const { stdout, stderr } = await runProcess("bash", ["-s"], script, 45_000);
@@ -661,7 +694,7 @@ async function tryLocalShell(body: UpdateBody) {
       );
     }
   }
-  const script = fallbackScript(body.appDir, false);
+  const script = fallbackScript(body.appDir, false, collectorOnly);
   const { stdout, stderr } = await runProcess("bash", ["-s"], script, 300_000);
   return {
     ok: true,
@@ -699,14 +732,15 @@ export async function POST(request: Request) {
       health: preUpdateHealth,
     });
   }
+  const collectorOnly = preUpdateHealth?.mode === "collector-only";
   try {
     const result = await ((await isLocalCheckout(body.appDir))
-      ? tryLocalShell(body)
+      ? tryLocalShell(body, collectorOnly)
       : body.preferRemoteShell
-        ? tryPreferredRemoteUpdate(body)
+        ? tryPreferredRemoteUpdate(body, collectorOnly)
         : body.collectorUrl
           ? tryCollectorUpdate(body)
-          : tryTailscaleSsh(body));
+          : tryTailscaleSsh(body, collectorOnly));
     if (body.simulate) {
       return Response.json({
         ...result,
@@ -731,7 +765,7 @@ export async function POST(request: Request) {
           stdout: "stdout" in result ? result.stdout : undefined,
           stderr: "stderr" in result ? result.stderr : undefined,
           health: verification.health,
-          fallbackCommand: fallbackScript(body.appDir, false),
+          fallbackCommand: fallbackScript(body.appDir, false, collectorOnly),
         },
         { status: 502 },
       );
@@ -748,7 +782,7 @@ export async function POST(request: Request) {
         {
           ok: false,
           error: rawError,
-          fallbackCommand: fallbackScript(body.appDir, false),
+          fallbackCommand: fallbackScript(body.appDir, false, collectorOnly),
         },
         { status: 502 },
       );
@@ -757,7 +791,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: rawError,
-        fallbackCommand: fallbackScript(body.appDir, false),
+        fallbackCommand: fallbackScript(body.appDir, false, collectorOnly),
       },
       { status: 502 },
     );

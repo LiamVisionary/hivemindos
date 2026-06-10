@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-10 17:03:24 WITA +0800 - Route Fleet Updates Through Collector-Only Commands
+
+- Status: Pushed
+- Areas changed: Fleet collector-only update and display surfaces (`src/app/api/fleet/update/route.ts`, `scripts/agent-telemetry-collector.mjs`, `src/lib/types/agent-runtime.ts`, `src/features/dashboard/hooks/use-dashboard-derived-state.tsx`)
+- Summary: Fleet machine updates now detect collector-only agent-bridge health payloads and generate collector-only local, SSH, detached SSH, and fallback update commands. Collector health also advertises the collector-only capability, and the dashboard labels those ready machines as `Collector Node`, so small agent-bridge hosts can receive Fleet-triggered updates without the dashboard install/build path that full dashboard machines still use.
+- Verification: `pnpm exec prettier --check` on the touched Fleet route, collector, type, dashboard hook, and changelog files; `pnpm exec eslint` on the touched TypeScript files; `node --check scripts/agent-telemetry-collector.mjs`; focused `pnpm exec tsc --noEmit --pretty false --skipLibCheck` filter returned no diagnostics for touched TypeScript files; `git diff --check` on touched files.
+- Intended commit message: `Route fleet updates through collector-only commands`
+
 ## 2026-06-10 16:57:50 WITA +0800 - Support Collector-Only Updates
 
 - Status: Pushed
@@ -5332,6 +5340,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Summary: Merge the active codex dashboard branch into main and record the stale remote dashboard usability branch as integrated while preserving the newer main-side implementation where histories overlapped.
 - Verification: `git fetch --all --prune`; inspected local and remote `codex/*` ahead counts; resolved remote merge conflicts in favor of current main where the remote branch would remove newer work.
 - Intended commit message: `Merge codex branches into main`
+
 ## 2026-05-30 21:24:32 WITA - Send AEON GitHub Connect Directly To OAuth
 
 - Status: Pushed
@@ -5339,6 +5348,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Summary: Stop routing AEON's GitHub connect action through Nango detection and always start the direct GitHub OAuth API flow from the AEON modal.
 - Verification: `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=999` passed with one existing warning; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; `git diff --check -- src/features/dashboard/views/chat/AgentSettingsModal.tsx CHANGELOG.md`.
 - Intended commit message: `Send AEON GitHub connect directly to OAuth`
+
 ## 2026-05-30 21:25:44 WITA - Speed Up AEON GitHub Key Badge
 
 - Status: Pushed
@@ -6914,6 +6924,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Summary: Add a vault-backed `hive-transfer` helper that creates targeted transfer envelopes under `.hivemindos-transfers`, copies payloads with media type/size/SHA-256 metadata, filters inboxes by machine/runtime/agent, and records receiver acknowledgements. Expose the same inbox/create/ack semantics through collector `/transfers` endpoints and advertise `fileTransfers` in `/health`. Install the helper beside the shared hive env commands, document receiver polling/ack flow, and request a Syncthing restart after folder configure so peer sharing changes take effect.
 - Verification: `npm run test:hive-transfer`; `node --check scripts/hive-transfer.mjs`; `node --check scripts/agent-telemetry-collector.mjs`; `bash -n setup.sh uninstall.sh scripts/hive-transfer`; `git diff --check -- docs/syncing-and-tailscale.md package.json scripts/agent-telemetry-collector.mjs scripts/hive-transfer scripts/hive-transfer.mjs scripts/test-hive-transfer.mjs setup.ps1 setup.sh uninstall.ps1 uninstall.sh`; `npm run typecheck -- --pretty false --skipLibCheck`; local CLI+HTTP smoke created a transfer for `hivemind-machine-08bf834423b5883edc65c753262afae2`/`hermes`/`receiver-test`, confirmed wrong-agent filtering, confirmed `/transfers` visibility, acknowledged through `/transfers/ack`, and confirmed the inbox cleared. Mac collector is reachable but still running the old build until the Mac checkout's dirty working tree is reconciled; direct Mac-side Syncthing repair added the Ubuntu device to the Mac `hivemindos-vault` folder and restarted Syncthing, after which Mac→Ubuntu note sync succeeded and a real `hive-transfer` envelope/payload created on Ubuntu replicated to the Mac with target `host=Liams-MacBook-Pro.local`, `runtime=hermes`, `agentId=mac-receiver-test`.
 - Intended commit message: `Add targeted hive file transfers`
+
 ## 2026-05-26 12:26:03 EDT - Bundle Tailnet Generation Skills
 
 - Status: Pushed
@@ -6921,7 +6932,6 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Summary: Add bundled HivemindOS shared-skill templates for Tailnet/local generation authoring, ComfyUI image generation, and local/Tailnet TTS generation. Make setup seed every bundled app skill into the shared Skills shelf instead of only karpathy-guidelines, while keeping karpathy-guidelines as the runtime baseline skill copied into agent skill folders. Document the localtts endpoint contract, including voice discovery via `/v1/voices` and `/voices`, cloned voice profile registration via `POST /v1/voices`, model discovery, health, OpenAI-style speech generation, JSON compatibility endpoints, and optional API docs.
 - Verification: `bash -n scripts/seed-shared-skills.sh setup.sh uninstall.sh`; PowerShell parser skipped because `pwsh` is not installed on this Mac; bundled skill frontmatter checked for the three new generation skills; temp-vault seed smoke test confirmed `karpathy-guidelines`, `tailscale-generation-skill-authoring`, `comfyui-image-generation`, and `localtts` are copied and indexed; `git diff --check -- CHANGELOG.md scripts/seed-shared-skills.sh setup.ps1 skills/tailscale-generation-skill-authoring/SKILL.md skills/comfyui-image-generation/SKILL.md skills/localtts/SKILL.md docs/tailnet-generation-skills.md`
 - Intended commit message: `Bundle Tailnet generation skills`
-
 
 ## 2026-05-26 11:07:59 EDT - Add Stable Machine IDs For Fleet Discovery
 
@@ -7140,7 +7150,6 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 - Summary: Simplify Hivemind Link setup by hiding raw launchctl load noise, detecting stale embedded Tailscale identity/auth failures such as `node ... already exists`, automatically rotating local Link state, and retrying the sidecar startup once before asking the user to rerun setup.
 - Verification: `bash -n scripts/install-telemetry-collector.sh setup.sh uninstall.sh`
 - Intended commit message: `Auto-recover Hivemind Link setup`
-
 
 ## 2026-05-26 08:49 UTC - Harden Shared Hive Env
 

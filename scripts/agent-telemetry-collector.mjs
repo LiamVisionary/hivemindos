@@ -3294,6 +3294,7 @@ async function collectorHealthPayload() {
       },
       capabilities: {
         chat: runtimes.includes("hermes"),
+        collectorOnly,
         directoryBrowsing: true,
         envHttpSync: true,
         nangoSetup: true,
