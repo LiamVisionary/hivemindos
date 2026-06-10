@@ -54,35 +54,24 @@ export async function runQueenBeeVoiceTurn(options: {
   brainServicesFolder?: string;
   kanbanFolder?: string;
 }): Promise<QueenVoiceTurnResult> {
-  const agent = await pickConversationAgent(options.vaultPath);
-  if (agent) {
-    try {
-      const text = await runRuntimeConversationTurn(
-        options.origin,
-        agent,
-        options.transcript,
-        options.history,
-      );
-      const parsed = parseVoiceTurnJson(text);
-      if (parsed?.task) {
-        const submitted = await submitTask(options, parsed.task);
-        return {
-          reply: joinSpeech(parsed.speech, submitted.summary),
-          taskId: submitted.taskId,
-          taskTitle: submitted.taskTitle,
-          created: submitted.created,
-          route: submitted.route,
-        };
-      }
-      if (parsed?.speech) return { reply: parsed.speech };
-      if (text.trim()) return { reply: text.trim().slice(0, 600) };
-    } catch (turnError) {
-      console.warn(
-        "[queen-bee-voice] conversation turn failed; falling back to control-plane submission:",
-        turnError instanceof Error ? turnError.message : turnError,
-      );
+  const text = await conversationTurnText(options);
+  if (text) {
+    const parsed = parseVoiceTurnJson(text);
+    if (parsed?.task) {
+      const submitted = await submitTask(options, parsed.task);
+      return {
+        reply: joinSpeech(parsed.speech, submitted.summary),
+        taskId: submitted.taskId,
+        taskTitle: submitted.taskTitle,
+        created: submitted.created,
+        route: submitted.route,
+      };
     }
+    if (parsed?.speech) return { reply: parsed.speech };
+    return { reply: text.trim().slice(0, 600) };
   }
+  // Last resort: treat the utterance as a direct work request so voice keeps
+  // working even when no conversational model is reachable.
   const submitted = await submitTask(options, {
     title: "",
     message: options.transcript,
@@ -94,6 +83,96 @@ export async function runQueenBeeVoiceTurn(options: {
     created: submitted.created,
     route: submitted.route,
   };
+}
+
+// Preferred brain: the user's own chat-capable fleet agent. Fallback: direct
+// OpenAI chat with the same key chain that powers Whisper STT and TTS, so the
+// voice loop stays conversational even when local runtimes are down.
+async function conversationTurnText(options: {
+  origin: string;
+  transcript: string;
+  history: QueenVoiceHistoryTurn[];
+  vaultPath?: string;
+}) {
+  const agent = await pickConversationAgent(options.vaultPath);
+  if (agent) {
+    try {
+      const text = await runRuntimeConversationTurn(
+        options.origin,
+        agent,
+        options.transcript,
+        options.history,
+      );
+      if (text.trim()) return text;
+    } catch (turnError) {
+      console.warn(
+        `[queen-bee-voice] runtime conversation turn via ${agent.name || agent.id} failed:`,
+        turnError instanceof Error ? turnError.message : turnError,
+      );
+    }
+  }
+  try {
+    return await runOpenAiConversationTurn(options.transcript, options.history);
+  } catch (fallbackError) {
+    console.warn(
+      "[queen-bee-voice] OpenAI conversation fallback failed; submitting utterance to the control plane:",
+      fallbackError instanceof Error ? fallbackError.message : fallbackError,
+    );
+    return "";
+  }
+}
+
+function conversationMessages(
+  transcript: string,
+  history: QueenVoiceHistoryTurn[],
+) {
+  const historyMessages = history.slice(-MAX_HISTORY_TURNS).map((turn) => ({
+    role: turn.who === "queen" ? "assistant" : "user",
+    content: turn.text.slice(0, 600),
+  }));
+  return [
+    { role: "system", content: QUEEN_VOICE_SYSTEM_PROMPT },
+    ...historyMessages,
+    { role: "user", content: transcript },
+  ];
+}
+
+async function runOpenAiConversationTurn(
+  transcript: string,
+  history: QueenVoiceHistoryTurn[],
+) {
+  const apiKey = await transcriptionApiKey();
+  if (!apiKey) {
+    throw new Error(
+      "No OpenAI key is configured for the Queen Bee voice conversation fallback.",
+    );
+  }
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model:
+        process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_VOICE_CHAT_FALLBACK_MODEL,
+      messages: conversationMessages(transcript, history),
+      max_tokens: 300,
+      temperature: 0.6,
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(CONVERSATION_TURN_TIMEOUT_MS),
+  });
+  const data = (await response.json().catch(() => null)) as {
+    choices?: Array<{ message?: { content?: string } }>;
+    error?: { message?: string } | string;
+  } | null;
+  if (!response.ok) {
+    const detail =
+      typeof data?.error === "string" ? data.error : data?.error?.message;
+    throw new Error(detail || `OpenAI chat returned HTTP ${response.status}.`);
+  }
+  return data?.choices?.[0]?.message?.content?.trim() || "";
 }
 
 // A live voice turn needs a runtime that answers chat requests directly;
@@ -139,20 +218,12 @@ async function runRuntimeConversationTurn(
   transcript: string,
   history: QueenVoiceHistoryTurn[],
 ) {
-  const historyMessages = history.slice(-MAX_HISTORY_TURNS).map((turn) => ({
-    role: turn.who === "queen" ? "assistant" : "user",
-    content: turn.text.slice(0, 600),
-  }));
   const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       agent: voiceOptimizedAgent(agent),
-      messages: [
-        { role: "system", content: QUEEN_VOICE_SYSTEM_PROMPT },
-        ...historyMessages,
-        { role: "user", content: transcript },
-      ],
+      messages: conversationMessages(transcript, history),
       runtimeSessionId: "queen-bee-voice",
       agentMode: "act",
       latencyMode: "voice",

@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-10 16:42:21 WITA +0800 - Add Queen Bee Voice Conversation Fallback
+
+- Status: Pushed
+- Areas changed: Queen Bee voice turn service (`src/lib/services/queen-bee/voice-turn.ts`)
+- Summary: Queen Bee voice chat now falls back to a direct OpenAI chat turn when no local chat-capable runtime can answer, keeping the voice loop conversational before falling back to task submission.
+- Verification: `pnpm exec prettier --check src/lib/services/queen-bee/voice-turn.ts`; `pnpm exec eslint src/lib/services/queen-bee/voice-turn.ts --max-warnings=999`; focused `pnpm exec tsc --noEmit --pretty false --skipLibCheck` filter returned no diagnostics for `src/lib/services/queen-bee/voice-turn.ts`; `git diff --check -- src/lib/services/queen-bee/voice-turn.ts`.
+- Intended commit message: `Add Queen Bee voice conversation fallback`
+
 ## 2026-06-10 16:39:50 WITA +0800 - Improve Voice Turns And Fleet Update Feedback
 
 - Status: Pushed
