@@ -53,16 +53,26 @@ function PerfBar({ label, pct, detail }: { label: string; pct?: number | null; d
 
 function ConnectedAppBadge({ app }: { app: FleetActiveApp }) {
   const [broken, setBroken] = React.useState(false);
+  const [loaded, setLoaded] = React.useState(false);
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span className={styles.rosterAppBadge}>
+          {/* Initials sit underneath so a slow or unreachable icon URL never leaves a blank badge. */}
+          <span>{app.initials || app.name.slice(0, 2).toUpperCase()}</span>
           {app.iconUrl && !broken ? (
             // eslint-disable-next-line @next/next/no-img-element -- collector-served icon URLs are not statically optimizable
-            <img src={app.iconUrl} alt="" onError={() => setBroken(true)} />
-          ) : (
-            <span>{app.initials || app.name.slice(0, 2).toUpperCase()}</span>
-          )}
+            <img
+              src={app.iconUrl}
+              alt=""
+              style={{ opacity: loaded ? 1 : 0 }}
+              onError={() => setBroken(true)}
+              onLoad={(event) => {
+                if (event.currentTarget.naturalWidth) setLoaded(true);
+                else setBroken(true);
+              }}
+            />
+          ) : null}
         </span>
       </TooltipTrigger>
       <TooltipContent>{app.name}</TooltipContent>
@@ -315,8 +325,8 @@ function RosterRow({
                 {machine.kind} · {machine.city}
               </div>
             </div>
+            {showUpdateButton ? (
             <div className={styles.rosterMachineStatus}>
-              {showUpdateButton ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
                 <button
@@ -388,8 +398,8 @@ function RosterRow({
                     </TooltipContent>
                   ) : null}
                 </Tooltip>
-              ) : null}
             </div>
+            ) : null}
           </div>
           {updateStatus === "updating" ? (
             <div

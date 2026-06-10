@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-10 16:21:44 WITA +0800 - Keep Fleet App Badges Visible While Icons Load
+
+- Status: Pushed
+- Areas changed: Fleet roster connected-app badges (`src/components/fleet/roster.tsx`, `src/components/fleet/fleet-tokens.module.css`)
+- Summary: Connected app badges in the Fleet roster now keep initials visible under slow or broken app icons, so roster rows do not briefly show blank badge circles while collector-served images load or fail.
+- Verification: `pnpm exec eslint src/components/fleet/roster.tsx --max-warnings=999`; `git diff --check -- src/components/fleet/roster.tsx src/components/fleet/fleet-tokens.module.css`.
+- Intended commit message: `Keep fleet app badges visible while icons load`
+
 ## 2026-06-10 16:06:39 WITA +0800 - Simplify Fleet Roster Agent Counts
 
 - Status: Pushed
