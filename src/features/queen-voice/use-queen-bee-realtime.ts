@@ -1,6 +1,12 @@
 "use client";
 
 import * as React from "react";
+import {
+  closeRealtimeSttSocket,
+  pcm16ToBase64,
+  prepareRealtimeSttSession,
+  resampleToPcm16,
+} from "./realtime-stt";
 import type { QueenVoicePhase, QueenVoiceTurn } from "./use-queen-bee-voice";
 
 type RealtimeSessionInfo = {
@@ -170,6 +176,14 @@ export function useQueenBeeRealtime(
     let liveQueenText = "";
     let liveUserTurnId = 0;
     let liveUserText = "";
+    let speechActive = false;
+    // Parallel transcription-intent session purely for live captions: the
+    // speech-to-speech session only transcribes input AFTER a turn commits,
+    // so on its own the user's words appear as late as the reply.
+    let captionSocket: WebSocket | null = null;
+    let captionContext: AudioContext | null = null;
+    let captionProcessor: ScriptProcessorNode | null = null;
+    let captionsLive = false;
     const fail = (message: string) => {
       if (cancelled) return;
       setPhase("error");
@@ -184,6 +198,84 @@ export function useQueenBeeRealtime(
     };
 
     let sessionInfo: RealtimeSessionInfo = {};
+
+    const ensureUserTurn = () => {
+      if (!liveUserTurnId) liveUserTurnId = addTurn("you", "...", true);
+      return liveUserTurnId;
+    };
+
+    async function startCaptionStream() {
+      try {
+        const socket = await prepareRealtimeSttSession();
+        if (cancelled || !localStream) {
+          closeRealtimeSttSocket(socket);
+          return;
+        }
+        captionSocket = socket;
+        socket.addEventListener("message", (event: MessageEvent<string>) => {
+          let payload: RealtimeEvent;
+          try {
+            payload = JSON.parse(event.data) as RealtimeEvent;
+          } catch {
+            return;
+          }
+          if (
+            payload.type ===
+              "conversation.item.input_audio_transcription.delta" &&
+            typeof payload.delta === "string" &&
+            payload.delta
+          ) {
+            captionsLive = true;
+            // Late deltas after the turn finalized would ghost a new row.
+            if (!liveUserTurnId && !speechActive) return;
+            liveUserText += payload.delta;
+            updateTurn(ensureUserTurn(), liveUserText.trim() || "...", true);
+          }
+          if (
+            payload.type ===
+            "conversation.item.input_audio_transcription.completed"
+          ) {
+            // The caption item closed; the next utterance starts fresh.
+            liveUserText = "";
+          }
+        });
+        const audioWindow = window as Window &
+          typeof globalThis & { webkitAudioContext?: typeof AudioContext };
+        const AudioContextClass =
+          audioWindow.AudioContext || audioWindow.webkitAudioContext;
+        if (!AudioContextClass) return;
+        captionContext = new AudioContextClass();
+        const source = captionContext.createMediaStreamSource(localStream);
+        captionProcessor = captionContext.createScriptProcessor(4096, 1, 1);
+        const silentGain = captionContext.createGain();
+        silentGain.gain.value = 0;
+        source.connect(captionProcessor);
+        captionProcessor.connect(silentGain);
+        silentGain.connect(captionContext.destination);
+        const activeContext = captionContext;
+        captionProcessor.onaudioprocess = (event) => {
+          if (cancelled || mutedRef.current) return;
+          if (socket.readyState !== WebSocket.OPEN) return;
+          const pcm = resampleToPcm16(
+            event.inputBuffer.getChannelData(0),
+            activeContext.sampleRate,
+          );
+          if (pcm.byteLength) {
+            socket.send(
+              JSON.stringify({
+                type: "input_audio_buffer.append",
+                audio: pcm16ToBase64(pcm),
+              }),
+            );
+          }
+        };
+      } catch (captionError) {
+        console.warn(
+          "[queen-voice] live captions unavailable; falling back to post-turn transcripts:",
+          captionError instanceof Error ? captionError.message : captionError,
+        );
+      }
+    }
 
     channel.addEventListener("open", () => {
       send({
@@ -228,20 +320,30 @@ export function useQueenBeeRealtime(
       }
       if (payload.type === "input_audio_buffer.speech_started") {
         setSpeechDetected(true);
+        speechActive = true;
         // Instant feedback: the live caption row appears as speech begins.
-        if (!liveUserTurnId) liveUserTurnId = addTurn("you", "...", true);
+        ensureUserTurn();
       }
       if (payload.type === "input_audio_buffer.speech_stopped") {
         setSpeechDetected(false);
+        speechActive = false;
+        // Close out the caption item so the next utterance starts fresh.
+        if (captionSocket?.readyState === WebSocket.OPEN) {
+          captionSocket.send(
+            JSON.stringify({ type: "input_audio_buffer.commit" }),
+          );
+        }
       }
       if (
         payload.type === "conversation.item.input_audio_transcription.delta" &&
         typeof payload.delta === "string" &&
-        payload.delta
+        payload.delta &&
+        !captionsLive
       ) {
+        // Fallback captions only: the speech-to-speech session transcribes
+        // post-commit, so the parallel caption stream owns live text.
         liveUserText += payload.delta;
-        if (!liveUserTurnId) liveUserTurnId = addTurn("you", "", true);
-        updateTurn(liveUserTurnId, liveUserText.trim() || "...", true);
+        updateTurn(ensureUserTurn(), liveUserText.trim() || "...", true);
       }
       if (
         payload.type === "conversation.item.input_audio_transcription.completed"
@@ -355,6 +457,8 @@ export function useQueenBeeRealtime(
           audio: ECHO_CANCELLED_AUDIO,
         });
         if (cancelled) return;
+        // Live captions run on their own transcription stream, in parallel.
+        void startCaptionStream();
         const track = localStream.getAudioTracks()[0] ?? null;
         trackRef.current = track;
         if (track) track.enabled = !mutedRef.current;
@@ -410,6 +514,14 @@ export function useQueenBeeRealtime(
         // Channel may already be closed.
       }
       peer.close();
+      if (captionProcessor) captionProcessor.onaudioprocess = null;
+      try {
+        captionProcessor?.disconnect();
+      } catch {
+        // Audio nodes may already be detached.
+      }
+      closeRealtimeSttSocket(captionSocket);
+      void captionContext?.close().catch(() => undefined);
       localStream?.getTracks().forEach((track) => track.stop());
       trackRef.current = null;
       audio.pause();

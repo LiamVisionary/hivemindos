@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-10 19:22:52 WITA +0800 - Polish Fleet Icons And Realtime Captions
+
+- Status: Pushed
+- Areas changed: fleet app discovery (`src/app/api/fleet/apps/route.ts`), Queen Bee realtime voice hook (`src/features/queen-voice/use-queen-bee-realtime.ts`)
+- Summary: Apps & Services now use bundled HivemindOS, MiroShark, and Queen Bee icons when local services do not expose their own favicon, so hive-native tiles do not fall back to initials. Queen Bee realtime speech-to-speech now runs a parallel live-caption stream while the speech-to-speech session is active, so user captions can appear during speech instead of waiting for the post-turn transcription event.
+- Verification: `pnpm exec eslint src/app/api/fleet/apps/route.ts src/features/queen-voice/use-queen-bee-realtime.ts --max-warnings=999`; `pnpm exec prettier --check src/app/api/fleet/apps/route.ts src/features/queen-voice/use-queen-bee-realtime.ts`; focused TypeScript filter returned no diagnostics for touched files; `git diff --check -- src/app/api/fleet/apps/route.ts src/features/queen-voice/use-queen-bee-realtime.ts`.
+- Intended commit message: `Polish fleet icons and realtime captions`
+
 ## 2026-06-10 19:16:17 WITA +0800 - Extend macOS Release Build Timeout
 
 - Status: Pushed

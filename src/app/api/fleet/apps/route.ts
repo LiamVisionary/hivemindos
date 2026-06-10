@@ -212,11 +212,11 @@ function sanitizeCachedApps(apps: HostedApp[]) {
     const legacyDeadIcon = /cdn\.simpleicons\.org\/openai\//.test(
       decodedIconUrl,
     );
+    const sanitized = legacyDeadIcon ? "" : appIconDisplayUrl(rawIconUrl);
     return {
       ...app,
-      iconUrl: legacyDeadIcon
-        ? undefined
-        : appIconDisplayUrl(rawIconUrl) || undefined,
+      iconUrl:
+        sanitized || bundledAppIconUrl(app.name, app.serviceKind) || undefined,
     };
   });
 }
@@ -365,6 +365,19 @@ const BRAND_ICON_SLUGS: Array<[RegExp, string]> = [
   [/github/i, "github"],
   [/discord/i, "discord"],
 ];
+
+// Icons shipped in public/ for hive services that expose no favicon of their own
+const BUNDLED_APP_ICONS: Array<[RegExp, string]> = [
+  [/miroshark/i, "/icons/miroshark.png"],
+  [/queen bee/i, "/icons/queen-bee.png"],
+  [/hivemindos/i, "/icon-512.png"],
+];
+
+function bundledAppIconUrl(name: string, serviceKind?: string) {
+  const value = `${name} ${serviceKind || ""}`;
+  const match = BUNDLED_APP_ICONS.find(([pattern]) => pattern.test(value));
+  return match ? match[1] : "";
+}
 
 function normalizeBaseUrl(value?: string) {
   return value?.trim().replace(/\/+$/, "") || "";
@@ -618,7 +631,13 @@ function dashboardIconProxyUrl(url: string) {
 
 function appIconDisplayUrl(url: string) {
   if (!url) return "";
-  if (url.startsWith("data:image/") || url.startsWith("/api/")) return url;
+  if (
+    url.startsWith("data:image/") ||
+    url.startsWith("/api/") ||
+    BUNDLED_APP_ICONS.some(([, bundledPath]) => bundledPath === url)
+  ) {
+    return url;
+  }
   return /^https?:\/\//i.test(url) ? dashboardIconProxyUrl(url) : "";
 }
 
@@ -987,7 +1006,9 @@ async function toHostedApp(
     rewriteServiceAssetUrl(app.iconUrl, machine);
   const discoveredIconUrl =
     mode === "fast"
-      ? collectorIconUrl || brandFallbackIconUrl(name)
+      ? collectorIconUrl ||
+        bundledAppIconUrl(name, serviceKind) ||
+        brandFallbackIconUrl(name)
       : /\/app-assets\//.test(collectorIconUrl)
         ? collectorIconUrl
         : (await firstReachableIcon([
@@ -995,6 +1016,7 @@ async function toHostedApp(
             metadata?.iconUrl,
             ...directAppIconCandidates(openUrl),
           ])) ||
+          bundledAppIconUrl(name, serviceKind) ||
           brandFallbackIconUrl(name) ||
           metadata?.iconUrl ||
           "";
