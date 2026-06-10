@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-11 00:18:17 WITA +0800 - Make Release Version Stamping Idempotent
+
+- Status: Pushed
+- Areas changed: version stamping helper (`scripts/bump-app-version.mjs`)
+- Summary: The release version stamper now succeeds when the requested release version already matches the checked-in Cargo lock entry. This allows the `0.2.0` release workflow to stamp `0.2.0` without failing before the platform builds start.
+- Verification: `node --check scripts/bump-app-version.mjs`; `node scripts/bump-app-version.mjs --set 0.2.0` now exits cleanly when all version files already contain `0.2.0`; `node scripts/bump-app-version.mjs --next` still returns `0.2.1`; `git diff --check -- scripts/bump-app-version.mjs CHANGELOG.md package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock`.
+- Intended commit message: `Make release version stamping idempotent`
+
 ## 2026-06-11 00:07:58 WITA +0800 - Start The 0.2 Release Line And Gate Release Tags On Successful Builds
 
 - Status: Pushed

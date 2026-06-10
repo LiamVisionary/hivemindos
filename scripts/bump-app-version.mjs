@@ -54,7 +54,12 @@ function replaceCargoPackageVersion(content, packageName, version) {
   const end = nextSection < 0 ? content.length : nextSection;
   const section = content.slice(start, end);
   const updatedSection = section.replace(/^version = "([^"]+)"$/m, `version = "${version}"`);
-  if (updatedSection === section) throw new Error(`Could not replace ${packageName} package version`);
+  if (updatedSection === section) {
+    if (new RegExp(`^version = "${version}"$`, "m").test(section)) {
+      return content;
+    }
+    throw new Error(`Could not replace ${packageName} package version`);
+  }
   return content.slice(0, start) + updatedSection + content.slice(end);
 }
 
