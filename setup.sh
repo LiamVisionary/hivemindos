@@ -13,6 +13,7 @@ CLI_SKIP_DEPS="false"
 CLI_BUILD_DASHBOARD="${HIVE_SETUP_BUILD_DASHBOARD:-false}"
 CLI_SKIP_COLLECTOR="false"
 CLI_SKIP_DASHBOARD="false"
+CLI_COLLECTOR_ONLY=""
 CLI_NETWORK_MODE=""
 
 info() { printf "\033[1;36m%s\033[0m\n" "$*"; }
@@ -257,6 +258,13 @@ Options:
   --skip-build                  Deprecated no-op; production builds are skipped by default.
   --skip-collector              Skip collector service installation/restart.
   --skip-dashboard              Skip starting/restarting the dashboard dev server.
+  --collector-only              Agent-bridge machine: install only the telemetry
+                                collector and its single npm dependency. Skips the
+                                workspace pnpm install, dashboard build, and dashboard
+                                server. The mode is persisted; later ./setup.sh and
+                                hive-update runs stay collector-only until --full.
+  --full                        Clear a persisted collector-only mode and run the
+                                full dashboard setup on this machine.
   --link                        Use app-managed Hivemind Link. This is the default.
   --ephemeral-node              Register the Link node as ephemeral (self-deletes from the tailnet when offline). For disposable machines and e2e runs.
   --system-tailscale            Use full system Tailscale setup for Hivemind Sync Syncthing, SSH, and rsync.
@@ -330,6 +338,12 @@ parse_args() {
       --skip-dashboard|--no-start)
         CLI_SKIP_DASHBOARD="true"
         ;;
+      --collector-only)
+        CLI_COLLECTOR_ONLY="true"
+        ;;
+      --full)
+        CLI_COLLECTOR_ONLY="false"
+        ;;
       --link)
         CLI_NETWORK_MODE="link"
         ;;
@@ -367,7 +381,30 @@ cd "$ROOT"
 
 parse_args "$@"
 
+# Resolve collector-only mode: explicit flag wins, then HIVE_COLLECTOR_ONLY env,
+# then the mode persisted by a previous --collector-only setup. Sticky so a plain
+# ./setup.sh rerun on an agent-bridge machine cannot accidentally start the full
+# dashboard install (which OOMs small hosts); use --full to opt back in.
+if [[ -z "$CLI_COLLECTOR_ONLY" ]]; then
+  CLI_COLLECTOR_ONLY="${HIVE_COLLECTOR_ONLY:-}"
+fi
+if [[ -z "$CLI_COLLECTOR_ONLY" && -f "$HOME/.hivemindos/collector.env" ]]; then
+  CLI_COLLECTOR_ONLY="$(awk -F= '$1=="HIVE_COLLECTOR_ONLY"{print substr($0, index($0, "=") + 1)}' "$HOME/.hivemindos/collector.env" | tail -1)"
+fi
+case "$CLI_COLLECTOR_ONLY" in
+  1|true|TRUE|yes|YES) CLI_COLLECTOR_ONLY="true" ;;
+  *) CLI_COLLECTOR_ONLY="false" ;;
+esac
+if [[ "$CLI_COLLECTOR_ONLY" == "true" ]]; then
+  CLI_BUILD_DASHBOARD="false"
+  CLI_SKIP_DASHBOARD="true"
+fi
+export HIVE_COLLECTOR_ONLY="$CLI_COLLECTOR_ONLY"
+
 info "HivemindOS setup"
+if [[ "$CLI_COLLECTOR_ONLY" == "true" ]]; then
+  info "Collector-only mode: installing the agent bridge without the dashboard (use --full to change)"
+fi
 
 install_rsync_if_missing() {
   if command -v rsync >/dev/null 2>&1; then
@@ -1893,7 +1930,11 @@ hash_files() {
 
 deps_stamp="$setup_cache_dir/deps.sha"
 deps_hash="$(hash_files package.json pnpm-lock.yaml)"
-if [[ "$CLI_SKIP_DEPS" == "true" ]]; then
+if [[ "$CLI_COLLECTOR_ONLY" == "true" ]]; then
+  info "Installing collector dependency only (no workspace install)"
+  ./scripts/ensure-collector-deps.sh
+  ok "Collector dependency ready"
+elif [[ "$CLI_SKIP_DEPS" == "true" ]]; then
   warn "Skipping dependency install because --skip-deps was provided"
 elif [[ "$CLI_FORCE" != "true" && -d "$ROOT/node_modules" && -f "$deps_stamp" && "$(cat "$deps_stamp" 2>/dev/null)" == "$deps_hash" ]]; then
   ok "Dependencies already installed"

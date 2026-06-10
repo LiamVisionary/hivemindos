@@ -11,6 +11,7 @@ HERMES_RESTART_MODE="${AGENT_TELEMETRY_HERMES_RESTART:-now}"
 NETWORK_MANAGED_BY_SETUP="${HIVE_SETUP_NETWORK_MANAGED:-false}"
 SETUP_TAILNET_SYNC_ENABLED="${HIVE_SETUP_TAILNET_SYNC_ENABLED:-false}"
 LINK_ENABLED="${HIVE_LINK_ENABLED:-false}"
+COLLECTOR_ONLY="${HIVE_COLLECTOR_ONLY:-}"
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COLLECTOR="$APP_DIR/scripts/agent-telemetry-collector.mjs"
 SYNCTHING_RUNNER="$APP_DIR/scripts/run-syncthing.sh"
@@ -49,6 +50,15 @@ fi
 if [[ -z "${HIVE_LINK_ENABLED:-}" && -f "$HOME/.hivemindos/collector.env" ]] && grep -q '^HIVE_LINK_LABEL=' "$HOME/.hivemindos/collector.env" 2>/dev/null; then
   LINK_ENABLED="true"
 fi
+# Collector-only machines skip the dashboard build/install entirely; the mode is
+# sticky via collector.env so plain installer reruns keep it.
+if [[ -z "$COLLECTOR_ONLY" && -f "$HOME/.hivemindos/collector.env" ]]; then
+  COLLECTOR_ONLY="$(awk -F= '$1=="HIVE_COLLECTOR_ONLY"{print substr($0, index($0, "=") + 1)}' "$HOME/.hivemindos/collector.env" | tail -1)"
+fi
+case "$COLLECTOR_ONLY" in
+  1|true|TRUE|yes|YES) COLLECTOR_ONLY="true" ;;
+  *) COLLECTOR_ONLY="false" ;;
+esac
 LINK_CONTROL_STATUS_URL="http://$LINK_CONTROL/status"
 LINK_CONTROL_HEALTH_URL="http://$LINK_CONTROL/health"
 
@@ -56,6 +66,10 @@ if [[ ! -f "$COLLECTOR" ]]; then
   echo "Missing collector: $COLLECTOR" >&2
   exit 1
 fi
+
+# The collector imports bonjour-service; make sure it resolves even when the full
+# workspace install never ran (collector-only machines). No-op otherwise.
+"$APP_DIR/scripts/ensure-collector-deps.sh"
 
 run_privileged() {
   if [[ "$(id -u)" == "0" ]]; then
@@ -1101,6 +1115,7 @@ PLIST
     <key>AGENT_TELEMETRY_HOST</key><string>$( [[ "$LINK_ACTIVE" == "true" || "$SYSTEM_TAILNET_SERVE_ACTIVE" == "true" ]] && printf "127.0.0.1" || printf "0.0.0.0" )</string>
     <key>AGENT_TELEMETRY_HERMES_API_HOST</key><string>$HERMES_API_HOST</string>
     <key>AGENT_TELEMETRY_HERMES_API_PORT</key><string>$HERMES_API_PORT</string>
+    <key>HIVE_COLLECTOR_ONLY</key><string>$COLLECTOR_ONLY</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -1197,6 +1212,7 @@ Environment=AGENT_TELEMETRY_PORT=$PORT
 Environment=AGENT_TELEMETRY_HOST=$( [[ "$LINK_ACTIVE" == "true" || "$SYSTEM_TAILNET_SERVE_ACTIVE" == "true" ]] && printf "127.0.0.1" || printf "0.0.0.0" )
 Environment=AGENT_TELEMETRY_HERMES_API_HOST=$HERMES_API_HOST
 Environment=AGENT_TELEMETRY_HERMES_API_PORT=$HERMES_API_PORT
+Environment=HIVE_COLLECTOR_ONLY=$COLLECTOR_ONLY
 ExecStart=$(command -v node) $COLLECTOR
 Restart=always
 
@@ -1255,6 +1271,7 @@ mkdir -p "$HOME/.hivemindos"
   printf "HIVE_LINK_RUN_WEB_CLIENT=%q\n" "$LINK_RUN_WEB_CLIENT"
   printf "HIVE_LINK_EPHEMERAL=%q\n" "$LINK_EPHEMERAL"
   printf "HIVE_LINK_STATUS_TIMEOUT=%q\n" "$LINK_STATUS_TIMEOUT"
+  printf "HIVE_COLLECTOR_ONLY=%q\n" "$COLLECTOR_ONLY"
 } > "$HOME/.hivemindos/collector.env"
 
 if [[ "$TAILNET_SYNC_ENABLED" == "true" && "$NETWORK_MANAGED_BY_SETUP" != "true" ]]; then

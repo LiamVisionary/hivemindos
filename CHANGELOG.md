@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-10 16:57:50 WITA +0800 - Support Collector-Only Updates
+
+- Status: Pushed
+- Areas changed: collector-only setup/update scripts and Fleet health payloads (`setup.sh`, `scripts/install-telemetry-collector.sh`, `scripts/update-hivemindos.sh`, `scripts/ensure-collector-deps.sh`, `scripts/agent-telemetry-collector.mjs`)
+- Summary: Collector-only HivemindOS machines can now set up and update the agent bridge without running the full dashboard dependency install or build. Setup and update commands honor the sticky collector-only flag, provide `--collector-only` and `--full` overrides, install only the collector's runtime dependency when needed, and advertise collector-only mode plus the lighter update command through Fleet health payloads so small hosts avoid the full workspace install.
+- Verification: `bash -n setup.sh scripts/install-telemetry-collector.sh scripts/update-hivemindos.sh scripts/ensure-collector-deps.sh`; `scripts/ensure-collector-deps.sh` completed cleanly with the dependency already present; `node --check scripts/agent-telemetry-collector.mjs`; `git diff --check -- CHANGELOG.md setup.sh scripts/install-telemetry-collector.sh scripts/update-hivemindos.sh scripts/ensure-collector-deps.sh scripts/agent-telemetry-collector.mjs`.
+- Intended commit message: `Support collector-only updates`
+
 ## 2026-06-10 16:43:58 WITA +0800 - Refine Queen Bee Voice Delegation Wording
 
 - Status: Pushed

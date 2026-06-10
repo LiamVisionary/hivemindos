@@ -9,6 +9,7 @@ SKIP_INSTALL="false"
 BUILD_DASHBOARD="false"
 SKIP_COLLECTOR="false"
 SKIP_DASHBOARD="false"
+COLLECTOR_ONLY="${HIVE_COLLECTOR_ONLY:-}"
 
 info() { printf "\033[1;36m%s\033[0m\n" "$*"; }
 ok() { printf "\033[1;32m✓\033[0m %s\n" "$*"; }
@@ -28,6 +29,13 @@ Options:
   --build            Run a production dashboard build before restarting.
   --skip-collector   Do not restart the telemetry collector.
   --skip-dashboard   Do not restart the dashboard dev server.
+  --collector-only   Update only the agent bridge: git pull, ensure the
+                     collector dependency, restart the collector. Skips the
+                     workspace pnpm install, dashboard build, and dashboard
+                     restart. Implied automatically on machines set up with
+                     setup.sh --collector-only.
+  --full             Force the full update path even when this machine is
+                     marked collector-only.
   -h, --help         Show this help.
 
 Environment:
@@ -45,6 +53,8 @@ while (( $# > 0 )); do
     --skip-build) BUILD_DASHBOARD="false" ;;
     --skip-collector) SKIP_COLLECTOR="true" ;;
     --skip-dashboard|--no-dashboard) SKIP_DASHBOARD="true" ;;
+    --collector-only) COLLECTOR_ONLY="true" ;;
+    --full) COLLECTOR_ONLY="false" ;;
     -h|--help)
       usage
       exit 0
@@ -60,6 +70,19 @@ while (( $# > 0 )); do
 done
 
 cd "$ROOT"
+
+if [[ -z "$COLLECTOR_ONLY" && -f "$HOME/.hivemindos/collector.env" ]]; then
+  COLLECTOR_ONLY="$(awk -F= '$1=="HIVE_COLLECTOR_ONLY"{print substr($0, index($0, "=") + 1)}' "$HOME/.hivemindos/collector.env" | tail -1)"
+fi
+case "$COLLECTOR_ONLY" in
+  1|true|TRUE|yes|YES) COLLECTOR_ONLY="true" ;;
+  *) COLLECTOR_ONLY="false" ;;
+esac
+if [[ "$COLLECTOR_ONLY" == "true" ]]; then
+  SKIP_INSTALL="true"
+  BUILD_DASHBOARD="false"
+  SKIP_DASHBOARD="true"
+fi
 
 refresh_tool_paths() {
   local brew_bin=""
@@ -224,6 +247,7 @@ restart_collector() {
   link_enabled="$(detect_hivemind_link_enabled)"
   info "Restarting telemetry collector on port $COLLECTOR_PORT"
   HIVE_LINK_ENABLED="$link_enabled" \
+    HIVE_COLLECTOR_ONLY="$COLLECTOR_ONLY" \
     AGENT_TELEMETRY_PORT="$COLLECTOR_PORT" \
     AGENT_TELEMETRY_HERMES_RESTART="${AGENT_TELEMETRY_HERMES_RESTART:-now}" \
     "$ROOT/scripts/install-telemetry-collector.sh"
@@ -231,6 +255,9 @@ restart_collector() {
 }
 
 info "Updating HivemindOS in $ROOT"
+if [[ "$COLLECTOR_ONLY" == "true" ]]; then
+  info "Collector-only machine: updating the agent bridge without the dashboard install/build"
+fi
 
 if [[ "$SKIP_PULL" == "true" ]]; then
   warn "Skipping git pull"
@@ -240,10 +267,14 @@ else
   ok "Git checkout is current"
 fi
 
-ensure_pnpm
+if [[ "$COLLECTOR_ONLY" == "true" ]]; then
+  "$ROOT/scripts/ensure-collector-deps.sh"
+else
+  ensure_pnpm
+fi
 
 if [[ "$SKIP_INSTALL" == "true" ]]; then
-  warn "Skipping dependency install"
+  [[ "$COLLECTOR_ONLY" == "true" ]] || warn "Skipping dependency install"
 else
   info "Installing dependencies"
   NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--no-deprecation" pnpm_run install --frozen-lockfile

@@ -18,6 +18,7 @@ import bonjourService from "bonjour-service";
 const { Bonjour } = bonjourService;
 
 const execFileAsync = promisify(execFile);
+const collectorOnly = /^(1|true|yes)$/i.test(process.env.HIVE_COLLECTOR_ONLY || "");
 const port = Number(process.env.AGENT_TELEMETRY_PORT || 8787);
 const host = process.env.AGENT_TELEMETRY_HOST || "0.0.0.0";
 const appDir = resolve(join(fileURLToPath(import.meta.url), "..", ".."));
@@ -1185,7 +1186,9 @@ async function readAppVersion() {
     dirty: dirty.length > 0,
     latestCommit,
     latestShortCommit: latestCommit.slice(0, 7),
-    updateCommand: `cd ${JSON.stringify(appDir)} && git pull --ff-only && pnpm install --frozen-lockfile && ./scripts/install-telemetry-collector.sh`,
+    updateCommand: collectorOnly
+      ? `cd ${JSON.stringify(appDir)} && ./scripts/update-hivemindos.sh --collector-only`
+      : `cd ${JSON.stringify(appDir)} && git pull --ff-only && pnpm install --frozen-lockfile && ./scripts/install-telemetry-collector.sh`,
     projects,
   };
 }
@@ -3278,6 +3281,7 @@ async function collectorHealthPayload() {
       ok: true,
       host: hostname(),
       machineId,
+      mode: collectorOnly ? "collector-only" : "full",
       collectorStartedAt,
       collectorStartedAtMs,
       version,
