@@ -68,6 +68,27 @@ Minimal ACL idea:
 }
 ```
 
+## Collector-Only Machines
+
+Remote machines that never open the dashboard locally (agent hosts, small VPSes)
+should run in collector-only mode. It installs the telemetry collector and its
+single npm dependency (`bonjour-service`, fetched by
+`scripts/ensure-collector-deps.sh`) and skips the workspace `pnpm install`,
+Next.js build, and dashboard dev server — the steps that OOM small hosts.
+
+```bash
+./setup.sh --collector-only
+```
+
+The mode is persisted as `HIVE_COLLECTOR_ONLY` in `~/.hivemindos/collector.env`,
+so later plain `./setup.sh` or `hive-update` runs stay collector-only. The
+collector advertises `mode: "collector-only"` (and
+`capabilities.collectorOnly`) in `/health`; the dashboard shows the machine as a
+"Collector Node" and its remote/auto updates use the slim path (git pull +
+collector restart) instead of the full install + build. To convert a machine
+back to a full install, run `./setup.sh --full`; to force one full update
+without converting, `./scripts/update-hivemindos.sh --full`.
+
 ## Hivemind Link Setup
 
 Normal setup uses the app-managed Link sidecar by default. For collector-only installs on additional machines, run:

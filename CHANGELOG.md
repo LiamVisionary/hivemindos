@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-10 17:06:55 WITA +0800 - Document Collector-Only Machines
+
+- Status: Pushed
+- Areas changed: fleet telemetry architecture docs (`docs/architecture/tailscale-fleet-telemetry.md`)
+- Summary: The Fleet telemetry docs now explain collector-only machines, including setup, the sticky `HIVE_COLLECTOR_ONLY` flag, health payload reporting, Fleet display behavior, and how to return a machine to the full dashboard setup path.
+- Verification: `git diff --check -- CHANGELOG.md docs/architecture/tailscale-fleet-telemetry.md`.
+- Intended commit message: `Document collector-only machines`
+
 ## 2026-06-10 17:03:24 WITA +0800 - Route Fleet Updates Through Collector-Only Commands
 
 - Status: Pushed
