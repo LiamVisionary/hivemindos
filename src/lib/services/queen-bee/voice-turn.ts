@@ -1,3 +1,6 @@
+import { mkdir, readFile, writeFile } from "fs/promises";
+import { homedir } from "os";
+import { dirname, join } from "path";
 import {
   RUNTIME_CAPABILITIES,
   RUNTIME_DEFINITIONS,
@@ -15,7 +18,9 @@ import {
   type QueenBeeFleetMachine,
 } from "@/lib/services/queen-bee/control-plane";
 
-const CONVERSATION_TURN_TIMEOUT_MS = 20_000;
+// Spoken turns need tight budgets: a slow runtime attempt costs silence.
+const AGENT_TURN_TIMEOUT_MS = 10_000;
+const OPENAI_TURN_TIMEOUT_MS = 20_000;
 const MAX_HISTORY_TURNS = 8;
 const OPENAI_VOICE_CHAT_FALLBACK_MODEL = "gpt-4o-mini";
 
@@ -49,10 +54,13 @@ export async function runQueenBeeVoiceTurn(options: {
   origin: string;
   transcript: string;
   history: QueenVoiceHistoryTurn[];
-  fleetSnapshot: QueenBeeFleetMachine[];
+  /** Lazy so pure-conversation turns never pay for fleet discovery. */
+  fleetSnapshot: () => Promise<QueenBeeFleetMachine[]>;
   vaultPath?: string;
   brainServicesFolder?: string;
   kanbanFolder?: string;
+  /** Optional per-stage timing sink for caller telemetry. */
+  marks?: Record<string, number>;
 }): Promise<QueenVoiceTurnResult> {
   const text = await conversationTurnText(options);
   if (text) {
@@ -85,6 +93,45 @@ export async function runQueenBeeVoiceTurn(options: {
   };
 }
 
+// A failed runtime brain costs several spoken seconds per turn; skip it for a
+// while instead of re-probing on every utterance. File-backed because dev
+// servers recycle route workers, which resets module state between requests.
+let runtimeTurnCooldownUntil = 0;
+const RUNTIME_TURN_COOLDOWN_MS = 5 * 60_000;
+const RUNTIME_COOLDOWN_PATH = join(
+  homedir(),
+  ".hivemindos",
+  "cache",
+  "queen-voice-runtime-cooldown.json",
+);
+
+async function runtimeTurnCoolingDown() {
+  if (Date.now() < runtimeTurnCooldownUntil) return true;
+  try {
+    const data = JSON.parse(await readFile(RUNTIME_COOLDOWN_PATH, "utf8")) as {
+      until?: unknown;
+    };
+    runtimeTurnCooldownUntil = Number(data.until) || 0;
+  } catch {
+    runtimeTurnCooldownUntil = 0;
+  }
+  return Date.now() < runtimeTurnCooldownUntil;
+}
+
+async function startRuntimeTurnCooldown() {
+  runtimeTurnCooldownUntil = Date.now() + RUNTIME_TURN_COOLDOWN_MS;
+  try {
+    await mkdir(dirname(RUNTIME_COOLDOWN_PATH), { recursive: true });
+    await writeFile(
+      RUNTIME_COOLDOWN_PATH,
+      JSON.stringify({ until: runtimeTurnCooldownUntil }),
+      "utf8",
+    );
+  } catch {
+    // In-memory cooldown still applies for this worker.
+  }
+}
+
 // Preferred brain: the user's own chat-capable fleet agent. Fallback: direct
 // OpenAI chat with the same key chain that powers Whisper STT and TTS, so the
 // voice loop stays conversational even when local runtimes are down.
@@ -93,9 +140,13 @@ async function conversationTurnText(options: {
   transcript: string;
   history: QueenVoiceHistoryTurn[];
   vaultPath?: string;
+  marks?: Record<string, number>;
 }) {
-  const agent = await pickConversationAgent(options.vaultPath);
+  const agent = (await runtimeTurnCoolingDown())
+    ? null
+    : await pickConversationAgent(options.vaultPath);
   if (agent) {
+    const agentStartedAt = Date.now();
     try {
       const text = await runRuntimeConversationTurn(
         options.origin,
@@ -103,14 +154,21 @@ async function conversationTurnText(options: {
         options.transcript,
         options.history,
       );
+      if (options.marks)
+        options.marks.agentTurnMs = Date.now() - agentStartedAt;
       if (text.trim()) return text;
+      await startRuntimeTurnCooldown();
     } catch (turnError) {
+      if (options.marks)
+        options.marks.agentTurnMs = Date.now() - agentStartedAt;
+      await startRuntimeTurnCooldown();
       console.warn(
-        `[queen-bee-voice] runtime conversation turn via ${agent.name || agent.id} failed:`,
+        `[queen-bee-voice] runtime conversation turn via ${agent.name || agent.id} failed; cooling down for 5 minutes:`,
         turnError instanceof Error ? turnError.message : turnError,
       );
     }
   }
+  const openAiStartedAt = Date.now();
   try {
     return await runOpenAiConversationTurn(options.transcript, options.history);
   } catch (fallbackError) {
@@ -119,6 +177,9 @@ async function conversationTurnText(options: {
       fallbackError instanceof Error ? fallbackError.message : fallbackError,
     );
     return "";
+  } finally {
+    if (options.marks)
+      options.marks.openAiTurnMs = Date.now() - openAiStartedAt;
   }
 }
 
@@ -161,7 +222,7 @@ async function runOpenAiConversationTurn(
       temperature: 0.6,
     }),
     cache: "no-store",
-    signal: AbortSignal.timeout(CONVERSATION_TURN_TIMEOUT_MS),
+    signal: AbortSignal.timeout(OPENAI_TURN_TIMEOUT_MS),
   });
   const data = (await response.json().catch(() => null)) as {
     choices?: Array<{ message?: { content?: string } }>;
@@ -229,7 +290,7 @@ async function runRuntimeConversationTurn(
       latencyMode: "voice",
     }),
     cache: "no-store",
-    signal: AbortSignal.timeout(CONVERSATION_TURN_TIMEOUT_MS),
+    signal: AbortSignal.timeout(AGENT_TURN_TIMEOUT_MS),
   });
   return readRuntimeResponseText(response);
 }
@@ -274,10 +335,14 @@ async function submitTask(
     vaultPath?: string;
     brainServicesFolder?: string;
     kanbanFolder?: string;
-    fleetSnapshot: QueenBeeFleetMachine[];
+    fleetSnapshot: () => Promise<QueenBeeFleetMachine[]>;
+    marks?: Record<string, number>;
   },
   task: { title: string; message: string },
 ) {
+  const fleetStartedAt = Date.now();
+  const fleetSnapshot = await options.fleetSnapshot();
+  if (options.marks) options.marks.fleetMs = Date.now() - fleetStartedAt;
   const result = await submitQueenBeeMessage({
     message: task.message,
     taskTitle: task.title || undefined,
@@ -286,7 +351,7 @@ async function submitTask(
     vaultPath: options.vaultPath,
     brainServicesFolder: options.brainServicesFolder,
     kanbanFolder: options.kanbanFolder,
-    fleetSnapshot: options.fleetSnapshot,
+    fleetSnapshot,
   });
   const summary =
     typeof result.receipt?.summary === "string" && result.receipt.summary.trim()

@@ -277,8 +277,10 @@ Environment overrides:
   HIVE_SHARED_SKILL_IMPORTS=all|none|codex,hermes,aeon
   HIVE_SHARED_SKILL_TARGETS=all|none|codex,hermes,aeon
   HIVE_SETUP_INTERACTIVE=false
-  HIVE_GITLAWB_SETUP=true|false
-  HIVE_GITLAWB_IDENTITY=true|false
+  HIVE_GITLAWB_SETUP=true|false (default true: every machine gets the gl CLI)
+  HIVE_GITLAWB_IDENTITY=true|false (default true: per-machine DID)
+  HIVE_GITLAWB_REGISTER=true|false (default true: gl register with GITLAWB_NODE)
+  GITLAWB_NODE=<node URL, default https://node.gitlawb.com>
   HIVE_NETWORK_MODE=link|system-tailscale|local
   HIVE_TAILSCALE_AUTHKEY=<tailscale auth key for headless tailnet join with Tailscale SSH>
 EOF
@@ -1694,11 +1696,14 @@ ensure_gitlawb_code_proof() {
   if command -v gl >/dev/null 2>&1 && command -v git-remote-gitlawb >/dev/null 2>&1; then
     ok "GitLawb CLI found: $(command -v gl)"
   else
-    local should_install="false"
-    if [[ "${HIVE_GITLAWB_SETUP:-}" =~ ^(1|true|yes|on)$ ]]; then
-      should_install="true"
-    elif setup_is_interactive && [[ "${HIVE_GITLAWB_SETUP:-true}" != "false" ]] && prompt_yes_no "Install GitLawb CLI for Code Proof now?" "yes"; then
-      should_install="true"
+    # GitLawb's model signs work at push time on the machine doing the work, so
+    # every machine (including non-interactive collector-only installs) gets the
+    # CLI by default. Opt out with HIVE_GITLAWB_SETUP=false.
+    local should_install="true"
+    if [[ "${HIVE_GITLAWB_SETUP:-}" =~ ^(0|false|no|off)$ ]]; then
+      should_install="false"
+    elif setup_is_interactive && [[ -z "${HIVE_GITLAWB_SETUP:-}" ]] && ! prompt_yes_no "Install GitLawb CLI for Code Proof now?" "yes"; then
+      should_install="false"
     fi
 
     if [[ "$should_install" == "true" ]]; then
@@ -1728,11 +1733,13 @@ ensure_gitlawb_code_proof() {
     if gl identity show >/dev/null 2>&1; then
       ok "GitLawb DID found"
     else
-      local should_create_identity="false"
-      if [[ "${HIVE_GITLAWB_IDENTITY:-}" =~ ^(1|true|yes|on)$ ]]; then
-        should_create_identity="true"
-      elif setup_is_interactive && [[ "${HIVE_GITLAWB_IDENTITY:-true}" != "false" ]] && prompt_yes_no "Create a local GitLawb DID now? This does not register with a public node." "yes"; then
-        should_create_identity="true"
+      # Each machine gets its own DID by default (GitLawb's per-actor identity
+      # model); opt out with HIVE_GITLAWB_IDENTITY=false.
+      local should_create_identity="true"
+      if [[ "${HIVE_GITLAWB_IDENTITY:-}" =~ ^(0|false|no|off)$ ]]; then
+        should_create_identity="false"
+      elif setup_is_interactive && [[ -z "${HIVE_GITLAWB_IDENTITY:-}" ]] && ! prompt_yes_no "Create this machine's GitLawb DID now?" "yes"; then
+        should_create_identity="false"
       fi
       if [[ "$should_create_identity" == "true" ]]; then
         if gl identity new >/dev/null 2>&1; then
@@ -1742,6 +1749,30 @@ ensure_gitlawb_code_proof() {
         fi
       else
         warn "No GitLawb DID created; Code Proof identity can be created later from Integrations."
+      fi
+    fi
+
+    # Per the GitLawb quickstart, work is pushed to a network node and the DID is
+    # registered there (signed ref certificates carry the proof). Default to the
+    # public node; override with GITLAWB_NODE, opt out with HIVE_GITLAWB_REGISTER=false.
+    if gl identity show >/dev/null 2>&1; then
+      local gitlawb_node="${GITLAWB_NODE:-https://node.gitlawb.com}"
+      set_env_local "GITLAWB_NODE" "$gitlawb_node"
+      printf "%s\n" "$gitlawb_node" > "$HOME/.hivemindos/gitlawb/node-url"
+      local should_register="true"
+      if [[ "${HIVE_GITLAWB_REGISTER:-}" =~ ^(0|false|no|off)$ ]]; then
+        should_register="false"
+      elif setup_is_interactive && [[ -z "${HIVE_GITLAWB_REGISTER:-}" ]] && ! prompt_yes_no "Register this machine's GitLawb DID with $gitlawb_node?" "yes"; then
+        should_register="false"
+      fi
+      if [[ "$should_register" == "true" ]]; then
+        if GITLAWB_NODE="$gitlawb_node" gl register >/dev/null 2>&1; then
+          ok "GitLawb DID registered with $gitlawb_node"
+        else
+          warn "GitLawb DID registration did not complete; run 'GITLAWB_NODE=$gitlawb_node gl register' later."
+        fi
+      else
+        warn "Skipping GitLawb DID registration; run 'GITLAWB_NODE=$gitlawb_node gl register' to join the network later."
       fi
     fi
   fi

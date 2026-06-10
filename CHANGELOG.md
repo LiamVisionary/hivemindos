@@ -3,6 +3,30 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-10 17:42:34 WITA - Speed Up Queen Bee Voice Turns And Fix Stuck Transcribing Caption
+
+- Status: Pushed
+- Areas changed: Queen Bee voice route (`src/app/api/queen-bee/voice/route.ts`), voice turn service (`src/lib/services/queen-bee/voice-turn.ts`), voice overlay hook (`src/features/queen-voice/use-queen-bee-voice.ts`)
+- Summary: Queen Bee voice turns now run in two steps — transcription first (your words appear on screen in about one to three seconds) and the conversational reply second — instead of one long silent request stuck on "Transcribing...". Stuck states are now impossible to hold: voice requests carry client-side timeouts, and a live caption is dropped if the session ends mid-request. Replies got much faster: an unreachable runtime brain now triggers a five-minute file-backed cooldown (`~/.hivemindos/cache/queen-voice-runtime-cooldown.json`) instead of being re-probed every utterance, the runtime attempt is capped at 10 seconds, and fleet discovery only runs when a turn actually creates a task. Per-stage timings (transcribe, fleet, agent turn, OpenAI turn) are appended to `~/.hivemindos/queen-voice-telemetry.jsonl` for diagnosis.
+- Verification: Live probes through the dev proxy: transcription step 1.1-3.7s; first conversational reply pays one agent probe (~8s), subsequent replies 1.3-1.4s with telemetry confirming the agent probe is skipped during cooldown; focused `pnpm exec tsc --noEmit --pretty false --skipLibCheck` filter returned no diagnostics for touched files; `pnpm exec eslint` passed with zero errors on touched files. In-app mic-to-speech re-test pending user confirmation.
+- Intended commit message: `Speed up Queen Bee voice turns and fix stuck transcribing caption`
+
+## 2026-06-10 17:49:00 WITA +0800 - Add Signed Agent Work Receipts
+
+- Status: Pushed
+- Areas changed: per-agent identity helper (`scripts/agent-identity.mjs`), telemetry collector work-receipt endpoint (`scripts/agent-telemetry-collector.mjs`), dashboard work-receipt proxy (`src/app/api/work-receipts/route.ts`), Kanban dispatch completion flow (`src/features/dashboard/hooks/use-kanban-dispatch-controller.tsx`), Kanban proof hydration (`src/lib/services/kanban/local-kanban-store.ts`), work-receipt verifier (`src/lib/services/gitlawb/work-receipts.ts`)
+- Summary: Agents now get local did:key identities that can sign a work receipt when delegated Kanban work completes. The collector stores receipts in the shared vault or local HivemindOS state, and the Kanban board verifies those signatures before showing them as task proofs, so GitLawb-style accountability works even for repositories that are not hosted on GitLawb.
+- Verification: `node --check scripts/agent-identity.mjs`; `node --check scripts/agent-telemetry-collector.mjs`; focused `pnpm exec tsc --noEmit --pretty false --skipLibCheck` filter returned no diagnostics for work-receipt and Kanban files; `pnpm exec eslint` passed with zero errors on touched files; `git diff --check`.
+- Intended commit message: `Add signed agent work receipts`
+
+## 2026-06-10 17:49:00 WITA +0800 - Show Mobile Devices As Fleet Members
+
+- Status: Pushed
+- Areas changed: Fleet discovery routes (`src/app/api/fleet/discover/route.ts`, `src/app/api/tailscale/devices/route.ts`), Fleet identity helpers (`src/features/fleet/fleet-identity.ts`), Fleet display helpers (`src/features/dashboard/dashboard-display-helpers.tsx`), Fleet cluster and tooltip UI (`src/components/fleet/machine-cluster.tsx`, `src/components/fleet/selection-tooltip.tsx`)
+- Summary: Mobile devices are now preserved in Fleet discovery as bridge-less fleet members instead of being filtered out or shown as needing setup. Phones appear as current fleet peers, but the UI no longer offers agent installation controls on those mobile clusters.
+- Verification: focused `pnpm exec tsc --noEmit --pretty false --skipLibCheck` filter returned no diagnostics for touched Fleet files; `pnpm exec eslint` passed with zero errors on touched files; `git diff --check`.
+- Intended commit message: `Show mobile devices as fleet members`
+
 ## 2026-06-10 17:06:55 WITA +0800 - Document Collector-Only Machines
 
 - Status: Pushed

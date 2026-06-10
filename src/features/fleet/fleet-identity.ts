@@ -1,6 +1,7 @@
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 
-export const SUPPRESSED_DISCOVERED_AGENTS_STORAGE_KEY = "hivemindos.suppressedDiscoveredAgents.v1";
+export const SUPPRESSED_DISCOVERED_AGENTS_STORAGE_KEY =
+  "hivemindos.suppressedDiscoveredAgents.v1";
 
 type FleetMachineIdentity = {
   self?: boolean;
@@ -32,7 +33,12 @@ export function isLoopbackCollector(url?: string) {
   if (!url?.trim()) return false;
   try {
     const hostname = new URL(url).hostname.toLowerCase();
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1" ||
+      hostname === "[::1]"
+    );
   } catch {
     return false;
   }
@@ -44,8 +50,10 @@ export function normalizeMachineName(value?: string) {
 
 export function isHivemindMachineName(name?: string, dnsName?: string) {
   const dnsLabel = dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
-  return normalizeMachineName(name).startsWith("hivemindos")
-    || normalizeMachineName(dnsLabel).startsWith("hivemindos");
+  return (
+    normalizeMachineName(name).startsWith("hivemindos") ||
+    normalizeMachineName(dnsLabel).startsWith("hivemindos")
+  );
 }
 
 export function isMobileMachineOs(os?: string) {
@@ -56,8 +64,16 @@ export function isMacMachineOs(os?: string) {
   return /^(macos|darwin)$/i.test(os ?? "");
 }
 
-export function isVisibleFleetMachine(machine: Pick<FleetMachineIdentity, "name" | "dnsName" | "os">) {
-  return isHivemindMachineName(machine.name, machine.dnsName) || isMacMachineOs(machine.os);
+export function isVisibleFleetMachine(
+  machine: Pick<FleetMachineIdentity, "name" | "dnsName" | "os">,
+) {
+  // Mobile devices are fleet members too: a phone running HivemindOS Mobile
+  // joins the tailnet to reach the hub, so it shows up as an iOS/Android peer.
+  return (
+    isHivemindMachineName(machine.name, machine.dnsName) ||
+    isMacMachineOs(machine.os) ||
+    isMobileMachineOs(machine.os)
+  );
 }
 
 /**
@@ -76,11 +92,20 @@ export function machineExactIdentity(name?: string, dnsName?: string) {
   return value.replace(/^hivemindos/, "").replace(/local$/, "");
 }
 
-export function machineHivemindBase(name?: string, dnsName?: string, os?: string) {
-  const rawDnsLabel = dnsName?.replace(/\.$/, "").split(".")[0]?.toLowerCase() ?? "";
+export function machineHivemindBase(
+  name?: string,
+  dnsName?: string,
+  os?: string,
+) {
+  const rawDnsLabel =
+    dnsName?.replace(/\.$/, "").split(".")[0]?.toLowerCase() ?? "";
   const rawName = name?.toLowerCase() ?? "";
-  const rawValue = normalizeMachineName(rawName).startsWith("hivemindos") ? rawName : rawDnsLabel;
-  const canonicalValue = isMacMachineOs(os) ? rawValue.replace(/-\d+$/, "") : rawValue;
+  const rawValue = normalizeMachineName(rawName).startsWith("hivemindos")
+    ? rawName
+    : rawDnsLabel;
+  const canonicalValue = isMacMachineOs(os)
+    ? rawValue.replace(/-\d+$/, "")
+    : rawValue;
   const value = normalizeMachineName(canonicalValue);
   if (!value.startsWith("hivemindos")) return "";
   return value.replace(/^hivemindos/, "").replace(/local\d*$/, "");
@@ -89,10 +114,16 @@ export function machineHivemindBase(name?: string, dnsName?: string, os?: string
 export function machinePhysicalBase(name?: string, dnsName?: string) {
   const dnsLabel = dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
   const value = normalizeMachineName(dnsLabel) || normalizeMachineName(name);
-  return value.replace(/^hivemindos/, "").replace(/local\d*$/, "").replace(/\d+$/, "");
+  return value
+    .replace(/^hivemindos/, "")
+    .replace(/local\d*$/, "")
+    .replace(/\d+$/, "");
 }
 
-export function isLocalLinkDuplicateOfSelf(self: FleetMachineIdentity | undefined, device: FleetMachineIdentity) {
+export function isLocalLinkDuplicateOfSelf(
+  self: FleetMachineIdentity | undefined,
+  device: FleetMachineIdentity,
+) {
   if (!self || device.self) return false;
   // Exact identity only. A name-base match (with `-N` stripped) is NOT proof
   // of being this machine: a second computer sharing the hostname differs
@@ -100,7 +131,9 @@ export function isLocalLinkDuplicateOfSelf(self: FleetMachineIdentity | undefine
   if (Boolean(self.ip && device.ip && self.ip === device.ip)) return true;
   const selfIdentity = machineExactIdentity(self.name, self.dnsName);
   const deviceIdentity = machineExactIdentity(device.name, device.dnsName);
-  return Boolean(selfIdentity && deviceIdentity && selfIdentity === deviceIdentity);
+  return Boolean(
+    selfIdentity && deviceIdentity && selfIdentity === deviceIdentity,
+  );
 }
 
 export function displayMachineName(
@@ -110,11 +143,12 @@ export function displayMachineName(
 ) {
   if (self) {
     const os = options?.os?.toLowerCase() ?? "";
-    const localLabel = os === "windows" || os === "win32"
-      ? "This PC"
-      : os === "linux"
-        ? "This computer"
-        : "This Mac";
+    const localLabel =
+      os === "windows" || os === "win32"
+        ? "This PC"
+        : os === "linux"
+          ? "This computer"
+          : "This Mac";
     if (!options?.mobileViewer) return localLabel;
     if (localLabel === "This PC") return "Dashboard PC";
     if (localLabel === "This computer") return "Dashboard computer";
@@ -123,12 +157,16 @@ export function displayMachineName(
   return name.replace(/^hivemindos[-_]?/i, "") || name;
 }
 
-export function shouldPreserveMissingDiscoveredMachine(machine: DiscoveredMachineIdentity) {
-  if (!isVisibleFleetMachine({
-    name: machine.device.name,
-    dnsName: machine.device.dnsName,
-    os: machine.device.os,
-  })) {
+export function shouldPreserveMissingDiscoveredMachine(
+  machine: DiscoveredMachineIdentity,
+) {
+  if (
+    !isVisibleFleetMachine({
+      name: machine.device.name,
+      dnsName: machine.device.dnsName,
+      os: machine.device.os,
+    })
+  ) {
     return false;
   }
   return machine.agents.length > 0 || machine.snapshots.length > 0;
@@ -144,26 +182,41 @@ export function machineIdentityFromParts({
   const dnsLabel = dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
   const normalizedDnsName = normalizeMachineName(dnsLabel);
   const normalizedName = normalizeMachineName(name) || normalizedDnsName;
-  if (normalizedName.startsWith("hivemindos") || normalizedDnsName.startsWith("hivemindos")) {
-    return machineExactIdentity(name, dnsName) || normalizedDnsName || normalizedName;
+  if (
+    normalizedName.startsWith("hivemindos") ||
+    normalizedDnsName.startsWith("hivemindos")
+  ) {
+    return (
+      machineExactIdentity(name, dnsName) || normalizedDnsName || normalizedName
+    );
   }
   if (self) return "self";
   // Exact identity, no `-N` collapsing: macOS renames leave offline ghosts
   // (hidden elsewhere by online/agent filters), but a live `-1` node is a
   // different physical machine that must keep its own identity.
-  return machineExactIdentity(name, dnsName) || normalizedName || collectorKey(collectorUrl) || ip || "";
+  return (
+    machineExactIdentity(name, dnsName) ||
+    normalizedName ||
+    collectorKey(collectorUrl) ||
+    ip ||
+    ""
+  );
 }
 
 export function normalizeAgentPath(path?: string) {
-  return path
-    ?.trim()
-    .replace(/^~(?=$|\/)/, "$home")
-    .replace(/\/+$/, "")
-    .toLowerCase() ?? "";
+  return (
+    path
+      ?.trim()
+      .replace(/^~(?=$|\/)/, "$home")
+      .replace(/\/+$/, "")
+      .toLowerCase() ?? ""
+  );
 }
 
 function agentRoleScope(agent: AgentProfile) {
-  return agent.beeRole === "queen" || /^queen-bee-/i.test(agent.id) ? ":queen" : "";
+  return agent.beeRole === "queen" || /^queen-bee-/i.test(agent.id)
+    ? ":queen"
+    : "";
 }
 
 function normalizedAgentName(value?: string) {
@@ -187,10 +240,16 @@ function uniqueAgentMatch(
   autoDiscoveredAgents: AgentProfile[],
   matches: (candidate: AgentProfile) => boolean,
 ) {
-  const candidates = autoDiscoveredAgents.filter((candidate) => candidate.id !== agent.id && matches(candidate));
+  const candidates = autoDiscoveredAgents.filter(
+    (candidate) => candidate.id !== agent.id && matches(candidate),
+  );
   if (candidates.length === 1) return candidates[0];
   const identities = new Set(candidates.map(relaxedAgentIdentity));
-  if (identities.size === 1) return candidates.find((candidate) => candidate.telemetryUrl?.trim()) ?? candidates[0];
+  if (identities.size === 1)
+    return (
+      candidates.find((candidate) => candidate.telemetryUrl?.trim()) ??
+      candidates[0]
+    );
   return undefined;
 }
 
@@ -199,11 +258,13 @@ export function agentWorkspaceKey(agent: AgentProfile) {
   const dataDir = normalizeAgentPath(agent.localDataDir);
   if (dataDir) {
     const collector = collectorKey(agent.telemetryUrl) || "unattached";
-    const canonicalHermesHome = dataDir === "$home/.hermes" || dataDir.endsWith("/.hermes");
+    const canonicalHermesHome =
+      dataDir === "$home/.hermes" || dataDir.endsWith("/.hermes");
     return `${agent.runtime}:data:${collector}:${canonicalHermesHome ? "$home/.hermes" : dataDir}${roleScope}`;
   }
   const telemetry = collectorKey(agent.telemetryUrl);
-  if (telemetry) return `${agent.runtime}:telemetry:${telemetry}:${agent.agentId || agent.name}${roleScope}`;
+  if (telemetry)
+    return `${agent.runtime}:telemetry:${telemetry}:${agent.agentId || agent.name}${roleScope}`;
   return `${agent.runtime}:id:${agent.id}${roleScope}`;
 }
 
@@ -214,7 +275,10 @@ export function agentSuppressionKeys(agent: AgentProfile) {
   ].filter(Boolean);
 }
 
-export function agentMatchesSuppression(agent: AgentProfile, suppressedKeys: ReadonlySet<string>) {
+export function agentMatchesSuppression(
+  agent: AgentProfile,
+  suppressedKeys: ReadonlySet<string>,
+) {
   return agentSuppressionKeys(agent).some((key) => suppressedKeys.has(key));
 }
 
@@ -230,7 +294,12 @@ export function suppressionKeysForRemovedAgent(
   survivingAgents: AgentProfile[],
 ) {
   const keys = agent ? agentSuppressionKeys(agent) : [`id:${agentId}`];
-  return keys.filter((key) => !survivingAgents.some((candidate) => agentSuppressionKeys(candidate).includes(key)));
+  return keys.filter(
+    (key) =>
+      !survivingAgents.some((candidate) =>
+        agentSuppressionKeys(candidate).includes(key),
+      ),
+  );
 }
 
 /**
@@ -240,17 +309,27 @@ export function suppressionKeysForRemovedAgent(
  * Returns the suppression set without the colliding keys, or null when the
  * agent collides with nothing.
  */
-export function withoutAgentSuppression(suppressedKeys: ReadonlySet<string>, agent: AgentProfile) {
-  const collidingKeys = agentSuppressionKeys(agent).filter((key) => suppressedKeys.has(key));
+export function withoutAgentSuppression(
+  suppressedKeys: ReadonlySet<string>,
+  agent: AgentProfile,
+) {
+  const collidingKeys = agentSuppressionKeys(agent).filter((key) =>
+    suppressedKeys.has(key),
+  );
   if (collidingKeys.length === 0) return null;
   const next = new Set(suppressedKeys);
   collidingKeys.forEach((key) => next.delete(key));
   return next;
 }
 
-export function filterSuppressedAgents<T extends AgentProfile>(agents: T[], suppressedKeys: ReadonlySet<string>) {
+export function filterSuppressedAgents<T extends AgentProfile>(
+  agents: T[],
+  suppressedKeys: ReadonlySet<string>,
+) {
   if (suppressedKeys.size === 0) return agents;
-  return agents.filter((agent) => !agentMatchesSuppression(agent, suppressedKeys));
+  return agents.filter(
+    (agent) => !agentMatchesSuppression(agent, suppressedKeys),
+  );
 }
 
 export function collectorRuntimeKey(agent: AgentProfile) {
@@ -265,62 +344,87 @@ export function renderAgentKey(agent: AgentProfile, index: number) {
     collectorKey(agent.telemetryUrl),
     agent.localDataDir?.trim() || agent.machineName || "",
     index,
-  ].filter(Boolean).join(":");
+  ]
+    .filter(Boolean)
+    .join(":");
 }
 
-export function agentAliasTarget(agent: AgentProfile, autoDiscoveredAgents: AgentProfile[]) {
-  const sameId = agent.id ? autoDiscoveredAgents.find((candidate) => candidate.id === agent.id) : undefined;
+export function agentAliasTarget(
+  agent: AgentProfile,
+  autoDiscoveredAgents: AgentProfile[],
+) {
+  const sameId = agent.id
+    ? autoDiscoveredAgents.find((candidate) => candidate.id === agent.id)
+    : undefined;
   if (sameId) return sameId;
 
   const exactKey = agentWorkspaceKey(agent);
-  const exact = autoDiscoveredAgents.find((candidate) => candidate.id !== agent.id && agentWorkspaceKey(candidate) === exactKey);
+  const exact = autoDiscoveredAgents.find(
+    (candidate) =>
+      candidate.id !== agent.id && agentWorkspaceKey(candidate) === exactKey,
+  );
   if (exact) return exact;
 
   const roleScope = agentRoleScope(agent);
   const dataDir = normalizeAgentPath(agent.localDataDir);
   if (dataDir) {
-    const dataDirMatch = uniqueAgentMatch(agent, autoDiscoveredAgents, (candidate) => (
-      candidate.runtime === agent.runtime
-      && agentRoleScope(candidate) === roleScope
-      && normalizeAgentPath(candidate.localDataDir) === dataDir
-    ));
+    const dataDirMatch = uniqueAgentMatch(
+      agent,
+      autoDiscoveredAgents,
+      (candidate) =>
+        candidate.runtime === agent.runtime &&
+        agentRoleScope(candidate) === roleScope &&
+        normalizeAgentPath(candidate.localDataDir) === dataDir,
+    );
     if (dataDirMatch) return dataDirMatch;
   }
 
   const aeonRepo = agent.aeonRepo?.trim().toLowerCase();
   if (agent.runtime === "aeon" && aeonRepo) {
-    const repoMatch = uniqueAgentMatch(agent, autoDiscoveredAgents, (candidate) => (
-      candidate.runtime === "aeon"
-      && agentRoleScope(candidate) === roleScope
-      && candidate.aeonRepo?.trim().toLowerCase() === aeonRepo
-    ));
+    const repoMatch = uniqueAgentMatch(
+      agent,
+      autoDiscoveredAgents,
+      (candidate) =>
+        candidate.runtime === "aeon" &&
+        agentRoleScope(candidate) === roleScope &&
+        candidate.aeonRepo?.trim().toLowerCase() === aeonRepo,
+    );
     if (repoMatch) return repoMatch;
   }
 
   const agentId = agent.agentId?.trim().toLowerCase();
   const name = normalizedAgentName(agent.name);
   if (agentId && name) {
-    const idMatch = uniqueAgentMatch(agent, autoDiscoveredAgents, (candidate) => (
-      candidate.runtime === agent.runtime
-      && agentRoleScope(candidate) === roleScope
-      && candidate.agentId?.trim().toLowerCase() === agentId
-      && normalizedAgentName(candidate.name) === name
-    ));
+    const idMatch = uniqueAgentMatch(
+      agent,
+      autoDiscoveredAgents,
+      (candidate) =>
+        candidate.runtime === agent.runtime &&
+        agentRoleScope(candidate) === roleScope &&
+        candidate.agentId?.trim().toLowerCase() === agentId &&
+        normalizedAgentName(candidate.name) === name,
+    );
     if (idMatch) return idMatch;
   }
 
   if (name) {
-    return uniqueAgentMatch(agent, autoDiscoveredAgents, (candidate) => (
-      candidate.runtime === agent.runtime
-      && agentRoleScope(candidate) === roleScope
-      && normalizedAgentName(candidate.name) === name
-    ));
+    return uniqueAgentMatch(
+      agent,
+      autoDiscoveredAgents,
+      (candidate) =>
+        candidate.runtime === agent.runtime &&
+        agentRoleScope(candidate) === roleScope &&
+        normalizedAgentName(candidate.name) === name,
+    );
   }
 
   return undefined;
 }
 
-export function agentAliasMap(configuredAgents: AgentProfile[], autoDiscoveredAgents: AgentProfile[]) {
+export function agentAliasMap(
+  configuredAgents: AgentProfile[],
+  autoDiscoveredAgents: AgentProfile[],
+) {
   const entries: Array<readonly [string, string]> = [];
   configuredAgents.forEach((agent) => {
     const target = agentAliasTarget(agent, autoDiscoveredAgents);

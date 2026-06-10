@@ -204,7 +204,15 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
       setPhase("thinking");
       setSpeechDetected(false);
       const youTurnId = addTurn("you", "Transcribing...", true);
+      // Drop the live caption if the session ends mid-request so a stale
+      // "Transcribing..." row never outlives the turn.
+      abort.signal.addEventListener("abort", () => dropTurn(youTurnId), {
+        once: true,
+      });
+      let transcriptShown = false;
       try {
+        // Step 1: transcription only, so the user's words land on screen
+        // fast instead of waiting out the whole conversational turn.
         const form = new FormData();
         form.set(
           "audio",
@@ -212,37 +220,66 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
             type: audio.type || mimeType || "audio/webm",
           }),
         );
-        form.set("history", JSON.stringify(history.slice(-8)));
-        const response = await fetch("/api/queen-bee/voice", {
+        const transcribeResponse = await fetch("/api/queen-bee/voice", {
           method: "POST",
           body: form,
           cache: "no-store",
-          signal: abort.signal,
+          // A stuck upstream should surface as an error pill, not an
+          // indefinitely live caption.
+          signal: AbortSignal.any([abort.signal, AbortSignal.timeout(60_000)]),
         });
-        const data = (await response
+        const transcribed = (await transcribeResponse
           .json()
           .catch(() => null)) as VoiceTurnResponse | null;
         if (cancelled) return;
-        if (!response.ok || !data?.ok || !data.transcript || !data.reply) {
+        if (
+          !transcribeResponse.ok ||
+          !transcribed?.ok ||
+          !transcribed.transcript
+        ) {
           dropTurn(youTurnId);
           failTurn(
-            data?.error ||
-              `Queen Bee voice turn returned HTTP ${response.status}.`,
+            transcribed?.error ||
+              `Queen Bee transcription returned HTTP ${transcribeResponse.status}.`,
           );
           return;
         }
-        updateTurn(youTurnId, data.transcript);
+        const transcript = transcribed.transcript;
+        updateTurn(youTurnId, transcript);
+        transcriptShown = true;
+
+        // Step 2: the conversational Queen Bee reply (and any delegation).
+        const converseResponse = await fetch("/api/queen-bee/voice", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "converse",
+            transcript,
+            history: history.slice(-8),
+          }),
+          cache: "no-store",
+          signal: AbortSignal.any([abort.signal, AbortSignal.timeout(75_000)]),
+        });
+        const data = (await converseResponse
+          .json()
+          .catch(() => null)) as VoiceTurnResponse | null;
+        if (cancelled) return;
+        history.push({ who: "you", text: transcript });
+        if (!converseResponse.ok || !data?.ok || !data.reply) {
+          failTurn(
+            data?.error ||
+              `Queen Bee reply returned HTTP ${converseResponse.status}.`,
+          );
+          return;
+        }
         addTurn("queen", data.reply);
-        history.push(
-          { who: "you", text: data.transcript },
-          { who: "queen", text: data.reply },
-        );
+        history.push({ who: "queen", text: data.reply });
         setPhase("speaking");
         await playSpokenReply(data.reply, abort.signal);
         if (!cancelled) startListening();
       } catch (turnError) {
         if (cancelled) return;
-        dropTurn(youTurnId);
+        if (!transcriptShown) dropTurn(youTurnId);
         failTurn(
           turnError instanceof Error
             ? turnError.message

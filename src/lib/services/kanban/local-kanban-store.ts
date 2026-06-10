@@ -4,6 +4,7 @@ import { homedir } from "os";
 import { isAbsolute, join, sep } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
+import { verifiedWorkReceiptProofsByTask } from "@/lib/services/gitlawb/work-receipts";
 import {
   applyLoopReceipts,
   discoverLoop,
@@ -15,12 +16,12 @@ import {
   recordLoopAntiPatterns,
   recordLoopExperiment,
 } from "@/lib/services/kanban/loop-optimizer";
-import { gitLawbProofForProject, readProjectRegistry } from "@/lib/services/projects/project-registry";
+import {
+  gitLawbProofForProject,
+  readProjectRegistry,
+} from "@/lib/services/projects/project-registry";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
-import type {
-  GitLawbProof,
-  HivemindProject,
-} from "@/lib/types/gitlawb";
+import type { GitLawbProof, HivemindProject } from "@/lib/types/gitlawb";
 import type {
   KanbanBoard,
   KanbanBoardMeta,
@@ -37,7 +38,10 @@ import type {
   KanbanTaskRun,
 } from "@/lib/types/kanban";
 import { KANBAN_STATUSES } from "@/lib/types/kanban";
-import { moveTaskBetweenColumns, priorityWeight } from "@/lib/utils/kanban-board";
+import {
+  moveTaskBetweenColumns,
+  priorityWeight,
+} from "@/lib/utils/kanban-board";
 
 const ROOT_DIR = join(homedir(), ".hivemindos", "kanban");
 const BOARDS_DIR = join(ROOT_DIR, "boards");
@@ -70,7 +74,32 @@ type CreateTaskInput = {
   maxAttempts?: number;
 };
 
-type PatchTaskInput = Partial<Pick<KanbanTask, "title" | "body" | "result" | "assignee" | "tenant" | "status" | "priority" | "workspace" | "skills" | "attachments" | "linkedDirectories" | "deliverables" | "targetMachine" | "projectId" | "proofs" | "loopReceipts" | "agentSession" | "reviewedBy" | "undoRequestedBy" | "maxRuntimeMs" | "maxAttempts">> & {
+type PatchTaskInput = Partial<
+  Pick<
+    KanbanTask,
+    | "title"
+    | "body"
+    | "result"
+    | "assignee"
+    | "tenant"
+    | "status"
+    | "priority"
+    | "workspace"
+    | "skills"
+    | "attachments"
+    | "linkedDirectories"
+    | "deliverables"
+    | "targetMachine"
+    | "projectId"
+    | "proofs"
+    | "loopReceipts"
+    | "agentSession"
+    | "reviewedBy"
+    | "undoRequestedBy"
+    | "maxRuntimeMs"
+    | "maxAttempts"
+  >
+> & {
   loop?: KanbanTask["loop"] | null;
   reviewedAt?: number | null;
   undoRequestedAt?: number | null;
@@ -117,22 +146,30 @@ export type KanbanStorageInfo = {
 export function normalizeBoardSlug(input?: string | null) {
   const slug = (input || DEFAULT_BOARD).trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(slug)) {
-    throw new Error("Board slug must start with a letter or number and contain only lowercase letters, numbers, hyphens, or underscores.");
+    throw new Error(
+      "Board slug must start with a letter or number and contain only lowercase letters, numbers, hyphens, or underscores.",
+    );
   }
   return slug;
 }
 
-export function resolveKanbanStorage(slugInput?: string | null, options: KanbanStorageOptions = {}): KanbanStorageInfo {
+export function resolveKanbanStorage(
+  slugInput?: string | null,
+  options: KanbanStorageOptions = {},
+): KanbanStorageInfo {
   const slug = normalizeBoardSlug(slugInput);
-  const requestedVault: string | undefined = cleanOptional(options.vaultPath ?? undefined)
-    ?? cleanOptional(DEFAULT_SHARED_VAULT.vaultPath ?? undefined);
+  const requestedVault: string | undefined =
+    cleanOptional(options.vaultPath ?? undefined) ??
+    cleanOptional(DEFAULT_SHARED_VAULT.vaultPath ?? undefined);
   const explicitVault = Boolean(cleanOptional(options.vaultPath ?? undefined));
-  const folder = normalizeKanbanFolder(options.kanbanFolder) || DEFAULT_VAULT_KANBAN_FOLDER;
+  const folder =
+    normalizeKanbanFolder(options.kanbanFolder) || DEFAULT_VAULT_KANBAN_FOLDER;
 
   if (requestedVault) {
     const vaultRoot = resolveObsidianVaultPath(requestedVault);
     try {
-      if (!statSync(vaultRoot).isDirectory()) throw new Error("Vault path is not a directory.");
+      if (!statSync(vaultRoot).isDirectory())
+        throw new Error("Vault path is not a directory.");
       const root = join(vaultRoot, folder);
       const boardsRoot = join(root, "boards");
       return {
@@ -143,7 +180,8 @@ export function resolveKanbanStorage(slugInput?: string | null, options: KanbanS
       };
     } catch (error) {
       if (explicitVault) {
-        const message = error instanceof Error ? error.message : "Vault path is unavailable.";
+        const message =
+          error instanceof Error ? error.message : "Vault path is unavailable.";
         throw new Error(`Kanban vault path is unavailable: ${message}`);
       }
     }
@@ -154,7 +192,9 @@ export function resolveKanbanStorage(slugInput?: string | null, options: KanbanS
     root: ROOT_DIR,
     boardsRoot: BOARDS_DIR,
     file: boardPathFor(ROOT_DIR, BOARDS_DIR, slug),
-    fallbackReason: requestedVault ? "Default Obsidian vault path was unavailable." : "No Obsidian vault path configured.",
+    fallbackReason: requestedVault
+      ? "Default Obsidian vault path was unavailable."
+      : "No Obsidian vault path configured.",
   };
 }
 
@@ -167,7 +207,12 @@ export async function listBoards(options: KanbanStorageOptions = {}) {
     const { readdir } = await import("fs/promises");
     const entries = await readdir(storage.boardsRoot, { withFileTypes: true });
     for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name === DEFAULT_BOARD || entry.name === "_archived") continue;
+      if (
+        !entry.isDirectory() ||
+        entry.name === DEFAULT_BOARD ||
+        entry.name === "_archived"
+      )
+        continue;
       boards.push(await readBoardMeta(entry.name, options));
     }
   } catch {
@@ -176,7 +221,10 @@ export async function listBoards(options: KanbanStorageOptions = {}) {
   return boards.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function readBoardMeta(slugInput?: string | null, options: KanbanStorageOptions = {}) {
+async function readBoardMeta(
+  slugInput?: string | null,
+  options: KanbanStorageOptions = {},
+) {
   const slug = normalizeBoardSlug(slugInput);
   const storage = resolveKanbanStorage(slug, options);
   if (!existsSync(storage.file)) return emptyBoard(slug).meta;
@@ -185,15 +233,22 @@ async function readBoardMeta(slugInput?: string | null, options: KanbanStorageOp
 
 async function projectMapForKanban(options: KanbanStorageOptions = {}) {
   try {
-    const registry = await readProjectRegistry({ vaultPath: options.vaultPath });
+    const registry = await readProjectRegistry({
+      vaultPath: options.vaultPath,
+    });
     return new Map(registry.projects.map((project) => [project.id, project]));
   } catch {
     return new Map<string, HivemindProject>();
   }
 }
 
-function mergedProjectProofs(task: Pick<KanbanTask, "projectId" | "proofs">, projectsById: Map<string, HivemindProject>) {
-  const proofs = Array.isArray(task.proofs) ? task.proofs.map((proof) => sanitizeGitLawbProof(proof) as GitLawbProof) : [];
+function mergedProjectProofs(
+  task: Pick<KanbanTask, "projectId" | "proofs">,
+  projectsById: Map<string, HivemindProject>,
+) {
+  const proofs = Array.isArray(task.proofs)
+    ? task.proofs.map((proof) => sanitizeGitLawbProof(proof) as GitLawbProof)
+    : [];
   if (!task.projectId) return proofs;
   const project = projectsById.get(task.projectId);
   const projectProof = project ? gitLawbProofForProject(project) : null;
@@ -210,35 +265,72 @@ function mergedProjectProofs(task: Pick<KanbanTask, "projectId" | "proofs">, pro
     title: cleanOptional(target.title) ?? projectProof.title,
     metadata: {
       ...(projectProof.metadata ?? {}),
-      ...(target.metadata && typeof target.metadata === "object" ? target.metadata : {}),
+      ...(target.metadata && typeof target.metadata === "object"
+        ? target.metadata
+        : {}),
     },
   }) as GitLawbProof;
   return next;
 }
 
-async function hydrateBoardProjectProofs(board: KanbanBoard, options: KanbanStorageOptions = {}) {
-  if (!board.tasks.some((task) => task.projectId)) return board;
-  const projectsById = await projectMapForKanban(options);
-  if (!projectsById.size) return board;
+async function hydrateBoardProjectProofs(
+  board: KanbanBoard,
+  options: KanbanStorageOptions = {},
+) {
+  // Signature-verified work receipts attach to any task, even when the project
+  // is not linked to (or hosted on) GitLawb.
+  let receiptProofs = new Map<string, GitLawbProof>();
+  try {
+    receiptProofs = verifiedWorkReceiptProofsByTask(
+      options.vaultPath ?? undefined,
+    );
+  } catch {
+    // Receipt verification is best-effort; boards render without it.
+  }
+  const needsProjects = board.tasks.some((task) => task.projectId);
+  if (!needsProjects && !receiptProofs.size) return board;
+  const projectsById = needsProjects
+    ? await projectMapForKanban(options)
+    : new Map<string, HivemindProject>();
   return {
     ...board,
-    tasks: board.tasks.map((task) => ({
-      ...task,
-      proofs: mergedProjectProofs(task, projectsById),
-    })),
+    tasks: board.tasks.map((task) => {
+      let proofs = mergedProjectProofs(task, projectsById);
+      const receiptProof = receiptProofs.get(task.id);
+      if (
+        receiptProof &&
+        !proofs.some((proof) => proof?.id === receiptProof.id)
+      ) {
+        proofs = [receiptProof, ...proofs];
+      }
+      return { ...task, proofs };
+    }),
   };
 }
 
-export async function readBoard(slugInput?: string | null, options: KanbanStorageOptions = {}): Promise<KanbanBoard> {
+export async function readBoard(
+  slugInput?: string | null,
+  options: KanbanStorageOptions = {},
+): Promise<KanbanBoard> {
   const slug = normalizeBoardSlug(slugInput);
   const storage = resolveKanbanStorage(slug, options);
   if (!existsSync(storage.file)) {
-    const defaultVaultBoard = await readDefaultVaultBoardIfPopulated(slug, options, storage);
-    if (defaultVaultBoard) return hydrateBoardProjectProofs(defaultVaultBoard, options);
+    const defaultVaultBoard = await readDefaultVaultBoardIfPopulated(
+      slug,
+      options,
+      storage,
+    );
+    if (defaultVaultBoard)
+      return hydrateBoardProjectProofs(defaultVaultBoard, options);
     const localPath = boardPathFor(ROOT_DIR, BOARDS_DIR, slug);
     if (storage.source === "obsidian" && existsSync(localPath)) {
       const migrated = normalizeBoard(await readBoardFile(localPath), slug);
-      migrated.events.unshift(event("board.migrated", "Migrated board from local dashboard storage into the shared Obsidian vault."));
+      migrated.events.unshift(
+        event(
+          "board.migrated",
+          "Migrated board from local dashboard storage into the shared Obsidian vault.",
+        ),
+      );
       await writeBoard(migrated, options);
       return hydrateBoardProjectProofs(migrated, options);
     }
@@ -248,8 +340,13 @@ export async function readBoard(slugInput?: string | null, options: KanbanStorag
   }
   const board = normalizeBoard(await readBoardFile(storage.file), slug);
   if (storage.source === "obsidian" && board.tasks.length === 0) {
-    const defaultVaultBoard = await readDefaultVaultBoardIfPopulated(slug, options, storage);
-    if (defaultVaultBoard) return hydrateBoardProjectProofs(defaultVaultBoard, options);
+    const defaultVaultBoard = await readDefaultVaultBoardIfPopulated(
+      slug,
+      options,
+      storage,
+    );
+    if (defaultVaultBoard)
+      return hydrateBoardProjectProofs(defaultVaultBoard, options);
   }
   return hydrateBoardProjectProofs(board, options);
 }
@@ -267,7 +364,11 @@ async function readBoardMetaFile(path: string, slug: string) {
     const head = new TextDecoder().decode(buffer.subarray(0, bytesRead));
     const match = head.match(/"meta"\s*:\s*(\{[\s\S]*?\})\s*,\s*"tasks"/);
     if (match) {
-      return { ...emptyBoard(slug).meta, ...JSON.parse(match[1]), slug } as KanbanBoardMeta;
+      return {
+        ...emptyBoard(slug).meta,
+        ...JSON.parse(match[1]),
+        slug,
+      } as KanbanBoardMeta;
     }
   } finally {
     await handle.close();
@@ -275,21 +376,41 @@ async function readBoardMetaFile(path: string, slug: string) {
   return normalizeBoard(await readBoardFile(path), slug).meta;
 }
 
-async function readDefaultVaultBoardIfPopulated(slug: string, options: KanbanStorageOptions, currentStorage: KanbanStorageInfo) {
+async function readDefaultVaultBoardIfPopulated(
+  slug: string,
+  options: KanbanStorageOptions,
+  currentStorage: KanbanStorageInfo,
+) {
   if (currentStorage.source !== "obsidian") return null;
   const requestedFolder = safeVaultFolder(options.kanbanFolder);
-  if (!requestedFolder || requestedFolder === safeVaultFolder(DEFAULT_VAULT_KANBAN_FOLDER)) return null;
+  if (
+    !requestedFolder ||
+    requestedFolder === safeVaultFolder(DEFAULT_VAULT_KANBAN_FOLDER)
+  )
+    return null;
   for (const fallbackSlug of [slug, DEFAULT_BOARD]) {
-    const defaultStorage = resolveKanbanStorage(fallbackSlug, { ...options, kanbanFolder: DEFAULT_VAULT_KANBAN_FOLDER });
-    if (defaultStorage.file === currentStorage.file || !existsSync(defaultStorage.file)) continue;
-    const defaultBoard = normalizeBoard(await readBoardFile(defaultStorage.file), fallbackSlug);
+    const defaultStorage = resolveKanbanStorage(fallbackSlug, {
+      ...options,
+      kanbanFolder: DEFAULT_VAULT_KANBAN_FOLDER,
+    });
+    if (
+      defaultStorage.file === currentStorage.file ||
+      !existsSync(defaultStorage.file)
+    )
+      continue;
+    const defaultBoard = normalizeBoard(
+      await readBoardFile(defaultStorage.file),
+      fallbackSlug,
+    );
     if (defaultBoard.tasks.length > 0) return defaultBoard;
   }
   return null;
 }
 
 function normalizeBoard(parsed: KanbanBoard, slug: string): KanbanBoard {
-  const tasks = Array.isArray(parsed.tasks) ? parsed.tasks.map(normalizeTask) : [];
+  const tasks = Array.isArray(parsed.tasks)
+    ? parsed.tasks.map(normalizeTask)
+    : [];
   const board = {
     ...emptyBoard(slug),
     ...parsed,
@@ -306,25 +427,40 @@ function normalizeBoard(parsed: KanbanBoard, slug: string): KanbanBoard {
 
 function normalizeTask(task: KanbanTask): KanbanTask {
   const storedDeliverables = Array.isArray(task.deliverables)
-    ? task.deliverables.map(normalizeDeliverable).filter(Boolean) as KanbanDeliverable[]
+    ? (task.deliverables
+        .map(normalizeDeliverable)
+        .filter(Boolean) as KanbanDeliverable[])
     : [];
   const normalizedStatus = normalizeKanbanStatus(task.status);
-  const extractedDeliverables = normalizedStatus === "done" ? extractTaskDeliverables(task, task.result, task.updatedAt) : [];
+  const extractedDeliverables =
+    normalizedStatus === "done"
+      ? extractTaskDeliverables(task, task.result, task.updatedAt)
+      : [];
   return {
     ...task,
     status: normalizedStatus,
     attachments: Array.isArray(task.attachments) ? task.attachments : [],
-    linkedDirectories: Array.isArray(task.linkedDirectories) ? task.linkedDirectories : [],
-    deliverables: filterSourceDeliverables(task, storedDeliverables.length ? storedDeliverables : extractedDeliverables),
+    linkedDirectories: Array.isArray(task.linkedDirectories)
+      ? task.linkedDirectories
+      : [],
+    deliverables: filterSourceDeliverables(
+      task,
+      storedDeliverables.length ? storedDeliverables : extractedDeliverables,
+    ),
     targetMachine: task.targetMachine?.key ? task.targetMachine : null,
     projectId: cleanOptional(task.projectId),
-    proofs: Array.isArray(task.proofs) ? task.proofs.map((proof) => sanitizeGitLawbProof(proof)) : [],
+    proofs: Array.isArray(task.proofs)
+      ? task.proofs.map((proof) => sanitizeGitLawbProof(proof))
+      : [],
     loop: normalizeLoopSpec(task.loop, task.maxAttempts, task.maxRuntimeMs),
     loopReceipts: normalizeLoopReceipts(task.loopReceipts),
     claimLock: cleanOptional(task.claimLock),
     currentRunId: cleanOptional(task.currentRunId),
     attempt: positiveInteger(task.attempt) ?? 1,
-    maxAttempts: positiveInteger(task.maxAttempts) ?? loopMaxAttempts(task.loop) ?? DEFAULT_MAX_ATTEMPTS,
+    maxAttempts:
+      positiveInteger(task.maxAttempts) ??
+      loopMaxAttempts(task.loop) ??
+      DEFAULT_MAX_ATTEMPTS,
     lastFailureReason: normalizeFailureReason(task.lastFailureReason),
   };
 }
@@ -341,7 +477,12 @@ function normalizeDeliverable(value: unknown): KanbanDeliverable | null {
     kind,
     path: cleanOptional(item.path),
     url: cleanOptional(item.url),
-    exists: typeof item.exists === "boolean" ? item.exists : item.path ? existsSync(item.path) : undefined,
+    exists:
+      typeof item.exists === "boolean"
+        ? item.exists
+        : item.path
+          ? existsSync(item.path)
+          : undefined,
     createdAt: positiveNumber(item.createdAt) ?? Date.now(),
   };
 }
@@ -358,7 +499,11 @@ function normalizeRun(run: KanbanTaskRun): KanbanTaskRun {
 }
 
 function normalizeRunStatus(status: string): KanbanRunStatus {
-  return ["running", "completed", "blocked", "reclaimed", "failed"].includes(status) ? status as KanbanRunStatus : "failed";
+  return ["running", "completed", "blocked", "reclaimed", "failed"].includes(
+    status,
+  )
+    ? (status as KanbanRunStatus)
+    : "failed";
 }
 
 function normalizeKanbanStatus(status: string): KanbanStatus {
@@ -366,10 +511,15 @@ function normalizeKanbanStatus(status: string): KanbanStatus {
   if (status === "todo") return "ready";
   if (status === "running") return "working";
   if (status === "blocked") return "needs-human";
-  return KANBAN_STATUSES.includes(status as KanbanStatus) ? status as KanbanStatus : "ideas";
+  return KANBAN_STATUSES.includes(status as KanbanStatus)
+    ? (status as KanbanStatus)
+    : "ideas";
 }
 
-export async function createBoard(input: Partial<KanbanBoardMeta> & { slug: string }, options: KanbanStorageOptions = {}) {
+export async function createBoard(
+  input: Partial<KanbanBoardMeta> & { slug: string },
+  options: KanbanStorageOptions = {},
+) {
   const slug = normalizeBoardSlug(input.slug);
   const board = await readBoard(slug, options);
   board.meta = {
@@ -379,14 +529,20 @@ export async function createBoard(input: Partial<KanbanBoardMeta> & { slug: stri
     icon: input.icon?.trim() || board.meta.icon,
     updatedAt: Date.now(),
   };
-  board.events.unshift(event("board.created", `Created board ${board.meta.name}`));
+  board.events.unshift(
+    event("board.created", `Created board ${board.meta.name}`),
+  );
   await writeBoard(board, options);
   return board;
 }
 
-export async function archiveBoard(slugInput: string, options: KanbanStorageOptions = {}) {
+export async function archiveBoard(
+  slugInput: string,
+  options: KanbanStorageOptions = {},
+) {
   const slug = normalizeBoardSlug(slugInput);
-  if (slug === DEFAULT_BOARD) throw new Error("The default board cannot be archived.");
+  if (slug === DEFAULT_BOARD)
+    throw new Error("The default board cannot be archived.");
   const storage = resolveKanbanStorage(slug, options);
   const from = boardDirFor(storage.root, storage.boardsRoot, slug);
   if (!existsSync(from)) throw new Error("Board not found.");
@@ -395,24 +551,37 @@ export async function archiveBoard(slugInput: string, options: KanbanStorageOpti
   await rename(from, join(archivedDir, `${slug}-${Date.now()}`));
 }
 
-export async function createTask(slug: string | null, input: CreateTaskInput, options: KanbanStorageOptions = {}) {
+export async function createTask(
+  slug: string | null,
+  input: CreateTaskInput,
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const projectsById = await projectMapForKanban(options);
   const title = input.title?.trim();
   if (!title) throw new Error("Task title is required.");
   if (input.idempotencyKey) {
-    const existing = board.tasks.find((task) => task.idempotencyKey === input.idempotencyKey);
+    const existing = board.tasks.find(
+      (task) => task.idempotencyKey === input.idempotencyKey,
+    );
     if (existing) return { board, task: existing, created: false };
   }
   const now = Date.now();
-  const requestedStatus = input.status && KANBAN_STATUSES.includes(input.status) ? input.status : "ideas";
+  const requestedStatus =
+    input.status && KANBAN_STATUSES.includes(input.status)
+      ? input.status
+      : "ideas";
   const parents = input.parents ?? [];
   const existingTasksById = new Map(board.tasks.map((task) => [task.id, task]));
   const hasUnfinishedParents = parents.some((parentId) => {
     const parent = existingTasksById.get(parentId);
     return parent && parent.status !== "done" && parent.status !== "archived";
   });
-  const loop = normalizeLoopSpec(input.loop, input.maxAttempts, input.maxRuntimeMs);
+  const loop = normalizeLoopSpec(
+    input.loop,
+    input.maxAttempts,
+    input.maxRuntimeMs,
+  );
   const taskBase: KanbanTask = {
     id: `t_${now.toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
     title,
@@ -424,16 +593,24 @@ export async function createTask(slug: string | null, input: CreateTaskInput, op
     workspace: input.workspace ?? "scratch",
     skills: input.skills ?? [],
     attachments: Array.isArray(input.attachments) ? input.attachments : [],
-    linkedDirectories: Array.isArray(input.linkedDirectories) ? input.linkedDirectories : [],
+    linkedDirectories: Array.isArray(input.linkedDirectories)
+      ? input.linkedDirectories
+      : [],
     deliverables: Array.isArray(input.deliverables) ? input.deliverables : [],
     targetMachine: input.targetMachine?.key ? input.targetMachine : null,
     projectId: cleanOptional(input.projectId),
-    proofs: Array.isArray(input.proofs) ? input.proofs.map((proof) => sanitizeGitLawbProof(proof)) : [],
+    proofs: Array.isArray(input.proofs)
+      ? input.proofs.map((proof) => sanitizeGitLawbProof(proof))
+      : [],
     loop,
     loopReceipts: normalizeLoopReceipts(input.loopReceipts),
-    maxRuntimeMs: positiveNumber(input.maxRuntimeMs) ?? loop?.budget?.maxRuntimeMs,
+    maxRuntimeMs:
+      positiveNumber(input.maxRuntimeMs) ?? loop?.budget?.maxRuntimeMs,
     attempt: 1,
-    maxAttempts: positiveInteger(input.maxAttempts) ?? loopMaxAttempts(loop) ?? DEFAULT_MAX_ATTEMPTS,
+    maxAttempts:
+      positiveInteger(input.maxAttempts) ??
+      loopMaxAttempts(loop) ??
+      DEFAULT_MAX_ATTEMPTS,
     idempotencyKey: cleanOptional(input.idempotencyKey),
     createdAt: now,
     updatedAt: now,
@@ -452,39 +629,90 @@ export async function createTask(slug: string | null, input: CreateTaskInput, op
   return { board, task, created: true };
 }
 
-export async function patchTask(slug: string | null, taskId: string, patch: PatchTaskInput, options: KanbanStorageOptions = {}) {
+export async function patchTask(
+  slug: string | null,
+  taskId: string,
+  patch: PatchTaskInput,
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const projectsById = await projectMapForKanban(options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   const fromStatus = task.status;
-  const nextStatus = patch.status && KANBAN_STATUSES.includes(patch.status) ? patch.status : undefined;
-  const retryingWorking = nextStatus === "working" && isRetryBlockerResult(task.result);
+  const nextStatus =
+    patch.status && KANBAN_STATUSES.includes(patch.status)
+      ? patch.status
+      : undefined;
+  const retryingWorking =
+    nextStatus === "working" && isRetryBlockerResult(task.result);
   const changedBase = {
     ...task,
     ...patch,
     status: nextStatus ?? task.status,
     title: patch.title?.trim() || task.title,
     body: patch.body ?? task.body,
-    assignee: patch.assignee === "" ? undefined : patch.assignee ?? task.assignee,
-    tenant: patch.tenant === "" ? undefined : patch.tenant ?? task.tenant,
+    assignee:
+      patch.assignee === "" ? undefined : (patch.assignee ?? task.assignee),
+    tenant: patch.tenant === "" ? undefined : (patch.tenant ?? task.tenant),
     attachments: patch.attachments ?? task.attachments,
     linkedDirectories: patch.linkedDirectories ?? task.linkedDirectories,
     deliverables: patch.deliverables ?? task.deliverables,
-    targetMachine: patch.targetMachine === null ? null : patch.targetMachine ?? task.targetMachine,
-    projectId: patch.projectId === "" ? undefined : patch.projectId ?? task.projectId,
-    proofs: Array.isArray(patch.proofs) ? patch.proofs.map((proof) => sanitizeGitLawbProof(proof)) : task.proofs,
-    loop: patch.loop === null ? undefined : patch.loop !== undefined ? normalizeLoopSpec(patch.loop, patch.maxAttempts ?? task.maxAttempts, patch.maxRuntimeMs ?? task.maxRuntimeMs) : task.loop,
-    loopReceipts: patch.loopReceipts ? normalizeLoopReceipts(patch.loopReceipts) : task.loopReceipts,
-    result: retryingWorking ? patch.result ?? "" : patch.result ?? task.result,
-    agentSession: retryingWorking ? patch.agentSession ?? undefined : patch.agentSession ?? task.agentSession,
-    reviewedAt: patch.reviewedAt === null ? undefined : patch.reviewedAt ?? task.reviewedAt,
-    reviewedBy: patch.reviewedBy === "" ? undefined : patch.reviewedBy ?? task.reviewedBy,
-    undoRequestedAt: patch.undoRequestedAt === null ? undefined : patch.undoRequestedAt ?? task.undoRequestedAt,
-    undoRequestedBy: patch.undoRequestedBy === "" ? undefined : patch.undoRequestedBy ?? task.undoRequestedBy,
-    maxAttempts: positiveInteger(patch.maxAttempts) ?? loopMaxAttempts(patch.loop ?? task.loop) ?? task.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
+    targetMachine:
+      patch.targetMachine === null
+        ? null
+        : (patch.targetMachine ?? task.targetMachine),
+    projectId:
+      patch.projectId === "" ? undefined : (patch.projectId ?? task.projectId),
+    proofs: Array.isArray(patch.proofs)
+      ? patch.proofs.map((proof) => sanitizeGitLawbProof(proof))
+      : task.proofs,
+    loop:
+      patch.loop === null
+        ? undefined
+        : patch.loop !== undefined
+          ? normalizeLoopSpec(
+              patch.loop,
+              patch.maxAttempts ?? task.maxAttempts,
+              patch.maxRuntimeMs ?? task.maxRuntimeMs,
+            )
+          : task.loop,
+    loopReceipts: patch.loopReceipts
+      ? normalizeLoopReceipts(patch.loopReceipts)
+      : task.loopReceipts,
+    result: retryingWorking
+      ? (patch.result ?? "")
+      : (patch.result ?? task.result),
+    agentSession: retryingWorking
+      ? (patch.agentSession ?? undefined)
+      : (patch.agentSession ?? task.agentSession),
+    reviewedAt:
+      patch.reviewedAt === null
+        ? undefined
+        : (patch.reviewedAt ?? task.reviewedAt),
+    reviewedBy:
+      patch.reviewedBy === ""
+        ? undefined
+        : (patch.reviewedBy ?? task.reviewedBy),
+    undoRequestedAt:
+      patch.undoRequestedAt === null
+        ? undefined
+        : (patch.undoRequestedAt ?? task.undoRequestedAt),
+    undoRequestedBy:
+      patch.undoRequestedBy === ""
+        ? undefined
+        : (patch.undoRequestedBy ?? task.undoRequestedBy),
+    maxAttempts:
+      positiveInteger(patch.maxAttempts) ??
+      loopMaxAttempts(patch.loop ?? task.loop) ??
+      task.maxAttempts ??
+      DEFAULT_MAX_ATTEMPTS,
     updatedAt: Date.now(),
-    completedAt: nextStatus ? (nextStatus === "done" ? Date.now() : undefined) : task.completedAt,
+    completedAt: nextStatus
+      ? nextStatus === "done"
+        ? Date.now()
+        : undefined
+      : task.completedAt,
   };
   const changed = {
     ...changedBase,
@@ -493,7 +721,11 @@ export async function patchTask(slug: string | null, taskId: string, patch: Patc
   if (changed.status === "done") {
     changed.deliverables = mergeDeliverables(
       changed.deliverables,
-      extractTaskDeliverables(changed, changed.result, changed.completedAt ?? changed.updatedAt),
+      extractTaskDeliverables(
+        changed,
+        changed.result,
+        changed.completedAt ?? changed.updatedAt,
+      ),
     );
   } else if (nextStatus && nextStatus !== "done" && !patch.deliverables) {
     changed.deliverables = [];
@@ -501,26 +733,47 @@ export async function patchTask(slug: string | null, taskId: string, patch: Patc
   if (nextStatus && nextStatus !== "working") {
     changed.claimLock = undefined;
     changed.claimExpiresAt = undefined;
-    changed.lastHeartbeatAt = nextStatus === "ready" ? undefined : changed.lastHeartbeatAt;
-    if (task.currentRunId && ["done", "needs-human", "archived"].includes(nextStatus)) {
-      finishActiveRun(board, task.id, nextStatus === "done" ? "completed" : nextStatus === "needs-human" ? "blocked" : "reclaimed", {
-        summary: patch.result ?? task.result,
-        reason: nextStatus,
-      });
+    changed.lastHeartbeatAt =
+      nextStatus === "ready" ? undefined : changed.lastHeartbeatAt;
+    if (
+      task.currentRunId &&
+      ["done", "needs-human", "archived"].includes(nextStatus)
+    ) {
+      finishActiveRun(
+        board,
+        task.id,
+        nextStatus === "done"
+          ? "completed"
+          : nextStatus === "needs-human"
+            ? "blocked"
+            : "reclaimed",
+        {
+          summary: patch.result ?? task.result,
+          reason: nextStatus,
+        },
+      );
       changed.currentRunId = undefined;
     }
   }
   if (isUnpollableAcceptedWorking(changed)) {
     changed.status = "needs-human";
-    changed.result = "Agent accepted the task but did not attach a pollable session or return output. Check the agent runtime/auth, then move this card back to Ready for Queen.";
+    changed.result =
+      "Agent accepted the task but did not attach a pollable session or return output. Check the agent runtime/auth, then move this card back to Ready for Queen.";
   }
-  board.tasks = board.tasks.map((item) => item.id === taskId ? changed : item);
-  if (changed.status === "done") rollUpCompletedChildDeliverables(board, changed.id, true);
-  board.events.unshift(event(
-    nextStatus && nextStatus !== fromStatus ? "task.moved" : "task.updated",
-    nextStatus && nextStatus !== fromStatus ? `Moved ${changed.title} from ${fromStatus} to ${nextStatus}` : `Updated ${changed.title}`,
-    taskId,
-  ));
+  board.tasks = board.tasks.map((item) =>
+    item.id === taskId ? changed : item,
+  );
+  if (changed.status === "done")
+    rollUpCompletedChildDeliverables(board, changed.id, true);
+  board.events.unshift(
+    event(
+      nextStatus && nextStatus !== fromStatus ? "task.moved" : "task.updated",
+      nextStatus && nextStatus !== fromStatus
+        ? `Moved ${changed.title} from ${fromStatus} to ${nextStatus}`
+        : `Updated ${changed.title}`,
+      taskId,
+    ),
+  );
   if (changed.status === "done") {
     createVisualHandoffChild(board, changed, changed.result);
     promoteReadyChildren(board, "dependency.auto-promote");
@@ -529,7 +782,12 @@ export async function patchTask(slug: string | null, taskId: string, patch: Patc
   return { board, task: changed };
 }
 
-export async function moveTask(slug: string | null, taskId: string, status: KanbanStatus, options: KanbanStorageOptions = {}) {
+export async function moveTask(
+  slug: string | null,
+  taskId: string,
+  status: KanbanStatus,
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -559,23 +817,52 @@ export async function moveTask(slug: string | null, taskId: string, status: Kanb
   }
   if (moved && isUnpollableAcceptedWorking(moved)) {
     moved.status = "needs-human";
-    moved.result = "This task cannot be marked Working because the assigned agent has no active session. Fix the agent runtime/auth, then move it back to Waiting for Queen.";
-    board.events.unshift(event("task.blocked", `${moved.title} needs agent runtime/auth before it can work`, taskId));
+    moved.result =
+      "This task cannot be marked Working because the assigned agent has no active session. Fix the agent runtime/auth, then move it back to Waiting for Queen.";
+    board.events.unshift(
+      event(
+        "task.blocked",
+        `${moved.title} needs agent runtime/auth before it can work`,
+        taskId,
+      ),
+    );
   }
-  if (task.currentRunId && ["ready", "needs-human", "done", "archived"].includes(moved?.status ?? status)) {
-    finishActiveRun(board, taskId, status === "done" ? "completed" : status === "needs-human" ? "blocked" : "reclaimed", {
-      summary: moved?.result ?? task.result,
-      reason: `moved to ${status}`,
-    });
+  if (
+    task.currentRunId &&
+    ["ready", "needs-human", "done", "archived"].includes(
+      moved?.status ?? status,
+    )
+  ) {
+    finishActiveRun(
+      board,
+      taskId,
+      status === "done"
+        ? "completed"
+        : status === "needs-human"
+          ? "blocked"
+          : "reclaimed",
+      {
+        summary: moved?.result ?? task.result,
+        reason: `moved to ${status}`,
+      },
+    );
     if (moved) moved.currentRunId = undefined;
   }
-  board.events.unshift(event("task.moved", `Moved ${task.title} to ${status}`, taskId));
-  if (moved?.status === "done") promoteReadyChildren(board, "dependency.auto-promote");
+  board.events.unshift(
+    event("task.moved", `Moved ${task.title} to ${status}`, taskId),
+  );
+  if (moved?.status === "done")
+    promoteReadyChildren(board, "dependency.auto-promote");
   await writeBoard(touch(board), options);
   return { board, task: board.tasks.find((item) => item.id === taskId)! };
 }
 
-export async function claimTask(slug: string | null, taskId: string, input: ClaimTaskInput = {}, options: KanbanStorageOptions = {}) {
+export async function claimTask(
+  slug: string | null,
+  taskId: string,
+  input: ClaimTaskInput = {},
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -584,7 +871,11 @@ export async function claimTask(slug: string | null, taskId: string, input: Clai
   return result;
 }
 
-export async function claimNextTask(slug: string | null, input: ClaimNextTaskInput = {}, options: KanbanStorageOptions = {}) {
+export async function claimNextTask(
+  slug: string | null,
+  input: ClaimNextTaskInput = {},
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const task = nextClaimCandidate(board, input);
   if (!task) return { board, task: null, run: null, claimed: false };
@@ -593,7 +884,10 @@ export async function claimNextTask(slug: string | null, input: ClaimNextTaskInp
   return { ...result, claimed: true };
 }
 
-function nextClaimCandidate(board: KanbanBoard, input: ClaimNextTaskInput = {}) {
+function nextClaimCandidate(
+  board: KanbanBoard,
+  input: ClaimNextTaskInput = {},
+) {
   const tenant = cleanOptional(input.tenant);
   const assignee = cleanOptional(input.assignee);
   const targetMachineKey = cleanOptional(input.targetMachineKey);
@@ -601,25 +895,52 @@ function nextClaimCandidate(board: KanbanBoard, input: ClaimNextTaskInput = {}) 
     .filter((task) => task.status === "ready" && !task.claimLock)
     .filter((task) => !tenant || task.tenant === tenant || !task.tenant)
     .filter((task) => !assignee || task.assignee === assignee || !task.assignee)
-    .filter((task) => !targetMachineKey || task.targetMachine?.key === targetMachineKey || !task.targetMachine?.key)
+    .filter(
+      (task) =>
+        !targetMachineKey ||
+        task.targetMachine?.key === targetMachineKey ||
+        !task.targetMachine?.key,
+    )
     .filter((task) => unfinishedParentIds(board, task.id).length === 0)
     .sort((left, right) => {
-      const priorityDelta = priorityWeight(right.priority) - priorityWeight(left.priority);
-      return priorityDelta || left.createdAt - right.createdAt || left.updatedAt - right.updatedAt;
+      const priorityDelta =
+        priorityWeight(right.priority) - priorityWeight(left.priority);
+      return (
+        priorityDelta ||
+        left.createdAt - right.createdAt ||
+        left.updatedAt - right.updatedAt
+      );
     })[0];
 }
 
-async function claimReadyTask(board: KanbanBoard, task: KanbanTask, input: ClaimTaskInput = {}, options: KanbanStorageOptions = {}) {
-  if (task.status !== "ready" || task.claimLock) throw new Error("Task is not ready to claim.");
+async function claimReadyTask(
+  board: KanbanBoard,
+  task: KanbanTask,
+  input: ClaimTaskInput = {},
+  options: KanbanStorageOptions = {},
+) {
+  if (task.status !== "ready" || task.claimLock)
+    throw new Error("Task is not ready to claim.");
   const blockingParents = unfinishedParentIds(board, task.id);
   if (blockingParents.length) {
     task.status = "ideas";
-    board.events.unshift(event("task.claim-rejected", `${task.title} is waiting on parent tasks.`, task.id, { parents: blockingParents }));
+    board.events.unshift(
+      event(
+        "task.claim-rejected",
+        `${task.title} is waiting on parent tasks.`,
+        task.id,
+        { parents: blockingParents },
+      ),
+    );
     await writeBoard(touch(board), options);
-    throw new Error(`Task has unfinished parent dependencies: ${blockingParents.join(", ")}`);
+    throw new Error(
+      `Task has unfinished parent dependencies: ${blockingParents.join(", ")}`,
+    );
   }
   const now = Date.now();
-  const claimLock = input.claimer?.trim() || `claim_${now.toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const claimLock =
+    input.claimer?.trim() ||
+    `claim_${now.toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const attempt = positiveInteger(task.attempt) ?? 1;
   const run: KanbanTaskRun = {
     id: `r_${now.toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
@@ -628,7 +949,11 @@ async function claimReadyTask(board: KanbanBoard, task: KanbanTask, input: Claim
     assignee: cleanOptional(input.assignee) ?? task.assignee,
     runtime: cleanOptional(input.runtime),
     claimLock,
-    claimExpiresAt: now + (positiveNumber(input.ttlMs) ?? task.maxRuntimeMs ?? DEFAULT_CLAIM_TTL_MS),
+    claimExpiresAt:
+      now +
+      (positiveNumber(input.ttlMs) ??
+        task.maxRuntimeMs ??
+        DEFAULT_CLAIM_TTL_MS),
     startedAt: now,
     lastHeartbeatAt: now,
     attempt,
@@ -646,33 +971,65 @@ async function claimReadyTask(board: KanbanBoard, task: KanbanTask, input: Claim
     attempt,
     updatedAt: now,
   };
-  board.tasks = board.tasks.map((item) => item.id === task.id ? changed : item);
-  board.events.unshift(event("task.claimed", `Claimed ${task.title}`, task.id, { lock: claimLock, runId: run.id, expiresAt: run.claimExpiresAt }, run.id));
+  board.tasks = board.tasks.map((item) =>
+    item.id === task.id ? changed : item,
+  );
+  board.events.unshift(
+    event(
+      "task.claimed",
+      `Claimed ${task.title}`,
+      task.id,
+      { lock: claimLock, runId: run.id, expiresAt: run.claimExpiresAt },
+      run.id,
+    ),
+  );
   return { board, task: changed, run };
 }
 
-export async function heartbeatTask(slug: string | null, taskId: string, note?: string, claimLock?: string, options: KanbanStorageOptions = {}) {
+export async function heartbeatTask(
+  slug: string | null,
+  taskId: string,
+  note?: string,
+  claimLock?: string,
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   if (task.status !== "working") throw new Error("Task is not working.");
-  if (claimLock && task.claimLock && claimLock !== task.claimLock) throw new Error("Claim lock does not match.");
+  if (claimLock && task.claimLock && claimLock !== task.claimLock)
+    throw new Error("Claim lock does not match.");
   const now = Date.now();
   const expiresAt = now + (task.maxRuntimeMs ?? DEFAULT_CLAIM_TTL_MS);
   task.lastHeartbeatAt = now;
   task.claimExpiresAt = expiresAt;
   task.updatedAt = now;
-  const run = task.currentRunId ? board.runs.find((item) => item.id === task.currentRunId) : undefined;
+  const run = task.currentRunId
+    ? board.runs.find((item) => item.id === task.currentRunId)
+    : undefined;
   if (run && run.status === "running") {
     run.lastHeartbeatAt = now;
     run.claimExpiresAt = expiresAt;
   }
-  board.events.unshift(event("task.heartbeat", note?.trim() || `Heartbeat for ${task.title}`, task.id, { note: note?.trim() || undefined }, run?.id));
+  board.events.unshift(
+    event(
+      "task.heartbeat",
+      note?.trim() || `Heartbeat for ${task.title}`,
+      task.id,
+      { note: note?.trim() || undefined },
+      run?.id,
+    ),
+  );
   await writeBoard(touch(board), options);
   return { board, task, run };
 }
 
-export async function completeTask(slug: string | null, taskId: string, input: FinishRunInput = {}, options: KanbanStorageOptions = {}) {
+export async function completeTask(
+  slug: string | null,
+  taskId: string,
+  input: FinishRunInput = {},
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -682,7 +1039,11 @@ export async function completeTask(slug: string | null, taskId: string, input: F
   const gateBlock = loopCompletionBlock(task.loop, loopReceipts);
   if (gateBlock) {
     const summary = `${input.summary ?? result ?? "Completion blocked."} Missing passing eval receipts: ${gateBlock.missingGateTitles.join(", ")}.`;
-    finishActiveRun(board, taskId, "blocked", { ...input, summary, reason: summary });
+    finishActiveRun(board, taskId, "blocked", {
+      ...input,
+      summary,
+      reason: summary,
+    });
     const changed: KanbanTask = {
       ...task,
       status: "needs-human",
@@ -693,10 +1054,28 @@ export async function completeTask(slug: string | null, taskId: string, input: F
       currentRunId: undefined,
       updatedAt: now,
     };
-    board.tasks = board.tasks.map((item) => item.id === taskId ? changed : item);
-    board.events.unshift(event("loop.eval-blocked", `${task.title} needs eval evidence before completion`, task.id, { missingGateIds: gateBlock.missingGateIds, missingGateTitles: gateBlock.missingGateTitles }, input.runId ?? task.currentRunId));
+    board.tasks = board.tasks.map((item) =>
+      item.id === taskId ? changed : item,
+    );
+    board.events.unshift(
+      event(
+        "loop.eval-blocked",
+        `${task.title} needs eval evidence before completion`,
+        task.id,
+        {
+          missingGateIds: gateBlock.missingGateIds,
+          missingGateTitles: gateBlock.missingGateTitles,
+        },
+        input.runId ?? task.currentRunId,
+      ),
+    );
     await writeBoard(touch(board), options);
-    return { board, task: changed, blocked: true, missingGateIds: gateBlock.missingGateIds };
+    return {
+      board,
+      task: changed,
+      blocked: true,
+      missingGateIds: gateBlock.missingGateIds,
+    };
   }
   finishActiveRun(board, taskId, "completed", input);
   const changed: KanbanTask = {
@@ -715,16 +1094,31 @@ export async function completeTask(slug: string | null, taskId: string, input: F
     updatedAt: now,
     completedAt: now,
   };
-  board.tasks = board.tasks.map((item) => item.id === taskId ? changed : item);
+  board.tasks = board.tasks.map((item) =>
+    item.id === taskId ? changed : item,
+  );
   rollUpCompletedChildDeliverables(board, taskId, true);
-  board.events.unshift(event("task.completed", `Completed ${task.title}`, task.id, { summary: input.summary ?? result }, input.runId ?? task.currentRunId));
+  board.events.unshift(
+    event(
+      "task.completed",
+      `Completed ${task.title}`,
+      task.id,
+      { summary: input.summary ?? result },
+      input.runId ?? task.currentRunId,
+    ),
+  );
   createVisualHandoffChild(board, changed, result);
   promoteReadyChildren(board, "dependency.auto-promote");
   await writeBoard(touch(board), options);
   return { board, task: changed };
 }
 
-export async function discoverTaskLoop(slug: string | null, taskId: string, input: Record<string, unknown> = {}, options: KanbanStorageOptions = {}) {
+export async function discoverTaskLoop(
+  slug: string | null,
+  taskId: string,
+  input: Record<string, unknown> = {},
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -733,71 +1127,146 @@ export async function discoverTaskLoop(slug: string | null, taskId: string, inpu
   const changed: KanbanTask = {
     ...task,
     loop,
-    maxRuntimeMs: positiveNumber(task.maxRuntimeMs) ?? loop.budget?.maxRuntimeMs,
-    maxAttempts: positiveInteger(task.maxAttempts) ?? loopMaxAttempts(loop) ?? DEFAULT_MAX_ATTEMPTS,
+    maxRuntimeMs:
+      positiveNumber(task.maxRuntimeMs) ?? loop.budget?.maxRuntimeMs,
+    maxAttempts:
+      positiveInteger(task.maxAttempts) ??
+      loopMaxAttempts(loop) ??
+      DEFAULT_MAX_ATTEMPTS,
     updatedAt: now,
   };
-  board.tasks = board.tasks.map((item) => item.id === taskId ? changed : item);
-  board.events.unshift(event("loop.discovered", `Discovered loop benchmark for ${task.title}`, task.id, {
-    benchmark: loop.benchmark,
-    frontierStrategy: loop.frontierStrategy,
-    gateCount: loop.evalGates.length,
-  }));
+  board.tasks = board.tasks.map((item) =>
+    item.id === taskId ? changed : item,
+  );
+  board.events.unshift(
+    event(
+      "loop.discovered",
+      `Discovered loop benchmark for ${task.title}`,
+      task.id,
+      {
+        benchmark: loop.benchmark,
+        frontierStrategy: loop.frontierStrategy,
+        gateCount: loop.evalGates.length,
+      },
+    ),
+  );
   await writeBoard(touch(board), options);
   return { board, task: changed, observation: loop.observation };
 }
 
-export async function recordTaskLoop(slug: string | null, taskId: string, input: { experiment?: Record<string, unknown>; antiPatterns?: unknown[] } = {}, options: KanbanStorageOptions = {}) {
+export async function recordTaskLoop(
+  slug: string | null,
+  taskId: string,
+  input: {
+    experiment?: Record<string, unknown>;
+    antiPatterns?: unknown[];
+  } = {},
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   let loop = task.loop;
   if (input.experiment?.hypothesis) {
-    loop = recordLoopExperiment(loop, input.experiment as Parameters<typeof recordLoopExperiment>[1]);
+    loop = recordLoopExperiment(
+      loop,
+      input.experiment as Parameters<typeof recordLoopExperiment>[1],
+    );
   }
   if (Array.isArray(input.antiPatterns)) {
     loop = recordLoopAntiPatterns(loop, input.antiPatterns);
   }
-  if (!loop) throw new Error("Loop record requires an experiment or anti-pattern.");
+  if (!loop)
+    throw new Error("Loop record requires an experiment or anti-pattern.");
   const changed: KanbanTask = {
     ...task,
     loop,
     updatedAt: Date.now(),
   };
-  board.tasks = board.tasks.map((item) => item.id === taskId ? changed : item);
-  board.events.unshift(event("loop.recorded", `Recorded loop evidence for ${task.title}`, task.id, {
-    experimentId: input.experiment?.id,
-    experimentStatus: input.experiment?.status,
-    score: input.experiment?.score,
-    antiPatternCount: Array.isArray(input.antiPatterns) ? input.antiPatterns.length : 0,
-    observation: loop.observation,
-  }));
+  board.tasks = board.tasks.map((item) =>
+    item.id === taskId ? changed : item,
+  );
+  board.events.unshift(
+    event(
+      "loop.recorded",
+      `Recorded loop evidence for ${task.title}`,
+      task.id,
+      {
+        experimentId: input.experiment?.id,
+        experimentStatus: input.experiment?.status,
+        score: input.experiment?.score,
+        antiPatternCount: Array.isArray(input.antiPatterns)
+          ? input.antiPatterns.length
+          : 0,
+        observation: loop.observation,
+      },
+    ),
+  );
   await writeBoard(touch(board), options);
   return { board, task: changed, observation: loop.observation };
 }
 
-export async function failTask(slug: string | null, taskId: string, input: FinishRunInput = {}, options: KanbanStorageOptions = {}) {
+export async function failTask(
+  slug: string | null,
+  taskId: string,
+  input: FinishRunInput = {},
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   const now = Date.now();
-  const failureReason = normalizeFailureReason(input.failureReason) ?? classifyKanbanFailure(input.error ?? input.reason ?? input.summary ?? input.result);
-  const summary = input.summary ?? input.error ?? input.reason ?? input.result ?? "Task failed.";
-  const run = finishActiveRun(board, taskId, "failed", { ...input, summary, failureReason });
-  const { task: changed, retried } = transitionTaskAfterFailure(task, failureReason, summary, now);
-  board.tasks = board.tasks.map((item) => item.id === taskId ? changed : item);
-  board.events.unshift(event(
-    retried ? "task.retry-queued" : "task.failed",
-    retried ? `Queued retry for ${task.title}` : `${task.title} needs human review after failure`,
-    task.id,
-    { failureReason, attempt: changed.attempt, maxAttempts: changed.maxAttempts, summary },
-    run?.id ?? input.runId ?? task.currentRunId,
-  ));
+  const failureReason =
+    normalizeFailureReason(input.failureReason) ??
+    classifyKanbanFailure(
+      input.error ?? input.reason ?? input.summary ?? input.result,
+    );
+  const summary =
+    input.summary ??
+    input.error ??
+    input.reason ??
+    input.result ??
+    "Task failed.";
+  const run = finishActiveRun(board, taskId, "failed", {
+    ...input,
+    summary,
+    failureReason,
+  });
+  const { task: changed, retried } = transitionTaskAfterFailure(
+    task,
+    failureReason,
+    summary,
+    now,
+  );
+  board.tasks = board.tasks.map((item) =>
+    item.id === taskId ? changed : item,
+  );
+  board.events.unshift(
+    event(
+      retried ? "task.retry-queued" : "task.failed",
+      retried
+        ? `Queued retry for ${task.title}`
+        : `${task.title} needs human review after failure`,
+      task.id,
+      {
+        failureReason,
+        attempt: changed.attempt,
+        maxAttempts: changed.maxAttempts,
+        summary,
+      },
+      run?.id ?? input.runId ?? task.currentRunId,
+    ),
+  );
   await writeBoard(touch(board), options);
   return { board, task: changed, run, retried, failureReason };
 }
 
-export async function blockTask(slug: string | null, taskId: string, reason: string, options: KanbanStorageOptions = {}) {
+export async function blockTask(
+  slug: string | null,
+  taskId: string,
+  reason: string,
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -812,17 +1281,29 @@ export async function blockTask(slug: string | null, taskId: string, reason: str
     currentRunId: undefined,
     updatedAt: now,
   };
-  board.tasks = board.tasks.map((item) => item.id === taskId ? changed : item);
-  board.events.unshift(event("task.blocked", `${task.title} needs human input`, task.id, { reason }));
+  board.tasks = board.tasks.map((item) =>
+    item.id === taskId ? changed : item,
+  );
+  board.events.unshift(
+    event("task.blocked", `${task.title} needs human input`, task.id, {
+      reason,
+    }),
+  );
   await writeBoard(touch(board), options);
   return { board, task: changed };
 }
 
-export async function unblockTask(slug: string | null, taskId: string, options: KanbanStorageOptions = {}) {
+export async function unblockTask(
+  slug: string | null,
+  taskId: string,
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
-  const status: KanbanStatus = unfinishedParentIds(board, taskId).length ? "ideas" : "ready";
+  const status: KanbanStatus = unfinishedParentIds(board, taskId).length
+    ? "ideas"
+    : "ready";
   const changed: KanbanTask = {
     ...task,
     status,
@@ -832,19 +1313,34 @@ export async function unblockTask(slug: string | null, taskId: string, options: 
     currentRunId: undefined,
     updatedAt: Date.now(),
   };
-  board.tasks = board.tasks.map((item) => item.id === taskId ? changed : item);
-  board.events.unshift(event("task.unblocked", `Unblocked ${task.title}`, task.id, { status }));
+  board.tasks = board.tasks.map((item) =>
+    item.id === taskId ? changed : item,
+  );
+  board.events.unshift(
+    event("task.unblocked", `Unblocked ${task.title}`, task.id, { status }),
+  );
   await writeBoard(touch(board), options);
   return { board, task: changed };
 }
 
-export async function promoteTask(slug: string | null, taskId: string, input: { force?: boolean; reason?: string; dryRun?: boolean } = {}, options: KanbanStorageOptions = {}) {
+export async function promoteTask(
+  slug: string | null,
+  taskId: string,
+  input: { force?: boolean; reason?: string; dryRun?: boolean } = {},
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
-  if (!["ideas", "needs-human"].includes(task.status)) throw new Error(`Task is '${task.status}'; promote only applies to Ideas or Needs You tasks.`);
+  if (!["ideas", "needs-human"].includes(task.status))
+    throw new Error(
+      `Task is '${task.status}'; promote only applies to Ideas or Needs You tasks.`,
+    );
   const blockingParents = unfinishedParentIds(board, taskId);
-  if (blockingParents.length && !input.force) throw new Error(`Task has unfinished parent dependencies: ${blockingParents.join(", ")}`);
+  if (blockingParents.length && !input.force)
+    throw new Error(
+      `Task has unfinished parent dependencies: ${blockingParents.join(", ")}`,
+    );
   if (input.dryRun) return { board, task, promoted: true };
   const changed: KanbanTask = {
     ...task,
@@ -855,42 +1351,81 @@ export async function promoteTask(slug: string | null, taskId: string, input: { 
     currentRunId: undefined,
     updatedAt: Date.now(),
   };
-  board.tasks = board.tasks.map((item) => item.id === taskId ? changed : item);
-  board.events.unshift(event("task.promoted", `Promoted ${task.title} to Ready`, task.id, { reason: input.reason, forced: Boolean(input.force) }));
+  board.tasks = board.tasks.map((item) =>
+    item.id === taskId ? changed : item,
+  );
+  board.events.unshift(
+    event("task.promoted", `Promoted ${task.title} to Ready`, task.id, {
+      reason: input.reason,
+      forced: Boolean(input.force),
+    }),
+  );
   await writeBoard(touch(board), options);
   return { board, task: changed, promoted: true };
 }
 
-export async function reclaimStaleTasks(slug: string | null, input: { staleMs?: number } = {}, options: KanbanStorageOptions = {}) {
+export async function reclaimStaleTasks(
+  slug: string | null,
+  input: { staleMs?: number } = {},
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const staleMs = positiveNumber(input.staleMs) ?? DEFAULT_STALE_HEARTBEAT_MS;
   const now = Date.now();
   const reclaimed: KanbanTask[] = [];
   board.tasks = board.tasks.map((task) => {
     if (task.status !== "working") return task;
-    const lastProgress = task.lastHeartbeatAt ?? task.agentSession?.updatedAt ?? task.updatedAt;
+    const lastProgress =
+      task.lastHeartbeatAt ?? task.agentSession?.updatedAt ?? task.updatedAt;
     const expired = Boolean(task.claimExpiresAt && task.claimExpiresAt <= now);
     const quiet = now - lastProgress >= staleMs;
     if (!expired && !quiet) return task;
     const summary = `Reclaimed after ${Math.round((now - lastProgress) / 1000)}s without worker progress.`;
-    finishActiveRun(board, task.id, "reclaimed", { summary, failureReason: "timeout" });
-    const { task: changed, retried } = transitionTaskAfterFailure(task, "timeout", summary, now);
+    finishActiveRun(board, task.id, "reclaimed", {
+      summary,
+      failureReason: "timeout",
+    });
+    const { task: changed, retried } = transitionTaskAfterFailure(
+      task,
+      "timeout",
+      summary,
+      now,
+    );
     reclaimed.push(changed);
-    board.events.unshift(event(
-      retried ? "task.reclaimed" : "task.reclaim-exhausted",
-      retried ? `Reclaimed stale task ${task.title}` : `${task.title} exhausted stale-task retries`,
-      task.id,
-      { staleMs, lastProgressAt: lastProgress, attempt: changed.attempt, maxAttempts: changed.maxAttempts },
-      task.currentRunId,
-    ));
+    board.events.unshift(
+      event(
+        retried ? "task.reclaimed" : "task.reclaim-exhausted",
+        retried
+          ? `Reclaimed stale task ${task.title}`
+          : `${task.title} exhausted stale-task retries`,
+        task.id,
+        {
+          staleMs,
+          lastProgressAt: lastProgress,
+          attempt: changed.attempt,
+          maxAttempts: changed.maxAttempts,
+        },
+        task.currentRunId,
+      ),
+    );
     return changed;
   });
   if (reclaimed.length) await writeBoard(touch(board), options);
   return { board, reclaimed };
 }
 
-export async function bulkPatchTasks(slug: string | null, ids: string[], patch: PatchTaskInput, options: KanbanStorageOptions = {}) {
-  const results: Array<{ taskId: string; ok: boolean; task?: KanbanTask; error?: string }> = [];
+export async function bulkPatchTasks(
+  slug: string | null,
+  ids: string[],
+  patch: PatchTaskInput,
+  options: KanbanStorageOptions = {},
+) {
+  const results: Array<{
+    taskId: string;
+    ok: boolean;
+    task?: KanbanTask;
+    error?: string;
+  }> = [];
   let latestBoard: KanbanBoard | null = null;
   for (const taskId of [...new Set(ids)]) {
     try {
@@ -900,25 +1435,43 @@ export async function bulkPatchTasks(slug: string | null, ids: string[], patch: 
       latestBoard = result.board;
       results.push({ taskId, ok: true, task: result.task });
     } catch (error) {
-      results.push({ taskId, ok: false, error: error instanceof Error ? error.message : "Task update failed." });
+      results.push({
+        taskId,
+        ok: false,
+        error: error instanceof Error ? error.message : "Task update failed.",
+      });
     }
   }
-  return { board: latestBoard ?? await readBoard(slug, options), results };
+  return { board: latestBoard ?? (await readBoard(slug, options)), results };
 }
 
-export async function deleteTask(slug: string | null, taskId: string, options: KanbanStorageOptions = {}) {
+export async function deleteTask(
+  slug: string | null,
+  taskId: string,
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   board.tasks = board.tasks.filter((item) => item.id !== taskId);
-  board.comments = board.comments.filter((comment) => comment.taskId !== taskId);
-  board.links = board.links.filter((link) => link.parentId !== taskId && link.childId !== taskId);
+  board.comments = board.comments.filter(
+    (comment) => comment.taskId !== taskId,
+  );
+  board.links = board.links.filter(
+    (link) => link.parentId !== taskId && link.childId !== taskId,
+  );
   board.events.unshift(event("task.deleted", `Deleted ${task.title}`));
   await writeBoard(touch(board), options);
   return { board, task };
 }
 
-export async function addComment(slug: string | null, taskId: string, body: string, author = "dashboard", options: KanbanStorageOptions = {}) {
+export async function addComment(
+  slug: string | null,
+  taskId: string,
+  body: string,
+  author = "dashboard",
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -931,24 +1484,45 @@ export async function addComment(slug: string | null, taskId: string, body: stri
   };
   if (!comment.body) throw new Error("Comment body is required.");
   board.comments.push(comment);
-  board.events.unshift(event("comment.created", `${comment.author} commented on ${task.title}`, taskId));
+  board.events.unshift(
+    event(
+      "comment.created",
+      `${comment.author} commented on ${task.title}`,
+      taskId,
+    ),
+  );
   await writeBoard(touch(board), options);
   return { board, comment };
 }
 
-export async function addLink(slug: string | null, parentId: string, childId: string, options: KanbanStorageOptions = {}) {
+export async function addLink(
+  slug: string | null,
+  parentId: string,
+  childId: string,
+  options: KanbanStorageOptions = {},
+) {
   const board = await readBoard(slug, options);
   const ids = new Set(board.tasks.map((task) => task.id));
-  if (!ids.has(parentId) || !ids.has(childId)) throw new Error("Both linked tasks must exist.");
-  if (!board.links.some((link) => link.parentId === parentId && link.childId === childId)) {
+  if (!ids.has(parentId) || !ids.has(childId))
+    throw new Error("Both linked tasks must exist.");
+  if (
+    !board.links.some(
+      (link) => link.parentId === parentId && link.childId === childId,
+    )
+  ) {
     board.links.push({ parentId, childId, createdAt: Date.now() });
-    board.events.unshift(event("task.linked", `Linked ${parentId} -> ${childId}`, childId));
+    board.events.unshift(
+      event("task.linked", `Linked ${parentId} -> ${childId}`, childId),
+    );
     await writeBoard(touch(board), options);
   }
   return { board };
 }
 
-async function writeBoard(board: KanbanBoard, options: KanbanStorageOptions = {}) {
+async function writeBoard(
+  board: KanbanBoard,
+  options: KanbanStorageOptions = {},
+) {
   const storage = resolveKanbanStorage(board.meta.slug, options);
   const dir = boardDirFor(storage.root, storage.boardsRoot, board.meta.slug);
   await mkdir(dir, { recursive: true, mode: 0o700 });
@@ -961,7 +1535,12 @@ async function writeBoard(board: KanbanBoard, options: KanbanStorageOptions = {}
 function emptyBoard(slug: string): KanbanBoard {
   const now = Date.now();
   return {
-    meta: { slug, name: slug === DEFAULT_BOARD ? "Default" : titleize(slug), createdAt: now, updatedAt: now },
+    meta: {
+      slug,
+      name: slug === DEFAULT_BOARD ? "Default" : titleize(slug),
+      createdAt: now,
+      updatedAt: now,
+    },
     tasks: [],
     comments: [],
     links: [],
@@ -970,7 +1549,13 @@ function emptyBoard(slug: string): KanbanBoard {
   };
 }
 
-function event(kind: string, message: string, taskId?: string, payload?: Record<string, unknown>, runId?: string): KanbanEvent {
+function event(
+  kind: string,
+  message: string,
+  taskId?: string,
+  payload?: Record<string, unknown>,
+  runId?: string,
+): KanbanEvent {
   return {
     id: `e_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
     taskId,
@@ -1008,33 +1593,70 @@ function positiveInteger(value?: number | null) {
   return Number.isInteger(numeric) && numeric > 0 ? numeric : undefined;
 }
 
-function normalizeFailureReason(value?: string | null): KanbanFailureReason | undefined {
+function normalizeFailureReason(
+  value?: string | null,
+): KanbanFailureReason | undefined {
   if (!value) return undefined;
   const normalized = value.trim().toLowerCase().replace(/_/g, "-");
-  return ["agent-error", "timeout", "runtime-offline", "runtime-recovery", "local-directory-error", "manual"].includes(normalized)
-    ? normalized as KanbanFailureReason
+  return [
+    "agent-error",
+    "timeout",
+    "runtime-offline",
+    "runtime-recovery",
+    "local-directory-error",
+    "manual",
+  ].includes(normalized)
+    ? (normalized as KanbanFailureReason)
     : undefined;
 }
 
 function classifyKanbanFailure(value?: string | null): KanbanFailureReason {
   const normalized = value?.toLowerCase() ?? "";
-  if (/local directory|workdir|workspace path|folder|enoent|permission denied/.test(normalized)) return "local-directory-error";
-  if (/orphan|recover|reclaim|daemon restart|runtime recovery/.test(normalized)) return "runtime-recovery";
-  if (/offline|unreachable|connection refused|network|econnrefused|not available/.test(normalized)) return "runtime-offline";
-  if (/timeout|timed out|expired|stale|heartbeat|no progress|without worker progress/.test(normalized)) return "timeout";
-  if (/manual|cancelled|canceled|user requested/.test(normalized)) return "manual";
+  if (
+    /local directory|workdir|workspace path|folder|enoent|permission denied/.test(
+      normalized,
+    )
+  )
+    return "local-directory-error";
+  if (/orphan|recover|reclaim|daemon restart|runtime recovery/.test(normalized))
+    return "runtime-recovery";
+  if (
+    /offline|unreachable|connection refused|network|econnrefused|not available/.test(
+      normalized,
+    )
+  )
+    return "runtime-offline";
+  if (
+    /timeout|timed out|expired|stale|heartbeat|no progress|without worker progress/.test(
+      normalized,
+    )
+  )
+    return "timeout";
+  if (/manual|cancelled|canceled|user requested/.test(normalized))
+    return "manual";
   return "agent-error";
 }
 
 function isRetryableFailureReason(reason: KanbanFailureReason) {
-  return ["timeout", "runtime-offline", "runtime-recovery", "local-directory-error"].includes(reason);
+  return [
+    "timeout",
+    "runtime-offline",
+    "runtime-recovery",
+    "local-directory-error",
+  ].includes(reason);
 }
 
-function transitionTaskAfterFailure(task: KanbanTask, failureReason: KanbanFailureReason, summary: string, now = Date.now()) {
+function transitionTaskAfterFailure(
+  task: KanbanTask,
+  failureReason: KanbanFailureReason,
+  summary: string,
+  now = Date.now(),
+) {
   const attempt = positiveInteger(task.attempt) ?? 1;
   const maxAttempts = positiveInteger(task.maxAttempts) ?? DEFAULT_MAX_ATTEMPTS;
   const nextAttempt = attempt + 1;
-  const retried = isRetryableFailureReason(failureReason) && attempt < maxAttempts;
+  const retried =
+    isRetryableFailureReason(failureReason) && attempt < maxAttempts;
   const taskBase: KanbanTask = {
     ...task,
     assignee: retried ? undefined : task.assignee,
@@ -1083,8 +1705,24 @@ function deliverableId(target: string) {
   return `d_${simpleStableHash(target)}`;
 }
 
-function normalizeDeliverableKind(kind?: string, path?: string, url?: string): KanbanDeliverableKind {
-  if (kind && ["website", "video", "image", "audio", "document", "directory", "file", "url"].includes(kind)) {
+function normalizeDeliverableKind(
+  kind?: string,
+  path?: string,
+  url?: string,
+): KanbanDeliverableKind {
+  if (
+    kind &&
+    [
+      "website",
+      "video",
+      "image",
+      "audio",
+      "document",
+      "directory",
+      "file",
+      "url",
+    ].includes(kind)
+  ) {
     return kind as KanbanDeliverableKind;
   }
   if (url && !url.startsWith("file:")) return "url";
@@ -1105,17 +1743,31 @@ function normalizeDeliverableKind(kind?: string, path?: string, url?: string): K
 }
 
 function deliverableLabel(target: string, kind: KanbanDeliverableKind) {
-  const clean = target.replace(/^file:\/\//, "").split(/[?#]/)[0].replace(/\/+$/, "");
+  const clean = target
+    .replace(/^file:\/\//, "")
+    .split(/[?#]/)[0]
+    .replace(/\/+$/, "");
   return clean.split(/[\\/]/).filter(Boolean).at(-1) || kind;
 }
 
-function deliverableFromTarget(target: string, label?: string, createdAt = Date.now()): KanbanDeliverable | null {
+function deliverableFromTarget(
+  target: string,
+  label?: string,
+  createdAt = Date.now(),
+): KanbanDeliverable | null {
   const trimmed = target.trim().replace(/[),.;:]+$/, "");
   if (!trimmed) return null;
   if (/^https?:\/\//i.test(trimmed)) {
-    if (/^https?:\/\/(?:www\.)?w3\.org\/2000\/svg\b/i.test(trimmed)) return null;
+    if (/^https?:\/\/(?:www\.)?w3\.org\/2000\/svg\b/i.test(trimmed))
+      return null;
     const kind = normalizeDeliverableKind(undefined, undefined, trimmed);
-    return { id: deliverableId(trimmed), label: label?.trim() || deliverableLabel(trimmed, kind), kind, url: trimmed, createdAt };
+    return {
+      id: deliverableId(trimmed),
+      label: label?.trim() || deliverableLabel(trimmed, kind),
+      kind,
+      url: trimmed,
+      createdAt,
+    };
   }
   const fileUrl = trimmed.match(/^file:\/\/(.+)/i)?.[1];
   const path = decodeURIComponent(fileUrl || trimmed);
@@ -1131,17 +1783,23 @@ function deliverableFromTarget(target: string, label?: string, createdAt = Date.
   };
 }
 
-function extractKanbanDeliverables(text: string, createdAt = Date.now()): KanbanDeliverable[] {
+function extractKanbanDeliverables(
+  text: string,
+  createdAt = Date.now(),
+): KanbanDeliverable[] {
   const deliverables = new Map<string, KanbanDeliverable>();
   const lines = text.split(/\r?\n/);
   for (const line of lines) {
-    const labeled = line.match(/^\s*(?:[-*]\s*)?([^:\n]{3,80}?)\s*:\s*(file:\/\/\/[^\s]+|https?:\/\/[^\s]+|\/[^\s"'<>]+(?:\s+[^\s"'<>]+)*?)(?:\s*)$/i);
+    const labeled = line.match(
+      /^\s*(?:[-*]\s*)?([^:\n]{3,80}?)\s*:\s*(file:\/\/\/[^\s]+|https?:\/\/[^\s]+|\/[^\s"'<>]+(?:\s+[^\s"'<>]+)*?)(?:\s*)$/i,
+    );
     if (labeled) {
       const item = deliverableFromTarget(labeled[2], labeled[1], createdAt);
       if (item) deliverables.set(item.path || item.url || item.id, item);
     }
   }
-  const targetPattern = /(?:file:\/\/\/[^\s"'<>]+|https?:\/\/[^\s"'<>]+|\/(?:Users|Volumes|tmp|var|private|home|opt)\/[^\s"'<>]+(?:\s[^\s"'<>]+)*?(?=\s{2,}|\n|$|[),.;]))/gi;
+  const targetPattern =
+    /(?:file:\/\/\/[^\s"'<>]+|https?:\/\/[^\s"'<>]+|\/(?:Users|Volumes|tmp|var|private|home|opt)\/[^\s"'<>]+(?:\s[^\s"'<>]+)*?(?=\s{2,}|\n|$|[),.;]))/gi;
   for (const match of text.matchAll(targetPattern)) {
     const item = deliverableFromTarget(match[0], undefined, createdAt);
     if (item) deliverables.set(item.path || item.url || item.id, item);
@@ -1149,11 +1807,18 @@ function extractKanbanDeliverables(text: string, createdAt = Date.now()): Kanban
   return [...deliverables.values()].slice(0, 12);
 }
 
-function mergeDeliverables(existing: KanbanDeliverable[] | undefined, next: KanbanDeliverable[]) {
+function mergeDeliverables(
+  existing: KanbanDeliverable[] | undefined,
+  next: KanbanDeliverable[],
+) {
   const merged = new Map<string, KanbanDeliverable>();
   for (const item of existing ?? []) {
     const normalized = normalizeDeliverable(item);
-    if (normalized) merged.set(normalized.path || normalized.url || normalized.id, normalized);
+    if (normalized)
+      merged.set(
+        normalized.path || normalized.url || normalized.id,
+        normalized,
+      );
   }
   for (const item of next) {
     const key = item.path || item.url || item.id;
@@ -1162,22 +1827,45 @@ function mergeDeliverables(existing: KanbanDeliverable[] | undefined, next: Kanb
   return [...merged.values()].slice(0, 12);
 }
 
-function extractTaskDeliverables(task: Pick<KanbanTask, "body" | "result" | "idempotencyKey" | "title" | "skills">, result?: string, createdAt = Date.now()) {
+function extractTaskDeliverables(
+  task: Pick<
+    KanbanTask,
+    "body" | "result" | "idempotencyKey" | "title" | "skills"
+  >,
+  result?: string,
+  createdAt = Date.now(),
+) {
   const resultText = result ?? task.result ?? "";
   const resultDeliverables = extractKanbanDeliverables(resultText, createdAt);
-  if (resultDeliverables.length) return filterSourceDeliverables(task, resultDeliverables);
-  return filterSourceDeliverables(task, extractKanbanDeliverables(stripSourceResultBlocks(task.body ?? ""), createdAt));
+  if (resultDeliverables.length)
+    return filterSourceDeliverables(task, resultDeliverables);
+  return filterSourceDeliverables(
+    task,
+    extractKanbanDeliverables(
+      stripSourceResultBlocks(task.body ?? ""),
+      createdAt,
+    ),
+  );
 }
 
 function stripSourceResultBlocks(text: string) {
-  return text.replace(/\n\s*Source result:\s*\n[\s\S]*?(?=\n\s*(?:VISUAL[_ -]?BRIEF|Source task|Source agent|Create the image|Create the visual|Files created|Verification)\b|$)/gi, "\n");
+  return text.replace(
+    /\n\s*Source result:\s*\n[\s\S]*?(?=\n\s*(?:VISUAL[_ -]?BRIEF|Source task|Source agent|Create the image|Create the visual|Files created|Verification)\b|$)/gi,
+    "\n",
+  );
 }
 
-function sourceDeliverableKeys(task: Pick<KanbanTask, "body" | "idempotencyKey" | "title" | "skills">) {
+function sourceDeliverableKeys(
+  task: Pick<KanbanTask, "body" | "idempotencyKey" | "title" | "skills">,
+) {
   if (!isVisualHandoffTask(task as KanbanTask)) return new Set<string>();
   const keys = new Set<string>();
   const body = task.body ?? "";
-  const sourceBlocks = [...body.matchAll(/\n\s*Source result:\s*\n([\s\S]*?)(?=\n\s*(?:VISUAL[_ -]?BRIEF|Source task|Source agent|Create the image|Create the visual|Files created|Verification)\b|$)/gi)];
+  const sourceBlocks = [
+    ...body.matchAll(
+      /\n\s*Source result:\s*\n([\s\S]*?)(?=\n\s*(?:VISUAL[_ -]?BRIEF|Source task|Source agent|Create the image|Create the visual|Files created|Verification)\b|$)/gi,
+    ),
+  ];
   for (const block of sourceBlocks) {
     for (const item of extractKanbanDeliverables(block[1] ?? "", Date.now())) {
       keys.add(item.path || item.url || item.id);
@@ -1186,42 +1874,83 @@ function sourceDeliverableKeys(task: Pick<KanbanTask, "body" | "idempotencyKey" 
   return keys;
 }
 
-function filterSourceDeliverables(task: Pick<KanbanTask, "body" | "idempotencyKey" | "title" | "skills">, deliverables: KanbanDeliverable[]) {
+function filterSourceDeliverables(
+  task: Pick<KanbanTask, "body" | "idempotencyKey" | "title" | "skills">,
+  deliverables: KanbanDeliverable[],
+) {
   const sourceKeys = sourceDeliverableKeys(task);
   if (!sourceKeys.size) return deliverables;
-  return deliverables.filter((item) => !sourceKeys.has(item.path || item.url || item.id));
+  return deliverables.filter(
+    (item) => !sourceKeys.has(item.path || item.url || item.id),
+  );
 }
 
 function isPlanningDeliverable(item: KanbanDeliverable) {
   const target = `${item.path ?? ""} ${item.url ?? ""} ${item.label ?? ""}`;
-  return item.kind === "document" && /(?:^|[/. -])(?:implementation[- ]?plan|plan)\.(?:md|txt|pdf)\b|\/\.hermes\/plans\//i.test(target);
+  return (
+    item.kind === "document" &&
+    /(?:^|[/. -])(?:implementation[- ]?plan|plan)\.(?:md|txt|pdf)\b|\/\.hermes\/plans\//i.test(
+      target,
+    )
+  );
 }
 
-function rollUpCompletedChildDeliverables(board: KanbanBoard, completedChildId?: string, recordEvents = false) {
+function rollUpCompletedChildDeliverables(
+  board: KanbanBoard,
+  completedChildId?: string,
+  recordEvents = false,
+) {
   const tasksById = new Map(board.tasks.map((task) => [task.id, task]));
   const parentDeliverables = new Map<string, KanbanDeliverable[]>();
   for (const link of board.links) {
     if (completedChildId && link.childId !== completedChildId) continue;
     const child = tasksById.get(link.childId);
-    if (!child || !["done", "archived"].includes(child.status) || !child.deliverables?.length) continue;
-    const childDeliverables = filterSourceDeliverables(child, child.deliverables).filter((item) => !isPlanningDeliverable(item));
+    if (
+      !child ||
+      !["done", "archived"].includes(child.status) ||
+      !child.deliverables?.length
+    )
+      continue;
+    const childDeliverables = filterSourceDeliverables(
+      child,
+      child.deliverables,
+    ).filter((item) => !isPlanningDeliverable(item));
     if (!childDeliverables.length) continue;
-    parentDeliverables.set(link.parentId, mergeDeliverables(parentDeliverables.get(link.parentId), childDeliverables));
+    parentDeliverables.set(
+      link.parentId,
+      mergeDeliverables(
+        parentDeliverables.get(link.parentId),
+        childDeliverables,
+      ),
+    );
   }
   for (const [parentId, childDeliverables] of parentDeliverables) {
     const parent = tasksById.get(parentId);
     if (!parent) continue;
-    const parentBase = childDeliverables.some((item) => item.kind !== "document")
-      ? (parent.deliverables ?? []).filter((item) => !isPlanningDeliverable(item))
+    const parentBase = childDeliverables.some(
+      (item) => item.kind !== "document",
+    )
+      ? (parent.deliverables ?? []).filter(
+          (item) => !isPlanningDeliverable(item),
+        )
       : parent.deliverables;
     parent.deliverables = mergeDeliverables(parentBase, childDeliverables);
-    for (const link of board.links.filter((item) => item.parentId === parentId)) {
+    for (const link of board.links.filter(
+      (item) => item.parentId === parentId,
+    )) {
       const child = tasksById.get(link.childId);
       if (child?.status === "done" && isVisualHandoffTask(child)) {
         child.status = "archived";
         child.updatedAt = Date.now();
         if (recordEvents) {
-          board.events.unshift(event("task.handoff-converged", `Rolled ${child.title} deliverables into ${parent.title}`, child.id, { parentId }));
+          board.events.unshift(
+            event(
+              "task.handoff-converged",
+              `Rolled ${child.title} deliverables into ${parent.title}`,
+              child.id,
+              { parentId },
+            ),
+          );
         }
       }
     }
@@ -1229,22 +1958,35 @@ function rollUpCompletedChildDeliverables(board: KanbanBoard, completedChildId?:
 }
 
 function extractVisualBrief(text?: string) {
-  const match = text?.match(/(?:^|\n)\s*VISUAL[\s_-]*BRIEF\s*:\s*([\s\S]*?)(?=\n\s*(?:[A-Z][A-Z0-9_ -]{2,}|Resume this session with|Session|Duration|Messages|---RESULT_LENGTH---)\s*:|\n\s*╰|$)/i);
+  const match = text?.match(
+    /(?:^|\n)\s*VISUAL[\s_-]*BRIEF\s*:\s*([\s\S]*?)(?=\n\s*(?:[A-Z][A-Z0-9_ -]{2,}|Resume this session with|Session|Duration|Messages|---RESULT_LENGTH---)\s*:|\n\s*╰|$)/i,
+  );
   const brief = match?.[1]?.replace(/\s+/g, " ").trim() ?? "";
   return brief.length > 20 ? brief.slice(0, 2000) : "";
 }
 
 function isVisualHandoffTask(task: KanbanTask) {
-  return Boolean(task.idempotencyKey?.startsWith("handoff:visual:"))
-    || (/^generate image for:/i.test(task.title) && (task.skills ?? []).some((skill) => /image generation|visual asset|art direction/i.test(skill)));
+  return (
+    Boolean(task.idempotencyKey?.startsWith("handoff:visual:")) ||
+    (/^generate image for:/i.test(task.title) &&
+      (task.skills ?? []).some((skill) =>
+        /image generation|visual asset|art direction/i.test(skill),
+      ))
+  );
 }
 
-function createVisualHandoffChild(board: KanbanBoard, parent: KanbanTask, result?: string) {
+function createVisualHandoffChild(
+  board: KanbanBoard,
+  parent: KanbanTask,
+  result?: string,
+) {
   if (isVisualHandoffTask(parent)) return null;
   const visualBrief = extractVisualBrief(result ?? parent.result);
   if (!visualBrief) return null;
   const idempotencyKey = `handoff:visual:${parent.id}:${simpleStableHash(visualBrief)}`;
-  const existing = board.tasks.find((task) => task.idempotencyKey === idempotencyKey);
+  const existing = board.tasks.find(
+    (task) => task.idempotencyKey === idempotencyKey,
+  );
   if (existing) return existing;
   const now = Date.now();
   const task: KanbanTask = {
@@ -1255,8 +1997,12 @@ function createVisualHandoffChild(board: KanbanBoard, parent: KanbanTask, result
       parent.assignee ? `Source agent: ${parent.assignee}` : "",
       "Create the image or image asset that best fits this handoff brief. Use image-generation/art tools when available. If raster generation is unavailable, create the best concrete visual asset your runtime can produce and report the exact file path.",
       `VISUAL_BRIEF: ${visualBrief}`,
-      result || parent.result ? `Source result:\n${(result || parent.result || "").slice(0, 4000)}` : "",
-    ].filter(Boolean).join("\n\n"),
+      result || parent.result
+        ? `Source result:\n${(result || parent.result || "").slice(0, 4000)}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
     assignee: undefined,
     tenant: undefined,
     status: "ready",
@@ -1272,7 +2018,14 @@ function createVisualHandoffChild(board: KanbanBoard, parent: KanbanTask, result
   };
   board.tasks.unshift(task);
   board.links.push({ parentId: parent.id, childId: task.id, createdAt: now });
-  board.events.unshift(event("task.handoff-created", `Created artist handoff for ${parent.title}`, task.id, { parentId: parent.id, visualBrief }));
+  board.events.unshift(
+    event(
+      "task.handoff-created",
+      `Created artist handoff for ${parent.title}`,
+      task.id,
+      { parentId: parent.id, visualBrief },
+    ),
+  );
   return task;
 }
 
@@ -1310,12 +2063,23 @@ function promoteReadyChildren(board: KanbanBoard, kind: string) {
   }
   for (const taskId of promotedIds) {
     const task = tasksById.get(taskId);
-    board.events.unshift(event(kind, `Promoted ${task?.title ?? taskId} after parent tasks completed.`, taskId));
+    board.events.unshift(
+      event(
+        kind,
+        `Promoted ${task?.title ?? taskId} after parent tasks completed.`,
+        taskId,
+      ),
+    );
   }
   return promotedIds.size;
 }
 
-function finishActiveRun(board: KanbanBoard, taskId: string, status: KanbanRunStatus, input: FinishRunInput = {}) {
+function finishActiveRun(
+  board: KanbanBoard,
+  taskId: string,
+  status: KanbanRunStatus,
+  input: FinishRunInput = {},
+) {
   const task = board.tasks.find((item) => item.id === taskId);
   const runId = input.runId ?? task?.currentRunId;
   const now = Date.now();
@@ -1327,7 +2091,7 @@ function finishActiveRun(board: KanbanBoard, taskId: string, status: KanbanRunSt
       status: "running",
       assignee: task?.assignee,
       startedAt: task?.lastHeartbeatAt ?? task?.updatedAt ?? now,
-      attempt: task ? positiveInteger(task.attempt) ?? 1 : undefined,
+      attempt: task ? (positiveInteger(task.attempt) ?? 1) : undefined,
     };
     board.runs.unshift(run);
   }
@@ -1339,29 +2103,46 @@ function finishActiveRun(board: KanbanBoard, taskId: string, status: KanbanRunSt
   run.claimExpiresAt = undefined;
   run.summary = input.summary ?? input.result ?? input.reason ?? run.summary;
   run.metadata = input.metadata ?? run.metadata;
-  run.error = input.error ?? (status === "blocked" ? input.reason : undefined) ?? run.error;
-  run.failureReason = normalizeFailureReason(input.failureReason) ?? run.failureReason;
-  run.attempt = positiveInteger(run.attempt) ?? (task ? positiveInteger(task.attempt) ?? 1 : undefined);
+  run.error =
+    input.error ??
+    (status === "blocked" ? input.reason : undefined) ??
+    run.error;
+  run.failureReason =
+    normalizeFailureReason(input.failureReason) ?? run.failureReason;
+  run.attempt =
+    positiveInteger(run.attempt) ??
+    (task ? (positiveInteger(task.attempt) ?? 1) : undefined);
   return run;
 }
 
 function isUnpollableAcceptedWorking(task: KanbanTask) {
-  return task.status === "working"
-    && !task.agentSession?.sessionId
-    && /produced no output|no pollable session|auth is failing|needs Hermes\/Codex|accepted the runtime connection|waiting for telemetry|dashboard timeout/i.test(task.result ?? "");
+  return (
+    task.status === "working" &&
+    !task.agentSession?.sessionId &&
+    /produced no output|no pollable session|auth is failing|needs Hermes\/Codex|accepted the runtime connection|waiting for telemetry|dashboard timeout/i.test(
+      task.result ?? "",
+    )
+  );
 }
 
 function isRetryBlockerResult(result?: string) {
-  return /cannot be marked Working|signed out of Codex|auth is failing|no active session|no pollable session|needs Hermes\/Codex|no assistant response|terminal\/tool output|tool output|session is updating|without a worker update/i.test(result ?? "");
+  return /cannot be marked Working|signed out of Codex|auth is failing|no active session|no pollable session|needs Hermes\/Codex|no assistant response|terminal\/tool output|tool output|session is updating|without a worker update/i.test(
+    result ?? "",
+  );
 }
 
 function safeVaultFolder(folder?: string | null) {
   const value = folder?.trim();
   if (!value) return "";
   if (isAbsolute(value) || value.split(/[\\/]+/).includes("..")) {
-    throw new Error("Kanban folder must be a relative path inside the shared vault.");
+    throw new Error(
+      "Kanban folder must be a relative path inside the shared vault.",
+    );
   }
-  return value.split(/[\\/]+/).filter(Boolean).join(sep);
+  return value
+    .split(/[\\/]+/)
+    .filter(Boolean)
+    .join(sep);
 }
 
 function normalizeKanbanFolder(folder?: string | null) {
@@ -1370,5 +2151,7 @@ function normalizeKanbanFolder(folder?: string | null) {
 }
 
 function titleize(slug: string) {
-  return slug.replace(/[-_]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  return slug
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }

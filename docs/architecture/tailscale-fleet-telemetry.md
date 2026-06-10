@@ -89,6 +89,25 @@ collector restart) instead of the full install + build. To convert a machine
 back to a full install, run `./setup.sh --full`; to force one full update
 without converting, `./scripts/update-hivemindos.sh --full`.
 
+## Per-Agent DIDs and Signed Work Receipts
+
+Every agent the collector reports gets its own Ed25519 `did:key` identity
+(`scripts/agent-identity.mjs`, keys under `~/.hivemindos/agent-identities/`,
+DID surfaced on `agent.gitlawb.did`). The machine holds its own key and signs a
+UCAN-shaped delegation for each agent key, so receipts carry a verifiable
+machine → agent chain.
+
+When a Work-board task completes, the dashboard asks the collector on the
+agent's machine (`POST /work-receipts`, capability `workReceipts`) to sign a
+work receipt over the workspace git state (remote, branch, commit, dirty).
+Receipts append to `Operations/Brain Services/Work Receipts.jsonl` in the
+shared vault (local fallback `~/.hivemindos/work-receipts.jsonl`). The
+dashboard verifies signatures offline from the embedded `did:key`
+(`src/lib/services/gitlawb/work-receipts.ts`) and shows verified receipts as
+"verified" proofs on tasks. This works for **any** repo — projects do not need
+to be hosted on or linked to GitLawb; the GitLawb link remains an additional,
+push-time attestation layer for repos that are.
+
 ## Hivemind Link Setup
 
 Normal setup uses the app-managed Link sidecar by default. For collector-only installs on additional machines, run:

@@ -2,15 +2,42 @@
 
 import Image from "next/image";
 import * as React from "react";
-import { AlertTriangle, Copy, GitBranch, LoaderCircle, MessageSquare, Monitor, PhoneCall, Plus, Settings, Smartphone, SquareTerminal, Trash2, Wallet } from "lucide-react";
+import {
+  AlertTriangle,
+  Copy,
+  GitBranch,
+  LoaderCircle,
+  MessageSquare,
+  Monitor,
+  PhoneCall,
+  Plus,
+  Settings,
+  Smartphone,
+  SquareTerminal,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 
 import { CloseIconButton } from "@/components/ui/close-icon-button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import { BeeIcon } from "./bee-icon";
 import { HexTile } from "./hex-tile";
-import { fleetAgentCanChat, isFleetMachineMobile, type FleetAgent, type FleetAgentChat, type FleetMachine } from "./fleet-data";
-import type { MachineUpdateButtonDetail, MachineUpdateButtonStatus } from "./roster";
+import {
+  fleetAgentCanChat,
+  isFleetMachineMobile,
+  type FleetAgent,
+  type FleetAgentChat,
+  type FleetMachine,
+} from "./fleet-data";
+import type {
+  MachineUpdateButtonDetail,
+  MachineUpdateButtonStatus,
+} from "./roster";
 import { FleetTaskPreviewRow } from "./task-preview-row";
 import styles from "./fleet-tokens.module.css";
 
@@ -24,7 +51,11 @@ type FleetAgentDetailPanelProps = {
   expandedTaskIds: Set<string>;
   onToggleTaskPreview: (previewId: string) => void;
   onOpenChat?: AgentAction;
-  onOpenTaskChat?: (machine: FleetMachine, agent: FleetAgent, chat?: FleetAgentChat) => void;
+  onOpenTaskChat?: (
+    machine: FleetMachine,
+    agent: FleetAgent,
+    chat?: FleetAgentChat,
+  ) => void;
   onCallAgent?: AgentAction;
   onOpenWallet?: AgentAction;
   onEditSettings?: AgentAction;
@@ -57,7 +88,11 @@ export type FleetSelectionTooltipContentProps = {
   onOpenUsePodHost?: (machine: FleetMachine) => void;
   onOpenShell?: (machine: FleetMachine) => void;
   onOpenChat?: AgentAction;
-  onOpenTaskChat?: (machine: FleetMachine, agent: FleetAgent, chat?: FleetAgentChat) => void;
+  onOpenTaskChat?: (
+    machine: FleetMachine,
+    agent: FleetAgent,
+    chat?: FleetAgentChat,
+  ) => void;
   onCallAgent?: AgentAction;
   onOpenWallet?: AgentAction;
   onEditSettings?: AgentAction;
@@ -77,7 +112,11 @@ function stopEvent(event: React.MouseEvent | React.KeyboardEvent) {
   event.stopPropagation();
 }
 
-function actionHandler(machine: FleetMachine, agent: FleetAgent, fn?: AgentAction) {
+function actionHandler(
+  machine: FleetMachine,
+  agent: FleetAgent,
+  fn?: AgentAction,
+) {
   return (event: React.MouseEvent) => {
     event.stopPropagation();
     fn?.(machine, agent);
@@ -88,7 +127,11 @@ function taskChatHandler(
   machine: FleetMachine,
   agent: FleetAgent,
   chat: FleetAgentChat,
-  fn?: (machine: FleetMachine, agent: FleetAgent, chat?: FleetAgentChat) => void,
+  fn?: (
+    machine: FleetMachine,
+    agent: FleetAgent,
+    chat?: FleetAgentChat,
+  ) => void,
 ) {
   return (event: React.MouseEvent) => {
     event.stopPropagation();
@@ -110,9 +153,17 @@ function FleetAgentDetailPanel({
   onRemove,
 }: FleetAgentDetailPanelProps) {
   const canChat = fleetAgentCanChat(agent);
-  const chats = (agent.recentChats?.length
-    ? agent.recentChats
-    : [{ id: agent.currentTaskId ?? "current", title: agent.task, task: agent.task, since: agent.since }]
+  const chats = (
+    agent.recentChats?.length
+      ? agent.recentChats
+      : [
+          {
+            id: agent.currentTaskId ?? "current",
+            title: agent.task,
+            task: agent.task,
+            since: agent.since,
+          },
+        ]
   ).slice(0, 3);
 
   return (
@@ -120,7 +171,8 @@ function FleetAgentDetailPanel({
       {chats.map((chat) => {
         const previewId = `${agent.id}:${chat.id}`;
         const isTaskExpanded = expandedTaskIds.has(previewId);
-        const canResumeChat = canChat && chat.id !== "current" && onOpenTaskChat;
+        const canResumeChat =
+          canChat && chat.id !== "current" && onOpenTaskChat;
         return (
           <FleetTaskPreviewRow
             key={previewId}
@@ -136,7 +188,12 @@ function FleetAgentDetailPanel({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    onClick={taskChatHandler(machine, agent, chat, onOpenTaskChat)}
+                    onClick={taskChatHandler(
+                      machine,
+                      agent,
+                      chat,
+                      onOpenTaskChat,
+                    )}
                     aria-label={`Resume chat with ${agent.name}`}
                     className={`${styles.tooltipActionButton} inline-grid place-items-center`}
                     style={{
@@ -184,16 +241,44 @@ function FleetAgentDetailPanel({
                 <MessageSquare size={12} aria-hidden="true" /> New Chat
               </button>
             </TooltipTrigger>
-            <TooltipContent>Start a fresh chat with {agent.name}</TooltipContent>
+            <TooltipContent>
+              Start a fresh chat with {agent.name}
+            </TooltipContent>
           </Tooltip>
         ) : null}
 
         {[
-          { id: "call", label: "Call", Icon: PhoneCall, onClick: actionHandler(machine, agent, onCallAgent) },
-          { id: "wallet", label: "Wallet & limits", Icon: Wallet, onClick: actionHandler(machine, agent, onOpenWallet) },
-          { id: "edit", label: "Edit settings", Icon: Settings, onClick: actionHandler(machine, agent, onEditSettings) },
-          { id: "dup", label: "Duplicate", Icon: Copy, onClick: actionHandler(machine, agent, onDuplicate) },
-          { id: "remove", label: "Remove agent", Icon: Trash2, onClick: actionHandler(machine, agent, onRemove), danger: true },
+          {
+            id: "call",
+            label: "Call",
+            Icon: PhoneCall,
+            onClick: actionHandler(machine, agent, onCallAgent),
+          },
+          {
+            id: "wallet",
+            label: "Wallet & limits",
+            Icon: Wallet,
+            onClick: actionHandler(machine, agent, onOpenWallet),
+          },
+          {
+            id: "edit",
+            label: "Edit settings",
+            Icon: Settings,
+            onClick: actionHandler(machine, agent, onEditSettings),
+          },
+          {
+            id: "dup",
+            label: "Duplicate",
+            Icon: Copy,
+            onClick: actionHandler(machine, agent, onDuplicate),
+          },
+          {
+            id: "remove",
+            label: "Remove agent",
+            Icon: Trash2,
+            onClick: actionHandler(machine, agent, onRemove),
+            danger: true,
+          },
         ].map(({ id, label, Icon, onClick, danger }) => (
           <Tooltip key={id}>
             <TooltipTrigger asChild>
@@ -243,16 +328,15 @@ function FleetMachineDetailPanel({
   }>({ key: "", state: "idle", message: "" });
   const syncState = syncFix.key === syncIssueKey ? syncFix.state : "idle";
   const syncMessage = syncFix.key === syncIssueKey ? syncFix.message : "";
-  const updateDisabled = updateStatus === "updating" || updateStatus === "updated";
+  const updateDisabled =
+    updateStatus === "updating" || updateStatus === "updated";
   const showUpdateButton = Boolean(
-    onUpdateMachine
-      && (
-        updateStatus === "updating"
-        || updateStatus === "updated"
-        || updateStatus === "failed"
-        || machine.versionState === "stale"
-        || machine.canUpdate === true
-      ),
+    onUpdateMachine &&
+    (updateStatus === "updating" ||
+      updateStatus === "updated" ||
+      updateStatus === "failed" ||
+      machine.versionState === "stale" ||
+      machine.canUpdate === true),
   );
   const codeNode = machine.gitlawb;
   const codeNodeLabel = codeNode?.healthy
@@ -263,7 +347,9 @@ function FleetMachineDetailPanel({
         ? "Code proof"
         : "";
   const syncRunning = syncState === "running";
-  const syncTooltip = [syncMessage, machine.syncIssue?.detail].filter(Boolean).join("\n\n");
+  const syncTooltip = [syncMessage, machine.syncIssue?.detail]
+    .filter(Boolean)
+    .join("\n\n");
 
   const runSyncFix = async (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -274,24 +360,44 @@ function FleetMachineDetailPanel({
       setSyncFix({
         key: syncIssueKey,
         state: "done",
-        message: "Repair request sent. Fleet will refresh the sync state shortly.",
+        message:
+          "Repair request sent. Fleet will refresh the sync state shortly.",
       });
     } catch (error) {
       setSyncFix({
         key: syncIssueKey,
         state: "failed",
-        message: error instanceof Error ? error.message : "Syncthing repair failed.",
+        message:
+          error instanceof Error ? error.message : "Syncthing repair failed.",
       });
     }
   };
 
   return (
     <div className="grid" style={{ gap: 9 }}>
-      <div className="grid" style={{ gap: 5, color: "var(--muted)", fontFamily: "var(--f-mono)", fontSize: 10.5, lineHeight: 1.45 }}>
-        <span>{machine.kind} · {machine.role} · {machine.city}</span>
+      <div
+        className="grid"
+        style={{
+          gap: 5,
+          color: "var(--muted)",
+          fontFamily: "var(--f-mono)",
+          fontSize: 10.5,
+          lineHeight: 1.45,
+        }}
+      >
+        <span>
+          {machine.kind} · {machine.role} · {machine.city}
+        </span>
         <span>{machine.os}</span>
-        <span>{machine.tailnet}{machine.ip !== "—" ? ` · ${machine.ip}` : ""}{machine.ping ? ` · ${machine.ping}ms` : ""}</span>
-        <span>{machine.agents.length} agent{machine.agents.length === 1 ? "" : "s"} · {machine.uptime}</span>
+        <span>
+          {machine.tailnet}
+          {machine.ip !== "—" ? ` · ${machine.ip}` : ""}
+          {machine.ping ? ` · ${machine.ping}ms` : ""}
+        </span>
+        <span>
+          {machine.agents.length} agent{machine.agents.length === 1 ? "" : "s"}{" "}
+          · {machine.uptime}
+        </span>
       </div>
 
       <div className="flex items-center flex-wrap" style={{ gap: 6 }}>
@@ -305,39 +411,62 @@ function FleetMachineDetailPanel({
                   if (!updateDisabled) onUpdateMachine?.(machine);
                 }}
                 disabled={updateDisabled}
-                aria-label={updateStatus === "updating" ? `Updating ${machine.name}` : `Update ${machine.name}`}
+                aria-label={
+                  updateStatus === "updating"
+                    ? `Updating ${machine.name}`
+                    : `Update ${machine.name}`
+                }
                 className={`${styles.tooltipActionButton} inline-flex items-center justify-center`}
                 style={{
                   minHeight: 28,
                   gap: 6,
                   padding: "7px 9px",
                   borderRadius: 7,
-                  border: updateStatus === "failed"
-                    ? "1px solid rgba(251,113,133,0.46)"
-                    : updateStatus === "updated"
-                      ? "1px solid rgba(94,234,212,0.54)"
-                      : "1px solid rgba(255,212,90,0.46)",
-                  background: updateStatus === "failed"
-                    ? "rgba(251,113,133,0.14)"
-                    : updateStatus === "updated"
-                      ? "rgba(45,212,191,0.16)"
-                      : "rgba(255,212,90,0.14)",
-                  color: updateStatus === "failed"
-                    ? "#fecdd3"
-                    : updateStatus === "updated"
-                      ? "var(--accent-strong)"
-                      : "var(--hex-honey-border)",
+                  border:
+                    updateStatus === "failed"
+                      ? "1px solid rgba(251,113,133,0.46)"
+                      : updateStatus === "updated"
+                        ? "1px solid rgba(94,234,212,0.54)"
+                        : "1px solid rgba(255,212,90,0.46)",
+                  background:
+                    updateStatus === "failed"
+                      ? "rgba(251,113,133,0.14)"
+                      : updateStatus === "updated"
+                        ? "rgba(45,212,191,0.16)"
+                        : "rgba(255,212,90,0.14)",
+                  color:
+                    updateStatus === "failed"
+                      ? "#fecdd3"
+                      : updateStatus === "updated"
+                        ? "var(--accent-strong)"
+                        : "var(--hex-honey-border)",
                   fontFamily: "var(--f-mono)",
                   fontSize: 9.5,
                   fontWeight: 800,
                   cursor: updateDisabled ? "default" : "pointer",
                 }}
               >
-                {updateStatus === "updating" ? <LoaderCircle size={12} className="animate-spin" aria-hidden="true" /> : null}
-                {updateStatus === "updated" ? "Updated!" : updateStatus === "failed" ? "Failed" : updateStatus === "updating" ? "Updating" : "Update"}
+                {updateStatus === "updating" ? (
+                  <LoaderCircle
+                    size={12}
+                    className="animate-spin"
+                    aria-hidden="true"
+                  />
+                ) : null}
+                {updateStatus === "updated"
+                  ? "Updated!"
+                  : updateStatus === "failed"
+                    ? "Failed"
+                    : updateStatus === "updating"
+                      ? "Updating"
+                      : "Update"}
               </button>
             </TooltipTrigger>
-            {updateDetail?.detail ? <TooltipContent style={{ maxWidth: 320, whiteSpace: "pre-wrap" }}>{updateDetail.detail}</TooltipContent> : null}
+            {updateDetail?.detail ? (
+              <TooltipContent style={{ maxWidth: 320, whiteSpace: "pre-wrap" }}>
+                {updateDetail.detail}
+              </TooltipContent>
+            ) : null}
           </Tooltip>
         ) : null}
 
@@ -403,11 +532,13 @@ function FleetMachineDetailPanel({
                 Terminal
               </button>
             </TooltipTrigger>
-            <TooltipContent>Open a shell on {machine.name} over the hive link</TooltipContent>
+            <TooltipContent>
+              Open a shell on {machine.name} over the hive link
+            </TooltipContent>
           </Tooltip>
         ) : null}
 
-        {onAddAgent ? (
+        {onAddAgent && !isFleetMachineMobile(machine) ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -450,7 +581,14 @@ function FleetMachineDetailPanel({
                 className={styles.rosterUsePodHostButton}
                 style={{ minHeight: 28, padding: "7px 9px" }}
               >
-                <Image src={USEPOD_RUNTIME_ICON_PATH} alt="" aria-hidden="true" width={15} height={15} unoptimized />
+                <Image
+                  src={USEPOD_RUNTIME_ICON_PATH}
+                  alt=""
+                  aria-hidden="true"
+                  width={15}
+                  height={15}
+                  unoptimized
+                />
                 <span>Rent compute</span>
               </button>
             </TooltipTrigger>
@@ -460,7 +598,14 @@ function FleetMachineDetailPanel({
       </div>
 
       {machine.networkIssue ? (
-        <div className={styles.rosterNetworkIssue} style={{ border: "1px solid rgba(251,191,36,0.42)", background: "rgba(251,191,36,0.12)", color: "#fde68a" }}>
+        <div
+          className={styles.rosterNetworkIssue}
+          style={{
+            border: "1px solid rgba(251,191,36,0.42)",
+            background: "rgba(251,191,36,0.12)",
+            color: "#fde68a",
+          }}
+        >
           <AlertTriangle size={10} aria-hidden="true" />
           <span>{machine.networkIssue.label}</span>
         </div>
@@ -475,17 +620,46 @@ function FleetMachineDetailPanel({
               disabled={syncRunning}
               className={`${styles.tooltipActionButton} ${styles.rosterNetworkIssue}`}
               style={{
-                border: syncState === "done" ? "1px solid rgba(94,234,212,0.46)" : "1px solid rgba(251,113,133,0.46)",
-                background: syncState === "done" ? "rgba(45,212,191,0.13)" : "rgba(251,113,133,0.13)",
-                color: syncState === "done" ? "var(--accent-strong)" : "#fecdd3",
-                cursor: syncRunning ? "wait" : onFixSyncIssue ? "pointer" : "default",
+                border:
+                  syncState === "done"
+                    ? "1px solid rgba(94,234,212,0.46)"
+                    : "1px solid rgba(251,113,133,0.46)",
+                background:
+                  syncState === "done"
+                    ? "rgba(45,212,191,0.13)"
+                    : "rgba(251,113,133,0.13)",
+                color:
+                  syncState === "done" ? "var(--accent-strong)" : "#fecdd3",
+                cursor: syncRunning
+                  ? "wait"
+                  : onFixSyncIssue
+                    ? "pointer"
+                    : "default",
               }}
             >
-              {syncRunning ? <LoaderCircle size={10} className="animate-spin" aria-hidden="true" /> : <AlertTriangle size={10} aria-hidden="true" />}
-              <span>{syncRunning ? "Fixing sync..." : syncState === "done" ? "Sync repair sent" : syncState === "failed" ? "Sync fix failed" : machine.syncIssue.label}</span>
+              {syncRunning ? (
+                <LoaderCircle
+                  size={10}
+                  className="animate-spin"
+                  aria-hidden="true"
+                />
+              ) : (
+                <AlertTriangle size={10} aria-hidden="true" />
+              )}
+              <span>
+                {syncRunning
+                  ? "Fixing sync..."
+                  : syncState === "done"
+                    ? "Sync repair sent"
+                    : syncState === "failed"
+                      ? "Sync fix failed"
+                      : machine.syncIssue.label}
+              </span>
             </button>
           </TooltipTrigger>
-          <TooltipContent style={{ maxWidth: 320, whiteSpace: "pre-wrap" }}>{syncTooltip}</TooltipContent>
+          <TooltipContent style={{ maxWidth: 320, whiteSpace: "pre-wrap" }}>
+            {syncTooltip}
+          </TooltipContent>
         </Tooltip>
       ) : null}
     </div>
@@ -519,16 +693,24 @@ export function FleetSelectionTooltipContent({
     ids: Set<string>;
   }>(() => ({ key: activeSelectionKey, ids: new Set() }));
   const emptyTaskIds = React.useMemo(() => new Set<string>(), []);
-  const expandedTaskIds = expandedTaskState.key === activeSelectionKey ? expandedTaskState.ids : emptyTaskIds;
+  const expandedTaskIds =
+    expandedTaskState.key === activeSelectionKey
+      ? expandedTaskState.ids
+      : emptyTaskIds;
 
-  const toggleTaskPreview = React.useCallback((previewId: string) => {
-    setExpandedTaskState((current) => {
-      const next = new Set(current.key === activeSelectionKey ? current.ids : []);
-      if (next.has(previewId)) next.delete(previewId);
-      else next.add(previewId);
-      return { key: activeSelectionKey, ids: next };
-    });
-  }, [activeSelectionKey]);
+  const toggleTaskPreview = React.useCallback(
+    (previewId: string) => {
+      setExpandedTaskState((current) => {
+        const next = new Set(
+          current.key === activeSelectionKey ? current.ids : [],
+        );
+        if (next.has(previewId)) next.delete(previewId);
+        else next.add(previewId);
+        return { key: activeSelectionKey, ids: next };
+      });
+    },
+    [activeSelectionKey],
+  );
 
   return (
     <div
@@ -540,7 +722,10 @@ export function FleetSelectionTooltipContent({
         width: "min(380px, calc(100vw - 32px))",
       }}
     >
-      <div className="flex items-start justify-between" style={{ gap: 10, marginBottom: 10 }}>
+      <div
+        className="flex items-start justify-between"
+        style={{ gap: 10, marginBottom: 10 }}
+      >
         <div className="flex min-w-0 items-center" style={{ gap: 10 }}>
           <HexTile size={agent ? 48 : 44} tone="honey" surface="flat">
             {agent ? (
@@ -559,10 +744,28 @@ export function FleetSelectionTooltipContent({
             )}
           </HexTile>
           <div className="min-w-0">
-            <div className={styles.monoCap} style={{ color: agent ? AGENT_STATE_COLOR[agent.state] : "var(--accent-strong)", marginBottom: 3 }}>
-              {agent ? `${machine.name} · ${agent.runtime} · ${agent.role}` : `${machine.kind} · ${machine.role}`}
+            <div
+              className={styles.monoCap}
+              style={{
+                color: agent
+                  ? AGENT_STATE_COLOR[agent.state]
+                  : "var(--accent-strong)",
+                marginBottom: 3,
+              }}
+            >
+              {agent
+                ? `${machine.name} · ${agent.runtime} · ${agent.role}`
+                : `${machine.kind} · ${machine.role}`}
             </div>
-            <div style={{ fontFamily: "var(--f-display)", fontSize: 15, fontWeight: 700, lineHeight: 1.2, overflowWrap: "anywhere" }}>
+            <div
+              style={{
+                fontFamily: "var(--f-display)",
+                fontSize: 15,
+                fontWeight: 700,
+                lineHeight: 1.2,
+                overflowWrap: "anywhere",
+              }}
+            >
               {agent ? agent.name : machine.name}
             </div>
           </div>
