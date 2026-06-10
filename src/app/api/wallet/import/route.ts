@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { importWalletSecret } from "@/lib/services/wallet/chain-wallet";
+import { importRecoveryPhraseWallets, importWalletSecret } from "@/lib/services/wallet/chain-wallet";
 import { storeWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
+import { writeWalletRecord } from "@/lib/services/obsidian/wallet-ledger";
 import { refreshWalletVaultBackup } from "@/lib/services/wallet/wallet-vault-backup";
+import { createDefaultAgentWallet } from "@/lib/utils/agent-wallet";
 import { requireAuth } from "@/lib/utils/server-auth";
 
 export async function POST(request: NextRequest) {
@@ -13,12 +15,58 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({})) as {
       agentId?: string;
       network?: string;
+      name?: string;
       secret?: string;
       importKind?: "private-key" | "recovery-phrase";
       vaultPath?: string;
     };
     const agentId = body.agentId?.trim();
     if (!agentId) return NextResponse.json({ ok: false, error: "agentId is required" }, { status: 400 });
+    if (body.importKind === "recovery-phrase") {
+      const importedWallets = importRecoveryPhraseWallets(body.secret || "");
+      const wallets = await Promise.all(importedWallets.map((wallet) => storeWalletSecret({
+        agentId: `${agentId}:${wallet.network.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "")}`,
+        address: wallet.address,
+        network: wallet.network,
+        secret: wallet.secret,
+      })));
+      if (agentId.startsWith("user:")) {
+        const now = Date.now();
+        await Promise.all(wallets.map((wallet, index) => writeWalletRecord({
+          vaultPath: body.vaultPath,
+          agentId: wallet.agentId,
+          agentName: importedWallets.length > 1
+            ? `${body.name?.trim() || "My wallet"} ${importedWallets[index]?.label || (wallet.network.startsWith("solana:") ? "Solana" : "Base")}`
+            : body.name?.trim() || `My ${wallet.network.startsWith("solana:") ? "Solana" : "Base"} wallet`,
+          wallet: {
+            ...createDefaultAgentWallet(wallet.agentId),
+            enabled: false,
+            provider: "manual",
+            walletAddress: wallet.address,
+            network: wallet.network,
+            tokenSymbol: wallet.network.startsWith("solana:") ? "SOL" : "ETH",
+            custodyMode: wallet.custodyMode,
+            updatedAt: now,
+          },
+        })));
+      }
+      const vaultSync = await refreshWalletVaultBackup(body.vaultPath).then(
+        (status) => ({ ok: true, status }),
+        (error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : "Encrypted wallet vault sync failed." }),
+      );
+      return NextResponse.json({
+        ok: true,
+        wallets: wallets.map((wallet, index) => ({
+          ...wallet,
+          label: importedWallets[index]?.label,
+          derivationPath: importedWallets[index]?.derivationPath,
+        })),
+        wallet: wallets[0],
+        importKind: "recovery-phrase",
+        vaultSync,
+      });
+    }
+
     const imported = importWalletSecret(body.network || "eip155:8453", body.secret || "", body.importKind || "private-key");
     const info = await storeWalletSecret({
       agentId,
@@ -26,6 +74,24 @@ export async function POST(request: NextRequest) {
       network: imported.network,
       secret: imported.secret,
     });
+    if (agentId.startsWith("user:")) {
+      const now = Date.now();
+      await writeWalletRecord({
+        vaultPath: body.vaultPath,
+        agentId: info.agentId,
+        agentName: body.name?.trim() || `My ${info.network.startsWith("solana:") ? "Solana" : "Base"} wallet`,
+        wallet: {
+          ...createDefaultAgentWallet(info.agentId),
+          enabled: false,
+          provider: "manual",
+          walletAddress: info.address,
+          network: info.network,
+          tokenSymbol: info.network.startsWith("solana:") ? "SOL" : "ETH",
+          custodyMode: info.custodyMode,
+          updatedAt: now,
+        },
+      });
+    }
     const vaultSync = await refreshWalletVaultBackup(body.vaultPath).then(
       (status) => ({ ok: true, status }),
       (error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : "Encrypted wallet vault sync failed." }),

@@ -1,0 +1,18 @@
+{
+  "upstreamName": "budge",
+  "upstreamSlug": "budge",
+  "hiveSlug": "budge",
+  "sourceLabel": "millionco",
+  "sourceUrl": "https://www.ui-skills.com/skills/millionco/budge",
+  "repository": "https://github.com/millionco/skills",
+  "installCommand": "npx skills add https://github.com/millionco/skills --skill budge",
+  "importedAt": "2026-06-08T15:01:39.308Z",
+  "refreshedAt": "2026-06-08T15:01:39.308Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/millionco/budge",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Use when making single-property CSS or Tailwind visual changes in Next.js App Router projects. Presents a floating control widget on the page so the user can tweak the value before it is persisted. Covers atomic style changes, live preview, and cleanup. Triggers on single CSS value or single Tailwind utility class modifications."
+}

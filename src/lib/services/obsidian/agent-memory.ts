@@ -4,6 +4,7 @@ import { createHash } from "crypto";
 import { basename, dirname, join, relative, resolve, sep } from "path";
 import { readGitLawbStatus, sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
+import { listFilesMatchingTerms, searchTermsFromQuery } from "@/lib/services/search/ripgrep-search";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import type { GitLawbProof, GitLawbProofStatus, GitLawbStatus } from "@/lib/types/gitlawb";
 
@@ -666,10 +667,29 @@ async function readMemoryRecordsFromMarkdown(root: string) {
   return records;
 }
 
-async function readVaultNoteRecords(root: string) {
-  const cached = vaultRecordsCache.get(root);
+async function candidateVaultFiles(root: string, query?: string): Promise<string[]> {
+  // Strict search policy: shortlist candidate notes with ripgrep (grep
+  // fallback) so query recalls don't read the whole vault; only fall back to
+  // the full fs walk when no search binary is usable or there is no query.
+  const terms = searchTermsFromQuery(query);
+  if (terms.length) {
+    const matched = await listFilesMatchingTerms({ root, terms, maxResults: MAX_VAULT_NOTE_FILES })
+      .catch(() => null);
+    if (matched) {
+      return matched.filter((file) => {
+        assertInside(root, file);
+        return !shouldSkipVaultPath(root, file, false);
+      });
+    }
+  }
+  return walkVaultMarkdown(root);
+}
+
+async function readVaultNoteRecords(root: string, query?: string) {
+  const cacheKey = `${root} ${searchTermsFromQuery(query).join(" ")}`;
+  const cached = vaultRecordsCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt <= VAULT_RECORD_CACHE_TTL_MS) return cached.records;
-  const files = await walkVaultMarkdown(root);
+  const files = await candidateVaultFiles(root, query);
   const records: AgentMemoryRecord[] = [];
   for (const file of files) {
     const st = await stat(file).catch(() => null);
@@ -678,7 +698,7 @@ async function readVaultNoteRecords(root: string) {
     const record = recordFromVaultMarkdown(root, file, markdown, st.mtimeMs);
     if (record) records.push(record);
   }
-  vaultRecordsCache.set(root, { cachedAt: Date.now(), records });
+  vaultRecordsCache.set(cacheKey, { cachedAt: Date.now(), records });
   return records;
 }
 
@@ -688,8 +708,8 @@ async function readMemoryRecords(root: string) {
   return readMemoryRecordsFromMarkdown(root);
 }
 
-async function readFullVaultRecords(root: string, memoryRecords: AgentMemoryRecord[]) {
-  const vaultRecords = await readVaultNoteRecords(root);
+async function readFullVaultRecords(root: string, memoryRecords: AgentMemoryRecord[], query?: string) {
+  const vaultRecords = await readVaultNoteRecords(root, query);
   const byPath = new Map<string, AgentMemoryRecord>();
   for (const record of vaultRecords) byPath.set(record.notePath, record);
   for (const record of memoryRecords) byPath.set(record.notePath, record);
@@ -1035,7 +1055,7 @@ export async function recallAgentMemory(input: RecallAgentMemoryInput = {}) {
       hits: memoryHits,
     };
   }
-  const records = await readFullVaultRecords(root, memoryRecords);
+  const records = await readFullVaultRecords(root, memoryRecords, input.query);
   const hits = hitsFromRecords(records, input, limit);
   return {
     vaultPath: root,

@@ -111,3 +111,21 @@ npx agent-control-room install-collector
 
 The first command can discover Tailscale devices. The second can install the
 collector and print the private Tailnet URL to add to the dashboard.
+
+## Stale Node Cleanup
+
+Re-registrations (hostname changes, Link state resets, reinstalls) leave old
+node registrations behind on the tailnet; Tailscale then names the new node
+with a `-1`/`-2` suffix and the dashboard has to dedupe ghosts. Two tools keep
+the tailnet clean:
+
+- `/api/tailscale/cleanup` — `GET` returns a dry-run plan of removable devices
+  (offline past the stale window and either `hivemindos-*` link nodes or
+  duplicates of a fresher hostname); `POST` deletes them. Requires
+  `TAILSCALE_API_KEY` in `~/.hivemindos/.env`. Unattended deletion (the
+  dashboard's daily sweep) additionally requires `HIVE_TAILNET_AUTO_CLEANUP=1`
+  and only ever touches offline `hivemindos-*` nodes.
+- `HIVE_LINK_EPHEMERAL=1` — registers the Link node as an ephemeral Tailscale
+  node so stale registrations self-delete after going offline. Pair with a
+  reusable `HIVE_LINK_AUTH_KEY` so the node can re-join headlessly after the
+  control plane garbage-collects it.

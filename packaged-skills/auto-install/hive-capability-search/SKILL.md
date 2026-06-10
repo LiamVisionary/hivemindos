@@ -36,10 +36,11 @@ Rank candidate parts by:
 1. Task fit and exact capability match.
 2. Confirmed availability in the current runtime or shared brain.
 3. Safety and side-effect controls.
-4. User preference or configured default.
+4. User preference or configured default. Connected apps can carry user routing preferences: a priority pin, prose usage notes such as "use this app for anime images", and preferred models per task type. When a usage note matches the requested style or task, that app wins over name-pattern matches, and its preferred model for the task type should be passed in the generation request.
 5. Cost policy, including whether paid fallback is configured or allowed.
 6. Quality and freshness for current-information tasks.
-7. Simplicity: prefer one capable specialist when it truly covers the job; otherwise compose specialists.
+7. Worker-class fit: hits marked class-preferred or agent task preference match the active agent's specialization; prefer them on ties. The class is a prior, not a gate — any listed capability remains usable, and strongly mismatched work should be routed back through Queen Bee instead of ground through with weak priors.
+8. Simplicity: prefer one capable specialist when it truly covers the job; otherwise compose specialists.
 
 Ask a short clarification only when multiple viable choices materially affect output quality, identity, cost, or external side effects and no configured default makes the choice obvious. If exactly one viable channel/tool exists, infer it and continue.
 

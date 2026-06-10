@@ -28,15 +28,15 @@ const tempRoot = await mkdtemp(join(tmpdir(), "hivemindos-agent-profile-renames-
 try {
   const { mirrorAgentProfilesToVault, readVaultAgentProfiles } = await loadAgentProfileModule(tempRoot);
   const vaultPath = join(tempRoot, "vault");
-  const oldProfilePath = join(vaultPath, "Agents", "Local OpenAI", "UsePod-on-This-Mac", "profile.json");
-  const renamedProfilePath = join(vaultPath, "Agents", "Local OpenAI", "Mr.-UsePod", "profile.json");
+  const oldProfilePath = join(vaultPath, "Agents", "HivemindOS", "UsePod-on-This-Mac", "profile.json");
+  const renamedProfilePath = join(vaultPath, "Agents", "HivemindOS", "Mr.-UsePod", "profile.json");
   const legacyRuntimeProfilePath = join(vaultPath, "AGENTS", "Hermes", "UsePod-on-This-Mac", "profile.json");
   const lowercaseAeonDir = join(vaultPath, "Agents", "AEON", "aeon");
   const lowercaseAeonProfilePath = join(lowercaseAeonDir, "profile.json");
   const baseAgent = {
-    id: "openai-compatible-usepod-on-this-mac-91b11c",
+    id: "hivemind-os-usepod-on-this-mac-91b11c",
     name: "UsePod on This Mac",
-    runtime: "openai-compatible",
+    runtime: "hivemind-os",
     gatewayUrl: "http://127.0.0.1:1234",
     chatPath: "/v1/chat/completions",
     statusPath: "/v1/models",

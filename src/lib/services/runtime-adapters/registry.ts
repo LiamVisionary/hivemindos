@@ -1,4 +1,4 @@
-import type { AgentRuntime, KnownAgentRuntime } from "@/lib/types/agent-runtime";
+import { HIVEMIND_OS_RUNTIME, normalizeAgentRuntime, type AgentRuntime, type KnownAgentRuntime } from "@/lib/types/agent-runtime";
 import type { RuntimeAdapter } from "./types";
 import { aeonAdapter } from "./aeon";
 import { claudeCodeAdapter, codexAdapter, opencodeAdapter } from "./cli-runtimes";
@@ -13,11 +13,11 @@ export const RUNTIME_ADAPTERS: Record<KnownAgentRuntime, RuntimeAdapter> = {
   codex: codexAdapter,
   "claude-code": claudeCodeAdapter,
   aeon: aeonAdapter,
-  "openai-compatible": openAICompatibleAdapter,
+  [HIVEMIND_OS_RUNTIME]: openAICompatibleAdapter,
 };
 
 export function getRuntimeAdapter(runtime: AgentRuntime): RuntimeAdapter | undefined {
-  return RUNTIME_ADAPTERS[runtime as KnownAgentRuntime];
+  return RUNTIME_ADAPTERS[normalizeAgentRuntime(runtime) as KnownAgentRuntime];
 }
 
 export function runtimeSupports(runtime: AgentRuntime, capability: keyof RuntimeAdapter["capabilities"]) {

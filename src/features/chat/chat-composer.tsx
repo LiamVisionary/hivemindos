@@ -1,4 +1,4 @@
-import { ArrowUp, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Mic, Minus, Network, Paperclip, Plus, RefreshCcw } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Image as ImageIcon, Mic, Minus, Network, Paperclip, Plus, RefreshCcw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 
 import chatStyles from "@/app/chat.module.css";
@@ -8,6 +8,7 @@ import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
 import { CHAT_SLASH_COMMANDS, type HermesSlashCommand } from "@/features/chat/hermes-slash-commands";
+import { listenForTauriComposerDragDrop, type TauriDragDropEvent, type TauriDropPosition, type TauriWebviewApi } from "@/features/chat/tauri-composer-drag-drop";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
 import type { KanbanLinkedDirectory, KanbanTaskAttachment } from "@/lib/types/kanban";
@@ -55,27 +56,6 @@ function shouldKeepEnterAsNewline() {
 
 type TauriRuntimeWindow = Window & {
   __TAURI_INTERNALS__?: unknown;
-};
-
-type TauriDropPosition = {
-  x: number;
-  y: number;
-};
-
-type TauriDragDropPayload =
-  | { type: "enter"; paths: string[]; position: TauriDropPosition }
-  | { type: "over"; position: TauriDropPosition }
-  | { type: "drop"; paths: string[]; position: TauriDropPosition }
-  | { type: "leave" };
-
-type TauriDragDropEvent = {
-  payload: TauriDragDropPayload;
-};
-
-type TauriWebviewApi = {
-  getCurrentWebview: () => {
-    onDragDropEvent: (handler: (event: TauriDragDropEvent) => void) => Promise<() => void>;
-  };
 };
 
 function basenameFromPath(path: string) {
@@ -695,6 +675,7 @@ export function ComposerField({
   onToggleRecording,
   canRecord = true,
   onSwarmCommand,
+  onImageGenerationCommand,
   canSend,
   onCancel,
   submitOnEnter = false,
@@ -739,6 +720,7 @@ export function ComposerField({
   onToggleRecording?: () => void;
   canRecord?: boolean;
   onSwarmCommand?: () => void;
+  onImageGenerationCommand?: () => void;
   canSend: boolean;
   onCancel?: () => void;
   submitOnEnter?: boolean;
@@ -944,7 +926,7 @@ export function ComposerField({
       .then((module) => {
         if (disposed) return undefined;
         const webviewApi = module as TauriWebviewApi;
-        return webviewApi.getCurrentWebview().onDragDropEvent(handleTauriDragDrop);
+        return listenForTauriComposerDragDrop(webviewApi, handleTauriDragDrop);
       })
       .then((unlisten) => {
         if (!unlisten) return;
@@ -1367,6 +1349,21 @@ export function ComposerField({
               title="Prepare swarm command"
             >
               <Network aria-hidden="true" />
+            </button>
+          ) : null}
+          {onImageGenerationCommand ? (
+            <button
+              type="button"
+              className={chatClass("composerIconButton")}
+              onClick={() => {
+                onImageGenerationCommand();
+                window.requestAnimationFrame(() => textareaRef.current?.focus());
+              }}
+              disabled={disabled}
+              aria-label="Prepare image generation command"
+              title="Prepare image generation command"
+            >
+              <ImageIcon aria-hidden="true" />
             </button>
           ) : null}
           {canRecord ? (

@@ -2,18 +2,20 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { Check, ChevronLeft, Clipboard, Copy, HelpCircle, LoaderCircle, Network, RefreshCcw, ShieldCheck, Sparkles, Terminal, X } from "lucide-react";
+import { Check, ChevronLeft, Clipboard, Copy, FolderOpen, HelpCircle, LoaderCircle, Lock, Network, RefreshCcw, ShieldCheck, Smartphone, Sparkles, Terminal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
-import { NATIVE_SETUP_DEMO_ENABLED, NATIVE_SETUP_RERUN_EVENT, readNativeSetupStatus, runNativeSetup, type NativeDetectedAgentRuntime, type NativeSetupStatus } from "@/lib/native/setup";
+import { NATIVE_SETUP_DEMO_ENABLED, NATIVE_SETUP_RERUN_EVENT, openFullDiskAccessSettings, readNativeSetupStatus, revealGatewayForFullDiskAccess, runNativeSetup, type NativeDetectedAgentRuntime, type NativeSetupStatus } from "@/lib/native/setup";
 import { runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode } from "@/lib/config/runtime-icons";
+import { dashboardStateValue, loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 
 const DISMISS_KEY = "hivemindos.nativeFirstRun.dismissed.v2";
+const DISMISS_FALLBACK_KEY = `${DISMISS_KEY}.localFallback`;
 
 type InstallMode = "local" | "link" | "system-tailscale";
-type WizardStep = "mode" | "agents" | "run";
+type WizardStep = "mode" | "agents" | "run" | "pairing";
 
 const ALL_AGENT_IDS = ["codex", "claude", "hermes", "gemini", "openclaw", "aeon"];
 const DEMO_RUN_MESSAGES = [
@@ -61,7 +63,7 @@ const INSTALL_MODES: Array<{
 ];
 
 function agentIconId(agentId: string) {
-  if (agentId === "codex" || agentId === "claude" || agentId === "gemini") return "openai-compatible";
+  if (agentId === "codex" || agentId === "claude" || agentId === "gemini") return "hivemind-os";
   return agentId;
 }
 
@@ -79,7 +81,7 @@ function AgentIcon({ agent, compact = false }: { agent: NativeDetectedAgentRunti
 }
 
 function StepDots({ step }: { step: WizardStep }) {
-  const steps: WizardStep[] = ["mode", "agents", "run"];
+  const steps: WizardStep[] = ["mode", "agents", "run", "pairing"];
   const activeIndex = steps.indexOf(step);
   return (
     <div className="flex items-center gap-1.5" aria-hidden="true">
@@ -88,6 +90,32 @@ function StepDots({ step }: { step: WizardStep }) {
       ))}
     </div>
   );
+}
+
+function readLocalDismissal() {
+  try {
+    return window.localStorage.getItem(DISMISS_KEY) === "1" || window.localStorage.getItem(DISMISS_FALLBACK_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeLocalDismissal() {
+  try {
+    window.localStorage.setItem(DISMISS_KEY, "1");
+    window.localStorage.setItem(DISMISS_FALLBACK_KEY, "1");
+  } catch {
+    // Dashboard state remains the primary persistence layer when browser storage is unavailable.
+  }
+}
+
+function clearLocalDismissal() {
+  try {
+    window.localStorage.removeItem(DISMISS_KEY);
+    window.localStorage.removeItem(DISMISS_FALLBACK_KEY);
+  } catch {
+    // Re-run setup should still continue even when browser storage is unavailable.
+  }
 }
 
 export function NativeFirstRunOnboarding() {
@@ -101,6 +129,8 @@ export function NativeFirstRunOnboarding() {
   const [infoCard, setInfoCard] = useState("");
   const [running, setRunning] = useState(false);
   const [runStatus, setRunStatus] = useState("");
+  const [pairingExpanded, setPairingExpanded] = useState(false);
+  const [pairingStatus, setPairingStatus] = useState("");
   const [stepHeight, setStepHeight] = useState<number | null>(null);
   const stepContentRef = useRef<HTMLDivElement | null>(null);
 
@@ -130,9 +160,13 @@ export function NativeFirstRunOnboarding() {
         return;
       }
       if (!isTauriDesktopRuntime()) return;
-      const dismissed = window.localStorage.getItem(DISMISS_KEY) === "1";
-      setOpen(!dismissed);
-      void refreshStatus();
+      void loadDashboardStateSnapshot().then((snapshot) => {
+        const dismissedInDashboardState = dashboardStateValue(snapshot, DISMISS_KEY) === "1";
+        const dismissed = dismissedInDashboardState || readLocalDismissal();
+        setOpen(!dismissed);
+        if (dismissed && !dismissedInDashboardState) void saveDashboardStateValue(DISMISS_KEY, "1");
+        void refreshStatus();
+      });
     }, 0);
     return () => window.clearTimeout(handle);
   }, [demoMode, refreshStatus]);
@@ -142,7 +176,8 @@ export function NativeFirstRunOnboarding() {
     let cancelled = false;
     let cleanup: (() => void) | undefined;
     void import("@tauri-apps/api/event").then(({ listen }) => listen(NATIVE_SETUP_RERUN_EVENT, () => {
-      window.localStorage.removeItem(DISMISS_KEY);
+      clearLocalDismissal();
+      void removeDashboardStateValue(DISMISS_KEY);
       setStep("mode");
       setRunStatus("");
       setOpen(true);
@@ -175,7 +210,7 @@ export function NativeFirstRunOnboarding() {
       observer?.disconnect();
       window.removeEventListener("resize", updateHeight);
     };
-  }, [open, step, infoCard, status, skillAgents, memoryAgents, running, runStatus]);
+  }, [open, step, infoCard, status, skillAgents, memoryAgents, running, runStatus, pairingExpanded, pairingStatus]);
 
   if (!open || !status) return null;
 
@@ -186,12 +221,17 @@ export function NativeFirstRunOnboarding() {
     setter((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   }
 
+  async function persistDismissal() {
+    writeLocalDismissal();
+    return saveDashboardStateValue(DISMISS_KEY, "1");
+  }
+
   function dismiss() {
     if (demoMode) {
       setOpen(false);
       return;
     }
-    window.localStorage.setItem(DISMISS_KEY, "1");
+    void persistDismissal();
     setOpen(false);
   }
 
@@ -207,7 +247,7 @@ export function NativeFirstRunOnboarding() {
   async function launchSetup() {
     if (demoMode) {
       await launchDemoSetup();
-      return;
+      return true;
     }
     setRunning(true);
     setRunStatus("Starting setup. If your system needs permission, a Terminal window will open for that part.");
@@ -224,7 +264,9 @@ export function NativeFirstRunOnboarding() {
       force: false,
     }, { demoMode });
     setRunning(false);
+    if (result?.ok) void persistDismissal();
     setRunStatus(result?.ok ? "Setup has started. Follow any permission prompts that appear." : result?.error ?? "Could not start setup.");
+    return Boolean(result?.ok);
   }
 
   async function copySetupCommand() {
@@ -234,6 +276,26 @@ export function NativeFirstRunOnboarding() {
     } catch {
       setRunStatus("Could not copy automatically. You can select the command text below.");
     }
+  }
+
+  async function openFolderAccessSettings() {
+    setPairingStatus("");
+    const ok = demoMode ? true : await openFullDiskAccessSettings();
+    if (!ok) {
+      setPairingStatus(
+        "Couldn't open Settings automatically — open System Settings → Privacy & Security → Full Disk Access.",
+      );
+    }
+  }
+
+  async function revealGatewayBinary() {
+    setPairingStatus("");
+    const ok = demoMode ? true : await revealGatewayForFullDiskAccess();
+    setPairingStatus(
+      ok
+        ? "Finder is highlighting “HivemindOS Gateway”. Drag it into the Full Disk Access list (or click +, then add it) and switch it on."
+        : "Couldn't reveal the file automatically. Make sure HivemindOS is installed on this Mac, then try again.",
+    );
   }
 
   return (
@@ -382,34 +444,102 @@ export function NativeFirstRunOnboarding() {
               {runStatus ? <p className="mt-3 text-sm text-[var(--muted)]">{runStatus}</p> : null}
             </div>
           ) : null}
+
+          {step === "pairing" ? (
+            <div className="rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.46)] p-5">
+              <div className="flex items-center gap-3">
+                <Smartphone aria-hidden="true" className="h-6 w-6 text-[var(--accent-strong)]" />
+                <div>
+                  <h3 className="text-lg font-semibold">Pair your phone</h3>
+                  <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+                    Let the HivemindOS app on your phone browse and work with files on this Mac — your projects, Downloads, Desktop, and more. macOS needs a one-time OK on this computer.
+                  </p>
+                </div>
+              </div>
+
+              {!pairingExpanded ? (
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Button type="button" onClick={() => setPairingExpanded(true)}>
+                    <Lock aria-hidden="true" />
+                    Set it up
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={dismiss}>
+                    Skip for now
+                  </Button>
+                </div>
+              ) : (
+                <div className="mt-5 space-y-3">
+                  <p className="text-sm leading-6 text-[var(--muted)]">
+                    Two quick steps, once. After this your phone can browse this Mac anytime — even when this app is closed.
+                  </p>
+                  <div className="rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.32)] p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--button-primary)] text-xs font-semibold text-[var(--button-primary-foreground)]">1</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold">Open the permission settings</div>
+                        <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Opens straight to Privacy &amp; Security → Full Disk Access.</p>
+                        <Button type="button" variant="secondary" className="mt-2" onClick={() => void openFolderAccessSettings()}>
+                          <ShieldCheck aria-hidden="true" />
+                          Open Full Disk Access
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.32)] p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--button-primary)] text-xs font-semibold text-[var(--button-primary-foreground)]">2</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold">Add “HivemindOS Gateway”</div>
+                        <p className="mt-1 text-xs leading-5 text-[var(--muted)]">We’ll highlight it in Finder. Drag it into the list (or click +, then add it) and switch it on.</p>
+                        <Button type="button" variant="secondary" className="mt-2" onClick={() => void revealGatewayBinary()}>
+                          <FolderOpen aria-hidden="true" />
+                          Show me the file
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  {pairingStatus ? <p className="text-sm leading-6 text-[var(--muted)]">{pairingStatus}</p> : null}
+                </div>
+              )}
+            </div>
+          ) : null}
           </div>
         </div>
 
         <footer className="shrink-0 flex flex-col gap-3 border-t border-[rgba(148,163,184,0.14)] p-4 sm:flex-row sm:items-center sm:justify-between">
-          <Button type="button" variant="ghost" disabled={step === "mode"} onClick={() => setStep(step === "run" ? "agents" : "mode")}>
+          <Button type="button" variant="ghost" disabled={step === "mode"} onClick={() => setStep(step === "pairing" ? "run" : step === "run" ? "agents" : "mode")}>
             <ChevronLeft aria-hidden="true" />
             Back
           </Button>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="ghost" onClick={() => void refreshStatus()}>
-              <RefreshCcw aria-hidden="true" />
-              Rescan
-            </Button>
-            {step !== "run" ? (
+            {step !== "pairing" ? (
+              <Button type="button" variant="ghost" onClick={() => void refreshStatus()}>
+                <RefreshCcw aria-hidden="true" />
+                Rescan
+              </Button>
+            ) : null}
+            {step === "run" ? (
+              <Button type="button" onClick={async () => { if (await launchSetup()) setStep("pairing"); }} disabled={running}>
+                {running ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Clipboard aria-hidden="true" />}
+                Start setup
+              </Button>
+            ) : step === "pairing" ? (
+              <Button type="button" onClick={dismiss}>
+                <Check aria-hidden="true" />
+                Done
+              </Button>
+            ) : (
               <Button type="button" onClick={() => setStep(step === "mode" ? "agents" : "run")}>
                 <Sparkles aria-hidden="true" />
                 Continue
               </Button>
-            ) : (
-              <Button type="button" onClick={() => void launchSetup()} disabled={running}>
-                {running ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Clipboard aria-hidden="true" />}
-                Start setup
-              </Button>
             )}
-            <Button type="button" variant="secondary" onClick={dismiss}>
-              <X aria-hidden="true" />
-              Skip
-            </Button>
+            {step !== "pairing" ? (
+              <Button type="button" variant="secondary" onClick={dismiss}>
+                <X aria-hidden="true" />
+                Skip
+              </Button>
+            ) : null}
           </div>
         </footer>
       </section>

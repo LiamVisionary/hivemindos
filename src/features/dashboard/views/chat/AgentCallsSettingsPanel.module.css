@@ -42,7 +42,8 @@
 }
 
 .agentPhoneSetupCard,
-.agentCallScheduleCard {
+.agentCallScheduleCard,
+.localTtsSection {
   display: grid;
   gap: 14px;
   border: 1px solid rgba(45, 212, 191, 0.22);
@@ -51,6 +52,123 @@
     linear-gradient(135deg, rgba(45, 212, 191, 0.1), rgba(59, 130, 246, 0.04) 48%, transparent),
     rgba(15, 23, 42, 0.4);
   padding: 14px;
+}
+
+.localTtsSectionHeader {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.localTtsSectionHeader strong {
+  color: var(--foreground);
+  font-size: 14px;
+}
+
+.localTtsSectionHeader span,
+.localTtsStatusOk,
+.localTtsStatusError {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.localTtsSectionHeader span {
+  color: var(--muted);
+}
+
+.localTtsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.localTtsCard {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.32);
+  color: inherit;
+  cursor: pointer;
+  padding: 12px;
+  text-align: left;
+}
+
+.localTtsCard:hover,
+.localTtsCard:focus-visible,
+.localTtsCardSelected {
+  border-color: rgba(45, 212, 191, 0.55);
+  background: rgba(20, 184, 166, 0.12);
+}
+
+.localTtsCard:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.localTtsCard strong {
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.localTtsCard small,
+.localTtsCard p,
+.localTtsCard em {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.localTtsCard p {
+  margin: 0;
+  color: #fca5a5;
+}
+
+.localTtsCard em {
+  font-style: normal;
+}
+
+.localTtsCard dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.localTtsCard dl div {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.localTtsCard dt,
+.localTtsCard dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.localTtsCard dt {
+  color: var(--muted);
+}
+
+.localTtsCard dd {
+  color: var(--foreground);
+  font-weight: 800;
+}
+
+.localTtsStatusOk {
+  color: #86efac;
+}
+
+.localTtsStatusError {
+  color: #fca5a5;
 }
 
 .agentPhoneSetupCopy > span,

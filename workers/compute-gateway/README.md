@@ -13,6 +13,25 @@ The cloned app can observe local runtime usage for capped lower-trust Honey. Spo
 
 By default the public Worker does not use an operator Bankr key. Set `ALLOW_SHARED_BANKR_KEY=true` only for private/internal deployments.
 
+## Managed no-BYOK compute
+
+When `ALLOW_SHARED_BANKR_KEY=true` and the caller does not provide a Bankr LLM key, the gateway uses the operator's Bankr key as a managed provider rail. In that mode it requires spend-only managed HONEY credits:
+
+1. Check the caller's managed Honey balance in the Honey ledger before calling the provider.
+2. Call Bankr LLM server-side with the operator key.
+3. Read provider usage from the upstream response.
+4. Submit a signed managed Honey debit to `/managed-billing/events`.
+
+Managed Honey debits use `HONEY_BILLING_SECRET` when present, otherwise `HONEY_LEDGER_SECRET`. Pricing is controlled by:
+
+```txt
+MANAGED_HONEY_CREDITS_PER_USD=100
+MANAGED_AGENT_MARKUP_BPS=5000
+MANAGED_AGENT_USD_PER_1K_TOKENS=0.01
+```
+
+These managed credits are not reward Honey and cannot be claimed to HIVE.
+
 ## Reward compute setup
 
 Use this worker as an OpenAI-compatible base URL:
@@ -61,6 +80,7 @@ Copy the returned `database_id` into `wrangler.toml`, then:
 pnpm d1:migrate:remote
 pnpm wrangler secret put BANKR_LLM_KEY
 pnpm wrangler secret put HONEY_LEDGER_SECRET
+pnpm wrangler secret put HONEY_BILLING_SECRET
 pnpm deploy
 ```
 

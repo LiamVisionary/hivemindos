@@ -2,18 +2,25 @@
 // @ts-nocheck
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ChatFolderModal } from "@/features/dashboard/views/chat/ChatFolderModal";
 import { ChatInlineMarkdown } from "@/features/dashboard/ChatMarkdown";
 import hiveChatStyles from "@/features/dashboard/views/chat/HiveChatView.module.css";
+import { imageGenerationToApplicationGeneration } from "@/features/dashboard/chat-application-generation";
+import { collapseSameTurnGenerationMessages } from "@/features/dashboard/chat-generation-message-dedupe";
+import { generatedImageCardFromAssistantText } from "@/features/dashboard/chat-generated-media";
+import { AgentProcessPanel, mergeProcessEvents, normalizeProcessEvents, processEventsAreActive } from "@/features/dashboard/views/chat/AgentProcessPanel";
+import { ApplicationGenerationCard } from "@/features/dashboard/views/chat/ApplicationGenerationCard";
 import {
   extractMiroSharkSimulationCard,
-  getMiroSharkProcessSummary,
-  MiroSharkProcessCard,
   MiroSharkSimulationCard,
 } from "@/features/dashboard/views/chat/MiroSharkSimulationCard";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import { LottiePlayer } from "@/components/ui/lottie-player";
-import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { HIVEMIND_OS_RUNTIME } from "@/lib/types/agent-runtime";
+import { Fragment, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 const hiveClass = createStyleClass(hiveChatStyles);
 
@@ -29,10 +36,12 @@ const PROVIDER_LABELS: Record<string, string> = {
   ollama: "Ollama",
 };
 
-const MODEL_SWITCHABLE_RUNTIMES = ["hermes", "openclaw", "openai-compatible"];
+const MODEL_SWITCHABLE_RUNTIMES = ["hermes", "openclaw", HIVEMIND_OS_RUNTIME];
+const CHAT_AUTO_SCROLL_THRESHOLD_PX = 180;
 
 const STATE_LABEL: Record<string, { tone: string; label: string }> = {
   working: { tone: "cyan", label: "working" },
+  online: { tone: "cyan", label: "ready" },
   ready: { tone: "muted", label: "ready" },
   setup: { tone: "honey", label: "setup" },
   failed: { tone: "danger", label: "blocked" },
@@ -75,9 +84,9 @@ function selectedAgentIcon(agent?: any, beeRoleIconPath?: (role?: string, worker
   if (agent.beeRole === "queen") return beeRoleIconPath?.("queen") ?? "/icons/queen-bee-v2.png";
   const customWorkerClass = agent.customWorkerClasses?.find((workerClass: any) => workerClass.id === agent.selectedCustomWorkerClassId)
     ?? agent.customWorkerClass;
-  return customWorkerClass?.imageSrc
-    || beeRoleIconPath?.("worker", agent.workerClass ?? "general")
-    || "/icons/worker-bee-general-v5.png";
+  return (customWorkerClass?.imageSrc?.trim()
+    || beeRoleIconPath?.("worker", agent.workerClass ?? "general")?.trim()
+    || "/icons/worker-bee-general-v5.png");
 }
 
 function isFixtureChatMachine(machine: any) {
@@ -92,6 +101,18 @@ function agentMenuMachineLabel(machine: any, agent: any) {
   if (agent?.telemetryUrl?.trim()) return "Bridge linked";
   if (agent?.gatewayUrl?.trim() || agent?.a2aUrl?.trim()) return "Runtime URL configured";
   return "Setup needed";
+}
+
+function agentMenuRuntimeIdentity(agent: any, runtimeModelSelectionsByRuntime?: Record<string, any>) {
+  const selection = agent?.runtime ? runtimeModelSelectionsByRuntime?.[agent.runtime] : undefined;
+  const provider = agent?.provider?.trim() || selection?.provider || "";
+  const model = agent?.model?.trim() || selection?.model || "";
+  const hasProviderModel = Boolean(provider && model);
+  return {
+    runtime: agent?.runtime?.trim() || "runtime",
+    provider: hasProviderModel ? provider : "",
+    model: hasProviderModel ? model : "",
+  };
 }
 
 function agentMenuStatusLabel(machine: any, agent: any) {
@@ -116,10 +137,66 @@ function messageText(message: any, chatDisplayContent?: (message: any) => string
   return String(message?.content ?? message?.text ?? message?.body ?? "").trim();
 }
 
+function isChatScrollNearBottom(node: HTMLElement) {
+  return node.scrollHeight - node.scrollTop - node.clientHeight <= CHAT_AUTO_SCROLL_THRESHOLD_PX;
+}
+
 function markdownText(text: string) {
   return text
     .replace(/^``([A-Za-z0-9_-]+)\s*$/gm, "```$1")
     .replace(/^``\s*$/gm, "```");
+}
+
+function plainPromptOptionText(value: string) {
+  return value
+    .replace(/^\s*[-*]\s+/, "")
+    .replace(/\*\*/g, "")
+    .replace(/__+/g, "")
+    .replace(/`/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function promptOptionButtonLabel(value: string) {
+  const text = plainPromptOptionText(value);
+  const parentheticalIndex = text.search(/\s+\(/);
+  return parentheticalIndex > 0 ? text.slice(0, parentheticalIndex).trim() : text;
+}
+
+function promptUiFromMessage(message: any, content: string) {
+  const structuredPrompt = message?.agentPrompt;
+  const structuredChoices = Array.isArray(structuredPrompt?.choices)
+    ? structuredPrompt.choices.map((choice: string) => plainPromptOptionText(choice)).filter(Boolean)
+    : [];
+  if (structuredPrompt?.question && structuredChoices.length) {
+    return {
+      displayText: String(structuredPrompt.question).trim() || content,
+      options: structuredChoices.map((choice: string) => ({ label: promptOptionButtonLabel(choice), value: choice })),
+    };
+  }
+
+  const lines = content.split(/\r?\n/);
+  const optionsIndex = lines.findIndex((line) => /^options?\s*:?\s*$/i.test(line.trim()));
+  if (optionsIndex < 0) return null;
+  const options: Array<{ label: string; value: string }> = [];
+  let listEnded = false;
+  const trailingLines: string[] = [];
+  for (const line of lines.slice(optionsIndex + 1)) {
+    const match = line.match(/^\s*(?:[-*]\s*)?(?:\d+|[A-Za-z])[\).:-]\s+(.+?)\s*$/);
+    if (match && !listEnded) {
+      const value = plainPromptOptionText(match[1] ?? "");
+      if (value) options.push({ label: promptOptionButtonLabel(value), value });
+      continue;
+    }
+    if (line.trim()) listEnded = true;
+    if (listEnded) trailingLines.push(line);
+  }
+  if (options.length < 2) return null;
+  const displayText = [
+    ...lines.slice(0, optionsIndex),
+    ...trailingLines,
+  ].join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return { displayText: displayText || content, options };
 }
 
 function processText(events: any[] = []) {
@@ -154,181 +231,75 @@ function chatSearchSnippet(text: string, query: string) {
   return `${start > 0 ? "... " : ""}${trimmed.slice(start, end)}${end < trimmed.length ? " ..." : ""}`;
 }
 
-const PROCESS_TOOL_META: Record<string, { icon: string; color: string }> = {
-  bash: { icon: "terminal", color: "#a78bfa" },
-  command: { icon: "terminal", color: "#a78bfa" },
-  read: { icon: "file", color: "#94a3b8" },
-  file: { icon: "file", color: "#94a3b8" },
-  image: { icon: "image", color: "#38bdf8" },
-  edit: { icon: "edit", color: "#60a5fa" },
-  write: { icon: "edit", color: "#60a5fa" },
-  search: { icon: "search", color: "#fb923c" },
-  skill: { icon: "sparkles", color: "#2dd4bf" },
-  git: { icon: "git", color: "#f59e0b" },
-  status: { icon: "activity", color: "#2dd4bf" },
-  error: { icon: "alert", color: "#fb7185" },
-  unknown: { icon: "hammer", color: "#94a3b8" },
-};
-
-function normalizeProcessEvents(value: any) {
-  if (Array.isArray(value)) return value;
-  if (Array.isArray(value?.events)) return value.events;
-  if (Array.isArray(value?.steps)) return value.steps;
-  return [];
-}
-
-function processDisplayEvents(events: any[] = []) {
-  return events.filter((event) => !/assistant started writing|assistant wrote in session|agent replied/i.test(String(event?.label ?? "")));
-}
-
-function processEventsAreActive(events: any[] = []) {
-  const visibleEvents = processDisplayEvents(events);
-  if (!visibleEvents.length) return false;
-  const lastEvent = visibleEvents[visibleEvents.length - 1];
-  const lastStatus = String(lastEvent?.status ?? "").trim().toLowerCase();
-  const lastText = `${String(lastEvent?.label ?? "").trim()} ${String(lastEvent?.detail ?? "").trim()}`.toLowerCase();
-  if (/\b(done|complete|completed|failed|failure|finished|settled|succeeded|cancelled|canceled)\b/.test(lastText)) return false;
-  return lastStatus !== "completed" && lastStatus !== "failed";
-}
-
-function processToolKey(event: any) {
-  const text = `${event?.label ?? ""} ${event?.detail ?? ""}`.toLowerCase();
-  if (/error|failed|interrupted|timed out/.test(text)) return "error";
-  if (/git|commit|branch|origin\//.test(text)) return "git";
-  if (/image|screenshot|vision/.test(text)) return "image";
-  if (/skill context|skill loaded/.test(text)) return "skill";
-  if (/file content|read file|cat\b|view file/.test(text)) return "read";
-  if (/edit|write|patch|created|updated/.test(text)) return "edit";
-  if (/grep|search|rg\b|find/.test(text)) return "search";
-  if (/command|bash|shell|terminal|exit\s+\d+/.test(text)) return "bash";
-  if (/tool/.test(text)) return "unknown";
-  return "status";
-}
-
-function processIconComponent(key: string, icons: any) {
-  const map: Record<string, any> = {
-    activity: icons.Activity,
-    alert: icons.CircleAlert,
-    edit: icons.Pencil,
-    file: icons.FileText,
-    git: icons.GitBranch,
-    hammer: icons.Hammer,
-    image: icons.Image,
-    search: icons.Search,
-    sparkles: icons.Sparkles,
-    terminal: icons.Terminal,
+function InteractivePromptControls({
+  disabled,
+  options,
+  sendPromptMessage,
+  Send,
+}: {
+  disabled?: boolean;
+  options: Array<{ label: string; value: string }>;
+  sendPromptMessage?: (prompt: string) => void | Promise<void>;
+  Send?: any;
+}) {
+  const [otherOpen, setOtherOpen] = useState(false);
+  const [otherText, setOtherText] = useState("");
+  if (!sendPromptMessage || !options.length) return null;
+  const submitValue = (value: string) => {
+    const prompt = value.trim();
+    if (!prompt) return;
+    void sendPromptMessage(prompt);
+    setOtherText("");
+    setOtherOpen(false);
   };
-  return map[key] ?? icons.Activity;
-}
-
-function processFileTarget(event: any) {
-  const detail = String(event?.detail ?? "");
-  const label = String(event?.label ?? "");
-  const haystack = `${label}\n${detail}`;
-  const structured = detail.match(/"?(?:path|file|filename|target)"?\s*[:=]\s*"?([^"',}\]\s]+)"?/i)?.[1];
-  const gitStatus = haystack.match(/(?:^|\s)[AMDRC?]{1,2}\s+([^\s]+\.[A-Za-z0-9]{1,8}|[^\s]+\/[^\s]+)/m)?.[1];
-  const mentioned = haystack.match(/(?:^|\s)([~./A-Za-z0-9_-]+\/[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)*\.[A-Za-z0-9]{1,8})\b/)?.[1]
-    ?? haystack.match(/`([^`]+\.[A-Za-z0-9]{1,8})`/)?.[1];
-  const target = structured ?? gitStatus ?? mentioned ?? "";
-  return target ? target.split(/[)\],]/)[0].replace(/^["'`]+|["'`]+$/g, "") : "";
-}
-
-function processDisplayLabel(event: any) {
-  const label = String(event?.label ?? "Runtime event").trim();
-  if (/tool output/i.test(label)) return "Tool output";
-  return label;
-}
-
-function processTimeLabel(value: unknown) {
-  const timestamp = typeof value === "number" ? value : Date.now();
-  return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
-function AgentProcessPanel(props: any) {
-  const {
-    Activity,
-    ChevronDown,
-    ChevronUp,
-    CircleAlert,
-    FileText,
-    GitBranch,
-    Hammer,
-    Image,
-    Pencil,
-    Search,
-    Sparkles,
-    Terminal,
-    active = false,
-    events = [],
-  } = props;
-  const [expanded, setExpanded] = useState(false);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const visibleEvents = processDisplayEvents(events);
-  const latestActive = active && processEventsAreActive(visibleEvents);
-  const mirosharkProcess = getMiroSharkProcessSummary(visibleEvents, latestActive);
-  const open = latestActive || expanded;
-  const latestEvent = visibleEvents[visibleEvents.length - 1];
-  const latestEventSignature = [
-    visibleEvents.length,
-    latestEvent?.at ?? "",
-    latestEvent?.label ?? "",
-    latestEvent?.detail ?? "",
-    latestEvent?.status ?? "",
-  ].join("|");
-
-  useEffect(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-    node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
-  }, [open, latestEventSignature]);
-
-  if (!visibleEvents.length) return null;
-
-  const ToggleIcon = open ? ChevronUp : ChevronDown;
-  const iconProps = { Activity, CircleAlert, FileText, GitBranch, Hammer, Image, Pencil, Search, Sparkles, Terminal };
-
   return (
-    <section className={hiveClass("hiveProcessPanel", open && "expanded")} aria-label="Agent process">
-      <button
-        type="button"
-        className={hiveClass("hiveProcessToggle")}
-        onClick={() => setExpanded((current) => !current)}
-        aria-expanded={open}
-      >
-        <span>{mirosharkProcess ? "MiroShark" : "Process"}</span>
-        <small>{visibleEvents.length} event{visibleEvents.length === 1 ? "" : "s"}</small>
-        {ToggleIcon ? <ToggleIcon aria-hidden="true" /> : null}
-      </button>
-      {open ? (
-        <>
-        {mirosharkProcess ? <MiroSharkProcessCard summary={mirosharkProcess} /> : null}
-        <div className={hiveClass("hiveProcessScroll")} ref={scrollRef}>
-          {visibleEvents.map((event: any, index: number) => {
-            const toolKey = processToolKey(event);
-            const meta = PROCESS_TOOL_META[toolKey] ?? PROCESS_TOOL_META.unknown;
-            const BadgeIcon = processIconComponent(meta.icon, iconProps);
-            const isActive = index === visibleEvents.length - 1 && latestActive;
-            const fileTarget = processFileTarget(event);
-            return (
-              <div className={hiveClass("hiveProcessRow", isActive && "active")} key={`${event.at ?? "event"}-${index}`}>
-                <time>{processTimeLabel(event.at)}</time>
-                <div className={hiveClass("hiveProcessBadge", isActive && "active")} style={{ "--process-accent": meta.color } as any} aria-hidden="true">
-                  {BadgeIcon ? <BadgeIcon /> : null}
-                </div>
-                <div className={hiveClass("hiveProcessBody")}>
-                  <div className={hiveClass("hiveProcessMetaLine")}>
-                    <strong>{processDisplayLabel(event)}</strong>
-                    {fileTarget ? <code>{fileTarget}</code> : null}
-                  </div>
-                  {event.detail ? <span>{event.detail}</span> : null}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        </>
+    <div className={hiveClass("hivePromptActions")} aria-label="Prompt response options">
+      <div className={hiveClass("hivePromptChoiceGrid")}>
+        {options.map((option, index) => (
+          <button
+            type="button"
+            key={`${option.value}-${index}`}
+            className={hiveClass("hivePromptChoiceButton")}
+            onClick={() => submitValue(option.value)}
+            disabled={disabled}
+          >
+            <span>{index + 1}</span>
+            <strong>{option.label}</strong>
+          </button>
+        ))}
+        <button
+          type="button"
+          className={hiveClass("hivePromptChoiceButton", "other")}
+          onClick={() => setOtherOpen((open) => !open)}
+          aria-expanded={otherOpen}
+          disabled={disabled}
+        >
+          <span>{options.length + 1}</span>
+          <strong>Other</strong>
+        </button>
+      </div>
+      {otherOpen ? (
+        <form
+          className={hiveClass("hivePromptOtherForm")}
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitValue(otherText);
+          }}
+        >
+          <input
+            type="text"
+            value={otherText}
+            onChange={(event) => setOtherText(event.currentTarget.value)}
+            placeholder="Type another answer..."
+            disabled={disabled}
+            autoFocus
+          />
+          <button type="submit" disabled={disabled || !otherText.trim()} aria-label="Send other answer">
+            {Send ? <Send aria-hidden="true" /> : "Send"}
+          </button>
+        </form>
       ) : null}
-    </section>
+    </div>
   );
 }
 
@@ -383,12 +354,13 @@ export function ChatPanel(props: any) {
     ChevronRight,
     ChevronUp,
     CircleAlert,
+    Copy,
     FileText,
     Folder,
     FolderOpen,
     GitBranch,
     Hammer,
-    Image,
+    KanbanSquare,
     LoaderCircle,
     MessageSquare,
     Monitor,
@@ -422,6 +394,7 @@ export function ChatPanel(props: any) {
     expandedChatFolders,
     flushingChatQueueId,
     formatRelativeTime,
+    generateKanbanTaskFromChat,
     handleChatFileChange,
     handleChatFileReferenceDrop,
     handleChatImageChange,
@@ -448,6 +421,7 @@ export function ChatPanel(props: any) {
     selectedChatProcess,
     selectedChatStorageKey,
     sendMessage,
+    sendPromptMessage,
     sendQueuedChatMessageNow,
     startAgentChat,
     setAttachmentMenuOpen,
@@ -469,6 +443,7 @@ export function ChatPanel(props: any) {
     ChatMarkdown,
     ComposerField,
   } = props;
+  const renderMessages = useMemo(() => collapseSameTurnGenerationMessages(visibleMessages), [visibleMessages]);
 
   const [shelfOpen, setShelfOpen] = useState(false);
   const [generalOpen, setGeneralOpen] = useState(true);
@@ -476,47 +451,104 @@ export function ChatPanel(props: any) {
   const [openMachines, setOpenMachines] = useState<Record<string, boolean>>({});
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
   const [statusChecking, setStatusChecking] = useState(false);
+  const [openKanbanTaskMenuKey, setOpenKanbanTaskMenuKey] = useState("");
+  const [copiedMessageKey, setCopiedMessageKey] = useState("");
+  const [chatCopied, setChatCopied] = useState(false);
   const [agentMode, setAgentMode] = useState<"plan" | "act">("act");
   const [agentMenuOpen, setAgentMenuOpen] = useState(false);
+  const [agentMenuSearchQuery, setAgentMenuSearchQuery] = useState("");
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [stickyChatProcess, setStickyChatProcess] = useState<any[]>([]);
   const [stickyChatProcessTargetKey, setStickyChatProcessTargetKey] = useState("");
   const scrollNodeRef = useRef<HTMLDivElement | null>(null);
+  const threadNodeRef = useRef<HTMLDivElement | null>(null);
   const agentMenuRef = useRef<HTMLDivElement | null>(null);
+  const agentMenuSearchInputRef = useRef<HTMLInputElement | null>(null);
   const chatSearchInputRef = useRef<HTMLInputElement | null>(null);
   const stickyChatProcessSignatureRef = useRef("");
+  const previousChatScrollKeyRef = useRef("");
+  const chatScrollFrameRef = useRef<number | null>(null);
   const deferredChatSearchQuery = useDeferredValue(chatSearchQuery);
   const liveProcessEvents = normalizeProcessEvents(selectedChatProcess);
-  const liveProcessSignature = liveProcessEvents
-    .map((event: any) => [event?.at, event?.label, event?.detail, event?.status].join("\u001f"))
-    .join("\u001e");
   const chatProcessScopeKey = `${selectedChatStorageKey || ""}\u001f${selectedChatLeafKey || ""}`;
   const activeTurnProcessTargetKey = (() => {
-    for (let index = visibleMessages.length - 1; index >= 0; index -= 1) {
-      if (visibleMessages[index]?.role === "user") {
-        return `${chatProcessScopeKey}\u001fuser\u001f${messageKey(visibleMessages[index], index)}`;
+    for (let index = renderMessages.length - 1; index >= 0; index -= 1) {
+      if (renderMessages[index]?.role === "user") {
+        return `${chatProcessScopeKey}\u001fuser\u001f${messageKey(renderMessages[index], index)}`;
       }
     }
-    for (let index = visibleMessages.length - 1; index >= 0; index -= 1) {
-      const message = visibleMessages[index];
+    for (let index = renderMessages.length - 1; index >= 0; index -= 1) {
+      const message = renderMessages[index];
       if (message?.role === "assistant") return `${chatProcessScopeKey}\u001fassistant\u001f${messageKey(message, index)}`;
     }
     return "";
   })();
+  const activeTurnMessageProcessEvents = (() => {
+    let latestUserIndex = -1;
+    for (let index = renderMessages.length - 1; index >= 0; index -= 1) {
+      if (renderMessages[index]?.role === "user") {
+        latestUserIndex = index;
+        break;
+      }
+    }
+    for (let index = renderMessages.length - 1; index > latestUserIndex; index -= 1) {
+      const message = renderMessages[index];
+      if (message?.role !== "assistant") continue;
+      const events = normalizeProcessEvents(message.processEvents ?? message.events);
+      if (events.length) return events;
+    }
+    return [];
+  })();
+  const currentProcessEvents = mergeProcessEvents(activeTurnMessageProcessEvents, liveProcessEvents);
+  const currentProcessSignature = currentProcessEvents
+    .map((event: any) => [event?.at, event?.label, event?.detail, event?.status, event?.runId].join("\u001f"))
+    .join("\u001e");
 
   useEffect(() => {
-    const events = normalizeProcessEvents(selectedChatProcess);
+    const events = currentProcessEvents;
     if (events.length) {
-      if (stickyChatProcessSignatureRef.current !== liveProcessSignature) {
-        stickyChatProcessSignatureRef.current = liveProcessSignature;
+      if (stickyChatProcessSignatureRef.current !== currentProcessSignature) {
+        stickyChatProcessSignatureRef.current = currentProcessSignature;
         setStickyChatProcess(events);
         setStickyChatProcessTargetKey(activeTurnProcessTargetKey);
       }
       return undefined;
     }
     return undefined;
-  }, [activeTurnProcessTargetKey, liveProcessSignature, selectedChatProcess]);
+  }, [activeTurnProcessTargetKey, currentProcessEvents, currentProcessSignature]);
+
+  const autoStatusAgentIdRef = useRef("");
+  useEffect(() => {
+    if (activeView !== "chat") return;
+    const agentId = selectedAgent?.id;
+    if (!agentId || !checkStatus || autoStatusAgentIdRef.current === agentId) return;
+    autoStatusAgentIdRef.current = agentId;
+    setStatusAgentId?.(agentId);
+    setStatusChecking(true);
+    void Promise.resolve(checkStatus()).catch(() => undefined).finally(() => setStatusChecking(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, selectedAgent?.id]);
+
+  const modelSelectionRefreshedRuntimesRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (activeView !== "chat" || !selectedAgent || !refreshRuntimeIntegrations) return;
+    const runtime = selectedAgent.runtime;
+    if (!runtime || runtimeModelSelectionsByRuntime?.[runtime] || modelSelectionRefreshedRuntimesRef.current.has(runtime)) return;
+    modelSelectionRefreshedRuntimesRef.current.add(runtime);
+    void refreshRuntimeIntegrations(selectedAgent);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, selectedAgent?.id]);
+
+  useEffect(() => {
+    if (chatKanbanGeneration?.phase !== "done") return undefined;
+    const key = chatKanbanGeneration.key;
+    const timeout = window.setTimeout(() => {
+      dismissChatKanbanGeneration?.(key);
+      setOpenKanbanTaskMenuKey((current) => current === key ? "" : current);
+    }, 2600);
+    return () => window.clearTimeout(timeout);
+  }, [chatKanbanGeneration, dismissChatKanbanGeneration]);
 
   const selectedRuntimeModelSelection = selectedAgent ? runtimeModelSelectionsByRuntime?.[selectedAgent.runtime] : undefined;
   const chatModelProviders = selectedRuntimeModelSelection?.providers ?? [];
@@ -548,6 +580,32 @@ export function ChatPanel(props: any) {
       if (selectedAgent) void refreshRuntimeIntegrations?.(selectedAgent);
     },
   } : undefined;
+  const lastVisibleMessage = renderMessages.length ? renderMessages[renderMessages.length - 1] : null;
+  const lastVisibleMessageTextLength = lastVisibleMessage ? messageText(lastVisibleMessage, chatDisplayContent).length : 0;
+  const lastVisibleMessageProcessCount = normalizeProcessEvents(lastVisibleMessage?.processEvents ?? lastVisibleMessage?.events).length;
+  const lastVisibleMessageGenerationStatus = String(lastVisibleMessage?.applicationGeneration?.status ?? lastVisibleMessage?.imageGeneration?.status ?? "");
+  const chatScrollKey = `${selectedChatStorageKey || ""}\u001f${selectedChatLeafKey || ""}`;
+  const chatScrollSignature = [
+    renderMessages.length,
+    lastVisibleMessage?.role ?? "",
+    lastVisibleMessageTextLength,
+    lastVisibleMessageProcessCount,
+    lastVisibleMessageGenerationStatus,
+    busy ? "busy" : "idle",
+    hasStreamingChunk ? "chunk" : "empty",
+  ].join("\u001f");
+
+  const scheduleChatScrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    if (chatScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(chatScrollFrameRef.current);
+    }
+    chatScrollFrameRef.current = window.requestAnimationFrame(() => {
+      chatScrollFrameRef.current = null;
+      const node = scrollNodeRef.current;
+      if (!node) return;
+      node.scrollTo({ top: node.scrollHeight, behavior });
+    });
+  }, []);
 
   useEffect(() => {
     if (!selectedAgent || selectedAgent.provider?.trim() || selectedAgent.model?.trim() || selectedRuntimeModelSelection) return;
@@ -558,19 +616,44 @@ export function ChatPanel(props: any) {
   useEffect(() => {
     const node = scrollNodeRef.current;
     if (!node || selectedChatHistoryLoading) return;
+    const chatChanged = previousChatScrollKeyRef.current !== chatScrollKey;
+    if (chatChanged) {
+      previousChatScrollKeyRef.current = chatScrollKey;
+      if (chatAutoScrollRef) chatAutoScrollRef.current = true;
+    }
+    if (!chatChanged && !chatAutoScrollRef?.current && !isChatScrollNearBottom(node)) return;
     if (chatAutoScrollRef) chatAutoScrollRef.current = true;
-    window.requestAnimationFrame(() => {
-      node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+    scheduleChatScrollToBottom(chatChanged ? "auto" : "smooth");
+  }, [chatAutoScrollRef, chatScrollKey, chatScrollSignature, scheduleChatScrollToBottom, selectedChatHistoryLoading]);
+
+  useEffect(() => {
+    const scrollNode = scrollNodeRef.current;
+    const threadNode = threadNodeRef.current;
+    if (!scrollNode || !threadNode || typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(() => {
+      if (!chatAutoScrollRef?.current && !isChatScrollNearBottom(scrollNode)) return;
+      if (chatAutoScrollRef) chatAutoScrollRef.current = true;
+      scheduleChatScrollToBottom("auto");
     });
-  }, [busy, chatAutoScrollRef, selectedChatHistoryLoading, selectedChatLeafKey, selectedChatStorageKey, visibleMessages.length]);
+    observer.observe(threadNode);
+    return () => observer.disconnect();
+  }, [chatAutoScrollRef, chatScrollKey, scheduleChatScrollToBottom]);
+
+  useEffect(() => () => {
+    if (chatScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(chatScrollFrameRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (!agentMenuOpen) return undefined;
+    window.requestAnimationFrame(() => agentMenuSearchInputRef.current?.focus());
     function closeOnOutsidePointer(event: PointerEvent) {
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (agentMenuRef.current?.contains(target)) return;
       setAgentMenuOpen(false);
+      setAgentMenuSearchQuery("");
     }
     window.addEventListener("pointerdown", closeOnOutsidePointer);
     return () => window.removeEventListener("pointerdown", closeOnOutsidePointer);
@@ -585,35 +668,31 @@ export function ChatPanel(props: any) {
   const providerLabel = titleCaseLabel(chatCurrentProvider);
   const modelLabel = chatCurrentModel?.trim() || "Not set";
   const machineLabel = selectedChatMachine?.name ?? selectedAgent?.machineName ?? "This Mac";
-  const runtimeIdentity = selectedAgent ? [
-    selectedAgent.runtime?.trim() || "runtime",
-    chatCurrentProvider && chatCurrentModel ? `${chatCurrentProvider}/${chatCurrentModel}` : "",
-  ].filter(Boolean).join(" / ") : "no runtime";
   const stateKey = !selectedAgent
     ? "setup"
     : statusAgentId === selectedAgent.id && status && status.ok === false
       ? "failed"
       : busy
         ? "working"
-        : "ready";
+        : statusAgentId === selectedAgent.id && status?.ok
+          ? "online"
+          : "ready";
   const state = STATE_LABEL[stateKey] ?? STATE_LABEL.ready;
   const iconSrc = selectedAgentIcon(selectedAgent, beeRoleIconPath);
   const activeThreadLabel = selectedChatLeafKey || selectedChatStorageKey || "agent chat";
   const displayThreadLabel = friendlyThreadLabel(activeThreadLabel, selectedChatDirectory);
-  const headerMetaLabel = selectedAgent
-    ? [runtimeIdentity, machineLabel].filter(Boolean).join(" / ")
-    : "Connect a machine and choose an agent to start chatting.";
+  const headerMetaLabel = "Connect a machine and choose an agent to start chatting.";
   const hasQueued = queuedChatMessages.length > 0;
-  const processEventsForDisplay = liveProcessEvents.length ? liveProcessEvents : stickyChatProcess;
-  const processEventsTargetKey = liveProcessEvents.length ? activeTurnProcessTargetKey : stickyChatProcessTargetKey;
+  const processEventsForDisplay = currentProcessEvents.length ? currentProcessEvents : stickyChatProcess;
+  const processEventsTargetKey = currentProcessEvents.length ? activeTurnProcessTargetKey : stickyChatProcessTargetKey;
   const activeChatTaskRunning = busy || processEventsAreActive(processEventsForDisplay);
   const runningChatStorageKeys = useMemo(() => new Set(Object.keys(chatStreamingByKey ?? {})), [chatStreamingByKey]);
   const runningChatIdentityKeys = useMemo(() => new Set(Object.values(chatStreamingByKey ?? {})
     .map((stream: any) => `${stream?.agentId ?? ""}\u001f${stream?.leafKey || `agent-${stream?.agentId ?? ""}`}`)
     .filter((key) => !key.startsWith("\u001f"))), [chatStreamingByKey]);
   const liveOutput = processText(processEventsForDisplay);
-  const pendingAssistantBubbleVisible = busy && !hasStreamingChunk && visibleMessages.some((message: any, index: number) => (
-    index === visibleMessages.length - 1
+  const pendingAssistantBubbleVisible = busy && !hasStreamingChunk && renderMessages.some((message: any, index: number) => (
+    index === renderMessages.length - 1
     && message?.role === "assistant"
     && !messageText(message, chatDisplayContent)
   ));
@@ -638,12 +717,47 @@ export function ChatPanel(props: any) {
     ?? machinesWithChats.find((machine: any) => machine.name === "This Mac" && machine.onStartChat)
     ?? machinesWithChats.find((machine: any) => machine.onStartChat)
     ?? generalMachine;
+  const newChatTarget = (() => {
+    for (const machine of chatSidebarTree) {
+      for (const folder of machine.folders ?? []) {
+        const holdsActiveChat = folder.active || (folder.chats ?? []).some((chat: any) => chat.active);
+        if (!holdsActiveChat) continue;
+        if (folder.onStartChat) return { label: folder.label, onStartChat: folder.onStartChat };
+        if (machine.onStartChat) return { label: machine.name, onStartChat: machine.onStartChat };
+      }
+    }
+    return defaultChatMachine?.onStartChat
+      ? { label: defaultChatMachine.name, onStartChat: defaultChatMachine.onStartChat }
+      : null;
+  })();
   const agentMenuMachines = machinesWithChats
     .map((machine: any) => ({
       machine,
       agents: (machineGroups.find((group: any) => group.key === machine.key)?.agents ?? []).filter((agent: any) => agent?.id),
     }))
     .filter((item: any) => item.agents.length > 0);
+  const normalizedAgentMenuSearchQuery = normalizeSearchText(agentMenuSearchQuery);
+  const agentMenuRows = agentMenuMachines.flatMap(({ machine, agents }: any) => agents
+    .map((agent: any) => {
+      const machineMenuLabel = agentMenuMachineLabel(machine, agent);
+      const statusLabel = agentMenuStatusLabel(machine, agent);
+      const runtimeIdentity = agentMenuRuntimeIdentity(agent, runtimeModelSelectionsByRuntime);
+      return { agent, machine, machineMenuLabel, statusLabel, runtimeIdentity };
+    })
+    .filter(({ agent, machine, machineMenuLabel, statusLabel }: any) => {
+      if (!normalizedAgentMenuSearchQuery) return true;
+      const searchable = normalizeSearchText([
+        agent?.name,
+        agent?.runtime,
+        agent?.provider,
+        agent?.model,
+        agent?.workerClass,
+        machine?.name,
+        machineMenuLabel,
+        statusLabel,
+      ].filter(Boolean).join(" "));
+      return normalizedAgentMenuSearchQuery.split(" ").every((token) => searchable.includes(token));
+    }));
   const chatSearchIndex = useMemo(() => {
     if (!chatSearchOpen) return [];
     const indexed = new Map<string, any>();
@@ -709,10 +823,122 @@ export function ChatPanel(props: any) {
     }
   }
 
+  function copyMessageContent(key: string, content: string) {
+    void navigator.clipboard?.writeText(content).then(() => {
+      setCopiedMessageKey(key);
+      window.setTimeout(() => setCopiedMessageKey((current) => current === key ? "" : current), 1400);
+    });
+  }
+
+  function dismissKanbanPopover(key: string) {
+    dismissChatKanbanGeneration?.(key);
+    setOpenKanbanTaskMenuKey((current) => current === key ? "" : current);
+  }
+
+  function copyChatMarkdown() {
+    const agentName = selectedAgent?.name ?? "Agent";
+    const lines: string[] = [`# Chat with ${agentName}`, ""];
+    for (const message of renderMessages) {
+      const content = messageText(message, chatDisplayContent);
+      if (!content) continue;
+      const speaker = message.role === "user" ? "You" : message.role === "system" ? "System" : agentName;
+      const timeLabel = Number.isFinite(message.createdAt) ? new Date(message.createdAt).toLocaleString() : "";
+      lines.push(`**${speaker}**${timeLabel ? ` — ${timeLabel}` : ""}`, "", content, "");
+    }
+    void navigator.clipboard?.writeText(`${lines.join("\n").trim()}\n`).then(() => {
+      setChatCopied(true);
+      window.setTimeout(() => setChatCopied(false), 1400);
+    });
+  }
+
+  function renderMessageActions(renderKey: string, content: string) {
+    if (!content?.trim()) return null;
+    const copied = copiedMessageKey === renderKey;
+    const generationForMessage = chatKanbanGeneration?.key === renderKey ? chatKanbanGeneration : null;
+    const generating = Boolean(generationForMessage && ["generating", "creating"].includes(generationForMessage.phase));
+    const actions = (
+      <div className={hiveClass("hiveMessageActions")}>
+        <ButtonGroup>
+          <Tooltip {...(copied ? { open: true } : {})}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-xs"
+                className="rounded-full"
+                aria-label={copied ? "Copied message" : "Copy message"}
+                onClick={() => copyMessageContent(renderKey, content)}
+              >
+                {copied && Check ? <Check aria-hidden="true" /> : Copy ? <Copy aria-hidden="true" /> : null}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{copied ? "Copied!" : "Copy message"}</TooltipContent>
+          </Tooltip>
+          {generateKanbanTaskFromChat ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-xs"
+                  className="rounded-full"
+                  aria-label="Generate Kanban task from this message"
+                  disabled={generating}
+                  onClick={() => setOpenKanbanTaskMenuKey((current) => current === renderKey ? "" : renderKey)}
+                >
+                  {generating && LoaderCircle ? <LoaderCircle aria-hidden="true" className={hiveClass("spinIcon")} /> : KanbanSquare ? <KanbanSquare aria-hidden="true" /> : null}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Send to Kanban</TooltipContent>
+            </Tooltip>
+          ) : null}
+        </ButtonGroup>
+        {generateKanbanTaskFromChat && (openKanbanTaskMenuKey === renderKey || generationForMessage) ? (
+          <div className={hiveClass("hiveKanbanPopover")}>
+            <div className={hiveClass("hiveKanbanPopoverHeader")}>
+              {generationForMessage?.phase === "done" && Check ? <Check aria-hidden="true" /> : Sparkles ? <Sparkles aria-hidden="true" /> : null}
+              <span>{generationForMessage ? generationForMessage.message : "Generate and send to:"}</span>
+              {!generationForMessage || ["done", "error"].includes(generationForMessage.phase) ? (
+                <button type="button" className={hiveClass("hiveKanbanPopoverClose")} aria-label="Close Kanban menu" onClick={() => dismissKanbanPopover(renderKey)}>
+                  x
+                </button>
+              ) : null}
+            </div>
+            {generationForMessage ? (
+              <small>{generationForMessage.taskTitle || (generationForMessage.status === "ready" ? "Ready lane" : "Ideas lane")}</small>
+            ) : (
+              <div className={hiveClass("hiveKanbanPopoverActions")}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenKanbanTaskMenuKey(renderKey);
+                    void generateKanbanTaskFromChat("ideas", { key: renderKey, content });
+                  }}
+                >
+                  Ideas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenKanbanTaskMenuKey(renderKey);
+                    void generateKanbanTaskFromChat("ready", { key: renderKey, content });
+                  }}
+                >
+                  Ready
+                </button>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+    );
+    return <TooltipProvider>{actions}</TooltipProvider>;
+  }
+
   function handleScroll(event: any) {
     messagesScrollRef.current = event.currentTarget;
     const node = event.currentTarget;
-    const nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 96;
+    const nearBottom = isChatScrollNearBottom(node);
     if (chatAutoScrollRef) chatAutoScrollRef.current = nearBottom;
     updateChatAutoScroll?.();
   }
@@ -786,9 +1012,9 @@ export function ChatPanel(props: any) {
       <section className={hiveClass("hiveChatRoot", shelfOpen && "shelfOpen")} aria-label="Agent chat">
         <div className={hiveClass("hiveGridBackdrop")} aria-hidden="true" />
         <div className={hiveClass("hiveHeaderControls")}>
-          <button type="button" className={hiveClass("hiveHeaderButton")} onClick={handleCheckStatus} disabled={statusChecking || !selectedAgent}>
-            {statusChecking && LoaderCircle ? <LoaderCircle aria-hidden="true" className={hiveClass("spinIcon")} /> : Activity ? <Activity aria-hidden="true" /> : null}
-            <span>{statusChecking ? "checking" : "status"}</span>
+          <button type="button" className={hiveClass("hiveHeaderButton")} onClick={copyChatMarkdown} disabled={!renderMessages.length} title="Copy this chat as markdown">
+            {chatCopied && Check ? <Check aria-hidden="true" /> : Copy ? <Copy aria-hidden="true" /> : null}
+            <span>{chatCopied ? "copied" : "copy chat"}</span>
           </button>
           <button
             type="button"
@@ -804,7 +1030,13 @@ export function ChatPanel(props: any) {
         <aside className={hiveClass("hiveChatRail")} aria-label="Chats">
           <header className={hiveClass("hiveRailHeader")}>
             <div className={hiveClass("hiveRailToolbar")}>
-              <button type="button" className={hiveClass("hiveNewChatButton")} onClick={() => startMachineChat(defaultChatMachine)} disabled={!defaultChatMachine?.onStartChat}>
+              <button
+                type="button"
+                className={hiveClass("hiveNewChatButton")}
+                title={newChatTarget ? `New chat in ${newChatTarget.label}` : undefined}
+                onClick={() => newChatTarget?.onStartChat?.()}
+                disabled={!newChatTarget}
+              >
                 {Plus ? <Plus aria-hidden="true" /> : null}
                 <span>New chat</span>
               </button>
@@ -1008,9 +1240,12 @@ export function ChatPanel(props: any) {
                 type="button"
                 className={hiveClass("hiveAgentCard")}
                 title="Choose the machine and agent for this chat"
-                aria-haspopup="menu"
+                aria-haspopup="dialog"
                 aria-expanded={agentMenuOpen}
-                onClick={() => setAgentMenuOpen((current) => !current)}
+                onClick={() => {
+                  if (agentMenuOpen) setAgentMenuSearchQuery("");
+                  setAgentMenuOpen((current) => !current);
+                }}
               >
                 <span className={hiveClass("hiveAgentAvatar")}>
                   {iconSrc ? (
@@ -1027,41 +1262,78 @@ export function ChatPanel(props: any) {
                       {state.label}
                     </span>
                   </span>
-                  <span className={hiveClass("hiveHeaderMeta")} title={selectedAgent ? activeThreadLabel : undefined}>{headerMetaLabel}</span>
+                  <span className={hiveClass("hiveHeaderMeta")} title={selectedAgent ? activeThreadLabel : undefined}>
+                    {selectedAgent ? (
+                      <>
+                        {selectedAgent.runtime?.trim() || "runtime"}
+                        {chatCurrentProvider && chatCurrentModel ? <> / {chatCurrentProvider}/<b>{chatCurrentModel}</b></> : null}
+                        {` / ${machineLabel}`}
+                      </>
+                    ) : headerMetaLabel}
+                  </span>
                 </span>
                 {ChevronDown ? <ChevronDown aria-hidden="true" className={hiveClass("hiveAgentChevron", agentMenuOpen && "openChevron")} /> : null}
               </button>
               {agentMenuOpen ? (
-                <div className={hiveClass("hiveAgentMenu")} role="menu">
-                  {agentMenuMachines.length ? agentMenuMachines.flatMap(({ machine, agents }: any) => agents.map((agent: any) => {
-                    const agentIconSrc = selectedAgentIcon(agent, beeRoleIconPath);
-                    const machineMenuLabel = agentMenuMachineLabel(machine, agent);
-                    const statusLabel = agentMenuStatusLabel(machine, agent);
-                    return (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        key={`${machine.key}-${agent.id}`}
-                        className={hiveClass(agent.id === selectedAgent?.id && "active")}
-                        onClick={() => {
-                          startAgentChat?.(agent.id, { fresh: true, chatLeafKey: `machine-${machine.key}-${agent.id}` });
+                <div className={hiveClass("hiveAgentMenu")} role="dialog" aria-label="Choose chat agent">
+                  <label className={hiveClass("hiveAgentMenuSearch")}>
+                    {Search ? <Search aria-hidden="true" /> : null}
+                    <input
+                      ref={agentMenuSearchInputRef}
+                      type="search"
+                      value={agentMenuSearchQuery}
+                      onChange={(event) => setAgentMenuSearchQuery(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Escape") return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (agentMenuSearchQuery) setAgentMenuSearchQuery("");
+                        else {
                           setAgentMenuOpen(false);
-                        }}
-                      >
-                        <span
-                          className={hiveClass("hiveAgentMenuIcon", agentIconSrc && "hasImage")}
-                          style={agentIconSrc ? { backgroundImage: `url(${agentIconSrc})` } : undefined}
-                          aria-hidden="true"
+                          setAgentMenuSearchQuery("");
+                        }
+                      }}
+                      placeholder="Search agents"
+                      aria-label="Search agents by name, machine, runtime, or model"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </label>
+                  <div className={hiveClass("hiveAgentMenuList")} role="menu" aria-label="Agents">
+                    {agentMenuRows.length ? agentMenuRows.map(({ machine, agent, machineMenuLabel, statusLabel, runtimeIdentity }: any) => {
+                      const agentIconSrc = selectedAgentIcon(agent, beeRoleIconPath);
+                      return (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          key={`${machine.key}-${agent.id}`}
+                          className={hiveClass(agent.id === selectedAgent?.id && "active")}
+                          onClick={() => {
+                            startAgentChat?.(agent.id, { fresh: true, chatLeafKey: `machine-${machine.key}-${agent.id}` });
+                            setAgentMenuOpen(false);
+                            setAgentMenuSearchQuery("");
+                          }}
                         >
-                          {agentIconSrc ? null : <b>{agentInitials(agent)}</b>}
-                        </span>
-                        <span>
-                          <strong>{agent.name}</strong>
-                          <small>{machineMenuLabel}{statusLabel && statusLabel !== agent.name ? ` / ${statusLabel.replace(`${agent.name} / `, "")}` : ""}</small>
-                        </span>
-                      </button>
-                    );
-                  })) : <p className={hiveClass("hiveEmptyText")}>No chat agents found</p>}
+                          <span
+                            className={hiveClass("hiveAgentMenuIcon", agentIconSrc && "hasImage")}
+                            style={agentIconSrc ? { backgroundImage: `url(${agentIconSrc})` } : undefined}
+                            aria-hidden="true"
+                          >
+                            {agentIconSrc ? null : <b>{agentInitials(agent)}</b>}
+                          </span>
+                          <span>
+                            <strong>{agent.name}</strong>
+                            <small>
+                              {runtimeIdentity.runtime}
+                              {runtimeIdentity.model ? <> / {runtimeIdentity.provider}/<b>{runtimeIdentity.model}</b></> : null}
+                              {` / ${machineMenuLabel}`}
+                              {statusLabel && statusLabel !== agent.name ? ` / ${statusLabel.replace(`${agent.name} / `, "")}` : ""}
+                            </small>
+                          </span>
+                        </button>
+                      );
+                    }) : <p className={hiveClass("hiveEmptyText")}>{normalizedAgentMenuSearchQuery ? "No agents match that search" : "No chat agents found"}</p>}
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -1073,7 +1345,7 @@ export function ChatPanel(props: any) {
             onScroll={handleScroll}
             aria-busy={selectedChatHistoryLoading}
           >
-            <div className={hiveClass("hiveMessageThread")}>
+            <div className={hiveClass("hiveMessageThread")} ref={threadNodeRef}>
               <div className={hiveClass("hiveThreadDivider")}>
                 <span />
                 <small title={activeThreadLabel}>{displayThreadLabel}</small>
@@ -1085,14 +1357,24 @@ export function ChatPanel(props: any) {
                   {LoaderCircle ? <LoaderCircle aria-hidden="true" className={hiveClass("spinIcon")} /> : null}
                   <span>Loading history</span>
                 </div>
-              ) : visibleMessages.length ? visibleMessages.map((message: any, index: number) => {
+              ) : renderMessages.length ? renderMessages.map((message: any, index: number) => {
                 const content = messageText(message, chatDisplayContent);
                 const isUser = message.role === "user";
                 const mirosharkCard = !isUser && content ? extractMiroSharkSimulationCard(content) : null;
+                const rawApplicationGenerationCard = !isUser
+                  ? message.applicationGeneration ?? (message.imageGeneration ? imageGenerationToApplicationGeneration(message.imageGeneration) : null)
+                  : null;
+                const generatedImagePathCard = !isUser && content ? generatedImageCardFromAssistantText(content, message.createdAt) : null;
+                const applicationGenerationCard = generatedImagePathCard && rawApplicationGenerationCard?.status !== "ready"
+                  ? generatedImagePathCard
+                  : rawApplicationGenerationCard;
+                const hasAssistantBody = Boolean(content || applicationGenerationCard || generatedImagePathCard || mirosharkCard);
+                const promptUi = !isUser && content ? promptUiFromMessage(message, content) : null;
+                const assistantDisplayText = promptUi?.displayText ?? content;
                 const timeLabel = Number.isFinite(message.createdAt) ? formatRelativeTime?.(message.createdAt) : "";
                 const attachments = message.attachments ?? [];
                 const messageEvents = normalizeProcessEvents(message.processEvents ?? message.events);
-                const isPendingAssistant = !isUser && !content && busy && index === visibleMessages.length - 1;
+                const isPendingAssistant = !isUser && !content && busy && index === renderMessages.length - 1;
                 const renderKey = messageKey(message, index);
                 const userProcessRenderKey = `${chatProcessScopeKey}\u001fuser\u001f${renderKey}`;
                 const assistantProcessRenderKey = `${chatProcessScopeKey}\u001fassistant\u001f${renderKey}`;
@@ -1100,8 +1382,8 @@ export function ChatPanel(props: any) {
                   ? processEventsForDisplay
                   : [];
                 const nextAssistantHasProcessEvents = isUser ? (() => {
-                  for (let nextIndex = index + 1; nextIndex < visibleMessages.length; nextIndex += 1) {
-                    const candidate = visibleMessages[nextIndex];
+                  for (let nextIndex = index + 1; nextIndex < renderMessages.length; nextIndex += 1) {
+                    const candidate = renderMessages[nextIndex];
                     if (candidate?.role === "user") return false;
                     if (candidate?.role === "assistant" && normalizeProcessEvents(candidate.processEvents ?? candidate.events).length > 0) return true;
                   }
@@ -1130,6 +1412,7 @@ export function ChatPanel(props: any) {
                         </div>
                       ) : null}
                       {timeLabel ? <time>{timeLabel}</time> : null}
+                      {renderMessageActions(renderKey, content)}
                     </article>
                     {userLiveEvents.length ? (
                       <AgentProcessPanel
@@ -1140,7 +1423,6 @@ export function ChatPanel(props: any) {
                         FileText={FileText}
                         GitBranch={GitBranch}
                         Hammer={Hammer}
-                        Image={Image}
                         Pencil={Pencil}
                         Search={Search}
                         Sparkles={Sparkles}
@@ -1161,7 +1443,6 @@ export function ChatPanel(props: any) {
                         FileText={FileText}
                         GitBranch={GitBranch}
                         Hammer={Hammer}
-                        Image={Image}
                         Pencil={Pencil}
                         Search={Search}
                         Sparkles={Sparkles}
@@ -1170,25 +1451,36 @@ export function ChatPanel(props: any) {
                         events={events}
                       />
                     ) : null}
-                    {isPendingAssistant ? (
+                    {isPendingAssistant && !hasAssistantBody ? (
                       <article className={hiveClass("hiveAssistantTurn")} aria-label="Agent is thinking">
                         <div className={hiveClass("hiveAssistantText")}>
                           {renderThinkingLoader()}
                         </div>
                       </article>
-                    ) : content ? (
+                    ) : hasAssistantBody ? (
                       <article className={hiveClass("hiveAssistantTurn")}>
                         <div className={hiveClass("hiveAssistantByline")}>
-                          {renderTaskBee(activeChatTaskRunning && index === visibleMessages.length - 1)}
+                          {renderTaskBee(activeChatTaskRunning && index === renderMessages.length - 1)}
                           <strong>{selectedAgent?.name ?? "Agent"}</strong>
                           {timeLabel ? <time>{timeLabel}</time> : null}
                         </div>
                         <div className={hiveClass("hiveAssistantText")}>
+                          {applicationGenerationCard ? <ApplicationGenerationCard card={applicationGenerationCard} /> : null}
+                          {!applicationGenerationCard && generatedImagePathCard ? <ApplicationGenerationCard card={generatedImagePathCard} /> : null}
                           {mirosharkCard ? <MiroSharkSimulationCard card={mirosharkCard} ChatMarkdown={ChatMarkdown} /> : null}
-                          {mirosharkCard?.hideRawContent ? null : ChatMarkdown
-                            ? <ChatMarkdown text={markdownText(content)} className={hiveClass("hiveMarkdown")} />
-                            : renderInline(content)}
+                          {applicationGenerationCard || generatedImagePathCard || mirosharkCard?.hideRawContent ? null : ChatMarkdown
+                            ? <ChatMarkdown text={markdownText(assistantDisplayText)} className={hiveClass("hiveMarkdown")} />
+                            : renderInline(assistantDisplayText)}
+                          {promptUi?.options?.length ? (
+                            <InteractivePromptControls
+                              disabled={false}
+                              options={promptUi.options}
+                              sendPromptMessage={sendPromptMessage}
+                              Send={Send}
+                            />
+                          ) : null}
                         </div>
+                        {!(busy && index === renderMessages.length - 1) ? renderMessageActions(renderKey, content) : null}
                       </article>
                     ) : null}
                   </Fragment>
@@ -1268,6 +1560,10 @@ export function ChatPanel(props: any) {
                     const current = (text ?? "").trim();
                     setText(current && !current.toLowerCase().startsWith("/swarm") ? `/swarm ${current}` : "/swarm ");
                   }}
+                  onImageGenerationCommand={() => {
+                    const current = (text ?? "").trim();
+                    setText(current && !/^\/(?:image-gen|imagine|txt2img)\b/i.test(current) ? `/image-gen ${current}` : "/image-gen ");
+                  }}
                   canSend={Boolean((text ?? "").trim() || chatAttachments.length || chatDirectories.length)}
                   submitOnEnter
                   hermesSlashCommands
@@ -1317,10 +1613,6 @@ export function ChatPanel(props: any) {
                 <button type="button" onClick={handleCheckStatus} disabled={statusChecking || !selectedAgent}>
                   {Activity ? <Activity aria-hidden="true" /> : null}
                   <span>Check status</span>
-                </button>
-                <button type="button" onClick={() => startMachineChat(chatSidebarTree[0])} disabled={!chatSidebarTree[0]?.onStartChat}>
-                  {MessageSquare ? <MessageSquare aria-hidden="true" /> : null}
-                  <span>New chat</span>
                 </button>
                 <button type="button" onClick={() => void refreshRuntimeIntegrations?.(selectedAgent)} disabled={!selectedAgent}>
                   {RefreshCcw ? <RefreshCcw aria-hidden="true" /> : null}

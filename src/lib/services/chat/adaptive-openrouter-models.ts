@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "fs/promises";
 import { homedir } from "os";
 import { dirname, join } from "path";
-import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { RUNTIME_CAPABILITIES, type AgentProfile } from "@/lib/types/agent-runtime";
 
 type IncomingMessage = {
   role: string;
@@ -32,9 +32,31 @@ type OpenRouterModelInventoryCache = {
   data: OpenRouterModelRecord[];
 };
 
+type OpenRouterEndpointRecord = {
+  status?: number;
+  uptime_last_5m?: number | null;
+  uptime_last_30m?: number | null;
+  throughput_last_30m?: {
+    p50?: number;
+    p90?: number;
+  } | null;
+  latency_last_30m?: {
+    p50?: number;
+    p90?: number;
+  } | null;
+};
+
+type OpenRouterModelEndpointCache = {
+  updatedAt: string;
+  data: Record<string, OpenRouterEndpointRecord[]>;
+};
+
 const OPENROUTER_MODEL_CACHE_FILE = join(homedir(), ".hivemindos", "openrouter-models-cache.json");
+const OPENROUTER_ENDPOINT_CACHE_FILE = join(homedir(), ".hivemindos", "openrouter-model-endpoints-cache.json");
+const OPENROUTER_ENDPOINT_HEALTH_LIMIT = 24;
 
 let adaptiveOpenRouterModelInventoryCache: OpenRouterModelInventoryCache | null = null;
+let adaptiveOpenRouterEndpointCache: OpenRouterModelEndpointCache | null = null;
 
 function zeroPriced(value: unknown) {
   if (value === undefined || value === null || value === "") return true;
@@ -82,6 +104,25 @@ async function writeOpenRouterModelInventoryCache(data: OpenRouterModelRecord[])
   await writeFile(OPENROUTER_MODEL_CACHE_FILE, JSON.stringify(adaptiveOpenRouterModelInventoryCache, null, 2), "utf8").catch(() => undefined);
 }
 
+async function readOpenRouterEndpointCache() {
+  if (adaptiveOpenRouterEndpointCache) return adaptiveOpenRouterEndpointCache.data;
+  const raw = await readFile(OPENROUTER_ENDPOINT_CACHE_FILE, "utf8").catch(() => "");
+  if (!raw) return {};
+  const parsed = JSON.parse(raw) as Partial<OpenRouterModelEndpointCache>;
+  if (!parsed.data || typeof parsed.data !== "object") return {};
+  adaptiveOpenRouterEndpointCache = {
+    updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : new Date(0).toISOString(),
+    data: parsed.data,
+  };
+  return adaptiveOpenRouterEndpointCache.data;
+}
+
+async function writeOpenRouterEndpointCache(data: Record<string, OpenRouterEndpointRecord[]>) {
+  adaptiveOpenRouterEndpointCache = { updatedAt: new Date().toISOString(), data };
+  await mkdir(dirname(OPENROUTER_ENDPOINT_CACHE_FILE), { recursive: true }).catch(() => undefined);
+  await writeFile(OPENROUTER_ENDPOINT_CACHE_FILE, JSON.stringify(adaptiveOpenRouterEndpointCache, null, 2), "utf8").catch(() => undefined);
+}
+
 async function fetchOpenRouterModelInventory() {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -105,6 +146,25 @@ async function fetchOpenRouterModelInventory() {
   const cached = await readOpenRouterModelInventoryCache().catch(() => []);
   if (cached.length) return cached;
   throw lastError instanceof Error ? lastError : new Error("Could not fetch OpenRouter's free model inventory for Adaptive mode.");
+}
+
+async function fetchOpenRouterModelEndpoints(modelId: string) {
+  const cached: Record<string, OpenRouterEndpointRecord[]> = await readOpenRouterEndpointCache().catch(() => ({}));
+  if (cached[modelId]?.length) return cached[modelId];
+  const [author, ...slugParts] = modelId.split("/");
+  const slug = slugParts.join("/");
+  if (!author || !slug) return [];
+  const response = await fetch(`https://openrouter.ai/api/v1/models/${encodeURIComponent(author)}/${encodeURIComponent(slug)}/endpoints`, {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) return [];
+  const payload = await response.json().catch(() => null) as { data?: { endpoints?: OpenRouterEndpointRecord[] } } | null;
+  const endpoints = Array.isArray(payload?.data?.endpoints) ? payload.data.endpoints : [];
+  if (!endpoints.length) return [];
+  await writeOpenRouterEndpointCache({ ...cached, [modelId]: endpoints }).catch(() => undefined);
+  return endpoints;
 }
 
 function configuredAdaptiveUseCase(profile: AgentProfile) {
@@ -134,10 +194,21 @@ function adaptiveUseCases(profile: AgentProfile, messages: IncomingMessage[]) {
   if (/\b(code|coding|program|developer|debug|repo|typescript|javascript|python|react|next\.?js|bug|test|refactor|cli|api|schema|sql)\b/.test(text)) cases.add("coding");
   if (/\b(write|writing|copy|essay|story|draft|edit|rewrite|tone|blog|newsletter|creative)\b/.test(text)) cases.add("writing");
   if (/\b(research|compare|summari[sz]e|sources?|search|evidence|market|analysis|report)\b/.test(text)) cases.add("research");
-  if (/\b(image|draw|illustration|photo|visual|vision|screenshot|diagram)\b/.test(text)) cases.add(hasImage ? "vision" : "image");
+  if (/\b(image|draw|illustration|photo|visual|vision|screenshot|diagram)\b/.test(text)) {
+    cases.add(hasImage ? "vision" : profileHasNativeImageGeneration(profile) ? "tool-use" : "image");
+  }
   if (/\b(tool|function|agent|workflow|automation|shell|command|browser|github|filesystem)\b/.test(text)) cases.add("tool-use");
   if (!cases.size) cases.add("general");
   return [...cases];
+}
+
+function profileHasNativeImageGeneration(profile: AgentProfile) {
+  const matrixCapabilities = RUNTIME_CAPABILITIES[profile.runtime];
+  return profile.runtime === "hermes"
+    || Boolean(matrixCapabilities?.imageGeneration)
+    || Boolean(matrixCapabilities?.skillCapabilities?.some((capability) => capability === "image-generation" || capability === "media-generation"))
+    || Boolean(profile.runtimeCapabilities?.imageGeneration)
+    || Boolean(profile.runtimeCapabilities?.skillCapabilities?.some((capability) => capability === "image-generation" || capability === "media-generation"));
 }
 
 function modelUseCaseScore(model: OpenRouterModelRecord, useCases: string[]) {
@@ -157,6 +228,46 @@ function modelUseCaseScore(model: OpenRouterModelRecord, useCases: string[]) {
   return score;
 }
 
+function endpointHealthScore(endpoints: OpenRouterEndpointRecord[]) {
+  if (!endpoints.length) return 0;
+  const best = endpoints.reduce((score, endpoint) => {
+    let current = 0;
+    if (endpoint.status === 0) current += 28;
+    else if (typeof endpoint.status === "number" && endpoint.status < 0) current -= 45;
+    const uptime = endpoint.uptime_last_5m ?? endpoint.uptime_last_30m;
+    if (typeof uptime === "number") {
+      if (uptime >= 99) current += 24;
+      else if (uptime >= 95) current += 12;
+      else if (uptime < 90) current -= 35;
+    }
+    const throughput = endpoint.throughput_last_30m?.p50;
+    if (typeof throughput === "number") current += Math.min(16, Math.floor(throughput / 12));
+    const latency = endpoint.latency_last_30m?.p90 ?? endpoint.latency_last_30m?.p50;
+    if (typeof latency === "number" && latency > 12_000) current -= 12;
+    return Math.max(score, current);
+  }, -60);
+  return best;
+}
+
+async function rankCandidatesWithEndpointHealth(candidates: OpenRouterModelRecord[], useCases: string[]) {
+  const ranked = candidates.map((model, index) => ({ model, index, baseScore: modelUseCaseScore(model, useCases) }));
+  const top = ranked.slice(0, OPENROUTER_ENDPOINT_HEALTH_LIMIT);
+  const health = await Promise.all(top.map(async (entry) => ({
+    id: entry.model.id,
+    score: endpointHealthScore(await fetchOpenRouterModelEndpoints(entry.model.id!).catch(() => [])),
+  })));
+  const healthById = new Map(health.map((entry) => [entry.id, entry.score]));
+  return ranked.sort((left, right) => {
+    const leftTools = left.model.supported_parameters?.includes("tools") ? 1 : 0;
+    const rightTools = right.model.supported_parameters?.includes("tools") ? 1 : 0;
+    return (right.baseScore + (healthById.get(right.model.id) ?? 0)) - (left.baseScore + (healthById.get(left.model.id) ?? 0))
+      || rightTools - leftTools
+      || (right.model.context_length ?? 0) - (left.model.context_length ?? 0)
+      || (right.model.created ?? 0) - (left.model.created ?? 0)
+      || (left.model.name ?? left.model.id ?? "").localeCompare(right.model.name ?? right.model.id ?? "");
+  }).map((entry) => entry.model);
+}
+
 export async function resolveAdaptiveOpenRouterModels(profile: AgentProfile, messages: IncomingMessage[]) {
   const fallbackModel = profile.adaptiveOpenRouter?.fallbackModel?.trim();
   const inventory = await fetchOpenRouterModelInventory().catch((error: unknown) => {
@@ -167,21 +278,17 @@ export async function resolveAdaptiveOpenRouterModels(profile: AgentProfile, mes
   const requiresImage = Array.isArray(latest?.content) && latest.content.some((part) => part.type === "image_url");
   const requiredModalities = requiresImage ? ["text", "image"] : ["text"];
   const useCases = adaptiveUseCases(profile, messages);
+  const openRouterImageFallback = useCases.includes("image") && !profileHasNativeImageGeneration(profile);
   const candidates = inventory
     .filter((model) => model.id)
     .filter(isFreeOpenRouterModel)
     .filter((model) => requiredModalities.every((modality) => model.architecture?.input_modalities?.includes(modality)))
-    .sort((left, right) => {
-      const rightTools = right.supported_parameters?.includes("tools") ? 1 : 0;
-      const leftTools = left.supported_parameters?.includes("tools") ? 1 : 0;
-      return modelUseCaseScore(right, useCases) - modelUseCaseScore(left, useCases)
-        || rightTools - leftTools
-        || (right.context_length ?? 0) - (left.context_length ?? 0)
-        || (right.created ?? 0) - (left.created ?? 0)
-        || (left.name ?? left.id ?? "").localeCompare(right.name ?? right.id ?? "");
-    });
-  if (!candidates[0]?.id && !fallbackModel) throw new Error("OpenRouter did not report any free model that matches this Adaptive request.");
-  const ids = candidates.map((model) => model.id!).filter(Boolean);
+    .filter((model) => !openRouterImageFallback || model.architecture?.output_modalities?.includes("image"));
+  const rankedCandidates = await rankCandidatesWithEndpointHealth(candidates, useCases);
+  if (!rankedCandidates[0]?.id && !fallbackModel) throw new Error(openRouterImageFallback
+    ? "OpenRouter did not report any free image-output model that matches this Adaptive request."
+    : "OpenRouter did not report any free model that matches this Adaptive request.");
+  const ids = rankedCandidates.map((model) => model.id!).filter(Boolean);
   return fallbackModel && !ids.includes(fallbackModel) ? [...ids, fallbackModel] : ids;
 }
 

@@ -1,0 +1,18 @@
+{
+  "upstreamName": "contrast-checker",
+  "upstreamSlug": "contrast-checker",
+  "hiveSlug": "contrast-checker",
+  "sourceLabel": "accesslint",
+  "sourceUrl": "https://www.ui-skills.com/skills/accesslint/contrast-checker",
+  "repository": "https://github.com/AccessLint/claude-marketplace",
+  "installCommand": "npx skills add https://github.com/AccessLint/claude-marketplace --skill contrast-checker",
+  "importedAt": "2026-06-08T15:01:23.515Z",
+  "refreshedAt": "2026-06-08T15:01:23.515Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/accesslint/contrast-checker",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Optional UI skill from accesslint."
+}

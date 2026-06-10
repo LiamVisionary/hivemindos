@@ -785,6 +785,14 @@ async function toHostedApp(app: CollectorApp, machine: FleetMachine, collectorUr
   };
 }
 
+async function safeHostedApp(app: CollectorApp, machine: FleetMachine, collectorUrl: string, mode: AppDiscoveryMode) {
+  try {
+    return await toHostedApp(app, machine, collectorUrl, mode);
+  } catch {
+    return null;
+  }
+}
+
 async function fetchJson<T>(url: string, timeoutMs = COLLECTOR_TIMEOUT_MS): Promise<T> {
   const response = await fetch(url, {
     cache: "no-store",
@@ -872,7 +880,7 @@ async function readPeerCollectorApps(forceRefresh: boolean, machines: FleetMachi
           collectorUrl,
         },
       };
-      const apps = await Promise.all(collectorApps.map((app) => toHostedApp(app, machine, collectorUrl, mode)));
+      const apps = await Promise.all(collectorApps.map((app) => safeHostedApp(app, machine, collectorUrl, mode)));
       const visibleApps = apps.filter((app): app is HostedApp => Boolean(app));
       return visibleApps.length > 0 ? { name: machine.device?.name ?? ip, collector, apps: visibleApps } : null;
     }))
@@ -907,7 +915,7 @@ async function readApps(request: NextRequest, mode: AppDiscoveryMode = "full"): 
     }
     try {
       const payload = await fetchJson<{ apps?: CollectorApp[] }>(collectorAppsUrl(collectorUrl, forceCollectors));
-      const apps = await Promise.all((payload.apps ?? []).map((app) => toHostedApp(app, machine, collectorUrl, mode)));
+      const apps = await Promise.all((payload.apps ?? []).map((app) => safeHostedApp(app, machine, collectorUrl, mode)));
       return {
         name,
         collector: machine.collector,

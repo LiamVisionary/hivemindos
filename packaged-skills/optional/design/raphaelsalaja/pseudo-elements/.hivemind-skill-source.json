@@ -1,0 +1,18 @@
+{
+  "upstreamName": "pseudo-elements",
+  "upstreamSlug": "pseudo-elements",
+  "hiveSlug": "pseudo-elements",
+  "sourceLabel": "raphaelsalaja",
+  "sourceUrl": "https://www.ui-skills.com/skills/raphaelsalaja/pseudo-elements",
+  "repository": "https://github.com/raphaelsalaja/skill",
+  "installCommand": "npx skills add https://github.com/raphaelsalaja/skill --skill pseudo-elements",
+  "importedAt": "2026-06-08T15:01:46.370Z",
+  "refreshedAt": "2026-06-08T15:01:46.370Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/raphaelsalaja/pseudo-elements",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Audit CSS for pseudo-element best practices and View Transitions API usage. Use when reviewing hover effects, decorative layers, or page transitions. Outputs file:line findings."
+}

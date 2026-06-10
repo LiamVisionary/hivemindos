@@ -1,0 +1,18 @@
+{
+  "upstreamName": "emil-design-eng",
+  "upstreamSlug": "emil-design-eng",
+  "hiveSlug": "emil-design-eng",
+  "sourceLabel": "emilkowalski",
+  "sourceUrl": "https://www.ui-skills.com/skills/emilkowalski/emil-design-eng",
+  "repository": "https://github.com/emilkowalski/skill",
+  "installCommand": "npx skills add https://github.com/emilkowalski/skill --skill emil-design-eng",
+  "importedAt": "2026-06-08T15:01:34.640Z",
+  "refreshedAt": "2026-06-08T15:01:34.640Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/emilkowalski/emil-design-eng",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "This skill encodes Emil Kowalski's philosophy on UI polish, component design, animation decisions, and the invisible details that make software feel great."
+}

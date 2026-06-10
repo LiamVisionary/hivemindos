@@ -1,0 +1,18 @@
+{
+  "upstreamName": "to-spring-or-not-to-spring",
+  "upstreamSlug": "to-spring-or-not-to-spring",
+  "hiveSlug": "to-spring-or-not-to-spring",
+  "sourceLabel": "raphaelsalaja",
+  "sourceUrl": "https://www.ui-skills.com/skills/raphaelsalaja/to-spring-or-not-to-spring",
+  "repository": "https://github.com/raphaelsalaja/skill",
+  "installCommand": "npx skills add https://github.com/raphaelsalaja/skill --skill to-spring-or-not-to-spring",
+  "importedAt": "2026-06-08T15:01:46.883Z",
+  "refreshedAt": "2026-06-08T15:01:46.883Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/raphaelsalaja/to-spring-or-not-to-spring",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Audit animation code for correct timing function selection. Use when reviewing motion implementations, debugging animations that feel wrong, or choosing between springs and easing. Outputs file:line findings."
+}

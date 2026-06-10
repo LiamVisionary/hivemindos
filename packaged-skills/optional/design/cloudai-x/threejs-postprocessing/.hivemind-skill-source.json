@@ -1,0 +1,18 @@
+{
+  "upstreamName": "threejs-postprocessing",
+  "upstreamSlug": "threejs-postprocessing",
+  "hiveSlug": "threejs-postprocessing",
+  "sourceLabel": "cloudai-x",
+  "sourceUrl": "https://www.ui-skills.com/skills/cloudai-x/threejs-postprocessing",
+  "repository": "https://github.com/cloudai-x/threejs-skills",
+  "installCommand": "npx skills add https://github.com/cloudai-x/threejs-skills --skill threejs-postprocessing",
+  "importedAt": "2026-06-08T15:01:33.018Z",
+  "refreshedAt": "2026-06-08T15:01:33.018Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/cloudai-x/threejs-postprocessing",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Three.js post-processing - EffectComposer, bloom, DOF, screen effects. Use when adding visual effects, color grading, blur, glow, or creating custom screen-space shaders."
+}

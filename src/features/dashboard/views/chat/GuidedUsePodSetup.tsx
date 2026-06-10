@@ -83,6 +83,8 @@ const FALLBACK_MODELS = [
   { id: "glm-5.1", name: "glm-5.1" },
 ];
 
+const MODEL_SKELETON_PILLS = ["44%", "36%", "42%", "48%", "34%"];
+
 const TOKEN_CREATION_STEPS = [
   "Requesting UsePod token",
   "Saving local credentials",
@@ -105,8 +107,7 @@ function fundingUrlForUsePod(registration: RegisterResponse | null, agent?: Agen
 
 function hasUsePodSetup(config?: AgentProfile["usePod"]) {
   return Boolean(
-    config?.tokenEnvName
-      || config?.depositAddress
+    config?.depositAddress
       || config?.depositCode
       || config?.dashboardUrl
       || config?.lastBalanceRemaining
@@ -301,11 +302,21 @@ export function GuidedUsePodSetup({
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   const [walletProviders, setWalletProviders] = useState<SolanaWalletProvider[]>([]);
   const [transferBusy, setTransferBusy] = useState("");
+  const [attachingWalletKey, setAttachingWalletKey] = useState("");
   const [showingSuccess, setShowingSuccess] = useState(false);
   const successTimerRef = useRef<number | null>(null);
+  const attachedWalletRef = useRef(false);
 
   const discoveredModels = status?.models?.length ? status.models : [];
-  const modelOptions = discoveredModels.length ? discoveredModels : FALLBACK_MODELS;
+  const usePodSetupKnown = Boolean(
+    status
+      || hasUsePodSetup(agent?.usePod)
+      || agent?.usePod?.lastTokenPresent
+      || agent?.usePod?.lastTestStatus,
+  );
+  const loadingModelInventory = checking && currentStep === 3 && !discoveredModels.length;
+  const modelListUnavailable = currentStep === 3 && usePodSetupKnown && !checking && !discoveredModels.length;
+  const modelOptions = discoveredModels.length ? discoveredModels : loadingModelInventory || modelListUnavailable ? [] : FALLBACK_MODELS;
   const activePreset = SPEND_PRESETS.find((preset) => preset.id === spendPreset);
   const inputCap = spendPreset === "custom" ? customCaps.input : activePreset?.input ?? "";
   const outputCap = spendPreset === "custom" ? customCaps.output : activePreset?.output ?? "";
@@ -316,9 +327,15 @@ export function GuidedUsePodSetup({
   const nativeRuntime = useMemo(() => isTauriDesktopRuntime(), []);
   const selectedWalletProvider = walletProviders[0] ?? null;
   const walletSelectorLabel = selectedWalletProvider?.label ?? "No wallet";
-  const isBusy = registering || checking || recovering || showingSuccess || Boolean(transferBusy) || busy === "usepod-register";
+  const isBusy = registering || checking || recovering || showingSuccess || Boolean(transferBusy) || Boolean(attachingWalletKey) || busy === "usepod-register";
   const showInlineFundingMessage = setupView === "setup" && currentStep === 2 && !showingSuccess && Boolean(message);
   const filteredModels = modelOptions.filter((model) => model.id.toLowerCase().includes(modelSearch.toLowerCase()));
+  const modelInventoryNotice = modelListUnavailable
+      ? status?.message || "UsePod did not return a live model list. Refresh models after funding is confirmed."
+      : filteredModels.length
+        ? ""
+        : "No UsePod models match this search.";
+  const modelCountLabel = status?.modelCount ?? (discoveredModels.length || modelOptions.length);
 
   const headerCopy = useMemo(() => {
     if (setupView === "wallets") return { title: "UsePod wallet", body: "Attach an existing wallet or create a new one." };
@@ -354,12 +371,12 @@ export function GuidedUsePodSetup({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             agent: { ...(agent ?? {}), ...profilePatchFromState() },
-            action: "metadata",
+            action: "models",
             model: selectedModel,
           }),
         });
         const data = await response.json().catch(() => null) as UsePodStatusResponse | null;
-        if (cancelled || !data?.ok) return;
+        if (cancelled || !data || (!data.ok && !data.tokenPresent)) return;
         setStatus(data);
         await onComplete(profilePatchFromState({
           tokenEnvName: data.tokenEnvName ?? tokenEnvName,
@@ -372,7 +389,9 @@ export function GuidedUsePodSetup({
           lastTokenPresent: data.tokenPresent,
           lastTokenSource: data.tokenSource ?? "",
         }));
-        if (data.dashboardUrl || data.depositCode || data.depositAddress) setCurrentStep(2);
+        if (attachedWalletRef.current) return;
+        if (data.status === "ready" && data.models?.length) setCurrentStep(3);
+        else if (data.tokenPresent || data.dashboardUrl || data.depositCode || data.depositAddress) setCurrentStep(2);
       } catch {
         // Missing saved metadata is fine; the primary create action remains available.
       } finally {
@@ -459,30 +478,13 @@ export function GuidedUsePodSetup({
   }
 
   async function attachWallet(wallet: AgentProfile) {
+    const walletKey = walletKeyForUsePodAgent(wallet);
+    if (attachingWalletKey) return;
     const walletUsePod = wallet.usePod ?? {};
     const walletModel = wallet.model || selectedModel || FALLBACK_MODELS[0].id;
     const walletPreset = walletUsePod.spendPreset ?? presetForCaps(walletUsePod.maxPriceInputMicrounits, walletUsePod.maxPriceOutputMicrounits);
-    setSelectedModel(walletModel);
-    setSpendPreset(walletPreset);
-    setCustomCaps({
-      input: walletUsePod.maxPriceInputMicrounits ?? "",
-      output: walletUsePod.maxPriceOutputMicrounits ?? "",
-    });
-    setStatus({
-      ok: true,
-      status: walletUsePod.lastTestStatus || "ready",
-      message: `Attached ${wallet.name}.`,
-      tokenEnvName: walletUsePod.tokenEnvName || "USEPOD_TOKEN",
-      depositAddress: walletUsePod.depositAddress || "",
-      depositCode: walletUsePod.depositCode || "",
-      dashboardUrl: walletUsePod.dashboardUrl || "",
-      modelCount: walletUsePod.lastModelCount ?? 0,
-      models: [{ id: walletModel }],
-      balanceRemaining: walletUsePod.lastBalanceRemaining || "",
-      route: walletUsePod.lastRoute || "",
-      checkedAt: walletUsePod.lastCheckedAt || new Date().toISOString(),
-    });
-    await onComplete({
+    attachedWalletRef.current = true;
+    const attachPatch = {
       provider: "usepod",
       model: walletModel,
       gatewayUrl: "https://api.usepod.ai",
@@ -506,10 +508,78 @@ export function GuidedUsePodSetup({
         lastTokenPresent: walletUsePod.lastTokenPresent,
         lastTokenSource: walletUsePod.lastTokenSource || "",
       },
+    };
+    setAttachingWalletKey(walletKey);
+    setMessage(`Attaching ${wallet.name}...`);
+    setSelectedModel(walletModel);
+    setSpendPreset(walletPreset);
+    setCustomCaps({
+      input: walletUsePod.maxPriceInputMicrounits ?? "",
+      output: walletUsePod.maxPriceOutputMicrounits ?? "",
+    });
+    setStatus({
+      ok: true,
+      status: walletUsePod.lastTestStatus || "ready",
+      message: `Attached ${wallet.name}.`,
+      tokenEnvName: walletUsePod.tokenEnvName || "USEPOD_TOKEN",
+      depositAddress: walletUsePod.depositAddress || "",
+      depositCode: walletUsePod.depositCode || "",
+      dashboardUrl: walletUsePod.dashboardUrl || "",
+      modelCount: walletUsePod.lastModelCount ?? 0,
+      models: [],
+      balanceRemaining: walletUsePod.lastBalanceRemaining || "",
+      route: walletUsePod.lastRoute || "",
+      checkedAt: walletUsePod.lastCheckedAt || new Date().toISOString(),
     });
     setSetupView("setup");
     setCurrentStep(3);
-    setMessage(`Attached ${wallet.name}.`);
+    try {
+      await onComplete(attachPatch);
+      setAttachingWalletKey("");
+      setChecking(true);
+      setMessage("Loading UsePod models...");
+      const response = await fetch("/api/usepod/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agent: { ...(agent ?? {}), ...attachPatch },
+          action: "models",
+          model: walletModel,
+        }),
+      });
+      const data = await response.json().catch(() => null) as UsePodStatusResponse | null;
+      if (!data?.ok || !data.models?.length) {
+        setMessage(data?.message ?? `Attached ${wallet.name}. Refresh models if the list still looks short.`);
+        return;
+      }
+      setStatus(data);
+      const resolvedModel = data.models.some((model) => model.id === walletModel) ? walletModel : data.models[0]?.id || walletModel;
+      if (resolvedModel !== walletModel) setSelectedModel(resolvedModel);
+      await onComplete({
+        ...profilePatchFromState({
+          tokenEnvName: data.tokenEnvName ?? attachPatch.usePod.tokenEnvName,
+          depositAddress: data.depositAddress ?? attachPatch.usePod.depositAddress,
+          depositCode: data.depositCode ?? attachPatch.usePod.depositCode,
+          dashboardUrl: data.dashboardUrl ?? attachPatch.usePod.dashboardUrl,
+          lastBalanceRemaining: data.balanceRemaining ?? attachPatch.usePod.lastBalanceRemaining,
+          lastRoute: data.route ?? attachPatch.usePod.lastRoute,
+          lastCheckedAt: data.checkedAt ?? attachPatch.usePod.lastCheckedAt,
+          lastTestStatus: data.status ?? attachPatch.usePod.lastTestStatus,
+          lastStatusMessage: data.message ?? attachPatch.usePod.lastStatusMessage,
+          lastHttpStatus: data.httpStatus ?? attachPatch.usePod.lastHttpStatus,
+          lastModelCount: data.modelCount ?? attachPatch.usePod.lastModelCount,
+          lastTokenPresent: data.tokenPresent ?? attachPatch.usePod.lastTokenPresent,
+          lastTokenSource: data.tokenSource ?? attachPatch.usePod.lastTokenSource,
+        }, { model: resolvedModel }),
+        model: resolvedModel,
+      });
+      setMessage(`Attached ${wallet.name}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : `Could not attach ${wallet.name}.`);
+    } finally {
+      setAttachingWalletKey("");
+      setChecking(false);
+    }
   }
 
   function clearSuccessTimer() {
@@ -755,14 +825,16 @@ export function GuidedUsePodSetup({
             {walletOptions.map((wallet) => {
               const walletUsePod = wallet.usePod ?? {};
               const deposit = walletUsePod.depositAddress || walletUsePod.depositCode || "";
+              const walletKey = walletKeyForUsePodAgent(wallet);
+              const attaching = attachingWalletKey === walletKey;
               return (
-                <button type="button" className={styles.wallet} key={walletKeyForUsePodAgent(wallet)} onClick={() => void attachWallet(wallet)}>
+                <button type="button" className={styles.wallet} key={walletKey} disabled={Boolean(attachingWalletKey)} onClick={() => void attachWallet(wallet)}>
                   <span className={styles.wname}>
                     <b>{wallet.name}</b>
-                    <small>{wallet.machineName || walletUsePod.tokenEnvName || "UsePod"}</small>
+                    <small>{attaching ? "Attaching wallet..." : wallet.machineName || walletUsePod.tokenEnvName || "UsePod"}</small>
                   </span>
                   <span className={styles.wbal}>
-                    <b>{walletUsePod.lastBalanceRemaining || "Funded"}</b>
+                    <b>{attaching ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : walletUsePod.lastBalanceRemaining || "Funded"}</b>
                     <small>{deposit ? shortUsePodValue(deposit) : `${walletUsePod.lastModelCount ?? 0} models`}</small>
                   </span>
                 </button>
@@ -950,7 +1022,27 @@ export function GuidedUsePodSetup({
                 <input placeholder="Search UsePod models" value={modelSearch} onChange={(event) => setModelSearch(event.target.value)} />
               </label>
               <div className={styles.models}>
-                {filteredModels.map((model) => (
+                {loadingModelInventory ? MODEL_SKELETON_PILLS.map((width, index) => (
+                  <div
+                    aria-hidden="true"
+                    className={styles.modelSkeleton}
+                    key={width}
+                    style={{ "--skeleton-width": width, "--skeleton-delay": `${index * 90}ms` } as CSSProperties}
+                  >
+                    <span className={styles.modelSkeletonDot} />
+                    <span className={styles.modelSkeletonText} />
+                  </div>
+                )) : modelInventoryNotice ? (
+                  <div className={styles.modelNotice}>
+                    <span>{modelInventoryNotice}</span>
+                    {modelListUnavailable ? (
+                      <button type="button" disabled={isBusy} onClick={() => void discoverModels()}>
+                        <RefreshCcw aria-hidden="true" />
+                        Refresh
+                      </button>
+                    ) : null}
+                  </div>
+                ) : filteredModels.map((model) => (
                   <button
                     type="button"
                     key={model.id}
@@ -1034,7 +1126,7 @@ export function GuidedUsePodSetup({
             <div className={styles.status}>
               {status?.balanceRemaining ? <span className={styles.stat}><span className={styles.dot} />Balance <b>{status.balanceRemaining}</b></span> : null}
               {status?.route ? <span className={styles.stat}>Route <b>{status.route}</b></span> : null}
-              <span className={styles.stat}>Models <b>{status?.modelCount ?? modelOptions.length}</b></span>
+              <span className={styles.stat}>Models <b>{modelCountLabel}</b></span>
             </div>
           </>
         ) : null}
@@ -1048,7 +1140,7 @@ export function GuidedUsePodSetup({
           {setupView === "setup" && currentStep === 1 && walletOptions.length ? <button type="button" className={styles.link} onClick={() => setSetupView("wallets")}>Attach existing wallet</button> : null}
           {setupView === "wallets" ? <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={() => { setMessage(""); setSetupView("setup"); setCurrentStep(1); }}><Plus aria-hidden="true" /> New wallet</button> : null}
           {setupView === "setup" && currentStep > 1 && !registering && !showingSuccess ? <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={() => setCurrentStep((currentStep - 1) as SetupStep)}>Back</button> : null}
-          {setupView === "setup" && currentStep === 3 ? <button type="button" className={`${styles.btn} ${styles.primary}`} onClick={onCancel}><Check aria-hidden="true" /> Done</button> : null}
+          {setupView === "setup" && currentStep === 3 ? <button type="button" className={`${styles.btn} ${styles.primary}`} disabled={isBusy || modelListUnavailable} onClick={onCancel}><Check aria-hidden="true" /> Done</button> : null}
         </div>
       </footer>
     </section>

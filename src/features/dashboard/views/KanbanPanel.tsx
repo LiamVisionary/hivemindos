@@ -133,10 +133,41 @@ export function KanbanPanel(props: any) {
     if (summary.status === "unavailable") return summary.projectLabel ? "unavailable" : "";
     return summary.projectLabel ? "linked" : "";
   };
+  const formatLoopScore = (score: any) => typeof score === "number"
+    ? score.toFixed(Math.abs(score) >= 10 ? 0 : 2).replace(/\.00$/, "")
+    : "";
+  const loopSummaryForTask = (task: any) => {
+    const loop = task.loop;
+    if (!loop) return null;
+    const observation = loop.observation;
+    const pendingRequiredGateCount = observation?.pendingRequiredGateCount ?? (Array.isArray(loop.evalGates)
+      ? loop.evalGates.filter((gate: any) => gate?.required && gate?.status !== "passed").length
+      : 0);
+    return {
+      antiPatternCount: observation?.antiPatternCount ?? loop.antiPatterns?.length ?? 0,
+      bestScore: formatLoopScore(observation?.bestScore),
+      experimentCount: observation?.totalExperiments ?? loop.experiments?.length ?? 0,
+      frontierCount: observation?.frontier?.length ?? 0,
+      label: loop.mode === "optimizer" ? "Optimizer loop" : `${loop.mode === "open" ? "Open" : "Closed"} loop`,
+      pendingRequiredGateCount,
+    };
+  };
 
   useEffect(() => {
     workHistoryEntryCountRef.current = workHistory.entries.length;
   }, [workHistory.entries.length]);
+
+  // Escape closes the open Kanban task modal. Ignore the Escape that cancels an
+  // IME composition so it doesn't close the modal mid-word.
+  useEffect(() => {
+    if (!kanbanTaskModal) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.isComposing || event.keyCode === 229) return;
+      setKanbanTaskModal("");
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [kanbanTaskModal, setKanbanTaskModal]);
 
   useEffect(() => {
     if (activeView !== "kanban") return;
@@ -532,6 +563,7 @@ export function KanbanPanel(props: any) {
                       const deliverables = task.status === "done" ? (task.deliverables ?? []) : [];
                       const undoInProgress = Boolean(task.undoRequestedAt && (task.status === "ready" || task.status === "working"));
                       const proofLabel = proofLabelForTask(task);
+                      const loopSummary = loopSummaryForTask(task);
                       return (
                         <article className={kanbanClass("kanbanCardShell")} key={task.id}>
                           <div
@@ -586,6 +618,19 @@ export function KanbanPanel(props: any) {
                                 <span className={kanbanClass("codeProofStatusPill", proofLabel)}>
                                   <span>{proofLabel === "verified" ? "Code proof verified" : `code proof ${proofLabel}`}</span>
                                 </span>
+                              </div>
+                            ) : null}
+                            {loopSummary ? (
+                              <div
+                                className={kanbanClass("codeProofRow")}
+                                title={`${loopSummary.experimentCount} experiments, ${loopSummary.frontierCount} frontier candidates, ${loopSummary.antiPatternCount} avoided patterns, ${loopSummary.pendingRequiredGateCount} pending gates`}
+                              >
+                                <span className={kanbanClass("priorityPill", loopSummary.pendingRequiredGateCount ? "urgent" : "normal")}>{loopSummary.label}</span>
+                                {loopSummary.bestScore ? <span className={kanbanClass("priorityPill", "normal")}>best {loopSummary.bestScore}</span> : null}
+                                <span className={kanbanClass("priorityPill", "normal")}>{loopSummary.experimentCount} exp</span>
+                                {loopSummary.frontierCount ? <span className={kanbanClass("priorityPill", "normal")}>{loopSummary.frontierCount} frontier</span> : null}
+                                {loopSummary.antiPatternCount ? <span className={kanbanClass("priorityPill", "stale")}>{loopSummary.antiPatternCount} avoid</span> : null}
+                                {loopSummary.pendingRequiredGateCount ? <span className={kanbanClass("priorityPill", "urgent")}>{loopSummary.pendingRequiredGateCount} gates</span> : null}
                               </div>
                             ) : null}
                             <div className={kanbanClass("kanbanCardMeta")}>

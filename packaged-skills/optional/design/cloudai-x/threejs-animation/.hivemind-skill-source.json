@@ -1,0 +1,18 @@
+{
+  "upstreamName": "threejs-animation",
+  "upstreamSlug": "threejs-animation",
+  "hiveSlug": "threejs-animation",
+  "sourceLabel": "cloudai-x",
+  "sourceUrl": "https://www.ui-skills.com/skills/cloudai-x/threejs-animation",
+  "repository": "https://github.com/cloudai-x/threejs-skills",
+  "installCommand": "npx skills add https://github.com/cloudai-x/threejs-skills --skill threejs-animation",
+  "importedAt": "2026-06-08T15:01:30.915Z",
+  "refreshedAt": "2026-06-08T15:01:30.915Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/cloudai-x/threejs-animation",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Three.js animation - keyframe animation, skeletal animation, morph targets, animation mixing. Use when animating objects, playing GLTF animations, creating procedural motion, or blending animations."
+}

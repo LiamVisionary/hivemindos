@@ -7,6 +7,11 @@ import styles from "./ModelPillSelector.module.css";
 export type ModelPillOption = {
   id: string;
   name?: string;
+  subtitle?: string;
+  group?: string;
+  badge?: string;
+  disabled?: boolean;
+  disabledReason?: string;
 };
 
 type ModelPillSelectorProps = {
@@ -30,12 +35,14 @@ function modelPillParts(model: ModelPillOption) {
       source: label.slice(0, slashIndex),
       name: label.slice(slashIndex + 1),
       detail: model.name && model.name !== model.id ? model.id : "",
+      subtitle: model.subtitle,
     };
   }
   return {
     source: "",
     name: label,
     detail: model.name && model.name !== model.id ? model.id : "",
+    subtitle: model.subtitle,
   };
 }
 
@@ -59,6 +66,7 @@ export function ModelPillSelector({
   };
 
   const selectModel = (modelId: string) => {
+    if (models.find((model) => model.id === modelId)?.disabled) return;
     markOptimisticModel(modelId);
     requestAnimationFrame(() => {
       window.setTimeout(() => void onSelectModel(modelId), 0);
@@ -94,6 +102,7 @@ export function ModelPillSelector({
         {filteredModels.map((model) => {
           const selected = model.id === (effectiveOptimisticModelId ?? selectedModelId);
           const pill = modelPillParts(model);
+          const modelDisabled = disabled || Boolean(model.disabled);
           return (
             <button
               type="button"
@@ -102,24 +111,30 @@ export function ModelPillSelector({
               aria-selected={selected}
               role="option"
               key={model.id}
-              onPointerDown={() => markOptimisticModel(model.id)}
+              onPointerDown={() => {
+                if (!model.disabled) markOptimisticModel(model.id);
+              }}
               onClick={() => selectModel(model.id)}
-              disabled={disabled}
-              title={pill.detail || model.id}
+              disabled={modelDisabled}
+              title={[pill.detail || model.id, pill.subtitle, model.disabledReason].filter(Boolean).join(" - ")}
             >
               <span className={styles.modelPillDot} aria-hidden="true" />
               {pill.source ? <span className={styles.modelPillSource}>{pill.source}</span> : null}
-              <span className={styles.modelPillName}>{pill.name}</span>
+              <span className={styles.modelPillText}>
+                <span className={styles.modelPillName}>{pill.name}</span>
+                {pill.subtitle ? <span className={styles.modelPillSubtitle}>{pill.subtitle}</span> : null}
+              </span>
+              {model.badge || model.disabledReason ? <span className={styles.modelPillBadge}>{model.disabledReason ? "Credits" : model.badge}</span> : null}
             </button>
           );
         })}
         {canAddModel ? (
           <button
-              type="button"
-              className={styles.addModelPill}
-              onClick={onAddModel}
-              disabled={disabled || addModelDisabled}
-            >
+            type="button"
+            className={styles.addModelPill}
+            onClick={onAddModel}
+            disabled={disabled || addModelDisabled}
+          >
             <Plus aria-hidden="true" />
             <span>{addModelLabel}</span>
           </button>

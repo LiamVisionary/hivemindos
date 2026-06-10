@@ -1,0 +1,18 @@
+{
+  "upstreamName": "playwright-cli",
+  "upstreamSlug": "playwright-cli",
+  "hiveSlug": "playwright-cli",
+  "sourceLabel": "microsoft",
+  "sourceUrl": "https://www.ui-skills.com/skills/microsoft/playwright-cli",
+  "repository": "https://github.com/microsoft/playwright-cli",
+  "installCommand": "npx skills add https://github.com/microsoft/playwright-cli --skill playwright-cli",
+  "importedAt": "2026-06-08T15:01:39.110Z",
+  "refreshedAt": "2026-06-08T15:01:39.110Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/microsoft/playwright-cli",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Automate browser interactions, test web pages and work with Playwright tests."
+}

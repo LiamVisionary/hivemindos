@@ -11,6 +11,7 @@ const autoWaitMs = Number(process.env.QUEEN_BEE_E2E_AUTO_WAIT_MS || 60_000);
 // and observe the Work Board. Set QUEEN_BEE_E2E_REQUIRE_AUTONOMOUS=0 only when
 // intentionally testing the legacy harness-assisted claim/chat/complete path.
 const requireAutonomousPickup = process.env.QUEEN_BEE_E2E_REQUIRE_AUTONOMOUS !== "0";
+const loopGateRequired = !requireAutonomousPickup;
 const dashboardDeviceToken = process.env.HIVE_E2E_DASHBOARD_TOKEN
   || process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
   || await readEnvValue(new URL("../.env.local", import.meta.url), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN");
@@ -137,6 +138,24 @@ async function main() {
     "QA verify the Queen Bee routing flow with a real worker chat.",
     "The selected delegate must return the marker exactly so the harness can verify completion.",
   ].join(" ");
+  const loop = {
+    mode: "closed",
+    goal: "Verify Queen Bee can route a real Work Board task to a real fleet chat agent and persist completion evidence.",
+    successCriteria: ["selected delegate returns the exact marker", "Work Board task completes with a loop receipt"],
+    evalGates: [{
+      id: "real-worker-chat-marker",
+      title: "real worker chat marker",
+      kind: "agent",
+      phase: "post",
+      required: loopGateRequired,
+      status: "pending",
+      verifier: "scripts/e2e-queen-bee-real-chat.mjs",
+      createdAt: Date.now(),
+    }],
+    budget: { maxAttempts: 2, maxRuntimeMs: 10 * 60 * 1000 },
+    retryPolicy: { maxAttempts: 2, onFailure: "needs-human" },
+    evidenceRequired: ["worker chat response", "Work Board completion receipt"],
+  };
   const queenBee = await dashboard("/api/queen-bee", {
     method: "POST",
     body: JSON.stringify({
@@ -145,6 +164,7 @@ async function main() {
       priority: "high",
       taskTitle: `Real Queen Bee E2E ${marker}`,
       message,
+      loop,
     }),
     timeoutMs: 45_000,
   });
@@ -161,6 +181,8 @@ async function main() {
     targetMachine: queenBee.route?.targetMachine,
     receiptStatus: queenBee.receipt?.status,
     receiptSummary: queenBee.receipt?.summary,
+    loopGateRequired,
+    loopGateCount: queenBee.task?.loop?.evalGates?.length || 0,
   };
   assert(queenBee.route?.delegation?.status === "delegated", "Queen Bee did not delegate to a live fleet agent.");
   assert(queenBee.route?.delegation?.workerClass === "qa", `Queen Bee inferred ${queenBee.route?.delegation?.workerClass || "none"}, expected qa for an explicit QA verification prompt.`);
@@ -219,18 +241,20 @@ async function main() {
   )) || selectedMachine.agents?.[0];
   assert(selectedLiveAgent, "Could not resolve selected live agent from fleet snapshot.");
 
-  const claimed = await dashboard("/api/kanban", {
-    method: "POST",
-    body: JSON.stringify({
-      action: "claim",
-      taskId,
-      assignee: selectedLiveAgent.name || selectedLiveAgent.id || queenBee.task.assignee,
-      claimer: `queen-bee-real-e2e:${runId}`,
-      runtime: selectedLiveAgent.runtime || "hermes",
-      ttlMs: 10 * 60 * 1000,
-    }),
-    timeoutMs: 30_000,
-  });
+  const claimed = summary.automaticPickup?.observed && summary.automaticPickup?.status === "working"
+    ? { task: autoResult.task, run: null, claimedByAutonomousPickup: true }
+    : await dashboard("/api/kanban", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "claim",
+        taskId,
+        assignee: selectedLiveAgent.name || selectedLiveAgent.id || queenBee.task.assignee,
+        claimer: `queen-bee-real-e2e:${runId}`,
+        runtime: selectedLiveAgent.runtime || "hermes",
+        ttlMs: 10 * 60 * 1000,
+      }),
+      timeoutMs: 30_000,
+    });
   assert(claimed.task?.status === "working", "Claim did not move task to working.");
 
   const collectorUrl = (selectedMachine.device?.collectorUrl || queenBee.route?.targetMachine?.collectorUrl || "").replace(/\/+$/, "");
@@ -282,10 +306,23 @@ async function main() {
         selectedMachine: selectedMachine.device?.name || selectedMachine.key,
         automaticPickupObserved: summary.automaticPickup?.observed === true,
       },
+      loopReceipts: [{
+        gateId: "real-worker-chat-marker",
+        status: "passed",
+        summary: `Real worker chat returned marker ${marker}.`,
+        evidence: [chatText],
+        verifier: selectedLiveAgent.name || selectedLiveAgent.id || "real fleet agent",
+        metadata: {
+          runId,
+          workerChatHost: chat.host,
+          selectedMachine: selectedMachine.device?.name || selectedMachine.key,
+        },
+      }],
     }),
     timeoutMs: 30_000,
   });
   assert(completed.task?.status === "done", "Complete did not move task to done.");
+  assert(completed.task?.loop?.evalGates?.some((gate) => gate.id === "real-worker-chat-marker" && gate.status === "passed"), "Loop gate did not record the passing worker-chat receipt.");
   summary.completion = {
     status: completed.task.status,
     completedAt: completed.task.completedAt,

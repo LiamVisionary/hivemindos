@@ -1,174 +1,27 @@
 {
-  "created_at": "2026-06-07T14:54:21.304043+00:00",
+  "created_at": "2026-06-09T17:23:40.780834+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
-      "source_repo": "kepano/obsidian-skills",
-      "source_path": "skills/obsidian-markdown",
-      "target_path": "packaged-skills/auto-install/obsidian-markdown",
-      "reuse_type": "copied_code",
-      "note": "Obsidian Flavored Markdown shared skill and references"
-    },
-    {
-      "source_repo": "kepano/obsidian-skills",
-      "source_path": "skills/obsidian-bases",
-      "target_path": "packaged-skills/auto-install/obsidian-bases",
-      "reuse_type": "copied_code",
-      "note": "Obsidian Bases shared skill and function reference"
-    },
-    {
-      "source_repo": "kepano/obsidian-skills",
-      "source_path": "skills/json-canvas",
-      "target_path": "packaged-skills/auto-install/json-canvas",
-      "reuse_type": "copied_code",
-      "note": "JSON Canvas shared skill and examples"
-    },
-    {
-      "source_repo": "kepano/obsidian-skills",
-      "source_path": "skills/defuddle",
-      "target_path": "packaged-skills/auto-install/defuddle",
-      "reuse_type": "copied_code",
-      "note": "Defuddle markdown extraction shared skill"
+      "source_repo": "hivemind-os",
+      "source_path": "src/features/fleet/fleet-identity.ts",
+      "target_path": "src/features/dashboard/DashboardApp.tsx",
+      "reuse_type": "adapted_code",
+      "note": "reuse agentWorkspaceKey for persistent discovered-agent tombstones"
     },
     {
       "source_repo": "hivemind-os",
-      "source_path": "src/features/dashboard/views/ChatPanel.tsx",
-      "target_path": "src/features/dashboard/views/ChatPanel.tsx",
+      "source_path": "src/features/dashboard/hooks/use-dashboard-derived-state.tsx",
+      "target_path": "src/features/dashboard/hooks/use-dashboard-derived-state.tsx",
       "reuse_type": "adapted_code",
-      "note": "Extended the existing AgentProcessPanel and assistant message rendering flow for MiroShark x402 progress and result cards."
+      "note": "filter discovered agents before dedupe/display graph derivation"
     },
     {
       "source_repo": "hivemind-os",
-      "source_path": "src/lib/services/miroshark/x402-buyer.ts",
-      "target_path": "src/features/dashboard/views/chat/MiroSharkSimulationCard.tsx",
+      "source_path": "src/features/dashboard/hooks/use-wallet-files-controller.tsx",
+      "target_path": "src/features/dashboard/hooks/use-wallet-files-controller.tsx",
       "reuse_type": "adapted_code",
-      "note": "Reused the MiroShark x402 run/status/report vocabulary to parse run ids, payment state, report markdown, and upstream links in chat output."
-    },
-    {
-      "source_repo": "hivemind-os",
-      "source_path": "src/features/dashboard/views/chat/HiveChatView.module.css",
-      "target_path": "src/features/dashboard/views/chat/MiroSharkSimulationCard.module.css",
-      "reuse_type": "adapted_code",
-      "note": "Adapted the existing dark Hivemind chat panel visual language, process pulses, and responsive wrapping rules for the MiroShark card styling."
-    },
-    {
-      "source_repo": "hivemind-os",
-      "source_path": "src/features/dashboard/views/chat/AgentSettingsModal.tsx",
-      "target_path": "src/features/dashboard/views/chat/AgentSettingsModal.tsx",
-      "reuse_type": "adapted_code",
-      "note": "Adapted the existing UsePod virtual runtime-card pattern for the Bankr LLM runtime card."
-    },
-    {
-      "source_repo": "hivemind-os",
-      "source_path": "src/lib/services/runtime-adapters/openai-compatible.ts",
-      "target_path": "src/lib/services/runtime-adapters/openai-compatible.ts",
-      "reuse_type": "adapted_code",
-      "note": "Adapted the OpenAI-compatible provider model discovery path for Bankr LLM model listing."
-    },
-    {
-      "source_repo": "hivemind-os",
-      "source_path": "src/app/api/chat/agent-runtime/route.ts",
-      "target_path": "src/app/api/chat/agent-runtime/route.ts",
-      "reuse_type": "adapted_code",
-      "note": "Adapted the existing OpenAI-compatible provider request flow with a provider-specific Bankr LLM header helper."
-    },
-    {
-      "source_repo": "hivemind-os",
-      "source_path": "src/app/api/chat/agent-runtime/route.ts",
-      "target_path": "src/app/api/chat/agent-runtime/route.ts",
-      "reuse_type": "adapted_code",
-      "note": "Adapted the existing wallet x402 SSE/session event flow into a native MiroShark chat execution branch."
-    },
-    {
-      "source_repo": "hivemind-os",
-      "source_path": "src/lib/services/miroshark/x402-buyer.ts",
-      "target_path": "src/lib/services/miroshark/x402-chat-run.ts",
-      "reuse_type": "adapted_code",
-      "note": "Reused the validated MiroShark x402 run/status/report executor shape for natural chat parsing, polling, and embedded card payloads."
-    },
-    {
-      "source_repo": "/Users/liam/Downloads/HivemindOS-19.zip",
-      "source_path": "nextjs-polymarket-modal/src/components/poly-modal",
-      "target_path": "src/features/dashboard/views/chat/poly-market-modal",
-      "reuse_type": "adapted_code",
-      "note": "Adapted the user-supplied Polymarket modal draft to accept normalized live MiroShark result data instead of static preview data."
-    },
-    {
-      "source_repo": "hivemind-os",
-      "source_path": "src/lib/services/chat/adaptive-openrouter-models.ts",
-      "target_path": "src/lib/services/chat/adaptive-model-router.ts",
-      "reuse_type": "adapted_code",
-      "note": "Generalized the existing Adaptive OpenRouter use-case detection, free-model preference, cache pattern, and fallback inventory behavior into provider-agnostic adaptive routing."
-    },
-    {
-      "source_repo": "hivemind-os",
-      "source_path": "src/app/api/chat/agent-runtime/route.ts",
-      "target_path": "src/app/api/chat/agent-runtime/route.ts",
-      "reuse_type": "adapted_code",
-      "note": "Extended the existing OpenAI-compatible adaptive retry loop to accept resolved provider route candidates across Adaptive provider plans."
-    },
-    {
-      "source_repo": "hivemind-os",
-      "source_path": "src/features/dashboard/views/chat/AgentSettingsModal.tsx",
-      "target_path": "src/features/dashboard/views/chat/AdaptiveProviderSettings.tsx",
-      "reuse_type": "adapted_code",
-      "note": "Extracted the existing provider tile and toggle-row settings patterns into a focused Adaptive provider settings component."
-    },
-    {
-      "source_repo": "/Users/liam/Downloads/bankr-symbol-full-color-rgb.svg",
-      "source_path": "bankr-symbol-full-color-rgb.svg",
-      "target_path": "public/icons/runtimes/bankr.svg",
-      "reuse_type": "asset_copied",
-      "note": "Copied the official user-supplied Bankr symbol into the runtime icon asset folder for the Bankr LLM card and provider tile."
-    },
-    {
-      "source_repo": "mvanhorn/last30days-skill",
-      "source_path": "skills/last30days/scripts",
-      "target_path": "packaged-skills/auto-install/hive-pulse/scripts",
-      "reuse_type": "copied_code",
-      "note": "pinned bundled Hive Pulse research engine"
-    },
-    {
-      "source_repo": "mvanhorn/last30days-skill",
-      "source_path": "skills/last30days/references",
-      "target_path": "packaged-skills/auto-install/hive-pulse/references",
-      "reuse_type": "copied_code",
-      "note": "upstream references for saved HTML briefs"
-    },
-    {
-      "source_repo": "mvanhorn/last30days-skill",
-      "source_path": "LICENSE",
-      "target_path": "packaged-skills/auto-install/hive-pulse/LICENSE",
-      "reuse_type": "copied_code",
-      "note": "MIT license attribution"
-    },
-    {
-      "source_repo": "multica-ai/multica",
-      "source_path": "server/internal/service/task.go",
-      "target_path": "src/lib/services/kanban/local-kanban-store.ts",
-      "reuse_type": "translated_code",
-      "note": "failure classification retry cap and exhausted failure transition"
-    },
-    {
-      "source_repo": "multica-ai/multica",
-      "source_path": "server/migrations/055_task_lease_and_retry.up.sql",
-      "target_path": "src/lib/types/kanban.ts",
-      "reuse_type": "translated_code",
-      "note": "attempt maxAttempts and failure reason task-run fields"
-    },
-    {
-      "source_repo": "multica-ai/multica",
-      "source_path": "server/internal/service/issue.go",
-      "target_path": "src/lib/services/kanban/local-kanban-store.ts",
-      "reuse_type": "adapted_code",
-      "note": "eligible queue admission and claim-next behavior"
-    },
-    {
-      "source_repo": "hivemind-os",
-      "source_path": "scripts/test-kanban-workflow.mjs",
-      "target_path": "scripts/test-kanban-workflow.mjs",
-      "reuse_type": "test_adapted",
-      "note": "claim-next retry and retry-exhaustion workflow smoke"
+      "note": "extend delete path to suppress discovered cache and snapshots"
     }
   ]
 }

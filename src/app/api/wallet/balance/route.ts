@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWalletBalance } from "@/lib/services/wallet/chain-wallet";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({})) as {

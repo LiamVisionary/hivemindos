@@ -35,7 +35,7 @@ Hivemind Sync does not replace Obsidian Sync, iCloud Drive, Dropbox, Git, or ano
 - HivemindOS-managed Syncthing
 - manual repair only
 
-When HivemindOS manages it, the app pairs Syncthing through trusted collectors and lets Syncthing do the continuous file replication.
+When HivemindOS manages it, the app pairs Syncthing through trusted collectors and lets Syncthing do the continuous file replication. Fleet sync health checks automatically use the same collector bridge to self-heal common Syncthing drift before showing a warning: restart an unreachable local API when possible, resume paused vault folders or devices, restore the shared vault folder membership, recreate the `.stfolder` sentinel, rescan the vault, and report before/after health. The Fleet roster only asks for attention when automatic repair fails.
 
 ## Shared Env
 
@@ -98,6 +98,6 @@ Do not use handoff transfers for secrets. Use shared env helpers for keys.
 | Handoff transfers | `.hivemindos-transfers/` inside the synced vault. |
 | Shared env push/remove | Collector `/env` endpoint on ready peers. |
 | Shared env pull | Tailscale SSH export from a trusted peer. |
-| Vault repair | Manual rsync repair over Tailscale SSH. |
+| Vault repair | Syncthing self-heal through trusted collectors; manual rsync over Tailscale SSH remains the fallback for non-Syncthing owners. |
 
 The common rule is simple: keep the collector private, keep the vault sync owner singular, and keep plaintext secrets out of the vault.

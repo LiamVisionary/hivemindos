@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,33 @@ from typing import Any
 
 DEFAULT_MARKDOWN = "ASSIMILATION_LOG.md"
 DEFAULT_JSONL = "ASSIMILATION_LOG.jsonl"
+MAX_TEXT_FIELD = 500
+MAX_NOTE_CHARS = 800
+
+DECISION_ALIASES = {
+    "selected_donor": "selected-donor",
+    "donor": "selected-donor",
+    "donor-only": "selected-donor",
+    "inspect": "inspected",
+    "inspecting": "inspected",
+    "reviewed": "inspected",
+    "audited": "inspected",
+    "adapted": "adapted_code",
+    "not_assimilated": "not-assimilated",
+    "reference_only": "reference-only",
+}
+
+
+def compact_text(value: Any, limit: int = MAX_TEXT_FIELD) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)].rstrip() + "..."
+
+
+def normalize_decision(value: str) -> str:
+    normalized = value.strip()
+    return DECISION_ALIASES.get(normalized, normalized)
 
 
 def split_candidate(value: str) -> dict[str, str]:
@@ -19,17 +47,36 @@ def split_candidate(value: str) -> dict[str, str]:
     if len(parts) == 1:
         return {"repo": parts[0].strip(), "decision": "", "reason": "", "path": ""}
     if len(parts) == 2:
-        return {"repo": parts[0].strip(), "decision": parts[1].strip(), "reason": "", "path": ""}
+        return {"repo": parts[0].strip(), "decision": normalize_decision(parts[1]), "reason": "", "path": ""}
     if len(parts) == 3:
-        return {"repo": parts[0].strip(), "decision": parts[1].strip(), "reason": parts[2].strip(), "path": ""}
-    return {"repo": parts[0].strip(), "decision": parts[1].strip(), "reason": parts[2].strip(), "path": parts[3].strip()}
+        return {
+            "repo": parts[0].strip(),
+            "decision": normalize_decision(parts[1]),
+            "reason": compact_text(parts[2]),
+            "path": "",
+        }
+    return {
+        "repo": parts[0].strip(),
+        "decision": normalize_decision(parts[1]),
+        "reason": compact_text(parts[2]),
+        "path": parts[3].strip(),
+    }
 
 
 def parse_json_payload(value: str | None) -> Any:
     if not value:
         return None
-    path = Path(value)
-    raw = path.read_text(encoding="utf-8") if path.exists() else value
+    stripped = value.strip()
+    if stripped.startswith(("{", "[")):
+        return json.loads(stripped)
+    if "\n" not in value and len(value) < os.pathconf("/", "PC_PATH_MAX"):
+        try:
+            path = Path(value)
+            if path.exists():
+                return json.loads(path.read_text(encoding="utf-8"))
+        except OSError:
+            pass
+    raw = value
     return json.loads(raw)
 
 
@@ -42,8 +89,27 @@ def compact_candidate(record: dict[str, Any]) -> dict[str, Any]:
         "license": record.get("license") or "",
         "query": record.get("query") or "",
         "matched_queries": record.get("matched_queries") or [],
-        "description": record.get("description") or "",
+        "score": record.get("score") or record.get("fit_score"),
+        "decision": normalize_decision(str(record.get("decision") or "")),
+        "reason": compact_text(record.get("reason")),
+        "path": record.get("path") or "",
+        "description": compact_text(record.get("description") or record.get("snippet") or ""),
     }
+
+
+def compact_payload(payload: Any) -> Any:
+    if not isinstance(payload, dict):
+        return None
+    compacted = {
+        key: value
+        for key, value in payload.items()
+        if key not in {"candidates", "records", "items", "results"}
+    }
+    if "result_count" not in compacted:
+        candidates = payload.get("candidates")
+        if isinstance(candidates, list):
+            compacted["result_count"] = len(candidates)
+    return compacted
 
 
 def event_from_args(args: argparse.Namespace) -> dict[str, Any]:
@@ -67,8 +133,8 @@ def event_from_args(args: argparse.Namespace) -> dict[str, Any]:
         "assimilated": args.assimilated,
         "not_assimilated": args.not_assimilated,
         "verification": args.verification,
-        "notes": args.note,
-        "payload": payload if isinstance(payload, dict) else None,
+        "notes": [compact_text(note, MAX_NOTE_CHARS) for note in args.note],
+        "payload": compact_payload(payload),
         "candidates": candidates,
     }
 

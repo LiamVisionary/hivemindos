@@ -61,6 +61,7 @@ export interface AgentWalletBalance {
   tokenSymbol: string;
   tokenBalance: number;
   nativeBalance: number;
+  totalValueUsd?: number | null;
   tokens?: AgentWalletTokenBalance[];
   fetchedAt: number;
 }
@@ -74,6 +75,8 @@ export interface AgentWalletTokenBalance {
   valueUsd?: number | null;
   priceChange24hPct?: number | null;
   isNative?: boolean;
+  tokenAddress?: string;
+  iconUrl?: string | null;
 }
 
 export interface AgentWalletVaultInfo {
@@ -109,6 +112,9 @@ export interface HoneyLedgerBalance {
   lifetimeHoney: number;
   availableHoney: number;
   hiveBalance: number;
+  managedHoneyBalance?: number;
+  managedHoneyLifetimeCredits?: number;
+  managedHoneySpent?: number;
   updatedAt: string;
 }
 

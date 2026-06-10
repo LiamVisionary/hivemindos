@@ -1,18 +1,14 @@
-import vaultStyles from "@/app/vault.module.css";
 import type { FleetAgent, FleetMachine } from "@/components/fleet";
-import { createStyleClass } from "@/features/dashboard/style-classes";
+import { DashboardHiveLoader } from "@/features/dashboard/DashboardHiveLoader";
 import type { AgentSnapshot, AppVersion, BrainGraphNode, DiscoveredMachine, MachineGroup } from "@/features/dashboard/dashboard-types";
 import {
   isLocalLinkDuplicateOfSelf,
   isLoopbackCollector,
-  machineHivemindBase,
+  machineExactIdentity,
   machineIdentityFromParts,
-  machinePhysicalBase,
   shouldPreserveMissingDiscoveredMachine,
 } from "@/features/fleet/fleet-identity";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
-
-const vaultClass = createStyleClass(vaultStyles);
 
 const REPO_CLONE_URL = "https://github.com/LiamVisionary/hivemindos.git";
 const QUIET_SNAPSHOT_HOLD_MS = 15 * 60 * 1000;
@@ -308,10 +304,10 @@ export function discoveredMachineScore(machine: DiscoveredMachine) {
 }
 
 function machineBaseCandidates(machine: DiscoveredMachine) {
-  return [
-    machineHivemindBase(machine.device.name, machine.device.dnsName),
-    machinePhysicalBase(machine.device.name, machine.device.dnsName),
-  ].filter((value, index, all) => value && all.indexOf(value) === index);
+  // Exact identity only (keeps tailscale's `-N` suffix): a `-1` node is a
+  // different physical machine with the same hostname, not a duplicate.
+  const identity = machineExactIdentity(machine.device.name, machine.device.dnsName);
+  return identity ? [identity] : [];
 }
 
 function hasFreshReadyDuplicate(machine: DiscoveredMachine, readyMachineBases: Set<string>) {
@@ -491,42 +487,7 @@ export function BrainGraphLoader({
   inline?: boolean;
   title?: string;
 }) {
-  return (
-    <div className={vaultClass("brainLoader", compact && "compact", inline && "inline")} role="status" aria-live="polite">
-      <svg className={vaultClass("brainLoaderComb")} viewBox="8 10 112 108" aria-hidden="true">
-        <g className={vaultClass("brainLoaderCells")}>
-          {BRAIN_LOADER_COORDS.map((coord, index) => {
-            const center = brainLoaderCenter(coord);
-            return (
-              <polygon
-                key={`${coord.q},${coord.r}`}
-                points={brainNodePoints(center.x, center.y, BRAIN_LOADER_RADIUS)}
-                style={{ animationDelay: `${index * 90}ms` }}
-              />
-            );
-          })}
-        </g>
-        <g className={vaultClass("brainLoaderEdges")}>
-          {BRAIN_LOADER_EDGES.map((edge) => (
-            <line
-              key={edge.key}
-              x1={formatBrainSvgNumber(edge.a.x)}
-              y1={formatBrainSvgNumber(edge.a.y)}
-              x2={formatBrainSvgNumber(edge.b.x)}
-              y2={formatBrainSvgNumber(edge.b.y)}
-            />
-          ))}
-        </g>
-      </svg>
-      <div>
-        <strong>{title}</strong>
-        <span>{detail}</span>
-      </div>
-      <div className={vaultClass("brainLoadingRail")} aria-hidden="true">
-        <span />
-      </div>
-    </div>
-  );
+  return <DashboardHiveLoader compact={compact} detail={detail} inline={inline} title={title} />;
 }
 
 export type BrainHexCoord = { q: number; r: number };

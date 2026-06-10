@@ -39,7 +39,7 @@ function runtimeFolder(runtime?: string) {
   if (value === "aeon") return "AEON";
   if (value === "hermes") return "Hermes";
   if (value === "openclaw") return "OpenClaw";
-  if (value === "openai-compatible") return "Local OpenAI";
+  if (value === "openai-compatible" || value === "hivemind-os") return "HivemindOS";
   return slug(value, "Agent");
 }
 

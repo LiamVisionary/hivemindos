@@ -1,0 +1,18 @@
+{
+  "upstreamName": "threejs-loaders",
+  "upstreamSlug": "threejs-loaders",
+  "hiveSlug": "threejs-loaders",
+  "sourceLabel": "cloudai-x",
+  "sourceUrl": "https://www.ui-skills.com/skills/cloudai-x/threejs-loaders",
+  "repository": "https://github.com/cloudai-x/threejs-skills",
+  "installCommand": "npx skills add https://github.com/cloudai-x/threejs-skills --skill threejs-loaders",
+  "importedAt": "2026-06-08T15:01:32.531Z",
+  "refreshedAt": "2026-06-08T15:01:32.531Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/cloudai-x/threejs-loaders",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Three.js asset loading - GLTF, textures, images, models, async patterns. Use when loading 3D models, textures, HDR environments, or managing loading progress."
+}

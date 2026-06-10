@@ -184,6 +184,17 @@ export default defineAgent({
 });
 
 loadEnvFiles();
+// LiveKit connects over the internet, so the worker stays off in the
+// local-first default and requires premium plus an explicit opt-in.
+const flagSet = (key) => /^(1|true|yes|on)$/i.test(process.env[key] || "");
+const missingOptIn = [
+  flagSet("HIVEMINDOS_PREMIUM") ? "" : "HIVEMINDOS_PREMIUM=1",
+  flagSet("HIVEMINDOS_LIVEKIT_ENABLED") ? "" : "HIVEMINDOS_LIVEKIT_ENABLED=1",
+].filter(Boolean);
+if (missingOptIn.length) {
+  console.log("[hivemindos-call-agent] LiveKit voice worker disabled (local-first default). BYOK Realtime and Local TTS calls still work. To enable HivemindOS Cloud Agent Calls, set HIVEMINDOS_PREMIUM=1 and HIVEMINDOS_LIVEKIT_ENABLED=1 in ~/.hivemindos/.env.");
+  process.exit(0);
+}
 const missing = missingWorkerEnv();
 if (missing.length) {
   console.warn(`[hivemindos-call-agent] Voice worker not started; missing ${missing.join(", ")}. Add them to ~/.hivemindos/.env, ~/.hivemindos/claw/voice.env, or .env.local, then rerun pnpm tauri:dev.`);

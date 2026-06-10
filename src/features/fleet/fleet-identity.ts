@@ -1,5 +1,7 @@
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 
+export const SUPPRESSED_DISCOVERED_AGENTS_STORAGE_KEY = "hivemindos.suppressedDiscoveredAgents.v1";
+
 type FleetMachineIdentity = {
   self?: boolean;
   name?: string;
@@ -58,6 +60,22 @@ export function isVisibleFleetMachine(machine: Pick<FleetMachineIdentity, "name"
   return isHivemindMachineName(machine.name, machine.dnsName) || isMacMachineOs(machine.os);
 }
 
+/**
+ * Exact machine identity from a tailnet name: the normalized dns label (or
+ * name) with only the `hivemindos` prefix and `.local` suffix stripped. The
+ * same physical machine's system node ("liams-macbook-pro") and link node
+ * ("hivemindos-liams-macbook-pro") map to the same identity, while a SECOND
+ * machine that shares the hostname keeps its tailscale `-1` suffix and stays
+ * distinct. Never strip `-N` here: two of Liam's MacBooks share the
+ * "Liams-MacBook-Pro" hostname, and stripping the suffix merged them into one
+ * machine (hiding one and cross-attributing its hosted apps).
+ */
+export function machineExactIdentity(name?: string, dnsName?: string) {
+  const dnsLabel = dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
+  const value = normalizeMachineName(dnsLabel) || normalizeMachineName(name);
+  return value.replace(/^hivemindos/, "").replace(/local$/, "");
+}
+
 export function machineHivemindBase(name?: string, dnsName?: string, os?: string) {
   const rawDnsLabel = dnsName?.replace(/\.$/, "").split(".")[0]?.toLowerCase() ?? "";
   const rawName = name?.toLowerCase() ?? "";
@@ -74,26 +92,15 @@ export function machinePhysicalBase(name?: string, dnsName?: string) {
   return value.replace(/^hivemindos/, "").replace(/local\d*$/, "").replace(/\d+$/, "");
 }
 
-function macNumberedHostnameBase(name?: string, dnsName?: string, os?: string) {
-  if (!isMacMachineOs(os)) return "";
-  const rawDnsLabel = dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
-  const rawValue = rawDnsLabel || name || "";
-  const withoutTailnetSuffix = rawValue.toLowerCase().replace(/-\d+$/, "");
-  const normalizedValue = normalizeMachineName(rawValue);
-  const normalizedBase = normalizeMachineName(withoutTailnetSuffix);
-  return normalizedBase && normalizedBase !== normalizedValue ? normalizedBase : "";
-}
-
 export function isLocalLinkDuplicateOfSelf(self: FleetMachineIdentity | undefined, device: FleetMachineIdentity) {
   if (!self || device.self) return false;
-  const deviceBase = machineHivemindBase(device.name, device.dnsName, device.os);
-  const selfBase = machineHivemindBase(self.name, self.dnsName, self.os);
-  if (selfBase && deviceBase && selfBase === deviceBase) return true;
-  const physicalSelfBase = machinePhysicalBase(self.name, self.dnsName);
-  const physicalDeviceBase = machinePhysicalBase(device.name, device.dnsName);
-  if (physicalSelfBase && physicalDeviceBase && physicalSelfBase === physicalDeviceBase) return true;
-  if (physicalSelfBase && deviceBase && physicalSelfBase === deviceBase) return true;
-  return Boolean(selfBase && physicalDeviceBase && selfBase === physicalDeviceBase);
+  // Exact identity only. A name-base match (with `-N` stripped) is NOT proof
+  // of being this machine: a second computer sharing the hostname differs
+  // only by that suffix.
+  if (Boolean(self.ip && device.ip && self.ip === device.ip)) return true;
+  const selfIdentity = machineExactIdentity(self.name, self.dnsName);
+  const deviceIdentity = machineExactIdentity(device.name, device.dnsName);
+  return Boolean(selfIdentity && deviceIdentity && selfIdentity === deviceIdentity);
 }
 
 export function displayMachineName(
@@ -133,18 +140,18 @@ export function machineIdentityFromParts({
   dnsName,
   collectorUrl,
   ip,
-  os,
 }: FleetMachineIdentity) {
   const dnsLabel = dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
   const normalizedDnsName = normalizeMachineName(dnsLabel);
   const normalizedName = normalizeMachineName(name) || normalizedDnsName;
-  if (normalizedName.startsWith("hivemindos")) {
-    return machineHivemindBase(name, dnsName, os) || normalizedDnsName || normalizedName;
+  if (normalizedName.startsWith("hivemindos") || normalizedDnsName.startsWith("hivemindos")) {
+    return machineExactIdentity(name, dnsName) || normalizedDnsName || normalizedName;
   }
   if (self) return "self";
-  const macBase = macNumberedHostnameBase(name, dnsName, os);
-  if (macBase) return macBase;
-  return normalizedName || collectorKey(collectorUrl) || ip || "";
+  // Exact identity, no `-N` collapsing: macOS renames leave offline ghosts
+  // (hidden elsewhere by online/agent filters), but a live `-1` node is a
+  // different physical machine that must keep its own identity.
+  return machineExactIdentity(name, dnsName) || normalizedName || collectorKey(collectorUrl) || ip || "";
 }
 
 export function normalizeAgentPath(path?: string) {
@@ -198,6 +205,52 @@ export function agentWorkspaceKey(agent: AgentProfile) {
   const telemetry = collectorKey(agent.telemetryUrl);
   if (telemetry) return `${agent.runtime}:telemetry:${telemetry}:${agent.agentId || agent.name}${roleScope}`;
   return `${agent.runtime}:id:${agent.id}${roleScope}`;
+}
+
+export function agentSuppressionKeys(agent: AgentProfile) {
+  return [
+    agent.id ? `id:${agent.id}` : "",
+    `workspace:${agentWorkspaceKey(agent)}`,
+  ].filter(Boolean);
+}
+
+export function agentMatchesSuppression(agent: AgentProfile, suppressedKeys: ReadonlySet<string>) {
+  return agentSuppressionKeys(agent).some((key) => suppressedKeys.has(key));
+}
+
+/**
+ * Tombstones to record when removing an agent. Duplicate roster entries can
+ * share the workspace key (same runtime/collector/data dir), so only keys that
+ * no surviving saved profile resolves to are recorded — otherwise deleting a
+ * duplicate silently hides the agent the user kept.
+ */
+export function suppressionKeysForRemovedAgent(
+  agent: AgentProfile | null | undefined,
+  agentId: string,
+  survivingAgents: AgentProfile[],
+) {
+  const keys = agent ? agentSuppressionKeys(agent) : [`id:${agentId}`];
+  return keys.filter((key) => !survivingAgents.some((candidate) => agentSuppressionKeys(candidate).includes(key)));
+}
+
+/**
+ * A deliberate re-add must win over an earlier removal: a new agent can share
+ * a removed agent's workspace tombstone (e.g. the name-independent canonical
+ * ~/.hermes first-agent key), which would silently hide it from the fleet.
+ * Returns the suppression set without the colliding keys, or null when the
+ * agent collides with nothing.
+ */
+export function withoutAgentSuppression(suppressedKeys: ReadonlySet<string>, agent: AgentProfile) {
+  const collidingKeys = agentSuppressionKeys(agent).filter((key) => suppressedKeys.has(key));
+  if (collidingKeys.length === 0) return null;
+  const next = new Set(suppressedKeys);
+  collidingKeys.forEach((key) => next.delete(key));
+  return next;
+}
+
+export function filterSuppressedAgents<T extends AgentProfile>(agents: T[], suppressedKeys: ReadonlySet<string>) {
+  if (suppressedKeys.size === 0) return agents;
+  return agents.filter((agent) => !agentMatchesSuppression(agent, suppressedKeys));
 }
 
 export function collectorRuntimeKey(agent: AgentProfile) {

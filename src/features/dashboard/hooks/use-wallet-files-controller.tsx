@@ -6,9 +6,20 @@ import { nativeRuntimeFileRequest } from "@/lib/native/runtime-files";
 import { readNativeRuntimeUsage } from "@/lib/native/runtime-usage";
 import { VEIL_CASH_DEFAULT_X402_URL } from "@/lib/config/veil-cash";
 import { assetSpendCapFor } from "@/lib/utils/agent-wallet";
+import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
+import { agentMatchesSuppression, suppressionKeysForRemovedAgent, SUPPRESSED_DISCOVERED_AGENTS_STORAGE_KEY } from "@/features/fleet/fleet-identity";
+
+const AGENT_PROFILES_STORAGE_KEY = "hivemindos.agentProfiles.v1";
+
+type DeleteAgentOptions = {
+  aeonDeleteDepth?: "local" | "github" | "both";
+  onProgress?: (progress: { step: "local" | "github"; status: "idle" | "working" | "done" | "failed"; message?: string }) => void;
+  machine?: { collectorUrl?: string };
+  fleetAgent?: { id?: string; name?: string };
+};
 
 export function useWalletFilesController(props: any) {
-  const { buildAgentPaymentPrompt, createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, displayAgents, duplicateAgentDraft, agents, honeyLedgerEnabled, normalizeMoney, openAgentCreationModal, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, selectedAgent, selectedAgentId, setAgents, setDuplicateAgentDraft, setHoneyLedgerEnabled, setHoneyTreasury, setMaintenanceBusy, setMaintenanceMessage, setMaintenanceReport, setMessagesByAgent, setMoneyClawLoadingEnvName, setMoneyClawStatusByEnvName, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setRuntimeFileRoots, setRuntimeFileStatus, setRuntimeFiles, setRuntimeUsage, setRuntimeUsageLoading, setSelectedAgentId, setSharedVault, setWalletActionsByAgent, setWalletVaultBackupBusy, setWalletVaultBackupMessage, setWalletVaultBackupStatus, setWalletsByAgent, sharedVault, updateAgentProfile, walletActionsByAgent, walletsByAgent } = props;
+  const { buildAgentPaymentPrompt, createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, displayAgents, duplicateAgentDraft, agents, honeyLedgerEnabled, normalizeMoney, onAgentAdded, openAgentCreationModal, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, selectedAgent, selectedAgentId, setAgents, setDiscoveredMachines, setDuplicateAgentDraft, setFleetSnapshots, setHoneyLedgerEnabled, setHoneyTreasury, setMaintenanceBusy, setMaintenanceMessage, setMaintenanceReport, setMessagesByAgent, setMoneyClawLoadingEnvName, setMoneyClawStatusByEnvName, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setRuntimeFileRoots, setRuntimeFileStatus, setRuntimeFiles, setRuntimeUsage, setRuntimeUsageLoading, setSelectedAgentId, setSharedVault, setSuppressedDiscoveredAgentKeys, setWalletActionsByAgent, setWalletVaultBackupBusy, setWalletVaultBackupMessage, setWalletVaultBackupStatus, setWalletsByAgent, sharedVault, updateAgentProfile, walletActionsByAgent, walletsByAgent } = props;
   const deleteFetchTimeoutMs = 20_000;
   const duplicateFetchTimeoutMs = 180_000;
   function updateSharedVault(patch: Partial<SharedVaultConfig>) {
@@ -39,6 +50,39 @@ export function useWalletFilesController(props: any) {
 
   async function copyPaymentPrompt(config: AgentWalletConfig) {
     await navigator.clipboard?.writeText(buildAgentPaymentPrompt(config)).catch(() => undefined);
+  }
+
+  async function exportWalletSecrets(input: { agentIds: string[]; label: string; filename?: string }) {
+    const agentIds = Array.from(new Set(input.agentIds.map((agentId) => agentId.trim()).filter(Boolean)));
+    if (!agentIds.length) return { ok: false, error: "No local wallet was selected for export." };
+    const confirmation = window.prompt("Type EXPORT_WALLET_SECRET to download this wallet secret export.");
+    if (confirmation !== "EXPORT_WALLET_SECRET") return { ok: false, error: "Wallet secret export cancelled." };
+
+    const response = await fetch("/api/wallet/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentIds, confirmation }),
+    }).catch(() => null);
+    const data = await response?.json().catch(() => null) as {
+      ok?: boolean;
+      entries?: Array<{ agentId: string; address: string; network: string; kind: "private-key" | "recovery-phrase"; secret: string }>;
+      error?: string;
+    } | null;
+    if (!response?.ok || !data?.ok || !data.entries?.length) {
+      return { ok: false, error: data?.error ?? "Could not export wallet secrets." };
+    }
+
+    const dedupedEntries = dedupeWalletExportEntries(data.entries);
+    downloadTextFile(
+      input.filename || `${slugifyWalletExportLabel(input.label)}-wallet-secrets.txt`,
+      renderWalletSecretExport(input.label, dedupedEntries),
+    );
+    const phraseCount = dedupedEntries.filter((entry) => entry.kind === "recovery-phrase").length;
+    return {
+      ok: true,
+      exportedCount: dedupedEntries.length,
+      label: phraseCount > 0 ? "recovery phrase" : "private key",
+    };
   }
 
   async function refreshMoneyClawStatus(agentId: string) {
@@ -628,6 +672,7 @@ export function useWalletFilesController(props: any) {
     };
     setAgents((current) => [...current, enriched]);
     setSelectedAgentId(enriched.id);
+    onAgentAdded?.(enriched);
     if (duplicateAgentDraft?.copyChats) {
       copyDuplicatedChats(source.id, enriched.id);
     }
@@ -711,9 +756,34 @@ export function useWalletFilesController(props: any) {
     setDuplicateAgentDraft(null);
   }
 
-  async function deleteAgent(agentId = selectedAgent?.id, options?: { aeonDeleteDepth?: "local" | "github" | "both"; onProgress?: (progress: { step: "local" | "github"; status: "idle" | "working" | "done" | "failed"; message?: string }) => void }) {
+  async function deleteRuntimeAgentAtSource(agent: any, options?: DeleteAgentOptions) {
+    const collectorUrl = options?.machine?.collectorUrl?.trim();
+    if (!collectorUrl || !agent || agent.runtime === "aeon") return;
+    const response = await fetch("/api/agents/runtime", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        collectorUrl,
+        id: agent.id,
+        runtime: agent.runtime,
+        profile: agent.profile,
+        agentId: agent.agentId,
+        name: agent.name,
+      }),
+      signal: AbortSignal.timeout(deleteFetchTimeoutMs),
+    });
+    const data = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.error || "Could not delete the runtime agent at its source.");
+    }
+  }
+
+  async function deleteAgent(agentId = selectedAgent?.id, options?: DeleteAgentOptions) {
     if (!agentId) return;
-    const agent = displayAgents.find((item) => item.id === agentId) ?? agents.find((item) => item.id === agentId) ?? selectedAgent;
+    const agent = displayAgents.find((item) => item.id === agentId)
+      ?? agents.find((item) => item.id === agentId)
+      ?? selectedAgent
+      ?? (options?.fleetAgent?.id === agentId ? options.fleetAgent : null);
     if (agent?.runtime === "aeon" && options?.aeonDeleteDepth) {
       const staleLocalDeleteError = (message: string) => (
         /does not exist/i.test(message)
@@ -771,8 +841,30 @@ export function useWalletFilesController(props: any) {
         return { ok: false, error: message };
       }
     }
+    const suppressionKeys = suppressionKeysForRemovedAgent(
+      agent,
+      agentId,
+      agents.filter((candidate) => candidate.id !== agentId),
+    );
+    if (suppressionKeys.length > 0) {
+      const suppressedKeys = new Set(suppressionKeys);
+      setSuppressedDiscoveredAgentKeys?.((current) => {
+        const nextSuppressedKeys = new Set([...current, ...suppressionKeys]);
+        void saveDashboardStateValue(SUPPRESSED_DISCOVERED_AGENTS_STORAGE_KEY, JSON.stringify([...nextSuppressedKeys].slice(-500)));
+        return nextSuppressedKeys;
+      });
+      setDiscoveredMachines?.((current) => current.map((machine) => ({
+        ...machine,
+        agents: (machine.agents ?? []).filter((candidate) => candidate.id !== agentId && !agentMatchesSuppression(candidate, suppressedKeys)),
+        snapshots: (machine.snapshots ?? []).filter((snapshot) => snapshot.agentId !== agentId),
+      })));
+    }
+    setFleetSnapshots?.((current) => Object.fromEntries(
+      Object.entries(current).filter(([snapshotAgentId]) => snapshotAgentId !== agentId),
+    ));
     const next = agents.filter((agent) => agent.id !== agentId);
     setAgents(next);
+    void saveDashboardStateValue(AGENT_PROFILES_STORAGE_KEY, JSON.stringify(next));
     if (selectedAgentId === agentId) {
       setSelectedAgentId(next[0]?.id ?? "");
     }
@@ -781,8 +873,68 @@ export function useWalletFilesController(props: any) {
       delete nextMessages[agentId];
       return nextMessages;
     });
+    void deleteRuntimeAgentAtSource(agent, options).catch((error) => {
+      const message = error instanceof DOMException && error.name === "TimeoutError"
+        ? `Runtime agent deletion timed out after ${Math.round(deleteFetchTimeoutMs / 1000)} seconds.`
+        : error instanceof Error ? error.message : "Could not delete the runtime agent at its source.";
+      setMaintenanceMessage?.(message);
+    });
     return { ok: true };
   }
 
-  return { updateSharedVault, updateWallet, resetWalletBurnClock, copyPaymentPrompt, refreshMoneyClawStatus, saveMoneyClawKey, initializeCoreWalletRails, refreshHoneyLedger, observeHoneyUsage, refreshRuntimeUsage, refreshWalletVaultBackupStatus, runWalletVaultBackupAction, refreshMaintenanceReport, runMaintenanceAction, runtimeFileRequest, refreshRuntimeFileRoots, listRuntimeFiles, openRuntimeFile, saveRuntimeFile, returnAllHiveToHoney, claimAllHoneyToBankrHive, enableHoneyLedger, updateWalletAction, createLocalWallet, refreshWalletBalance, sendWalletUsdc, testX402Fetch, addAgentToMachine, requestDuplicateAgent, duplicateAgent, deleteAgent };
+  return { updateSharedVault, updateWallet, resetWalletBurnClock, copyPaymentPrompt, exportWalletSecrets, refreshMoneyClawStatus, saveMoneyClawKey, initializeCoreWalletRails, refreshHoneyLedger, observeHoneyUsage, refreshRuntimeUsage, refreshWalletVaultBackupStatus, runWalletVaultBackupAction, refreshMaintenanceReport, runMaintenanceAction, runtimeFileRequest, refreshRuntimeFileRoots, listRuntimeFiles, openRuntimeFile, saveRuntimeFile, returnAllHiveToHoney, claimAllHoneyToBankrHive, enableHoneyLedger, updateWalletAction, createLocalWallet, refreshWalletBalance, sendWalletUsdc, testX402Fetch, addAgentToMachine, requestDuplicateAgent, duplicateAgent, deleteAgent };
+}
+
+function dedupeWalletExportEntries(entries: Array<{ agentId: string; address: string; network: string; kind: "private-key" | "recovery-phrase"; secret: string }>) {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    const key = `${entry.kind}:${entry.secret}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function renderWalletSecretExport(
+  label: string,
+  entries: Array<{ agentId: string; address: string; network: string; kind: "private-key" | "recovery-phrase"; secret: string }>,
+) {
+  const lines = [
+    "HivemindOS wallet secret export",
+    `Wallet: ${label}`,
+    `Created: ${new Date().toISOString()}`,
+    "",
+    "Keep this file offline. Anyone with these secrets can spend from the exported wallets.",
+    "",
+  ];
+  entries.forEach((entry, index) => {
+    lines.push(
+      `## Wallet ${index + 1}`,
+      `Agent id: ${entry.agentId}`,
+      `Network: ${entry.network}`,
+      `Address: ${entry.address}`,
+      `Secret type: ${entry.kind === "recovery-phrase" ? "Recovery phrase" : "Private key"}`,
+      "Secret:",
+      entry.secret,
+      "",
+    );
+  });
+  return `${lines.join("\n")}\n`;
+}
+
+function downloadTextFile(filename: string, content: string) {
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function slugifyWalletExportLabel(label: string) {
+  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
+  return slug || "hivemindos";
 }

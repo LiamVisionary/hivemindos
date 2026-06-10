@@ -12,6 +12,139 @@ export type KanbanFailureReason =
   | "local-directory-error"
   | "manual";
 
+export type KanbanLoopMode = "closed" | "open" | "optimizer";
+
+export type KanbanEvalGatePhase = "pre" | "post";
+
+export type KanbanEvalGateKind = "command" | "test" | "artifact" | "agent" | "human" | "receipt";
+
+export type KanbanEvalGateStatus = "pending" | "passed" | "failed" | "skipped";
+
+export type KanbanEvalGate = {
+  id: string;
+  title: string;
+  kind: KanbanEvalGateKind;
+  phase: KanbanEvalGatePhase;
+  required: boolean;
+  status: KanbanEvalGateStatus;
+  command?: string;
+  verifier?: string;
+  evidence?: string[];
+  summary?: string;
+  createdAt: number;
+  updatedAt?: number;
+};
+
+export type KanbanLoopMetricDirection = "max" | "min";
+
+export type KanbanLoopFrontierStrategyKind = "argmax" | "top_k" | "epsilon_greedy" | "softmax" | "pareto_per_task";
+
+export type KanbanLoopFrontierStrategy = {
+  kind: KanbanLoopFrontierStrategyKind;
+  params?: Record<string, number>;
+  seed?: number;
+};
+
+export type KanbanLoopBenchmark = {
+  target?: string;
+  command?: string;
+  metricName?: string;
+  metricDirection: KanbanLoopMetricDirection;
+  scoreFloor?: number;
+  resourceProfile?: string;
+  instrumentation?: "sdk" | "inline" | "manual";
+  discoveredAt: number;
+  notes?: string[];
+};
+
+export type KanbanLoopExperimentStatus = "candidate" | "running" | "evaluated" | "committed" | "discarded" | "failed";
+
+export type KanbanLoopExperiment = {
+  id: string;
+  parentId?: string;
+  runId?: string;
+  title?: string;
+  hypothesis: string;
+  status: KanbanLoopExperimentStatus;
+  score?: number;
+  taskScores?: Record<string, number>;
+  taskDirections?: Record<string, KanbanLoopMetricDirection>;
+  gateReceipts?: KanbanLoopReceipt[];
+  agent?: string;
+  result?: string;
+  discardedReason?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type KanbanLoopAntiPattern = {
+  id: string;
+  title: string;
+  reason: string;
+  sourceExperimentId?: string;
+  evidence: string[];
+  createdAt: number;
+};
+
+export type KanbanLoopFrontierItem = {
+  id: string;
+  rank: number;
+  score?: number;
+  hypothesis: string;
+  status: KanbanLoopExperimentStatus;
+  parentId?: string;
+  reason?: string;
+};
+
+export type KanbanLoopObservation = {
+  totalExperiments: number;
+  committedExperiments: number;
+  discardedExperiments: number;
+  failedExperiments: number;
+  bestExperimentId?: string;
+  bestScore?: number;
+  runningBestExperimentIds: string[];
+  frontier: KanbanLoopFrontierItem[];
+  antiPatternCount: number;
+  pendingRequiredGateCount: number;
+  updatedAt: number;
+};
+
+export type KanbanLoopSpec = {
+  mode: KanbanLoopMode;
+  goal: string;
+  successCriteria: string[];
+  evalGates: KanbanEvalGate[];
+  benchmark?: KanbanLoopBenchmark;
+  frontierStrategy?: KanbanLoopFrontierStrategy;
+  experiments?: KanbanLoopExperiment[];
+  antiPatterns?: KanbanLoopAntiPattern[];
+  observation?: KanbanLoopObservation;
+  budget?: {
+    maxAttempts?: number;
+    maxRuntimeMs?: number;
+    maxTokens?: number;
+    maxCostUsd?: number;
+  };
+  retryPolicy?: {
+    maxAttempts?: number;
+    onFailure?: "retry" | "needs-human";
+  };
+  handoffRules?: string[];
+  evidenceRequired?: string[];
+};
+
+export type KanbanLoopReceipt = {
+  id: string;
+  gateId?: string;
+  status: "passed" | "failed" | "skipped";
+  summary: string;
+  evidence: string[];
+  verifier?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: number;
+};
+
 export type KanbanColumn = {
   id: KanbanStatus;
   title: string;
@@ -110,6 +243,8 @@ export type KanbanTask = {
   targetMachine?: KanbanMachineTarget | null;
   projectId?: string;
   proofs?: GitLawbProof[];
+  loop?: KanbanLoopSpec;
+  loopReceipts?: KanbanLoopReceipt[];
   agentSession?: KanbanAgentSession | null;
   claimLock?: string;
   claimExpiresAt?: number;

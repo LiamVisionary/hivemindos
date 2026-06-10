@@ -1,0 +1,18 @@
+{
+  "upstreamName": "generating-sounds-with-ai",
+  "upstreamSlug": "generating-sounds-with-ai",
+  "hiveSlug": "generating-sounds-with-ai",
+  "sourceLabel": "raphaelsalaja",
+  "sourceUrl": "https://www.ui-skills.com/skills/raphaelsalaja/generating-sounds-with-ai",
+  "repository": "https://github.com/raphaelsalaja/skill",
+  "installCommand": "npx skills add https://github.com/raphaelsalaja/skill --skill generating-sounds-with-ai",
+  "importedAt": "2026-06-08T15:01:45.315Z",
+  "refreshedAt": "2026-06-08T15:01:45.315Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/raphaelsalaja/generating-sounds-with-ai",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Audit Web Audio API code for sound synthesis best practices. Use when reviewing procedural audio, implementing UI sounds, or checking audio parameter quality. Outputs file:line findings."
+}

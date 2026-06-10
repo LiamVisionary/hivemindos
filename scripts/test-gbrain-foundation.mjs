@@ -141,7 +141,7 @@ for (const token of [
   "Archive/Processed Requests",
   "agentName: \"Queen Bee\"",
   "machineName: \"Foundation Workflows\"",
-  "runtime: \"openai-compatible\"",
+  "runtime: \"hivemind-os\"",
 ]) {
   assert.ok(vaultSeeder.includes(token), `vault foundation seeder missing ${token}`);
 }

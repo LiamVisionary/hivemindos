@@ -23,6 +23,8 @@ Exactly one sync owner should own realtime shared-brain replication:
 
 Do not stack multiple realtime sync systems on the same vault unless the user explicitly designed that setup.
 
+When HivemindOS owns Syncthing, Fleet health checks run collector-side self-heal automatically before showing a warning. The repair starts Syncthing when possible, resumes paused vault folders and devices, restores the vault folder's paired-device membership, recreates `.stfolder`, rescans the folder, and returns before/after sync health for the dashboard. Fleet only surfaces a sync warning when automatic repair fails and manual attention may be needed.
+
 ## Handoff Transfers
 
 Handoff files and artifacts live under:

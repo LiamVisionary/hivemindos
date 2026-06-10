@@ -6,7 +6,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    const result = await listRecentDirectories(request.nextUrl.searchParams.get("vaultPath") ?? undefined);
+    const result = await listRecentDirectories({
+      vaultPath: request.nextUrl.searchParams.get("vaultPath") ?? undefined,
+      kanbanFolder: request.nextUrl.searchParams.get("kanbanFolder") ?? undefined,
+    });
     return Response.json({ ok: true, ...result });
   } catch (error) {
     return Response.json({

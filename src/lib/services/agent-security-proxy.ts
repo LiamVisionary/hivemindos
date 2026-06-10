@@ -144,6 +144,17 @@ function redactSecrets(text: string): { text: string; redacted: string[] } {
   return { text: result, redacted };
 }
 
+/**
+ * Redaction-only pass for content that is persisted to shared stores
+ * (vault notes, shared-brain memory). Applies the same SECRET_PATTERNS as the
+ * output proxy without the block-verdict policy checks.
+ */
+export function redactSecretText(text: string): { text: string; redactedLabels: string[] } {
+  if (!text || typeof text !== 'string') return { text: '', redactedLabels: [] };
+  const { text: redactedText, redacted } = redactSecrets(normalizeText(text));
+  return { text: redactedText, redactedLabels: redacted };
+}
+
 // ── Input Proxy ──────────────────────────────────────────────────────────────
 
 /**

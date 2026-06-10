@@ -1,0 +1,18 @@
+{
+  "upstreamName": "bencium-innovative-ux-designer",
+  "upstreamSlug": "bencium-innovative-ux-designer",
+  "hiveSlug": "bencium-innovative-ux-designer",
+  "sourceLabel": "bencium",
+  "sourceUrl": "https://www.ui-skills.com/skills/bencium/bencium-innovative-ux-designer",
+  "repository": "https://github.com/bencium/bencium-marketplace",
+  "installCommand": "npx skills add https://github.com/bencium/bencium-marketplace --skill bencium-innovative-ux-designer",
+  "importedAt": "2026-06-08T15:01:30.400Z",
+  "refreshedAt": "2026-06-08T15:01:30.400Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/bencium/bencium-innovative-ux-designer",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, or applications. Generates creative, polished code that avoids generic AI aesthetics."
+}

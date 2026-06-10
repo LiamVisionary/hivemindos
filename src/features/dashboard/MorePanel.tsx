@@ -1,11 +1,11 @@
-import { Activity, AppWindow, Bell, Bot, FolderOpen, PhoneCall, PlugZap, Search, ShieldCheck, Sparkles, Wrench } from "lucide-react";
+import { Activity, AppWindow, Bell, Bot, FolderOpen, MessageSquare, PhoneCall, PlugZap, Search, ShieldCheck, Sparkles, Wrench } from "lucide-react";
 
 import fleetStyles from "@/app/fleet.module.css";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 
 const fleetClass = createStyleClass(fleetStyles);
 
-type MorePanelTarget = "integrations" | "env" | "maintenance" | "sessions" | "tools" | "files" | "notifications" | "memory" | "my-apps" | "phone" | "aeon" | "fusion";
+type MorePanelTarget = "integrations" | "env" | "maintenance" | "sessions" | "tools" | "files" | "notifications" | "messaging" | "memory" | "my-apps" | "phone" | "aeon" | "fusion";
 
 export type MorePanelProps = {
   sharedEnvCount?: number;
@@ -107,6 +107,13 @@ export function MorePanel({
       eyebrow: notificationUnread ? `${notificationUnread} unread` : `${notificationTotal} total`,
       title: "Alerts",
       body: "Review messages agents write into the shared inbox.",
+    },
+    {
+      id: "messaging" as const,
+      icon: <MessageSquare aria-hidden="true" />,
+      eyebrow: "Telegram, Discord, iMessage",
+      title: "Messaging",
+      body: "Set up outbound channels for Queen Bee and individual agents.",
     },
   ];
 

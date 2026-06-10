@@ -47,7 +47,9 @@ type config struct {
 	tailDebug       bool
 	runWebClient    bool
 	disablePortlist bool
+	ephemeral       bool
 	statusTimeout   time.Duration
+	shellEnabled    bool
 }
 
 func defaultHostname() string {
@@ -101,7 +103,9 @@ func parseConfig() config {
 	flag.BoolVar(&cfg.tailDebug, "tailscale-debug-logs", defaultTailscaleDebugLogs(), "include verbose embedded Tailscale logs")
 	flag.BoolVar(&cfg.runWebClient, "run-web-client", defaultBoolFromEnv("HIVE_LINK_RUN_WEB_CLIENT", false), "expose Tailscale's embedded web client for this app node")
 	flag.BoolVar(&cfg.disablePortlist, "disable-portlist", defaultBoolFromEnv("HIVE_LINK_DISABLE_PORTLIST", true), "disable Tailscale's macOS portlist polling helpers")
+	flag.BoolVar(&cfg.ephemeral, "ephemeral", defaultBoolFromEnv("HIVE_LINK_EPHEMERAL", false), "register as an ephemeral Tailscale node so stale registrations self-delete when offline")
 	flag.DurationVar(&cfg.statusTimeout, "status-timeout", defaultStatusTimeoutFromEnv(), "maximum time spent waiting for embedded Tailscale status")
+	flag.BoolVar(&cfg.shellEnabled, "shell", defaultBoolFromEnv("HIVE_LINK_SHELL_ENABLED", true), "serve the remote shell API to this node's tailnet owner")
 	flag.Parse()
 	return cfg
 }
@@ -900,7 +904,7 @@ func appPortalScript(hostPort string, appProxyPrefix string) string {
 ` + `</script>`
 }
 
-func serveControl(ctx context.Context, ln net.Listener, lc *local.Client, ts *tsnet.Server, statusTimeout time.Duration) *http.Server {
+func serveControl(ctx context.Context, ln net.Listener, lc *local.Client, ts *tsnet.Server, statusTimeout time.Duration, shell *shellManager) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "hivemind-linkd"})
@@ -909,6 +913,11 @@ func serveControl(ctx context.Context, ln net.Listener, lc *local.Client, ts *ts
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(statusPayload(ctx, lc, statusTimeout))
 	})
+	if shell != nil {
+		// Local-only access for the dashboard's own machine; the listener is
+		// bound to loopback so no extra auth applies here.
+		mux.Handle(shellPathPrefix, shell.handler())
+	}
 	mux.HandleFunc("/peer/", servePeerProxy(ts))
 	mux.HandleFunc("/", servePeerRefererFallback(ts))
 	server := &http.Server{Addr: ln.Addr().String(), Handler: mux, ReadHeaderTimeout: 5 * time.Second}
@@ -941,6 +950,7 @@ func main() {
 		Hostname:     cfg.hostname,
 		Dir:          cfg.stateDir,
 		AuthKey:      cfg.authKey,
+		Ephemeral:    cfg.ephemeral,
 		RunWebClient: cfg.runWebClient,
 		Logf:         tailscaleLogf(cfg.tailDebug),
 	}
@@ -959,7 +969,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("embedded tailscale local client: %v", err)
 	}
-	controlServer := serveControl(ctx, controlListener, lc, ts, cfg.statusTimeout)
+	var shell *shellManager
+	if cfg.shellEnabled && runtime.GOOS != "windows" {
+		shell = newShellManager()
+		defer shell.shutdownAll()
+	}
+	controlServer := serveControl(ctx, controlListener, lc, ts, cfg.statusTimeout, shell)
 	defer controlServer.Shutdown(context.Background()) //nolint:errcheck
 
 	ln, err := ts.Listen("tcp", cfg.listenAddr)
@@ -973,8 +988,21 @@ func main() {
 		_ = ln.Close()
 	}()
 
-	log.Printf("hivemind-linkd proxying Tailnet %s to %s as %s", cfg.listenAddr, cfg.target, cfg.hostname)
-	if err := http.Serve(ln, newProxy(target, lc)); err != nil && !strings.Contains(err.Error(), "use of closed network connection") && !errors.Is(err, net.ErrClosed) {
+	collectorProxy := newProxy(target, lc)
+	var tailnetHandler http.Handler = collectorProxy
+	if shell != nil {
+		shellHandler := requireTailnetSelfUser(lc, cfg.statusTimeout, shell.handler())
+		tailnetHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, shellPathPrefix) {
+				shellHandler.ServeHTTP(w, r)
+				return
+			}
+			collectorProxy.ServeHTTP(w, r)
+		})
+	}
+
+	log.Printf("hivemind-linkd proxying Tailnet %s to %s as %s (shell=%t)", cfg.listenAddr, cfg.target, cfg.hostname, shell != nil)
+	if err := http.Serve(ln, tailnetHandler); err != nil && !strings.Contains(err.Error(), "use of closed network connection") && !errors.Is(err, net.ErrClosed) {
 		log.Fatalf("serve proxy: %v", err)
 	}
 }

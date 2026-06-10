@@ -63,7 +63,7 @@ import {
 } from "lucide-react";
 import type { AdaptiveOpenRouterConfig, AdaptiveRoutingConfig, AgentProfile, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile, RuntimeCapabilities, SharedVaultConfig, UsePodAgentConfig } from "@/lib/types/agent-runtime";
 import type { AgentNotification, AgentNotificationSettings, AgentNotificationSummary } from "@/lib/types/agent-notifications";
-import { createAgentProfile, DEFAULT_SHARED_VAULT, RUNTIME_CAPABILITIES, RUNTIME_DEFAULTS, RUNTIME_KINDS, RUNTIME_LABELS } from "@/lib/types/agent-runtime";
+import { HIVEMIND_OS_RUNTIME, createAgentProfile, DEFAULT_SHARED_VAULT, RUNTIME_CAPABILITIES, RUNTIME_DEFAULTS, RUNTIME_KINDS, RUNTIME_LABELS } from "@/lib/types/agent-runtime";
 import type { AgentPaymentProvider, AgentWalletConfig, HoneyTreasuryConfig } from "@/lib/types/agent-wallet";
 import type { KanbanBoard, KanbanLinkedDirectory, KanbanMachineTarget, KanbanStatus, KanbanTask, KanbanTaskAttachment } from "@/lib/types/kanban";
 import type { RecentDirectory } from "@/lib/types/recent-directories";
@@ -74,6 +74,7 @@ import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { providerIconPath, providerIconRenderMode, runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode } from "@/lib/config/runtime-icons";
 import { BEE_WORKER_PRESET_LIST, beeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import { logClientTelemetry } from "@/lib/utils/client-telemetry";
+import { loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue, type DashboardStateSnapshot } from "@/lib/services/dashboard-state-client";
 import { readNativeDashboardBootstrap } from "@/lib/native/dashboard-bootstrap";
 import { getNativeAppVersion } from "@/lib/native/desktop-status";
 import { getNativeFleetAppsCache, getNativeTailscaleDevices } from "@/lib/native/fleet";
@@ -100,6 +101,7 @@ import kanbanStyles from "@/app/kanban-board.module.css";
 import notificationStyles from "@/app/notifications.module.css";
 import vaultStyles from "@/app/vault.module.css";
 import walletStyles from "@/app/wallets.module.css";
+import { WalletPanelLoading } from "@/features/dashboard/views/WalletPanelLoading";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -125,7 +127,7 @@ import type { CellMenuItem } from "@/components/cells/CellMenu";
 import type { AgentTaskRow } from "@/components/cells/AgentTaskList";
 import type { SetupStep } from "@/components/cells/SetupCell";
 import type { FleetAgentChat, FleetAlert, FleetMachine, FleetTask } from "@/components/fleet";
-import { activeConnectedAppBadges, applyActiveAppBadges, type FleetHostedApp } from "@/components/fleet/active-apps";
+import { activeConnectedAppBadges, type FleetHostedApp } from "@/components/fleet/active-apps";
 import type { SchedulerJob, SchedulerRunPhase, SchedulerRunState } from "@/components/scheduler";
 import type { NewTaskPayload } from "@/components/task-modal";
 import type { SwarmAgent, SwarmDecision, SwarmMarket, SwarmRun, SwarmSocialPost, SwarmTemplate, TemplateId } from "@/components/swarm";
@@ -142,7 +144,6 @@ import {
   SwarmView,
   TaskModal,
 } from "@/features/dashboard/lazy-components";
-import { AgentsPanel } from "@/features/dashboard/views/AgentsPanel";
 import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
 import {
   chatDedupeKey,
@@ -201,6 +202,15 @@ import {
   splitBrainLabel,
 } from "@/features/dashboard/dashboard-display-helpers";
 import { createStyleClass } from "@/features/dashboard/style-classes";
+import {
+  applyFleetSyncAutoRepairIssues,
+  buildFleetSyncRepairTargets,
+  runFleetSyncAutoRepairs,
+  type FleetSyncAutoRepairState,
+  type FleetSyncPeerHealth,
+  type FleetSyncRepairTarget,
+  type FleetSyncthingDevice,
+} from "@/features/dashboard/fleet-sync-auto-repair";
 import type { DashboardGBrainStatus, DashboardSyntoStatus, DashboardTradingBrainStatus, DashboardView, RuntimeSessionSearchResult, WorkView } from "@/features/dashboard/dashboard-types";
 import type { MemoryTelemetryPayload } from "@/lib/types/memory-telemetry";
 import type { WorkHistoryPayload } from "@/lib/types/work-history";
@@ -221,17 +231,19 @@ import {
   notificationSourceLabel,
   summarizeHermesAuthError,
 } from "@/features/notifications/notification-display";
-import { NotificationsPanel } from "@/features/notifications/NotificationsPanel";
 import {
   agentAliasMap,
-  agentWorkspaceKey,
+  agentMatchesSuppression,
   collectorKey,
   displayMachineName,
+  filterSuppressedAgents,
   isLoopbackCollector,
   isMobileMachineOs,
   isVisibleFleetMachine,
   machineIdentityFromParts,
   renderAgentKey,
+  SUPPRESSED_DISCOVERED_AGENTS_STORAGE_KEY,
+  withoutAgentSuppression,
 } from "@/features/fleet/fleet-identity";
 import {
   AgentEnvCard,
@@ -259,7 +271,9 @@ import {
   formatRelativeTime,
   HERMES_UPDATE_INTEGRATION_KEYS,
   chatMessagesStorageStats,
+  clearPendingChatSaves,
   compactChatMessagesForStorage,
+  diffChatMessagesForPendingSave,
   hermesUpdateDetail,
   isAutomationChatTranscript,
   mergeMachineNameAliases,
@@ -276,14 +290,17 @@ import {
   parseStoredTasks,
   parseStoredVault,
   parseStoredWallets,
+  readPendingChatSaves,
   readStoredValue,
   runtimeCan,
   runtimeCapabilities,
   runtimeCount,
   runtimeSetupDefinition,
   seedAgents,
+  mergePendingChatMessages,
   skillRequiresHermesUpdate,
   workerCapabilityBadges,
+  writePendingChatSaves,
 } from "@/features/dashboard/dashboard-storage";
 import {
   HETZNER_IMAGE_OPTIONS,
@@ -334,8 +351,10 @@ import {
 import { useMirosharkBrainController } from "@/features/dashboard/hooks/use-miroshark-brain-controller";
 import { useDashboardPollingEffects } from "@/features/dashboard/hooks/use-dashboard-polling-effects";
 import { useDashboardDerivedState } from "@/features/dashboard/hooks/use-dashboard-derived-state";
+import { useTailnetAutoCleanup } from "@/features/dashboard/hooks/use-tailnet-auto-cleanup";
 import { useRuntimeSessionSearch } from "@/features/dashboard/hooks/use-runtime-session-search";
 import { useVisibilityAwarePolling } from "@/features/dashboard/hooks/use-visibility-aware-polling";
+import { useFleetAutoUpdate } from "@/features/dashboard/hooks/use-fleet-auto-update";
 import { useAgentController } from "@/features/dashboard/hooks/use-agent-controller";
 import { useSchedulerController } from "@/features/dashboard/hooks/use-scheduler-controller";
 import { useWalletFilesController } from "@/features/dashboard/hooks/use-wallet-files-controller";
@@ -350,8 +369,6 @@ import { chatTelemetryMessages, chatTelemetrySession } from "@/lib/services/tele
 import { useDashboardNavigationController } from "@/features/dashboard/hooks/use-dashboard-navigation-controller";
 import { DashboardHeader, type DashboardAppCompletionNotification } from "@/features/dashboard/views/DashboardHeader";
 import { DashboardCommandPalette } from "@/features/dashboard/views/DashboardCommandPalette";
-import { AgentSettingsModal } from "@/features/dashboard/views/chat/AgentSettingsModal";
-import { SkillBrowserModal } from "@/features/dashboard/views/chat/SkillBrowserModal";
 const kanbanClass = createStyleClass(kanbanStyles);
 const fleetClass = createStyleClass(fleetStyles);
 const chatClass = createStyleClass(chatStyles);
@@ -361,7 +378,7 @@ const walletClass = createStyleClass(walletStyles);
 const DASHBOARD_ROUTE_LABELS: Record<DashboardView, string> = {
   agents: "Fleet", kanban: "Work", scheduler: "Scheduler", swarm: "Swarm", history: "Work History", wallet: "Wallets", vault: "Brain",
   integrations: "Integrations", maintenance: "Diagnostics", sessions: "Sessions", tools: "Tools", memory: "Memory", files: "Files",
-  notifications: "Alerts", chat: "Agent Chat", more: "More", env: "Env", "my-apps": "Apps & Services", phone: "Phone", aeon: "Aeon", fusion: "Hive Fusion",
+  notifications: "Alerts", messaging: "Messaging", chat: "Agent Chat", more: "More", env: "Env", "my-apps": "Apps & Services", phone: "Phone", aeon: "Aeon", fusion: "Hive Fusion",
 };
 
 type DashboardRouteLoadingProps = { detail?: string; label?: string; view?: DashboardView };
@@ -379,10 +396,11 @@ function DashboardRouteLoading({ detail, label, view }: DashboardRouteLoadingPro
 }
 const routeLoadingFor = (view: DashboardView) => function RouteLoading() { return <DashboardRouteLoading view={view} />; };
 const routeLoadingFromProps = (props: { activeView?: DashboardView }) => <DashboardRouteLoading view={props?.activeView} />;
+const AgentsPanel = dynamic(() => import("@/features/dashboard/views/AgentsPanel").then((mod) => mod.AgentsPanel), { ssr: false, loading: routeLoadingFor("agents") });
 const KanbanPanel = dynamic(() => import("@/features/dashboard/views/KanbanPanel").then((mod) => mod.KanbanPanel), { ssr: false, loading: routeLoadingFromProps });
 const SchedulerPanel = dynamic(() => import("@/features/dashboard/views/SchedulerPanel").then((mod) => mod.SchedulerPanel), { ssr: false, loading: routeLoadingFor("scheduler") });
 const SwarmPanel = dynamic(() => import("@/features/dashboard/views/SwarmPanel").then((mod) => mod.SwarmPanel), { ssr: false, loading: routeLoadingFor("swarm") });
-const WalletPanel = dynamic(() => import("@/features/dashboard/views/WalletPanel").then((mod) => mod.WalletPanel), { ssr: false, loading: routeLoadingFor("wallet") });
+const WalletPanel = dynamic(() => import("@/features/dashboard/views/WalletPanel").then((mod) => mod.WalletPanel), { ssr: false, loading: WalletPanelLoading });
 const VaultPanel = dynamic(() => import("@/features/dashboard/views/VaultPanel").then((mod) => mod.VaultPanel), { ssr: false, loading: routeLoadingFor("vault") });
 const UtilityPanels = dynamic(() => import("@/features/dashboard/views/UtilityPanels").then((mod) => mod.UtilityPanels), { ssr: false, loading: routeLoadingFromProps });
 const ChatPanel = dynamic(() => import("@/features/dashboard/views/ChatPanel").then((mod) => mod.ChatPanel), { ssr: false, loading: routeLoadingFor("chat") });
@@ -391,6 +409,11 @@ const FusionPanel = dynamic(() => import("@/features/dashboard/views/FusionPanel
 const AeonAutopilotPanel = dynamic(() => import("@/components/aeon").then((mod) => mod.AeonAutopilotPanel), { ssr: false, loading: routeLoadingFor("aeon") });
 const PhonePanel = dynamic(() => import("@/features/dashboard/views/PhonePanel").then((mod) => mod.PhonePanel), { ssr: false, loading: routeLoadingFor("phone") });
 const DashboardModals = dynamic(() => import("@/features/dashboard/views/DashboardModals").then((mod) => mod.DashboardModals), { ssr: false });
+const AgentSettingsModal = dynamic(() => import("@/features/dashboard/views/chat/AgentSettingsModal").then((mod) => mod.AgentSettingsModal), { ssr: false });
+const SkillBrowserModal = dynamic(() => import("@/features/dashboard/views/chat/SkillBrowserModal").then((mod) => mod.SkillBrowserModal), { ssr: false });
+const NotificationsPanel = dynamic(() => import("@/features/notifications/NotificationsPanel").then((mod) => mod.NotificationsPanel), { ssr: false });
+const ConnectPhoneFab = dynamic(() => import("@/components/phone/ConnectPhoneFab").then((mod) => mod.ConnectPhoneFab), { ssr: false });
+const QueenBeeVoiceOverlay = dynamic(() => import("@/features/queen-voice/QueenBeeVoiceOverlay").then((mod) => mod.QueenBeeVoiceOverlay), { ssr: false });
 const NangoIntegrationsView = dynamic(() => import("@/features/integrations/NangoIntegrationsView"), { ssr: false, loading: routeLoadingFor("integrations") });
 const GitLawbIntegrationPanel = dynamic(() => import("@/features/integrations/GitLawbIntegrationPanel"), { ssr: false, loading: routeLoadingFor("integrations") });
 const BRAIN_SKILL_PROVIDER_FALLBACK: BrainSkillProviderInventory[] = [
@@ -413,7 +436,7 @@ function isWorkView(view: DashboardView): view is WorkView {
   return view === "kanban" || view === "scheduler" || view === "swarm" || view === "history";
 }
 function isUtilityPanelView(view: DashboardView) {
-  return ["maintenance", "sessions", "tools", "memory", "files", "notifications", "env", "my-apps", "more"].includes(view);
+  return ["maintenance", "sessions", "tools", "memory", "files", "notifications", "messaging", "env", "my-apps", "more"].includes(view);
 }
 
 const STORAGE_KEY = "hivemindos.agentProfiles.v1";
@@ -484,10 +507,9 @@ function mergeAgentProfiles(current: AgentProfile[], incoming: AgentProfile[]) {
   return [...merged.values()];
 }
 
-function readActiveChatRuns(): Record<string, ActiveChatRunRecord> {
-  if (typeof window === "undefined") return {};
+function readActiveChatRuns(snapshot: DashboardStateSnapshot): Record<string, ActiveChatRunRecord> {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(ACTIVE_CHAT_RUNS_STORAGE_KEY) || "{}") as Record<string, ActiveChatRunRecord>;
+    const parsed = JSON.parse(snapshot[ACTIVE_CHAT_RUNS_STORAGE_KEY] || "{}") as Record<string, ActiveChatRunRecord>;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
     const now = Date.now();
     return Object.fromEntries(Object.entries(parsed)
@@ -503,13 +525,10 @@ function readActiveChatRuns(): Record<string, ActiveChatRunRecord> {
   }
 }
 
-function writeActiveChatRuns(runs: Record<string, ActiveChatRunRecord>) {
-  if (typeof window === "undefined") return;
+function compactActiveChatRuns(runs: Record<string, ActiveChatRunRecord>) {
   const now = Date.now();
-  const compact = Object.fromEntries(Object.entries(runs)
+  return Object.fromEntries(Object.entries(runs)
     .filter(([, run]) => now - run.updatedAt < ACTIVE_CHAT_RUN_TTL_MS));
-  if (Object.keys(compact).length) window.localStorage.setItem(ACTIVE_CHAT_RUNS_STORAGE_KEY, JSON.stringify(compact));
-  else window.localStorage.removeItem(ACTIVE_CHAT_RUNS_STORAGE_KEY);
 }
 
 function chatTranscriptHasAssistantReply(messages: ChatMessage[] | undefined) {
@@ -555,6 +574,7 @@ function chatProcessFromSessionMessage(message: ChatMessage | { role?: string; c
   const role = String(message?.role ?? "").trim().toLowerCase();
   const content = String(message?.content ?? "").trim();
   if (!content || role === "user" || role === "assistant") return null;
+  if (role === "tool" && /^Runtime event$/i.test(content)) return null;
   const detail = content.replace(/\s+/g, " ").slice(0, 180);
   if (role === "tool") {
     if (/\[Command interrupted\]/i.test(content)) return { label: "Command interrupted" };
@@ -598,6 +618,16 @@ function runtimeSessionMessages(session: unknown): ChatMessage[] {
     output.push(...splitCombinedUserAssistantMessage(normalizedMessage));
     if (role === "assistant" && pendingProcessEvents.length) pendingProcessEvents = [];
   }
+  if (pendingProcessEvents.length) {
+    output.push({
+      role: "assistant",
+      content: "",
+      createdAt: pendingProcessEvents.at(-1)?.at,
+      sourceSessionId: sessionId || undefined,
+      surface: "chat",
+      processEvents: pendingProcessEvents,
+    });
+  }
   return output;
 }
 
@@ -616,6 +646,28 @@ function normalizedChatMessageContent(message: Pick<ChatMessage, "content">) {
 function sameVisibleChatMessage(left: ChatMessage | undefined, right: ChatMessage | undefined) {
   if (!left || !right) return false;
   return left.role === right.role && normalizedChatMessageContent(left) === normalizedChatMessageContent(right);
+}
+
+function chatMessageCreatedAtMs(message: Pick<ChatMessage, "createdAt"> | undefined) {
+  const raw = Number(message?.createdAt || 0);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return raw < 10_000_000_000 ? Math.round(raw * 1000) : Math.round(raw);
+}
+
+function userMessagesLikelySameTurn(localMessage: ChatMessage | undefined, sessionMessage: ChatMessage | undefined) {
+  if (!localMessage || !sessionMessage || localMessage.role !== "user" || sessionMessage.role !== "user") return false;
+  if (sameVisibleChatMessage(localMessage, sessionMessage)) return true;
+  const localContent = normalizedChatMessageContent(localMessage);
+  const sessionContent = normalizedChatMessageContent(sessionMessage);
+  if (!localContent || !sessionContent) return false;
+  const contentLooksRelated = localContent.startsWith(sessionContent)
+    || sessionContent.startsWith(localContent)
+    || (localContent.length <= 32 && sessionContent.includes(localContent))
+    || (sessionContent.length <= 32 && localContent.includes(sessionContent));
+  const localAt = chatMessageCreatedAtMs(localMessage);
+  const sessionAt = chatMessageCreatedAtMs(sessionMessage);
+  const closeInTime = Boolean(localAt && sessionAt && Math.abs(localAt - sessionAt) <= 30_000);
+  return contentLooksRelated || closeInTime;
 }
 
 function combinedUserAssistantSplitIndex(content: string) {
@@ -670,9 +722,55 @@ function findNextChatUserIndex(messages: ChatMessage[], startIndex: number) {
 }
 
 function withPreservedProcessEvents(nextMessage: ChatMessage, previousMessage?: ChatMessage) {
-  return (previousMessage?.processEvents?.length ?? 0) > 0 && !(nextMessage.processEvents?.length ?? 0)
-    ? { ...nextMessage, processEvents: previousMessage?.processEvents }
-    : nextMessage;
+  let next = nextMessage;
+  const mergedProcessEvents = mergeChatProcessEvents(previousMessage?.processEvents, next.processEvents);
+  if (mergedProcessEvents.length) {
+    next = { ...next, processEvents: mergedProcessEvents };
+  }
+  if (previousMessage?.applicationGeneration && !next.applicationGeneration) {
+    next = { ...next, applicationGeneration: previousMessage.applicationGeneration };
+  }
+  if (previousMessage?.imageGeneration && !next.imageGeneration) {
+    next = { ...next, imageGeneration: previousMessage.imageGeneration };
+  }
+  return next;
+}
+
+function mergeChatProcessEvents(
+  first: ChatMessage["processEvents"] = [],
+  second: ChatMessage["processEvents"] = [],
+) {
+  const output: NonNullable<ChatMessage["processEvents"]> = [];
+  const indexByKey = new Map<string, number>();
+  for (const event of [...(first ?? []), ...(second ?? [])]) {
+    if (!event) continue;
+    const key = [event.runId ?? "", event.label ?? "", event.detail ?? "", event.status ?? ""].join("\u001f");
+    const existingIndex = indexByKey.get(key);
+    if (existingIndex === undefined) {
+      indexByKey.set(key, output.length);
+      output.push(event);
+    } else if (Number(event.at ?? 0) >= Number(output[existingIndex]?.at ?? 0)) {
+      output[existingIndex] = event;
+    }
+  }
+  return output.sort((left, right) => Number(left.at ?? 0) - Number(right.at ?? 0)).slice(-80);
+}
+
+function chatMessageHasActiveSurface(message?: ChatMessage) {
+  return Boolean(
+    message
+    && (
+      message.content.trim()
+      || message.agentPrompt
+      || (message.processEvents?.length ?? 0) > 0
+      || message.applicationGeneration
+      || message.imageGeneration
+    ),
+  );
+}
+
+function chatMessageHasGenerationSurface(message?: ChatMessage) {
+  return Boolean(message?.applicationGeneration || message?.imageGeneration);
 }
 
 function dedupeChatTranscript(messages: ChatMessage[]) {
@@ -692,12 +790,11 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
         const between = output.slice(previousUserIndex + 1);
         const duplicateActiveTurn = between.length > 0 && between.every((item) => (
           item.role === "assistant"
-          && !item.agentPrompt
-          && !item.content.trim()
+          && !chatMessageHasActiveSurface(item)
         ));
         if (duplicateActiveTurn) continue;
         const nextAssistant = messages[index + 1];
-        const previousAssistant = [...between].reverse().find((item) => item.role === "assistant" && item.content.trim());
+        const previousAssistant = [...between].reverse().find((item) => item.role === "assistant" && chatMessageHasActiveSurface(item));
         if (
           nextAssistant?.role === "assistant"
           && previousAssistant
@@ -712,10 +809,23 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
         }
       }
     }
-    if (message.role === "assistant" && message.content.trim()) {
+    if (message.role === "assistant" && chatMessageHasActiveSurface(message)) {
+      const currentUser = [...output].reverse().find((item) => item.role === "user");
+      const previousCardAssistantIndex = findLastChatMessageIndex(output, (item) => (
+        item.role === "assistant"
+        && chatMessageHasGenerationSurface(item)
+      ));
+      const previousCardUser = [...output.slice(0, previousCardAssistantIndex)].reverse().find((item) => item.role === "user");
+      if (
+        previousCardAssistantIndex >= 0
+        && sameVisibleChatMessage(previousCardUser, currentUser)
+        && !sameVisibleChatMessage(output[previousCardAssistantIndex], message)
+      ) {
+        output[previousCardAssistantIndex] = withPreservedProcessEvents(message, output[previousCardAssistantIndex]);
+        continue;
+      }
       const previousAssistantIndex = findLastChatMessageIndex(output, (item) => sameVisibleChatMessage(item, message));
       const previousUser = [...output.slice(0, previousAssistantIndex)].reverse().find((item) => item.role === "user");
-      const currentUser = [...output].reverse().find((item) => item.role === "user");
       if (previousAssistantIndex >= 0 && sameVisibleChatMessage(previousUser, currentUser)) {
         output[previousAssistantIndex] = withPreservedProcessEvents(message, output[previousAssistantIndex]);
         continue;
@@ -729,20 +839,34 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
 function preserveLocalTurnProcessEvents(sessionTurn: ChatMessage[], localTurn: ChatMessage[]) {
   const localAssistantProcessMessages = localTurn.filter((message) => (
     message.role === "assistant"
-    && (message.processEvents?.length ?? 0) > 0
+    && ((message.processEvents?.length ?? 0) > 0 || message.applicationGeneration || message.imageGeneration)
   ));
+  const localUserMessage = localTurn.find((message) => message.role === "user" && message.content.trim());
   let fallbackProcessIndex = 0;
   return sessionTurn.map((message) => {
-    if (message.role !== "assistant" || (message.processEvents?.length ?? 0) > 0) return message;
+    if (message.role === "user" && userMessagesLikelySameTurn(localUserMessage, message)) {
+      return {
+        ...message,
+        content: localUserMessage?.content ?? message.content,
+        attachments: localUserMessage?.attachments,
+        surface: localUserMessage?.surface ?? message.surface,
+        createdAt: localUserMessage?.createdAt ?? message.createdAt,
+      };
+    }
+    if (message.role !== "assistant") return message;
     const sameContentProcessMessage = localAssistantProcessMessages.find((localMessage) => (
       sameVisibleChatMessage(localMessage, message)
     ));
     const fallbackProcessMessage = localAssistantProcessMessages[fallbackProcessIndex];
     if (!sameContentProcessMessage && fallbackProcessMessage) fallbackProcessIndex += 1;
     const processSource = sameContentProcessMessage ?? fallbackProcessMessage;
-    return processSource?.processEvents?.length
-      ? { ...message, processEvents: processSource.processEvents }
-      : message;
+    if (!processSource) return message;
+    return {
+      ...message,
+      processEvents: mergeChatProcessEvents(processSource.processEvents, message.processEvents),
+      applicationGeneration: message.applicationGeneration ?? processSource.applicationGeneration,
+      imageGeneration: message.imageGeneration ?? processSource.imageGeneration,
+    };
   });
 }
 
@@ -751,7 +875,7 @@ function mergeRuntimeSessionMessages(existing: ChatMessage[], sessionMessages: C
   if (!visibleSessionMessages.length) return existing;
   const sessionUser = visibleSessionMessages.find((message) => message.role === "user" && message.content.trim());
   if (sessionUser) {
-    const localUserIndex = findLastChatMessageIndex(existing, (message) => sameVisibleChatMessage(message, sessionUser));
+    const localUserIndex = findLastChatMessageIndex(existing, (message) => userMessagesLikelySameTurn(message, sessionUser));
     if (localUserIndex >= 0) {
       const nextLocalUserIndex = findNextChatUserIndex(existing, localUserIndex);
       const localTurn = existing.slice(localUserIndex, nextLocalUserIndex >= 0 ? nextLocalUserIndex : existing.length);
@@ -811,8 +935,12 @@ const QUIET_SNAPSHOT_HOLD_MS = 15 * 60 * 1000;
 const ACTIVE_CHAT_RUN_TTL_MS = 20 * 60 * 1000;
 const APP_COMPLETION_MIN_VISIBLE_MS = 10_000;
 const FLEET_SYNC_HEALTH_POLL_MS = 30_000;
+const FLEET_SYNC_HEALTH_INITIAL_DELAY_MS = 2_500;
+const FLEET_PASSIVE_REFRESH_DELAY_MS = 2_000;
+const FLEET_EMPTY_REFRESH_DELAY_MS = 300;
 const FLEET_SYNC_STALLED_MS = 5 * 60 * 1000;
-const FLEET_SYNC_REPAIR_TIMEOUT_MS = 25_000;
+const FLEET_SYNC_REPAIR_TIMEOUT_MS = 70_000;
+const FLEET_AUTO_UPDATE_PAUSED_STORAGE_KEY = "hivemindos.fleet.autoUpdate.paused.v1";
 const STORAGE_SUFFIXES = {
   agents: ".agentProfiles.v1",
   vault: ".sharedVault.v1",
@@ -825,55 +953,8 @@ const STORAGE_SUFFIXES = {
   chatFolders: ".chatFolders.v1",
   machineNameAliases: ".machineNameAliases.v1",
   fleetSnapshots: ".fleetSnapshots.v1",
+  suppressedDiscoveredAgents: ".suppressedDiscoveredAgents.v1",
 };
-
-type FleetSyncthingDevice = {
-  deviceID: string;
-  name?: string;
-  completion?: number | null;
-  remoteState?: string | null;
-  needBytes?: number | null;
-  needItems?: number | null;
-};
-
-type FleetSyncPeerHealth = FleetSyncthingDevice & {
-  stalled: boolean;
-  unchangedMs: number;
-};
-
-function normalizeFleetSyncName(value?: string | null) {
-  return (value ?? "")
-    .toLowerCase()
-    .replace(/\.local$/g, "")
-    .replace(/\.[a-z0-9-]+\.ts\.net$/g, "")
-    .replace(/\bhivemindos\b/g, "")
-    .replace(/\blocal\b/g, "")
-    .replace(/\bmacbook\b/g, "macbook")
-    .replace(/(?:^|[-_\s])\d+$/g, "")
-    .replace(/[^a-z0-9]+/g, "");
-}
-
-function fleetSyncPeerMatchesMachine(peer: FleetSyncPeerHealth, machine: FleetMachine) {
-  const peerName = normalizeFleetSyncName(peer.name);
-  if (!peerName) return false;
-  return [machine.name, machine.tailnet, machine.ip, machine.collectorUrl]
-    .map(normalizeFleetSyncName)
-    .filter(Boolean)
-    .some((candidate) => (
-      candidate === peerName
-      || candidate.includes(peerName)
-      || peerName.includes(candidate)
-    ));
-}
-
-function formatSyncPeerIssueDetail(peer: FleetSyncPeerHealth) {
-  const completion = typeof peer.completion === "number" ? `${peer.completion.toFixed(1)}%` : "unknown";
-  const pending = typeof peer.needItems === "number" ? `${peer.needItems} pending item${peer.needItems === 1 ? "" : "s"}` : "pending items unknown";
-  const bytes = typeof peer.needBytes === "number" && peer.needBytes > 0 ? `, ${Math.ceil(peer.needBytes / 1024)} KB` : "";
-  const remoteState = peer.remoteState ? ` Remote state: ${peer.remoteState}.` : "";
-  const stalled = peer.stalled ? ` No progress for ${Math.max(1, Math.round(peer.unchangedMs / 60_000))} minutes.` : "";
-  return `Shared vault sync is incomplete for ${peer.name || peer.deviceID.slice(0, 7)}: ${completion} synced, ${pending}${bytes}.${remoteState}${stalled}`;
-}
 
 type ActiveChatRunRecord = {
   storageKey: string;
@@ -886,6 +967,22 @@ type ActiveChatRunRecord = {
   sessionId?: string;
   status?: "active" | "stalled";
 };
+
+function parseStoredSuppressedDiscoveredAgentKeys(snapshot: DashboardStateSnapshot = {}) {
+  const raw = readStoredValue(snapshot, SUPPRESSED_DISCOVERED_AGENTS_STORAGE_KEY, STORAGE_SUFFIXES.suppressedDiscoveredAgents);
+  if (!raw) return new Set<string>();
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const values = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === "object" && Array.isArray((parsed as { keys?: unknown[] }).keys)
+        ? (parsed as { keys: unknown[] }).keys
+        : [];
+    return new Set(values.filter((key): key is string => typeof key === "string" && Boolean(key.trim())));
+  } catch {
+    return new Set<string>();
+  }
+}
 
 type ChatStreamState = {
   agentId: string;
@@ -907,8 +1004,9 @@ export type DashboardVaultPanelMode = "hive-vault" | "shared-skills" | "brain-se
 
 export default function DashboardApp({ initialChatAgentId, initialChatLeaf, initialView, initialVaultPanelMode, initialWorkHistory }: DashboardAppProps = {}) {
   // Initialize all persisted state with deterministic seed values so SSR and
-  // first client render match. localStorage is read inside a useEffect below.
+  // first client render match. Server-backed dashboard state is read inside a useEffect below.
   const [hydrated, setHydrated] = useState(false);
+  const dashboardStateRef = useRef<DashboardStateSnapshot>({});
   const [agents, setAgents] = useState<AgentProfile[]>(seedAgents);
   const agentVaultHydratedRef = useRef(false);
   const aeonProfilePruneKeyRef = useRef("");
@@ -976,6 +1074,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   const messagesByAgentRef = useRef<Record<string, ChatMessage[]>>({});
   const lastPersistedChatMessagesRef = useRef("");
   const lastPersistedChatStatsRef = useRef("");
+  const lastConfirmedChatMessagesRef = useRef<Record<string, ChatMessage[]>>({});
   const runtimeSessionFallbackMessagesRef = useRef<Record<string, ChatMessage[]>>({});
   const runtimeSessionPollInFlightRef = useRef<Set<string>>(new Set());
   const resumedRuntimeSessionKeysRef = useRef<Set<string>>(new Set());
@@ -1054,7 +1153,10 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   const [fleetDiscoveryLoading, setFleetDiscoveryLoading] = useState(true);
   const [fleetHostedApps, setFleetHostedApps] = useState<FleetHostedApp[]>([]);
   const [fleetSyncPeerHealth, setFleetSyncPeerHealth] = useState<Record<string, FleetSyncPeerHealth>>({});
+  const [fleetSyncAutoRepairByDevice, setFleetSyncAutoRepairByDevice] = useState<Record<string, FleetSyncAutoRepairState>>({});
+  const fleetSnapshotRefreshInFlightRef = useRef<{ key: string; promise: Promise<boolean> } | null>(null);
   const fleetSyncProgressRef = useRef<Record<string, { signature: string; lastChangedAt: number }>>({});
+  const fleetSyncAutoRepairRef = useRef<Record<string, FleetSyncAutoRepairState>>({});
   const [appCompletionNotifications, setAppCompletionNotifications] = useState<DashboardAppCompletionNotification[]>([]);
   const previousConnectedAppBadgesRef = useRef<{ initialized: boolean; badges: Map<string, { item: ReturnType<typeof activeConnectedAppBadges>[number]; firstSeenAt: number }> }>({
     initialized: false,
@@ -1067,9 +1169,12 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   const [hivemindLinkConnectedUntil, setHivemindLinkConnectedUntil] = useState(0);
   const [hivemindLinkSignInPolling, setHivemindLinkSignInPolling] = useState(false);
   const [discoveredMachines, setDiscoveredMachines] = useState<DiscoveredMachine[]>([]);
+  const [suppressedDiscoveredAgentKeys, setSuppressedDiscoveredAgentKeys] = useState<Set<string>>(() => new Set());
+  const [recentAgentArrival, setRecentAgentArrival] = useState<{ agentId: string; at: number } | null>(null);
   const [machineNameAliases, setMachineNameAliases] = useState<Record<string, string>>({});
   const [appVersion, setAppVersion] = useState<AppVersion | null>(null);
   const [updateStatusByMachine, setUpdateStatusByMachine] = useState<Record<string, MachineUpdateStatus>>({});
+  const [fleetAutoUpdatePaused, setFleetAutoUpdatePaused] = useState(false);
   const [copiedUpdateDetailKey, setCopiedUpdateDetailKey] = useState("");
   const [setupMachineKey, setSetupMachineKey] = useState("");
   const [machineInitOpen, setMachineInitOpen] = useState(false);
@@ -1237,6 +1342,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   const [chatRuntimeSessionIdsByKey, setChatRuntimeSessionIdsByKey] = useState<Record<string, string>>({});
   const chatRuntimeSessionIdsByKeyRef = useRef<Record<string, string>>({});
   const activeChatStreams = Object.values(chatStreamingByKey);
+  const chatRequestActive = activeChatStreams.length > 0;
   const busyAgentId = activeChatStreams[0]?.agentId ?? "";
   const [chatMessageWindow, setChatMessageWindow] = useState<{ agentId: string; limit: number } | null>(null);
   const [selectedChatLeafKey, setSelectedChatLeafKey] = useState(initialChatLeaf ?? "");
@@ -1633,13 +1739,57 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     setAgentEnvDrafts((current) => ({ ...current, [agent.id]: { key: "", value: "" } }));
     setHiveEnvStatus(`Added ${key} for ${agent.name}.`);
   }, [agentEnvDrafts]);
+  const persistDashboardStateValue = useCallback((key: string, value: string) => {
+    dashboardStateRef.current = { ...dashboardStateRef.current, [key]: value };
+    return saveDashboardStateValue(key, value);
+  }, []);
+  const persistChatMessages = useCallback((compactMessages: Record<string, ChatMessage[]>, serialized: string) => {
+    void persistDashboardStateValue(CHAT_MESSAGES_STORAGE_KEY, serialized).then((saved) => {
+      if (saved) {
+        lastConfirmedChatMessagesRef.current = compactMessages;
+        clearPendingChatSaves();
+        const stats = chatMessagesStorageStats(compactMessages);
+        const statsSignature = `${stats.agentCount}:${stats.messageCount}`;
+        if (statsSignature === lastPersistedChatStatsRef.current) return;
+        lastPersistedChatStatsRef.current = statsSignature;
+        logClientTelemetry("chat.messages.persisted", stats);
+        return;
+      }
+      // The server never stored this save (e.g. dev-server restart returned a
+      // proxy 503). Stash the unsaved delta so a reload can restore it.
+      writePendingChatSaves(diffChatMessagesForPendingSave(lastConfirmedChatMessagesRef.current, compactMessages));
+      logClientTelemetry("chat.messages.persist_failed", chatMessagesStorageStats(compactMessages));
+    });
+  }, [persistDashboardStateValue]);
+  const deleteDashboardStateValue = useCallback((key: string) => {
+    const next = { ...dashboardStateRef.current };
+    delete next[key];
+    dashboardStateRef.current = next;
+    void removeDashboardStateValue(key);
+  }, []);
+  const discoveredAgentIsSuppressed = useCallback((agent: AgentProfile) => (
+    agentMatchesSuppression(agent, suppressedDiscoveredAgentKeys)
+  ), [suppressedDiscoveredAgentKeys]);
+  const persistActiveChatRuns = useCallback((runs: Record<string, ActiveChatRunRecord>) => {
+    const compact = compactActiveChatRuns(runs);
+    if (Object.keys(compact).length) {
+      persistDashboardStateValue(ACTIVE_CHAT_RUNS_STORAGE_KEY, JSON.stringify(compact));
+    } else {
+      deleteDashboardStateValue(ACTIVE_CHAT_RUNS_STORAGE_KEY);
+    }
+  }, [deleteDashboardStateValue, persistDashboardStateValue]);
   // Hydrate persisted state on the client after the first render. Reading
-  // localStorage inside useState init would diverge from SSR and trigger
+  // server-backed dashboard state inside useState init would diverge from SSR and trigger
   // a hydration mismatch — this is the canonical pattern to avoid it,
   // even though the lint rule flags setState-in-effect in general.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    const storedAgents = parseStoredAgents();
+    let cancelled = false;
+    void (async () => {
+    const dashboardState = await loadDashboardStateSnapshot();
+    if (cancelled) return;
+    dashboardStateRef.current = dashboardState;
+    const storedAgents = parseStoredAgents(dashboardState);
     const routeTarget = dashboardTargetFromSearch(window.location.search);
     setAgents(storedAgents);
     setSelectedAgentId((current: string) => (
@@ -1651,12 +1801,16 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       const routeSessionId = runtimeSessionIdFromChatLeafKey(routeTarget.chatLeaf);
       if (routeSessionId) setSelectedChatRuntimeSessionId(routeSessionId);
     }
-    setSharedVault(parseStoredVault());
-    setTasks(parseStoredTasks());
-    setSchedules(parseStoredSchedules());
-    setWalletsByAgent(parseStoredWallets());
-    const storedChatMessages = Object.fromEntries(Object.entries(parseStoredChatMessages())
+    setSharedVault(parseStoredVault(dashboardState));
+    setTasks(parseStoredTasks(dashboardState));
+    setSchedules(parseStoredSchedules(dashboardState));
+    setWalletsByAgent(parseStoredWallets(dashboardState));
+    const serverChatMessages: Record<string, ChatMessage[]> = Object.fromEntries(Object.entries(parseStoredChatMessages(dashboardState))
       .map(([storageKey, transcript]) => [storageKey, dedupeChatTranscript(transcript)]));
+    lastConfirmedChatMessagesRef.current = serverChatMessages;
+    // Restore chats whose last save never reached the server (reload raced a
+    // dev-server restart) from the localStorage stash.
+    const storedChatMessages = mergePendingChatMessages(serverChatMessages, readPendingChatSaves());
     const routeSessionId = routeTarget?.view === "chat" && routeTarget.chatLeaf ? runtimeSessionIdFromChatLeafKey(routeTarget.chatLeaf) : "";
     const routeChatStorageKey = routeTarget?.view === "chat" && routeTarget.agentId && routeTarget.chatLeaf
       ? chatMessageStorageKey(routeTarget.agentId, routeTarget.chatLeaf)
@@ -1686,9 +1840,9 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         storedMessageCount: storedChatStats.messageCount,
       }, { threadId: routeChatStorageKey || undefined, runId: routeSessionId || undefined });
     }
-    const activeRuns = Object.fromEntries(Object.entries(readActiveChatRuns())
+    const activeRuns = Object.fromEntries(Object.entries(readActiveChatRuns(dashboardState))
       .filter(([storageKey, run]) => !activeChatRunHasAssistantReply(storedChatMessages[storageKey], run)));
-    writeActiveChatRuns(activeRuns);
+    persistActiveChatRuns(activeRuns);
     if (Object.keys(activeRuns).length) {
       setChatStreamingByKey(Object.fromEntries(Object.entries(activeRuns).map(([storageKey, run]) => [
         storageKey,
@@ -1697,7 +1851,6 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       setChatProcessByKey(Object.fromEntries(Object.entries(activeRuns).map(([storageKey, run]) => [
         storageKey,
         [
-          { at: run.startedAt, label: "Queued chat request", detail: run.requestLabel, runId: run.runId },
           { at: Date.now(), label: "Resumed after reload", detail: "Checking the runtime session for activity.", runId: run.runId },
         ].filter((entry) => entry.detail !== ""),
       ])));
@@ -1705,16 +1858,25 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         .filter(([, run]) => Boolean(run.sessionId))
         .map(([storageKey, run]) => [storageKey, run.sessionId])));
     }
-    setHoneyLedgerEnabled(parseStoredHoneyLedgerEnabled());
+    setHoneyLedgerEnabled(parseStoredHoneyLedgerEnabled(dashboardState));
     setHoneyTreasury(parseStoredHoneyTreasury());
-    setChatCustomFolders(parseStoredChatFolders());
-    setDiscoveredMachines(parseStoredDiscoveredMachines());
-    setFleetSnapshots(parseStoredFleetSnapshots());
-    setMachineNameAliases(parseStoredMachineNameAliases());
-    const storedTheme = readStoredValue(THEME_STORAGE_KEY, STORAGE_SUFFIXES.theme);
+    setChatCustomFolders(parseStoredChatFolders(dashboardState));
+    const storedDiscoveredMachines = parseStoredDiscoveredMachines(dashboardState);
+    const storedFleetSnapshots = parseStoredFleetSnapshots(dashboardState);
+    setDiscoveredMachines(storedDiscoveredMachines);
+    setSuppressedDiscoveredAgentKeys(parseStoredSuppressedDiscoveredAgentKeys(dashboardState));
+    setFleetSnapshots(storedFleetSnapshots);
+    setFleetCheckedAt(Math.max(0, ...Object.values(storedFleetSnapshots).map((snapshot) => snapshot.checkedAt || 0)) || null);
+    setFleetDiscoveryLoading(storedDiscoveredMachines.length === 0);
+    setMachineNameAliases(parseStoredMachineNameAliases(dashboardState));
+    const storedTheme = readStoredValue(dashboardState, THEME_STORAGE_KEY, STORAGE_SUFFIXES.theme);
     setDashboardTheme(storedTheme === "hive-light" ? "hive-light" : "dark");
     setHydrated(true);
-  }, []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [persistActiveChatRuns]);
   /* eslint-enable react-hooks/set-state-in-effect */
   useVisibilityAwarePolling({
     enabled: hydrated && honeyLedgerEnabled,
@@ -1724,17 +1886,17 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   });
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem(HONEY_LEDGER_ENABLED_STORAGE_KEY, honeyLedgerEnabled ? "true" : "false");
-  }, [honeyLedgerEnabled, hydrated]);
+    persistDashboardStateValue(HONEY_LEDGER_ENABLED_STORAGE_KEY, honeyLedgerEnabled ? "true" : "false");
+  }, [honeyLedgerEnabled, hydrated, persistDashboardStateValue]);
   useEffect(() => {
     document.documentElement.dataset.theme = dashboardTheme;
     if (!hydrated) return;
-    window.localStorage.setItem(THEME_STORAGE_KEY, dashboardTheme);
-  }, [dashboardTheme, hydrated]);
+    persistDashboardStateValue(THEME_STORAGE_KEY, dashboardTheme);
+  }, [dashboardTheme, hydrated, persistDashboardStateValue]);
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(agents));
-  }, [hydrated, agents]);
+    persistDashboardStateValue(STORAGE_KEY, JSON.stringify(agents));
+  }, [hydrated, agents, persistDashboardStateValue]);
   useEffect(() => {
     if (!hydrated || !sharedVault.enabled || agentVaultHydratedRef.current) return;
     let cancelled = false;
@@ -1755,7 +1917,10 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     if (!hydrated || !sharedVault.enabled || !agentVaultHydratedRef.current) return;
     const aeonAgents = [
       ...agents,
-      ...discoveredMachines.flatMap((machine) => machine.agents ?? []).map(normalizeAgentProfile),
+      ...discoveredMachines
+        .flatMap((machine) => machine.agents ?? [])
+        .map(normalizeAgentProfile)
+        .filter((agent) => !discoveredAgentIsSuppressed(agent)),
     ].filter((agent, index, list) => agent.runtime === "aeon" && list.findIndex((candidate) => candidate.id === agent.id) === index);
     if (!aeonAgents.length) {
       aeonProfilePruneKeyRef.current = "";
@@ -1806,7 +1971,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     return () => {
       cancelled = true;
     };
-  }, [agents, discoveredMachines, hydrated, sharedVault.enabled, sharedVault.vaultPath]);
+  }, [agents, discoveredAgentIsSuppressed, discoveredMachines, hydrated, sharedVault.enabled, sharedVault.vaultPath]);
   useEffect(() => {
     if (!hydrated || !sharedVault.enabled || !agentVaultHydratedRef.current) return;
     const handle = window.setTimeout(() => {
@@ -1820,20 +1985,20 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   }, [hydrated, sharedVault.enabled, sharedVault.vaultPath, agents]);
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(sharedVault));
-  }, [hydrated, sharedVault]);
+    persistDashboardStateValue(VAULT_STORAGE_KEY, JSON.stringify(sharedVault));
+  }, [hydrated, sharedVault, persistDashboardStateValue]);
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(tasks.slice(0, 80)));
-  }, [hydrated, tasks]);
+    persistDashboardStateValue(TASK_STORAGE_KEY, JSON.stringify(tasks.slice(0, 80)));
+  }, [hydrated, tasks, persistDashboardStateValue]);
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(schedules.slice(0, 120)));
-  }, [hydrated, schedules]);
+    persistDashboardStateValue(SCHEDULE_STORAGE_KEY, JSON.stringify(schedules.slice(0, 120)));
+  }, [hydrated, schedules, persistDashboardStateValue]);
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem(WALLET_STORAGE_KEY, JSON.stringify(walletsByAgent));
-  }, [hydrated, walletsByAgent]);
+    persistDashboardStateValue(WALLET_STORAGE_KEY, JSON.stringify(walletsByAgent));
+  }, [hydrated, walletsByAgent, persistDashboardStateValue]);
   useEffect(() => {
     if (!hydrated) return;
     if (!Object.values(messagesByAgent).some((messages) => isAutomationChatTranscript(messages))) return;
@@ -1851,7 +2016,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       });
     }, 0);
     return () => window.clearTimeout(cleanupTimer);
-  }, [hydrated, messagesByAgent]);
+  }, [hydrated, messagesByAgent, persistDashboardStateValue]);
   // Hydrate wallets from the shared vault ledger when sharedVault is enabled.
   // Vault wins where it has a newer `updatedAt` than the locally-stored copy.
   useEffect(() => {
@@ -1924,23 +2089,25 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       const serialized = JSON.stringify(compactMessages);
       if (serialized === lastPersistedChatMessagesRef.current) return;
       lastPersistedChatMessagesRef.current = serialized;
-      window.localStorage.setItem(CHAT_MESSAGES_STORAGE_KEY, serialized);
-      const stats = chatMessagesStorageStats(compactMessages);
-      const statsSignature = `${stats.agentCount}:${stats.messageCount}`;
-      if (statsSignature === lastPersistedChatStatsRef.current) return;
-      lastPersistedChatStatsRef.current = statsSignature;
-      logClientTelemetry("chat.messages.persisted", stats);
+      persistChatMessages(compactMessages, serialized);
     }, 700);
     return () => window.clearTimeout(persistTimer);
-  }, [hydrated, messagesByAgent]);
+  }, [hydrated, messagesByAgent, persistChatMessages]);
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem(CHAT_FOLDER_STORAGE_KEY, JSON.stringify(chatCustomFolders));
-  }, [chatCustomFolders, hydrated]);
+    persistDashboardStateValue(CHAT_FOLDER_STORAGE_KEY, JSON.stringify(chatCustomFolders));
+  }, [chatCustomFolders, hydrated, persistDashboardStateValue]);
   useEffect(() => {
     if (!hydrated || discoveredMachines.length === 0) return;
-    window.localStorage.setItem(DISCOVERED_MACHINES_STORAGE_KEY, JSON.stringify(discoveredMachines.slice(0, 32)));
-  }, [discoveredMachines, hydrated]);
+    persistDashboardStateValue(DISCOVERED_MACHINES_STORAGE_KEY, JSON.stringify(discoveredMachines.slice(0, 32)));
+  }, [discoveredMachines, hydrated, persistDashboardStateValue]);
+  useEffect(() => {
+    if (!hydrated) return;
+    const values = [...suppressedDiscoveredAgentKeys].slice(-500);
+    if (values.length) {
+      persistDashboardStateValue(SUPPRESSED_DISCOVERED_AGENTS_STORAGE_KEY, JSON.stringify(values));
+    }
+  }, [hydrated, persistDashboardStateValue, suppressedDiscoveredAgentKeys]);
   useEffect(() => {
     if (!hydrated) return;
     const compactSnapshots = Object.fromEntries(Object.entries(fleetSnapshots)
@@ -1949,12 +2116,12 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         ...snapshot,
         tasks: snapshot.tasks.slice(0, 12),
       }]));
-    window.localStorage.setItem(FLEET_SNAPSHOTS_STORAGE_KEY, JSON.stringify(compactSnapshots));
-  }, [fleetSnapshots, hydrated]);
+    persistDashboardStateValue(FLEET_SNAPSHOTS_STORAGE_KEY, JSON.stringify(compactSnapshots));
+  }, [fleetSnapshots, hydrated, persistDashboardStateValue]);
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem(MACHINE_NAME_ALIAS_STORAGE_KEY, JSON.stringify(machineNameAliases));
-  }, [hydrated, machineNameAliases]);
+    persistDashboardStateValue(MACHINE_NAME_ALIAS_STORAGE_KEY, JSON.stringify(machineNameAliases));
+  }, [hydrated, machineNameAliases, persistDashboardStateValue]);
   useEffect(() => {
     if (!hydrated || !sharedVault.enabled) return;
     const vaultPath = sharedVault.vaultPath.trim();
@@ -2062,8 +2229,14 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     };
   }, [chatContextMenu]);
   const buildSnapshotAgents = useCallback(() => {
-    const discoveredAgents = discoveredMachines.flatMap((machine) => machine.agents ?? []).map(normalizeAgentProfile);
-    return dedupeAgents(agents, discoveredAgents).map((agent) => ({
+    const configuredAgents = filterSuppressedAgents(agents, suppressedDiscoveredAgentKeys);
+    const discoveredAgents = filterSuppressedAgents(
+      discoveredMachines
+        .flatMap((machine) => machine.agents ?? [])
+        .map(normalizeAgentProfile),
+      suppressedDiscoveredAgentKeys,
+    );
+    return dedupeAgents(configuredAgents, discoveredAgents).map((agent) => ({
         id: agent.id,
         name: agent.name,
         runtime: agent.runtime,
@@ -2078,11 +2251,19 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         telemetryUrl: agent.telemetryUrl,
         collectorCapabilities: agent.collectorCapabilities,
       }));
-  }, [agents, discoveredMachines]);
+  }, [agents, discoveredMachines, suppressedDiscoveredAgentKeys]);
 
   const refreshFleetSnapshots = useCallback(async (signal: AbortSignal, mode: "full" | "history") => {
+      if (signal.aborted) return false;
       const snapshotAgents = buildSnapshotAgents();
       if (snapshotAgents.length === 0) return false;
+      const refreshKey = JSON.stringify({
+        mode,
+        controlRoomPath: sharedVault.controlRoomPath,
+        agents: snapshotAgents.map((agent) => [agent.id, agent.runtime, agent.telemetryUrl, agent.localDataDir, agent.agentId]),
+      });
+      if (fleetSnapshotRefreshInFlightRef.current?.key === refreshKey) return fleetSnapshotRefreshInFlightRef.current.promise;
+      const refreshPromise = (async () => {
       const response = await fetch("/api/fleet/snapshot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2106,13 +2287,64 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       setFleetSnapshots((current) => mergeSnapshotRecord(current, snapshots));
       setFleetCheckedAt(data.checkedAt ?? Date.now());
       return true;
+      })().finally(() => {
+        if (fleetSnapshotRefreshInFlightRef.current?.key === refreshKey) {
+          fleetSnapshotRefreshInFlightRef.current = null;
+        }
+      });
+      fleetSnapshotRefreshInFlightRef.current = { key: refreshKey, promise: refreshPromise };
+      return refreshPromise;
   }, [buildSnapshotAgents, sharedVault.controlRoomPath]);
 
   const pollFleetSnapshot = useCallback(async (signal: AbortSignal) => {
       await refreshFleetSnapshots(signal, activeView === "chat" ? "history" : "full");
   }, [activeView, refreshFleetSnapshots]);
+  const refreshCreatedAgentSnapshot = useCallback(async (agent: AgentProfile) => {
+    const checkedAt = Date.now();
+    setFleetSnapshots((current) => mergeSnapshotRecord(current, [{
+      agentId: agent.id,
+      ok: false,
+      runtimeReachable: false,
+      processRunning: false,
+      summary: "Checking newly added agent...",
+      sources: ["dashboard add agent"],
+      tasks: [],
+      checkedAt,
+    }]));
+    setFleetCheckedAt(checkedAt);
+    const response = await fetch("/api/fleet/snapshot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agents: [agent],
+        sharedVault: { controlRoomPath: sharedVault.controlRoomPath },
+        mode: "full",
+      }),
+    }).catch(() => null);
+    const data = (await response?.json().catch(() => null)) as {
+      checkedAt?: number;
+      snapshots?: AgentSnapshot[];
+    } | null;
+    if (!response?.ok || !data?.snapshots?.length) return;
+    setFleetSnapshots((current) => mergeSnapshotRecord(current, data.snapshots ?? []));
+    setFleetCheckedAt(data.checkedAt ?? Date.now());
+  }, [sharedVault.controlRoomPath]);
+  // A deliberate user add must win over past removals: deleting an agent
+  // suppresses its workspace key, which a newly created agent on the same
+  // machine can collide with (e.g. the canonical ~/.hermes first-agent key) —
+  // without clearing it the new agent never shows up. Also records the arrival
+  // so the fleet view can spotlight the new agent's hex.
+  const noteAgentArrival = useCallback((agent: AgentProfile) => {
+    setSuppressedDiscoveredAgentKeys((current) => withoutAgentSuppression(current, agent) ?? current);
+    setRecentAgentArrival({ agentId: agent.id, at: Date.now() });
+  }, []);
+  const clearRecentAgentArrival = useCallback(() => setRecentAgentArrival(null), []);
+  const handleAgentCreated = useCallback(async (agent: AgentProfile) => {
+    noteAgentArrival(agent);
+    await refreshCreatedAgentSnapshot(agent);
+  }, [noteAgentArrival, refreshCreatedAgentSnapshot]);
   useEffect(() => {
-    if (!hydrated || activeView !== "chat" || agents.length === 0) return;
+    if (!hydrated || activeView !== "chat" || chatRequestActive || agents.length === 0) return;
     const refreshKey = JSON.stringify({
       controlRoomPath: sharedVault.controlRoomPath,
       agents: agents.map((agent) => ({
@@ -2132,11 +2364,12 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       }
     });
     return () => controller.abort();
-  }, [activeView, agents, hydrated, refreshFleetSnapshots, sharedVault.controlRoomPath]);
+  }, [activeView, agents, chatRequestActive, hydrated, refreshFleetSnapshots, sharedVault.controlRoomPath]);
   useVisibilityAwarePolling({
-    enabled: hydrated,
+    enabled: hydrated && !chatRequestActive && (activeView === "agents" || activeView === "chat"),
     intervalMs: activeView === "agents" ? 30_000 : 45_000,
     hiddenIntervalMs: 5 * 60_000,
+    initialDelayMs: fleetCheckedAt ? FLEET_PASSIVE_REFRESH_DELAY_MS : FLEET_EMPTY_REFRESH_DELAY_MS,
     task: pollFleetSnapshot,
   });
   const refreshFleetHostedApps = useCallback(async (signal: AbortSignal) => {
@@ -2151,9 +2384,10 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     setFleetHostedApps(data.apps);
   }, []);
   useVisibilityAwarePolling({
-    enabled: hydrated,
+    enabled: hydrated && !chatRequestActive,
     intervalMs: activeView === "agents" ? 30_000 : 45_000,
     hiddenIntervalMs: 5 * 60_000,
+    initialDelayMs: activeView === "agents" ? FLEET_PASSIVE_REFRESH_DELAY_MS : 5_000,
     task: refreshFleetHostedApps,
   });
   useEffect(() => {
@@ -2192,7 +2426,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   }, [hivemindLinkSignInPolling, refreshTailscaleDevices]);
   const pollFleetDiscovery = useCallback(async (signal: AbortSignal) => {
       setFleetDiscoveryLoading((current) => current || discoveredMachines.length === 0);
-      const response = await fetch("/api/fleet/discover?includeSnapshots=0&fresh=1", {
+      const response = await fetch("/api/fleet/discover?includeSnapshots=0&stale=1", {
         cache: "no-store",
         signal,
       }).catch(() => null);
@@ -2224,9 +2458,10 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       setFleetDiscoveryLoading(false);
   }, [applyHivemindLinkStatus, discoveredMachines.length, tailscaleStatus]);
   useVisibilityAwarePolling({
-    enabled: hydrated && (activeView === "agents" || activeView === "chat"),
+    enabled: hydrated && !chatRequestActive && (activeView === "agents" || activeView === "chat"),
     intervalMs: 60_000,
     hiddenIntervalMs: 5 * 60_000,
+    initialDelayMs: discoveredMachines.length > 0 ? FLEET_PASSIVE_REFRESH_DELAY_MS : FLEET_EMPTY_REFRESH_DELAY_MS,
     task: pollFleetDiscovery,
   });
   const pollAppVersion = useCallback(async (signal: AbortSignal) => {
@@ -2245,9 +2480,10 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       if (data?.commit) setAppVersion(data);
   }, []);
   useVisibilityAwarePolling({
-    enabled: hydrated,
+    enabled: hydrated && !chatRequestActive,
     intervalMs: 5 * 60_000,
     hiddenIntervalMs: 10 * 60_000,
+    initialDelayMs: 5_000,
     task: pollAppVersion,
   });
   const pollMirosharkStatus = useCallback(async (signal: AbortSignal) => {
@@ -2259,9 +2495,10 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       if (data?.baseUrl) setMirosharkStatus(data);
   }, []);
   useVisibilityAwarePolling({
-    enabled: hydrated,
+    enabled: hydrated && !chatRequestActive,
     intervalMs: mirosharkStatus?.install.running ? (activeView === "swarm" ? 15_000 : 60_000) : 120_000,
     hiddenIntervalMs: 5 * 60_000,
+    initialDelayMs: activeView === "swarm" ? FLEET_PASSIVE_REFRESH_DELAY_MS : 5_000,
     task: pollMirosharkStatus,
   });
   const { refreshMirosharkMetadata, runMirosharkAction, startNewMirosharkSimulation, applyMirosharkTemplate, updateMirosharkTemplateInput, extractMirosharkHelperText, runMirosharkScenarioHelper, launchMirosharkSwarm, runMirosharkSwarm, runMirosharkExperiment, analyzeMirosharkRun, refreshMirosharkArchive, refreshBrainGraph, refreshRecentDirectories, recordRecentDirectory, loadMachineDirectories, chooseDirectoryForMachine, refreshHermesUpdateRequirement, refreshBrainSkills, importBrainSkills, syncBrainSkillsToAeon, openSkillBrowser: openBrainSkillBrowser, importRemoteSkillToBrain, convertSkillToAeon, installGithubSkillToBrain, addWrittenSkillToBrain, refreshNotifications, loadMirosharkArchivedRun, refreshMirosharkRun, mirosharkRunStatus, mirosharkRunIsArchived, mirosharkRunnerStatus, mirosharkPosts, mirosharkFeedIsWaiting, mirosharkFeedIsLive, mirosharkObservedRound, mirosharkTotalRounds, mirosharkCurrentRound, mirosharkProgressPercent, mirosharkRunIsWorking, mirosharkDisplayStep, mirosharkDisplayStatus, mirosharkProgressLabel, mirosharkTemplates, allMirosharkTemplates, mirosharkSelectedTemplate, mirosharkSelectedTemplateFields, mirosharkMissingTemplateFields, mirosharkTelemetryCount, mirosharkActionCount, mirosharkMarketCount, mirosharkTimelineItems, mirosharkActionItems, mirosharkProfileItems, mirosharkMarketItems, mirosharkObservabilityItems, mirosharkLlmCallItems, swarmTemplates, swarmTimelineItems, swarmObservabilityItems, swarmAgents, swarmDecisions, swarmThreadPosts, swarmSocialPosts, mirosharkMarketPricePayloads, swarmMarket, swarmIntegrationItems, swarmMarketPriceItems, swarmExportLinks, currentSwarmRun, swarmRuns, swarmStatusLabel, selectedSwarmRunId } = useMirosharkBrainController({ BRAIN_GRAPH_CLIENT_CACHE_MS, MIROSHARK_TEMPLATE_INPUTS, SWARM_LAUNCH_PRESETS, activeView, agents, appVersion, asRecord, brainGraph, brainGraphLoadedAtRef, brainGraphVaultPathRef, brainSkills, compactValue, composeMirosharkTemplateScenario, createDefaultAgentWallet, defaultMirosharkTemplateInputs, formatRelativeTime, getMiroSharkPosts, getMiroSharkRunStatus, getMiroSharkTemplates, hermesUpdateDetail, hermesUpdateRequiredDetail, honeyLedgerEnabled, isEmptyIntegrationPayload, isLoopbackCollector, isMiroSharkRunTerminal, isUnpublishedSimulationPayload, mirosharkAnalysisAgentId, mirosharkArchiveRuns, mirosharkExperimentEvent, mirosharkHandle, mirosharkMetadata, mirosharkPlatform, mirosharkRounds, mirosharkRun, mirosharkRunPending, mirosharkScenario, mirosharkSelectedTemplateId, mirosharkStat, mirosharkStatus, mirosharkTemplateInputs, mirosharkUserName, mirosharkWorkspaceMode, notificationCountRef, notificationCursorRef, numericRecordValue, payloadArray, payloadCount, payloadData, payloadPreview, pickLinkedDirectory, selectedAgentId, selectedMirosharkRunId, setBrainGraph, setBrainGraphLoading, setBrainGraphStatus, setBrainSkillAeonSyncing, setBrainSkillImportProvider, setBrainSkillImportSuccess, setBrainSkills, setBrainSkillsLoading, setBrainSkillsStatus, setHermesUpdateRequiredDetail, setMachineDirectoryBrowser, setMirosharkActionPending, setMirosharkAnalysisPending, setMirosharkAnalysisResult, setMirosharkAnalysisStatus, setMirosharkArchiveLoading, setMirosharkArchiveRuns, setMirosharkArchiveStatus, setMirosharkExperimentPending, setMirosharkExperimentStatus, setMirosharkHelperPending, setMirosharkHelperStatus, setMirosharkMetadata, setMirosharkPlatform, setMirosharkRounds, setMirosharkRun, setMirosharkRunPending, setMirosharkScenario, setMirosharkSelectedTemplateId, setMirosharkStatus, setMirosharkTemplateInputs, setMirosharkWorkbenchTab, setMirosharkWorkspaceMode, setNotificationCursor, setNotificationSummary, setNotifications, setNotificationsLoading, setNotificationsStatus, setRecentDirectories, setSelectedBrainNodeId, setSelectedMirosharkRunId, setSkillBrowserGithubInstalling, setSkillBrowserGithubOpen, setSkillBrowserGithubUrl, setSkillBrowserImporting, setSkillBrowserLoading, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserSkills, setSkillBrowserStatus, setSkillBrowserView, setSkillBrowserWriting, setSkillBrowserWrittenContent, sharedVault, skillBrowserGithubUrl, skillBrowserWrittenContent, skillRequiresHermesUpdate, swarmEventItem, swarmMarketEventItem, swarmMarketFromItems, swarmMarketPriceEventItem, swarmRunState, swarmTemplateIdFromMirosharkTemplate, swarmTemplateIdFromSurface, walletsByAgent });
@@ -2283,26 +2520,24 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         ...current,
         [storageKey]: [...(current[storageKey] ?? []), { ...message, createdAt: message.createdAt ?? Date.now() }],
       };
-      if (typeof window !== "undefined") {
-        const compactMessages = compactChatMessagesForStorage(next);
-        const serialized = JSON.stringify(compactMessages);
-        lastPersistedChatMessagesRef.current = serialized;
-        window.localStorage.setItem(CHAT_MESSAGES_STORAGE_KEY, serialized);
-      }
+      const compactMessages = compactChatMessagesForStorage(next);
+      const serialized = JSON.stringify(compactMessages);
+      lastPersistedChatMessagesRef.current = serialized;
+      persistChatMessages(compactMessages, serialized);
       return next;
     });
-  }, []);
+  }, [persistChatMessages]);
   const recordActiveChatRun = useCallback((run: ActiveChatRunRecord) => {
-    writeActiveChatRuns({
-      ...readActiveChatRuns(),
+    persistActiveChatRuns({
+      ...readActiveChatRuns(dashboardStateRef.current),
       [run.storageKey]: { ...run, updatedAt: Date.now() },
     });
-  }, []);
+  }, [persistActiveChatRuns]);
   const clearActiveChatRun = useCallback((storageKey: string) => {
-    const next = readActiveChatRuns();
+    const next = readActiveChatRuns(dashboardStateRef.current);
     delete next[storageKey];
-    writeActiveChatRuns(next);
-  }, []);
+    persistActiveChatRuns(next);
+  }, [persistActiveChatRuns]);
   const upsertTask = useCallback((task: AgentTask) => {
     setTasks((current) => [task, ...current.filter((item) => item.id !== task.id)].slice(0, 80));
   }, []);
@@ -2317,7 +2552,18 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     if (sharedVault.vaultPath.trim()) params.set("vaultPath", sharedVault.vaultPath.trim());
     if (sharedVault.kanbanFolder?.trim()) params.set("kanbanFolder", sharedVault.kanbanFolder.trim());
   }, [sharedVault.enabled, sharedVault.kanbanFolder, sharedVault.vaultPath]);
-  const { discoveredAgents, agentAliases, candidateAgents, candidateWorkById, displayAgents, agentWorkById, effectiveSelectedAgentId, selectedAgent, sharedSkillOptions, filteredSkillBrowserSkills, hermesUpdateRequired, filteredSchedulerSkills, selectedBrainNode, visibleBrainNodes, brainLayout, brainGraphStats, selectedBrainTargetIds, messages, lastAssistant, visibleMessages, sessionNotice, selectedChatStreaming, selectedChatHasStreamingChunk, selectedChatProcess, updateChatAutoScroll, machineGroups, renameMachine, kanbanMachineTargets, localKanbanMachineTarget, quickAddMachineTarget, agentsForKanbanTask, visibleAgentCount, fleetViewData, fleetUpdateStatusByMachine, fleetUpdateDetailByMachine, kanbanColumns, visibleKanbanColumns, selectedKanbanTask, selectedKanbanComments, selectedKanbanAgent, selectedKanbanAgentMessages, notificationGroups, selectedKanbanEvents, selectedKanbanBulkIds, selectedWallet, selectedWalletSnapshot, walletStats, honeyAgentRewards, selectedHoneyReward, honeyStats, kanbanAssigneeOptions, workBoardStats, kanbanViewColumns, kanbanInitialLoading, updateKanbanBoardScrollState, agentSpecificEnvCount, sharedEnvSource, runtimeEnvSources, selectedRuntimeEnvSource, sharedEnvCount, unsharedRuntimeEnvCount, sharedBackupStatus, sharedEnvImport, sharedEnvImportDiff, sharedEnvImportNewCount, sharedEnvImportChangedCount, sharedEnvImportSameCount, brainSkillImportableCount, brainSkillImportableLabel, brainSkillImportAllLabel, brainSkillImportAllDescription, navItems, activeHeader, setupMachine, roleModalAgent, agentCreateMachine } = useDashboardDerivedState({ RUNTIME_LABELS, activeView, agentAliasMap, agentCreateDraft, agentCreateMachineKey, agentRoleModalId, agentSettingsPanel, agents, beeRoleLabel, brainGraph, brainGraphLayout, brainSkills, chatAutoScrollRef, chatDisplayContent, chatMessageStorageKey, chatMessageWindow, chatProcessByKey, chatStreamingByKey, cleanActivityTitle, collectorKey, createAgentProfile, createDefaultAgentWallet, dedupeAgents, discoveredMachines, displayMachineName, fleetAgentState, fleetMachineLocation, fleetMetric, fleetSnapshots, fleetVersionState, formatRelativeTime, getHoneyAgentRewards, getSurvivalSnapshot, groupKanbanTasks, groupNotifications, hermesUpdateRequiredDetail, hiveEnv, hiveEnvRuntimeSourceId, honeyTreasury, hydrated, inferCurrentTask, inferLatestAgentMessage, isChatSidebarTask, isLoopbackCollector, isManualAgentChatMessage, isMeaningfulActive, isMobileMachineOs, isStarterPlaceholder, isVisibleFleetMachine, isWorkView, kanbanAssignees, kanbanBoard, kanbanBoardScrollRef, kanbanError, kanbanIncludeArchived, kanbanLoading, kanbanTaskAssigneeAgent, machineIdentityFromParts, machineNameAliases, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineNetworkIssue, maintenanceReport, messagesByAgent, messagesScrollRef, mirosharkAnalysisAgentId, mirosharkStatus, moneyClawLoadingEnvName, moneyClawStatusByEnvName, normalizeAgentProfile, notificationActorMeta, notificationDisplayBody, notificationDisplayTitle, notificationSummary, notificationSourceLabel, notifications, parseEnvImportText, quickAddMachineTargets, refreshMoneyClawStatus, refreshRuntimeIntegrations, refreshSharedSchedulesFromVault, runtimeCan, runtimeCount, runtimeFileRoots, runtimeModelSelectionsByRuntime, runtimeUsage, schedulerSkillSearch, schedules, selectedAgentId, selectedBrainNodeId, selectedChatLeafKey, selectedChatPreview, selectedKanbanTaskId, selectedKanbanTaskIds, setKanbanBoardScrollState, setMachineNameAliases, setScheduleDraft, setupMachineKey, sharedEnvImportText, sharedVault, skillBrowserSearch, skillBrowserSkills, tailscaleDevices, tailscaleStatus, tasks, updateStatusByMachine, walletExpanded, walletsByAgent, workPriority });
+  const { discoveredAgents, agentAliases, candidateAgents, candidateWorkById, displayAgents, agentWorkById, effectiveSelectedAgentId, selectedAgent, sharedSkillOptions, filteredSkillBrowserSkills, hermesUpdateRequired, filteredSchedulerSkills, selectedBrainNode, visibleBrainNodes, brainLayout, brainGraphStats, selectedBrainTargetIds, messages, lastAssistant, visibleMessages, sessionNotice, selectedChatStreaming, selectedChatHasStreamingChunk, selectedChatProcess, updateChatAutoScroll, machineGroups, renameMachine, kanbanMachineTargets, localKanbanMachineTarget, quickAddMachineTarget, agentsForKanbanTask, visibleAgentCount, fleetViewData, fleetUpdateStatusByMachine, fleetUpdateDetailByMachine, kanbanColumns, visibleKanbanColumns, selectedKanbanTask, selectedKanbanComments, selectedKanbanAgent, selectedKanbanAgentMessages, notificationGroups, selectedKanbanEvents, selectedKanbanBulkIds, selectedWallet, selectedWalletSnapshot, walletStats, honeyAgentRewards, selectedHoneyReward, honeyStats, kanbanAssigneeOptions, workBoardStats, kanbanViewColumns, kanbanInitialLoading, updateKanbanBoardScrollState, agentSpecificEnvCount, sharedEnvSource, runtimeEnvSources, selectedRuntimeEnvSource, sharedEnvCount, unsharedRuntimeEnvCount, sharedBackupStatus, sharedEnvImport, sharedEnvImportDiff, sharedEnvImportNewCount, sharedEnvImportChangedCount, sharedEnvImportSameCount, brainSkillImportableCount, brainSkillImportableLabel, brainSkillImportAllLabel, brainSkillImportAllDescription, navItems, activeHeader, setupMachine, roleModalAgent, agentCreateMachine } = useDashboardDerivedState({ RUNTIME_LABELS, activeView, agentAliasMap, agentCreateDraft, agentCreateMachineKey, agentRoleModalId, agentSettingsPanel, agents, beeRoleLabel, brainGraph, brainGraphLayout, brainSkills, chatAutoScrollRef, chatDisplayContent, chatMessageStorageKey, chatMessageWindow, chatProcessByKey, chatStreamingByKey, cleanActivityTitle, collectorKey, createAgentProfile, createDefaultAgentWallet, dedupeAgents, discoveredMachines, displayMachineName, fleetAgentState, fleetMachineLocation, fleetMetric, fleetSnapshots, fleetVersionState, formatRelativeTime, getHoneyAgentRewards, getSurvivalSnapshot, groupKanbanTasks, groupNotifications, hermesUpdateRequiredDetail, hiveEnv, hiveEnvRuntimeSourceId, honeyTreasury, hydrated, inferCurrentTask, inferLatestAgentMessage, isChatSidebarTask, isLoopbackCollector, isManualAgentChatMessage, isMeaningfulActive, isMobileMachineOs, isStarterPlaceholder, isVisibleFleetMachine, isWorkView, kanbanAssignees, kanbanBoard, kanbanBoardScrollRef, kanbanError, kanbanIncludeArchived, kanbanLoading, kanbanTaskAssigneeAgent, machineIdentityFromParts, machineNameAliases, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineNetworkIssue, maintenanceReport, messagesByAgent, messagesScrollRef, mirosharkAnalysisAgentId, mirosharkStatus, moneyClawLoadingEnvName, moneyClawStatusByEnvName, normalizeAgentProfile, notificationActorMeta, notificationDisplayBody, notificationDisplayTitle, notificationSummary, notificationSourceLabel, notifications, parseEnvImportText, quickAddMachineTargets, refreshMoneyClawStatus, refreshRuntimeIntegrations, refreshSharedSchedulesFromVault, runtimeCan, runtimeCount, runtimeFileRoots, runtimeModelSelectionsByRuntime, runtimeUsage, schedulerSkillSearch, schedules, selectedAgentId, selectedBrainNodeId, selectedChatLeafKey, selectedChatPreview, selectedKanbanTaskId, selectedKanbanTaskIds, setKanbanBoardScrollState, setMachineNameAliases, setScheduleDraft, setupMachineKey, sharedEnvImportText, sharedVault, skillBrowserSearch, skillBrowserSkills, tailscaleDevices, tailscaleStatus, tasks, updateStatusByMachine, walletExpanded, walletsByAgent, workPriority, suppressedDiscoveredAgentKeys });
+  const tailnetCleanupState = useTailnetAutoCleanup(hydrated);
+  const tailnetCleanup = useMemo(() => ({
+    visible: tailnetCleanupState.stalePlanVisible || Boolean(tailnetCleanupState.cleanupNotice),
+    candidates: tailnetCleanupState.stalePlan?.candidates ?? [],
+    staleAgeDays: tailnetCleanupState.stalePlan?.staleAgeDays ?? 7,
+    busy: tailnetCleanupState.cleanupBusy,
+    notice: tailnetCleanupState.cleanupNotice,
+    onCleanupNow: () => void tailnetCleanupState.runCleanupNow(),
+    onAlwaysCleanup: () => void tailnetCleanupState.enableAlwaysCleanup(),
+    onDismiss: tailnetCleanupState.dismissCleanup,
+  }), [tailnetCleanupState]);
   const selectedChatStorageKey = selectedAgent ? chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey) : "";
   const selectedChatLeafRuntimeSessionId = runtimeSessionIdFromChatLeafKey(selectedChatLeafKey);
   const selectedChatRuntimeLeafLoading = Boolean(
@@ -2328,7 +2574,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     && runtimeSessionLoadedByKey[selectedChatStorageKey] !== selectedChatLeafRuntimeSessionId
   );
   const selectedChatHistoryLoading = Boolean(selectedChatStorageKey && chatHistoryLoadingByKey[selectedChatStorageKey]) || selectedChatRuntimeLeafLoading;
-  const chatInitialLoading = activeView === "chat" && (!hydrated || selectedChatHistoryLoading);
+  const chatInitialLoading = activeView === "chat" && !hydrated;
   useEffect(() => {
     if (!hydrated || activeView !== "chat" || !selectedAgent || !selectedChatStorageKey) return;
     const element = messagesScrollRef.current;
@@ -2372,89 +2618,82 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     }
 
     let cancelled = false;
+    let inFlight = false;
+    let timer: number | null = null;
     const readSyncHealth = async () => {
+      if (cancelled || inFlight) return;
+      inFlight = true;
       const params = new URLSearchParams({ vaultPath: fleetSyncVaultPath });
       const response = await fetch(`/api/syncthing/status?${params.toString()}`, { cache: "no-store" }).catch(() => null);
       const data = await response?.json().catch(() => null);
-      if (cancelled || !data?.ok) return;
+      try {
+        if (cancelled || !data?.ok) return;
 
-      const now = Date.now();
-      const peers = Array.isArray(data.vaultFolder?.devices) ? data.vaultFolder.devices as FleetSyncthingDevice[] : [];
-      const activePeerIds = new Set<string>();
-      const next: Record<string, FleetSyncPeerHealth> = {};
+        const now = Date.now();
+        const peers = Array.isArray(data.vaultFolder?.devices) ? data.vaultFolder.devices as FleetSyncthingDevice[] : [];
+        const activePeerIds = new Set<string>();
+        const next: Record<string, FleetSyncPeerHealth> = {};
 
-      for (const peer of peers) {
-        if (!peer?.deviceID) continue;
-        const completion = typeof peer.completion === "number" ? peer.completion : null;
-        const needItems = typeof peer.needItems === "number" ? peer.needItems : null;
-        const needBytes = typeof peer.needBytes === "number" ? peer.needBytes : null;
-        const remoteState = typeof peer.remoteState === "string" ? peer.remoteState : null;
-        const incomplete = (typeof completion === "number" && completion < 99.95) || (typeof needItems === "number" && needItems > 0);
-        const remoteNotSharing = Boolean(remoteState && !/^(?:valid|idle)$/i.test(remoteState));
-        if (!incomplete && !remoteNotSharing) continue;
+        for (const peer of peers) {
+          if (!peer?.deviceID) continue;
+          const completion = typeof peer.completion === "number" ? peer.completion : null;
+          const needItems = typeof peer.needItems === "number" ? peer.needItems : null;
+          const needBytes = typeof peer.needBytes === "number" ? peer.needBytes : null;
+          const remoteState = typeof peer.remoteState === "string" ? peer.remoteState : null;
+          const incomplete = (typeof completion === "number" && completion < 99.95) || (typeof needItems === "number" && needItems > 0);
+          const remoteNotSharing = Boolean(remoteState && !/^(?:valid|idle)$/i.test(remoteState));
+          if (!incomplete && !remoteNotSharing) continue;
 
-        const signature = [completion ?? "", needItems ?? "", needBytes ?? "", remoteState ?? ""].join(":");
-        const previous = fleetSyncProgressRef.current[peer.deviceID];
-        if (!previous || previous.signature !== signature) {
-          fleetSyncProgressRef.current[peer.deviceID] = { signature, lastChangedAt: now };
+          const signature = [completion ?? "", needItems ?? "", needBytes ?? "", remoteState ?? ""].join(":");
+          const previous = fleetSyncProgressRef.current[peer.deviceID];
+          if (!previous || previous.signature !== signature) {
+            fleetSyncProgressRef.current[peer.deviceID] = { signature, lastChangedAt: now };
+          }
+          const lastChangedAt = fleetSyncProgressRef.current[peer.deviceID]?.lastChangedAt ?? now;
+          const unchangedMs = Math.max(0, now - lastChangedAt);
+          activePeerIds.add(peer.deviceID);
+          next[peer.deviceID] = {
+            ...peer,
+            completion,
+            needItems,
+            needBytes,
+            remoteState,
+            stalled: remoteNotSharing || unchangedMs >= FLEET_SYNC_STALLED_MS,
+            unchangedMs,
+          };
         }
-        const lastChangedAt = fleetSyncProgressRef.current[peer.deviceID]?.lastChangedAt ?? now;
-        const unchangedMs = Math.max(0, now - lastChangedAt);
-        activePeerIds.add(peer.deviceID);
-        next[peer.deviceID] = {
-          ...peer,
-          completion,
-          needItems,
-          needBytes,
-          remoteState,
-          stalled: remoteNotSharing || unchangedMs >= FLEET_SYNC_STALLED_MS,
-          unchangedMs,
-        };
-      }
 
-      for (const deviceID of Object.keys(fleetSyncProgressRef.current)) {
-        if (!activePeerIds.has(deviceID)) delete fleetSyncProgressRef.current[deviceID];
+        for (const deviceID of Object.keys(fleetSyncProgressRef.current)) {
+          if (!activePeerIds.has(deviceID)) delete fleetSyncProgressRef.current[deviceID];
+        }
+        setFleetSyncPeerHealth(next);
+      } finally {
+        inFlight = false;
+        if (!cancelled) {
+          timer = window.setTimeout(() => void readSyncHealth(), FLEET_SYNC_HEALTH_POLL_MS);
+        }
       }
-      setFleetSyncPeerHealth(next);
     };
 
-    void readSyncHealth();
-    const interval = window.setInterval(() => void readSyncHealth(), FLEET_SYNC_HEALTH_POLL_MS);
+    timer = window.setTimeout(() => void readSyncHealth(), FLEET_SYNC_HEALTH_INITIAL_DELAY_MS);
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      if (timer !== null) window.clearTimeout(timer);
     };
   }, [fleetSyncVaultPath, hydrated, sharedVault.enabled, sharedVault.syncProvider]);
 
   const fleetSyncPeers = useMemo(() => Object.values(fleetSyncPeerHealth), [fleetSyncPeerHealth]);
-  const fleetViewDataWithApps = useMemo(() => {
-    const machinesWithApps = applyActiveAppBadges(fleetViewData.machines, fleetHostedApps);
-    const assignedSyncPeerIds = new Set<string>();
-    return {
-      ...fleetViewData,
-      machines: machinesWithApps.map((machine) => {
-        if (machine.role === "Primary" || machine.name === "This Mac" || machine.kind === "Setup Target") return machine;
-        const syncPeer = fleetSyncPeers.find((peer) => !assignedSyncPeerIds.has(peer.deviceID) && fleetSyncPeerMatchesMachine(peer, machine));
-        if (!syncPeer) return machine;
-        assignedSyncPeerIds.add(syncPeer.deviceID);
-        return {
-          ...machine,
-          syncIssue: {
-            label: "Sync error. Fix?",
-            title: "Shared vault sync needs repair",
-            detail: formatSyncPeerIssueDetail(syncPeer),
-            deviceID: syncPeer.deviceID,
-            deviceName: syncPeer.name || syncPeer.deviceID.slice(0, 7),
-            completion: syncPeer.completion,
-            needItems: syncPeer.needItems,
-            needBytes: syncPeer.needBytes,
-            remoteState: syncPeer.remoteState,
-            stalled: syncPeer.stalled,
-          },
-        };
-      }),
-    };
-  }, [fleetHostedApps, fleetSyncPeers, fleetViewData]);
+  const fleetSyncRepairTargets = useMemo<FleetSyncRepairTarget[]>(() => buildFleetSyncRepairTargets({
+    machines: fleetViewData.machines,
+    hostedApps: fleetHostedApps,
+    peers: fleetSyncPeers,
+  }), [fleetHostedApps, fleetSyncPeers, fleetViewData.machines]);
+  const fleetViewDataWithApps = useMemo(() => applyFleetSyncAutoRepairIssues({
+    fleetViewData,
+    hostedApps: fleetHostedApps,
+    targets: fleetSyncRepairTargets,
+    autoRepairByDevice: fleetSyncAutoRepairByDevice,
+  }), [fleetHostedApps, fleetSyncAutoRepairByDevice, fleetSyncRepairTargets, fleetViewData]);
   const activeConnectedAppBadgesForShell = useMemo(
     () => activeConnectedAppBadges(fleetViewDataWithApps.machines),
     [fleetViewDataWithApps.machines],
@@ -2521,14 +2760,43 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     }, 0);
     return () => window.clearTimeout(timer);
   }, [scheduleImportStatus]);
-  const { updateAgent, updateAgentProfile: agentUpdateAgentProfile, syncAeonEnvToGitHub, openAgentCreationModal, closeAgentSettingsModal, browseAgentRuntimeFolder, refreshRuntimeIntegrations: agentRefreshRuntimeIntegrations, runRuntimeIntegrationAction, searchRuntimeSessionsForAgent, createAgentFromModal } = useAgentController({ RUNTIME_LABELS, aeonEnvKeys, agentCreateDraft, agentCreateMachine, agents, beeWorkerPreset, collectorKey, createAgentProfile, defaultWorkerClassDraft, displayAgents, hermesUpdateDetail, normalizeAgentProfile, openSetupModal, roleModalAgent, runtimeCount, runtimeSessionQuery, selectedAgent, setActiveView, setAeonEnvSyncStatus, setAeonEnvSyncing, setAgentCreateDraft, setAgentCreateMachineKey, setAgentRenameDraft, setAgentRenameEditing, setAgentRoleModalId, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderBrowsing, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setAgentWorkerClassView, setAgents, setCustomWorkerDraft, setCustomWorkerImageError, setCustomWorkerSkillSearch, setDiscoveredMachines, setHermesUpdateRequiredDetail, setRuntimeBackgroundPrompt, setRuntimeIntegrationBusy, setRuntimeIntegrationMessage, setRuntimeIntegrationStatus, setRuntimeModelDraft, setRuntimeModelSelectionsByRuntime, setRuntimeModelSetupMode, setRuntimeSessionQuery, setRuntimeSessionResults, setSelectedAgentId });
+  const { updateAgent, updateAgentProfile: agentUpdateAgentProfile, syncAeonEnvToGitHub, openAgentCreationModal, closeAgentSettingsModal, browseAgentRuntimeFolder, refreshRuntimeIntegrations: agentRefreshRuntimeIntegrations, runRuntimeIntegrationAction, searchRuntimeSessionsForAgent, createAgentFromModal } = useAgentController({ RUNTIME_LABELS, aeonEnvKeys, agentCreateDraft, agentCreateMachine, agents, beeWorkerPreset, collectorKey, createAgentProfile, defaultWorkerClassDraft, displayAgents, hermesUpdateDetail, normalizeAgentProfile, onAgentCreated: handleAgentCreated, openSetupModal, roleModalAgent, runtimeCount, runtimeSessionQuery, selectedAgent, setActiveView, setAeonEnvSyncStatus, setAeonEnvSyncing, setAgentCreateDraft, setAgentCreateMachineKey, setAgentRenameDraft, setAgentRenameEditing, setAgentRoleModalId, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderBrowsing, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setAgentWorkerClassView, setAgents, setCustomWorkerDraft, setCustomWorkerImageError, setCustomWorkerSkillSearch, setDiscoveredMachines, setHermesUpdateRequiredDetail, setRuntimeBackgroundPrompt, setRuntimeIntegrationBusy, setRuntimeIntegrationMessage, setRuntimeIntegrationStatus, setRuntimeModelDraft, setRuntimeModelSelectionsByRuntime, setRuntimeModelSetupMode, setRuntimeSessionQuery, setRuntimeSessionResults, setSelectedAgentId });
   const { searchAllRuntimeSessions, sessionSearchLoading, sessionSearchMessage, sessionSearchQuery, sessionSearchResults, setSessionSearchQuery } = useRuntimeSessionSearch(displayAgents);
   const { toggleScheduleSkill, toggleSchedulerStepMode, updateSchedulerStep, addSchedulerStep, removeSchedulerStep, addSchedulerStepPath, removeSchedulerStepPath, toggleSchedulerStepSkill, updateSchedulerStepModel, isSchedulerFilePath, pickSchedulerFolder, pickSchedulerFiles, addSchedulePath, removeSchedulePath, removeScheduleSkill, resetScheduleDraft, editSchedule, createSchedule, removeSchedule, importExistingSchedules, normalizeImportedScheduleEvery, toggleSchedule, schedulerPlainPrompt, schedulerSharedSnapshot, upsertSharedSchedule, upsertSharedSchedules, fetchPastRunContext, scheduleFromSharedSnapshot, mergeSharedSchedules, refreshSharedSchedulesFromVault: schedulerRefreshSharedSchedulesFromVault, recordSharedScheduledRun, runScheduleNow, schedulerStatusFromSchedule, scheduleIntervalMs, formatSchedulerDuration, schedulerCadenceLabel, schedulerJobs, findScheduleForJob, modalCadenceFromEvery, everyFromModalCadence, schedulerModalInitial, saveScheduleFromModal, browseSchedulerFolder } = useSchedulerController({ RUNTIME_LABELS, SCHEDULER_DYNAMIC_SKILL_ACTIONS_ENABLED, SCHEDULER_HERMES_SKILL_CONTEXT_ENABLED, SCHEDULER_MODEL_OPTIONS, SCHEDULER_RUN_STALE_MS, agents, appVersion, appendMessage, chatSetupIssue, createDefaultAgentWallet, displayAgents, displayMachineName, editingScheduleId, formatRelativeTime, honeyLedgerEnabled, logClientTelemetry, refreshHoneyLedger, scheduleDraft, schedules, selectedAgent, setEditingScheduleId, setMessagesByAgent, setScheduleDraft, setScheduleImportStatus, setScheduleImporting, setSchedulerAttachMenu, setSchedulerDraftOpen, setSchedulerPathDraft, setSchedulerPathKind, setSchedulerRunStates, setSchedulerSelectedStep, setSchedulerSkillSearch, setSchedules, sharedVault, updateTask, upsertTask, walletsByAgent });
-  const { updateSharedVault, updateWallet, resetWalletBurnClock, copyPaymentPrompt, refreshMoneyClawStatus: walletRefreshMoneyClawStatus, saveMoneyClawKey, initializeCoreWalletRails, refreshHoneyLedger: walletRefreshHoneyLedger, observeHoneyUsage: walletObserveHoneyUsage, refreshRuntimeUsage, refreshWalletVaultBackupStatus, runWalletVaultBackupAction, refreshMaintenanceReport, runMaintenanceAction, runtimeFileRequest, refreshRuntimeFileRoots, listRuntimeFiles, openRuntimeFile, saveRuntimeFile, returnAllHiveToHoney, claimAllHoneyToBankrHive, enableHoneyLedger, updateWalletAction, createLocalWallet, refreshWalletBalance, sendWalletUsdc, testX402Fetch, addAgentToMachine, requestDuplicateAgent, duplicateAgent, deleteAgent } = useWalletFilesController({ buildAgentPaymentPrompt, createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, displayAgents, duplicateAgentDraft, agents, honeyLedgerEnabled, normalizeMoney, openAgentCreationModal, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, selectedAgent, selectedAgentId, setAgents, setDuplicateAgentDraft, setHoneyLedgerEnabled, setHoneyTreasury, setMaintenanceBusy, setMaintenanceMessage, setMaintenanceReport, setMessagesByAgent, setMoneyClawLoadingEnvName, setMoneyClawStatusByEnvName, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setRuntimeFileRoots, setRuntimeFileStatus, setRuntimeFiles, setRuntimeUsage, setRuntimeUsageLoading, setSelectedAgentId, setSharedVault, setWalletActionsByAgent, setWalletVaultBackupBusy, setWalletVaultBackupMessage, setWalletVaultBackupStatus, setWalletsByAgent, sharedVault, updateAgentProfile, walletActionsByAgent, walletsByAgent });
+  const { updateSharedVault, updateWallet, resetWalletBurnClock, copyPaymentPrompt, exportWalletSecrets, refreshMoneyClawStatus: walletRefreshMoneyClawStatus, saveMoneyClawKey, initializeCoreWalletRails, refreshHoneyLedger: walletRefreshHoneyLedger, observeHoneyUsage: walletObserveHoneyUsage, refreshRuntimeUsage, refreshWalletVaultBackupStatus, runWalletVaultBackupAction, refreshMaintenanceReport, runMaintenanceAction, runtimeFileRequest, refreshRuntimeFileRoots, listRuntimeFiles, openRuntimeFile, saveRuntimeFile, returnAllHiveToHoney, claimAllHoneyToBankrHive, enableHoneyLedger, updateWalletAction, createLocalWallet, refreshWalletBalance, sendWalletUsdc, testX402Fetch, addAgentToMachine, requestDuplicateAgent, duplicateAgent, deleteAgent } = useWalletFilesController({ buildAgentPaymentPrompt, createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, displayAgents, duplicateAgentDraft, agents, honeyLedgerEnabled, normalizeMoney, onAgentAdded: noteAgentArrival, openAgentCreationModal, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, selectedAgent, selectedAgentId, setAgents, setDiscoveredMachines, setDuplicateAgentDraft, setFleetSnapshots, setHoneyLedgerEnabled, setHoneyTreasury, setMaintenanceBusy, setMaintenanceMessage, setMaintenanceReport, setMessagesByAgent, setMoneyClawLoadingEnvName, setMoneyClawStatusByEnvName, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setRuntimeFileRoots, setRuntimeFileStatus, setRuntimeFiles, setRuntimeUsage, setRuntimeUsageLoading, setSelectedAgentId, setSharedVault, setSuppressedDiscoveredAgentKeys, setWalletActionsByAgent, setWalletVaultBackupBusy, setWalletVaultBackupMessage, setWalletVaultBackupStatus, setWalletsByAgent, sharedVault, updateAgentProfile, walletActionsByAgent, walletsByAgent });
   const { switchRuntime, hasConversation, conversationTitle, hydrateRuntimeSessionChat, startAgentChat, startAgentWorkChat, changeChatWorkingDirectory, closeChatFolderCreator, createChatFolder, chatSidebarTree, selectedChatMachine, selectedChatDirectory, chatFolderCreatorMachine, chatFolderCreatorParentOptions, copySetupCommand } = useChatTreeController({ RUNTIME_CAPABILITIES, RUNTIME_DEFAULTS, RUNTIME_KINDS, RUNTIME_LABELS, activeView, agentWorkById, chatCustomFolders, chatDedupeKey, chatFolderDraft, chatFolderLabel, chatMessageStorageKey, chatMessageWindow, chatPreviewDedupeKey, chatSeedMessagesForTask, chooseDirectoryForMachine, createChatLeafKey, displayAgents, findRosterChatTask, runtimeSessionIdFromTask, isChatSidebarTask, isManualAgentChatMessage, logClientTelemetry, machineGroups, messagesByAgent, parentPathFromPath, preferChatTreeItem, recordRecentDirectory, runtimeCan, runtimeSessionForChat, selectedAgent, selectedAgentId, selectedChatDirectoryPath, selectedChatLeafKey, setActiveView, setChatCustomFolders, setChatFolderDraft, setChatHistoryLoadingByKey, setChatMessageWindow, setMessagesByAgent, setSelectedAgentId, setSelectedChatDirectoryPath, setSelectedChatLeafKey, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setSetupCommandCopied, setSetupMachineKey, setupCollectorCommand, setStatus, setStatusAgentId, taskChatLeafKey, updateAgent, workPriority, workspaceLabelFromPath });
   const { openMachineInitModal, saveHetznerToken, openHetznerEnvFile, initializeMachineProject, copyMachineInitCommand, refreshAppVersionNow, refreshDiscoveryNow, runMachineUpdate, copyUpdateDetail, refreshKanbanOnce, kanbanStorageBody, notificationStorageBody, raiseHermesAuthAlert, noteIntakeBody, scanNoteIntake, importNoteIntake, markNotificationRead, markAllNotificationsRead, updateNotificationSettings, trackAgentTaskOnKanban } = useFleetNotificationsController({ DEFAULT_SHARED_VAULT, addKanbanStorageParams, appVersion, hydrated, isCollectorAutoUpdateable, kanbanAssigneeFilter, kanbanBoardSlug, kanbanIncludeArchived, kanbanSearch, kanbanTenantFilter, cleanActivityTitle, localDashboardHasUnpublishedChanges, machineInitDraft, machineInitToken, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineVersionCopy, mergeDiscoveredMachines, mergeSnapshotRecord, noteIntakeAutoInFlightRef, notifications, setAppVersion, setCopiedUpdateDetailKey, setDiscoveredMachines, setFleetSnapshots, setKanbanAssignees, setKanbanBoard, setKanbanBoards, setKanbanError, setKanbanStorage, setKanbanTenants, setActiveView, setSelectedKanbanTaskId, setMachineInitCopiedKey, setMachineInitOpen, setMachineInitStatus, setMachineInitToken, setMachineInitTokenStatus, setNoteIntakePending, setNoteIntakePreview, setNoteIntakeStatus, setNotificationCursor, setNotificationSummary, setNotifications, setNotificationsStatus, setTasks, setUpdateStatusByMachine, sharedVault, summarizeHermesAuthError, updateStatusByMachine });
   const { createKanbanTask, createKanbanBoard, patchKanbanTask, bulkPatchKanbanTasks, promoteKanbanIdea, updateKanbanTaskMachine, markKanbanTaskReviewed, requestKanbanTaskUndo, readWorkspaceGitSnapshot, kanbanWorkspaceChangeSummary, addKanbanCardFiles, openKanbanCardFilePicker, handleKanbanCardFileChange, handleKanbanCardImageChange, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, removeKanbanCardAttachment, removeKanbanCardDirectory, moveKanbanTask, deleteKanbanTask, editAndInterruptKanbanTask, openKanbanTaskModal, kanbanTaskMenuItems, orchestrateReadyKanbanTask, addKanbanSystemComment } = useKanbanTaskController({ AbortController, Eye, GitBranch, KANBAN_COLUMNS, KANBAN_PICKUP_PREVIEW_MS, MessageSquare, Pencil, RotateCcw, Trash2, Users, agentsForKanbanTask, appVersion, appendMessage, attachmentSizeLabel, beeRoleIconPath, beeWorkerClassLabel, chatSetupIssue, chooseBeeAssignment, chooseDirectoryForMachine, createDefaultAgentWallet, dispatchKanbanTaskToAgentRef, displayAgents, honeyLedgerEnabled, kanbanBoard, kanbanBoardSlug, kanbanCardAttachmentTargetId, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanDispatchCooldownRef, kanbanEditDraft, kanbanEditPendingTaskId, kanbanReadyPickupAttemptRef, kanbanReadyPickupInFlightRef, kanbanReadyPickupSignature, kanbanRuntimeAbortRef, kanbanStorageBody, kanbanTaskAssigneeAgent, kanbanTaskInterruptPrompt, linkedDirectoryLabel, logClientTelemetry, newBoardDraft, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddMachineTarget, readComposerFiles, recordRecentDirectory, refreshHoneyLedger, refreshKanbanOnce, selectedKanbanAgent, selectedKanbanBulkIds, selectedKanbanTask, selectedKanbanTaskId, setKanbanBoard, setKanbanBoardSlug, setKanbanBulkPending, setKanbanCardAttachmentMenuOpen, setKanbanCardAttachmentTargetId, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanEditPendingTaskId, setKanbanError, setKanbanPickupPreviewByTask, setKanbanStorage, setKanbanTaskModal, setMessagesByAgent, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddStatus, setSelectedKanbanTaskId, setSelectedKanbanTaskIds, sharedVault, updateTask, upsertTask, wait, walletsByAgent });
   const { createKanbanArtistHandoffTask, requeueStaleKanbanTask, dispatchKanbanTaskToAgent, addKanbanComment, refreshKanbanAgentSession, steerSelectedKanbanTask } = useKanbanDispatchController({ AbortController, KANBAN_COLUMNS, KANBAN_DISPATCH_NO_PROGRESS_MS, KANBAN_NO_ASSISTANT_QUIET_MS, KANBAN_NO_ASSISTANT_STALL_MS, KANBAN_SESSION_POLL_FAILURE_LIMIT, KANBAN_STALE_AGENT_COOLDOWN_MS, KANBAN_TOOL_OUTPUT_STALL_MS, addKanbanSystemComment, appVersion, appendMessage, attachmentSizeLabel, attachmentSummary, chatSetupIssue, commentDraft, compactDiagnosticPreview, createDefaultAgentWallet, displayAgents, extractKanbanVisualBrief, formatDurationShort, honeyLedgerEnabled, hydrated, isHermesAuthFailure, isInternalHermesSessionPrelude, isKanbanAwaitingAgentUpdate, isKanbanStaleWorkingTask, isTransientDelegationMessage, kanbanBoard, kanbanBoardSlug, kanbanDispatchCooldownRef, kanbanNoAssistantStalledDetail, kanbanReadyPickupAttemptRef, kanbanReadyPickupInFlightRef, kanbanReadyPickupSignature, kanbanRuntimeAbortRef, kanbanSessionPollFailureRef, kanbanSessionPollRef, kanbanStaleAge, kanbanStaleRequeueAttemptRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanStorageBody, kanbanTaskAssigneeAgent, kanbanTaskAssignmentForAgent, kanbanTaskDispatchPrompt, kanbanToolOutputStalledDetail, kanbanWorkspaceChangeSummary, logClientTelemetry, messageContentParts, messagesByAgent, orchestrateReadyKanbanTask, patchKanbanTask, raiseHermesAuthAlert, readWorkspaceGitSnapshot, refreshHoneyLedger, refreshKanbanOnce, selectedKanbanAgent, selectedKanbanTask, setCommentDraft, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanSteeringTaskId, setMessagesByAgent, sharedVault, simpleStableHash, summarizeKanbanToolOutput, updateTask, upsertTask, walletsByAgent });
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        setFleetAutoUpdatePaused(window.localStorage.getItem(FLEET_AUTO_UPDATE_PAUSED_STORAGE_KEY) === "1");
+      } catch {
+        // Stay unpaused when storage is unavailable.
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const toggleFleetAutoUpdatePaused = useCallback(() => {
+    setFleetAutoUpdatePaused((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(FLEET_AUTO_UPDATE_PAUSED_STORAGE_KEY, next ? "1" : "0");
+      } catch {
+        // Toggle still applies for this session.
+      }
+      return next;
+    });
+  }, []);
+  useFleetAutoUpdate({
+    enabled: hydrated,
+    paused: fleetAutoUpdatePaused,
+    machineGroups,
+    appVersion,
+    updateStatusByMachine,
+    runMachineUpdate,
+  });
   // eslint-disable-next-line react-hooks/refs
   selectedChatTargetRef.current = { agentId: selectedAgentId, leafKey: selectedChatLeafKey };
 
@@ -2571,6 +2839,20 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     const leafRuntimeSessionId = runtimeSessionIdFromChatLeafKey(selectedChatLeafKey);
     const leafRuntimeSessionLoaded = Boolean(leafRuntimeSessionId && runtimeSessionLoadedByKeyRef.current[storageKey] === leafRuntimeSessionId);
     if (leafRuntimeSessionLoaded && !chatStreamingByKeyRef.current[storageKey]) return;
+    const initialSessionId = chatRuntimeSessionIdsByKeyRef.current[storageKey] || selectedChatRuntimeSessionIdRef.current || leafRuntimeSessionId || "";
+    const initialActiveRun = readActiveChatRuns(dashboardStateRef.current)[storageKey];
+    const initialActiveRunFresh = Boolean(initialActiveRun && initialActiveRun.status === "active" && Date.now() - initialActiveRun.updatedAt < CHAT_RESPONSE_STALL_TIMEOUT_MS);
+    if (!initialSessionId && !chatStreamingByKeyRef.current[storageKey] && !initialActiveRunFresh) {
+      logClientTelemetry("chat.runtime.poll.skipped", {
+        agentId: selectedAgent.id,
+        agentName: selectedAgent.name,
+        runtime: selectedAgent.runtime,
+        leafKey: selectedChatLeafKey,
+        storageKey,
+        reason: "no-runtime-session",
+      }, { threadId: storageKey });
+      return;
+    }
     const markRuntimeLeafLoaded = () => {
       if (!leafRuntimeSessionId) return;
       runtimeSessionLoadedByKeyRef.current = {
@@ -2611,6 +2893,19 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     };
     const pollSession = async () => {
       const sessionId = chatRuntimeSessionIdsByKeyRef.current[storageKey] || selectedChatRuntimeSessionIdRef.current || leafRuntimeSessionId || "";
+      const activeRun = readActiveChatRuns(dashboardStateRef.current)[storageKey];
+      const activeRunFresh = Boolean(activeRun && activeRun.status === "active" && Date.now() - activeRun.updatedAt < CHAT_RESPONSE_STALL_TIMEOUT_MS);
+      if (!sessionId && !chatStreamingByKeyRef.current[storageKey] && !activeRunFresh) {
+        logClientTelemetry("chat.runtime.poll.skipped", {
+          agentId: selectedAgent.id,
+          agentName: selectedAgent.name,
+          runtime: selectedAgent.runtime,
+          leafKey: selectedChatLeafKey,
+          storageKey,
+          reason: "no-runtime-session",
+        }, { threadId: storageKey });
+        return;
+      }
       const pollRequestKey = `${storageKey}:${sessionId || "recent"}`;
       if (runtimeSessionPollInFlightRef.current.has(pollRequestKey)) return;
       runtimeSessionPollInFlightRef.current.add(pollRequestKey);
@@ -2667,12 +2962,13 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         const visibleSessionMessages = sessionMessages.filter((message) => message.role === "user" || message.role === "assistant");
         const latestSessionMessage = Array.isArray(session.messages) ? session.messages.at(-1) : null;
         const latestSessionRole = String(latestSessionMessage?.role ?? visibleSessionMessages.at(-1)?.role ?? "").toLowerCase();
-        const localRun = readActiveChatRuns()[storageKey];
+        const localRun = readActiveChatRuns(dashboardStateRef.current)[storageKey];
         const localRunActive = Boolean(localRun && localRun.status === "active" && Date.now() - localRun.updatedAt < CHAT_RESPONSE_STALL_TIMEOUT_MS);
         const visibleRunMessages = localRunActive ? chatMessagesForActiveRun(visibleSessionMessages, localRun) : visibleSessionMessages;
         const latestRunMessage = visibleRunMessages.at(-1);
         const latestRunRole = String(latestRunMessage?.role ?? (localRunActive ? "" : latestSessionRole)).toLowerCase();
-        const hasAssistantReply = latestRunRole === "assistant"
+        const latestRunHasAssistantReply = latestRunRole === "assistant" && Boolean(latestRunMessage?.content?.trim() || latestRunMessage?.agentPrompt);
+        const hasAssistantReply = latestRunHasAssistantReply
           || visibleRunMessages.some((message) => message.role === "assistant" && message.content.trim())
           || (!localRunActive && chatTranscriptHasAssistantReply(messagesByAgentRef.current[storageKey]));
         const replaceRuntimeLeafHistory = Boolean(leafRuntimeSessionId && !localRunActive);
@@ -2820,8 +3116,8 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         }
         if (active) {
           const runMessages = chatMessagesForActiveRun(visibleSessionMessages, { startedAt: runStartedAt } as ActiveChatRunRecord);
-          writeActiveChatRuns({
-            ...readActiveChatRuns(),
+          persistActiveChatRuns({
+            ...readActiveChatRuns(dashboardStateRef.current),
             [storageKey]: {
               storageKey,
               agentId: selectedAgent.id,
@@ -2835,10 +3131,10 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
             },
           });
         } else {
-          const activeRuns = readActiveChatRuns();
+          const activeRuns = readActiveChatRuns(dashboardStateRef.current);
           if (activeRuns[storageKey]) {
             delete activeRuns[storageKey];
-            writeActiveChatRuns(activeRuns);
+            persistActiveChatRuns(activeRuns);
           }
         }
         resumedRuntimeSessionKeysRef.current.add(`${storageKey}:${sessionKey || updatedAt}`);
@@ -2860,7 +3156,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     void pollSession();
     const timer = window.setInterval(() => void pollSession(), chatStreamingByKeyRef.current[storageKey] ? 5_000 : 12_000);
     return () => window.clearInterval(timer);
-  }, [activeView, hydrated, selectedAgent, selectedChatLeafKey]);
+  }, [activeView, hydrated, persistActiveChatRuns, selectedAgent, selectedChatLeafKey, selectedChatRuntimeSessionId]);
 
   // eslint-disable-next-line react-hooks/refs
   updateAgentProfileRef.current = agentUpdateAgentProfile;
@@ -2961,7 +3257,16 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   }, [activeView, displayAgents, hydrated]);
   // eslint-disable-next-line react-hooks/refs
   dispatchKanbanTaskToAgentRef.current = dispatchKanbanTaskToAgent;
-  const { checkStatus, checkVaultStatus, checkControlRoomStatus, runVaultTailnetSync, pairSyncthingCollector, pairSyncthingVaultSync, inspectBrainNode, startBrainPan, moveBrainPan, endBrainPan, addChatFiles, handleChatFileChange, handleChatFileReferenceDrop, handleChatImageChange, removeChatAttachment, attachChatDirectory, attachChatRecentDirectory, removeChatDirectory, addQuickAddFiles, handleQuickAddFileChange, handleQuickAddImageChange, removeQuickAddAttachment, attachQuickAddDirectory, attachQuickAddRecentDirectory, removeQuickAddDirectory, addKanbanSteerFiles, handleKanbanSteerFileChange, handleKanbanSteerImageChange, removeKanbanSteerAttachment, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, removeKanbanSteerDirectory, updateVoiceTranscript, appendVoiceTranscriptToInput, cleanupVoiceCapture, startVoiceWaveform, startAudioRecording, stopAudioRecording, sendMessage, queuedChatMessages, flushingChatQueueId, removeQueuedChatMessage, sendQueuedChatMessageNow, generateKanbanTaskFromChat, dismissChatKanbanGeneration, chatKanbanGeneration } = useStatusChatInputController({ AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents: displayAgents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy: selectedChatStreaming, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceBands, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent });
+  const { checkStatus, checkVaultStatus, checkControlRoomStatus, runVaultTailnetSync, pairSyncthingCollector, pairSyncthingVaultSync, inspectBrainNode, startBrainPan, moveBrainPan, endBrainPan, addChatFiles, handleChatFileChange, handleChatFileReferenceDrop, handleChatImageChange, removeChatAttachment, attachChatDirectory, attachChatRecentDirectory, removeChatDirectory, addQuickAddFiles, handleQuickAddFileChange, handleQuickAddImageChange, removeQuickAddAttachment, attachQuickAddDirectory, attachQuickAddRecentDirectory, removeQuickAddDirectory, addKanbanSteerFiles, handleKanbanSteerFileChange, handleKanbanSteerImageChange, removeKanbanSteerAttachment, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, removeKanbanSteerDirectory, updateVoiceTranscript, appendVoiceTranscriptToInput, cleanupVoiceCapture, startVoiceWaveform, startAudioRecording, stopAudioRecording, sendMessage, sendPromptMessage, queuedChatMessages, flushingChatQueueId, removeQueuedChatMessage, sendQueuedChatMessageNow, generateKanbanTaskFromChat, dismissChatKanbanGeneration, chatKanbanGeneration } = useStatusChatInputController({ AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents: displayAgents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy: selectedChatStreaming, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceBands, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent });
+  const updateFleetSyncAutoRepair = useCallback((deviceID: string, nextState: FleetSyncAutoRepairState | null) => {
+    setFleetSyncAutoRepairByDevice((current) => {
+      const next = { ...current };
+      if (nextState) next[deviceID] = nextState;
+      else delete next[deviceID];
+      fleetSyncAutoRepairRef.current = next;
+      return next;
+    });
+  }, []);
   const fixFleetSyncIssue = useCallback(async (machine: FleetMachine) => {
     const collectorUrl = machine.collectorUrl || (/^https?:\/\//i.test(machine.tailnet) ? machine.tailnet : "");
     const remoteCollectorUrl = collectorUrl;
@@ -2994,11 +3299,27 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       setVaultSyncStatus({ ok: false, method: "syncthing", error });
       throw new Error(error);
     }
-    setVaultSyncStatus({ ...data, method: "syncthing", message: `Syncthing repair re-paired ${machine.name}.` });
+    setVaultSyncStatus({ ...data, method: "syncthing", message: `Syncthing repaired and rescanned ${machine.name}.` });
     void checkVaultStatus();
   }, [checkVaultStatus, pairSyncthingCollector, setVaultSyncPending, setVaultSyncStatus, sharedVault.tailnetSyncPath]);
+  useEffect(() => {
+    runFleetSyncAutoRepairs({
+      enabled: hydrated && sharedVault.enabled && sharedVault.syncProvider === "syncthing",
+      targets: fleetSyncRepairTargets,
+      autoRepairRef: fleetSyncAutoRepairRef,
+      updateAutoRepair: updateFleetSyncAutoRepair,
+      repairMachine: fixFleetSyncIssue,
+    });
+  }, [
+    fixFleetSyncIssue,
+    fleetSyncRepairTargets,
+    hydrated,
+    sharedVault.enabled,
+    sharedVault.syncProvider,
+    updateFleetSyncAutoRepair,
+  ]);
   useDashboardPollingEffects({
-    activeView, hydrated, refreshMirosharkArchive, refreshBrainGraph, refreshBrainSkills, refreshRecentDirectories, refreshMirosharkRun,
+    activeView, hydrated, chatRequestActive, refreshMirosharkArchive, refreshBrainGraph, refreshBrainSkills, refreshRecentDirectories, refreshMirosharkRun,
     sharedVault, brainSkills, brainSkillsLoading, walletPanelMode, refreshRuntimeUsage, refreshWalletVaultBackupStatus,
     refreshMaintenanceReport, refreshRuntimeFileRoots, hiveEnv, hiveEnvLoading, refreshHiveEnv, agentWorkerClassView, vaultPanelMode,
     refreshNotifications, mirosharkRun, mirosharkPosts, mirosharkRunnerStatus, mirosharkArchiveSaveKeyRef, mirosharkScenario,
@@ -3340,6 +3661,22 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     if (!roleModalAgent && !agentCreateMachine) return;
     let cancelled = false;
     const hintedAgents = agentCreateMachine?.agents ?? (roleModalAgent ? [roleModalAgent] : []);
+    const allKnownAgentsByTarget = new Map<string, AgentProfile>();
+    const rememberAgent = (agent?: AgentProfile | null) => {
+      if (!agent) return;
+      const telemetryUrl = agent.telemetryUrl?.trim().replace(/\/+$/, "") || "local";
+      const gatewayUrl = agent.gatewayUrl?.trim().replace(/\/+$/, "") || "";
+      const machineName = agent.machineName?.trim() || "";
+      const localDataDir = agent.localDataDir?.trim() || "";
+      const agentId = agent.agentId?.trim() || agent.id?.trim() || "";
+      allKnownAgentsByTarget.set([agent.runtime, telemetryUrl, gatewayUrl, machineName, localDataDir, agentId].join("|"), agent);
+    };
+    for (const agent of displayAgents) rememberAgent(agent);
+    for (const machine of machineGroups) {
+      for (const agent of machine.agents ?? []) rememberAgent(agent);
+    }
+    for (const agent of hintedAgents) rememberAgent(agent);
+    rememberAgent(agentSettingsIntegrationTarget);
     const integrationTargetsByRuntime = new Map<AgentRuntime, AgentProfile>();
     for (const agent of hintedAgents) {
       if (runtimeCan(agent, "modelSelection") && !integrationTargetsByRuntime.has(agent.runtime)) {
@@ -3366,13 +3703,25 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         }
       })
       .catch(() => undefined);
-    const runtimeCheckTimer = window.setTimeout(() => { for (const target of integrationTargetsByRuntime.values()) { if (!runtimeModelSelectionsByRuntime[target.runtime]) void refreshRuntimeIntegrations(target); } }, agentCreateMachine ? 350 : 0);
+    const runtimeCheckTimer = window.setTimeout(() => {
+      if (agentSettingsRuntime === HIVEMIND_OS_RUNTIME) {
+        for (const target of allKnownAgentsByTarget.values()) {
+          if (target.runtime === HIVEMIND_OS_RUNTIME && runtimeCan(target, "modelSelection")) {
+            void refreshRuntimeIntegrations(target);
+          }
+        }
+        return;
+      }
+      for (const target of integrationTargetsByRuntime.values()) {
+        if (!runtimeModelSelectionsByRuntime[target.runtime]) void refreshRuntimeIntegrations(target);
+      }
+    }, agentCreateMachine ? 350 : 0);
     return () => {
       cancelled = true;
       window.clearTimeout(runtimeCheckTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentCreateMachine?.key, roleModalAgent?.id]);
+  }, [agentCreateMachine?.key, roleModalAgent?.id, agentSettingsRuntime]);
   const showHivemindLinkSignInBanner = !hivemindLinkBannerDismissed
     && !showHivemindLinkConnectedBanner
     && Boolean(hivemindLinkStatus?.authUrl)
@@ -3416,14 +3765,14 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
 
   return (
     <main className="shell commandShell">
-      <DashboardHeader {...{ Image, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, activeHeader, activeView, appCompletionNotification, isWorkView, kanbanBoard, navItems, notificationClass, notificationSummary, setActiveView, setKanbanLoading, viewIcon }} />
+      <DashboardHeader {...{ Image, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, activeHeader, activeView, appCompletionNotification, appVersion, isWorkView, kanbanBoard, navItems, notificationClass, notificationSummary, setActiveView, setKanbanLoading, viewIcon }} />
       <div className="commandMain" style={chatRouteShellStyle}>
       <Suspense fallback={<DashboardRouteLoading view={activeView} />}>
-      {activeView === "agents" ? <AgentsPanel {...{ AgentCell, AgentTaskList, Bot, Button, CellMenu, Check, CircleAlert, Copy, CopyPlus, ExternalLink, FleetView, MachineCell, MessageSquare, PlugZap, Plus, QUIET_SNAPSHOT_HOLD_MS, RefreshCcw, Settings2, Trash2, WalletCards, activeView, addAgentToMachine, agentWorkById, agents, appVersion, beeRoleLabel, busyAgentId, cleanActivityTitle, copiedUpdateDetailKey, copyUpdateDetail, deleteAgent, displayAgents, fleetCheckedAt, fleetClass, fleetDiscoveryLoading, fleetSnapshots, fleetUpdateDetailByMachine, fleetUpdateStatusByMachine, fleetViewData: fleetViewDataWithApps, formatRelativeTime, friendlyEmptyTitle, runtimeSessionIdFromTask, hivemindLinkSignInPolling, hivemindLinkSignInPollingRef, hivemindLinkStatus, hydrateRuntimeSessionChat, isCollectorAutoUpdateable, isMeaningfulActive, localDashboardHasUnpublishedChanges, machineGroups, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineVersionCopy, markNotificationRead, openMachineInitModal, openSetupModal, onFixSyncIssue: fixFleetSyncIssue, renameMachine, renderAgentKey, requestDuplicateAgent, runMachineUpdate, selectedAgent, setActiveView, setAgentRenameDraft, setAgentRenameEditing, setAgentRoleModalId, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setHivemindLinkBannerDismissed, setHivemindLinkConnectedUntil, setHivemindLinkSignInPolling, setSelectedAgentId, showHivemindLinkConnectedBanner, showHivemindLinkSignInBanner, startAgentChat, startAgentWorkChat, tailscaleStatus, taskChatLeafKey, trackAgentTaskOnKanban, updateStatusByMachine }} /> : null}
+      {activeView === "agents" ? <AgentsPanel {...{ AgentCell, AgentTaskList, Bot, Button, CellMenu, Check, CircleAlert, Copy, CopyPlus, ExternalLink, FleetView, MachineCell, MessageSquare, PlugZap, Plus, QUIET_SNAPSHOT_HOLD_MS, RefreshCcw, Settings2, Trash2, WalletCards, activeView, addAgentToMachine, agentWorkById, agents, appVersion, beeRoleLabel, busyAgentId, cleanActivityTitle, copiedUpdateDetailKey, copyUpdateDetail, deleteAgent, displayAgents, fleetAutoUpdatePaused, fleetCheckedAt, fleetClass, fleetDiscoveryLoading, fleetHostedApps, fleetSnapshots, fleetUpdateDetailByMachine, fleetUpdateStatusByMachine, fleetViewData: fleetViewDataWithApps, formatRelativeTime, friendlyEmptyTitle, runtimeSessionIdFromTask, hivemindLinkSignInPolling, hivemindLinkSignInPollingRef, hivemindLinkStatus, hydrateRuntimeSessionChat, isCollectorAutoUpdateable, isMeaningfulActive, localDashboardHasUnpublishedChanges, machineGroups, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineVersionCopy, markNotificationRead, openMachineInitModal, openSetupModal, onFixSyncIssue: fixFleetSyncIssue, onRecentAgentArrivalSeen: clearRecentAgentArrival, onToggleFleetAutoUpdatePaused: toggleFleetAutoUpdatePaused, recentAgentArrival, renameMachine, renderAgentKey, requestDuplicateAgent, runMachineUpdate, selectedAgent, setActiveView, setAgentRenameDraft, setAgentRenameEditing, setAgentRoleModalId, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setHivemindLinkBannerDismissed, setHivemindLinkConnectedUntil, setHivemindLinkSignInPolling, setSelectedAgentId, showHivemindLinkConnectedBanner, showHivemindLinkSignInBanner, startAgentChat, startAgentWorkChat, tailnetCleanup, tailscaleStatus, taskChatLeafKey, trackAgentTaskOnKanban, updateStatusByMachine }} /> : null}
       {(activeView === "kanban" || activeView === "history") ? <KanbanPanel {...{ AttachmentListMenuContent, AttachmentMenuContent, CellMenu, ChatMarkdown, Check, ChevronDown, ChevronRight, ComposerField, DEFAULT_SHARED_VAULT, ExternalLink, Eye, FolderOpen, Image, KANBAN_COLUMNS, KANBAN_STEER_TARGETS, MessageAttachments, MessageSquare, Paperclip, Plus, RotateCcw, Search, Settings2, activeView, addKanbanComment, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, attachQuickAddDirectory, attachQuickAddRecentDirectory, bulkPatchKanbanTasks, chatClass, commentDraft, createKanbanBoard, createKanbanTask, displayAgents, editAndInterruptKanbanTask, expandedKanbanCards, formatDurationShort, formatMessageTimestamp, formatRelativeTime, handleKanbanCardFileChange, handleKanbanCardImageChange, handleKanbanSteerFileChange, handleKanbanSteerImageChange, handleQuickAddFileChange, handleQuickAddImageChange, importNoteIntake, initialWorkHistory, isKanbanStaleWorkingTask, isKanbanTerminalMessage, isWorkView, kanbanAssigneeFilter, kanbanAssigneeOptions, kanbanBoard, kanbanBoardScrollRef, kanbanBoardScrollState, kanbanBoardSlug, kanbanBoards, kanbanBulkAssignee, kanbanBulkPending, kanbanCardAttachmentListOpen, kanbanCardAttachmentMenuOpen, kanbanCardDeliverableMenuOpen, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanCardMachineMenuOpen, kanbanCardMessage, kanbanCardRecentsExpanded, kanbanClass, kanbanEditDraft, kanbanEditPendingTaskId, kanbanError, kanbanEventLabel, kanbanIncludeArchived, kanbanInitialLoading, kanbanLoading, kanbanMachineTargets, kanbanPickupPreviewByTask, kanbanSearch, kanbanStaleAge, kanbanSteerAttachmentError, kanbanSteerAttachmentMenuOpen, kanbanSteerAttachmentMenuRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerFileInputRef, kanbanSteerImageInputRef, kanbanSteerTargetMenuOpen, kanbanSteerTargetMenuRef, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanStorage, kanbanTaskBee, kanbanTaskMenuItems, kanbanTaskModal, kanbanTenantFilter, kanbanTenants, kanbanViewColumns, markKanbanTaskReviewed, moveKanbanTask, newBoardDraft, noteIntakePending, noteIntakePreview, noteIntakeStatus, openKanbanCardFilePicker, openKanbanTaskModal, patchKanbanTask, quickAddAttachmentError, quickAddAttachmentMenuOpen, quickAddAttachmentMenuRef, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddFileInputRef, quickAddImageInputRef, quickAddMachineMenuOpen, quickAddMachineMenuRef, quickAddMachineTarget, quickAddMachineTargets, quickAddStatus, recentDirectories, recentDirectoriesExpanded, recording, removeKanbanCardAttachment, removeKanbanCardDirectory, removeKanbanSteerAttachment, removeKanbanSteerDirectory, removeQuickAddAttachment, removeQuickAddDirectory, scanNoteIntake, selectedKanbanAgent, selectedKanbanAgentMessages, selectedKanbanBulkIds, selectedKanbanComments, selectedKanbanEvents, selectedKanbanTask, selectedKanbanTaskId, selectedKanbanTaskIds, setActiveView, setCommentDraft, setExpandedKanbanCards, setKanbanAssigneeFilter, setKanbanBoardSlug, setKanbanBulkAssignee, setKanbanCardAttachmentListOpen, setKanbanCardAttachmentMenuOpen, setKanbanCardDeliverableMenuOpen, setKanbanCardMachineMenuOpen, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanIncludeArchived, setKanbanLoading, setKanbanSearch, setKanbanSteerAttachmentMenuOpen, setKanbanSteerDraft, setKanbanSteerTargetMenuOpen, setKanbanSteerTargetStatus, setKanbanTaskModal, setKanbanTenantFilter, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddStatus, setRecentDirectoriesExpanded, setSelectedKanbanTaskId, setSelectedKanbanTaskIds, sharedVault, startAudioRecording, steerSelectedKanbanTask, stopAudioRecording, updateKanbanTaskMachine, updateSharedVault, voiceBands, voiceTarget, voiceTranscript, walletClass, workBoardStats }} /> : null}
       {(activeView === "scheduler" || (activeView === "aeon" && schedulerDraftOpen)) ? <SchedulerPanel {...{ AlignLeft, Button, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Link, List, LoaderCircle, Paperclip, Pencil, Plus, Puzzle, RUNTIME_LABELS, Repeat2, SCHEDULER_MODEL_OPTIONS, SCHEDULE_PRESETS, SchedulerView, Search, Send, Sparkles, TaskModal, Trash2, activeView, addSchedulePath, addSchedulerStep, addSchedulerStepPath, browseSchedulerFolder, createSchedule, displayAgents, editSchedule, editingScheduleId, filteredSchedulerSkills, findScheduleForJob, fleetClass, importExistingSchedules, isSchedulerFilePath, machineGroups, openSkillBrowser, pickSchedulerFiles, pickSchedulerFolder, refreshSharedSchedulesFromVault, removeSchedule, removeSchedulePath, removeScheduleSkill, removeSchedulerStep, removeSchedulerStepPath, renderAgentKey, resetScheduleDraft, runScheduleNow, saveScheduleFromModal, scheduleDraft, scheduleImportStatus, scheduleImporting, schedulerAttachMenu, schedulerDraftOpen, schedulerJobs, schedulerModalInitial, schedulerPathDraft, schedulerPathKind, schedulerRunStates, schedulerSelectedStep, schedulerSkillSearch, schedules, selectedAgent, setActiveView, setScheduleDraft, setScheduleImportStatus, setSchedulerAttachMenu, setSchedulerDraftOpen, setSchedulerPathDraft, setSchedulerPathKind, setSchedulerSelectedStep, setSchedulerSkillSearch, sharedSkillOptions, aeonSkillOptions, toggleSchedule, toggleScheduleSkill, toggleSchedulerStepMode, toggleSchedulerStepSkill, updateSchedulerStep, updateSchedulerStepModel, vaultClass }} /> : null}
       {activeView === "swarm" ? <SwarmPanel {...{ SwarmView, activeView, allMirosharkTemplates, analyzeMirosharkRun, applyMirosharkTemplate, currentSwarmRun, displayAgents, launchMirosharkSwarm, loadMirosharkArchivedRun, mirosharkAnalysisAgentId, mirosharkAnalysisPending, mirosharkAnalysisResult, mirosharkAnalysisStatus, mirosharkArchiveLoading, mirosharkArchiveStatus, mirosharkExperimentPending, mirosharkExperimentStatus, mirosharkHelperPending, mirosharkHelperStatus, mirosharkMissingTemplateFields, mirosharkPlatform, mirosharkProgressLabel, mirosharkRounds, mirosharkRunPending, mirosharkScenario, mirosharkSelectedTemplate, mirosharkSelectedTemplateFields, mirosharkTemplateInputs, runMirosharkExperiment, runMirosharkScenarioHelper, runtimeModelSelectionsByRuntime, selectedAgent, selectedSwarmRunId, setActiveView, setMirosharkAnalysisAgentId, setMirosharkPlatform, setMirosharkRounds, setMirosharkScenario, startNewMirosharkSimulation, swarmAgents, swarmDecisions, swarmMarket, swarmRuns, swarmSocialPosts, swarmStatusLabel, swarmTemplates, updateMirosharkTemplateInput }} /> : null}
-      {activeView === "wallet" ? <WalletPanel {...{ AGENT_PAYMENT_PROVIDER_COPY, AgentWalletCard, AgentWalletCardCompact, Button, ChevronLeft, Download, HandCoins, LoaderCircle, RUNTIME_LABELS, RefreshCcw, activeView, copyPaymentPrompt, createDefaultAgentWallet, createLocalWallet, displayAgents, claimAllHoneyToBankrHive, enableHoneyLedger, formatHiveAmount, formatRelativeTime, getSurvivalSnapshot, honeyLedgerEnabled, honeyStats, initializeCoreWalletRails, moneyClawStatusByEnvName, refreshRuntimeIntegrations, refreshRuntimeUsage, refreshWalletBalance, renderAgentKey, resetWalletBurnClock, returnAllHiveToHoney, runWalletVaultBackupAction, runtimeUsage, runtimeUsageLoading, saveMoneyClawKey, selectedAgent, selectedHoneyReward, selectedWallet, selectedWalletSnapshot, sendWalletUsdc, setSelectedAgentId, setWalletExpanded, setWalletPanelMode, testX402Fetch, updateAgentProfile, updateWallet, updateWalletAction, vaultClass, walletActionsByAgent, walletClass, walletExpanded, walletPanelMode, walletStats, walletVaultBackupBusy, walletVaultBackupMessage, walletVaultBackupStatus, walletsByAgent }} /> : null}
+      {activeView === "wallet" ? <WalletPanel {...{ AGENT_PAYMENT_PROVIDER_COPY, AgentWalletCard, AgentWalletCardCompact, Button, ChevronLeft, Download, HandCoins, LoaderCircle, RUNTIME_LABELS, RefreshCcw, activeView, copyPaymentPrompt, createDefaultAgentWallet, createLocalWallet, displayAgents, claimAllHoneyToBankrHive, enableHoneyLedger, exportWalletSecrets, formatHiveAmount, formatRelativeTime, getSurvivalSnapshot, honeyLedgerEnabled, honeyStats, initializeCoreWalletRails, moneyClawStatusByEnvName, refreshRuntimeIntegrations, refreshRuntimeUsage, refreshWalletBalance, renderAgentKey, resetWalletBurnClock, returnAllHiveToHoney, runWalletVaultBackupAction, runtimeUsage, runtimeUsageLoading, saveMoneyClawKey, selectedAgent, selectedHoneyReward, selectedWallet, selectedWalletSnapshot, sharedVault, sendWalletUsdc, setSelectedAgentId, setWalletExpanded, setWalletPanelMode, testX402Fetch, updateAgentProfile, updateWallet, updateWalletAction, vaultClass, walletActionsByAgent, walletClass, walletExpanded, walletPanelMode, walletStats, walletVaultBackupBusy, walletVaultBackupMessage, walletVaultBackupStatus, walletsByAgent }} /> : null}
       {activeView === "vault" ? <VaultPanel {...{ Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, Clock3, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, Image, KeyRound, LoaderCircle, MemoryCell, Network, PlugZap, RefreshCcw, Repeat2, Sparkles, activeView, brainGraph, brainGraphEdgePath, brainGraphLoading, brainGraphStats, brainGraphStatus, brainLayout, brainNodePoints, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, openSkillBrowser, pairSyncthingVaultSync, queryGbrainFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshRuntimeFileRoots, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, selectedBrainTargetIds, setActiveView, setBrainPan, setGbrainQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, splitBrainLabel, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus, visibleBrainNodes, walletClass }} /> : null}
       {activeView === "integrations" ? (
         <div style={{ display: "grid", gap: 16 }}>
@@ -3435,7 +3784,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       {activeView === "aeon" ? <AeonAutopilotPanel agentProfiles={displayAgents.filter((agent) => agent.runtime === "aeon")} sharedVault={sharedVault} machineGroups={machineGroups} chooseDirectoryForMachine={chooseDirectoryForMachine} onWorkspaceCreated={handleAeonWorkspaceCreated} /> : null}
       {activeView === "fusion" ? <FusionPanel sharedVault={sharedVault} /> : activeView === "phone" ? <PhonePanel activeView={activeView} fleetClass={fleetClass} formatRelativeTime={formatRelativeTime} sharedVault={sharedVault} /> : null}
       {activeView === "chat" && chatInitialLoading ? <DashboardRouteLoading view="chat" /> : null}
-      {((activeView === "chat" && !chatInitialLoading) || chatFolderCreatorMachine) ? <ChatPanel {...{ Activity, AgentResponseLoader, AlignLeft, BEE_WORKER_PRESET_LIST, BrainCircuit, Button, ChatMarkdown, Check, ChevronDown, ChevronRight, ChevronUp, CircleAlert, ComposerField, Copy, Cpu, Download, Eye, FileText, Folder, FolderOpen, FolderPlus, GitBranch, HERMES_UPDATE_INTEGRATION_KEYS, Hammer, Image, KanbanSquare, LoaderCircle, MessageAttachments, MessageSquare, Minus, Monitor, Pencil, PlugZap, Plus, RUNTIME_LABELS, RefreshCcw, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Terminal, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Upload, activeView, addAgentPreferredSkill, addHermesModelFromDraft, aeonEnvKeys, aeonEnvSyncStatus, aeonEnvSyncing, agentCreateDraft, agentCreateMachine, agentRenameDraft, agentRenameEditing, agentRuntimeAdvancedOpen, agentRuntimeFolderBrowsing, agentRuntimeFolderEditing, agentRuntimeFolderStatus, agentSettingsCustomWorker, agentSettingsCustomWorkers, agentSettingsDescription, agentSettingsIntegrationTarget, agentSettingsPanel, agentSettingsPreferredSkills, agentSettingsProvider, agentSettingsRuntime, agentSettingsSelectedCustomWorkerId, agentSettingsSkillProfile, agentSettingsTitle, agentSettingsWorkerClass, agentSettingsWorkerImage, agentSettingsWorkerLabel, agentSettingsWorkerPreset, agentWorkerClassView, applyCustomWorkerClass, attachChatDirectory, attachChatRecentDirectory, attachmentError, attachmentMenuOpen, attachmentMenuRef, beeRoleIconPath, beeRoleLabel, browseAgentRuntimeFolder, busy: selectedChatStreaming, changeChatWorkingDirectory, chatAttachments, chatAutoScrollRef, chatClass, chatContextMenu, chatContextMenuRef, chatDirectories, chatDisplayContent, chatFileInputRef, chatFolderCreatorMachine, chatFolderCreatorParentOptions, chatFolderDraft, chatImageInputRef, chatKanbanGeneration, chatSidebarTree, chatStreamingByKey, checkStatus, closeAgentSettingsModal, closeChatFolderCreator, createAgentFromModal, createChatFolder, customWorkerDraft, customWorkerImageError, customWorkerImageInputRef, customWorkerSkillSearch, dismissChatKanbanGeneration, displayAgents, expandedChatFolders, filteredCustomWorkerSkills, filteredSkillBrowserSkills, fleetClass, flushingChatQueueId, formatAgentEnvText, formatRelativeTime, generateKanbanTaskFromChat, handleChatFileChange, handleChatFileReferenceDrop, handleChatImageChange, hasStreamingChunk: selectedChatHasStreamingChunk, hermesUpdateRequired, hermesUpdateRequiredDetail, importRemoteSkillToBrain, convertSkillToAeon, installGithubSkillToBrain, addWrittenSkillToBrain, lastAssistant, logClientTelemetry, machineGroups, messagesEndRef, messagesScrollRef, openAgentSkillBrowser, openCustomWorkerClassCreator, openSkillBrowser, parseAgentEnvText, providerIconPath, providerIconRenderMode, queuedChatMessages, recentDirectories, recentDirectoriesExpanded, recording, refreshRuntimeIntegrations, removeAgentPreferredSkill, removeChatAttachment, removeChatDirectory, removeQueuedChatMessage, roleModalAgent, runRuntimeIntegrationAction, runtimeAvailability, runtimeBackgroundPrompt, runtimeCapabilities, runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode, runtimeIntegrationBusy, runtimeIntegrationMessage, runtimeIntegrationStatus, runtimeModelDraft, runtimeModelProviders, runtimeModelSelection, runtimeModelSelectionsByRuntime, runtimeModelSetupMode, runtimeSessionQuery, runtimeSessionResults, runtimeSetupDefinition, runtimeSetupKey, runtimeUpdateConfirmKey, searchRuntimeSessionsForAgent, selectAgentWorkerClass, selectCustomWorkerClass, selectedAgent, selectedChatDirectory, selectedChatHistoryLoading, selectedChatLeafKey, selectedChatMachine, selectedChatProcess, selectedChatStorageKey, selectedRuntimeModel, selectedRuntimeModelId, selectedRuntimeModels, selectedRuntimeProvider, sendMessage, sendQueuedChatMessageNow, sessionNotice, setActiveView, setAeonEnvKeys, setAgentCreateDraft, setAgentRenameDraft, setAgentRenameEditing, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setAgentWorkerClassView, setAttachmentMenuOpen, setChatContextMenu, setChatFolderDraft, setCustomWorkerDraft, setCustomWorkerSkillSearch, setExpandedChatFolders, setRecentDirectoriesExpanded, setRuntimeBackgroundPrompt, setRuntimeModelDraft, setRuntimeModelSetupMode, setRuntimeSessionQuery, setRuntimeSetupKey, setRuntimeUpdateConfirmKey, setSkillBrowserGithubOpen, setSkillBrowserGithubUrl, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setStatus, setStatusAgentId, setText, sharedVault, skillBrowserGithubInstalling, skillBrowserGithubOpen, skillBrowserGithubUrl, skillBrowserImporting, skillBrowserLoading, skillBrowserMode, skillBrowserOpen, skillBrowserSearch, skillBrowserStatus, skillBrowserView, skillBrowserWrittenContent, skillBrowserWriting, skillRequiresHermesUpdate, startAgentChat, startAudioRecording, status, statusAgentId, stopAudioRecording, switchRuntime, syncAeonEnvToGitHub, text, toggleCustomWorkerSkill, updateAgent, updateAgentProfile, updateAgentRuntimeModel, updateAgentSkillProfile, updateChatAutoScroll, uploadCustomWorkerImage, vaultClass, visibleMessages, voiceBands, voiceTarget, voiceTranscript, workerCapabilityBadges }} /> : null}
+      {((activeView === "chat" && !chatInitialLoading) || chatFolderCreatorMachine) ? <ChatPanel {...{ Activity, AgentResponseLoader, AlignLeft, BEE_WORKER_PRESET_LIST, BrainCircuit, Button, ChatMarkdown, Check, ChevronDown, ChevronRight, ChevronUp, CircleAlert, ComposerField, Copy, Cpu, Download, Eye, FileText, Folder, FolderOpen, FolderPlus, GitBranch, HERMES_UPDATE_INTEGRATION_KEYS, Hammer, Image, KanbanSquare, LoaderCircle, MessageAttachments, MessageSquare, Minus, Monitor, Pencil, PlugZap, Plus, RUNTIME_LABELS, RefreshCcw, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Terminal, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Upload, activeView, addAgentPreferredSkill, addHermesModelFromDraft, aeonEnvKeys, aeonEnvSyncStatus, aeonEnvSyncing, agentCreateDraft, agentCreateMachine, agentRenameDraft, agentRenameEditing, agentRuntimeAdvancedOpen, agentRuntimeFolderBrowsing, agentRuntimeFolderEditing, agentRuntimeFolderStatus, agentSettingsCustomWorker, agentSettingsCustomWorkers, agentSettingsDescription, agentSettingsIntegrationTarget, agentSettingsPanel, agentSettingsPreferredSkills, agentSettingsProvider, agentSettingsRuntime, agentSettingsSelectedCustomWorkerId, agentSettingsSkillProfile, agentSettingsTitle, agentSettingsWorkerClass, agentSettingsWorkerImage, agentSettingsWorkerLabel, agentSettingsWorkerPreset, agentWorkerClassView, applyCustomWorkerClass, attachChatDirectory, attachChatRecentDirectory, attachmentError, attachmentMenuOpen, attachmentMenuRef, beeRoleIconPath, beeRoleLabel, browseAgentRuntimeFolder, busy: selectedChatStreaming, changeChatWorkingDirectory, chatAttachments, chatAutoScrollRef, chatClass, chatContextMenu, chatContextMenuRef, chatDirectories, chatDisplayContent, chatFileInputRef, chatFolderCreatorMachine, chatFolderCreatorParentOptions, chatFolderDraft, chatImageInputRef, chatKanbanGeneration, chatSidebarTree, chatStreamingByKey, checkStatus, closeAgentSettingsModal, closeChatFolderCreator, createAgentFromModal, createChatFolder, customWorkerDraft, customWorkerImageError, customWorkerImageInputRef, customWorkerSkillSearch, dismissChatKanbanGeneration, displayAgents, expandedChatFolders, filteredCustomWorkerSkills, filteredSkillBrowserSkills, fleetClass, flushingChatQueueId, formatAgentEnvText, formatRelativeTime, generateKanbanTaskFromChat, handleChatFileChange, handleChatFileReferenceDrop, handleChatImageChange, hasStreamingChunk: selectedChatHasStreamingChunk, hermesUpdateRequired, hermesUpdateRequiredDetail, importRemoteSkillToBrain, convertSkillToAeon, installGithubSkillToBrain, addWrittenSkillToBrain, lastAssistant, logClientTelemetry, machineGroups, messagesEndRef, messagesScrollRef, openAgentSkillBrowser, openCustomWorkerClassCreator, openSkillBrowser, parseAgentEnvText, providerIconPath, providerIconRenderMode, queuedChatMessages, recentDirectories, recentDirectoriesExpanded, recording, refreshRuntimeIntegrations, removeAgentPreferredSkill, removeChatAttachment, removeChatDirectory, removeQueuedChatMessage, roleModalAgent, runRuntimeIntegrationAction, runtimeAvailability, runtimeBackgroundPrompt, runtimeCapabilities, runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode, runtimeIntegrationBusy, runtimeIntegrationMessage, runtimeIntegrationStatus, runtimeModelDraft, runtimeModelProviders, runtimeModelSelection, runtimeModelSelectionsByRuntime, runtimeModelSetupMode, runtimeSessionQuery, runtimeSessionResults, runtimeSetupDefinition, runtimeSetupKey, runtimeUpdateConfirmKey, searchRuntimeSessionsForAgent, selectAgentWorkerClass, selectCustomWorkerClass, selectedAgent, selectedChatDirectory, selectedChatHistoryLoading, selectedChatLeafKey, selectedChatMachine, selectedChatProcess, selectedChatStorageKey, selectedRuntimeModel, selectedRuntimeModelId, selectedRuntimeModels, selectedRuntimeProvider, sendMessage, sendPromptMessage, sendQueuedChatMessageNow, sessionNotice, setActiveView, setAeonEnvKeys, setAgentCreateDraft, setAgentRenameDraft, setAgentRenameEditing, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setAgentWorkerClassView, setAttachmentMenuOpen, setChatContextMenu, setChatFolderDraft, setCustomWorkerDraft, setCustomWorkerSkillSearch, setExpandedChatFolders, setRecentDirectoriesExpanded, setRuntimeBackgroundPrompt, setRuntimeModelDraft, setRuntimeModelSetupMode, setRuntimeSessionQuery, setRuntimeSetupKey, setRuntimeUpdateConfirmKey, setSkillBrowserGithubOpen, setSkillBrowserGithubUrl, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setStatus, setStatusAgentId, setText, sharedVault, skillBrowserGithubInstalling, skillBrowserGithubOpen, skillBrowserGithubUrl, skillBrowserImporting, skillBrowserLoading, skillBrowserMode, skillBrowserOpen, skillBrowserSearch, skillBrowserStatus, skillBrowserView, skillBrowserWrittenContent, skillBrowserWriting, skillRequiresHermesUpdate, startAgentChat, startAudioRecording, status, statusAgentId, stopAudioRecording, switchRuntime, syncAeonEnvToGitHub, text, toggleCustomWorkerSkill, updateAgent, updateAgentProfile, updateAgentRuntimeModel, updateAgentSkillProfile, updateChatAutoScroll, uploadCustomWorkerImage, vaultClass, visibleMessages, voiceBands, voiceTarget, voiceTranscript, workerCapabilityBadges }} /> : null}
       {(roleModalAgent || agentCreateMachine) ? <AgentSettingsModal {...{ BEE_WORKER_PRESET_LIST, BrainCircuit, Button, Check, ChevronRight, Copy, Cpu, Eye, FolderOpen, HERMES_UPDATE_INTEGRATION_KEYS, Image, KanbanSquare, LoaderCircle, MessageSquare, Minus, Pencil, PlugZap, Plus, RUNTIME_LABELS, RefreshCcw, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Upload, addHermesModelFromDraft, agentCreateDraft, agentCreateMachine, agentRenameDraft, agentRenameEditing, agentRuntimeAdvancedOpen, agentRuntimeFolderBrowsing, agentRuntimeFolderEditing, agentRuntimeFolderStatus, agentSettingsCustomWorker, agentSettingsCustomWorkers, agentSettingsDescription, agentSettingsIntegrationTarget, agentSettingsPanel, agentSettingsPreferredSkills, agentSettingsProvider, agentSettingsRuntime, agentSettingsSelectedCustomWorkerId, agentSettingsSkillProfile, agentSettingsTitle, agentSettingsWorkerClass, agentSettingsWorkerImage, agentSettingsWorkerLabel, agentSettingsWorkerPreset, agentWorkerClassView, applyCustomWorkerClass, beeRoleIconPath, browseAgentRuntimeFolder, chooseDirectoryForMachine, closeAgentSettingsModal, createAgentFromModal, customWorkerDraft, customWorkerImageError, customWorkerImageInputRef, customWorkerSkillSearch, displayAgents, filteredCustomWorkerSkills, fleetClass, hermesUpdateRequired, machineGroups, onAeonWorkspaceCreated: handleAeonWorkspaceCreated, openAgentSkillBrowser, openCustomWorkerClassCreator, providerIconPath, providerIconRenderMode, refreshRuntimeIntegrations, removeAgentPreferredSkill, roleModalAgent, runRuntimeIntegrationAction, runtimeAvailability, runtimeBackgroundPrompt, runtimeCapabilities, runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode, runtimeIntegrationBusy, runtimeIntegrationMessage, runtimeIntegrationStatus, runtimeModelDraft, runtimeModelProviders, runtimeModelSelection, runtimeModelSelectionsByRuntime, runtimeModelSelectionFresh, runtimeModelSetupMode, runtimeSessionQuery, runtimeSessionResults, runtimeSetupDefinition, runtimeSetupKey, runtimeUpdateConfirmKey, searchRuntimeSessionsForAgent, selectAgentWorkerClass, selectCustomWorkerClass, selectedRuntimeModelId, selectedRuntimeModels, selectedRuntimeProvider, setActiveView, setAgentCreateDraft, setAgentRenameDraft, setAgentRenameEditing, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setAgentWorkerClassView, setCustomWorkerDraft, setCustomWorkerSkillSearch, setRuntimeBackgroundPrompt, setRuntimeModelDraft, setRuntimeModelSetupMode, setRuntimeSessionQuery, setRuntimeSetupKey, setRuntimeUpdateConfirmKey, sharedVault, startAgentChat, toggleCustomWorkerSkill, updateAgentProfile, updateAgentRuntimeModel, updateAgentSkillProfile, uploadCustomWorkerImage, workerCapabilityBadges }} /> : null}
       <SkillBrowserModal {...{ Button, Copy, Download, GitBranch, Image, LoaderCircle, Minus, Plus, RefreshCcw, Sparkles, addAgentPreferredSkill, addWrittenSkillToBrain, agentSettingsPreferredSkills, convertSkillToAeon, fleetClass, hermesUpdateRequired, hermesUpdateRequiredDetail, importRemoteSkillToBrain, installGithubSkillToBrain, openAgentSkillBrowser, openSkillBrowser, removeAgentPreferredSkill, setSkillBrowserGithubOpen, setSkillBrowserGithubUrl, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, skillBrowserGithubInstalling, skillBrowserGithubOpen, skillBrowserGithubUrl, skillBrowserImporting, skillBrowserLoading, skillBrowserMode, skillBrowserOpen, skillBrowserSearch, skillBrowserSkills, skillBrowserStatus, skillBrowserView, skillBrowserWrittenContent, skillBrowserWriting, skillRequiresHermesUpdate, vaultClass }} /></Suspense>
       <DashboardModals {...{ Button, Check, ChevronLeft, Copy, CopyPlus, FileText, FolderOpen, HETZNER_IMAGE_OPTIONS, HETZNER_LOCATION_OPTIONS, HETZNER_SERVER_TYPE_OPTIONS, LoaderCircle, Plus, SetupCell, copyMachineInitCommand, copySetupCommand, displayAgents, duplicateAgent, duplicateAgentDraft, fleetClass, initializeMachineProject, kanbanClass, loadMachineDirectories, machineDirectoryBrowser, machineInitCopiedKey, machineInitDraft, machineInitOpen, machineInitStatus, machineInitToken, machineInitTokenStatus, openHetznerEnvFile, saveHetznerToken, selectedHetznerServerType, setDuplicateAgentDraft, setMachineDirectoryBrowser, setMachineInitDraft, setMachineInitOpen, setMachineInitToken, setMachineInitTokenStatus, setSetupMachineKey, setupCollectorCommand, setupCommandCopied, setupMachine }} />
@@ -3451,6 +3800,8 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         onOpenChange={setCommandPaletteOpen}
         onPopout={popoutDashboardTarget}
       />
+      {activeView === "agents" ? <ConnectPhoneFab /> : null}
+      <QueenBeeVoiceOverlay />
       </div></main>
   );
 }

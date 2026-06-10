@@ -30,6 +30,11 @@ function dashboardDeviceToken() {
   return process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN?.trim() ?? "";
 }
 
+function nativeBootstrapToken() {
+  if (process.env.HIVEMINDOS_NATIVE !== "1") return "";
+  return process.env.HIVEMINDOS_NATIVE_BOOTSTRAP_TOKEN?.trim() ?? "";
+}
+
 function userId() {
   return process.env.OPENCLAW_NEXT_USER_ID?.trim() || "local-user";
 }
@@ -158,11 +163,10 @@ async function verifyDeviceToken(value: string) {
   const secret = dashboardAuthSecret();
   const expectedToken = dashboardDeviceToken();
   if (secret.length < MIN_SECRET_LENGTH || expectedToken.length < MIN_TOKEN_LENGTH || !value) return false;
-  const [actual, expected] = await Promise.all([
-    hmacHex(secret, value),
-    hmacHex(secret, expectedToken),
-  ]);
-  return safeEqual(actual, expected);
+  const allowedTokens = [expectedToken, nativeBootstrapToken()].filter((token) => token.length >= MIN_TOKEN_LENGTH);
+  const actual = await hmacHex(secret, value);
+  const expectedSignatures = await Promise.all(allowedTokens.map((token) => hmacHex(secret, token)));
+  return expectedSignatures.some((expected) => safeEqual(actual, expected));
 }
 
 function bearerToken(request: Request) {

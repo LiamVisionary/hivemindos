@@ -357,6 +357,22 @@ fn status_from_cli() -> Result<Value, String> {
     Err(last_error)
 }
 
+/// This machine's tailnet IPv4 (100.x) when Tailscale is running, else None.
+/// Used to bind the phone bridge to the tailnet interface only — reachable by a
+/// paired phone over the tailnet, never the local LAN.
+pub(crate) fn self_tailnet_ipv4() -> Option<String> {
+    let status = status_from_cli().ok()?;
+    if status.get("BackendState").and_then(Value::as_str) != Some("Running") {
+        return None;
+    }
+    let ip = peer_ip(status.get("Self")?);
+    if ip.starts_with("100.") && ip.chars().filter(|item| *item == '.').count() == 3 {
+        Some(ip)
+    } else {
+        None
+    }
+}
+
 fn tailnet_health(status: Option<&Value>) -> Value {
     let Some(status) = status else {
         return json!({ "state": "status-unavailable", "detail": "Tailscale status was not available." });

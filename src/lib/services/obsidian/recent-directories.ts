@@ -1,15 +1,22 @@
 import { constants } from "fs";
 import { access, mkdir, readFile, readdir, writeFile } from "fs/promises";
-import { dirname, relative, resolve, sep } from "path";
+import { dirname, isAbsolute, relative, resolve, sep } from "path";
 import { hostname } from "os";
 import type { KanbanBoard, KanbanLinkedDirectory } from "@/lib/types/kanban";
+import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import type { RecentDirectory } from "@/lib/types/recent-directories";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 
 const RECENT_DIRECTORIES_PATH = "Projects/HivemindOS/Brain Access/recent-directories.json";
+const LEGACY_KANBAN_FOLDER = "Kanban";
+const LEGACY_PROJECT_KANBAN_FOLDERS = [
+  "Projects/HivemindOS/Kanban",
+  "Projects/Omni-Agent Hivemind/Kanban",
+];
 const MAX_RECENT_DIRECTORIES = 40;
 const RECENT_DIRECTORIES_CACHE_MS = 30_000;
 
+type ListRecentDirectoriesInput = string | { vaultPath?: string | null; kanbanFolder?: string | null };
 type RecentDirectoriesResult = { vaultPath: string; directories: RecentDirectory[] };
 type RecentDirectoriesCacheEntry = {
   expiresAt: number;
@@ -18,10 +25,6 @@ type RecentDirectoriesCacheEntry = {
 };
 
 const recentDirectoriesCache = new Map<string, RecentDirectoriesCacheEntry>();
-
-function toVaultPath(root: string, path: string): string {
-  return relative(root, path).split(sep).join("/");
-}
 
 function assertInside(root: string, path: string) {
   const relativePath = relative(root, path);
@@ -34,6 +37,39 @@ function recentDirectoriesFile(root: string) {
   const file = resolve(root, RECENT_DIRECTORIES_PATH);
   assertInside(root, file);
   return file;
+}
+
+function normalizeListInput(input?: ListRecentDirectoriesInput) {
+  if (typeof input === "string") return { vaultPath: input, kanbanFolder: undefined };
+  return {
+    vaultPath: input?.vaultPath ?? undefined,
+    kanbanFolder: input?.kanbanFolder ?? undefined,
+  };
+}
+
+function cacheKey(root: string, kanbanFolder?: string) {
+  return `${root}\0${kanbanFolder ?? ""}`;
+}
+
+function deleteCacheForRoot(root: string) {
+  const prefix = `${root}\0`;
+  for (const key of recentDirectoriesCache.keys()) {
+    if (key.startsWith(prefix)) recentDirectoriesCache.delete(key);
+  }
+}
+
+function safeVaultFolder(folder?: string | null) {
+  const value = folder?.trim();
+  if (!value) return "";
+  if (isAbsolute(value) || value.split(/[\\/]+/).includes("..")) {
+    throw new Error("Kanban folder must be a relative path inside the shared vault.");
+  }
+  return value.split(/[\\/]+/).filter(Boolean).join(sep);
+}
+
+function normalizeKanbanFolder(folder?: string | null) {
+  const value = safeVaultFolder(folder);
+  return /^kanban$/i.test(value) ? DEFAULT_SHARED_VAULT.kanbanFolder : value;
 }
 
 function normalizeDirectoryName(input?: string) {
@@ -79,25 +115,36 @@ async function readStoredRecents(root: string): Promise<RecentDirectory[]> {
     .filter((entry): entry is RecentDirectory => entry !== null && hasReusableDirectoryPath(entry));
 }
 
-async function findKanbanFiles(root: string, dir = root, output: string[] = []): Promise<string[]> {
-  if (output.length >= 40) return output;
-  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+async function kanbanFilesInFolder(root: string, folder: string): Promise<string[]> {
+  const kanbanRoot = resolve(root, folder);
+  assertInside(root, kanbanRoot);
+  const files = [resolve(kanbanRoot, "kanban.json")];
+  const boardsRoot = resolve(kanbanRoot, "boards");
+  assertInside(root, boardsRoot);
+  const entries = await readdir(boardsRoot, { withFileTypes: true }).catch(() => []);
   for (const entry of entries) {
-    if (output.length >= 40) break;
-    if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
-    const fullPath = resolve(dir, entry.name);
-    assertInside(root, fullPath);
-    if (entry.isDirectory()) {
-      await findKanbanFiles(root, fullPath, output);
-    } else if (entry.isFile() && entry.name === "kanban.json" && /\/Kanban\/kanban\.json$/i.test(toVaultPath(root, fullPath))) {
-      output.push(fullPath);
-    }
+    if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "_archived") continue;
+    const file = resolve(boardsRoot, entry.name, "kanban.json");
+    assertInside(root, file);
+    files.push(file);
   }
-  return output;
+  return files;
 }
 
-async function readKanbanRecents(root: string): Promise<RecentDirectory[]> {
-  const files = await findKanbanFiles(root);
+async function knownKanbanFiles(root: string, kanbanFolder?: string): Promise<string[]> {
+  const folders = [
+    normalizeKanbanFolder(kanbanFolder) || DEFAULT_SHARED_VAULT.kanbanFolder,
+    DEFAULT_SHARED_VAULT.kanbanFolder,
+    LEGACY_KANBAN_FOLDER,
+    ...LEGACY_PROJECT_KANBAN_FOLDERS,
+  ];
+  const uniqueFolders = [...new Set(folders.filter(Boolean))];
+  const files = await Promise.all(uniqueFolders.map((folder) => kanbanFilesInFolder(root, folder)));
+  return [...new Set(files.flat())];
+}
+
+async function readKanbanRecents(root: string, kanbanFolder?: string): Promise<RecentDirectory[]> {
+  const files = await knownKanbanFiles(root, kanbanFolder);
   const recents: RecentDirectory[] = [];
   for (const file of files) {
     const raw = await readFile(file, "utf-8").catch(() => "");
@@ -147,31 +194,33 @@ function mergeRecents(entries: RecentDirectory[]) {
     .slice(0, MAX_RECENT_DIRECTORIES);
 }
 
-export async function listRecentDirectories(vaultPath?: string): Promise<RecentDirectoriesResult> {
+export async function listRecentDirectories(input?: ListRecentDirectoriesInput): Promise<RecentDirectoriesResult> {
+  const { vaultPath, kanbanFolder } = normalizeListInput(input);
   const root = resolveObsidianVaultPath(vaultPath);
   await access(root, constants.R_OK);
   const now = Date.now();
-  const cached = recentDirectoriesCache.get(root);
+  const key = cacheKey(root, normalizeKanbanFolder(kanbanFolder));
+  const cached = recentDirectoriesCache.get(key);
   if (cached?.result && cached.expiresAt > now) return cached.result;
   if (cached?.inFlight) return cached.inFlight;
 
-  const inFlight = scanRecentDirectories(root).finally(() => {
-    const entry = recentDirectoriesCache.get(root);
+  const inFlight = scanRecentDirectories(root, kanbanFolder).finally(() => {
+    const entry = recentDirectoriesCache.get(key);
     if (entry?.inFlight === inFlight) {
-      recentDirectoriesCache.set(root, { ...entry, inFlight: undefined });
+      recentDirectoriesCache.set(key, { ...entry, inFlight: undefined });
     }
   });
-  recentDirectoriesCache.set(root, { expiresAt: now + RECENT_DIRECTORIES_CACHE_MS, inFlight });
+  recentDirectoriesCache.set(key, { expiresAt: now + RECENT_DIRECTORIES_CACHE_MS, inFlight });
   return inFlight;
 }
 
-async function scanRecentDirectories(root: string): Promise<RecentDirectoriesResult> {
+async function scanRecentDirectories(root: string, kanbanFolder?: string): Promise<RecentDirectoriesResult> {
   const [stored, kanban] = await Promise.all([
     readStoredRecents(root),
-    readKanbanRecents(root),
+    readKanbanRecents(root, kanbanFolder),
   ]);
   const result = { vaultPath: root, directories: mergeRecents([...stored, ...kanban]) };
-  recentDirectoriesCache.set(root, { expiresAt: Date.now() + RECENT_DIRECTORIES_CACHE_MS, result });
+  recentDirectoriesCache.set(cacheKey(root, normalizeKanbanFolder(kanbanFolder)), { expiresAt: Date.now() + RECENT_DIRECTORIES_CACHE_MS, result });
   return result;
 }
 
@@ -198,6 +247,6 @@ export async function recordRecentDirectory(input: {
   const file = recentDirectoriesFile(root);
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, `${JSON.stringify({ updatedAt: new Date().toISOString(), directories }, null, 2)}\n`, "utf-8");
-  recentDirectoriesCache.delete(root);
+  deleteCacheForRoot(root);
   return { vaultPath: root, directory, directories };
 }

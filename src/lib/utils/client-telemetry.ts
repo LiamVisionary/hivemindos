@@ -46,6 +46,5 @@ async function flushClientTelemetry() {
 
 function telemetryEnabled() {
   if (typeof window === "undefined") return false;
-  if (process.env.NODE_ENV !== "production") return window.localStorage.getItem("hivemindos.telemetry.enabled") !== "false";
-  return window.localStorage.getItem("hivemindos.telemetry.enabled") === "true";
+  return process.env.NODE_ENV !== "production";
 }

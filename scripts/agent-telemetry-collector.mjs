@@ -5,12 +5,14 @@ import { constants as cryptoConstants, createHash, generateKeyPairSync, privateD
 import { access, mkdir, readdir, readFile, readlink, rm, stat, writeFile } from "node:fs/promises";
 import { constants, watch } from "node:fs";
 import { connect } from "node:net";
-import { homedir, hostname, userInfo } from "node:os";
+import { arch, cpus, freemem, homedir, hostname, loadavg, platform, release, totalmem, uptime as osUptime, userInfo } from "node:os";
 import { basename, delimiter, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { acknowledgeTransfer, createTransfer, listTransfers } from "./hive-transfer.mjs";
+import { createConfigureSyncthingFolder } from "./syncthing-configure.mjs";
+import { createSyncthingRepair } from "./syncthing-repair.mjs";
 import bonjourService from "bonjour-service";
 
 const { Bonjour } = bonjourService;
@@ -181,9 +183,14 @@ function stripHermesCliMetadata(value) {
   return String(value || "")
     .split(/\r?\n/)
     .filter((line) => !/^\s*session_id:\s*\S+\s*$/.test(line))
+    .filter((line) => !isHermesCliNoiseLine(line))
     .map((line) => line.replace(/^\s*session_id:\s*\S+\s*/i, ""))
     .join("\n")
     .trim();
+}
+
+function isHermesCliNoiseLine(value) {
+  return /tirith security scanner enabled but not available/i.test(String(value || ""));
 }
 
 function couldBeSessionIdPrefix(value) {
@@ -228,7 +235,7 @@ function createHermesCliOutputSanitizer(write) {
           const end = newline.index + newline[0].length;
           const line = pendingLineStart.slice(0, end);
           const rest = pendingLineStart.slice(end);
-          if (!/^\s*session_id:\s*\S+\s*\r?\n$/i.test(line)) emit(line);
+          if (!/^\s*session_id:\s*\S+\s*\r?\n$/i.test(line) && !isHermesCliNoiseLine(line)) emit(line);
           pendingLineStart = "";
           text = rest;
           filteringLineStart = true;
@@ -251,7 +258,8 @@ function createHermesCliOutputSanitizer(write) {
       }
       const newlineText = text.slice(newlineIndex).startsWith("\r\n") ? "\r\n" : text.slice(newlineIndex, newlineIndex + 1);
       const end = newlineIndex + newlineText.length;
-      emit(text.slice(0, end));
+      const line = text.slice(0, end);
+      if (!isHermesCliNoiseLine(line)) emit(line);
       text = text.slice(end);
       filteringLineStart = true;
     }
@@ -260,7 +268,7 @@ function createHermesCliOutputSanitizer(write) {
   function flush() {
     if (!pendingLineStart) return;
     const sanitized = pendingLineStart.replace(/^\s*session_id:\s*\S+\s*/i, "");
-    if (sanitized) emit(sanitized);
+    if (sanitized && !isHermesCliNoiseLine(sanitized)) emit(sanitized);
     pendingLineStart = "";
     filteringLineStart = true;
   }
@@ -723,10 +731,13 @@ function uniqueAgentId(runtime, name) {
   return `${runtime}-${slugify(name)}-${randomBytes(3).toString("hex")}`;
 }
 
-const knownRuntimeIds = ["hermes", "openclaw", "aeon", "openai-compatible"];
+const HIVE_RUNTIME_ID = "hivemind-os";
+const LEGACY_OPENAI_COMPATIBLE_RUNTIME_ID = "openai-compatible";
+const knownRuntimeIds = ["hermes", "openclaw", "aeon", HIVE_RUNTIME_ID];
 
 function normalizeRuntimeId(runtime, fallback = "hermes") {
   const value = String(runtime || "").trim();
+  if (value === LEGACY_OPENAI_COMPATIBLE_RUNTIME_ID) return HIVE_RUNTIME_ID;
   return knownRuntimeIds.includes(value) ? value : fallback;
 }
 
@@ -761,6 +772,7 @@ function runtimeCapabilitiesFor(runtime) {
       sessionSearch: true,
       backgroundTasks: true,
       xSearch: true,
+      imageGeneration: true,
       videoGeneration: true,
       codexRuntime: true,
       kanbanDecompose: true,
@@ -798,7 +810,7 @@ function runtimeCapabilitiesFor(runtime) {
       setup: true,
     };
   }
-  if (runtime === "openai-compatible") {
+  if (runtime === HIVE_RUNTIME_ID) {
     return {
       status: true,
       chat: true,
@@ -809,7 +821,7 @@ function runtimeCapabilitiesFor(runtime) {
 }
 
 function normalizeRuntimeAgent(entry) {
-  const runtime = normalizeRuntimeId(entry?.runtime, "openai-compatible");
+  const runtime = normalizeRuntimeId(entry?.runtime, HIVE_RUNTIME_ID);
   return {
     ...entry,
     id: String(entry?.id || uniqueAgentId(runtime, entry?.name)),
@@ -910,14 +922,14 @@ async function createRuntimeAgent(input) {
     runtime,
     gatewayUrl: runtime === "openclaw"
       ? String(input.gatewayUrl || "ws://127.0.0.1:18789")
-      : runtime === "openai-compatible"
+      : runtime === HIVE_RUNTIME_ID
         ? String(input.gatewayUrl || process.env.LOCAL_OPENAI_BASE_URL || "http://127.0.0.1:1234")
         : "",
     agentId: profile,
-    chatPath: runtime === "hermes" ? "/chat" : runtime === "openai-compatible" ? "/v1/chat/completions" : "",
-    statusPath: runtime === "hermes" ? "/health" : runtime === "openai-compatible" ? "/v1/models" : "",
-    provider: input.provider || (runtime === "openai-compatible" ? "lm-studio" : undefined),
-    model: input.model || (runtime === "openai-compatible" ? process.env.LOCAL_OPENAI_MODEL : undefined),
+    chatPath: runtime === "hermes" ? "/chat" : runtime === HIVE_RUNTIME_ID ? "/v1/chat/completions" : "",
+    statusPath: runtime === "hermes" ? "/health" : runtime === HIVE_RUNTIME_ID ? "/v1/models" : "",
+    provider: input.provider || (runtime === HIVE_RUNTIME_ID ? "lm-studio" : undefined),
+    model: input.model || (runtime === HIVE_RUNTIME_ID ? process.env.LOCAL_OPENAI_MODEL : undefined),
     localDataDir: runtimeResult.profileDir || (runtime === "hermes" ? join(hermesProfilesDir, profile) : ""),
     beeRole: input.beeRole,
     workerClass: input.workerClass,
@@ -1607,128 +1619,23 @@ async function syncthingRescan(input = {}) {
   return { ok: true, folderId: folderId || null, rescanned: true };
 }
 
-function mergeDevice(existing, defaults, peer) {
-  const device = {
-    ...defaults,
-    ...existing,
-    deviceID: peer.deviceID,
-    name: peer.name || existing?.name || defaults?.name || peer.deviceID.slice(0, 7),
-    addresses: Array.isArray(peer.addresses) && peer.addresses.length ? peer.addresses : existing?.addresses || ["dynamic"],
-    paused: false,
-    introducer: false,
-    autoAcceptFolders: false,
-  };
-  delete device._editing;
-  return device;
-}
+const syncthingRepair = createSyncthingRepair({
+  expandHome,
+  folderMatchesPath,
+  safeFolderId,
+  sleep,
+  syncthingFetch,
+  syncthingFolderStatus,
+  syncthingInstalled,
+  waitForSyncthing,
+});
 
-function folderDevices(config, existingDevices, peerDeviceID) {
-  const devices = [];
-  const seen = new Set();
-  const addDevice = (device) => {
-    const deviceID = String(device?.deviceID || "").trim();
-    if (!deviceID || seen.has(deviceID)) return;
-    seen.add(deviceID);
-    devices.push({ ...device, deviceID });
-  };
-
-  for (const device of Array.isArray(existingDevices) ? existingDevices : []) {
-    addDevice(device);
-  }
-  addDevice({ deviceID: config.myID });
-  addDevice({ deviceID: peerDeviceID });
-  return devices;
-}
-
-function mergeFolder(existing, defaults, input, config) {
-  const folder = {
-    ...defaults,
-    ...existing,
-    id: safeFolderId(input.folderId || defaults?.id),
-    label: input.label || existing?.label || defaults?.label || "HivemindOS Sync",
-    path: expandHome(input.path),
-    type: "sendreceive",
-    paused: false,
-    fsWatcherEnabled: true,
-    fsWatcherDelayS: existing?.fsWatcherDelayS ?? defaults?.fsWatcherDelayS ?? 10,
-    rescanIntervalS: existing?.rescanIntervalS ?? defaults?.rescanIntervalS ?? 30,
-    ignorePerms: true,
-    devices: folderDevices(config, existing?.devices, input.peerDeviceID),
-  };
-  delete folder._editing;
-  return folder;
-}
-
-async function configureSyncthingFolder(input) {
-  const peerDeviceID = String(input.peerDeviceID || "").trim();
-  const path = expandHome(String(input.path || "").trim());
-  if (!peerDeviceID) throw new Error("peerDeviceID is required.");
-  if (!path) throw new Error("path is required.");
-  await mkdir(path, { recursive: true, mode: 0o700 });
-  await mkdir(join(path, ".stfolder"), { recursive: true, mode: 0o700 });
-  const running = await waitForSyncthing();
-  if (!running) throw new Error("Syncthing local API is not reachable.");
-
-  const [config, deviceDefaults, folderDefaults, status] = await Promise.all([
-    syncthingFetch("/rest/config"),
-    syncthingFetch("/rest/config/defaults/device"),
-    syncthingFetch("/rest/config/defaults/folder"),
-    syncthingFetch("/rest/system/status"),
-  ]);
-  config.myID = status.myID;
-
-  const folderId = safeFolderId(input.folderId || `hivemindos-${randomBytes(4).toString("hex")}`);
-  const devices = Array.isArray(config.devices) ? config.devices : [];
-  const folders = Array.isArray(config.folders) ? config.folders : [];
-  const existingDeviceIndex = devices.findIndex((device) => device.deviceID === peerDeviceID);
-  const peerDevice = mergeDevice(existingDeviceIndex >= 0 ? devices[existingDeviceIndex] : null, deviceDefaults, {
-    deviceID: peerDeviceID,
-    name: input.peerName,
-    addresses: input.peerAddresses,
-  });
-  if (existingDeviceIndex >= 0) {
-    devices[existingDeviceIndex] = peerDevice;
-  } else {
-    devices.push(peerDevice);
-  }
-
-  const existingFolderIndex = folders.findIndex((folder) => folder.id === folderId);
-  const folder = mergeFolder(existingFolderIndex >= 0 ? folders[existingFolderIndex] : null, folderDefaults, {
-    folderId,
-    label: input.label,
-    path,
-    peerDeviceID,
-  }, config);
-  if (existingFolderIndex >= 0) {
-    folders[existingFolderIndex] = folder;
-  } else {
-    folders.push(folder);
-  }
-
-  config.devices = devices;
-  config.folders = folders;
-  await syncthingFetch("/rest/config", { method: "PUT", body: JSON.stringify(config), timeoutMs: 15_000 });
-  await syncthingFetch("/rest/db/scan", {
-    method: "POST",
-    body: JSON.stringify({ folder: folderId }),
-    timeoutMs: 8_000,
-  }).catch(() => null);
-  const restartRequested = await syncthingFetch("/rest/system/restart", {
-    method: "POST",
-    timeoutMs: 5_000,
-  }).then(() => true).catch(() => false);
-
-  return {
-    ok: true,
-    host: hostname(),
-    deviceID: status.myID,
-    folderId,
-    label: folder.label,
-    path: folder.path,
-    peerDeviceID,
-    restartRequested,
-  };
-}
+const configureSyncthingFolder = createConfigureSyncthingFolder({
+  expandHome,
+  safeFolderId,
+  syncthingFetch,
+  waitForSyncthing,
+});
 
 function safeSyncTestId(value) {
   const id = String(value || "").trim();
@@ -1843,6 +1750,7 @@ async function hermesIntegrationStatus(agent = {}) {
       backgroundTasks: true,
       xSearch: true,
       socialPosting: false,
+      imageGeneration: true,
       videoGeneration: true,
       codexRuntime: true,
       kanbanDecompose: true,
@@ -1868,6 +1776,31 @@ async function hermesIntegrationStatus(agent = {}) {
         supported: false,
         enabled: false,
         detail: "Hermes exposes X search natively here; posting should remain a skill/plugin action.",
+      },
+      imageGeneration: {
+        supported: true,
+        enabled: toolEnabled("image_gen"),
+        detail: toolEnabled("image_gen") ? "image_generate is enabled for CLI." : "Enable image_gen before asking Hermes to create images.",
+      },
+      ttsGeneration: {
+        supported: false,
+        enabled: false,
+        detail: "tts_gen is reserved for future runtime speech-generation support.",
+      },
+      musicGeneration: {
+        supported: false,
+        enabled: false,
+        detail: "music-gen is reserved for future runtime music-generation support.",
+      },
+      sfxGeneration: {
+        supported: false,
+        enabled: false,
+        detail: "sfx_gen is reserved for future runtime sound-effect generation support.",
+      },
+      model3dGeneration: {
+        supported: false,
+        enabled: false,
+        detail: "3d_gen is reserved for future runtime 3D-generation support.",
       },
       videoGeneration: {
         supported: true,
@@ -2058,6 +1991,245 @@ async function openClawIntegrationStatus(agent = {}) {
     },
     diagnostics: configReadable ? [] : ["OpenClaw config was not found."],
   };
+}
+
+function localOpenAiBase(agent = {}) {
+  return String(agent.gatewayUrl || "http://127.0.0.1:1234").trim().replace(/\/+$/, "") || "http://127.0.0.1:1234";
+}
+
+function localOpenAiProviderName(agent = {}) {
+  const provider = String(agent.provider || "openai-compatible").trim();
+  if (provider === "lm-studio") return "LM Studio";
+  if (provider === "ollama") return "Ollama";
+  if (provider === "vllm") return "vLLM";
+  if (provider === "llamacpp") return "llama.cpp";
+  return "OpenAI-compatible";
+}
+
+function localOpenAiHeaders(agent = {}) {
+  const token = String(agent.token || "").trim();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function resolveLmsBin() {
+  const candidates = [
+    join(homedir(), ".lmstudio", "bin", "lms"),
+    "/opt/homebrew/bin/lms",
+    "/usr/local/bin/lms",
+    "lms",
+  ];
+  for (const candidate of candidates) {
+    if (candidate === "lms") return candidate;
+    try {
+      await access(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // Try next candidate.
+    }
+  }
+  return "lms";
+}
+
+async function runLmsJson(args, timeout = 15_000) {
+  const { stdout } = await execFileAsync(await resolveLmsBin(), args, {
+    timeout,
+    maxBuffer: 8_000_000,
+    env: runtimeProcessEnv({ PATH: [join(homedir(), ".lmstudio", "bin"), process.env.PATH].filter(Boolean).join(delimiter) }),
+  });
+  const trimmed = stdout.trim();
+  if (!trimmed) return [];
+  return JSON.parse(trimmed);
+}
+
+async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 8_000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const error = typeof data?.error === "string" ? data.error : data?.error?.message || `${url} returned ${response.status}`;
+      throw new Error(error);
+    }
+    return data || {};
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function normalizeLmStudioInventory(payload = {}) {
+  const models = Array.isArray(payload) ? payload : Array.isArray(payload.models) ? payload.models : [];
+  const normalized = models
+    .map((model) => {
+      const key = String(model?.key || model?.modelKey || "").trim();
+      if (!key) return null;
+      const loadedInstanceIds = Array.isArray(model.loaded_instances)
+        ? model.loaded_instances.map((instance) => String(instance?.id || "").trim()).filter(Boolean)
+        : Array.isArray(model.loadedInstanceIds)
+          ? model.loadedInstanceIds.map((id) => String(id || "").trim()).filter(Boolean)
+        : [];
+      return {
+        key,
+        displayName: String(model.display_name || model.displayName || key),
+        type: String(model.type || "llm"),
+        loaded: loadedInstanceIds.length > 0,
+        loadedInstanceIds,
+        maxContextLength: Number.isFinite(Number(model.max_context_length ?? model.maxContextLength)) ? Number(model.max_context_length ?? model.maxContextLength) : undefined,
+        paramsString: model.params_string ?? model.paramsString ?? null,
+        sizeBytes: Number.isFinite(Number(model.size_bytes ?? model.sizeBytes)) ? Number(model.size_bytes ?? model.sizeBytes) : null,
+        format: model.format ?? null,
+      };
+    }).filter(Boolean);
+  const seen = new Set();
+  return normalized.filter((model) => {
+    if (seen.has(model.key)) return false;
+    seen.add(model.key);
+    return true;
+  });
+}
+
+function markLoadedLmStudioModels(models, loadedModels = []) {
+  const loadedRefs = new Set(loadedModels.flatMap((model) => [
+    model?.identifier,
+    model?.modelKey,
+    model?.key,
+    model?.path,
+    model?.displayName,
+  ].map((value) => String(value || "").trim()).filter(Boolean)));
+  return models.map((model) => loadedRefs.has(model.key) || loadedRefs.has(model.displayName)
+    ? { ...model, loaded: true, loadedInstanceIds: model.loadedInstanceIds.length ? model.loadedInstanceIds : [model.key] }
+    : model);
+}
+
+async function readLmStudioCliInventory() {
+  const [models, loaded] = await Promise.all([
+    runLmsJson(["ls", "--json"]),
+    runLmsJson(["ps", "--json"]).catch(() => []),
+  ]);
+  return markLoadedLmStudioModels(normalizeLmStudioInventory(models), Array.isArray(loaded) ? loaded : []);
+}
+
+async function localOpenAiIntegrationStatus(agent = {}) {
+  const provider = String(agent.provider || "openai-compatible").trim() || "openai-compatible";
+  const providerName = localOpenAiProviderName(agent);
+  const baseUrl = localOpenAiBase(agent);
+  const diagnostics = [];
+  let lmStudioModels = [];
+  let openAiModels = [];
+  let inventoryError = "";
+  let inventorySource = "";
+  if (provider === "lm-studio") {
+    try {
+      lmStudioModels = await readLmStudioCliInventory();
+      if (lmStudioModels.length) inventorySource = "lms ls --json";
+    } catch (error) {
+      inventoryError = error instanceof Error ? error.message : "LM Studio CLI inventory failed.";
+      diagnostics.push(`${providerName} CLI inventory unavailable: ${inventoryError}`);
+    }
+    if (!lmStudioModels.length) {
+      try {
+        lmStudioModels = normalizeLmStudioInventory(await fetchJsonWithTimeout(`${baseUrl}/api/v1/models`, {
+          headers: localOpenAiHeaders(agent),
+        }));
+        if (lmStudioModels.length) {
+          inventoryError = "";
+          inventorySource = `${baseUrl}/api/v1/models`;
+        }
+      } catch (error) {
+        diagnostics.push(`LM Studio REST inventory unavailable: ${error instanceof Error ? error.message : "REST model inventory failed."}`);
+      }
+    }
+  }
+  if (!lmStudioModels.length) {
+    try {
+      const statusPath = String(agent.statusPath || "/v1/models");
+      const payload = await fetchJsonWithTimeout(`${baseUrl}${statusPath.startsWith("/") ? statusPath : `/${statusPath}`}`, {
+        headers: localOpenAiHeaders(agent),
+      });
+      openAiModels = Array.isArray(payload.data)
+        ? payload.data.map((model) => String(model?.id || "").trim()).filter(Boolean)
+        : [];
+    } catch (error) {
+      if (!inventoryError) diagnostics.push(`${providerName} model discovery unavailable: ${error instanceof Error ? error.message : "Model discovery failed."}`);
+    }
+  }
+  const llmModels = lmStudioModels.filter((model) => model.type === "llm");
+  const modelOptions = llmModels.length
+    ? llmModels.map((model) => ({
+      id: model.key,
+      name: model.displayName,
+      subtitle: model.loaded ? "Loaded" : "Downloaded",
+      group: model.paramsString || undefined,
+      badge: model.loaded ? "Loaded" : undefined,
+    }))
+    : openAiModels.map((id) => ({ id }));
+  const fallbackModel = String(agent.model || "").trim();
+  if (fallbackModel && !modelOptions.some((model) => model.id === fallbackModel)) {
+    modelOptions.unshift({ id: fallbackModel });
+  }
+  return {
+    runtime: HIVE_RUNTIME_ID,
+    machine: { host: hostname(), collectorUrl: `http://${hostname()}:${port}` },
+    capabilities: runtimeCapabilitiesFor(HIVE_RUNTIME_ID),
+    modelSelection: {
+      provider,
+      model: fallbackModel || modelOptions[0]?.id || "",
+      providers: [{
+        slug: provider,
+        name: providerName,
+        models: modelOptions,
+        totalModels: modelOptions.length,
+        isCurrent: true,
+        isUserDefined: true,
+        source: provider === "lm-studio" ? inventorySource || `${baseUrl}/api/v1/models` : `${baseUrl}${agent.statusPath || "/v1/models"}`,
+      }],
+    },
+    providerStatus: provider === "lm-studio" ? {
+      lmStudio: {
+        baseUrl,
+        models: lmStudioModels,
+        error: inventoryError || undefined,
+        checkedAt: new Date().toISOString(),
+      },
+    } : undefined,
+    integrations: {
+      modelSelection: {
+        supported: true,
+        enabled: modelOptions.length > 0,
+        detail: modelOptions.length ? `${providerName} reported ${modelOptions.length} model${modelOptions.length === 1 ? "" : "s"}.` : `${providerName} did not report models.`,
+      },
+    },
+    diagnostics,
+  };
+}
+
+async function runLocalOpenAiIntegrationAction(action, input = {}, agent = {}) {
+  if (String(agent.provider || "") !== "lm-studio") return { ok: false, error: `${localOpenAiProviderName(agent)} does not expose load/unload controls here yet.` };
+  if (action === "load-model") {
+    const model = String(input.model || "").trim();
+    if (!model) return { ok: false, error: "Model is required." };
+    const contextLength = Number(input.contextLength || 0);
+    const args = ["load", "--identifier", model, "--yes"];
+    if (Number.isFinite(contextLength) && contextLength > 0) args.push("--context-length", String(contextLength));
+    args.push(model);
+    await execFileAsync(await resolveLmsBin(), args, {
+      timeout: 180_000,
+      maxBuffer: 2_000_000,
+      env: runtimeProcessEnv({ PATH: [join(homedir(), ".lmstudio", "bin"), process.env.PATH].filter(Boolean).join(delimiter) }),
+    });
+    return { ok: true, message: `Loaded ${model} in LM Studio.` };
+  }
+  if (action === "unload-model") {
+    const instanceId = String(input.instanceId || input.model || "").trim();
+    if (!instanceId) return { ok: false, error: "Loaded model instance is required." };
+    await execFileAsync(await resolveLmsBin(), ["unload", instanceId], {
+      timeout: 60_000,
+      maxBuffer: 2_000_000,
+      env: runtimeProcessEnv({ PATH: [join(homedir(), ".lmstudio", "bin"), process.env.PATH].filter(Boolean).join(delimiter) }),
+    });
+    return { ok: true, message: `Unloaded ${instanceId} from LM Studio.` };
+  }
+  return { ok: false, error: `Unsupported Local OpenAI action: ${action}` };
 }
 
 async function runOpenClawIntegrationAction(action, input = {}) {
@@ -3025,6 +3197,66 @@ async function localAgents() {
   return agents;
 }
 
+async function darwinRamUsedBytes() {
+  const { stdout } = await execFileAsync("vm_stat", [], { timeout: 4_000 });
+  const pageSize = Number(/page size of (\d+) bytes/.exec(stdout)?.[1] || 16_384);
+  const pages = (label) => Number(new RegExp(`${label}:\\s+(\\d+)`).exec(stdout)?.[1] || 0);
+  // Approximates Activity Monitor's "Memory Used": active + wired + compressed.
+  return (pages("Pages active") + pages("Pages wired down") + pages("Pages occupied by compressor")) * pageSize;
+}
+
+async function linuxRamUsedBytes() {
+  const meminfo = await readFile("/proc/meminfo", "utf8");
+  const kb = (label) => Number(new RegExp(`^${label}:\\s+(\\d+) kB`, "m").exec(meminfo)?.[1] || 0);
+  const totalKb = kb("MemTotal");
+  const availableKb = kb("MemAvailable");
+  if (!totalKb || !availableKb) throw new Error("MemAvailable missing from /proc/meminfo.");
+  return (totalKb - availableKb) * 1024;
+}
+
+async function rootDiskUsage() {
+  // On macOS "/" is the sealed system volume; user data lives on the Data volume.
+  const target = platform() === "darwin" ? "/System/Volumes/Data" : "/";
+  const { stdout } = await execFileAsync("df", ["-kP", target], { timeout: 4_000 });
+  const parts = (stdout.trim().split("\n").at(-1) || "").split(/\s+/);
+  const totalKb = Number(parts[1] || 0);
+  const usedKb = Number(parts[2] || 0);
+  if (!totalKb) return null;
+  return { totalKb, usedKb };
+}
+
+async function systemStats() {
+  const toGb = (bytes) => Math.round((bytes / 1024 ** 3) * 10) / 10;
+  const clampPct = (value) => Math.max(0, Math.min(100, Math.round(value)));
+  const cores = cpus();
+  const coreCount = cores.length || 1;
+  const load1m = loadavg()[0];
+  const ramTotal = totalmem();
+  const ramUsed = platform() === "darwin"
+    ? await darwinRamUsedBytes().catch(() => ramTotal - freemem())
+    : platform() === "linux"
+      ? await linuxRamUsedBytes().catch(() => ramTotal - freemem())
+      : ramTotal - freemem();
+  const disk = await rootDiskUsage().catch(() => null);
+  return {
+    checkedAt: Date.now(),
+    cpuPct: clampPct((load1m / coreCount) * 100),
+    cpuCores: coreCount,
+    cpuModel: cores[0]?.model?.trim() || "",
+    loadAvg1m: Math.round(load1m * 100) / 100,
+    ramPct: ramTotal ? clampPct((ramUsed / ramTotal) * 100) : 0,
+    ramUsedGb: toGb(ramUsed),
+    ramTotalGb: toGb(ramTotal),
+    diskPct: disk ? clampPct((disk.usedKb / disk.totalKb) * 100) : null,
+    diskUsedGb: disk ? toGb(disk.usedKb * 1024) : null,
+    diskTotalGb: disk ? toGb(disk.totalKb * 1024) : null,
+    platform: platform(),
+    arch: arch(),
+    osRelease: release(),
+    uptimeSec: Math.round(osUptime()),
+  };
+}
+
 async function collectorHealthPayload() {
   const now = Date.now();
   if (healthPayloadCache && now - healthPayloadCache.checkedAt < healthCacheMs) {
@@ -3033,12 +3265,13 @@ async function collectorHealthPayload() {
   if (healthPayloadPromise) return healthPayloadPromise;
 
   healthPayloadPromise = (async () => {
-    const [syncthing, envSync, agents, machineId, version] = await Promise.all([
+    const [syncthing, envSync, agents, machineId, version, system] = await Promise.all([
       syncthingInstalled(),
       resolveHiveEnvAdd(),
       localAgents(),
       stableMachineId(),
       appVersion(),
+      systemStats().catch(() => null),
     ]);
     const runtimes = [...new Set(agents.map((agent) => agent.runtime))];
     const value = {
@@ -3048,6 +3281,7 @@ async function collectorHealthPayload() {
       collectorStartedAt,
       collectorStartedAtMs,
       version,
+      system,
       envSync: {
         ready: envSync.ready,
         user: currentUsername(),
@@ -3193,6 +3427,12 @@ function hermesCliArgs(agent, tailArgs) {
   const args = [];
   const model = typeof agent.model === "string" ? agent.model.trim() : "";
   const provider = typeof agent.provider === "string" ? agent.provider.trim() : "";
+  if (tailArgs[0] === "chat") {
+    args.push("chat");
+    if (model) args.push("-m", model);
+    if (provider) args.push("--provider", provider);
+    return [...args, ...tailArgs.slice(1)];
+  }
   if (model) args.push("-m", model);
   if (provider) args.push("--provider", provider);
   return [...args, ...tailArgs];
@@ -3576,11 +3816,11 @@ async function streamHermesChat(body, response) {
   const agent = body.agent && typeof body.agent === "object" ? body.agent : {};
   const hermesHome = expandHome(agent.localDataDir || body.localDataDir || defaultHermesDir);
   const agentEnv = hermesContextEnv(safeAgentEnv(body.agentEnv), body.context);
-  if (hermesChatMode === "api" && await proxyHermesApiChat(body, response, text, hermesHome)) return;
+  if (body.forceHermesCli !== true && hermesChatMode === "api" && await proxyHermesApiChat(body, response, text, hermesHome)) return;
 
   const runtimeSessionId = normalizeHermesSessionId(body.runtimeSessionId || body.hermesSessionId || "");
   const args = hermesCliArgs(agent, ["chat", "-Q", "-q", text, "--accept-hooks", "--source", "hivemindos"]);
-  if (runtimeSessionId) args.push("--resume", runtimeSessionId);
+  if (runtimeSessionId && body.disableHermesResume !== true) args.push("--resume", runtimeSessionId);
   const cwd = await resolveChatWorkingDirectory(body.workingDirectory);
   const requestStartedAt = Date.now();
 
@@ -4141,6 +4381,14 @@ const telemetryServer = createServer(async (request, response) => {
         jsonResponse(response, 200, { ok: true, status: await openClawIntegrationStatus(body.agent || {}) });
         return;
       }
+      if (runtimeName === HIVE_RUNTIME_ID || runtimeName === LEGACY_OPENAI_COMPATIBLE_RUNTIME_ID) {
+        if (body.action) {
+          jsonResponse(response, 200, await runLocalOpenAiIntegrationAction(body.action, body.input || {}, body.agent || {}));
+          return;
+        }
+        jsonResponse(response, 200, { ok: true, status: await localOpenAiIntegrationStatus(body.agent || {}) });
+        return;
+      }
       if (runtimeName !== "hermes") {
         jsonResponse(response, 404, { ok: false, error: `${runtimeName} integrations are not exposed by this collector yet.` });
         return;
@@ -4264,6 +4512,20 @@ const telemetryServer = createServer(async (request, response) => {
       jsonResponse(response, 400, {
         ok: false,
         error: error instanceof Error ? error.message : "Could not trigger a Syncthing rescan.",
+      });
+    }
+    return;
+  }
+  if (pathname === "/syncthing/repair" && request.method === "POST") {
+    try {
+      const rawBody = await readBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const result = await syncthingRepair(body);
+      jsonResponse(response, result.ok ? 200 : 503, result);
+    } catch (error) {
+      jsonResponse(response, 400, {
+        ok: false,
+        error: error instanceof Error ? error.message : "Could not repair Syncthing.",
       });
     }
     return;

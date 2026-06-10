@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { discoverRawConnectedApps } from "@/lib/services/fleet/connected-apps";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,7 @@ type AppRequestBody = {
   method?: string;
   path?: string;
   body?: unknown;
+  stream?: boolean;
 };
 
 type HostedApp = {
@@ -31,12 +33,27 @@ function normalizeRequestPath(path: unknown) {
 function selectedApp(apps: HostedApp[], body: AppRequestBody) {
   const appId = body.appId?.trim();
   const serviceKind = body.serviceKind?.trim().toLowerCase();
-  if (appId) return apps.find((app) => app.id === appId);
+  if (appId) return apps.find((app) => appMatchesId(app, appId));
   if (serviceKind) return apps.find((app) => app.serviceKind?.trim().toLowerCase() === serviceKind);
   return null;
 }
 
-async function discoveredApps(origin: string) {
+function appIdHint(value?: string) {
+  const text = value?.trim() || "";
+  const match = /^(.+):(\d+):(.+)$/.exec(text);
+  if (!match) return null;
+  return { host: match[1], port: Number(match[2]) };
+}
+
+function appMatchesId(app: HostedApp, selectedAppId: string) {
+  if (app.id === selectedAppId) return true;
+  const selected = appIdHint(selectedAppId);
+  const candidate = appIdHint(app.id);
+  if (!selected || !candidate || selected.host !== candidate.host) return false;
+  return selected.port === candidate.port;
+}
+
+async function normalizedApps(origin: string) {
   const url = new URL("/api/fleet/apps?refresh=1&fast=1&wait=1", origin);
   const response = await fetch(url, {
     cache: "no-store",
@@ -45,6 +62,18 @@ async function discoveredApps(origin: string) {
   if (!response.ok) throw new Error(`Apps discovery returned ${response.status}.`);
   const payload = await response.json().catch(() => null) as { apps?: HostedApp[] } | null;
   return Array.isArray(payload?.apps) ? payload.apps : [];
+}
+
+async function discoveredApps(origin: string, body: AppRequestBody) {
+  const raw = await discoverRawConnectedApps(origin, { selfOnly: body.appId?.startsWith("local:") }).catch(() => []);
+  const rawApp = selectedApp(raw, body);
+  if (rawApp) return [rawApp];
+  const normalized = await normalizedApps(origin);
+  const byId = new Map<string, HostedApp>();
+  for (const app of [...normalized, ...raw]) {
+    if (app.id && !byId.has(app.id)) byId.set(app.id, app);
+  }
+  return [...byId.values()];
 }
 
 export async function POST(request: NextRequest) {
@@ -68,7 +97,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const apps = await discoveredApps(request.nextUrl.origin);
+    const apps = await discoveredApps(request.nextUrl.origin, body);
     const app = selectedApp(apps, body);
     if (!app?.apiBaseUrl) {
       return Response.json({ ok: false, error: "No matching connected app with an API base URL was found." }, { status: 404 });
@@ -87,6 +116,24 @@ export async function POST(request: NextRequest) {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     const contentType = upstream.headers.get("content-type") || "application/octet-stream";
+    if (body.stream) {
+      const headers = new Headers();
+      headers.set("Content-Type", contentType);
+      headers.set("Cache-Control", "no-store");
+      for (const key of [
+        "x-audio-sample-rate",
+        "x-audio-channels",
+        "x-audio-sample-format",
+        "x-universal-tts-streaming-implementation",
+      ]) {
+        const value = upstream.headers.get(key);
+        if (value) headers.set(key, value);
+      }
+      return new Response(upstream.body, {
+        status: upstream.status,
+        headers,
+      });
+    }
     const payload = await upstream.arrayBuffer();
     return new Response(payload, {
       status: upstream.status,

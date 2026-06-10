@@ -131,6 +131,11 @@ export type RuntimeRepoSyncStatus = {
 export type RuntimeModelOption = {
   id: string;
   name?: string;
+  subtitle?: string;
+  group?: string;
+  badge?: string;
+  disabled?: boolean;
+  disabledReason?: string;
 };
 
 export type RuntimeModelProvider = {

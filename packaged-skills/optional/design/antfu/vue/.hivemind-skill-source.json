@@ -1,0 +1,18 @@
+{
+  "upstreamName": "vue",
+  "upstreamSlug": "vue",
+  "hiveSlug": "vue",
+  "sourceLabel": "antfu",
+  "sourceUrl": "https://www.ui-skills.com/skills/antfu/vue",
+  "repository": "https://github.com/antfu/skills",
+  "installCommand": "npx skills add https://github.com/antfu/skills --skill vue",
+  "importedAt": "2026-06-08T15:01:27.994Z",
+  "refreshedAt": "2026-06-08T15:01:27.994Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/antfu/vue",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Vue 3 Composition API, script setup macros, reactivity system, and built-in components. Use when writing Vue SFCs, defineProps/defineEmits/defineModel, watchers, or using Transition/Teleport/Suspense/KeepAlive."
+}

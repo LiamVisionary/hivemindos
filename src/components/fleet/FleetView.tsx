@@ -2,6 +2,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BeeIcon } from "./bee-icon";
@@ -10,7 +11,13 @@ import { ListView } from "./list-view";
 import { MapView } from "./map-view";
 import { NetworkGraph } from "./network-graph";
 import { FleetConstellationLoading, FleetDispatchLoading, FleetRosterLoading, FleetScanOverlay } from "./fleet-loading";
-import { Roster, type AeonDeleteDepth, type AeonDeleteProgress, type AeonDeleteResult, type MachineUpdateButtonDetail, type MachineUpdateButtonStatus } from "./roster";
+import { Roster, type MachineUpdateButtonDetail, type MachineUpdateButtonStatus } from "./roster";
+import { AeonDeleteModal, isAeonAgent, type AeonDeleteDepth, type AeonDeleteProgress, type AeonDeleteResult } from "./aeon-delete-modal";
+import { EconomyStrip } from "./economy-strip";
+import type { FleetHostedApp } from "./active-apps";
+import { UsePodHostModal } from "./usepod-host-modal";
+import { MachineTerminalModal } from "./machine-terminal-modal";
+import { dashboardStateValue, loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import {
   ALERTS,
   MACHINES,
@@ -27,6 +34,11 @@ import styles from "./fleet-tokens.module.css";
 
 type ViewMode = "graph" | "map" | "list";
 const DISMISSED_ALERTS_STORAGE_KEY = "hivemindos.fleet.dismissedAlerts.v1";
+// Matches the bounce/glow animation length in fleet-tokens.module.css (3 × 880ms).
+const NEW_AGENT_HIGHLIGHT_MS = 2700;
+// An arrival older than this is stale (e.g. the user created an agent and only
+// opened the fleet much later) — clear it instead of celebrating.
+const NEW_AGENT_ARRIVAL_WINDOW_MS = 5 * 60_000;
 
 type SettledFleetViewData = {
   machines: FleetMachine[];
@@ -43,13 +55,22 @@ export interface FleetViewProps {
   alerts?: FleetAlert[];
   ticker?: string[];
   edges?: Array<[string, string]>;
+  /** Hosted apps & services discovered across the fleet; shown per machine in the roster. */
+  hostedApps?: FleetHostedApp[];
   loading?: boolean;
   checkedLabel?: string;
   tailnetLabel?: string;
   mastheadMode?: "all" | "mobile" | "none";
+  /** A just-created agent to spotlight (bounce + auto-open tooltip) once it appears in the fleet data. */
+  recentAgentArrival?: { agentId: string; at: number } | null;
+  /** Called once the arrival has been spotlighted (or was stale) so the parent can clear it. */
+  onRecentAgentArrivalSeen?: () => void;
   /** Optional override hooks so the parent app can wire actions to real APIs. */
   onAddAgent?: (m: FleetMachine) => void;
   onAddMachine?: () => void;
+  /** Fleet auto-update pause control; the toggle renders only when the handler is provided. */
+  autoUpdatePaused?: boolean;
+  onToggleAutoUpdatePaused?: () => void;
   updateStatusByMachine?: Record<string, MachineUpdateButtonStatus>;
   updateDetailByMachine?: Record<string, MachineUpdateButtonDetail>;
   onUpdateMachine?: (m: FleetMachine) => void;
@@ -72,10 +93,10 @@ function preferredInitialMachineId(machines: FleetMachine[]) {
     ?? "";
 }
 
-function readDismissedAlertIds() {
-  if (typeof window === "undefined") return new Set<string>();
+async function readDismissedAlertIds() {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(DISMISSED_ALERTS_STORAGE_KEY) || "[]") as unknown;
+    const snapshot = await loadDashboardStateSnapshot();
+    const parsed = JSON.parse(dashboardStateValue(snapshot, DISMISSED_ALERTS_STORAGE_KEY) || "[]") as unknown;
     return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
   } catch {
     return new Set<string>();
@@ -83,10 +104,9 @@ function readDismissedAlertIds() {
 }
 
 function writeDismissedAlertIds(ids: Set<string>) {
-  if (typeof window === "undefined") return;
   const values = [...ids].slice(-200);
-  if (values.length) window.localStorage.setItem(DISMISSED_ALERTS_STORAGE_KEY, JSON.stringify(values));
-  else window.localStorage.removeItem(DISMISSED_ALERTS_STORAGE_KEY);
+  if (values.length) void saveDashboardStateValue(DISMISSED_ALERTS_STORAGE_KEY, JSON.stringify(values));
+  else void removeDashboardStateValue(DISMISSED_ALERTS_STORAGE_KEY);
 }
 
 export function FleetView({
@@ -95,10 +115,15 @@ export function FleetView({
   alerts = ALERTS,
   ticker = TICKER,
   edges = FLEET_EDGES,
+  hostedApps,
   loading = false,
   mastheadMode = "all",
+  recentAgentArrival,
+  onRecentAgentArrivalSeen,
   onAddAgent,
   onAddMachine,
+  autoUpdatePaused,
+  onToggleAutoUpdatePaused,
   updateStatusByMachine,
   updateDetailByMachine,
   onUpdateMachine,
@@ -117,11 +142,17 @@ export function FleetView({
   const [selected, setSelected] = React.useState<string>(() => preferredInitialMachineId(machines));
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
   const [view, setView] = React.useState<ViewMode>("graph");
-  const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set(["nimbus"]));
   const [dispatchIdx, setDispatchIdx] = React.useState(0);
-  const [dismissedAlertIds, setDismissedAlertIds] = React.useState<Set<string>>(readDismissedAlertIds);
+  const [aeonDeleteTarget, setAeonDeleteTarget] = React.useState<{ machine: FleetMachine; agent: FleetAgent } | null>(null);
+  const [dismissedAlertIds, setDismissedAlertIds] = React.useState<Set<string>>(() => new Set());
+  const [dismissedAlertsHydrated, setDismissedAlertsHydrated] = React.useState(false);
   const [selectedAlert, setSelectedAlert] = React.useState<FleetAlert | null>(null);
   const [gitlawbNode, setGitlawbNode] = React.useState<FleetMachine["gitlawb"] | null>(null);
+  const [selectionTooltipKey, setSelectionTooltipKey] = React.useState<string | null>(null);
+  const [newAgentKey, setNewAgentKey] = React.useState<string | null>(null);
+  const [usePodHostMachine, setUsePodHostMachine] = React.useState<FleetMachine | null>(null);
+  const [terminalMachine, setTerminalMachine] = React.useState<FleetMachine | null>(null);
+  const newAgentTimerRef = React.useRef<number>(0);
   const [settledFleet, setSettledFleet] = React.useState<SettledFleetViewData>({
     machines: [],
     tasks: [],
@@ -159,14 +190,55 @@ export function FleetView({
   const refreshing = loading && !initialLoading;
   const showMasthead = mastheadMode !== "none";
 
+  // When the app reports a just-created agent, wait for it to show up in the
+  // fleet data, then select it, auto-open its tooltip, and bounce its hex so
+  // it's easy to spot in the hive. Driven by an explicit signal from the
+  // create/duplicate flows — never inferred from data refreshes — so startup
+  // loads and background discovery can't trigger it.
+  React.useEffect(() => {
+    if (!recentAgentArrival) return;
+    if (Date.now() - recentAgentArrival.at > NEW_AGENT_ARRIVAL_WINDOW_MS) {
+      const timer = window.setTimeout(() => onRecentAgentArrivalSeen?.(), 0);
+      return () => window.clearTimeout(timer);
+    }
+    const machine = displayMachines.find((m) => m.agents.some((a) => a.id === recentAgentArrival.agentId));
+    if (!machine) return; // not in the fleet data yet — try again on the next refresh
+    const key = `${machine.id}:${recentAgentArrival.agentId}`;
+    const timer = window.setTimeout(() => {
+      setSelected(machine.id);
+      setSelectedAgentId(recentAgentArrival.agentId);
+      setSelectionTooltipKey(key);
+      setNewAgentKey(key);
+      window.clearTimeout(newAgentTimerRef.current);
+      newAgentTimerRef.current = window.setTimeout(() => setNewAgentKey(null), NEW_AGENT_HIGHLIGHT_MS);
+      onRecentAgentArrivalSeen?.();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [displayMachines, onRecentAgentArrivalSeen, recentAgentArrival]);
+
+  React.useEffect(() => () => window.clearTimeout(newAgentTimerRef.current), []);
+
   React.useEffect(() => {
     const t = setInterval(() => setDispatchIdx((i) => displayTicker.length ? (i + 1) % displayTicker.length : 0), 2200);
     return () => clearInterval(t);
   }, [displayTicker.length]);
 
   React.useEffect(() => {
+    if (!dismissedAlertsHydrated) return;
     writeDismissedAlertIds(dismissedAlertIds);
-  }, [dismissedAlertIds]);
+  }, [dismissedAlertIds, dismissedAlertsHydrated]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void readDismissedAlertIds().then((ids) => {
+      if (cancelled) return;
+      setDismissedAlertIds(ids);
+      setDismissedAlertsHydrated(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -188,28 +260,35 @@ export function FleetView({
   const handleSelectMachine = React.useCallback((id: string) => {
     setSelected(id);
     setSelectedAgentId(null);
-    setExpanded((current) => current.has(id) ? new Set() : new Set([id]));
+    setSelectionTooltipKey(null);
   }, []);
   const handleSelectAgent = React.useCallback((m: FleetMachine, a: FleetAgent) => {
     setSelected(m.id);
     setSelectedAgentId(a.id);
-    setExpanded(new Set([m.id]));
+    setSelectionTooltipKey(null);
   }, []);
   const handleAddAgent = React.useCallback((m: FleetMachine) => {
     onAddAgent?.(m);
   }, [onAddAgent]);
-  const toggleExpand = React.useCallback((id: string) => {
-    setExpanded((prev) => {
-      if (prev.has(id)) return new Set();
-      return new Set([id]);
-    });
-  }, []);
   const handleCallAgent = React.useCallback((machine: FleetMachine, agent: FleetAgent) => {
     setSelected(machine.id);
     setSelectedAgentId(agent.id);
-    setExpanded(new Set([machine.id]));
     void onCallAgent?.(machine, agent);
   }, [onCallAgent]);
+  // Route AEON removals through the slide-to-unlock dialog; everything else
+  // deletes directly, matching the old roster behavior on every surface.
+  const handleRemove = React.useCallback((
+    machine: FleetMachine,
+    agent: FleetAgent,
+    depth?: AeonDeleteDepth,
+    onProgress?: (progress: AeonDeleteProgress) => void,
+  ): void | Promise<AeonDeleteResult | void> => {
+    if (depth === undefined && isAeonAgent(agent)) {
+      setAeonDeleteTarget({ machine, agent });
+      return;
+    }
+    return onRemove?.(machine, agent, depth, onProgress);
+  }, [onRemove]);
 
   const totalAgents = displayMachines.reduce((n, m) => n + m.agents.length, 0);
   const working = displayMachines.reduce(
@@ -352,19 +431,50 @@ export function FleetView({
           >
             <section>
               <div className={styles.monoCap} style={{ color: "var(--muted)", marginBottom: 10 }}>
-                The roster
+                The economy
+              </div>
+              <EconomyStrip machines={displayMachines} />
+            </section>
+
+            <section>
+              <div
+                className={`${styles.monoCap} flex items-center justify-between`}
+                style={{ color: "var(--muted)", marginBottom: 10, gap: 8 }}
+              >
+                <span>The roster</span>
+                {onToggleAutoUpdatePaused ? (
+                  <button
+                    type="button"
+                    onClick={onToggleAutoUpdatePaused}
+                    aria-pressed={autoUpdatePaused}
+                    title={autoUpdatePaused
+                      ? "Fleet auto-updates are paused. Machines will not pull new dashboard commits until resumed."
+                      : "Pause fleet auto-updates. Machines stop pulling new dashboard commits until resumed."}
+                    className="uppercase cursor-pointer"
+                    style={{
+                      fontFamily: "var(--f-mono)",
+                      fontSize: 9,
+                      fontWeight: 800,
+                      letterSpacing: 0.04,
+                      padding: "3px 8px",
+                      borderRadius: 9999,
+                      border: `1px solid ${autoUpdatePaused ? "rgba(251,191,36,0.42)" : "rgba(148,163,184,0.22)"}`,
+                      background: autoUpdatePaused ? "rgba(251,191,36,0.12)" : "transparent",
+                      color: autoUpdatePaused ? "#fde68a" : "var(--muted)",
+                    }}
+                  >
+                    {autoUpdatePaused ? "Auto-update paused" : "Pause auto-update"}
+                  </button>
+                ) : null}
               </div>
               {initialLoading ? (
                 <FleetRosterLoading />
               ) : (
                 <Roster
                   selected={selectedMachineId}
-                  selectedAgentId={selectedAgentId}
-                  expanded={expanded}
                   machines={displayMachines}
+                  hostedApps={hostedApps}
                   onSelectMachine={handleSelectMachine}
-                  onSelectAgent={handleSelectAgent}
-                  onToggleExpand={toggleExpand}
                   onAddAgent={handleAddAgent}
                   updateStatusByMachine={updateStatusByMachine}
                   updateDetailByMachine={updateDetailByMachine}
@@ -372,13 +482,7 @@ export function FleetView({
                   onRenameMachine={onRenameMachine}
                   onOpenCodeProof={onOpenCodeProof}
                   onFixSyncIssue={onFixSyncIssue}
-                  onOpenChat={onOpenChat}
-                  onOpenTaskChat={onOpenTaskChat}
-                  onCallAgent={handleCallAgent}
-                  onOpenWallet={onOpenWallet}
-                  onEditSettings={onEditSettings}
-                  onDuplicate={onDuplicate}
-                  onRemove={onRemove}
+                  onOpenUsePodHost={setUsePodHostMachine}
                 />
               )}
             </section>
@@ -492,6 +596,24 @@ export function FleetView({
                   onSelectAgent={handleSelectAgent}
                   onAddAgent={handleAddAgent}
                   onAddMachine={onAddMachine}
+                  updateStatusByMachine={updateStatusByMachine}
+                  updateDetailByMachine={updateDetailByMachine}
+                  onUpdateMachine={onUpdateMachine}
+                  onOpenCodeProof={onOpenCodeProof}
+                  onFixSyncIssue={onFixSyncIssue}
+                  onOpenUsePodHost={setUsePodHostMachine}
+                  onOpenShell={setTerminalMachine}
+                  onOpenChat={onOpenChat}
+                  onOpenTaskChat={onOpenTaskChat}
+                  onCallAgent={handleCallAgent}
+                  onOpenWallet={onOpenWallet}
+                  onEditSettings={onEditSettings}
+                  onDuplicate={onDuplicate}
+                  onRemove={onRemove ? handleRemove : undefined}
+                  selectionTooltipKey={selectionTooltipKey}
+                  onOpenSelectionTooltip={setSelectionTooltipKey}
+                  onDismissSelectionTooltip={() => setSelectionTooltipKey(null)}
+                  newAgentKey={newAgentKey}
                 />
               )}
               {!initialLoading && view === "map" && (
@@ -503,6 +625,16 @@ export function FleetView({
                   onSelectMachine={handleSelectMachine}
                   onSelectAgent={handleSelectAgent}
                   onAddAgent={handleAddAgent}
+                  updateStatusByMachine={updateStatusByMachine}
+                  updateDetailByMachine={updateDetailByMachine}
+                  onUpdateMachine={onUpdateMachine}
+                  onOpenCodeProof={onOpenCodeProof}
+                  onFixSyncIssue={onFixSyncIssue}
+                  onOpenUsePodHost={setUsePodHostMachine}
+                  onOpenShell={setTerminalMachine}
+                  selectionTooltipKey={selectionTooltipKey}
+                  onOpenSelectionTooltip={setSelectionTooltipKey}
+                  onDismissSelectionTooltip={() => setSelectionTooltipKey(null)}
                   width={840} height={840}
                 />
               )}
@@ -520,7 +652,7 @@ export function FleetView({
                   onOpenWallet={onOpenWallet}
                   onEditSettings={onEditSettings}
                   onDuplicate={onDuplicate}
-                  onRemove={onRemove}
+                  onRemove={onRemove ? handleRemove : undefined}
                 />
               )}
               {refreshing ? <FleetScanOverlay /> : null}
@@ -670,6 +802,23 @@ export function FleetView({
               </pre>
             </section>
           </div>
+        ) : null}
+
+        {usePodHostMachine && typeof document !== "undefined" ? createPortal((
+          <UsePodHostModal machine={usePodHostMachine} onClose={() => setUsePodHostMachine(null)} />
+        ), document.body) : null}
+
+        {terminalMachine && typeof document !== "undefined" ? (
+          <MachineTerminalModal machine={terminalMachine} onClose={() => setTerminalMachine(null)} />
+        ) : null}
+
+        {aeonDeleteTarget && onRemove ? (
+          <AeonDeleteModal
+            machine={aeonDeleteTarget.machine}
+            agent={aeonDeleteTarget.agent}
+            onClose={() => setAeonDeleteTarget(null)}
+            onRemove={onRemove}
+          />
         ) : null}
 
       </div>

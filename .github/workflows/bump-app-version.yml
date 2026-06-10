@@ -1,4 +1,10 @@
-name: Bump App Version
+name: Tag App Version
+
+# Tags each human push to main as the next patch release (vX.Y.Z) instead of
+# committing version bumps back to main. main only moves when a person pushes,
+# so local checkouts no longer go "stale" behind bot commits. The release build
+# workflow injects the tag's version into package.json / tauri.conf.json /
+# Cargo.toml at build time — the checked-in versions are just a floor.
 
 on:
   push:
@@ -9,33 +15,34 @@ permissions:
   contents: write
 
 concurrency:
-  group: bump-app-version-main
+  group: tag-app-version-main
   cancel-in-progress: false
 
 jobs:
-  bump:
-    name: Bump patch version
+  tag:
+    name: Tag next patch version
     if: ${{ github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip version bump]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Bump app version
-        run: node scripts/bump-app-version.mjs
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-      - name: Commit version bump
+      - name: Compute next version
+        id: next
+        run: echo "version=$(node scripts/bump-app-version.mjs --next)" >> "$GITHUB_OUTPUT"
+
+      - name: Push release tag
+        env:
+          VERSION: ${{ steps.next.outputs.version }}
         run: |
           set -euo pipefail
-          if git diff --quiet -- package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock; then
-            echo "No version changes to commit."
-            exit 0
-          fi
-          version="$(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version)")"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
-          git commit -m "chore: bump app version to ${version} [skip version bump]"
-          git push
+          git tag -a "v${VERSION}" -m "HivemindOS v${VERSION}"
+          git push origin "v${VERSION}"

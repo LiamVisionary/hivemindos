@@ -194,6 +194,7 @@ export const hermesAdapter: RuntimeAdapter = {
     sessionSearch: true,
     backgroundTasks: true,
     xSearch: true,
+    imageGeneration: true,
     videoGeneration: true,
     codexRuntime: true,
     kanbanDecompose: true,

@@ -1,0 +1,18 @@
+{
+  "upstreamName": "gpt-tasteskill",
+  "upstreamSlug": "gpt-tasteskill",
+  "hiveSlug": "gpt-tasteskill",
+  "sourceLabel": "leonxlnx",
+  "sourceUrl": "https://www.ui-skills.com/skills/leonxlnx/gpt-tasteskill",
+  "repository": "https://github.com/Leonxlnx/taste-skill",
+  "installCommand": "npx skills add https://github.com/Leonxlnx/taste-skill --skill gpt-taste",
+  "importedAt": "2026-06-08T15:01:37.527Z",
+  "refreshedAt": "2026-06-08T15:01:37.527Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/leonxlnx/gpt-tasteskill",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Elite UX/UI & Advanced GSAP Motion Engineer. Enforces Python-driven true randomization for layout variance, strict AIDA page structure, wide editorial typography (bans 6-line wraps), gapless bento grids, strict GSAP ScrollTriggers (pinning, stacking, scrubbing), inline micro-images, and massive section spacing."
+}

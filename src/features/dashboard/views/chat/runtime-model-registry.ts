@@ -3,6 +3,9 @@ import type { RuntimeModelSelection } from "@/features/dashboard/dashboard-types
 type RuntimeModelProvider = RuntimeModelSelection["providers"][number];
 type RuntimeModelOption = RuntimeModelProvider["models"][number];
 
+const BANKR_BASE_MODEL_ID = "gemini-3-flash";
+const BANKR_ADAPTIVE_MODEL_ID = "adaptive";
+
 export function summarizeRuntimeModelRegistry(providers: RuntimeModelProvider[], selectedProviderSlug?: string) {
   const providerCount = providers.length;
   const visibleModelCount = providers.reduce((sum, provider) => sum + provider.models.length, 0);
@@ -24,7 +27,6 @@ function modelSearchText(model: RuntimeModelOption) {
 function scoreModel(model: RuntimeModelOption) {
   const text = modelSearchText(model);
   let score = 0;
-  if (text.includes("adaptive")) score += 1000;
   if (text.includes("gpt-5")) score += 920;
   if (text.includes("codex")) score += 880;
   if (text.includes("claude-4") || text.includes("claude-sonnet-4") || text.includes("claude-opus-4")) score += 860;
@@ -60,4 +62,14 @@ export function selectBestRuntimeModel(provider: RuntimeModelProvider | undefine
   if (options.preferAdaptive && provider.slug === "openrouter") return "adaptive";
 
   return [...models].sort((left, right) => scoreModel(right) - scoreModel(left))[0]?.id ?? "";
+}
+
+export function gateBankrModelsForCredits(models: RuntimeModelOption[], lowCredits: boolean) {
+  if (!lowCredits) return models;
+  return models.map((model) => {
+    const credited = model.id === BANKR_ADAPTIVE_MODEL_ID || (model.group ?? model.subtitle ?? "").toLowerCase().includes("max mode");
+    return credited && model.id !== BANKR_BASE_MODEL_ID
+      ? { ...model, disabled: true, disabledReason: "Top up credits" }
+      : model;
+  });
 }

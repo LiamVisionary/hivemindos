@@ -1,0 +1,18 @@
+{
+  "upstreamName": "brutalist-skill",
+  "upstreamSlug": "brutalist-skill",
+  "hiveSlug": "brutalist-skill",
+  "sourceLabel": "leonxlnx",
+  "sourceUrl": "https://www.ui-skills.com/skills/leonxlnx/brutalist-skill",
+  "repository": "https://github.com/Leonxlnx/taste-skill",
+  "installCommand": "npx skills add https://github.com/Leonxlnx/taste-skill --skill industrial-brutalist-ui",
+  "importedAt": "2026-06-08T15:01:36.925Z",
+  "refreshedAt": "2026-06-08T15:01:36.925Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/leonxlnx/brutalist-skill",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Raw mechanical interfaces fusing Swiss typographic print with military terminal aesthetics. Rigid grids, extreme type scale contrast, utilitarian color, analog degradation effects. For data-heavy dashboards, portfolios, or editorial sites that need to feel like declassified blueprints."
+}

@@ -1163,6 +1163,90 @@
   font-weight: 700;
 }
 
+/* ─── Loading skeletons ───────────────────────────────────────────── */
+
+.walletSkeletonPanel {
+  pointer-events: none;
+}
+
+.walletSkeleton {
+  display: inline-block;
+  max-width: 100%;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.10), rgba(94, 234, 212, 0.18), rgba(148, 163, 184, 0.10));
+  background-size: 220% 100%;
+  animation: walletSkeletonSweep 1.45s ease-in-out infinite;
+}
+
+.walletSkeletonBlock {
+  border-radius: 8px;
+}
+
+.walletSkeletonCircle {
+  border-radius: 999px;
+}
+
+.walletSkeletonTile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  min-height: 178px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 50% -20%, rgba(45, 212, 191, 0.07), transparent 55%),
+    linear-gradient(180deg, rgba(15, 19, 27, 0.92), rgba(6, 9, 14, 0.94));
+  padding: 18px 18px 16px;
+}
+
+.walletSkeletonTileHead,
+.walletSkeletonTileFoot {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.walletSkeletonTileFoot {
+  justify-content: space-between;
+  margin-top: auto;
+}
+
+.walletUsageSkeletonGrid,
+.walletUsageSkeletonColumns {
+  display: grid;
+  gap: 14px;
+}
+
+.walletUsageSkeletonGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.walletUsageSkeletonGrid > div {
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.55);
+  padding: 14px;
+}
+
+.walletUsageSkeletonColumns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.walletUsageSkeletonRows {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+@keyframes walletSkeletonSweep {
+  0% { background-position: 180% 0; }
+  100% { background-position: -80% 0; }
+}
+
 /* ─── Responsive ──────────────────────────────────────────────────── */
 
 @media (max-width: 1180px) {
@@ -1204,6 +1288,8 @@
   .walletHeader { align-items: stretch; flex-direction: column; }
   .hiveLedgerGrid,
   .honeyAgentGrid,
+  .walletUsageSkeletonGrid,
+  .walletUsageSkeletonColumns,
   .survivalStrip,
   .walletTwoCol,
   .walletThreeCol {

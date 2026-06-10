@@ -160,7 +160,7 @@ Your workspace id is stored at `~/.hivemindos/install-id` after setup. The gatew
 
 ### Local OpenAI-Compatible Runtimes
 
-HivemindOS can register a generic `openai-compatible` agent runtime for local model servers that expose OpenAI-style endpoints. LM Studio works with the default base URL:
+HivemindOS can register the `hivemind-os` managed runtime for local model servers that expose OpenAI-style endpoints. LM Studio works with the default base URL:
 
 ```txt
 LOCAL_OPENAI_BASE_URL=http://127.0.0.1:1234
@@ -235,7 +235,7 @@ HivemindOS uses Tailscale in a few specific ways:
 - **Hivemind Sync handoffs:** `hive-transfer` writes routed file envelopes into `.hivemindos-transfers/` inside the vault. Syncthing or the selected vault sync owner moves those files to the receiver.
 - **Vault repair:** rsync over Tailscale SSH is available as an advanced fallback for one-shot push, pull, or bidirectional repair jobs. rsync repair conflicts are written as explicit `.conflict-host-timestamp` copies; Syncthing conflicts are handled by Syncthing in the vault and Syncthing UI.
 
-Plaintext secrets do not belong in the shared vault. If GPG is configured, `hive-env-add` can refresh an encrypted `hive.env.gpg` backup in your chosen notes folder.
+Plaintext secrets do not belong in the shared vault. If GPG is configured, `hive-env-add` can refresh an encrypted `hive.env.gpg` backup in your chosen notes folder. Wallet secrets for user wallets and agent wallets stay in the local encrypted wallet vault, and the Wallets view can sync a restorable GPG backup as `hive.wallet-vault.gpg` with a metadata-only `hive.wallet-vault.md` reference note.
 
 ## Shared Env
 

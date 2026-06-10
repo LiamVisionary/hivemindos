@@ -1,0 +1,18 @@
+{
+  "upstreamName": "soft-skill",
+  "upstreamSlug": "soft-skill",
+  "hiveSlug": "soft-skill",
+  "sourceLabel": "leonxlnx",
+  "sourceUrl": "https://www.ui-skills.com/skills/leonxlnx/soft-skill",
+  "repository": "https://github.com/Leonxlnx/taste-skill",
+  "installCommand": "npx skills add https://github.com/Leonxlnx/taste-skill --skill high-end-visual-design",
+  "importedAt": "2026-06-08T15:01:38.467Z",
+  "refreshedAt": "2026-06-08T15:01:38.467Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/leonxlnx/soft-skill",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Teaches the AI to design like a high-end agency. Defines the exact fonts, spacing, shadows, card structures, and animations that make a website feel expensive. Blocks all the common defaults that make AI designs look cheap or generic."
+}

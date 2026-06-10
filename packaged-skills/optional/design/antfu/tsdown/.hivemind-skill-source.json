@@ -1,0 +1,18 @@
+{
+  "upstreamName": "tsdown",
+  "upstreamSlug": "tsdown",
+  "hiveSlug": "tsdown",
+  "sourceLabel": "antfu",
+  "sourceUrl": "https://www.ui-skills.com/skills/antfu/tsdown",
+  "repository": "https://github.com/antfu/skills",
+  "installCommand": "npx skills add https://github.com/antfu/skills --skill tsdown",
+  "importedAt": "2026-06-08T15:01:26.422Z",
+  "refreshedAt": "2026-06-08T15:01:26.422Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/antfu/tsdown",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Bundle TypeScript and JavaScript libraries with blazing-fast speed powered by Rolldown. Use when building libraries, generating type declarations, bundling for multiple formats, or migrating from tsup."
+}

@@ -1,0 +1,18 @@
+{
+  "upstreamName": "vitepress",
+  "upstreamSlug": "vitepress",
+  "hiveSlug": "vitepress",
+  "sourceLabel": "antfu",
+  "sourceUrl": "https://www.ui-skills.com/skills/antfu/vitepress",
+  "repository": "https://github.com/antfu/skills",
+  "installCommand": "npx skills add https://github.com/antfu/skills --skill vitepress",
+  "importedAt": "2026-06-08T15:01:27.515Z",
+  "refreshedAt": "2026-06-08T15:01:27.515Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/antfu/vitepress",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "VitePress static site generator powered by Vite and Vue. Use when building documentation sites, configuring themes, or writing Markdown with Vue components."
+}

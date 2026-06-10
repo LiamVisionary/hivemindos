@@ -1,0 +1,18 @@
+{
+  "upstreamName": "minimalist-skill",
+  "upstreamSlug": "minimalist-skill",
+  "hiveSlug": "minimalist-skill",
+  "sourceLabel": "leonxlnx",
+  "sourceUrl": "https://www.ui-skills.com/skills/leonxlnx/minimalist-skill",
+  "repository": "https://github.com/Leonxlnx/taste-skill",
+  "installCommand": "npx skills add https://github.com/Leonxlnx/taste-skill --skill minimalist-ui",
+  "importedAt": "2026-06-08T15:01:37.753Z",
+  "refreshedAt": "2026-06-08T15:01:37.753Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/leonxlnx/minimalist-skill",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Clean editorial-style interfaces. Warm monochrome palette, typographic contrast, flat bento grids, muted pastels. No gradients, no heavy shadows."
+}

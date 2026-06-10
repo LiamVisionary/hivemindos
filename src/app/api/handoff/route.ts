@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { chooseBeeAssignment, inferWorkerClass } from "@/lib/services/orchestration/bee-roles";
 import type { AgentProfile, BeeWorkerClass } from "@/lib/types/agent-runtime";
+import { canonicalLocalCollectorUrl } from "@/lib/services/local-collector-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -382,7 +383,10 @@ async function sendRemoteTask(input: {
 }
 
 async function postCollectorJson(machine: FleetMachine, path: string, payload: Record<string, unknown>) {
-  const collectorUrl = machine.device?.collectorUrl?.replace(/\/+$/, "");
+  const collectorUrl = await canonicalLocalCollectorUrl({
+    telemetryUrl: machine.device?.collectorUrl,
+    machineName: machine.device?.self ? "local" : machineName(machine),
+  });
   if (!collectorUrl) throw new Error(`${machineName(machine)} does not have a collector URL.`);
   try {
     const response = await fetch(`${collectorUrl}${path}`, {

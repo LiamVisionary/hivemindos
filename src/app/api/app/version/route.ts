@@ -42,14 +42,35 @@ async function packageVersion() {
   return packageJson.version || "0.0.0";
 }
 
+function parseSemver(version: string) {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+  return match ? match.slice(1).map(Number) as [number, number, number] : null;
+}
+
+// Releases are versioned by git tag (see bump-app-version.yml); the checked-in
+// package.json version is only a floor. Source checkouts report the nearest
+// reachable tag when it is ahead of package.json so the header matches the
+// released tag. Packaged builds ship without .git, so the tag lookup fails and
+// they fall back to package.json — which the release build stamped from the tag.
+function effectiveVersion(pkgVersion: string, tagVersion: string) {
+  const pkg = parseSemver(pkgVersion);
+  const tag = parseSemver(tagVersion);
+  if (!tag) return pkgVersion;
+  if (!pkg) return tagVersion;
+  const diff = (tag[0] - pkg[0]) || (tag[1] - pkg[1]) || (tag[2] - pkg[2]);
+  return diff > 0 ? tagVersion : pkgVersion;
+}
+
 async function readVersion(): Promise<AppVersionPayload> {
-  const [version, commit, branch, dirty, remoteCommit] = await Promise.all([
+  const [pkgVersion, tagVersion, commit, branch, dirty, remoteCommit] = await Promise.all([
     packageVersion(),
+    safeGit(["describe", "--tags", "--abbrev=0", "--match", "v[0-9]*"]),
     safeGit(["rev-parse", "HEAD"]),
     safeGit(["rev-parse", "--abbrev-ref", "HEAD"]),
     safeGit(["status", "--porcelain"]),
     safeGit(["ls-remote", "origin", "main"]),
   ]);
+  const version = effectiveVersion(pkgVersion, tagVersion.replace(/^v/, ""));
   const latestCommit = remoteCommit.split(/\s+/)[0] || commit;
 
   return {

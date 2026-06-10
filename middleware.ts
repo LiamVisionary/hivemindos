@@ -5,6 +5,9 @@ const SELF_AUTHENTICATING_API_PREFIXES = [
   "/api/auth/session",
   "/api/runtimes/aeon/brain",
   "/api/runtimes/aeon/hive/miroshark",
+  // Authenticates inside the route: dashboard auth OR a path-scoped signed URL
+  // (phone image loaders can't carry the session cookie / device token).
+  "/api/chat/generated-media",
 ];
 
 function isSelfAuthenticatingApi(pathname: string) {

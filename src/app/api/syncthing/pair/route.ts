@@ -23,18 +23,23 @@ type SyncthingStatus = {
   defaultSyncPath?: string;
 };
 
+type CollectorRequestInit = RequestInit & {
+  timeoutMs?: number;
+};
+
 function collectorBase(value?: string | null) {
   return (value?.trim() || localTelemetryCollectorUrl()).replace(/\/+$/, "");
 }
 
-async function collectorJson(base: string, path: string, init?: RequestInit) {
+async function collectorJson(base: string, path: string, init?: CollectorRequestInit) {
+  const { timeoutMs = 20_000, ...requestInit } = init ?? {};
   const response = await fetch(`${base}${path}`, {
-    ...init,
+    ...requestInit,
     cache: "no-store",
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(timeoutMs),
     headers: {
-      ...(init?.body ? { "content-type": "application/json" } : {}),
-      ...(init?.headers ?? {}),
+      ...(requestInit.body ? { "content-type": "application/json" } : {}),
+      ...(requestInit.headers ?? {}),
     },
   });
   const payload = await response.json().catch(() => null);
@@ -42,6 +47,21 @@ async function collectorJson(base: string, path: string, init?: RequestInit) {
     throw new Error(payload?.error ?? `${base}${path} returned HTTP ${response.status}`);
   }
   return payload;
+}
+
+async function collectorRepair(base: string, body: Record<string, unknown>) {
+  try {
+    return await collectorJson(base, "/syncthing/repair", {
+      method: "POST",
+      body: JSON.stringify(body),
+      timeoutMs: 45_000,
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Syncthing repair failed.",
+    };
+  }
 }
 
 function staticAddress(host?: string) {
@@ -70,6 +90,8 @@ export async function POST(request: Request) {
 
     const folderId = body.folderId?.trim() || "hivemindos-vault";
     const label = body.label?.trim() || "hivemindos-vault";
+    const remoteAddresses = staticAddress(body.remoteTailscaleIp || body.remoteAddressHost);
+    const localAddresses = staticAddress(body.localTailscaleIp);
     const [localConfig, remoteConfig] = await Promise.all([
       collectorJson(localBase, "/syncthing/configure", {
         method: "POST",
@@ -79,7 +101,7 @@ export async function POST(request: Request) {
           path: localPath,
           peerDeviceID: remoteStatus.deviceID,
           peerName: body.remoteName || remoteStatus.host,
-          peerAddresses: staticAddress(body.remoteTailscaleIp || body.remoteAddressHost),
+          peerAddresses: remoteAddresses,
         }),
       }),
       collectorJson(remoteBase, "/syncthing/configure", {
@@ -90,10 +112,27 @@ export async function POST(request: Request) {
           path: remotePath,
           peerDeviceID: localStatus.deviceID,
           peerName: localStatus.host,
-          peerAddresses: staticAddress(body.localTailscaleIp),
+          peerAddresses: localAddresses,
         }),
       }),
     ]);
+    const [localRepair, remoteRepair] = await Promise.all([
+      collectorRepair(localBase, {
+        folderId,
+        path: localPath,
+        peerDeviceID: remoteStatus.deviceID,
+        peerName: body.remoteName || remoteStatus.host,
+        peerAddresses: remoteAddresses,
+      }),
+      collectorRepair(remoteBase, {
+        folderId,
+        path: remotePath,
+        peerDeviceID: localStatus.deviceID,
+        peerName: localStatus.host,
+        peerAddresses: localAddresses,
+      }),
+    ]);
+    const repairOk = localRepair?.ok !== false && remoteRepair?.ok !== false;
 
     return Response.json({
       ok: true,
@@ -101,6 +140,12 @@ export async function POST(request: Request) {
       label,
       local: localConfig,
       remote: remoteConfig,
+      repair: {
+        ok: repairOk,
+        local: localRepair,
+        remote: remoteRepair,
+      },
+      ...(!repairOk ? { warning: "Syncthing was paired, but one side reported a repair warning. Refresh sync status and run Fix again if the warning remains." } : {}),
     });
   } catch (error) {
     return Response.json({

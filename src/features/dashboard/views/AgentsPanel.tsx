@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import type { ComponentType, Dispatch, ElementType, MutableRefObject, SetStateAction } from "react";
-import { AgentCallModal, type AgentCallLiveKit, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent } from "@/components/fleet/agent-call-modal";
+import { AgentCallModal, type AgentCallLiveKit, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent } from "@/components/fleet/agent-call-modal";
 import type { FleetViewProps } from "@/components/fleet/FleetView";
 import type { AeonDeleteDepth, AeonDeleteProgress, AeonDeleteResult } from "@/components/fleet/roster";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
@@ -23,12 +23,24 @@ type FleetViewData = {
   edges: NonNullable<FleetViewProps["edges"]>;
 };
 
+type TailnetCleanupBanner = {
+  visible: boolean;
+  candidates: Array<{ id: string; hostname: string; offlineForDays: number }>;
+  staleAgeDays: number;
+  busy: boolean;
+  notice: string;
+  onCleanupNow: () => void;
+  onAlwaysCleanup: () => void;
+  onDismiss: () => void;
+};
+
 type AgentsPanelProps = {
   Button: ElementType;
   Check: IconComponent;
   ExternalLink: IconComponent;
   FleetView: ComponentType<FleetViewProps>;
   activeView: DashboardView;
+  tailnetCleanup?: TailnetCleanupBanner;
   addAgentToMachine: (machine: MachineGroup) => void;
   agents: AgentProfile[];
   deleteAgent: (
@@ -36,13 +48,17 @@ type AgentsPanelProps = {
     options?: {
       aeonDeleteDepth?: AeonDeleteDepth;
       onProgress?: (progress: AeonDeleteProgress) => void;
+      machine?: Pick<NonNullable<FleetViewProps["machines"]>[number], "collectorUrl">;
+      fleetAgent?: Pick<NonNullable<FleetViewProps["machines"]>[number]["agents"][number], "id" | "name">;
     },
   ) => void | Promise<AeonDeleteResult | void>;
   displayAgents: AgentProfile[];
+  fleetAutoUpdatePaused?: boolean;
   fleetClass: ClassNameBuilder;
   fleetUpdateDetailByMachine: NonNullable<FleetViewProps["updateDetailByMachine"]>;
   fleetUpdateStatusByMachine: NonNullable<FleetViewProps["updateStatusByMachine"]>;
   fleetDiscoveryLoading: boolean;
+  fleetHostedApps?: FleetViewProps["hostedApps"];
   fleetViewData: FleetViewData;
   hivemindLinkSignInPolling: boolean;
   hivemindLinkSignInPollingRef: MutableRefObject<boolean>;
@@ -51,6 +67,9 @@ type AgentsPanelProps = {
   markNotificationRead: (id: string) => void;
   openMachineInitModal: () => void;
   onFixSyncIssue: NonNullable<FleetViewProps["onFixSyncIssue"]>;
+  onRecentAgentArrivalSeen?: FleetViewProps["onRecentAgentArrivalSeen"];
+  onToggleFleetAutoUpdatePaused?: () => void;
+  recentAgentArrival?: FleetViewProps["recentAgentArrival"];
   renameMachine: NonNullable<FleetViewProps["onRenameMachine"]>;
   requestDuplicateAgent: (agentId: string) => void;
   runMachineUpdate: (machine: MachineGroup) => void | Promise<void>;
@@ -83,7 +102,8 @@ type AgentPhoneCallResult = {
       callerName?: string;
       dashboardToken?: string;
       livekitUrl?: string;
-      mode?: "byok" | "cloud";
+      mode?: "byok" | "cloud" | "local-tts";
+      localTts?: AgentCallLocalTts;
       realtime?: AgentCallRealtime;
       runtimeAgent?: AgentCallRuntimeAgent;
       room?: string;
@@ -132,12 +152,15 @@ export function AgentsPanel(props: AgentsPanelProps) {
     ExternalLink,
     FleetView,
     activeView,
+    tailnetCleanup,
     addAgentToMachine,
     agents,
     deleteAgent,
     displayAgents,
+    fleetAutoUpdatePaused,
     fleetClass,
     fleetDiscoveryLoading,
+    fleetHostedApps,
     fleetUpdateDetailByMachine,
     fleetUpdateStatusByMachine,
     fleetViewData,
@@ -148,6 +171,9 @@ export function AgentsPanel(props: AgentsPanelProps) {
     markNotificationRead,
     openMachineInitModal,
     onFixSyncIssue,
+    onRecentAgentArrivalSeen,
+    onToggleFleetAutoUpdatePaused,
+    recentAgentArrival,
     renameMachine,
     requestDuplicateAgent,
     runMachineUpdate,
@@ -176,6 +202,7 @@ export function AgentsPanel(props: AgentsPanelProps) {
     notice?: string;
     livekit?: AgentCallLiveKit;
     realtime?: AgentCallRealtime;
+    localTts?: AgentCallLocalTts;
     runtimeAgent?: AgentCallRuntimeAgent;
   } | null>(null);
 
@@ -200,6 +227,10 @@ export function AgentsPanel(props: AgentsPanelProps) {
           runtime: profile?.runtime ?? fleetAgent.runtime,
           role: fleetAgent.role,
           task: fleetAgent.task,
+          voiceRuntime: profile?.calls?.voiceRuntime,
+          voiceProviderId: profile?.calls?.voiceProviderId,
+          voiceModelId: profile?.calls?.voiceModelId,
+          voiceId: profile?.calls?.voiceId,
           skillProfilePrompt: profile?.skillProfilePrompt,
           preferredSkillSlugs: profile?.preferredSkillSlugs,
           aeonRepo: profile?.aeonRepo,
@@ -239,6 +270,15 @@ export function AgentsPanel(props: AgentsPanelProps) {
           ...current,
           phase: "ringing",
           realtime: call.realtime,
+          runtimeAgent: call.runtimeAgent,
+        } : current);
+        return;
+      }
+      if (call?.mode === "local-tts" && call.localTts) {
+        setAgentCallSession((current) => current?.agent.id === fleetAgent.id ? {
+          ...current,
+          phase: "ringing",
+          localTts: call.localTts,
           runtimeAgent: call.runtimeAgent,
         } : current);
         return;
@@ -309,6 +349,46 @@ export function AgentsPanel(props: AgentsPanelProps) {
               />
             </div>
           ) : null}
+          {tailnetCleanup?.visible ? (
+            <div className="relative mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.10)] px-4 py-3 pr-12 text-sm text-[var(--foreground)]">
+              <div style={{ minWidth: 0 }}>
+                <strong>
+                  {tailnetCleanup.candidates.length === 1
+                    ? "1 stale tailnet node detected"
+                    : `${tailnetCleanup.candidates.length} stale tailnet nodes detected`}
+                </strong>
+                <p className="mt-1 text-[var(--muted)]" style={{ overflowWrap: "anywhere" }}>
+                  {tailnetCleanup.notice
+                    || `Old registrations offline for over ${tailnetCleanup.staleAgeDays} days: ${tailnetCleanup.candidates.map((candidate) => candidate.hostname).join(", ")}. Removing them keeps the fleet roster free of ghost machines.`}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={tailnetCleanup.busy}
+                  onClick={() => tailnetCleanup.onCleanupNow()}
+                >
+                  {tailnetCleanup.busy ? "Cleaning..." : "Clean up now"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={tailnetCleanup.busy}
+                  onClick={() => tailnetCleanup.onAlwaysCleanup()}
+                  title="Also removes future stale hivemindos-* nodes automatically once a day"
+                >
+                  Always clean up automatically
+                </Button>
+              </div>
+              <CloseIconButton
+                className="absolute right-2 top-2"
+                aria-label="Dismiss stale tailnet node message"
+                onClick={() => tailnetCleanup.onDismiss()}
+              />
+            </div>
+          ) : null}
           <div className={`${fleetClass("fleetViewport")} fleetViewportShell`}>
             <FleetView
               machines={fleetViewData.machines}
@@ -316,13 +396,18 @@ export function AgentsPanel(props: AgentsPanelProps) {
               alerts={fleetViewData.alerts}
               ticker={fleetViewData.ticker}
               edges={fleetViewData.edges}
+              hostedApps={fleetHostedApps}
               loading={fleetDiscoveryLoading}
               mastheadMode="mobile"
+              recentAgentArrival={recentAgentArrival}
+              onRecentAgentArrivalSeen={onRecentAgentArrivalSeen}
               onAddAgent={(machine) => {
                 const group = machineGroups.find((item) => item.key === machine.id);
                 if (group) addAgentToMachine(group);
               }}
               onAddMachine={openMachineInitModal}
+              autoUpdatePaused={fleetAutoUpdatePaused}
+              onToggleAutoUpdatePaused={onToggleFleetAutoUpdatePaused}
               updateStatusByMachine={fleetUpdateStatusByMachine}
               updateDetailByMachine={fleetUpdateDetailByMachine}
               onUpdateMachine={(machine) => {
@@ -355,7 +440,11 @@ export function AgentsPanel(props: AgentsPanelProps) {
                 setAgentRoleModalId(agent.id);
               }}
               onDuplicate={(_, agent) => requestDuplicateAgent(agent.id)}
-              onRemove={(_, agent, depth, onProgress) => deleteAgent(agent.id, depth ? { aeonDeleteDepth: depth, onProgress } : undefined)}
+              onRemove={(machine, agent, depth, onProgress) => deleteAgent(agent.id, {
+                ...(depth ? { aeonDeleteDepth: depth, onProgress } : {}),
+                machine,
+                fleetAgent: agent,
+              })}
             />
           </div>
           {agentCallSession ? (
@@ -367,6 +456,7 @@ export function AgentsPanel(props: AgentsPanelProps) {
               notice={agentCallSession.notice}
               livekit={agentCallSession.livekit}
               realtime={agentCallSession.realtime}
+              localTts={agentCallSession.localTts}
               runtimeAgent={agentCallSession.runtimeAgent}
               onVoiceConnected={() => {
                 setAgentCallSession((current) => (
@@ -374,6 +464,18 @@ export function AgentsPanel(props: AgentsPanelProps) {
                     ? { ...current, phase: "talking" }
                     : current
                 ));
+              }}
+              onTransferToChat={(agent) => {
+                setAgentCallSession(null);
+                startAgentChat(agent.id, { fresh: true });
+              }}
+              onAddAgent={(_, machine) => {
+                setAgentCallSession(null);
+                const group = machineGroups.find((item) => item.key === machine.id);
+                if (group) addAgentToMachine(group);
+              }}
+              onRedial={(agent, machine) => {
+                void openAgentPhoneCall(machine, agent);
               }}
               onClose={() => setAgentCallSession(null)}
             />

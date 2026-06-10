@@ -45,3 +45,11 @@ strix_runs/
 .DS_Store
 .idea/
 .vscode/
+
+# Sidecar binaries staged for bundling (fetched/installed, not committed)
+src-tauri/binaries/
+
+# Local build/cache outputs
+hivemind-linkd
+__pycache__/
+*.pyc

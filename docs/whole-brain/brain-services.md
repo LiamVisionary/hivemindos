@@ -74,6 +74,26 @@ Optional GitLawb memory receipts are appended at:
 Operations/Brain Services/Agent Memory Proofs.jsonl
 ```
 
+### Conversation notes
+
+Finished HivemindOS chat sessions are mirrored into the shared vault as one markdown note per session under:
+
+```text
+Memory/Conversations/<agent>/YYYY-MM-DD-<title>-<sessionId>.md
+```
+
+with an append-only index at:
+
+```text
+Operations/Brain Services/Conversations Index.jsonl
+```
+
+Each note carries `type: conversation` frontmatter (session, agent, runtime, chat storage key, timestamps, keywords), a summary block with a `[[Agent Name]]` wikilink, and the redacted transcript. Index readers dedupe by `sessionId`; the last entry wins. The writer runs best-effort on session finish when the shared vault is enabled, applies the security-proxy secret redaction (`redactSecretText`) to every message before it touches the vault, and skips automation/cron transcripts and sessions without an assistant reply. Because the notes live in the vault, "check our conversations about x" works through normal tiered/full-vault recall for every agent — managed runtimes, `hive-brain`, and the Claude prompt hook alike — with no per-agent changes.
+
+### Search policy
+
+All content searches over the vault and conversations use ripgrep (`rg`) first, fall back to plain `grep` when `rg` is unavailable, and only fall back to a full filesystem walk when neither binary works. Server recall uses `src/lib/services/search/ripgrep-search.ts` to shortlist candidate notes for query recalls instead of reading every vault file; the `hive-brain` CLI implements the same chain for its local fallback.
+
 The API supports:
 
 - `remember`: save a typed memory note.

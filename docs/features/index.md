@@ -13,7 +13,7 @@ The feature surface follows the work an operator actually does: connect machines
   <section class="signalCard"><strong>Connect</strong><span>Fleet, collectors, Tailnet/Link, apps, and runtime discovery.</span></section>
   <section class="signalCard"><strong>Operate</strong><span>Agents, chat, Work board, Code Proof, Scheduler, Swarm, and deliverables.</span></section>
   <section class="signalCard"><strong>Remember</strong><span>Obsidian vault, shared skills, GBrain, Syntho, Synthesis, and notifications.</span></section>
-  <section class="signalCard"><strong>Pay</strong><span>Wallets, Base/Solana, USDC, UsePod prepaid, Honey, HIVE, and x402.</span></section>
+  <section class="signalCard"><strong>Pay</strong><span>Wallets, crypto rail routing, Base/Solana, USDC, UsePod prepaid, Honey, HIVE, and x402.</span></section>
   <section class="signalCard"><strong>Integrate</strong><span>GitLawb, MiroShark, Nango, GitHub OAuth, My Apps, phone, and work history.</span></section>
   <section class="signalCard"><strong>Maintain</strong><span>Hivemind Sync, runtime files, native helpers, memory telemetry, and repair checks.</span></section>
 </div>
@@ -122,12 +122,12 @@ The shared brain is a normal Obsidian vault, not a proprietary database. Hivemin
 
 ## Economy And Integrations
 
-Wallet and token features are explicit rails, not a background permission pool. Agent wallets handle controlled Base and Solana balances plus x402 paid requests. UsePod is prepaid runtime access. Honey and Bankr HIVE are reward and claim paths. Integrations connect the control room to outside systems without making those systems own local state.
+Wallet and token features are explicit rails, not a background permission pool. Agent wallets handle controlled Base and Solana balances plus x402 paid requests. The crypto capability router lets agents ask for intents such as paid API, private transfer, or Bankr trading, then select or prepare the configured rail without executing spending itself. UsePod is prepaid runtime access. Honey and Bankr HIVE are reward and claim paths. Integrations connect the control room to outside systems without making those systems own local state.
 
 <div class="docGrid">
   <section class="docCard">
     <h3>Wallets, Tokens, Honey, HIVE, And x402</h3>
-    <p>Agent wallets, USDC sends, MoneyClaw, UsePod deposits, wallet-vault backups, Honey rewards, Bankr HIVE claims, and paid requests.</p>
+    <p>Agent wallets, crypto rail routing, USDC sends, MoneyClaw, UsePod deposits, wallet-vault backups, Honey rewards, Bankr HIVE claims, and paid requests.</p>
     <a href="wallets-honey-and-x402.html">Open wallet docs</a>
   </section>
   <section class="docCard">

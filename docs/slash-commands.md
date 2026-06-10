@@ -29,6 +29,7 @@ When a dashboard command and runtime command share the same name, the dashboard 
 | `/handoff-task <machine> <task>` |  | Send a task to the best agent on a target machine. |
 | `/swarm [number] <task>` |  | Spawn a best-suited team of configured chat-capable agents to work on the task in parallel and return a combined swarm packet. Omit the number for automatic sizing. |
 | `/swarm-sim <scenario>` |  | Launch a MiroShark simulation from the chat input and return the queued run status. |
+| `/image-gen <prompt>` | `/imagine`, `/txt2img` | Generate an image through a connected Image Studio, ComfyUI, or Z-Image app and show the result as a native chat card. |
 
 ## Hermes And Gateway Commands
 

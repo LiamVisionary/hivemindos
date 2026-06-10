@@ -1,0 +1,19 @@
+{
+  "upstreamName": "ui-ux-pro-max",
+  "sourceUrl": "https://www.ui-skills.com/skills/nextlevelbuilder/ui-ux-pro-max",
+  "repository": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+  "commit": "b7e3af80f6e331f6fb456667b82b12cade7c9d35",
+  "importedAt": "2026-06-03T03:05:17.042Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/nextlevelbuilder/ui-ux-pro-max",
+  "status": "optional",
+  "upstreamSlug": "ui-ux-pro-max",
+  "hiveSlug": "ui-ux-pro-max",
+  "sourceLabel": "nextlevelbuilder",
+  "installCommand": "npx skills add https://github.com/nextlevelbuilder/ui-ux-pro-max-skill --skill ui-ux-pro-max",
+  "refreshedAt": "2026-06-08T15:01:39.766Z",
+  "packageGroup": "design",
+  "license": "unknown",
+  "description": "UI/UX design intelligence for web and mobile. Includes 50+ styles, 161 color palettes, 57 font pairings, 161 product types, 99 UX guidelines, and 25 chart types across 10 stacks (React, Next.js, Vue, Svelte, SwiftUI, React Native, Flutter, Tailwind, shadcn/ui, and HTML/CSS). Actions: plan, build, create, design, implement, review, fix, improve, optimize, enhance, refactor, and check UI/UX code. Projects: website, landing page, dashboard, admin panel, e-commerce, SaaS, portfolio, blog, and mobile app. Elements: button, modal, navbar, sidebar, card, table, form, and chart. Styles: glassmorphism, claymorphism, minimalism, brutalism, neumorphism, bento grid, dark mode, responsive, skeuomorphism, and flat design. Topics: color systems, accessibility, animation, layout, typography, font pairing, spacing, interaction states, shadow, and gradient. Integrations: shadcn/ui MCP for component search and examples."
+}

@@ -1,0 +1,18 @@
+{
+  "upstreamName": "12-principles-of-animation",
+  "upstreamSlug": "12-principles-of-animation",
+  "hiveSlug": "12-principles-of-animation",
+  "sourceLabel": "raphaelsalaja",
+  "sourceUrl": "https://www.ui-skills.com/skills/raphaelsalaja/12-principles-of-animation",
+  "repository": "https://github.com/raphaelsalaja/skill",
+  "installCommand": "npx skills add https://github.com/raphaelsalaja/skill --skill 12-principles-of-animation",
+  "importedAt": "2026-06-08T15:01:45.077Z",
+  "refreshedAt": "2026-06-08T15:01:45.077Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/raphaelsalaja/12-principles-of-animation",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Audit animation code against Disney's 12 principles adapted for web. Use when reviewing motion, implementing animations, or checking animation quality. Outputs file:line findings."
+}

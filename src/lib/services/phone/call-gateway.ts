@@ -10,6 +10,12 @@ import {
   voiceConfigPayload,
   voiceProvidersFromManagedConfig,
 } from "@/lib/services/phone/realtime-voice";
+import {
+  LOCAL_TTS_RUNTIME,
+  discoverLocalTtsCandidates,
+  isLocalTtsProviderId,
+  resolveLocalTtsCallConfig,
+} from "@/lib/services/phone/local-tts";
 
 const GATEWAY_PORTS = [5000, 5001, 5002];
 
@@ -19,6 +25,9 @@ export type GatewayCallPayload = {
   briefing?: string;
   returnAfterRoomReady?: boolean;
   voiceProviderId?: string;
+  voiceRuntime?: string;
+  voiceModelId?: string;
+  voiceId?: string;
   runtimeAgent?: RuntimeAgentVoiceBridge;
 };
 
@@ -39,6 +48,9 @@ export type AgentCallIdentity = {
   role?: string;
   task?: string;
   voiceProviderId?: string;
+  voiceRuntime?: string;
+  voiceModelId?: string;
+  voiceId?: string;
   skillProfilePrompt?: string;
   preferredSkillSlugs?: string[];
   aeonRepo?: string;
@@ -181,6 +193,11 @@ function sectionText(markdown: string, heading: string) {
 
 function unescapeMarkdownCell(value: string) {
   return value.replace(/\\\|/g, "|").replace(/<br\s*\/?>/gi, " ").trim();
+}
+
+function openingLineForBriefing(briefing: string) {
+  const match = briefing.match(/\[greeting\]\s*Start the call with exactly:\s*["“](.+?)["”]/i);
+  return match?.[1]?.trim() || "Hello Liam, this is your HivemindOS coding agent.";
 }
 
 function extractMiroSharkPostTexts(postsMarkdown: string) {
@@ -357,6 +374,9 @@ export async function buildAgentCallPayload(input: AgentCallInput): Promise<Gate
     briefing: isAeon ? await buildAeonCallBriefing(input) : context,
     returnAfterRoomReady: true,
     voiceProviderId: clean(input.agent.voiceProviderId) || undefined,
+    voiceRuntime: clean(input.agent.voiceRuntime) || undefined,
+    voiceModelId: clean(input.agent.voiceModelId) || undefined,
+    voiceId: clean(input.agent.voiceId) || undefined,
   };
 }
 
@@ -428,9 +448,11 @@ async function startInternalAgentCall(
   if (!call.ok) {
     return {
       ok: false,
-      error: call.reason === "voice_transport_not_configured"
-        ? `HivemindOS voice is missing ${call.missing.join(", ")}. Add those keys to ~/.hivemindos/.env, ~/.hivemindos/claw/voice.env, or .env.local, then rerun pnpm tauri:dev.`
-        : call.reason,
+      error: call.reason === "livekit_disabled"
+        ? `HivemindOS Cloud Agent Calls (LiveKit) are off by default so the setup stays local and private. To opt in, set ${call.missing.join(" and ")} in ~/.hivemindos/.env, then rerun pnpm tauri:dev.`
+        : call.reason === "voice_transport_not_configured"
+          ? `HivemindOS voice is missing ${call.missing.join(", ")}. Add those keys to ~/.hivemindos/.env, ~/.hivemindos/claw/voice.env, or .env.local, then rerun pnpm tauri:dev.`
+          : call.reason,
       result: call,
     };
   }
@@ -462,6 +484,38 @@ async function startAgentByokCall(input: AgentCallInput, hubUrl: string, idPrefi
   const managed = readManagedVoiceConfig();
   const voiceProviders = voiceProvidersFromManagedConfig(managed);
   const runtimeAgent = buildRuntimeAgentVoiceBridge(input, hubUrl);
+  if (payload.voiceRuntime === LOCAL_TTS_RUNTIME || isLocalTtsProviderId(payload.voiceProviderId)) {
+    const localTts = await resolveLocalTtsCallConfig({
+      origin: hubUrl,
+      voiceProviderId: payload.voiceProviderId,
+      voiceModelId: payload.voiceModelId,
+      voiceId: payload.voiceId,
+      openingLine: openingLineForBriefing(payload.briefing || ""),
+    });
+    if (!localTts) {
+      return {
+        ok: false,
+        gateway: "hivemindos",
+        error: "Local TTS is selected, but no connected TTS app passed validation. Open Calls settings, refresh, and select a validated TTS server.",
+        result: { ok: false, reason: "local_tts_not_validated", missing: [] },
+      };
+    }
+    return {
+      ok: true,
+      gateway: "hivemindos",
+      result: {
+        ok: true,
+        call: {
+          id: `${idPrefix}_local_tts_${Date.now()}`,
+          mode: "local-tts",
+          callerName: payload.title,
+          voiceReady: true,
+          localTts,
+          runtimeAgent,
+        },
+      },
+    };
+  }
   const call = await createByokAgentCall({
     briefing: payload.briefing || "",
     voice: resolveVoice(payload.voiceProviderId, voiceProviders, managed),
@@ -507,8 +561,33 @@ export async function startAgentMobileCall(input: AgentCallInput, hubUrl: string
   return startAgentByokCall(input, hubUrl, "mobile");
 }
 
-export async function readGatewayVoiceConfig(): Promise<GatewayCallResult> {
-  return { ok: true, gateway: "hivemindos", result: voiceConfigPayload() };
+export async function readGatewayVoiceConfig(origin?: string): Promise<GatewayCallResult> {
+  const payload = voiceConfigPayload();
+  const config = payload.config as Record<string, unknown>;
+  const localTtsCandidates = origin ? await discoverLocalTtsCandidates(origin).catch(() => []) : [];
+  const localVoiceOptions = localTtsCandidates
+    .filter((candidate) => candidate.ok)
+    .map((candidate) => ({
+      id: candidate.id,
+      provider: LOCAL_TTS_RUNTIME,
+      voice: candidate.voice,
+      model: candidate.model,
+      appName: candidate.name,
+      machineName: candidate.machineName,
+      source: "configured",
+    }));
+  return {
+    ok: true,
+    gateway: "hivemindos",
+    result: {
+      ...payload,
+      config: {
+        ...config,
+        voiceOptions: [...(Array.isArray(config.voiceOptions) ? config.voiceOptions : []), ...localVoiceOptions],
+        localTtsCandidates,
+      },
+    },
+  };
 }
 
 export async function readGatewayVoiceDeviceStatus(): Promise<GatewayCallResult> {

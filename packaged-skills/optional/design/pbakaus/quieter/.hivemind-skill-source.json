@@ -1,0 +1,18 @@
+{
+  "upstreamName": "quieter",
+  "upstreamSlug": "quieter",
+  "hiveSlug": "quieter",
+  "sourceLabel": "pbakaus",
+  "sourceUrl": "https://www.ui-skills.com/skills/pbakaus/quieter",
+  "repository": "https://github.com/pbakaus/impeccable",
+  "installCommand": "npx skills add https://github.com/pbakaus/impeccable --skill quieter",
+  "importedAt": "2026-06-08T15:01:43.718Z",
+  "refreshedAt": "2026-06-08T15:01:43.718Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/pbakaus/quieter",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Optional UI skill from pbakaus."
+}

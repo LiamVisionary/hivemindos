@@ -1,0 +1,18 @@
+{
+  "upstreamName": "shape",
+  "upstreamSlug": "shape",
+  "hiveSlug": "shape",
+  "sourceLabel": "pbakaus",
+  "sourceUrl": "https://www.ui-skills.com/skills/pbakaus/shape",
+  "repository": "https://github.com/pbakaus/impeccable",
+  "installCommand": "npx skills add https://github.com/pbakaus/impeccable --skill shape",
+  "importedAt": "2026-06-08T15:01:44.302Z",
+  "refreshedAt": "2026-06-08T15:01:44.302Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/pbakaus/shape",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Optional UI skill from pbakaus."
+}

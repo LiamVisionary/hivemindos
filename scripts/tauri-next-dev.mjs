@@ -135,26 +135,14 @@ const devRecoveryScript = String.raw`
   var readyWasDown = false;
   var routeLoadingSince = 0;
   var reloading = false;
+  var lastReloadAt = 0;
   var reloadCooldownMs = 20000;
   var routeLoadingTimeoutMs = 12000;
-  var reloadStampKey = "hivemindos:tauri-dev:last-reload";
-
-  function lastReloadAt() {
-    try {
-      var value = window.sessionStorage.getItem(reloadStampKey);
-      var parsed = value ? JSON.parse(value) : null;
-      return parsed && typeof parsed.at === "number" ? parsed.at : 0;
-    } catch (_) {
-      return 0;
-    }
-  }
 
   function forceReload(reason, ignoreCooldown) {
-    if (reloading || (!ignoreCooldown && Date.now() - lastReloadAt() < reloadCooldownMs)) return;
+    if (reloading || (!ignoreCooldown && Date.now() - lastReloadAt < reloadCooldownMs)) return;
     reloading = true;
-    try {
-      window.sessionStorage.setItem(reloadStampKey, JSON.stringify({ at: Date.now(), reason: reason }));
-    } catch (_) {}
+    lastReloadAt = Date.now();
     window.location.reload();
   }
 
@@ -273,15 +261,42 @@ function checkRouteReady(response) {
 }
 
 function proxyTimeoutForRequest(clientRequest) {
+  if (clientRequest.url?.startsWith("/api/chat/agent-runtime")) return 11 * 60_000;
+  if (clientRequest.url?.startsWith("/api/chat/image-generation")) return 4 * 60_000;
   if (clientRequest.url?.startsWith("/api/")) return 60_000;
   if (clientRequest.headers.accept?.includes("text/html")) return 15_000;
   return 2_500;
 }
 
+function apiFallbackMessage(clientRequest, proxyTimeoutMs, reason) {
+  const path = clientRequest.url || "/";
+  const seconds = Math.max(1, Math.round(proxyTimeoutMs / 1000));
+  const action = reason === "timeout"
+    ? `timed out after ${seconds}s`
+    : "lost its connection to the Next dev server";
+  return `HivemindOS dev proxy ${action} while waiting for ${path}. The request may still be blocked behind compilation, a restarted dev server, or a slow connected app. Retry after the dashboard settles.`;
+}
+
+function sendApiFallback(clientRequest, clientResponse, proxyTimeoutMs, reason) {
+  const status = reason === "timeout" ? 504 : 503;
+  const message = apiFallbackMessage(clientRequest, proxyTimeoutMs, reason);
+  clientResponse.writeHead(status, {
+    "Cache-Control": "no-store",
+    "Content-Type": "application/json; charset=utf-8",
+  });
+  clientResponse.end(JSON.stringify({
+    ok: false,
+    error: message,
+    code: reason === "timeout" ? "DEV_PROXY_TIMEOUT" : "DEV_PROXY_UNAVAILABLE",
+    path: clientRequest.url || "/",
+    timeoutMs: proxyTimeoutMs,
+  }));
+}
+
 function proxyHttp(clientRequest, clientResponse) {
   let handled = false;
   const proxyTimeoutMs = proxyTimeoutForRequest(clientRequest);
-  const useFallback = () => {
+  const useFallback = (reason = "unavailable") => {
     if (handled || clientResponse.headersSent) return;
     handled = true;
     if (isDevReadyPath(clientRequest.url)) {
@@ -293,8 +308,12 @@ function proxyHttp(clientRequest, clientResponse) {
       sendLoading(clientResponse);
       return;
     }
-    clientResponse.writeHead(503, { "Cache-Control": "no-store" });
-    clientResponse.end("HivemindOS dev server is warming up.");
+    if (clientRequest.url?.startsWith("/api/")) {
+      sendApiFallback(clientRequest, clientResponse, proxyTimeoutMs, reason);
+      return;
+    }
+    clientResponse.writeHead(503, { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" });
+    clientResponse.end(apiFallbackMessage(clientRequest, proxyTimeoutMs, reason));
   };
 
   const proxyRequest = httpRequest(
@@ -317,9 +336,9 @@ function proxyHttp(clientRequest, clientResponse) {
 
   proxyRequest.setTimeout(proxyTimeoutMs, () => {
     proxyRequest.destroy();
-    useFallback();
+    useFallback("timeout");
   });
-  proxyRequest.on("error", useFallback);
+  proxyRequest.on("error", () => useFallback("unavailable"));
   clientRequest.on("error", () => proxyRequest.destroy());
   clientResponse.on("error", () => proxyRequest.destroy());
 

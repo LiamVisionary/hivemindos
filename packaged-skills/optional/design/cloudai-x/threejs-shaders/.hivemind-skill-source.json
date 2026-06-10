@@ -1,0 +1,18 @@
+{
+  "upstreamName": "threejs-shaders",
+  "upstreamSlug": "threejs-shaders",
+  "hiveSlug": "threejs-shaders",
+  "sourceLabel": "cloudai-x",
+  "sourceUrl": "https://www.ui-skills.com/skills/cloudai-x/threejs-shaders",
+  "repository": "https://github.com/cloudai-x/threejs-skills",
+  "installCommand": "npx skills add https://github.com/cloudai-x/threejs-skills --skill threejs-shaders",
+  "importedAt": "2026-06-08T15:01:33.266Z",
+  "refreshedAt": "2026-06-08T15:01:33.266Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/cloudai-x/threejs-shaders",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Three.js shaders - GLSL, ShaderMaterial, uniforms, custom effects. Use when creating custom visual effects, modifying vertices, writing fragment shaders, or extending built-in materials."
+}

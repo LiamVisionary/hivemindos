@@ -1,0 +1,18 @@
+{
+  "upstreamName": "fixing-accessibility",
+  "upstreamSlug": "fixing-accessibility",
+  "hiveSlug": "fixing-accessibility",
+  "sourceLabel": "ibelick",
+  "sourceUrl": "https://www.ui-skills.com/skills/ibelick/fixing-accessibility",
+  "repository": "https://github.com/ibelick/ui-skills",
+  "installCommand": "npx skills add https://github.com/ibelick/ui-skills --skill fixing-accessibility",
+  "importedAt": "2026-06-08T15:01:35.136Z",
+  "refreshedAt": "2026-06-08T15:01:35.136Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/ibelick/fixing-accessibility",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Audit and fix HTML accessibility issues including ARIA labels, keyboard navigation, focus management, color contrast, and form errors. Use when adding interactive controls, forms, dialogs, or reviewing WCAG compliance."
+}

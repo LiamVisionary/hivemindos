@@ -1,0 +1,231 @@
+import { agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
+import { BEE_WORKER_HANDOFF_GUIDANCE, beeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { VEIL_CASH_TRANSFER_CONFIRMATION_LABEL, VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM } from "@/lib/config/veil-cash";
+import { HIVEMIND_OS_RUNTIME, type AgentProfile, type WorkerTaskPreference } from "@/lib/types/agent-runtime";
+import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
+import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS } from "@/lib/utils/agent-wallet";
+import { isUsePodProfile } from "@/lib/services/usepod";
+import { summarizeX402Policy } from "@/lib/services/wallet/x402-agent-fetch";
+
+export type HivemindAgentMode = "plan" | "act";
+export type HivemindPromptDelivery = "full-system" | "runtime-overlay" | "user-context" | "task-spec";
+
+export type HivemindPromptEnvelope = {
+  delivery: HivemindPromptDelivery;
+  basePrompt: string;
+  dynamicContext: string;
+  systemContext: string;
+};
+
+export type HivemindPromptInput = {
+  profile: AgentProfile;
+  agentMode: HivemindAgentMode;
+  workingDirectory?: string;
+  vaultContext?: string;
+  sharedBrainMemoryContext?: string;
+  taskRetrievalContext?: string;
+  wallet?: AgentWalletConfig;
+  runtimeSessionId?: string;
+  chatStorageKey?: string;
+  platform?: string;
+  extraDynamicContext?: string;
+};
+
+const RAW_SYSTEM_RUNTIMES = new Set([HIVEMIND_OS_RUNTIME]);
+const USER_CONTEXT_RUNTIMES = new Set(["openclaw"]);
+const TASK_SPEC_RUNTIMES = new Set(["aeon"]);
+
+export function hivemindPromptDeliveryFor(profile: AgentProfile): HivemindPromptDelivery {
+  if (RAW_SYSTEM_RUNTIMES.has(profile.runtime)) return "full-system";
+  if (USER_CONTEXT_RUNTIMES.has(profile.runtime)) return "user-context";
+  if (TASK_SPEC_RUNTIMES.has(profile.runtime)) return "task-spec";
+  return "runtime-overlay";
+}
+
+export function buildHivemindBasePrompt(delivery: HivemindPromptDelivery): string {
+  if (delivery !== "full-system") {
+    return [
+      "HivemindOS runtime overlay:",
+      "Preserve the native runtime's identity, tools, and system contract. Treat this overlay as HivemindOS dashboard context for routing, memory, vault access, wallet policy, and completion discipline.",
+      "Use HivemindOS capability evidence and injected shared-brain context before guessing. Do not invent tool calls, app names, local execution success, receipts, credential status, or machine state.",
+      "When work is requested, continue until the task is actually handled or a concrete blocker remains. Verify important results when tools make that possible.",
+    ].join("\n");
+  }
+
+  return [
+    "You are HivemindOS Agent, a local-first AI operator for Liam's HivemindOS environment. You help with software, research, notes, agent coordination, machine routing, workflows, wallets, and private shared-brain context. Be clear, capable, grounded, and direct. Prefer useful action over performance. Admit uncertainty, verify important claims, and keep the user oriented while you work.",
+    "",
+    "You operate inside HivemindOS: a private agent control room with shared Obsidian memory, runtime adapters, Queen Bee routing, Work Board tasks, fleet machines, shared skills, capability search, agent wallets, and local-first credentials. Treat privacy, provenance, and user control as core product behavior.",
+    "",
+    "# Finishing The Job",
+    "When the user asks you to build, change, run, debug, verify, inspect, or deliver something, the deliverable is real work backed by tool output, not a description of what could be done. Continue until the request is handled or a real blocker remains. Do not claim completion without checking the relevant artifact, command, UI, test, file, API response, or runtime state.",
+    "",
+    "# Tool And Capability Discipline",
+    "Use tools whenever they improve correctness. Do not invent tool outputs, route names, connected apps, credential status, machine state, file contents, URLs, tests, or successful actions. If a capability search, runtime probe, memory recall, or connected-app lookup times out, say that it timed out and continue with safe fallback assumptions.",
+    "",
+    "Resolve user intent to a HivemindOS capability first, then to a provider. The user should not need to know provider names for common powers such as image generation, paid API calls, private transfer, model routing, app deployment, agent handoff, or message delivery. Prefer capability/default matrices, /api/context-index, runtime capability metadata, shared skills, and setup/status checks over hard-coded provider branches.",
+    "",
+    "# Shared Brain Memory",
+    "Before relying on prior preferences, decisions, durable project context, instructions, commitments, lessons, credential status, or known artifacts, recall Shared Brain Memory when available. Write memory only for durable reviewed facts. Do not store transient task progress, raw secrets, private Tailnet IPs, stale PR/commit trivia, or temporary TODOs.",
+    "",
+    "# Skills",
+    "Before complex work, check relevant bundled or shared skills. If a skill clearly applies, use it. If you discover a reusable workflow, missing setup rule, recurring mistake, or durable technique, update or propose a shared skill rather than relying on memory alone.",
+    "",
+    "# Project And Code Context",
+    "Follow injected project context such as AGENTS.md, .hermes.md, HERMES.md, CLAUDE.md, .cursorrules, shared vault instructions, and repo docs. Read before editing, prefer existing patterns, keep changes scoped, and avoid destructive git or filesystem operations unless explicitly requested.",
+    "",
+    "# Queen Bee And Work Board",
+    "Use Queen Bee for routing, dedupe, leases, safety policy, and receipts. Use the Work Board for tasks. Use Shared Brain Memory for durable facts. When delegating, route by project registry, machine availability, runtime capability, worker class, checkout freshness, dirty state, and user constraints.",
+    "",
+    "# Wallets And Paid Actions",
+    "Wallet, crypto, x402, private transfer, trading, and paid API actions require explicit capability routing and approval gates. Start with read-only status. Refer to credentials by key name and set/missing status only. Never reveal or persist secret values. When spending is disabled, prepare a reviewed draft instead of executing.",
+    "",
+    "# Communication",
+    "Be concise but not cryptic. Give short progress updates during longer work. Ask questions only when the answer cannot be discovered and a reasonable assumption would be risky.",
+  ].join("\n");
+}
+
+export function formatWorkerTaskPreference(preference: WorkerTaskPreference): string {
+  const target = [preference.appName || preference.appId, preference.model ? `model: ${preference.model}` : ""].filter(Boolean).join(", ");
+  return [
+    preference.taskType,
+    target ? `→ ${target}` : "",
+    preference.notes?.trim() ? `— ${preference.notes.trim()}` : "",
+  ].filter(Boolean).join(" ");
+}
+
+function workerTaskPreferenceLines(preferences: WorkerTaskPreference[] | undefined): string[] {
+  const valid = (preferences ?? []).filter((preference) => preference.taskType?.trim() && (preference.appId || preference.appName || preference.model || preference.notes));
+  if (!valid.length) return [];
+  return [
+    "- Task routing preferences (use the matching app/model for each task type before picking your own):",
+    ...valid.map((preference) => `  - ${formatWorkerTaskPreference(preference)}`),
+  ];
+}
+
+export function buildAgentProfileContext(profile: AgentProfile): string {
+  const usePod = isUsePodProfile(profile) ? profile.usePod : undefined;
+  const preset = profile.workerClass ? beeWorkerPreset(profile.workerClass) : null;
+  const usingCustomClass = Boolean(profile.selectedCustomWorkerClassId || profile.customWorkerClass);
+  const lines = [
+    "Agent profile context:",
+    `- Name: ${profile.name || profile.id}`,
+    `- Runtime: ${profile.runtime}`,
+    profile.machineName ? `- Machine: ${profile.machineName}` : "",
+    profile.beeRole ? `- Bee role: ${profile.beeRole}` : "",
+    profile.workerClass ? `- Worker class: ${profile.workerClass}` : "",
+    profile.provider || profile.model ? `- Preferred model: ${[profile.provider, profile.model].filter(Boolean).join("/")}` : "",
+    usePod ? `- UsePod rail: prepaid marketplace inference${usePod.spendPreset ? `, ${usePod.spendPreset} spend caps` : ""}${usePod.lastBalanceRemaining ? `, last balance ${usePod.lastBalanceRemaining}` : ""}` : "",
+    profile.skillProfilePrompt?.trim() ? `- Role instructions: ${profile.skillProfilePrompt.trim()}` : "",
+    profile.preferredSkillSlugs?.length ? `- Preferred skills: ${profile.preferredSkillSlugs.join(", ")}` : "",
+    preset && !usingCustomClass ? `- Quality bar: ${preset.qualityBar}` : "",
+    ...workerTaskPreferenceLines(profile.taskPreferences),
+    profile.workerClass ? `- Specialization and handoff: ${BEE_WORKER_HANDOFF_GUIDANCE}` : "",
+    "- HivemindOS chat bridge: do not use terminal-only interactive clarification prompts. If a question is unavoidable, emit or return a concise question with explicit choices so the dashboard can render it, otherwise make a reasonable assumption and continue.",
+  ].filter(Boolean);
+  return lines.length > 2 ? lines.join("\n") : "";
+}
+
+export function buildAgentModeContext(mode: HivemindAgentMode): string {
+  if (mode === "plan") {
+    return [
+      "Agent operating mode: Plan.",
+      "- Think through the approach, assumptions, and verification path before making changes.",
+      "- Prefer explaining the intended steps and asking only when a decision is genuinely needed.",
+      "- Do not mutate files, services, wallets, or remote systems unless the user explicitly asks you to proceed.",
+    ].join("\n");
+  }
+  return [
+    "Agent operating mode: Act.",
+    "- Execute the user's request directly, make reasonable assumptions, and keep moving until the task is handled.",
+    "- Use concise progress updates and surface blockers only when you cannot resolve them safely.",
+  ].join("\n");
+}
+
+export function buildWorkingDirectoryContext(workingDirectory?: string): string {
+  const trimmed = workingDirectory?.trim();
+  if (!trimmed) return "";
+  return [
+    "Working directory context:",
+    `- Use this directory for the chat unless the user says otherwise: ${trimmed}`,
+  ].join("\n");
+}
+
+function duplicatePaymentGuardSeconds(wallet: AgentWalletConfig | undefined) {
+  const seconds = Number(wallet?.duplicatePaymentGuardSeconds);
+  return Number.isFinite(seconds) ? Math.max(0, seconds) : DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS;
+}
+
+function duplicatePaymentGuardEnabled(wallet: AgentWalletConfig | undefined) {
+  return wallet?.duplicatePaymentGuardEnabled !== false && duplicatePaymentGuardSeconds(wallet) > 0;
+}
+
+export function buildWalletToolContext(wallet?: AgentWalletConfig): string {
+  if (!wallet) return "";
+  const walletFeatures = agentPaymentProviderFeatures(wallet.provider);
+  const privateTransferAssets = walletFeatures.privateTransferAssets.join(" | ");
+  const veilAutoPrivateX402 = wallet.provider === "veil" && wallet.veilAutoPrivateX402 !== false;
+  const lines = [
+    "Agent wallet/payment context:",
+    summarizeX402Policy(wallet),
+    !wallet.enabled
+      ? "- Wallet spending is off: do not call walletTools, do not execute x402_fetch, and do not execute privateTransfer. You may prepare a reviewed draft and ask the user to turn Spend on before execution."
+      : "",
+    privateTransferAssets
+      ? `- Capability: private transfer is available for ${privateTransferAssets}. If the user asks to "send privately", "make a private payment", "send a private transfer", or similar, infer this private-transfer capability from the active wallet rail; do not require the user to name the provider.`
+      : "",
+    "- Tool: x402_fetch",
+    "- Dashboard endpoint: call walletTools.x402Fetch when provided, otherwise POST /api/wallet/x402 with { agentId, url, method, headers, body, policy, confirmation }.",
+    wallet.autoPayEnabled
+      ? "- Allow auto-use is on: x402_fetch may pay without another prompt while staying under the hard per-payment cap."
+      : "- Allow auto-use is off: present a concise payment draft and ask for a plain confirmation such as \"confirm\" before running x402_fetch.",
+    "- Read-only balance check: POST /api/wallet/balance with public address and network.",
+    wallet.autoPayEnabled
+      ? "- USDC sends follow the same auto-use rule: POST /api/wallet/send may send without another prompt while staying under the hard per-payment cap."
+      : "- USDC sends follow the same auto-use rule: do not call POST /api/wallet/send until the user explicitly supplies SEND_USDC for the exact recipient and amount.",
+    duplicatePaymentGuardEnabled(wallet)
+      ? `- Duplicate payment guard is on: recently completed matching private sends are replay-protected for ${Math.max(1, Math.round(duplicatePaymentGuardSeconds(wallet) / 60))} minutes.`
+      : "- Duplicate payment guard is off: the same private send may be intentionally submitted again after the previous transfer finishes.",
+    wallet.provider === "usepod" ? "- UsePod rail: use the prepaid UsePod balance for inference and provider-managed x402/paywalls; do not require a separate local wallet for UsePod x402." : "",
+    wallet.provider === "veil" ? `- Selected private-send implementation: call walletTools.privateTransfer with { agentId, enabled: true, provider: 'veil', network: 'eip155:8453', asset: 'USDC' | 'ETH', recipientAddress, amount, maxAssetAmount, confirmation: '${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL}', autoShield: true, duplicateGuardEnabled, duplicateGuardSeconds }. Treat public/private/queued Veil balances as internal rail state; tell the user they have one agent spend balance. By default this sends privately to any public Ethereum address, unlinking the funding wallet from the recipient. If ready private USDC is insufficient, HivemindOS can shield from the agent's encrypted local Base wallet first, subject to Veil's 20 USDC shield minimum and queue acceptance delay, then complete the withdrawal after acceptance. Current public-recipient USDC withdrawals require at least ${VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM} USDC. Only include recipientMode: 'registered' when the user explicitly asks for an in-pool shielded transfer to a registered Veil recipient. Before execution, present a concise draft with asset, amount, recipient, network, cap, and "private send"; ask for a plain confirmation such as "Reply confirm to send." ${veilAutoPrivateX402 ? "Auto Always Private is on: ordinary x402/pay-this endpoint requests use Veil private x402; call walletTools.x402Fetch with { provider: 'veil', agentId, url, policy, confirmation: 'VEIL_X402' } after confirmation." : "Auto Always Private is off: ordinary x402/pay-this endpoint requests use the basic public x402 route through walletTools.x402Fetch; only explicit private wording such as privately, in private, private, or Veil should use the private x402 draft path."} Private x402 withdraws USDC from the private Veil pool into a fresh derived payer EOA before x402 settlement. Ask for a plain confirmation such as "confirm", not a magic token, unless a lower-level API rejects the plain confirmation. Never execute private payment actions from an ambiguous recipient, amount, or asset.` : "",
+    "- Hard rule: never ask for or reveal private keys; the dashboard signs from its encrypted local vault.",
+  ].filter(Boolean);
+  return lines.join("\n");
+}
+
+export function buildHivemindDynamicContext(input: HivemindPromptInput): string {
+  return [
+    buildAgentProfileContext(input.profile),
+    input.extraDynamicContext,
+    buildAgentModeContext(input.agentMode),
+    buildWorkingDirectoryContext(input.workingDirectory),
+    input.vaultContext,
+    input.sharedBrainMemoryContext,
+    input.taskRetrievalContext,
+    buildWalletToolContext(input.wallet),
+    input.runtimeSessionId ? `Session metadata:\n- Runtime session ID: ${input.runtimeSessionId}` : "",
+    input.chatStorageKey ? `- Chat storage key: ${input.chatStorageKey}` : "",
+    input.platform ? `Platform context:\n- Active surface: ${input.platform}` : "",
+  ].filter(Boolean).join("\n\n");
+}
+
+export function buildHivemindPromptEnvelope(input: HivemindPromptInput): HivemindPromptEnvelope {
+  const delivery = hivemindPromptDeliveryFor(input.profile);
+  const basePrompt = buildHivemindBasePrompt(delivery);
+  const dynamicContext = buildHivemindDynamicContext(input);
+  const systemContext = [basePrompt, dynamicContext].filter(Boolean).join("\n\n");
+  return { delivery, basePrompt, dynamicContext, systemContext };
+}
+
+export function prependHivemindSystemMessage<T extends { role: string; content: unknown }>(
+  messages: T[],
+  envelope: HivemindPromptEnvelope,
+): Array<T | { role: "system"; content: string }> {
+  if (!envelope.systemContext.trim()) return messages;
+  return [{ role: "system", content: envelope.systemContext }, ...messages];
+}
+
+export function buildHivemindUserContextText(envelope: HivemindPromptEnvelope, userPrompt: string): string {
+  const trimmedContext = envelope.systemContext.trim();
+  return trimmedContext ? `${trimmedContext}\n\nUser message:\n${userPrompt}` : userPrompt;
+}

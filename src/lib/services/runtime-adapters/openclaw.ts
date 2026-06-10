@@ -120,6 +120,7 @@ function providerName(slug: string) {
     xai: "xAI",
     anthropic: "Anthropic",
     google: "Google",
+    "lm-studio": "Local OpenAI",
     openrouter: "OpenRouter",
   }));
   if (known.has(slug)) return known.get(slug) as string;

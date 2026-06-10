@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentType, Dispatch, ElementType, SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ComponentType, CSSProperties, Dispatch, ElementType, SetStateAction } from "react";
 import Image from "next/image";
-import { ChevronDown, KeyRound, Plus, Search, Send, WalletCards, X } from "lucide-react";
+import { Check, Copy, Download as DownloadIcon, KeyRound, List, Plus, RefreshCcw as RefreshIcon, Send, Shuffle, WalletCards, X } from "lucide-react";
 import type { AgentWalletCardProps } from "@/components/wallet/AgentWalletCard";
 import type { AgentWalletCardCompactProps } from "@/components/wallet/AgentWalletCardCompact";
-import type { AgentProfile } from "@/lib/types/agent-runtime";
+import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { AgentPaymentProvider, AgentSurvivalSnapshot, AgentWalletConfig, AgentWalletTokenBalance, HoneyAgentReward } from "@/lib/types/agent-wallet";
 import { resolveAgentWallet } from "@/lib/utils/agent-wallet";
 import { createStyleClass } from "@/features/dashboard/style-classes";
+import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import type { DashboardView, RuntimeUsageAnalytics, WalletActionState, WalletMoneyClawStatus, WalletVaultBackupStatus } from "@/features/dashboard/dashboard-types";
+import { exportAgentWalletSecret, exportPersonalWalletGroupSecret } from "./wallet-secret-export-actions";
+import { WalletUsageLoading } from "./WalletPanelLoading";
 import personalStyles from "./PersonalWallets.module.css";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
@@ -63,17 +67,42 @@ type PersonalWallet = {
   currentBalanceUsd: number;
   nativeBalance: number;
   tokens: AgentWalletTokenBalance[];
+  portfolioVersion?: number;
   lastOnchainSyncAt: number;
   createdAt: number;
   updatedAt: number;
 };
 
-type WalletRecipient = {
-  id: string;
-  label: string;
-  group: "My wallet" | "Agent wallet";
+type PersonalWalletVaultInfo = {
+  agentId: string;
+  id?: string;
+  name?: string;
   address: string;
   network: string;
+  custodyMode?: "local" | "watch";
+  importedFrom?: PersonalWallet["importedFrom"];
+  currentBalanceUsd?: number;
+  nativeBalance?: number;
+  tokens?: AgentWalletTokenBalance[];
+  portfolioVersion?: number;
+  lastOnchainSyncAt?: number;
+  createdAt?: string | number;
+  updatedAt?: number;
+};
+
+type PersonalPortfolioToken = AgentWalletTokenBalance & {
+  walletId: string;
+  walletName: string;
+};
+
+type PersonalWalletGroup = {
+  id: string;
+  name: string;
+  wallets: PersonalWallet[];
+  tokens: PersonalPortfolioToken[];
+  totalValueUsd: number;
+  nativeSummary: string;
+  primaryWallet: PersonalWallet;
 };
 
 type AgentWalletRow = {
@@ -82,8 +111,57 @@ type AgentWalletRow = {
   wallet: AgentWalletConfig;
 };
 
-const PERSONAL_WALLET_STORAGE_KEY = ".userWallets.v1";
+const BANKR_RECIPIENT_STORAGE_KEY = "hivemindos.bankrRecipientAddress";
+const PERSONAL_WALLET_PORTFOLIO_VERSION = 7;
+const RECOVERY_PHRASE_WORD_COUNT = 12;
+const RECOVERY_PHRASE_WALLET_ID_SUFFIX = /:(?:eip155-\d+|solana-[a-z0-9-]+)$/i;
 const personalClass = createStyleClass(personalStyles);
+
+function emptyRecoveryPhraseWords() {
+  return Array.from({ length: RECOVERY_PHRASE_WORD_COUNT }, () => "");
+}
+
+function normalizeRecoveryPhraseWord(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function parseRecoveryPhraseWords(value: string) {
+  return value
+    .trim()
+    .split(/\s+/)
+    .map(normalizeRecoveryPhraseWord)
+    .filter(Boolean)
+    .slice(0, RECOVERY_PHRASE_WORD_COUNT);
+}
+
+function isRecoveryPhraseWalletId(id: string) {
+  return id.startsWith("user:") && RECOVERY_PHRASE_WALLET_ID_SUFFIX.test(id);
+}
+
+function normalizePersonalWalletImportSource(
+  id: string,
+  importedFrom?: PersonalWallet["importedFrom"],
+): PersonalWallet["importedFrom"] {
+  return importedFrom === "recovery-phrase" || isRecoveryPhraseWalletId(id)
+    ? "recovery-phrase"
+    : importedFrom || "watch";
+}
+
+function personalAccountGroupId(wallet: PersonalWallet) {
+  return normalizePersonalWalletImportSource(wallet.id, wallet.importedFrom) === "recovery-phrase"
+    ? wallet.id.replace(RECOVERY_PHRASE_WALLET_ID_SUFFIX, "")
+    : wallet.id;
+}
+
+function personalAccountName(wallet: PersonalWallet) {
+  if (normalizePersonalWalletImportSource(wallet.id, wallet.importedFrom) !== "recovery-phrase") return wallet.name;
+  if (wallet.name === wallet.id) return wallet.id.replace(RECOVERY_PHRASE_WALLET_ID_SUFFIX, "");
+  return wallet.name.replace(/\s+(?:Base|Solana)$/i, "");
+}
+
+function shouldRefreshPersonalWalletSnapshot(wallet: PersonalWallet) {
+  return wallet.lastOnchainSyncAt <= 0 || (wallet.portfolioVersion ?? 0) < PERSONAL_WALLET_PORTFOLIO_VERSION;
+}
 
 type WalletPanelProps = {
   AGENT_PAYMENT_PROVIDER_COPY: PaymentProviderCopy;
@@ -103,6 +181,7 @@ type WalletPanelProps = {
   displayAgents: AgentProfile[];
   claimAllHoneyToBankrHive: (recipientAddress?: string) => Promise<{ ok: boolean; error?: string; txHash?: string; amount?: number; recipientAddress?: string }>;
   enableHoneyLedger: () => void;
+  exportWalletSecrets: (input: { agentIds: string[]; label: string; filename?: string }) => Promise<{ ok?: boolean; error?: string; exportedCount?: number; label?: string }>;
   formatHiveAmount: (amount: number) => string;
   formatRelativeTime: (timestamp: number) => string;
   getSurvivalSnapshot: (wallet: AgentWalletConfig) => AgentSurvivalSnapshot;
@@ -124,6 +203,7 @@ type WalletPanelProps = {
   selectedHoneyReward: HoneyAgentReward | null;
   selectedWallet: AgentWalletConfig | null;
   selectedWalletSnapshot: AgentSurvivalSnapshot | null;
+  sharedVault: SharedVaultConfig;
   sendWalletUsdc: (agentId: string) => void | Promise<void>;
   setSelectedAgentId: Dispatch<SetStateAction<string>>;
   setWalletExpanded: Dispatch<SetStateAction<boolean>>;
@@ -170,6 +250,85 @@ function formatToken(value: number) {
   return value.toLocaleString(undefined, { maximumFractionDigits: value >= 1 ? 4 : 8 });
 }
 
+function isLikelySpamPortfolioToken(token: Pick<AgentWalletTokenBalance, "symbol" | "name">) {
+  const text = `${token.symbol ?? ""} ${token.name ?? ""}`.toLowerCase();
+  if (!text.trim()) return false;
+  return [
+    /\bvisit\s+to\s+claim\b/,
+    /\bclaim\s+(?:on|at|now|your)\b/,
+    /\bairdrop\b/,
+    /\bt\.me\/\S+/,
+    /\btelegram\b/,
+    /\bdiscord\.gg\b/,
+    /\bbit\.ly\b/,
+    /\bswap-[a-z0-9.-]+/,
+    /\b(?:https?:\/\/|www\.)\S+/,
+    /\.(?:com|org|net|xyz|io|app|top|site|click|lol|vip)\b/,
+    /✅/,
+  ].some((pattern) => pattern.test(text));
+}
+
+function hashTokenSeed(seed: string) {
+  let hash = 0;
+  for (const character of seed) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0;
+  return Math.abs(hash);
+}
+
+type TokenIconStyle = CSSProperties & {
+  "--token-accent-a"?: string;
+  "--token-accent-b"?: string;
+  "--token-accent-c"?: string;
+};
+
+function tokenIconFallbackStyle(token: Pick<AgentWalletTokenBalance, "symbol" | "name" | "network" | "tokenAddress">): TokenIconStyle {
+  const hash = hashTokenSeed(`${token.network}:${token.tokenAddress ?? ""}:${token.symbol}:${token.name}`);
+  const hue = hash % 360;
+  return {
+    "--token-accent-a": `hsl(${hue} 78% 62%)`,
+    "--token-accent-b": `hsl(${(hue + 42) % 360} 72% 52%)`,
+    "--token-accent-c": `hsl(${(hue + 196) % 360} 70% 58%)`,
+  };
+}
+
+function tokenIconLabel(symbol: string) {
+  const compact = symbol.replace(/[^a-z0-9]/gi, "");
+  return (compact || "?").slice(0, 2).toUpperCase();
+}
+
+function chainBadgeSrc(network: string) {
+  if (network.startsWith("solana:")) return "/icons/wallet/chains/solana.svg";
+  if (network.startsWith("eip155:")) return "/icons/wallet/chains/base.svg";
+  return "";
+}
+
+function PersonalTokenIcon({ token }: { token: PersonalPortfolioToken }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const iconUrl = imageFailed ? "" : token.iconUrl?.trim();
+  const badgeSrc = chainBadgeSrc(token.network);
+  if (iconUrl) {
+    return (
+      <span className={personalClass("personalTokenIconFrame")}>
+        <span className={personalClass("personalTokenIcon")}>
+          <Image src={iconUrl} alt="" width={44} height={44} unoptimized onError={() => setImageFailed(true)} />
+        </span>
+        {badgeSrc ? <Image className={personalClass("personalTokenChainBadge")} src={badgeSrc} alt="" width={16} height={16} /> : null}
+      </span>
+    );
+  }
+  return (
+    <span className={personalClass("personalTokenIconFrame")}>
+      <span
+        aria-hidden="true"
+        className={personalClass("personalTokenIcon", "personalTokenIconFallback")}
+        style={tokenIconFallbackStyle(token)}
+      >
+        <span>{tokenIconLabel(token.symbol)}</span>
+      </span>
+      {badgeSrc ? <Image className={personalClass("personalTokenChainBadge")} src={badgeSrc} alt="" width={16} height={16} /> : null}
+    </span>
+  );
+}
+
 function shortenAddress(address: string) {
   if (address.length <= 14) return address;
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -192,49 +351,43 @@ function compareAgentWalletRows(left: AgentWalletRow, right: AgentWalletRow) {
     || left.agent.id.localeCompare(right.agent.id, undefined, { sensitivity: "base" });
 }
 
-function safePersonalWallets(raw: string | null): PersonalWallet[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.flatMap((item): PersonalWallet[] => {
-      if (!item || typeof item !== "object") return [];
-      const record = item as Partial<PersonalWallet>;
-      if (!record.id || !record.address || !record.network) return [];
-      return [{
-        id: String(record.id),
-        name: String(record.name || "My wallet"),
-        address: String(record.address),
-        network: String(record.network),
-        custodyMode: record.custodyMode === "local" ? "local" : "watch",
-        importedFrom: record.importedFrom || "watch",
-        currentBalanceUsd: Number(record.currentBalanceUsd) || 0,
-        nativeBalance: Number(record.nativeBalance) || 0,
-        tokens: Array.isArray(record.tokens) ? record.tokens : [],
-        lastOnchainSyncAt: Number(record.lastOnchainSyncAt) || 0,
-        createdAt: Number(record.createdAt) || Date.now(),
-        updatedAt: Number(record.updatedAt) || Date.now(),
-      }];
-    });
-  } catch {
-    return [];
-  }
+function personalWalletKey(wallet: Pick<PersonalWallet, "network" | "address">) {
+  return `${wallet.network}:${wallet.address.toLowerCase()}`;
+}
+
+function timestampFromVaultDate(value: string | undefined) {
+  const timestamp = value ? Date.parse(value) : 0;
+  return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : Date.now();
+}
+
+function personalWalletFromVaultInfo(wallet: PersonalWalletVaultInfo): PersonalWallet | null {
+  if (!wallet.agentId || !wallet.address || !wallet.network) return null;
+  const createdAt = typeof wallet.createdAt === "number" ? wallet.createdAt : timestampFromVaultDate(wallet.createdAt);
+  return {
+    id: wallet.id || wallet.agentId,
+    name: wallet.name || `My ${networkLabel(wallet.network)} wallet`,
+    address: wallet.address,
+    network: wallet.network,
+    custodyMode: wallet.custodyMode === "watch" ? "watch" : "local",
+    importedFrom: normalizePersonalWalletImportSource(wallet.id || wallet.agentId, wallet.importedFrom || "private-key"),
+    currentBalanceUsd: Number(wallet.currentBalanceUsd) || 0,
+    nativeBalance: Number(wallet.nativeBalance) || 0,
+    tokens: Array.isArray(wallet.tokens) ? wallet.tokens : [],
+    portfolioVersion: Number(wallet.portfolioVersion) || 0,
+    lastOnchainSyncAt: Number(wallet.lastOnchainSyncAt) || 0,
+    createdAt,
+    updatedAt: Number(wallet.updatedAt) || createdAt,
+  };
 }
 
 export function WalletPanel(props: WalletPanelProps) {
-  const { AGENT_PAYMENT_PROVIDER_COPY, AgentWalletCard, AgentWalletCardCompact, Button, ChevronLeft, Download, HandCoins, LoaderCircle, RUNTIME_LABELS, RefreshCcw, activeView, claimAllHoneyToBankrHive, copyPaymentPrompt, createLocalWallet, displayAgents, enableHoneyLedger, formatHiveAmount, formatRelativeTime, getSurvivalSnapshot, honeyLedgerEnabled, honeyStats, initializeCoreWalletRails, moneyClawStatusByEnvName, refreshRuntimeIntegrations, refreshRuntimeUsage, refreshWalletBalance, renderAgentKey, resetWalletBurnClock, returnAllHiveToHoney, runWalletVaultBackupAction, runtimeUsage, runtimeUsageLoading, saveMoneyClawKey, selectedAgent, selectedHoneyReward, selectedWallet, selectedWalletSnapshot, sendWalletUsdc, setSelectedAgentId, setWalletExpanded, setWalletPanelMode, testX402Fetch, updateAgentProfile, updateWallet, updateWalletAction, vaultClass, walletActionsByAgent, walletClass, walletExpanded, walletPanelMode, walletStats, walletVaultBackupBusy, walletVaultBackupMessage, walletVaultBackupStatus, walletsByAgent } = props;
+  const { AGENT_PAYMENT_PROVIDER_COPY, AgentWalletCard, AgentWalletCardCompact, Button, ChevronLeft, Download, HandCoins, LoaderCircle, RUNTIME_LABELS, RefreshCcw, activeView, claimAllHoneyToBankrHive, copyPaymentPrompt, createLocalWallet, displayAgents, enableHoneyLedger, exportWalletSecrets, formatHiveAmount, formatRelativeTime, getSurvivalSnapshot, honeyLedgerEnabled, honeyStats, initializeCoreWalletRails, moneyClawStatusByEnvName, refreshRuntimeIntegrations, refreshRuntimeUsage, refreshWalletBalance, renderAgentKey, resetWalletBurnClock, returnAllHiveToHoney, runWalletVaultBackupAction, runtimeUsage, runtimeUsageLoading, saveMoneyClawKey, selectedAgent, selectedHoneyReward, selectedWallet, selectedWalletSnapshot, sharedVault, sendWalletUsdc, setSelectedAgentId, setWalletExpanded, setWalletPanelMode, testX402Fetch, updateAgentProfile, updateWallet, updateWalletAction, vaultClass, walletActionsByAgent, walletClass, walletExpanded, walletPanelMode, walletStats, walletVaultBackupBusy, walletVaultBackupMessage, walletVaultBackupStatus, walletsByAgent } = props;
   const refreshedUsePodAgentIds = useRef<Set<string>>(new Set());
   const [bankrClaimBusy, setBankrClaimBusy] = useState(false);
   const [bankrConnectBusy, setBankrConnectBusy] = useState(false);
   const [bankrClaimStatus, setBankrClaimStatus] = useState("");
-  const [bankrRecipientAddress, setBankrRecipientAddress] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return window.localStorage.getItem("hivemindos.bankrRecipientAddress") ?? "";
-  });
-  const [personalWallets, setPersonalWallets] = useState<PersonalWallet[]>(() => {
-    if (typeof window === "undefined") return [];
-    return safePersonalWallets(window.localStorage.getItem(PERSONAL_WALLET_STORAGE_KEY));
-  });
+  const [bankrRecipientAddress, setBankrRecipientAddress] = useState("");
+  const [personalWallets, setPersonalWallets] = useState<PersonalWallet[]>([]);
   const [personalWalletActions, setPersonalWalletActions] = useState<Record<string, WalletActionState>>({});
   const [personalImportOpen, setPersonalImportOpen] = useState(false);
   const [personalImportDraft, setPersonalImportDraft] = useState({
@@ -244,9 +397,11 @@ export function WalletPanel(props: WalletPanelProps) {
     secret: "",
     address: "",
   });
+  const [personalRecoveryWords, setPersonalRecoveryWords] = useState(() => emptyRecoveryPhraseWords());
   const [personalImportStatus, setPersonalImportStatus] = useState("");
-  const [quickSendOpen, setQuickSendOpen] = useState<Record<string, boolean>>({});
-  const [quickSendSearch, setQuickSendSearch] = useState("");
+  const [copiedAddressKey, setCopiedAddressKey] = useState("");
+  const autoRefreshPersonalWalletsRef = useRef(new Set<string>());
+  const nativeDesktopRuntime = useMemo(() => isTauriDesktopRuntime(), []);
   const bankrRecipientReady = /^0x[a-fA-F0-9]{40}$/.test(bankrRecipientAddress.trim());
   const effectiveSelectedWallet = selectedAgent && selectedWallet ? resolveAgentWallet(selectedAgent, selectedWallet) : selectedWallet;
   const effectiveSelectedWalletSnapshot = effectiveSelectedWallet ? getSurvivalSnapshot(effectiveSelectedWallet) : selectedWalletSnapshot;
@@ -262,35 +417,84 @@ export function WalletPanel(props: WalletPanelProps) {
       })
       .sort(compareAgentWalletRows)
   ), [displayAgents, walletsByAgent]);
-  const walletRecipients = useMemo<WalletRecipient[]>(() => {
-    const personal = personalWallets
-      .filter((wallet) => wallet.address.trim())
-      .map((wallet) => ({
-        id: wallet.id,
-        label: wallet.name,
-        group: "My wallet" as const,
-        address: wallet.address,
-        network: wallet.network,
-      }));
-    const agentRecipients = displayAgents.flatMap((agent): WalletRecipient[] => {
-      const wallet = resolveAgentWallet(agent, walletsByAgent[agent.id]);
-      const address = wallet.walletAddress || wallet.vaultAddress;
-      if (!address) return [];
-      return [{
-        id: `agent:${agent.id}`,
-        label: agent.name,
-        group: "Agent wallet",
-        address,
-        network: wallet.network,
-      }];
+  const personalWalletGroups = useMemo<PersonalWalletGroup[]>(() => {
+    const groups = new Map<string, PersonalWallet[]>();
+    for (const wallet of personalWallets) {
+      const groupId = personalAccountGroupId(wallet);
+      groups.set(groupId, [...(groups.get(groupId) ?? []), wallet]);
+    }
+    return [...groups.entries()].map(([id, wallets]) => {
+      const tokens = wallets
+        .flatMap((wallet) => wallet.tokens.map((token) => ({ ...token, walletId: wallet.id, walletName: wallet.name })))
+        .filter((token) => !isLikelySpamPortfolioToken(token))
+        .sort((left, right) => {
+          const valueDelta = (right.valueUsd ?? -1) - (left.valueUsd ?? -1);
+          if (valueDelta !== 0) return valueDelta;
+          if (left.isNative !== right.isNative) return left.isNative ? -1 : 1;
+          return `${left.network}:${left.symbol}`.localeCompare(`${right.network}:${right.symbol}`);
+        });
+      const totalValueUsd = Math.round(wallets.reduce((total, wallet) => total + wallet.currentBalanceUsd, 0) * 100) / 100;
+      const nativeSummary = wallets
+        .filter((wallet) => wallet.nativeBalance > 0)
+        .map((wallet) => `${formatToken(wallet.nativeBalance)} ${nativeSymbol(wallet.network)}`)
+        .join(" · ");
+      return {
+        id,
+        name: personalAccountName(wallets[0]!),
+        wallets,
+        tokens,
+        totalValueUsd,
+        nativeSummary,
+        primaryWallet: wallets[0]!,
+      };
     });
-    return [...personal, ...agentRecipients];
-  }, [displayAgents, personalWallets, walletsByAgent]);
+  }, [personalWallets]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(PERSONAL_WALLET_STORAGE_KEY, JSON.stringify(personalWallets));
-  }, [personalWallets]);
+    let cancelled = false;
+    void loadDashboardStateSnapshot().then((snapshot) => {
+      if (!cancelled) setBankrRecipientAddress(dashboardStateValue(snapshot, BANKR_RECIPIENT_STORAGE_KEY) ?? "");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (activeView !== "wallet" || walletPanelMode !== "wallets") return;
+    let cancelled = false;
+    async function loadPersonalWalletVault() {
+      const params = sharedVault.vaultPath.trim() ? `?vaultPath=${encodeURIComponent(sharedVault.vaultPath.trim())}` : "";
+      const response = await fetch(`/api/wallet/personal${params}`, { headers: { accept: "application/json" } }).catch(() => null);
+      const data = await response?.json().catch(() => null) as {
+        ok?: boolean;
+        wallets?: PersonalWalletVaultInfo[];
+      } | null;
+      if (cancelled || !response?.ok || !data?.ok || !Array.isArray(data.wallets)) return;
+      const vaultWallets = data.wallets
+        .map(personalWalletFromVaultInfo)
+        .filter((wallet): wallet is PersonalWallet => Boolean(wallet));
+      if (!vaultWallets.length) return;
+      setPersonalWallets((current) => {
+        const existing = new Set(current.map(personalWalletKey));
+        const fresh = vaultWallets.filter((wallet) => !existing.has(personalWalletKey(wallet)));
+        return fresh.length ? [...fresh, ...current] : current;
+      });
+    }
+    void loadPersonalWalletVault();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeView, sharedVault.vaultPath, walletPanelMode]);
+
+  const persistPersonalWalletRecords = useCallback((wallets: PersonalWallet[]) => {
+    const vaultPath = sharedVault.vaultPath.trim() || undefined;
+    void fetch("/api/wallet/personal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vaultPath, wallets }),
+    }).catch(() => null);
+  }, [sharedVault.vaultPath]);
 
   async function refreshUsePodWallet(agent: AgentProfile) {
     const nextUsePod = {
@@ -344,7 +548,7 @@ export function WalletPanel(props: WalletPanelProps) {
       });
 
       setBankrRecipientAddress(address);
-      window.localStorage.setItem("hivemindos.bankrRecipientAddress", address);
+      void saveDashboardStateValue(BANKR_RECIPIENT_STORAGE_KEY, address);
       setBankrClaimStatus("Base wallet connected. Ready to claim Bankr HIVE.");
     } catch (error) {
       setBankrClaimStatus(error instanceof Error ? error.message : "Could not connect wallet.");
@@ -361,7 +565,7 @@ export function WalletPanel(props: WalletPanelProps) {
     }
     setBankrClaimBusy(true);
     setBankrClaimStatus("Sending Bankr HIVE transaction...");
-    window.localStorage.setItem("hivemindos.bankrRecipientAddress", recipientAddress);
+    void saveDashboardStateValue(BANKR_RECIPIENT_STORAGE_KEY, recipientAddress);
     const result = await claimAllHoneyToBankrHive(recipientAddress);
     setBankrClaimBusy(false);
     if (!result.ok) {
@@ -372,15 +576,46 @@ export function WalletPanel(props: WalletPanelProps) {
     setBankrClaimStatus(`Sent ${formatHiveAmount(result.amount ?? 0)} HIVE to Bankr.${hash}`);
   }
 
-  function updatePersonalWallet(walletId: string, patch: Partial<PersonalWallet>) {
+  const updatePersonalWallet = useCallback((walletId: string, patch: Partial<PersonalWallet>) => {
     setPersonalWallets((current) => current.map((wallet) => wallet.id === walletId ? { ...wallet, ...patch, updatedAt: Date.now() } : wallet));
-  }
+  }, []);
 
-  function updatePersonalAction(walletId: string, patch: Partial<WalletActionState>) {
+  const updatePersonalAction = useCallback((walletId: string, patch: Partial<WalletActionState>) => {
     setPersonalWalletActions((current) => ({
       ...current,
       [walletId]: { ...(current[walletId] ?? {}), ...patch },
     }));
+  }, []);
+
+  function copyPersonalAddress(wallet: PersonalWallet) {
+    const key = `${wallet.id}:${wallet.address}`;
+    void navigator.clipboard?.writeText(wallet.address);
+    setCopiedAddressKey(key);
+    window.setTimeout(() => {
+      setCopiedAddressKey((current) => current === key ? "" : current);
+    }, 1800);
+  }
+
+  function updatePersonalImportKind(importKind: "private-key" | "recovery-phrase" | "watch") {
+    setPersonalImportDraft((current) => ({ ...current, importKind, secret: "" }));
+    if (importKind !== "recovery-phrase") {
+      setPersonalRecoveryWords(emptyRecoveryPhraseWords());
+    }
+  }
+
+  function updateRecoveryPhraseWords(startIndex: number, incomingWords: string[]) {
+    setPersonalRecoveryWords((current) => {
+      const next = [...current];
+      incomingWords.slice(0, RECOVERY_PHRASE_WORD_COUNT - startIndex).forEach((word, offset) => {
+        next[startIndex + offset] = normalizeRecoveryPhraseWord(word);
+      });
+      return next;
+    });
+  }
+
+  function handleRecoveryPhraseInput(index: number, value: string) {
+    const words = parseRecoveryPhraseWords(value);
+    updateRecoveryPhraseWords(index, words.length > 1 ? words : [value]);
   }
 
   async function createPersonalWallet() {
@@ -393,6 +628,8 @@ export function WalletPanel(props: WalletPanelProps) {
       body: JSON.stringify({
         agentId: walletId,
         network,
+        name: personalImportDraft.name.trim() || "My wallet",
+        vaultPath: sharedVault.vaultPath.trim() || undefined,
       }),
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as {
@@ -415,6 +652,7 @@ export function WalletPanel(props: WalletPanelProps) {
       currentBalanceUsd: 0,
       nativeBalance: 0,
       tokens: [],
+      portfolioVersion: 0,
       lastOnchainSyncAt: 0,
       createdAt: now,
       updatedAt: now,
@@ -433,8 +671,8 @@ export function WalletPanel(props: WalletPanelProps) {
         setPersonalImportStatus("Paste a public address first.");
         return;
       }
-      const now = Date.now();
-      setPersonalWallets((current) => [{
+      const now = Number(new Date());
+      const row: PersonalWallet = {
         id: walletId,
         name,
         address,
@@ -444,12 +682,23 @@ export function WalletPanel(props: WalletPanelProps) {
         currentBalanceUsd: 0,
         nativeBalance: 0,
         tokens: [],
+        portfolioVersion: 0,
         lastOnchainSyncAt: 0,
         createdAt: now,
         updatedAt: now,
-      }, ...current]);
+      };
+      setPersonalWallets((current) => [row, ...current]);
+      persistPersonalWalletRecords([row]);
       setPersonalImportOpen(false);
       setPersonalImportStatus("View-only wallet added.");
+      return;
+    }
+
+    const importSecret = personalImportDraft.importKind === "recovery-phrase"
+      ? personalRecoveryWords.map((word) => word.trim()).filter(Boolean).join(" ")
+      : personalImportDraft.secret;
+    if (personalImportDraft.importKind === "recovery-phrase" && parseRecoveryPhraseWords(importSecret).length !== RECOVERY_PHRASE_WORD_COUNT) {
+      setPersonalImportStatus("Enter all 12 recovery phrase words first.");
       return;
     }
 
@@ -460,50 +709,63 @@ export function WalletPanel(props: WalletPanelProps) {
       body: JSON.stringify({
         agentId: walletId,
         network,
-        secret: personalImportDraft.secret,
+        name,
+        secret: importSecret,
         importKind: personalImportDraft.importKind,
+        vaultPath: sharedVault.vaultPath.trim() || undefined,
       }),
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as {
       ok?: boolean;
-      wallet?: { address: string; network: string };
+      wallet?: { agentId?: string; address: string; network: string; label?: string };
+      wallets?: Array<{ agentId?: string; address: string; network: string; label?: string }>;
       importKind?: "private-key" | "recovery-phrase";
       error?: string;
     } | null;
-    if (!response?.ok || !data?.ok || !data.wallet) {
+    const importedWallets = data?.wallets?.length ? data.wallets : data?.wallet ? [data.wallet] : [];
+    if (!response?.ok || !data?.ok || !importedWallets.length) {
       setPersonalImportStatus(data?.error ?? "Could not import wallet.");
       return;
     }
-    const now = Date.now();
-    setPersonalWallets((current) => [{
-      id: walletId,
-      name,
-      address: data.wallet!.address,
-      network: data.wallet!.network,
+    const now = Number(new Date());
+    const importedRows = importedWallets.map((wallet): PersonalWallet => ({
+      id: wallet.agentId || walletId,
+      name: importedWallets.length > 1 ? `${name} ${wallet.label || networkLabel(wallet.network)}` : name,
+      address: wallet.address,
+      network: wallet.network,
       custodyMode: "local",
       importedFrom: data.importKind || personalImportDraft.importKind,
       currentBalanceUsd: 0,
       nativeBalance: 0,
       tokens: [],
+      portfolioVersion: 0,
       lastOnchainSyncAt: 0,
       createdAt: now,
       updatedAt: now,
-    }, ...current]);
+    }));
+    const existingWallets = new Set(personalWallets.map(personalWalletKey));
+    const freshRows = importedRows.filter((wallet) => !existingWallets.has(personalWalletKey(wallet)));
+    if (!freshRows.length) {
+      setPersonalImportStatus(importedRows.length > 1 ? "Those recovery phrase accounts are already in My wallets." : "That wallet is already in My wallets.");
+      return;
+    }
+    setPersonalWallets((current) => {
+      const existing = new Set(current.map(personalWalletKey));
+      return [...freshRows.filter((wallet) => !existing.has(personalWalletKey(wallet))), ...current];
+    });
+    freshRows.forEach((wallet) => {
+      void refreshPersonalWalletBalance(wallet);
+    });
     setPersonalImportDraft((current) => ({ ...current, secret: "", address: "" }));
+    setPersonalRecoveryWords(emptyRecoveryPhraseWords());
     setPersonalImportOpen(false);
-    setPersonalImportStatus("Wallet imported.");
+    setPersonalImportStatus(freshRows.length > 1 ? `Imported ${freshRows.length} recovery phrase accounts. Refreshing token lists...` : "Wallet imported. Refreshing token list...");
   }
 
   async function connectBrowserWalletToPersonalList() {
     const provider = (window as WalletWindow).ethereum;
-    setPersonalImportOpen(true);
     if (!provider) {
-      setPersonalImportDraft((current) => ({
-        ...current,
-        network: "eip155:8453",
-        importKind: "watch",
-      }));
-      setPersonalImportStatus("No browser wallet was found. Paste a public wallet address to track balances only, or choose Private key / Recovery phrase to enable sends.");
+      setPersonalImportStatus("No browser wallet extension was found. Use Add manually to paste a public address, import a key, or generate a wallet.");
       return;
     }
     setPersonalImportStatus("Connecting browser wallet...");
@@ -525,6 +787,7 @@ export function WalletPanel(props: WalletPanelProps) {
         currentBalanceUsd: 0,
         nativeBalance: 0,
         tokens: [],
+        portfolioVersion: 0,
         lastOnchainSyncAt: 0,
         createdAt: now,
         updatedAt: now,
@@ -532,12 +795,11 @@ export function WalletPanel(props: WalletPanelProps) {
       setPersonalImportStatus("Browser wallet added as view-only.");
       setPersonalImportOpen(false);
     } catch (error) {
-      setPersonalImportOpen(true);
       setPersonalImportStatus(error instanceof Error ? error.message : "Could not connect browser wallet.");
     }
   }
 
-  async function refreshPersonalWalletBalance(wallet: PersonalWallet) {
+  const refreshPersonalWalletBalance = useCallback(async (wallet: PersonalWallet) => {
     updatePersonalAction(wallet.id, { busy: true, error: "", message: "Refreshing portfolio..." });
     const response = await fetch("/api/wallet/balance", {
       method: "POST",
@@ -546,57 +808,38 @@ export function WalletPanel(props: WalletPanelProps) {
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as {
       ok?: boolean;
-      balance?: { tokenBalance: number; nativeBalance: number; fetchedAt: number; tokens?: AgentWalletTokenBalance[] };
+      balance?: { tokenBalance: number; nativeBalance: number; totalValueUsd?: number | null; fetchedAt: number; tokens?: AgentWalletTokenBalance[] };
       error?: string;
     } | null;
     if (!response?.ok || !data?.ok || !data.balance) {
       updatePersonalAction(wallet.id, { busy: false, error: data?.error ?? "Could not refresh this wallet.", message: "" });
       return;
     }
-    updatePersonalWallet(wallet.id, {
-      currentBalanceUsd: Number(data.balance.tokenBalance) || 0,
+    const updatedWallet = {
+      ...wallet,
+      currentBalanceUsd: Number(data.balance.totalValueUsd ?? data.balance.tokenBalance) || 0,
       nativeBalance: Number(data.balance.nativeBalance) || 0,
       tokens: data.balance.tokens ?? [],
+      portfolioVersion: PERSONAL_WALLET_PORTFOLIO_VERSION,
       lastOnchainSyncAt: data.balance.fetchedAt,
-    });
-    updatePersonalAction(wallet.id, { busy: false, error: "", message: "Portfolio refreshed." });
-  }
+      updatedAt: Date.now(),
+    };
+    updatePersonalWallet(wallet.id, updatedWallet);
+    persistPersonalWalletRecords([updatedWallet]);
+    const tokenCount = data.balance.tokens?.length ?? 0;
+    updatePersonalAction(wallet.id, { busy: false, error: "", message: tokenCount > 2 ? `Portfolio refreshed: ${tokenCount} tokens.` : "Portfolio refreshed." });
+  }, [persistPersonalWalletRecords, updatePersonalAction, updatePersonalWallet]);
 
-  async function sendPersonalWalletUsdc(wallet: PersonalWallet) {
-    const action = personalWalletActions[wallet.id] ?? {};
-    const amount = Number(action.sendAmount);
-    updatePersonalAction(wallet.id, { busy: true, error: "", message: "Sending USDC..." });
-    const response = await fetch("/api/wallet/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        agentId: wallet.id,
-        toAddress: action.sendTo,
-        amountUsd: amount,
-        maxPaymentUsd: 100000,
-        autoPayEnabled: false,
-        confirmation: action.confirmation,
-      }),
-    }).catch(() => null);
-    const data = await response?.json().catch(() => null) as {
-      ok?: boolean;
-      signature?: string;
-      error?: string;
-    } | null;
-    if (!response?.ok || !data?.ok) {
-      updatePersonalAction(wallet.id, { busy: false, error: data?.error ?? "Could not send USDC.", message: "" });
-      return;
-    }
-    updatePersonalAction(wallet.id, { busy: false, error: "", message: `Sent. Transaction: ${data.signature}`, confirmation: "" });
-    await refreshPersonalWalletBalance(wallet);
-  }
-
-  function recipientOptionsFor(wallet: PersonalWallet, query: string) {
-    const lower = query.trim().toLowerCase();
-    return walletRecipients
-      .filter((recipient) => recipient.id !== wallet.id)
-      .filter((recipient) => !lower || `${recipient.label} ${recipient.address} ${recipient.group}`.toLowerCase().includes(lower));
-  }
+  useEffect(() => {
+    if (activeView !== "wallet" || walletPanelMode !== "wallets") return;
+    personalWallets
+      .filter((wallet) => shouldRefreshPersonalWalletSnapshot(wallet) && !autoRefreshPersonalWalletsRef.current.has(wallet.id))
+      .slice(0, 4)
+      .forEach((wallet) => {
+        autoRefreshPersonalWalletsRef.current.add(wallet.id);
+        void refreshPersonalWalletBalance(wallet);
+      });
+  }, [activeView, personalWallets, refreshPersonalWalletBalance, walletPanelMode]);
 
   return (<>
       {activeView === "wallet" ? (
@@ -644,58 +887,62 @@ export function WalletPanel(props: WalletPanelProps) {
         </div>
 
         {walletPanelMode === "usage" ? (
-        <section className={walletClass("usagePanel")}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="eyebrow">Runtime analytics</p>
-              <h3 className="m-0 text-base font-bold">Token usage</h3>
-            </div>
-            <Button type="button" size="sm" variant="secondary" onClick={() => void refreshRuntimeUsage()} disabled={runtimeUsageLoading}>
-              {runtimeUsageLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
-              Refresh
-            </Button>
-          </div>
-          {runtimeUsage?.error ? <p className="m-0 text-xs text-[#fecdd3]">{runtimeUsage.error}</p> : null}
-          <div className="grid gap-3 md:grid-cols-4">
-            {[
-              ["Sessions", runtimeUsage?.totals?.sessions?.toLocaleString() ?? "0"],
-              ["Tokens", runtimeUsage?.totals?.tokens?.toLocaleString() ?? "0"],
-              ["Output", runtimeUsage?.totals?.outputTokens?.toLocaleString() ?? "0"],
-              ["Est. cost", `$${(runtimeUsage?.totals?.estimatedCostUsd ?? 0).toFixed(4)}`],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-md border border-[rgba(148,163,184,0.12)] bg-[rgba(15,23,42,0.55)] p-3">
-                <span className="block font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">{label}</span>
-                <strong className="mt-1 block text-xl">{value}</strong>
+          runtimeUsageLoading ? (
+            <WalletUsageLoading />
+          ) : (
+            <section className={walletClass("usagePanel")}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="eyebrow">Runtime analytics</p>
+                  <h3 className="m-0 text-base font-bold">Token usage</h3>
+                </div>
+                <Button type="button" size="sm" variant="secondary" onClick={() => void refreshRuntimeUsage()} disabled={runtimeUsageLoading}>
+                  {runtimeUsageLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
+                  Refresh
+                </Button>
               </div>
-            ))}
-          </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div>
-              <strong className="text-sm">Models</strong>
-              <div className="mt-2 grid gap-2">
-                {(runtimeUsage?.models ?? []).slice(0, 6).map((model) => (
-                  <div key={model.model} className="flex items-center justify-between gap-3 rounded-md border border-[rgba(148,163,184,0.10)] px-3 py-2 text-xs">
-                    <span className="min-w-0 break-words">{model.model}</span>
-                    <b>{model.tokens.toLocaleString()}</b>
+              {runtimeUsage?.error ? <p className="m-0 text-xs text-[#fecdd3]">{runtimeUsage.error}</p> : null}
+              <div className="grid gap-3 md:grid-cols-4">
+                {[
+                  ["Sessions", runtimeUsage?.totals?.sessions?.toLocaleString() ?? "0"],
+                  ["Tokens", runtimeUsage?.totals?.tokens?.toLocaleString() ?? "0"],
+                  ["Output", runtimeUsage?.totals?.outputTokens?.toLocaleString() ?? "0"],
+                  ["Est. cost", `$${(runtimeUsage?.totals?.estimatedCostUsd ?? 0).toFixed(4)}`],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-md border border-[rgba(148,163,184,0.12)] bg-[rgba(15,23,42,0.55)] p-3">
+                    <span className="block font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">{label}</span>
+                    <strong className="mt-1 block text-xl">{value}</strong>
                   </div>
                 ))}
-                {runtimeUsage?.models?.length ? null : <p className="m-0 text-xs text-[var(--muted)]">No token rows found yet.</p>}
               </div>
-            </div>
-            <div>
-              <strong className="text-sm">Recent sessions</strong>
-              <div className="mt-2 grid gap-2">
-                {(runtimeUsage?.rows ?? []).slice(0, 6).map((row) => (
-                  <div key={`${row.runtime}-${row.sessionId}`} className="grid gap-1 rounded-md border border-[rgba(148,163,184,0.10)] px-3 py-2 text-xs">
-                    <span className="font-semibold">{RUNTIME_LABELS[row.runtime]} · {row.model}</span>
-                    <span className="text-[var(--muted)]">{row.totalTokens.toLocaleString()} tokens · {formatRelativeTime(Date.parse(row.updatedAt))}</span>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div>
+                  <strong className="text-sm">Models</strong>
+                  <div className="mt-2 grid gap-2">
+                    {(runtimeUsage?.models ?? []).slice(0, 6).map((model) => (
+                      <div key={model.model} className="flex items-center justify-between gap-3 rounded-md border border-[rgba(148,163,184,0.10)] px-3 py-2 text-xs">
+                        <span className="min-w-0 break-words">{model.model}</span>
+                        <b>{model.tokens.toLocaleString()}</b>
+                      </div>
+                    ))}
+                    {runtimeUsage?.models?.length ? null : <p className="m-0 text-xs text-[var(--muted)]">No token rows found yet.</p>}
                   </div>
-                ))}
-                {runtimeUsage?.rows?.length ? null : <p className="m-0 text-xs text-[var(--muted)]">Hermes/OpenClaw usage appears here when local counters are readable.</p>}
+                </div>
+                <div>
+                  <strong className="text-sm">Recent sessions</strong>
+                  <div className="mt-2 grid gap-2">
+                    {(runtimeUsage?.rows ?? []).slice(0, 6).map((row) => (
+                      <div key={`${row.runtime}-${row.sessionId}`} className="grid gap-1 rounded-md border border-[rgba(148,163,184,0.10)] px-3 py-2 text-xs">
+                        <span className="font-semibold">{RUNTIME_LABELS[row.runtime]} · {row.model}</span>
+                        <span className="text-[var(--muted)]">{row.totalTokens.toLocaleString()} tokens · {formatRelativeTime(Date.parse(row.updatedAt))}</span>
+                      </div>
+                    ))}
+                    {runtimeUsage?.rows?.length ? null : <p className="m-0 text-xs text-[var(--muted)]">Hermes/OpenClaw usage appears here when local counters are readable.</p>}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </section>
+            </section>
+          )
         ) : null}
 
         {walletPanelMode === "wallets" ? (
@@ -737,10 +984,11 @@ export function WalletPanel(props: WalletPanelProps) {
                 onResetRunway={() => resetWalletBurnClock(selectedAgent.id)}
                 onCopyPaymentPrompt={() => copyPaymentPrompt(effectiveSelectedWallet)}
                 onCreateLocalWallet={() => createLocalWallet(selectedAgent.id, effectiveSelectedWallet.network)}
-                onRefreshBalance={() => { void (effectiveSelectedWallet.provider === "usepod" ? refreshUsePodWallet(selectedAgent) : refreshWalletBalance(selectedAgent.id)); }}
-                onSendUsdc={() => sendWalletUsdc(selectedAgent.id)}
-                onCallX402={() => testX402Fetch(selectedAgent.id)}
-              />
+	                onRefreshBalance={() => { void (effectiveSelectedWallet.provider === "usepod" ? refreshUsePodWallet(selectedAgent) : refreshWalletBalance(selectedAgent.id)); }}
+	                onSendUsdc={() => sendWalletUsdc(selectedAgent.id)}
+	                onCallX402={() => testX402Fetch(selectedAgent.id)}
+	                onExportSecret={() => void exportAgentWalletSecret(selectedAgent, exportWalletSecrets, updateWalletAction)}
+	              />
             </div>
               );
             })()
@@ -754,14 +1002,24 @@ export function WalletPanel(props: WalletPanelProps) {
                     <p>Personal wallets stay above agent wallets and can quick-send to any saved user or agent address.</p>
                   </div>
                   <div className={personalClass("personalWalletActions")}>
-                    <Button type="button" size="sm" variant="secondary" onClick={() => setPersonalImportOpen((open) => !open)}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setPersonalImportStatus("");
+                        setPersonalImportOpen((open) => !open);
+                      }}
+                    >
                       {personalImportOpen ? <X aria-hidden="true" /> : <Plus aria-hidden="true" />}
-                      {personalImportOpen ? "Close" : "Add wallet"}
+                      {personalImportOpen ? "Close" : "Add manually"}
                     </Button>
-                    <Button type="button" size="sm" variant="secondary" onClick={() => void connectBrowserWalletToPersonalList()}>
-                      <WalletCards aria-hidden="true" />
-                      Connect
-                    </Button>
+                    {!nativeDesktopRuntime ? (
+                      <Button type="button" size="sm" variant="secondary" onClick={() => void connectBrowserWalletToPersonalList()}>
+                        <WalletCards aria-hidden="true" />
+                        Connect browser
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
                 {personalImportStatus ? <p className={personalClass("personalConnectorStatus")}>{personalImportStatus}</p> : null}
@@ -777,23 +1035,25 @@ export function WalletPanel(props: WalletPanelProps) {
                           placeholder="Treasury wallet"
                         />
                       </label>
-                      <label>
-                        <span>Network</span>
-                        <select
-                          value={personalImportDraft.network}
-                          onChange={(event) => setPersonalImportDraft((current) => ({ ...current, network: event.target.value }))}
-                        >
-                          <option value="eip155:8453">Base mainnet</option>
-                          <option value="eip155:84532">Base Sepolia</option>
-                          <option value="solana:mainnet">Solana mainnet</option>
-                          <option value="solana:devnet">Solana devnet</option>
-                        </select>
-                      </label>
+                      {personalImportDraft.importKind !== "recovery-phrase" ? (
+                        <label>
+                          <span>Network</span>
+                          <select
+                            value={personalImportDraft.network}
+                            onChange={(event) => setPersonalImportDraft((current) => ({ ...current, network: event.target.value }))}
+                          >
+                            <option value="eip155:8453">Base mainnet</option>
+                            <option value="eip155:84532">Base Sepolia</option>
+                            <option value="solana:mainnet">Solana mainnet</option>
+                            <option value="solana:devnet">Solana devnet</option>
+                          </select>
+                        </label>
+                      ) : null}
                       <label>
                         <span>Import</span>
                         <select
                           value={personalImportDraft.importKind}
-                          onChange={(event) => setPersonalImportDraft((current) => ({ ...current, importKind: event.target.value as "private-key" | "recovery-phrase" | "watch" }))}
+                          onChange={(event) => updatePersonalImportKind(event.target.value as "private-key" | "recovery-phrase" | "watch")}
                         >
                           <option value="private-key">Private key (send enabled)</option>
                           <option value="recovery-phrase">Recovery phrase (send enabled)</option>
@@ -810,13 +1070,41 @@ export function WalletPanel(props: WalletPanelProps) {
                           placeholder={personalImportDraft.network.startsWith("solana:") ? "Solana address" : "0x..."}
                         />
                       </label>
+                    ) : personalImportDraft.importKind === "recovery-phrase" ? (
+                      <div className={personalClass("personalImportSecret")}>
+                        <span>Recovery phrase</span>
+                        <div className={personalClass("recoveryPhraseGrid")} role="group" aria-label="Recovery phrase words">
+                          {personalRecoveryWords.map((word, index) => (
+                            <label key={index} className={personalClass("recoveryWordField")}>
+                              <span aria-hidden="true" className={personalClass("recoveryWordIndex")}>{index + 1}.</span>
+                              <input
+                                aria-label={`Recovery phrase word ${index + 1}`}
+                                value={word}
+                                onChange={(event) => handleRecoveryPhraseInput(index, event.target.value)}
+                                onPaste={(event) => {
+                                  const words = parseRecoveryPhraseWords(event.clipboardData.getData("text"));
+                                  if (words.length > 1) {
+                                    event.preventDefault();
+                                    updateRecoveryPhraseWords(index, words);
+                                  }
+                                }}
+                                autoCapitalize="none"
+                                autoComplete="off"
+                                autoCorrect="off"
+                                spellCheck={false}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                        <p className={personalClass("recoveryPhraseHint")}>Imports the Base and Solana mainnet accounts derived from this phrase.</p>
+                      </div>
                     ) : (
                       <label className={personalClass("personalImportSecret")}>
-                        <span>{personalImportDraft.importKind === "recovery-phrase" ? "Recovery phrase" : "Private key"}</span>
+                        <span>Private key</span>
                         <textarea
                           value={personalImportDraft.secret}
                           onChange={(event) => setPersonalImportDraft((current) => ({ ...current, secret: event.target.value }))}
-                          placeholder={personalImportDraft.importKind === "recovery-phrase" ? "EVM recovery phrase" : "Encrypted locally after import"}
+                          placeholder="Encrypted locally after import"
                           spellCheck={false}
                         />
                       </label>
@@ -834,36 +1122,98 @@ export function WalletPanel(props: WalletPanelProps) {
                   </div>
                 ) : null}
 
-                {personalWallets.length ? (
+                {personalWalletGroups.length ? (
                   <div className={personalClass("personalWalletGrid")} role="list" aria-label="User wallets">
-                    {personalWallets.map((wallet) => {
-                      const action = personalWalletActions[wallet.id] ?? {};
-                      const sendOpen = Boolean(quickSendOpen[wallet.id]);
-                      const recipients = recipientOptionsFor(wallet, quickSendSearch);
-                      const tokenRows = wallet.tokens.length ? wallet.tokens : [
-                        { symbol: "USDC", name: "USD Coin", balance: wallet.currentBalanceUsd, network: wallet.network, priceUsd: 1, valueUsd: wallet.currentBalanceUsd, priceChange24hPct: null },
-                        { symbol: nativeSymbol(wallet.network), name: nativeSymbol(wallet.network), balance: wallet.nativeBalance, network: wallet.network, priceUsd: null, valueUsd: null, priceChange24hPct: null, isNative: true },
-                      ] as AgentWalletTokenBalance[];
+                    {personalWalletGroups.map((group) => {
+                      const action = personalWalletActions[group.primaryWallet.id] ?? {};
+                      const tokenRows = group.tokens.length ? group.tokens : group.wallets.flatMap((wallet): PersonalPortfolioToken[] => [
+                        {
+                          walletId: wallet.id,
+                          walletName: wallet.name,
+                          symbol: nativeSymbol(wallet.network),
+                          name: nativeSymbol(wallet.network),
+                          balance: wallet.nativeBalance,
+                          network: wallet.network,
+                          priceUsd: null,
+                          valueUsd: null,
+                          priceChange24hPct: null,
+                          isNative: true,
+                        },
+                      ]);
                       return (
-                        <article key={wallet.id} className={personalClass("personalWalletCard")} role="listitem">
+                        <article key={group.id} className={personalClass("personalWalletCard", "accountWalletCard")} role="listitem">
                           <header className={personalClass("personalWalletTop")}>
                             <div>
-                              <strong>{wallet.name}</strong>
-                              <span>{networkLabel(wallet.network)} · {wallet.custodyMode === "local" ? "Spendable" : "View-only"}</span>
+                              <strong>{group.name}</strong>
+                              <span>{group.primaryWallet.custodyMode === "local" ? "Spendable" : "View-only"} · {group.wallets.length} {group.wallets.length === 1 ? "chain" : "chains"}</span>
                             </div>
-                            <button type="button" onClick={() => void navigator.clipboard?.writeText(wallet.address)}>{shortenAddress(wallet.address)}</button>
+                            <div className={personalClass("addressMenu")}>
+                              <Button type="button" variant="ghost" size="icon-sm" className={personalClass("addressListButton")} aria-label={`${group.name} addresses`}>
+                                <List aria-hidden="true" />
+                              </Button>
+                              <div className={personalClass("addressTooltip")} role="tooltip">
+                                {group.wallets.map((wallet) => {
+                                  const copied = copiedAddressKey === `${wallet.id}:${wallet.address}`;
+                                  return (
+                                    <div key={wallet.id}>
+                                      <span>
+                                        <strong>{networkLabel(wallet.network)}</strong>
+                                        <small>{shortenAddress(wallet.address)}</small>
+                                      </span>
+                                      <Button
+                                        type="button"
+                                        variant={copied ? "secondary" : "ghost"}
+                                        size="icon-xs"
+                                        className={personalClass("addressCopyButton")}
+                                        onClick={() => copyPersonalAddress(wallet)}
+                                        aria-label={`Copy ${networkLabel(wallet.network)} address`}
+                                        title={copied ? "Copied" : "Copy address"}
+                                      >
+                                        {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+                                      </Button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           </header>
                           <div className={personalClass("personalWalletBalance")}>
-                            <strong>{formatMoney(wallet.currentBalanceUsd)}</strong>
-                            <span>{formatToken(wallet.nativeBalance)} {nativeSymbol(wallet.network)}</span>
+                            <strong>{formatMoney(group.totalValueUsd)}</strong>
+                            {group.nativeSummary ? <span>{group.nativeSummary}</span> : null}
                           </div>
-                          <div className={personalClass("personalTokenList")} aria-label={`${wallet.name} tokens`}>
+                          <div className={personalClass("walletActionGrid")}>
+                            <button type="button" onClick={() => updatePersonalAction(group.primaryWallet.id, { message: "Send flow is being tightened for multi-chain accounts." })}>
+                              <Send aria-hidden="true" />
+                              <span>Send</span>
+                            </button>
+                            <button type="button" disabled>
+                              <Shuffle aria-hidden="true" />
+                              <span>Swap</span>
+                            </button>
+                            <button type="button" onClick={() => copyPersonalAddress(group.primaryWallet)}>
+                              <Copy aria-hidden="true" />
+                              <span>Receive</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void exportPersonalWalletGroupSecret(group, exportWalletSecrets, updatePersonalAction)}
+                              disabled={action.busy || !group.wallets.some((wallet) => wallet.custodyMode === "local")}
+                            >
+                              <DownloadIcon aria-hidden="true" />
+                              <span>Export</span>
+                            </button>
+	                            <button type="button" onClick={() => void Promise.all(group.wallets.map((wallet) => refreshPersonalWalletBalance(wallet)))} disabled={action.busy}>
+	                              <RefreshIcon aria-hidden="true" />
+	                              <span>Refresh</span>
+                            </button>
+                          </div>
+                          <div className={personalClass("personalTokenList")} aria-label={`${group.name} tokens`}>
                             {tokenRows.map((token) => (
-                              <div key={`${token.symbol}-${token.isNative ? "native" : "token"}`} className={personalClass("personalTokenRow")}>
-                                <span className={personalClass("personalTokenIcon")}>{token.symbol.slice(0, 1)}</span>
+                              <div key={`${token.network}-${token.isNative ? "native" : token.tokenAddress || token.symbol}`} className={personalClass("personalTokenRow")}>
+                                <PersonalTokenIcon token={token} />
                                 <div>
                                   <strong>{token.symbol}</strong>
-                                  <span>{formatToken(token.balance)} {token.name}</span>
+                                  <span>{networkLabel(token.network)} · {formatToken(token.balance)} {token.name}</span>
                                 </div>
                                 <div>
                                   <strong>{token.valueUsd == null ? "No quote" : formatMoney(token.valueUsd)}</strong>
@@ -873,90 +1223,6 @@ export function WalletPanel(props: WalletPanelProps) {
                                 </div>
                               </div>
                             ))}
-                          </div>
-                          <div className={personalClass("personalSendForm")}>
-                            <label>
-                              <span>Recipient</span>
-                              <input
-                                value={action.sendTo ?? ""}
-                                onChange={(event) => updatePersonalAction(wallet.id, { sendTo: event.target.value })}
-                                placeholder="0x... or Solana address"
-                              />
-                            </label>
-                            <label>
-                              <span>USDC</span>
-                              <input
-                                value={action.sendAmount ?? ""}
-                                onChange={(event) => updatePersonalAction(wallet.id, { sendAmount: event.target.value })}
-                                inputMode="decimal"
-                                placeholder="0.00"
-                              />
-                            </label>
-                            <label>
-                              <span>Confirm</span>
-                              <input
-                                value={action.confirmation ?? ""}
-                                onChange={(event) => updatePersonalAction(wallet.id, { confirmation: event.target.value })}
-                                placeholder="SEND_USDC"
-                              />
-                            </label>
-                          </div>
-                          <div className={personalClass("personalWalletButtons")}>
-                            <Button type="button" size="sm" variant="secondary" onClick={() => void refreshPersonalWalletBalance(wallet)} disabled={action.busy}>
-                              <RefreshCcw aria-hidden="true" />
-                              Refresh
-                            </Button>
-                            <div className={personalClass("quickSend")}>
-                              <Button type="button" size="sm" disabled={action.busy || wallet.custodyMode !== "local"} onClick={() => void sendPersonalWalletUsdc(wallet)}>
-                                <Send aria-hidden="true" />
-                                Send
-                              </Button>
-                              <button
-                                type="button"
-                                className={personalClass("quickSendToggle")}
-                                aria-label={`Choose quick-send recipient for ${wallet.name}`}
-                                aria-expanded={sendOpen}
-                                disabled={wallet.custodyMode !== "local"}
-                                onClick={() => setQuickSendOpen((current) => ({ ...current, [wallet.id]: !current[wallet.id] }))}
-                              >
-                                <ChevronDown aria-hidden="true" />
-                              </button>
-                              {sendOpen ? (
-                                <div className={personalClass("quickSendMenu")} role="dialog" aria-label="Quick send recipients">
-                                  <label>
-                                    <Search aria-hidden="true" />
-                                    <input
-                                      value={quickSendSearch}
-                                      onChange={(event) => setQuickSendSearch(event.target.value)}
-                                      placeholder="Search wallets"
-                                    />
-                                  </label>
-                                  <div>
-                                    {recipients.map((recipient) => {
-                                      const compatible = recipient.network === wallet.network;
-                                      return (
-                                        <button
-                                          key={recipient.id}
-                                          type="button"
-                                          disabled={!compatible}
-                                          onClick={() => {
-                                            updatePersonalAction(wallet.id, { sendTo: recipient.address });
-                                            setQuickSendOpen((current) => ({ ...current, [wallet.id]: false }));
-                                          }}
-                                        >
-                                          <span>
-                                            <strong>{recipient.label}</strong>
-                                            <small>{recipient.group} · {shortenAddress(recipient.address)}</small>
-                                          </span>
-                                          <small>{compatible ? networkLabel(recipient.network) : "Different network"}</small>
-                                        </button>
-                                      );
-                                    })}
-                                    {recipients.length ? null : <p>No wallets match.</p>}
-                                  </div>
-                                </div>
-                              ) : null}
-                            </div>
                           </div>
                           {action.message ? <p className={personalClass("personalWalletStatus")} data-tone="ok">{action.message}</p> : null}
                           {action.error ? <p className={personalClass("personalWalletStatus")} data-tone="error">{action.error}</p> : null}

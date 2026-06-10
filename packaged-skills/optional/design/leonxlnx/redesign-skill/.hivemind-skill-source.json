@@ -1,0 +1,18 @@
+{
+  "upstreamName": "redesign-skill",
+  "upstreamSlug": "redesign-skill",
+  "hiveSlug": "redesign-skill",
+  "sourceLabel": "leonxlnx",
+  "sourceUrl": "https://www.ui-skills.com/skills/leonxlnx/redesign-skill",
+  "repository": "https://github.com/Leonxlnx/taste-skill",
+  "installCommand": "npx skills add https://github.com/Leonxlnx/taste-skill --skill redesign-existing-projects",
+  "importedAt": "2026-06-08T15:01:38.260Z",
+  "refreshedAt": "2026-06-08T15:01:38.260Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/leonxlnx/redesign-skill",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Upgrades existing websites and apps to premium quality. Audits current design, identifies generic AI patterns, and applies high-end design standards without breaking functionality. Works with any CSS framework or vanilla CSS."
+}

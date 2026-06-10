@@ -2,7 +2,7 @@ import { execFile } from "child_process";
 import { readFile, readlink } from "fs/promises";
 import { promisify } from "util";
 import { hivemindLinkControlUrl, localTelemetryCollectorUrl } from "@/lib/services/hivemind-link-control";
-import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
+import type { AgentProfile } from "@/lib/types/agent-runtime";
 
 export const runtime = "nodejs";
 
@@ -93,7 +93,24 @@ type CollectorEnvSync = {
   error?: string;
 };
 
-const QUEEN_RUNTIME_PRIORITY: AgentRuntime[] = ["hermes", "openclaw", "opencode", "codex", "claude-code", "openai-compatible", "aeon"];
+type CollectorSystemStats = {
+  checkedAt?: number;
+  cpuPct?: number;
+  cpuCores?: number;
+  cpuModel?: string;
+  loadAvg1m?: number;
+  ramPct?: number;
+  ramUsedGb?: number;
+  ramTotalGb?: number;
+  diskPct?: number | null;
+  diskUsedGb?: number | null;
+  diskTotalGb?: number | null;
+  platform?: string;
+  arch?: string;
+  osRelease?: string;
+  uptimeSec?: number;
+};
+
 const FOREGROUND_COLLECTOR_FETCH_TIMEOUT_MS = 2_500;
 const BACKGROUND_COLLECTOR_FETCH_TIMEOUT_MS = 8_000;
 const SNAPSHOT_FETCH_TIMEOUT_MS = 4_000;
@@ -116,6 +133,7 @@ type DiscoveredMachine = {
   version?: CollectorVersion;
   capabilities?: CollectorCapabilities;
   envSync?: CollectorEnvSync;
+  system?: CollectorSystemStats;
   agents: AgentProfile[];
   snapshots: unknown[];
 };
@@ -191,14 +209,22 @@ function isSameTailscalePeer(left?: TailscalePeer, right?: TailscalePeer) {
   return Boolean(leftDns && rightDns && leftDns === rightDns);
 }
 
+// Exact identity: the normalized dns label (or name) with only the
+// `hivemindos` prefix and `.local` suffix stripped. The same physical
+// machine's system node and link node map to the same identity, while
+// tailscale's `-N` suffix is KEPT — a `-1` node is a different physical
+// machine that shares the hostname (two MacBooks named "Liams-MacBook-Pro"),
+// and stripping it merged them into one machine.
+function exactMachineIdentity(device: Device) {
+  const value = normalizeName(dnsLabel(device.dnsName)) || normalizeName(device.name);
+  return value.replace(/^hivemindos/, "").replace(/local\d*$/, "");
+}
+
 function deviceIdentityKey(device: Device) {
-  const dnsName = normalizeName(dnsLabel(device.dnsName));
-  const name = normalizeName(device.name) || dnsName;
-  if (name.startsWith("hivemindos")) return hivemindMachineBase(device) || dnsName || name;
+  const identity = exactMachineIdentity(device);
+  if (identity) return identity;
   if (device.self) return "self";
-  const macBase = macNumberedHostnameBase(device);
-  if (macBase) return macBase;
-  return name || device.ip || device.collectorUrl;
+  return device.ip || device.collectorUrl;
 }
 
 function isHivemindLinkDevice(device: Device) {
@@ -214,47 +240,36 @@ function isMacDevice(device: Device) {
   return /^(macos|darwin)$/i.test(device.os);
 }
 
-function hivemindMachineBase(device: Device) {
-  const rawName = device.name.toLowerCase();
-  const rawDnsName = dnsLabel(device.dnsName).toLowerCase();
-  const rawValue = normalizeName(rawName).startsWith("hivemindos") ? rawName : rawDnsName;
-  const canonicalValue = isMacDevice(device) ? rawValue.replace(/-\d+$/, "") : rawValue;
-  const value = normalizeName(canonicalValue);
-  if (!value.startsWith("hivemindos")) return "";
-  return value.replace(/^hivemindos/, "").replace(/local\d*$/, "");
+const STALE_OFFLINE_NODE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function machineFamilyBase(device: Device) {
+  return exactMachineIdentity(device).replace(/\d+$/, "");
 }
 
-function physicalMachineBase(device: Device) {
-  const normalizedDnsName = normalizeName(dnsLabel(device.dnsName));
-  const normalizedName = normalizeName(device.name);
-  const value = normalizedDnsName || normalizedName;
-  return value.replace(/^hivemindos/, "").replace(/local\d*$/, "").replace(/\d+$/, "");
-}
-
-function macNumberedHostnameBase(device: Device) {
-  if (!isMacDevice(device)) return "";
-  const rawValue = dnsLabel(device.dnsName) || device.name || "";
-  const withoutTailnetSuffix = rawValue.toLowerCase().replace(/-\d+$/, "");
-  const normalizedValue = normalizeName(rawValue);
-  const normalizedBase = normalizeName(withoutTailnetSuffix);
-  return normalizedBase && normalizedBase !== normalizedValue ? normalizedBase : "";
+function isLongOffline(device: Device) {
+  if (device.online) return false;
+  const lastSeen = device.lastSeen ?? "";
+  if (!lastSeen || lastSeen.startsWith("0001-01-01")) return false;
+  const seenAt = Date.parse(lastSeen);
+  return Number.isFinite(seenAt) && Date.now() - seenAt > STALE_OFFLINE_NODE_MS;
 }
 
 function isStaleSelfDuplicate(self: Device | undefined, device: Device) {
   if (!self || device.self) return false;
-  const deviceIsHivemindLink = isHivemindLinkDevice(device);
-  const selfBase = hivemindMachineBase(self);
-  const deviceBase = hivemindMachineBase(device);
-  if (deviceIsHivemindLink) {
-    return Boolean(!device.online && selfBase && deviceBase && selfBase === deviceBase);
-  }
-  const physicalSelfBase = physicalMachineBase(self);
-  const physicalDeviceBase = physicalMachineBase(device);
-  if (physicalSelfBase && physicalDeviceBase && physicalSelfBase === physicalDeviceBase) return true;
-  if (physicalSelfBase && deviceBase && physicalSelfBase === deviceBase) return true;
-  if (selfBase && physicalDeviceBase && selfBase === physicalDeviceBase) return true;
-  if (device.online) return false;
-  return normalizeName(self.name) !== "" && normalizeName(self.name) === normalizeName(device.name);
+  // Exact identity: this machine's own link node (or another tailnet view of
+  // the same node) seen as a peer.
+  const selfIdentity = exactMachineIdentity(self);
+  const deviceIdentity = exactMachineIdentity(device);
+  if (selfIdentity && deviceIdentity && selfIdentity === deviceIdentity) return true;
+  if (self.ip && device.ip && self.ip === device.ip) return true;
+  // A name-base match with the `-N` suffix stripped is AMBIGUOUS: it is
+  // either an old registration of this machine (macOS renames itself, link
+  // nodes re-register) or a DIFFERENT physical machine that shares the
+  // hostname. An online node is alive somewhere we are not — never hide it.
+  // Only hide entries that have been offline long enough to be dead.
+  const selfFamily = machineFamilyBase(self);
+  if (!selfFamily || selfFamily !== machineFamilyBase(device)) return false;
+  return isLongOffline(device);
 }
 
 function deviceFreshnessScore(device: Device) {
@@ -397,11 +412,19 @@ function devicesFromStatus(status: TailscaleStatus | HivemindLinkStatus, viaLink
 async function tailscaleDevices(): Promise<FleetDeviceStatus> {
   const link = await hivemindLinkStatus();
   if (link) {
-    const systemStatus = await systemTailscaleStatus({ allowCliFallback: false });
+    const systemStatus = await systemTailscaleStatus({ allowCliFallback: true });
     const linkDevices = devicesFromStatus(link, true, systemStatus?.Self);
     const systemDevices = systemStatus ? devicesFromStatus(systemStatus) : [];
+    // The self device must advertise the SYSTEM tailnet IP — where the desktop
+    // app's forwarder binds and what the pairing QR uses — not hivemind-linkd's
+    // embedded tsnet node, or the phone's self-machine Claw probe targets an
+    // unroutable linkd IP. Mirrors the fix in /api/tailscale/devices.
+    const systemSelfIp = systemStatus?.Self?.TailscaleIPs?.find((value) => /^\d+\.\d+\.\d+\.\d+$/.test(value)) ?? "";
+    const devices = dedupeDevices([...linkDevices, ...systemDevices]);
     return {
-      devices: dedupeDevices([...linkDevices, ...systemDevices]),
+      devices: systemSelfIp
+        ? devices.map((device) => (device.self ? { ...device, ip: systemSelfIp } : device))
+        : devices,
       link,
       source: systemDevices.length > linkDevices.length ? "hivemind-link+tailscale-cli" : "hivemind-link",
     };
@@ -438,43 +461,6 @@ async function fetchAgents(url: string, device: Device, timeoutMs: number) {
   }
 }
 
-function hasQueenAgent(agents: AgentProfile[]) {
-  return agents.some((agent) => (
-    agent.beeRole === "queen"
-    || /queen|orchestrat|lead/i.test(agent.name)
-  ));
-}
-
-function queenRuntimeRank(runtime: AgentRuntime) {
-  const index = QUEEN_RUNTIME_PRIORITY.indexOf(runtime);
-  return index === -1 ? QUEEN_RUNTIME_PRIORITY.length : index;
-}
-
-function defaultQueenAgent(device: Device, agents: AgentProfile[], capabilities?: CollectorCapabilities): AgentProfile | null {
-  if (hasQueenAgent(agents)) return null;
-  const configuredRuntimes = new Set((capabilities?.runtimes ?? [])
-    .filter((runtime): runtime is AgentRuntime => typeof runtime === "string" && runtime.trim().length > 0));
-  const candidates = agents
-    .filter((agent) => configuredRuntimes.size === 0 || configuredRuntimes.has(agent.runtime))
-    .sort((left, right) => queenRuntimeRank(left.runtime) - queenRuntimeRank(right.runtime));
-  const base = candidates[0];
-  if (!base) return null;
-  const machineSlug = (device.name || device.ip || "machine").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "machine";
-  return {
-    ...base,
-    id: `queen-bee-${machineSlug}-${base.runtime}`,
-    name: "Queen Bee",
-    agentId: base.agentId || base.id,
-    beeRole: "queen",
-    workerClass: "planner",
-    runtimeKind: base.runtimeKind,
-    runtimeCapabilities: base.runtimeCapabilities,
-    telemetryUrl: device.collectorUrl,
-    machineName: device.name,
-    collectorCapabilities: capabilities,
-  };
-}
-
 function shouldIncludeSnapshots(request: Request) {
   const value = new URL(request.url).searchParams.get("includeSnapshots")?.toLowerCase();
   return value === "1" || value === "true" || value === "yes";
@@ -483,6 +469,11 @@ function shouldIncludeSnapshots(request: Request) {
 function shouldForceFresh(request: Request) {
   const params = new URL(request.url).searchParams;
   const value = (params.get("fresh") ?? params.get("force"))?.toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
+function shouldReturnStale(request: Request) {
+  const value = new URL(request.url).searchParams.get("stale")?.toLowerCase();
   return value === "1" || value === "true" || value === "yes";
 }
 
@@ -498,6 +489,7 @@ type CollectorProbeResult = {
   version?: CollectorVersion;
   capabilities?: CollectorCapabilities;
   envSync?: CollectorEnvSync;
+  system?: CollectorSystemStats;
   collectorHost?: string;
   machineId?: string;
 };
@@ -592,6 +584,7 @@ async function probeCollector(device: Device, collectorUrl: string, options: Dis
     version?: CollectorVersion;
     capabilities?: CollectorCapabilities;
     envSync?: CollectorEnvSync;
+    system?: CollectorSystemStats;
   };
   if (!isHivemindCollectorHealth(healthData)) {
     throw new Error("Health endpoint is not a HivemindOS collector.");
@@ -607,6 +600,7 @@ async function probeCollector(device: Device, collectorUrl: string, options: Dis
     version: healthData.version,
     capabilities,
     envSync: healthData.envSync,
+    system: healthData.system,
     collectorHost: healthData.host,
     machineId: healthData.machineId,
   };
@@ -633,6 +627,7 @@ async function probeCollectorViaTailscale(device: Device, options: DiscoveryProb
     version?: CollectorVersion;
     capabilities?: CollectorCapabilities;
     envSync?: CollectorEnvSync;
+    system?: CollectorSystemStats;
   };
   const agentsData = await fetchRemoteCollectorJsonViaTailscale(device, "/agents", options.collectorTimeoutMs)
     .catch(() => ({ agents: [] })) as { agents?: AgentProfile[] };
@@ -649,6 +644,7 @@ async function probeCollectorViaTailscale(device: Device, options: DiscoveryProb
     version: healthData.version,
     capabilities,
     envSync: healthData.envSync,
+    system: healthData.system,
     collectorHost: healthData.host,
     machineId: healthData.machineId,
   };
@@ -681,10 +677,6 @@ async function readDiscovery(includeSnapshots: boolean, options: DiscoveryProbeO
       return { device, collector: device.online ? "not-installed" : "offline", agents: [], snapshots: [] };
     }
 
-    const visibleAgents = [
-      ...probe.agents,
-      ...[defaultQueenAgent(probe.device, probe.agents, probe.capabilities)].filter((agent): agent is AgentProfile => Boolean(agent)),
-    ];
     if (!includeSnapshots) {
       return {
         device: probe.device,
@@ -694,7 +686,8 @@ async function readDiscovery(includeSnapshots: boolean, options: DiscoveryProbeO
         version: probe.version,
         capabilities: probe.capabilities,
         envSync: probe.envSync,
-        agents: visibleAgents,
+        system: probe.system,
+        agents: probe.agents,
         snapshots: [],
       };
     }
@@ -713,7 +706,8 @@ async function readDiscovery(includeSnapshots: boolean, options: DiscoveryProbeO
         version: probe.version,
         capabilities: probe.capabilities,
         envSync: probe.envSync,
-        agents: visibleAgents,
+        system: probe.system,
+        agents: probe.agents,
         snapshots: snapshotData.snapshots ?? [],
       };
     } catch {
@@ -725,7 +719,8 @@ async function readDiscovery(includeSnapshots: boolean, options: DiscoveryProbeO
         version: probe.version,
         capabilities: probe.capabilities,
         envSync: probe.envSync,
-        agents: visibleAgents,
+        system: probe.system,
+        agents: probe.agents,
         snapshots: [],
       };
     }
@@ -806,11 +801,17 @@ function refreshDiscoveryInBackground(cacheKey: string, includeSnapshots: boolea
 export async function GET(request: Request) {
   const includeSnapshots = shouldIncludeSnapshots(request);
   const forceFresh = shouldForceFresh(request);
+  const returnStale = shouldReturnStale(request);
   const allowSshFallback = shouldAllowSshFallback(request);
   const cacheKey = `${DISCOVERY_CACHE_VERSION}:${includeSnapshots ? "with-snapshots" : "light"}`;
   const cached = discoveryCache.get(cacheKey);
   const now = Date.now();
   if (!forceFresh && cached && now - cached.checkedAt < DISCOVERY_CACHE_MS) {
+    return Response.json(cached.payload);
+  }
+
+  if (!forceFresh && returnStale && cached) {
+    refreshDiscoveryInBackground(cacheKey, includeSnapshots, allowSshFallback);
     return Response.json(cached.payload);
   }
 
@@ -868,11 +869,9 @@ function dedupeMachines<T extends { device: Device; collector: string; machineId
 }
 
 function machineBaseCandidates(machine: { device: Device }) {
-  return [
-    deviceIdentityKey(machine.device),
-    hivemindMachineBase(machine.device),
-    physicalMachineBase(machine.device),
-  ].filter((value, index, all) => value && all.indexOf(value) === index);
+  // Exact identity only (keeps tailscale's `-N` suffix): a `-1` node is a
+  // different physical machine with the same hostname, not a duplicate.
+  return [deviceIdentityKey(machine.device)].filter(Boolean);
 }
 
 function hasFreshReadyDuplicate(machine: { device: Device; collector: string }, readyMachineBases: Set<string>) {

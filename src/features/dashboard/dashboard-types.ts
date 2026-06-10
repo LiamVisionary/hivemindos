@@ -4,6 +4,7 @@ import type { KanbanBoard, KanbanLinkedDirectory, KanbanMachineTarget, KanbanTas
 import type { GBrainStatus } from "@/lib/services/brain/gbrain";
 import type { SyntoStatus } from "@/lib/services/brain/synto";
 import type { TradingBrainStatus } from "@/lib/services/brain/trading-brain";
+import type { ChatApplicationGenerationCard, ChatImageGeneration } from "@/features/dashboard/chat-application-generation";
 
 export type GatewayStatus = {
   ok?: boolean;
@@ -18,6 +19,11 @@ export type RuntimeIntegrationKey =
   | "backgroundTasks"
   | "xSearch"
   | "socialPosting"
+  | "imageGeneration"
+  | "ttsGeneration"
+  | "musicGeneration"
+  | "sfxGeneration"
+  | "model3dGeneration"
   | "videoGeneration"
   | "codexRuntime"
   | "kanbanDecompose";
@@ -38,7 +44,7 @@ export type RuntimeIntegrationStatus = {
     providers: Array<{
       slug: string;
       name: string;
-      models: Array<{ id: string; name?: string }>;
+      models: Array<{ id: string; name?: string; subtitle?: string; group?: string; badge?: string; disabled?: boolean; disabledReason?: string }>;
       totalModels: number;
       isCurrent?: boolean;
       isUserDefined?: boolean;
@@ -60,6 +66,31 @@ export type RuntimeIntegrationStatus = {
       message?: string;
       httpStatus?: number;
       modelCount?: number;
+    };
+    bankr?: {
+      creditsBalanceUsd?: number | null;
+      balanceLabel?: string;
+      clubActive?: boolean | null;
+      lowCredits?: boolean;
+      checkedAt?: string;
+      error?: string;
+      modelError?: string;
+    };
+    lmStudio?: {
+      baseUrl?: string;
+      models?: Array<{
+        key: string;
+        displayName?: string;
+        type?: "llm" | "embedding" | string;
+        loaded?: boolean;
+        loadedInstanceIds?: string[];
+        maxContextLength?: number;
+        paramsString?: string | null;
+        sizeBytes?: number | null;
+        format?: string | null;
+      }>;
+      error?: string;
+      checkedAt?: string;
     };
   };
 };
@@ -226,6 +257,8 @@ export type ChatMessage = {
   sourceIndex?: number;
   processEvents?: Array<{ at?: number; label: string; detail?: string; status?: string }>;
   attachments?: ChatAttachment[];
+  applicationGeneration?: ChatApplicationGenerationCard;
+  imageGeneration?: ChatImageGeneration;
   agentPrompt?: {
     id: string;
     type: "clarify" | "approval" | "sudo" | "secret" | "prompt";
@@ -329,6 +362,7 @@ export type SkillBrowserSkill = {
   category?: string;
   skillMdUrl?: string;
   githubUrl?: string;
+  packagedPath?: string;
   sourceRef?: string;
   capabilities?: string[];
   envKeys?: string[];
@@ -457,6 +491,24 @@ export type HivemindLinkClientStatus = {
   source?: string;
 };
 
+export type MachineSystemStats = {
+  checkedAt?: number;
+  cpuPct?: number;
+  cpuCores?: number;
+  cpuModel?: string;
+  loadAvg1m?: number;
+  ramPct?: number;
+  ramUsedGb?: number;
+  ramTotalGb?: number;
+  diskPct?: number | null;
+  diskUsedGb?: number | null;
+  diskTotalGb?: number | null;
+  platform?: string;
+  arch?: string;
+  osRelease?: string;
+  uptimeSec?: number;
+};
+
 export type MachineGroup = {
   key: string;
   name: string;
@@ -484,6 +536,7 @@ export type MachineGroup = {
     command?: string;
     error?: string;
   };
+  system?: MachineSystemStats;
   lastSeenAt?: number;
 };
 
@@ -544,6 +597,7 @@ export type DiscoveredMachine = {
   version?: AppVersion;
   capabilities?: AgentProfile["collectorCapabilities"];
   envSync?: MachineGroup["envSync"];
+  system?: MachineSystemStats;
   lastSeenAt?: number;
 };
 
@@ -913,7 +967,7 @@ export type MiroSharkSurfaceView = "x" | "reddit" | "polymarket" | "timeline";
 
 export type MiroSharkWorkspaceMode = "new" | "run";
 
-export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "chat" | "more" | "env" | "my-apps" | "phone" | "aeon" | "fusion";
+export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "phone" | "aeon" | "fusion";
 
 export type WorkView = Extract<DashboardView, "kanban" | "scheduler" | "swarm" | "history">;
 

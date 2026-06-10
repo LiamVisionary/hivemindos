@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import http from "node:http";
+import { spawnSync } from "node:child_process";
 
 const MEMORY_FOLDER = "Memory/Distillations/Agent Memory";
 const INDEX_PATH = "Operations/Brain Services/Agent Memory Index.jsonl";
@@ -317,6 +318,52 @@ function walk(root, dir = root, output = []) {
   return output;
 }
 
+// Strict search policy: ripgrep first, plain grep fallback, full fs walk only
+// when neither binary is available.
+let contentSearchBinary;
+
+function detectContentSearchBinary() {
+  if (contentSearchBinary !== undefined) return contentSearchBinary;
+  contentSearchBinary = null;
+  for (const binary of ["rg", "grep"]) {
+    const probe = spawnSync(binary, ["--version"], { stdio: "ignore" });
+    if (!probe.error && probe.status === 0) {
+      contentSearchBinary = binary;
+      break;
+    }
+  }
+  return contentSearchBinary;
+}
+
+function searchTerms(query) {
+  return [...new Set(String(query || "").toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 3))].slice(0, 16);
+}
+
+function escapeRegex(term) {
+  return term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function searchVaultFiles(root, query) {
+  const terms = searchTerms(query);
+  if (!terms.length) return null;
+  const binary = detectContentSearchBinary();
+  if (!binary) return null;
+  const pattern = terms.map(escapeRegex).join("|");
+  const args = binary === "rg"
+    ? ["-li", "--no-messages", "--no-ignore-vcs", "-g", "*.md", ...[...EXCLUDE_PARTS].flatMap((dir) => ["-g", `!${dir}/**`]), "-e", pattern, "."]
+    : ["-rli", "-E", pattern, "--include=*.md", ...[...EXCLUDE_PARTS].map((dir) => `--exclude-dir=${dir}`), "."];
+  const result = spawnSync(binary, args, { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 10000 });
+  // Exit status 1 means "no matches" for both rg and grep.
+  if (result.error || (result.status !== 0 && result.status !== 1)) return null;
+  return String(result.stdout || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((file) => path.join(root, file))
+    .filter((file) => !shouldSkip(root, file, false))
+    .slice(0, MAX_VAULT_FILES);
+}
+
 function recordsFromIndex(root) {
   const file = path.join(root, INDEX_PATH);
   if (!fs.existsSync(file)) return [];
@@ -381,7 +428,8 @@ function fallbackRecall(input) {
     return { ok: true, source: "local-fallback", recallScope: "agent-memory", augmentedFromVault: false, hits: memoryHits };
   }
   const byPath = new Map();
-  for (const file of walk(root)) {
+  const fullVaultFiles = searchVaultFiles(root, input.query) ?? walk(root);
+  for (const file of fullVaultFiles) {
     if (rel(root, file).startsWith(`${MEMORY_FOLDER}/`)) continue;
     const record = recordFromMarkdown(root, file, false);
     if (record) byPath.set(record.notePath, record);

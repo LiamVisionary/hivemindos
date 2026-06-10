@@ -1,0 +1,1098 @@
+{
+  "sourceUrl": "https://www.ui-skills.com/skills/",
+  "importedAt": "2026-06-08T15:01:52.606Z",
+  "count": 109,
+  "failed": [],
+  "skills": [
+    {
+      "name": "Design Lab",
+      "url": "https://www.ui-skills.com/skills/0xdesign/design-lab",
+      "source": "0xdesign",
+      "slug": "design-lab",
+      "hiveSlug": "design-lab",
+      "description": "Conduct design interviews, generate five distinct UI variations in a temporary design lab, collect feedback, and produce implementation plans. Use when the user wants to explore UI design options, redesign existing components, or create new UI with multiple approaches to compare.",
+      "repository": "https://github.com/0xdesign/design-plugin",
+      "installCommand": true
+    },
+    {
+      "name": "Audit And Fix",
+      "url": "https://www.ui-skills.com/skills/accesslint/audit-and-fix",
+      "source": "accesslint",
+      "slug": "audit-and-fix",
+      "hiveSlug": "audit-and-fix",
+      "description": "Optional UI skill from accesslint.",
+      "repository": "https://github.com/AccessLint/claude-marketplace",
+      "installCommand": true
+    },
+    {
+      "name": "Contrast Checker",
+      "url": "https://www.ui-skills.com/skills/accesslint/contrast-checker",
+      "source": "accesslint",
+      "slug": "contrast-checker",
+      "hiveSlug": "contrast-checker",
+      "description": "Optional UI skill from accesslint.",
+      "repository": "https://github.com/AccessLint/claude-marketplace",
+      "installCommand": true
+    },
+    {
+      "name": "Link Purpose",
+      "url": "https://www.ui-skills.com/skills/accesslint/link-purpose",
+      "source": "accesslint",
+      "slug": "link-purpose",
+      "hiveSlug": "link-purpose",
+      "description": "Optional UI skill from accesslint.",
+      "repository": "https://github.com/AccessLint/claude-marketplace",
+      "installCommand": true
+    },
+    {
+      "name": "Refactor",
+      "url": "https://www.ui-skills.com/skills/accesslint/refactor",
+      "source": "accesslint",
+      "slug": "refactor",
+      "hiveSlug": "refactor",
+      "description": "Optional UI skill from accesslint.",
+      "repository": "https://github.com/AccessLint/claude-marketplace",
+      "installCommand": true
+    },
+    {
+      "name": "Use Of Color",
+      "url": "https://www.ui-skills.com/skills/accesslint/use-of-color",
+      "source": "accesslint",
+      "slug": "use-of-color",
+      "hiveSlug": "use-of-color",
+      "description": "Optional UI skill from accesslint.",
+      "repository": "https://github.com/AccessLint/claude-marketplace",
+      "installCommand": true
+    },
+    {
+      "name": "Frontend UI Engineering",
+      "url": "https://www.ui-skills.com/skills/addyosmani/frontend-ui-engineering",
+      "source": "addyosmani",
+      "slug": "frontend-ui-engineering",
+      "hiveSlug": "frontend-ui-engineering",
+      "description": "Builds production-quality UIs. Use when building or modifying user-facing interfaces. Use when creating components, implementing layouts, managing state, or when the output needs to look and feel production-quality rather than AI-generated.",
+      "repository": "https://github.com/addyosmani/agent-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Web Quality Audit",
+      "url": "https://www.ui-skills.com/skills/addyosmani/web-quality-audit",
+      "source": "addyosmani",
+      "slug": "web-quality-audit",
+      "hiveSlug": "web-quality-audit",
+      "description": "Comprehensive web quality audit covering performance, accessibility, SEO, and best practices. Use when asked to \"audit my site\", \"review web quality\", \"run lighthouse audit\", \"check page quality\", or \"optimize my website\".",
+      "repository": "https://github.com/addyosmani/web-quality-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Antfu",
+      "url": "https://www.ui-skills.com/skills/antfu/antfu",
+      "source": "antfu",
+      "slug": "antfu",
+      "hiveSlug": "antfu",
+      "description": "Anthony Fu's opinionated tooling and conventions for JavaScript/TypeScript projects. Use when setting up new projects, configuring ESLint/Prettier alternatives, monorepos, library publishing, or when the user mentions Anthony Fu's preferences.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Nuxt",
+      "url": "https://www.ui-skills.com/skills/antfu/nuxt",
+      "source": "antfu",
+      "slug": "nuxt",
+      "hiveSlug": "nuxt",
+      "description": "Nuxt full-stack Vue framework with SSR, auto-imports, and file-based routing. Use when working with Nuxt apps, server routes, useFetch, middleware, or hybrid rendering.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Pinia",
+      "url": "https://www.ui-skills.com/skills/antfu/pinia",
+      "source": "antfu",
+      "slug": "pinia",
+      "hiveSlug": "pinia",
+      "description": "Pinia official Vue state management library, type-safe and extensible. Use when defining stores, working with state/getters/actions, or implementing store patterns in Vue apps.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Pnpm",
+      "url": "https://www.ui-skills.com/skills/antfu/pnpm",
+      "source": "antfu",
+      "slug": "pnpm",
+      "hiveSlug": "pnpm",
+      "description": "Node.js package manager with strict dependency resolution. Use when running pnpm specific commands, configuring workspaces, or managing dependencies with catalogs, patches, or overrides.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Slidev",
+      "url": "https://www.ui-skills.com/skills/antfu/slidev",
+      "source": "antfu",
+      "slug": "slidev",
+      "hiveSlug": "slidev",
+      "description": "Create and present web-based slidedecks for developers using Slidev with Markdown, Vue components, code highlighting, animations, and interactive features. Use when building technical presentations, conference talks, code walkthroughs, teaching materials, or developer decks.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Tsdown",
+      "url": "https://www.ui-skills.com/skills/antfu/tsdown",
+      "source": "antfu",
+      "slug": "tsdown",
+      "hiveSlug": "tsdown",
+      "description": "Bundle TypeScript and JavaScript libraries with blazing-fast speed powered by Rolldown. Use when building libraries, generating type declarations, bundling for multiple formats, or migrating from tsup.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Turborepo",
+      "url": "https://www.ui-skills.com/skills/antfu/turborepo",
+      "source": "antfu",
+      "slug": "turborepo",
+      "hiveSlug": "turborepo",
+      "description": "|",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Unocss",
+      "url": "https://www.ui-skills.com/skills/antfu/unocss",
+      "source": "antfu",
+      "slug": "unocss",
+      "hiveSlug": "unocss",
+      "description": "UnoCSS instant atomic CSS engine, superset of Tailwind CSS. Use when configuring UnoCSS, writing utility rules, shortcuts, or working with presets like Wind, Icons, Attributify.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vite",
+      "url": "https://www.ui-skills.com/skills/antfu/vite",
+      "source": "antfu",
+      "slug": "vite",
+      "hiveSlug": "vite",
+      "description": "Vite build tool configuration, plugin API, SSR, and Vite 8 Rolldown migration. Use when working with Vite projects, vite.config.ts, Vite plugins, or building libraries/SSR apps with Vite.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vitepress",
+      "url": "https://www.ui-skills.com/skills/antfu/vitepress",
+      "source": "antfu",
+      "slug": "vitepress",
+      "hiveSlug": "vitepress",
+      "description": "VitePress static site generator powered by Vite and Vue. Use when building documentation sites, configuring themes, or writing Markdown with Vue components.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vitest",
+      "url": "https://www.ui-skills.com/skills/antfu/vitest",
+      "source": "antfu",
+      "slug": "vitest",
+      "hiveSlug": "vitest",
+      "description": "Vitest fast unit testing framework powered by Vite with Jest-compatible API. Use when writing tests, mocking, configuring coverage, or working with test filtering and fixtures.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vue",
+      "url": "https://www.ui-skills.com/skills/antfu/vue",
+      "source": "antfu",
+      "slug": "vue",
+      "hiveSlug": "vue",
+      "description": "Vue 3 Composition API, script setup macros, reactivity system, and built-in components. Use when writing Vue SFCs, defineProps/defineEmits/defineModel, watchers, or using Transition/Teleport/Suspense/KeepAlive.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vue Best Practices",
+      "url": "https://www.ui-skills.com/skills/antfu/vue-best-practices",
+      "source": "antfu",
+      "slug": "vue-best-practices",
+      "hiveSlug": "antfu-vue-best-practices",
+      "description": "MUST be used for Vue.js tasks. Strongly recommends Composition API with `<script setup>` and TypeScript as the standard approach. Covers Vue 3, SSR, Volar, vue-tsc. Load for any Vue, .vue files, Vue Router, Pinia, or Vite with Vue work. ALWAYS use Composition API unless the project explicitly requires Options API.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vue Router Best Practices",
+      "url": "https://www.ui-skills.com/skills/antfu/vue-router-best-practices",
+      "source": "antfu",
+      "slug": "vue-router-best-practices",
+      "hiveSlug": "antfu-vue-router-best-practices",
+      "description": "Vue Router 4 patterns, navigation guards, route params, and route-component lifecycle interactions.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vue Testing Best Practices",
+      "url": "https://www.ui-skills.com/skills/antfu/vue-testing-best-practices",
+      "source": "antfu",
+      "slug": "vue-testing-best-practices",
+      "hiveSlug": "antfu-vue-testing-best-practices",
+      "description": "Use for Vue.js testing. Covers Vitest, Vue Test Utils, component testing, mocking, testing patterns, and Playwright for E2E testing.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vueuse Functions",
+      "url": "https://www.ui-skills.com/skills/antfu/vueuse-functions",
+      "source": "antfu",
+      "slug": "vueuse-functions",
+      "hiveSlug": "vueuse-functions",
+      "description": "Apply VueUse composables where appropriate to build concise, maintainable Vue.js / Nuxt features.",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Web Design Guidelines",
+      "url": "https://www.ui-skills.com/skills/antfu/web-design-guidelines",
+      "source": "antfu",
+      "slug": "web-design-guidelines",
+      "hiveSlug": "antfu-web-design-guidelines",
+      "description": "Review UI code for Web Interface Guidelines compliance. Use when asked to \"review my UI\", \"check accessibility\", \"audit design\", \"review UX\", or \"check my site against best practices\".",
+      "repository": "https://github.com/antfu/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Canvas Design",
+      "url": "https://www.ui-skills.com/skills/anthropics/canvas-design",
+      "source": "anthropics",
+      "slug": "canvas-design",
+      "hiveSlug": "canvas-design",
+      "description": "Create beautiful visual art in .png and .pdf documents using design philosophy. You should use this skill when the user asks to create a poster, piece of art, design, or other static piece. Create original visual designs, never copying existing artists' work to avoid copyright violations.",
+      "repository": "https://github.com/anthropics/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Frontend Design",
+      "url": "https://www.ui-skills.com/skills/anthropics/frontend-design",
+      "source": "anthropics",
+      "slug": "frontend-design",
+      "hiveSlug": "frontend-design",
+      "description": "Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, artifacts, posters, or applications (examples include websites, landing pages, dashboards, React components, HTML/CSS layouts, or when styling/beautifying any web UI). Generates creative, polished code and UI design that avoids generic AI aesthetics.",
+      "repository": "https://github.com/anthropics/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Bencium Innovative Ux Designer",
+      "url": "https://www.ui-skills.com/skills/bencium/bencium-innovative-ux-designer",
+      "source": "bencium",
+      "slug": "bencium-innovative-ux-designer",
+      "hiveSlug": "bencium-innovative-ux-designer",
+      "description": "Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, or applications. Generates creative, polished code that avoids generic AI aesthetics.",
+      "repository": "https://github.com/bencium/bencium-marketplace",
+      "installCommand": true
+    },
+    {
+      "name": "React Native Best Practices",
+      "url": "https://www.ui-skills.com/skills/callstackincubator/react-native-best-practices",
+      "source": "callstackincubator",
+      "slug": "react-native-best-practices",
+      "hiveSlug": "react-native-best-practices",
+      "description": "Provides React Native performance optimization guidelines for FPS, TTI, bundle size, memory leaks, re-renders, and animations. Applies to tasks involving Hermes optimization, JS thread blocking, bridge overhead, FlashList, native modules, or debugging jank and frame drops.",
+      "repository": "https://github.com/callstackincubator/agent-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Threejs Animation",
+      "url": "https://www.ui-skills.com/skills/cloudai-x/threejs-animation",
+      "source": "cloudai-x",
+      "slug": "threejs-animation",
+      "hiveSlug": "threejs-animation",
+      "description": "Three.js animation - keyframe animation, skeletal animation, morph targets, animation mixing. Use when animating objects, playing GLTF animations, creating procedural motion, or blending animations.",
+      "repository": "https://github.com/cloudai-x/threejs-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Threejs Fundamentals",
+      "url": "https://www.ui-skills.com/skills/cloudai-x/threejs-fundamentals",
+      "source": "cloudai-x",
+      "slug": "threejs-fundamentals",
+      "hiveSlug": "threejs-fundamentals",
+      "description": "Three.js scene setup, cameras, renderer, Object3D hierarchy, coordinate systems. Use when setting up 3D scenes, creating cameras, configuring renderers, managing object hierarchies, or working with transforms.",
+      "repository": "https://github.com/cloudai-x/threejs-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Threejs Geometry",
+      "url": "https://www.ui-skills.com/skills/cloudai-x/threejs-geometry",
+      "source": "cloudai-x",
+      "slug": "threejs-geometry",
+      "hiveSlug": "threejs-geometry",
+      "description": "Three.js geometry creation - built-in shapes, BufferGeometry, custom geometry, instancing. Use when creating 3D shapes, working with vertices, building custom meshes, or optimizing with instanced rendering.",
+      "repository": "https://github.com/cloudai-x/threejs-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Threejs Interaction",
+      "url": "https://www.ui-skills.com/skills/cloudai-x/threejs-interaction",
+      "source": "cloudai-x",
+      "slug": "threejs-interaction",
+      "hiveSlug": "threejs-interaction",
+      "description": "Three.js interaction - raycasting, controls, mouse/touch input, object selection. Use when handling user input, implementing click detection, adding camera controls, or creating interactive 3D experiences.",
+      "repository": "https://github.com/cloudai-x/threejs-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Threejs Lighting",
+      "url": "https://www.ui-skills.com/skills/cloudai-x/threejs-lighting",
+      "source": "cloudai-x",
+      "slug": "threejs-lighting",
+      "hiveSlug": "threejs-lighting",
+      "description": "Three.js lighting - light types, shadows, environment lighting. Use when adding lights, configuring shadows, setting up IBL, or optimizing lighting performance.",
+      "repository": "https://github.com/cloudai-x/threejs-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Threejs Loaders",
+      "url": "https://www.ui-skills.com/skills/cloudai-x/threejs-loaders",
+      "source": "cloudai-x",
+      "slug": "threejs-loaders",
+      "hiveSlug": "threejs-loaders",
+      "description": "Three.js asset loading - GLTF, textures, images, models, async patterns. Use when loading 3D models, textures, HDR environments, or managing loading progress.",
+      "repository": "https://github.com/cloudai-x/threejs-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Threejs Materials",
+      "url": "https://www.ui-skills.com/skills/cloudai-x/threejs-materials",
+      "source": "cloudai-x",
+      "slug": "threejs-materials",
+      "hiveSlug": "threejs-materials",
+      "description": "Three.js materials - PBR, basic, phong, shader materials, material properties. Use when styling meshes, working with textures, creating custom shaders, or optimizing material performance.",
+      "repository": "https://github.com/cloudai-x/threejs-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Threejs Postprocessing",
+      "url": "https://www.ui-skills.com/skills/cloudai-x/threejs-postprocessing",
+      "source": "cloudai-x",
+      "slug": "threejs-postprocessing",
+      "hiveSlug": "threejs-postprocessing",
+      "description": "Three.js post-processing - EffectComposer, bloom, DOF, screen effects. Use when adding visual effects, color grading, blur, glow, or creating custom screen-space shaders.",
+      "repository": "https://github.com/cloudai-x/threejs-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Threejs Shaders",
+      "url": "https://www.ui-skills.com/skills/cloudai-x/threejs-shaders",
+      "source": "cloudai-x",
+      "slug": "threejs-shaders",
+      "hiveSlug": "threejs-shaders",
+      "description": "Three.js shaders - GLSL, ShaderMaterial, uniforms, custom effects. Use when creating custom visual effects, modifying vertices, writing fragment shaders, or extending built-in materials.",
+      "repository": "https://github.com/cloudai-x/threejs-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Threejs Textures",
+      "url": "https://www.ui-skills.com/skills/cloudai-x/threejs-textures",
+      "source": "cloudai-x",
+      "slug": "threejs-textures",
+      "hiveSlug": "threejs-textures",
+      "description": "Three.js textures - texture types, UV mapping, environment maps, texture settings. Use when working with images, UV coordinates, cubemaps, HDR environments, or texture optimization.",
+      "repository": "https://github.com/cloudai-x/threejs-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Interface Design",
+      "url": "https://www.ui-skills.com/skills/dammyjay93/interface-design",
+      "source": "dammyjay93",
+      "slug": "interface-design",
+      "hiveSlug": "interface-design",
+      "description": "This skill is for interface design — dashboards, admin panels, apps, tools, and interactive products. NOT for marketing design (landing pages, marketing sites, campaigns).",
+      "repository": "https://github.com/Dammyjay93/interface-design",
+      "installCommand": true
+    },
+    {
+      "name": "Swiftui UI Patterns",
+      "url": "https://www.ui-skills.com/skills/dimillian/swiftui-ui-patterns",
+      "source": "dimillian",
+      "slug": "swiftui-ui-patterns",
+      "hiveSlug": "swiftui-ui-patterns",
+      "description": "Best practices and example-driven guidance for building SwiftUI views and components, including navigation hierarchies, custom view modifiers, and responsive layouts with stacks and grids. Use when creating or refactoring SwiftUI UI, designing tab architecture with TabView, composing screens with VStack/HStack, managing @State or @Binding, building declarative iOS interfaces, or needing component-specific patterns and examples.",
+      "repository": "https://github.com/dimillian/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Emil Design Eng",
+      "url": "https://www.ui-skills.com/skills/emilkowalski/emil-design-eng",
+      "source": "emilkowalski",
+      "slug": "emil-design-eng",
+      "hiveSlug": "emil-design-eng",
+      "description": "This skill encodes Emil Kowalski's philosophy on UI polish, component design, animation decisions, and the invisible details that make software feel great.",
+      "repository": "https://github.com/emilkowalski/skill",
+      "installCommand": true
+    },
+    {
+      "name": "Baseline UI",
+      "url": "https://www.ui-skills.com/skills/ibelick/baseline-ui",
+      "source": "ibelick",
+      "slug": "baseline-ui",
+      "hiveSlug": "baseline-ui",
+      "description": "Validates animation durations, enforces typography scale, checks component accessibility, and prevents layout anti-patterns in Tailwind CSS projects. Use when building UI components, reviewing CSS utilities, styling React views, or enforcing design consistency.",
+      "repository": "https://github.com/ibelick/ui-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Fixing Accessibility",
+      "url": "https://www.ui-skills.com/skills/ibelick/fixing-accessibility",
+      "source": "ibelick",
+      "slug": "fixing-accessibility",
+      "hiveSlug": "fixing-accessibility",
+      "description": "Audit and fix HTML accessibility issues including ARIA labels, keyboard navigation, focus management, color contrast, and form errors. Use when adding interactive controls, forms, dialogs, or reviewing WCAG compliance.",
+      "repository": "https://github.com/ibelick/ui-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Fixing Metadata",
+      "url": "https://www.ui-skills.com/skills/ibelick/fixing-metadata",
+      "source": "ibelick",
+      "slug": "fixing-metadata",
+      "hiveSlug": "fixing-metadata",
+      "description": ">",
+      "repository": "https://github.com/ibelick/ui-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Fixing Motion Performance",
+      "url": "https://www.ui-skills.com/skills/ibelick/fixing-motion-performance",
+      "source": "ibelick",
+      "slug": "fixing-motion-performance",
+      "hiveSlug": "fixing-motion-performance",
+      "description": "Audit and fix animation performance issues including layout thrashing, compositor properties, scroll-linked motion, and blur effects. Use when animations stutter, transitions jank, or reviewing CSS/JS animation performance.",
+      "repository": "https://github.com/ibelick/ui-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Transitions Dev",
+      "url": "https://www.ui-skills.com/skills/jakubantalik/transitions-dev",
+      "source": "jakubantalik",
+      "slug": "transitions-dev",
+      "hiveSlug": "transitions-dev",
+      "description": "Production-ready CSS transitions for web apps. Use when implementing notification badges, dropdowns, modals, panel reveals, page transitions, card resizes, number pop-ins, text swaps, icon swaps, success checks, avatar group hovers, or error state shakes. Triggers on \"add a transition\", \"animate the dropdown\", \"make the modal open smoothly\", \"swap icon\", \"page slide\", \"stagger animation\", \"open / close transition\", \"make it animate\", \"tween the size\", \"fade between\", \"smooth open\", \"smooth close\", \"success animation\", \"checkmark animation\", \"confirmation animation\", \"form error\", \"shake on invalid\", \"validation feedback\", \"hover lift\", \"avatar stack hover\", \"chip group hover\".",
+      "repository": "https://github.com/Jakubantalik/transitions-dev",
+      "installCommand": true
+    },
+    {
+      "name": "Make Interfaces Feel Better",
+      "url": "https://www.ui-skills.com/skills/jakubkrehel/make-interfaces-feel-better",
+      "source": "jakubkrehel",
+      "slug": "make-interfaces-feel-better",
+      "hiveSlug": "make-interfaces-feel-better",
+      "description": "Design engineering principles for making interfaces feel polished. Use when building UI components, reviewing frontend code, implementing animations, hover states, shadows, borders, typography, micro-interactions, enter/exit animations, or any visual detail work. Triggers on UI polish, design details, \"make it feel better\", \"feels off\", stagger animations, border radius, optical alignment, font smoothing, tabular numbers, image outlines, box shadows.",
+      "repository": "https://github.com/jakubkrehel/make-interfaces-feel-better",
+      "installCommand": true
+    },
+    {
+      "name": "Oklch Skill",
+      "url": "https://www.ui-skills.com/skills/jakubkrehel/oklch-skill",
+      "source": "jakubkrehel",
+      "slug": "oklch-skill",
+      "hiveSlug": "oklch-skill",
+      "description": "OKLCH color space for web projects. Convert hex/rgb/hsl to oklch, generate palettes, check contrast, handle gamut boundaries, and theme with Tailwind v4. Triggers on oklch, color conversion, palette generation, contrast ratio, gamut, display p3, design tokens, hue drift, chroma, dark mode colors.",
+      "repository": "https://github.com/jakubkrehel/oklch-skill",
+      "installCommand": true
+    },
+    {
+      "name": "Industrial Brutalist UI",
+      "url": "https://www.ui-skills.com/skills/leonxlnx/brutalist-skill",
+      "source": "leonxlnx",
+      "slug": "brutalist-skill",
+      "hiveSlug": "brutalist-skill",
+      "description": "Raw mechanical interfaces fusing Swiss typographic print with military terminal aesthetics. Rigid grids, extreme type scale contrast, utilitarian color, analog degradation effects. For data-heavy dashboards, portfolios, or editorial sites that need to feel like declassified blueprints.",
+      "repository": "https://github.com/Leonxlnx/taste-skill",
+      "installCommand": true
+    },
+    {
+      "name": "Gpt Taste",
+      "url": "https://www.ui-skills.com/skills/leonxlnx/gpt-tasteskill",
+      "source": "leonxlnx",
+      "slug": "gpt-tasteskill",
+      "hiveSlug": "gpt-tasteskill",
+      "description": "Elite UX/UI & Advanced GSAP Motion Engineer. Enforces Python-driven true randomization for layout variance, strict AIDA page structure, wide editorial typography (bans 6-line wraps), gapless bento grids, strict GSAP ScrollTriggers (pinning, stacking, scrubbing), inline micro-images, and massive section spacing.",
+      "repository": "https://github.com/Leonxlnx/taste-skill",
+      "installCommand": true
+    },
+    {
+      "name": "Minimalist UI",
+      "url": "https://www.ui-skills.com/skills/leonxlnx/minimalist-skill",
+      "source": "leonxlnx",
+      "slug": "minimalist-skill",
+      "hiveSlug": "minimalist-skill",
+      "description": "Clean editorial-style interfaces. Warm monochrome palette, typographic contrast, flat bento grids, muted pastels. No gradients, no heavy shadows.",
+      "repository": "https://github.com/Leonxlnx/taste-skill",
+      "installCommand": true
+    },
+    {
+      "name": "Full Output Enforcement",
+      "url": "https://www.ui-skills.com/skills/leonxlnx/output-skill",
+      "source": "leonxlnx",
+      "slug": "output-skill",
+      "hiveSlug": "output-skill",
+      "description": "Overrides default LLM truncation behavior. Enforces complete code generation, bans placeholder patterns, and handles token-limit splits cleanly. Apply to any task requiring exhaustive, unabridged output.",
+      "repository": "https://github.com/Leonxlnx/taste-skill",
+      "installCommand": true
+    },
+    {
+      "name": "Redesign Existing Projects",
+      "url": "https://www.ui-skills.com/skills/leonxlnx/redesign-skill",
+      "source": "leonxlnx",
+      "slug": "redesign-skill",
+      "hiveSlug": "redesign-skill",
+      "description": "Upgrades existing websites and apps to premium quality. Audits current design, identifies generic AI patterns, and applies high-end design standards without breaking functionality. Works with any CSS framework or vanilla CSS.",
+      "repository": "https://github.com/Leonxlnx/taste-skill",
+      "installCommand": true
+    },
+    {
+      "name": "High End Visual Design",
+      "url": "https://www.ui-skills.com/skills/leonxlnx/soft-skill",
+      "source": "leonxlnx",
+      "slug": "soft-skill",
+      "hiveSlug": "soft-skill",
+      "description": "Teaches the AI to design like a high-end agency. Defines the exact fonts, spacing, shadows, card structures, and animations that make a website feel expensive. Blocks all the common defaults that make AI designs look cheap or generic.",
+      "repository": "https://github.com/Leonxlnx/taste-skill",
+      "installCommand": true
+    },
+    {
+      "name": "Stitch Design Taste",
+      "url": "https://www.ui-skills.com/skills/leonxlnx/stitch-skill",
+      "source": "leonxlnx",
+      "slug": "stitch-skill",
+      "hiveSlug": "stitch-skill",
+      "description": "Semantic Design System Skill for Google Stitch. Generates agent-friendly DESIGN.md files that enforce premium, anti-generic UI standards — strict typography, calibrated color, asymmetric layouts, perpetual micro-motion, and hardware-accelerated performance.",
+      "repository": "https://github.com/Leonxlnx/taste-skill",
+      "installCommand": true
+    },
+    {
+      "name": "Design Taste Frontend",
+      "url": "https://www.ui-skills.com/skills/leonxlnx/taste-skill",
+      "source": "leonxlnx",
+      "slug": "taste-skill",
+      "hiveSlug": "taste-skill",
+      "description": "Anti-slop frontend skill for landing pages, portfolios, and redesigns. The agent reads the brief, infers the right design direction, and ships interfaces that do not look templated. Real design systems when applicable, audit-first on redesigns, strict pre-flight check.",
+      "repository": "https://github.com/Leonxlnx/taste-skill",
+      "installCommand": true
+    },
+    {
+      "name": "Playwright Cli",
+      "url": "https://www.ui-skills.com/skills/microsoft/playwright-cli",
+      "source": "microsoft",
+      "slug": "playwright-cli",
+      "hiveSlug": "playwright-cli",
+      "description": "Automate browser interactions, test web pages and work with Playwright tests.",
+      "repository": "https://github.com/microsoft/playwright-cli",
+      "installCommand": true
+    },
+    {
+      "name": "Budge",
+      "url": "https://www.ui-skills.com/skills/millionco/budge",
+      "source": "millionco",
+      "slug": "budge",
+      "hiveSlug": "budge",
+      "description": "Use when making single-property CSS or Tailwind visual changes in Next.js App Router projects. Presents a floating control widget on the page so the user can tweak the value before it is persisted. Covers atomic style changes, live preview, and cleanup. Triggers on single CSS value or single Tailwind utility class modifications.",
+      "repository": "https://github.com/millionco/skills",
+      "installCommand": true
+    },
+    {
+      "name": "React Doctor",
+      "url": "https://www.ui-skills.com/skills/millionco/react-doctor",
+      "source": "millionco",
+      "slug": "react-doctor",
+      "hiveSlug": "react-doctor",
+      "description": "Use when finishing a feature, fixing a bug, before committing React code, or when the user types `/doctor`, asks to scan, triage, or clean up React diagnostics. Covers lint, accessibility, bundle size, architecture. Includes a regression check and a full local-triage workflow that fetches the canonical playbook.",
+      "repository": "https://github.com/millionco/react-doctor",
+      "installCommand": true
+    },
+    {
+      "name": "UI Ux Pro Max",
+      "url": "https://www.ui-skills.com/skills/nextlevelbuilder/ui-ux-pro-max",
+      "source": "nextlevelbuilder",
+      "slug": "ui-ux-pro-max",
+      "hiveSlug": "ui-ux-pro-max",
+      "description": "UI/UX design intelligence for web and mobile. Includes 50+ styles, 161 color palettes, 57 font pairings, 161 product types, 99 UX guidelines, and 25 chart types across 10 stacks (React, Next.js, Vue, Svelte, SwiftUI, React Native, Flutter, Tailwind, shadcn/ui, and HTML/CSS). Actions: plan, build, create, design, implement, review, fix, improve, optimize, enhance, refactor, and check UI/UX code. Projects: website, landing page, dashboard, admin panel, e-commerce, SaaS, portfolio, blog, and mobile app. Elements: button, modal, navbar, sidebar, card, table, form, and chart. Styles: glassmorphism, claymorphism, minimalism, brutalism, neumorphism, bento grid, dark mode, responsive, skeuomorphism, and flat design. Topics: color systems, accessibility, animation, layout, typography, font pairing, spacing, interaction states, shadow, and gradient. Integrations: shadcn/ui MCP for component search and examples.",
+      "repository": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+      "installCommand": true
+    },
+    {
+      "name": "Adapt",
+      "url": "https://www.ui-skills.com/skills/pbakaus/adapt",
+      "source": "pbakaus",
+      "slug": "adapt",
+      "hiveSlug": "adapt",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Animate",
+      "url": "https://www.ui-skills.com/skills/pbakaus/animate",
+      "source": "pbakaus",
+      "slug": "animate",
+      "hiveSlug": "animate",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Audit",
+      "url": "https://www.ui-skills.com/skills/pbakaus/audit",
+      "source": "pbakaus",
+      "slug": "audit",
+      "hiveSlug": "audit",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Bolder",
+      "url": "https://www.ui-skills.com/skills/pbakaus/bolder",
+      "source": "pbakaus",
+      "slug": "bolder",
+      "hiveSlug": "bolder",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Clarify",
+      "url": "https://www.ui-skills.com/skills/pbakaus/clarify",
+      "source": "pbakaus",
+      "slug": "clarify",
+      "hiveSlug": "clarify",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Colorize",
+      "url": "https://www.ui-skills.com/skills/pbakaus/colorize",
+      "source": "pbakaus",
+      "slug": "colorize",
+      "hiveSlug": "colorize",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Critique",
+      "url": "https://www.ui-skills.com/skills/pbakaus/critique",
+      "source": "pbakaus",
+      "slug": "critique",
+      "hiveSlug": "critique",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Delight",
+      "url": "https://www.ui-skills.com/skills/pbakaus/delight",
+      "source": "pbakaus",
+      "slug": "delight",
+      "hiveSlug": "delight",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Distill",
+      "url": "https://www.ui-skills.com/skills/pbakaus/distill",
+      "source": "pbakaus",
+      "slug": "distill",
+      "hiveSlug": "distill",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Harden",
+      "url": "https://www.ui-skills.com/skills/pbakaus/harden",
+      "source": "pbakaus",
+      "slug": "harden",
+      "hiveSlug": "harden",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Impeccable",
+      "url": "https://www.ui-skills.com/skills/pbakaus/impeccable",
+      "source": "pbakaus",
+      "slug": "impeccable",
+      "hiveSlug": "impeccable",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Layout",
+      "url": "https://www.ui-skills.com/skills/pbakaus/layout",
+      "source": "pbakaus",
+      "slug": "layout",
+      "hiveSlug": "layout",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Optimize",
+      "url": "https://www.ui-skills.com/skills/pbakaus/optimize",
+      "source": "pbakaus",
+      "slug": "optimize",
+      "hiveSlug": "optimize",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Overdrive",
+      "url": "https://www.ui-skills.com/skills/pbakaus/overdrive",
+      "source": "pbakaus",
+      "slug": "overdrive",
+      "hiveSlug": "overdrive",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Polish",
+      "url": "https://www.ui-skills.com/skills/pbakaus/polish",
+      "source": "pbakaus",
+      "slug": "polish",
+      "hiveSlug": "polish",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Quieter",
+      "url": "https://www.ui-skills.com/skills/pbakaus/quieter",
+      "source": "pbakaus",
+      "slug": "quieter",
+      "hiveSlug": "quieter",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Shape",
+      "url": "https://www.ui-skills.com/skills/pbakaus/shape",
+      "source": "pbakaus",
+      "slug": "shape",
+      "hiveSlug": "shape",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Typeset",
+      "url": "https://www.ui-skills.com/skills/pbakaus/typeset",
+      "source": "pbakaus",
+      "slug": "typeset",
+      "hiveSlug": "typeset",
+      "description": "Optional UI skill from pbakaus.",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "installCommand": true
+    },
+    {
+      "name": "Rams",
+      "url": "https://www.ui-skills.com/skills/rams/rams",
+      "source": "rams",
+      "slug": "rams",
+      "hiveSlug": "rams",
+      "description": "Optional UI skill from rams.",
+      "repository": "https://github.com/rams/rams-ai",
+      "installCommand": true
+    },
+    {
+      "name": "12 Principles Of Animation",
+      "url": "https://www.ui-skills.com/skills/raphaelsalaja/12-principles-of-animation",
+      "source": "raphaelsalaja",
+      "slug": "12-principles-of-animation",
+      "hiveSlug": "12-principles-of-animation",
+      "description": "Audit animation code against Disney's 12 principles adapted for web. Use when reviewing motion, implementing animations, or checking animation quality. Outputs file:line findings.",
+      "repository": "https://github.com/raphaelsalaja/skill",
+      "installCommand": true
+    },
+    {
+      "name": "Generating Sounds With Ai",
+      "url": "https://www.ui-skills.com/skills/raphaelsalaja/generating-sounds-with-ai",
+      "source": "raphaelsalaja",
+      "slug": "generating-sounds-with-ai",
+      "hiveSlug": "generating-sounds-with-ai",
+      "description": "Audit Web Audio API code for sound synthesis best practices. Use when reviewing procedural audio, implementing UI sounds, or checking audio parameter quality. Outputs file:line findings.",
+      "repository": "https://github.com/raphaelsalaja/skill",
+      "installCommand": true
+    },
+    {
+      "name": "Mastering Animate Presence",
+      "url": "https://www.ui-skills.com/skills/raphaelsalaja/mastering-animate-presence",
+      "source": "raphaelsalaja",
+      "slug": "mastering-animate-presence",
+      "hiveSlug": "mastering-animate-presence",
+      "description": "Audit Motion/Framer Motion code for AnimatePresence best practices. Use when reviewing exit animations, modals, or presence state. Outputs file:line findings.",
+      "repository": "https://github.com/raphaelsalaja/skill",
+      "installCommand": true
+    },
+    {
+      "name": "Morphing Icons",
+      "url": "https://www.ui-skills.com/skills/raphaelsalaja/morphing-icons",
+      "source": "raphaelsalaja",
+      "slug": "morphing-icons",
+      "hiveSlug": "morphing-icons",
+      "description": "Build icon components where any icon morphs into any other through SVG line transformation. Use when asked to \"create morphing icons\", \"build icon transitions\", \"animate between icons\", or \"transform icons\".",
+      "repository": "https://github.com/raphaelsalaja/skill",
+      "installCommand": true
+    },
+    {
+      "name": "Pseudo Elements",
+      "url": "https://www.ui-skills.com/skills/raphaelsalaja/pseudo-elements",
+      "source": "raphaelsalaja",
+      "slug": "pseudo-elements",
+      "hiveSlug": "pseudo-elements",
+      "description": "Audit CSS for pseudo-element best practices and View Transitions API usage. Use when reviewing hover effects, decorative layers, or page transitions. Outputs file:line findings.",
+      "repository": "https://github.com/raphaelsalaja/skill",
+      "installCommand": true
+    },
+    {
+      "name": "Sounds On The Web",
+      "url": "https://www.ui-skills.com/skills/raphaelsalaja/sounds-on-the-web",
+      "source": "raphaelsalaja",
+      "slug": "sounds-on-the-web",
+      "hiveSlug": "sounds-on-the-web",
+      "description": "Audit UI code for audio feedback best practices. Use when reviewing sound implementation, checking audio UX decisions, or auditing accessibility. Outputs file:line findings.",
+      "repository": "https://github.com/raphaelsalaja/skill",
+      "installCommand": true
+    },
+    {
+      "name": "To Spring Or Not To Spring",
+      "url": "https://www.ui-skills.com/skills/raphaelsalaja/to-spring-or-not-to-spring",
+      "source": "raphaelsalaja",
+      "slug": "to-spring-or-not-to-spring",
+      "hiveSlug": "to-spring-or-not-to-spring",
+      "description": "Audit animation code for correct timing function selection. Use when reviewing motion implementations, debugging animations that feel wrong, or choosing between springs and easing. Outputs file:line findings.",
+      "repository": "https://github.com/raphaelsalaja/skill",
+      "installCommand": true
+    },
+    {
+      "name": "React Router Framework Mode",
+      "url": "https://www.ui-skills.com/skills/remix-run/react-router-framework-mode",
+      "source": "remix-run",
+      "slug": "react-router-framework-mode",
+      "hiveSlug": "react-router-framework-mode",
+      "description": "Build full-stack React applications using React Router's framework mode. Use when configuring routes, working with loaders and actions, handling forms, handling navigation, pending/optimistic UI, error boundaries, or working with react-router.config.ts or other react router conventions.",
+      "repository": "https://github.com/remix-run/agent-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Remotion Best Practices",
+      "url": "https://www.ui-skills.com/skills/remotion-dev/remotion-best-practices",
+      "source": "remotion-dev",
+      "slug": "remotion-best-practices",
+      "hiveSlug": "remotion-best-practices",
+      "description": "Best practices for Remotion - Video creation in React",
+      "repository": "https://github.com/remotion-dev/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Shadcn",
+      "url": "https://www.ui-skills.com/skills/shadcn-ui/shadcn",
+      "source": "shadcn-ui",
+      "slug": "shadcn",
+      "hiveSlug": "shadcn",
+      "description": "Manages shadcn components and projects — adding, searching, fixing, debugging, styling, and composing UI. Provides project context, component docs, and usage examples. Applies when working with shadcn/ui, component registries, presets, --preset codes, or any project with a components.json file. Also triggers for \"shadcn init\", \"create an app with --preset\", or \"switch to --preset\".",
+      "repository": "https://github.com/shadcn-ui/ui",
+      "installCommand": true
+    },
+    {
+      "name": "Svelte Code Writer",
+      "url": "https://www.ui-skills.com/skills/sveltejs/svelte-code-writer",
+      "source": "sveltejs",
+      "slug": "svelte-code-writer",
+      "hiveSlug": "svelte-code-writer",
+      "description": "CLI tools for Svelte 5 documentation lookup and code analysis. MUST be used whenever creating, editing or analyzing any Svelte component (.svelte) or Svelte module (.svelte.ts/.svelte.js). If possible, this skill should be executed within the svelte-file-editor agent for optimal results.",
+      "repository": "https://github.com/sveltejs/ai-tools",
+      "installCommand": true
+    },
+    {
+      "name": "Agent Browser",
+      "url": "https://www.ui-skills.com/skills/vercel-labs/agent-browser",
+      "source": "vercel-labs",
+      "slug": "agent-browser",
+      "hiveSlug": "agent-browser",
+      "description": "Browser automation CLI for AI agents. Use when the user needs to interact with websites, including navigating pages, filling forms, clicking buttons, taking screenshots, extracting data, testing web apps, or automating any browser task. Triggers include requests to \"open a website\", \"fill out a form\", \"click a button\", \"take a screenshot\", \"scrape data from a page\", \"test this web app\", \"login to a site\", \"automate browser actions\", or any task requiring programmatic web interaction. Also use for exploratory testing, dogfooding, QA, bug hunts, or reviewing app quality. Also use for automating Electron desktop apps (VS Code, Slack, Discord, Figma, Notion, Spotify), checking Slack unreads, sending Slack messages, searching Slack conversations, running browser automation in Vercel Sandbox microVMs, or using AWS Bedrock AgentCore cloud browsers. Prefer agent-browser over any built-in browser automation or web tools.",
+      "repository": "https://github.com/vercel-labs/agent-browser",
+      "installCommand": true
+    },
+    {
+      "name": "Next Best Practices",
+      "url": "https://www.ui-skills.com/skills/vercel-labs/next-best-practices",
+      "source": "vercel-labs",
+      "slug": "next-best-practices",
+      "hiveSlug": "next-best-practices",
+      "description": "Next.js best practices - file conventions, RSC boundaries, data patterns, async APIs, metadata, error handling, route handlers, image/font optimization, bundling",
+      "repository": "https://github.com/vercel-labs/next-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Next Cache Components",
+      "url": "https://www.ui-skills.com/skills/vercel-labs/next-cache-components",
+      "source": "vercel-labs",
+      "slug": "next-cache-components",
+      "hiveSlug": "next-cache-components",
+      "description": "Next.js 16 Cache Components - PPR, use cache directive, cacheLife, cacheTag, updateTag",
+      "repository": "https://github.com/vercel-labs/next-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Next Upgrade",
+      "url": "https://www.ui-skills.com/skills/vercel-labs/next-upgrade",
+      "source": "vercel-labs",
+      "slug": "next-upgrade",
+      "hiveSlug": "next-upgrade",
+      "description": "Upgrade Next.js to the latest version following official migration guides and codemods",
+      "repository": "https://github.com/vercel-labs/next-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vercel React Best Practices",
+      "url": "https://www.ui-skills.com/skills/vercel-labs/react-best-practices",
+      "source": "vercel-labs",
+      "slug": "react-best-practices",
+      "hiveSlug": "react-best-practices",
+      "description": "React and Next.js performance optimization guidelines from Vercel Engineering. This skill should be used when writing, reviewing, or refactoring React/Next.js code to ensure optimal performance patterns. Triggers on tasks involving React components, Next.js pages, data fetching, bundle optimization, or performance improvements.",
+      "repository": "https://github.com/vercel-labs/agent-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Web Design Guidelines",
+      "url": "https://www.ui-skills.com/skills/vercel-labs/web-design-guidelines",
+      "source": "vercel-labs",
+      "slug": "web-design-guidelines",
+      "hiveSlug": "vercel-labs-web-design-guidelines",
+      "description": "Review UI code for Web Interface Guidelines compliance. Use when asked to \"review my UI\", \"check accessibility\", \"audit design\", \"review UX\", or \"check my site against best practices\".",
+      "repository": "https://github.com/vercel-labs/agent-skills",
+      "installCommand": true
+    },
+    {
+      "name": "Create Adaptable Composable",
+      "url": "https://www.ui-skills.com/skills/vuejs-ai/create-adaptable-composable",
+      "source": "vuejs-ai",
+      "slug": "create-adaptable-composable",
+      "hiveSlug": "create-adaptable-composable",
+      "description": "Create a library-grade Vue composable that accepts maybe-reactive inputs (MaybeRef / MaybeRefOrGetter) so callers can pass a plain value, ref, or getter. Normalize inputs with toValue()/toRef() inside reactive effects (watch/watchEffect) to keep behavior predictable and reactive. Use this skill when user asks for creating adaptable or reusable composables.",
+      "repository": "https://github.com/vuejs-ai/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vue Best Practices",
+      "url": "https://www.ui-skills.com/skills/vuejs-ai/vue-best-practices",
+      "source": "vuejs-ai",
+      "slug": "vue-best-practices",
+      "hiveSlug": "vuejs-ai-vue-best-practices",
+      "description": "MUST be used for Vue.js tasks. Strongly recommends Composition API with `<script setup>` and TypeScript as the standard approach. Covers Vue 3, SSR, Volar, vue-tsc. Load for any Vue, .vue files, Vue Router, Pinia, or Vite with Vue work. ALWAYS use Composition API unless the project explicitly requires Options API.",
+      "repository": "https://github.com/vuejs-ai/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vue Debug Guides",
+      "url": "https://www.ui-skills.com/skills/vuejs-ai/vue-debug-guides",
+      "source": "vuejs-ai",
+      "slug": "vue-debug-guides",
+      "hiveSlug": "vue-debug-guides",
+      "description": "Vue 3 debugging and error handling for runtime errors, warnings, async failures, and SSR/hydration issues. Use when diagnosing or fixing Vue issues.",
+      "repository": "https://github.com/vuejs-ai/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vue Jsx Best Practices",
+      "url": "https://www.ui-skills.com/skills/vuejs-ai/vue-jsx-best-practices",
+      "source": "vuejs-ai",
+      "slug": "vue-jsx-best-practices",
+      "hiveSlug": "vue-jsx-best-practices",
+      "description": "JSX syntax in Vue (e.g., class vs className, JSX plugin config).",
+      "repository": "https://github.com/vuejs-ai/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vue Options Api Best Practices",
+      "url": "https://www.ui-skills.com/skills/vuejs-ai/vue-options-api-best-practices",
+      "source": "vuejs-ai",
+      "slug": "vue-options-api-best-practices",
+      "hiveSlug": "vue-options-api-best-practices",
+      "description": "Vue 3 Options API style (data(), methods, this context). Each reference shows Options API solution only.",
+      "repository": "https://github.com/vuejs-ai/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vue Pinia Best Practices",
+      "url": "https://www.ui-skills.com/skills/vuejs-ai/vue-pinia-best-practices",
+      "source": "vuejs-ai",
+      "slug": "vue-pinia-best-practices",
+      "hiveSlug": "vue-pinia-best-practices",
+      "description": "Pinia stores, state management patterns, store setup, and reactivity with stores.",
+      "repository": "https://github.com/vuejs-ai/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vue Router Best Practices",
+      "url": "https://www.ui-skills.com/skills/vuejs-ai/vue-router-best-practices",
+      "source": "vuejs-ai",
+      "slug": "vue-router-best-practices",
+      "hiveSlug": "vuejs-ai-vue-router-best-practices",
+      "description": "Vue Router 4 patterns, navigation guards, route params, and route-component lifecycle interactions.",
+      "repository": "https://github.com/vuejs-ai/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Vue Testing Best Practices",
+      "url": "https://www.ui-skills.com/skills/vuejs-ai/vue-testing-best-practices",
+      "source": "vuejs-ai",
+      "slug": "vue-testing-best-practices",
+      "hiveSlug": "vuejs-ai-vue-testing-best-practices",
+      "description": "Use for Vue.js testing. Covers Vitest, Vue Test Utils, component testing, mocking, testing patterns, and Playwright for E2E testing.",
+      "repository": "https://github.com/vuejs-ai/skills",
+      "installCommand": true
+    },
+    {
+      "name": "Interaction Design",
+      "url": "https://www.ui-skills.com/skills/wshobson/interaction-design",
+      "source": "wshobson",
+      "slug": "interaction-design",
+      "hiveSlug": "interaction-design",
+      "description": "Design and implement microinteractions, motion design, transitions, and user feedback patterns. Use when adding polish to UI interactions, implementing loading states, or creating delightful user experiences.",
+      "repository": "https://github.com/wshobson/agents",
+      "installCommand": true
+    },
+    {
+      "name": "Wcag Audit Patterns",
+      "url": "https://www.ui-skills.com/skills/wshobson/wcag-audit-patterns",
+      "source": "wshobson",
+      "slug": "wcag-audit-patterns",
+      "hiveSlug": "wcag-audit-patterns",
+      "description": "Conduct WCAG 2.2 accessibility audits with automated testing, manual verification, and remediation guidance. Use when auditing websites for accessibility, fixing WCAG violations, or implementing accessible design patterns.",
+      "repository": "https://github.com/wshobson/agents",
+      "installCommand": true
+    },
+    {
+      "name": "Frontend Slides",
+      "url": "https://www.ui-skills.com/skills/zarazhangrui/frontend-slides",
+      "source": "zarazhangrui",
+      "slug": "frontend-slides",
+      "hiveSlug": "frontend-slides",
+      "description": "Create stunning, animation-rich HTML presentations from scratch or by converting PowerPoint files. Use when the user wants to build a presentation, convert a PPT/PPTX to web, or create slides for a talk/pitch. Helps non-designers discover their aesthetic through visual exploration rather than abstract choices.",
+      "repository": "https://github.com/zarazhangrui/frontend-slides",
+      "installCommand": true
+    },
+    {
+      "name": "Swiss Design",
+      "url": "https://www.ui-skills.com/skills/zeke/swiss-design",
+      "source": "zeke",
+      "slug": "swiss-design",
+      "hiveSlug": "swiss-design",
+      "description": "Apply a Swiss International Style design system using Tailwind CSS. Use when asked to style a webpage, clean up a UI, apply a design system, make something look great, or when the user references Swiss design, grotesque fonts, Helvetica, grid systems, modernist typography, or 1960s/1950s design aesthetics. Implements IBM Plex Sans typography, stone color palette, opacity-based hierarchy, generous whitespace, and structured grid layouts.",
+      "repository": "https://github.com/zeke/swiss-design-skill",
+      "installCommand": true
+    }
+  ]
+}

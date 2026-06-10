@@ -1,0 +1,18 @@
+{
+  "upstreamName": "rams",
+  "upstreamSlug": "rams",
+  "hiveSlug": "rams",
+  "sourceLabel": "rams",
+  "sourceUrl": "https://www.ui-skills.com/skills/rams/rams",
+  "repository": "https://github.com/rams/rams-ai",
+  "installCommand": "npx skills add https://github.com/rams/rams-ai --skill rams",
+  "importedAt": "2026-06-08T15:01:44.774Z",
+  "refreshedAt": "2026-06-08T15:01:44.774Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/rams/rams",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Optional UI skill from rams."
+}

@@ -1,0 +1,18 @@
+{
+  "upstreamName": "interface-design",
+  "upstreamSlug": "interface-design",
+  "hiveSlug": "interface-design",
+  "sourceLabel": "dammyjay93",
+  "sourceUrl": "https://www.ui-skills.com/skills/dammyjay93/interface-design",
+  "repository": "https://github.com/Dammyjay93/interface-design",
+  "installCommand": "npx skills add https://github.com/Dammyjay93/interface-design --skill interface-design",
+  "importedAt": "2026-06-08T15:01:34.153Z",
+  "refreshedAt": "2026-06-08T15:01:34.153Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/dammyjay93/interface-design",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "This skill is for interface design — dashboards, admin panels, apps, tools, and interactive products. NOT for marketing design (landing pages, marketing sites, campaigns)."
+}

@@ -1,5 +1,5 @@
 import { constants } from "fs";
-import { access, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "fs/promises";
+import { access, cp, mkdir, open, readdir, readFile, rm, stat, writeFile } from "fs/promises";
 import { createHash } from "crypto";
 import { homedir } from "os";
 import { basename, dirname, join, relative, resolve } from "path";
@@ -100,6 +100,7 @@ export type RemoteBrainSkillInput = {
   category?: string;
   skillMdUrl?: string;
   githubUrl?: string;
+  packagedPath?: string;
 };
 
 export type UploadedBrainSkillFile = {
@@ -123,6 +124,8 @@ type GitHubContentEntry = {
   content?: string;
   encoding?: string;
 };
+
+type SkillSummaryMode = "full" | "fast";
 
 export type RemoteBrainSkillProviderInventory = BrainSkillProviderInventory;
 
@@ -197,6 +200,8 @@ const GITHUB_API_BASE = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
 const MAX_GITHUB_SKILL_FILES = 120;
 const MAX_GITHUB_SKILL_FILE_BYTES = 5 * 1024 * 1024;
+const FAST_SKILL_SUMMARY_BYTES = 16 * 1024;
+const SKILL_FILE_LIST_CACHE_MS = 60_000;
 const BUNDLED_SHARED_SKILLS = [
   {
     slug: "karpathy-guidelines",
@@ -204,6 +209,12 @@ const BUNDLED_SHARED_SKILLS = [
     sourceUrl: "https://github.com/multica-ai/andrej-karpathy-skills/tree/main/skills/karpathy-guidelines",
   },
 ];
+
+const skillFileListCache = new Map<string, { at: number; files: string[] }>();
+
+export function invalidateSkillFileListCache() {
+  skillFileListCache.clear();
+}
 
 function expandHome(path: string) {
   return path === "~" || path.startsWith("~/") ? join(homedir(), path.slice(2)) : path;
@@ -220,6 +231,18 @@ async function canRead(path: string) {
 
 async function readText(path: string) {
   return readFile(path, "utf8").catch(() => "");
+}
+
+async function readTextHead(path: string, maxBytes = FAST_SKILL_SUMMARY_BYTES) {
+  const handle = await open(path, "r").catch(() => null);
+  if (!handle) return "";
+  try {
+    const buffer = new Uint8Array(maxBytes);
+    const { bytesRead } = await handle.read(buffer, 0, maxBytes, 0);
+    return new TextDecoder().decode(buffer.subarray(0, bytesRead));
+  } finally {
+    await handle.close().catch(() => {});
+  }
 }
 
 function checksum(value: string) {
@@ -268,9 +291,14 @@ function namespacedSharedSlug(basePath: string, skillPath: string) {
   return relativeDir.map((part) => sanitizeSlug(part)).join("/");
 }
 
-async function findSkillFiles(root: string, maxDepth: number) {
+async function findSkillFiles(root: string, maxDepth: number, options: { cache?: boolean } = {}) {
   const resolvedRoot = resolve(expandHome(root));
   if (!(await canRead(resolvedRoot))) return [];
+  const cacheKey = `${resolvedRoot}:${maxDepth}`;
+  if (options.cache) {
+    const hit = skillFileListCache.get(cacheKey);
+    if (hit && Date.now() - hit.at < SKILL_FILE_LIST_CACHE_MS) return [...hit.files];
+  }
   const found: string[] = [];
 
   async function walk(current: string, depth: number): Promise<void> {
@@ -293,6 +321,7 @@ async function findSkillFiles(root: string, maxDepth: number) {
   }
 
   await walk(resolvedRoot, 0);
+  if (options.cache) skillFileListCache.set(cacheKey, { at: Date.now(), files: [...found] });
   return found;
 }
 
@@ -303,15 +332,19 @@ async function skillSummary(input: {
   basePath: string;
   sharedByChecksum: Map<string, BrainSkillSummary>;
   sharedBySlug: Map<string, BrainSkillSummary>;
+  mode?: SkillSummaryMode;
 }): Promise<BrainSkillSummary> {
-  const markdown = await readText(input.skillPath);
+  const mode = input.mode ?? "full";
+  const fileStats = await stat(input.skillPath).catch(() => null);
+  const markdown = mode === "fast" ? await readTextHead(input.skillPath) : await readText(input.skillPath);
   const frontmatter = parseFrontmatter(markdown);
   const slug = input.provider === "shared"
     ? namespacedSharedSlug(input.basePath, input.skillPath)
     : sanitizeSlug(basename(dirname(input.skillPath)));
   const sourceMetadata = input.provider === "shared" ? await readSourceMetadata(dirname(input.skillPath)) : null;
-  const existing = input.sharedByChecksum.get(checksum(markdown)) ?? input.sharedBySlug.get(slug);
-  const updatedAt = (await stat(input.skillPath).catch(() => null))?.mtimeMs ?? 0;
+  const skillChecksum = mode === "fast" ? checksum(`${fileStats?.size ?? 0}:${markdown}`) : checksum(markdown);
+  const existing = input.sharedByChecksum.get(skillChecksum) ?? input.sharedBySlug.get(slug);
+  const updatedAt = fileStats?.mtimeMs ?? 0;
   return {
     id: `${input.provider}:${input.skillPath}`,
     slug,
@@ -321,7 +354,7 @@ async function skillSummary(input: {
     providerLabel: sourceMetadata?.providerLabel ?? input.providerLabel,
     path: input.skillPath,
     relativePath: relative(input.basePath, input.skillPath),
-    checksum: checksum(markdown),
+    checksum: skillChecksum,
     updatedAt,
     imported: input.provider === "shared" || Boolean(existing),
     importedAs: existing?.slug,
@@ -478,6 +511,15 @@ function safeDestinationPath(root: string, relativePath: string) {
   return destination;
 }
 
+function resolvePackagedSkillDir(packagedPath: string) {
+  const packageRoot = resolve(process.cwd(), "packaged-skills");
+  const sourceDir = resolve(process.cwd(), packagedPath.trim());
+  if (sourceDir !== packageRoot && !sourceDir.startsWith(`${packageRoot}/`)) {
+    throw new Error("Packaged skill path is outside the HivemindOS packaged-skills folder.");
+  }
+  return sourceDir;
+}
+
 async function downloadGitHubSkillDirectory(input: {
   source: GitHubSkillSource;
   ref: string;
@@ -521,9 +563,9 @@ function firstParagraph(markdown: string) {
     .find(Boolean) ?? "";
 }
 
-async function readSharedSkills(vaultPath: string) {
+async function readSharedSkills(vaultPath: string, mode: SkillSummaryMode = "full") {
   const skillsFolder = join(vaultPath, "Skills");
-  const files = await findSkillFiles(skillsFolder, 3);
+  const files = await findSkillFiles(skillsFolder, 3, { cache: mode === "fast" });
   const blank = new Map<string, BrainSkillSummary>();
   const summaries = await Promise.all(files.map((skillPath) => skillSummary({
     skillPath,
@@ -532,6 +574,7 @@ async function readSharedSkills(vaultPath: string) {
     basePath: skillsFolder,
     sharedByChecksum: blank,
     sharedBySlug: blank,
+    mode,
   })));
   const unique = new Map<string, BrainSkillSummary>();
   for (const skill of summaries.sort((a, b) => (
@@ -649,18 +692,20 @@ function mergeProviderInventories(
 export async function getBrainSkillInventory(
   vaultPath?: string,
   remoteProviders?: RemoteBrainSkillProviderInventory[],
+  options: { summaryMode?: SkillSummaryMode } = {},
 ): Promise<BrainSkillInventory> {
   const resolvedVault = resolveObsidianVaultPath(vaultPath);
   const skillsFolder = join(resolvedVault, "Skills");
   const readmePath = join(skillsFolder, "README.md");
   const seeded = await ensureSharedSkillsFolder(resolvedVault);
-  const shared = await readSharedSkills(resolvedVault);
+  const summaryMode = options.summaryMode ?? "full";
+  const shared = await readSharedSkills(resolvedVault, summaryMode);
   const sharedByChecksum = new Map(shared.map((skill) => [skill.checksum, skill]));
   const sharedBySlug = new Map(shared.map((skill) => [skill.slug, skill]));
 
   const localProviders = await Promise.all(PROVIDERS.map(async (provider) => {
     const skillFiles = [...new Set((await Promise.all(
-      provider.roots.map((root) => findSkillFiles(root.path, root.maxDepth)),
+      provider.roots.map((root) => findSkillFiles(root.path, root.maxDepth, { cache: summaryMode === "fast" })),
     )).flat())];
     const summaries = await Promise.all(skillFiles.map((skillPath) => skillSummary({
       skillPath,
@@ -669,10 +714,13 @@ export async function getBrainSkillInventory(
       basePath: resolve(expandHome(provider.home)),
       sharedByChecksum,
       sharedBySlug,
+      mode: summaryMode,
     })));
-    const managedMirrorPaths = new Set((await Promise.all(skillFiles.map(async (skillPath) => (
-      await isManagedSharedSkillMirror(skillPath) ? skillPath : ""
-    )))).filter(Boolean));
+    const managedMirrorPaths = summaryMode === "fast"
+      ? new Set<string>()
+      : new Set((await Promise.all(skillFiles.map(async (skillPath) => (
+        await isManagedSharedSkillMirror(skillPath) ? skillPath : ""
+      )))).filter(Boolean));
     const skills = summaries
       .filter((skill) => !managedMirrorPaths.has(skill.path))
       .filter((skill) => !skill.path.startsWith(skillsFolder))
@@ -706,7 +754,7 @@ export async function getBrainSkillInventory(
   return inventory;
 }
 
-export async function getSharedBrainSkills(vaultPath?: string): Promise<{
+export async function getSharedBrainSkills(vaultPath?: string, options: { summaryMode?: SkillSummaryMode } = {}): Promise<{
   vaultPath: string;
   skillsFolder: string;
   readmePath: string;
@@ -716,7 +764,7 @@ export async function getSharedBrainSkills(vaultPath?: string): Promise<{
   const skillsFolder = join(resolvedVault, "Skills");
   const readmePath = join(skillsFolder, "README.md");
   const seeded = await ensureSharedSkillsFolder(resolvedVault);
-  const shared = await readSharedSkills(resolvedVault);
+  const shared = await readSharedSkills(resolvedVault, options.summaryMode ?? "full");
   if (seeded) {
     await writeSkillsReadme({
       vaultPath: resolvedVault,
@@ -738,8 +786,9 @@ export const SHARED_BRAIN_CACHE_PREFIX = "shared-brain:";
 // Short-TTL wrapper around getSharedBrainSkills. The AEON panel reads the shared
 // skill list from several endpoints in one refresh (skills, secrets, analytics);
 // caching the underlying vault scan collapses those into a single read.
-export function getSharedBrainSkillsCached(vaultPath?: string) {
-  return cachedCall(`${SHARED_BRAIN_CACHE_PREFIX}${vaultPath ?? ""}`, 15_000, () => getSharedBrainSkills(vaultPath));
+export function getSharedBrainSkillsCached(vaultPath?: string, options: { summaryMode?: SkillSummaryMode } = {}) {
+  const summaryMode = options.summaryMode ?? "full";
+  return cachedCall(`${SHARED_BRAIN_CACHE_PREFIX}${summaryMode}:${vaultPath ?? ""}`, 15_000, () => getSharedBrainSkills(vaultPath, { summaryMode }));
 }
 
 async function writeSourceFiles(destinationDir: string, files: BrainSkillSourceFile[]) {
@@ -965,6 +1014,56 @@ export async function importRemoteBrainSkill(input: {
   const destinationSlug = await nextDestinationSlug(before.skillsFolder, slug, "shared", sharedBySlug);
   const destinationDir = join(before.skillsFolder, destinationSlug);
   await mkdir(destinationDir, { recursive: true });
+
+  if (skill.packagedPath?.trim()) {
+    const sourceDir = resolvePackagedSkillDir(skill.packagedPath);
+    const sourceSkillPath = join(sourceDir, "SKILL.md");
+    const rawMarkdown = await readFile(sourceSkillPath, "utf8").catch(() => "");
+    if (!rawMarkdown.trim()) throw new Error("Packaged skill is missing SKILL.md.");
+    await rm(destinationDir, { recursive: true, force: true });
+    await cp(sourceDir, destinationDir, {
+      recursive: true,
+      force: true,
+      filter: (path) => !path.split("/").some((part) => SKIPPED_DIRS.has(part)),
+    });
+    const markdown = normalizeAgentAgnosticSkill(rawMarkdown, skill.source || skill.packagedPath);
+    await writeFile(join(destinationDir, "SKILL.md"), markdown.endsWith("\n") ? markdown : `${markdown}\n`, "utf8");
+    const audit = await auditSkillDirectory({
+      slug: destinationSlug,
+      dir: destinationDir,
+      sourceRef: `packaged:${skill.packagedPath}`,
+    });
+    if (audit.status === "blocked") {
+      await rm(destinationDir, { recursive: true, force: true });
+      throw new Error(`Skill audit blocked ${destinationSlug}: ${audit.findings.map((finding) => finding.title).join(", ")}`);
+    }
+    await writeFile(join(destinationDir, SKILL_MANIFEST_FILE), JSON.stringify(createSkillManifest({
+      slug: destinationSlug,
+      name: skill.name || skillNameFromMarkdown(markdown),
+      description: skill.description || firstParagraph(markdown) || "Shared agent skill.",
+      sourceType: "pack",
+      sourceLabel: skill.source || "HivemindOS optional packaged skills",
+      sourceUrl: skill.githubUrl || skill.skillMdUrl || "",
+      sourcePath: skill.packagedPath,
+      audit,
+      markdown,
+    }), null, 2), "utf8");
+    await writeFile(join(destinationDir, SOURCE_METADATA_FILE), JSON.stringify({
+      provider: "packaged-optional",
+      providerLabel: skill.source || "HivemindOS optional packaged skills",
+      sourceUrl: skill.githubUrl || skill.skillMdUrl || "",
+      sourcePath: skill.packagedPath,
+      agentAgnostic: true,
+      auditStatus: audit.status,
+      capabilities: audit.capabilities,
+      envKeys: audit.envKeys,
+      importedAt: new Date().toISOString(),
+    }, null, 2), "utf8");
+
+    const after = await getBrainSkillInventory(input.vaultPath);
+    await writeSkillsReadme(after);
+    return after;
+  }
 
   let markdown = "";
   if (skill.skillMdUrl) {

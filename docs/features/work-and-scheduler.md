@@ -43,6 +43,13 @@ What the Work board can do:
 - Store attachments, linked directories, target machines, comments, events, run records, child links, and deliverables.
 - Optionally attach a Hivemind project to a task with `projectId`.
 - Preserve sanitized GitLawb proof records on cards through optional `proofs`.
+- Attach closed/open/optimizer loop contracts with success criteria, budgets, pre/post eval gates, and receipts.
+- Fail loop-gated tasks closed to Needs You when required eval gates do not have passing receipts.
+- Record optimizer loop experiments with parent lineage, hypotheses, scores, gate receipts, selected agents, and outcomes.
+- Rank loop frontier candidates with Evo-style strategies such as `argmax`, `top_k`, seeded `epsilon_greedy`, `softmax`, and `pareto_per_task`.
+- Preserve "what not to try" anti-patterns on the loop so future agents can avoid repeated failed approaches.
+- Store benchmark discovery metadata including target, command, metric direction, score floor, resource profile, instrumentation mode, and discovered gates.
+- Expose a loop observation summary with best score, running-best lineage, frontier items, gate counts, experiment counts, and anti-pattern count.
 - Show compact Code Proof badges for project-linked tasks.
 - Extract local paths and URLs from completed output into deliverables.
 - Roll completed child deliverables into parent handoff tasks while filtering planning/source artifacts.
@@ -51,6 +58,25 @@ What the Work board can do:
 - Use machine-aware directory picking for linked folders: native picker for This Mac in desktop builds, collector directory browsing for remote machines, and API fallback in the browser.
 - Capture quick-add text, files, images, directories, target machine, and voice transcripts directly in each lane.
 - Steer active tasks with comments, attachments, target-lane selection, and interruption/reclaim actions.
+
+### Loop Contracts And Eval Gates
+
+Loop-aware Work Board tasks can carry a `loop` contract. The contract records the mode (`closed`, `open`, or `optimizer`), goal, success criteria, retry/runtime budget, handoff rules, required evidence, and named eval gates.
+
+Eval gates follow the Evo-style split between `pre` gates and `post` gates. A `pre` gate is intended for checks that can fail early before spend or external work. A `post` gate is intended for checks that need the worker result, benchmark output, artifact, or human review. Required gates must be satisfied by passing `loopReceipts` before `/api/kanban` will complete the task; missing gate receipts move the card to Needs You and leave a `loop.eval-blocked` event instead of silently marking work done.
+
+Optimizer loops add five Evo-derived surfaces on top of the same task record:
+
+- Experiment lineage: `loop.experiments` records each hypothesis, parent experiment, score, per-task scores, status, result, agent, and gate receipts.
+- Frontier strategy: `loop.frontierStrategy` controls how the next attempt is selected. The stored observation ranks current leaves so agents can exploit the best branch or preserve specialists.
+- What-not-to-try memory: `loop.antiPatterns` captures discarded approaches with reasons and evidence, close to the task rather than buried in chat.
+- Benchmark discovery: `loop.benchmark` records the target, command, metric direction, score floor, resource profile, instrumentation choice, and discovery notes.
+- Observability: `loop.observation` summarizes best score, running-best experiment ids, frontier candidates, pending gates, experiment totals, and anti-pattern count for dashboard cards and agents.
+
+The API exposes this through `/api/kanban` actions:
+
+- `loop-discover`: attach or update benchmark discovery, gates, success criteria, and frontier strategy.
+- `loop-record`: append/update one experiment and optional anti-pattern records, then refresh the observation summary.
 
 ## Note Intake And Work History
 

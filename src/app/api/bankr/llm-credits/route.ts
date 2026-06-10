@@ -1,10 +1,8 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { bankrLlmAccessStatus, bankrLlmCreditTopUp, execBankrCommand } from "@/lib/services/bankr-llm";
 import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
 
-const execFileAsync = promisify(execFile);
 const FUND_CONFIRMATION = "FUND_BANKR_LLM_CREDITS";
 const HIVE_TOKEN_ADDRESS = process.env.HIVE_TOKEN_ADDRESS?.trim()
   || process.env.NEXT_PUBLIC_HIVE_TOKEN_ADDRESS?.trim()
@@ -86,7 +84,7 @@ function fallbackFundingOptions(): FundingOption[] {
 }
 
 async function readCredits() {
-  const { stdout, stderr } = await execFileAsync("bankr", ["llm", "credits"], { timeout: 20_000, maxBuffer: 500_000 });
+  const { stdout, stderr } = await execBankrCommand(["llm", "credits"], { timeout: 20_000, maxBuffer: 500_000 });
   const output = `${stdout}${stderr ? `\n${stderr}` : ""}`;
   return {
     balanceUsd: parseCreditBalance(output),
@@ -95,32 +93,52 @@ async function readCredits() {
 }
 
 async function readFundingOptions() {
-  const { stdout } = await execFileAsync("bankr", ["wallet", "portfolio", "--json", "--low-value"], {
+  const result = await execBankrCommand(["wallet", "portfolio", "--json", "--low-value"], {
     timeout: 25_000,
     maxBuffer: 4_000_000,
-  }).catch(() => ({ stdout: "" }));
+  }).then(({ stdout }) => ({ stdout, error: "" })).catch((error) => ({
+    stdout: "",
+    error: error instanceof Error ? error.message : "Could not read Bankr wallet portfolio.",
+  }));
   let parsed: unknown = null;
   try {
-    parsed = stdout.trim() ? JSON.parse(stdout) as unknown : null;
+    parsed = result.stdout.trim() ? JSON.parse(result.stdout) as unknown : null;
   } catch {
     parsed = null;
   }
   const options = parsed ? [...collectPortfolioTokens(parsed).values()] : [];
   const byToken = new Map(fallbackFundingOptions().map((option) => [option.token.toLowerCase(), option]));
   for (const option of options) byToken.set(option.token.toLowerCase(), option);
-  return [...byToken.values()].sort((left, right) => (right.balanceUsd ?? -1) - (left.balanceUsd ?? -1));
+  return {
+    options: [...byToken.values()].sort((left, right) => (right.balanceUsd ?? -1) - (left.balanceUsd ?? -1)),
+    error: result.error,
+  };
 }
 
 export async function GET(request: Request) {
   const unauthorized = await requireAuth(request);
   if (unauthorized) return unauthorized;
+  const balanceOnly = new URL(request.url).searchParams.get("mode") === "balance";
   try {
-    const [credits, fundingOptions] = await Promise.all([readCredits(), readFundingOptions()]);
+    if (balanceOnly) {
+      const [credits, access] = await Promise.all([readCredits(), bankrLlmAccessStatus()]);
+      return Response.json({
+        ok: true,
+        balanceUsd: credits.balanceUsd,
+        balanceLabel: credits.balanceUsd === null ? "Unknown" : `$${credits.balanceUsd.toFixed(2)}`,
+        clubActive: access.clubActive,
+        accessError: access.error,
+      });
+    }
+    const [credits, funding, access] = await Promise.all([readCredits(), readFundingOptions(), bankrLlmAccessStatus()]);
     return Response.json({
       ok: true,
       balanceUsd: credits.balanceUsd,
       balanceLabel: credits.balanceUsd === null ? "Unknown" : `$${credits.balanceUsd.toFixed(2)}`,
-      fundingOptions,
+      clubActive: access.clubActive,
+      accessError: access.error,
+      fundingError: funding.error,
+      fundingOptions: funding.options,
     });
   } catch (error) {
     return Response.json({
@@ -142,22 +160,34 @@ export async function POST(request: Request) {
   if (!Number.isFinite(amountUsd) || amountUsd <= 0 || amountUsd > 1000) return Response.json({ ok: false, error: "Enter a top-up amount from $1 to $1000." }, { status: 400 });
   if (!token || !/^[A-Za-z0-9._:-]{2,128}$/.test(token)) return Response.json({ ok: false, error: "Choose a token symbol or contract address." }, { status: 400 });
   try {
-    const amount = amountUsd.toFixed(2).replace(/\.00$/, "");
-    const { stdout, stderr } = await execFileAsync("bankr", ["llm", "credits", "add", amount, "--token", token, "--yes"], {
-      timeout: 180_000,
-      maxBuffer: 2_000_000,
-    });
+    const funding = await readFundingOptions();
+    if (/IP address not allowed/i.test(funding.error)) {
+      return Response.json({
+        ok: false,
+        error: `${funding.error} Bankr credit funding requires the shared Bankr key's IP allowlist to permit this machine. Update the key's allowlist in Bankr, or remove the allowlist for local development.`,
+      }, { status: 403 });
+    }
+    const topUp = await bankrLlmCreditTopUp(amountUsd, token);
     const credits = await readCredits().catch(() => ({ balanceUsd: null }));
+    const balanceUsd = topUp.newBalance ?? credits.balanceUsd;
+    const message = [
+      topUp.creditsGranted !== null ? `Added $${topUp.creditsGranted.toFixed(2)} credits.` : "Bankr LLM credits funded.",
+      topUp.newBalance !== null ? `New balance: $${topUp.newBalance.toFixed(2)}.` : "",
+      topUp.txHash ? `Transaction: ${topUp.txHash}` : "",
+    ].filter(Boolean).join(" ");
     return Response.json({
       ok: true,
-      balanceUsd: credits.balanceUsd,
-      balanceLabel: credits.balanceUsd === null ? "Unknown" : `$${credits.balanceUsd.toFixed(2)}`,
-      message: `${stdout}${stderr ? `\n${stderr}` : ""}`.trim().slice(0, 2000) || "Bankr LLM credits funded.",
+      balanceUsd,
+      balanceLabel: balanceUsd === null ? "Unknown" : `$${balanceUsd.toFixed(2)}`,
+      message,
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not fund Bankr LLM credits.";
     return Response.json({
       ok: false,
-      error: error instanceof Error ? error.message : "Could not fund Bankr LLM credits.",
+      error: /LLM Gateway not enabled/i.test(message)
+        ? `${message} HivemindOS used the shared Bankr key for both API and LLM Gateway access when no separate BANKR_API_KEY was configured. Bankr is still rejecting that key for LLM Gateway credit funding.`
+        : message,
     }, { status: 500 });
   }
 }

@@ -3,10 +3,11 @@
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import * as React from "react";
-import { ChevronDown, Copy, MessageSquare, Monitor, PhoneCall, Settings2, Smartphone, Trash2, Wallet } from "lucide-react";
+import { Copy, MessageSquare, Monitor, PhoneCall, Settings2, Smartphone, Trash2, Wallet } from "lucide-react";
 import { BeeIcon } from "./bee-icon";
 import { HexTile } from "./hex-tile";
 import { fleetAgentCanChat, isFleetMachineMobile, type AgentState, type FleetAgent, type FleetAgentChat, type FleetMachine } from "./fleet-data";
+import { FleetTaskPreviewRow } from "./task-preview-row";
 import styles from "./fleet-tokens.module.css";
 
 interface ListViewProps {
@@ -231,29 +232,17 @@ export function ListView({
                               const previewId = `${a.id}:${chat.id}`;
                               const isTaskExpanded = expandedTaskIds.has(previewId);
                               return (
-                                <div
+                                <FleetTaskPreviewRow
                                   key={previewId}
-                                  role="button"
-                                  tabIndex={0}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    toggleTaskPreview(previewId);
-                                  }}
-                                  onKeyDown={(event) => {
-                                    if (event.key !== "Enter" && event.key !== " ") return;
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    toggleTaskPreview(previewId);
-                                  }}
-                                  className={`${styles.rosterTaskPreview} ${styles.listTaskPreview} ${isTaskExpanded ? styles.rosterTaskPreviewExpanded : ""}`}
-                                  aria-expanded={isTaskExpanded}
-                                  aria-label={`${isTaskExpanded ? "Collapse" : "Expand"} recent chat for ${a.name}`}
+                                  id={previewId}
+                                  title={chat.title}
+                                  since={chat.since}
+                                  expanded={isTaskExpanded}
+                                  subjectName={a.name}
+                                  className={styles.listTaskPreview}
+                                  textClassName={styles.listTaskPreviewText}
+                                  onToggle={toggleTaskPreview}
                                 >
-                                  <span
-                                    className={`${styles.rosterTaskPreviewText} ${styles.listTaskPreviewText} ${isTaskExpanded ? "" : styles.rosterTaskPreviewTextCollapsed}`}
-                                  >
-                                    {chat.title}
-                                  </span>
                                   {canChat && onOpenTaskChat && chat.id !== "current" ? (
                                     <Tooltip>
                                       <TooltipTrigger asChild>
@@ -279,19 +268,7 @@ export function ListView({
                                       <TooltipContent>Resume chat</TooltipContent>
                                     </Tooltip>
                                   ) : null}
-                                  <span
-                                    aria-hidden="true"
-                                    style={{
-                                      color: "var(--muted)",
-                                      fontFamily: "var(--f-mono)",
-                                      fontSize: 9,
-                                      whiteSpace: "nowrap",
-                                    }}
-                                  >
-                                    {chat.since}
-                                  </span>
-                                  <ChevronDown size={13} aria-hidden="true" />
-                                </div>
+                                </FleetTaskPreviewRow>
                               );
                             })}
                             {isASel && (

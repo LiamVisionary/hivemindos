@@ -1,0 +1,18 @@
+{
+  "upstreamName": "adapt",
+  "upstreamSlug": "adapt",
+  "hiveSlug": "adapt",
+  "sourceLabel": "pbakaus",
+  "sourceUrl": "https://www.ui-skills.com/skills/pbakaus/adapt",
+  "repository": "https://github.com/pbakaus/impeccable",
+  "installCommand": "npx skills add https://github.com/pbakaus/impeccable --skill adapt",
+  "importedAt": "2026-06-08T15:01:39.957Z",
+  "refreshedAt": "2026-06-08T15:01:39.957Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/pbakaus/adapt",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Optional UI skill from pbakaus."
+}

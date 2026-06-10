@@ -25,19 +25,29 @@ function normalize(value?: string | number | null) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+// Host identity for app<->machine matching: IPv4 stays whole; otherwise the
+// first dns label, normalized, with the `hivemindos` link prefix stripped so
+// a link-node host matches its machine's identity.
+function hostIdentity(value?: string) {
+  const raw = (value ?? "").trim().toLowerCase().replace(/\.$/, "");
+  if (!raw) return "";
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(raw)) return raw;
+  return normalize(raw.split(".")[0]).replace(/^hivemindos/, "");
+}
+
 function appMatchesMachine(machine: FleetMachine, app: FleetHostedApp) {
-  const appMachine = normalize(app.machineName);
-  const appHost = normalize(app.machineHost);
-  const machineNames = [machine.name, machine.id, machine.tailnet, machine.ip].map(normalize).filter(Boolean);
   if (app.local && (machine.role === "Primary" || /this(?:mac|machine)/i.test(machine.name) || machine.ip === "127.0.0.1")) {
     return true;
   }
-  return machineNames.some((name) => (
-    name === appMachine
-    || name === appHost
-    || (name.length >= 5 && appMachine.includes(name))
-    || (appMachine.length >= 5 && name.includes(appMachine))
-  ));
+  // Exact host identity only — never substring matching. Two machines can
+  // share a hostname (e.g. two MacBooks both named "Liams-MacBook-Pro" that
+  // differ only by tailscale's `-1` suffix), and fuzzy matching attributed
+  // one machine's hosted apps to the other's card.
+  const machineHosts = [hostIdentity(machine.tailnet), hostIdentity(machine.ip), normalize(machine.id)].filter(Boolean);
+  const appHost = hostIdentity(app.machineHost);
+  if (appHost) return machineHosts.includes(appHost);
+  const appMachine = normalize(app.machineName);
+  return Boolean(appMachine) && [normalize(machine.name), ...machineHosts].includes(appMachine);
 }
 
 function appMatchScore(searchText: string, app: FleetHostedApp) {
@@ -109,6 +119,22 @@ export function applyActiveAppBadges(machines: FleetMachine[], apps: FleetHosted
       return match ? { ...agent, activeApp: appBadge(match) } : agent;
     }),
   }));
+}
+
+/** All connected apps & services hosted on a machine, deduped for badge rows
+ *  (the dashboard itself is skipped — it runs everywhere and is just noise). */
+export function machineConnectedApps(machine: FleetMachine, apps: FleetHostedApp[]): FleetActiveApp[] {
+  const seen = new Set<string>();
+  return apps
+    .filter((app) => app.online !== false && !isSelfDashboardApp(app) && appMatchesMachine(machine, app))
+    .map(appBadge)
+    .filter((app) => {
+      const key = normalize(app.name) || app.id;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((left, right) => Number(Boolean(right.iconUrl)) - Number(Boolean(left.iconUrl)) || left.name.localeCompare(right.name));
 }
 
 export function activeConnectedAppBadges(machines: FleetMachine[]): FleetActiveAppBadgeSnapshot[] {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getBrainSkillInventory, writeSkillsReadme } from "@/lib/services/obsidian/brain-skills";
-import { appendSkillAnalyticsEvent, installSkillPack, SKILL_PACKS } from "@/lib/services/skills/skill-os";
+import { appendSkillAnalyticsEvent, getSkillPacks, installSkillPack } from "@/lib/services/skills/skill-os";
 import { invalidateCachedCall } from "@/lib/services/async-cache";
 import { SHARED_BRAIN_CACHE_PREFIX } from "@/lib/services/obsidian/brain-skills";
 
@@ -8,7 +8,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json({ ok: true, packs: SKILL_PACKS });
+  const packs = await getSkillPacks();
+  return NextResponse.json({ ok: true, packs });
 }
 
 export async function POST(request: Request) {

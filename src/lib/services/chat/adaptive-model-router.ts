@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "fs/promises";
 import { homedir } from "os";
 import { dirname, join } from "path";
-import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
+import { HIVEMIND_OS_RUNTIME, type AgentProfile, type AgentRuntime } from "@/lib/types/agent-runtime";
 import { resolveAdaptiveOpenRouterModels } from "./adaptive-openrouter-models";
 
 type IncomingMessage = {
@@ -40,7 +40,7 @@ type ModelsDevCatalogCache = {
 };
 
 export type AdaptiveRouteCandidate = {
-  runtime: Extract<AgentRuntime, "hermes" | "openai-compatible">;
+  runtime: Extract<AgentRuntime, "hermes" | typeof HIVEMIND_OS_RUNTIME>;
   provider: string;
   providerName: string;
   model: string;
@@ -63,8 +63,8 @@ export type AdaptiveRoutePlan = {
 const MODELS_DEV_CACHE_FILE = join(homedir(), ".hivemindos", "models-dev-cache.json");
 const HIVE_ENV_FILE = join(homedir(), ".hivemindos", ".env");
 const HERMES_ENV_FILE = join(homedir(), ".hermes", ".env");
-const DIRECT_RUNTIME: AdaptiveRouteCandidate["runtime"] = "openai-compatible";
-const SUPPORTED_RUNTIMES = new Set<AdaptiveRouteCandidate["runtime"]>(["hermes", "openai-compatible"]);
+const DIRECT_RUNTIME: AdaptiveRouteCandidate["runtime"] = HIVEMIND_OS_RUNTIME;
+const SUPPORTED_RUNTIMES = new Set<AdaptiveRouteCandidate["runtime"]>(["hermes", HIVEMIND_OS_RUNTIME]);
 
 let modelsDevCache: ModelsDevCatalogCache | null = null;
 

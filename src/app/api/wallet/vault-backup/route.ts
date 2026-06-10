@@ -5,11 +5,15 @@ import {
   refreshWalletVaultBackup,
   restoreWalletVaultBackup,
 } from "@/lib/services/wallet/wallet-vault-backup";
+import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const unauthorized = await requireAuth(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const vaultPath = request.nextUrl.searchParams.get("vaultPath") ?? undefined;
     const status = await getWalletVaultBackupStatus(vaultPath);
@@ -23,6 +27,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const unauthorized = await requireAuth(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const body = await request.json().catch(() => ({})) as { action?: string; vaultPath?: string };
     if (body.action === "refresh") {

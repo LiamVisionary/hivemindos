@@ -81,7 +81,8 @@ function state() {
 
 export async function collectMemoryTelemetry(): Promise<MemoryTelemetryPayload> {
   const checkedAt = Date.now();
-  const rows = await readProcessTable();
+  const rows = await readProcessTable().catch(() => null);
+  if (!rows) return collectBasicMemoryTelemetry(checkedAt);
   const processByPid = new Map(rows.map((row) => [row.pid, row]));
   const relatedPids = relatedProcessIds(processByPid);
   const cwd = process.cwd();
@@ -182,6 +183,106 @@ export async function collectMemoryTelemetry(): Promise<MemoryTelemetryPayload> 
     topGrowers,
     topSystemProcesses,
     suspects: buildSuspects(processes, topGrowers, aggregateSample, currentState.aggregateSamples),
+  };
+}
+
+async function collectBasicMemoryTelemetry(checkedAt: number): Promise<MemoryTelemetryPayload> {
+  const currentMemory = process.memoryUsage();
+  const heapDiagnostics = collectHeapDiagnostics();
+  const aggregateSample: MemoryTelemetryAggregateSample = {
+    ts: checkedAt,
+    appRssMb: bytesToMb(currentMemory.rss),
+    currentRssMb: bytesToMb(currentMemory.rss),
+    heapUsedMb: bytesToMb(currentMemory.heapUsed),
+    heapTotalMb: bytesToMb(currentMemory.heapTotal),
+    heapLimitMb: heapDiagnostics.heapLimitMb,
+    oldSpaceUsedMb: heapDiagnostics.oldSpaceUsedMb,
+    codeSpaceUsedMb: heapDiagnostics.codeSpaceUsedMb,
+    largeObjectSpaceUsedMb: heapDiagnostics.largeObjectSpaceUsedMb,
+    externalMb: bytesToMb(currentMemory.external),
+    arrayBuffersMb: bytesToMb(currentMemory.arrayBuffers),
+    nativeContexts: heapDiagnostics.nativeContexts,
+    detachedContexts: heapDiagnostics.detachedContexts,
+    trackedProcessCount: 1,
+  };
+  const currentState = state();
+  currentState.aggregateSamples.push(aggregateSample);
+  currentState.aggregateSamples = currentState.aggregateSamples.slice(-MAX_AGGREGATE_SAMPLES);
+  await persistMemorySample(aggregateSample, heapDiagnostics);
+
+  const resourceUsage = process.resourceUsage();
+  const currentProcess: MemoryTelemetryProcess = {
+    pid: process.pid,
+    ppid: process.ppid,
+    role: "current",
+    label: "Next.js server",
+    command: "Current process",
+    rssMb: aggregateSample.currentRssMb,
+    percentMemory: totalmem() > 0 ? roundMb((currentMemory.rss / totalmem()) * 100) : 0,
+    firstSeenAt: checkedAt,
+    lastSeenAt: checkedAt,
+    sampleCount: 1,
+    growthMb: 0,
+    recentGrowthMb: 0,
+    growthRateMbPerHour: 0,
+    maxRssMb: aggregateSample.currentRssMb,
+    trend: "flat",
+    isCurrentProcess: true,
+    isAppRelated: true,
+  };
+
+  return {
+    ok: true,
+    checkedAt,
+    pid: process.pid,
+    uptimeSeconds: Math.round(process.uptime()),
+    processMemory: {
+      rssMb: aggregateSample.currentRssMb,
+      heapTotalMb: aggregateSample.heapTotalMb,
+      heapUsedMb: aggregateSample.heapUsedMb,
+      externalMb: aggregateSample.externalMb,
+      arrayBuffersMb: aggregateSample.arrayBuffersMb,
+      heapLimitMb: heapDiagnostics.heapLimitMb,
+      totalAvailableSizeMb: heapDiagnostics.totalAvailableSizeMb,
+      mallocedMemoryMb: heapDiagnostics.mallocedMemoryMb,
+      peakMallocedMemoryMb: heapDiagnostics.peakMallocedMemoryMb,
+      nativeContexts: heapDiagnostics.nativeContexts,
+      detachedContexts: heapDiagnostics.detachedContexts,
+      heapSpaces: heapDiagnostics.heapSpaces,
+    },
+    resourceUsage: {
+      maxRssMb: kbToMb(resourceUsage.maxRSS),
+      userCpuSeconds: microsecondsToSeconds(resourceUsage.userCPUTime),
+      systemCpuSeconds: microsecondsToSeconds(resourceUsage.systemCPUTime),
+    },
+    systemMemory: {
+      totalMb: bytesToMb(totalmem()),
+      freeMb: bytesToMb(freemem()),
+      usedMb: bytesToMb(totalmem() - freemem()),
+    },
+    cleanup: {
+      devGuardEnabled: process.env.NODE_ENV === "development" && process.env.HIVEMINDOS_DEV_MEMORY_GUARD !== "0",
+      gcAvailable: typeof (globalThis as typeof globalThis & { gc?: () => void }).gc === "function",
+      forceGcEnabled: process.env.HIVEMINDOS_DEV_FORCE_GC === "1",
+      maxOldSpaceMb: configuredMaxOldSpaceMb(),
+    },
+    summary: {
+      appRssMb: aggregateSample.appRssMb,
+      trackedProcessCount: 1,
+      topGrowerLabel: currentProcess.label,
+      topGrowerGrowthMb: 0,
+      sampleWindowMinutes: sampleWindowMinutes(currentState.aggregateSamples),
+    },
+    samples: currentState.aggregateSamples,
+    processes: [currentProcess],
+    topGrowers: [currentProcess],
+    topSystemProcesses: [],
+    suspects: [{
+      severity: "warning",
+      title: "Process table telemetry is unavailable",
+      detail: "HivemindOS returned current-process memory only because the OS process-table probe timed out or failed.",
+      pid: process.pid,
+    }],
   };
 }
 

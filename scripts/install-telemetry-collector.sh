@@ -30,6 +30,7 @@ LINK_LOG_MAX_BYTES="${HIVE_LINK_LOG_MAX_BYTES:-2097152}"
 LINK_TAILSCALE_DEBUG_LOGS="${HIVE_LINK_TAILSCALE_DEBUG_LOGS:-false}"
 LINK_DISABLE_PORTLIST="${HIVE_LINK_DISABLE_PORTLIST:-true}"
 LINK_RUN_WEB_CLIENT="${HIVE_LINK_RUN_WEB_CLIENT:-false}"
+LINK_EPHEMERAL="${HIVE_LINK_EPHEMERAL:-false}"
 LINK_STATUS_TIMEOUT="${HIVE_LINK_STATUS_TIMEOUT:-3s}"
 LINK_CONTROL_STATUS_URL="http://$LINK_CONTROL/status"
 LINK_CONTROL_HEALTH_URL="http://$LINK_CONTROL/health"
@@ -789,6 +790,9 @@ reset_hivemind_link_state() {
     backup_path="$state_path.bak.$(date +%Y%m%d-%H%M%S)"
     mv "$state_path" "$backup_path"
     echo "Hivemind Link had stale Tailscale sign-in state, so setup reset it automatically."
+    echo "Note: the previous Tailscale node registration stays on the tailnet as an offline duplicate."
+    echo "The dashboard lists it at /api/tailscale/cleanup once it has been offline past the stale window;"
+    echo "set HIVE_TAILNET_AUTO_CLEANUP=1 in ~/.hivemindos/.env (with TAILSCALE_API_KEY) to prune such nodes automatically."
   fi
   if [[ "$(uname -s)" == "Darwin" ]]; then
     : > "$HOME/Library/Logs/hivemindos-linkd.log" 2>/dev/null || true
@@ -1135,6 +1139,7 @@ PLIST
     <key>HIVE_LINK_TAILSCALE_DEBUG_LOGS</key><string>$LINK_TAILSCALE_DEBUG_LOGS</string>
     <key>HIVE_LINK_DISABLE_PORTLIST</key><string>$LINK_DISABLE_PORTLIST</string>
     <key>HIVE_LINK_RUN_WEB_CLIENT</key><string>$LINK_RUN_WEB_CLIENT</string>
+    <key>HIVE_LINK_EPHEMERAL</key><string>$LINK_EPHEMERAL</string>
     <key>HIVE_LINK_STATUS_TIMEOUT</key><string>$LINK_STATUS_TIMEOUT</string>
     <key>TS_DEBUG_DISABLE_PORTLIST</key><string>$LINK_DISABLE_PORTLIST</string>
   </dict>
@@ -1219,6 +1224,7 @@ Environment=HIVE_LINK_LOG_MAX_BYTES=$LINK_LOG_MAX_BYTES
 Environment=HIVE_LINK_TAILSCALE_DEBUG_LOGS=$LINK_TAILSCALE_DEBUG_LOGS
 Environment=HIVE_LINK_DISABLE_PORTLIST=$LINK_DISABLE_PORTLIST
 Environment=HIVE_LINK_RUN_WEB_CLIENT=$LINK_RUN_WEB_CLIENT
+Environment=HIVE_LINK_EPHEMERAL=$LINK_EPHEMERAL
 Environment=HIVE_LINK_STATUS_TIMEOUT=$LINK_STATUS_TIMEOUT
 Environment=TS_DEBUG_DISABLE_PORTLIST=$LINK_DISABLE_PORTLIST
 ExecStart=$LINK_BIN
@@ -1247,6 +1253,7 @@ mkdir -p "$HOME/.hivemindos"
   printf "HIVE_LINK_TAILSCALE_DEBUG_LOGS=%q\n" "$LINK_TAILSCALE_DEBUG_LOGS"
   printf "HIVE_LINK_DISABLE_PORTLIST=%q\n" "$LINK_DISABLE_PORTLIST"
   printf "HIVE_LINK_RUN_WEB_CLIENT=%q\n" "$LINK_RUN_WEB_CLIENT"
+  printf "HIVE_LINK_EPHEMERAL=%q\n" "$LINK_EPHEMERAL"
   printf "HIVE_LINK_STATUS_TIMEOUT=%q\n" "$LINK_STATUS_TIMEOUT"
 } > "$HOME/.hivemindos/collector.env"
 

@@ -1,0 +1,18 @@
+{
+  "upstreamName": "baseline-ui",
+  "upstreamSlug": "baseline-ui",
+  "hiveSlug": "baseline-ui",
+  "sourceLabel": "ibelick",
+  "sourceUrl": "https://www.ui-skills.com/skills/ibelick/baseline-ui",
+  "repository": "https://github.com/ibelick/ui-skills",
+  "installCommand": "npx skills add https://github.com/ibelick/ui-skills --skill baseline-ui",
+  "importedAt": "2026-06-08T15:01:34.894Z",
+  "refreshedAt": "2026-06-08T15:01:34.894Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/ibelick/baseline-ui",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Validates animation durations, enforces typography scale, checks component accessibility, and prevents layout anti-patterns in Tailwind CSS projects. Use when building UI components, reviewing CSS utilities, styling React views, or enforcing design consistency."
+}

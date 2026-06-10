@@ -1,0 +1,18 @@
+{
+  "upstreamName": "transitions-dev",
+  "upstreamSlug": "transitions-dev",
+  "hiveSlug": "transitions-dev",
+  "sourceLabel": "jakubantalik",
+  "sourceUrl": "https://www.ui-skills.com/skills/jakubantalik/transitions-dev",
+  "repository": "https://github.com/Jakubantalik/transitions-dev",
+  "installCommand": "npx skills add https://github.com/Jakubantalik/transitions-dev --skill transitions-dev",
+  "importedAt": "2026-06-08T15:01:35.859Z",
+  "refreshedAt": "2026-06-08T15:01:35.859Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/jakubantalik/transitions-dev",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Production-ready CSS transitions for web apps. Use when implementing notification badges, dropdowns, modals, panel reveals, page transitions, card resizes, number pop-ins, text swaps, icon swaps, success checks, avatar group hovers, or error state shakes. Triggers on \"add a transition\", \"animate the dropdown\", \"make the modal open smoothly\", \"swap icon\", \"page slide\", \"stagger animation\", \"open / close transition\", \"make it animate\", \"tween the size\", \"fade between\", \"smooth open\", \"smooth close\", \"success animation\", \"checkmark animation\", \"confirmation animation\", \"form error\", \"shake on invalid\", \"validation feedback\", \"hover lift\", \"avatar stack hover\", \"chip group hover\"."
+}

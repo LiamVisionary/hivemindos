@@ -28,6 +28,17 @@ The ledger tracks the pool in micro-HIVE. Usage receipts mint Honey as a HIVE-de
 
 `POST /return-to-honey` reverses older ledger-only HIVE conversions back into available Honey so the dashboard can retire the confusing intermediate balance before real Bankr settlement.
 
+## Managed HONEY Credits
+
+Managed-agent credits use the same HONEY display unit, but they are a separate spend-only bucket on `agent_balances`:
+
+- `available_honey_micro` is reward Honey and can be claimed to HIVE.
+- `managed_honey_balance_micro` is service credit for HivemindOS-managed agents and cannot be claimed.
+
+`POST /managed-billing/events` records managed credit and debit events. The endpoint is idempotent by `event_id` and optional `(workspace_id, idempotency_key)`, requires either `HONEY_BILLING_SECRET`/`HONEY_LEDGER_SECRET` HMAC or the admin bearer token, and refuses debits when the D1 balance is insufficient.
+
+Funding rails such as Stripe, x402, Bankr, agent wallets, or HIVE should credit managed Honey only after their settlement proof is verified server-side. Browser requests must never be allowed to mint official managed Honey directly.
+
 ## Free-tier setup
 
 ```bash
@@ -41,6 +52,7 @@ Copy the returned `database_id` into `wrangler.toml`, then run:
 ```bash
 pnpm d1:migrate:remote
 pnpm wrangler secret put HONEY_LEDGER_SECRET
+pnpm wrangler secret put HONEY_BILLING_SECRET
 pnpm wrangler secret put HONEY_LEDGER_ADMIN_TOKEN
 pnpm wrangler secret put HONEY_REWARD_BANKR_API_KEY
 pnpm deploy
@@ -50,6 +62,7 @@ Existing deployments need the reward-pool migration once:
 
 ```bash
 pnpm d1:migrate:reward-pool:remote
+pnpm d1:migrate:managed-billing:remote
 ```
 
 For local testing:
@@ -74,6 +87,12 @@ Trusted official HivemindOS servers/runtimes may set a signer secret:
 
 ```bash
 HONEY_LEDGER_SIGNING_SECRET="<same value as HONEY_LEDGER_SECRET>"
+```
+
+Managed billing signers may use a separate secret:
+
+```bash
+HONEY_BILLING_SIGNING_SECRET="<same value as HONEY_BILLING_SECRET>"
 ```
 
 Never commit private values. Editing frontend Honey values does not affect conversion, because `/exchange` converts only the Honey balance stored in the official Cloudflare D1 ledger.

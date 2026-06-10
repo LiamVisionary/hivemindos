@@ -6,11 +6,12 @@ import { join, resolve } from "path";
 import net from "net";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
-import { getRuntimeUrl } from "@/lib/types/agent-runtime";
+import { HIVEMIND_OS_RUNTIME, getRuntimeUrl, normalizeAgentRuntime, type AgentProfile, type SharedVaultConfig } from "@/lib/types/agent-runtime";
 import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
+import { getRuntimeIntegrationStatus } from "@/lib/services/runtime-integrations";
 import type { RuntimeRun } from "@/lib/services/runtime-adapters/types";
 import { normalizeAgentTelemetryUrl } from "@/lib/utils/agent-telemetry-url";
+import { canonicalLocalCollectorUrl, normalizeCollectorUrl } from "@/lib/services/local-collector-url";
 
 export const runtime = "nodejs";
 
@@ -55,6 +56,14 @@ type AgentSnapshot = {
   error?: string;
 };
 
+type RuntimeProbeResult = {
+  reachable: boolean;
+  payload: unknown;
+  error: string;
+  source?: string;
+  summary?: string;
+};
+
 type SnapshotPayload = {
   ok: true;
   checkedAt: number;
@@ -79,19 +88,15 @@ async function pathReadable(path?: string) {
   return access(resolve(expandHome(path)), constants.R_OK).then(() => true).catch(() => false);
 }
 
-function normalizeCollectorUrl(url: string) {
-  return url.replace(/\/+$/, "");
-}
-
-function collectorUrlForSnapshot(agent: AgentWithLocal) {
+async function collectorUrlForSnapshot(agent: AgentWithLocal) {
   const telemetryUrl = normalizeAgentTelemetryUrl(agent.telemetryUrl);
-  if (telemetryUrl) return telemetryUrl;
+  if (telemetryUrl) return canonicalLocalCollectorUrl(agent);
   if (!agent.collectorCapabilities) return "";
-  return normalizeAgentTelemetryUrl(agent.gatewayUrl);
+  return canonicalLocalCollectorUrl(normalizeAgentTelemetryUrl(agent.gatewayUrl));
 }
 
 async function readRemoteSnapshot(agent: AgentWithLocal): Promise<AgentSnapshot | null> {
-  const baseUrl = collectorUrlForSnapshot(agent);
+  const baseUrl = await collectorUrlForSnapshot(agent);
   if (!baseUrl) return null;
   try {
     const response = await fetch(`${normalizeCollectorUrl(baseUrl)}/snapshot`, {
@@ -528,7 +533,56 @@ async function checkTcpUrl(url: string) {
   });
 }
 
-async function checkRuntime(agent: AgentProfile) {
+type LmStudioStatusModel = {
+  key: string;
+  displayName?: string;
+  type?: string;
+  loaded?: boolean;
+};
+
+function lmStudioModelName(model: LmStudioStatusModel | undefined) {
+  return (model?.displayName || model?.key || "").trim();
+}
+
+async function checkLmStudioInventory(agent: AgentProfile): Promise<RuntimeProbeResult | null> {
+  if (normalizeAgentRuntime(agent.runtime) !== HIVEMIND_OS_RUNTIME || agent.provider !== "lm-studio") return null;
+  try {
+    const status = await getRuntimeIntegrationStatus(HIVEMIND_OS_RUNTIME, { ...agent, runtime: HIVEMIND_OS_RUNTIME });
+    const lmStudio = status.providerStatus?.lmStudio;
+    const llmModels = (lmStudio?.models ?? []).filter((model) => model.type !== "embedding");
+    if (!llmModels.length) {
+      return lmStudio?.error ? { reachable: false, payload: status, error: lmStudio.error } : null;
+    }
+    const configuredModel = agent.model?.trim();
+    const selectedModel = configuredModel
+      ? llmModels.find((model) => model.key === configuredModel || model.displayName === configuredModel)
+      : undefined;
+    const loadedModel = selectedModel?.loaded
+      ? selectedModel
+      : llmModels.find((model) => model.loaded) ?? selectedModel;
+    const model = loadedModel ?? llmModels[0];
+    const loadedCount = llmModels.filter((item) => item.loaded).length;
+    const source = loadedCount > 0 ? "LM Studio loaded model" : "LM Studio inventory";
+    const summary = loadedCount > 0
+      ? `LM Studio reports ${lmStudioModelName(model) || "a local model"} loaded.`
+      : `LM Studio inventory reports ${llmModels.length} local model${llmModels.length === 1 ? "" : "s"}.`;
+    return {
+      reachable: true,
+      payload: status,
+      error: "",
+      source,
+      summary,
+    };
+  } catch (error) {
+    return {
+      reachable: false,
+      payload: null,
+      error: error instanceof Error ? error.message : "LM Studio inventory check failed.",
+    };
+  }
+}
+
+async function checkRuntime(agent: AgentProfile): Promise<RuntimeProbeResult> {
   if (agent.runtime === "openclaw") {
     const reachable = await checkTcpUrl(agent.gatewayUrl);
     return {
@@ -537,6 +591,8 @@ async function checkRuntime(agent: AgentProfile) {
       error: reachable ? "" : "OpenClaw gateway port is not reachable",
     };
   }
+  const lmStudioInventory = await checkLmStudioInventory(agent);
+  if (lmStudioInventory?.reachable) return lmStudioInventory;
   const statusUrl = getRuntimeUrl(agent, agent.statusPath || "/health");
   try {
     const response = await fetch(statusUrl, {
@@ -554,7 +610,7 @@ async function checkRuntime(agent: AgentProfile) {
     const reason = error instanceof Error && error.message !== "fetch failed"
       ? error.message
       : "endpoint is not listening";
-    return { reachable: false, payload: null, error: `Runtime status unavailable at ${statusUrl}: ${reason}` };
+    return lmStudioInventory ?? { reachable: false, payload: null, error: `Runtime status unavailable at ${statusUrl}: ${reason}` };
   }
 }
 
@@ -678,7 +734,7 @@ async function readSnapshots(agents: AgentWithLocal[], sharedVault?: SharedVault
       .slice(0, 12);
     const failedTask = tasks.find((task) => task.status === "failed");
     const sources = [
-      runtimeResult.reachable ? "runtime reachable" : "",
+      runtimeResult.reachable ? runtimeResult.source ?? "runtime reachable" : "",
       remoteSnapshot?.error ? "remote agent bridge" : "",
       taskBusTasks.length ? "task bus" : "",
       hermesDbTasks.length ? "Hermes history" : "",
@@ -700,6 +756,7 @@ async function readSnapshots(agents: AgentWithLocal[], sharedVault?: SharedVault
       runtimeReachable: runtimeResult.reachable,
       processRunning: processes.length > 0,
       summary: tasks[0]?.title
+        ?? runtimeResult.summary
         ?? (processes.length
           ? "Process is running; no current task exposed yet."
           : localFilesWarning

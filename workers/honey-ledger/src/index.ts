@@ -3,6 +3,7 @@ type Env = {
   HIVE_PER_MILLION_TOKENS?: string;
   OBSERVED_DAILY_TOKEN_CAP?: string;
   HONEY_LEDGER_SECRET?: string;
+  HONEY_BILLING_SECRET?: string;
   HONEY_LEDGER_READ_TOKEN?: string;
   HONEY_LEDGER_ADMIN_TOKEN?: string;
   HONEY_REWARD_BANKR_API_KEY?: string;
@@ -24,6 +25,28 @@ type UsageReceipt = {
 
 type ObservedUsage = Omit<UsageReceipt, "issuerId" | "signature">;
 
+type ManagedBillingKind = "credit" | "debit";
+
+type ManagedBillingEvent = {
+  eventId: string;
+  issuerId: string;
+  workspaceId: string;
+  agentId: string;
+  kind: ManagedBillingKind;
+  honeyAmount: number;
+  usdAmount?: number;
+  provider: string;
+  sku: string;
+  units?: number;
+  unitUsd?: number;
+  markupBps?: number;
+  source: string;
+  timestamp: string;
+  idempotencyKey?: string;
+  metadataHash?: string;
+  signature?: string;
+};
+
 type AgentBalanceRow = {
   workspace_id: string;
   agent_id: string;
@@ -34,6 +57,9 @@ type AgentBalanceRow = {
   lifetime_honey_micro: number;
   available_honey_micro: number;
   hive_balance_micro: number;
+  managed_honey_balance_micro: number;
+  managed_honey_lifetime_credit_micro: number;
+  managed_honey_spent_micro: number;
   updated_at: string;
 };
 
@@ -89,6 +115,9 @@ const worker: ExportedHandler<Env> = {
       }
       if (request.method === "POST" && url.pathname === "/pool-events") {
         return handlePoolEvent(request, env);
+      }
+      if (request.method === "POST" && url.pathname === "/managed-billing/events") {
+        return handleManagedBillingEvent(request, env);
       }
       return fail(env, "Not found.", 404);
     } catch (error) {
@@ -497,6 +526,135 @@ async function handlePoolEvent(request: Request, env: Env) {
   });
 }
 
+async function handleManagedBillingEvent(request: Request, env: Env) {
+  const body = await request.json().catch(() => null);
+  if (!isManagedBillingEvent(body)) return fail(env, "Invalid managed Honey billing event.", 400);
+
+  const billingSecret = env.HONEY_BILLING_SECRET || env.HONEY_LEDGER_SECRET;
+  const bearerError = requireBearer(request, env.HONEY_LEDGER_ADMIN_TOKEN);
+  const hasAdmin = env.HONEY_LEDGER_ADMIN_TOKEN && !bearerError;
+  if (!hasAdmin) {
+    if (!billingSecret) return fail(env, "Managed Honey billing requires a trusted signer.", 500);
+    if (!body.signature) return fail(env, "Managed Honey billing events must be signed.", 401);
+    const expected = await signManagedBillingEvent(body, billingSecret);
+    if (!timingSafeEqual(body.signature, expected)) return fail(env, "Invalid managed Honey billing signature.", 401);
+  }
+
+  const honeyMicro = toMicro(body.honeyAmount);
+  if (honeyMicro <= 0) return fail(env, "Managed Honey billing amount must be greater than zero.", 400);
+
+  const existing = await findManagedBillingEvent(env, body);
+  if (existing?.applied) {
+    const pool = await getRewardPoolState(env);
+    const rows = await env.DB.prepare("SELECT * FROM agent_balances WHERE workspace_id = ? AND agent_id = ?")
+      .bind(body.workspaceId, body.agentId)
+      .all<AgentBalanceRow>();
+    return ok(env, {
+      ok: true,
+      duplicate: true,
+      ledger: toHoneyLedger(env, rows.results ?? [], pool),
+      event: managedBillingLedgerEvent(body),
+      balance: rows.results?.[0] ? toBalance(rows.results[0]) : null,
+    });
+  }
+
+  await ensureRewardPoolState(env);
+  await ensureManagedBalanceRow(env, body.workspaceId, body.agentId);
+  const inserted = await env.DB.prepare(
+    `INSERT OR IGNORE INTO managed_billing_events
+      (event_id, issuer_id, workspace_id, agent_id, kind, honey_delta_micro, usd_amount_micro, provider, sku, units, unit_usd_micro, markup_bps, source, occurred_at, signature, idempotency_key, metadata_hash, applied)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+  ).bind(
+    body.eventId,
+    body.issuerId,
+    body.workspaceId,
+    body.agentId,
+    body.kind,
+    body.kind === "credit" ? honeyMicro : -honeyMicro,
+    moneyToMicro(body.usdAmount ?? 0),
+    cleanLabel(body.provider),
+    cleanLabel(body.sku),
+    Math.max(0, Number(body.units ?? 0) || 0),
+    moneyToMicro(body.unitUsd ?? 0),
+    Math.max(0, Math.round(Number(body.markupBps ?? 0) || 0)),
+    cleanLabel(body.source),
+    body.timestamp,
+    body.signature ?? "",
+    cleanOptional(body.idempotencyKey),
+    cleanOptional(body.metadataHash),
+  ).run();
+
+  if ((inserted.meta.changes ?? 0) === 0) {
+    const pool = await getRewardPoolState(env);
+    const rows = await env.DB.prepare("SELECT * FROM agent_balances WHERE workspace_id = ? AND agent_id = ?")
+      .bind(body.workspaceId, body.agentId)
+      .all<AgentBalanceRow>();
+    return ok(env, {
+      ok: true,
+      duplicate: true,
+      ledger: toHoneyLedger(env, rows.results ?? [], pool),
+      event: managedBillingLedgerEvent(body),
+      balance: rows.results?.[0] ? toBalance(rows.results[0]) : null,
+    });
+  }
+
+  const update = body.kind === "credit"
+    ? await env.DB.prepare(
+      `UPDATE agent_balances
+        SET managed_honey_balance_micro = managed_honey_balance_micro + ?,
+          managed_honey_lifetime_credit_micro = managed_honey_lifetime_credit_micro + ?,
+          updated_at = datetime('now')
+        WHERE workspace_id = ? AND agent_id = ?`,
+    ).bind(honeyMicro, honeyMicro, body.workspaceId, body.agentId).run()
+    : await env.DB.prepare(
+      `UPDATE agent_balances
+        SET managed_honey_balance_micro = managed_honey_balance_micro - ?,
+          managed_honey_spent_micro = managed_honey_spent_micro + ?,
+          updated_at = datetime('now')
+        WHERE workspace_id = ? AND agent_id = ? AND managed_honey_balance_micro >= ?`,
+    ).bind(honeyMicro, honeyMicro, body.workspaceId, body.agentId, honeyMicro).run();
+
+  if ((update.meta.changes ?? 0) === 0) {
+    await env.DB.prepare("DELETE FROM managed_billing_events WHERE event_id = ? AND applied = 0").bind(body.eventId).run();
+    return fail(env, "Insufficient managed HONEY credits.", 402);
+  }
+
+  await env.DB.prepare("UPDATE managed_billing_events SET applied = 1 WHERE event_id = ?").bind(body.eventId).run();
+
+  const rows = await env.DB.prepare("SELECT * FROM agent_balances WHERE workspace_id = ? AND agent_id = ?")
+    .bind(body.workspaceId, body.agentId)
+    .all<AgentBalanceRow>();
+  const pool = await getRewardPoolState(env);
+  return ok(env, {
+    ok: true,
+    duplicate: false,
+    ledger: toHoneyLedger(env, rows.results ?? [], pool),
+    event: managedBillingLedgerEvent(body),
+    balance: rows.results?.[0] ? toBalance(rows.results[0]) : null,
+  });
+}
+
+async function ensureManagedBalanceRow(env: Env, workspaceId: string, agentId: string) {
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO agent_balances
+      (workspace_id, agent_id, updated_at)
+      VALUES (?, ?, datetime('now'))`,
+  ).bind(workspaceId, agentId).run();
+}
+
+async function findManagedBillingEvent(env: Env, event: ManagedBillingEvent) {
+  const byEventId = await env.DB.prepare("SELECT event_id, applied FROM managed_billing_events WHERE event_id = ?")
+    .bind(event.eventId)
+    .first<{ event_id: string; applied: number }>();
+  if (byEventId) return { eventId: byEventId.event_id, applied: byEventId.applied === 1 };
+  const idempotencyKey = cleanOptional(event.idempotencyKey);
+  if (!idempotencyKey) return null;
+  const byKey = await env.DB.prepare("SELECT event_id, applied FROM managed_billing_events WHERE workspace_id = ? AND idempotency_key = ?")
+    .bind(event.workspaceId, idempotencyKey)
+    .first<{ event_id: string; applied: number }>();
+  return byKey ? { eventId: byKey.event_id, applied: byKey.applied === 1 } : null;
+}
+
 async function getBalance(env: Env, workspaceId: string, agentId: string) {
   const row = await env.DB.prepare("SELECT * FROM agent_balances WHERE workspace_id = ? AND agent_id = ?")
     .bind(workspaceId, agentId)
@@ -526,6 +684,9 @@ function toBalance(row: AgentBalanceRow) {
     lifetimeHoney: fromMicro(row.lifetime_honey_micro),
     availableHoney: fromMicro(row.available_honey_micro),
     hiveBalance: fromMicro(row.hive_balance_micro),
+    managedHoneyBalance: fromMicro(row.managed_honey_balance_micro),
+    managedHoneyLifetimeCredits: fromMicro(row.managed_honey_lifetime_credit_micro),
+    managedHoneySpent: fromMicro(row.managed_honey_spent_micro),
     updatedAt: row.updated_at,
   };
 }
@@ -565,6 +726,25 @@ function isObservedUsage(value: unknown): value is ObservedUsage {
   );
 }
 
+function isManagedBillingEvent(value: unknown): value is ManagedBillingEvent {
+  if (!value || typeof value !== "object") return false;
+  const event = value as Partial<ManagedBillingEvent>;
+  return Boolean(
+    cleanId(event.eventId ?? "") &&
+    cleanId(event.issuerId ?? "") &&
+    cleanId(event.workspaceId ?? "") &&
+    cleanId(event.agentId ?? "") &&
+    (event.kind === "credit" || event.kind === "debit") &&
+    typeof event.honeyAmount === "number" &&
+    Number.isFinite(event.honeyAmount) &&
+    event.honeyAmount > 0 &&
+    typeof event.provider === "string" &&
+    typeof event.sku === "string" &&
+    /^managed-agent($|-)/.test(event.source ?? "") &&
+    typeof event.timestamp === "string",
+  );
+}
+
 async function observedTokensToday(env: Env, workspaceId: string) {
   const row = await env.DB.prepare(
     `SELECT COALESCE(SUM(tokens_used), 0) AS tokens
@@ -588,6 +768,18 @@ async function signReceipt(receipt: Omit<UsageReceipt, "signature">, secret: str
   return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+async function signManagedBillingEvent(event: Omit<ManagedBillingEvent, "signature">, secret: string) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(canonicalManagedBillingEvent(event)));
+  return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 function canonicalReceipt(receipt: Omit<UsageReceipt, "signature">) {
   return [
     receipt.issuerId,
@@ -599,6 +791,40 @@ function canonicalReceipt(receipt: Omit<UsageReceipt, "signature">) {
     receipt.source,
     receipt.timestamp,
   ].join(".");
+}
+
+function canonicalManagedBillingEvent(event: Omit<ManagedBillingEvent, "signature">) {
+  return [
+    event.issuerId,
+    event.eventId,
+    event.workspaceId,
+    event.agentId,
+    event.kind,
+    fromMicro(toMicro(event.honeyAmount)),
+    fromMicro(moneyToMicro(event.usdAmount ?? 0)),
+    cleanLabel(event.provider),
+    cleanLabel(event.sku),
+    Math.max(0, Number(event.units ?? 0) || 0),
+    fromMicro(moneyToMicro(event.unitUsd ?? 0)),
+    Math.max(0, Math.round(Number(event.markupBps ?? 0) || 0)),
+    cleanLabel(event.source),
+    event.timestamp,
+    cleanOptional(event.idempotencyKey),
+    cleanOptional(event.metadataHash),
+  ].join(".");
+}
+
+function managedBillingLedgerEvent(event: ManagedBillingEvent) {
+  return {
+    id: event.eventId,
+    agentId: event.agentId,
+    kind: event.kind === "credit" ? "managed-credit" : "managed-spend",
+    source: event.source,
+    tokensUsed: 0,
+    honeyDelta: event.kind === "credit" ? event.honeyAmount : -event.honeyAmount,
+    hiveDelta: 0,
+    createdAt: event.timestamp,
+  };
 }
 
 function timingSafeEqual(left: string, right: string) {
@@ -702,8 +928,9 @@ function toMicro(value: unknown) {
   return moneyToMicro(value);
 }
 
-function fromMicro(value: number) {
-  return Math.round(Math.max(0, value) * 1_000_000 / MICRO) / 1_000_000;
+function fromMicro(value: unknown) {
+  const numeric = Number(value);
+  return Math.round(Math.max(0, Number.isFinite(numeric) ? numeric : 0) * 1_000_000 / MICRO) / 1_000_000;
 }
 
 function clampSafeInteger(value: bigint) {
@@ -713,6 +940,15 @@ function clampSafeInteger(value: bigint) {
 
 function cleanId(value: string) {
   return value.trim().slice(0, 160);
+}
+
+function cleanLabel(value: unknown) {
+  return typeof value === "string" ? value.trim().slice(0, 160) : "";
+}
+
+function cleanOptional(value: unknown) {
+  const cleaned = cleanLabel(value);
+  return cleaned || null;
 }
 
 function positiveNumber(value: unknown, fallback: number) {

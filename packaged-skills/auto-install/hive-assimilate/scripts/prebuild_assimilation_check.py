@@ -8,6 +8,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -20,7 +21,15 @@ def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, text=True, capture_output=True)
 
 
-def write_log(args: argparse.Namespace, phase: str, source: str, decision: str, reason: str, note: str = "") -> None:
+def write_log(
+    args: argparse.Namespace,
+    phase: str,
+    source: str,
+    decision: str,
+    reason: str,
+    note: str = "",
+    payload: dict[str, Any] | None = None,
+) -> None:
     cmd = [
         sys.executable,
         str(LOG_SCRIPT),
@@ -40,8 +49,27 @@ def write_log(args: argparse.Namespace, phase: str, source: str, decision: str, 
         reason,
     ]
     if note:
-        cmd.extend(["--note", note[:4000]])
-    subprocess.run(cmd, text=True, capture_output=True, check=False)
+        cmd.extend(["--note", note])
+    if payload is not None:
+        cmd.extend(["--payload", json.dumps(payload)])
+    completed = subprocess.run(cmd, text=True, capture_output=True, check=False)
+    if completed.returncode != 0:
+        raise SystemExit(f"failed to write assimilation log: {completed.stderr.strip()}")
+
+
+def print_local_results(records: list[dict[str, Any]]) -> None:
+    for rank, record in enumerate(records, start=1):
+        print(f"{rank}. score={record.get('score')} {record.get('repo')} [{record.get('kind')}]")
+        if record.get("matched_terms"):
+            print(f"   matched: {', '.join(record['matched_terms'])}")
+        if record.get("path"):
+            print(f"   path: {record.get('path')}")
+        if record.get("url"):
+            print(f"   url: {record.get('url')}")
+        if record.get("obsidian_note"):
+            print(f"   note: {record.get('obsidian_note')}")
+        if record.get("snippet"):
+            print(f"   {record.get('snippet')}")
 
 
 def main() -> int:
@@ -62,12 +90,25 @@ def main() -> int:
             args.request,
             "--top",
             str(args.local_top),
+            "--json",
         ]
     )
+    local_records: list[dict[str, Any]] = []
     if local.returncode == 0 and local.stdout.strip():
-        print(local.stdout.rstrip())
+        local_records = json.loads(local.stdout)
+        if local_records:
+            print_local_results(local_records)
+        else:
+            print("No relevant local index hits after threshold filtering.")
         if not args.no_log:
-            write_log(args, "local-search", "local-index", "retrieved", "Retrieved local/private-visible index hits.", local.stdout)
+            write_log(
+                args,
+                "local-search",
+                "local-index",
+                "retrieved" if local_records else "no-results",
+                "Retrieved local/private-visible index hits." if local_records else "No relevant local index hits after threshold filtering.",
+                payload={"candidates": local_records, "result_count": len(local_records)},
+            )
     else:
         print("No local index hits or local index unavailable.")
         if not args.no_log:

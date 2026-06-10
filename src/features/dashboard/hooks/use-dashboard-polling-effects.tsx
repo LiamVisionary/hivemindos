@@ -23,6 +23,7 @@ type KanbanStorageInfo = NonNullable<KanbanResponse["storage"]>;
 type UseDashboardPollingEffectsProps = {
   activeView: DashboardView;
   hydrated: boolean;
+  chatRequestActive?: boolean;
   refreshMirosharkArchive: () => void | Promise<void>;
   refreshBrainGraph: (force?: boolean) => void | Promise<void>;
   refreshBrainSkills: () => void | Promise<void>;
@@ -70,6 +71,7 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
   const {
     activeView,
     hydrated,
+    chatRequestActive = false,
     refreshMirosharkArchive,
     refreshBrainGraph,
     refreshBrainSkills,
@@ -112,16 +114,18 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
     setKanbanStorage,
     setSelectedKanbanTaskId,
   } = props;
+  const pauseBackgroundRefresh = Boolean(chatRequestActive);
+  const recentDirectoriesVisible = activeView === "chat" || activeView === "kanban" || activeView === "history";
   useEffect(() => {
-    if (!hydrated || activeView !== "swarm") return;
+    if (!hydrated || pauseBackgroundRefresh || activeView !== "swarm") return;
     const timer = window.setTimeout(() => {
       void refreshMirosharkArchive();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [activeView, hydrated, refreshMirosharkArchive]);
+  }, [activeView, hydrated, pauseBackgroundRefresh, refreshMirosharkArchive]);
 
   useEffect(() => {
-    if (!hydrated || activeView !== "vault") return;
+    if (!hydrated || pauseBackgroundRefresh || activeView !== "vault") return;
     const timer = window.setTimeout(() => {
       void refreshBrainGraph();
     }, 0);
@@ -132,78 +136,78 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
       window.clearTimeout(timer);
       window.clearTimeout(skillsTimer);
     };
-  }, [activeView, hydrated, refreshBrainGraph, refreshBrainSkills]);
+  }, [activeView, hydrated, pauseBackgroundRefresh, refreshBrainGraph, refreshBrainSkills]);
 
   useEffect(() => {
-    if (!hydrated || !sharedVault.enabled) return;
+    if (!hydrated || pauseBackgroundRefresh || !sharedVault.enabled || !recentDirectoriesVisible) return;
     const timer = window.setTimeout(() => {
       void refreshRecentDirectories();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [hydrated, refreshRecentDirectories, sharedVault.enabled]);
+  }, [hydrated, pauseBackgroundRefresh, recentDirectoriesVisible, refreshRecentDirectories, sharedVault.enabled]);
 
   useEffect(() => {
-    if (!hydrated || activeView !== "scheduler" || brainSkills || brainSkillsLoading) return;
+    if (!hydrated || pauseBackgroundRefresh || activeView !== "scheduler" || brainSkills || brainSkillsLoading) return;
     const timer = window.setTimeout(() => {
       void refreshBrainSkills();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [activeView, brainSkills, brainSkillsLoading, hydrated, refreshBrainSkills]);
+  }, [activeView, brainSkills, brainSkillsLoading, hydrated, pauseBackgroundRefresh, refreshBrainSkills]);
 
   useEffect(() => {
-    if (!hydrated || activeView !== "wallet" || walletPanelMode !== "usage") return;
+    if (!hydrated || pauseBackgroundRefresh || activeView !== "wallet" || walletPanelMode !== "usage") return;
     const timer = window.setTimeout(() => {
       void refreshRuntimeUsage();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [activeView, hydrated, walletPanelMode]);
+  }, [activeView, hydrated, pauseBackgroundRefresh, walletPanelMode]);
 
   useEffect(() => {
-    if (!hydrated || activeView !== "wallet") return;
+    if (!hydrated || pauseBackgroundRefresh || activeView !== "wallet") return;
     const timer = window.setTimeout(() => {
       void refreshWalletVaultBackupStatus();
     }, 0);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView, hydrated, sharedVault.enabled, sharedVault.vaultPath]);
+  }, [activeView, hydrated, pauseBackgroundRefresh, sharedVault.enabled, sharedVault.vaultPath]);
 
   useEffect(() => {
-    if (!hydrated || activeView !== "maintenance") return;
+    if (!hydrated || pauseBackgroundRefresh || activeView !== "maintenance") return;
     const timer = window.setTimeout(() => {
       void refreshMaintenanceReport();
     }, 0);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView, hydrated]);
+  }, [activeView, hydrated, pauseBackgroundRefresh]);
 
   useEffect(() => {
-    if (!hydrated || activeView !== "files") return;
+    if (!hydrated || pauseBackgroundRefresh || activeView !== "files") return;
     const timer = window.setTimeout(() => {
       void refreshRuntimeFileRoots();
     }, 0);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView, hydrated]);
+  }, [activeView, hydrated, pauseBackgroundRefresh]);
 
   useEffect(() => {
     const envVisibleOrNearby = activeView === "env" || activeView === "vault";
-    if (!hydrated || !envVisibleOrNearby || hiveEnv || hiveEnvLoading) return;
+    if (!hydrated || pauseBackgroundRefresh || !envVisibleOrNearby || hiveEnv || hiveEnvLoading) return;
     const timer = window.setTimeout(() => {
       void refreshHiveEnv();
     }, vaultPanelMode === "env" ? 0 : 250);
     return () => window.clearTimeout(timer);
-  }, [activeView, hiveEnv, hiveEnvLoading, hydrated, refreshHiveEnv, vaultPanelMode]);
+  }, [activeView, hiveEnv, hiveEnvLoading, hydrated, pauseBackgroundRefresh, refreshHiveEnv, vaultPanelMode]);
 
   useEffect(() => {
-    if (!hydrated || agentWorkerClassView !== "create" || brainSkills || brainSkillsLoading) return;
+    if (!hydrated || pauseBackgroundRefresh || agentWorkerClassView !== "create" || brainSkills || brainSkillsLoading) return;
     const timer = window.setTimeout(() => {
       void refreshBrainSkills();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [agentWorkerClassView, brainSkills, brainSkillsLoading, hydrated, refreshBrainSkills]);
+  }, [agentWorkerClassView, brainSkills, brainSkillsLoading, hydrated, pauseBackgroundRefresh, refreshBrainSkills]);
 
   useVisibilityAwarePolling({
-    enabled: hydrated && sharedVault.enabled,
+    enabled: hydrated && !pauseBackgroundRefresh && sharedVault.enabled,
     intervalMs: activeView === "notifications" ? 30_000 : 120_000,
     hiddenIntervalMs: 5 * 60_000,
     initialDelayMs: activeView === "notifications" ? 0 : 300,
@@ -211,7 +215,7 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
   });
 
   useEffect(() => {
-    if (!hydrated || !sharedVault.enabled || !mirosharkRun?.simulationId || mirosharkRun.archived) return;
+    if (!hydrated || pauseBackgroundRefresh || !sharedVault.enabled || !mirosharkRun?.simulationId || mirosharkRun.archived) return;
     const saveKey = [
       mirosharkRun.simulationId,
       mirosharkPosts.count,
@@ -247,13 +251,14 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
     mirosharkRunnerStatus,
     mirosharkRun,
     mirosharkScenario,
+    pauseBackgroundRefresh,
     refreshMirosharkArchive,
     sharedVault.enabled,
     sharedVault.vaultPath,
   ]);
 
   useEffect(() => {
-    if (mirosharkRun?.archived || !mirosharkRun?.jobId || mirosharkRun.status === "started" || mirosharkRun.status === "failed") return;
+    if (pauseBackgroundRefresh || mirosharkRun?.archived || !mirosharkRun?.jobId || mirosharkRun.status === "started" || mirosharkRun.status === "failed") return;
     let inFlight = false;
     const refreshOnce = () => {
       if (inFlight) return;
@@ -264,18 +269,18 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
     };
     const timer = window.setInterval(refreshOnce, 3_000);
     return () => window.clearInterval(timer);
-  }, [mirosharkRun?.archived, mirosharkRun?.jobId, mirosharkRun?.status, refreshMirosharkRun]);
+  }, [mirosharkRun?.archived, mirosharkRun?.jobId, mirosharkRun?.status, pauseBackgroundRefresh, refreshMirosharkRun]);
 
   useEffect(() => {
-    if (mirosharkRun?.archived || mirosharkRun?.status !== "started" || !mirosharkRun.simulationId || mirosharkRun.posts) return;
+    if (pauseBackgroundRefresh || mirosharkRun?.archived || mirosharkRun?.status !== "started" || !mirosharkRun.simulationId || mirosharkRun.posts) return;
     const timer = window.setTimeout(() => {
       void refreshMirosharkRun();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [mirosharkRun?.archived, mirosharkRun?.posts, mirosharkRun?.simulationId, mirosharkRun?.status, refreshMirosharkRun]);
+  }, [mirosharkRun?.archived, mirosharkRun?.posts, mirosharkRun?.simulationId, mirosharkRun?.status, pauseBackgroundRefresh, refreshMirosharkRun]);
 
   useEffect(() => {
-    if (mirosharkRun?.archived || mirosharkRun?.status !== "started" || !mirosharkRun.simulationId) return;
+    if (pauseBackgroundRefresh || mirosharkRun?.archived || mirosharkRun?.status !== "started" || !mirosharkRun.simulationId) return;
     if (isMiroSharkRunTerminal(mirosharkRunnerStatus)) return;
 
     const simulationId = mirosharkRun.simulationId;
@@ -327,10 +332,11 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
     mirosharkRun?.simulationId,
     mirosharkRun?.status,
     mirosharkRunnerStatus,
+    pauseBackgroundRefresh,
   ]);
 
   useEffect(() => {
-    if (!hydrated || activeView !== "kanban") return;
+    if (!hydrated || pauseBackgroundRefresh || activeView !== "kanban") return;
     let cancelled = false;
     let boardRefreshInFlight = false;
     let kanbanRefreshInFlight = false;
@@ -477,6 +483,7 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
     kanbanSearch,
     activeView,
     hydrated,
+    pauseBackgroundRefresh,
     sharedVault.enabled,
     sharedVault.kanbanFolder,
     sharedVault.vaultPath,

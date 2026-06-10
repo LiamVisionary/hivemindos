@@ -36,6 +36,18 @@ export function processLabelFromComment(eventText: string) {
 }
 
 export function processLabelFromRuntimeEvent(parsed: any) {
+  if (Array.isArray(parsed?.choices) && parsed.choices.length > 0 && parsed.choices.every((choice: any) => {
+    if (!choice || typeof choice !== "object") return false;
+    const finishReason = typeof choice.finish_reason === "string" ? choice.finish_reason.trim() : "";
+    const text = [
+      choice.delta?.content,
+      choice.delta?.reasoning,
+      choice.message?.content,
+      choice.message?.reasoning,
+      choice.text,
+    ].map((value) => String(value ?? "")).join("").trim();
+    return Boolean(finishReason) && !text && !choice.delta?.tool_calls && !choice.delta?.function_call && !choice.message?.tool_calls;
+  })) return null;
   const event = parsed?.event && typeof parsed.event === "object" ? parsed.event : null;
   const type = String(event?.type ?? parsed?.type ?? "").trim();
   const source = event ?? parsed;
@@ -82,6 +94,7 @@ export function processLabelFromSessionMessage(message: any) {
   if (!content) return null;
   if (role === "user" || role === "assistant") return null;
   if (role === "tool") {
+    if (/^Runtime event$/i.test(content)) return null;
     if (/\[Command interrupted\]/i.test(content)) return { label: "Command interrupted" };
     if (/Tool execution skipped/i.test(content)) return { label: "Tool execution skipped", detail: compactProcessDetail(content) };
     if (/\bexit\s+\d+\b/i.test(content)) return { label: "Command finished", detail: compactProcessDetail(content) };

@@ -258,6 +258,7 @@ Options:
   --skip-collector              Skip collector service installation/restart.
   --skip-dashboard              Skip starting/restarting the dashboard dev server.
   --link                        Use app-managed Hivemind Link. This is the default.
+  --ephemeral-node              Register the Link node as ephemeral (self-deletes from the tailnet when offline). For disposable machines and e2e runs.
   --system-tailscale            Use full system Tailscale setup for Hivemind Sync Syncthing, SSH, and rsync.
   --local-only                  Skip all multi-machine networking.
   --force                       Re-run setup work even when cached checks say it is current.
@@ -271,6 +272,7 @@ Environment overrides:
   HIVE_GITLAWB_SETUP=true|false
   HIVE_GITLAWB_IDENTITY=true|false
   HIVE_NETWORK_MODE=link|system-tailscale|local
+  HIVE_TAILSCALE_AUTHKEY=<tailscale auth key for headless tailnet join with Tailscale SSH>
 EOF
 }
 
@@ -330,6 +332,12 @@ parse_args() {
         ;;
       --link)
         CLI_NETWORK_MODE="link"
+        ;;
+      --ephemeral-node)
+        # Disposable machines (e2e runs, throwaway VPSes): the Link node
+        # self-deletes from the tailnet after going offline, so test runs
+        # never leave stale device registrations behind.
+        export HIVE_LINK_EPHEMERAL="true"
         ;;
       --system-tailscale|--tailscale)
         CLI_NETWORK_MODE="system-tailscale"
@@ -899,6 +907,52 @@ enable_tailscale_ssh() {
   return 0
 }
 
+tailscale_authkey_value() {
+  local value="${HIVE_TAILSCALE_AUTHKEY:-${TS_AUTHKEY:-}}"
+  if [[ -z "$value" && -f "$HOME/.hivemindos/.env" ]]; then
+    value="$(sed -n 's/^\(export \)\{0,1\}HIVE_TAILSCALE_AUTHKEY=//p' "$HOME/.hivemindos/.env" | head -1 | sed "s/^[\"']//; s/[\"']\$//")"
+  fi
+  printf "%s" "$value"
+}
+
+# Join (or re-join) the tailnet headlessly with an auth key and Tailscale SSH
+# advertised in the same step. This is what keeps remote/update runs from
+# stranding a logged-out node that nobody can SSH back into.
+tailscale_up_with_authkey() {
+  local cli="$1" authkey
+  authkey="$(tailscale_authkey_value)"
+  [[ -n "$authkey" ]] || return 1
+  run_tailscale_cli_sudo_noninteractive "$cli" up --ssh --authkey "$authkey" >/dev/null 2>&1 \
+    || run_tailscale_cli "$cli" up --ssh --authkey "$authkey" >/dev/null 2>&1
+}
+
+# Linux servers are administered over Tailscale SSH, so even when HivemindOS
+# networking runs in link mode (the default), a setup/update run must never
+# leave an installed-but-stopped or logged-out system tailscaled behind.
+# Best-effort: warns instead of failing setup.
+maintain_system_tailscale_ssh() {
+  [[ "$(uname -s)" == "Linux" ]] || return 0
+  local cli
+  cli="$(tailscale_cli_candidates | awk '!seen[$0]++ { print; exit }')"
+  [[ -n "$cli" ]] || return 0
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable --now tailscaled >/dev/null 2>&1 \
+      || sudo -n systemctl enable --now tailscaled >/dev/null 2>&1 \
+      || true
+  fi
+  if ! tailscale_status_connected; then
+    if tailscale_up_with_authkey "$cli"; then
+      ok "System Tailscale re-joined the tailnet with Tailscale SSH advertised"
+      return 0
+    fi
+    warn "System Tailscale is installed but logged out, so Tailscale SSH to this machine is down."
+    warn "Re-join headlessly: set HIVE_TAILSCALE_AUTHKEY in ~/.hivemindos/.env (key from https://login.tailscale.com/admin/settings/keys) and re-run setup,"
+    warn "or run once: sudo tailscale up --ssh"
+    return 0
+  fi
+  enable_tailscale_ssh || true
+}
+
 install_tailscale_if_missing() {
   if tailscale_status_connected || command -v tailscale >/dev/null 2>&1 || [[ -n "$(tailscale_cli_candidates | head -1)" ]]; then
     return 0
@@ -954,6 +1008,10 @@ ensure_tailscale_connected() {
   cli="$(tailscale_cli_candidates | awk '!seen[$0]++ { print; exit }')"
   if [[ -z "$cli" ]]; then
     return 1
+  fi
+  if tailscale_up_with_authkey "$cli"; then
+    ok "Tailscale joined the tailnet with an auth key (Tailscale SSH advertised)"
+    return 0
   fi
   if ! setup_is_interactive || ! prompt_yes_no "Tailscale is installed but not logged in. Start Tailscale login now and wait for it to finish?" "yes"; then
     return 1
@@ -1465,6 +1523,7 @@ case "$network_mode" in
     hivemind_link_enabled="true"
     ok "Network mode: Hivemind Link"
     ok "Remote Fleet/chat will use an app-managed Tailscale node."
+    maintain_system_tailscale_ssh || true
     ;;
   system-tailscale)
     if ensure_tailscale_connected; then

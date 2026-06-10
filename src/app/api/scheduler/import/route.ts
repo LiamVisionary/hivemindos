@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { getRuntimeAdapter, runtimeSupports, type RuntimeSchedule } from "@/lib/services/runtime-adapters/registry";
+import { canonicalLocalCollectorUrl } from "@/lib/services/local-collector-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,9 +19,10 @@ export async function POST(request: NextRequest) {
     errors.push(...result.errors);
   }
 
-  const collectorUrls = [...new Set(agents
+  const collectorUrls = [...new Set((await Promise.all(agents
     .filter((agent) => !runtimeSupports(agent.runtime, "schedules") && agent.telemetryUrl?.trim())
-    .map((agent) => agent.telemetryUrl!.replace(/\/+$/, "")))];
+    .map((agent) => canonicalLocalCollectorUrl(agent))))
+    .filter(Boolean))];
   const collectorResults = await Promise.all(collectorUrls.map(importCollectorSchedules));
   for (const result of collectorResults) {
     schedules.push(...result.schedules);

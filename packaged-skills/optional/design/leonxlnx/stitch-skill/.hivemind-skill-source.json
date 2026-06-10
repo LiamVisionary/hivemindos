@@ -1,0 +1,18 @@
+{
+  "upstreamName": "stitch-skill",
+  "upstreamSlug": "stitch-skill",
+  "hiveSlug": "stitch-skill",
+  "sourceLabel": "leonxlnx",
+  "sourceUrl": "https://www.ui-skills.com/skills/leonxlnx/stitch-skill",
+  "repository": "https://github.com/Leonxlnx/taste-skill",
+  "installCommand": "npx skills add https://github.com/Leonxlnx/taste-skill --skill stitch-design-taste",
+  "importedAt": "2026-06-08T15:01:38.715Z",
+  "refreshedAt": "2026-06-08T15:01:38.715Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/leonxlnx/stitch-skill",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Semantic Design System Skill for Google Stitch. Generates agent-friendly DESIGN.md files that enforce premium, anti-generic UI standards — strict typography, calibrated color, asymmetric layouts, perpetual micro-motion, and hardware-accelerated performance."
+}

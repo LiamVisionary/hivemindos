@@ -1,0 +1,18 @@
+{
+  "upstreamName": "frontend-slides",
+  "upstreamSlug": "frontend-slides",
+  "hiveSlug": "frontend-slides",
+  "sourceLabel": "zarazhangrui",
+  "sourceUrl": "https://www.ui-skills.com/skills/zarazhangrui/frontend-slides",
+  "repository": "https://github.com/zarazhangrui/frontend-slides",
+  "installCommand": "npx skills add https://github.com/zarazhangrui/frontend-slides --skill frontend-slides",
+  "importedAt": "2026-06-08T15:01:52.364Z",
+  "refreshedAt": "2026-06-08T15:01:52.364Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/zarazhangrui/frontend-slides",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Create stunning, animation-rich HTML presentations from scratch or by converting PowerPoint files. Use when the user wants to build a presentation, convert a PPT/PPTX to web, or create slides for a talk/pitch. Helps non-designers discover their aesthetic through visual exploration rather than abstract choices."
+}

@@ -1,0 +1,18 @@
+{
+  "upstreamName": "swiftui-ui-patterns",
+  "upstreamSlug": "swiftui-ui-patterns",
+  "hiveSlug": "swiftui-ui-patterns",
+  "sourceLabel": "dimillian",
+  "sourceUrl": "https://www.ui-skills.com/skills/dimillian/swiftui-ui-patterns",
+  "repository": "https://github.com/dimillian/skills",
+  "installCommand": "npx skills add https://github.com/dimillian/skills --skill swiftui-ui-patterns",
+  "importedAt": "2026-06-08T15:01:34.399Z",
+  "refreshedAt": "2026-06-08T15:01:34.399Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/dimillian/swiftui-ui-patterns",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Best practices and example-driven guidance for building SwiftUI views and components, including navigation hierarchies, custom view modifiers, and responsive layouts with stacks and grids. Use when creating or refactoring SwiftUI UI, designing tab architecture with TabView, composing screens with VStack/HStack, managing @State or @Binding, building declarative iOS interfaces, or needing component-specific patterns and examples."
+}

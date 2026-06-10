@@ -1,0 +1,18 @@
+{
+  "upstreamName": "delight",
+  "upstreamSlug": "delight",
+  "hiveSlug": "delight",
+  "sourceLabel": "pbakaus",
+  "sourceUrl": "https://www.ui-skills.com/skills/pbakaus/delight",
+  "repository": "https://github.com/pbakaus/impeccable",
+  "installCommand": "npx skills add https://github.com/pbakaus/impeccable --skill delight",
+  "importedAt": "2026-06-08T15:01:41.562Z",
+  "refreshedAt": "2026-06-08T15:01:41.562Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/pbakaus/delight",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Optional UI skill from pbakaus."
+}

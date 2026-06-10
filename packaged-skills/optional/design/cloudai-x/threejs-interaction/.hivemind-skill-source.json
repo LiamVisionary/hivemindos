@@ -1,0 +1,18 @@
+{
+  "upstreamName": "threejs-interaction",
+  "upstreamSlug": "threejs-interaction",
+  "hiveSlug": "threejs-interaction",
+  "sourceLabel": "cloudai-x",
+  "sourceUrl": "https://www.ui-skills.com/skills/cloudai-x/threejs-interaction",
+  "repository": "https://github.com/cloudai-x/threejs-skills",
+  "installCommand": "npx skills add https://github.com/cloudai-x/threejs-skills --skill threejs-interaction",
+  "importedAt": "2026-06-08T15:01:32.043Z",
+  "refreshedAt": "2026-06-08T15:01:32.043Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/cloudai-x/threejs-interaction",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Three.js interaction - raycasting, controls, mouse/touch input, object selection. Use when handling user input, implementing click detection, adding camera controls, or creating interactive 3D experiences."
+}

@@ -1,0 +1,18 @@
+{
+  "upstreamName": "react-router-framework-mode",
+  "upstreamSlug": "react-router-framework-mode",
+  "hiveSlug": "react-router-framework-mode",
+  "sourceLabel": "remix-run",
+  "sourceUrl": "https://www.ui-skills.com/skills/remix-run/react-router-framework-mode",
+  "repository": "https://github.com/remix-run/agent-skills",
+  "installCommand": "npx skills add https://github.com/remix-run/agent-skills --skill react-router-framework-mode",
+  "importedAt": "2026-06-08T15:01:47.169Z",
+  "refreshedAt": "2026-06-08T15:01:47.169Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/remix-run/react-router-framework-mode",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Build full-stack React applications using React Router's framework mode. Use when configuring routes, working with loaders and actions, handling forms, handling navigation, pending/optimistic UI, error boundaries, or working with react-router.config.ts or other react router conventions."
+}

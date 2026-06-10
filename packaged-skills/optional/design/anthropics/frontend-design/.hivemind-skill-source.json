@@ -1,0 +1,18 @@
+{
+  "upstreamName": "frontend-design",
+  "upstreamSlug": "frontend-design",
+  "hiveSlug": "frontend-design",
+  "sourceLabel": "anthropics",
+  "sourceUrl": "https://www.ui-skills.com/skills/anthropics/frontend-design",
+  "repository": "https://github.com/anthropics/skills",
+  "installCommand": "npx skills add https://github.com/anthropics/skills --skill frontend-design",
+  "importedAt": "2026-06-08T15:01:30.084Z",
+  "refreshedAt": "2026-06-08T15:01:30.084Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/anthropics/frontend-design",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, artifacts, posters, or applications (examples include websites, landing pages, dashboards, React components, HTML/CSS layouts, or when styling/beautifying any web UI). Generates creative, polished code and UI design that avoids generic AI aesthetics."
+}

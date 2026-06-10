@@ -107,7 +107,7 @@ Known runtimes:
 | OpenClaw | Gateway | status, chat, model selection |
 | Hermes | Interactive | status, chat, runs, memory, session search, background tasks, X search, video generation, Codex runtime, Kanban decomposition, setup, wallet tools, model selection |
 | Aeon | Background | status, skills, schedules, runs, outputs, memory, background tasks, notifications, setup |
-| OpenAI-compatible | Interactive | status, chat, model selection |
+| HivemindOS | Interactive | status, chat, model selection |
 
 Adapters let the dashboard ask a runtime for status, skills, schedules, runs, outputs, env sync, sessions, and model options without baking every runtime path into the UI. OpenClaw stays on the generic Hivemind runtime bridge here.
 
@@ -146,7 +146,8 @@ The collector is private infrastructure. Keep it on the Tailnet or Hivemind Link
 
 ```mermaid
 flowchart LR
-  Dashboard["Dashboard state"] --> LocalStorage["Browser localStorage"]
+  Dashboard["Dashboard state"] --> DashboardState["/api/dashboard/state"]
+  DashboardState --> HiveHome["~/.hivemindos"]
   Api["API routes"] --> HiveHome["~/.hivemindos"]
   Api --> Vault["Obsidian vault"]
   Api --> RuntimeHomes["~/.hermes / ~/.openclaw / ~/.aeon"]
@@ -160,8 +161,7 @@ flowchart LR
 
 Important storage locations:
 
-- Browser `localStorage`: UI preferences, local agent config, cached dashboard state, chat history snippets, and user-selected settings.
-- `~/.hivemindos`: install id, shared env, collector env, Kanban fallback, runtime agent registry, wallet vault, Honey ledger cache, runtime run cache, skill auto-sync config.
+- `~/.hivemindos`: install id, server-backed dashboard state, shared env, collector env, Kanban fallback, runtime agent registry, wallet vault, Honey ledger cache, runtime run cache, skill auto-sync config.
 - Obsidian vault: shared brain, Kanban board files, notifications, scheduled-run files, wallet ledger notes, recent directories, shared skills, machine aliases, graph access logs, GBrain and Syntho service notes.
 - Runtime homes: Hermes, OpenClaw, Aeon, and local OpenAI-compatible server config/state.
 - Cloudflare D1: optional official Honey ledger and compute gateway accounting.

@@ -1,0 +1,18 @@
+{
+  "upstreamName": "vue-jsx-best-practices",
+  "upstreamSlug": "vue-jsx-best-practices",
+  "hiveSlug": "vue-jsx-best-practices",
+  "sourceLabel": "vuejs-ai",
+  "sourceUrl": "https://www.ui-skills.com/skills/vuejs-ai/vue-jsx-best-practices",
+  "repository": "https://github.com/vuejs-ai/skills",
+  "installCommand": "npx skills add https://github.com/vuejs-ai/skills --skill vue-jsx-best-practices",
+  "importedAt": "2026-06-08T15:01:50.517Z",
+  "refreshedAt": "2026-06-08T15:01:50.517Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/vuejs-ai/vue-jsx-best-practices",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "JSX syntax in Vue (e.g., class vs className, JSX plugin config)."
+}

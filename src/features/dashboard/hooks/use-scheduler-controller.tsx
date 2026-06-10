@@ -596,8 +596,8 @@ export function useSchedulerController(props: any) {
       return {
         id: typeof value.id === "string" ? value.id : `step-${id}-${index}`,
         text: typeof value.text === "string" ? value.text : "",
-        skills: Array.isArray(value.skills) ? value.skills.filter((item): item is string => typeof item === "string") : [],
-        paths: Array.isArray(value.paths) ? value.paths.filter((item): item is string => typeof item === "string") : [],
+        skills: Array.isArray(value.skills) ? [...new Set(value.skills.filter((item): item is string => typeof item === "string"))] : [],
+        paths: Array.isArray(value.paths) ? [...new Set(value.paths.filter((item): item is string => typeof item === "string"))] : [],
         model: typeof value.model === "string" ? value.model : "",
       };
     }).filter((step) => step.text.trim());
@@ -613,8 +613,8 @@ export function useSchedulerController(props: any) {
       mode: snapshot.mode === "steps" ? "steps" : "prompt",
       prompt: typeof snapshot.prompt === "string" ? snapshot.prompt : "",
       model: typeof snapshot.model === "string" ? snapshot.model : "",
-      skills: Array.isArray(snapshot.skills) ? snapshot.skills.filter((item): item is string => typeof item === "string") : [],
-      paths: Array.isArray(snapshot.paths) ? snapshot.paths.filter((item): item is string => typeof item === "string") : [],
+      skills: Array.isArray(snapshot.skills) ? [...new Set(snapshot.skills.filter((item): item is string => typeof item === "string"))] : [],
+      paths: Array.isArray(snapshot.paths) ? [...new Set(snapshot.paths.filter((item): item is string => typeof item === "string"))] : [],
       steps,
       createdAt: typeof snapshot.updatedAt === "number" ? snapshot.updatedAt : Date.now(),
       updatedAt: typeof snapshot.updatedAt === "number" ? snapshot.updatedAt : Date.now(),
@@ -1368,8 +1368,8 @@ export function useSchedulerController(props: any) {
     const now = Date.now();
     const schedulerFeature = runtimeSchedulerFeature(agent.runtime);
     const externalRuntime = schedulerFeature.kind === "external-runtime" ? schedulerFeature.externalSource : undefined;
-    const skills = task.attachments.filter((item) => item.kind === "skill").map((item) => item.label);
-    const paths = task.attachments.filter((item) => item.kind === "path").map((item) => item.label);
+    const skills = [...new Set(task.attachments.filter((item) => item.kind === "skill").map((item) => item.label))];
+    const paths = [...new Set(task.attachments.filter((item) => item.kind === "path").map((item) => item.label))];
     const steps = task.mode === "steps"
       ? task.steps.filter((step) => step.trim()).map((step, index) => ({
         id: `step-${now}-${index}`,

@@ -2,7 +2,7 @@ export const RUNTIME_ICON_PATHS: Record<string, string> = {
   openclaw: "/icons/runtimes/openclaw.svg?v=20260526-runtime-icons-2",
   hermes: "/icons/runtimes/hermes.svg?v=20260526-runtime-icons-2",
   aeon: "/icons/runtimes/aeon.png?v=20260526-runtime-icons-2",
-  "openai-compatible": "/icons/runtimes/openai.svg?v=20260526-runtime-icons-2",
+  "hivemind-os": "/icons/runtimes/openai.svg?v=20260526-runtime-icons-2",
   codex: "/icons/runtimes/openai.svg?v=20260526-runtime-icons-2",
 };
 
@@ -10,7 +10,7 @@ export const RUNTIME_ICON_RENDER_MODES: Record<string, "image" | "mask"> = {
   openclaw: "image",
   hermes: "mask",
   aeon: "image",
-  "openai-compatible": "mask",
+  "hivemind-os": "mask",
   codex: "mask",
 };
 
@@ -18,7 +18,7 @@ export const RUNTIME_ICON_FALLBACKS: Record<string, string> = {
   openclaw: "OC",
   hermes: "H",
   aeon: "A",
-  "openai-compatible": "AI",
+  "hivemind-os": "HO",
   opencode: "OP",
   codex: "CX",
   "claude-code": "CC",
@@ -42,12 +42,12 @@ export function runtimeIconFallback(runtime?: string, label?: string) {
 
 export function providerIconPath(provider?: { slug?: string; name?: string } | null) {
   const providerText = `${provider?.slug ?? ""} ${provider?.name ?? ""}`;
-  if (/\b(openai|codex)\b/i.test(providerText)) return RUNTIME_ICON_PATHS["openai-compatible"];
+  if (/\b(openai|codex)\b/i.test(providerText)) return RUNTIME_ICON_PATHS["hivemind-os"];
   return "";
 }
 
 export function providerIconRenderMode(provider?: { slug?: string; name?: string } | null) {
   const providerText = `${provider?.slug ?? ""} ${provider?.name ?? ""}`;
-  if (/\b(openai|codex)\b/i.test(providerText)) return RUNTIME_ICON_RENDER_MODES["openai-compatible"];
+  if (/\b(openai|codex)\b/i.test(providerText)) return RUNTIME_ICON_RENDER_MODES["hivemind-os"];
   return "image";
 }

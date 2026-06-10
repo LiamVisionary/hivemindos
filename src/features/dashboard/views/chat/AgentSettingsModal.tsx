@@ -4,46 +4,29 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  BrainCircuit,
-  Check,
-  ChevronRight,
-  Cpu,
-  FolderOpen,
-  KanbanSquare,
-  MessageSquare,
-  Minus,
-  Pencil,
-  Phone,
-  PlugZap,
-  Plus,
-  Repeat2,
-  Search,
-  Send,
-  Settings2,
-  ShieldCheck,
-  Sparkles,
-  Upload,
-  X,
-} from "lucide-react";
+import { BrainCircuit, Check, ChevronRight, Cpu, FolderOpen, KanbanSquare, MessageSquare, Minus, Pencil, Phone, PlugZap, Plus, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Upload, X } from "lucide-react";
 import { AgentCallsSettingsPanel } from "./AgentCallsSettingsPanel";
 import { AdaptiveProviderSettings } from "./AdaptiveProviderSettings";
 import { BankrLowCreditSetup } from "./BankrLowCreditSetup";
+import { BankrSetupStatus } from "./BankrSetupStatus";
 import { GuidedProviderSetup } from "./GuidedProviderSetup";
 import { GuidedUsePodSetup } from "./GuidedUsePodSetup";
+import { LmStudioLoadProgress, LmStudioModelManager } from "./LmStudioModelManager";
 import { MissingSharedEnvKeySetup } from "./MissingSharedEnvKeySetup";
 import { ModelPillSelector } from "./ModelPillSelector";
-import { selectBestRuntimeModel } from "./runtime-model-registry";
+import { ProviderDiscoverySkeleton, ToggleRow } from "./AgentSettingsSmallParts";
+import { WorkerTaskPreferencesEditor } from "./WorkerTaskPreferencesEditor";
+import { gateBankrModelsForCredits, selectBestRuntimeModel } from "./runtime-model-registry";
 import { AeonOrb, Btn, Eyebrow, Pill, aeonStyles as styles } from "@/components/aeon/parts";
 import { WorkspaceModal } from "@/components/aeon";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
-import type { AgentRuntime } from "@/lib/types/agent-runtime";
-import { defaultAgentNameForRuntime, runtimeSettingsFeature } from "@/lib/types/agent-runtime";
+import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeProfileFeature, runtimeSettingsFeature, type AgentRuntime } from "@/lib/types/agent-runtime";
 
 const USEPOD_PROVIDER = MODEL_PROVIDER_GATEWAYS.usepod;
 const BANKR_LLM_BASE_URL = "https://llm.bankr.bot";
 const BANKR_LLM_CHAT_PATH = "/v1/chat/completions";
 const BANKR_LLM_MODELS_PATH = "/v1/models";
+const LM_STUDIO_EMPTY_DISCOVERY_GRACE_MS = 12_000;
 
 const PANEL_ICONS = {
   role: Sparkles,
@@ -135,120 +118,6 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
   return <div className={styles.monoCap} style={{ color: "var(--fg-4)", marginBottom: 9 }}>{children}</div>;
 }
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
-  return (
-    <button
-      className={styles.interactiveSubtle}
-      type="button"
-      aria-pressed={checked}
-      onClick={() => onChange(!checked)}
-      style={{
-        position: "relative",
-        width: 38,
-        height: 22,
-        flex: "0 0 auto",
-        border: `1px solid ${checked ? "var(--aeon-line)" : "var(--line-2)"}`,
-        borderRadius: 999,
-        background: checked ? "rgba(94,234,212,0.34)" : "rgba(2,6,23,0.58)",
-        cursor: "pointer",
-      }}
-    >
-      <span
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          top: 2,
-          left: checked ? 18 : 2,
-          width: 16,
-          height: 16,
-          borderRadius: 999,
-          background: checked ? "var(--aeon)" : "var(--fg-4)",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
-          transition: "left 160ms ease",
-        }}
-      />
-    </button>
-  );
-}
-
-function ToggleRow({ label, sub, checked, onChange, icon: RowIcon }: {
-  label: string;
-  sub?: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  icon?: React.ComponentType<any>;
-}) {
-  return (
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      gap: 12,
-      padding: "12px 14px",
-      borderRadius: 11,
-      border: `1px solid ${checked ? "var(--aeon-line)" : "var(--line)"}`,
-      background: checked ? "var(--aeon-soft)" : "var(--panel-bg-soft)",
-    }}>
-      {RowIcon ? <RowIcon size={17} style={{ color: checked ? "var(--cyan-2)" : "var(--fg-4)", flex: "0 0 auto" }} aria-hidden="true" /> : null}
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ color: "var(--fg)", fontSize: 13.5, fontWeight: 700 }}>{label}</div>
-        {sub ? <div style={{ marginTop: 2, color: "var(--fg-4)", fontSize: 11.5, lineHeight: 1.45 }}>{sub}</div> : null}
-      </div>
-      <Toggle checked={checked} onChange={onChange} />
-    </div>
-  );
-}
-
-function ProviderDiscoverySkeleton({ runtimeLabel }: { runtimeLabel: string }) {
-  return (
-    <>
-      {[0, 1, 2].map((index) => (
-        <div
-          key={index}
-          className={styles.sheen}
-          role={index === 0 ? "status" : undefined}
-          aria-live={index === 0 ? "polite" : undefined}
-          aria-label={index === 0 ? `Discovering ${runtimeLabel} providers` : undefined}
-          style={{
-            display: "grid",
-            gap: 6,
-            minHeight: 62,
-            padding: "9px 10px",
-            borderRadius: 10,
-            border: "1px solid var(--line)",
-            background: "var(--panel-bg-soft)",
-            overflow: "hidden",
-          }}
-        >
-          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                width: 26,
-                height: 26,
-                borderRadius: 8,
-                border: "1px solid var(--aeon-line)",
-                background: "linear-gradient(135deg, rgba(94,234,212,0.18), rgba(2,6,23,0.42))",
-                flex: "0 0 auto",
-              }}
-            />
-            <span style={{ display: "grid", gap: 5, minWidth: 0, flex: 1 }}>
-              <span style={{ width: `${78 - index * 10}%`, height: 9, borderRadius: 999, background: "rgba(198,209,223,0.18)" }} />
-              {index === 0 ? (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--fg-4)", fontSize: 10.5, lineHeight: 1.2 }}>
-                  Discovering
-                  <span className={styles.eq} aria-hidden="true" style={{ height: 10 }}><i /><i /><i /><i /></span>
-                </span>
-              ) : (
-                <span style={{ width: `${46 + index * 8}%`, height: 7, borderRadius: 999, background: "rgba(142,155,177,0.14)" }} />
-              )}
-            </span>
-          </span>
-          <span style={{ width: `${54 + index * 8}%`, height: 7, borderRadius: 999, background: "rgba(142,155,177,0.12)" }} />
-        </div>
-      ))}
-    </>
-  );
-}
-
 function iconMark({
   label,
   iconPath,
@@ -293,9 +162,7 @@ function iconMark({
 
 function hasUsePodSetup(config = {}) {
   return Boolean(
-    config.tokenEnvName
-      || config.depositAddress
-      || config.depositCode
+    config.depositAddress || config.depositCode
       || config.dashboardUrl
       || config.lastBalanceRemaining
       || config.lastRoute
@@ -362,6 +229,7 @@ export function AgentSettingsModal(props: any) {
     refreshRuntimeIntegrations,
     removeAgentPreferredSkill,
     roleModalAgent,
+    runRuntimeIntegrationAction,
     runtimeAvailability,
     runtimeCapabilities,
     runtimeIconFallback,
@@ -404,6 +272,8 @@ export function AgentSettingsModal(props: any) {
 
   const [aeonOauthConnecting, setAeonOauthConnecting] = useState(false);
   const [aeonWorkspaceOpen, setAeonWorkspaceOpen] = useState(false);
+  const [lmStudioEmptyDiscoveryGraceActive, setLmStudioEmptyDiscoveryGraceActive] = useState(false);
+  const [lmStudioPendingLoadModelKeys, setLmStudioPendingLoadModelKeys] = useState<string[]>([]), [lmStudioPendingPrimaryAction, setLmStudioPendingPrimaryAction] = useState<"save" | "create" | null>(null);
   const portalTarget = typeof document === "undefined" ? null : document.body;
   const modalOpen = Boolean(portalTarget && (roleModalAgent || agentCreateMachine));
 
@@ -417,11 +287,20 @@ export function AgentSettingsModal(props: any) {
   const openRouterSelected = selectedProviderSlug === "openrouter";
   const usePodSelected = selectedProviderSlug === "usepod";
   const bankrLlmSelected = selectedProviderSlug === "bankr";
+  const lmStudioSelected = selectedProviderSlug === "lm-studio";
   const adaptiveProviderSelected = selectedProviderSlug === "adaptive";
   const defaultNameForRuntime = (runtime: AgentRuntime, provider = "") => defaultAgentNameForRuntime(displayAgents ?? [], runtime, RUNTIME_LABELS, { provider });
   const currentName = agentCreateMachine ? agentCreateDraft.name : roleModalAgent?.name ?? "";
   const displayName = currentName || defaultNameForRuntime(activeRuntime, selectedProviderSlug);
   const adaptiveOpenRouterSelected = openRouterSelected && selectedRuntimeModelId === "adaptive";
+  const agentTaskPreferences = (agentCreateMachine ? agentCreateDraft.taskPreferences : roleModalAgent?.taskPreferences) ?? [];
+  const updateAgentTaskPreferences = (next) => {
+    if (agentCreateMachine) {
+      setAgentCreateDraft((current) => ({ ...current, taskPreferences: next }));
+    } else if (roleModalAgent) {
+      updateAgentProfile(roleModalAgent.id, { taskPreferences: next });
+    }
+  };
   const adaptiveOpenRouter = agentCreateMachine ? agentCreateDraft.adaptiveOpenRouter ?? {} : roleModalAgent?.adaptiveOpenRouter ?? {};
   const adaptiveRouting = agentCreateMachine ? agentCreateDraft.adaptiveRouting ?? {} : roleModalAgent?.adaptiveRouting ?? {};
   const usePodConfig = agentCreateMachine ? agentCreateDraft.usePod ?? {} : roleModalAgent?.usePod ?? {};
@@ -451,17 +330,32 @@ export function AgentSettingsModal(props: any) {
   const runtimeCanAddModels = Boolean(runtimeSettings.canAddModels);
   const runtimeCanAddGatewayProviders = runtimeSettings.modelSource === "runtime" && modelSelectableRuntime && activeRuntime !== "aeon";
   const runtimeCanAddCustomModel = runtimeCanAddModels && hasRuntimeProviders;
-  const runtimeModelOptions = adaptiveProviderSelected
-    ? [{ id: "best-free", name: "Best free" }]
-    : openRouterSelected
-    ? [{ id: "adaptive", name: "Adaptive" }, ...selectedRuntimeModels.filter((model) => model.id !== "adaptive")]
-    : selectedRuntimeModels;
-  const runtimeModelProviderSlug = selectedProviderSlug;
   const bankrSetupRequired = bankrLlmSelected && selectedRuntimeModels.length === 0;
   const bankrSetupDetail = runtimeIntegrationStatus?.diagnostics?.find((item) => /Bankr LLM models unavailable/i.test(item)) ?? "";
   const bankrInvalidKey = /(?:invalid|inactive|unauthorized|401).*api key|api key.*(?:invalid|inactive|unauthorized)/i.test(bankrSetupDetail);
   const bankrNeedsKeySetup = bankrInvalidKey || /BANKR_LLM_KEY.*(not configured|required|missing)|missing.*BANKR_LLM_KEY/i.test(bankrSetupDetail);
   const bankrLowCredits = /insufficient_credits|credits exhausted|402|balance|fund/i.test(bankrSetupDetail);
+  const bankrSetupVisible = bankrLlmSelected && Boolean(bankrSetupDetail);
+  const bankrCreditStatus = runtimeIntegrationStatus?.providerStatus?.bankr;
+  const lmStudioStatus = runtimeIntegrationStatus?.providerStatus?.lmStudio;
+  const bankrInitialCredits = bankrCreditStatus ? { ok: true, balanceUsd: bankrCreditStatus.creditsBalanceUsd, balanceLabel: bankrCreditStatus.balanceLabel ?? (bankrCreditStatus.creditsBalanceUsd === null ? "Unknown" : undefined), error: bankrCreditStatus.error } : undefined;
+  const creditProviderBalances = { bankr: bankrCreditStatus?.balanceLabel ?? "", usepod: (() => { const value = runtimeIntegrationStatus?.providerStatus?.usePod?.balanceRemaining || usePodConfig.lastBalanceRemaining || completedUsePodWallets.find((agent) => agent.usePod?.lastBalanceRemaining)?.usePod?.lastBalanceRemaining || ""; return value && /^[\d\s,.]+$/.test(value) ? `$${value.trim()}` : value; })() };
+  const runtimeModelOptions = adaptiveProviderSelected
+    ? [{ id: "best-free", name: "Best free" }]
+    : openRouterSelected
+    ? [{ id: "adaptive", name: "Adaptive" }, ...selectedRuntimeModels.filter((model) => model.id !== "adaptive")]
+    : gateBankrModelsForCredits(selectedRuntimeModels, bankrLlmSelected && bankrLowCredits);
+  const lmStudioInventoryModelCount = lmStudioStatus?.models?.length ?? 0;
+  const lmStudioHasDiscoveredModels = runtimeModelOptions.length > 0 || lmStudioInventoryModelCount > 0;
+  const lmStudioDiscoveryPending = Boolean(lmStudioSelected && !lmStudioHasDiscoveredModels && (runtimeIntegrationBusy === "status" || lmStudioEmptyDiscoveryGraceActive));
+  const selectedRuntimeModelOption = runtimeModelOptions.find((model) => model.id === selectedRuntimeModelId), selectedLmStudioInventoryModel = lmStudioStatus?.models?.find((model) => model.key === selectedRuntimeModelId && model.type === "llm");
+  const lmStudioSelectedModelLoaded = Boolean(selectedLmStudioInventoryModel?.loaded || selectedRuntimeModelOption?.subtitle === "Loaded" || selectedRuntimeModelOption?.badge === "Loaded"), lmStudioSelectedModelLoading = Boolean(lmStudioSelected && selectedRuntimeModelId && lmStudioPendingLoadModelKeys.includes(selectedRuntimeModelId) && !lmStudioSelectedModelLoaded);
+  const lmStudioSelectedModelNeedsLoad = Boolean(lmStudioSelected && selectedRuntimeModelId && selectedRuntimeModelId !== "adaptive" && (
+    selectedLmStudioInventoryModel
+      ? !selectedLmStudioInventoryModel.loaded
+      : selectedRuntimeModelOption?.subtitle === "Downloaded" || selectedRuntimeModelOption?.subtitle === "Available"
+  ));
+  const selectedLmStudioModelLabel = selectedLmStudioInventoryModel?.displayName || selectedRuntimeModelOption?.name || selectedRuntimeModelId, runtimeModelProviderSlug = selectedProviderSlug;
   const runtimeModelPanelAvailable = runtimeSettings.modelSource === "runtime" && (
     runtimeModelProviders.length > 0
       || modelSelectableRuntime
@@ -470,8 +364,10 @@ export function AgentSettingsModal(props: any) {
   );
   const showProviderDiscovery = !runtimeModelProviders.length && !runtimeCanAddGatewayProviders && modelSelectableRuntime && !usePodSelected && !bankrLlmSelected && !adaptiveProviderSelected && !runtimeModelSelectionFresh && !runtimeIntegrationMessage;
   const hideRuntimeSection = !agentCreateMachine && Boolean(runtimeSettings.hidesRuntimeSelectorWhenEditing);
+  const runtimeSelectorEntries = Object.entries(RUNTIME_LABELS).filter(([runtime]) => runtime !== HIVEMIND_OS_RUNTIME || activeRuntime === HIVEMIND_OS_RUNTIME);
   const showWorkerClassSection = !isAutopilotSettings && !(usePodSelected && !usePodSetupComplete);
   const agentStatus = agentCreateMachine ? "New profile" : roleModalAgent?.telemetryUrl ? "Connected" : "Local profile";
+  const targetMachineRuntimes = agentCreateMachine?.capabilities?.runtimes ?? [], targetMachineHasRuntimeInventory = targetMachineRuntimes.length > 0;
   const workerSubtitle = (agentSettingsCustomWorker?.label || agentSettingsWorkerPreset?.label || agentSettingsWorkerLabel || "")
     .replace(/\s+bee$/i, "")
     .trim();
@@ -514,6 +410,42 @@ export function AgentSettingsModal(props: any) {
     usePodSelected,
   ]);
 
+  useEffect(() => {
+    if (!modalOpen || !lmStudioSelected || lmStudioHasDiscoveredModels) {
+      const clearGrace = window.setTimeout(() => setLmStudioEmptyDiscoveryGraceActive(false), 0);
+      return () => window.clearTimeout(clearGrace);
+    }
+    const startGrace = window.setTimeout(() => setLmStudioEmptyDiscoveryGraceActive(true), 0);
+    const stopGrace = window.setTimeout(() => setLmStudioEmptyDiscoveryGraceActive(false), LM_STUDIO_EMPTY_DISCOVERY_GRACE_MS);
+    return () => {
+      window.clearTimeout(startGrace);
+      window.clearTimeout(stopGrace);
+    };
+  }, [lmStudioHasDiscoveredModels, lmStudioSelected, modalOpen, runtimeIntegrationBusy, selectedProviderSlug]);
+
+  useEffect(() => {
+    if (!lmStudioPendingLoadModelKeys.length) return;
+    const loadedKeys = new Set((lmStudioStatus?.models ?? []).filter((model) => model.loaded).map((model) => model.key));
+    if (!loadedKeys.size) return;
+    const clearLoaded = window.setTimeout(() => setLmStudioPendingLoadModelKeys((current) => current.filter((key) => !loadedKeys.has(key))), 0);
+    return () => window.clearTimeout(clearLoaded);
+  }, [lmStudioPendingLoadModelKeys.length, lmStudioStatus?.models]);
+
+  useEffect(() => {
+    if (!modalOpen || !lmStudioSelected || !lmStudioPendingLoadModelKeys.length || !agentSettingsIntegrationTarget) return;
+    const refresh = () => { if (runtimeIntegrationBusy !== "status") void refreshRuntimeIntegrations(agentSettingsIntegrationTarget); };
+    const initial = window.setTimeout(refresh, 900);
+    const interval = window.setInterval(refresh, 2500);
+    return () => { window.clearTimeout(initial); window.clearInterval(interval); };
+  }, [agentSettingsIntegrationTarget, lmStudioPendingLoadModelKeys, lmStudioSelected, modalOpen, refreshRuntimeIntegrations, runtimeIntegrationBusy]);
+
+  useEffect(() => {
+    if (!lmStudioPendingPrimaryAction || !selectedRuntimeModelId || !lmStudioSelectedModelLoaded || lmStudioSelectedModelLoading) return;
+    const action = lmStudioPendingPrimaryAction;
+    const continueAfterLoad = window.setTimeout(() => { setLmStudioPendingPrimaryAction(null); if (action === "create" && agentCreateMachine) void createAgentFromModal(); else closeAgentSettingsModal(); }, 0);
+    return () => window.clearTimeout(continueAfterLoad);
+  }, [agentCreateMachine, closeAgentSettingsModal, createAgentFromModal, lmStudioPendingPrimaryAction, lmStudioSelectedModelLoaded, lmStudioSelectedModelLoading, selectedRuntimeModelId]);
+
   if (!modalOpen) return null;
 
   const runtimeFolderValue = roleModalAgent
@@ -533,6 +465,40 @@ export function AgentSettingsModal(props: any) {
       return;
     }
     if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
+  };
+
+  const loadLmStudioModel = async (modelKey: string, modelType?: string, pendingPrimaryAction: "save" | "create" | null = null) => {
+    if (!agentSettingsIntegrationTarget || !modelKey) return false;
+    const contextLength = runtimeModelDraft.contextLength.trim();
+    setLmStudioPendingLoadModelKeys((current) => current.includes(modelKey) ? current : [...current, modelKey]);
+    setLmStudioPendingPrimaryAction(pendingPrimaryAction);
+    const result = await runRuntimeIntegrationAction("load-model", {
+      model: modelKey,
+      contextLength: modelType === "embedding" || !contextLength ? undefined : Number(contextLength),
+    }, {
+      ...agentSettingsIntegrationTarget,
+      provider: selectedProviderSlug,
+      model: modelKey,
+    });
+    if (result?.ok === false) {
+      setLmStudioPendingLoadModelKeys((current) => current.filter((key) => key !== modelKey));
+      setLmStudioPendingPrimaryAction((current) => current === pendingPrimaryAction ? null : current);
+    }
+    return result?.ok !== false;
+  };
+
+  const runPrimarySettingsAction = async () => {
+    if (lmStudioSelectedModelNeedsLoad) {
+      if (!lmStudioSelectedModelLoading && selectedRuntimeModelId) {
+        await loadLmStudioModel(selectedRuntimeModelId, selectedLmStudioInventoryModel?.type, agentCreateMachine ? "create" : "save");
+      }
+      return;
+    }
+    if (agentCreateMachine) {
+      await createAgentFromModal();
+      return;
+    }
+    closeAgentSettingsModal();
   };
 
   const updateAdaptiveOpenRouter = (patch: Record<string, unknown>) => {
@@ -572,7 +538,7 @@ export function AgentSettingsModal(props: any) {
   };
 
   const updateSettingsRuntime = (runtime: AgentRuntime) => {
-    if (runtime !== "aeon" && runtimeAvailability?.[runtime]?.installed === false) return;
+    if (runtime !== "aeon" && runtime !== HIVEMIND_OS_RUNTIME && (agentCreateMachine && targetMachineHasRuntimeInventory ? !targetMachineRuntimes.includes(runtime) : runtimeAvailability?.[runtime]?.installed === false)) return;
     setRuntimeModelSetupMode(null);
     const sameRuntime = runtime === activeRuntime;
     const currentProvider = agentCreateMachine ? agentCreateDraft.provider : roleModalAgent?.provider;
@@ -598,6 +564,7 @@ export function AgentSettingsModal(props: any) {
         runtime,
         provider,
         model,
+        workerClass: !current.selectedCustomWorkerClassId && current.workerClass === (runtimeProfileFeature(current.runtime).defaultWorkerClass ?? "general") ? runtimeProfileFeature(runtime).defaultWorkerClass ?? "general" : current.workerClass,
         name: current.name.trim()
           && current.name !== `${RUNTIME_LABELS[current.runtime] ?? current.runtime} on ${agentCreateMachine.name}`
           && current.name !== defaultNameForRuntime(current.runtime, current.provider)
@@ -636,24 +603,27 @@ export function AgentSettingsModal(props: any) {
   const selectUsePodProvider = () => {
     const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
     const model = currentModel && currentModel !== "adaptive" ? currentModel : USEPOD_PROVIDER.defaultModel;
+    const usePodStatus = runtimeIntegrationStatus?.providerStatus?.usePod ?? {};
     const nextUsePod = {
-      tokenEnvName: usePodConfig.tokenEnvName || "USEPOD_TOKEN",
-      depositAddress: usePodConfig.depositAddress || "",
-      depositCode: usePodConfig.depositCode || "",
-      dashboardUrl: usePodConfig.dashboardUrl || "",
+      tokenEnvName: usePodConfig.tokenEnvName || usePodStatus.tokenEnvName || "USEPOD_TOKEN",
+      depositAddress: usePodConfig.depositAddress || usePodStatus.depositAddress || "",
+      depositCode: usePodConfig.depositCode || usePodStatus.depositCode || "",
+      dashboardUrl: usePodConfig.dashboardUrl || usePodStatus.dashboardUrl || "",
       maxPriceInputMicrounits: usePodConfig.maxPriceInputMicrounits || "2000",
       maxPriceOutputMicrounits: usePodConfig.maxPriceOutputMicrounits || "8000",
       spendPreset: usePodConfig.spendPreset || "balanced",
-      lastBalanceRemaining: usePodConfig.lastBalanceRemaining || "",
-      lastRoute: usePodConfig.lastRoute || "",
-      lastCheckedAt: usePodConfig.lastCheckedAt || "",
-      lastTestStatus: usePodConfig.lastTestStatus || "",
-      lastModelCount: usePodConfig.lastModelCount,
+      lastBalanceRemaining: usePodConfig.lastBalanceRemaining || usePodStatus.balanceRemaining || "",
+      lastRoute: usePodConfig.lastRoute || usePodStatus.route || "",
+      lastCheckedAt: usePodConfig.lastCheckedAt || usePodStatus.checkedAt || "",
+      lastTestStatus: usePodConfig.lastTestStatus || usePodStatus.status || "",
+      lastModelCount: usePodConfig.lastModelCount ?? usePodStatus.modelCount,
+      lastTokenPresent: usePodConfig.lastTokenPresent ?? usePodStatus.tokenPresent,
+      lastTokenSource: usePodConfig.lastTokenSource || usePodStatus.tokenSource || "",
     };
     const patch = {
       provider: "usepod",
       model,
-      ...(activeRuntime === "openai-compatible" ? {
+      ...(activeRuntime === HIVEMIND_OS_RUNTIME ? {
         gatewayUrl: "https://api.usepod.ai",
         chatPath: "/v1/chat/completions",
         statusPath: "/v1/models",
@@ -688,7 +658,7 @@ export function AgentSettingsModal(props: any) {
     const patch = {
       provider: "bankr",
       model,
-      ...(activeRuntime === "openai-compatible" ? {
+      ...(activeRuntime === HIVEMIND_OS_RUNTIME ? {
         gatewayUrl: BANKR_LLM_BASE_URL,
         chatPath: BANKR_LLM_CHAT_PATH,
         statusPath: BANKR_LLM_MODELS_PATH,
@@ -724,7 +694,7 @@ export function AgentSettingsModal(props: any) {
       adaptiveRouting: {
         mode: adaptiveRouting.mode || "best-free",
         useCase: adaptiveRouting.useCase || "auto",
-        enabledRuntimes: adaptiveRouting.enabledRuntimes?.length ? adaptiveRouting.enabledRuntimes : ["hermes", "openai-compatible"],
+        enabledRuntimes: adaptiveRouting.enabledRuntimes?.length ? adaptiveRouting.enabledRuntimes : ["hermes", HIVEMIND_OS_RUNTIME],
         disabledProviders: adaptiveRouting.disabledProviders ?? [],
       },
     };
@@ -746,11 +716,10 @@ export function AgentSettingsModal(props: any) {
   const renderRuntimeCard = (runtime: string, label: string) => {
     const selected = runtime === activeRuntime;
     const runtimeFeature = runtimeSettingsFeature(runtime as AgentRuntime);
-    const unavailable = runtimeAvailability?.[runtime]?.installed === false;
-    const disabled = unavailable && runtimeFeature.kind !== "autopilot";
-    const detail = runtimeFeature.kind === "autopilot"
-      ? runtimeFeature.runtimeSegmentSubcopy || runtimeAvailability?.[runtime]?.detail || "Autopilot"
-      : unavailable ? "Not configured" : "Configured";
+    const availableOnTargetMachine = targetMachineRuntimes.includes(runtime);
+    const unavailable = agentCreateMachine && targetMachineHasRuntimeInventory ? !availableOnTargetMachine : runtimeAvailability?.[runtime]?.installed === false;
+    const disabled = unavailable && runtimeFeature.kind !== "autopilot" && runtime !== HIVEMIND_OS_RUNTIME;
+    const detail = runtimeFeature.kind === "autopilot" ? runtimeFeature.runtimeSegmentSubcopy || runtimeAvailability?.[runtime]?.detail || "Autopilot" : unavailable ? runtime === HIVEMIND_OS_RUNTIME ? "Configurable provider" : "Not configured" : availableOnTargetMachine ? "Available on machine" : "Configured";
     const iconPath = runtimeIconPath(runtime);
     return (
       <button
@@ -785,30 +754,10 @@ export function AgentSettingsModal(props: any) {
   };
 
   const renderProviderModelPanel = () => {
-    if (usePodSelected) {
-      return (
-        <div style={{ display: "grid", gap: 12 }}>
-          <GroupLabel>UsePod setup</GroupLabel>
-          <div className={fleetClass("agentRuntimeModelSetup", "agentRuntimeModelSetupProvider")}>
-            <GuidedUsePodSetup
-              key={usePodSetupTarget?.id ?? "new-usepod"}
-              agent={usePodSetupTarget}
-              busy={runtimeIntegrationBusy}
-              existingWallets={completedUsePodWallets}
-              fleetClass={fleetClass}
-              requireCurrentSetup={usePodRequiresCurrentSetup}
-              recoverSavedSetup={!agentCreateMachine}
-              onCancel={() => setRuntimeModelSetupMode(null)}
-              onComplete={applyUsePodSetupProfile}
-            />
-          </div>
-        </div>
-      );
-    }
-    if (!runtimeModelPanelAvailable) return null;
+    if (!runtimeModelPanelAvailable && !usePodSelected) return null;
     return (
       <div style={{ display: "grid", gap: 16 }}>
-        <div>
+        {runtimeModelPanelAvailable ? <div>
           <GroupLabel>Provider</GroupLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(132px, 168px))", gap: 7, alignItems: "stretch" }}>
             <button
@@ -835,7 +784,16 @@ export function AgentSettingsModal(props: any) {
               <small style={{ color: "var(--fg-4)", fontSize: 10.5, lineHeight: 1.3 }}>Best free route</small>
             </button>
             {runtimeModelProviders.map((provider) => {
-              const selected = provider.slug === selectedProviderSlug;
+              const selected = provider.slug === selectedProviderSlug, providerCreditBadge = creditProviderBalances[provider.slug] || "", providerLoading = provider.totalModels === 0 && (runtimeIntegrationBusy === "status" || (provider.slug === "bankr" && !runtimeModelSelectionFresh && !runtimeIntegrationStatus?.providerStatus?.bankr?.checkedAt));
+              const lmStudioProviderModels = provider.slug === "lm-studio" ? (lmStudioStatus?.models?.filter((model) => model.type === "llm") ?? []) : [];
+              const lmStudioLoadedCount = lmStudioProviderModels.filter((model) => model.loaded).length;
+              const providerModelDetail = providerLoading
+                ? <><Repeat2 className="animate-spin" size={11} aria-hidden="true" /> Loading models</>
+                : provider.slug === "lm-studio" && lmStudioDiscoveryPending
+                  ? <><Repeat2 className="animate-spin" size={11} aria-hidden="true" /> Discovering models</>
+                : provider.slug === "lm-studio" && lmStudioProviderModels.length
+                  ? `${lmStudioProviderModels.length} downloaded · ${lmStudioLoadedCount} loaded`
+                  : `${provider.totalModels} model${provider.totalModels === 1 ? "" : "s"}`;
               const bestProviderModel = selectBestRuntimeModel(provider, {
                 defaultModel: runtimeSettings.defaultModel,
                 runtimeSelectedModel: runtimeModelSelectionsByRuntime?.[activeRuntime]?.model,
@@ -856,6 +814,7 @@ export function AgentSettingsModal(props: any) {
                   style={{
                     display: "grid",
                     gap: 5,
+                    position: "relative",
                     padding: "9px 10px",
                     minHeight: 62,
                     borderRadius: 10,
@@ -875,7 +834,8 @@ export function AgentSettingsModal(props: any) {
                     })}
                     <strong style={{ color: selected ? "var(--cyan-3)" : "var(--fg)", fontSize: 13, lineHeight: 1.2, overflowWrap: "anywhere" }}>{provider.name}</strong>
                   </span>
-                  <small style={{ color: "var(--fg-4)", fontSize: 10.5, lineHeight: 1.3 }}>{provider.totalModels} model{provider.totalModels === 1 ? "" : "s"}</small>
+                  <small style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--fg-4)", fontSize: 10.5, lineHeight: 1.3 }}>{providerModelDetail}</small>
+                  {providerCreditBadge ? <span aria-label={`${provider.name} remaining balance ${providerCreditBadge}`} style={{ position: "absolute", right: 9, bottom: 7, maxWidth: "48%", border: "1px solid rgba(94,234,212,0.22)", borderRadius: 999, background: "rgba(20,184,166,0.1)", padding: "2px 7px", color: "var(--cyan-3)", fontSize: 10, fontWeight: 800, lineHeight: 1.2, overflowWrap: "anywhere", textAlign: "right" }}>{providerCreditBadge}</span> : null}
                 </button>
               );
             })}
@@ -897,8 +857,24 @@ export function AgentSettingsModal(props: any) {
               </button>
             ) : null}
           </div>
-        </div>
-        {bankrSetupRequired && bankrNeedsKeySetup ? (
+        </div> : null}
+        {usePodSelected ? (
+          <div style={{ display: "grid", gap: 12 }}>
+            <GroupLabel>UsePod setup</GroupLabel>
+            <div className={fleetClass("agentRuntimeModelSetup", "agentRuntimeModelSetupProvider")}>
+              <GuidedUsePodSetup
+                key={usePodSetupTarget?.id ?? "new-usepod"}
+                agent={usePodSetupTarget}
+                busy={runtimeIntegrationBusy}
+                existingWallets={completedUsePodWallets}
+                fleetClass={fleetClass}
+                requireCurrentSetup={usePodRequiresCurrentSetup}
+                onCancel={() => setRuntimeModelSetupMode(null)}
+                onComplete={applyUsePodSetupProfile}
+              />
+            </div>
+          </div>
+        ) : bankrSetupVisible && bankrNeedsKeySetup ? (
           <MissingSharedEnvKeySetup
             apiKeyName="BANKR_LLM_KEY"
             providerLabel="Bankr LLM"
@@ -906,38 +882,64 @@ export function AgentSettingsModal(props: any) {
             issue={bankrInvalidKey ? "invalid" : "missing"}
             onSaved={() => refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)}
           />
-        ) : bankrSetupRequired && bankrLowCredits ? (
+        ) : bankrSetupVisible && bankrLowCredits && !selectedRuntimeModels.length ? (
           <BankrLowCreditSetup
             diagnostic={bankrSetupDetail}
+            initialCredits={bankrInitialCredits}
             onFunded={() => refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)}
           />
         ) : bankrSetupRequired ? (
-          <div style={{ display: "grid", gap: 10, border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel-bg-soft)", padding: 13 }}>
-            <GroupLabel>Bankr setup</GroupLabel>
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-start", color: "var(--fg-3)", fontSize: 12.5, lineHeight: 1.45 }}>
-              <ShieldCheck size={18} color="var(--cyan-3)" aria-hidden="true" />
-              <div>
-                <strong style={{ display: "block", color: "var(--fg)", fontSize: 13 }}>No live Bankr models found</strong>
-                <span>Configure `BANKR_LLM_KEY` with funded Bankr LLM access, then reload providers.</span>
-                {bankrSetupDetail ? <span style={{ display: "block", marginTop: 5 }}>{bankrSetupDetail}</span> : null}
-              </div>
-            </div>
-            <Btn variant="ghost" disabled={Boolean(runtimeIntegrationBusy)} onClick={() => void refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)}>
-              <Repeat2 size={14} aria-hidden="true" /> Reload providers
-            </Btn>
-          </div>
+          <BankrSetupStatus
+            detail={bankrSetupDetail}
+            busy={Boolean(runtimeIntegrationBusy)}
+            onRefresh={() => refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)}
+          />
         ) : !adaptiveProviderSelected ? (
-          <div>
+          <div style={{ display: "grid", gap: 9 }}>
             <GroupLabel>Model</GroupLabel>
+            {bankrLlmSelected && bankrLowCredits && selectedRuntimeModels.length ? (
+              <BankrLowCreditSetup
+                diagnostic={bankrSetupDetail}
+                variant="compact"
+                initialCredits={bankrInitialCredits}
+                onFunded={() => refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)}
+              />
+            ) : null}
             <ModelPillSelector
               models={runtimeModelOptions}
               selectedModelId={selectedRuntimeModelId}
               addModelDisabled={Boolean(runtimeIntegrationBusy)}
               canAddModel={runtimeCanAddCustomModel}
-              emptyLabel={hasRuntimeProviders ? "No models configured." : "Add a provider first. Models appear after a provider is connected."}
-              onSelectModel={(modelId) => updateAgentRuntimeModel(modelId === "adaptive" ? "openrouter" : runtimeModelProviderSlug, modelId)}
+              emptyLabel={lmStudioDiscoveryPending ? "Loading LM Studio models..." : hasRuntimeProviders ? "No models configured." : "Add a provider first. Models appear after a provider is connected."}
+              onSelectModel={(modelId) => updateAgentRuntimeModel(modelId === "adaptive" && runtimeModelProviderSlug === "openrouter" ? "openrouter" : runtimeModelProviderSlug, modelId)}
               onAddModel={() => setRuntimeModelSetupMode((current) => current === "model" ? null : "model")}
             />
+            {lmStudioSelectedModelNeedsLoad ? (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, border: "1px solid rgba(94,234,212,0.18)", borderRadius: 10, background: "rgba(20,184,166,0.07)", padding: "9px 11px", color: "var(--fg-3)", fontSize: 12, lineHeight: 1.35 }}>
+                <span style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                  <span><strong style={{ color: "var(--fg)" }}>{selectedLmStudioModelLabel}</strong> {lmStudioSelectedModelLoading ? "is loading on the target machine." : "is downloaded. It will load before saving."}</span>
+                  {lmStudioSelectedModelLoading ? <LmStudioLoadProgress label="Loading in LM Studio" /> : null}
+                </span>
+                <Btn variant="secondary" size="sm" disabled={runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading} onClick={() => selectedRuntimeModelId && void loadLmStudioModel(selectedRuntimeModelId, selectedLmStudioInventoryModel?.type)}>
+                  {runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading ? "Loading..." : "Load now"}
+                </Btn>
+              </div>
+            ) : null}
+            {lmStudioSelected ? (
+              <LmStudioModelManager
+                agent={agentSettingsIntegrationTarget}
+                busy={runtimeIntegrationBusy}
+                discoveryPending={lmStudioDiscoveryPending}
+                lmStudioStatus={lmStudioStatus}
+                modelOptions={selectedRuntimeModels}
+                onLoadModel={loadLmStudioModel}
+                pendingLoadModelKeys={lmStudioPendingLoadModelKeys}
+                refreshRuntimeIntegrations={refreshRuntimeIntegrations}
+                runRuntimeIntegrationAction={runRuntimeIntegrationAction}
+                runtimeModelDraft={runtimeModelDraft}
+                setRuntimeModelDraft={setRuntimeModelDraft}
+              />
+            ) : null}
           </div>
         ) : null}
         {adaptiveProviderSelected ? (
@@ -1101,6 +1103,13 @@ export function AgentSettingsModal(props: any) {
               </button>
             </div>
           </div>
+          <div>
+            <GroupLabel>App & model preferences by task</GroupLabel>
+            <p style={{ margin: "0 0 8px", color: "var(--fg-4)", fontSize: 12, lineHeight: 1.5 }}>
+              Route this class to specific connected apps and models per task type, e.g. image → Open Generative AI with an anime model. Agents read these before picking a capability.
+            </p>
+            <WorkerTaskPreferencesEditor value={agentTaskPreferences} onChange={updateAgentTaskPreferences} />
+          </div>
         </div>
       </div>
     );
@@ -1113,7 +1122,7 @@ export function AgentSettingsModal(props: any) {
         <div>
           <GroupLabel>Runtime</GroupLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(132px, 168px))", gap: 7, alignItems: "stretch" }}>
-            {Object.entries(RUNTIME_LABELS).map(([runtime, label]) => renderRuntimeCard(runtime, label))}
+            {runtimeSelectorEntries.map(([runtime, label]) => renderRuntimeCard(runtime, label))}
           </div>
         </div>
       ) : null}
@@ -1247,7 +1256,6 @@ export function AgentSettingsModal(props: any) {
       </div>
     );
   };
-
   const renderTools = () => {
     if (!roleModalAgent) {
       return <p style={{ margin: 0, color: "var(--fg-3)", fontSize: 13 }}>Create the agent first; runtime tools appear after the profile exists.</p>;
@@ -1257,7 +1265,7 @@ export function AgentSettingsModal(props: any) {
       ["backgroundTasks", "Background tasks", "Run work without blocking chat.", Repeat2],
       ["xSearch", "X search", "Fetch X posts through runtime auth.", MessageSquare],
       ["socialPosting", "X posting", "Publish through installed social skills.", Send],
-      ["videoGeneration", "AI video", "Generate videos through runtime tools.", Sparkles],
+      ["imageGeneration", "AI images", "Generate images through runtime tools.", Sparkles], ["ttsGeneration", "TTS", "Generate speech through runtime tools.", Sparkles], ["musicGeneration", "Music", "Generate music through runtime tools.", Sparkles], ["sfxGeneration", "SFX", "Generate sound effects through runtime tools.", Sparkles], ["model3dGeneration", "3D", "Generate 3D assets through runtime tools.", Sparkles], ["videoGeneration", "AI video", "Generate videos through runtime tools.", Sparkles],
       ["codexRuntime", "Codex runtime", "Delegate coding to Codex paths.", Cpu],
       ["kanbanDecompose", "Kanban decomposition", "Break triage goals into child work.", KanbanSquare],
     ];
@@ -1334,6 +1342,18 @@ export function AgentSettingsModal(props: any) {
           : activePanel === "calls"
             ? <AgentCallsSettingsPanel {...{ Button, LoaderCircle: LoaderCircleIcon, PlugZap: PlugZapIcon, RefreshCcw: RefreshCcwIcon, Send: SendIcon, agentCreateDraft, agentCreateMachine, fleetClass, roleModalAgent, setAgentCreateDraft, updateAgentProfile }} />
             : renderSecurity();
+  const primaryActionBusy = runtimeIntegrationBusy === "create-agent" || runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading;
+  const primaryActionLabel = (runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading) && lmStudioSelectedModelNeedsLoad
+    ? "Loading..."
+    : agentCreateMachine
+      ? runtimeIntegrationBusy === "create-agent"
+        ? "Creating..."
+        : lmStudioSelectedModelNeedsLoad
+          ? "Load & Add Agent"
+          : runtimeSettingsFeature(agentCreateDraft.runtime).createActionLabel || "Add agent"
+      : lmStudioSelectedModelNeedsLoad
+        ? "Load & Save"
+        : "Done";
 
   return createPortal((
     <>
@@ -1468,10 +1488,10 @@ export function AgentSettingsModal(props: any) {
               <Btn
                 variant="primary"
                 sheen
-                disabled={runtimeIntegrationBusy === "create-agent" || usePodCreateBlocked}
-                onClick={agentCreateMachine ? () => void createAgentFromModal() : closeAgentSettingsModal}
+                disabled={primaryActionBusy || usePodCreateBlocked}
+                onClick={() => void runPrimarySettingsAction()}
               >
-                {agentCreateMachine ? runtimeIntegrationBusy === "create-agent" ? "Creating..." : runtimeSettingsFeature(agentCreateDraft.runtime).createActionLabel || "Add agent" : "Done"}
+                {primaryActionLabel}
               </Btn>
             </div>
           </footer>

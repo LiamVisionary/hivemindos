@@ -67,6 +67,7 @@ export function GuidedProviderSetup({ agent, busy, fleetClass, runtime, onCancel
   const activeProvider = sortedProviders.find((provider) => provider.slug === selectedProvider) ?? sortedProviders[0];
   const modelOptions = activeProvider?.models ?? [];
   const credentialReady = Boolean(activeProvider?.authenticated);
+  const credentialOptional = activeProvider?.authType === "none";
   const isBusy = loading || submitting || busy === "add-provider" || busy === "provider-setup-options";
 
   useEffect(() => {
@@ -184,8 +185,8 @@ export function GuidedProviderSetup({ agent, busy, fleetClass, runtime, onCancel
         <div className={credentialReady ? fleetClass("guidedProviderStatus", "ready") : fleetClass("guidedProviderStatus")}>
           {credentialReady ? <ShieldCheck aria-hidden="true" /> : <KeyRound aria-hidden="true" />}
           <div>
-            <strong>{credentialReady ? "Credential ready" : "Credential needed"}</strong>
-            <p>{credentialReady ? `${activeProvider?.keyEnv || "Provider credentials"} available to Hermes.` : activeProvider?.warning || "Configure credentials, then reload providers."}</p>
+            <strong>{credentialOptional ? "No credential needed" : credentialReady ? "Credential ready" : "Credential needed"}</strong>
+            <p>{credentialOptional ? "This local provider uses its configured base URL." : credentialReady ? `${activeProvider?.keyEnv || "Provider credentials"} available to Hermes.` : activeProvider?.warning || "Configure credentials, then reload providers."}</p>
           </div>
         </div>
         <div className={fleetClass("guidedProviderStatus", modelOptions.length ? "ready" : "")}>

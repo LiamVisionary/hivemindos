@@ -124,7 +124,7 @@ const CLASS_KEYWORDS: Array<{ workerClass: QueenBeeWorkerClass; priority: number
   { workerClass: "qa", priority: 85, keywords: [{ pattern: /\bqa\b|quality assurance/i, weight: 4 }, { pattern: /verify|verification|review|playwright|lint|typecheck|screenshot test|rigorous/i, weight: 2 }] },
 ];
 
-const RUNTIME_PRIORITY = ["hermes", "openclaw", "opencode", "codex", "claude-code", "openai-compatible", "aeon"];
+const RUNTIME_PRIORITY = ["hermes", "openclaw", "opencode", "codex", "claude-code", "hivemind-os", "aeon"];
 const CURRENT_APP_PROJECT_SLUGS = new Set(["hivemindos", "omniagenthivemind"]);
 
 export function inferQueenBeeWorkerClass(task: QueenBeeTaskIntent): QueenBeeWorkerClass {
@@ -145,9 +145,14 @@ export function inferQueenBeeWorkerClass(task: QueenBeeTaskIntent): QueenBeeWork
   return scored[0]?.workerClass ?? "general";
 }
 
-export function chooseQueenBeeDelegate(task: QueenBeeTaskIntent, machines: QueenBeeMachine[] = []): QueenBeeDelegate {
+export type QueenBeeRouterOptions = {
+  /** Recent per-agent completion/failure counts; adjusts scores by ±15 once an agent has enough history. */
+  outcomes?: Record<string, { completed: number; failed: number }>;
+};
+
+export function chooseQueenBeeDelegate(task: QueenBeeTaskIntent, machines: QueenBeeMachine[] = [], options: QueenBeeRouterOptions = {}): QueenBeeDelegate {
   const workerClass = inferQueenBeeWorkerClass(task);
-  const candidates = machines.flatMap((machine) => candidateAgents(machine, workerClass, task));
+  const candidates = machines.flatMap((machine) => candidateAgents(machine, workerClass, task, options));
   if (!candidates.length) {
     return {
       status: "pending",
@@ -170,17 +175,33 @@ export function chooseQueenBeeDelegate(task: QueenBeeTaskIntent, machines: Queen
   };
 }
 
-function candidateAgents(machine: QueenBeeMachine, workerClass: QueenBeeWorkerClass, task: QueenBeeTaskIntent): ScoredCandidate[] {
+function candidateAgents(machine: QueenBeeMachine, workerClass: QueenBeeWorkerClass, task: QueenBeeTaskIntent, options: QueenBeeRouterOptions): ScoredCandidate[] {
   if (machine.collector && machine.collector !== "ready") return [];
   if (machine.device?.online === false) return [];
   return (machine.agents ?? [])
     .filter((agent) => agent.beeRole !== "observer" && agent.beeRole !== "human")
     .filter((agent) => isChatCapable(agent, machine))
-    .map((agent) => scoreCandidate(agent, machine, workerClass, task))
+    .map((agent) => scoreCandidate(agent, machine, workerClass, task, options))
     .filter((candidate) => candidate.score > 0);
 }
 
-function scoreCandidate(agent: QueenBeeAgent, machine: QueenBeeMachine, workerClass: QueenBeeWorkerClass, task: QueenBeeTaskIntent): ScoredCandidate {
+const OUTCOME_MIN_SAMPLES = 3;
+const OUTCOME_MAX_ADJUSTMENT = 15;
+
+function outcomeScore(agent: QueenBeeAgent, options: QueenBeeRouterOptions, reasons: string[]) {
+  const agentId = agent.id || agent.agentId;
+  const outcome = agentId ? options.outcomes?.[agentId] : undefined;
+  if (!outcome) return 0;
+  const total = outcome.completed + outcome.failed;
+  if (total < OUTCOME_MIN_SAMPLES) return 0;
+  const successRate = outcome.completed / total;
+  const adjustment = Math.round((successRate - 0.5) * 2 * OUTCOME_MAX_ADJUSTMENT);
+  if (adjustment > 0) reasons.push(`strong recent completion rate (${outcome.completed}/${total})`);
+  if (adjustment < 0) reasons.push(`weak recent completion rate (${outcome.completed}/${total})`);
+  return adjustment;
+}
+
+function scoreCandidate(agent: QueenBeeAgent, machine: QueenBeeMachine, workerClass: QueenBeeWorkerClass, task: QueenBeeTaskIntent, options: QueenBeeRouterOptions = {}): ScoredCandidate {
   const reasons: string[] = [];
   let score = 10;
   const agentClass = normalizeWorkerClass(agent.workerClass) ?? "general";
@@ -209,6 +230,7 @@ function scoreCandidate(agent: QueenBeeAgent, machine: QueenBeeMachine, workerCl
   const runtimeIndex = RUNTIME_PRIORITY.indexOf(String(agent.runtime || ""));
   if (runtimeIndex >= 0) score += Math.max(0, 12 - runtimeIndex * 2);
   score += taskAffinityScore(agent, machine, task, reasons);
+  score += outcomeScore(agent, options, reasons);
   if (machine.device?.self) score += 1; // tie-break only; do not prefer local over a better remote specialist.
   return { agent, machine, workerClass, score, reasons };
 }

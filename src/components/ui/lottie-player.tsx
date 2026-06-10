@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DotLottie } from "@lottiefiles/dotlottie-web";
 
+import { getCachedLottieAssetData, normalizeLottieSource, warmLottieAsset } from "@/components/ui/lottie-asset-cache";
 import { cn } from "@/lib/utils/cn";
 
 type LottiePlayerProps = {
@@ -16,6 +17,11 @@ type LottiePlayerProps = {
 
 type DotLottiePlayer = InstanceType<typeof DotLottie>;
 
+type CachedLottieAssetState = {
+  src: string;
+  data: ArrayBuffer;
+};
+
 const FIXED_CANVAS_RENDER_CONFIG = {
   autoResize: false,
   freezeOnOffscreen: false,
@@ -23,27 +29,6 @@ const FIXED_CANVAS_RENDER_CONFIG = {
 
 function fixedCanvasDevicePixelRatio() {
   return Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
-}
-
-function normalizeLottieSource(src: string) {
-  if (/^(?:https?:|data:|blob:)/i.test(src)) {
-    return src;
-  }
-
-  return src
-    .split("/")
-    .map((part, index) => {
-      if (index === 0 || part.length === 0) {
-        return part;
-      }
-
-      try {
-        return encodeURIComponent(decodeURIComponent(part));
-      } catch {
-        return encodeURIComponent(part);
-      }
-    })
-    .join("/");
 }
 
 function createFixedCanvasRect(rect: DOMRect, pixelSize: number): DOMRect {
@@ -127,6 +112,38 @@ export function LottiePlayer({
       }
     : { lineHeight: 0 }, [pixelSize]);
   const normalizedSrc = normalizeLottieSource(src);
+  const [cachedAsset, setCachedAsset] = useState<CachedLottieAssetState | null>(() => {
+    const data = getCachedLottieAssetData(normalizedSrc);
+    return data ? { src: normalizedSrc, data } : null;
+  });
+  const cachedData = cachedAsset?.src === normalizedSrc ? cachedAsset.data : null;
+
+  useEffect(() => {
+    let mounted = true;
+    const publishData = (data: ArrayBuffer) => {
+      if (mounted) setCachedAsset({ src: normalizedSrc, data });
+    };
+
+    const readyData = getCachedLottieAssetData(normalizedSrc);
+    if (readyData) {
+      queueMicrotask(() => publishData(readyData));
+      return () => {
+        mounted = false;
+      };
+    }
+
+    void warmLottieAsset(normalizedSrc)
+      .then((data) => {
+        if (data) publishData(data);
+      })
+      .catch(() => {
+        // Non-fatal: the player can still load from the original src below.
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [normalizedSrc]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -162,9 +179,13 @@ export function LottiePlayer({
     };
 
     try {
+      const sourceConfig = cachedData
+        ? { data: cachedData.slice(0) }
+        : { src: normalizedSrc };
+
       player = new DotLottie({
         canvas,
-        src: normalizedSrc,
+        ...sourceConfig,
         loop,
         autoplay,
         renderConfig: {
@@ -206,7 +227,7 @@ export function LottiePlayer({
       }
       if (playerRef.current === current) playerRef.current = null;
     };
-  }, [autoplay, loop, normalizedSrc, pixelSize]);
+  }, [autoplay, cachedData, loop, normalizedSrc, pixelSize]);
 
   return (
     <span

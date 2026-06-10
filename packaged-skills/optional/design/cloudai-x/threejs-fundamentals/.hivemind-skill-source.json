@@ -1,0 +1,18 @@
+{
+  "upstreamName": "threejs-fundamentals",
+  "upstreamSlug": "threejs-fundamentals",
+  "hiveSlug": "threejs-fundamentals",
+  "sourceLabel": "cloudai-x",
+  "sourceUrl": "https://www.ui-skills.com/skills/cloudai-x/threejs-fundamentals",
+  "repository": "https://github.com/cloudai-x/threejs-skills",
+  "installCommand": "npx skills add https://github.com/cloudai-x/threejs-skills --skill threejs-fundamentals",
+  "importedAt": "2026-06-08T15:01:31.517Z",
+  "refreshedAt": "2026-06-08T15:01:31.517Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/cloudai-x/threejs-fundamentals",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Three.js scene setup, cameras, renderer, Object3D hierarchy, coordinate systems. Use when setting up 3D scenes, creating cameras, configuring renderers, managing object hierarchies, or working with transforms."
+}

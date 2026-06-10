@@ -31,6 +31,21 @@ const TOOLS = [
     description: "Start the best matching agent on a target machine on a task, without files.",
     inputSchema: handoffSchema(["target", "task"]),
   },
+  {
+    name: "crypto_capabilities",
+    description: "List HivemindOS crypto/payment rail readiness for Bankr, x402, Veil Cash, MoneyClaw, and UsePod without spending.",
+    inputSchema: cryptoSchema([]),
+  },
+  {
+    name: "select_crypto_rail",
+    description: "Select the best configured crypto/payment rail for an intent without executing the spend.",
+    inputSchema: cryptoSchema(["intent"]),
+  },
+  {
+    name: "prepare_crypto_action",
+    description: "Prepare a spend-gated crypto/payment action draft and return the provider endpoint, request body, approval need, and missing readiness.",
+    inputSchema: cryptoSchema(["intent"]),
+  },
 ];
 
 function handoffSchema(required) {
@@ -43,6 +58,31 @@ function handoffSchema(required) {
       task: { type: "string", description: "Work the receiving agent should perform." },
       note: { type: "string" },
       allowAmbiguous: { type: "boolean" },
+    },
+  };
+}
+
+function cryptoSchema(required) {
+  return {
+    type: "object",
+    required,
+    properties: {
+      intent: {
+        type: "string",
+        enum: ["status", "portfolio", "receive", "send", "private-transfer", "paid-api", "private-paid-api", "trade", "card-payment", "fund-llm-credits"],
+        description: "Natural payment intent to route.",
+      },
+      agentId: { type: "string", description: "Agent wallet/profile id, when the action belongs to a specific agent." },
+      preferredProvider: { type: "string", enum: ["bankr", "moneyclaw", "x402", "usepod", "veil"], description: "Optional explicit provider preference." },
+      wallet: { type: "object", description: "Current agent wallet policy from the dashboard, including provider, Spend, caps, network, and auto-use settings." },
+      amountUsd: { type: "number", description: "USD-denominated amount or cap for the intended action." },
+      asset: { type: "string", enum: ["USDC", "ETH"], description: "Asset for private transfers." },
+      url: { type: "string", description: "Paid API/x402 URL." },
+      method: { type: "string", description: "HTTP method for paid API/x402 requests." },
+      headers: { type: "object", description: "HTTP headers for paid API/x402 requests." },
+      body: { description: "JSON body for paid API/x402 requests." },
+      recipientAddress: { type: "string", description: "Recipient wallet address for send/private-transfer intents." },
+      amount: { description: "Asset amount for private transfer intents." },
     },
   };
 }
@@ -139,6 +179,24 @@ async function callTool(name, args = {}) {
       })),
     };
   }
+  if (name === "crypto_capabilities") {
+    return callDashboard("/api/crypto/capabilities", "POST", {
+      action: "status",
+      ...cryptoArgs(args),
+    });
+  }
+  if (name === "select_crypto_rail") {
+    return callDashboard("/api/crypto/capabilities", "POST", {
+      action: "select",
+      ...cryptoArgs(args),
+    });
+  }
+  if (name === "prepare_crypto_action") {
+    return callDashboard("/api/crypto/capabilities", "POST", {
+      action: "prepare",
+      ...cryptoArgs(args),
+    });
+  }
   const actionByTool = {
     plan_handoff: "plan",
     handoff_file: "send-file",
@@ -156,6 +214,14 @@ async function callTool(name, args = {}) {
     dryRun: name === "plan_handoff",
     allowAmbiguous: args.allowAmbiguous === true,
   });
+}
+
+function cryptoArgs(args) {
+  const output = {};
+  for (const key of ["intent", "agentId", "preferredProvider", "wallet", "amountUsd", "asset", "url", "method", "headers", "body", "recipientAddress", "amount"]) {
+    if (args[key] !== undefined) output[key] = args[key];
+  }
+  return output;
 }
 
 function expandHome(value) {

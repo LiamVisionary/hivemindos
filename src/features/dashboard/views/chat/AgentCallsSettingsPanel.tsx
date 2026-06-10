@@ -14,6 +14,7 @@ const VOICE_RUNTIME_LABELS: Record<string, string> = {
   "openai-realtime": "OpenAI Realtime",
   "grok-voice": "Grok Voice",
   "gemini-live": "Gemini Live",
+  "local-tts": "Local TTS",
 };
 
 const CALL_FALLBACK_OPTIONS = [
@@ -37,7 +38,29 @@ type VoiceOption = {
   id: string;
   provider: string;
   voice: string;
+  model?: string;
+  appName?: string;
+  machineName?: string;
   source: "configured" | "runtime-default";
+};
+
+type LocalTtsCandidate = {
+  id: string;
+  appId: string;
+  name: string;
+  machineName?: string;
+  port?: number;
+  ok: boolean;
+  error?: string;
+  model: string;
+  voice: string;
+  voiceCount?: number;
+  supportsTrueStreaming: boolean;
+  streamingKind?: string;
+  streamingImplementation?: string;
+  sampleRate: number;
+  channels: number;
+  sampleFormat: string;
 };
 
 type PhoneStatus = {
@@ -82,10 +105,42 @@ function readVoiceOptions(value: unknown): VoiceOption[] {
     const id = typeof item?.id === "string" ? item.id : "";
     const runtime = typeof item?.provider === "string" ? item.provider : "";
     const voice = typeof item?.voice === "string" ? item.voice : "";
+    const model = typeof item?.model === "string" ? item.model : undefined;
+    const appName = typeof item?.appName === "string" ? item.appName : undefined;
+    const machineName = typeof item?.machineName === "string" ? item.machineName : undefined;
     const source: VoiceOption["source"] = item?.source === "runtime-default" ? "runtime-default" : "configured";
-    return id && runtime && voice ? [{ id, provider: runtime, voice, source }] : [];
+    return id && runtime && voice ? [{ id, provider: runtime, voice, model, appName, machineName, source }] : [];
   });
   return configuredOptions.length ? configuredOptions : runtimeDefaultVoiceOptions("openai-realtime");
+}
+
+function readLocalTtsCandidates(value: unknown): LocalTtsCandidate[] {
+  const config = asRecord(asRecord(value)?.config);
+  const candidates = Array.isArray(config?.localTtsCandidates) ? config.localTtsCandidates : [];
+  return candidates.flatMap((candidate) => {
+    const item = asRecord(candidate);
+    const id = typeof item?.id === "string" ? item.id : "";
+    const appId = typeof item?.appId === "string" ? item.appId : "";
+    if (!id || !appId) return [];
+    return [{
+      id,
+      appId,
+      name: typeof item?.name === "string" ? item.name : "Local TTS",
+      machineName: typeof item?.machineName === "string" ? item.machineName : undefined,
+      port: typeof item?.port === "number" ? item.port : undefined,
+      ok: item?.ok === true,
+      error: typeof item?.error === "string" ? item.error : undefined,
+      model: typeof item?.model === "string" ? item.model : "chatterbox-turbo",
+      voice: typeof item?.voice === "string" ? item.voice : "voice01",
+      voiceCount: typeof item?.voiceCount === "number" ? item.voiceCount : undefined,
+      supportsTrueStreaming: item?.supportsTrueStreaming === true,
+      streamingKind: typeof item?.streamingKind === "string" ? item.streamingKind : undefined,
+      streamingImplementation: typeof item?.streamingImplementation === "string" ? item.streamingImplementation : undefined,
+      sampleRate: typeof item?.sampleRate === "number" ? item.sampleRate : 24_000,
+      channels: typeof item?.channels === "number" ? item.channels : 1,
+      sampleFormat: typeof item?.sampleFormat === "string" ? item.sampleFormat : "pcm16",
+    }];
+  });
 }
 
 function runtimeDefaultVoiceOptions(provider: string): VoiceOption[] {
@@ -116,12 +171,13 @@ export function AgentCallsSettingsPanel(props: AgentCallsSettingsPanelProps) {
   const [phoneConnectError, setPhoneConnectError] = useState("");
   const [phoneStatus, setPhoneStatus] = useState<PhoneStatus>({ checked: false, connected: false, apnsMissing: [] });
   const [voiceOptions, setVoiceOptions] = useState<VoiceOption[]>(() => runtimeDefaultVoiceOptions("openai-realtime"));
+  const [localTtsCandidates, setLocalTtsCandidates] = useState<LocalTtsCandidate[]>([]);
   const [callTestBusy, setCallTestBusy] = useState(false);
   const [callTestMessage, setCallTestMessage] = useState("");
   const [callTestTone, setCallTestTone] = useState<"ok" | "error" | "muted">("muted");
 
   const agentCallSettings = buildAgentCallPreferences(agentCreateMachine ? agentCreateDraft.calls : roleModalAgent?.calls);
-  const voiceRuntimeOptions = ["openai-realtime", agentCallSettings.voiceRuntime, ...voiceOptions.map((provider) => provider.provider)]
+  const voiceRuntimeOptions = ["openai-realtime", "local-tts", agentCallSettings.voiceRuntime, ...voiceOptions.map((provider) => provider.provider)]
     .filter((provider, index, list) => provider && list.indexOf(provider) === index);
   const selectedVoiceOptions = voiceOptions.filter((provider) => provider.provider === agentCallSettings.voiceRuntime);
   const selectedVoiceOption = voiceOptions.find((provider) => provider.id === agentCallSettings.voiceProviderId)
@@ -153,6 +209,7 @@ export function AgentCallsSettingsPanel(props: AgentCallsSettingsPanelProps) {
     updateAgentCalls({
       voiceRuntime,
       voiceProviderId: firstVoice.source === "configured" ? firstVoice.id : undefined,
+      voiceModelId: firstVoice.source === "configured" ? firstVoice.model : undefined,
       voiceId: firstVoice.source === "configured" ? firstVoice.voice : undefined,
     });
   };
@@ -163,7 +220,18 @@ export function AgentCallsSettingsPanel(props: AgentCallsSettingsPanelProps) {
     updateAgentCalls({
       voiceProviderId: provider.source === "configured" ? provider.id : undefined,
       voiceRuntime: provider.provider,
+      voiceModelId: provider.source === "configured" ? provider.model : undefined,
       voiceId: provider.source === "configured" ? provider.voice : undefined,
+    });
+  };
+
+  const selectLocalTtsCandidate = (candidate: LocalTtsCandidate) => {
+    if (!candidate.ok) return;
+    updateAgentCalls({
+      voiceRuntime: "local-tts",
+      voiceProviderId: candidate.id,
+      voiceModelId: candidate.model,
+      voiceId: candidate.voice,
     });
   };
 
@@ -185,7 +253,9 @@ export function AgentCallsSettingsPanel(props: AgentCallsSettingsPanelProps) {
       apnsConfigured: typeof apns?.configured === "boolean" ? apns.configured : undefined,
       apnsMissing: Array.isArray(missingApns) ? missingApns.filter((item): item is string => typeof item === "string") : [],
     });
-    setVoiceOptions(readVoiceOptions(voiceData?.result ?? voiceData));
+    const voicePayload = voiceData?.result ?? voiceData;
+    setVoiceOptions(readVoiceOptions(voicePayload));
+    setLocalTtsCandidates(readLocalTtsCandidates(voicePayload));
   };
 
   const buildPairingQr = async () => {
@@ -239,6 +309,9 @@ export function AgentCallsSettingsPanel(props: AgentCallsSettingsPanelProps) {
             runtime: agent.runtime,
             role: agent.workerClass,
             voiceProviderId: selectedVoiceOption.source === "configured" ? selectedVoiceOption.id : undefined,
+            voiceRuntime: agentCallSettings.voiceRuntime,
+            voiceModelId: selectedVoiceOption.source === "configured" ? selectedVoiceOption.model : undefined,
+            voiceId: selectedVoiceOption.source === "configured" ? selectedVoiceOption.voice : undefined,
             skillProfilePrompt: agent.skillProfilePrompt,
             preferredSkillSlugs: agent.preferredSkillSlugs,
             aeonRepo: agent.aeonRepo,
@@ -316,8 +389,52 @@ export function AgentCallsSettingsPanel(props: AgentCallsSettingsPanelProps) {
       {!hasConfiguredVoices ? (
         <div className={fleetClass("agentSettingsInfo")}>
           <PlugZap aria-hidden="true" />
-          <p>Using the gateway-resolved default voice. Add or sync custom voices in Claw Code Mobile Settings → Calls when you want an explicit provider voice.</p>
+          <p>Using the gateway-resolved default voice. Add or sync custom voices in Hivemind Mobile Settings → Calls when you want an explicit provider voice.</p>
         </div>
+      ) : null}
+
+      {agentCallSettings.voiceRuntime === "local-tts" ? (
+        <section className={styles.localTtsSection}>
+          <div className={styles.localTtsSectionHeader}>
+            <strong>TTS server candidates</strong>
+            <span>{localTtsCandidates.filter((candidate) => candidate.ok).length} validated</span>
+          </div>
+          {localTtsCandidates.length ? (
+            <div className={styles.localTtsGrid}>
+              {localTtsCandidates.map((candidate) => {
+                const selected = candidate.id === agentCallSettings.voiceProviderId;
+                return (
+                  <button
+                    type="button"
+                    key={candidate.id}
+                    className={`${styles.localTtsCard} ${selected ? styles.localTtsCardSelected : ""}`}
+                    disabled={!candidate.ok}
+                    onClick={() => selectLocalTtsCandidate(candidate)}
+                  >
+                    <span className={candidate.ok ? styles.localTtsStatusOk : styles.localTtsStatusError}>
+                      {candidate.ok ? "Validated" : "Unavailable"}
+                    </span>
+                    <strong>{candidate.name}</strong>
+                    <small>{[candidate.machineName, candidate.port ? `port ${candidate.port}` : ""].filter(Boolean).join(" · ") || "Connected app"}</small>
+                    <dl>
+                      <div><dt>Model</dt><dd>{candidate.model}</dd></div>
+                      <div><dt>Voice</dt><dd>{candidate.voice}</dd></div>
+                      <div><dt>Stream</dt><dd>{candidate.sampleFormat} · {candidate.sampleRate} Hz</dd></div>
+                      <div><dt>Engine</dt><dd>{candidate.streamingImplementation || candidate.streamingKind || "streaming"}</dd></div>
+                    </dl>
+                    {candidate.voiceCount ? <em>{candidate.voiceCount} voices</em> : null}
+                    {!candidate.ok && candidate.error ? <p>{candidate.error}</p> : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className={fleetClass("agentSettingsInfo")}>
+              <PlugZap aria-hidden="true" />
+              <p>No TTS candidates were discovered yet. Start Universal TTS, then refresh this panel.</p>
+            </div>
+          )}
+        </section>
       ) : null}
 
       {!phoneStatus.connected ? (

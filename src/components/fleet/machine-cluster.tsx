@@ -23,15 +23,18 @@ import { AddHexCell } from "./add-hex-cell";
 import { BeeIcon } from "./bee-icon";
 import { HexTile, type HexTone } from "./hex-tile";
 import { axialToPixel, FLEET_GRAPH_CELL_SCALE, HEX_H, HEX_W, hexSpiral } from "./hex-math";
+import { FleetSelectionTooltipContent } from "./selection-tooltip";
 import {
   isFleetMachineMobile,
   type AgentState,
   type FleetActiveApp,
   type FleetAgent,
+  type FleetAgentChat,
   type FleetAgentCapabilityBadge,
   type FleetAgentCapabilityIcon,
   type FleetMachine,
 } from "./fleet-data";
+import type { AeonDeleteDepth, AeonDeleteProgress, AeonDeleteResult, MachineUpdateButtonDetail, MachineUpdateButtonStatus } from "./roster";
 import styles from "./fleet-tokens.module.css";
 
 const STATE_TONE: Record<AgentState, HexTone> = {
@@ -381,6 +384,30 @@ interface MachineClusterProps {
   onSelectMachine: () => void;
   onSelectAgent: (machine: FleetMachine, agent: FleetAgent) => void;
   onAddAgent: (machine: FleetMachine) => void;
+  updateStatus?: MachineUpdateButtonStatus;
+  updateDetail?: MachineUpdateButtonDetail;
+  onUpdateMachine?: (machine: FleetMachine) => void;
+  onOpenCodeProof?: (machine: FleetMachine) => void;
+  onFixSyncIssue?: (machine: FleetMachine) => void | Promise<void>;
+  onOpenUsePodHost?: (machine: FleetMachine) => void;
+  onOpenShell?: (machine: FleetMachine) => void;
+  onOpenChat?: (machine: FleetMachine, agent: FleetAgent) => void;
+  onOpenTaskChat?: (machine: FleetMachine, agent: FleetAgent, chat?: FleetAgentChat) => void;
+  onCallAgent?: (machine: FleetMachine, agent: FleetAgent) => void;
+  onOpenWallet?: (machine: FleetMachine, agent: FleetAgent) => void;
+  onEditSettings?: (machine: FleetMachine, agent: FleetAgent) => void;
+  onDuplicate?: (machine: FleetMachine, agent: FleetAgent) => void;
+  onRemove?: (
+    machine: FleetMachine,
+    agent: FleetAgent,
+    depth?: AeonDeleteDepth,
+    onProgress?: (progress: AeonDeleteProgress) => void,
+  ) => void | Promise<AeonDeleteResult | void>;
+  selectionTooltipKey?: string | null;
+  onOpenSelectionTooltip?: (key: string) => void;
+  onDismissSelectionTooltip?: () => void;
+  /** `machineId:agentId` of a just-added agent — its hex gets the arrival bounce. */
+  newAgentKey?: string | null;
 }
 
 /**
@@ -395,6 +422,24 @@ export function MachineCluster({
   capabilityBadgeVariant = "side-rails",
   selected, selectedAgentId,
   onSelectMachine, onSelectAgent, onAddAgent,
+  updateStatus,
+  updateDetail,
+  onUpdateMachine,
+  onOpenCodeProof,
+  onFixSyncIssue,
+  onOpenUsePodHost,
+  onOpenShell,
+  onOpenChat,
+  onOpenTaskChat,
+  onCallAgent,
+  onOpenWallet,
+  onEditSettings,
+  onDuplicate,
+  onRemove,
+  selectionTooltipKey,
+  onOpenSelectionTooltip,
+  onDismissSelectionTooltip,
+  newAgentKey,
 }: MachineClusterProps) {
   const agentCount = machine.agents.length;
   const occupiedCells = hexSpiral(agentCount + 1);
@@ -451,59 +496,100 @@ export function MachineCluster({
           );
         }
 
+        const tooltipKey = `${machine.id}:${isMachine ? "machine" : agent!.id}`;
+        const tooltipOpen = Boolean(
+          selectionTooltipKey === tooltipKey
+          && (isMachine ? selected && !selectedAgentId : isAgentSelected),
+        );
+        const isNewArrival = !isMachine && !!newAgentKey && newAgentKey === tooltipKey;
+
         return (
-          <div key={i} style={wrapperStyle} title={isMachine ? machine.name : `${agent!.name}${agent!.activeApp ? ` · ${agent!.activeApp.name} active` : ""}`}>
-            <HexTile
-              size={HEX_W}
-              tone={tone!}
-              data-fleet-cell-control
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isMachine) onSelectMachine();
-                else if (agent) onSelectAgent(machine, agent);
-              }}
-            >
-              {!isMachine && agent?.activeApp ? <ActiveAppBadge app={agent.activeApp} /> : null}
-              <div
-                className={isMachine ? "grid justify-items-center text-center" : `${styles.graphAgentCellContent} text-center`}
-                style={{
-                  width: isMachine ? "100%" : undefined,
-                  height: isMachine ? "100%" : undefined,
-                  maxWidth: isMachine ? HEX_W : undefined,
-                  minHeight: isMachine ? undefined : HEX_H,
-                  paddingInline: isMachine ? 0 : graphScale(4),
-                  alignContent: isMachine ? "center" : "center",
-                  gap: isMachine ? 0 : graphScale(1),
-                  transform: undefined,
-                  "--graph-agent-scale": FLEET_GRAPH_CELL_SCALE,
-                } as React.CSSProperties}
-              >
-                {isMachine ? (
-                  <MachineScreenIcon
-                    name={machine.name}
-                    selected={selected && !selectedAgentId}
-                    muted={machine.versionState === "needs-setup" && !(selected && !selectedAgentId)}
-                    mobile={isFleetMachineMobile(machine)}
-                  />
-                ) : (
-                  <>
-                    {SHOW_GRAPH_AGENT_CAPABILITY_BADGES ? (
-                      <GraphAgentCapabilityBadges
-                        capabilities={agent!.capabilities}
-                        variant={capabilityBadgeVariant}
+          <div key={i} style={isNewArrival ? { ...wrapperStyle, zIndex: 5 } : wrapperStyle}>
+            <Tooltip open={tooltipOpen} disableHoverableContent={false}>
+              <TooltipTrigger asChild>
+                <HexTile
+                  size={HEX_W}
+                  tone={tone!}
+                  className={isNewArrival ? styles.hexNewArrival : undefined}
+                  data-fleet-cell-control
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isMachine) onSelectMachine();
+                    else if (agent) onSelectAgent(machine, agent);
+                    onOpenSelectionTooltip?.(tooltipKey);
+                  }}
+                >
+                  {!isMachine && agent?.activeApp ? <ActiveAppBadge app={agent.activeApp} /> : null}
+                  <div
+                    className={isMachine ? "grid justify-items-center text-center" : `${styles.graphAgentCellContent} text-center`}
+                    style={{
+                      width: isMachine ? "100%" : undefined,
+                      height: isMachine ? "100%" : undefined,
+                      maxWidth: isMachine ? HEX_W : undefined,
+                      minHeight: isMachine ? undefined : HEX_H,
+                      paddingInline: isMachine ? 0 : graphScale(4),
+                      alignContent: isMachine ? "center" : "center",
+                      gap: isMachine ? 0 : graphScale(1),
+                      transform: undefined,
+                      "--graph-agent-scale": FLEET_GRAPH_CELL_SCALE,
+                    } as React.CSSProperties}
+                  >
+                    {isMachine ? (
+                      <MachineScreenIcon
+                        name={machine.name}
+                        selected={selected && !selectedAgentId}
+                        muted={machine.versionState === "needs-setup" && !(selected && !selectedAgentId)}
+                        mobile={isFleetMachineMobile(machine)}
                       />
-                    ) : null}
-                    <BeeIcon
-                      role={agent!.beeRole === "queen" ? "queen" : "worker"}
-                      workerClass={agent!.workerClass}
-                      size={graphScale(48)}
-                      dim={agent!.state === "ready" && !isAgentSelected}
-                    />
-                    <GraphAgentEdgeLabel segments={agentNameSegments} selected={isAgentSelected} />
-                  </>
-                )}
-              </div>
-            </HexTile>
+                    ) : (
+                      <>
+                        {SHOW_GRAPH_AGENT_CAPABILITY_BADGES ? (
+                          <GraphAgentCapabilityBadges
+                            capabilities={agent!.capabilities}
+                            variant={capabilityBadgeVariant}
+                          />
+                        ) : null}
+                        <BeeIcon
+                          role={agent!.beeRole === "queen" ? "queen" : "worker"}
+                          workerClass={agent!.workerClass}
+                          size={graphScale(48)}
+                          dim={agent!.state === "ready" && !isAgentSelected}
+                        />
+                        <GraphAgentEdgeLabel segments={agentNameSegments} selected={isAgentSelected} />
+                      </>
+                    )}
+                  </div>
+                </HexTile>
+              </TooltipTrigger>
+              <TooltipContent
+                side="top"
+                sideOffset={4}
+                className="pointer-events-auto max-w-none p-3"
+                arrowClassName="h-2.5 w-5"
+                onPointerDownOutside={onDismissSelectionTooltip}
+              >
+                <FleetSelectionTooltipContent
+                  machine={machine}
+                  agent={agent}
+                  updateStatus={updateStatus}
+                  updateDetail={updateDetail}
+                  onClose={onDismissSelectionTooltip}
+                  onAddAgent={onAddAgent}
+                  onUpdateMachine={onUpdateMachine}
+                  onOpenCodeProof={onOpenCodeProof}
+                  onFixSyncIssue={onFixSyncIssue}
+                  onOpenUsePodHost={onOpenUsePodHost}
+                  onOpenShell={onOpenShell}
+                  onOpenChat={onOpenChat}
+                  onOpenTaskChat={onOpenTaskChat}
+                  onCallAgent={onCallAgent}
+                  onOpenWallet={onOpenWallet}
+                  onEditSettings={onEditSettings}
+                  onDuplicate={onDuplicate}
+                  onRemove={onRemove}
+                />
+              </TooltipContent>
+            </Tooltip>
           </div>
         );
       })}

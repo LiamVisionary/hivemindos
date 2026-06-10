@@ -119,7 +119,7 @@ try {
     waitUntil: "domcontentloaded",
     timeout: 45_000,
   });
-  await seedDashboardState(page, seedAgents);
+  await seedDashboardState(context.request, seedAgents);
 
   await page.goto(`${baseUrl}/?view=chat&agent=${encodeURIComponent(selectedAgent.id)}&chatLeaf=${encodeURIComponent(chatLeaf)}`, {
     waitUntil: "domcontentloaded",
@@ -195,12 +195,18 @@ async function discoverRealAgents(request) {
   return chatAgents;
 }
 
-async function seedDashboardState(page, seedAgents) {
-  await page.evaluate((agents) => {
-    window.localStorage.setItem("hivemindos.agentProfiles.v1", JSON.stringify(agents));
-    window.localStorage.setItem("hivemindos.chatMessages.v1", "{}");
-    window.localStorage.setItem("hivemindos.honeyLedger.enabled.v1", "false");
-  }, seedAgents);
+async function seedDashboardState(request, seedAgents) {
+  const response = await request.post(`${baseUrl}/api/dashboard/state`, {
+    data: {
+      values: {
+        "hivemindos.agentProfiles.v1": JSON.stringify(seedAgents),
+        "hivemindos.chatMessages.v1": "{}",
+        "hivemindos.honeyLedger.enabled.v1": "false",
+      },
+    },
+    headers: { Accept: "application/json" },
+  });
+  assert.ok(response.ok(), `dashboard state seed failed with ${response.status()}`);
 }
 
 async function assertSelectedAgent(page, agentName) {

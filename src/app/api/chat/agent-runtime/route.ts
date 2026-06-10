@@ -1,11 +1,10 @@
 import { NextRequest } from "next/server";
 import { execFile } from "child_process";
-import { readFile, stat } from "fs/promises";
-import { homedir, hostname, networkInterfaces } from "os";
-import { join, resolve } from "path";
+import { access, readFile, stat } from "fs/promises";
+import { homedir } from "os";
+import { delimiter, join, resolve } from "path";
 import { promisify } from "util";
-import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
-import { getRuntimeUrl } from "@/lib/types/agent-runtime";
+import { HIVEMIND_OS_RUNTIME, getRuntimeUrl, normalizeAgentRuntime, type AgentProfile, type SharedVaultConfig } from "@/lib/types/agent-runtime";
 import { sendMessageViaGateway } from "@/lib/services/openclaw/gateway-client";
 import { getGatewayAuthToken } from "@/lib/services/openclaw/gateway-health";
 import { proxyInput, proxyOutput } from "@/lib/services/agent-security-proxy";
@@ -13,7 +12,6 @@ import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
 import {
   VEIL_CASH_NETWORK,
-  VEIL_CASH_TRANSFER_CONFIRMATION_LABEL,
   VEIL_CASH_X402_CONFIRMATION,
   VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM,
 } from "@/lib/config/veil-cash";
@@ -21,7 +19,7 @@ import { veilEnvValue } from "@/lib/services/wallet/veil-cli";
 import { callVeilMcpTool } from "@/lib/services/wallet/veil-mcp";
 import { executeVeilPrivateTransfer, veilPrivateTransferErrorMessage } from "@/lib/services/wallet/veil-private-transfer";
 import { getWalletBalance } from "@/lib/services/wallet/chain-wallet";
-import { executeX402Fetch, summarizeX402Policy, type X402FetchPolicy, type X402FetchResult } from "@/lib/services/wallet/x402-agent-fetch";
+import { executeX402Fetch, type X402FetchPolicy, type X402FetchResult } from "@/lib/services/wallet/x402-agent-fetch";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
 import { recordHoneyUsage } from "@/lib/services/wallet/honey-ledger";
@@ -31,8 +29,10 @@ import { normalizeRuntimeStreamEvent, RUNTIME_STREAM_EVENT_TYPES, type RuntimeSt
 import { isUsePodProfile, resolveUsePodRuntimeConfig, summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
 import {
   bankrLlmModel,
+  isBankrAdaptiveModel,
   isBankrLlmProfile,
   resolveBankrLlmRuntimeProfile,
+  resolveAdaptiveBankrLlmModels,
 } from "@/lib/services/bankr-llm";
 import {
   buildMiroSharkChatCard,
@@ -46,7 +46,20 @@ import {
 import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS } from "@/lib/utils/agent-wallet";
 import { activeSharedVault, buildVaultContext } from "@/lib/services/chat/shared-vault-context";
 import { buildSharedBrainMemoryContext } from "@/lib/services/chat/shared-brain-memory-context";
-import { buildTaskRetrievalContext } from "@/lib/services/chat/task-retrieval-context";
+import {
+  buildTaskRetrievalContextResult,
+  buildTaskRetrievalFallbackContext,
+  formatTaskRetrievalFallbackProcessDetail,
+  formatTaskRetrievalProcessDetail,
+  imageGenerationRequest,
+  type TaskRetrievalTelemetry,
+} from "@/lib/services/chat/task-retrieval-context";
+import { runtimeImageGenerationCapabilityContext } from "@/lib/services/chat/runtime-image-generation-capability";
+import {
+  buildHivemindPromptEnvelope,
+  buildHivemindUserContextText,
+  prependHivemindSystemMessage,
+} from "@/lib/services/chat/hivemind-system-prompt";
 import { resolveAdaptiveOpenRouterModel, resolveAdaptiveOpenRouterModels } from "@/lib/services/chat/adaptive-openrouter-models";
 import { isAdaptiveProviderProfile, resolveAdaptiveRoutePlan, type AdaptiveRoutePlan } from "@/lib/services/chat/adaptive-model-router";
 import {
@@ -56,6 +69,8 @@ import {
   finishRuntimeChatSession,
   startRuntimeChatSession,
 } from "@/lib/services/chat/runtime-session-store";
+import { canonicalLocalCollectorUrl, isLocalCollectorUrl, remoteCollectorLocalServiceUrl } from "@/lib/services/local-collector-url";
+import { RUN_COMMAND_TOOL_NAME, runAgentCommand, runCommandToolDefinition } from "@/lib/services/agent-shell/command-tool";
 
 export const runtime = "nodejs";
 export const maxDuration = 600;
@@ -81,8 +96,13 @@ type AgentMode = "plan" | "act";
 
 const INTERACTIVE_RUNTIME_LOCK_MS = 130_000;
 const RUNTIME_FETCH_TIMEOUT_MS = 10 * 60 * 1000;
+const CHAT_PREFLIGHT_RUNTIME_CAPABILITY_TIMEOUT_MS = 150;
+const CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS = 900;
+const CHAT_PREFLIGHT_MEMORY_TIMEOUT_MS = 650;
+const ADAPTIVE_HERMES_OPENROUTER_FREE_ATTEMPTS = 5;
+const ADAPTIVE_HERMES_OPENROUTER_ATTEMPT_TIMEOUT_MS = 45_000;
+const DEFAULT_ADAPTIVE_HERMES_OPENROUTER_FALLBACK_MODEL = "openai/gpt-4.1-mini";
 const HIVE_ENV_FILE = join(homedir(), ".hivemindos", ".env");
-const LOCAL_COLLECTOR_ENV_FILE = join(homedir(), ".hivemindos", "collector.env");
 const HERMES_ENV_FILE = join(homedir(), ".hermes", ".env");
 const interactiveRuntimeLocks = new Map<string, number>();
 const privateTransferExecutions = new Map<string, { status: "running" | "completed"; startedAt: number; message?: string }>();
@@ -189,7 +209,7 @@ function userFacingMachineName(profile: AgentProfile) {
 }
 
 function interactiveRuntimeLockKey(profile: AgentProfile, url: string) {
-  if (profile.runtime !== "hermes" && profile.runtime !== "openai-compatible") return "";
+  if (profile.runtime !== "hermes" && profile.runtime !== HIVEMIND_OS_RUNTIME) return "";
   if ((profile.runtimeKind ?? "interactive") !== "interactive") return "";
   return url;
 }
@@ -208,33 +228,26 @@ function releaseInteractiveRuntime(key: string) {
   interactiveRuntimeLocks.delete(key);
 }
 
-function buildWorkingDirectoryContext(workingDirectory?: string): string {
-  const trimmed = workingDirectory?.trim();
-  if (!trimmed) return "";
+function promptNeedsFullVaultContext(prompt: string) {
+  return /\b(?:agent|app|brain|capabilit(?:y|ies)|kanban|memory|note|notes|obsidian|queen bee|recall|remember|skill|task|tool|vault|work board|workflow)\b/i.test(prompt);
+}
+
+function buildCompactVaultContext(sharedVault: SharedVaultConfig | null): string {
+  if (!sharedVault) return "";
   return [
-    "Working directory context:",
-    `- Use this directory for the chat unless the user says otherwise: ${trimmed}`,
+    "Shared vault context:",
+    `- Vault path: ${sharedVault.vaultPath}`,
+    "- Use the shared vault, memory, skills, Kanban, and dashboard APIs only when the user asks for durable context, tasks, tools, notes, or hive workflow.",
   ].join("\n");
+}
+
+function buildChatVaultContext(sharedVault: SharedVaultConfig | null, prompt: string): string {
+  if (!sharedVault) return "";
+  return promptNeedsFullVaultContext(prompt) ? buildVaultContext(sharedVault) : buildCompactVaultContext(sharedVault);
 }
 
 function normalizeAgentMode(value: unknown): AgentMode {
   return value === "plan" ? "plan" : "act";
-}
-
-function buildAgentModeContext(mode: AgentMode): string {
-  if (mode === "plan") {
-    return [
-      "Agent operating mode: Plan.",
-      "- Think through the approach, assumptions, and verification path before making changes.",
-      "- Prefer explaining the intended steps and asking only when a decision is genuinely needed.",
-      "- Do not mutate files, services, wallets, or remote systems unless the user explicitly asks you to proceed.",
-    ].join("\n");
-  }
-  return [
-    "Agent operating mode: Act.",
-    "- Execute the user's request directly, make reasonable assumptions, and keep moving until the task is handled.",
-    "- Use concise progress updates and surface blockers only when you cannot resolve them safely.",
-  ].join("\n");
 }
 
 async function readWorkspaceSnapshot(workingDirectory?: string): Promise<WorkspaceSnapshot | null> {
@@ -268,39 +281,6 @@ function workspaceChangeSummary(before: WorkspaceSnapshot | null, after: Workspa
     headChanged ? `HEAD changed from ${before.head.slice(0, 7)} to ${after.head.slice(0, 7)}.` : "",
     changedFiles.length ? `Changed files: ${changedFiles.slice(0, 8).join(", ")}${changedFiles.length > 8 ? ", ..." : ""}.` : "",
   ].filter(Boolean).join(" ");
-}
-
-function buildWalletToolContext(wallet?: AgentWalletConfig): string {
-  if (!wallet) return "";
-  const walletFeatures = agentPaymentProviderFeatures(wallet.provider);
-  const privateTransferAssets = walletFeatures.privateTransferAssets.join(" | ");
-  const veilAutoPrivateX402 = wallet.provider === "veil" && wallet.veilAutoPrivateX402 !== false;
-  const lines = [
-    "Agent wallet/payment context:",
-    summarizeX402Policy(wallet),
-    !wallet.enabled
-      ? "- Wallet spending is off: do not call walletTools, do not execute x402_fetch, and do not execute privateTransfer. You may prepare a reviewed draft and ask the user to turn Spend on before execution."
-      : "",
-    privateTransferAssets
-      ? `- Capability: private transfer is available for ${privateTransferAssets}. If the user asks to "send privately", "make a private payment", "send a private transfer", or similar, infer this private-transfer capability from the active wallet rail; do not require the user to name the provider.`
-      : "",
-    "- Tool: x402_fetch",
-    "- Dashboard endpoint: call walletTools.x402Fetch when provided, otherwise POST /api/wallet/x402 with { agentId, url, method, headers, body, policy, confirmation }.",
-    wallet.autoPayEnabled
-      ? "- Allow auto-use is on: x402_fetch may pay without another prompt while staying under the hard per-payment cap."
-      : "- Allow auto-use is off: present a concise payment draft and ask for a plain confirmation such as \"confirm\" before running x402_fetch.",
-    "- Read-only balance check: POST /api/wallet/balance with public address and network.",
-    wallet.autoPayEnabled
-      ? "- USDC sends follow the same auto-use rule: POST /api/wallet/send may send without another prompt while staying under the hard per-payment cap."
-      : "- USDC sends follow the same auto-use rule: do not call POST /api/wallet/send until the user explicitly supplies SEND_USDC for the exact recipient and amount.",
-    duplicatePaymentGuardEnabled(wallet)
-      ? `- Duplicate payment guard is on: recently completed matching private sends are replay-protected for ${Math.max(1, Math.round(duplicatePaymentGuardSeconds(wallet) / 60))} minutes.`
-      : "- Duplicate payment guard is off: the same private send may be intentionally submitted again after the previous transfer finishes.",
-    wallet.provider === "usepod" ? "- UsePod rail: use the prepaid UsePod balance for inference and provider-managed x402/paywalls; do not require a separate local wallet for UsePod x402." : "",
-    wallet.provider === "veil" ? `- Selected private-send implementation: call walletTools.privateTransfer with { agentId, enabled: true, provider: 'veil', network: 'eip155:8453', asset: 'USDC' | 'ETH', recipientAddress, amount, maxAssetAmount, confirmation: '${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL}', autoShield: true, duplicateGuardEnabled, duplicateGuardSeconds }. Treat public/private/queued Veil balances as internal rail state; tell the user they have one agent spend balance. By default this sends privately to any public Ethereum address, unlinking the funding wallet from the recipient. If ready private USDC is insufficient, HivemindOS can shield from the agent's encrypted local Base wallet first, subject to Veil's 20 USDC shield minimum and queue acceptance delay, then complete the withdrawal after acceptance. Current public-recipient USDC withdrawals require at least ${VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM} USDC. Only include recipientMode: 'registered' when the user explicitly asks for an in-pool shielded transfer to a registered Veil recipient. Before execution, present a concise draft with asset, amount, recipient, network, cap, and "private send"; ask for a plain confirmation such as "Reply confirm to send." ${veilAutoPrivateX402 ? "Auto Always Private is on: ordinary x402/pay-this endpoint requests use Veil private x402; call walletTools.x402Fetch with { provider: 'veil', agentId, url, policy, confirmation: 'VEIL_X402' } after confirmation." : "Auto Always Private is off: ordinary x402/pay-this endpoint requests use the basic public x402 route through walletTools.x402Fetch; only explicit private wording such as privately, in private, private, or Veil should use the private x402 draft path."} Private x402 withdraws USDC from the private Veil pool into a fresh derived payer EOA before x402 settlement. Ask for a plain confirmation such as "confirm", not a magic token, unless a lower-level API rejects the plain confirmation. Never execute private payment actions from an ambiguous recipient, amount, or asset.` : "",
-    "- Hard rule: never ask for or reveal private keys; the dashboard signs from its encrypted local vault.",
-  ].filter(Boolean);
-  return lines.join("\n");
 }
 
 function buildWalletTools(wallet?: AgentWalletConfig) {
@@ -1512,24 +1492,6 @@ function messageText(message?: IncomingMessage) {
   return message.content.map((part) => part.text ?? "").join("\n");
 }
 
-function buildAgentProfileContext(profile: AgentProfile): string {
-  const usePod = isUsePodProfile(profile) ? profile.usePod : undefined;
-  const lines = [
-    "Agent profile context:",
-    `- Name: ${profile.name || profile.id}`,
-    `- Runtime: ${profile.runtime}`,
-    profile.machineName ? `- Machine: ${profile.machineName}` : "",
-    profile.beeRole ? `- Bee role: ${profile.beeRole}` : "",
-    profile.workerClass ? `- Worker class: ${profile.workerClass}` : "",
-    profile.provider || profile.model ? `- Preferred model: ${[profile.provider, profile.model].filter(Boolean).join("/")}` : "",
-    usePod ? `- UsePod rail: prepaid marketplace inference${usePod.spendPreset ? `, ${usePod.spendPreset} spend caps` : ""}${usePod.lastBalanceRemaining ? `, last balance ${usePod.lastBalanceRemaining}` : ""}` : "",
-    profile.skillProfilePrompt?.trim() ? `- Role instructions: ${profile.skillProfilePrompt.trim()}` : "",
-    profile.preferredSkillSlugs?.length ? `- Preferred skills: ${profile.preferredSkillSlugs.join(", ")}` : "",
-    "- HivemindOS chat bridge: do not use terminal-only interactive clarification prompts. If a question is unavoidable, emit or return a concise question with explicit choices so the dashboard can render it, otherwise make a reasonable assumption and continue.",
-  ].filter(Boolean);
-  return lines.length > 2 ? lines.join("\n") : "";
-}
-
 function safeAgentEnv(value: unknown): Record<string, string> | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const env: Record<string, string> = {};
@@ -1651,6 +1613,35 @@ function extractReasoningChunk(payload: unknown): string {
   );
 }
 
+function isTerminalOpenAiStreamMetadata(payload: unknown) {
+  if (!payload || typeof payload !== "object") return false;
+  const choices = (payload as { choices?: unknown }).choices;
+  if (!Array.isArray(choices) || choices.length === 0) return false;
+  return choices.every((choice) => {
+    if (!choice || typeof choice !== "object") return false;
+    const entry = choice as {
+      delta?: { content?: unknown; reasoning?: unknown; tool_calls?: unknown; function_call?: unknown };
+      finish_reason?: unknown;
+      message?: { content?: unknown; reasoning?: unknown; tool_calls?: unknown };
+      text?: unknown;
+    };
+    if (typeof entry.finish_reason !== "string" || !entry.finish_reason.trim()) return false;
+    const text = [
+      entry.delta?.content,
+      entry.delta?.reasoning,
+      entry.message?.content,
+      entry.message?.reasoning,
+      entry.text,
+    ].map((value) => String(value ?? "")).join("").trim();
+    return (
+      !text
+      && !entry.delta?.tool_calls
+      && !entry.delta?.function_call
+      && !entry.message?.tool_calls
+    );
+  });
+}
+
 type ChannelMarkupState = {
   channel: "content" | "thinking";
   pending: string;
@@ -1701,18 +1692,83 @@ function routeChannelMarkupDelta(
 }
 
 function isOpenAICompatibleRuntime(profile: AgentProfile) {
-  return profile.runtime === "openai-compatible";
+  return profile.runtime === HIVEMIND_OS_RUNTIME;
 }
 
 function buildOpenAICompatibleUrl(profile: AgentProfile) {
   const base = profile.gatewayUrl.trim().replace(/\/+$/, "");
   const suffix = profile.chatPath?.trim() || "/v1/chat/completions";
-  return `${base}${suffix.startsWith("/") ? suffix : `/${suffix}`}`;
+  return remoteCollectorLocalServiceUrl(profile, `${base}${suffix.startsWith("/") ? suffix : `/${suffix}`}`);
 }
 
 function openAICompatibleModel(profile: AgentProfile) {
   if (isBankrLlmProfile(profile)) return bankrLlmModel(profile);
   return profile.model?.trim() || process.env.LOCAL_OPENAI_MODEL?.trim() || process.env.NEXT_PUBLIC_LOCAL_OPENAI_MODEL?.trim() || "local-model";
+}
+
+function isLocalLmStudioProfile(profile: AgentProfile) {
+  return profile.runtime === HIVEMIND_OS_RUNTIME
+    && profile.provider === "lm-studio"
+    && isLocalCollectorUrl(profile.telemetryUrl);
+}
+
+function lmStudioCliEnv() {
+  return {
+    ...process.env,
+    FORCE_COLOR: "0",
+    NO_COLOR: "1",
+    TERM: "dumb",
+    PATH: [join(homedir(), ".lmstudio", "bin"), process.env.PATH].filter(Boolean).join(delimiter),
+  };
+}
+
+async function resolveLmStudioCliBin() {
+  const candidates = [
+    join(homedir(), ".lmstudio", "bin", "lms"),
+    "/opt/homebrew/bin/lms",
+    "/usr/local/bin/lms",
+    "lms",
+  ];
+  for (const candidate of candidates) {
+    if (candidate === "lms") return candidate;
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      // Try the next common LM Studio CLI location.
+    }
+  }
+  return "lms";
+}
+
+function stripTerminalControls(value: string) {
+  return value
+    .replace(/\x1B\][^\x07]*(?:\x07|\x1B\\)/g, "")
+    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/\r[^\n]*/g, "")
+    .trim();
+}
+
+type BestEffortPreflightResult<T> = {
+  value: T;
+  timedOut: boolean;
+  failed: boolean;
+};
+
+async function bestEffortPreflight<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<BestEffortPreflightResult<T>> {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise
+        .then((value) => ({ value, timedOut: false, failed: false }))
+        .catch(() => ({ value: fallback, timedOut: false, failed: true })),
+      new Promise<BestEffortPreflightResult<T>>((resolve) => {
+        timeout = setTimeout(() => resolve({ value: fallback, timedOut: true, failed: false }), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 function isAdaptiveOpenRouterProfile(profile: AgentProfile) {
@@ -1768,7 +1824,7 @@ async function openRouterCompatibleProfile(profile: AgentProfile) {
   if (!token) throw new Error("OPENROUTER_API_KEY is required for OpenRouter Adaptive agents.");
   return {
     ...profile,
-    runtime: "openai-compatible" as AgentProfile["runtime"],
+    runtime: HIVEMIND_OS_RUNTIME as AgentProfile["runtime"],
     gatewayUrl: "https://openrouter.ai/api",
     chatPath: "/v1/chat/completions",
     provider: "openrouter",
@@ -1804,6 +1860,17 @@ function finalAdaptiveOpenRouterError(status: number, modelAttempts: string[]) {
     return `OpenRouter's free models are currently rate-limited or out of promo capacity. Adaptive tried ${modelAttempts.length} configured model${modelAttempts.length === 1 ? "" : "s"}${modelAttempts.length ? `, ending with ${modelAttempts.at(-1)}` : ""}. Try again shortly or choose an optional paid fallback model in Adaptive advanced settings.`;
   }
   return `OpenRouter could not complete this Adaptive request after trying ${modelAttempts.length || 1} configured model${modelAttempts.length === 1 ? "" : "s"}.`;
+}
+
+function finalAdaptiveHermesOpenRouterError(attempts: string[], lastError: string) {
+  const attempted = attempts.length
+    ? ` Adaptive tried ${attempts.length} Hermes/OpenRouter model${attempts.length === 1 ? "" : "s"}, ending with ${attempts.at(-1)}.`
+    : "";
+  return `Hermes Adaptive OpenRouter could not produce assistant text.${attempted}${lastError ? ` Last error: ${lastError}` : ""}`;
+}
+
+function isHermesCliFailureText(value: string) {
+  return /^(?:api call failed|provider resolver returned|unknown provider|session not found|hermes exited)\b/i.test(value.trim());
 }
 
 function finalAdaptiveProviderError(status: number, attempts: string[]) {
@@ -1879,37 +1946,382 @@ async function collectorChatProfile(profile: AgentProfile): Promise<AgentProfile
   };
 }
 
-async function canonicalLocalCollectorUrl(profile: AgentProfile) {
-  const rawUrl = profile.telemetryUrl?.trim() ?? "";
+async function streamAdaptiveHermesOpenRouterRuntime(
+  profile: AgentProfile,
+  messages: IncomingMessage[],
+  userText: string,
+  sharedVault: SharedVaultConfig | null,
+  agentMode: AgentMode,
+  url: string,
+  lockKey: string,
+  workingDirectory?: string,
+  wallet?: AgentWalletConfig,
+  honeyLedgerEnabled = false,
+  runtimeSessionId = "",
+  telemetry?: RuntimeRouteTelemetry,
+  taskRetrievalContext = "",
+  sharedBrainMemoryContext = "",
+  vaultPromptContext = "",
+) {
+  let candidateModels: string[];
   try {
-    const parsed = new URL(rawUrl);
-    if (parsed.pathname.startsWith("/peer/")) return rawUrl.replace(/\/$/, "");
-    const isLocalProfile = userFacingMachineName(profile) === "This Mac"
-      || [hostname(), `${hostname()}.local`].includes(profile.machineName?.trim() ?? "");
-    if (!localInterfaceHosts().has(parsed.hostname) && !isLocalProfile) return rawUrl;
-    parsed.hostname = "127.0.0.1";
-    const localPort = await localCollectorPort();
-    if (localPort) parsed.port = localPort;
-    return parsed.toString().replace(/\/$/, "");
-  } catch {
-    return rawUrl;
+    candidateModels = await resolveAdaptiveOpenRouterModels(profile, messages);
+  } catch (error) {
+    releaseInteractiveRuntime(lockKey);
+    return Response.json({ error: error instanceof Error ? error.message : "Adaptive OpenRouter model selection failed." }, { status: 502 });
   }
-}
-
-async function localCollectorPort() {
-  const envText = await readFile(LOCAL_COLLECTOR_ENV_FILE, "utf8").catch(() => "");
-  const port = envText.match(/^AGENT_TELEMETRY_PORT=(\d+)$/m)?.[1]?.trim();
-  return port && /^\d+$/.test(port) ? port : "";
-}
-
-function localInterfaceHosts() {
-  const hosts = new Set(["localhost", "127.0.0.1", "::1"]);
-  for (const interfaces of Object.values(networkInterfaces())) {
-    for (const item of interfaces ?? []) {
-      if (item.address) hosts.add(item.address);
-    }
+  const fallbackModel = profile.adaptiveOpenRouter?.fallbackModel?.trim()
+    || profile.adaptiveRouting?.fallbackModel?.trim()
+    || DEFAULT_ADAPTIVE_HERMES_OPENROUTER_FALLBACK_MODEL;
+  if (fallbackModel) {
+    const freeModels = candidateModels.filter((model) => model !== fallbackModel);
+    candidateModels = [...freeModels.slice(0, ADAPTIVE_HERMES_OPENROUTER_FREE_ATTEMPTS), fallbackModel];
+  } else {
+    candidateModels = candidateModels.slice(0, ADAPTIVE_HERMES_OPENROUTER_FREE_ATTEMPTS);
   }
-  return hosts;
+  const openRouterToken = await openRouterApiKey().catch(() => "");
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const fetchStartedAt = Date.now();
+  const readable = new ReadableStream({
+    async start(controller) {
+      let streamClosed = false;
+      const safeEnqueue = (payload: string) => {
+        if (streamClosed) return false;
+        try {
+          controller.enqueue(encoder.encode(payload));
+          return true;
+        } catch {
+          streamClosed = true;
+          return false;
+        }
+      };
+      const safeClose = () => {
+        if (streamClosed) return;
+        streamClosed = true;
+        try {
+          controller.close();
+        } catch {
+          // The browser may have already closed the SSE stream.
+        }
+      };
+      let sessionWrite = Promise.resolve();
+      const queueSessionWrite = (operation: () => Promise<void>) => {
+        if (!runtimeSessionId) return;
+        sessionWrite = sessionWrite.then(operation, operation).catch(() => undefined);
+      };
+      if (runtimeSessionId) {
+        safeEnqueue(ssePayload({
+          session: { id: runtimeSessionId, runtime: profile.runtime, source: "hivemindos-chat", startedAt: fetchStartedAt },
+        }));
+      }
+
+      const attemptedModels: string[] = [];
+      let lastError = "";
+      try {
+        for (const candidateModel of candidateModels) {
+          const candidateProfile = profileWithResolvedModel(profile, candidateModel);
+          const promptEnvelope = buildHivemindPromptEnvelope({
+            profile: candidateProfile,
+            agentMode,
+            workingDirectory,
+            vaultContext: vaultPromptContext,
+            sharedBrainMemoryContext,
+            taskRetrievalContext,
+            wallet,
+            runtimeSessionId,
+            extraDynamicContext: buildAdaptiveOpenRouterResolvedModelContext(profile, candidateModel),
+          });
+          const runtimeMessages = prependHivemindSystemMessage(messages, promptEnvelope);
+          attemptedModels.push(`openrouter/${candidateModel}`);
+          recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.fetch.start", {
+            ...telemetryPayloadForProfile(candidateProfile),
+            url,
+            model: candidateModel,
+            adaptiveOpenRouter: true,
+            attempt: attemptedModels.length,
+            remainingCandidates: Math.max(0, candidateModels.length - attemptedModels.length),
+          });
+
+          let upstream: Response;
+          const attemptController = new AbortController();
+          const attemptTimer = setTimeout(() => attemptController.abort(), ADAPTIVE_HERMES_OPENROUTER_ATTEMPT_TIMEOUT_MS);
+          try {
+            upstream = await fetch(url, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(profile.token ? { Authorization: `Bearer ${profile.token}` } : {}),
+              },
+              body: JSON.stringify({
+                agent: candidateProfile,
+                agentId: candidateProfile.agentId || candidateProfile.id,
+                sessionKey: candidateProfile.sessionKey,
+                provider: candidateProfile.provider || undefined,
+                model: candidateModel,
+                agentEnv: safeAgentEnv({
+                  ...candidateProfile.agentEnv,
+                  ...(openRouterToken ? { OPENROUTER_API_KEY: openRouterToken } : {}),
+                }),
+                rawUserMessage: userText,
+                forceHermesCli: true,
+                disableHermesResume: true,
+                agentMode,
+                mode: agentMode,
+                runtimeSessionId: runtimeSessionId || undefined,
+                hermesSessionId: runtimeSessionId || undefined,
+                message: userText,
+                messages: runtimeMessages,
+                stream: true,
+                sharedVault,
+                obsidianVault: sharedVault,
+                workingDirectory,
+                controlRoomPath: sharedVault?.controlRoomPath,
+                wallet,
+                walletTools: buildWalletTools(wallet),
+                context: promptEnvelope.systemContext || undefined,
+              }),
+              signal: attemptController.signal,
+            });
+          } catch (error) {
+            clearTimeout(attemptTimer);
+            lastError = runtimeFetchError(candidateProfile, url, error);
+            recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.fetch.failed", {
+              ...telemetryPayloadForProfile(candidateProfile),
+              url,
+              model: candidateModel,
+              adaptiveOpenRouter: true,
+              errorName: error instanceof Error ? error.name : null,
+              errorMessage: error instanceof Error ? error.message : String(error),
+              attempt: attemptedModels.length,
+              remainingCandidates: Math.max(0, candidateModels.length - attemptedModels.length),
+              elapsedMs: Date.now() - fetchStartedAt,
+            });
+            queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive retry", lastError));
+            continue;
+          }
+
+          if (!upstream.ok || !upstream.body) {
+            clearTimeout(attemptTimer);
+            const errorText = await upstream.text().catch(() => "");
+            lastError = errorText || `Hermes returned ${upstream.status || 502} for ${candidateModel}.`;
+            recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.upstream_error", {
+              ...telemetryPayloadForProfile(candidateProfile),
+              url,
+              model: candidateModel,
+              adaptiveOpenRouter: true,
+              status: upstream.status,
+              bodyPreview: lastError.slice(0, 500),
+              attempt: attemptedModels.length,
+              remainingCandidates: Math.max(0, candidateModels.length - attemptedModels.length),
+              elapsedMs: Date.now() - fetchStartedAt,
+            });
+            queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive retry", lastError));
+            continue;
+          }
+
+          const reader = upstream.body.getReader();
+          let buffer = "";
+          let fullText = "";
+          let sawFirstChunk = false;
+          let textDeltaCount = 0;
+          const channelMarkupState = createChannelMarkupState();
+          try {
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              if (!sawFirstChunk) {
+                sawFirstChunk = true;
+                recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.stream.first_chunk", {
+                  ...telemetryPayloadForProfile(candidateProfile),
+                  url,
+                  model: candidateModel,
+                  adaptiveOpenRouter: true,
+                  byteLength: value.byteLength,
+                  attempt: attemptedModels.length,
+                  streamElapsedMs: Date.now() - fetchStartedAt,
+                });
+              }
+              buffer += decoder.decode(value, { stream: true });
+              const events = buffer.split("\n\n");
+              buffer = events.pop() ?? "";
+              for (const eventText of events) {
+                const dataLine = eventText.split("\n").find((line) => line.startsWith("data:"));
+                if (!dataLine) {
+                  if (eventText.trim().startsWith(":")) safeEnqueue(`${eventText}\n\n`);
+                  continue;
+                }
+                const raw = dataLine.replace(/^data:\s*/, "");
+                if (raw === "[DONE]") continue;
+                try {
+                  const parsed = JSON.parse(raw);
+                  const errorMessage = typeof parsed?.error === "string"
+                    ? parsed.error
+                    : typeof parsed?.error?.message === "string"
+                      ? parsed.error.message
+                      : "";
+                  if (errorMessage.trim()) {
+                    lastError = errorMessage.trim();
+                    queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive model failed", `${candidateModel}: ${lastError}`, parsed));
+                    continue;
+                  }
+                  const outputCheck = proxyOutput(extractChunk(parsed));
+                  const reasoningCheck = proxyOutput(extractReasoningChunk(parsed));
+                  if (outputCheck.verdict === "block") {
+                    lastError = outputCheck.reason ?? "Response blocked by security policy";
+                    queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive model failed", lastError, parsed));
+                    continue;
+                  }
+                  if (reasoningCheck.verdict === "block") {
+                    lastError = reasoningCheck.reason ?? "Response blocked by security policy";
+                    queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive model failed", lastError, parsed));
+                    continue;
+                  }
+                  const routed = routeChannelMarkupDelta(outputCheck.text, channelMarkupState);
+                  const thinking = [reasoningCheck.text, routed.thinking].filter(Boolean).join("");
+                  if (thinking) {
+                    queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Thinking", thinking, parsed));
+                    safeEnqueue(ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: thinking }));
+                  }
+                if (routed.content) {
+                  if (isHermesCliFailureText(routed.content)) {
+                    lastError = routed.content.trim();
+                    queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive model failed", `${candidateModel}: ${lastError}`, parsed));
+                  } else {
+                    fullText += routed.content;
+                    textDeltaCount += 1;
+                    queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", routed.content, parsed));
+                    safeEnqueue(ssePayload({ choices: [{ delta: { content: routed.content } }] }));
+                  }
+                  } else if (!thinking && isTerminalOpenAiStreamMetadata(parsed)) {
+                    continue;
+                  } else if (!thinking && parsed?.session) {
+                    safeEnqueue(ssePayload(parsed));
+                  } else if (!thinking) {
+                    queueSessionWrite(() => appendRuntimeChatSessionEvent(
+                      runtimeSessionId,
+                      typeof parsed?.type === "string" ? parsed.type : typeof parsed?.event?.type === "string" ? parsed.event.type : "Runtime event",
+                      typeof parsed?.message === "string" ? parsed.message : undefined,
+                      parsed,
+                    ));
+                  }
+                } catch {
+                  const outputCheck = proxyOutput(raw);
+                  const routed = outputCheck.verdict === "block"
+                    ? { content: "", thinking: "" }
+                    : routeChannelMarkupDelta(outputCheck.text, channelMarkupState);
+                  if (outputCheck.verdict === "block") {
+                    lastError = outputCheck.reason ?? "Response blocked by security policy";
+                    queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive model failed", lastError));
+                  } else {
+                    if (routed.thinking) {
+                      queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Thinking", routed.thinking));
+                      safeEnqueue(ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: routed.thinking }));
+                    }
+                    if (routed.content) {
+                      if (isHermesCliFailureText(routed.content)) {
+                        lastError = routed.content.trim();
+                        queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive model failed", lastError));
+                      } else {
+                        fullText += routed.content;
+                        textDeltaCount += 1;
+                        queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", routed.content));
+                        safeEnqueue(ssePayload({ choices: [{ delta: { content: routed.content } }] }));
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            lastError = runtimeStreamErrorMessage(candidateProfile, error);
+            recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.stream.failed", {
+              ...telemetryPayloadForProfile(candidateProfile),
+              url,
+              model: candidateModel,
+              adaptiveOpenRouter: true,
+              message: lastError,
+              attempt: attemptedModels.length,
+              remainingCandidates: Math.max(0, candidateModels.length - attemptedModels.length),
+              streamElapsedMs: Date.now() - fetchStartedAt,
+            });
+            queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive retry", `${candidateModel}: ${lastError}`));
+          } finally {
+            clearTimeout(attemptTimer);
+          }
+
+          if (fullText.trim()) {
+            const event = await recordChatHoney(candidateProfile, userText, fullText, honeyLedgerEnabled);
+            if (event) safeEnqueue(ssePayload({ honey: event }));
+            safeEnqueue("data: [DONE]\n\n");
+            recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.stream.completed", {
+              ...telemetryPayloadForProfile(candidateProfile),
+              url,
+              model: candidateModel,
+              adaptiveOpenRouter: true,
+              attempt: attemptedModels.length,
+              outputLength: fullText.length,
+              textDeltaCount,
+              attemptedModels,
+              streamElapsedMs: Date.now() - fetchStartedAt,
+            });
+            queueSessionWrite(() => finishRuntimeChatSession(runtimeSessionId, "completed"));
+            await sessionWrite.catch(() => undefined);
+            releaseInteractiveRuntime(lockKey);
+            safeClose();
+            return;
+          }
+
+          lastError ||= `Hermes returned no assistant text for ${candidateModel}.`;
+          recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.empty_model", {
+            ...telemetryPayloadForProfile(candidateProfile),
+            url,
+            model: candidateModel,
+            adaptiveOpenRouter: true,
+            attempt: attemptedModels.length,
+            remainingCandidates: Math.max(0, candidateModels.length - attemptedModels.length),
+            lastError,
+            streamElapsedMs: Date.now() - fetchStartedAt,
+          });
+          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive retry", `${candidateModel}: ${lastError}`));
+        }
+
+        const message = finalAdaptiveHermesOpenRouterError(attemptedModels, lastError);
+        safeEnqueue(ssePayload({ error: message }));
+        safeEnqueue("data: [DONE]\n\n");
+        recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.failed", {
+          ...telemetryPayloadForProfile(profile),
+          url,
+          adaptiveOpenRouter: true,
+          attemptedModels,
+          lastError,
+          elapsedMs: Date.now() - fetchStartedAt,
+        });
+        queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive failed", message));
+        queueSessionWrite(() => finishRuntimeChatSession(runtimeSessionId, "failed"));
+      } catch (error) {
+        const message = runtimeStreamErrorMessage(profile, error);
+        safeEnqueue(ssePayload({ error: message }));
+        safeEnqueue("data: [DONE]\n\n");
+        queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive stream failed", message));
+        queueSessionWrite(() => finishRuntimeChatSession(runtimeSessionId, "failed"));
+      } finally {
+        await sessionWrite.catch(() => undefined);
+        releaseInteractiveRuntime(lockKey);
+        safeClose();
+      }
+    },
+  });
+
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
 
 async function streamHttpRuntime(
@@ -1925,6 +2337,7 @@ async function streamHttpRuntime(
   telemetry?: RuntimeRouteTelemetry,
   taskRetrievalContext = "",
   sharedBrainMemoryContext = "",
+  vaultPromptContext = "",
 ) {
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
@@ -1933,28 +2346,39 @@ async function streamHttpRuntime(
   if (isAdaptiveProviderProfile(profile)) {
     try {
       const adaptiveRoutePlan = await resolveAdaptiveRoutePlan(profile, messages);
-      if (adaptiveRoutePlan.profile.runtime === "openai-compatible") {
-        return streamOpenAICompatibleRuntime(adaptiveRoutePlan.profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, adaptiveRoutePlan);
+      if (adaptiveRoutePlan.profile.runtime === HIVEMIND_OS_RUNTIME) {
+        return streamOpenAICompatibleRuntime(adaptiveRoutePlan.profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, adaptiveRoutePlan, vaultPromptContext);
       }
       profile = adaptiveRoutePlan.profile;
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "Adaptive provider routing failed." }, { status: 502 });
     }
   }
+  if (isBankrLlmProfile(profile)) {
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext);
+  }
   if (isOpenAICompatibleRuntime(profile)) {
-    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext);
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext);
   }
   if (isOpenRouterProvider(profile) && !isAdaptiveOpenRouterProfile(profile)) {
     try {
       const openRouterProfile = await openRouterCompatibleProfile(profile);
-      return streamOpenAICompatibleRuntime(openRouterProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext);
+      return streamOpenAICompatibleRuntime(openRouterProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext);
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "OpenRouter model selection failed." }, { status: 502 });
     }
   }
   let runtimeProfile = profile;
   let adaptiveResolvedModel = "";
-  if (isAdaptiveOpenRouterProfile(profile)) {
+  if (isBankrAdaptiveModel(profile)) {
+    try {
+      const [resolvedModel] = await resolveAdaptiveBankrLlmModels(profile, messages);
+      runtimeProfile = profileWithResolvedModel(profile, resolvedModel);
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : "Adaptive Bankr model selection failed." }, { status: 502 });
+    }
+  }
+  if (isAdaptiveOpenRouterProfile(profile) && profile.runtime !== "hermes") {
     try {
       adaptiveResolvedModel = await resolveAdaptiveOpenRouterModel(profile, messages);
       runtimeProfile = profileWithResolvedModel(profile, adaptiveResolvedModel);
@@ -1972,12 +2396,22 @@ async function streamHttpRuntime(
     });
     return Response.json({ error: message }, { status: 409 });
   }
-  const vaultContext = buildVaultContext(sharedVault);
-  const walletContext = buildWalletToolContext(wallet);
-  const modeContext = buildAgentModeContext(agentMode);
-  const context = [buildAgentProfileContext(runtimeProfile), modeContext, buildWorkingDirectoryContext(workingDirectory), vaultContext, sharedBrainMemoryContext, taskRetrievalContext, walletContext].filter(Boolean).join("\n\n");
+  if (isAdaptiveOpenRouterProfile(profile) && profile.runtime === "hermes") {
+    return streamAdaptiveHermesOpenRouterRuntime(profile, messages, userText, sharedVault, agentMode, url, lockKey, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, vaultPromptContext);
+  }
+  const vaultContext = vaultPromptContext;
+  const promptEnvelope = buildHivemindPromptEnvelope({
+    profile: runtimeProfile,
+    agentMode,
+    workingDirectory,
+    vaultContext,
+    sharedBrainMemoryContext,
+    taskRetrievalContext,
+    wallet,
+    runtimeSessionId,
+  });
   const hermesSlashCommand = profile.runtime === "hermes" && /^\/[^\s/]*(?:\s|$)/.test(inputCheck.text.trim());
-  const runtimeMessages = context && !hermesSlashCommand ? [{ role: "system", content: context }, ...messages] : messages;
+  const runtimeMessages = hermesSlashCommand ? messages : prependHivemindSystemMessage(messages, promptEnvelope);
   const runtimeMessage = inputCheck.text;
   const workspaceBefore = await readWorkspaceSnapshot(workingDirectory);
   let upstream: Response;
@@ -1998,7 +2432,7 @@ async function streamHttpRuntime(
       url,
       model: runtimeProfile.model || null,
       adaptiveOpenRouter: Boolean(adaptiveResolvedModel),
-      contextLength: context.length,
+      contextLength: hermesSlashCommand ? 0 : promptEnvelope.systemContext.length,
       messageCount: runtimeMessages.length,
       runtimeMessageLength: runtimeMessage.length,
     });
@@ -2029,7 +2463,7 @@ async function streamHttpRuntime(
         controlRoomPath: sharedVault?.controlRoomPath,
         wallet,
         walletTools: buildWalletTools(wallet),
-        context: context || undefined,
+        context: hermesSlashCommand ? undefined : promptEnvelope.systemContext || undefined,
       }),
       signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
     });
@@ -2175,6 +2609,7 @@ async function streamHttpRuntime(
       let dataEventCount = 0;
       let textDeltaCount = 0;
       let processEventCount = 0;
+      let lastRuntimeError = "";
       const channelMarkupState = createChannelMarkupState();
       recordRuntimeTelemetry(telemetry, "agent_runtime.http.stream.start", {
         ...telemetryPayloadForProfile(runtimeProfile),
@@ -2225,8 +2660,44 @@ async function streamHttpRuntime(
             if (raw === "[DONE]") continue;
             try {
               const parsed = JSON.parse(raw);
-              const outputCheck = proxyOutput(extractChunk(parsed));
-              const reasoningCheck = proxyOutput(extractReasoningChunk(parsed));
+              let parsedRuntimeError = "";
+              if (parsed && typeof parsed === "object") {
+                const record = parsed as Record<string, unknown>;
+                const event = record.event && typeof record.event === "object" ? record.event as Record<string, unknown> : null;
+                const rawError = record.error ?? event?.error;
+                const rawMessage = record.message ?? event?.message;
+                if (typeof rawError === "string" && rawError.trim()) parsedRuntimeError = rawError.trim();
+                else if (rawError && typeof rawError === "object") {
+                  const nestedError = rawError as Record<string, unknown>;
+                  const message = String(nestedError.message ?? nestedError.error ?? nestedError.detail ?? "").trim();
+                  if (message) parsedRuntimeError = message;
+                } else if (typeof rawMessage === "string" && /error|failed|failure|empty|without returning/i.test(rawMessage)) {
+                  parsedRuntimeError = rawMessage.trim();
+                }
+                if (parsedRuntimeError) lastRuntimeError = parsedRuntimeError;
+              }
+              const rawOutput = extractChunk(parsed);
+              const rawReasoning = extractReasoningChunk(parsed);
+              if (parsedRuntimeError && !rawOutput.trim() && !rawReasoning.trim()) {
+                processEventCount += 1;
+                recordRuntimeTelemetry(telemetry, "agent_runtime.http.stream.error_event", {
+                  ...telemetryPayloadForProfile(runtimeProfile),
+                  url,
+                  model: runtimeProfile.model || null,
+                  adaptiveOpenRouter: Boolean(adaptiveResolvedModel),
+                  processEventCount,
+                  message: parsedRuntimeError,
+                  streamElapsedMs: Date.now() - fetchStartedAt,
+                });
+                queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Runtime stream failed", parsedRuntimeError, parsed));
+                queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", `Error: ${parsedRuntimeError}`));
+                queueSessionWrite(() => finishRuntimeChatSession(runtimeSessionId, "failed"));
+                safeEnqueue(ssePayload({ error: parsedRuntimeError }));
+                safeEnqueue("data: [DONE]\n\n");
+                return;
+              }
+              const outputCheck = proxyOutput(rawOutput);
+              const reasoningCheck = proxyOutput(rawReasoning);
               if (outputCheck.verdict === "block") {
                 safeEnqueue(ssePayload({ error: outputCheck.reason ?? "Response blocked by security policy" }));
                 continue;
@@ -2258,12 +2729,19 @@ async function streamHttpRuntime(
                     streamElapsedMs: Date.now() - fetchStartedAt,
                   });
                 }
+              } else if (!thinking && isTerminalOpenAiStreamMetadata(parsed)) {
+                continue;
               } else if (!thinking) {
                 processEventCount += 1;
+                const eventDetail = typeof parsed?.message === "string"
+                  ? parsed.message
+                  : typeof parsed?.error === "string"
+                    ? parsed.error
+                    : undefined;
                 queueSessionWrite(() => appendRuntimeChatSessionEvent(
                   runtimeSessionId,
                   typeof parsed?.type === "string" ? parsed.type : typeof parsed?.event?.type === "string" ? parsed.event.type : "Runtime event",
-                  typeof parsed?.message === "string" ? parsed.message : undefined,
+                  eventDetail,
                   parsed,
                 ));
                 recordRuntimeTelemetry(telemetry, "agent_runtime.http.stream.process_event", {
@@ -2319,6 +2797,29 @@ async function streamHttpRuntime(
             });
           }
         }
+        if (!fullText.trim()) {
+          const emptyMessage = lastRuntimeError
+            || `${runtimeProfile.runtime === "hermes" ? "Hermes API" : "Runtime"} stream finished without returning any text. Check the active provider, model, and credentials.`;
+          recordRuntimeTelemetry(telemetry, "agent_runtime.http.stream.empty", {
+            ...telemetryPayloadForProfile(runtimeProfile),
+            url,
+            model: runtimeProfile.model || null,
+            adaptiveOpenRouter: Boolean(adaptiveResolvedModel),
+            sawFirstChunk,
+            commentEventCount,
+            dataEventCount,
+            textDeltaCount,
+            processEventCount,
+            message: emptyMessage,
+            streamElapsedMs: Date.now() - fetchStartedAt,
+          });
+          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Runtime stream failed", emptyMessage));
+          queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", `Error: ${emptyMessage}`));
+          queueSessionWrite(() => finishRuntimeChatSession(runtimeSessionId, "failed"));
+          safeEnqueue(ssePayload({ error: emptyMessage }));
+          safeEnqueue("data: [DONE]\n\n");
+          return;
+        }
         const event = await recordChatHoney(runtimeProfile, userText, fullText, honeyLedgerEnabled);
         if (event) safeEnqueue(ssePayload({ honey: event }));
         recordRuntimeTelemetry(telemetry, "agent_runtime.http.stream.completed", {
@@ -2368,6 +2869,74 @@ async function streamHttpRuntime(
   });
 }
 
+const IMAGE_TOOL_DISPATCH_TIMEOUT_MS = 190_000;
+const IMAGE_GENERATION_TOOL_NAME = "generate_image";
+
+// Single tool offered to OpenAI-compatible models when the user is asking for an
+// image. The model only supplies the prompt; HivemindOS picks the best reachable
+// connected app server-side (see appScore in /api/chat/image-generation), so the
+// "strongest endpoint wins" ranking applies instead of a name-only model guess.
+function imageGenerationToolDefinition() {
+  return {
+    type: "function",
+    function: {
+      name: IMAGE_GENERATION_TOOL_NAME,
+      description: "Generate an image from a text prompt using a connected HivemindOS image-generation app (for example Open Generative AI, ComfyUI, or Z-Image). Call this whenever the user asks to generate, create, draw, or render an image. HivemindOS automatically routes to the best reachable connected app, so do not pick an app yourself — just pass the full prompt.",
+      parameters: {
+        type: "object",
+        properties: {
+          prompt: { type: "string", description: "The complete image-generation prompt to render." },
+        },
+        required: ["prompt"],
+      },
+    },
+  };
+}
+
+type AccumulatedToolCall = { id: string; name: string; arguments: string };
+
+function parseToolCallArguments(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw || "{}");
+    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+type ImageGenerationDispatchResult = {
+  ok: boolean;
+  error?: string;
+  prompt?: string;
+  app?: { id?: string; name?: string; machineName?: string; serviceKind?: string };
+  endpoint?: string;
+  images?: Array<{ url: string; width?: number; height?: number; seed?: string | number }>;
+};
+
+async function dispatchImageGenerationViaRoute(origin: string, prompt: string, signal?: AbortSignal): Promise<ImageGenerationDispatchResult> {
+  const response = await fetch(new URL("/api/chat/image-generation", origin), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
+    cache: "no-store",
+    signal: signal ?? AbortSignal.timeout(IMAGE_TOOL_DISPATCH_TIMEOUT_MS),
+  });
+  const json = await response.json().catch(() => null) as ImageGenerationDispatchResult | null;
+  if (!response.ok || !json?.ok) {
+    throw new Error(json?.error || `Image generation failed (${response.status}).`);
+  }
+  return json;
+}
+
+function imageGenerationArtifacts(images?: Array<{ url: string }>) {
+  const urls = (images ?? []).map((image) => image?.url).filter((url): url is string => Boolean(url));
+  return urls.map((url, index) => ({
+    kind: "image",
+    url,
+    label: urls.length === 1 ? "Generated image" : `Generated image ${index + 1}`,
+  }));
+}
+
 async function streamOpenAICompatibleRuntime(
   profile: AgentProfile,
   messages: IncomingMessage[],
@@ -2382,6 +2951,7 @@ async function streamOpenAICompatibleRuntime(
   taskRetrievalContext = "",
   sharedBrainMemoryContext = "",
   adaptiveRoutePlan?: AdaptiveRoutePlan,
+  vaultPromptContext = "",
 ) {
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
@@ -2432,25 +3002,59 @@ async function streamOpenAICompatibleRuntime(
     ).catch(() => undefined);
   }
   const modelMessagesFor = (candidateProfile: AgentProfile, candidateModel: string) => {
-    const context = [buildAgentProfileContext(candidateProfile), buildAdaptiveOpenRouterResolvedModelContext(runtimeProfile, candidateModel), buildAgentModeContext(agentMode), buildWorkingDirectoryContext(workingDirectory), buildVaultContext(sharedVault), sharedBrainMemoryContext, taskRetrievalContext, buildWalletToolContext(wallet)].filter(Boolean).join("\n\n");
-    return context ? [{ role: "system" as const, content: context }, ...messages] : messages;
+    const promptEnvelope = buildHivemindPromptEnvelope({
+      profile: candidateProfile,
+      agentMode,
+      workingDirectory,
+      vaultContext: vaultPromptContext,
+      sharedBrainMemoryContext,
+      taskRetrievalContext,
+      wallet,
+      runtimeSessionId,
+      extraDynamicContext: buildAdaptiveOpenRouterResolvedModelContext(runtimeProfile, candidateModel),
+    });
+    return prependHivemindSystemMessage(messages, promptEnvelope);
   };
   let candidateModels: string[];
   try {
     candidateModels = isAdaptiveOpenRouterProfile(runtimeProfile)
       ? await resolveAdaptiveOpenRouterModels(runtimeProfile, messages)
-      : [openAICompatibleModel(runtimeProfile)];
+      : isBankrAdaptiveModel(profile)
+        ? await resolveAdaptiveBankrLlmModels(profile, messages)
+        : [openAICompatibleModel(runtimeProfile)];
   } catch (error) {
     releaseInteractiveRuntime(lockKey);
     return Response.json({ error: error instanceof Error ? error.message : "Adaptive OpenRouter model selection failed." }, { status: 502 });
   }
+  const requestOrigin = (() => {
+    try {
+      return new URL(telemetry?.request?.url ?? "").origin;
+    } catch {
+      return "";
+    }
+  })();
+  // Only advertise the image tool when the user is actually asking for an image and we
+  // can reach our own dispatch route. Every other chat is byte-for-byte unchanged.
+  const offerImageTool = Boolean(requestOrigin) && imageGenerationRequest(userText);
+  // Advertise the real-command tool to agents whose profile declares the
+  // skillActions runtime capability. This gives a hivemind-os chat agent an
+  // actual local-execution loop (allowlisted commands) instead of letting it
+  // role-play "I ran osascript…". Agents without the capability are unchanged.
+  const offerCommandTool = profile.runtimeCapabilities?.skillActions === true;
+  // Tool definitions advertised on every request attempt. Empty → no tools
+  // field is sent and the chat path is byte-for-byte unchanged.
+  const toolDefinitions = [
+    ...(offerImageTool ? [imageGenerationToolDefinition()] : []),
+    ...(offerCommandTool ? [runCommandToolDefinition()] : []),
+  ];
+  let winningRequest: { url: string; headers: Record<string, string>; messages: IncomingMessage[]; model: string; sentTools: boolean } | null = null;
   const fetchStartedAt = Date.now();
   let upstream: Response | null = null;
   let model = candidateModels[0] ?? openAICompatibleModel(profile);
   let lastStatus = 0;
   let lastFetchError: unknown = null;
   const attemptedModels: string[] = [];
-  const adaptiveRouteCandidates = adaptiveRoutePlan?.candidates.filter((candidate) => candidate.runtime === "openai-compatible") ?? [];
+  const adaptiveRouteCandidates = adaptiveRoutePlan?.candidates.filter((candidate) => candidate.runtime === HIVEMIND_OS_RUNTIME) ?? [];
   const routeAttempts = adaptiveRouteCandidates.length
     ? adaptiveRouteCandidates
     : candidateModels.map((candidateModel) => ({
@@ -2462,6 +3066,58 @@ async function streamOpenAICompatibleRuntime(
       token: runtimeProfile.token,
       headers: {} as Record<string, string>,
     }));
+  const startLmStudioServerForProfile = async (candidateProfile: AgentProfile, failedUrl: string, error: unknown) => {
+    if (!isLocalLmStudioProfile(candidateProfile) || adaptiveProvider || adaptiveOpenRouter || usePodEnabled || isBankrLlmProfile(candidateProfile)) return false;
+    let port = "1234";
+    try {
+      const parsed = new URL(candidateProfile.gatewayUrl);
+      port = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
+    } catch {
+      return false;
+    }
+    if (!/^\d+$/.test(port)) return false;
+    recordRuntimeTelemetry(telemetry, "agent_runtime.lm_studio_server.start", {
+      ...telemetryPayloadForProfile(candidateProfile),
+      failedUrl,
+      port,
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+    await appendRuntimeChatSessionEvent(
+      runtimeSessionId,
+      "Starting LM Studio server",
+      `LM Studio has the model loaded, but ${failedUrl} is not listening. Starting the local LM Studio OpenAI-compatible server on port ${port}.`,
+    ).catch(() => undefined);
+    try {
+      const { stdout, stderr } = await execFileAsync(await resolveLmStudioCliBin(), ["server", "start", "--port", port, "--bind", "127.0.0.1"], {
+        timeout: 20_000,
+        maxBuffer: 1_000_000,
+        env: lmStudioCliEnv(),
+        signal: telemetry?.request.signal,
+      });
+      const detail = stripTerminalControls([stdout, stderr].filter(Boolean).join("\n"));
+      recordRuntimeTelemetry(telemetry, "agent_runtime.lm_studio_server.started", {
+        ...telemetryPayloadForProfile(candidateProfile),
+        port,
+        detail: detail.slice(0, 500),
+        elapsedMs: Date.now() - fetchStartedAt,
+      });
+      return true;
+    } catch (serverError) {
+      recordRuntimeTelemetry(telemetry, "agent_runtime.lm_studio_server.start_failed", {
+        ...telemetryPayloadForProfile(candidateProfile),
+        port,
+        errorName: serverError instanceof Error ? serverError.name : null,
+        errorMessage: serverError instanceof Error ? serverError.message : String(serverError),
+        elapsedMs: Date.now() - fetchStartedAt,
+      });
+      await appendRuntimeChatSessionEvent(
+        runtimeSessionId,
+        "LM Studio server start failed",
+        serverError instanceof Error ? serverError.message : "Could not start LM Studio server.",
+      ).catch(() => undefined);
+      return false;
+    }
+  };
   for (const routeAttempt of routeAttempts) {
     const candidateModel = routeAttempt.model;
     model = candidateModel;
@@ -2476,6 +3132,20 @@ async function streamOpenAICompatibleRuntime(
     const candidateUrl = buildOpenAICompatibleUrl(candidateProfile);
     attemptedModels.push(`${routeAttempt.provider}/${candidateModel}`);
     const modelMessages = modelMessagesFor(candidateProfile, candidateModel);
+    const attemptHeaders = {
+      "Content-Type": "application/json",
+      ...(candidateProfile.token ? { Authorization: `Bearer ${candidateProfile.token}` } : {}),
+      ...usePodHeaders,
+      ...providerHeaders,
+      ...(routeAttempt.headers ?? {}),
+    };
+    let sentTools = toolDefinitions.length > 0;
+    const requestBodyFor = (withTools: boolean) => JSON.stringify({
+      model,
+      messages: modelMessages,
+      stream: true,
+      ...(withTools && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: "auto" } : {}),
+    });
     recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.fetch.start", {
       ...telemetryPayloadForProfile(candidateProfile),
       url: candidateUrl,
@@ -2483,25 +3153,34 @@ async function streamOpenAICompatibleRuntime(
       adaptiveOpenRouter,
       adaptiveProvider,
       usePod: usePodEnabled,
+      offerImageTool: sentTools,
       messageCount: modelMessages.length,
     });
     try {
       upstream = await fetch(candidateUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(candidateProfile.token ? { Authorization: `Bearer ${candidateProfile.token}` } : {}),
-          ...usePodHeaders,
-          ...providerHeaders,
-          ...(routeAttempt.headers ?? {}),
-        },
-        body: JSON.stringify({
-          model,
-          messages: modelMessages,
-          stream: true,
-        }),
+        headers: attemptHeaders,
+        body: requestBodyFor(sentTools),
         signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
       });
+      // Some OpenAI-compatible providers reject a `tools` array with a 400. Retry the
+      // same candidate once without tools so image chats still get a normal text reply.
+      if (sentTools && !upstream.ok && upstream.status === 400) {
+        recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.tools_unsupported", {
+          ...telemetryPayloadForProfile(candidateProfile),
+          url: candidateUrl,
+          model,
+          status: upstream.status,
+          elapsedMs: Date.now() - fetchStartedAt,
+        });
+        sentTools = false;
+        upstream = await fetch(candidateUrl, {
+          method: "POST",
+          headers: attemptHeaders,
+          body: requestBodyFor(false),
+          signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
+        });
+      }
     } catch (error) {
       lastFetchError = error;
       recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.fetch.failed", {
@@ -2520,12 +3199,47 @@ async function streamOpenAICompatibleRuntime(
       if ((adaptiveOpenRouter || adaptiveProvider) && attemptedModels.length < routeAttempts.length) {
         continue;
       }
+      if (await startLmStudioServerForProfile(candidateProfile, candidateUrl, error)) {
+        try {
+          upstream = await fetch(candidateUrl, {
+            method: "POST",
+            headers: attemptHeaders,
+            body: requestBodyFor(sentTools),
+            signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
+          });
+          recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.fetch.retry_response", {
+            ...telemetryPayloadForProfile(candidateProfile),
+            url: candidateUrl,
+            model,
+            status: upstream.status,
+            ok: upstream.ok,
+            elapsedMs: Date.now() - fetchStartedAt,
+          });
+          if (upstream.ok) {
+            winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, sentTools };
+            break;
+          }
+        } catch (retryError) {
+          lastFetchError = retryError;
+          recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.fetch.retry_failed", {
+            ...telemetryPayloadForProfile(candidateProfile),
+            url: candidateUrl,
+            model,
+            errorName: retryError instanceof Error ? retryError.name : null,
+            errorMessage: retryError instanceof Error ? retryError.message : String(retryError),
+            elapsedMs: Date.now() - fetchStartedAt,
+          });
+        }
+      }
       await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible fetch failed", runtimeFetchError(candidateProfile, candidateUrl, error)).catch(() => undefined);
       await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
       releaseInteractiveRuntime(lockKey);
       return Response.json({ error: runtimeFetchError(candidateProfile, candidateUrl, error) }, { status: 502 });
     }
-    if (upstream.ok) break;
+    if (upstream.ok) {
+      winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, sentTools };
+      break;
+    }
     lastStatus = upstream.status;
     const errorText = await upstream.text().catch(() => "");
     recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.upstream_error", {
@@ -2631,7 +3345,6 @@ async function streamOpenAICompatibleRuntime(
   const decoder = new TextDecoder();
   const readable = new ReadableStream({
     async start(controller) {
-      const reader = upstream.body?.getReader();
       let sessionWrite = Promise.resolve();
       const queueSessionWrite = (operation: () => Promise<void>) => {
         if (!runtimeSessionId) return;
@@ -2642,12 +3355,18 @@ async function streamOpenAICompatibleRuntime(
           session: { id: runtimeSessionId, runtime: profile.runtime, source: "hivemindos-chat", startedAt: fetchStartedAt },
         })));
       }
-      let buffer = "";
       let fullText = "";
-      const channelMarkupState = createChannelMarkupState();
-      try {
-        while (reader) {
-          const { value, done } = await reader.read();
+      // Consume one upstream SSE stream: emit content/thinking to the client exactly as
+      // before, and (when allowed) accumulate any tool_calls instead of leaking them as
+      // raw deltas. Returns the completed tool calls so the caller can run the tool loop.
+      const consume = async (stream: Response, allowTools: boolean): Promise<{ toolCalls: AccumulatedToolCall[] }> => {
+        const streamReader = stream.body?.getReader();
+        if (!streamReader) return { toolCalls: [] };
+        let buffer = "";
+        const channelMarkupState = createChannelMarkupState();
+        const toolAcc = new Map<number, AccumulatedToolCall>();
+        while (true) {
+          const { value, done } = await streamReader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
           const events = buffer.split("\n\n");
@@ -2659,6 +3378,20 @@ async function streamOpenAICompatibleRuntime(
             if (raw === "[DONE]") continue;
             try {
               const parsed = JSON.parse(raw);
+              const toolDeltas = parsed?.choices?.[0]?.delta?.tool_calls;
+              if (Array.isArray(toolDeltas) && toolDeltas.length) {
+                if (allowTools) {
+                  for (const toolDelta of toolDeltas) {
+                    const index = typeof toolDelta?.index === "number" ? toolDelta.index : 0;
+                    const slot = toolAcc.get(index) ?? { id: "", name: "", arguments: "" };
+                    if (typeof toolDelta?.id === "string" && toolDelta.id) slot.id = toolDelta.id;
+                    if (typeof toolDelta?.function?.name === "string" && toolDelta.function.name) slot.name = toolDelta.function.name;
+                    if (typeof toolDelta?.function?.arguments === "string") slot.arguments += toolDelta.function.arguments;
+                    toolAcc.set(index, slot);
+                  }
+                }
+                continue;
+              }
               const outputCheck = proxyOutput(extractChunk(parsed));
               const reasoningCheck = proxyOutput(extractReasoningChunk(parsed));
               if (outputCheck.verdict === "block") {
@@ -2677,6 +3410,7 @@ async function streamOpenAICompatibleRuntime(
               }
               if (routed.content) fullText += routed.content;
               if (routed.content) queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", routed.content, parsed));
+              if (!routed.content && !thinking && isTerminalOpenAiStreamMetadata(parsed)) continue;
               if (!routed.content && !thinking) queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Runtime event", String(parsed?.type ?? parsed?.event?.type ?? "").trim(), parsed));
               if (routed.content || (!thinking && !outputCheck.text)) {
                 controller.enqueue(encoder.encode(routed.content
@@ -2702,6 +3436,211 @@ async function streamOpenAICompatibleRuntime(
               }
             }
           }
+        }
+        return { toolCalls: [...toolAcc.values()].filter((call) => call.name) };
+      };
+
+      // Execute the generate_image tool: stream a running card, dispatch to the connected
+      // image app (which runs the appScore endpoint-strength ranking), then a ready/error
+      // card. Returns the tool-result payload and a fallback line for the continuation turn.
+      const runImageToolCall = async (call: AccumulatedToolCall) => {
+        const args = parseToolCallArguments(call.arguments);
+        const imagePrompt = typeof args.prompt === "string" && args.prompt.trim() ? args.prompt.trim() : userText;
+        controller.enqueue(encoder.encode(ssePayload({ applicationGeneration: { status: "running", prompt: imagePrompt, title: "Image generation" } })));
+        queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Image generation", "Dispatching the prompt to the best reachable connected image app."));
+        recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.image_tool.dispatch", {
+          ...telemetryPayloadForProfile(profile),
+          url,
+          model,
+          promptLength: imagePrompt.length,
+        });
+        // Image dispatch can poll for up to ~2 minutes. Emit an inert keepalive every 20s
+        // so the client's 130s stall-abort timer never fires mid-generation.
+        const heartbeat = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(ssePayload({})));
+          } catch {
+            // controller already closed; nothing to keep alive
+          }
+        }, 20_000);
+        try {
+          const result = await dispatchImageGenerationViaRoute(requestOrigin, imagePrompt, telemetry?.request?.signal);
+          clearInterval(heartbeat);
+          const artifacts = imageGenerationArtifacts(result.images);
+          controller.enqueue(encoder.encode(ssePayload({ applicationGeneration: {
+            status: "ready",
+            prompt: result.prompt || imagePrompt,
+            title: "Image generation",
+            appName: result.app?.name,
+            machineName: result.app?.machineName,
+            artifacts,
+            completedAt: Date.now(),
+          } })));
+          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Image generation completed", `${artifacts.length} image${artifacts.length === 1 ? "" : "s"} from ${result.app?.name ?? "connected app"}.`));
+          recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.image_tool.completed", {
+            ...telemetryPayloadForProfile(profile),
+            appName: result.app?.name ?? null,
+            endpoint: result.endpoint ?? null,
+            imageCount: artifacts.length,
+          });
+          return {
+            toolResultContent: JSON.stringify({ ok: true, app: result.app?.name, endpoint: result.endpoint, images: artifacts.map((artifact) => artifact.url) }),
+            fallbackText: artifacts.length
+              ? `Generated ${artifacts.length} image${artifacts.length === 1 ? "" : "s"} with ${result.app?.name ?? "the connected app"}.`
+              : "The image generation finished.",
+          };
+        } catch (error) {
+          clearInterval(heartbeat);
+          const message = error instanceof Error ? error.message : "Image generation failed.";
+          controller.enqueue(encoder.encode(ssePayload({ applicationGeneration: { status: "error", prompt: imagePrompt, title: "Image generation", error: message } })));
+          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Image generation failed", message));
+          recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.image_tool.failed", {
+            ...telemetryPayloadForProfile(profile),
+            errorMessage: message,
+          });
+          return {
+            toolResultContent: JSON.stringify({ ok: false, error: message }),
+            fallbackText: `I couldn't complete the image generation: ${message}`,
+          };
+        }
+      };
+
+      // Execute a run_command tool call: stream a running/finished tool card (the
+      // same chat.tool.* shape the dashboard + mobile client render), run the
+      // allowlisted command, then return the tool-result payload for the
+      // continuation turn. Real local execution — see command-tool.ts.
+      const runCommandToolCall = async (call: AccumulatedToolCall) => {
+        const args = parseToolCallArguments(call.arguments);
+        const commandLine = [
+          typeof args.command === "string" ? args.command : "",
+          ...(Array.isArray(args.args) ? args.args.filter((a): a is string => typeof a === "string") : []),
+        ].filter(Boolean).join(" ");
+        const label = typeof args.reason === "string" && args.reason.trim()
+          ? args.reason.trim()
+          : `Run ${typeof args.command === "string" && args.command ? args.command : "command"}`;
+        controller.enqueue(encoder.encode(ssePayload({
+          type: RUNTIME_STREAM_EVENT_TYPES.TOOL_START,
+          toolName: RUN_COMMAND_TOOL_NAME,
+          name: RUN_COMMAND_TOOL_NAME,
+          message: label,
+          detail: commandLine,
+          status: "running",
+        })));
+        queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, label, commandLine));
+        recordRuntimeTelemetry(telemetry, "agent_runtime.command_tool.dispatch", {
+          ...telemetryPayloadForProfile(profile),
+          command: typeof args.command === "string" ? args.command : null,
+          argCount: Array.isArray(args.args) ? args.args.length : 0,
+        });
+        const result = await runAgentCommand({
+          command: args.command,
+          args: args.args,
+          cwd: workingDirectory,
+          signal: telemetry?.request?.signal,
+        });
+        controller.enqueue(encoder.encode(ssePayload({
+          type: RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
+          toolName: RUN_COMMAND_TOOL_NAME,
+          name: RUN_COMMAND_TOOL_NAME,
+          message: label,
+          detail: result.ok
+            ? (result.stdout?.split("\n").find(Boolean)?.slice(0, 200) || "Done")
+            : (result.error || result.stderr || "Failed"),
+          status: result.ok ? "completed" : "failed",
+        })));
+        queueSessionWrite(() => appendRuntimeChatSessionEvent(
+          runtimeSessionId,
+          result.ok ? "Command finished" : "Command failed",
+          (result.stdout || result.stderr || result.error || "").slice(0, 500),
+        ));
+        recordRuntimeTelemetry(telemetry, result.ok ? "agent_runtime.command_tool.completed" : "agent_runtime.command_tool.failed", {
+          ...telemetryPayloadForProfile(profile),
+          command: result.command || null,
+          exitCode: result.exitCode ?? null,
+          elapsedMs: result.elapsedMs,
+        });
+        return {
+          toolResultContent: JSON.stringify({
+            ok: result.ok,
+            command: result.command,
+            args: result.args,
+            exitCode: result.exitCode,
+            stdout: result.stdout,
+            stderr: result.stderr,
+            error: result.error,
+          }),
+          fallbackText: result.ok
+            ? `Ran \`${commandLine}\`.`
+            : `Command failed: ${result.error ?? result.stderr ?? "unknown error"}`,
+        };
+      };
+
+      // Dispatch one accumulated tool call by name. Unknown tools return an
+      // error result so the model can recover instead of stalling.
+      const runToolCall = async (call: AccumulatedToolCall) => {
+        if (call.name === IMAGE_GENERATION_TOOL_NAME) return runImageToolCall(call);
+        if (call.name === RUN_COMMAND_TOOL_NAME) return runCommandToolCall(call);
+        return {
+          toolResultContent: JSON.stringify({ ok: false, error: `Unknown tool: ${call.name}` }),
+          fallbackText: "",
+        };
+      };
+
+      try {
+        let active: Response = upstream as Response;
+        // The image tool needs a single round; the command tool can chain
+        // several (inspect → act → verify), so allow a bounded number when it
+        // is on offer. Each round consumes the model's tool_calls, runs them,
+        // and feeds the results back for a continuation turn.
+        let toolRoundsLeft = winningRequest?.sentTools ? (offerCommandTool ? 6 : 1) : 0;
+        const conversation: Array<Record<string, unknown>> = winningRequest
+          ? [...(winningRequest.messages as unknown as Array<Record<string, unknown>>)]
+          : [];
+        while (true) {
+          const { toolCalls } = await consume(active, toolRoundsLeft > 0);
+          if (!toolCalls.length || toolRoundsLeft <= 0 || !winningRequest) break;
+          toolRoundsLeft -= 1;
+          // Run every tool call the model emitted this round and collect the
+          // assistant tool_calls + tool results for the continuation request.
+          const assistantToolCalls: Array<Record<string, unknown>> = [];
+          const toolResultMessages: Array<Record<string, unknown>> = [];
+          const fallbacks: string[] = [];
+          for (const call of toolCalls) {
+            const callId = call.id || `call_${call.name}`;
+            const outcome = await runToolCall(call);
+            assistantToolCalls.push({ id: callId, type: "function", function: { name: call.name, arguments: call.arguments || "{}" } });
+            toolResultMessages.push({ role: "tool", tool_call_id: callId, content: outcome.toolResultContent });
+            if (outcome.fallbackText) fallbacks.push(outcome.fallbackText);
+          }
+          conversation.push({ role: "assistant", content: "", tool_calls: assistantToolCalls });
+          conversation.push(...toolResultMessages);
+          // Keep offering tools on the continuation so the model can chain
+          // another command; stop offering once the round budget is spent.
+          const continuationBody: Record<string, unknown> = {
+            model: winningRequest.model,
+            messages: conversation,
+            stream: true,
+            ...(toolRoundsLeft > 0 && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: "auto" } : {}),
+          };
+          let continuation: Response | null = null;
+          try {
+            continuation = await fetch(winningRequest.url, {
+              method: "POST",
+              headers: winningRequest.headers,
+              body: JSON.stringify(continuationBody),
+              signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
+            });
+          } catch {
+            continuation = null;
+          }
+          if (!continuation || !continuation.ok || !continuation.body) {
+            const fallbackText = fallbacks.join(" ") || "The tool finished.";
+            controller.enqueue(encoder.encode(ssePayload({ choices: [{ delta: { content: fallbackText } }] })));
+            fullText += fallbackText;
+            queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", fallbackText));
+            break;
+          }
+          active = continuation;
         }
         const event = await recordChatHoney(profile, userText, fullText, honeyLedgerEnabled);
         if (event) controller.enqueue(encoder.encode(ssePayload({ honey: event })));
@@ -2751,6 +3690,7 @@ export async function POST(request: NextRequest) {
   let chatStorageKey = "";
   let clientRunId = "";
   let agentMode: AgentMode = "act";
+  let latencyMode = "";
   try {
     const body = (await request.json()) as {
       agent?: AgentProfile;
@@ -2764,9 +3704,10 @@ export async function POST(request: NextRequest) {
       hermesSessionId?: string;
       chatStorageKey?: string;
       clientRunId?: string;
+      latencyMode?: string;
     };
     if (!body.agent || !Array.isArray(body.messages)) throw new Error("Missing agent or messages");
-    profile = body.agent;
+    profile = { ...body.agent, runtime: normalizeAgentRuntime(body.agent.runtime) };
     messages = body.messages;
     sharedVault = body.sharedVault;
     workingDirectory = body.workingDirectory;
@@ -2780,6 +3721,7 @@ export async function POST(request: NextRequest) {
         : "";
     chatStorageKey = typeof body.chatStorageKey === "string" ? body.chatStorageKey : "";
     clientRunId = typeof body.clientRunId === "string" ? body.clientRunId : "";
+    latencyMode = typeof body.latencyMode === "string" ? body.latencyMode : "";
   } catch {
     await recordRouteTelemetry(request, "agent_runtime.request.invalid", { elapsedMs: Date.now() - routeStartedAt });
     return Response.json({ error: "Expected { agent, messages }" }, { status: 400 });
@@ -2793,6 +3735,7 @@ export async function POST(request: NextRequest) {
     chatStorageKey: chatStorageKey || null,
     clientRunId: clientRunId || null,
     agentMode,
+    latencyMode: latencyMode || null,
     sharedVaultEnabled: Boolean(sharedVault?.enabled),
     honeyLedgerEnabled,
     elapsedMs: Date.now() - routeStartedAt,
@@ -2820,14 +3763,101 @@ export async function POST(request: NextRequest) {
   }
   const vault = activeSharedVault(profile, sharedVault);
   runtimeSessionId = createRuntimeChatSessionId(profile, runtimeSessionId || clientRunId);
-  const [taskRetrievalContext, sharedBrainMemoryContext] = await Promise.all([
-    buildTaskRetrievalContext({ origin: request.url, query: userPrompt, sharedVault: vault }),
-    buildSharedBrainMemoryContext(vault, userPrompt),
+  const lowLatencyVoiceTurn = latencyMode === "voice";
+  if (lowLatencyVoiceTurn) {
+    const effectiveProfile = isBankrLlmProfile(profile) ? profile : await collectorChatProfile(profile) ?? profile;
+    const profileError = isBankrLlmProfile(effectiveProfile) ? null : validateHttpRuntimeProfile(effectiveProfile);
+    if (profileError) {
+      await recordRouteTelemetry(request, "agent_runtime.voice.validation_failed", {
+        reason: "profile-error",
+        message: profileError,
+        ...telemetryPayloadForProfile(effectiveProfile),
+        elapsedMs: Date.now() - routeStartedAt,
+      });
+      return Response.json({ error: profileError }, { status: 400 });
+    }
+    await recordRouteTelemetry(request, "agent_runtime.voice.fast_path.dispatch", {
+      ...telemetryPayloadForProfile(effectiveProfile),
+      runtimeSessionId,
+      chatStorageKey: chatStorageKey || null,
+      agentMode,
+      elapsedMs: Date.now() - routeStartedAt,
+    });
+    return streamHttpRuntime(effectiveProfile, messages, promptCheck.text, null, agentMode, workingDirectory, undefined, false, runtimeSessionId, {
+      request,
+      routeStartedAt,
+      runtimeSessionId,
+      chatStorageKey,
+    }, "", "", "");
+  }
+  const fallbackRuntimeCapabilityContext: Awaited<ReturnType<typeof runtimeImageGenerationCapabilityContext>> = {
+    runtime: profile.runtime,
+    hasRuntimeImageGeneration: false,
+    runtimeImageGenerationSource: undefined,
+  };
+  const emptyTaskRetrievalResult = { context: "", telemetry: null as TaskRetrievalTelemetry | null };
+  const runtimeCapabilityPreflight = lowLatencyVoiceTurn
+    ? { value: undefined as Awaited<ReturnType<typeof runtimeImageGenerationCapabilityContext>> | undefined, timedOut: false, failed: false }
+    : await bestEffortPreflight(
+      runtimeImageGenerationCapabilityContext(profile),
+      CHAT_PREFLIGHT_RUNTIME_CAPABILITY_TIMEOUT_MS,
+      fallbackRuntimeCapabilityContext,
+    );
+  const runtimeCapabilityContext = runtimeCapabilityPreflight.value;
+  const [taskRetrievalPreflight, sharedBrainMemoryPreflight] = await Promise.all([
+    bestEffortPreflight(
+      buildTaskRetrievalContextResult({
+        origin: request.url,
+        query: userPrompt,
+        sharedVault: vault,
+        runtime: runtimeCapabilityContext,
+        agent: {
+          workerClass: profile.workerClass,
+          preferredSkillSlugs: profile.preferredSkillSlugs,
+          taskPreferences: profile.taskPreferences,
+        },
+      }),
+      CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS,
+      emptyTaskRetrievalResult,
+    ),
+    lowLatencyVoiceTurn
+      ? Promise.resolve({ value: "", timedOut: false, failed: false })
+      : bestEffortPreflight(
+        buildSharedBrainMemoryContext(vault, userPrompt),
+        CHAT_PREFLIGHT_MEMORY_TIMEOUT_MS,
+        "",
+      ),
   ]);
+  const taskRetrievalResult = taskRetrievalPreflight.value;
+  const sharedBrainMemoryContext = sharedBrainMemoryPreflight.value;
+  const taskRetrievalContext = taskRetrievalResult.context || buildTaskRetrievalFallbackContext({
+    query: userPrompt,
+    origin: request.url,
+    timeoutMs: CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS,
+    timedOut: taskRetrievalPreflight.timedOut,
+    failed: taskRetrievalPreflight.failed,
+  });
+  await recordRouteTelemetry(request, "agent_runtime.capability_search.completed", {
+    ...telemetryPayloadForProfile(profile),
+    runtimeSessionId,
+    chatStorageKey: chatStorageKey || null,
+    skipped: false,
+    lowLatencyVoiceTurn,
+    runtimeCapabilityTimedOut: runtimeCapabilityPreflight.timedOut,
+    runtimeCapabilityFailed: runtimeCapabilityPreflight.failed,
+    capabilitySearchTimedOut: taskRetrievalPreflight.timedOut,
+    capabilitySearchFailed: taskRetrievalPreflight.failed,
+    sharedBrainMemoryTimedOut: sharedBrainMemoryPreflight.timedOut,
+    sharedBrainMemoryFailed: sharedBrainMemoryPreflight.failed,
+    contextInjected: Boolean(taskRetrievalContext),
+    telemetry: taskRetrievalResult.telemetry,
+    elapsedMs: Date.now() - routeStartedAt,
+  });
   const runtimeSession = await startRuntimeChatSession({
     sessionId: runtimeSessionId,
     agent: profile,
     chatStorageKey,
+    sharedVaultPath: vault?.vaultPath,
     userContent: userPrompt,
     startedAt: routeStartedAt,
   }).catch(() => null);
@@ -2838,6 +3868,16 @@ export async function POST(request: NextRequest) {
     session: chatTelemetrySession(runtimeSession),
     elapsedMs: Date.now() - routeStartedAt,
   });
+  const capabilitySearchProcessDetail = taskRetrievalResult.telemetry?.queryCount
+    ? formatTaskRetrievalProcessDetail(taskRetrievalResult.telemetry)
+    : formatTaskRetrievalFallbackProcessDetail({
+      timeoutMs: CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS,
+      timedOut: taskRetrievalPreflight.timedOut,
+      failed: taskRetrievalPreflight.failed,
+    });
+  if (capabilitySearchProcessDetail) {
+    await appendRuntimeChatSessionEvent(runtimeSessionId, "Hive capability search", capabilitySearchProcessDetail).catch(() => undefined);
+  }
   const naturalMiroSharkX402 = await maybeExecuteNaturalMiroSharkX402({
     request,
     routeStartedAt,
@@ -2901,13 +3941,22 @@ export async function POST(request: NextRequest) {
     runtimeSessionId,
   });
   if (confirmedPrivateTransfer) return confirmedPrivateTransfer;
-  const runtimeContexts = [buildAgentProfileContext(profile), buildAgentModeContext(agentMode), buildWorkingDirectoryContext(workingDirectory), buildVaultContext(vault), sharedBrainMemoryContext, taskRetrievalContext, buildWalletToolContext(wallet)].filter(Boolean).join("\n\n");
-  const textWithVaultContext = runtimeContexts
-    ? `${runtimeContexts}\n\nUser message:\n${userPrompt}`
-    : promptCheck.text;
-  if (profile.runtime !== "openclaw") {
+  const vaultPromptContext = buildChatVaultContext(vault, userPrompt);
+  const promptEnvelope = buildHivemindPromptEnvelope({
+    profile,
+    agentMode,
+    workingDirectory,
+    vaultContext: vaultPromptContext,
+    sharedBrainMemoryContext,
+    taskRetrievalContext,
+    wallet,
+    runtimeSessionId,
+    chatStorageKey,
+  });
+  const textWithVaultContext = buildHivemindUserContextText(promptEnvelope, userPrompt) || promptCheck.text;
+  if (profile.runtime !== "openclaw" || isBankrLlmProfile(profile)) {
     const adapter = getRuntimeAdapter(profile.runtime);
-    if (adapter && !adapter.capabilities.chat) {
+    if (!isBankrLlmProfile(profile) && adapter && !adapter.capabilities.chat) {
       await recordRouteTelemetry(request, "agent_runtime.validation_failed", {
         reason: "adapter-chat-unavailable",
         adapterKind: adapter.kind,
@@ -2921,7 +3970,7 @@ export async function POST(request: NextRequest) {
         error: `${adapter.label} is configured as a ${adapter.kind} runtime here and does not expose interactive chat. Use Scheduler, skills, or runs for this runtime.`,
       }, { status: 400 });
     }
-    if (profile.runtime === "hermes" && profile.telemetryUrl?.trim() && profile.collectorCapabilities?.chat === false) {
+    if (!isBankrLlmProfile(profile) && profile.runtime === "hermes" && profile.telemetryUrl?.trim() && profile.collectorCapabilities?.chat === false) {
       await recordRouteTelemetry(request, "agent_runtime.validation_failed", {
         reason: "collector-chat-unavailable",
         ...telemetryPayloadForProfile(profile),
@@ -2933,8 +3982,8 @@ export async function POST(request: NextRequest) {
         error: `${userFacingMachineName(profile)} is connected, but its local agent bridge does not have the Hermes chat bridge installed yet. Run setup/update on that machine after these dashboard changes are available there.`,
       }, { status: 400 });
     }
-    const effectiveProfile = await collectorChatProfile(profile) ?? profile;
-    const profileError = validateHttpRuntimeProfile(effectiveProfile);
+    const effectiveProfile = isBankrLlmProfile(profile) ? profile : await collectorChatProfile(profile) ?? profile;
+    const profileError = isBankrLlmProfile(effectiveProfile) ? null : validateHttpRuntimeProfile(effectiveProfile);
     if (profileError) {
       await recordRouteTelemetry(request, "agent_runtime.validation_failed", {
         reason: "profile-error",
@@ -2949,7 +3998,7 @@ export async function POST(request: NextRequest) {
     await recordRouteTelemetry(request, "agent_runtime.dispatch.http", {
       ...telemetryPayloadForProfile(effectiveProfile),
       promptLength: userPrompt.length,
-      contextLength: runtimeContexts.length,
+      contextLength: promptEnvelope.systemContext.length,
       runtimeSessionId,
       chatStorageKey: chatStorageKey || null,
       agentMode,
@@ -2960,7 +4009,7 @@ export async function POST(request: NextRequest) {
       routeStartedAt,
       runtimeSessionId,
       chatStorageKey,
-    }, taskRetrievalContext, sharedBrainMemoryContext);
+    }, taskRetrievalContext, sharedBrainMemoryContext, vaultPromptContext);
   }
 
   const token = await getGatewayAuthToken(profile.token);
@@ -2977,7 +4026,7 @@ export async function POST(request: NextRequest) {
   await recordRouteTelemetry(request, "agent_runtime.dispatch.openclaw", {
     ...telemetryPayloadForProfile(profile),
     promptLength: userPrompt.length,
-    contextLength: runtimeContexts.length,
+    contextLength: promptEnvelope.systemContext.length,
     runtimeSessionId,
     chatStorageKey: chatStorageKey || null,
     agentMode,

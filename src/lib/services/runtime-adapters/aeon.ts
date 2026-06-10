@@ -1,5 +1,4 @@
-import { constants } from "fs";
-import { access, mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
 import { execFile, spawn } from "child_process";
 import { promisify } from "util";
 import { homedir } from "os";
@@ -86,10 +85,6 @@ function aeonRepo(profile?: AgentProfile) {
 
 function aeonBranch(profile?: AgentProfile) {
   return clean(profile?.aeonBranch) || clean(process.env.AEON_BRANCH) || DEFAULT_BRANCH;
-}
-
-async function canRead(path: string) {
-  return access(path, constants.R_OK).then(() => true).catch(() => false);
 }
 
 async function readLocalFile(root: string, path: string) {
@@ -922,14 +917,17 @@ export const aeonAdapter: RuntimeAdapter = {
   async getStatus(profile) {
     const root = aeonRoot(profile);
     const repo = aeonRepo(profile);
-    const [hasConfig, hasA2a, localSkillCount] = await Promise.all([
-      root ? canRead(join(root, "aeon.yml")) : Promise.resolve(false),
+    const [rawConfig, hasA2a, localSkillCount] = await Promise.all([
+      readLocalFile(root, "aeon.yml"),
       fetch(`${(clean(profile.a2aUrl) || clean(profile.gatewayUrl) || DEFAULT_A2A_URL).replace(/\/+$/, "")}/.well-known/agent.json`, {
         cache: "no-store",
         signal: AbortSignal.timeout(1_500),
       }).then((response) => response.ok).catch(() => false),
       root ? countLocalSkillFolders(root) : Promise.resolve(0),
     ]);
+    const hasConfig = Boolean(rawConfig.trim());
+    const provider = clean(profile.provider) || "anthropic";
+    const model = clean(profile.model) || parseAeonConfig(rawConfig).model;
     return {
       ok: Boolean(hasConfig || repo || hasA2a),
       runtime: "aeon",
@@ -939,6 +937,19 @@ export const aeonAdapter: RuntimeAdapter = {
       hasConfig,
       a2aReachable: hasA2a,
       localSkillCount,
+      modelSelection: {
+        provider,
+        model,
+        providers: [{
+          slug: provider,
+          name: provider === "anthropic" ? "Anthropic" : provider,
+          models: model ? [{ id: model }] : [],
+          totalModels: model ? 1 : 0,
+          isCurrent: true,
+          isUserDefined: false,
+          source: "aeon.yml",
+        }],
+      },
     };
   },
   async listSkills(profile, context) {

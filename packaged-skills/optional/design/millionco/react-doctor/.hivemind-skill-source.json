@@ -1,0 +1,18 @@
+{
+  "upstreamName": "react-doctor",
+  "upstreamSlug": "react-doctor",
+  "hiveSlug": "react-doctor",
+  "sourceLabel": "millionco",
+  "sourceUrl": "https://www.ui-skills.com/skills/millionco/react-doctor",
+  "repository": "https://github.com/millionco/react-doctor",
+  "installCommand": "npx skills add https://github.com/millionco/react-doctor --skill react-doctor",
+  "importedAt": "2026-06-08T15:01:39.498Z",
+  "refreshedAt": "2026-06-08T15:01:39.498Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/millionco/react-doctor",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Use when finishing a feature, fixing a bug, before committing React code, or when the user types `/doctor`, asks to scan, triage, or clean up React diagnostics. Covers lint, accessibility, bundle size, architecture. Includes a regression check and a full local-triage workflow that fetches the canonical playbook."
+}

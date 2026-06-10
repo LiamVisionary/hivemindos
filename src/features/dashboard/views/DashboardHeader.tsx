@@ -1,10 +1,10 @@
 "use client";
 
-import { startTransition, useState, type Dispatch, type ElementType, type ReactNode, type SetStateAction } from "react";
+import { startTransition, useEffect, useState, type Dispatch, type ElementType, type ReactNode, type SetStateAction } from "react";
 import type { AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import type { KanbanBoard } from "@/lib/types/kanban";
 import type { FleetActiveApp } from "@/components/fleet/fleet-data";
-import type { DashboardView } from "@/features/dashboard/dashboard-types";
+import type { AppVersion, DashboardView } from "@/features/dashboard/dashboard-types";
 
 export type DashboardAppCompletionNotification = {
   id: string;
@@ -22,6 +22,7 @@ type DashboardHeaderProps = {
   TooltipTrigger: ElementType;
   activeHeader: { eyebrow: string; title: string };
   activeView: DashboardView;
+  appVersion?: AppVersion | null;
   isWorkView: (view: DashboardView) => boolean;
   kanbanBoard?: KanbanBoard | null;
   navItems: Array<{ id: DashboardView; label: string; detail: string }>;
@@ -42,6 +43,7 @@ export function DashboardHeader(props: DashboardHeaderProps) {
     TooltipTrigger,
     activeHeader,
     activeView,
+    appVersion,
     isWorkView,
     kanbanBoard,
     navItems,
@@ -53,7 +55,9 @@ export function DashboardHeader(props: DashboardHeaderProps) {
     viewIcon,
   } = props;
   const [mobileRoutesOpen, setMobileRoutesOpen] = useState(false);
+  const [fallbackVersion, setFallbackVersion] = useState("");
   const showFleetHeader = activeView === "agents";
+  const displayVersion = appVersion?.version ?? fallbackVersion;
   const topbarClassName = [
     "commandTopbar",
     showFleetHeader ? "fleetCommandTopbar" : "",
@@ -78,6 +82,19 @@ export function DashboardHeader(props: DashboardHeaderProps) {
     });
     closeMobileRoutes();
   };
+  useEffect(() => {
+    if (!showFleetHeader || appVersion?.version || fallbackVersion) return;
+    let cancelled = false;
+    fetch("/api/app/version", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: AppVersion | null) => {
+        if (!cancelled && data?.version) setFallbackVersion(data.version);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [appVersion?.version, fallbackVersion, showFleetHeader]);
 
   return (
     <TooltipProvider delayDuration={120}>
@@ -160,6 +177,11 @@ export function DashboardHeader(props: DashboardHeaderProps) {
               ) : (
                 <strong className="topbarHeadline">{renderHeaderPhrase(activeHeader.title, activeView)}</strong>
               )}
+              {showFleetHeader && displayVersion ? (
+                <span className="fleetHeaderVersion" aria-label={`HivemindOS version ${displayVersion}`}>
+                  v{displayVersion}
+                </span>
+              ) : null}
             </div>
           </div>
 

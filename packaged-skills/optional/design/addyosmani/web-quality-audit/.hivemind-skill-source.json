@@ -1,0 +1,18 @@
+{
+  "upstreamName": "web-quality-audit",
+  "upstreamSlug": "web-quality-audit",
+  "hiveSlug": "web-quality-audit",
+  "sourceLabel": "addyosmani",
+  "sourceUrl": "https://www.ui-skills.com/skills/addyosmani/web-quality-audit",
+  "repository": "https://github.com/addyosmani/web-quality-skills",
+  "installCommand": "npx skills add https://github.com/addyosmani/web-quality-skills --skill web-quality-audit",
+  "importedAt": "2026-06-08T15:01:24.794Z",
+  "refreshedAt": "2026-06-08T15:01:24.794Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/addyosmani/web-quality-audit",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Comprehensive web quality audit covering performance, accessibility, SEO, and best practices. Use when asked to \"audit my site\", \"review web quality\", \"run lighthouse audit\", \"check page quality\", or \"optimize my website\"."
+}

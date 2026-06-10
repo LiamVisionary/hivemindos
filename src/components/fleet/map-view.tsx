@@ -3,9 +3,12 @@
 
 import * as React from "react";
 import { Monitor, Smartphone } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { HexTile } from "./hex-tile";
 import { LottieBee } from "./lottie-bee";
 import { isFleetMachineMobile, type FleetAgent, type FleetMachine } from "./fleet-data";
+import { FleetSelectionTooltipContent } from "./selection-tooltip";
+import type { MachineUpdateButtonDetail, MachineUpdateButtonStatus } from "./roster";
 import coastlineData from "./data/ne_110m_coastline";
 
 interface MapViewProps {
@@ -18,6 +21,16 @@ interface MapViewProps {
   onSelectMachine: (id: string) => void;
   onSelectAgent: (m: FleetMachine, a: FleetAgent) => void;
   onAddAgent: (m: FleetMachine) => void;
+  updateStatusByMachine?: Record<string, MachineUpdateButtonStatus>;
+  updateDetailByMachine?: Record<string, MachineUpdateButtonDetail>;
+  onUpdateMachine?: (m: FleetMachine) => void;
+  onOpenCodeProof?: (m: FleetMachine) => void;
+  onFixSyncIssue?: (m: FleetMachine) => void | Promise<void>;
+  onOpenUsePodHost?: (m: FleetMachine) => void;
+  onOpenShell?: (m: FleetMachine) => void;
+  selectionTooltipKey?: string | null;
+  onOpenSelectionTooltip?: (key: string) => void;
+  onDismissSelectionTooltip?: () => void;
 }
 
 type CoastlineFeatureCollection = {
@@ -41,8 +54,18 @@ const PIN_OFFSET: Record<string, [number, number]> = {
 export function MapView({
   width = 720, height = 540,
   machines, edges,
-  selected,
-  onSelectMachine,
+  selected, selectedAgentId,
+  onSelectMachine, onAddAgent,
+  updateStatusByMachine,
+  updateDetailByMachine,
+  onUpdateMachine,
+  onOpenCodeProof,
+  onFixSyncIssue,
+  onOpenUsePodHost,
+  onOpenShell,
+  selectionTooltipKey,
+  onOpenSelectionTooltip,
+  onDismissSelectionTooltip,
 }: MapViewProps) {
   const w = width, h = height;
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
@@ -271,6 +294,8 @@ export function MapView({
           ? "ghost"
           : selected === m.id ? "honey" : "default";
         const SZ = 56;
+        const tooltipKey = `${m.id}:machine`;
+        const tooltipOpen = Boolean(selectionTooltipKey === tooltipKey && selected === m.id && !selectedAgentId);
         return (
           <div
             key={m.id}
@@ -280,34 +305,65 @@ export function MapView({
               top:  pos[m.id].y - (SZ * 1.1547) / 2,
             }}
           >
-            <HexTile size={SZ} tone={tone} onClick={() => onSelectMachine(m.id)}>
-              <div className="grid place-items-center gap-px">
-                {(() => {
-                  const MachineIcon = isFleetMachineMobile(m) ? Smartphone : Monitor;
-                  return <MachineIcon
-                  aria-hidden="true"
-                  size={20}
-                  style={{
-                    color: m.versionState === "needs-setup" && selected !== m.id
-                      ? "var(--muted)"
-                      : "var(--accent-strong)",
-                  }}
-                  />;
-                })()}
-                <span
-                  className="font-semibold leading-none"
-                  style={{
-                    fontFamily: "var(--f-display)",
-                    fontSize: 10,
-                    letterSpacing: 0,
-                    marginTop: 2,
-                    color: selected === m.id ? "var(--hex-honey-border)" : "var(--foreground)",
+            <Tooltip open={tooltipOpen} disableHoverableContent={false}>
+              <TooltipTrigger asChild>
+                <HexTile
+                  size={SZ}
+                  tone={tone}
+                  onClick={() => {
+                    onSelectMachine(m.id);
+                    onOpenSelectionTooltip?.(tooltipKey);
                   }}
                 >
-                  {m.name}
-                </span>
-              </div>
-            </HexTile>
+                  <div className="grid place-items-center gap-px">
+                    {(() => {
+                      const MachineIcon = isFleetMachineMobile(m) ? Smartphone : Monitor;
+                      return <MachineIcon
+                      aria-hidden="true"
+                      size={20}
+                      style={{
+                        color: m.versionState === "needs-setup" && selected !== m.id
+                          ? "var(--muted)"
+                          : "var(--accent-strong)",
+                      }}
+                      />;
+                    })()}
+                    <span
+                      className="font-semibold leading-none"
+                      style={{
+                        fontFamily: "var(--f-display)",
+                        fontSize: 10,
+                        letterSpacing: 0,
+                        marginTop: 2,
+                        color: selected === m.id ? "var(--hex-honey-border)" : "var(--foreground)",
+                      }}
+                    >
+                      {m.name}
+                    </span>
+                  </div>
+                </HexTile>
+              </TooltipTrigger>
+              <TooltipContent
+                side="top"
+                sideOffset={4}
+                className="pointer-events-auto max-w-none p-3"
+                arrowClassName="h-2.5 w-5"
+                onPointerDownOutside={onDismissSelectionTooltip}
+              >
+                <FleetSelectionTooltipContent
+                  machine={m}
+                  updateStatus={updateStatusByMachine?.[m.id]}
+                  updateDetail={updateDetailByMachine?.[m.id]}
+                  onClose={onDismissSelectionTooltip}
+                  onAddAgent={onAddAgent}
+                  onUpdateMachine={onUpdateMachine}
+                  onOpenCodeProof={onOpenCodeProof}
+                  onFixSyncIssue={onFixSyncIssue}
+                  onOpenUsePodHost={onOpenUsePodHost}
+                  onOpenShell={onOpenShell}
+                />
+              </TooltipContent>
+            </Tooltip>
             {/* Agent count badge */}
             <div
               className="absolute grid place-items-center"

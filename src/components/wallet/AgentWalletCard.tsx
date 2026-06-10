@@ -102,6 +102,7 @@ export type AgentWalletCardProps = {
   onRefreshBalance: () => void;
   onSendUsdc: () => void;
   onCallX402: () => void;
+  onExportSecret?: () => void;
 };
 
 type Sheet = "send" | "receive" | "limits" | null;
@@ -218,6 +219,7 @@ export function AgentWalletCard({
   onRefreshBalance,
   onSendUsdc,
   onCallX402,
+  onExportSecret,
 }: AgentWalletCardProps) {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [moneyClawModalOpen, setMoneyClawModalOpen] = useState(false);
@@ -536,6 +538,15 @@ export function AgentWalletCard({
         >
           <HandCoins aria-hidden="true" />
           <span>{wallet.autoPayEnabled ? "Allowed" : "Auto-use"}</span>
+        </button>
+        <button
+          type="button"
+          className={styles.actionBtn}
+          disabled={!onExportSecret || wallet.custodyMode === "watch" || !(wallet.walletAddress || wallet.vaultAddress)}
+          onClick={onExportSecret}
+        >
+          <KeyRound aria-hidden="true" />
+          <span>Export</span>
         </button>
       </div>
 

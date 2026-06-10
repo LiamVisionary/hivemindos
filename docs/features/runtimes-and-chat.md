@@ -13,7 +13,7 @@ Known runtimes are defined in `src/lib/types/agent-runtime.ts`:
 | OpenClaw          | Gateway     | status, chat, model selection                                                                                                            |
 | Hermes            | Interactive | status, chat, runs, memory, sessions, background tasks, X search, video generation, Codex runtime, Kanban decomposition, model selection |
 | Aeon              | Background  | status, skills, schedules, runs, outputs, memory, background tasks, notifications                                                        |
-| OpenAI-compatible | Interactive | status, chat, model selection                                                                                                            |
+| HivemindOS | Interactive | status, chat, model selection                                                                                                            |
 
 ## How Runtime Settings Work
 
@@ -79,6 +79,15 @@ Phone support is split between a settings surface and action routes:
 - `src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx` exposes pairing and test-call controls in agent settings.
 - `/api/phone` reads gateway voice config/device status, starts `ring-agent` calls, starts `dashboard-agent-call` calls, rings stored prompts, and checks mobile push readiness.
 - `src/lib/services/phone/call-gateway.ts` builds private call briefings, including AEON-specific identity and recent artifact context.
+
+## Queen Bee Voice Chat
+
+The desktop app ships a hands-free voice channel into the Queen Bee control plane:
+
+- The HivemindOS menu bar (tray) icon menu leads with `Voice Chat with Queen Bee`; the app menu also exposes `Navigation > Voice Chat with Queen Bee` (`Cmd+Shift+V`). Both emit `hivemindos:queen-bee-voice` to the dashboard webview.
+- While active, the dashboard shows an Apple Intelligence-style animated glow around the window perimeter (`src/features/queen-voice/QueenVoiceGlow.tsx`, ported from `jacobamobin/AppleIntelligenceGlowEffect`) plus live on-screen transcription of both the user's utterances and Queen Bee's replies.
+- Each utterance is detected with an energy-based VAD, recorded, and sent to `/api/queen-bee/voice`, which transcribes it with the shared Whisper STT helpers (`src/lib/services/phone/transcription.ts`), submits the transcript to the Queen Bee control plane, and returns the spoken-ready receipt summary.
+- Replies are voiced through OpenAI TTS when an OpenAI voice key is configured in the shared env, with on-device speech synthesis as the fallback.
 
 ## Main Code Paths
 

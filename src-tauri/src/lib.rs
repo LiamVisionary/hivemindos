@@ -1,12 +1,18 @@
 use serde::Serialize;
 use serde_json::Value;
+use std::any::Any;
 use std::collections::HashMap;
 use std::fs;
+use std::io::Write;
+use std::net::TcpStream;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Child, Command};
-use std::sync::Mutex;
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::{Mutex, Once};
 use std::time::{Duration, Instant};
 use tauri::{Manager, RunEvent};
+#[cfg(not(debug_assertions))]
+use tauri::Runtime;
 
 mod brain;
 mod desktop_navigation;
@@ -22,7 +28,7 @@ mod scheduler;
 mod setup;
 
 #[cfg(not(debug_assertions))]
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpListener;
 #[cfg(all(not(debug_assertions), target_os = "windows"))]
 use std::os::windows::process::CommandExt;
 #[cfg(not(debug_assertions))]
@@ -31,10 +37,31 @@ use std::process::Stdio;
 
 #[cfg(all(not(debug_assertions), target_os = "windows"))]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+// The embedded Next dashboard binds IPv4 loopback only (127.0.0.1 — NOT
+// "localhost", which resolves to IPv6 ::1 and breaks the IPv4 forwarder dial).
+// A paired phone reaches it over the tailnet via spawn_tailnet_forwarder, which
+// bridges this machine's 100.x tailnet IP to this loopback port. Keeping Next
+// on loopback means the LAN can never reach the dashboard API directly, and the
+// desktop window keeps working even if Tailscale drops.
 #[cfg(not(debug_assertions))]
-const NATIVE_BIND_HOST: &str = "localhost";
+const NATIVE_BIND_HOST: &str = "127.0.0.1";
 const NATIVE_BROWSER_HOST: &str = "localhost";
+// Prefer a stable port so a paired phone's saved hub survives app restarts;
+// reserve_local_port falls back to any free port when 5020 is taken (we never
+// evict whoever holds it).
+#[cfg(not(debug_assertions))]
+const NATIVE_PREFERRED_PORT: u16 = 5020;
 const NATIVE_CACHE_TTL: Duration = Duration::from_secs(30);
+#[cfg(not(debug_assertions))]
+const DASHBOARD_AUTH_SECRET_KEY: &str = "HIVEMINDOS_DASHBOARD_AUTH_SECRET";
+#[cfg(not(debug_assertions))]
+const DASHBOARD_DEVICE_TOKEN_KEY: &str = "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN";
+#[cfg(not(debug_assertions))]
+const NATIVE_BOOTSTRAP_TOKEN_KEY: &str = "HIVEMINDOS_NATIVE_BOOTSTRAP_TOKEN";
+#[cfg(not(debug_assertions))]
+const MIN_DASHBOARD_AUTH_SECRET_LENGTH: usize = 32;
+#[cfg(not(debug_assertions))]
+const MIN_DASHBOARD_DEVICE_TOKEN_LENGTH: usize = 24;
 
 struct NativeCacheEntry {
     loaded_at: Instant,
@@ -43,18 +70,108 @@ struct NativeCacheEntry {
 
 struct NativeServerState {
     child: Mutex<Option<Child>>,
+    // The claw gateway, when this app hosts it as a child process (Stage 1 of
+    // the signed-agent file-access work). None when the headless launchd agent
+    // owns it (the default).
+    gateway_child: Mutex<Option<Child>>,
     port: Mutex<Option<u16>>,
+    dashboard_token: Mutex<Option<String>>,
     cache: Mutex<HashMap<String, NativeCacheEntry>>,
+}
+
+#[cfg(not(debug_assertions))]
+struct NativeDashboardAuth {
+    secret: String,
+    token: String,
+    bootstrap_token: String,
 }
 
 impl NativeServerState {
     fn new() -> Self {
         Self {
             child: Mutex::new(None),
+            gateway_child: Mutex::new(None),
             port: Mutex::new(None),
+            dashboard_token: Mutex::new(None),
             cache: Mutex::new(HashMap::new()),
         }
     }
+}
+
+#[cfg(not(debug_assertions))]
+fn random_hex(byte_count: usize) -> Result<String, String> {
+    let mut bytes = vec![0_u8; byte_count];
+    getrandom::getrandom(&mut bytes).map_err(|error| error.to_string())?;
+    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+#[cfg(not(debug_assertions))]
+fn parse_env_key(contents: &str, key: &str) -> String {
+    contents
+        .lines()
+        .find_map(|line| {
+            let (name, value) = line.split_once('=')?;
+            if name == key {
+                Some(value.trim().to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default()
+}
+
+#[cfg(not(debug_assertions))]
+fn native_dashboard_auth_path<R: Runtime>(app: &impl Manager<R>) -> Result<PathBuf, String> {
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("dashboard-auth.env"))
+}
+
+#[cfg(not(debug_assertions))]
+fn secure_native_dashboard_auth_file(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = fs::metadata(path).map_err(|error| error.to_string())?.permissions();
+        permissions.set_mode(0o600);
+        fs::set_permissions(path, permissions).map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+#[cfg(not(debug_assertions))]
+fn ensure_native_dashboard_auth<R: Runtime>(app: &impl Manager<R>) -> Result<NativeDashboardAuth, String> {
+    let path = native_dashboard_auth_path(app)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+
+    let current = fs::read_to_string(&path).unwrap_or_default();
+    let mut secret = parse_env_key(&current, DASHBOARD_AUTH_SECRET_KEY);
+    let mut token = parse_env_key(&current, DASHBOARD_DEVICE_TOKEN_KEY);
+
+    if secret.len() < MIN_DASHBOARD_AUTH_SECRET_LENGTH {
+        secret = random_hex(32)?;
+    }
+    if token.len() < MIN_DASHBOARD_DEVICE_TOKEN_LENGTH {
+        token = random_hex(32)?;
+    }
+
+    let next = format!(
+        "{DASHBOARD_AUTH_SECRET_KEY}={secret}\n{DASHBOARD_DEVICE_TOKEN_KEY}={token}\n",
+    );
+    if next != current {
+        fs::write(&path, next).map_err(|error| error.to_string())?;
+    }
+    secure_native_dashboard_auth_file(&path)?;
+
+    Ok(NativeDashboardAuth {
+        secret,
+        token,
+        bootstrap_token: random_hex(32)?,
+    })
 }
 
 #[derive(Serialize)]
@@ -80,10 +197,60 @@ struct CreatedFolder {
     label: String,
 }
 
+static PANIC_LOGGER: Once = Once::new();
+
 fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
+}
+
+fn panic_payload_text(payload: &(dyn Any + Send)) -> String {
+    payload
+        .downcast_ref::<&str>()
+        .map(|value| (*value).to_string())
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "non-string panic payload".to_string())
+}
+
+fn append_native_panic_log(context: &str, payload: &str, location: &str) {
+    if let Some(path) = home_dir().map(|home| home.join(".hivemindos").join("native-panic.log")) {
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
+            let _ = writeln!(
+                file,
+                "\n--- HivemindOS native panic {:?} ---\ncontext: {context}\nthread: {:?}\nlocation: {location}\npayload: {payload}\nbacktrace:\n{}",
+                std::time::SystemTime::now(),
+                std::thread::current().name(),
+                std::backtrace::Backtrace::force_capture(),
+            );
+        }
+    }
+}
+
+pub(crate) fn guard_native_callback(context: &str, callback: impl FnOnce()) {
+    if let Err(payload) = catch_unwind(AssertUnwindSafe(callback)) {
+        let payload = panic_payload_text(payload.as_ref());
+        append_native_panic_log(context, &payload, "caught native callback panic");
+        eprintln!("HivemindOS: suppressed native callback panic in {context}: {payload}");
+    }
+}
+
+fn install_native_panic_logger() {
+    PANIC_LOGGER.call_once(|| {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let payload = panic_payload_text(info.payload());
+            let location = info
+                .location()
+                .map(|item| format!("{}:{}:{}", item.file(), item.line(), item.column()))
+                .unwrap_or_else(|| "unknown location".to_string());
+            append_native_panic_log("uncaught panic", &payload, &location);
+            previous(info);
+        }));
+    });
 }
 
 fn expand_home_path(path: &str) -> PathBuf {
@@ -281,6 +448,101 @@ fn reveal_system_path(path: &Path) -> Result<(), String> {
     }
 }
 
+/// Open macOS System Settings → Privacy & Security → Full Disk Access so the
+/// user can grant the always-on gateway access to protected folders
+/// (Downloads/Desktop/Documents) for phone file browsing. TCC is macOS-only; a
+/// no-op elsewhere.
+#[tauri::command]
+fn open_full_disk_access_settings() -> Result<(), String> {
+    if cfg!(target_os = "macos") {
+        open_system_target(
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
+        )
+    } else {
+        Ok(())
+    }
+}
+
+/// Reveal, in Finder, the exact gateway binary that needs Full Disk Access, so
+/// the user can drag it into the list. The installer records the path in
+/// ~/.hivemindos/claw/gateway-fda-target.txt; fall back to the claw install dir
+/// if it's missing.
+#[tauri::command]
+fn reveal_gateway_for_full_disk_access() -> Result<(), String> {
+    let home = home_dir().ok_or("Could not resolve home directory")?;
+    let claw_dir = home.join(".hivemindos").join("claw");
+    let target = std::fs::read_to_string(claw_dir.join("gateway-fda-target.txt"))
+        .ok()
+        .map(|raw| raw.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .filter(|p| p.exists())
+        .unwrap_or(claw_dir);
+    reveal_system_path(&target)
+}
+
+fn contains_dashboard_auth_helper(path: &Path) -> bool {
+    path.join("package.json").exists() && path.join("scripts").join("dashboard-auth.mjs").exists()
+}
+
+fn dashboard_auth_project_dir() -> Option<PathBuf> {
+    if let Ok(current_dir) = std::env::current_dir() {
+        if contains_dashboard_auth_helper(&current_dir) {
+            return Some(current_dir);
+        }
+    }
+
+    let source_dir = home_dir()?.join(".hivemindos").join("app-source");
+    if contains_dashboard_auth_helper(&source_dir) {
+        return Some(source_dir);
+    }
+
+    None
+}
+
+fn open_terminal_in_directory(path: &Path) -> Result<(), String> {
+    if cfg!(target_os = "macos") {
+        return Command::new("open")
+            .args(["-a", "Terminal"])
+            .arg(path)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| error.to_string());
+    }
+
+    if cfg!(target_os = "windows") {
+        let command = format!("cd /d \"{}\"", path.display().to_string().replace('"', "\\\""));
+        return Command::new("cmd")
+            .args(["/c", "start", "", "cmd.exe", "/K", &command])
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| error.to_string());
+    }
+
+    for (program, args) in [
+        ("x-terminal-emulator", vec!["--working-directory".to_string(), path.display().to_string()]),
+        ("gnome-terminal", vec![format!("--working-directory={}", path.display())]),
+        ("konsole", vec!["--workdir".to_string(), path.display().to_string()]),
+    ] {
+        if Command::new(program).args(args).spawn().is_ok() {
+            return Ok(());
+        }
+    }
+
+    open_system_target(&path.to_string_lossy())
+}
+
+#[tauri::command]
+fn open_project_terminal() -> Result<serde_json::Value, String> {
+    let directory = dashboard_auth_project_dir()
+        .ok_or_else(|| "No HivemindOS source folder with dashboard auth commands was found.".to_string())?;
+    open_terminal_in_directory(&directory)?;
+    Ok(serde_json::json!({
+        "ok": true,
+        "directory": display_path(&directory),
+    }))
+}
+
 #[tauri::command]
 fn open_deliverable(action: Option<String>, path: Option<String>, url: Option<String>) -> Result<serde_json::Value, String> {
     let action = if action.as_deref() == Some("reveal") { "reveal" } else { "open" };
@@ -357,6 +619,20 @@ fn desktop_status(state: tauri::State<NativeServerState>) -> serde_json::Value {
         "nativeHost": NATIVE_BROWSER_HOST,
         "nativePort": port
     })
+}
+
+#[tauri::command]
+fn native_dashboard_unlock_token(
+    state: tauri::State<NativeServerState>,
+) -> Result<Option<String>, String> {
+    if cfg!(debug_assertions) {
+        return Ok(None);
+    }
+    let native_server_running = state.port.lock().ok().and_then(|guard| *guard).is_some();
+    if !native_server_running {
+        return Ok(None);
+    }
+    Ok(state.dashboard_token.lock().ok().and_then(|guard| guard.clone()))
 }
 
 fn native_payload(result: Result<serde_json::Value, String>) -> serde_json::Value {
@@ -483,6 +759,13 @@ fn dashboard_bootstrap(
 
 #[cfg(not(debug_assertions))]
 fn reserve_local_port() -> Result<u16, Box<dyn std::error::Error>> {
+    // Prefer the stable port so a paired phone's saved hub survives restarts;
+    // if it's already in use, take any free port rather than evicting it.
+    if let Ok(listener) = TcpListener::bind((NATIVE_BIND_HOST, NATIVE_PREFERRED_PORT)) {
+        let port = listener.local_addr()?.port();
+        drop(listener);
+        return Ok(port);
+    }
     let listener = TcpListener::bind((NATIVE_BIND_HOST, 0))?;
     let port = listener.local_addr()?.port();
     drop(listener);
@@ -526,8 +809,56 @@ fn has_packaged_next_server(app: &tauri::App) -> bool {
         .unwrap_or(false)
 }
 
+/// Bridge the loopback dashboard onto the tailnet so a paired phone can reach
+/// it: bind this machine's 100.x tailnet IP at the SAME port the dashboard uses
+/// on loopback, and pipe bytes through. The LAN can't route to a 100.x socket,
+/// so only tailnet peers (the phone) get in. No-op when Tailscale is down — the
+/// desktop window still works on loopback; relaunch with Tailscale up to pair.
+/// Because the tailnet port equals the loopback port, the pairing QR
+/// (`<tailnet-ip>:<window.location.port>`) addresses the bridge with no change.
 #[cfg(not(debug_assertions))]
-fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16), Box<dyn std::error::Error>> {
+fn spawn_tailnet_forwarder(loopback_port: u16) {
+    std::thread::spawn(move || {
+        let Some(tailnet_ip) = fleet::self_tailnet_ipv4() else {
+            return;
+        };
+        let listener = match TcpListener::bind((tailnet_ip.as_str(), loopback_port)) {
+            Ok(listener) => listener,
+            Err(_) => return,
+        };
+        for incoming in listener.incoming() {
+            let Ok(client) = incoming else { continue };
+            std::thread::spawn(move || {
+                if let Ok(upstream) = TcpStream::connect((NATIVE_BIND_HOST, loopback_port)) {
+                    forward_between(client, upstream);
+                }
+            });
+        }
+    });
+}
+
+/// Splice two TCP streams in both directions until either side closes. Each
+/// direction runs on its own thread; a half-close is propagated so the peer's
+/// copy() can drain and finish.
+#[cfg(not(debug_assertions))]
+fn forward_between(client: TcpStream, upstream: TcpStream) {
+    let (mut client_read, mut upstream_write) = match (client.try_clone(), upstream.try_clone()) {
+        (Ok(client_read), Ok(upstream_write)) => (client_read, upstream_write),
+        _ => return,
+    };
+    let mut upstream_read = upstream;
+    let mut client_write = client;
+    let pump = std::thread::spawn(move || {
+        let _ = std::io::copy(&mut client_read, &mut upstream_write);
+        let _ = upstream_write.shutdown(std::net::Shutdown::Write);
+    });
+    let _ = std::io::copy(&mut upstream_read, &mut client_write);
+    let _ = client_write.shutdown(std::net::Shutdown::Write);
+    let _ = pump.join();
+}
+
+#[cfg(not(debug_assertions))]
+fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16, String), Box<dyn std::error::Error>> {
     let (server_js, node_path) = packaged_next_server_paths(app)?;
     let server_dir = server_js
         .parent()
@@ -540,6 +871,7 @@ fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16), Box<dyn st
         return Err(format!("Missing packaged Node.js runtime at {}", node_path.display()).into());
     }
 
+    let auth = ensure_native_dashboard_auth(app)?;
     let port = reserve_local_port()?;
     let mut command = Command::new(&node_path);
     command
@@ -550,6 +882,9 @@ fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16), Box<dyn st
         .env("NODE_ENV", "production")
         .env("NEXT_TELEMETRY_DISABLED", "1")
         .env("HIVEMINDOS_NATIVE", "1")
+        .env(DASHBOARD_AUTH_SECRET_KEY, &auth.secret)
+        .env(DASHBOARD_DEVICE_TOKEN_KEY, &auth.token)
+        .env(NATIVE_BOOTSTRAP_TOKEN_KEY, &auth.bootstrap_token)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -564,27 +899,136 @@ fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16), Box<dyn st
         return Err(message.into());
     }
 
-    Ok((child, port))
+    // Expose the loopback dashboard to a paired phone over the tailnet only.
+    spawn_tailnet_forwarder(port);
+
+    Ok((child, port, auth.bootstrap_token))
+}
+
+/// The system-Tailscale IPv4 a paired phone should dial — the SAME address the
+/// tailnet forwarder binds (spawn_tailnet_forwarder). The dashboard's device
+/// list can report a different "self" IP because hivemind-linkd runs its own
+/// embedded tsnet node; that node has no bridge on the dashboard port, so a QR
+/// built from it makes the phone time out. The pairing QR uses this instead.
+/// None when Tailscale isn't up.
+#[tauri::command]
+fn native_pairing_host() -> Option<String> {
+    fleet::self_tailnet_ipv4()
+}
+
+/// Whether this desktop app should host the claw gateway as a child process
+/// (instead of the headless launchd agent). OFF by default — opt in with the
+/// `HIVEMINDOS_APP_HOSTS_GATEWAY` env var (1/true/on) or a
+/// `~/.hivemindos/app-hosts-gateway` marker file. When on, the gateway's file
+/// access is attributed to this (signed) app, so macOS shows one-click "Allow"
+/// prompts for Downloads/Desktop/Documents instead of a silent EPERM.
+///
+/// NOTE: while opting in, stop the launchd gateway first
+/// (`launchctl bootout gui/$(id -u)/com.hivemindos.claw-backend`) so two
+/// gateways don't fight over the port. Stage 3 makes this the permanent path.
+fn app_should_host_gateway() -> bool {
+    if let Ok(raw) = std::env::var("HIVEMINDOS_APP_HOSTS_GATEWAY") {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" | "force" => return true,
+            "0" | "false" | "no" | "off" | "" => return false,
+            _ => {}
+        }
+    }
+    home_dir()
+        .map(|home| home.join(".hivemindos").join("app-hosts-gateway").exists())
+        .unwrap_or(false)
+}
+
+fn app_forces_host_gateway() -> bool {
+    std::env::var("HIVEMINDOS_APP_HOSTS_GATEWAY")
+        .map(|raw| raw.trim().eq_ignore_ascii_case("force"))
+        .unwrap_or(false)
+}
+
+/// The port the app-hosted gateway binds and the phone probes. NOT 5000 — that's
+/// permanently held by Apple's ControlCenter / AirPlay receiver.
+const HOSTED_GATEWAY_PORT: u16 = 5001;
+
+fn claw_gateway_already_listening() -> bool {
+    // Probe the GATEWAY port (5001), NOT 5000. Port 5000 is permanently held by
+    // Apple's ControlCenter / AirPlay receiver, so probing it is a false positive
+    // ("a gateway is already up") — which made the app skip hosting and leave the
+    // phone on the launchd gateway (external claw, no Downloads grant). The hosted
+    // gateway binds 5001 (see spawn_hosted_gateway), so that's the port to check.
+    TcpStream::connect(("127.0.0.1", HOSTED_GATEWAY_PORT)).is_ok()
+}
+
+/// Spawn the installed claw gateway launcher as a child of this app. Returns
+/// None if the launcher is missing (claw not installed) or the spawn fails.
+fn spawn_hosted_gateway() -> Option<Child> {
+    let launcher = home_dir()?
+        .join(".hivemindos")
+        .join("claw")
+        .join("launch-gateway.sh");
+    if !launcher.exists() {
+        eprintln!(
+            "HivemindOS: app-hosted gateway requested but launcher is missing at {}",
+            launcher.display()
+        );
+        return None;
+    }
+    let mut command = Command::new("/bin/bash");
+    command.arg(&launcher).stdin(std::process::Stdio::null());
+    // Prefer the `claw` binary bundled INSIDE this signed app (Contents/MacOS/claw,
+    // next to our own executable). A binary nested in the app bundle inherits the
+    // app's TCC identity, so the agent's file writes to protected folders are
+    // covered by the one-click "Allow <folder>" grant. An EXTERNAL claw
+    // (~/.hivemindos/claw/bin/claw) is its own TCC responsible process and gets
+    // denied. launch-gateway.sh honors an inherited CLAW_BINARY; it falls back to
+    // the installed copy when this isn't bundled (e.g. a dev build).
+    if let Some(bundled_claw) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("claw")))
+        .filter(|path| path.exists())
+    {
+        command.env("CLAW_BINARY", bundled_claw);
+    }
+    // Pin the gateway to the port the phone probes (5001). 5000 is taken by Apple's
+    // ControlCenter, so the backend's EADDRINUSE walk-up would otherwise reach 5001
+    // only by luck. Making it deterministic means this signed, app-hosted gateway is
+    // the single owner of the port — the launchd gateway (external claw, denied
+    // ~/Downloads) can't win the race. launch-gateway.sh sets no PORT, so it inherits.
+    command.env("PORT", HOSTED_GATEWAY_PORT.to_string());
+    match command.spawn() {
+        Ok(child) => {
+            eprintln!("HivemindOS: hosting claw gateway as a child (pid {})", child.id());
+            Some(child)
+        }
+        Err(error) => {
+            eprintln!("HivemindOS: failed to spawn hosted gateway: {error}");
+            None
+        }
+    }
 }
 
 fn stop_native_server(state: tauri::State<NativeServerState>) {
-    if let Ok(mut guard) = state.child.lock() {
-        if let Some(mut child) = guard.take() {
-            let _ = child.kill();
-            let _ = child.wait();
+    for lock in [&state.child, &state.gateway_child] {
+        if let Ok(mut guard) = lock.lock() {
+            if let Some(mut child) = guard.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
         }
     }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    install_native_panic_logger();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(NativeServerState::new())
         .menu(desktop_navigation::app_menu)
         .on_menu_event(|app, event| {
-            desktop_navigation::handle_menu_event(app, event.id().as_ref());
+            guard_native_callback("app menu event", || {
+                desktop_navigation::handle_menu_event(app, event.id().as_ref());
+            });
         })
         .setup(|_app| {
             if let Err(error) = desktop_navigation::setup_tray(_app.handle()) {
@@ -592,19 +1036,39 @@ pub fn run() {
             }
             desktop_navigation::restore_window_state(_app.handle());
 
+            // Stage 1: optionally host the claw gateway as a child of this
+            // (signed) app, so its filesystem access is attributed to
+            // HivemindOS and macOS shows one-click folder prompts. Opt-in;
+            // the default leaves the headless launchd gateway untouched.
+            if app_should_host_gateway() {
+                if claw_gateway_already_listening() && !app_forces_host_gateway() {
+                    eprintln!(
+                        "HivemindOS: app-hosted gateway skipped because a gateway is already listening on 127.0.0.1:5001"
+                    );
+                } else if let Some(child) = spawn_hosted_gateway() {
+                    if let Ok(mut guard) =
+                        _app.state::<NativeServerState>().gateway_child.lock()
+                    {
+                        *guard = Some(child);
+                    }
+                }
+            }
+
             #[cfg(not(debug_assertions))]
             {
                 let app = _app;
                 if has_packaged_next_server(app) {
-                    let (child, port) = spawn_native_next_server(app)?;
+                    let (child, port, token) = spawn_native_next_server(app)?;
                     let state = app.state::<NativeServerState>();
                     *state.child.lock().map_err(|_| "Native server lock poisoned")? = Some(child);
                     *state.port.lock().map_err(|_| "Native server port lock poisoned")? = Some(port);
+                    *state.dashboard_token.lock().map_err(|_| "Native server token lock poisoned")? = Some(token.clone());
 
                     let window = app
                         .get_webview_window("main")
                         .ok_or("Missing main HivemindOS window")?;
-                    let url = url::Url::parse(&format!("http://{NATIVE_BROWSER_HOST}:{port}/"))?;
+                    let mut url = url::Url::parse(&format!("http://{NATIVE_BIND_HOST}:{port}/"))?;
+                    url.set_fragment(Some(&format!("hivemindos_native_bootstrap={token}")));
                     window.navigate(url)?;
                 }
             }
@@ -613,11 +1077,16 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             desktop_status,
+            native_pairing_host,
+            native_dashboard_unlock_token,
             dashboard_bootstrap,
             list_local_directories,
             create_local_folder,
             display_local_path,
             open_deliverable,
+            open_project_terminal,
+            open_full_disk_access_settings,
+            reveal_gateway_for_full_disk_access,
             deliverables::list_aeon_deliverables,
             deliverables::list_aeon_outputs,
             deliverables::list_aeon_schedules,
@@ -646,17 +1115,18 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building HivemindOS desktop")
         .run(|app_handle, event| {
-            match event {
+            guard_native_callback("app run event", || match event {
                 RunEvent::WindowEvent { label, event, .. } if label == "main" => {
-                    if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) | tauri::WindowEvent::CloseRequested { .. }) {
+                    if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
                         desktop_navigation::save_main_window_state(app_handle);
                     }
                 }
                 RunEvent::ExitRequested { .. } => {
+                    desktop_navigation::save_main_window_state(app_handle);
                     let state = app_handle.state::<NativeServerState>();
                     stop_native_server(state);
                 }
                 _ => {}
-            }
+            });
         });
 }

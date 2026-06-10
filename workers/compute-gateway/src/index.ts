@@ -6,6 +6,11 @@ type Env = {
   DEFAULT_MODEL?: string;
   HONEY_LEDGER_URL?: string;
   HONEY_LEDGER_SECRET?: string;
+  HONEY_BILLING_SECRET?: string;
+  HONEY_LEDGER_READ_TOKEN?: string;
+  MANAGED_HONEY_CREDITS_PER_USD?: string;
+  MANAGED_AGENT_MARKUP_BPS?: string;
+  MANAGED_AGENT_USD_PER_1K_TOKENS?: string;
   ALLOW_SHARED_BANKR_KEY?: string;
   DAILY_TOKEN_CAP?: string;
   CORS_ORIGIN?: string;
@@ -46,6 +51,14 @@ type LedgerSubmitResult = {
   ok: boolean;
   honeyDelta: number;
   error?: string;
+};
+
+type ManagedHoneyQuote = {
+  honeyAmount: number;
+  retailUsd: number;
+  upstreamUsd: number;
+  markupBps: number;
+  unitUsd: number;
 };
 
 const corsHeaders = (env: Env) => ({
@@ -184,6 +197,11 @@ async function handleOpenAIChatCompletions(request: Request, env: Env) {
   if (current + promptTokens > cap) {
     return openAIError(env, `Daily reward compute cap reached for this workspace (${cap.toLocaleString()} tokens).`, 429);
   }
+  const estimatedManagedQuote = quoteManagedHoney(env, Math.max(promptTokens, Number(body?.max_tokens ?? body?.max_completion_tokens ?? 0) || promptTokens));
+  if (auth.usesManagedHoney) {
+    const hasBudget = await hasManagedHoneyBudget(env, auth.workspaceId, auth.agentId, estimatedManagedQuote.honeyAmount);
+    if (!hasBudget) return openAIError(env, "Add managed HONEY credits before using HivemindOS-managed provider keys.", 402);
+  }
 
   const upstream = await fetch(env.BANKR_LLM_BASE_URL ?? "https://llm.bankr.bot/v1/chat/completions", {
     method: "POST",
@@ -206,6 +224,15 @@ async function handleOpenAIChatCompletions(request: Request, env: Env) {
   const usageTokens = extractUsageTokens(data) ?? estimateTokens(`${JSON.stringify(messages)}\n${outputText}`);
   const acceptedTokens = Math.max(1, Math.min(usageTokens, Math.max(0, cap - current)));
   await addDailyUsage(env, auth.workspaceId, acceptedTokens);
+  const managedHoney = auth.usesManagedHoney
+    ? await submitManagedHoneyDebit(env, {
+      workspaceId: auth.workspaceId,
+      agentId: auth.agentId,
+      tokensUsed: acceptedTokens,
+      model,
+      quote: quoteManagedHoney(env, acceptedTokens),
+    })
+    : null;
 
   const receipt = await signedReceipt(env, {
     eventId: crypto.randomUUID(),
@@ -239,11 +266,13 @@ async function handleOpenAIChatCompletions(request: Request, env: Env) {
       tokensUsed: acceptedTokens,
       honeyDelta: submitted.honeyDelta,
       createdAt: receipt.timestamp,
+      managedHoney,
     });
   }
 
   return json(env, {
     ...responseBody,
+    ...(managedHoney ? { managedHoney } : {}),
     honey: {
       id: receipt.eventId,
       agentId: auth.agentId,
@@ -298,6 +327,89 @@ async function submitHoneyReceipt(env: Env, receipt: LedgerReceipt): Promise<Led
   return { ok: true, honeyDelta: Number(data?.honeyDelta ?? 0) || 0 };
 }
 
+async function hasManagedHoneyBudget(env: Env, workspaceId: string, agentId: string, requiredHoney: number) {
+  if (!env.HONEY_LEDGER_URL) return false;
+  const url = `${env.HONEY_LEDGER_URL.replace(/\/+$/, "")}/ledger?workspaceId=${encodeURIComponent(workspaceId)}&agentId=${encodeURIComponent(agentId)}`;
+  const response = await fetch(url, { headers: authHeaders(env.HONEY_LEDGER_READ_TOKEN) }).catch(() => null);
+  if (!response?.ok) return false;
+  const data = await response.json().catch(() => null) as {
+    ledger?: { balances?: Array<{ agentId?: string; managedHoneyBalance?: number }> };
+  } | null;
+  const balance = data?.ledger?.balances?.find((item) => item.agentId === agentId)?.managedHoneyBalance ?? 0;
+  return Number(balance) >= requiredHoney;
+}
+
+async function submitManagedHoneyDebit(env: Env, input: {
+  workspaceId: string;
+  agentId: string;
+  model: string;
+  tokensUsed: number;
+  quote: ManagedHoneyQuote;
+}) {
+  const secret = env.HONEY_BILLING_SECRET || env.HONEY_LEDGER_SECRET;
+  if (!env.HONEY_LEDGER_URL || !secret) {
+    throw new Error("Managed HONEY billing is not configured for shared-key compute.");
+  }
+  const timestamp = new Date().toISOString();
+  const event = {
+    eventId: crypto.randomUUID(),
+    issuerId: "hivemindos-managed-compute-gateway",
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    kind: "debit" as const,
+    honeyAmount: input.quote.honeyAmount,
+    usdAmount: input.quote.retailUsd,
+    provider: "bankr",
+    sku: "managed-agent-compute",
+    units: Math.max(1, input.tokensUsed) / 1000,
+    unitUsd: input.quote.unitUsd,
+    markupBps: input.quote.markupBps,
+    source: "managed-agent",
+    timestamp,
+    idempotencyKey: `${input.workspaceId}:${input.agentId}:${timestamp}:${input.model}`,
+    metadataHash: shortHash(`${input.model}:${input.tokensUsed}:${input.quote.retailUsd}`),
+  };
+  const signature = await signManagedBillingEvent(event, secret);
+  const response = await fetch(`${env.HONEY_LEDGER_URL.replace(/\/+$/, "")}/managed-billing/events`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...event, signature }),
+  }).catch(() => null);
+  const data = await response?.json().catch(() => null) as {
+    ok?: boolean;
+    event?: unknown;
+    balance?: { managedHoneyBalance?: number } | null;
+    error?: string;
+  } | null;
+  if (!response?.ok || !data?.ok) {
+    throw new Error(data?.error || "Managed HONEY debit failed.");
+  }
+  return {
+    eventId: event.eventId,
+    honeyDelta: -event.honeyAmount,
+    retailUsd: event.usdAmount,
+    upstreamUsd: input.quote.upstreamUsd,
+    markupBps: event.markupBps,
+    balance: data.balance?.managedHoneyBalance ?? null,
+  };
+}
+
+function quoteManagedHoney(env: Env, tokens: number): ManagedHoneyQuote {
+  const tokenUnits = Math.max(1, Math.ceil(tokens)) / 1000;
+  const unitUsd = positiveNumber(env.MANAGED_AGENT_USD_PER_1K_TOKENS, 0.01);
+  const upstreamUsd = roundMoney(tokenUnits * unitUsd);
+  const markupBps = Math.max(0, Math.round(positiveNumber(env.MANAGED_AGENT_MARKUP_BPS, 5_000)));
+  const retailUsd = roundMoney(Math.max(0.01, upstreamUsd * (1 + markupBps / 10_000)));
+  const honeyCreditsPerUsd = positiveNumber(env.MANAGED_HONEY_CREDITS_PER_USD, 100);
+  return {
+    honeyAmount: roundMoney(retailUsd * honeyCreditsPerUsd),
+    retailUsd,
+    upstreamUsd,
+    markupBps,
+    unitUsd,
+  };
+}
+
 async function signedReceipt(env: Env, receipt: Omit<LedgerReceipt, "signature">): Promise<LedgerReceipt> {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -313,6 +425,35 @@ async function signedReceipt(env: Env, receipt: Omit<LedgerReceipt, "signature">
   };
 }
 
+async function signManagedBillingEvent(event: {
+  issuerId: string;
+  eventId: string;
+  workspaceId: string;
+  agentId: string;
+  kind: "credit" | "debit";
+  honeyAmount: number;
+  usdAmount?: number;
+  provider: string;
+  sku: string;
+  units?: number;
+  unitUsd?: number;
+  markupBps?: number;
+  source: string;
+  timestamp: string;
+  idempotencyKey?: string;
+  metadataHash?: string;
+}, secret: string) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(canonicalManagedBillingEvent(event)));
+  return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 function canonicalReceipt(receipt: Omit<LedgerReceipt, "signature">) {
   return [
     receipt.issuerId,
@@ -323,6 +464,44 @@ function canonicalReceipt(receipt: Omit<LedgerReceipt, "signature">) {
     receipt.model,
     receipt.source,
     receipt.timestamp,
+  ].join(".");
+}
+
+function canonicalManagedBillingEvent(event: {
+  issuerId: string;
+  eventId: string;
+  workspaceId: string;
+  agentId: string;
+  kind: "credit" | "debit";
+  honeyAmount: number;
+  usdAmount?: number;
+  provider: string;
+  sku: string;
+  units?: number;
+  unitUsd?: number;
+  markupBps?: number;
+  source: string;
+  timestamp: string;
+  idempotencyKey?: string;
+  metadataHash?: string;
+}) {
+  return [
+    event.issuerId,
+    event.eventId,
+    event.workspaceId,
+    event.agentId,
+    event.kind,
+    roundMoney(event.honeyAmount),
+    roundMoney(event.usdAmount ?? 0),
+    event.provider,
+    event.sku,
+    Math.max(0, Number(event.units ?? 0) || 0),
+    roundMoney(event.unitUsd ?? 0),
+    Math.max(0, Math.round(Number(event.markupBps ?? 0) || 0)),
+    event.source,
+    event.timestamp,
+    event.idempotencyKey ?? "",
+    event.metadataHash ?? "",
   ].join(".");
 }
 
@@ -365,6 +544,7 @@ type RewardAuth = {
   workspaceId: string;
   agentId: string;
   agentName?: string;
+  usesManagedHoney: boolean;
 };
 
 function parseRewardAuth(request: Request, body: GatewayRequest | null, env: Env): RewardAuth {
@@ -372,7 +552,9 @@ function parseRewardAuth(request: Request, body: GatewayRequest | null, env: Env
   const bodyBankrKey = cleanSecret(body?.bankrLlmKey);
   const bearer = bearerToken(request);
   const rewardKey = parseRewardKey(bearer);
-  const bankrKey = headerBankrKey || bodyBankrKey || rewardKey?.bankrLlmKey || cleanSecret(bearer) || sharedBankrKey(env);
+  const explicitBankrKey = headerBankrKey || bodyBankrKey || rewardKey?.bankrLlmKey || cleanSecret(bearer);
+  const managedBankrKey = sharedBankrKey(env);
+  const bankrKey = explicitBankrKey || managedBankrKey;
   const workspaceId = cleanId(
     request.headers.get("X-Hivemind-Workspace-Id")
       ?? body?.workspaceId
@@ -390,6 +572,7 @@ function parseRewardAuth(request: Request, body: GatewayRequest | null, env: Env
     bankrKey,
     workspaceId: workspaceId || "reward-anonymous",
     agentId: agentId || "reward-client",
+    usesManagedHoney: !explicitBankrKey && Boolean(managedBankrKey),
     ...(agentName ? { agentName } : {}),
   };
 }
@@ -467,6 +650,7 @@ function openAIStream(env: Env, responseBody: ReturnType<typeof openAIChatRespon
   tokensUsed: number;
   honeyDelta: number;
   createdAt: string;
+  managedHoney?: unknown;
 }) {
   const text = extractAssistantText(responseBody);
   const created = Math.floor(Date.now() / 1000);
@@ -486,10 +670,12 @@ function openAIStream(env: Env, responseBody: ReturnType<typeof openAIChatRespon
     usage: responseBody.usage,
     honey: {
       ...honey,
+      managedHoney: undefined,
       kind: "usage",
       source: "verified-reward-gateway",
       hiveDelta: 0,
     },
+    ...(honey.managedHoney ? { managedHoney: honey.managedHoney } : {}),
   };
   return new Response([
     `data: ${JSON.stringify(chunk)}`,
@@ -529,9 +715,22 @@ function sharedBankrKey(env: Env) {
   return cleanSecret(env.BANKR_LLM_KEY) || cleanSecret(env.BANKR_MANAGEMENT_KEY);
 }
 
+function authHeaders(token?: string): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 function positiveInteger(value: unknown, fallback: number) {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : fallback;
+}
+
+function positiveNumber(value: unknown, fallback: number) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback;
+}
+
+function roundMoney(value: number) {
+  return Math.max(0, Math.round(value * 1_000_000) / 1_000_000);
 }
 
 function json(env: Env, body: unknown, status = 200) {

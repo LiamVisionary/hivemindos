@@ -1,4 +1,7 @@
-export type KnownAgentRuntime = "openclaw" | "hermes" | "opencode" | "codex" | "claude-code" | "aeon" | "openai-compatible";
+export const HIVEMIND_OS_RUNTIME = "hivemind-os";
+export const LEGACY_OPENAI_COMPATIBLE_RUNTIME = "openai-compatible";
+
+export type KnownAgentRuntime = "openclaw" | "hermes" | "opencode" | "codex" | "claude-code" | "aeon" | typeof HIVEMIND_OS_RUNTIME;
 export type AgentRuntime = KnownAgentRuntime | (string & {});
 export type AgentRuntimeKind = "interactive" | "background" | "gateway" | "collector";
 
@@ -14,6 +17,11 @@ export interface RuntimeCapabilities {
   backgroundTasks?: boolean;
   xSearch?: boolean;
   socialPosting?: boolean;
+  imageGeneration?: boolean;
+  ttsGeneration?: boolean;
+  musicGeneration?: boolean;
+  sfxGeneration?: boolean;
+  model3dGeneration?: boolean;
   videoGeneration?: boolean;
   codexRuntime?: boolean;
   kanbanDecompose?: boolean;
@@ -23,7 +31,7 @@ export interface RuntimeCapabilities {
   modelSelection?: boolean;
   skillActions?: boolean;
   skillActionRuntimes?: Array<"osascript" | "http" | "shell" | "node" | "python" | "mcp" | "tauri-native">;
-  skillCapabilities?: Array<"chat" | "background" | "scheduler" | "shell" | "browser" | "mcp" | "http" | "filesystem" | "wallet" | "publishing" | "deployment" | "analytics" | "aeon-workflow">;
+  skillCapabilities?: Array<"chat" | "background" | "scheduler" | "shell" | "browser" | "mcp" | "http" | "filesystem" | "wallet" | "publishing" | "deployment" | "analytics" | "image-generation" | "tts-generation" | "music-generation" | "sfx-generation" | "3d-generation" | "media-generation" | "aeon-workflow">;
 }
 
 export type RuntimeEnvFeature =
@@ -112,7 +120,7 @@ export type RuntimeProfileFeature = {
   firstAgentWorkerClass?: BeeWorkerClass;
   postCreateAction?: {
     view: string;
-    sessionStorageAgentIdKey?: string;
+    dashboardStateAgentIdKey?: string;
   };
   aeonDefaults?: {
     repoEnvVar: string;
@@ -180,6 +188,7 @@ export type AgentCallMissedFallback = "none" | "in_app" | "obsidian_note" | "tel
 export interface AgentCallPreferences {
   voiceRuntime: AgentVoiceRuntime;
   voiceProviderId?: string;
+  voiceModelId?: string;
   voiceId?: string;
   enabled: boolean;
   dailyEnabled: boolean;
@@ -209,6 +218,7 @@ export function buildAgentCallPreferences(input?: Partial<AgentCallPreferences> 
   return {
     voiceRuntime: input?.voiceRuntime || "openai-realtime",
     voiceProviderId: input?.voiceProviderId,
+    voiceModelId: input?.voiceModelId,
     voiceId: input?.voiceId,
     enabled: input?.enabled ?? false,
     dailyEnabled: input?.dailyEnabled ?? false,
@@ -227,12 +237,24 @@ export function buildAgentCallPreferences(input?: Partial<AgentCallPreferences> 
   };
 }
 
+export interface WorkerTaskPreference {
+  id: string;
+  /** Task family the preference applies to, e.g. "image", "video", "writing", or free text. */
+  taskType: string;
+  appId?: string;
+  appName?: string;
+  model?: string;
+  /** Natural-prose hint, e.g. "anime-style renders" or "long-form realism". */
+  notes?: string;
+}
+
 export interface CustomWorkerClassProfile {
   id: string;
   label: string;
   imageSrc?: string;
   skillProfilePrompt: string;
   preferredSkillSlugs: string[];
+  taskPreferences?: WorkerTaskPreference[];
 }
 
 export interface AgentGitLawbStatus {
@@ -289,6 +311,7 @@ export interface AgentProfile {
   selectedCustomWorkerClassId?: string;
   skillProfilePrompt?: string;
   preferredSkillSlugs?: string[];
+  taskPreferences?: WorkerTaskPreference[];
   agentEnv?: Record<string, string>;
   gitlawb?: AgentGitLawbStatus;
   memoryForkedFromAgentId?: string;
@@ -410,7 +433,11 @@ export const DEFAULT_SHARED_VAULT: SharedVaultConfig = {
   instructions: "Use this vault as the shared memory and handoff space for all local agents. Read AGENTS.md and Operations/AI-Ready Vault Contract.md before durable edits. Use /api/brain/memory for shared-brain recall and durable shared memories: default recall is tiered through typed Agent Memory first and full shared vault when needed, scope: \"agent-memory\" narrows to strict typed/proven memory, scope: \"full-vault\" forces broad vault recall, recall before relying on prior context, remember durable facts/decisions/preferences/goals/instructions with agent/runtime/machine/Tailnet provenance, and use proof: \"auto\" unless the user asks for explicit proof. Treat GBrain as the optional retrieval/graph brain service, Syntho as the optional compiled-wiki/MCP service for Synthesis, and Operations as machine-readable HivemindOS state.",
 };
 
-export const KNOWN_AGENT_RUNTIMES: KnownAgentRuntime[] = ["openclaw", "hermes", "opencode", "codex", "claude-code", "aeon", "openai-compatible"];
+export const KNOWN_AGENT_RUNTIMES: KnownAgentRuntime[] = ["openclaw", "hermes", "opencode", "codex", "claude-code", "aeon", HIVEMIND_OS_RUNTIME];
+
+export function normalizeAgentRuntime(runtime: AgentRuntime | string | undefined): AgentRuntime {
+  return runtime === LEGACY_OPENAI_COMPATIBLE_RUNTIME ? HIVEMIND_OS_RUNTIME : (runtime || HIVEMIND_OS_RUNTIME);
+}
 
 const DEFAULT_RUNTIME_ENV_FEATURE: RuntimeEnvFeature = {
   kind: "agent-overlay",
@@ -498,6 +525,7 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
       backgroundTasks: true,
       xSearch: true,
       socialPosting: false,
+      imageGeneration: true,
       videoGeneration: true,
       codexRuntime: true,
       kanbanDecompose: true,
@@ -506,7 +534,7 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
       modelSelection: true,
       skillActions: true,
       skillActionRuntimes: ["http", "shell", "node", "python", "mcp"],
-      skillCapabilities: ["chat", "background", "scheduler", "shell", "browser", "mcp", "http", "filesystem", "wallet", "publishing", "deployment", "analytics"],
+      skillCapabilities: ["chat", "background", "scheduler", "shell", "browser", "mcp", "http", "filesystem", "wallet", "publishing", "deployment", "analytics", "image-generation", "media-generation"],
     },
     env: DEFAULT_RUNTIME_ENV_FEATURE,
     settings: {
@@ -556,6 +584,7 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
     profile: {
       ...DEFAULT_RUNTIME_PROFILE_FEATURE,
       firstAgentLocalDataDir: "~/.opencode",
+      defaultWorkerClass: "code",
     },
     integration: DEFAULT_RUNTIME_INTEGRATION_FEATURE,
   },
@@ -687,7 +716,7 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
       runtimeFolderMirrors: ["aeonLocalPath"],
       postCreateAction: {
         view: "aeon",
-        sessionStorageAgentIdKey: "hivemindos.aeon.openDetailAgentId",
+        dashboardStateAgentIdKey: "hivemindos.aeon.openDetailAgentId",
       },
       aeonDefaults: {
         repoEnvVar: "NEXT_PUBLIC_AEON_REPO",
@@ -701,9 +730,9 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
     },
     integration: DEFAULT_RUNTIME_INTEGRATION_FEATURE,
   },
-  "openai-compatible": {
-    runtime: "openai-compatible",
-    label: "Local OpenAI",
+  [HIVEMIND_OS_RUNTIME]: {
+    runtime: HIVEMIND_OS_RUNTIME,
+    label: "HivemindOS",
     kind: "interactive",
     defaults: {
       gatewayUrl: process.env.NEXT_PUBLIC_LOCAL_OPENAI_BASE_URL ?? "http://127.0.0.1:1234",
@@ -724,7 +753,7 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
     },
     chat: {
       kind: "interactive",
-      label: "OpenAI-compatible",
+      label: "HivemindOS-managed chat",
     },
     scheduler: DEFAULT_RUNTIME_SCHEDULER_FEATURE,
     profile: DEFAULT_RUNTIME_PROFILE_FEATURE,
@@ -773,35 +802,37 @@ export const RUNTIME_KINDS: Record<string, AgentRuntimeKind> = Object.fromEntrie
 );
 
 export function runtimeDisplayLabel(runtime: AgentRuntime) {
-  return RUNTIME_LABELS[runtime] ?? runtime;
+  const normalizedRuntime = normalizeAgentRuntime(runtime);
+  return RUNTIME_LABELS[normalizedRuntime] ?? normalizedRuntime;
 }
 
 export function runtimeEnvFeature(runtime: AgentRuntime): RuntimeEnvFeature {
-  return RUNTIME_ENV_FEATURES[runtime] ?? DEFAULT_RUNTIME_ENV_FEATURE;
+  return RUNTIME_ENV_FEATURES[normalizeAgentRuntime(runtime)] ?? DEFAULT_RUNTIME_ENV_FEATURE;
 }
 
 export function runtimeSettingsFeature(runtime: AgentRuntime): RuntimeSettingsFeature {
-  return RUNTIME_SETTINGS_FEATURES[runtime] ?? DEFAULT_RUNTIME_SETTINGS_FEATURE;
+  return RUNTIME_SETTINGS_FEATURES[normalizeAgentRuntime(runtime)] ?? DEFAULT_RUNTIME_SETTINGS_FEATURE;
 }
 
 export function runtimeChatFeature(runtime: AgentRuntime): RuntimeChatFeature {
-  return RUNTIME_CHAT_FEATURES[runtime] ?? {
+  const normalizedRuntime = normalizeAgentRuntime(runtime);
+  return RUNTIME_CHAT_FEATURES[normalizedRuntime] ?? {
     kind: "interactive",
-    label: runtimeDisplayLabel(runtime),
+    label: runtimeDisplayLabel(normalizedRuntime),
     slashCommandPolicy: "none",
   };
 }
 
 export function runtimeSchedulerFeature(runtime: AgentRuntime): RuntimeSchedulerFeature {
-  return RUNTIME_SCHEDULER_FEATURES[runtime] ?? DEFAULT_RUNTIME_SCHEDULER_FEATURE;
+  return RUNTIME_SCHEDULER_FEATURES[normalizeAgentRuntime(runtime)] ?? DEFAULT_RUNTIME_SCHEDULER_FEATURE;
 }
 
 export function runtimeProfileFeature(runtime: AgentRuntime): RuntimeProfileFeature {
-  return RUNTIME_PROFILE_FEATURES[runtime] ?? DEFAULT_RUNTIME_PROFILE_FEATURE;
+  return RUNTIME_PROFILE_FEATURES[normalizeAgentRuntime(runtime)] ?? DEFAULT_RUNTIME_PROFILE_FEATURE;
 }
 
 export function runtimeIntegrationFeature(runtime: AgentRuntime): RuntimeIntegrationFeature {
-  return RUNTIME_INTEGRATION_FEATURES[runtime] ?? DEFAULT_RUNTIME_INTEGRATION_FEATURE;
+  return RUNTIME_INTEGRATION_FEATURES[normalizeAgentRuntime(runtime)] ?? DEFAULT_RUNTIME_INTEGRATION_FEATURE;
 }
 
 export function runtimeLocalDataDirPatch(runtime: AgentRuntime, path: string): Partial<AgentProfile> {
@@ -873,9 +904,10 @@ export function defaultAgentNameForRuntime(agents: AgentProfile[], runtime: Agen
 }
 
 export function createAgentProfile(runtime: AgentRuntime, index = 1): AgentProfile {
-  const defaults = RUNTIME_DEFAULTS[runtime] ?? RUNTIME_DEFAULTS["openai-compatible"];
-  const settings = runtimeSettingsFeature(runtime);
-  const profile = runtimeProfileFeature(runtime);
+  const normalizedRuntime = normalizeAgentRuntime(runtime);
+  const defaults = RUNTIME_DEFAULTS[normalizedRuntime] ?? RUNTIME_DEFAULTS[HIVEMIND_OS_RUNTIME];
+  const settings = runtimeSettingsFeature(normalizedRuntime);
+  const profile = runtimeProfileFeature(normalizedRuntime);
   const aeonDefaults = profile.aeonDefaults;
   const beeRole = index === 1
     ? profile.firstAgentBeeRole ?? profile.defaultBeeRole ?? "worker"
@@ -884,9 +916,9 @@ export function createAgentProfile(runtime: AgentRuntime, index = 1): AgentProfi
     ? profile.firstAgentWorkerClass ?? profile.defaultWorkerClass ?? "general"
     : profile.defaultWorkerClass ?? "general";
   return {
-    id: `${runtime}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name: `${runtimeAgentNamePrefix(runtime)}${String(index).padStart(2, "0")}`,
-    runtime,
+    id: `${normalizedRuntime}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: `${runtimeAgentNamePrefix(normalizedRuntime)}${String(index).padStart(2, "0")}`,
+    runtime: normalizedRuntime,
     gatewayUrl: defaults.gatewayUrl,
     chatPath: defaults.chatPath,
     statusPath: defaults.statusPath,

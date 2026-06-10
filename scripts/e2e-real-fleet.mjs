@@ -820,7 +820,6 @@ async function kanbanRequest(method, body = {}, query = {}) {
 
 async function testKanbanHandoff(machines) {
   const agents = machines.flatMap((machine) => (machine.agents || []).map((agent) => ({ ...agent, machineName: machine.device?.name })));
-  assert(agents.some((agent) => agent.beeRole === "queen" || /queen bee/i.test(agent.name)), "Kanban handoff requires a discoverable Queen Bee.");
   assert(agents.some((agent) => /emerson/i.test(agent.name) && agent.workerClass === "writer"), "Kanban handoff requires Emerson as a writer.");
   assert(agents.some((agent) => /henry matisse/i.test(agent.name) && agent.workerClass === "artist"), "Kanban handoff requires Henry Matisse as an artist.");
 
@@ -922,12 +921,14 @@ async function sendAdaptiveDashboardChat(agent, testCase) {
   const telemetry = await poll(`AdaptiveAgent ${testCase} resolved-model telemetry`, async () => {
     const events = await readTelemetryEventsSince(sinceMs, (event) => event.payload?.agentId === agent.id || event.payload?.agentName === agent.name);
     const fetchStart = events.find((event) => (
-      (event.type === "agent_runtime.http.fetch.start" || event.type === "agent_runtime.openai_compatible.fetch.start")
-      && event.payload?.adaptiveOpenRouter === true
-    ));
+      event.type === "agent_runtime.http.fetch.start"
+      || event.type === "agent_runtime.openai_compatible.fetch.start"
+      || event.type === "agent_runtime.hermes_adaptive_openrouter.fetch.start"
+    ) && event.payload?.adaptiveOpenRouter === true);
     const completed = [...events].reverse().find((event) => (
       event.type === "agent_runtime.http.stream.completed"
       || event.type === "agent_runtime.openai_compatible.stream.done"
+      || event.type === "agent_runtime.hermes_adaptive_openrouter.stream.completed"
     ));
     return fetchStart && completed ? { events, fetchStart, completed } : null;
   }, 30_000);

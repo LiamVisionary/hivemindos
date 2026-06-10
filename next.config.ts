@@ -41,11 +41,23 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   distDir: isTauriDev ? tauriDevDistDir : isTauriStaticBuild ? ".next-tauri-static-build" : isTauriBuild ? ".next-tauri-build" : ".next",
   output: isTauriStaticBuild ? "export" : isTauriBuild ? "standalone" : undefined,
-  typescript: isTauriStaticBuild
-    ? {
-        ignoreBuildErrors: true,
-      }
-    : undefined,
+  // Tauri packaging builds (static export + embedded server) don't gate on
+  // type/lint errors — those are enforced in dev and the standalone `build`/
+  // `lint` scripts + CI. The embedded build additionally compiles paths the
+  // static build hides (API routes, remotion/), so without this it trips on
+  // pre-existing type errors (e.g. an SVG `pathLength` in a Remotion `style`).
+  typescript:
+    isTauriStaticBuild || isTauriBuild
+      ? {
+          ignoreBuildErrors: true,
+        }
+      : undefined,
+  eslint:
+    isTauriStaticBuild || isTauriBuild
+      ? {
+          ignoreDuringBuilds: true,
+        }
+      : undefined,
   trailingSlash: isTauriStaticBuild ? true : undefined,
   images: isTauriStaticBuild || isTauriBuild
     ? {

@@ -3,11 +3,11 @@ import type { RemoteBrainSkillProviderInventory } from "@/lib/services/obsidian/
 
 export async function remoteSkillProviders(
   request: NextRequest,
-  options: { includeSourceFiles?: boolean } = {},
+  options: { includeSourceFiles?: boolean; fleetTimeoutMs?: number; collectorTimeoutMs?: number } = {},
 ): Promise<RemoteBrainSkillProviderInventory[]> {
   const fleetUrl = new URL("/api/fleet/discover", request.url);
   fleetUrl.searchParams.set("includeSnapshots", "0");
-  const fleetResponse = await fetch(fleetUrl, { cache: "no-store", signal: AbortSignal.timeout(12_000) }).catch(() => null);
+  const fleetResponse = await fetch(fleetUrl, { cache: "no-store", signal: AbortSignal.timeout(options.fleetTimeoutMs ?? 12_000) }).catch(() => null);
   if (!fleetResponse?.ok) return [];
   const fleet = await fleetResponse.json().catch(() => null) as {
     machines?: Array<{
@@ -25,7 +25,7 @@ export async function remoteSkillProviders(
     if (options.includeSourceFiles) url.searchParams.set("includeSourceFiles", "true");
     const response = await fetch(url, {
       cache: "no-store",
-      signal: AbortSignal.timeout(options.includeSourceFiles ? 60_000 : 12_000),
+      signal: AbortSignal.timeout(options.collectorTimeoutMs ?? (options.includeSourceFiles ? 60_000 : 12_000)),
     }).catch(() => null);
     if (!response?.ok) return [];
     const payload = await response.json().catch(() => null) as { providers?: RemoteBrainSkillProviderInventory[] } | null;

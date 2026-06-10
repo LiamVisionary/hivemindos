@@ -1,0 +1,18 @@
+{
+  "upstreamName": "make-interfaces-feel-better",
+  "upstreamSlug": "make-interfaces-feel-better",
+  "hiveSlug": "make-interfaces-feel-better",
+  "sourceLabel": "jakubkrehel",
+  "sourceUrl": "https://www.ui-skills.com/skills/jakubkrehel/make-interfaces-feel-better",
+  "repository": "https://github.com/jakubkrehel/make-interfaces-feel-better",
+  "installCommand": "npx skills add https://github.com/jakubkrehel/make-interfaces-feel-better --skill make-interfaces-feel-better",
+  "importedAt": "2026-06-08T15:01:36.467Z",
+  "refreshedAt": "2026-06-08T15:01:36.467Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/jakubkrehel/make-interfaces-feel-better",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Design engineering principles for making interfaces feel polished. Use when building UI components, reviewing frontend code, implementing animations, hover states, shadows, borders, typography, micro-interactions, enter/exit animations, or any visual detail work. Triggers on UI polish, design details, \"make it feel better\", \"feels off\", stagger animations, border radius, optical alignment, font smoothing, tabular numbers, image outlines, box shadows."
+}

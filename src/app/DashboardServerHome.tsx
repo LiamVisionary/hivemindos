@@ -125,7 +125,11 @@ function DashboardUnlock({ params }: { params?: Record<string, string | string[]
             </button>
           </form>
         )}
-        <DashboardUnlockRecovery authSecretPresent={dashboardAuthConfigured()} deviceTokenPresent={dashboardDeviceTokenConfigured()} />
+        <DashboardUnlockRecovery
+          authSecretPresent={dashboardAuthConfigured()}
+          deviceTokenPresent={dashboardDeviceTokenConfigured()}
+          nativeMode={process.env.HIVEMINDOS_NATIVE === "1"}
+        />
       </section>
     </main>
   );

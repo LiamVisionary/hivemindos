@@ -1,0 +1,18 @@
+{
+  "upstreamName": "mastering-animate-presence",
+  "upstreamSlug": "mastering-animate-presence",
+  "hiveSlug": "mastering-animate-presence",
+  "sourceLabel": "raphaelsalaja",
+  "sourceUrl": "https://www.ui-skills.com/skills/raphaelsalaja/mastering-animate-presence",
+  "repository": "https://github.com/raphaelsalaja/skill",
+  "installCommand": "npx skills add https://github.com/raphaelsalaja/skill --skill mastering-animate-presence",
+  "importedAt": "2026-06-08T15:01:45.917Z",
+  "refreshedAt": "2026-06-08T15:01:45.917Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/raphaelsalaja/mastering-animate-presence",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Audit Motion/Framer Motion code for AnimatePresence best practices. Use when reviewing exit animations, modals, or presence state. Outputs file:line findings."
+}

@@ -1,0 +1,18 @@
+{
+  "upstreamName": "swiss-design",
+  "upstreamSlug": "swiss-design",
+  "hiveSlug": "swiss-design",
+  "sourceLabel": "zeke",
+  "sourceUrl": "https://www.ui-skills.com/skills/zeke/swiss-design",
+  "repository": "https://github.com/zeke/swiss-design-skill",
+  "installCommand": "npx skills add https://github.com/zeke/swiss-design-skill --skill swiss-design",
+  "importedAt": "2026-06-08T15:01:52.605Z",
+  "refreshedAt": "2026-06-08T15:01:52.605Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/zeke/swiss-design",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Apply a Swiss International Style design system using Tailwind CSS. Use when asked to style a webpage, clean up a UI, apply a design system, make something look great, or when the user references Swiss design, grotesque fonts, Helvetica, grid systems, modernist typography, or 1960s/1950s design aesthetics. Implements IBM Plex Sans typography, stone color palette, opacity-based hierarchy, generous whitespace, and structured grid layouts."
+}

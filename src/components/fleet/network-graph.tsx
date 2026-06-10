@@ -6,8 +6,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { AddHexCell } from "./add-hex-cell";
 import { MachineCluster, type GraphAgentCapabilityBadgeVariant } from "./machine-cluster";
 import { LottieBee } from "./lottie-bee";
-import { type FleetAgent, type FleetMachine } from "./fleet-data";
+import { type FleetAgent, type FleetAgentChat, type FleetMachine } from "./fleet-data";
 import { axialToPixel, FLEET_GRAPH_CELL_SCALE, HEX_H, HEX_W, hexSpiral } from "./hex-math";
+import type { AeonDeleteDepth, AeonDeleteProgress, AeonDeleteResult, MachineUpdateButtonDetail, MachineUpdateButtonStatus } from "./roster";
 
 interface NetworkGraphProps {
   width?: number;
@@ -20,6 +21,30 @@ interface NetworkGraphProps {
   onSelectAgent: (m: FleetMachine, a: FleetAgent) => void;
   onAddAgent: (m: FleetMachine) => void;
   onAddMachine?: () => void;
+  updateStatusByMachine?: Record<string, MachineUpdateButtonStatus>;
+  updateDetailByMachine?: Record<string, MachineUpdateButtonDetail>;
+  onUpdateMachine?: (m: FleetMachine) => void;
+  onOpenCodeProof?: (m: FleetMachine) => void;
+  onFixSyncIssue?: (m: FleetMachine) => void | Promise<void>;
+  onOpenUsePodHost?: (m: FleetMachine) => void;
+  onOpenShell?: (m: FleetMachine) => void;
+  onOpenChat?: (m: FleetMachine, a: FleetAgent) => void;
+  onOpenTaskChat?: (m: FleetMachine, a: FleetAgent, chat?: FleetAgentChat) => void;
+  onCallAgent?: (m: FleetMachine, a: FleetAgent) => void;
+  onOpenWallet?: (m: FleetMachine, a: FleetAgent) => void;
+  onEditSettings?: (m: FleetMachine, a: FleetAgent) => void;
+  onDuplicate?: (m: FleetMachine, a: FleetAgent) => void;
+  onRemove?: (
+    m: FleetMachine,
+    a: FleetAgent,
+    depth?: AeonDeleteDepth,
+    onProgress?: (progress: AeonDeleteProgress) => void,
+  ) => void | Promise<AeonDeleteResult | void>;
+  selectionTooltipKey?: string | null;
+  onOpenSelectionTooltip?: (key: string) => void;
+  onDismissSelectionTooltip?: () => void;
+  /** `machineId:agentId` of a just-added agent — its hex bounces and the view pans to it. */
+  newAgentKey?: string | null;
   agentCapabilityBadgeVariant?: GraphAgentCapabilityBadgeVariant;
 }
 
@@ -86,6 +111,24 @@ export function NetworkGraph({
   machines, edges,
   selected, selectedAgentId,
   onSelectMachine, onSelectAgent, onAddAgent, onAddMachine,
+  updateStatusByMachine,
+  updateDetailByMachine,
+  onUpdateMachine,
+  onOpenCodeProof,
+  onFixSyncIssue,
+  onOpenUsePodHost,
+  onOpenShell,
+  onOpenChat,
+  onOpenTaskChat,
+  onCallAgent,
+  onOpenWallet,
+  onEditSettings,
+  onDuplicate,
+  onRemove,
+  selectionTooltipKey,
+  onOpenSelectionTooltip,
+  onDismissSelectionTooltip,
+  newAgentKey,
   agentCapabilityBadgeVariant = "side-rails",
 }: NetworkGraphProps) {
   const w = width, h = height;
@@ -102,8 +145,21 @@ export function NetworkGraph({
   const [graphView, setGraphView] = React.useState<GraphViewTransform>({ x: 0, y: 0, zoom: 1 });
   const [dragging, setDragging] = React.useState(false);
   const graphTransform = graphTransformValue(graphView);
-  const [initialLayout] = React.useState(() => makeClusterLayout(machines));
-  const layout = React.useMemo(() => makeClusterLayout(machines, initialLayout), [initialLayout, machines]);
+  const [layoutState, setLayoutState] = React.useState(() => ({
+    machines,
+    layout: makeClusterLayout(machines, sessionClusterLayout),
+  }));
+  let layout = layoutState.layout;
+  if (layoutState.machines !== machines) {
+    // Seed each re-layout from the layout currently on screen so machines keep
+    // their slots when a later data load (e.g. live discovery after the cached
+    // index paint) changes the machines array.
+    layout = makeClusterLayout(machines, layoutState.layout);
+    setLayoutState({ machines, layout });
+  }
+  React.useEffect(() => {
+    sessionClusterLayout = layout;
+  }, [layout]);
   const clusters = assignAddCells(machines.map((m) => ({
     m,
     cx: layout[m.id][0] * w,
@@ -116,6 +172,7 @@ export function NetworkGraph({
     clusters.map((c) => [c.m.id, { x: c.cx, y: c.cy }]),
   );
   const latestBeeGraphRef = React.useRef({ edges, pos });
+  const latestClustersRef = React.useRef(clusters);
   const bounds = React.useMemo(() => contentBounds(clusters, addMachinePoint), [clusters, addMachinePoint]);
 
   const clampPan = React.useCallback((next: { x: number; y: number }, nextZoom: number) => {
@@ -134,6 +191,32 @@ export function NetworkGraph({
   React.useLayoutEffect(() => {
     latestBeeGraphRef.current = { edges, pos };
   }, [edges, pos]);
+
+  React.useLayoutEffect(() => {
+    latestClustersRef.current = clusters;
+  });
+
+  // Pan the graph so a just-added agent's hex lands in view while it bounces.
+  React.useEffect(() => {
+    if (!newAgentKey) return;
+    const element = viewportRef.current;
+    if (!element || !element.clientWidth || !element.clientHeight) return;
+    const cluster = latestClustersRef.current.find((c) =>
+      c.m.agents.some((a) => `${c.m.id}:${a.id}` === newAgentKey),
+    );
+    if (!cluster) return;
+    const agentIndex = cluster.m.agents.findIndex((a) => `${cluster.m.id}:${a.id}` === newAgentKey);
+    const cell = hexSpiral(cluster.m.agents.length + 1)[agentIndex + 1] ?? [0, 0];
+    const offset = axialToPixel(cell[0], cell[1]);
+    const target = { x: cluster.cx + offset.x, y: cluster.cy + offset.y };
+    const current = graphViewRef.current;
+    const nextBounds = boundsRef.current;
+    applyGraphView({
+      ...current,
+      x: clampAxis(element.clientWidth / 2 - target.x * current.zoom, element.clientWidth, nextBounds.minX, nextBounds.maxX, current.zoom),
+      y: clampAxis(element.clientHeight / 2 - target.y * current.zoom, element.clientHeight, nextBounds.minY, nextBounds.maxY, current.zoom),
+    });
+  }, [applyGraphView, newAgentKey]);
 
   React.useLayoutEffect(() => {
     boundsRef.current = bounds;
@@ -365,6 +448,24 @@ export function NetworkGraph({
           onSelectMachine={() => onSelectMachine(c.m.id)}
           onSelectAgent={onSelectAgent}
           onAddAgent={onAddAgent}
+          updateStatus={updateStatusByMachine?.[c.m.id]}
+          updateDetail={updateDetailByMachine?.[c.m.id]}
+          onUpdateMachine={onUpdateMachine}
+          onOpenCodeProof={onOpenCodeProof}
+          onFixSyncIssue={onFixSyncIssue}
+          onOpenUsePodHost={onOpenUsePodHost}
+          onOpenShell={onOpenShell}
+          onOpenChat={onOpenChat}
+          onOpenTaskChat={onOpenTaskChat}
+          onCallAgent={onCallAgent}
+          onOpenWallet={onOpenWallet}
+          onEditSettings={onEditSettings}
+          onDuplicate={onDuplicate}
+          onRemove={onRemove}
+          selectionTooltipKey={selectionTooltipKey}
+          onOpenSelectionTooltip={onOpenSelectionTooltip}
+          onDismissSelectionTooltip={onDismissSelectionTooltip}
+          newAgentKey={newAgentKey}
         />
       ))}
 
@@ -429,12 +530,20 @@ export function NetworkGraph({
   );
 }
 
+// Latest committed layout for this session, so a remount (view switch, loading
+// skeleton swap) restores the same arrangement instead of re-seeding from scratch.
+let sessionClusterLayout: Record<string, [number, number]> = {};
+
 function makeClusterLayout(machines: FleetMachine[], previousLayout: Record<string, [number, number]> = {}) {
   const fallback: Record<string, [number, number]> = {};
   const usedSlots = new Set<number>();
-  [...machines].sort((left, right) => (
+  const sorted = [...machines].sort((left, right) => (
     layoutSortKey(left).localeCompare(layoutSortKey(right))
-  )).forEach((machine) => {
+  ));
+  // Two passes: machines keep their previous slot before any newcomer is placed,
+  // so a machine arriving in a later data load cannot displace one already on screen.
+  const unplaced: FleetMachine[] = [];
+  sorted.forEach((machine) => {
     const previousSlot = previousLayoutSlot(machine, previousLayout);
     if (previousSlot !== null && !usedSlots.has(previousSlot)) {
       usedSlots.add(previousSlot);
@@ -442,6 +551,9 @@ function makeClusterLayout(machines: FleetMachine[], previousLayout: Record<stri
       fallback[machineLayoutIdentity(machine)] = FALLBACK_LAYOUT_SLOTS[previousSlot];
       return;
     }
+    unplaced.push(machine);
+  });
+  unplaced.forEach((machine) => {
     const slotIndex = nextAvailableLayoutSlot(preferredLayoutSlot(machine), usedSlots);
     usedSlots.add(slotIndex);
     fallback[machine.id] = FALLBACK_LAYOUT_SLOTS[slotIndex];

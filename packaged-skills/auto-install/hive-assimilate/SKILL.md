@@ -112,11 +112,26 @@ python3 /Users/liam/.codex/skills/hive-assimilate/scripts/search_github_public.p
   "expo react native chatbot talking anime character voice" --limit 30
 ```
 
+Inspect planned public GitHub queries without spending search calls:
+
+```bash
+python3 /Users/liam/.codex/skills/hive-assimilate/scripts/search_github_public.py \
+  "HivemindOS Syncthing repair rescan reconnect" --print-queries
+```
+
 For build requests without a pinned source, prefer the blocking prebuild command after shared-brain and workspace search:
 
 ```bash
 python3 /Users/liam/.codex/skills/hive-assimilate/scripts/prebuild_assimilation_check.py \
   "Build me a personal finance dashboard that connects to imported bank CSVs"
+```
+
+The public-search default is intentionally bounded (`--max-queries 4`, `--per-query-limit 8`, `--min-fit-score 5.5`) so normal build requests do not burn time, GitHub rate limit, or attention on weak matches. Use a deliberate deep search only when the first pass misses reusable primitives:
+
+```bash
+python3 /Users/liam/.codex/skills/hive-assimilate/scripts/search_github_public.py \
+  "Cloudflare D1 prepaid credits ledger HMAC signed receipts TypeScript" \
+  --max-queries 8 --per-query-limit 12 --min-fit-score 4
 ```
 
 Audit a candidate before assimilating it:
@@ -189,6 +204,13 @@ python3 /Users/liam/.codex/skills/hive-assimilate/scripts/log_assimilation_decis
 ```
 
 When a candidate looked promising but was rejected, log it immediately instead of relying on memory.
+
+Keep logs compact and structured:
+
+- Prefer `--payload '{"candidates":[...]}'` or repeated `--candidate` values over pasting raw search output into `--note`.
+- Use notes only for short human context; the logger truncates long notes and descriptions by design.
+- A failed logger write is a failed prebuild gate. Fix the log error instead of silently continuing.
+- Normalize candidate decisions to a small vocabulary such as `selected`, `selected-donor`, `rejected`, `inspected`, `adapted_code`, `copied_code`, `not-assimilated`, or `reference-only`.
 
 Final answers for build tasks must include:
 

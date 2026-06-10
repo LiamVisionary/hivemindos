@@ -219,7 +219,7 @@ export function SchedulerPanel(props: any) {
                       </div>
                       {step.paths.length || step.skills.length ? (
                         <div className={fleetClass("schedulerStepBadges")}>
-                          {step.paths.map((path) => (
+                          {[...new Set(step.paths)].map((path) => (
                             <span className={fleetClass("schedulerAttachmentBadge", isSchedulerFilePath(path) ? "file" : "path")} key={path} title={path}>
                               {isSchedulerFilePath(path) ? <FileText aria-hidden="true" /> : <FolderOpen aria-hidden="true" />}
                               {path.split("/").filter(Boolean).pop() || path}
@@ -228,7 +228,7 @@ export function SchedulerPanel(props: any) {
                               ) : null}
                             </span>
                           ))}
-                          {step.skills.map((slug) => {
+                          {[...new Set(step.skills)].map((slug) => {
                             const skill = sharedSkillOptions.find((item) => item.slug === slug);
                             return (
                               <span className={fleetClass("schedulerAttachmentBadge", "skill")} key={slug}>
@@ -404,7 +404,7 @@ export function SchedulerPanel(props: any) {
               )}
               {scheduleDraft.mode === "prompt" && (scheduleDraft.skills.length || scheduleDraft.paths.length) ? (
                 <div className={fleetClass("schedulerAttachmentBadges")} aria-label="Scheduler attachments">
-                  {scheduleDraft.skills.map((slug) => {
+                  {[...new Set(scheduleDraft.skills)].map((slug) => {
                     const skill = sharedSkillOptions.find((item) => item.slug === slug);
                     return (
                       <span className={fleetClass("schedulerAttachmentBadge", "skill")} key={slug}>
@@ -414,7 +414,7 @@ export function SchedulerPanel(props: any) {
                       </span>
                     );
                   })}
-                  {scheduleDraft.paths.map((path) => (
+                  {[...new Set(scheduleDraft.paths)].map((path) => (
                     <span className={fleetClass("schedulerAttachmentBadge", "path")} key={path}>
                       {path.includes(".") ? <FileText aria-hidden="true" /> : <FolderOpen aria-hidden="true" />}
                       {path.split("/").filter(Boolean).pop() || path}
@@ -601,8 +601,8 @@ export function SchedulerPanel(props: any) {
                   <p>{schedule.lastSummary || (schedule.mode === "steps" ? `${schedule.steps.length} step runbook` : schedule.prompt)}</p>
                   {schedule.skills.length || schedule.paths.length ? (
                     <div className={fleetClass("scheduleSkillRow")}>
-                      {schedule.skills.slice(0, 4).map((skill) => <span key={skill}><Puzzle aria-hidden="true" /> {skill}</span>)}
-                      {schedule.paths.slice(0, 3).map((path) => <span key={path}><Paperclip aria-hidden="true" /> {path.split("/").filter(Boolean).pop() || path}</span>)}
+                      {[...new Set(schedule.skills)].slice(0, 4).map((skill) => <span key={skill}><Puzzle aria-hidden="true" /> {skill}</span>)}
+                      {[...new Set(schedule.paths)].slice(0, 3).map((path) => <span key={path}><Paperclip aria-hidden="true" /> {path.split("/").filter(Boolean).pop() || path}</span>)}
                     </div>
                   ) : null}
                   {schedule.usePastRuns || schedule.sharedRunFolder ? (

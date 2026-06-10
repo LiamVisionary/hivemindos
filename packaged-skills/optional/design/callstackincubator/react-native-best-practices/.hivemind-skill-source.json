@@ -1,0 +1,18 @@
+{
+  "upstreamName": "react-native-best-practices",
+  "upstreamSlug": "react-native-best-practices",
+  "hiveSlug": "react-native-best-practices",
+  "sourceLabel": "callstackincubator",
+  "sourceUrl": "https://www.ui-skills.com/skills/callstackincubator/react-native-best-practices",
+  "repository": "https://github.com/callstackincubator/agent-skills",
+  "installCommand": "npx skills add https://github.com/callstackincubator/agent-skills --skill react-native-best-practices",
+  "importedAt": "2026-06-08T15:01:30.632Z",
+  "refreshedAt": "2026-06-08T15:01:30.632Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/callstackincubator/react-native-best-practices",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Provides React Native performance optimization guidelines for FPS, TTI, bundle size, memory leaks, re-renders, and animations. Applies to tasks involving Hermes optimization, JS thread blocking, bridge overhead, FlashList, native modules, or debugging jank and frame drops."
+}

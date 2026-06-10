@@ -1,0 +1,18 @@
+{
+  "upstreamName": "design-lab",
+  "upstreamSlug": "design-lab",
+  "hiveSlug": "design-lab",
+  "sourceLabel": "0xdesign",
+  "sourceUrl": "https://www.ui-skills.com/skills/0xdesign/design-lab",
+  "repository": "https://github.com/0xdesign/design-plugin",
+  "installCommand": "npx skills add https://github.com/0xdesign/design-plugin --skill design-lab",
+  "importedAt": "2026-06-08T15:01:22.990Z",
+  "refreshedAt": "2026-06-08T15:01:22.991Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/0xdesign/design-lab",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Conduct design interviews, generate five distinct UI variations in a temporary design lab, collect feedback, and produce implementation plans. Use when the user wants to explore UI design options, redesign existing components, or create new UI with multiple approaches to compare."
+}

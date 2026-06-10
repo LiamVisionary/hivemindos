@@ -16,6 +16,11 @@ packaged-skills/
     <slug>/
       SKILL.md
       ...
+    <category>/
+      <source>/
+        <slug>/
+          SKILL.md
+          ...
 ```
 
 ## Auto-Install
@@ -44,6 +49,12 @@ Any packaged skill addition, removal, rename, install-policy change, or source r
 
 Skills in `optional/` are a store/catalog for later one-click install. They must not be automatically copied into the shared brain, mirrored into runtime skill folders, or injected into agent context.
 
-When a user installs an optional skill, the app should copy that skill from `packaged-skills/optional/<slug>/` into the configured shared brain `Skills/<slug>/` folder and rebuild the shared skill index.
+Optional skills may be flat (`packaged-skills/optional/<slug>/`) or grouped by catalog category (`packaged-skills/optional/<category>/<source>/<slug>/`). When a user installs an optional skill, the app should copy the selected package directory into the configured shared brain `Skills/<slug>/` folder and rebuild the shared skill index.
+
+Grouped optional directories can also expose a whole-directory pack in the Skill Browser's Packs tab. Installing that pack copies every packaged skill in the directory into the shared brain in one pass, still using local package files and audit checks instead of upstream installer commands.
+
+Current optional catalog:
+
+- `design/`: 109 optional UI and design-engineering skills imported from the UI Skills directory, preserving upstream source namespaces as `design/<source>/<skill>/` and available as the `Design Optional Skills Directory` pack.
 
 Keep packaged skills self-contained, user-safe, and installable without relying on Liam's local agent runtime paths.

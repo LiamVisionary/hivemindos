@@ -1,0 +1,18 @@
+{
+  "upstreamName": "create-adaptable-composable",
+  "upstreamSlug": "create-adaptable-composable",
+  "hiveSlug": "create-adaptable-composable",
+  "sourceLabel": "vuejs-ai",
+  "sourceUrl": "https://www.ui-skills.com/skills/vuejs-ai/create-adaptable-composable",
+  "repository": "https://github.com/vuejs-ai/skills",
+  "installCommand": "npx skills add https://github.com/vuejs-ai/skills --skill create-adaptable-composable",
+  "importedAt": "2026-06-08T15:01:49.798Z",
+  "refreshedAt": "2026-06-08T15:01:49.798Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/vuejs-ai/create-adaptable-composable",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Create a library-grade Vue composable that accepts maybe-reactive inputs (MaybeRef / MaybeRefOrGetter) so callers can pass a plain value, ref, or getter. Normalize inputs with toValue()/toRef() inside reactive effects (watch/watchEffect) to keep behavior predictable and reactive. Use this skill when user asks for creating adaptable or reusable composables."
+}

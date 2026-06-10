@@ -12,8 +12,16 @@ function TooltipProvider({
   return <TooltipPrimitive.Provider data-slot="tooltip-provider" delayDuration={delayDuration} {...props} />;
 }
 
-function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />;
+function Tooltip(rawProps: React.ComponentProps<typeof TooltipPrimitive.Root>) {
+  const { open, ...props } = rawProps;
+  const hasControlledOpen = Object.prototype.hasOwnProperty.call(rawProps, "open");
+  return (
+    <TooltipPrimitive.Root
+      data-slot="tooltip"
+      {...props}
+      {...(hasControlledOpen ? { open: Boolean(open) } : {})}
+    />
+  );
 }
 
 function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
@@ -21,11 +29,14 @@ function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimiti
 }
 
 function TooltipContent({
+  arrowClassName,
   className,
   sideOffset = 6,
   children,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+}: React.ComponentProps<typeof TooltipPrimitive.Content> & {
+  arrowClassName?: string;
+}) {
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
@@ -38,7 +49,7 @@ function TooltipContent({
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className="fill-[#0b1018]" />
+        <TooltipPrimitive.Arrow className={cn("fill-[#0b1018]", arrowClassName)} />
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   );

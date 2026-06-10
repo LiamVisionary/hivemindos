@@ -5,6 +5,11 @@ import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { readVaultAgentProfiles } from "@/lib/services/obsidian/agent-profiles";
 import { readGatewayVoiceConfig, readGatewayVoiceDeviceStatus, ringAgentCall, ringStoredPrompt, startAgentDashboardCall, startAgentMobileCall } from "@/lib/services/phone/call-gateway";
+import { streamLocalTtsSpeech } from "@/lib/services/phone/local-tts";
+import { createRealtimeTranscriptionClientSecret, transcribeAudioWithWhisper } from "@/lib/services/phone/transcription";
+import { runChatImageGeneration } from "@/lib/services/chat/image-generation";
+import { cacheGeneratedImageForPhone } from "@/lib/services/chat/generated-media-cache";
+import { signedGeneratedMediaUrl } from "@/lib/services/chat/generated-media-signing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +24,8 @@ export const dynamic = "force-dynamic";
 //   <spoken instructions / prompt body>
 const PRIMARY_FOLDER = "Operations/Automations/Calls";
 const LEGACY_FOLDER = "Claw/Calls";
+const VOICE_RUNTIME_TURN_TIMEOUT_MS = 15_000;
+const VOICE_RUNTIME_CONNECT_TIMEOUT_MS = 30_000;
 
 type CallPrompt = {
   id: string;
@@ -61,6 +68,27 @@ function safeVoiceConfigPayload(result: Awaited<ReturnType<typeof readGatewayVoi
     voice: "Gateway default",
     source: "runtime-default",
   }];
+  const rawVoiceOptions = Array.isArray(config.voiceOptions) ? config.voiceOptions : [];
+  const extraVoiceOptions = rawVoiceOptions
+    .filter((provider) => provider && typeof provider === "object")
+    .map((provider) => provider as Record<string, unknown>)
+    .filter((provider) => provider.provider === "local-tts")
+    .map((provider) => ({
+      id: typeof provider.id === "string" ? provider.id : "",
+      provider: "local-tts",
+      voice: typeof provider.voice === "string" ? provider.voice : "",
+      model: typeof provider.model === "string" ? provider.model : undefined,
+      appName: typeof provider.appName === "string" ? provider.appName : undefined,
+      machineName: typeof provider.machineName === "string" ? provider.machineName : undefined,
+      source: "configured",
+    }))
+    .filter((provider) => provider.id && provider.voice);
+  const localTtsCandidates = Array.isArray(config.localTtsCandidates)
+    ? config.localTtsCandidates.filter((candidate) => candidate && typeof candidate === "object")
+    : [];
+  const callModes = Array.isArray(config.callModes)
+    ? config.callModes.filter((mode) => mode && typeof mode === "object")
+    : [];
   return {
     ...result,
     result: {
@@ -75,7 +103,9 @@ function safeVoiceConfigPayload(result: Awaited<ReturnType<typeof readGatewayVoi
         dailyEnabled: Boolean(config.dailyEnabled),
         dailyCallTime: typeof config.dailyCallTime === "string" ? config.dailyCallTime : undefined,
         voiceProviders,
-        voiceOptions,
+        voiceOptions: [...voiceOptions, ...extraVoiceOptions],
+        localTtsCandidates,
+        callModes,
       },
     },
   };
@@ -137,17 +167,119 @@ function hubUrlFromRequest(request: NextRequest, explicit?: unknown) {
   return request.nextUrl.origin.replace(/\/+$/, "");
 }
 
+function voiceOptimizedAgent(agent: AgentProfile): AgentProfile {
+  const fallback = agent.adaptiveOpenRouter?.fallbackModel?.trim() || agent.adaptiveRouting?.fallbackModel?.trim();
+  const provider = agent.provider?.trim().toLowerCase();
+  const model = agent.model?.trim().toLowerCase();
+  if (provider === "openrouter" && model === "adaptive" && fallback) {
+    return { ...agent, model: fallback };
+  }
+  return agent;
+}
+
 function sseTextFromPayload(raw: string) {
   if (!raw || raw === "[DONE]") return "";
   try {
     const parsed = JSON.parse(raw) as {
       choices?: Array<{ delta?: { content?: string }; message?: { content?: string } }>;
+      event?: { delta?: string; content?: string; error?: string };
+      delta?: string;
+      content?: string;
+      text?: string;
       error?: string;
     };
-    return parsed.choices?.map((choice) => choice.delta?.content || choice.message?.content || "").join("") || parsed.error || "";
+    const error = typeof parsed.error === "string" ? parsed.error : parsed.event?.error || "";
+    if (error.trim()) throw new Error(error.trim());
+    const text = parsed.choices?.map((choice) => choice.delta?.content || choice.message?.content || "").join("")
+      || parsed.event?.delta
+      || parsed.event?.content
+      || parsed.delta
+      || parsed.content
+      || parsed.text
+      || "";
+    if (/^\s*(?:we need|we are asked|the user asked|i need to|let's|first,)/i.test(text)) return "";
+    return text;
   } catch {
     return "";
   }
+}
+
+function sseErrorFromPayload(raw: string) {
+  if (!raw || raw === "[DONE]") return "";
+  try {
+    const parsed = JSON.parse(raw) as {
+      type?: string;
+      error?: string | { message?: string };
+      event?: { error?: string };
+    };
+    if (parsed.type === "chat.error") {
+      return typeof parsed.error === "string" ? parsed.error : parsed.error?.message || parsed.event?.error || "Runtime returned an error.";
+    }
+    return typeof parsed.error === "string" ? parsed.error : parsed.error?.message || parsed.event?.error || "";
+  } catch {
+    return "";
+  }
+}
+
+function linkedAbortSignal(signals: AbortSignal[], timeoutMs: number) {
+  const activeSignals = signals.filter(Boolean);
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  return anyAbortSignal([...activeSignals, timeoutSignal]);
+}
+
+function anyAbortSignal(signals: AbortSignal[]) {
+  const activeSignals = signals.filter(Boolean);
+  const abortSignalWithAny = AbortSignal as typeof AbortSignal & {
+    any?: (signals: AbortSignal[]) => AbortSignal;
+  };
+  if (typeof abortSignalWithAny.any === "function") {
+    return abortSignalWithAny.any(activeSignals);
+  }
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  for (const signal of activeSignals) {
+    if (signal.aborted) {
+      controller.abort();
+      break;
+    }
+    signal.addEventListener("abort", abort, { once: true });
+  }
+  return controller.signal;
+}
+
+function spokenVoiceRuntimeFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  if (/missing runtime chat url/i.test(message)) return "That agent is missing its local runtime URL, so I can't reach it for this call yet.";
+  if (/abort|timeout|timed out/i.test(message)) return "That agent is taking too long to answer. Try again in a moment, or switch to a faster model for calls.";
+  return "I couldn't reach that agent for this call. Try again in a moment.";
+}
+
+async function fetchRuntimeVoiceTurn(request: NextRequest, body: Record<string, unknown>, signal?: AbortSignal) {
+  const rawAgent = body.agent && typeof body.agent === "object" ? body.agent as AgentProfile : null;
+  const message = typeof body.message === "string" ? body.message.trim() : "";
+  const resolvedAgent = rawAgent ? await resolveVoiceCallAgent(rawAgent) : null;
+  const agent = resolvedAgent ? voiceOptimizedAgent(resolvedAgent) : null;
+  if (!agent?.id || !agent.runtime) throw new Error("A voice-call agent target is required.");
+  if (!message) throw new Error("A spoken request is required.");
+  return fetch(new URL("/api/chat/agent-runtime", request.url), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      agent,
+      messages: [
+        {
+          role: "system",
+          content: "You are speaking on a live phone call. Reply directly in one or two short spoken sentences. Do not explain your reasoning, quote instructions, mention providers, or include preambles.",
+        },
+        { role: "user", content: message },
+      ],
+      runtimeSessionId: typeof body.runtimeSessionId === "string" ? body.runtimeSessionId : `voice-${agent.id}`,
+      agentMode: "act",
+      latencyMode: "voice",
+    }),
+    cache: "no-store",
+    signal: signal ?? linkedAbortSignal([request.signal], VOICE_RUNTIME_TURN_TIMEOUT_MS),
+  });
 }
 
 async function readRuntimeResponseText(response: Response) {
@@ -180,25 +312,241 @@ async function readRuntimeResponseText(response: Response) {
 }
 
 async function runAgentVoiceTurn(request: NextRequest, body: Record<string, unknown>) {
-  const rawAgent = body.agent && typeof body.agent === "object" ? body.agent as AgentProfile : null;
-  const message = typeof body.message === "string" ? body.message.trim() : "";
-  const agent = rawAgent ? await resolveVoiceCallAgent(rawAgent) : null;
-  if (!agent?.id || !agent.runtime) throw new Error("A voice-call agent target is required.");
-  if (!message) throw new Error("A spoken request is required.");
-  const runtimeResponse = await fetch(new URL("/api/chat/agent-runtime", request.url), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      agent,
-      messages: [{ role: "user", content: message }],
-      runtimeSessionId: typeof body.runtimeSessionId === "string" ? body.runtimeSessionId : `voice-${agent.id}`,
-      agentMode: "act",
-    }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(120_000),
-  });
+  const runtimeResponse = await fetchRuntimeVoiceTurn(request, body);
   const text = await readRuntimeResponseText(runtimeResponse);
   return { ok: true, text: text || "The agent completed the request without a spoken response." };
+}
+
+async function streamAgentVoiceTurn(request: NextRequest, body: Record<string, unknown>) {
+  const runtimeResponse = await fetchRuntimeVoiceTurn(request, body);
+  const headers = new Headers({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+  });
+  if (!runtimeResponse.body || !runtimeResponse.headers.get("content-type")?.includes("text/event-stream")) {
+    const text = await readRuntimeResponseText(runtimeResponse).catch((error) => error instanceof Error ? error.message : `Runtime returned HTTP ${runtimeResponse.status}.`);
+    return new Response(`data: ${JSON.stringify(runtimeResponse.ok ? { choices: [{ delta: { content: text } }] } : { error: text })}\n\ndata: [DONE]\n\n`, {
+      status: runtimeResponse.ok ? 200 : runtimeResponse.status,
+      headers,
+    });
+  }
+  return new Response(runtimeResponse.body, {
+    status: runtimeResponse.status,
+    headers,
+  });
+}
+
+function pullSpeakableSegments(text: string, force = false, options?: { fastFirstSegment?: boolean }) {
+  const segments: string[] = [];
+  let rest = text;
+  for (;;) {
+    const match = /[.!?。！？](?:\s+|$)|\n{2,}/.exec(rest);
+    if (!match) break;
+    const end = match.index + match[0].length;
+    const segment = rest.slice(0, end).trim();
+    if (segment) segments.push(segment);
+    rest = rest.slice(end).trimStart();
+  }
+  if (!force && options?.fastFirstSegment && !segments.length && rest.length > 42) {
+    const clauseMatch = /[,;:](?:\s+|$)|\s+-\s+/.exec(rest);
+    const clauseEnd = clauseMatch && clauseMatch.index > 18 && clauseMatch.index < 70
+      ? clauseMatch.index + clauseMatch[0].length
+      : -1;
+    const splitAt = clauseEnd > 0 ? clauseEnd : rest.lastIndexOf(" ", 56);
+    if (splitAt > 24) {
+      const segment = rest.slice(0, splitAt).trim();
+      if (segment) segments.push(segment);
+      rest = rest.slice(splitAt).trimStart();
+    }
+  }
+  if (!force && rest.length > 90) {
+    const clauseAt = Math.max(
+      rest.lastIndexOf(",", 90),
+      rest.lastIndexOf(";", 90),
+      rest.lastIndexOf(":", 90),
+      rest.lastIndexOf(" - ", 90),
+    );
+    const splitAt = clauseAt > 36 ? clauseAt + 1 : rest.lastIndexOf(" ", 76);
+    if (splitAt > 36) {
+      const segment = rest.slice(0, splitAt).trim();
+      if (segment) segments.push(segment);
+      rest = rest.slice(splitAt).trimStart();
+    }
+  }
+  if (force && rest.trim()) {
+    segments.push(rest.trim());
+    rest = "";
+  }
+  return { rest, segments };
+}
+
+function isUnspeakableVoicePreamble(text: string) {
+  return /^\s*(?:we need|we are asked|the user asked|i need to|let's|first,|the scenario says|the instruction says)/i.test(text);
+}
+
+async function streamAgentLocalTtsAudio(request: NextRequest, body: Record<string, unknown>) {
+  const localTts = body.localTts && typeof body.localTts === "object" ? body.localTts as Record<string, unknown> : {};
+  const appId = typeof localTts.appId === "string" ? localTts.appId.trim() : "";
+  const model = typeof localTts.model === "string" ? localTts.model.trim() : "";
+  const voice = typeof localTts.voice === "string" ? localTts.voice.trim() : "";
+  const message = typeof body.message === "string" ? body.message.trim() : "";
+  if (!appId) throw new Error("A validated local TTS app is required.");
+  if (!message) throw new Error("A spoken request is required.");
+
+  const streamAbort = new AbortController();
+  const streamSignal = linkedAbortSignal([request.signal, streamAbort.signal], 120_000);
+  const runtimeConnectAbort = new AbortController();
+  const runtimeConnectTimeout = setTimeout(() => runtimeConnectAbort.abort(), VOICE_RUNTIME_CONNECT_TIMEOUT_MS);
+  const runtimeResponse = await fetchRuntimeVoiceTurn(
+    request,
+    body,
+    anyAbortSignal([request.signal, streamAbort.signal, runtimeConnectAbort.signal]),
+  ).finally(() => clearTimeout(runtimeConnectTimeout));
+  if (!runtimeResponse.ok) {
+    const text = await readRuntimeResponseText(runtimeResponse).catch((error) => error instanceof Error ? error.message : `Runtime returned HTTP ${runtimeResponse.status}.`);
+    return Response.json({ ok: false, error: text || `Runtime returned HTTP ${runtimeResponse.status}.` }, { status: runtimeResponse.status });
+  }
+  if (!runtimeResponse.body) {
+    return Response.json({ ok: false, error: "Runtime returned an empty stream." }, { status: 502 });
+  }
+
+  const encoderHeaders = new Headers();
+  encoderHeaders.set("Content-Type", "audio/pcm");
+  encoderHeaders.set("Cache-Control", "no-store, no-transform");
+  encoderHeaders.set("x-audio-sample-rate", String(Number(localTts.sampleRate) || 24_000));
+  encoderHeaders.set("x-audio-channels", String(Number(localTts.channels) || 1));
+  encoderHeaders.set("x-audio-sample-format", typeof localTts.sampleFormat === "string" ? localTts.sampleFormat : "pcm16");
+  encoderHeaders.set("x-hivemindos-orchestrator", "local-tts-agent-audio-stream");
+  if (typeof localTts.streamingImplementation === "string") {
+    encoderHeaders.set("x-universal-tts-streaming-implementation", localTts.streamingImplementation);
+  }
+
+  const readable = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const runtimeReader = runtimeResponse.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let pendingText = "";
+      let spoke = false;
+
+      const speakSegment = async (segment: string) => {
+      const text = segment.trim();
+      if (!text) return;
+      if (isUnspeakableVoicePreamble(text)) return;
+      spoke = true;
+      const ttsText = /[.!?。！？]$/.test(text) ? text : `${text}.`;
+      const ttsResponse = await streamLocalTtsSpeech({
+        origin: request.nextUrl.origin,
+        appId,
+        model,
+        voice,
+        text: ttsText,
+        utteranceId: `voice_${Date.now()}`,
+        signal: streamSignal,
+      });
+        if (!ttsResponse.ok || !ttsResponse.body) {
+          const errorText = await ttsResponse.text().catch(() => "");
+          throw new Error(errorText || `Local TTS returned HTTP ${ttsResponse.status}.`);
+        }
+        const ttsReader = ttsResponse.body.getReader();
+        try {
+          for (;;) {
+            const { value, done } = await ttsReader.read();
+            if (done) break;
+            if (value?.byteLength) controller.enqueue(value);
+          }
+        } finally {
+          await ttsReader.cancel().catch(() => undefined);
+        }
+      };
+
+      const acceptText = async (chunk: string, force = false) => {
+        pendingText += chunk;
+        const pulled = pullSpeakableSegments(pendingText, force, { fastFirstSegment: !spoke });
+        pendingText = pulled.rest;
+        for (const segment of pulled.segments) await speakSegment(segment);
+      };
+
+      try {
+        while (runtimeReader) {
+          const { value, done } = await runtimeReader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const frames = buffer.split(/\n\n/);
+          buffer = frames.pop() ?? "";
+          for (const frame of frames) {
+            const data = frame.split(/\n/).filter((line) => line.startsWith("data: ")).map((line) => line.slice(6)).join("\n");
+            if (data === "[DONE]") continue;
+            const error = sseErrorFromPayload(data);
+            if (error) throw new Error(error);
+            await acceptText(sseTextFromPayload(data));
+          }
+        }
+        if (buffer) {
+          const data = buffer.split(/\n/).filter((line) => line.startsWith("data: ")).map((line) => line.slice(6)).join("\n");
+          const error = sseErrorFromPayload(data);
+          if (error) throw new Error(error);
+          await acceptText(sseTextFromPayload(data));
+        }
+        await acceptText("", true);
+        if (!spoke) await speakSegment("The agent completed the request without a spoken response.");
+        controller.close();
+      } catch (error) {
+        if (!spoke && !streamSignal.aborted) {
+          try {
+            await speakSegment(spokenVoiceRuntimeFailure(error));
+            controller.close();
+            return;
+          } catch {
+            // Fall through to the real stream error when even the fallback cannot be spoken.
+          }
+        }
+        controller.error(error);
+      } finally {
+        await runtimeReader?.cancel().catch(() => undefined);
+      }
+    },
+    cancel() {
+      streamAbort.abort();
+    },
+  });
+
+  return new Response(readable, { headers: encoderHeaders });
+}
+
+function formValue(form: FormData, key: string) {
+  const value = form.get(key);
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function formJsonValue(form: FormData, key: string) {
+  const raw = formValue(form, key);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+async function streamLocalTtsAudioTurnFromForm(request: NextRequest, form: FormData) {
+  const audio = form.get("audio");
+  if (!(audio instanceof Blob)) throw new Error("An audio recording is required.");
+  const signal = linkedAbortSignal([request.signal], 120_000);
+  const message = await transcribeAudioWithWhisper(audio, signal);
+  const body: Record<string, unknown> = {
+    action: "local-tts-agent-audio-stream",
+    localTts: formJsonValue(form, "localTts"),
+    agent: formJsonValue(form, "agent"),
+    machine: formJsonValue(form, "machine"),
+    runtimeSessionId: formValue(form, "runtimeSessionId"),
+    message,
+  };
+  const response = await streamAgentLocalTtsAudio(request, body);
+  response.headers.set("x-hivemindos-stt-provider", "whisper");
+  response.headers.set("x-hivemindos-transcript", encodeURIComponent(message.slice(0, 500)));
+  return response;
 }
 
 async function resolveVoiceCallAgent(agent: AgentProfile): Promise<AgentProfile> {
@@ -361,8 +709,72 @@ async function syncStatus(request: NextRequest, vaultPath: string) {
 }
 
 function errorResponse(error: unknown) {
-  const message = error instanceof Error ? error.message : "Phone request failed.";
+  // Undici network failures throw TypeError("fetch failed") with the real
+  // reason (ECONNREFUSED, ENOTFOUND, …) hidden in `cause` — surface it, or
+  // the phone shows a bare "fetch failed" with nothing to act on.
+  const cause = error instanceof Error && error.cause instanceof Error ? `: ${error.cause.message}` : "";
+  const message = error instanceof Error ? `${error.message}${cause}` : "Phone request failed.";
   return NextResponse.json({ ok: false, error: message }, { status: 400 });
+}
+
+/**
+ * Phone-facing image generation. Runs the same orchestration as the
+ * dashboard's /api/chat/image-generation, then pulls every result image onto
+ * hub disk (connected apps often answer with hub-only URLs like
+ * http://127.0.0.1:7860/… that the phone can't reach) and answers with
+ * short-lived signed /api/chat/generated-media URLs. The phone downloads each
+ * image once over the tailnet and stores it locally with the thread.
+ */
+async function runPhoneImageGeneration(request: NextRequest, body: Record<string, unknown>) {
+  const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+  const prompt = text(body.prompt);
+  if (!prompt) {
+    return { payload: { ok: false, error: "An image prompt is required." }, status: 400 };
+  }
+  const result = await runChatImageGeneration({
+    origin: request.nextUrl.origin,
+    prompt,
+    appId: text(body.appId) || undefined,
+    serviceKind: text(body.serviceKind) || undefined,
+    model: text(body.model) || undefined,
+    runId: text(body.runId) || undefined,
+  });
+  if (!result.ok) {
+    return { payload: { ok: false, error: result.error }, status: result.status };
+  }
+
+  const images: { url: string; width?: number; height?: number; seed?: string | number }[] = [];
+  let firstFailure = "";
+  for (const image of result.images) {
+    try {
+      const path = await cacheGeneratedImageForPhone(image.url);
+      images.push({
+        url: await signedGeneratedMediaUrl(path),
+        width: image.width,
+        height: image.height,
+        seed: image.seed,
+      });
+    } catch (error) {
+      firstFailure ||= error instanceof Error ? error.message : "Generated image could not be prepared for the phone.";
+    }
+  }
+  if (images.length === 0) {
+    return {
+      payload: { ok: false, error: firstFailure || "Generated images could not be prepared for the phone." },
+      status: 502,
+    };
+  }
+  return {
+    payload: {
+      ok: true,
+      prompt: result.prompt,
+      app: result.app,
+      endpoint: result.endpoint,
+      images,
+      rawStatus: result.rawStatus,
+    },
+    status: 200,
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -370,7 +782,7 @@ export async function GET(request: NextRequest) {
     const action = request.nextUrl.searchParams.get("action");
 
     if (action === "voice-config") {
-      const result = await readGatewayVoiceConfig();
+      const result = await readGatewayVoiceConfig(request.nextUrl.origin);
       return NextResponse.json(safeVoiceConfigPayload(result), { status: result.ok ? 200 : 502 });
     }
 
@@ -400,6 +812,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const contentType = request.headers.get("content-type") || "";
+    if (contentType.includes("multipart/form-data")) {
+      const form = await request.formData();
+      if (formValue(form, "action") === "local-tts-audio-turn-stream") {
+        return streamLocalTtsAudioTurnFromForm(request, form);
+      }
+      throw new Error("Unsupported multipart phone action.");
+    }
     const body = await request.json().catch(() => ({}));
     const writableVaultPath = () => resolveObsidianVaultPath(body.vaultPath ?? request.nextUrl.searchParams.get("vaultPath") ?? undefined, { requireWritable: true });
 
@@ -479,8 +899,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result, { status: result.ok ? 200 : 502 });
     }
 
+    if (body.action === "image-generation") {
+      const result = await runPhoneImageGeneration(request, body);
+      return NextResponse.json(result.payload, { status: result.status });
+    }
+
     if (body.action === "agent-voice-turn") {
       return NextResponse.json(await runAgentVoiceTurn(request, body));
+    }
+
+    if (body.action === "agent-voice-turn-stream") {
+      return streamAgentVoiceTurn(request, body);
+    }
+
+    if (body.action === "local-tts-agent-audio-stream") {
+      return streamAgentLocalTtsAudio(request, body);
+    }
+
+    if (body.action === "local-tts-stt-client-secret") {
+      return NextResponse.json(await createRealtimeTranscriptionClientSecret());
+    }
+
+    if (body.action === "local-tts-speech-stream") {
+      const localTts = body.localTts && typeof body.localTts === "object" ? body.localTts as Record<string, unknown> : {};
+      const appId = typeof localTts.appId === "string" ? localTts.appId.trim() : "";
+      const model = typeof localTts.model === "string" ? localTts.model.trim() : "";
+      const voice = typeof localTts.voice === "string" ? localTts.voice.trim() : "";
+      const text = typeof body.input === "string" ? body.input.trim() : "";
+      if (!appId) throw new Error("A validated local TTS app is required.");
+      if (!text) throw new Error("Speech text is required.");
+      return streamLocalTtsSpeech({
+        origin: request.nextUrl.origin,
+        appId,
+        model,
+        voice,
+        text,
+        utteranceId: typeof body.utteranceId === "string" ? body.utteranceId : undefined,
+      });
     }
 
     if (body.action === "rescan") {

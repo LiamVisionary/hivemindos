@@ -34,9 +34,12 @@ Optional packaged skills live under:
 
 ```text
 packaged-skills/optional/<slug>/
+packaged-skills/optional/<category>/<source>/<slug>/
 ```
 
 They are catalog content until a user installs them. Optional skills must not be silently copied into the shared brain or runtime homes.
+
+Grouped optional directories can appear as installable packs in the Skill Browser. Installing one of those packs copies every local packaged skill in the directory into the shared brain after audit; it does not run upstream installer commands.
 
 ## Current Guides
 

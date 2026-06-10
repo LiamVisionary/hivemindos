@@ -300,8 +300,9 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-  BrowserStorage["Browser localStorage"] --> UIPrefs["UI prefs and fast caches"]
-  Home["~/.hivemindos"] --> Env["Shared env"]
+  Home["~/.hivemindos"] --> DashboardState["Dashboard state"]
+  DashboardState --> UIPrefs["UI prefs and fast caches"]
+  Home --> Env["Shared env"]
   Home --> Kanban["Kanban fallback"]
   Home --> WalletVault["Wallet vault"]
   Home --> MemorySamples["Memory samples"]

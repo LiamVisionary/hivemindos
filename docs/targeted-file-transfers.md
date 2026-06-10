@@ -294,13 +294,23 @@ The response includes the resolved machine, selected agent, worker class, transf
 
 Setup also installs `hivemind-mcp`, a small stdio MCP server for runtimes that prefer tools over shell commands. It exposes:
 
+Fleet handoff tools:
+
 - `list_hivemind_machines`
 - `plan_handoff`
 - `handoff_file`
 - `handoff_file_task`
 - `handoff_task`
 
-The MCP server calls the same `/api/handoff` route, so CLI, dashboard slash command, and MCP behavior stay aligned.
+Crypto/payment router tools:
+
+- `crypto_capabilities`
+- `select_crypto_rail`
+- `prepare_crypto_action`
+
+The MCP server calls the same dashboard APIs as the UI. Handoff tools call `/api/handoff`; crypto tools call `/api/crypto/capabilities`, which selects or prepares Bankr, x402, Veil Cash, MoneyClaw, and UsePod rails without executing spending itself.
+
+`hivemind-mcp` is a local proxy, not a standalone background wallet service. HivemindOS must be running on a discovered dashboard API port, and the caller needs the dashboard device token when auth is required. An agent can use these MCP tools from Codex, Claude, Hermes, or another runtime without the user actively chatting in the dashboard, as long as the dashboard API is reachable. If HivemindOS is offline, only independently installed provider CLIs or skills are available.
 
 ## How Receivers Know A File Is Waiting
 

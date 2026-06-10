@@ -1,8 +1,7 @@
 import { constants } from "fs";
 import { access, mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
 import { basename, dirname, extname, join, relative, sep } from "path";
-import { cachedCall } from "@/lib/services/async-cache";
-import { getBrainSkillInventory } from "@/lib/services/obsidian/brain-skills";
+import { getBrainSkillInventory, getSharedBrainSkillsCached } from "@/lib/services/obsidian/brain-skills";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import {
   USEPOD_COMPATIBILITY_MATRIX,
@@ -19,6 +18,7 @@ import {
 } from "@/lib/config/veil-cash";
 import { RUNTIME_DEFINITIONS } from "@/lib/types/agent-runtime";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
+import { applyAppPreferences, readAppPreferences, type AppModelPreference } from "@/lib/services/fleet/app-preferences";
 
 export type ContextIndexKind =
   | "skill"
@@ -51,6 +51,8 @@ export type ContextIndexItem = {
   updatedAt?: number;
   sizeBytes?: number;
   score?: number;
+  /** Rank bonus applied on top of text relevance, e.g. user-pinned priority apps. */
+  priorityBoost?: number;
 };
 
 export type ContextIndex = {
@@ -65,11 +67,11 @@ export type ContextIndexOptions = {
   vaultPath?: string;
   includeRuntimeProviders?: boolean;
   connectedApps?: ContextConnectedApp[];
+  kinds?: ContextIndexKind[];
 };
 
 export type ContextIndexSearchOptions = ContextIndexOptions & {
   query?: string;
-  kinds?: ContextIndexKind[];
   limit?: number;
 };
 
@@ -98,9 +100,12 @@ export type ContextConnectedApp = {
   healthUrl?: string;
   apiRoutes?: ContextConnectedAppRoute[];
   apiRoutesSource?: string;
+  priority?: boolean;
+  usageNotes?: string;
+  preferredModels?: AppModelPreference[];
 };
 
-const CACHE_TTL_MS = 30_000;
+const FS_REFRESH_CHECK_INTERVAL_MS = 15_000;
 const MAX_DOC_BYTES = 256 * 1024;
 const SKIPPED_DIRS = new Set([".git", ".next", ".next-tauri", ".next-tauri-build", "node_modules", "out", "dist", "build"]);
 const WORKSPACE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".mjs", ".json", ".md", ".sh", ".ps1", ".go", ".rs"]);
@@ -134,6 +139,23 @@ async function canRead(path: string) {
 
 async function safeStat(path: string) {
   return stat(path).catch(() => null);
+}
+
+type FileStatEntry = { path: string; mtimeMs: number; size: number };
+
+async function statPaths(paths: string[]): Promise<FileStatEntry[]> {
+  const stats = await Promise.all(paths.map(async (path) => {
+    const st = await safeStat(path);
+    return st?.isFile() ? { path, mtimeMs: st.mtimeMs, size: st.size } : null;
+  }));
+  return stats.filter((entry): entry is FileStatEntry => entry !== null);
+}
+
+function fileSignature(files: FileStatEntry[]) {
+  return files
+    .map((file) => `${file.path}\u001f${Math.round(file.mtimeMs)}\u001f${file.size}`)
+    .sort()
+    .join("\u001e");
 }
 
 async function walkFiles(root: string, output: string[] = [], maxFiles = 800): Promise<string[]> {
@@ -303,8 +325,8 @@ function compactCapabilityTags(capabilities: Record<string, unknown>) {
 }
 
 async function skillItems(options: ContextIndexOptions): Promise<ContextIndexItem[]> {
-  const inventory = await getBrainSkillInventory(options.vaultPath);
-  const shared = inventory.shared.map((skill): ContextIndexItem => ({
+  const sharedInventory = await getSharedBrainSkillsCached(options.vaultPath, { summaryMode: "fast" });
+  const shared = sharedInventory.shared.map((skill): ContextIndexItem => ({
     id: `skill:shared:${skill.slug}`,
     kind: "skill",
     title: skill.name,
@@ -321,7 +343,8 @@ async function skillItems(options: ContextIndexOptions): Promise<ContextIndexIte
 
   if (!options.includeRuntimeProviders) return shared;
 
-  const providerSkills = inventory.providers.flatMap((provider) => provider.skills.map((skill): ContextIndexItem => ({
+  const providerInventory = await getBrainSkillInventory(options.vaultPath, undefined, { summaryMode: "fast" });
+  const providerSkills = providerInventory.providers.flatMap((provider) => provider.skills.map((skill): ContextIndexItem => ({
     id: `skill:${provider.id}:${skill.slug}:${skill.path}`,
     kind: "skill",
     title: skill.name,
@@ -339,88 +362,87 @@ async function skillItems(options: ContextIndexOptions): Promise<ContextIndexIte
   return [...shared, ...providerSkills];
 }
 
-async function packagedSkillItems(): Promise<ContextIndexItem[]> {
+async function packagedSkillFileStats(): Promise<FileStatEntry[]> {
   const root = absolutePath(PACKAGED_AUTO_INSTALL_SKILLS_ROOT);
   if (!(await canRead(root))) return [];
   const files = (await walkFiles(root, [], 200)).filter((file) => basename(file) === "SKILL.md");
-  return Promise.all(files.map(async (path): Promise<ContextIndexItem> => {
-    const markdown = await readFile(path, "utf8").catch(() => "");
-    const frontmatter = parseSimpleFrontmatter(markdown);
-    const relativePath = toPosix(relative(workspaceRoot(), path));
-    const slug = basename(dirname(path));
-    const st = await safeStat(path);
-    const description = frontmatter.get("description") || firstUsefulParagraph(markdown) || `Packaged skill ${slug}.`;
-    return {
-      id: `skill:packaged:auto-install:${slug}`,
-      kind: "skill",
-      title: frontmatter.get("name") || slug,
-      summary: description,
-      tags: tagParts(slug, "packaged", "auto-install", "installable", "one-click", "skill"),
-      path,
-      retrievalText: retrievalText([description, relativePath, "packaged skill auto-install catalog"]),
-      load: {
-        type: "file",
-        target: path,
-        note: "Packaged auto-install skill metadata is indexed for setup discovery. Optional packaged skills are excluded until the user installs them into the shared brain.",
-      },
-      updatedAt: st?.mtimeMs,
-      sizeBytes: st?.size,
-    };
-  }));
+  return statPaths(files);
 }
 
-async function apiRouteItems(): Promise<ContextIndexItem[]> {
+async function packagedSkillItem(file: FileStatEntry): Promise<ContextIndexItem> {
+  const markdown = await readFile(file.path, "utf8").catch(() => "");
+  const frontmatter = parseSimpleFrontmatter(markdown);
+  const relativePath = toPosix(relative(workspaceRoot(), file.path));
+  const slug = basename(dirname(file.path));
+  const description = frontmatter.get("description") || firstUsefulParagraph(markdown) || `Packaged skill ${slug}.`;
+  return {
+    id: `skill:packaged:auto-install:${slug}`,
+    kind: "skill",
+    title: frontmatter.get("name") || slug,
+    summary: description,
+    tags: tagParts(slug, "packaged", "auto-install", "installable", "one-click", "skill"),
+    path: file.path,
+    retrievalText: retrievalText([description, relativePath, "packaged skill auto-install catalog"]),
+    load: {
+      type: "file",
+      target: file.path,
+      note: "Packaged auto-install skill metadata is indexed for setup discovery. Optional packaged skills are excluded until the user installs them into the shared brain.",
+    },
+    updatedAt: file.mtimeMs,
+    sizeBytes: file.size,
+  };
+}
+
+async function apiRouteFileStats(): Promise<FileStatEntry[]> {
   const files = await walkFiles(join(workspaceRoot(), "src/app/api"), [], 500);
-  const routes = files.filter((file) => file.endsWith(`${sep}route.ts`));
-  return Promise.all(routes.map(async (path) => {
-    const source = await readFile(path, "utf8").catch(() => "");
-    const methods = methodNames(source);
-    const route = routeFromFile(path);
-    const st = await safeStat(path);
-    return {
-      id: `api:${route}`,
-      kind: "api-route" as const,
-      title: route,
-      summary: `${methods.join(", ") || "HTTP"} endpoint for ${route}.`,
-      tags: tagParts(route, ...methods),
-      path,
-      route,
-      methods,
-      load: { type: "file" as const, target: path, note: "Read the route file for request and response shape before calling." },
-      updatedAt: st?.mtimeMs,
-      sizeBytes: st?.size,
-    };
-  }));
+  return statPaths(files.filter((file) => file.endsWith(`${sep}route.ts`)));
 }
 
-async function toolSchemaItems(): Promise<ContextIndexItem[]> {
-  const items: ContextIndexItem[] = [];
-  for (const relativePath of TOOL_SCHEMA_FILES) {
-    const path = absolutePath(relativePath);
-    if (!(await canRead(path))) continue;
-    const source = await readFile(path, "utf8").catch(() => "");
-    const st = await safeStat(path);
-    const tools = extractToolNames(source);
-    const title = relativePath.endsWith("search-tool.ts")
-      ? "web_search"
-      : relativePath.includes("orchestrator")
-        ? "orchestrator tools"
-        : basename(dirname(path));
-    items.push({
-      id: `tool-schema:${relativePath}`,
-      kind: "tool-schema",
-      title,
-      summary: tools.length
-        ? `Tool surface: ${tools.join(", ")}.`
-        : "Tool schema or action runtime definitions. Read before exposing tool calls.",
-      tags: tagParts(title, relativePath, ...tools),
-      path,
-      load: { type: "file", target: path, note: "Load only when this tool surface is needed for the task." },
-      updatedAt: st?.mtimeMs,
-      sizeBytes: st?.size,
-    });
-  }
-  return items;
+async function apiRouteItem(file: FileStatEntry): Promise<ContextIndexItem> {
+  const source = await readFile(file.path, "utf8").catch(() => "");
+  const methods = methodNames(source);
+  const route = routeFromFile(file.path);
+  return {
+    id: `api:${route}`,
+    kind: "api-route" as const,
+    title: route,
+    summary: `${methods.join(", ") || "HTTP"} endpoint for ${route}.`,
+    tags: tagParts(route, ...methods),
+    path: file.path,
+    route,
+    methods,
+    load: { type: "file" as const, target: file.path, note: "Read the route file for request and response shape before calling." },
+    updatedAt: file.mtimeMs,
+    sizeBytes: file.size,
+  };
+}
+
+function toolSchemaFileStats(): Promise<FileStatEntry[]> {
+  return statPaths(TOOL_SCHEMA_FILES.map(absolutePath));
+}
+
+async function toolSchemaItem(file: FileStatEntry): Promise<ContextIndexItem> {
+  const relativePath = toPosix(relative(workspaceRoot(), file.path));
+  const source = await readFile(file.path, "utf8").catch(() => "");
+  const tools = extractToolNames(source);
+  const title = relativePath.endsWith("search-tool.ts")
+    ? "web_search"
+    : relativePath.includes("orchestrator")
+      ? "orchestrator tools"
+      : basename(dirname(file.path));
+  return {
+    id: `tool-schema:${relativePath}`,
+    kind: "tool-schema",
+    title,
+    summary: tools.length
+      ? `Tool surface: ${tools.join(", ")}.`
+      : "Tool schema or action runtime definitions. Read before exposing tool calls.",
+    tags: tagParts(title, relativePath, ...tools),
+    path: file.path,
+    load: { type: "file", target: file.path, note: "Load only when this tool surface is needed for the task." },
+    updatedAt: file.mtimeMs,
+    sizeBytes: file.size,
+  };
 }
 
 function localCliToolItems(): ContextIndexItem[] {
@@ -492,10 +514,79 @@ function localCliToolItems(): ContextIndexItem[] {
       },
     },
     {
+      id: "tool-schema:crypto-capability-router",
+      kind: "tool-schema",
+      title: "crypto capability router",
+      summary: "Unified agent-facing crypto router for Bankr, x402, Veil Cash, MoneyClaw, and UsePod readiness, route selection, and safe action preparation.",
+      tags: ["crypto", "wallet", "payment", "capability", "router", "bankr", "x402", "veil", "moneyclaw", "usepod", "paid-api", "private-payment", "trade", "agent", "tool"],
+      aliases: [
+        "crypto router",
+        "unified crypto mcp",
+        "crypto capability search",
+        "wallet rail router",
+        "which crypto tool",
+        "pay with any available rail",
+        "private payment",
+        "private x402",
+        "paid api router",
+        "bankr x402 veil moneyclaw",
+      ],
+      retrievalText: [
+        "Use /api/crypto/capabilities as the first stop when a workflow needs crypto, wallet, payments, paid APIs, x402, private transfers, Bankr trading, MoneyClaw, Veil Cash, or UsePod prepaid rails.",
+        "This is the unified capability layer for agent decisions: it reports provider readiness by key name only, selects the best configured rail for an intent, and prepares the existing provider endpoint request body without executing money movement itself.",
+        "GET /api/crypto/capabilities?intent=<status|portfolio|receive|send|private-transfer|paid-api|private-paid-api|trade|card-payment|fund-llm-credits>&agentId=<id> returns the capability map. POST { action: 'select', intent, agentId, wallet, preferredProvider? } selects a rail. POST { action: 'prepare', intent, agentId, wallet, url?, recipientAddress?, amountUsd?, asset? } returns the endpoint, draft body, missing readiness, approval requirement, and confirmation token expected by the existing gated route.",
+        "MCP path: run hivemind-mcp as a stdio MCP server. It exposes crypto_capabilities for readiness, select_crypto_rail for no-side-effect provider selection, and prepare_crypto_action for provider endpoint/request-body drafts.",
+        "The router covers Bankr for trading and LLM credit funding, x402 for public paid API fetches and local-wallet USDC sends, Veil for private transfers and private x402, MoneyClaw for card/web payment readiness, and UsePod for prepaid provider-managed paid inference/paywalls.",
+        "Execution remains with the existing hardened routes: /api/wallet/x402, /api/wallet/veil/x402, /api/wallet/veil/transfer, /api/wallet/send, /api/wallet/moneyclaw, /api/usepod/status, /api/usepod/deposit-transaction, and /api/bankr/llm-credits, or the Bankr skill/CLI for trades.",
+        "Side-effect policy: call status/select/prepare first; do not execute sends, trades, paid API calls, card payments, private transfers, or LLM credit funding unless wallet Spend and caps allow it or the user has explicitly confirmed the prepared draft. Never ask for, print, store, or summarize private keys, seed phrases, API keys, card details, or wallet secrets.",
+      ].join(" "),
+      route: "/api/crypto/capabilities",
+      methods: ["GET", "POST"],
+      load: {
+        type: "api",
+        target: "/api/crypto/capabilities",
+        note: "Use this router before provider-specific wallet routes. It selects and prepares only; execution stays behind existing spend gates.",
+      },
+    },
+    {
+      id: "tool-schema:managed-agent-billing",
+      kind: "tool-schema",
+      title: "managed agent Honey billing",
+      summary: "No-BYOK managed-agent billing through spend-only managed HONEY credits, Stripe Checkout funding, signed Honey ledger credit/debit events, and server-side provider markup.",
+      tags: ["managed agent", "billing", "honey", "credits", "stripe", "x402", "bankr", "markup", "no api keys", "funding", "spend"],
+      aliases: [
+        "managed agent credits",
+        "honey credits",
+        "no api keys",
+        "stripe top up",
+        "pay with hive",
+        "pay with x402",
+        "managed compute billing",
+        "api key markup",
+      ],
+      retrievalText: [
+        "Use /api/managed-agent/billing when the user wants one-step managed agent usage without bringing their own provider API keys.",
+        "GET /api/managed-agent/billing?agentId=<id> returns the Honey ledger, managed Honey balance for the agent, configured funding rails, and provider mode choices.",
+        "POST { action: 'quote', intent: 'chat'|'coding'|'research'|'paid-api'|'tool', provider?: 'auto'|'bankr'|'openai'|'x402'|'moneyclaw'|'agent-wallet'|'hive', estimatedTokens?, estimatedCalls? } returns a server-side quote in spend-only managed HONEY credits with markup.",
+        "POST { action: 'create-stripe-checkout', agentId, amountUsd, rail?: 'stripe'|'stripe-crypto' } creates a Stripe Checkout top-up session when STRIPE_SECRET_KEY is configured. The Stripe webhook credits managed HONEY only after a verified checkout.session.completed event.",
+        "Managed HONEY credits are separate from reward Honey: reward Honey can be claimed to HIVE, but managed HONEY is spend-only service credit for managed agents and cannot be cashed out.",
+        "Official spoof resistance lives in workers/honey-ledger: /managed-billing/events requires HONEY_BILLING_SECRET/HONEY_LEDGER_SECRET HMAC or the admin token, is idempotent, and refuses debit events when the D1-managed balance is insufficient.",
+        "The compute gateway's shared-key mode uses managed HONEY: if ALLOW_SHARED_BANKR_KEY=true and the caller does not provide a Bankr key, it checks managed Honey budget, calls the provider server-side, then submits a signed debit based on verified token usage.",
+        "Never let clients directly claim funded credits. Stripe, x402, Bankr, agent-wallet, and $HIVE funding rails must credit managed HONEY only after a provider-side settlement/webhook/proof is verified by HivemindOS.",
+      ].join(" "),
+      route: "/api/managed-agent/billing",
+      methods: ["GET", "POST"],
+      load: {
+        type: "api",
+        target: "/api/managed-agent/billing",
+        note: "Use for no-BYOK managed agent quoting and funding. Side-effectful credit/debit paths require webhook, admin, signer, or internal billing auth.",
+      },
+    },
+    {
       id: "tool-schema:wallet-actions",
       kind: "tool-schema",
       title: "agent wallet tools",
-      summary: "Dashboard wallet capability for read-only balance checks, local encrypted-wallet x402 paid fetches, UsePod prepaid status, Veil Cash privacy setup, and auto-use-gated USDC sends.",
+      summary: "Provider-specific dashboard wallet routes for read-only balance checks, x402 paid fetches, UsePod prepaid status, Veil Cash privacy setup, and auto-use-gated USDC sends.",
       tags: ["wallet", "payment", "crypto", "usdc", "x402", "usepod", "moneyclaw", "bankr", "veil", "privacy", "spend", "balance", "agent", "tool"],
       aliases: [
         "agent wallet",
@@ -515,6 +606,7 @@ function localCliToolItems(): ContextIndexItem[] {
         "privacy pool",
       ],
       retrievalText: [
+        "Prefer /api/crypto/capabilities for unified crypto capability selection and safe action preparation. Load this provider-specific wallet surface after the router selects a rail or when debugging a concrete wallet route.",
         "Use this capability when a workflow needs agent wallet, payment, crypto, x402, USDC, UsePod, MoneyClaw, Bankr, Veil Cash, privacy-pool setup, or paid API actions.",
         "Read-only checks: POST /api/wallet/balance for public wallet balance, GET /api/wallet/moneyclaw for MoneyClaw status, POST /api/usepod/status for UsePod token balance/models.",
         "Paid API path: x402_fetch uses POST /api/wallet/x402 with { agentId, url, method, headers, body, policy, confirmation } and signs from the encrypted local wallet vault.",
@@ -598,15 +690,45 @@ function localCliToolItems(): ContextIndexItem[] {
   ];
 }
 
+function appPreferenceAliases(app: ContextConnectedApp) {
+  if (!app.priority && !app.usageNotes?.trim()) return [];
+  const noteWords = (app.usageNotes ?? "")
+    .toLowerCase()
+    .split(/[^a-z0-9-]+/)
+    .filter((word) => word.length >= 4)
+    .slice(0, 16);
+  return uniqueList([
+    ...(app.priority ? ["priority app", "preferred app", "user preferred"] : []),
+    ...noteWords,
+  ]);
+}
+
+function appPreferenceSummary(app: ContextConnectedApp) {
+  return [
+    app.priority ? "User-pinned priority app: prefer this app when it matches the task." : "",
+    app.usageNotes?.trim() ? `User routing preference: ${app.usageNotes.trim()}` : "",
+    app.preferredModels?.length
+      ? `Preferred models: ${app.preferredModels.map((entry) => `${entry.task} → ${entry.model}`).join("; ")}.`
+      : "",
+  ].filter(Boolean).join(" ");
+}
+
+function appPriorityBoost(app: ContextConnectedApp) {
+  return (app.priority ? 25 : 0) + (app.usageNotes?.trim() ? 5 : 0);
+}
+
 function connectedAppItems(apps: ContextConnectedApp[] | undefined): ContextIndexItem[] {
   const items: ContextIndexItem[] = [];
   for (const app of apps ?? []) {
     const name = app.name?.trim() || app.id?.trim() || "Connected app";
     const id = app.id?.trim() || `${name}:${app.machineName ?? ""}:${app.openUrl ?? app.apiBaseUrl ?? ""}`;
-    const aliases = connectedAppAliases(app);
+    const preferenceAliases = appPreferenceAliases(app);
+    const preferenceSummary = appPreferenceSummary(app);
+    const aliases = uniqueList([...connectedAppAliases(app), ...preferenceAliases]);
     const appTags = tagParts(name, app.description, app.kind, app.serviceKind, app.machineName, app.machineHost, "connected", "tailnet", "app", ...aliases);
     const summary = [
       app.description?.trim() || "Connected Tailnet app or service discovered from the existing Apps view source.",
+      preferenceSummary,
       app.machineName ? `Machine: ${app.machineName}.` : "",
       app.serviceKind ? `Service kind: ${app.serviceKind}.` : "",
       app.kind ? `App kind: ${app.kind}.` : "",
@@ -620,6 +742,7 @@ function connectedAppItems(apps: ContextConnectedApp[] | undefined): ContextInde
       summary,
       tags: appTags,
       aliases,
+      priorityBoost: appPriorityBoost(app),
       retrievalText: retrievalText([
         `connected app: ${name}`,
         summary,
@@ -638,8 +761,11 @@ function connectedAppItems(apps: ContextConnectedApp[] | undefined): ContextInde
       const method = route.method?.trim().toUpperCase() || "GET";
       const path = route.path?.trim() || "/";
       const url = route.url?.trim() || (app.apiBaseUrl ? `${app.apiBaseUrl.replace(/\/+$/, "")}${path.startsWith("/") ? path : `/${path}`}` : "");
-      const aliases = endpointAliases(app, route);
-      const summary = route.summary?.trim() || `${method} endpoint from ${name}${route.category ? ` (${route.category})` : ""}.`;
+      const aliases = uniqueList([...endpointAliases(app, route), ...preferenceAliases]);
+      const summary = [
+        route.summary?.trim() || `${method} endpoint from ${name}${route.category ? ` (${route.category})` : ""}.`,
+        preferenceSummary,
+      ].filter(Boolean).join(" ");
       items.push({
         id: `app-endpoint:${id}:${method}:${path}`,
         kind: "app-endpoint",
@@ -647,6 +773,7 @@ function connectedAppItems(apps: ContextConnectedApp[] | undefined): ContextInde
         summary,
         tags: tagParts(name, app.description, app.kind, app.serviceKind, app.machineName, route.category, method, path, route.source, ...aliases),
         aliases,
+        priorityBoost: appPriorityBoost(app),
         retrievalText: retrievalText([
           `connected app endpoint: ${name} ${method} ${path}`,
           summary,
@@ -773,30 +900,31 @@ function runtimeItems(): ContextIndexItem[] {
   });
 }
 
-async function docItems(): Promise<ContextIndexItem[]> {
+async function docFileStats(): Promise<FileStatEntry[]> {
   const roots = DOC_ROOTS.map((root) => join(workspaceRoot(), root));
   const files = (await Promise.all(roots.map((root) => walkFiles(root, [], 500)))).flat()
     .filter((file) => file.endsWith(".md"));
-  return Promise.all(files.map(async (path) => {
-    const st = await safeStat(path);
-    const content = st && st.size <= MAX_DOC_BYTES ? await readFile(path, "utf8").catch(() => "") : "";
-    const title = content ? titleFromMarkdown(path, content) : basename(path);
-    const summary = content ? firstUsefulParagraph(content) : "Documentation file. Load for details.";
-    return {
-      id: `doc:${toPosix(relative(workspaceRoot(), path))}`,
-      kind: "doc" as const,
-      title,
-      summary: summary.slice(0, 280),
-      tags: tagParts(title, relative(workspaceRoot(), path)),
-      path,
-      load: { type: "file" as const, target: path, note: "Use as documentation context; prefer the most specific doc first." },
-      updatedAt: st?.mtimeMs,
-      sizeBytes: st?.size,
-    };
-  }));
+  return statPaths(files);
 }
 
-async function workspaceFileItems(): Promise<ContextIndexItem[]> {
+async function docItem(file: FileStatEntry): Promise<ContextIndexItem> {
+  const content = file.size <= MAX_DOC_BYTES ? await readFile(file.path, "utf8").catch(() => "") : "";
+  const title = content ? titleFromMarkdown(file.path, content) : basename(file.path);
+  const summary = content ? firstUsefulParagraph(content) : "Documentation file. Load for details.";
+  return {
+    id: `doc:${toPosix(relative(workspaceRoot(), file.path))}`,
+    kind: "doc" as const,
+    title,
+    summary: summary.slice(0, 280),
+    tags: tagParts(title, relative(workspaceRoot(), file.path)),
+    path: file.path,
+    load: { type: "file" as const, target: file.path, note: "Use as documentation context; prefer the most specific doc first." },
+    updatedAt: file.mtimeMs,
+    sizeBytes: file.size,
+  };
+}
+
+async function workspaceFileStats(): Promise<FileStatEntry[]> {
   const topLevel = TOP_LEVEL_FILES.map(absolutePath);
   const roots = WORKSPACE_ROOTS.map((root) => join(workspaceRoot(), root));
   const files = [
@@ -805,22 +933,22 @@ async function workspaceFileItems(): Promise<ContextIndexItem[]> {
   ];
   const unique = [...new Set(files)]
     .filter((file) => !file.includes(`${sep}src${sep}app${sep}api${sep}`) && !file.includes(`${sep}docs${sep}`));
+  return statPaths(unique);
+}
 
-  return Promise.all(unique.map(async (path) => {
-    const st = await safeStat(path);
-    const rel = toPosix(relative(workspaceRoot(), path));
-    return {
-      id: `workspace:${rel}`,
-      kind: "workspace-file" as const,
-      title: rel,
-      summary: `Workspace file ${rel}.`,
-      tags: tagParts(rel, basename(path), dirname(rel)),
-      path,
-      load: { type: "file" as const, target: path, note: "Load for implementation details only after metadata matches the task." },
-      updatedAt: st?.mtimeMs,
-      sizeBytes: st?.size,
-    };
-  }));
+function workspaceFileItem(file: FileStatEntry): ContextIndexItem {
+  const rel = toPosix(relative(workspaceRoot(), file.path));
+  return {
+    id: `workspace:${rel}`,
+    kind: "workspace-file" as const,
+    title: rel,
+    summary: `Workspace file ${rel}.`,
+    tags: tagParts(rel, basename(file.path), dirname(rel)),
+    path: file.path,
+    load: { type: "file" as const, target: file.path, note: "Load for implementation details only after metadata matches the task." },
+    updatedAt: file.mtimeMs,
+    sizeBytes: file.size,
+  };
 }
 
 function totals(items: ContextIndexItem[]) {
@@ -838,27 +966,186 @@ function totals(items: ContextIndexItem[]) {
   return result;
 }
 
-export async function buildContextIndex(options: ContextIndexOptions = {}): Promise<ContextIndex> {
-  const root = workspaceRoot();
-  const items = (await Promise.all([
-    skillItems(options).catch(() => []),
-    packagedSkillItems().catch(() => []),
-    apiRouteItems(),
-    toolSchemaItems(),
-    Promise.resolve(localCliToolItems()),
-    Promise.resolve(connectedAppItems(options.connectedApps)),
-    Promise.resolve(runtimeItems()),
-    docItems(),
-    workspaceFileItems(),
-  ])).flat();
+// Filesystem-backed sources for the long-lived index. Each source has a cheap
+// probe (stat-level fingerprint, no content reads) and a build step that runs
+// only when the fingerprint actually changed. Connected apps, runtimes, and
+// local CLI tools are intentionally NOT sources: they are cheap synchronous
+// items computed fresh per request, so app churn never invalidates this index.
+type FsSourceProbe = { signature: string; files?: FileStatEntry[]; items?: ContextIndexItem[] };
 
+type FsSourceDefinition = {
+  name: string;
+  kinds: ContextIndexKind[];
+  probe: (options: ContextIndexOptions) => Promise<FsSourceProbe>;
+  build: (probe: FsSourceProbe, options: ContextIndexOptions) => Promise<ContextIndexItem[]>;
+};
+
+const FS_SOURCES: FsSourceDefinition[] = [
+  {
+    // Vault skills have no local stat fingerprint; the inventory calls are
+    // cached upstream, so the probe builds the items and signs id + mtime.
+    name: "vault-skills",
+    kinds: ["skill"],
+    probe: async (options) => {
+      const items = await skillItems(options);
+      return {
+        signature: items.map((item) => `${item.id}\u001f${item.updatedAt ?? 0}`).sort().join("\u001e"),
+        items,
+      };
+    },
+    build: async (probe) => probe.items ?? [],
+  },
+  {
+    name: "packaged-skills",
+    kinds: ["skill"],
+    probe: async () => {
+      const files = await packagedSkillFileStats();
+      return { signature: fileSignature(files), files };
+    },
+    build: (probe) => Promise.all((probe.files ?? []).map(packagedSkillItem)),
+  },
+  {
+    name: "api-routes",
+    kinds: ["api-route"],
+    probe: async () => {
+      const files = await apiRouteFileStats();
+      return { signature: fileSignature(files), files };
+    },
+    build: (probe) => Promise.all((probe.files ?? []).map(apiRouteItem)),
+  },
+  {
+    name: "tool-schemas",
+    kinds: ["tool-schema"],
+    probe: async () => {
+      const files = await toolSchemaFileStats();
+      return { signature: fileSignature(files), files };
+    },
+    build: (probe) => Promise.all((probe.files ?? []).map(toolSchemaItem)),
+  },
+  {
+    name: "docs",
+    kinds: ["doc"],
+    probe: async () => {
+      const files = await docFileStats();
+      return { signature: fileSignature(files), files };
+    },
+    build: (probe) => Promise.all((probe.files ?? []).map(docItem)),
+  },
+  {
+    name: "workspace-files",
+    kinds: ["workspace-file"],
+    probe: async () => {
+      const files = await workspaceFileStats();
+      return { signature: fileSignature(files), files };
+    },
+    build: async (probe) => (probe.files ?? []).map(workspaceFileItem),
+  },
+];
+
+type FsSourceSnapshot = { signature: string; items: ContextIndexItem[] };
+
+type FsIndexState = {
+  checkedAt: number;
+  sources: Map<string, FsSourceSnapshot>;
+  building: Map<string, Promise<ContextIndexItem[]>>;
+  refreshing: Promise<void> | null;
+};
+
+const fsIndexStates = new Map<string, FsIndexState>();
+
+function fsIndexKey(options: ContextIndexOptions) {
+  return [
+    options.vaultPath ?? "default",
+    options.includeRuntimeProviders ? "providers" : "shared",
+  ].join(":");
+}
+
+function fsIndexState(options: ContextIndexOptions) {
+  const key = fsIndexKey(options);
+  let state = fsIndexStates.get(key);
+  if (!state) {
+    state = { checkedAt: Date.now(), sources: new Map(), building: new Map(), refreshing: null };
+    fsIndexStates.set(key, state);
+  }
+  return state;
+}
+
+async function probeAndBuildSource(source: FsSourceDefinition, options: ContextIndexOptions): Promise<FsSourceSnapshot> {
+  const probe = await source.probe(options);
+  return { signature: probe.signature, items: probe.items ?? await source.build(probe, options) };
+}
+
+// Cold path only: build a missing source once, de-duping concurrent callers.
+// Failures are never stored, so the next request retries the source.
+async function ensureSourceItems(state: FsIndexState, source: FsSourceDefinition, options: ContextIndexOptions): Promise<ContextIndexItem[]> {
+  const cached = state.sources.get(source.name);
+  if (cached) return cached.items;
+  const inFlight = state.building.get(source.name);
+  if (inFlight) return inFlight;
+  const pending = probeAndBuildSource(source, options).then((snapshot) => {
+    state.sources.set(source.name, snapshot);
+    return snapshot.items;
+  });
+  state.building.set(source.name, pending);
+  try {
+    return await pending;
+  } finally {
+    state.building.delete(source.name);
+  }
+}
+
+// Stale-while-revalidate: requests always read the in-memory snapshots; this
+// background pass re-probes fingerprints and surgically rebuilds only the
+// sources whose backing files actually changed.
+function scheduleFsSourceRefresh(state: FsIndexState, options: ContextIndexOptions) {
+  if (state.refreshing || Date.now() - state.checkedAt < FS_REFRESH_CHECK_INTERVAL_MS) return;
+  state.checkedAt = Date.now();
+  state.refreshing = Promise.all(FS_SOURCES.map((source) => (async () => {
+    const cached = state.sources.get(source.name);
+    if (!cached) return;
+    const probe = await source.probe(options);
+    if (probe.signature === cached.signature) return;
+    const items = probe.items ?? await source.build(probe, options);
+    state.sources.set(source.name, { signature: probe.signature, items });
+  })().catch(() => undefined))).then(() => undefined).finally(() => {
+    state.refreshing = null;
+  });
+}
+
+function perRequestItems(options: ContextIndexOptions, wants: (kind: ContextIndexKind) => boolean): ContextIndexItem[] {
+  return [
+    ...(wants("tool-schema") ? localCliToolItems() : []),
+    ...(wants("connected-app") || wants("app-endpoint") ? connectedAppItems(options.connectedApps) : []),
+    ...(wants("runtime") ? runtimeItems() : []),
+  ].filter((item) => wants(item.kind));
+}
+
+function assembleIndex(options: ContextIndexOptions, items: ContextIndexItem[]): ContextIndex {
   return {
     generatedAt: new Date().toISOString(),
-    root,
+    root: workspaceRoot(),
     vaultPath: options.vaultPath,
     items,
     totals: totals(items),
   };
+}
+
+async function withAppPreferences(options: ContextIndexOptions): Promise<ContextIndexOptions> {
+  if (!options.connectedApps?.length) return options;
+  const preferences = await readAppPreferences().catch(() => []);
+  if (!preferences.length) return options;
+  return { ...options, connectedApps: applyAppPreferences(options.connectedApps, preferences) };
+}
+
+export async function buildContextIndex(rawOptions: ContextIndexOptions = {}): Promise<ContextIndex> {
+  const options = await withAppPreferences(rawOptions);
+  const requestedKinds = options.kinds?.length ? new Set(options.kinds) : null;
+  const wants = (kind: ContextIndexKind) => !requestedKinds || requestedKinds.has(kind);
+  const fsItems = (await Promise.all(FS_SOURCES
+    .filter((source) => source.kinds.some(wants))
+    .map((source) => probeAndBuildSource(source, options).then((snapshot) => snapshot.items).catch(() => []))
+  )).flat();
+  return assembleIndex(options, [...fsItems, ...perRequestItems(options, wants)]);
 }
 
 function tokenize(value: string) {
@@ -899,13 +1186,21 @@ function scoreItem(query: string, item: ContextIndexItem) {
   return score;
 }
 
-function cacheKey(options: ContextIndexOptions) {
-  return `context-index:${options.vaultPath ?? "default"}:${options.includeRuntimeProviders === false ? "shared" : "providers"}`;
-}
-
-export function getContextIndex(options: ContextIndexOptions = {}) {
-  if (options.connectedApps?.length) return buildContextIndex(options);
-  return cachedCall(cacheKey(options), CACHE_TTL_MS, () => buildContextIndex(options));
+// Long-lived index serving: the first request for a source blocks to build it
+// once; every later request reads the in-memory snapshot immediately and a
+// background pass refreshes only the sources whose fingerprints changed.
+// Connected apps never key or invalidate this cache — they merge per request.
+export async function getContextIndex(rawOptions: ContextIndexOptions = {}): Promise<ContextIndex> {
+  const options = await withAppPreferences(rawOptions);
+  const requestedKinds = options.kinds?.length ? new Set(options.kinds) : null;
+  const wants = (kind: ContextIndexKind) => !requestedKinds || requestedKinds.has(kind);
+  const state = fsIndexState(options);
+  const fsItems = (await Promise.all(FS_SOURCES
+    .filter((source) => source.kinds.some(wants))
+    .map((source) => ensureSourceItems(state, source, options).catch(() => []))
+  )).flat();
+  scheduleFsSourceRefresh(state, options);
+  return assembleIndex(options, [...fsItems, ...perRequestItems(options, wants)]);
 }
 
 export async function searchContextIndex(options: ContextIndexSearchOptions = {}) {
@@ -913,7 +1208,11 @@ export async function searchContextIndex(options: ContextIndexSearchOptions = {}
   const kinds = options.kinds?.length ? new Set(options.kinds) : null;
   const scored = index.items
     .filter((item) => !kinds || kinds.has(item.kind))
-    .map((item) => ({ ...item, score: scoreItem(options.query ?? "", item) }))
+    .map((item) => {
+      const base = scoreItem(options.query ?? "", item);
+      // Priority boost only re-ranks items that already match the query; it never surfaces irrelevant apps.
+      return { ...item, score: base > 0 ? base + (item.priorityBoost ?? 0) : base };
+    })
     .filter((item) => !options.query?.trim() || (item.score ?? 0) > 0)
     .sort((left, right) => (right.score ?? 0) - (left.score ?? 0) || left.kind.localeCompare(right.kind) || left.title.localeCompare(right.title));
   return {

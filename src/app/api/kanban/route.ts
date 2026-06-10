@@ -12,6 +12,7 @@ import {
   createBoard,
   createTask,
   deleteTask,
+  discoverTaskLoop,
   failTask,
   heartbeatTask,
   listBoards,
@@ -19,6 +20,7 @@ import {
   patchTask,
   promoteTask,
   readBoard,
+  recordTaskLoop,
   reclaimStaleTasks,
   resolveKanbanStorage,
   unblockTask,
@@ -106,6 +108,14 @@ export async function POST(request: NextRequest) {
     }
     if (body.action === "complete") {
       const result = await completeTask(boardSlug, body.taskId, body, storageOptions);
+      return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+    }
+    if (body.action === "loop-discover") {
+      const result = await discoverTaskLoop(boardSlug, body.taskId, body.loop ?? body, storageOptions);
+      return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+    }
+    if (body.action === "loop-record") {
+      const result = await recordTaskLoop(boardSlug, body.taskId, body, storageOptions);
       return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
     if (body.action === "block") {

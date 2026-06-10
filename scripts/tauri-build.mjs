@@ -12,6 +12,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { basename, dirname, extname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -30,11 +31,49 @@ const serverResourceDir = join(resourcesDir, "hivemindos-next");
 const nodeResourceDir = join(resourcesDir, "hivemindos-node");
 const standaloneDir = join(nextBuildDir, "standalone");
 const standaloneServer = join(standaloneDir, "server.js");
+const embeddedFingerprintFile = join(nextBuildDir, ".hivemindos-embedded-fingerprint.json");
+const packagedFingerprintFile = join(serverResourceDir, ".hivemindos-embedded-fingerprint.json");
 const nodeBinaryName = process.platform === "win32" ? "node.exe" : "node";
-const buildMemoryMb = process.env.TAURI_NEXT_BUILD_MEMORY_MB || "9000";
+const buildMemoryMb = process.env.TAURI_NEXT_BUILD_MEMORY_MB || "12000";
+// V8 old-space heap for the EMBEDDED build's `next build`. The embedded build
+// compiles all ~155 API routes (the static build hides them), which exceeds
+// Node's ~4 GB default heap and OOMs. 8 GB is comfortable on a dev Mac; lower
+// it (e.g. on a small CI runner) via TAURI_NEXT_BUILD_HEAP_MB. Keep it well
+// under buildMemoryMb so the RSS watchdog above doesn't kill the build.
+const buildHeapMb = process.env.TAURI_NEXT_BUILD_HEAP_MB || "8192";
 const buildTimeoutSeconds = process.env.TAURI_NEXT_BUILD_TIMEOUT_SECONDS || "1800";
 const embeddedNextMode = process.env.HIVEMINDOS_TAURI_EMBEDDED_NEXT === "1";
+const forceEmbeddedNextBuild = process.env.HIVEMINDOS_TAURI_FORCE_NEXT_BUILD === "1";
+const reuseEmbeddedNextBuild = process.env.HIVEMINDOS_TAURI_REUSE_EMBEDDED_NEXT !== "0";
+const optimizePngAssets = process.env.HIVEMINDOS_TAURI_OPTIMIZE_PNGS === "1";
 const originalNextEnv = existsSync(nextEnvPath) ? readFileSync(nextEnvPath, "utf8") : null;
+
+const embeddedFingerprintInputs = [
+  "components.json",
+  "next.config.ts",
+  "package.json",
+  "pnpm-lock.yaml",
+  "postcss.config.mjs",
+  "scripts/tauri-build.mjs",
+  "src",
+  "tsconfig.json",
+  "public",
+];
+
+const skippedFingerprintDirs = new Set([
+  ".git",
+  ".next",
+  ".next-tauri",
+  ".next-tauri-build",
+  ".next-tauri-static-build",
+  "node_modules",
+  "out",
+  "src-tauri/target",
+]);
+
+const skippedFingerprintFileNames = new Set([
+  ".DS_Store",
+]);
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -116,6 +155,142 @@ function writeBuildNextEnv() {
     "// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.",
     "",
   ].join("\n"));
+}
+
+function normalizePathForFingerprint(path) {
+  return path.slice(projectRoot.length + 1).replace(/\\/g, "/");
+}
+
+function fingerprintPathIsSkipped(path) {
+  const relativePath = normalizePathForFingerprint(path);
+  return [...skippedFingerprintDirs].some((skipped) => relativePath === skipped || relativePath.startsWith(`${skipped}/`));
+}
+
+function addFingerprintPath(hash, path, files) {
+  if (!existsSync(path) || fingerprintPathIsSkipped(path)) {
+    return;
+  }
+
+  const stats = statSync(path);
+  if (stats.isDirectory()) {
+    for (const entry of readdirSync(path, { withFileTypes: true })) {
+      addFingerprintPath(hash, join(path, entry.name), files);
+    }
+    return;
+  }
+
+  if (!stats.isFile()) {
+    return;
+  }
+
+  if (skippedFingerprintFileNames.has(basename(path))) {
+    return;
+  }
+
+  files.push(path);
+}
+
+function buildEmbeddedFingerprint() {
+  const files = [];
+  const hash = createHash("sha256");
+
+  for (const input of embeddedFingerprintInputs) {
+    addFingerprintPath(hash, join(projectRoot, input), files);
+  }
+
+  const sortedFiles = files.sort((left, right) => normalizePathForFingerprint(left).localeCompare(normalizePathForFingerprint(right)));
+  for (const file of sortedFiles) {
+    const relativePath = normalizePathForFingerprint(file);
+    const stats = statSync(file);
+    hash.update("file\0");
+    hash.update(relativePath);
+    hash.update("\0");
+    hash.update(String(stats.size));
+    hash.update("\0");
+    hash.update(readFileSync(file));
+    hash.update("\0");
+  }
+
+  for (const [name, value] of Object.entries(process.env).sort(([left], [right]) => left.localeCompare(right))) {
+    if (!name.startsWith("NEXT_PUBLIC_")) continue;
+    hash.update("env\0");
+    hash.update(name);
+    hash.update("\0");
+    hash.update(value ?? "");
+    hash.update("\0");
+  }
+
+  hash.update("node\0");
+  hash.update(process.version);
+  hash.update("\0");
+  hash.update(process.platform);
+  hash.update("\0");
+  hash.update(process.arch);
+  hash.update("\0");
+  hash.update(buildHeapMb);
+  hash.update("\0");
+  hash.update(buildMemoryMb);
+
+  return {
+    version: 1,
+    mode: "embedded-next-webpack",
+    hash: hash.digest("hex"),
+    fileCount: sortedFiles.length,
+    inputs: embeddedFingerprintInputs,
+    node: {
+      version: process.version,
+      platform: process.platform,
+      arch: process.arch,
+    },
+  };
+}
+
+function readJsonFile(path) {
+  if (!existsSync(path)) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function fingerprintsMatch(left, right) {
+  return Boolean(left && right && left.version === right.version && left.mode === right.mode && left.hash === right.hash);
+}
+
+function packagedEmbeddedResourcesAreReusable(fingerprint) {
+  if (forceEmbeddedNextBuild || !reuseEmbeddedNextBuild) {
+    return false;
+  }
+
+  if (!existsSync(join(serverResourceDir, "server.js")) || !existsSync(join(nodeResourceDir, nodeBinaryName))) {
+    return false;
+  }
+
+  return fingerprintsMatch(fingerprint, readJsonFile(packagedFingerprintFile));
+}
+
+function standaloneBuildIsReusable(fingerprint) {
+  if (forceEmbeddedNextBuild || !reuseEmbeddedNextBuild) {
+    return false;
+  }
+
+  if (!existsSync(standaloneServer)) {
+    return false;
+  }
+
+  return fingerprintsMatch(fingerprint, readJsonFile(embeddedFingerprintFile));
+}
+
+function writeEmbeddedFingerprint(path, fingerprint) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify({
+    ...fingerprint,
+    createdAt: new Date().toISOString(),
+  }, null, 2)}\n`);
 }
 
 function copyNodeBinary() {
@@ -309,6 +484,11 @@ function pruneImageOptimizerRuntime() {
 function prunePackagedBuildArtifacts() {
   rmSync(join(serverResourceDir, ".next-tauri-build", "cache"), { force: true, recursive: true });
   rmSync(join(serverResourceDir, ".next-tauri-build", "diagnostics"), { force: true, recursive: true });
+  // Webpack persistent build caches (Remotion's bundler writes ~200 MB of
+  // *.pack files into node_modules/.cache/webpack). They get traced into the
+  // standalone copy but are build-time only — nothing reads them at runtime.
+  // Dropping this roughly halves the packaged app size.
+  rmSync(join(serverResourceDir, "node_modules", ".cache"), { force: true, recursive: true });
 
   for (const filePath of collectFiles(serverResourceDir, (candidate) => {
     const fileName = basename(candidate);
@@ -323,6 +503,10 @@ function prunePackagedBuildArtifacts() {
 }
 
 function optimizePackagedPngAssets(root = join(serverResourceDir, "public")) {
+  if (!optimizePngAssets) {
+    return;
+  }
+
   const versionResult = spawnSync("oxipng", ["--version"], {
     cwd: projectRoot,
     encoding: "utf8",
@@ -430,13 +614,16 @@ function copyRequiredRuntimePackages() {
   }
 }
 
-function buildEmbeddedNextResources() {
-  rmSync(serverResourceDir, { force: true, recursive: true });
-  rmSync(nodeResourceDir, { force: true, recursive: true });
-  rmSync(staticResourceDir, { force: true, recursive: true });
-  mkdirSync(resourcesDir, { recursive: true });
+function writeEmbeddedStaticStub() {
   mkdirSync(staticResourceDir, { recursive: true });
   writeFileSync(join(staticResourceDir, "README.md"), "# Static Tauri UI\n\nRun `pnpm tauri:prepare` without `HIVEMINDOS_TAURI_EMBEDDED_NEXT=1` to regenerate this directory.\n");
+}
+
+function runEmbeddedNextBuild(fingerprint) {
+  if (standaloneBuildIsReusable(fingerprint)) {
+    console.log(`Reusing cached embedded Next standalone build (${fingerprint.hash.slice(0, 12)}). Set HIVEMINDOS_TAURI_FORCE_NEXT_BUILD=1 to rebuild it.`);
+    return;
+  }
 
   try {
     writeBuildNextEnv();
@@ -450,9 +637,14 @@ function buildEmbeddedNextResources() {
       "exec",
       "next",
       "build",
+      // Use webpack like the static build does. Turbopack rejects this
+      // codebase's `:global {}` CSS module block and the API routes' dynamic
+      // execFile/fs patterns; webpack tolerates them.
+      "--webpack",
     ], {
       env: {
         HIVEMINDOS_TAURI_BUILD: "1",
+        NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${buildHeapMb}`.trim(),
       },
     });
   } finally {
@@ -463,6 +655,12 @@ function buildEmbeddedNextResources() {
     throw new Error(`Next standalone server was not generated at ${standaloneServer}`);
   }
 
+  writeEmbeddedFingerprint(embeddedFingerprintFile, fingerprint);
+}
+
+function copyEmbeddedNextResources(fingerprint) {
+  rmSync(serverResourceDir, { force: true, recursive: true });
+  rmSync(nodeResourceDir, { force: true, recursive: true });
   mkdirSync(serverResourceDir, { recursive: true });
   cpSync(standaloneDir, serverResourceDir, { recursive: true });
 
@@ -485,8 +683,24 @@ function buildEmbeddedNextResources() {
   prunePackagedBuildArtifacts();
   optimizePackagedPngAssets();
   copyNodeBinary();
+  writeEmbeddedFingerprint(packagedFingerprintFile, fingerprint);
 
   console.log(`Prepared embedded Tauri Next server resources in ${basename(resourcesDir)}/`);
+}
+
+function buildEmbeddedNextResources() {
+  const fingerprint = buildEmbeddedFingerprint();
+  mkdirSync(resourcesDir, { recursive: true });
+  rmSync(staticResourceDir, { force: true, recursive: true });
+  writeEmbeddedStaticStub();
+
+  if (packagedEmbeddedResourcesAreReusable(fingerprint)) {
+    console.log(`Reusing prepared embedded Tauri Next resources (${fingerprint.hash.slice(0, 12)}). Set HIVEMINDOS_TAURI_FORCE_NEXT_BUILD=1 to rebuild them.`);
+    return;
+  }
+
+  runEmbeddedNextBuild(fingerprint);
+  copyEmbeddedNextResources(fingerprint);
 }
 
 function buildStaticNativeResources() {

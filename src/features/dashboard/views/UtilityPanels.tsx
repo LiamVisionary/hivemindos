@@ -14,6 +14,7 @@ import type { NotificationGroup, NotificationsPanelProps } from "@/features/noti
 import { MemoryTelemetryPanel } from "@/features/dashboard/views/MemoryTelemetryPanel";
 import { MyAppsPanel } from "@/features/dashboard/views/MyAppsPanel";
 import { AgentToolsPanel } from "@/features/dashboard/views/AgentToolsPanel";
+import { MessagingChannelsPanel } from "@/features/dashboard/views/MessagingChannelsPanel";
 import type {
   DashboardView,
   HiveEnvBackupStatus,
@@ -223,6 +224,13 @@ export function UtilityPanels(props: UtilityPanelsProps) {
         fleetClass={fleetClass}
         setActiveView={setActiveView}
         startAgentChat={startAgentChat}
+      />
+
+      <MessagingChannelsPanel
+        active={activeView === "messaging"}
+        displayAgents={displayAgents}
+        fleetClass={fleetClass}
+        sharedVault={sharedVault}
       />
 
       {envPanelVisible ? (

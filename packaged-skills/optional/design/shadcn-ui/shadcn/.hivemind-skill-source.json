@@ -1,0 +1,18 @@
+{
+  "upstreamName": "shadcn",
+  "upstreamSlug": "shadcn",
+  "hiveSlug": "shadcn",
+  "sourceLabel": "shadcn-ui",
+  "sourceUrl": "https://www.ui-skills.com/skills/shadcn-ui/shadcn",
+  "repository": "https://github.com/shadcn-ui/ui",
+  "installCommand": "npx skills add https://github.com/shadcn-ui/ui --skill shadcn",
+  "importedAt": "2026-06-08T15:01:47.692Z",
+  "refreshedAt": "2026-06-08T15:01:47.692Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/shadcn-ui/shadcn",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Manages shadcn components and projects — adding, searching, fixing, debugging, styling, and composing UI. Provides project context, component docs, and usage examples. Applies when working with shadcn/ui, component registries, presets, --preset codes, or any project with a components.json file. Also triggers for \"shadcn init\", \"create an app with --preset\", or \"switch to --preset\"."
+}

@@ -1,0 +1,18 @@
+{
+  "upstreamName": "vite",
+  "upstreamSlug": "vite",
+  "hiveSlug": "vite",
+  "sourceLabel": "antfu",
+  "sourceUrl": "https://www.ui-skills.com/skills/antfu/vite",
+  "repository": "https://github.com/antfu/skills",
+  "installCommand": "npx skills add https://github.com/antfu/skills --skill vite",
+  "importedAt": "2026-06-08T15:01:27.263Z",
+  "refreshedAt": "2026-06-08T15:01:27.263Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/antfu/vite",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Vite build tool configuration, plugin API, SSR, and Vite 8 Rolldown migration. Use when working with Vite projects, vite.config.ts, Vite plugins, or building libraries/SSR apps with Vite."
+}

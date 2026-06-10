@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
@@ -8,7 +9,7 @@ use tauri::{
     AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
 
-use crate::NativeServerState;
+use crate::{guard_native_callback, NativeServerState};
 #[cfg(not(debug_assertions))]
 use crate::NATIVE_BROWSER_HOST;
 
@@ -16,6 +17,7 @@ const NAVIGATE_EVENT: &str = "hivemindos:navigate";
 const OPEN_PALETTE_EVENT: &str = "hivemindos:open-command-palette";
 const OPEN_POPOUT_EVENT: &str = "hivemindos:open-popout";
 const RERUN_SETUP_EVENT: &str = "hivemindos:rerun-setup";
+const QUEEN_VOICE_EVENT: &str = "hivemindos:queen-bee-voice";
 
 #[derive(Deserialize)]
 pub struct RouteWindowTarget {
@@ -53,6 +55,41 @@ fn show_main_window(app: &AppHandle) {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
+    }
+}
+
+// Tray menu clicks are delivered to both the tray menu handler and the
+// app-level menu handler, so a single click would toggle twice (open then
+// instantly close). Debounce duplicate toggles within this window.
+static LAST_QUEEN_VOICE_TOGGLE_MS: AtomicU64 = AtomicU64::new(0);
+const QUEEN_VOICE_TOGGLE_DEBOUNCE_MS: u64 = 300;
+
+fn toggle_queen_voice_chat(app: &AppHandle) {
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as u64)
+        .unwrap_or(0);
+    let last_ms = LAST_QUEEN_VOICE_TOGGLE_MS.swap(now_ms, Ordering::SeqCst);
+    if now_ms.saturating_sub(last_ms) < QUEEN_VOICE_TOGGLE_DEBOUNCE_MS {
+        log_queen_voice_debug(app, "duplicate menu event ignored");
+        return;
+    }
+    show_main_window(app);
+    let emitted = app.emit(QUEEN_VOICE_EVENT, serde_json::json!({ "action": "toggle" }));
+    log_queen_voice_debug(app, &format!("toggle clicked, emit_ok={}", emitted.is_ok()));
+}
+
+// Temporary diagnostics for the Queen Bee voice toggle: append one line per
+// click so the event path is bisectable without a visible console.
+fn log_queen_voice_debug(app: &AppHandle, message: &str) {
+    let Ok(dir) = app.path().app_data_dir() else {
+        return;
+    };
+    let _ = fs::create_dir_all(&dir);
+    let line = format!("{} {message}\n", chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"));
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(dir.join("queen-voice-debug.log")) {
+        use std::io::Write;
+        let _ = file.write_all(line.as_bytes());
     }
 }
 
@@ -94,6 +131,7 @@ pub fn app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let palette = menu_item(app, "nav:palette", "Command Palette", Some("CmdOrCtrl+K"))?;
     let new_task = menu_item(app, "nav:new-task", "New Task", Some("CmdOrCtrl+Shift+K"))?;
     let new_chat = menu_item(app, "nav:new-chat", "Agent Chat", Some("CmdOrCtrl+Shift+C"))?;
+    let queen_voice = menu_item(app, "queen-voice:toggle", "Voice Chat with Queen Bee", Some("CmdOrCtrl+Shift+V"))?;
 
     let show = menu_item(app, "window:show", "Show Main Window", None::<&str>)?;
     let popout_current = menu_item(app, "window:popout-current", "Pop Out Current View", None::<&str>)?;
@@ -153,6 +191,7 @@ pub fn app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
                     &PredefinedMenuItem::separator(app)?,
                     &new_task,
                     &new_chat,
+                    &queen_voice,
                 ],
             )?,
             &Submenu::with_items(
@@ -215,7 +254,9 @@ pub fn handle_menu_event(app: &AppHandle, id: &str) {
         emit_popout(app, view);
         return;
     }
-    if id == "window:show" || id == "tray:show" {
+    if id == "queen-voice:toggle" {
+        toggle_queen_voice_chat(app);
+    } else if id == "window:show" || id == "tray:show" {
         show_main_window(app);
     } else if id == "window:popout-current" {
         emit_current_popout(app);
@@ -228,6 +269,7 @@ pub fn handle_menu_event(app: &AppHandle, id: &str) {
 }
 
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
+    let queen_voice = menu_item(app, "queen-voice:toggle", "Voice Chat with Queen Bee", Some("CmdOrCtrl+Shift+V"))?;
     let show = menu_item(app, "tray:show", "Show HivemindOS", None::<&str>)?;
     let palette = menu_item(app, "tray:palette", "Command Palette", Some("CmdOrCtrl+K"))?;
     let fleet = menu_item(app, "nav:agents", "Fleet", Some("CmdOrCtrl+1"))?;
@@ -237,6 +279,8 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let menu = Menu::with_items(
         app,
         &[
+            &queen_voice,
+            &PredefinedMenuItem::separator(app)?,
             &show,
             &palette,
             &PredefinedMenuItem::separator(app)?,
@@ -250,16 +294,22 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let mut tray = TrayIconBuilder::with_id("main")
         .menu(&menu)
         .tooltip("HivemindOS")
-        .on_menu_event(|app, event| handle_menu_event(app, event.id().as_ref()))
+        .on_menu_event(|app, event| {
+            guard_native_callback("tray menu event", || {
+                handle_menu_event(app, event.id().as_ref());
+            });
+        })
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
-            } = event
-            {
-                show_main_window(tray.app_handle());
-            }
+            guard_native_callback("tray icon event", || {
+                if let TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } = event
+                {
+                    show_main_window(tray.app_handle());
+                }
+            });
         });
     if let Some(icon) = app.default_window_icon() {
         tray = tray.icon(icon.clone());

@@ -80,6 +80,17 @@ If a feature needs HivemindOS to provide hosted infrastructure, shared room orch
 | Agent runtime work | Local and user-configured runtimes                    | Future managed runtime capacity, if offered                  |
 | Brain and vault    | Local Obsidian vault and user-owned sync choices      | Future managed brain hosting, if offered                     |
 
+## Managed Agent Credits
+
+Managed agents use HONEY as the visible credit unit. The ledger separates reward Honey from managed HONEY credits:
+
+- Reward Honey is earned through ecosystem participation and may be claimable to HIVE.
+- Managed HONEY credits are spend-only service credits for HivemindOS-managed agents and cannot be claimed to HIVE.
+
+Users can start without provider API keys. HivemindOS quotes the task, lets the user fund managed HONEY through a verified rail such as Stripe Checkout, Stripe crypto payments, x402, Bankr, an agent wallet, or HIVE, then runs the managed agent through HivemindOS-held provider keys at a configured markup.
+
+Official credit changes are spoof-resistant: credits are written only from verified funding events, and debits are signed by trusted managed runtimes after provider usage is observed server-side.
+
 ## Revenue Sources
 
 Optional premium services may include Hive Cloud, managed compute, the Agent Marketplace, and Enterprise.

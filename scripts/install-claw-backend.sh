@@ -138,7 +138,11 @@ cat > "$CLAW_HOME/launch-gateway.sh" <<LAUNCH
 set -uo pipefail
 export HIVEMIND_MODE=1
 export DATA_DIR="$DATA_DIR"
-export CLAW_BINARY="$CLAW_HOME/bin/claw"
+# Honor a CLAW_BINARY supplied by the caller (the app-hosted gateway passes the
+# claw bundled inside the signed .app, so its file access inherits the app's TCC
+# grant). Fall back to the installed copy for the headless launchd path.
+: "\${CLAW_BINARY:=$CLAW_HOME/bin/claw}"
+export CLAW_BINARY
 # A malformed voice.env must never take the gateway down — source it tolerantly.
 if [ -f "$VOICE_ENV" ]; then set -a; . "$VOICE_ENV" 2>/dev/null || true; set +a; fi
 mkdir -p "$DATA_DIR"
@@ -158,6 +162,14 @@ cd "$CLAW_HOME/backend"
 exec "$NODE_BIN" --import tsx "$WORKER_ENTRY" start
 LAUNCH
 chmod +x "$CLAW_HOME/launch-gateway.sh" "$CLAW_HOME/launch-worker.sh"
+
+# Record the binary that actually reads the filesystem (the gateway's Node
+# process) so the desktop app's "pair your phone" onboarding can point macOS
+# Full Disk Access straight at it. The gateway runs as a headless launchd agent,
+# which macOS never lets show a permission prompt — so a one-time grant against
+# this exact binary is what unblocks phone file browsing of protected folders
+# (Downloads/Desktop/Documents).
+printf '%s\n' "$NODE_BIN" > "$CLAW_HOME/gateway-fda-target.txt" 2>/dev/null || true
 
 # Run the voice worker only when LiveKit creds are actually present.
 VOICE_CONFIGURED=0
@@ -187,28 +199,17 @@ relaunch_agent() {
 #    env, cwd, and source voice.env). The gateway always runs; the voice worker
 #    runs only when configured.
 if [[ "$os" == "Darwin" ]]; then
-  PLIST="$HOME/Library/LaunchAgents/com.hivemindos.claw-backend.plist"
-  mkdir -p "$(dirname "$PLIST")"
-  cat > "$PLIST" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>com.hivemindos.claw-backend</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/bin/bash</string>
-    <string>$CLAW_HOME/launch-gateway.sh</string>
-  </array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>$HOME/Library/Logs/hivemindos-claw-backend.log</string>
-  <key>StandardErrorPath</key><string>$HOME/Library/Logs/hivemindos-claw-backend.err.log</string>
-</dict>
-</plist>
-PLIST
-  relaunch_agent "com.hivemindos.claw-backend" "$PLIST"
-  echo "[claw] installed launchd service com.hivemindos.claw-backend"
+  # On macOS the agent gateway is hosted by the signed HivemindOS.app (so claw's
+  # file writes are attributed to com.hivemindos.desktop and get a one-click folder
+  # grant). A headless launchd gateway must NOT run here: it spawns the EXTERNAL
+  # claw as its own TCC-responsible process (denied ~/Downloads etc.) and races the
+  # app for the gateway port. Retire any previously-installed backend job and do not
+  # recreate it. (launch-gateway.sh stays — the app runs it; the voice worker below
+  # is a separate job that doesn't bind the gateway port and is left intact.)
+  launchctl bootout "gui/$(id -u)/com.hivemindos.claw-backend" 2>/dev/null || true
+  launchctl disable "gui/$(id -u)/com.hivemindos.claw-backend" 2>/dev/null || true
+  rm -f "$HOME/Library/LaunchAgents/com.hivemindos.claw-backend.plist"
+  echo "[claw] gateway is now hosted by the signed HivemindOS app (one-click folder grant) — headless launchd backend retired"
 
   WPLIST="$HOME/Library/LaunchAgents/com.hivemindos.claw-voice-worker.plist"
   if [ "$VOICE_CONFIGURED" = "1" ]; then

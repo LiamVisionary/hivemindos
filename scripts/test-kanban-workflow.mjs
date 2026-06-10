@@ -147,6 +147,145 @@ async function main() {
     assert(completed.task?.status === "done", "Complete should finish claimed work.");
     assert(completed.board.runs.some((run) => run.id === claimable.currentRunId && run.status === "completed"), "Complete should close the active run.");
 
+    let loopGated = await createTask("loop gated completion", "ready", {
+      maxAttempts: 3,
+      loop: {
+        mode: "closed",
+        goal: "Complete only after the real worker output passes the held-out marker check.",
+        successCriteria: ["worker result includes the verification marker"],
+        evalGates: [{
+          id: "marker-check",
+          title: "held-out marker check",
+          kind: "agent",
+          phase: "post",
+          required: true,
+          status: "pending",
+          createdAt: Date.now(),
+        }],
+        budget: { maxAttempts: 3, maxRuntimeMs: 60_000 },
+        retryPolicy: { maxAttempts: 3, onFailure: "retry" },
+        evidenceRequired: ["worker chat transcript"],
+      },
+    });
+    assert(loopGated.loop?.evalGates?.[0]?.phase === "post", "Loop gates should preserve Evo-style pre/post phase metadata.");
+    assert(loopGated.maxAttempts === 3 && loopGated.maxRuntimeMs === 60_000, "Loop budget should hydrate task retry/runtime limits.");
+    const loopBlocked = await request("POST", {
+      action: "complete",
+      taskId: loopGated.id,
+      summary: "worker claimed success without eval evidence",
+    });
+    assert(loopBlocked.blocked === true, "Required loop gates should block completion without a passing receipt.");
+    assert(loopBlocked.task?.status === "needs-human", "Missing loop evidence should fail closed to Needs You.");
+    assert(loopBlocked.board.events.some((item) => item.kind === "loop.eval-blocked" && item.taskId === loopGated.id), "Blocked loop completion should leave an eval event receipt.");
+    const loopPassed = await request("POST", {
+      action: "complete",
+      taskId: loopGated.id,
+      summary: "worker output passed marker check",
+      loopReceipts: [{
+        gateId: "marker-check",
+        status: "passed",
+        summary: "marker found in worker chat",
+        evidence: ["worker chat transcript included marker"],
+        verifier: "kanban workflow test",
+      }],
+    });
+    loopGated = loopPassed.task;
+    assert(loopGated.status === "done", "A passing loop receipt should allow completion.");
+    assert(loopGated.loop?.evalGates?.[0]?.status === "passed", "Passing receipts should update gate status.");
+    assert(loopGated.loopReceipts?.some((receipt) => receipt.gateId === "marker-check" && receipt.status === "passed"), "Loop receipts should persist on the task.");
+
+    let optimizerLoop = await createTask("optimizer loop substrate", "ready", {
+      loop: {
+        mode: "optimizer",
+        goal: "Improve routing quality without breaking QA gates.",
+        successCriteria: ["increase held-out routing score"],
+        evalGates: [],
+      },
+    });
+    const discoveredLoop = await request("POST", {
+      action: "loop-discover",
+      taskId: optimizerLoop.id,
+      loop: {
+        goal: "Improve routing quality without breaking QA gates.",
+        successCriteria: ["increase held-out routing score", "preserve marker verification"],
+        target: "src/lib/services/queen-bee/router.ts",
+        command: "pnpm test:queen-bee:routing -- --json",
+        metricName: "held_out_routing_score",
+        metricDirection: "max",
+        scoreFloor: 0.72,
+        resourceProfile: "CPU-light isolated benchmark",
+        instrumentation: "manual",
+        frontierStrategy: { kind: "pareto_per_task", params: { k: 2, task_floor: 0.01 }, seed: 7 },
+        evalGates: [{
+          id: "routing-floor",
+          title: "held-out routing floor",
+          kind: "test",
+          phase: "post",
+          required: true,
+          status: "pending",
+          createdAt: Date.now(),
+        }],
+      },
+    });
+    optimizerLoop = discoveredLoop.task;
+    assert(optimizerLoop.loop?.benchmark?.metricName === "held_out_routing_score", "loop-discover should persist benchmark discovery metadata.");
+    assert(optimizerLoop.loop?.frontierStrategy?.kind === "pareto_per_task", "loop-discover should persist frontier strategy.");
+    assert(optimizerLoop.loop?.observation?.pendingRequiredGateCount === 1, "Observation should expose pending required gates.");
+    const expA = await request("POST", {
+      action: "loop-record",
+      taskId: optimizerLoop.id,
+      experiment: {
+        id: "exp-a",
+        hypothesis: "prefer exact QA worker class",
+        status: "committed",
+        score: 0.76,
+        taskScores: { qa: 0.91, coding: 0.54 },
+        createdAt: Date.now(),
+      },
+    });
+    assert(expA.task?.loop?.observation?.bestExperimentId === "exp-a", "First committed experiment should become running best.");
+    const expA2 = await request("POST", {
+      action: "loop-record",
+      taskId: optimizerLoop.id,
+      experiment: {
+        id: "exp-a2",
+        parentId: "exp-a",
+        hypothesis: "prefer exact QA worker class plus freshest project checkout",
+        status: "committed",
+        score: 0.82,
+        taskScores: { qa: 0.92, coding: 0.65 },
+        createdAt: Date.now() + 1,
+      },
+    });
+    assert(expA2.task?.loop?.observation?.runningBestExperimentIds?.includes("exp-a2"), "Observation should track running-best experiment lineage.");
+    const expB = await request("POST", {
+      action: "loop-record",
+      taskId: optimizerLoop.id,
+      experiment: {
+        id: "exp-b",
+        hypothesis: "route by coding project checkout before worker class",
+        status: "evaluated",
+        score: 0.74,
+        taskScores: { qa: 0.62, coding: 0.93 },
+        createdAt: Date.now() + 2,
+      },
+      antiPatterns: [{
+        title: "Do not route by display name alone",
+        reason: "It repeatedly assigns local and remote agents ambiguously when names collide.",
+        sourceExperimentId: "exp-b",
+        evidence: ["display-name-only routing caused stale checkout selection"],
+      }],
+    });
+    optimizerLoop = expB.task;
+    const observation = optimizerLoop.loop?.observation;
+    assert(observation?.totalExperiments === 3, "Observation should count loop experiments.");
+    assert(observation?.antiPatternCount === 1, "What-not-to-try memory should be counted in observation.");
+    assert(optimizerLoop.loop?.antiPatterns?.[0]?.title === "Do not route by display name alone", "Anti-pattern memory should persist on the loop.");
+    assert(observation?.frontier?.some((item) => item.id === "exp-a2"), "Frontier should include the best leaf experiment.");
+    assert(observation?.frontier?.some((item) => item.id === "exp-b"), "Pareto frontier should preserve a specialist leaf.");
+    assert(!observation?.frontier?.some((item) => item.id === "exp-a"), "Frontier should exclude experiments extended by children.");
+    await moveTask(optimizerLoop, "archived");
+
     const queueTarget = { key: "queue-test-machine", name: "Queue Test Machine" };
     await createTask("queue lower priority", "ready", { priority: "normal", targetMachine: queueTarget });
     const queueUrgent = await createTask("queue retryable runtime failure", "ready", {

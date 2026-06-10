@@ -9,6 +9,7 @@ import { RUNTIME_CAPABILITIES, runtimeUsesAgentEnvOverlay } from "@/lib/types/ag
 import { getUsePodBalanceUsd, resolveAgentWallet } from "@/lib/utils/agent-wallet";
 import type { FleetAgentCapabilityBadge, FleetAgentCapabilityIcon } from "@/components/fleet/fleet-data";
 import { simpleStableHash } from "@/features/dashboard/dashboard-light-helpers";
+import { filterSuppressedAgents } from "@/features/fleet/fleet-identity";
 
 const FLEET_CAPABILITY_META: Record<string, { label: string; icon: FleetAgentCapabilityIcon; tone: FleetAgentCapabilityBadge["tone"] }> = {
   chat: { label: "Chat", icon: "chat", tone: "aqua" },
@@ -86,20 +87,29 @@ function fleetAgentCapabilityBadges(agent: any): FleetAgentCapabilityBadge[] {
 }
 
 export function useDashboardDerivedState(props: any) {
-  const { RUNTIME_LABELS, activeView, agentAliasMap, agentCreateDraft, agentCreateMachineKey, agentRoleModalId, agentSettingsPanel, agents, beeRoleLabel, brainGraph, brainGraphLayout, brainSkills, chatAutoScrollRef, chatDisplayContent, chatMessageStorageKey, chatMessageWindow, chatProcessByKey, chatStreamingByKey, cleanActivityTitle, collectorKey, createAgentProfile, dedupeAgents, discoveredMachines, displayMachineName, fleetAgentState, fleetMachineLocation, fleetMetric, fleetSnapshots, fleetVersionState, formatRelativeTime, getHoneyAgentRewards, getSurvivalSnapshot, groupKanbanTasks, groupNotifications, hermesUpdateRequiredDetail, hiveEnv, hiveEnvRuntimeSourceId, honeyTreasury, hydrated, inferCurrentTask, inferLatestAgentMessage, isChatSidebarTask, isLoopbackCollector, isManualAgentChatMessage, isMeaningfulActive, isMobileMachineOs, isStarterPlaceholder, isVisibleFleetMachine, isWorkView, kanbanAssignees, kanbanBoard, kanbanBoardScrollRef, kanbanError, kanbanIncludeArchived, kanbanLoading, kanbanTaskAssigneeAgent, machineIdentityFromParts, machineNameAliases, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineNetworkIssue, maintenanceReport, messagesByAgent, messagesScrollRef, mirosharkAnalysisAgentId, mirosharkStatus, moneyClawLoadingEnvName, moneyClawStatusByEnvName, normalizeAgentProfile, notificationActorMeta, notificationDisplayBody, notificationDisplayTitle, notificationSourceLabel, notificationSummary, notifications, parseEnvImportText, quickAddMachineTargets, refreshMoneyClawStatus, refreshRuntimeIntegrations, refreshSharedSchedulesFromVault, runtimeCan, runtimeCount, runtimeFileRoots, runtimeUsage, schedulerSkillSearch, schedules, selectedAgentId, selectedBrainNodeId, selectedChatLeafKey, selectedChatPreview, selectedKanbanTaskId, selectedKanbanTaskIds, setKanbanBoardScrollState, setMachineNameAliases, setScheduleDraft, setupMachineKey, sharedEnvImportText, sharedVault, skillBrowserSearch, skillBrowserSkills, tailscaleDevices, tailscaleStatus, tasks, updateStatusByMachine, walletExpanded, walletsByAgent, workPriority } = props;
+  const { RUNTIME_LABELS, activeView, agentAliasMap, agentCreateDraft, agentCreateMachineKey, agentRoleModalId, agentSettingsPanel, agents, beeRoleLabel, brainGraph, brainGraphLayout, brainSkills, chatAutoScrollRef, chatDisplayContent, chatMessageStorageKey, chatMessageWindow, chatProcessByKey, chatStreamingByKey, cleanActivityTitle, collectorKey, createAgentProfile, dedupeAgents, discoveredMachines, displayMachineName, fleetAgentState, fleetMachineLocation, fleetMetric, fleetSnapshots, fleetVersionState, formatRelativeTime, getHoneyAgentRewards, getSurvivalSnapshot, groupKanbanTasks, groupNotifications, hermesUpdateRequiredDetail, hiveEnv, hiveEnvRuntimeSourceId, honeyTreasury, hydrated, inferCurrentTask, inferLatestAgentMessage, isChatSidebarTask, isLoopbackCollector, isManualAgentChatMessage, isMeaningfulActive, isMobileMachineOs, isStarterPlaceholder, isVisibleFleetMachine, isWorkView, kanbanAssignees, kanbanBoard, kanbanBoardScrollRef, kanbanError, kanbanIncludeArchived, kanbanLoading, kanbanTaskAssigneeAgent, machineIdentityFromParts, machineNameAliases, machineNeedsChatBridgeRepair, machineNeedsEnvHttpSyncRepair, machineNeedsSkillSyncRepair, machineNetworkIssue, maintenanceReport, messagesByAgent, messagesScrollRef, mirosharkAnalysisAgentId, mirosharkStatus, moneyClawLoadingEnvName, moneyClawStatusByEnvName, normalizeAgentProfile, notificationActorMeta, notificationDisplayBody, notificationDisplayTitle, notificationSourceLabel, notificationSummary, notifications, parseEnvImportText, quickAddMachineTargets, refreshMoneyClawStatus, refreshRuntimeIntegrations, refreshSharedSchedulesFromVault, runtimeCan, runtimeCount, runtimeFileRoots, runtimeUsage, schedulerSkillSearch, schedules, selectedAgentId, selectedBrainNodeId, selectedChatLeafKey, selectedChatPreview, selectedKanbanTaskId, selectedKanbanTaskIds, setKanbanBoardScrollState, setMachineNameAliases, setScheduleDraft, setupMachineKey, sharedEnvImportText, sharedVault, skillBrowserSearch, skillBrowserSkills, tailscaleDevices, tailscaleStatus, tasks, updateStatusByMachine, walletExpanded, walletsByAgent, workPriority, suppressedDiscoveredAgentKeys = new Set() } = props;
+  const visibleConfiguredAgents = useMemo(
+    () => filterSuppressedAgents(agents, suppressedDiscoveredAgentKeys),
+    [agents, suppressedDiscoveredAgentKeys],
+  );
   const discoveredAgents = useMemo(
-    () => discoveredMachines.flatMap((machine) => machine.agents ?? []).map(normalizeAgentProfile),
-    [discoveredMachines],
+    () => filterSuppressedAgents(
+      discoveredMachines
+        .flatMap((machine) => machine.agents ?? [])
+        .map(normalizeAgentProfile),
+      suppressedDiscoveredAgentKeys,
+    ),
+    [discoveredMachines, normalizeAgentProfile, suppressedDiscoveredAgentKeys],
   );
 
   const agentAliases = useMemo(
-    () => agentAliasMap(agents, discoveredAgents),
-    [agents, discoveredAgents],
+    () => agentAliasMap(visibleConfiguredAgents, discoveredAgents),
+    [visibleConfiguredAgents, discoveredAgents],
   );
 
   const candidateAgents = useMemo(
-    () => dedupeAgents(agents, discoveredAgents),
-    [agents, discoveredAgents],
+    () => dedupeAgents(visibleConfiguredAgents, discoveredAgents),
+    [dedupeAgents, visibleConfiguredAgents, discoveredAgents],
   );
 
   const candidateWorkById = useMemo(() => {
@@ -329,11 +339,50 @@ export function useDashboardDerivedState(props: any) {
       && left?.role === right?.role
       && (left?.content ?? "").replace(/\s+/g, " ").trim().toLowerCase() === (right?.content ?? "").replace(/\s+/g, " ").trim().toLowerCase()
     );
-    const withPreservedProcessEvents = (nextMessage: ChatMessage, previousMessage?: ChatMessage) => (
-      (previousMessage?.processEvents?.length ?? 0) > 0 && !(nextMessage.processEvents?.length ?? 0)
-        ? { ...nextMessage, processEvents: previousMessage?.processEvents }
-        : nextMessage
+    const chatMessageHasActiveSurface = (message?: ChatMessage) => Boolean(
+      message
+      && (
+        chatDisplayContent(message).trim()
+        || message.agentPrompt
+        || (message.processEvents?.length ?? 0) > 0
+        || message.applicationGeneration
+        || message.imageGeneration
+      ),
     );
+    const chatMessageHasGenerationSurface = (message?: ChatMessage) => Boolean(message?.applicationGeneration || message?.imageGeneration);
+    const mergeChatProcessEvents = (
+      first: ChatMessage["processEvents"] = [],
+      second: ChatMessage["processEvents"] = [],
+    ) => {
+      const output: NonNullable<ChatMessage["processEvents"]> = [];
+      const indexByKey = new Map<string, number>();
+      for (const event of [...(first ?? []), ...(second ?? [])]) {
+        if (!event) continue;
+        const key = [event.runId ?? "", event.label ?? "", event.detail ?? "", event.status ?? ""].join("\u001f");
+        const existingIndex = indexByKey.get(key);
+        if (existingIndex === undefined) {
+          indexByKey.set(key, output.length);
+          output.push(event);
+        } else if (Number(event.at ?? 0) >= Number(output[existingIndex]?.at ?? 0)) {
+          output[existingIndex] = event;
+        }
+      }
+      return output.sort((left, right) => Number(left.at ?? 0) - Number(right.at ?? 0)).slice(-80);
+    };
+    const withPreservedProcessEvents = (nextMessage: ChatMessage, previousMessage?: ChatMessage) => {
+      let next = nextMessage;
+      const mergedProcessEvents = mergeChatProcessEvents(previousMessage?.processEvents, next.processEvents);
+      if (mergedProcessEvents.length) {
+        next = { ...next, processEvents: mergedProcessEvents };
+      }
+      if (previousMessage?.applicationGeneration && !next.applicationGeneration) {
+        next = { ...next, applicationGeneration: previousMessage.applicationGeneration };
+      }
+      if (previousMessage?.imageGeneration && !next.imageGeneration) {
+        next = { ...next, imageGeneration: previousMessage.imageGeneration };
+      }
+      return next;
+    };
     const findLastMessageIndex = (messagesToSearch: ChatMessage[], predicate: (message: ChatMessage) => boolean) => {
       for (let index = messagesToSearch.length - 1; index >= 0; index -= 1) {
         if (predicate(messagesToSearch[index])) return index;
@@ -368,14 +417,13 @@ export function useDashboardDerivedState(props: any) {
         const between = previousUserIndex >= 0 ? output.slice(previousUserIndex + 1) : [];
         const onlyPendingAssistantBetween = between.length > 0 && between.every((item) => (
           item.role === "assistant"
-          && !chatDisplayContent(item).trim()
-          && !item.agentPrompt
+          && !chatMessageHasActiveSurface(item)
         ));
         if (onlyPendingAssistantBetween) continue;
         const nextAssistant = items[index + 1];
         const previousAssistant = [...between].reverse().find((item) => (
           item.role === "assistant"
-          && chatDisplayContent(item).trim()
+          && chatMessageHasActiveSurface(item)
         ));
         if (
           nextAssistant?.role === "assistant"
@@ -390,10 +438,23 @@ export function useDashboardDerivedState(props: any) {
           continue;
         }
       }
-      if (message.role === "assistant" && chatDisplayContent(message).trim()) {
+      if (message.role === "assistant" && chatMessageHasActiveSurface(message)) {
+        const currentUser = [...output].reverse().find((item) => item.role === "user");
+        const previousCardAssistantIndex = findLastMessageIndex(output, (item) => (
+          item.role === "assistant"
+          && chatMessageHasGenerationSurface(item)
+        ));
+        const previousCardUser = [...output.slice(0, previousCardAssistantIndex)].reverse().find((item) => item.role === "user");
+        if (
+          previousCardAssistantIndex >= 0
+          && sameMessage(previousCardUser, currentUser)
+          && !sameMessage(output[previousCardAssistantIndex], message)
+        ) {
+          output[previousCardAssistantIndex] = withPreservedProcessEvents(message, output[previousCardAssistantIndex]);
+          continue;
+        }
         const previousAssistantIndex = findLastMessageIndex(output, (item) => sameMessage(item, message));
         const previousUser = [...output.slice(0, previousAssistantIndex)].reverse().find((item) => item.role === "user");
-        const currentUser = [...output].reverse().find((item) => item.role === "user");
         if (previousAssistantIndex >= 0 && sameMessage(previousUser, currentUser)) {
           output[previousAssistantIndex] = withPreservedProcessEvents(message, output[previousAssistantIndex]);
           continue;
@@ -426,6 +487,9 @@ export function useDashboardDerivedState(props: any) {
           || (selectedChatStreaming && index > latestUserIndex)
           || chatDisplayContent(message).trim()
           || message.agentPrompt
+          || (message.processEvents?.length ?? 0) > 0
+          || message.applicationGeneration
+          || message.imageGeneration
           || (selectedChatProcess.length > 0 && index === lastAssistantIndex)
         )
       )));
@@ -484,6 +548,7 @@ export function useDashboardDerivedState(props: any) {
       machineId: discovered?.machineId,
       capabilities: discovered?.capabilities,
       envSync: discovered?.envSync,
+      system: discovered?.system,
       lastSeenAt: discovered?.lastSeenAt,
       };
     });
@@ -519,6 +584,7 @@ export function useDashboardDerivedState(props: any) {
 	        machineId: machine.machineId,
 	        capabilities: machine.capabilities,
 	        envSync: machine.envSync,
+	        system: machine.system,
 	        lastSeenAt: machine.lastSeenAt,
       });
     });
@@ -530,11 +596,29 @@ export function useDashboardDerivedState(props: any) {
         + (machine.agents.length * 10)
         + (machine.online ? 5 : 0)
       );
+      const stableMachineId = (item: MachineGroup) => {
+        const machineId = item.collector === "ready" ? item.machineId?.trim().toLowerCase() ?? "" : "";
+        return /^hivemind-machine-[a-f0-9]{32}$/.test(machineId) ? machineId : "";
+      };
+      // Bridge machineId keys to name-identity keys: a bare tailscale device
+      // (no collector probe, so no machineId) must still merge with the
+      // discovered copy of the same machine, which is keyed by machineId.
+      // Identities claimed by more than one machineId are ambiguous (distinct
+      // physical machines whose names collide after -N stripping), so leave
+      // those unbridged rather than merging a shadow into the wrong machine.
+      const machineIdByNameIdentity = new Map<string, string>();
       for (const item of items) {
-        const machineId = item.collector === "ready" ? item.machineId?.trim().toLowerCase() : "";
-        const key = machineId && /^hivemind-machine-[a-f0-9]{32}$/.test(machineId)
-          ? machineId
-          : machineIdentityFromParts(item);
+        const machineId = stableMachineId(item);
+        if (!machineId) continue;
+        const nameIdentity = machineIdentityFromParts(item);
+        const claimed = machineIdByNameIdentity.get(nameIdentity);
+        machineIdByNameIdentity.set(nameIdentity, claimed && claimed !== machineId ? "" : machineId);
+      }
+      for (const item of items) {
+        const nameIdentity = machineIdentityFromParts(item);
+        const key = stableMachineId(item)
+          || machineIdByNameIdentity.get(nameIdentity)
+          || nameIdentity;
         const previous = byIdentity.get(key);
         if (!previous) {
           byIdentity.set(key, item);
@@ -671,9 +755,10 @@ export function useDashboardDerivedState(props: any) {
         ip: machine.ip || machine.address || "—",
         collectorUrl: machine.collectorUrl,
         ping: machine.online ? fleetMetric(machine.key, 4, 68) : 0,
-        cpu: fleetMetric(`${machine.key}:cpu`, machine.collector === "ready" ? 12 : 2, machine.collector === "ready" ? 82 : 18),
-        ram: fleetMetric(`${machine.key}:ram`, 18, 86),
-        disk: fleetMetric(`${machine.key}:disk`, 12, 88),
+        cpu: machine.system?.cpuPct ?? fleetMetric(`${machine.key}:cpu`, machine.collector === "ready" ? 12 : 2, machine.collector === "ready" ? 82 : 18),
+        ram: machine.system?.ramPct ?? fleetMetric(`${machine.key}:ram`, 18, 86),
+        disk: machine.system?.diskPct ?? fleetMetric(`${machine.key}:disk`, 12, 88),
+        system: machine.system,
         version: machine.version?.shortCommit ? `build ${machine.version.shortCommit}` : machine.collector === "ready" ? "current" : "—",
         versionState,
         canUpdate,
@@ -1172,7 +1257,7 @@ export function useDashboardDerivedState(props: any) {
   const activeNavItem = navItems.find((item) => (
     item.id === activeView
     || (item.id === "kanban" && isWorkView(activeView))
-    || (item.id === "more" && (activeView === "maintenance" || activeView === "sessions" || activeView === "tools" || activeView === "memory" || activeView === "files" || activeView === "notifications" || activeView === "env" || activeView === "integrations" || activeView === "my-apps" || activeView === "phone" || activeView === "aeon" || activeView === "fusion"))
+    || (item.id === "more" && (activeView === "maintenance" || activeView === "sessions" || activeView === "tools" || activeView === "memory" || activeView === "files" || activeView === "notifications" || activeView === "messaging" || activeView === "env" || activeView === "integrations" || activeView === "my-apps" || activeView === "phone" || activeView === "aeon" || activeView === "fusion"))
   ));
   const activeHeader = (() => {
     const detail = activeNavItem?.detail ?? "";
@@ -1191,6 +1276,7 @@ export function useDashboardDerivedState(props: any) {
       memory: { label: "Memory", title: "What memory grows" },
       files: { label: "Brain Files", title: "What agents inspect" },
       notifications: { label: "Alerts", title: "What alerts need" },
+      messaging: { label: "Messaging", title: "Where agents can message" },
       chat: { label: "Agent Chat", title: selectedAgent?.name ? `Talking with ${selectedAgent.name}` : "Choose an agent to chat with" },
       more: { label: "More", title: "Where utilities live" },
       env: { label: "Env", title: "What agents share" },

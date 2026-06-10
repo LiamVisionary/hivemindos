@@ -407,10 +407,11 @@ export function useMirosharkBrainController(props: any) {
     }
     const params = new URLSearchParams();
     if (sharedVault.vaultPath.trim()) params.set("vaultPath", sharedVault.vaultPath.trim());
+    if (sharedVault.kanbanFolder?.trim()) params.set("kanbanFolder", sharedVault.kanbanFolder.trim());
     const response = await fetch(`/api/obsidian/recent-directories?${params.toString()}`).catch(() => null);
     const data = await response?.json().catch(() => null) as { ok?: boolean; directories?: RecentDirectory[] } | null;
     if (response?.ok && data?.ok && Array.isArray(data.directories)) setRecentDirectories(data.directories);
-  }, [sharedVault.enabled, sharedVault.vaultPath]);
+  }, [sharedVault.enabled, sharedVault.kanbanFolder, sharedVault.vaultPath]);
 
   const recordRecentDirectory = useCallback(async (
     directory: LinkedDirectory,
@@ -711,6 +712,7 @@ export function useMirosharkBrainController(props: any) {
       category: typeof skill.category === "string" ? skill.category : undefined,
       skillMdUrl: typeof skill.skillMdUrl === "string" ? skill.skillMdUrl : undefined,
       githubUrl: typeof skill.githubUrl === "string" ? skill.githubUrl : typeof skill.githubRepoUrl === "string" ? skill.githubRepoUrl : undefined,
+      packagedPath: typeof skill.packagedPath === "string" ? skill.packagedPath : undefined,
       sourceRef: typeof skill.sourceRef === "string" ? skill.sourceRef : undefined,
       capabilities: Array.isArray(skill.capabilities) ? skill.capabilities.map(String) : undefined,
       envKeys: Array.isArray(skill.envKeys) ? skill.envKeys.map(String) : undefined,

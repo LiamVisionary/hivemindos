@@ -2,29 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
 import { getRuntimeIntegrationStatus, runRuntimeIntegrationAction } from "@/lib/services/runtime-integrations";
 import { runtimeHasAdapter } from "@/lib/services/runtime-adapters/registry";
+import { canonicalLocalCollectorUrl, isLocalCollectorUrl, normalizeCollectorUrl } from "@/lib/services/local-collector-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function validRuntime(value: string): value is AgentRuntime {
   return runtimeHasAdapter(value);
-}
-
-function normalizeCollectorUrl(url?: string) {
-  return url?.trim().replace(/\/+$/, "") ?? "";
-}
-
-function isLocalCollectorUrl(url?: string) {
-  const normalized = normalizeCollectorUrl(url);
-  if (!normalized) return false;
-  try {
-    const parsed = new URL(normalized);
-    if (parsed.pathname !== "/" && parsed.pathname !== "") return false;
-    const hostname = parsed.hostname.toLowerCase();
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
-  } catch {
-    return false;
-  }
 }
 
 async function proxyCollectorIntegration(runtime: AgentRuntime, collectorUrl: string, body: { agent?: AgentProfile; action?: string; input?: Record<string, unknown> }) {
@@ -52,7 +36,7 @@ export async function POST(
     return NextResponse.json({ ok: false, error: `Unknown runtime: ${runtime}` }, { status: 404 });
   }
   const body = await request.json().catch(() => ({})) as { agent?: AgentProfile; action?: string; input?: Record<string, unknown> };
-  const collectorUrl = normalizeCollectorUrl(body.agent?.telemetryUrl);
+  const collectorUrl = await canonicalLocalCollectorUrl(body.agent);
   if (collectorUrl && !isLocalCollectorUrl(collectorUrl)) {
     try {
       return NextResponse.json(await proxyCollectorIntegration(runtime, collectorUrl, body));
@@ -66,7 +50,7 @@ export async function POST(
   }
   if (body.action) {
     try {
-      const result = await runRuntimeIntegrationAction(runtime, body.action, body.input ?? {});
+      const result = await runRuntimeIntegrationAction(runtime, body.action, body.input ?? {}, body.agent);
       return NextResponse.json(result);
     } catch (error) {
       return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Runtime action failed." }, { status: 502 });

@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { AgentRuntime } from "@/lib/types/agent-runtime";
-import { RUNTIME_DEFAULTS, RUNTIME_LABELS } from "@/lib/types/agent-runtime";
+import { HIVEMIND_OS_RUNTIME, RUNTIME_DEFAULTS, RUNTIME_LABELS } from "@/lib/types/agent-runtime";
 
 const execFileAsync = promisify(execFile);
 
@@ -29,7 +29,7 @@ async function checkRuntimeAvailability(runtime: AgentRuntime) {
   if (runtime === "codex") return checkCliRuntime("Codex", process.env.CODEX_BIN, "codex");
   if (runtime === "claude-code") return checkCliRuntime("Claude Code", process.env.CLAUDE_CODE_BIN || process.env.CLAUDE_BIN, "claude");
   if (runtime === "aeon") return checkAeon();
-  if (runtime === "openai-compatible") return checkOpenAICompatible();
+  if (runtime === HIVEMIND_OS_RUNTIME) return checkOpenAICompatible();
   return { installed: false, detail: `${RUNTIME_LABELS[runtime] ?? runtime} is not installed.` };
 }
 
@@ -107,7 +107,7 @@ async function checkAeon() {
 }
 
 async function checkOpenAICompatible() {
-  const defaults = RUNTIME_DEFAULTS["openai-compatible"];
+  const defaults = RUNTIME_DEFAULTS[HIVEMIND_OS_RUNTIME];
   const base = defaults.gatewayUrl.replace(/\/+$/, "");
   const path = defaults.statusPath || "/v1/models";
   const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
@@ -117,7 +117,7 @@ async function checkOpenAICompatible() {
   }).then((response) => response.ok).catch(() => false);
   return {
     installed: reachable,
-    detail: reachable ? "Local OpenAI-compatible endpoint is reachable." : "Local OpenAI-compatible runtime is not installed.",
+    detail: reachable ? "HivemindOS managed runtime endpoint is reachable." : "HivemindOS managed runtime endpoint is not reachable.",
   };
 }
 

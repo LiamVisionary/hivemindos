@@ -6,9 +6,10 @@ import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { createTask, readBoard } from "@/lib/services/kanban/local-kanban-store";
 import { scheduleQueenBeeAutonomousPickup } from "@/lib/services/queen-bee/autonomous-worker";
 import { chooseQueenBeeDelegate, type QueenBeeWorkerClass } from "@/lib/services/queen-bee/router";
+import { readQueenBeeOutcomeStats } from "@/lib/services/queen-bee/outcome-stats";
 import { readProjectRegistry } from "@/lib/services/projects/project-registry";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
-import type { KanbanPriority } from "@/lib/types/kanban";
+import type { KanbanLoopSpec, KanbanPriority } from "@/lib/types/kanban";
 
 export const QUEEN_BEE_FOLDER_NAME = "Queen Bee";
 export const QUEEN_BEE_PROTOCOL = "hivemind-queen-bee";
@@ -24,6 +25,7 @@ export type QueenBeeMessageInput = QueenBeeOptions & {
   source?: string | null;
   mode?: "act" | "plan" | "route";
   priority?: KanbanPriority;
+  loop?: KanbanLoopSpec | null;
   taskTitle?: string | null;
   agentId?: string | null;
   machineId?: string | null;
@@ -204,13 +206,14 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   const title = input.taskTitle?.trim() || taskTitleFromMessage(message);
   const createdAt = new Date().toISOString();
   const projectRegistry = await readQueenBeeProjectRegistry(input.vaultPath);
-  const delegation = chooseQueenBeeDelegate({ title, body: message, skills: [], projectRegistry }, input.fleetSnapshot ?? []);
+  const outcomes = await readQueenBeeOutcomeStats().catch(() => ({}));
+  const delegation = chooseQueenBeeDelegate({ title, body: message, skills: [], projectRegistry }, input.fleetSnapshot ?? [], { outcomes });
   const selectedAgentName = delegation.agent?.name || delegation.agent?.id || delegation.agent?.agentId;
   const selectedMachineName = delegation.machine?.device?.name || delegation.machine?.key;
 
   const result = await createTask(null, {
     title,
-    body: queenBeeTaskBody({ message, source, mode, fingerprint, delegation }),
+    body: queenBeeTaskBody({ message, source, mode, fingerprint, delegation, loop: input.loop }),
     assignee: selectedAgentName || "queen-bee",
     status: mode === "plan" ? "ideas" : "ready",
     priority: input.priority || "normal",
@@ -221,6 +224,7 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
       name: selectedMachineName || "Unknown machine",
       collectorUrl: delegation.machine.device?.collectorUrl,
     } : null,
+    loop: input.loop ?? undefined,
     idempotencyKey,
   }, {
     vaultPath: input.vaultPath,
@@ -347,7 +351,7 @@ function taskTitleFromMessage(message: string) {
   return clean.length > 80 ? `${clean.slice(0, 77)}...` : clean;
 }
 
-function queenBeeTaskBody(input: { message: string; source: string; mode: string; fingerprint: string; delegation: ReturnType<typeof chooseQueenBeeDelegate> }) {
+function queenBeeTaskBody(input: { message: string; source: string; mode: string; fingerprint: string; delegation: ReturnType<typeof chooseQueenBeeDelegate>; loop?: KanbanLoopSpec | null }) {
   const delegation = publicDelegation(input.delegation);
   return [
     "Created by the Queen Bee control plane.",
@@ -358,6 +362,7 @@ function queenBeeTaskBody(input: { message: string; source: string; mode: string
     `Worker class: ${delegation.workerClass}`,
     `Delegated agent: ${delegation.agent?.name || "pending"}`,
     `Target machine: ${delegation.machine?.name || "pending"}`,
+    loopSummary(input.loop),
     "",
     "## Request",
     input.message,
@@ -368,6 +373,17 @@ function queenBeeTaskBody(input: { message: string; source: string; mode: string
     "## Queen Bee delegation",
     delegation.reason,
   ].join("\n");
+}
+
+function loopSummary(loop?: KanbanLoopSpec | null) {
+  if (!loop) return "";
+  return [
+    "## Loop contract",
+    `Mode: ${loop.mode}`,
+    loop.goal ? `Goal: ${loop.goal}` : "",
+    loop.successCriteria?.length ? `Success criteria: ${loop.successCriteria.join("; ")}` : "",
+    loop.evalGates?.length ? `Eval gates: ${loop.evalGates.map((gate) => `${gate.title} (${gate.phase})`).join("; ")}` : "",
+  ].filter(Boolean).join("\n");
 }
 
 function publicDelegation(delegation: ReturnType<typeof chooseQueenBeeDelegate>) {

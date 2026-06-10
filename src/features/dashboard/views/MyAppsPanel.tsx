@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowLeft, Ban, Clock3, Copy, ExternalLink, LoaderCircle, Maximize2, Minimize2, RefreshCcw, Route, Sparkles, XOctagon } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Ban, Clock3, Copy, ExternalLink, LoaderCircle, Maximize2, Minimize2, RefreshCcw, Route, Sparkles, Star, XOctagon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AGENT_APP_CATALOG } from "@/features/dashboard/agent-capability-catalog";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
+import { AppPreferencesCard, matchAppPreference, type AppPreferenceRecord } from "@/features/dashboard/views/AppPreferencesCard";
 import { getNativeFleetAppsCache } from "@/lib/native/fleet";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
@@ -361,6 +362,7 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
   const [status, setStatus] = useState("");
   const [statusTone, setStatusTone] = useState<"info" | "error">("info");
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+  const [appPreferences, setAppPreferences] = useState<AppPreferenceRecord[]>([]);
   const [liveAppExpanded, setLiveAppExpanded] = useState(false);
   const [copiedRouteKey, setCopiedRouteKey] = useState("");
   const [taskActionStatus, setTaskActionStatus] = useState("");
@@ -423,6 +425,24 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
     }, 0);
     return () => window.clearTimeout(timer);
   }, [activeView, loading, payload, refresh]);
+
+  useEffect(() => {
+    if (activeView !== "my-apps") return;
+    let cancelled = false;
+    fetch("/api/fleet/apps/preferences", { cache: "no-store" })
+      .then((response) => response.json().catch(() => null))
+      .then((payload: { ok?: boolean; preferences?: AppPreferenceRecord[] } | null) => {
+        if (!cancelled && payload?.ok && Array.isArray(payload.preferences)) setAppPreferences(payload.preferences);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeView]);
+
+  const rememberAppPreference = useCallback((preference: AppPreferenceRecord) => {
+    setAppPreferences((current) => [...current.filter((entry) => entry.appId !== preference.appId), preference]);
+  }, []);
 
   useEffect(() => {
     if (!liveAppExpanded) return undefined;
@@ -555,6 +575,13 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
                 </div>
               ) : null}
             </div>
+
+            <AppPreferencesCard
+              key={selectedApp.id}
+              app={selectedApp}
+              preference={matchAppPreference(selectedApp, appPreferences)}
+              onSaved={rememberAppPreference}
+            />
           </div>
 
           {selectedApp.interactive ? (
@@ -825,6 +852,11 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
               <AppIcon app={app} />
               <span className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-[rgb(10,14,21)] ${app.online ? "bg-emerald-400" : "bg-slate-400"}`} />
               {!app.interactive ? <span className="absolute -left-2 -top-2 rounded-full border border-[rgba(94,234,212,0.32)] bg-[rgba(10,14,21,0.92)] px-1.5 py-0.5 text-[9px] font-black uppercase text-[var(--accent-strong)]">API</span> : null}
+              {matchAppPreference(app, appPreferences)?.priority ? (
+                <span className="absolute -right-2 -top-2 grid h-5 w-5 place-items-center rounded-full border border-[rgba(251,191,36,0.4)] bg-[rgba(10,14,21,0.92)]">
+                  <Star aria-hidden="true" className="h-3 w-3 fill-[#fbbf24] text-[#fbbf24]" />
+                </span>
+              ) : null}
             </span>
             <span className="max-w-[7rem] text-sm font-bold leading-5">{app.name}</span>
             {(appNameCounts.get(app.name.toLowerCase()) ?? 0) > 1 ? (

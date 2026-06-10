@@ -8,7 +8,8 @@ import type { AgentProfile, AgentRuntime, RuntimeCapabilities } from "@/lib/type
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
 import { RUNTIME_CAPABILITIES } from "@/lib/types/agent-runtime";
 import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
-import { listBankrLlmModels } from "@/lib/services/bankr-llm";
+import { discoverLmStudioProviderModels, localOpenAIProviderProfile, runLmStudioAction } from "@/lib/services/runtime-adapters/openai-compatible";
+import { bankrLlmAccessStatus, bankrLlmModelOptions, isBankrLlmLowCreditError, listBankrLlmModels } from "@/lib/services/bankr-llm";
 import { mergeRuntimeSessions, previewSessionText } from "@/lib/services/runtime-session-utils";
 import type { RuntimeModelSelection } from "./runtime-adapters/types";
 
@@ -27,6 +28,11 @@ export type RuntimeIntegrationKey =
   | "backgroundTasks"
   | "xSearch"
   | "socialPosting"
+  | "imageGeneration"
+  | "ttsGeneration"
+  | "musicGeneration"
+  | "sfxGeneration"
+  | "model3dGeneration"
   | "videoGeneration"
   | "codexRuntime"
   | "kanbanDecompose";
@@ -56,6 +62,31 @@ export type RuntimeIntegrationStatus = {
       message?: string;
       httpStatus?: number;
       modelCount?: number;
+    };
+    bankr?: {
+      creditsBalanceUsd?: number | null;
+      balanceLabel?: string;
+      clubActive?: boolean | null;
+      lowCredits?: boolean;
+      checkedAt?: string;
+      error?: string;
+      modelError?: string;
+    };
+    lmStudio?: {
+      baseUrl?: string;
+      models?: Array<{
+        key: string;
+        displayName?: string;
+        type?: "llm" | "embedding" | string;
+        loaded?: boolean;
+        loadedInstanceIds?: string[];
+        maxContextLength?: number;
+        paramsString?: string | null;
+        sizeBytes?: number | null;
+        format?: string | null;
+      }>;
+      error?: string;
+      checkedAt?: string;
     };
   };
 };
@@ -99,11 +130,17 @@ export async function getRuntimeIntegrationStatus(runtime: AgentRuntime, agent?:
         if (status && typeof status === "object" && "providerStatus" in status) {
           providerStatus = (status as { providerStatus?: RuntimeIntegrationStatus["providerStatus"] }).providerStatus;
         }
+        if (status && typeof status === "object" && "diagnostics" in status) {
+          const statusDiagnostics = (status as { diagnostics?: unknown }).diagnostics;
+          if (Array.isArray(statusDiagnostics)) {
+            diagnostics.push(...statusDiagnostics.filter((item): item is string => typeof item === "string"));
+          }
+        }
       } catch (error) {
         diagnostics.push(error instanceof Error ? error.message : `${adapter.label} status check failed.`);
       }
     }
-    modelSelection = await augmentGatewayModelProviders(modelSelection, diagnostics, agent);
+    ({ modelSelection, providerStatus } = await augmentGatewayModelProviders(modelSelection, diagnostics, agent, providerStatus));
     return {
       runtime,
       capabilities,
@@ -127,7 +164,7 @@ export async function getRuntimeIntegrationStatus(runtime: AgentRuntime, agent?:
       return undefined;
     }),
   ]);
-  const modelSelection = await augmentGatewayModelProviders(baseModelSelection, diagnostics, agent);
+  const { modelSelection, providerStatus } = await augmentGatewayModelProviders(baseModelSelection, diagnostics, agent);
   const toolEnabled = (name: string) => new RegExp(`✓\\s+enabled\\s+${escapeRegExp(name)}\\b`).test(tools);
   const codexConfigured = /provider:\s*openai-codex\b|codex_app_server|codex-runtime/i.test(config);
   const kanbanAuto = /auto_decompose:\s*true/i.test(config);
@@ -137,6 +174,7 @@ export async function getRuntimeIntegrationStatus(runtime: AgentRuntime, agent?:
     runtime,
     capabilities,
     modelSelection,
+    providerStatus,
     integrations: {
       sessionSearch: {
         supported: true,
@@ -158,6 +196,31 @@ export async function getRuntimeIntegrationStatus(runtime: AgentRuntime, agent?:
         enabled: false,
         detail: "Hermes exposes X search natively here; posting should remain a skill/plugin action.",
       },
+      imageGeneration: {
+        supported: true,
+        enabled: toolEnabled("image_gen"),
+        detail: toolEnabled("image_gen") ? "image_generate is enabled for CLI." : "Enable image_gen before asking Hermes to create images.",
+      },
+      ttsGeneration: {
+        supported: false,
+        enabled: false,
+        detail: "tts_gen is reserved for future runtime speech-generation support.",
+      },
+      musicGeneration: {
+        supported: false,
+        enabled: false,
+        detail: "music-gen is reserved for future runtime music-generation support.",
+      },
+      sfxGeneration: {
+        supported: false,
+        enabled: false,
+        detail: "sfx_gen is reserved for future runtime sound-effect generation support.",
+      },
+      model3dGeneration: {
+        supported: false,
+        enabled: false,
+        detail: "3d_gen is reserved for future runtime 3D-generation support.",
+      },
       videoGeneration: {
         supported: true,
         enabled: toolEnabled("video_gen"),
@@ -178,20 +241,69 @@ export async function getRuntimeIntegrationStatus(runtime: AgentRuntime, agent?:
   };
 }
 
-async function augmentGatewayModelProviders(modelSelection: RuntimeModelSelection | undefined, diagnostics: string[], agent?: AgentProfile) {
-  if (!agent) return modelSelection;
+async function augmentGatewayModelProviders(
+  modelSelection: RuntimeModelSelection | undefined,
+  diagnostics: string[],
+  agent?: AgentProfile,
+  providerStatus?: RuntimeIntegrationStatus["providerStatus"],
+) {
+  if (!agent) return { modelSelection, providerStatus };
   const bankrGateway = MODEL_PROVIDER_GATEWAYS.bankr;
   const bankr = await listBankrLlmModels(agent).catch((error) => ({
     models: [],
     error: error instanceof Error ? error.message : "Bankr LLM model discovery failed.",
   }));
+  const bankrAccess = await bankrLlmAccessStatus().catch((error) => ({
+      clubActive: null,
+      creditsBalanceUsd: null,
+      error: error instanceof Error ? error.message : "Bankr access check failed.",
+    }));
   if (bankr.error) diagnostics.push(`Bankr LLM models unavailable: ${bankr.error}`);
+  if (bankrAccess.error) diagnostics.push(`Bankr access status unavailable: ${bankrAccess.error}`);
   const providers = [...(modelSelection?.providers ?? [])];
+  const lmStudioGateway = MODEL_PROVIDER_GATEWAYS["lm-studio"];
+  const lmStudio = await discoverLmStudioProviderModels(localOpenAIProviderProfile(agent)).catch((error) => ({
+    runtimeProfile: localOpenAIProviderProfile(agent),
+    lmStudioModels: [],
+    modelDiscoveryError: error instanceof Error ? error.message : "Local OpenAI model discovery failed.",
+    lmStudioModelSource: "",
+    models: [],
+  }));
+  if (lmStudio.modelDiscoveryError) diagnostics.push(`Local OpenAI model discovery unavailable: ${lmStudio.modelDiscoveryError}`);
+  const lmStudioModels = lmStudio.models.length
+    ? lmStudio.models
+    : agent.provider === "lm-studio" && agent.model?.trim()
+      ? [agent.model.trim()]
+      : [];
+  const lmStudioProvider = {
+    slug: "lm-studio",
+    name: lmStudioGateway.name,
+    models: lmStudioModels.map((id) => {
+      const model = lmStudio.lmStudioModels.find((item) => item.key === id);
+      return model
+        ? {
+          id,
+          name: model.displayName,
+          subtitle: model.loaded ? "Loaded" : "Downloaded",
+          group: model.paramsString || undefined,
+          badge: model.loaded ? "Loaded" : undefined,
+        }
+        : { id };
+    }),
+    totalModels: lmStudioModels.length,
+    isCurrent: agent.provider === "lm-studio",
+    isUserDefined: true,
+    source: lmStudio.lmStudioModelSource || `${lmStudioGateway.hermes?.baseUrl || "http://127.0.0.1:1234/v1"}/models`,
+  };
+  const lmStudioIndex = providers.findIndex((provider) => provider.slug === "lm-studio");
+  if (lmStudioIndex >= 0) providers[lmStudioIndex] = { ...providers[lmStudioIndex], ...lmStudioProvider };
+  else providers.push(lmStudioProvider);
+  const bankrModels = bankrLlmModelOptions(bankr.models, bankr.error, bankrAccess);
   const bankrProvider = {
     slug: "bankr",
     name: bankrGateway.name,
-    models: bankr.models.map((id) => ({ id })),
-    totalModels: bankr.models.length,
+    models: bankrModels,
+    totalModels: bankrModels.length,
     isCurrent: agent.provider === "bankr",
     isUserDefined: true,
     source: `${bankrGateway.hermes?.baseUrl || "https://llm.bankr.bot/v1"}/models`,
@@ -199,10 +311,31 @@ async function augmentGatewayModelProviders(modelSelection: RuntimeModelSelectio
   const existingIndex = providers.findIndex((provider) => provider.slug === "bankr");
   if (existingIndex >= 0) providers[existingIndex] = { ...providers[existingIndex], ...bankrProvider };
   else providers.push(bankrProvider);
+  const nextProviderStatus = {
+    ...providerStatus,
+    bankr: {
+      creditsBalanceUsd: bankrAccess.creditsBalanceUsd,
+      balanceLabel: bankrAccess.creditsBalanceUsd === null ? undefined : `$${bankrAccess.creditsBalanceUsd.toFixed(2)}`,
+      clubActive: bankrAccess.clubActive,
+      lowCredits: bankrAccess.creditsBalanceUsd === 0 || (bankrAccess.creditsBalanceUsd === null && isBankrLlmLowCreditError(bankr.error)),
+      checkedAt: new Date().toISOString(),
+      error: bankrAccess.error || undefined,
+      modelError: bankr.error || undefined,
+    },
+    lmStudio: {
+      baseUrl: lmStudio.runtimeProfile.gatewayUrl?.trim().replace(/\/+$/, ""),
+      models: lmStudio.lmStudioModels,
+      error: lmStudio.modelDiscoveryError || undefined,
+      checkedAt: new Date().toISOString(),
+    },
+  };
   return {
-    provider: modelSelection?.provider || agent.provider || "",
-    model: modelSelection?.model || agent.model || "",
-    providers,
+    modelSelection: {
+      provider: modelSelection?.provider || agent.provider || "",
+      model: modelSelection?.model || agent.model || "",
+      providers,
+    },
+    providerStatus: nextProviderStatus,
   };
 }
 
@@ -212,7 +345,10 @@ export async function searchRuntimeSessions(runtime: AgentRuntime, query: string
   return [];
 }
 
-export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action: string, input: Record<string, unknown> = {}) {
+export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action: string, input: Record<string, unknown> = {}, agent?: AgentProfile) {
+  if ((action === "load-model" || action === "unload-model") && agent?.provider === "lm-studio") {
+    return runLmStudioAction(agent, action, input);
+  }
   if (runtime === "openclaw" && action === "set-model") {
     const provider = String(input.provider ?? "").trim();
     const model = String(input.model ?? "").trim();
@@ -223,7 +359,7 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
   if (runtime !== "hermes") {
     const adapter = getRuntimeAdapter(runtime);
     if (adapter?.runIntegrationAction) {
-      return adapter.runIntegrationAction(undefined, action, input, {});
+      return adapter.runIntegrationAction(agent, action, input, {});
     }
     return { ok: false, error: `${runtime} does not expose this dashboard integration action yet.` };
   }
@@ -256,6 +392,7 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     const provider = String(input.provider ?? "").trim();
     const model = String(input.model ?? "").trim();
     if (!provider || !model) return { ok: false, error: "Provider and model are required." };
+    if (MODEL_PROVIDER_GATEWAYS[provider]?.hermes) await addHermesProvider(provider, model);
     await setHermesModel(provider, model);
     return { ok: true, message: `Hermes default model set to ${provider}/${model}.` };
   }
@@ -307,7 +444,7 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
 }
 
 function integrationDefaults(capabilities: RuntimeCapabilities, overrides: Partial<Record<RuntimeIntegrationKey, string>> = {}) {
-  const keys: RuntimeIntegrationKey[] = ["sessionSearch", "backgroundTasks", "xSearch", "socialPosting", "videoGeneration", "codexRuntime", "kanbanDecompose"];
+  const keys: RuntimeIntegrationKey[] = ["sessionSearch", "backgroundTasks", "xSearch", "socialPosting", "imageGeneration", "ttsGeneration", "musicGeneration", "sfxGeneration", "model3dGeneration", "videoGeneration", "codexRuntime", "kanbanDecompose"];
   return Object.fromEntries(keys.map((key) => [
     key,
     {
@@ -596,14 +733,15 @@ print(json.dumps(payload.get("providers", [])))
   const env: Record<string, string | undefined> = await hermesProcessEnv();
   for (const gateway of Object.values(MODEL_PROVIDER_GATEWAYS)) {
     if (existing.has(gateway.slug) || !gateway.hermes) continue;
+    const keyEnv = gateway.hermes.keyEnv.trim();
     mapped.push({
       slug: gateway.slug,
       name: gateway.name,
       models: gateway.hermes.models.map((id) => ({ id })),
       totalModels: gateway.hermes.models.length,
-      authenticated: Boolean(env[gateway.hermes.keyEnv]),
-      authType: "api-key",
-      keyEnv: gateway.hermes.keyEnv,
+      authenticated: keyEnv ? Boolean(env[keyEnv]) : true,
+      authType: keyEnv ? "api-key" : "none",
+      keyEnv,
       warning: gateway.slug === "usepod"
         ? "UsePod uses a tokenized proxy URL; finish UsePod setup in HivemindOS before using this provider."
         : undefined,

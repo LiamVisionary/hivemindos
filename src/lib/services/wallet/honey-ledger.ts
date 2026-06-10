@@ -10,8 +10,20 @@ export type HoneyLedgerEvent = {
   id: string;
   agentId: string;
   agentName?: string;
-  kind: "usage" | "exchange";
-  source: "chat" | "kanban-chat" | "scheduler" | "manual" | "observed-hermes-usage" | "observed-openclaw-usage" | "observed-runtime-usage";
+  kind: "usage" | "exchange" | "managed-credit" | "managed-spend";
+  source:
+    | "chat"
+    | "kanban-chat"
+    | "scheduler"
+    | "manual"
+    | "observed-hermes-usage"
+    | "observed-openclaw-usage"
+    | "observed-runtime-usage"
+    | "managed-agent"
+    | "managed-agent-stripe"
+    | "managed-agent-x402"
+    | "managed-agent-bankr"
+    | "managed-agent-wallet";
   tokensUsed: number;
   honeyDelta: number;
   hiveDelta: number;
@@ -35,6 +47,35 @@ export type BankrHoneyClaim = {
   amount: number;
   tokenAddress: string;
   events: HoneyLedgerEvent[];
+};
+
+export type ManagedHoneyBillingKind = "credit" | "debit";
+
+export type ManagedHoneyBillingEvent = {
+  eventId: string;
+  issuerId: string;
+  workspaceId?: string;
+  agentId: string;
+  kind: ManagedHoneyBillingKind;
+  honeyAmount: number;
+  usdAmount?: number;
+  provider: string;
+  sku: string;
+  units?: number;
+  unitUsd?: number;
+  markupBps?: number;
+  source: Extract<HoneyLedgerEvent["source"], `managed-agent${string}`>;
+  timestamp?: string;
+  idempotencyKey?: string;
+  metadataHash?: string;
+  signature?: string;
+};
+
+export type ManagedHoneyBillingResult = {
+  ledger: HoneyLedger;
+  event: HoneyLedgerEvent;
+  balance?: NonNullable<HoneyLedger["balances"]>[number] | null;
+  duplicate?: boolean;
 };
 
 class HoneyClaimError extends Error {
@@ -329,6 +370,26 @@ export async function claimHoneyToBankrHive(input: { agentId?: string; recipient
   };
 }
 
+export async function recordManagedHoneyBillingEvent(input: Omit<ManagedHoneyBillingEvent, "workspaceId" | "timestamp" | "signature"> & {
+  workspaceId?: string;
+  timestamp?: string;
+}): Promise<ManagedHoneyBillingResult> {
+  const event = normalizeManagedBillingEvent({
+    ...input,
+    workspaceId: input.workspaceId || await getWorkspaceId(),
+    timestamp: input.timestamp ?? new Date().toISOString(),
+  });
+
+  const remote = getRemoteLedgerConfig();
+  if (remote) {
+    const remoteResult = await recordRemoteManagedHoneyBillingEvent(remote, event).catch(() => null);
+    if (remoteResult) return remoteResult;
+    throw new HoneyClaimError("Official Honey ledger did not accept the managed billing event.", 502);
+  }
+
+  return recordLocalManagedHoneyBillingEvent(event);
+}
+
 function estimateTokens(text: string) {
   const trimmed = text.trim();
   if (!trimmed) return 0;
@@ -398,7 +459,9 @@ type RemoteLedgerConfig = {
   url: string;
   issuerId: string;
   signingSecret?: string;
+  billingSigningSecret?: string;
   readToken?: string;
+  adminToken?: string;
 };
 
 type RemoteUsageReceipt = {
@@ -419,8 +482,10 @@ function getRemoteLedgerConfig(): RemoteLedgerConfig | null {
   return {
     url,
     signingSecret: process.env.HONEY_LEDGER_SIGNING_SECRET?.trim(),
+    billingSigningSecret: process.env.HONEY_BILLING_SIGNING_SECRET?.trim() || process.env.HONEY_LEDGER_SIGNING_SECRET?.trim(),
     issuerId: process.env.HONEY_LEDGER_ISSUER_ID?.trim() || "hivemindos",
     readToken: process.env.HONEY_LEDGER_READ_TOKEN?.trim(),
+    adminToken: process.env.HONEY_LEDGER_ADMIN_TOKEN?.trim(),
   };
 }
 
@@ -586,6 +651,109 @@ async function claimRemoteHoneyToBankrHive(
   };
 }
 
+async function recordRemoteManagedHoneyBillingEvent(
+  remote: RemoteLedgerConfig,
+  input: ManagedHoneyBillingEvent,
+): Promise<ManagedHoneyBillingResult | null> {
+  const unsignedEvent = {
+    ...input,
+    workspaceId: input.workspaceId || await getWorkspaceId(),
+    timestamp: input.timestamp ?? new Date().toISOString(),
+  };
+  const body: ManagedHoneyBillingEvent = remote.billingSigningSecret
+    ? { ...unsignedEvent, signature: signManagedBillingEvent(unsignedEvent, remote.billingSigningSecret) }
+    : unsignedEvent;
+  const headers = {
+    "Content-Type": "application/json",
+    ...authHeaders(remote.billingSigningSecret ? undefined : remote.adminToken),
+  };
+  const response = await fetch(`${remote.url}/managed-billing/events`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(REMOTE_HONEY_TIMEOUT_MS),
+  });
+  const data = await response.json().catch(() => null) as {
+    ok?: boolean;
+    ledger?: Partial<HoneyLedger>;
+    event?: HoneyLedgerEvent;
+    balance?: NonNullable<HoneyLedger["balances"]>[number] | null;
+    duplicate?: boolean;
+    error?: string;
+  } | null;
+  if (!response.ok || !data?.ok || !data.ledger || !data.event) {
+    if (data?.error) throw new HoneyClaimError(data.error, response.status || 502);
+    return null;
+  }
+  return {
+    ledger: normalizeLedger(data.ledger),
+    event: data.event,
+    balance: data.balance ?? null,
+    duplicate: data.duplicate === true,
+  };
+}
+
+async function recordLocalManagedHoneyBillingEvent(input: ManagedHoneyBillingEvent): Promise<ManagedHoneyBillingResult> {
+  const ledger = await readHoneyLedger();
+  if (ledger.events.some((event) => event.id === input.eventId)) {
+    const existing = ledger.events.find((event) => event.id === input.eventId);
+    return {
+      ledger,
+      event: existing ?? managedBillingLedgerEvent(input),
+      balance: ledger.balances?.find((balance) => balance.agentId === input.agentId) ?? null,
+      duplicate: true,
+    };
+  }
+
+  const amount = roundHive(input.honeyAmount);
+  if (amount <= 0) throw new HoneyClaimError("Managed Honey billing amount must be greater than zero.", 400);
+  const balances = [...(ledger.balances ?? [])];
+  const balanceIndex = balances.findIndex((balance) => balance.agentId === input.agentId);
+  const existing = balanceIndex >= 0
+    ? balances[balanceIndex]
+    : {
+      workspaceId: input.workspaceId ?? "",
+      agentId: input.agentId,
+      tokensUsed: 0,
+      lifetimeHoney: 0,
+      availableHoney: 0,
+      hiveBalance: 0,
+      managedHoneyBalance: 0,
+      managedHoneyLifetimeCredits: 0,
+      managedHoneySpent: 0,
+      updatedAt: input.timestamp ?? new Date().toISOString(),
+    };
+  const managedBalance = Math.max(0, Number(existing.managedHoneyBalance ?? 0));
+  if (input.kind === "debit" && managedBalance < amount) {
+    throw new HoneyClaimError("Insufficient managed HONEY credits.", 402);
+  }
+
+  const nextBalance = {
+    ...existing,
+    workspaceId: existing.workspaceId || input.workspaceId || "",
+    managedHoneyBalance: input.kind === "credit"
+      ? roundHive(managedBalance + amount)
+      : roundHive(managedBalance - amount),
+    managedHoneyLifetimeCredits: input.kind === "credit"
+      ? roundHive(Number(existing.managedHoneyLifetimeCredits ?? 0) + amount)
+      : roundHive(Number(existing.managedHoneyLifetimeCredits ?? 0)),
+    managedHoneySpent: input.kind === "debit"
+      ? roundHive(Number(existing.managedHoneySpent ?? 0) + amount)
+      : roundHive(Number(existing.managedHoneySpent ?? 0)),
+    updatedAt: input.timestamp ?? new Date().toISOString(),
+  };
+  if (balanceIndex >= 0) balances[balanceIndex] = nextBalance;
+  else balances.push(nextBalance);
+
+  const event = managedBillingLedgerEvent(input);
+  ledger.balances = balances;
+  ledger.events.unshift(event);
+  ledger.events = ledger.events.slice(0, 500);
+  ledger.updatedAt = event.createdAt;
+  await writeHoneyLedger(ledger);
+  return { ledger, event, balance: nextBalance, duplicate: false };
+}
+
 function signReceipt(receipt: Omit<RemoteUsageReceipt, "signature">, secret: string) {
   return createHmac("sha256", secret).update(canonicalReceipt(receipt)).digest("hex");
 }
@@ -601,6 +769,70 @@ function canonicalReceipt(receipt: Omit<RemoteUsageReceipt, "signature">) {
     receipt.source,
     receipt.timestamp,
   ].join(".");
+}
+
+function signManagedBillingEvent(event: Omit<ManagedHoneyBillingEvent, "signature">, secret: string) {
+  return createHmac("sha256", secret).update(canonicalManagedBillingEvent(event)).digest("hex");
+}
+
+function canonicalManagedBillingEvent(event: Omit<ManagedHoneyBillingEvent, "signature">) {
+  return [
+    event.issuerId,
+    event.eventId,
+    event.workspaceId ?? "",
+    event.agentId,
+    event.kind,
+    roundHive(event.honeyAmount),
+    roundHive(event.usdAmount ?? 0),
+    event.provider,
+    event.sku,
+    Math.max(0, Number(event.units ?? 0) || 0),
+    roundHive(event.unitUsd ?? 0),
+    Math.max(0, Math.round(Number(event.markupBps ?? 0) || 0)),
+    event.source,
+    event.timestamp ?? "",
+    event.idempotencyKey ?? "",
+    event.metadataHash ?? "",
+  ].join(".");
+}
+
+function normalizeManagedBillingEvent(input: ManagedHoneyBillingEvent): ManagedHoneyBillingEvent {
+  const honeyAmount = roundHive(input.honeyAmount);
+  if (!input.eventId.trim()) throw new HoneyClaimError("Missing managed Honey billing event id.", 400);
+  if (!input.agentId.trim()) throw new HoneyClaimError("Missing managed Honey billing agent id.", 400);
+  if (input.kind !== "credit" && input.kind !== "debit") throw new HoneyClaimError("Unsupported managed Honey billing kind.", 400);
+  if (honeyAmount <= 0) throw new HoneyClaimError("Managed Honey billing amount must be greater than zero.", 400);
+  return {
+    ...input,
+    eventId: input.eventId.trim(),
+    issuerId: input.issuerId.trim() || "hivemindos-managed-billing",
+    workspaceId: input.workspaceId?.trim(),
+    agentId: input.agentId.trim(),
+    honeyAmount,
+    usdAmount: roundHive(input.usdAmount ?? 0),
+    provider: input.provider.trim().slice(0, 80) || "auto",
+    sku: input.sku.trim().slice(0, 120) || "managed-agent",
+    units: Math.max(0, Number(input.units ?? 0) || 0),
+    unitUsd: roundHive(input.unitUsd ?? 0),
+    markupBps: Math.max(0, Math.round(Number(input.markupBps ?? 0) || 0)),
+    source: input.source,
+    timestamp: input.timestamp?.trim() || new Date().toISOString(),
+    idempotencyKey: input.idempotencyKey?.trim().slice(0, 200),
+    metadataHash: input.metadataHash?.trim().slice(0, 128),
+  };
+}
+
+function managedBillingLedgerEvent(input: ManagedHoneyBillingEvent): HoneyLedgerEvent {
+  return {
+    id: input.eventId,
+    agentId: input.agentId,
+    kind: input.kind === "credit" ? "managed-credit" : "managed-spend",
+    source: input.source,
+    tokensUsed: 0,
+    honeyDelta: input.kind === "credit" ? input.honeyAmount : -input.honeyAmount,
+    hiveDelta: 0,
+    createdAt: input.timestamp ?? new Date().toISOString(),
+  };
 }
 
 function authHeaders(token?: string): Record<string, string> {
@@ -683,27 +915,30 @@ function normalizeBalances(
   agentHiveBalances: Record<string, number> = {},
 ): HoneyTreasuryConfig["balances"] {
   if (!Array.isArray(value)) return undefined;
-  return value
-    .map((raw) => {
-      if (!raw || typeof raw !== "object") return null;
-      const balance = raw as Partial<NonNullable<HoneyTreasuryConfig["balances"]>[number]>;
-      if (typeof balance.agentId !== "string" || !balance.agentId.trim()) return null;
-      const lifetimeHoney = positiveNumber(balance.lifetimeHoney, 0);
-      const exchanged = agentHoneyExchanged[balance.agentId];
-      const hiveBalance = agentHiveBalances[balance.agentId];
-      return {
-        workspaceId: typeof balance.workspaceId === "string" ? balance.workspaceId : "",
-        agentId: balance.agentId,
-        tokensUsed: Math.max(0, Math.round(Number(balance.tokensUsed ?? 0) || 0)),
-        lifetimeHoney,
-        availableHoney: exchanged == null
-          ? positiveNumber(balance.availableHoney, 0)
-          : Math.max(0, Math.round((lifetimeHoney - exchanged) * 1_000_000) / 1_000_000),
-        hiveBalance: hiveBalance == null ? positiveNumber(balance.hiveBalance, 0) : hiveBalance,
-        updatedAt: typeof balance.updatedAt === "string" ? balance.updatedAt : new Date(0).toISOString(),
-      };
-    })
-    .filter((balance): balance is NonNullable<HoneyTreasuryConfig["balances"]>[number] => Boolean(balance));
+  const balances: NonNullable<HoneyTreasuryConfig["balances"]> = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object") continue;
+    const balance = raw as Partial<NonNullable<HoneyTreasuryConfig["balances"]>[number]>;
+    if (typeof balance.agentId !== "string" || !balance.agentId.trim()) continue;
+    const lifetimeHoney = positiveNumber(balance.lifetimeHoney, 0);
+    const exchanged = agentHoneyExchanged[balance.agentId];
+    const hiveBalance = agentHiveBalances[balance.agentId];
+    balances.push({
+      workspaceId: typeof balance.workspaceId === "string" ? balance.workspaceId : "",
+      agentId: balance.agentId,
+      tokensUsed: Math.max(0, Math.round(Number(balance.tokensUsed ?? 0) || 0)),
+      lifetimeHoney,
+      availableHoney: exchanged == null
+        ? positiveNumber(balance.availableHoney, 0)
+        : Math.max(0, Math.round((lifetimeHoney - exchanged) * 1_000_000) / 1_000_000),
+      hiveBalance: hiveBalance == null ? positiveNumber(balance.hiveBalance, 0) : hiveBalance,
+      managedHoneyBalance: positiveNumber(balance.managedHoneyBalance, 0),
+      managedHoneyLifetimeCredits: positiveNumber(balance.managedHoneyLifetimeCredits, 0),
+      managedHoneySpent: positiveNumber(balance.managedHoneySpent, 0),
+      updatedAt: typeof balance.updatedAt === "string" ? balance.updatedAt : new Date(0).toISOString(),
+    });
+  }
+  return balances;
 }
 
 function positiveNumber(value: unknown, fallback: number) {

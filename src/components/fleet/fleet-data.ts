@@ -96,6 +96,25 @@ export interface FleetMachineSyncIssue {
   stalled?: boolean;
 }
 
+/** Live host metrics reported by the machine's collector `/health` endpoint. */
+export interface FleetMachineSystem {
+  checkedAt?: number;
+  cpuPct?: number;
+  cpuCores?: number;
+  cpuModel?: string;
+  loadAvg1m?: number;
+  ramPct?: number;
+  ramUsedGb?: number;
+  ramTotalGb?: number;
+  diskPct?: number | null;
+  diskUsedGb?: number | null;
+  diskTotalGb?: number | null;
+  platform?: string;
+  arch?: string;
+  osRelease?: string;
+  uptimeSec?: number;
+}
+
 export interface FleetMachine {
   id: string;
   name: string;
@@ -117,6 +136,7 @@ export interface FleetMachine {
   lat: number;
   lon: number;
   uptime: string;
+  system?: FleetMachineSystem;
   networkIssue?: FleetMachineNetworkIssue;
   syncIssue?: FleetMachineSyncIssue;
   gitlawb?: GitLawbNodeStatus;
@@ -167,6 +187,7 @@ export const MACHINES: FleetMachine[] = [
     city: "Brooklyn",
     lat: 40.68, lon: -73.96,
     uptime: "12d 4h",
+    system: { cpuPct: 38, cpuCores: 14, cpuModel: "Apple M3 Max", ramPct: 62, ramUsedGb: 22.3, ramTotalGb: 36, diskPct: 41 },
     agents: [
       { id: "a1", name: "Hermes-α",       runtime: "Hermes",   state: "working",   role: "Lead",       wallet: "0.42 ETH", balance: "healthy",     task: "Refactoring the swarm agent bridge to stream over Tailscale SSH", since: "2m" },
       { id: "a2", name: "OpenClaw-eng",   runtime: "OpenClaw", state: "ready",     role: "Engineer",   wallet: "0.08 ETH", balance: "healthy",     task: "Idle · waiting for next handoff from Hermes-α", since: "11m" },
@@ -189,6 +210,7 @@ export const MACHINES: FleetMachine[] = [
     city: "Ashburn, VA",
     lat: 39.04, lon: -77.49,
     uptime: "41d 9h",
+    system: { cpuPct: 71, cpuCores: 32, cpuModel: "AMD EPYC 7543", ramPct: 48, ramUsedGb: 61.4, ramTotalGb: 128, diskPct: 22 },
     agents: [
       { id: "b1", name: "MiroShark-sim",     runtime: "MiroShark", state: "working", role: "Simulator", wallet: "—",        balance: "off",         task: "Running market-making sim · epoch 8410 of 12000", since: "23m" },
       { id: "b2", name: "Hermes-research",   runtime: "Hermes",    state: "working", role: "Research",  wallet: "0.12 ETH", balance: "low_compute", task: "Synthesizing the Tavily research dump into an Obsidian brief", since: "1m" },
@@ -212,6 +234,7 @@ export const MACHINES: FleetMachine[] = [
     city: "Lisbon",
     lat: 38.72, lon: -9.13,
     uptime: "2h 14m",
+    system: { cpuPct: 12, cpuCores: 8, cpuModel: "Apple M2", ramPct: 28, ramUsedGb: 6.7, ramTotalGb: 24, diskPct: 64 },
     agents: [
       { id: "c1", name: "Hermes-mobile", runtime: "Hermes", state: "ready", role: "Inbox", wallet: "0.02 ETH", balance: "healthy", task: "Idle · brain sync paused while on hotspot", since: "8m" },
       { id: "c2", name: "Gemini-notes",  runtime: "Gemini", state: "setup", role: "Notes", wallet: "—",        balance: "off",     task: "Needs API key · `hive-env-add GOOGLE_API_KEY`", since: "—" },
@@ -233,6 +256,7 @@ export const MACHINES: FleetMachine[] = [
     city: "Brooklyn",
     lat: 40.69, lon: -73.97,
     uptime: "98d 2h",
+    system: { cpuPct: 18, cpuCores: 24, cpuModel: "Intel Xeon E5-2680", ramPct: 34, ramUsedGb: 32.6, ramTotalGb: 96, diskPct: 78 },
     agents: [
       { id: "d1", name: "Brain-sync", runtime: "Syncthing", state: "working",   role: "Vault",     wallet: "—", balance: "off", task: "Reconciling Obsidian vault · 412 files this hour", since: "12s" },
       { id: "d2", name: "Aeon-jobs",  runtime: "Aeon",      state: "scheduled", role: "Schedules", wallet: "—", balance: "off", task: "Next: `pull-rss-digest` in 23m", since: "4m" },

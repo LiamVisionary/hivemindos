@@ -85,7 +85,7 @@
   place-items: center;
 }
 
-.hex svg {
+.hex > svg {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -93,10 +93,12 @@
 }
 
 .hexContent {
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 1;
   display: grid;
   place-items: center;
+  pointer-events: none;
 }
 
 .head {
@@ -176,6 +178,8 @@
 .stepNumber {
   display: grid;
   place-items: center;
+  width: 18px;
+  height: 18px;
   color: var(--fg4);
   font-family: var(--fm);
   font-size: 12px;
@@ -183,9 +187,13 @@
 }
 
 .stepNumber svg {
+  position: static;
+  inset: auto;
   width: 14px;
   height: 14px;
   color: var(--cyan2);
+  display: block;
+  stroke-width: 2.2;
 }
 
 .step.active .stepNumber {
@@ -711,7 +719,12 @@
 .models {
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
   gap: 8px;
+  max-height: 104px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
 }
 
 .model {
@@ -762,6 +775,99 @@
 .model svg {
   width: 13px;
   height: 13px;
+  flex: 0 0 auto;
+}
+
+.modelSkeleton {
+  --skeleton-width: 40%;
+  --skeleton-delay: 0ms;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 124px;
+  width: var(--skeleton-width);
+  max-width: 230px;
+  height: 36px;
+  overflow: hidden;
+  border: 1px solid rgba(94, 234, 212, 0.18);
+  border-radius: 999px;
+  background: rgba(8, 12, 19, 0.46);
+  padding: 8px 13px;
+}
+
+.modelSkeleton::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(100deg, transparent 0%, rgba(94, 234, 212, 0.18) 42%, transparent 76%);
+  transform: translateX(-110%);
+  animation: usePodModelSkeleton 1.2s ease-in-out infinite;
+  animation-delay: var(--skeleton-delay);
+}
+
+.modelSkeletonDot,
+.modelSkeletonText {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  background: rgba(148, 163, 184, 0.26);
+}
+
+.modelSkeletonDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+}
+
+.modelSkeletonText {
+  width: calc(100% - 24px);
+  height: 12px;
+  border-radius: 999px;
+}
+
+.modelNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+  background: rgba(45, 212, 191, 0.08);
+  color: var(--cyan2);
+  font-family: var(--fm);
+  font-size: 12px;
+  padding: 10px 12px;
+}
+
+.modelNotice span {
+  min-width: 0;
+}
+
+.modelNotice button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(94, 234, 212, 0.45);
+  border-radius: 999px;
+  background: rgba(8, 12, 19, 0.55);
+  color: var(--cyan2);
+  cursor: pointer;
+  font-family: var(--fb);
+  font-size: 11px;
+  padding: 6px 9px;
+}
+
+.modelNotice button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.modelNotice button svg {
+  width: 12px;
+  height: 12px;
   flex: 0 0 auto;
 }
 
@@ -940,6 +1046,12 @@
   border-color: var(--cyan);
   background: rgba(45, 212, 191, 0.06);
   transform: translateY(-1px);
+}
+
+.wallet:disabled {
+  cursor: wait;
+  opacity: 0.76;
+  transform: none;
 }
 
 .wname {
@@ -1255,10 +1367,21 @@
   }
 }
 
+@keyframes usePodModelSkeleton {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  100% {
+    transform: translateX(110%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .r1,
   .r2,
   .spin,
+  .modelSkeleton::after,
   .successMark,
   .successMark::before {
     animation: none !important;

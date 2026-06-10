@@ -1,0 +1,18 @@
+{
+  "upstreamName": "interaction-design",
+  "upstreamSlug": "interaction-design",
+  "hiveSlug": "interaction-design",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://www.ui-skills.com/skills/wshobson/interaction-design",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "npx skills add https://github.com/wshobson/agents --skill interaction-design",
+  "importedAt": "2026-06-08T15:01:51.830Z",
+  "refreshedAt": "2026-06-08T15:01:51.830Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/wshobson/interaction-design",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Design and implement microinteractions, motion design, transitions, and user feedback patterns. Use when adding polish to UI interactions, implementing loading states, or creating delightful user experiences."
+}

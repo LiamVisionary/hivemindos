@@ -1,0 +1,18 @@
+{
+  "upstreamName": "oklch-skill",
+  "upstreamSlug": "oklch-skill",
+  "hiveSlug": "oklch-skill",
+  "sourceLabel": "jakubkrehel",
+  "sourceUrl": "https://www.ui-skills.com/skills/jakubkrehel/oklch-skill",
+  "repository": "https://github.com/jakubkrehel/oklch-skill",
+  "installCommand": "npx skills add https://github.com/jakubkrehel/oklch-skill --skill oklch-skill",
+  "importedAt": "2026-06-08T15:01:36.698Z",
+  "refreshedAt": "2026-06-08T15:01:36.698Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/jakubkrehel/oklch-skill",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "OKLCH color space for web projects. Convert hex/rgb/hsl to oklch, generate palettes, check contrast, handle gamut boundaries, and theme with Tailwind v4. Triggers on oklch, color conversion, palette generation, contrast ratio, gamut, display p3, design tokens, hue drift, chroma, dark mode colors."
+}

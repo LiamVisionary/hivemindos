@@ -424,6 +424,19 @@ a {
   align-items: center;
 }
 
+.fleetHeaderVersion {
+  display: block;
+  margin-top: 5px;
+  color: rgba(203, 213, 225, 0.52);
+  font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  pointer-events: none;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.64);
+}
+
 .fleetCommandTopbar .topbarMasthead {
   height: 92px;
 }

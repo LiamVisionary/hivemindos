@@ -75,6 +75,7 @@ export type SkillCatalogEntry = {
   tags: string[];
   githubUrl?: string;
   skillMdUrl?: string;
+  packagedPath?: string;
   sourceRef?: string;
   capabilities: SkillCapability[];
   envKeys: string[];

@@ -8,6 +8,7 @@ import {
   isDashboardView,
   type DashboardRouteTarget,
 } from "@/features/dashboard/dashboard-navigation";
+import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValue, type DashboardStateSnapshot } from "@/lib/services/dashboard-state-client";
 import { listenForDesktopNavigation, openNativeRouteWindow } from "@/lib/native/desktop-navigation";
 
 const NAV_RECENTS_STORAGE_KEY = "hivemindos.dashboardNavigation.recents.v1";
@@ -38,13 +39,6 @@ export function initialDashboardView(): DashboardView {
   if (typeof window !== "undefined") {
     const restored = dashboardTargetFromSearch(window.location.search);
     if (restored?.view) return restored.view;
-
-    try {
-      const stored = window.localStorage.getItem(RESTORED_ROUTE_STORAGE_KEY);
-      const target = stored ? JSON.parse(stored) : null;
-      const restoredView = normalizeStoredDashboardView(target?.view);
-      if (restoredView) return restoredView;
-    } catch {}
   }
 
   return dashboardViewFromLocation() ?? "agents";
@@ -65,7 +59,7 @@ export function useDashboardNavigationController({
   vaultPanelMode,
 }: UseDashboardNavigationControllerOptions) {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [navigationRecents, setNavigationRecents] = useState<DashboardRouteTarget[]>(initialNavigationRecents);
+  const [navigationRecents, setNavigationRecents] = useState<DashboardRouteTarget[]>([]);
   const initialRouteAppliedRef = useRef(false);
   const navigationUrlRef = useRef("");
 
@@ -102,8 +96,17 @@ export function useDashboardNavigationController({
   useEffect(() => {
     if (!hydrated || initialRouteAppliedRef.current) return;
     initialRouteAppliedRef.current = true;
-    const target = dashboardTargetFromSearch(window.location.search) ?? restoredDashboardTargetFromStorage();
-    if (target) navigateDashboardTarget(target);
+    let cancelled = false;
+    void (async () => {
+      const snapshot = await loadDashboardStateSnapshot();
+      if (cancelled) return;
+      setNavigationRecents(initialNavigationRecents(snapshot));
+      const target = dashboardTargetFromSearch(window.location.search) ?? restoredDashboardTargetFromStorage(snapshot);
+      if (target) navigateDashboardTarget(target);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [hydrated, navigateDashboardTarget]);
 
   useEffect(() => {
@@ -123,13 +126,13 @@ export function useDashboardNavigationController({
     }
 
     navigationUrlRef.current = nextUrl;
-    window.localStorage.setItem(RESTORED_ROUTE_STORAGE_KEY, JSON.stringify(target));
+    void saveDashboardStateValue(RESTORED_ROUTE_STORAGE_KEY, JSON.stringify(target));
     // Route changes intentionally update the displayed recents list and its persistent mirror together.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setNavigationRecents((current) => {
       const key = JSON.stringify(target);
       const next = [target, ...current.filter((item) => JSON.stringify(item) !== key)].slice(0, 8);
-      window.localStorage.setItem(NAV_RECENTS_STORAGE_KEY, JSON.stringify(next));
+      void saveDashboardStateValue(NAV_RECENTS_STORAGE_KEY, JSON.stringify(next));
       return next;
     });
   }, [activeView, hydrated, selectedAgentId, selectedChatLeafKey, selectedKanbanTaskId, vaultPanelMode]);
@@ -184,11 +187,9 @@ function dashboardViewFromLocation(): DashboardView | null {
   return normalizeStoredDashboardView(view);
 }
 
-function restoredDashboardTargetFromStorage(): DashboardRouteTarget | null {
-  if (typeof window === "undefined") return null;
-
+function restoredDashboardTargetFromStorage(snapshot: DashboardStateSnapshot): DashboardRouteTarget | null {
   try {
-    const stored = window.localStorage.getItem(RESTORED_ROUTE_STORAGE_KEY);
+    const stored = dashboardStateValue(snapshot, RESTORED_ROUTE_STORAGE_KEY);
     return normalizeStoredDashboardTarget(stored ? JSON.parse(stored) : null);
   } catch {
     return null;
@@ -211,11 +212,9 @@ function normalizeStoredDashboardTarget(value: unknown): DashboardRouteTarget | 
   };
 }
 
-function initialNavigationRecents(): DashboardRouteTarget[] {
-  if (typeof window === "undefined") return [];
-
+function initialNavigationRecents(snapshot: DashboardStateSnapshot): DashboardRouteTarget[] {
   try {
-    const value = window.localStorage.getItem(NAV_RECENTS_STORAGE_KEY);
+    const value = dashboardStateValue(snapshot, NAV_RECENTS_STORAGE_KEY);
     const parsed = value ? JSON.parse(value) : [];
     return Array.isArray(parsed)
       ? parsed

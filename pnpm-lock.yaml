@@ -56,6 +56,9 @@ importers:
       '@scure/base':
         specifier: ^2.2.0
         version: 2.2.0
+      '@scure/bip39':
+        specifier: 1.6.0
+        version: 1.6.0
       '@solana/kit':
         specifier: ^6.9.0
         version: 6.9.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)

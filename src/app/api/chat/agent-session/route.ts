@@ -8,6 +8,7 @@ import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { readRuntimeChatSession } from "@/lib/services/chat/runtime-session-store";
 import { chatTelemetrySession } from "@/lib/services/telemetry/chat-dev-telemetry";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
+import { canonicalLocalCollectorUrl } from "@/lib/services/local-collector-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -116,7 +117,7 @@ async function recordAgentSessionTelemetry(type: string, body: { agent?: AgentPr
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as { agent?: AgentProfile; sessionId?: string; sinceMs?: number; chatStorageKey?: string };
-    const telemetryUrl = body.agent?.telemetryUrl?.trim().replace(/\/+$/, "");
+    const telemetryUrl = await canonicalLocalCollectorUrl(body.agent);
     const sessionId = body.sessionId?.trim();
     const sinceMs = Number(body.sinceMs || 0);
     const chatStorageKey = body.chatStorageKey?.trim();

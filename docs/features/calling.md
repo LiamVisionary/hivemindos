@@ -123,15 +123,17 @@ OPENAI_REALTIME_KEY
 OPENAI_API_KEY
 ```
 
-HivemindOS Cloud Agent Calls use the LiveKit branch and need managed room credentials on the service side:
+HivemindOS Cloud Agent Calls are opt-in. LiveKit rooms connect over the internet, so the cloud path stays fully off in the local-first default even when LiveKit credentials are present. Enabling it requires the premium entitlement plus an explicit LiveKit opt-in, alongside the managed room credentials:
 
 ```text
+HIVEMINDOS_PREMIUM=1
+HIVEMINDOS_LIVEKIT_ENABLED=1
 LIVEKIT_URL
 LIVEKIT_API_KEY
 LIVEKIT_API_SECRET
 ```
 
-In local dev, `pnpm tauri:dev` starts the HivemindOS voice worker when the LiveKit credentials are present. If they are missing, the worker skips itself and the normal BYOK path still works.
+In local dev, `pnpm tauri:dev` starts the HivemindOS voice worker only when both opt-in flags and the LiveKit credentials are present. Otherwise the worker skips itself with a single notice line, no LiveKit connection is made, and the normal BYOK and Local TTS paths still work.
 
 ## Main Code Paths
 

@@ -133,14 +133,22 @@ function isSameTailscalePeer(left?: TailscalePeer, right?: TailscalePeer) {
   return Boolean(leftDns && rightDns && leftDns === rightDns);
 }
 
+// Exact identity: the normalized dns label (or name) with only the
+// `hivemindos` prefix and `.local` suffix stripped. The same physical
+// machine's system node and link node map to the same identity, while
+// tailscale's `-N` suffix is KEPT — a `-1` node is a different physical
+// machine that shares the hostname (two MacBooks named "Liams-MacBook-Pro"),
+// and stripping it merged them into one machine.
+function exactMachineIdentity(device: ReturnType<typeof simplifyDevice>) {
+  const value = normalizeName(dnsLabel(device.dnsName)) || normalizeName(device.name);
+  return value.replace(/^hivemindos/, "").replace(/local\d*$/, "");
+}
+
 function deviceIdentityKey(device: ReturnType<typeof simplifyDevice>) {
-  const dnsName = normalizeName(dnsLabel(device.dnsName));
-  const name = normalizeName(device.name) || dnsName;
-  if (name.startsWith("hivemindos")) return hivemindMachineBase(device) || dnsName || name;
+  const identity = exactMachineIdentity(device);
+  if (identity) return identity;
   if (device.self) return "self";
-  const macBase = macNumberedHostnameBase(device);
-  if (macBase) return macBase;
-  return name || device.ip || device.collectorUrl;
+  return device.ip || device.collectorUrl;
 }
 
 function isHivemindLinkDevice(device: ReturnType<typeof simplifyDevice>) {
@@ -186,30 +194,18 @@ function tailnetHealthFromStatus(status?: TailscaleStatus | HivemindLinkStatus |
   return { state: "ok" };
 }
 
-function hivemindMachineBase(device: ReturnType<typeof simplifyDevice>) {
-  const rawName = device.name.toLowerCase();
-  const rawDnsName = dnsLabel(device.dnsName).toLowerCase();
-  const rawValue = normalizeName(rawName).startsWith("hivemindos") ? rawName : rawDnsName;
-  const canonicalValue = isMacDevice(device) ? rawValue.replace(/-\d+$/, "") : rawValue;
-  const value = normalizeName(canonicalValue);
-  if (!value.startsWith("hivemindos")) return "";
-  return value.replace(/^hivemindos/, "").replace(/local\d*$/, "");
+const STALE_OFFLINE_NODE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function machineFamilyBase(device: ReturnType<typeof simplifyDevice>) {
+  return exactMachineIdentity(device).replace(/\d+$/, "");
 }
 
-function physicalMachineBase(device: ReturnType<typeof simplifyDevice>) {
-  const normalizedDnsName = normalizeName(dnsLabel(device.dnsName));
-  const normalizedName = normalizeName(device.name);
-  const value = normalizedDnsName || normalizedName;
-  return value.replace(/^hivemindos/, "").replace(/local\d*$/, "").replace(/\d+$/, "");
-}
-
-function macNumberedHostnameBase(device: ReturnType<typeof simplifyDevice>) {
-  if (!isMacDevice(device)) return "";
-  const rawValue = dnsLabel(device.dnsName) || device.name || "";
-  const withoutTailnetSuffix = rawValue.toLowerCase().replace(/-\d+$/, "");
-  const normalizedValue = normalizeName(rawValue);
-  const normalizedBase = normalizeName(withoutTailnetSuffix);
-  return normalizedBase && normalizedBase !== normalizedValue ? normalizedBase : "";
+function isLongOffline(device: ReturnType<typeof simplifyDevice>) {
+  if (device.online) return false;
+  const lastSeen = device.lastSeen ?? "";
+  if (!lastSeen || lastSeen.startsWith("0001-01-01")) return false;
+  const seenAt = Date.parse(lastSeen);
+  return Number.isFinite(seenAt) && Date.now() - seenAt > STALE_OFFLINE_NODE_MS;
 }
 
 function isStaleSelfDuplicate(
@@ -217,20 +213,20 @@ function isStaleSelfDuplicate(
   device: ReturnType<typeof simplifyDevice>,
 ) {
   if (!self || device.self) return false;
-  const deviceIsHivemindLink = isHivemindLinkDevice(device);
-  const selfBase = hivemindMachineBase(self);
-  const deviceBase = hivemindMachineBase(device);
-  if (deviceIsHivemindLink) {
-    return Boolean(!device.online && selfBase && deviceBase && selfBase === deviceBase);
-  }
-  if (selfBase && deviceBase && selfBase === deviceBase) return true;
-  const physicalSelfBase = physicalMachineBase(self);
-  const physicalDeviceBase = physicalMachineBase(device);
-  if (physicalSelfBase && physicalDeviceBase && physicalSelfBase === physicalDeviceBase) return true;
-  if (physicalSelfBase && deviceBase && physicalSelfBase === deviceBase) return true;
-  if (selfBase && physicalDeviceBase && selfBase === physicalDeviceBase) return true;
-  if (device.online) return false;
-  return normalizeName(self.name) !== "" && normalizeName(self.name) === normalizeName(device.name);
+  // Exact identity: this machine's own link node (or another tailnet view of
+  // the same node) seen as a peer.
+  const selfIdentity = exactMachineIdentity(self);
+  const deviceIdentity = exactMachineIdentity(device);
+  if (selfIdentity && deviceIdentity && selfIdentity === deviceIdentity) return true;
+  if (self.ip && device.ip && self.ip === device.ip) return true;
+  // A name-base match with the `-N` suffix stripped is AMBIGUOUS: it is
+  // either an old registration of this machine (macOS renames itself, link
+  // nodes re-register) or a DIFFERENT physical machine that shares the
+  // hostname. An online node is alive somewhere we are not — never hide it.
+  // Only hide entries that have been offline long enough to be dead.
+  const selfFamily = machineFamilyBase(self);
+  if (!selfFamily || selfFamily !== machineFamilyBase(device)) return false;
+  return isLongOffline(device);
 }
 
 function deviceFreshnessScore(device: ReturnType<typeof simplifyDevice>) {
@@ -373,8 +369,22 @@ async function withLocalMachineId(devices: ReturnType<typeof devicesFromStatus>)
 export async function GET() {
   const link = await hivemindLinkStatus();
   if (link) {
-    const status = await systemTailscaleStatus({ allowCliFallback: false });
+    const status = await systemTailscaleStatus({ allowCliFallback: true });
     const health = tailnetHealthFromStatus(status.error ? link : status);
+    // A paired phone reaches THIS Mac via the SYSTEM Tailscale node — that's
+    // where the desktop app's tailnet forwarder binds (lib.rs
+    // spawn_tailnet_forwarder), and the pairing QR is built from the self
+    // device's ip. hivemind-linkd runs a SEPARATE embedded tsnet node, so
+    // link.self's ip is a different address with no forwarder on it (the QR
+    // pointed there and the phone timed out). Advertise the system tailnet
+    // IPv4 for the self device instead; fall back to link.self's ip only if the
+    // system status is unavailable.
+    const systemSelfIp = status.error
+      ? ""
+      : (status.Self?.TailscaleIPs?.find((value) => /^\d+\.\d+\.\d+\.\d+$/.test(value)) ?? "");
+    const devices = await withLocalMachineId(
+      devicesFromStatus(link, true, status.error ? undefined : status.Self),
+    );
     return Response.json({
       ok: link.ok === true,
       backendState: link.backendState,
@@ -382,7 +392,9 @@ export async function GET() {
       magicDnsSuffix: link.magicDnsSuffix,
       source: "hivemind-link",
       tailnetHealth: health,
-      devices: await withLocalMachineId(devicesFromStatus(link, true, status.error ? undefined : status.Self)),
+      devices: systemSelfIp
+        ? devices.map((device) => (device.self ? { ...device, ip: systemSelfIp } : device))
+        : devices,
     });
   }
 

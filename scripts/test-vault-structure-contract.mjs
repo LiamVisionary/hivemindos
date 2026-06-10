@@ -200,9 +200,14 @@ has("docs/whole-brain/shared-skills.md", "hive-pulse");
 has("packaged-skills/README.md", "Obsidian Native Brain Pack");
 has("packaged-skills/README.md", "hive-assimilate");
 has("packaged-skills/README.md", "hive-pulse");
+has("packaged-skills/README.md", "packaged-skills/optional/<category>/<source>/<slug>/");
+has("packaged-skills/README.md", "UI Skills directory");
+has("packaged-skills/README.md", "Design Optional Skills Directory");
 assert.ok(existsSync(join(root, "packaged-skills/auto-install/hive-assimilate/SKILL.md")), "missing hive-assimilate packaged skill");
 assert.ok(existsSync(join(root, "packaged-skills/auto-install/hive-pulse/SKILL.md")), "missing hive-pulse packaged skill");
 assert.ok(existsSync(join(root, "packaged-skills/auto-install/hive-pulse/scripts/last30days.py")), "missing bundled Hive Pulse engine");
+assert.ok(existsSync(join(root, "packaged-skills/optional/design/0xdesign/design-lab/SKILL.md")), "missing UI Skills design-lab optional package");
+assert.ok(existsSync(join(root, "packaged-skills/optional/design/nextlevelbuilder/ui-ux-pro-max/SKILL.md")), "missing UI Skills ui-ux-pro-max optional package");
 for (const path of [
   "docs/packaged-skills/index.md",
   "docs/packaged-skills/hive-skills.md",
@@ -219,6 +224,8 @@ has("docs/packaged-skills/hive-skills.md", "hive-assimilate");
 has("docs/packaged-skills/hive-skills.md", "hive-pulse");
 has("docs/packaged-skills/hive-skills.md", "hive-brain recall");
 has("docs/packaged-skills/third-party-skills.md", "Obsidian Native Brain Pack");
+has("docs/packaged-skills/third-party-skills.md", "UI Skills directory");
+has("docs/whole-brain/shared-skills.md", "packaged-skills/optional/design/<source>/<skill>/");
 has("docs/slash-commands.md", "/handoff-task");
 has("docs/slash-commands.md", "/reload-skills");
 has("docs/features/token-and-cost-savings.md", "hive-brain answer");

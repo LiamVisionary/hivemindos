@@ -1,0 +1,18 @@
+{
+  "upstreamName": "pinia",
+  "upstreamSlug": "pinia",
+  "hiveSlug": "pinia",
+  "sourceLabel": "antfu",
+  "sourceUrl": "https://www.ui-skills.com/skills/antfu/pinia",
+  "repository": "https://github.com/antfu/skills",
+  "installCommand": "npx skills add https://github.com/antfu/skills --skill pinia",
+  "importedAt": "2026-06-08T15:01:25.607Z",
+  "refreshedAt": "2026-06-08T15:01:25.607Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/antfu/pinia",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Pinia official Vue state management library, type-safe and extensible. Use when defining stores, working with state/getters/actions, or implementing store patterns in Vue apps."
+}

@@ -13,6 +13,10 @@ type MissingSharedEnvKeySetupProps = {
   onSaved?: () => void | Promise<void>;
 };
 
+const SETUP_CARD_MIN_HEIGHT = 240;
+const SUCCESS_HOLD_MS = 3000;
+const SUCCESS_FADE_MS = 450;
+
 async function readEnvSaveResponse(response: Response | null, apiKeyName: string) {
   if (!response) {
     return { ok: false, error: `Could not reach the dashboard env API while saving ${apiKeyName}.` };
@@ -49,6 +53,7 @@ export function MissingSharedEnvKeySetup({
   const [successFading, setSuccessFading] = useState(false);
   const fadeTimerRef = useRef<number | null>(null);
   const refreshTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
 
   const clearSuccessTimers = useCallback(() => {
     if (fadeTimerRef.current !== null) window.clearTimeout(fadeTimerRef.current);
@@ -57,7 +62,10 @@ export function MissingSharedEnvKeySetup({
     refreshTimerRef.current = null;
   }, []);
 
-  useEffect(() => () => clearSuccessTimers(), [clearSuccessTimers]);
+  useEffect(() => () => {
+    mountedRef.current = false;
+    clearSuccessTimers();
+  }, [clearSuccessTimers]);
 
   const save = async () => {
     const trimmed = value.trim();
@@ -91,15 +99,18 @@ export function MissingSharedEnvKeySetup({
       fadeTimerRef.current = window.setTimeout(() => {
         setSuccessFading(true);
         fadeTimerRef.current = null;
-      }, 950);
+      }, SUCCESS_HOLD_MS);
       refreshTimerRef.current = window.setTimeout(() => {
         refreshTimerRef.current = null;
         void Promise.resolve(onSaved?.()).catch((error: unknown) => {
+          if (!mountedRef.current) return;
+          setStatus(error instanceof Error ? error.message : `Saved ${apiKeyName}, but could not reload providers.`);
+        }).finally(() => {
+          if (!mountedRef.current) return;
           setSaved(false);
           setSuccessFading(false);
-          setStatus(error instanceof Error ? error.message : `Saved ${apiKeyName}, but could not reload providers.`);
         });
-      }, 1350);
+      }, SUCCESS_HOLD_MS + SUCCESS_FADE_MS);
     } finally {
       setSaving(false);
     }
@@ -109,6 +120,7 @@ export function MissingSharedEnvKeySetup({
     return (
       <section
         className={`grid gap-3 rounded-md border border-[rgba(94,234,212,0.22)] bg-[rgba(20,184,166,0.08)] p-4 transition duration-500 ${successFading ? "opacity-0 translate-y-1" : "opacity-100 translate-y-0"}`}
+        style={{ minHeight: SETUP_CARD_MIN_HEIGHT }}
         aria-live="polite"
       >
         <div className="flex items-start gap-3">
@@ -130,7 +142,7 @@ export function MissingSharedEnvKeySetup({
 
   if (explaining) {
     return (
-      <section className="grid gap-3 rounded-md border border-[rgba(94,234,212,0.18)] bg-[rgba(20,184,166,0.06)] p-4">
+      <section className="grid gap-3 rounded-md border border-[rgba(94,234,212,0.18)] bg-[rgba(20,184,166,0.06)] p-4" style={{ minHeight: SETUP_CARD_MIN_HEIGHT }}>
         <div className="flex items-start gap-3">
           <ShieldCheck aria-hidden="true" className="mt-0.5 h-5 w-5 text-[var(--accent-strong)]" />
           <div>
@@ -155,7 +167,7 @@ export function MissingSharedEnvKeySetup({
   const invalid = issue === "invalid";
 
   return (
-    <section className="grid gap-3 rounded-md border border-[rgba(94,234,212,0.18)] bg-[rgba(20,184,166,0.06)] p-4">
+    <section className="grid gap-3 rounded-md border border-[rgba(94,234,212,0.18)] bg-[rgba(20,184,166,0.06)] p-4" style={{ minHeight: SETUP_CARD_MIN_HEIGHT }}>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="eyebrow">{invalid ? "API key setup" : "Missing API key"}</p>

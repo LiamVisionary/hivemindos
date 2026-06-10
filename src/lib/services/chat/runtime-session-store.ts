@@ -1,7 +1,8 @@
-import { mkdir, readFile, readdir, writeFile } from "fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
 import { homedir } from "os";
 import { join } from "path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { syncConversationNoteForSession } from "@/lib/services/obsidian/conversation-notes";
 
 export type RuntimeChatSessionMessage = {
   index: number;
@@ -20,6 +21,7 @@ export type RuntimeChatSessionRecord = {
   agentId: string;
   agentName: string;
   chatStorageKey?: string;
+  sharedVaultPath?: string;
   startedAt: number;
   updatedAt: number;
   endedAt?: number;
@@ -31,6 +33,7 @@ type StartRuntimeChatSessionOptions = {
   sessionId: string;
   agent: AgentProfile;
   chatStorageKey?: string;
+  sharedVaultPath?: string;
   userContent: string;
   startedAt?: number;
 };
@@ -44,6 +47,7 @@ type RuntimeSessionQuery = {
 };
 
 const SESSION_DIR = join(homedir(), ".hivemindos", "chat-runtime-sessions");
+const MAX_SESSION_FALLBACK_FILES = 80;
 
 function safeFileName(value: string) {
   return value.replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 160) || "session";
@@ -119,6 +123,7 @@ export async function startRuntimeChatSession(options: StartRuntimeChatSessionOp
   session.agentId = options.agent.id || options.agent.agentId || session.agentId;
   session.agentName = options.agent.name || session.agentName;
   session.chatStorageKey = options.chatStorageKey || session.chatStorageKey;
+  session.sharedVaultPath = options.sharedVaultPath || session.sharedVaultPath;
   session.updatedAt = Date.now();
   session.endedAt = undefined;
   session.endReason = undefined;
@@ -183,6 +188,9 @@ export async function finishRuntimeChatSession(sessionId: string, endReason = "c
   session.endedAt = now;
   session.endReason = endReason;
   await writeSession(session);
+  // Mirror the finished conversation into the shared vault (best effort) so
+  // shared-brain recall can search it; never block or fail the chat response.
+  void syncConversationNoteForSession(session).catch(() => {});
 }
 
 export async function readRuntimeChatSession(query: RuntimeSessionQuery) {
@@ -191,11 +199,22 @@ export async function readRuntimeChatSession(query: RuntimeSessionQuery) {
     const exact = await readSessionFile(sessionPath(query.sessionId));
     if (exact) return exact;
   }
-  const names = await readdir(SESSION_DIR).catch(() => []);
-  const sessions = (await Promise.all(
-    names.filter((name) => name.endsWith(".json")).map((name) => readSessionFile(join(SESSION_DIR, name))),
-  )).filter((session): session is RuntimeChatSessionRecord => Boolean(session));
+  const entries = await readdir(SESSION_DIR, { withFileTypes: true }).catch(() => []);
   const sinceMs = Number(query.sinceMs || 0);
+  const candidates = (await Promise.all(entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+    .map(async (entry) => {
+      const path = join(SESSION_DIR, entry.name);
+      const info = await stat(path).catch(() => null);
+      return info ? { path, mtimeMs: info.mtimeMs } : null;
+    })))
+    .filter((entry): entry is { path: string; mtimeMs: number } => Boolean(entry))
+    .filter((entry) => !sinceMs || entry.mtimeMs >= sinceMs)
+    .sort((left, right) => right.mtimeMs - left.mtimeMs)
+    .slice(0, MAX_SESSION_FALLBACK_FILES);
+  const sessions = (await Promise.all(
+    candidates.map((entry) => readSessionFile(entry.path)),
+  )).filter((session): session is RuntimeChatSessionRecord => Boolean(session));
   return sessions
     .filter((session) => !query.runtime || session.runtime === query.runtime)
     .filter((session) => !query.agentId || session.agentId === query.agentId)

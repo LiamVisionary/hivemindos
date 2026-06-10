@@ -1,0 +1,18 @@
+{
+  "upstreamName": "fixing-metadata",
+  "upstreamSlug": "fixing-metadata",
+  "hiveSlug": "fixing-metadata",
+  "sourceLabel": "ibelick",
+  "sourceUrl": "https://www.ui-skills.com/skills/ibelick/fixing-metadata",
+  "repository": "https://github.com/ibelick/ui-skills",
+  "installCommand": "npx skills add https://github.com/ibelick/ui-skills --skill fixing-metadata",
+  "importedAt": "2026-06-08T15:01:35.366Z",
+  "refreshedAt": "2026-06-08T15:01:35.366Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/ibelick/fixing-metadata",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": ">"
+}

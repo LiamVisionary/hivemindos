@@ -850,7 +850,7 @@ function scheduleMarkdown(workflow, folders) {
     name: workflow.name,
     agentName: "Queen Bee",
     machineName: "Foundation Workflows",
-    runtime: "openai-compatible",
+    runtime: "hivemind-os",
     enabled: false,
     every: workflow.every,
     mode: "prompt",
@@ -872,7 +872,7 @@ scheduleId: ${JSON.stringify(config.id)}
 scheduleName: ${JSON.stringify(workflow.name)}
 device: Foundation Workflows
 agentName: Queen Bee
-runtime: openai-compatible
+runtime: hivemind-os
 enabled: false
 every: ${JSON.stringify(workflow.every)}
 externalSource: hivemindos-foundation

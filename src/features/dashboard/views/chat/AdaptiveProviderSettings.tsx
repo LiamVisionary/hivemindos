@@ -2,7 +2,7 @@
 
 import { Check, Cpu, PlugZap } from "lucide-react";
 import type React from "react";
-import type { AdaptiveRoutingConfig, AgentRuntime } from "@/lib/types/agent-runtime";
+import { HIVEMIND_OS_RUNTIME, type AdaptiveRoutingConfig, type AgentRuntime } from "@/lib/types/agent-runtime";
 
 const inputStyle = {
   width: "100%",
@@ -94,7 +94,7 @@ export function AdaptiveProviderSettings({
 }) {
   const configuredProviderSlugs = new Set(runtimeModelProviders.map((provider) => provider.slug));
   const disabledProviders = new Set((adaptiveRouting.disabledProviders ?? []).map((item: string) => item.toLowerCase()));
-  const runtimeSet = new Set(adaptiveRouting.enabledRuntimes?.length ? adaptiveRouting.enabledRuntimes : ["hermes", "openai-compatible"]);
+  const runtimeSet = new Set(adaptiveRouting.enabledRuntimes?.length ? adaptiveRouting.enabledRuntimes : ["hermes", HIVEMIND_OS_RUNTIME]);
   const toggleProvider = (provider: string, enabled: boolean) => {
     const next = new Set(disabledProviders);
     if (enabled) next.delete(provider);
@@ -109,7 +109,7 @@ export function AdaptiveProviderSettings({
   };
   const providerRows = [
     { slug: "openrouter", name: "OpenRouter", ready: configuredProviderSlugs.has("openrouter"), detail: configuredProviderSlugs.has("openrouter") ? "Runtime provider configured" : "Uses OPENROUTER_API_KEY when present" },
-    { slug: "lm-studio", name: "LM Studio", ready: configuredProviderSlugs.has("lm-studio"), detail: configuredProviderSlugs.has("lm-studio") ? "Local provider discovered" : "Enable when local models are available" },
+    { slug: "lm-studio", name: "Local OpenAI", ready: configuredProviderSlugs.has("lm-studio"), detail: configuredProviderSlugs.has("lm-studio") ? "Local provider discovered" : "Enable when local models are available" },
     { slug: "ollama", name: "Ollama", ready: configuredProviderSlugs.has("ollama"), detail: configuredProviderSlugs.has("ollama") ? "Local provider discovered" : "Enable when Ollama is configured" },
     { slug: "bankr", name: "Bankr LLM", ready: bankrLlmSelected || configuredProviderSlugs.has("bankr"), detail: bankrLlmSelected || configuredProviderSlugs.has("bankr") ? "Gateway selected or discovered" : "Uses BANKR_LLM_KEY when present" },
     { slug: "usepod", name: "UsePod", ready: usePodSetupComplete || configuredProviderSlugs.has("usepod"), detail: usePodSetupComplete ? "Marketplace balance ready" : "Requires UsePod setup" },
@@ -133,7 +133,7 @@ export function AdaptiveProviderSettings({
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 8 }}>
           <ToggleRow label="Hermes" sub={activeRuntime === "hermes" ? "Current runtime" : "Use when this profile runs through Hermes"} checked={runtimeSet.has("hermes")} onChange={(checked) => toggleRuntime("hermes", checked)} icon={Cpu} />
-          <ToggleRow label="OpenAI-compatible" sub="Direct OpenAI-compatible providers" checked={runtimeSet.has("openai-compatible")} onChange={(checked) => toggleRuntime("openai-compatible", checked)} icon={PlugZap} />
+          <ToggleRow label="Direct provider route" sub="Use OpenAI-compatible provider APIs without changing this agent runtime" checked={runtimeSet.has(HIVEMIND_OS_RUNTIME)} onChange={(checked) => toggleRuntime(HIVEMIND_OS_RUNTIME, checked)} icon={PlugZap} />
         </div>
         <div style={{ display: "grid", gap: 8 }}>
           {providerRows.map((provider) => (

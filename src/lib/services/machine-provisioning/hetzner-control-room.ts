@@ -322,7 +322,7 @@ case "$HIVE_AGENT_RUNTIME" in
       curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash || true
     fi
     ;;
-  openclaw|aeon|openai-compatible)
+  openclaw|aeon|hivemind-os)
     log "$HIVE_AGENT_RUNTIME selected; HivemindOS fleet wiring and shared skill targets will be installed."
     ;;
   *)
@@ -343,7 +343,9 @@ cd "$HIVE_APP_DIR"
 HIVE_SETUP_INTERACTIVE=false HIVE_SHARED_SKILLS=true HIVE_SHARED_SKILL_TARGETS="$HIVE_AGENT_RUNTIME" ./setup.sh --non-interactive
 
 log "Ensuring fleet collector is installed"
-AGENT_TELEMETRY_HERMES_RESTART=now ./scripts/install-telemetry-collector.sh
+# Provisioned VPS workers register ephemeral tailnet nodes so destroyed or
+# re-provisioned servers never leave stale device registrations behind.
+AGENT_TELEMETRY_HERMES_RESTART=now HIVE_LINK_EPHEMERAL="\${HIVE_LINK_EPHEMERAL:-true}" ./scripts/install-telemetry-collector.sh
 
 if command -v hermes >/dev/null 2>&1 && [ "$HIVE_AGENT_RUNTIME" = "hermes" ]; then
   hermes config set API_SERVER_ENABLED true >/dev/null || true

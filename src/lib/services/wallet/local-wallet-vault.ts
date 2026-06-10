@@ -101,6 +101,14 @@ export async function getWalletInfo(agentId: string): Promise<AgentWalletVaultIn
   return publicInfo(record);
 }
 
+export async function listWalletInfos(options: { agentIdPrefix?: string } = {}): Promise<AgentWalletVaultInfo[]> {
+  const vault = await readVault();
+  return Object.values(vault.records)
+    .filter((record) => !options.agentIdPrefix || record.agentId.startsWith(options.agentIdPrefix))
+    .map(publicInfo)
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+}
+
 export async function getWalletSecret(agentId: string): Promise<{ info: AgentWalletVaultInfo; secret: string } | null> {
   const key = await ensureVaultKey();
   const vault = await readVault();

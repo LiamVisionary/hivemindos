@@ -4,6 +4,17 @@ import { homedir } from "os";
 import { isAbsolute, join, sep } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
+import {
+  applyLoopReceipts,
+  discoverLoop,
+  loopCompletionBlock,
+  loopMaxAttempts,
+  mergeLoopReceipts,
+  normalizeLoopReceipts,
+  normalizeLoopSpec,
+  recordLoopAntiPatterns,
+  recordLoopExperiment,
+} from "@/lib/services/kanban/loop-optimizer";
 import { gitLawbProofForProject, readProjectRegistry } from "@/lib/services/projects/project-registry";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import type {
@@ -18,6 +29,7 @@ import type {
   KanbanDeliverableKind,
   KanbanEvent,
   KanbanFailureReason,
+  KanbanLoopReceipt,
   KanbanPriority,
   KanbanRunStatus,
   KanbanStatus,
@@ -50,13 +62,16 @@ type CreateTaskInput = {
   targetMachine?: KanbanTask["targetMachine"];
   projectId?: string;
   proofs?: KanbanTask["proofs"];
+  loop?: KanbanTask["loop"];
+  loopReceipts?: KanbanTask["loopReceipts"];
   parents?: string[];
   idempotencyKey?: string;
   maxRuntimeMs?: number;
   maxAttempts?: number;
 };
 
-type PatchTaskInput = Partial<Pick<KanbanTask, "title" | "body" | "result" | "assignee" | "tenant" | "status" | "priority" | "workspace" | "skills" | "attachments" | "linkedDirectories" | "deliverables" | "targetMachine" | "projectId" | "proofs" | "agentSession" | "reviewedBy" | "undoRequestedBy" | "maxAttempts">> & {
+type PatchTaskInput = Partial<Pick<KanbanTask, "title" | "body" | "result" | "assignee" | "tenant" | "status" | "priority" | "workspace" | "skills" | "attachments" | "linkedDirectories" | "deliverables" | "targetMachine" | "projectId" | "proofs" | "loopReceipts" | "agentSession" | "reviewedBy" | "undoRequestedBy" | "maxRuntimeMs" | "maxAttempts">> & {
+  loop?: KanbanTask["loop"] | null;
   reviewedAt?: number | null;
   undoRequestedAt?: number | null;
 };
@@ -73,6 +88,7 @@ type FinishRunInput = {
   summary?: string;
   result?: string;
   metadata?: Record<string, unknown>;
+  loopReceipts?: KanbanLoopReceipt[];
   error?: string;
   reason?: string;
   runId?: string;
@@ -303,10 +319,12 @@ function normalizeTask(task: KanbanTask): KanbanTask {
     targetMachine: task.targetMachine?.key ? task.targetMachine : null,
     projectId: cleanOptional(task.projectId),
     proofs: Array.isArray(task.proofs) ? task.proofs.map((proof) => sanitizeGitLawbProof(proof)) : [],
+    loop: normalizeLoopSpec(task.loop, task.maxAttempts, task.maxRuntimeMs),
+    loopReceipts: normalizeLoopReceipts(task.loopReceipts),
     claimLock: cleanOptional(task.claimLock),
     currentRunId: cleanOptional(task.currentRunId),
     attempt: positiveInteger(task.attempt) ?? 1,
-    maxAttempts: positiveInteger(task.maxAttempts) ?? DEFAULT_MAX_ATTEMPTS,
+    maxAttempts: positiveInteger(task.maxAttempts) ?? loopMaxAttempts(task.loop) ?? DEFAULT_MAX_ATTEMPTS,
     lastFailureReason: normalizeFailureReason(task.lastFailureReason),
   };
 }
@@ -394,6 +412,7 @@ export async function createTask(slug: string | null, input: CreateTaskInput, op
     const parent = existingTasksById.get(parentId);
     return parent && parent.status !== "done" && parent.status !== "archived";
   });
+  const loop = normalizeLoopSpec(input.loop, input.maxAttempts, input.maxRuntimeMs);
   const taskBase: KanbanTask = {
     id: `t_${now.toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
     title,
@@ -410,9 +429,11 @@ export async function createTask(slug: string | null, input: CreateTaskInput, op
     targetMachine: input.targetMachine?.key ? input.targetMachine : null,
     projectId: cleanOptional(input.projectId),
     proofs: Array.isArray(input.proofs) ? input.proofs.map((proof) => sanitizeGitLawbProof(proof)) : [],
-    maxRuntimeMs: positiveNumber(input.maxRuntimeMs),
+    loop,
+    loopReceipts: normalizeLoopReceipts(input.loopReceipts),
+    maxRuntimeMs: positiveNumber(input.maxRuntimeMs) ?? loop?.budget?.maxRuntimeMs,
     attempt: 1,
-    maxAttempts: positiveInteger(input.maxAttempts) ?? DEFAULT_MAX_ATTEMPTS,
+    maxAttempts: positiveInteger(input.maxAttempts) ?? loopMaxAttempts(loop) ?? DEFAULT_MAX_ATTEMPTS,
     idempotencyKey: cleanOptional(input.idempotencyKey),
     createdAt: now,
     updatedAt: now,
@@ -453,13 +474,15 @@ export async function patchTask(slug: string | null, taskId: string, patch: Patc
     targetMachine: patch.targetMachine === null ? null : patch.targetMachine ?? task.targetMachine,
     projectId: patch.projectId === "" ? undefined : patch.projectId ?? task.projectId,
     proofs: Array.isArray(patch.proofs) ? patch.proofs.map((proof) => sanitizeGitLawbProof(proof)) : task.proofs,
+    loop: patch.loop === null ? undefined : patch.loop !== undefined ? normalizeLoopSpec(patch.loop, patch.maxAttempts ?? task.maxAttempts, patch.maxRuntimeMs ?? task.maxRuntimeMs) : task.loop,
+    loopReceipts: patch.loopReceipts ? normalizeLoopReceipts(patch.loopReceipts) : task.loopReceipts,
     result: retryingWorking ? patch.result ?? "" : patch.result ?? task.result,
     agentSession: retryingWorking ? patch.agentSession ?? undefined : patch.agentSession ?? task.agentSession,
     reviewedAt: patch.reviewedAt === null ? undefined : patch.reviewedAt ?? task.reviewedAt,
     reviewedBy: patch.reviewedBy === "" ? undefined : patch.reviewedBy ?? task.reviewedBy,
     undoRequestedAt: patch.undoRequestedAt === null ? undefined : patch.undoRequestedAt ?? task.undoRequestedAt,
     undoRequestedBy: patch.undoRequestedBy === "" ? undefined : patch.undoRequestedBy ?? task.undoRequestedBy,
-    maxAttempts: positiveInteger(patch.maxAttempts) ?? task.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
+    maxAttempts: positiveInteger(patch.maxAttempts) ?? loopMaxAttempts(patch.loop ?? task.loop) ?? task.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
     updatedAt: Date.now(),
     completedAt: nextStatus ? (nextStatus === "done" ? Date.now() : undefined) : task.completedAt,
   };
@@ -654,12 +677,34 @@ export async function completeTask(slug: string | null, taskId: string, input: F
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   const now = Date.now();
-  finishActiveRun(board, taskId, "completed", input);
   const result = input.result ?? input.summary ?? task.result;
+  const loopReceipts = mergeLoopReceipts(task.loopReceipts, input.loopReceipts);
+  const gateBlock = loopCompletionBlock(task.loop, loopReceipts);
+  if (gateBlock) {
+    const summary = `${input.summary ?? result ?? "Completion blocked."} Missing passing eval receipts: ${gateBlock.missingGateTitles.join(", ")}.`;
+    finishActiveRun(board, taskId, "blocked", { ...input, summary, reason: summary });
+    const changed: KanbanTask = {
+      ...task,
+      status: "needs-human",
+      result: summary,
+      loopReceipts,
+      claimLock: undefined,
+      claimExpiresAt: undefined,
+      currentRunId: undefined,
+      updatedAt: now,
+    };
+    board.tasks = board.tasks.map((item) => item.id === taskId ? changed : item);
+    board.events.unshift(event("loop.eval-blocked", `${task.title} needs eval evidence before completion`, task.id, { missingGateIds: gateBlock.missingGateIds, missingGateTitles: gateBlock.missingGateTitles }, input.runId ?? task.currentRunId));
+    await writeBoard(touch(board), options);
+    return { board, task: changed, blocked: true, missingGateIds: gateBlock.missingGateIds };
+  }
+  finishActiveRun(board, taskId, "completed", input);
   const changed: KanbanTask = {
     ...task,
     status: "done",
     result,
+    loop: applyLoopReceipts(task.loop, loopReceipts),
+    loopReceipts,
     deliverables: mergeDeliverables(
       task.deliverables,
       extractTaskDeliverables(task, result, now),
@@ -677,6 +722,58 @@ export async function completeTask(slug: string | null, taskId: string, input: F
   promoteReadyChildren(board, "dependency.auto-promote");
   await writeBoard(touch(board), options);
   return { board, task: changed };
+}
+
+export async function discoverTaskLoop(slug: string | null, taskId: string, input: Record<string, unknown> = {}, options: KanbanStorageOptions = {}) {
+  const board = await readBoard(slug, options);
+  const task = board.tasks.find((item) => item.id === taskId);
+  if (!task) throw new Error("Task not found.");
+  const now = Date.now();
+  const loop = discoverLoop(task.loop, input);
+  const changed: KanbanTask = {
+    ...task,
+    loop,
+    maxRuntimeMs: positiveNumber(task.maxRuntimeMs) ?? loop.budget?.maxRuntimeMs,
+    maxAttempts: positiveInteger(task.maxAttempts) ?? loopMaxAttempts(loop) ?? DEFAULT_MAX_ATTEMPTS,
+    updatedAt: now,
+  };
+  board.tasks = board.tasks.map((item) => item.id === taskId ? changed : item);
+  board.events.unshift(event("loop.discovered", `Discovered loop benchmark for ${task.title}`, task.id, {
+    benchmark: loop.benchmark,
+    frontierStrategy: loop.frontierStrategy,
+    gateCount: loop.evalGates.length,
+  }));
+  await writeBoard(touch(board), options);
+  return { board, task: changed, observation: loop.observation };
+}
+
+export async function recordTaskLoop(slug: string | null, taskId: string, input: { experiment?: Record<string, unknown>; antiPatterns?: unknown[] } = {}, options: KanbanStorageOptions = {}) {
+  const board = await readBoard(slug, options);
+  const task = board.tasks.find((item) => item.id === taskId);
+  if (!task) throw new Error("Task not found.");
+  let loop = task.loop;
+  if (input.experiment?.hypothesis) {
+    loop = recordLoopExperiment(loop, input.experiment as Parameters<typeof recordLoopExperiment>[1]);
+  }
+  if (Array.isArray(input.antiPatterns)) {
+    loop = recordLoopAntiPatterns(loop, input.antiPatterns);
+  }
+  if (!loop) throw new Error("Loop record requires an experiment or anti-pattern.");
+  const changed: KanbanTask = {
+    ...task,
+    loop,
+    updatedAt: Date.now(),
+  };
+  board.tasks = board.tasks.map((item) => item.id === taskId ? changed : item);
+  board.events.unshift(event("loop.recorded", `Recorded loop evidence for ${task.title}`, task.id, {
+    experimentId: input.experiment?.id,
+    experimentStatus: input.experiment?.status,
+    score: input.experiment?.score,
+    antiPatternCount: Array.isArray(input.antiPatterns) ? input.antiPatterns.length : 0,
+    observation: loop.observation,
+  }));
+  await writeBoard(touch(board), options);
+  return { board, task: changed, observation: loop.observation };
 }
 
 export async function failTask(slug: string | null, taskId: string, input: FinishRunInput = {}, options: KanbanStorageOptions = {}) {

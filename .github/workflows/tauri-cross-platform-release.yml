@@ -23,8 +23,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Native Apple Silicon (arm64). NOTE: free macos-14 runners have only
+          # ~7 GB RAM, and the embedded Next build needs a ~6-8 GB Node heap
+          # (TAURI_NEXT_BUILD_HEAP_MB), so it may OOM here. For a reliable arm64
+          # dashboard build, use a paid macos-14-xlarge runner; fail-fast:false
+          # keeps the other legs shipping if this one fails.
+          - label: macOS Apple Silicon
+            os: macos-14
+            app_arch: -arm64
+            bundle_glob: src-tauri/target/release/bundle/macos/*.app src-tauri/target/release/bundle/dmg/*.dmg
           - label: macOS Intel
             os: macos-13
+            app_arch: -x64
             bundle_glob: src-tauri/target/release/bundle/macos/*.app src-tauri/target/release/bundle/dmg/*.dmg
           - label: Windows x64
             os: windows-latest
@@ -71,7 +81,37 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The repo's checked-in versions are a floor, not the release version —
+      # releases are versioned by tag (see bump-app-version.yml). Stamp the
+      # tag's version into package.json/tauri.conf.json/Cargo.* for this build
+      # only; nothing is committed.
+      - name: Stamp release version from tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
+        run: node scripts/bump-app-version.mjs --set "${RELEASE_TAG#v}"
+
       - name: Build Tauri app
+        env:
+          # macOS Developer ID code signing + notarization. These are read by
+          # the Tauri bundler only on macOS (ignored on Windows/Linux). If the
+          # secrets are unset the macOS build is simply unsigned (same as before)
+          # — set them in repo Settings → Secrets → Actions to ship a signed,
+          # notarized app (required so the gateway's file-access TCC grant has a
+          # stable identity that persists across updates). See
+          # docs/macos-code-signing.md.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Build the full embedded Next server (all API routes -> a working
+          # dashboard) instead of the static export, which strips the API routes
+          # and ships an empty dashboard. The embedded build path is POSIX-only
+          # (scripts/run-with-memory-limit.sh), so Windows stays on the static
+          # build until that path gains a Windows branch.
+          HIVEMINDOS_TAURI_EMBEDDED_NEXT: ${{ runner.os != 'Windows' && '1' || '' }}
         run: pnpm tauri:build
 
       - name: Collect bundle assets
@@ -83,10 +123,44 @@ jobs:
           for item in ${{ matrix.bundle_glob }}; do
             if [ -d "$item" ]; then
               base="$(basename "$item")"
-              ditto -c -k --keepParent "$item" "release-assets/${base}.zip" 2>/dev/null || zip -r "release-assets/${base}.zip" "$item"
+              # arch-tag the .app zip so the Intel + arm64 macOS builds don't
+              # overwrite each other on the release (.dmg names already carry arch).
+              zipname="${base%.app}${{ matrix.app_arch }}.app.zip"
+              ditto -c -k --keepParent "$item" "release-assets/${zipname}" 2>/dev/null || zip -r "release-assets/${zipname}" "$item"
             else
               cp "$item" release-assets/
             fi
+          done
+          for asset in release-assets/*; do
+            case "$(basename "$asset")" in
+              *_aarch64.dmg)
+                cp "$asset" release-assets/HivemindOS-macos-aarch64.dmg
+                ;;
+              *_x64.dmg)
+                cp "$asset" release-assets/HivemindOS-macos-x64.dmg
+                ;;
+              *-arm64.app.zip)
+                cp "$asset" release-assets/HivemindOS-macos-arm64.app.zip
+                ;;
+              *-x64.app.zip)
+                cp "$asset" release-assets/HivemindOS-macos-x64.app.zip
+                ;;
+              *_x64-setup.exe)
+                cp "$asset" release-assets/HivemindOS-windows-x64-setup.exe
+                ;;
+              *_x64_en-US.msi)
+                cp "$asset" release-assets/HivemindOS-windows-x64.msi
+                ;;
+              *_amd64.AppImage)
+                cp "$asset" release-assets/HivemindOS-linux-x64.AppImage
+                ;;
+              *_amd64.deb)
+                cp "$asset" release-assets/HivemindOS-linux-x64.deb
+                ;;
+              *-1.x86_64.rpm)
+                cp "$asset" release-assets/HivemindOS-linux-x64.rpm
+                ;;
+            esac
           done
           if [ -z "$(find release-assets -maxdepth 1 -type f -print -quit)" ]; then
             echo "No bundle assets found for ${{ matrix.label }}." >&2
@@ -101,4 +175,8 @@ jobs:
           RELEASE_TAG: ${{ github.event.inputs.tag }}
           REPOSITORY: ${{ github.repository }}
         shell: bash
-        run: gh release upload "$RELEASE_TAG" release-assets/* --repo "$REPOSITORY" --clobber
+        run: |
+          gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$RELEASE_TAG" --repo "$REPOSITORY" --title "$RELEASE_TAG" --generate-notes \
+            || true
+          gh release upload "$RELEASE_TAG" release-assets/* --repo "$REPOSITORY" --clobber

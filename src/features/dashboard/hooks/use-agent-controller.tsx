@@ -3,8 +3,8 @@
 import type { Dispatch, SetStateAction } from "react";
 import { openNativeDirectory } from "@/lib/native/filesystem";
 import type { BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
-import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
-import { defaultAgentNameForRuntime, runtimeIntegrationFeature, runtimeLocalDataDirPatch, runtimePostCreateAction, runtimeProfileFeature, runtimeSettingsFeature } from "@/lib/types/agent-runtime";
+import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
+import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeIntegrationFeature, runtimeLocalDataDirPatch, runtimePostCreateAction, runtimeProfileFeature, runtimeSettingsFeature, type AgentProfile, type AgentRuntime } from "@/lib/types/agent-runtime";
 import type { AgentCreateDraft, AgentSettingsPanel, AgentWorkerClassView, RuntimeModelDraft, RuntimeModelSetupMode } from "@/features/dashboard/agent-settings-types";
 import type { DashboardView, DiscoveredMachine, MachineGroup, RuntimeEnvSyncResponse, RuntimeIntegrationStatus, RuntimeModelSelection, RuntimeSessionSearchResult, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
 
@@ -21,6 +21,7 @@ type UseAgentControllerProps = {
   displayAgents: AgentProfile[];
   hermesUpdateDetail: (status: RuntimeIntegrationStatus | null | undefined) => string;
   normalizeAgentProfile: (agent: AgentProfile) => AgentProfile;
+  onAgentCreated?: (agent: AgentProfile) => void | Promise<void>;
   openSetupModal: (machine: MachineGroup) => void;
   roleModalAgent: AgentProfile | null;
   runtimeCount: (agents: AgentProfile[], runtime: AgentRuntime) => number;
@@ -66,13 +67,44 @@ function runtimeIntegrationTargetKey(agent?: AgentProfile | null) {
   return [agent.runtime, telemetryUrl, localDataDir, agentId].join("|");
 }
 
+function mergeRuntimeModelSelections(
+  current: RuntimeModelSelection | undefined,
+  incoming: RuntimeModelSelection,
+): RuntimeModelSelection {
+  const providersBySlug = new Map<string, RuntimeModelSelection["providers"][number]>();
+  for (const provider of [...(current?.providers ?? []), ...incoming.providers]) {
+    const existing = providersBySlug.get(provider.slug);
+    if (!existing) {
+      providersBySlug.set(provider.slug, provider);
+      continue;
+    }
+    const modelsById = new Map(existing.models.map((model) => [model.id, model]));
+    for (const model of provider.models) {
+      modelsById.set(model.id, { ...modelsById.get(model.id), ...model });
+    }
+    providersBySlug.set(provider.slug, {
+      ...existing,
+      ...provider,
+      models: [...modelsById.values()],
+      totalModels: Math.max(existing.totalModels, provider.totalModels, modelsById.size),
+      isCurrent: Boolean(existing.isCurrent || provider.isCurrent),
+      source: existing.source && provider.source && existing.source !== provider.source
+        ? "Multiple machines"
+        : provider.source ?? existing.source,
+    });
+  }
+  return {
+    provider: incoming.provider || current?.provider || "",
+    model: incoming.model || current?.model || "",
+    providers: [...providersBySlug.values()],
+  };
+}
+
 export function useAgentController(props: UseAgentControllerProps) {
-  const { RUNTIME_LABELS, aeonEnvKeys, agentCreateDraft, agentCreateMachine, agents, beeWorkerPreset, collectorKey, createAgentProfile, defaultWorkerClassDraft, displayAgents, hermesUpdateDetail, normalizeAgentProfile, openSetupModal, roleModalAgent, runtimeCount, runtimeSessionQuery, selectedAgent, setActiveView, setAeonEnvSyncStatus, setAeonEnvSyncing, setAgentCreateDraft, setAgentCreateMachineKey, setAgentRenameDraft, setAgentRenameEditing, setAgentRoleModalId, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderBrowsing, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setAgentWorkerClassView, setAgents, setCustomWorkerDraft, setCustomWorkerImageError, setCustomWorkerSkillSearch, setDiscoveredMachines, setHermesUpdateRequiredDetail, setRuntimeBackgroundPrompt, setRuntimeIntegrationBusy, setRuntimeIntegrationMessage, setRuntimeIntegrationStatus, setRuntimeModelDraft, setRuntimeModelSelectionsByRuntime, setRuntimeModelSetupMode, setRuntimeSessionQuery, setRuntimeSessionResults, setSelectedAgentId } = props;
+  const { RUNTIME_LABELS, aeonEnvKeys, agentCreateDraft, agentCreateMachine, agents, beeWorkerPreset, collectorKey, createAgentProfile, defaultWorkerClassDraft, displayAgents, hermesUpdateDetail, normalizeAgentProfile, onAgentCreated, openSetupModal, roleModalAgent, runtimeCount, runtimeSessionQuery, selectedAgent, setActiveView, setAeonEnvSyncStatus, setAeonEnvSyncing, setAgentCreateDraft, setAgentCreateMachineKey, setAgentRenameDraft, setAgentRenameEditing, setAgentRoleModalId, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderBrowsing, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setAgentWorkerClassView, setAgents, setCustomWorkerDraft, setCustomWorkerImageError, setCustomWorkerSkillSearch, setDiscoveredMachines, setHermesUpdateRequiredDetail, setRuntimeBackgroundPrompt, setRuntimeIntegrationBusy, setRuntimeIntegrationMessage, setRuntimeIntegrationStatus, setRuntimeModelDraft, setRuntimeModelSelectionsByRuntime, setRuntimeModelSetupMode, setRuntimeSessionQuery, setRuntimeSessionResults, setSelectedAgentId } = props;
   function updateAgent(patch: Partial<AgentProfile>) {
     if (!selectedAgent) return;
-    setAgents((current) => current.map((agent) => (
-      agent.id === selectedAgent.id ? { ...agent, ...patch } : agent
-    )));
+    updateAgentProfile(selectedAgent.id, patch);
   }
 
   function updateAgentProfile(agentId: string, patch: Partial<AgentProfile>) {
@@ -236,8 +268,8 @@ export function useAgentController(props: UseAgentControllerProps) {
       body: JSON.stringify({ agent }),
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as { ok?: boolean; status?: RuntimeIntegrationStatus; error?: string } | null;
-    setRuntimeIntegrationBusy("");
     if (!response?.ok || !data?.ok || !data.status) {
+      setRuntimeIntegrationBusy("");
       setRuntimeIntegrationMessage(data?.error ?? "Could not read runtime integrations.");
       return;
     }
@@ -246,9 +278,12 @@ export function useAgentController(props: UseAgentControllerProps) {
     if (data.status.modelSelection) {
       setRuntimeModelSelectionsByRuntime((current) => ({
         ...current,
-        [data.status!.runtime]: data.status!.modelSelection,
+        [data.status!.runtime]: data.status!.runtime === HIVEMIND_OS_RUNTIME
+          ? mergeRuntimeModelSelections(current[data.status!.runtime], data.status!.modelSelection!)
+          : data.status!.modelSelection,
       }));
     }
+    setRuntimeIntegrationBusy("");
     const usePodStatus = data.status.providerStatus?.usePod;
     if (agent.id && agent.provider === "usepod" && usePodStatus) {
       updateAgentProfile(agent.id, {
@@ -276,7 +311,7 @@ export function useAgentController(props: UseAgentControllerProps) {
 
   async function runRuntimeIntegrationAction(action: string, input: Record<string, unknown> = {}, agentOverride?: AgentProfile) {
     const targetAgent = agentOverride ?? roleModalAgent;
-    if (!targetAgent) return;
+    if (!targetAgent) return { ok: false, error: "Agent profile is required." };
     setRuntimeIntegrationBusy(action);
     setRuntimeIntegrationMessage("");
     const response = await fetch(`/api/runtimes/${targetAgent.runtime}/integrations`, {
@@ -288,10 +323,11 @@ export function useAgentController(props: UseAgentControllerProps) {
     setRuntimeIntegrationBusy("");
     if (!response?.ok || !data?.ok) {
       setRuntimeIntegrationMessage(data?.error ?? "Runtime action failed.");
-      return;
+      return { ok: false, error: data?.error ?? "Runtime action failed." };
     }
     setRuntimeIntegrationMessage(data.message ?? data.output ?? "Runtime action completed.");
     await refreshRuntimeIntegrations(targetAgent);
+    return data;
   }
 
   async function searchRuntimeSessionsForAgent() {
@@ -331,7 +367,7 @@ export function useAgentController(props: UseAgentControllerProps) {
       adaptiveRouting: agentCreateDraft.adaptiveRouting,
       usePod: agentCreateDraft.usePod,
       calls: agentCreateDraft.calls,
-      localDataDir: autopilotRuntime ? autopilotLocalPath : "",
+      localDataDir: autopilotRuntime ? autopilotLocalPath : baseAgent.localDataDir || "",
       aeonLocalPath: autopilotRuntime ? autopilotLocalPath : undefined,
       aeonRepo: autopilotRuntime ? agentCreateDraft.aeonRepo || baseAgent.aeonRepo || "" : undefined,
       aeonBranch: autopilotRuntime ? agentCreateDraft.aeonBranch || autopilotDefaults?.branch : undefined,
@@ -345,6 +381,7 @@ export function useAgentController(props: UseAgentControllerProps) {
       selectedCustomWorkerClassId: agentCreateDraft.selectedCustomWorkerClassId,
       skillProfilePrompt: agentCreateDraft.skillProfilePrompt,
       preferredSkillSlugs: agentCreateDraft.preferredSkillSlugs,
+      taskPreferences: agentCreateDraft.taskPreferences,
       useSharedVault: agentCreateDraft.useSharedVault,
     };
     setRuntimeIntegrationBusy("create-agent");
@@ -382,10 +419,11 @@ export function useAgentController(props: UseAgentControllerProps) {
     )));
     setSelectedAgentId(next.id);
     closeAgentSettingsModal();
+    void onAgentCreated?.(next);
     const postCreateAction = runtimePostCreateAction(runtime);
     if (postCreateAction) {
-      if (postCreateAction.sessionStorageAgentIdKey) {
-        window.sessionStorage.setItem(postCreateAction.sessionStorageAgentIdKey, next.id);
+      if (postCreateAction.dashboardStateAgentIdKey) {
+        void saveDashboardStateValue(postCreateAction.dashboardStateAgentIdKey, next.id);
       }
       setActiveView(postCreateAction.view as DashboardView);
     }

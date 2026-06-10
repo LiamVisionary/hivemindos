@@ -1,5 +1,16 @@
-import { searchContextIndex, type ContextConnectedApp, type ContextIndexItem } from "@/lib/services/context-index";
-import type { SharedVaultConfig } from "@/lib/types/agent-runtime";
+import { beeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { searchContextIndex, type ContextConnectedApp, type ContextConnectedAppRoute, type ContextIndexItem } from "@/lib/services/context-index";
+import { applyAppPreferences, readAppPreferences, usageNoteAffinity } from "@/lib/services/fleet/app-preferences";
+import { generationMetricsContext } from "@/lib/services/generation-metrics";
+import type { BeeWorkerClass, SharedVaultConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
+
+const CONNECTED_APPS_PREFLIGHT_TIMEOUT_MS = 250;
+const CONNECTED_APPS_CACHE_TTL_MS = 60_000;
+const CONNECTED_APPS_STALE_TTL_MS = 5 * 60_000;
+const CHAT_CAPABILITY_SEARCH_KINDS = ["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "runtime"] as const;
+
+let connectedAppsCache: { origin: string; apps: ContextConnectedApp[]; updatedAt: number } | null = null;
+let connectedAppsRefresh: Promise<ContextConnectedApp[] | undefined> | null = null;
 
 function compactContextText(value: string, maxLength: number) {
   const compacted = value.replace(/\s+/g, " ").trim();
@@ -13,7 +24,7 @@ function safeContextTags(item: ContextIndexItem) {
 
 function contextItemLocator(item: ContextIndexItem) {
   if (item.kind === "connected-app" || item.kind === "app-endpoint") {
-    return "Use /api/context-index or /api/fleet/apps for current app URLs; do not hard-code Tailnet endpoints.";
+    return "Dashboard can resolve current app URLs through /api/context-index or /api/fleet/apps for tool-capable runtimes; do not hard-code Tailnet endpoints.";
   }
   return item.path || item.route || item.load.note || "No direct locator.";
 }
@@ -22,6 +33,158 @@ type RetrievalHit = {
   item: ContextIndexItem;
   label: string;
 };
+
+export type AgentRetrievalProfile = {
+  workerClass?: string;
+  preferredSkillSlugs?: string[];
+  taskPreferences?: WorkerTaskPreference[];
+};
+
+function normalizeMatchText(value?: string) {
+  return (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function classPreferredSkillSlugs(agent: AgentRetrievalProfile | undefined) {
+  if (!agent) return new Set<string>();
+  const preset = agent.workerClass ? beeWorkerPreset(agent.workerClass as BeeWorkerClass) : null;
+  return new Set([
+    ...(agent.preferredSkillSlugs ?? []),
+    ...(preset?.skillSlugs ?? []),
+  ].map((slug) => slug.toLowerCase().trim()).filter(Boolean));
+}
+
+function taskPreferenceMatches(item: ContextIndexItem, preferences: WorkerTaskPreference[]) {
+  if (item.kind !== "connected-app" && item.kind !== "app-endpoint") return null;
+  const itemText = normalizeMatchText(`${item.id} ${item.title}`);
+  return preferences.find((preference) => {
+    const appName = normalizeMatchText(preference.appName);
+    const appId = normalizeMatchText(preference.appId);
+    return (appName.length >= 3 && itemText.includes(appName)) || (appId.length >= 3 && itemText.includes(appId));
+  }) ?? null;
+}
+
+// Class-aware re-rank: the class never gates what an agent can see — it only
+// reorders ties so class-preferred skills and the agent's task-preference apps
+// surface in the top slots of the bounded hit list.
+function rankHitsForAgent(hits: RetrievalHit[], agent: AgentRetrievalProfile | undefined): RetrievalHit[] {
+  if (!agent) return hits;
+  const skillSlugs = classPreferredSkillSlugs(agent);
+  const taskPreferences = (agent.taskPreferences ?? []).filter((preference) => preference.appId || preference.appName);
+  if (!skillSlugs.size && !taskPreferences.length) return hits;
+  const annotated = hits.map((hit, index) => {
+    let bonus = 0;
+    let label = hit.label;
+    if (hit.item.kind === "skill") {
+      const skillText = `${hit.item.id} ${hit.item.path ?? ""} ${hit.item.title}`.toLowerCase();
+      if ([...skillSlugs].some((slug) => skillText.includes(slug))) {
+        bonus += 30;
+        label = `${label}; class-preferred skill`;
+      }
+    }
+    const matchedPreference = taskPreferenceMatches(hit.item, taskPreferences);
+    if (matchedPreference) {
+      bonus += 40;
+      label = `${label}; agent task preference (${matchedPreference.taskType}${matchedPreference.model ? `, model ${matchedPreference.model}` : ""})`;
+    }
+    return { hit: { ...hit, label }, sortScore: (hit.item.score ?? 0) + bonus, index };
+  });
+  return annotated
+    .sort((left, right) => right.sortScore - left.sortScore || left.index - right.index)
+    .map((entry) => entry.hit);
+}
+
+function userAppPreferenceContext(apps: ContextConnectedApp[] | undefined, query: string) {
+  const preferred = (apps ?? [])
+    .filter((app) => app.priority || app.usageNotes?.trim())
+    .sort((left, right) =>
+      (Number(right.priority ?? false) - Number(left.priority ?? false))
+      || (usageNoteAffinity(query, right.usageNotes) - usageNoteAffinity(query, left.usageNotes)))
+    .slice(0, 4);
+  if (!preferred.length) return "";
+  const lines = ["User app routing preferences (honor these before picking an app yourself):"];
+  for (const app of preferred) {
+    lines.push([
+      `- ${app.name ?? app.id ?? "Connected app"}`,
+      app.priority ? "(priority app)" : "",
+      app.usageNotes?.trim() ? `— ${app.usageNotes.trim()}` : "",
+      app.preferredModels?.length ? `[models: ${app.preferredModels.map((entry) => `${entry.task} → ${entry.model}`).join("; ")}]` : "",
+    ].filter(Boolean).join(" "));
+  }
+  return lines.join("\n");
+}
+
+type RuntimeCapabilityContext = {
+  runtime?: string;
+  hasRuntimeImageGeneration?: boolean;
+  runtimeImageGenerationProvider?: string;
+  runtimeImageGenerationModel?: string;
+  runtimeImageGenerationSource?: string;
+};
+
+export type TaskRetrievalTelemetry = {
+  queryCount: number;
+  hitCount: number;
+  connectedAppCount: number | null;
+  imageGenerationIntent: boolean;
+  localImageGenerationIntent: boolean;
+  runtimeImageGenerationAvailable: boolean;
+  runtimeImageGenerationSource: string | null;
+};
+
+export type TaskRetrievalContextResult = {
+  context: string;
+  telemetry: TaskRetrievalTelemetry;
+};
+
+export function formatTaskRetrievalProcessDetail(telemetry: TaskRetrievalTelemetry) {
+  return [
+    `${telemetry.hitCount} retrieval hit${telemetry.hitCount === 1 ? "" : "s"}`,
+    `${telemetry.queryCount} quer${telemetry.queryCount === 1 ? "y" : "ies"}`,
+    telemetry.connectedAppCount === null ? "connected apps unavailable" : `${telemetry.connectedAppCount} connected app${telemetry.connectedAppCount === 1 ? "" : "s"} observed`,
+    telemetry.localImageGenerationIntent ? "local image generation intent detected" : telemetry.imageGenerationIntent ? "image generation intent detected" : "",
+    telemetry.runtimeImageGenerationAvailable ? `runtime image generation available${telemetry.runtimeImageGenerationSource ? ` via ${telemetry.runtimeImageGenerationSource}` : ""}` : "",
+  ].filter(Boolean).join("; ");
+}
+
+export function buildTaskRetrievalFallbackContext(input: {
+  query: string;
+  origin: string;
+  timeoutMs: number;
+  timedOut: boolean;
+  failed: boolean;
+}) {
+  if (!input.timedOut && !input.failed) return "";
+  const status = input.timedOut
+    ? `timed out after ${input.timeoutMs}ms`
+    : "failed before returning retrieval results";
+  return [
+    "Hive capability search preflight:",
+    `- Capability search ${status}; this chat is continuing under the fast preflight SLA instead of waiting on slow discovery.`,
+    `- Query attempted: ${compactContextText(input.query, 240)}`,
+    `- HivemindOS dashboard API origin for tool-capable runtimes: ${dashboardOriginFor(input.origin)}`,
+    "- Do not invent tool calls, app names, local generation success, or execution receipts.",
+    "- For local image generation requests, say the capability search did not return a live generator route in time and ask the user to retry or use the HivemindOS image route once discovery is healthy.",
+    "- If a real HTTP/tool bridge is available later in the turn, prefer the dashboard proxy POST /api/fleet/apps/request with a discovered service/app target.",
+  ].join("\n");
+}
+
+export function formatTaskRetrievalFallbackProcessDetail(input: { timeoutMs: number; timedOut: boolean; failed: boolean }) {
+  if (input.timedOut) {
+    return `capability search timed out after ${input.timeoutMs}ms before returning retrieval telemetry; query attempted; continuing with fallback context`;
+  }
+  if (input.failed) {
+    return "capability search failed before returning retrieval telemetry; query attempted; continuing with fallback context";
+  }
+  return "";
+}
+
+function dashboardOriginFor(value: string) {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return value.replace(/\/+$/, "");
+  }
+}
 
 function formatTaskRetrievalItem(hit: RetrievalHit, index: number) {
   const item = hit.item;
@@ -42,7 +205,7 @@ function taskRetrievalQueries(query: string) {
     queries.push({ label: "x research and writing", query: "x twitter search latest news social post x-post optimizer grok writer" });
   }
   if (/image|picture|photo|visual|render|generate|generation/.test(normalized)) {
-    queries.push({ label: "image generation", query: "image generation comfyui zimage imagegen visual creative" });
+    queries.push({ label: "image generation", query: "image generation open generative ai zimage z-image imagegen visual creative diffusion comfyui" });
   }
   if (/telegram|message|send|deliver|delivery|notify|notification/.test(normalized)) {
     queries.push({ label: "delivery channel", query: "telegram message send notification delivery channel configure access bot" });
@@ -65,48 +228,254 @@ function taskRetrievalQueries(query: string) {
   }).slice(0, 5);
 }
 
-async function connectedAppsForTaskRetrieval(origin: string) {
+export function imageGenerationRequest(query: string) {
+  return /\b(?:generate|create|make|draw|render|produce|imagine)\b[\s\S]{0,80}\b(?:image|picture|photo|visual|art|illustration)\b/i.test(query)
+    || /\b(?:image|picture|photo|visual|art|illustration)\b[\s\S]{0,80}\b(?:generate|generation|create|make|draw|render|produce|imagine)\b/i.test(query)
+    || /\b(?:txt2img|text\s*to\s*image|image[-\s]?gen|image generation)\b/i.test(query);
+}
+
+export function localImageGenerationRequest(query: string) {
+  return imageGenerationRequest(query) && /\b(?:local|locally|on this mac|this mac|my mac|self[-\s]?hosted|tailnet|comfyui|z[-\s]?image|zimage)\b/i.test(query);
+}
+
+export function requiresCapabilityRouting(query: string) {
+  return localImageGenerationRequest(query)
+    || /\b(?:capabilit(?:y|ies)|connected app|tool|api|x402|wallet|payment|send|deliver|deploy|workflow|kanban|scheduler|miroshark)\b/i.test(query);
+}
+
+function shouldRunTaskRetrieval(query: string) {
+  return Boolean(query.trim());
+}
+
+const IMAGE_APP_HAYSTACK_PATTERN = /\b(?:image[-\s]?gen|image generation|txt2img|text to image|comfyui|diffusion|stable diffusion|open generative ai|local-?ai|z[-\s]?image|zimage|gpt-image|dall-?e)\b/;
+
+// Mirrors generationRouteScore() in /api/chat/image-generation/route.ts so the
+// preflight ranks connected image apps by the same "reachable endpoint" signal
+// the deterministic dispatch scorer uses. Kept local to avoid importing a route handler.
+function generationRouteStrength(route: ContextConnectedAppRoute) {
+  const method = (route.method || "GET").trim().toUpperCase();
+  if (method && method !== "POST") return 0;
+  const text = `${route.path ?? ""} ${route.summary ?? ""} ${route.category ?? ""}`.toLowerCase();
+  let score = 0;
+  if (/\/(?:api\/)?(?:generate|generation|txt2img|image|images)(?:\/|$)/.test(text)) score += 50;
+  if (/prompt|text.?to.?image|image generation|generate image/.test(text)) score += 30;
+  if (/status|history|models|health|download|delete/.test(text)) score -= 40;
+  return score;
+}
+
+type RankedImageApp = {
+  app: ContextConnectedApp;
+  score: number;
+  hasGenerationRoute: boolean;
+  workspaceOnly: boolean;
+  bestRoute?: ContextConnectedAppRoute;
+};
+
+function scoreImageApp(app: ContextConnectedApp, query = ""): RankedImageApp | null {
+  const routes = app.apiRoutes ?? [];
+  const routeText = routes.map((route) => `${route.method ?? ""} ${route.path ?? ""} ${route.summary ?? ""} ${route.category ?? ""}`).join(" ");
+  const haystack = `${app.name ?? ""} ${app.description ?? ""} ${app.serviceKind ?? ""} ${app.openUrl ?? ""} ${app.apiBaseUrl ?? ""} ${routeText}`.toLowerCase();
+  const serviceKind = (app.serviceKind ?? "").toLowerCase();
+  if (!IMAGE_APP_HAYSTACK_PATTERN.test(haystack) && !serviceKind.includes("image")) return null;
+  const rankedRoutes = routes
+    .map((route) => ({ route, strength: generationRouteStrength(route) }))
+    .sort((left, right) => right.strength - left.strength);
+  const bestRoute = rankedRoutes[0];
+  const hasGenerationRoute = (bestRoute?.strength ?? 0) > 0;
+  const workspaceOnly = routes.length > 0 && !hasGenerationRoute
+    && routes.every((route) => (route.method || "GET").trim().toUpperCase() === "GET" && (route.path || "/").trim() === "/");
+  // Deliberately no per-name boosts: endpoint strength decides, not whether the
+  // name looks image-related, so a real generation route outranks a name match.
+  let score = 0;
+  if (serviceKind.includes("image")) score += 40;
+  if (IMAGE_APP_HAYSTACK_PATTERN.test(haystack)) score += 30;
+  if (hasGenerationRoute) score += 80;
+  if (workspaceOnly) score -= 30;
+  if (app.online) score += 10;
+  if (app.local) score += 10;
+  // User preference signals: a pinned app or a prose hint that matches the
+  // request ("use this app for realism") outranks name-pattern matches.
+  if (app.priority) score += 60;
+  score += Math.min(usageNoteAffinity(query, app.usageNotes) * 25, 100);
+  return { app, score, hasGenerationRoute, workspaceOnly, bestRoute: hasGenerationRoute ? bestRoute?.route : undefined };
+}
+
+function imageAppRecommendationContext(apps: ContextConnectedApp[] | undefined, query = "") {
+  if (!apps?.length) return "";
+  const ranked = apps
+    .map((app) => scoreImageApp(app, query))
+    .filter((entry): entry is RankedImageApp => entry !== null && entry.score > 0)
+    .sort((left, right) => right.score - left.score);
+  if (!ranked.length) return "";
+  const top = ranked[0];
+  const lines = ["Connected image-app ranking (ranked by reachable generation endpoint and user preference, not by name):"];
+  if (top.app.usageNotes?.trim() && usageNoteAffinity(query, top.app.usageNotes) > 0) {
+    lines.push(`- User preference matched: ${top.app.name ?? "connected app"} — "${top.app.usageNotes.trim()}"`);
+  }
+  if (top.hasGenerationRoute && top.bestRoute) {
+    const method = (top.bestRoute.method || "POST").trim().toUpperCase();
+    const path = (top.bestRoute.path || "").trim();
+    lines.push(`- Recommended route: ${top.app.name ?? "connected app"} — reachable generation endpoint (${method} ${path || "/"}). Prefer this over name-only or workspace-only matches.`);
+  } else {
+    lines.push(`- Highest-ranked connected image app: ${top.app.name ?? "connected app"}, but no reachable generation endpoint was discovered. Do not claim it can generate until a real route is confirmed.`);
+  }
+  const others = ranked.slice(1, 4).map((entry) => {
+    const status = entry.hasGenerationRoute ? "has generation route" : entry.workspaceOnly ? "workspace-only" : "name match only";
+    return `${entry.app.name ?? "app"} (${status})`;
+  });
+  if (others.length) lines.push(`- Lower-ranked candidates: ${others.join("; ")}.`);
+  return lines.join("\n");
+}
+
+function imageGenerationCapabilityContext(query: string, runtime?: RuntimeCapabilityContext, connectedApps?: ContextConnectedApp[]) {
+  if (!imageGenerationRequest(query)) return "";
+  const localRequested = localImageGenerationRequest(query);
+  const runtimeLabel = runtime?.runtime ? `${runtime.runtime} runtime` : "active runtime";
+  const runtimeModel = [runtime?.runtimeImageGenerationProvider, runtime?.runtimeImageGenerationModel].filter(Boolean).join("/");
+  const runtimeDetail = [
+    runtimeModel ? `model ${runtimeModel}` : "",
+    runtime?.runtimeImageGenerationSource ? `source: ${runtime.runtimeImageGenerationSource}` : "",
+  ].filter(Boolean).join("; ");
+  return [
+    "Image generation capability routing:",
+    runtime?.hasRuntimeImageGeneration
+      ? `- Active ${runtimeLabel} advertises its own image-generation capability${runtimeDetail ? ` (${runtimeDetail})` : ""}; prefer the runtime-native image tool before selecting an OpenRouter image model.`
+      : "- If the active runtime advertises a native image-generation capability, prefer that runtime tool before selecting an external image provider.",
+    localRequested
+      ? "- The user asked for local image generation: prefer connected local/Tailnet image-generation apps from the retrieved capability hints when a real tool bridge is available."
+      : "- Prefer hive capability search results and connected image-generation apps/services before choosing a provider-specific fallback.",
+    "- Rank connected image apps by reachable generation endpoints and healthy app-proxy routes. A name that merely looks image-related (no discovered generation route) or a workspace-only app must not outrank an app that exposes a real generation endpoint.",
+    "- When a user app routing preference matches the requested style (for example anime versus realism), use that app and its preferred model for the task type; pass the model in the generation request body.",
+    imageAppRecommendationContext(connectedApps, query),
+    "- If this chat bridge does not expose real tool calls/app dispatch, do not say the generation was initiated, sent, dispatched, queued, or executed. Say the selected route and that HivemindOS needs to run the native image-generation dispatch path.",
+    "- OpenRouter free image-model search is only a fallback when no runtime-native image generator and no suitable hive capability/app is available, unless the user explicitly asks for OpenRouter.",
+  ].filter(Boolean).join("\n");
+}
+
+async function fetchConnectedAppsForTaskRetrieval(origin: string) {
   const url = new URL("/api/fleet/apps", origin);
   const response = await fetch(url, {
     cache: "no-store",
-    signal: AbortSignal.timeout(7_000),
+    signal: AbortSignal.timeout(CONNECTED_APPS_PREFLIGHT_TIMEOUT_MS),
   }).catch(() => null);
   if (!response?.ok) return undefined;
   const payload = await response.json().catch(() => null) as { apps?: ContextConnectedApp[] } | null;
   return Array.isArray(payload?.apps) ? payload.apps : undefined;
 }
 
+function refreshConnectedAppsForTaskRetrieval(origin: string) {
+  if (connectedAppsRefresh) return connectedAppsRefresh;
+  connectedAppsRefresh = fetchConnectedAppsForTaskRetrieval(origin)
+    .then((apps) => {
+      if (apps) connectedAppsCache = { origin, apps, updatedAt: Date.now() };
+      return apps;
+    })
+    .finally(() => {
+      connectedAppsRefresh = null;
+    });
+  return connectedAppsRefresh;
+}
+
+async function connectedAppsForTaskRetrieval(origin: string) {
+  const now = Date.now();
+  const cached = connectedAppsCache?.origin === origin ? connectedAppsCache : null;
+  if (cached && now - cached.updatedAt < CONNECTED_APPS_CACHE_TTL_MS) return cached.apps;
+  if (cached && now - cached.updatedAt < CONNECTED_APPS_STALE_TTL_MS) {
+    void refreshConnectedAppsForTaskRetrieval(origin).catch(() => undefined);
+    return cached.apps;
+  }
+  return refreshConnectedAppsForTaskRetrieval(origin);
+}
+
 export async function buildTaskRetrievalContext(input: {
   origin: string;
   query: string;
   sharedVault: SharedVaultConfig | null;
+  runtime?: RuntimeCapabilityContext;
+  agent?: AgentRetrievalProfile;
 }) {
+  return (await buildTaskRetrievalContextResult(input)).context;
+}
+
+export async function buildTaskRetrievalContextResult(input: {
+  origin: string;
+  query: string;
+  sharedVault: SharedVaultConfig | null;
+  runtime?: RuntimeCapabilityContext;
+  agent?: AgentRetrievalProfile;
+}): Promise<TaskRetrievalContextResult> {
   const trimmed = input.query.trim();
-  if (!trimmed) return "";
-  const connectedApps = await connectedAppsForTaskRetrieval(input.origin);
-  const results = await Promise.all(taskRetrievalQueries(trimmed).map(async (entry) => {
+  const baseTelemetry = {
+    queryCount: 0,
+    hitCount: 0,
+    connectedAppCount: null,
+    imageGenerationIntent: false,
+    localImageGenerationIntent: false,
+    runtimeImageGenerationAvailable: Boolean(input.runtime?.hasRuntimeImageGeneration),
+    runtimeImageGenerationSource: input.runtime?.runtimeImageGenerationSource ?? null,
+  };
+  if (!trimmed) {
+    return { context: "", telemetry: baseTelemetry };
+  }
+  if (!shouldRunTaskRetrieval(trimmed)) {
+    return { context: "", telemetry: baseTelemetry };
+  }
+  const dashboardOrigin = dashboardOriginFor(input.origin);
+  const [rawConnectedApps, appPreferences] = await Promise.all([
+    connectedAppsForTaskRetrieval(dashboardOrigin),
+    readAppPreferences().catch(() => []),
+  ]);
+  const connectedApps = rawConnectedApps ? applyAppPreferences(rawConnectedApps, appPreferences) : rawConnectedApps;
+  const queries = taskRetrievalQueries(trimmed);
+  const imageIntent = imageGenerationRequest(trimmed);
+  const localImageIntent = localImageGenerationRequest(trimmed);
+  const generationPerformanceContext = await generationMetricsContext(trimmed).catch(() => "");
+  const results = await Promise.all(queries.map(async (entry) => {
     const result = await searchContextIndex({
       query: entry.query,
       vaultPath: input.sharedVault?.vaultPath,
       connectedApps,
+      includeRuntimeProviders: false,
+      kinds: [...CHAT_CAPABILITY_SEARCH_KINDS],
       limit: 8,
     }).catch(() => null);
     return (result?.items ?? []).map((item): RetrievalHit => ({ item, label: entry.label }));
   }));
   const seen = new Set<string>();
-  const hits = results.flat().filter((hit) => {
+  const dedupedHits = results.flat().filter((hit) => {
     if (seen.has(hit.item.id)) return false;
     seen.add(hit.item.id);
     return true;
-  }).slice(0, 22);
-  if (!hits.length) return "";
-  return [
-    "Task retrieval context from /api/context-index:",
+  });
+  const hits = rankHitsForAgent(dedupedHits, input.agent).slice(0, 22);
+  const telemetry: TaskRetrievalTelemetry = {
+    queryCount: queries.length,
+    hitCount: hits.length,
+    connectedAppCount: connectedApps?.length ?? null,
+    imageGenerationIntent: imageIntent,
+    localImageGenerationIntent: localImageIntent,
+    runtimeImageGenerationAvailable: Boolean(input.runtime?.hasRuntimeImageGeneration),
+    runtimeImageGenerationSource: input.runtime?.runtimeImageGenerationSource ?? null,
+  };
+  const retrievalSummary = hits.length
+    ? "- Ranked retrieval hits are listed below. Prefer these concrete names before inventing generic tools."
+    : "- No ranked retrieval hits were returned. Still use this capability preflight: resolve live apps/routes through the dashboard APIs before choosing a provider fallback.";
+  const context = [
+    "Hive capability search preflight:",
+    "- Treat this as already-retrieved context. If the current chat does not expose real tool calls, answer directly and do not emit tool-call markup.",
     `- Query: ${compactContextText(trimmed, 240)}`,
-    `- HivemindOS dashboard API origin for terminal/http tool calls: ${input.origin.replace(/\/+$/, "")}`,
-    "- These are ranked lightweight hits for this exact user message plus targeted subqueries. Prefer these names before inventing generic tools.",
-    "- For connected apps and app endpoints, resolve fresh URLs through the Apps view APIs instead of hard-coding local or Tailnet addresses.",
-    "- For agent terminal/runtime calls into connected apps, prefer the dashboard proxy: POST /api/fleet/apps/request with { serviceKind or appId, method, path, body }. This lets HivemindOS reach Tailnet apps through the same Apps view logic without exposing or depending on raw Tailnet URLs.",
+    `- HivemindOS dashboard API origin for tool-capable runtimes: ${dashboardOrigin}`,
+    `- Queries run: ${queries.length}; retrieval hits: ${hits.length}; connected apps observed: ${connectedApps?.length ?? "unknown"}.`,
+    retrievalSummary,
+    "- For connected apps and app endpoints, tool-capable runtimes should resolve fresh URLs through the Apps view APIs instead of hard-coding local or Tailnet addresses.",
+    "- If a real HTTP/tool bridge is available, prefer the dashboard proxy POST /api/fleet/apps/request with { serviceKind or appId, method, path, body }; otherwise describe the route and ask for execution through HivemindOS.",
+    input.agent?.workerClass
+      ? `- Worker class lens: ${input.agent.workerClass}. Hits marked class-preferred or agent task preference match this agent's specialization; prefer them on ties, but any listed capability remains usable.`
+      : "",
+    userAppPreferenceContext(connectedApps, trimmed),
+    imageGenerationCapabilityContext(trimmed, input.runtime, connectedApps),
+    generationPerformanceContext,
     ...hits.map(formatTaskRetrievalItem),
-  ].join("\n");
+  ].filter(Boolean).join("\n");
+  return { context, telemetry };
 }

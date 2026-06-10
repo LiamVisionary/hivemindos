@@ -66,6 +66,8 @@ These are curated from [`kepano/obsidian-skills`](https://github.com/kepano/obsi
 
 GitHub Pages packaged-skill docs live under [`docs/packaged-skills/`](../packaged-skills/). That section splits HivemindOS-owned Hive skills from curated third-party packaged skills and optional catalog skills.
 
+Optional catalog skills are not auto-installed. The UI Skills design catalog lives under `packaged-skills/optional/design/<source>/<skill>/` and is copied into the shared brain only when the user chooses a skill from the catalog.
+
 The native pack pairs with seeded vault views under `Operations/Brain Services/`:
 
 - `Agent Memory.base`

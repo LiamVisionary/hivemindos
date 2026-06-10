@@ -1,0 +1,18 @@
+{
+  "upstreamName": "colorize",
+  "upstreamSlug": "colorize",
+  "hiveSlug": "colorize",
+  "sourceLabel": "pbakaus",
+  "sourceUrl": "https://www.ui-skills.com/skills/pbakaus/colorize",
+  "repository": "https://github.com/pbakaus/impeccable",
+  "installCommand": "npx skills add https://github.com/pbakaus/impeccable --skill colorize",
+  "importedAt": "2026-06-08T15:01:41.033Z",
+  "refreshedAt": "2026-06-08T15:01:41.033Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/pbakaus/colorize",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Optional UI skill from pbakaus."
+}

@@ -24,6 +24,9 @@ hivemindos-vault/
 |   `-- Sources/
 |-- Memory/
 |   |-- Book Notes/
+|   |-- Conversations/
+|   |   `-- <agent-name>/
+|   |       `-- YYYY-MM-DD-<title>-<sessionId>.md
 |   |-- Daily Briefings/
 |   |-- Decision Journal/
 |   |-- Distillations/
@@ -89,7 +92,8 @@ The exact project, skill, and migration folders will vary. The top level shape s
 | --- | --- |
 | `Intake/` | Raw captures, requests, passive ingest, web clips, voice notes, and unsorted source material. |
 | `.hivemindos-transfers/` | Vault-backed Hivemind Sync handoff envelopes for targeted files and artifacts. Do not store secrets here. |
-| `Memory/` | Durable source of truth knowledge: daily briefings, weekly reviews, decisions, meetings, imported sources, book notes, and distillations. |
+| `Memory/` | Durable source of truth knowledge: daily briefings, weekly reviews, decisions, meetings, imported sources, book notes, distillations, and conversation mirrors. |
+| `Memory/Conversations/` | Finished HivemindOS chat sessions mirrored as one redacted note per session, organized by agent name. Written on session finish when the shared vault is enabled. Used for cross-session topic recall by all agents. |
 | `Synthesis/` | Generated drafts, connection reports, research summaries, reviewed analysis, Syntho wiki output, and agent-generated outputs. |
 | `Ideas/` | Liam's original thinking, mental models, recurring questions, taste, and personal strategy. |
 | `Projects/` | Active work, project-specific context, status deltas, plans, and decisions. |
@@ -120,6 +124,7 @@ Setup also seeds these child paths because agents and workflows expect them to e
 - `Memory/Daily Briefings`
 - `Memory/Weekly Reviews`
 - `Memory/Imported Sources`
+- `Memory/Conversations`
 - `Memory/Distillations`
 - `Memory/Distillations/Agent Memory`
 - `Operations/Automations`
@@ -143,6 +148,7 @@ Shared Brain Memory has two recall layers:
 - The private hot-path index lives in `Operations/Brain Services/Agent Memory Index.jsonl`.
 - Optional hash-only GitLawb receipts live in `Operations/Brain Services/Agent Memory Proofs.jsonl`.
 - Broad recall can search regular markdown notes across the vault when the typed memory layer is weak or when callers force `--scope full-vault`.
+- Conversation mirrors live in `Memory/Conversations/<agent>/` with a deduped index at `Operations/Brain Services/Conversations Index.jsonl`. They are included in full-vault recall, making cross-session queries like "check our conversations about x" work for every agent type without per-agent changes.
 - Obsidian-native views live at `Operations/Brain Services/Agent Memory.base`, `Project Brain.base`, `Secure References.base`, and `Whole Brain.canvas` so humans can inspect memory, projects, credential status references, and recall topology in Obsidian.
 
 Agents should use `/api/brain/memory` when they are app-routed and `hive-brain answer "<query>"` when they are raw/non-managed. Claude Code also gets a `hive-brain-hook` prompt hook during setup so raw Claude prompts can receive relevant shared-brain context automatically.

@@ -1,0 +1,18 @@
+{
+  "upstreamName": "canvas-design",
+  "upstreamSlug": "canvas-design",
+  "hiveSlug": "canvas-design",
+  "sourceLabel": "anthropics",
+  "sourceUrl": "https://www.ui-skills.com/skills/anthropics/canvas-design",
+  "repository": "https://github.com/anthropics/skills",
+  "installCommand": "npx skills add https://github.com/anthropics/skills --skill canvas-design",
+  "importedAt": "2026-06-08T15:01:29.877Z",
+  "refreshedAt": "2026-06-08T15:01:29.877Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/anthropics/canvas-design",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "unknown",
+  "description": "Create beautiful visual art in .png and .pdf documents using design philosophy. You should use this skill when the user asks to create a poster, piece of art, design, or other static piece. Create original visual designs, never copying existing artists' work to avoid copyright violations."
+}

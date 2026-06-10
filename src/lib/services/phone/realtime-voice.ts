@@ -16,6 +16,8 @@ export type ManagedVoiceConfig = {
   livekitUrl?: string;
   livekitApiKey?: string;
   livekitApiSecret?: string;
+  livekitEnabled: boolean;
+  premiumUnlocked: boolean;
   timezone?: string;
 };
 
@@ -134,6 +136,7 @@ function readLocalEnvValues() {
 export function readManagedVoiceConfig(env: NodeJS.ProcessEnv = process.env): ManagedVoiceConfig {
   const fileEnv = readLocalEnvValues();
   const value = (key: string) => env[key]?.trim() || fileEnv[key]?.trim() || undefined;
+  const flag = (key: string) => /^(1|true|yes|on)$/i.test(value(key) || "");
   return {
     keys: {
       "openai-realtime": value("OPENAI_REALTIME_KEY") || value("OPENAI_API_KEY"),
@@ -143,8 +146,24 @@ export function readManagedVoiceConfig(env: NodeJS.ProcessEnv = process.env): Ma
     livekitUrl: value("LIVEKIT_URL"),
     livekitApiKey: value("LIVEKIT_API_KEY"),
     livekitApiSecret: value("LIVEKIT_API_SECRET"),
+    livekitEnabled: flag("HIVEMINDOS_LIVEKIT_ENABLED"),
+    premiumUnlocked: flag("HIVEMINDOS_PREMIUM"),
     timezone: value("CALLS_TIMEZONE") || value("TZ"),
   };
+}
+
+// LiveKit cloud calls connect over the internet, so they stay off in the
+// local-first default: they require both the premium entitlement and an
+// explicit user opt-in.
+export function livekitCallingAllowed(managed: ManagedVoiceConfig) {
+  return managed.premiumUnlocked && managed.livekitEnabled;
+}
+
+export function missingLivekitOptIn(managed: ManagedVoiceConfig) {
+  return [
+    managed.premiumUnlocked ? "" : "HIVEMINDOS_PREMIUM",
+    managed.livekitEnabled ? "" : "HIVEMINDOS_LIVEKIT_ENABLED",
+  ].filter(Boolean);
 }
 
 function voiceForProvider(provider: RealtimeVoiceProvider) {
@@ -229,7 +248,9 @@ export async function createByokAgentCall(args: {
     briefing: args.briefing,
     runtimeAgent: args.runtimeAgent,
   });
-  const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${args.voice.apiKey}`,
@@ -257,7 +278,13 @@ export async function createByokAgentCall(args: {
       },
     }),
     signal: AbortSignal.timeout(12_000),
-  });
+    });
+  } catch (error) {
+    // Surface the real network reason (cause of undici's "fetch failed")
+    // so the phone/dashboard shows something actionable.
+    const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : error instanceof Error ? error.message : String(error);
+    return { ok: false, reason: `The hub couldn't reach api.openai.com to mint the Realtime session: ${cause}`, missing: [] };
+  }
   const data = await response.json().catch(() => null) as {
     value?: unknown;
     expires_at?: unknown;
@@ -293,6 +320,9 @@ export async function createInAppCall(args: {
   callId?: string;
   runtimeAgent?: RuntimeAgentVoiceBridge;
 }, managed: ManagedVoiceConfig = readManagedVoiceConfig()): Promise<InAppCallResult> {
+  if (!livekitCallingAllowed(managed)) {
+    return { ok: false, reason: "livekit_disabled", missing: missingLivekitOptIn(managed) };
+  }
   const missing = missingForCall(managed, args.voice);
   if (missing.length || !args.voice?.apiKey) {
     return { ok: false, reason: "voice_transport_not_configured", missing };
@@ -346,10 +376,17 @@ export async function createInAppCall(args: {
 export function voiceConfigPayload(managed: ManagedVoiceConfig = readManagedVoiceConfig()) {
   const voiceProviders = voiceProvidersFromManagedConfig(managed);
   const voiceOptions = voiceProviders.map((provider) => ({ ...provider, source: "configured" }));
+  const livekitAllowed = livekitCallingAllowed(managed);
   const missing = [
-    managed.livekitUrl ? "" : "LIVEKIT_URL",
-    managed.livekitApiKey ? "" : "LIVEKIT_API_KEY",
-    managed.livekitApiSecret ? "" : "LIVEKIT_API_SECRET",
+    // LiveKit credentials only matter once the cloud mode is unlocked and
+    // explicitly enabled; the local-first default needs none of them.
+    ...(livekitAllowed
+      ? [
+        managed.livekitUrl ? "" : "LIVEKIT_URL",
+        managed.livekitApiKey ? "" : "LIVEKIT_API_KEY",
+        managed.livekitApiSecret ? "" : "LIVEKIT_API_SECRET",
+      ]
+      : []),
     voiceProviders.length ? "" : "OPENAI_REALTIME_KEY or OPENAI_API_KEY",
   ].filter(Boolean);
   return {
@@ -374,12 +411,22 @@ export function voiceConfigPayload(managed: ManagedVoiceConfig = readManagedVoic
           label: "BYOK Agent Calls",
           description: "Direct 1:1 OpenAI Realtime calls using the user's HivemindOS OpenAI key.",
           premium: false,
+          enabled: true,
         },
         {
           id: "cloud",
           label: "HivemindOS Cloud Agent Calls",
-          description: "Managed multi-party rooms for humans and multiple agents.",
+          description: "Managed multi-party rooms for humans and multiple agents. Connects over the internet, so it stays off until premium is unlocked and LiveKit is explicitly enabled.",
           premium: true,
+          enabled: livekitAllowed,
+          requires: missingLivekitOptIn(managed),
+        },
+        {
+          id: "local-tts",
+          label: "Local TTS Agent Calls",
+          description: "Use a connected local or Tailnet TTS service for agent speech while the selected agent runtime remains the LLM.",
+          premium: false,
+          enabled: true,
         },
       ],
       missing,

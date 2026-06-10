@@ -5,8 +5,7 @@
 import { type ChangeEvent, type Dispatch, type SetStateAction, useMemo } from "react";
 import type { BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
-import type { AgentProfile, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile } from "@/lib/types/agent-runtime";
-import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
+import { HIVEMIND_OS_RUNTIME, runtimeSettingsFeature, type AgentProfile, type AgentRuntime, type BeeWorkerClass, type CustomWorkerClassProfile } from "@/lib/types/agent-runtime";
 import type { BrainSkillSummary, HivemindLinkClientStatus, MachineGroup, RuntimeIntegrationStatus, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
 import type { AgentCreateDraft, AgentWorkerClassView, RuntimeModelDraft } from "@/features/dashboard/agent-settings-types";
 import { selectBestRuntimeModel } from "@/features/dashboard/views/chat/runtime-model-registry";
@@ -32,6 +31,14 @@ function runtimeIntegrationTargetKey(agent?: AgentProfile | null) {
   return [agent.runtime, telemetryUrl, localDataDir, agentId].join("|");
 }
 
+function localOpenAiProviderName(slug: string) {
+  if (slug === "lm-studio") return "Local OpenAI";
+  if (slug === "ollama") return "Ollama";
+  if (slug === "vllm") return "vLLM";
+  if (slug === "llamacpp") return "llama.cpp";
+  return "OpenAI-compatible";
+}
+
 type UseAgentSettingsControllerProps = {
   HETZNER_SERVER_TYPE_OPTIONS: readonly HetznerServerTypeOption[];
   agentCreateDraft: AgentCreateDraft;
@@ -51,7 +58,7 @@ type UseAgentSettingsControllerProps = {
   hivemindLinkStatus: HivemindLinkClientStatus | null;
   machineInitDraft: MachineInitDraft;
   roleModalAgent: AgentProfile | null;
-  runRuntimeIntegrationAction: (action: string, input: Record<string, unknown>, agent: AgentProfile) => void | Promise<void>;
+  runRuntimeIntegrationAction: (action: string, input: Record<string, unknown>, agent: AgentProfile) => void | Promise<{ ok?: boolean; error?: string; message?: string } | void>;
   runtimeCount: (agents: AgentProfile[], runtime: AgentRuntime) => number;
   runtimeIntegrationStatus: RuntimeIntegrationStatus | null;
   runtimeModelDraft: RuntimeModelDraft;
@@ -98,12 +105,30 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
     ? runtimeIntegrationStatus.modelSelection
     : undefined;
   const runtimeModelSelectionFresh = Boolean(freshRuntimeModelSelection);
-  const runtimeModelSelection = freshRuntimeModelSelection ?? runtimeModelSelectionsByRuntime[agentSettingsRuntime];
+  const cachedRuntimeModelSelection = runtimeModelSelectionsByRuntime[agentSettingsRuntime];
+  const runtimeModelSelection = agentSettingsRuntime === HIVEMIND_OS_RUNTIME
+    ? cachedRuntimeModelSelection ?? freshRuntimeModelSelection
+    : freshRuntimeModelSelection ?? cachedRuntimeModelSelection;
   const runtimeModelProviders = (() => {
     const baseProviders = runtimeModelSelection?.providers ?? [];
     const modelSettings = runtimeSettingsFeature(agentSettingsRuntime);
     if (modelSettings.modelSource !== "runtime" || agentSettingsRuntime === "aeon") return baseProviders;
     const providersBySlug = new Map(baseProviders.map((provider) => [provider.slug, provider]));
+    if (agentSettingsRuntime === HIVEMIND_OS_RUNTIME) {
+      const localProviderSlug = agentSettingsProvider || modelSettings.defaultProvider || "openai-compatible";
+      if (!providersBySlug.has(localProviderSlug)) {
+        const models = agentSettingsModel ? [{ id: agentSettingsModel }] : [];
+        providersBySlug.set(localProviderSlug, {
+          slug: localProviderSlug,
+          name: localOpenAiProviderName(localProviderSlug),
+          models,
+          totalModels: models.length,
+          isCurrent: true,
+          isUserDefined: true,
+          source: "Configured Local OpenAI provider",
+        });
+      }
+    }
     for (const gateway of Object.values(MODEL_PROVIDER_GATEWAYS)) {
       if (providersBySlug.has(gateway.slug)) continue;
       const models = gateway.defaultModel ? [{ id: gateway.defaultModel }] : [];
@@ -135,7 +160,8 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
     if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
     const target = agentSettingsIntegrationTarget;
-    if (target && provider !== "adaptive" && (target.runtime === "openclaw" || target.runtime === "hermes")) {
+    const virtualRuntimeModel = provider === "adaptive" || (provider === "bankr" && model === "adaptive");
+    if (target && !virtualRuntimeModel && (target.runtime === "openclaw" || target.runtime === "hermes")) {
       window.setTimeout(() => {
         void runRuntimeIntegrationAction("set-model", patch, { ...target, ...patch });
       }, 0);

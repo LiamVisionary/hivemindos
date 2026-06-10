@@ -17,6 +17,7 @@ All routes below are served by the Next.js app under `src/app/api`.
 | `/api/brain/trading-brain/*` | Trading brain status and install |
 | `/api/chat/*` | Agent chat, runtime chat stream, session reads, chat folder persistence |
 | `/api/control-room/status` | Control-room path and setup status checks |
+| `/api/crypto/capabilities` | Unified crypto rail readiness, selection, and safe action preparation for Bankr, x402, Veil Cash, MoneyClaw, and UsePod |
 | `/api/env` | Shared and runtime-specific env listing/import/update through hive-env helpers |
 | `/api/fleet/*` | Fleet discovery, snapshots, updates, app/service discovery, app icons, machine init, and Hetzner setup helpers |
 | `/api/gitlawb/*` | GitLawb Code Proof CLI, DID, node health, and lazy setup status |
@@ -43,9 +44,21 @@ All routes below are served by the Next.js app under `src/app/api`.
 | `/api/tailscale/devices` | Tailscale and Hivemind Link device discovery |
 | `/api/telemetry/events` | Local telemetry event recording and query |
 | `/api/usepod/*` | UsePod registration and readiness/model/balance checks |
-| `/api/wallet/*` | Wallet creation, balance, send, MoneyClaw, backup, and x402 actions |
+| `/api/wallet/*` | Wallet creation, balance, send, export, MoneyClaw, backup, and x402 actions |
 | `/api/work-history` | Dynamic work history and changelog summaries |
 | `/api/workspace/git-status` | Workspace git status for task safety checks |
+
+## Crypto Capability Router
+
+`/api/crypto/capabilities` is the dashboard control-plane route for agent money-rail selection. It supports:
+
+- `status`: read readiness and missing setup by provider.
+- `select`: choose a rail for an intent without side effects.
+- `prepare`: return a provider endpoint and request draft for the existing spend-gated execution route.
+
+The router covers Bankr, x402, Veil Cash, MoneyClaw, and UsePod. It reports credential readiness by key name/status only and does not return raw env values or wallet secrets. It does not execute spending directly; sends, trades, paid API calls, private transfers, card payments, and LLM credit funding still execute through the existing provider route or skill after the relevant spend gate or confirmation.
+
+`scripts/hivemind-mcp` exposes the same control-plane route to external agents through `crypto_capabilities`, `select_crypto_rail`, and `prepare_crypto_action`. Those MCP tools require a running authenticated HivemindOS dashboard API. They can be used outside dashboard chat, but they are not an offline wallet daemon.
 
 ## Fleet App And API Service Discovery
 
@@ -83,7 +96,7 @@ Dynamic runtime routes call `src/lib/services/runtime-adapters/registry.ts`:
 | `/api/runtimes/[runtime]/analytics` | runtime analytics where supported |
 | `/api/runtimes/[runtime]/memory` | runtime memory context where supported |
 
-Known runtime ids are `openclaw`, `hermes`, `aeon`, and `openai-compatible`.
+Known runtime ids are `openclaw`, `hermes`, `aeon`, and `hivemind-os`.
 
 ## GitLawb Code Proof
 
@@ -145,16 +158,16 @@ The collector also exposes runtime session, chat, schedule, run, output, env syn
 
 ## Persistent Storage
 
-### Browser Storage
+### Dashboard State
 
-The dashboard uses browser `localStorage` for UI preferences and cache:
+The dashboard uses the authenticated `/api/dashboard/state` route for UI preferences and cache. The route persists to `~/.hivemindos/dashboard-state.json`, so packaged Tauri and ordinary browser sessions hydrate from the same local server source:
 
 - Agent profile configuration.
 - Shared vault UI configuration.
 - Recent task, schedule, wallet, chat, folder, and discovered-machine state.
 - Theme and Honey opt-in flags.
 
-This helps the dashboard start quickly. Durable shared collaboration should use the vault or runtime-backed services.
+This avoids origin-scoped browser storage drift. Durable shared collaboration should use the vault or runtime-backed services.
 
 ### HivemindOS Home
 
@@ -179,7 +192,8 @@ Important files and folders:
 | `~/.hivemindos/runtime-runs` | Runtime run cache/output metadata |
 | `~/.hivemindos/skill-auto-sync.json` | Skill auto-sync provider configuration |
 | `~/.hivemindos/telemetry/memory-samples.jsonl` | Memory telemetry samples used to detect growth trends |
-| `~/.hivemindos/wallet-vault` | Local encrypted wallet secret store |
+| `~/.hivemindos/wallet-vault.json` | Local encrypted wallet secret store for user and agent wallets |
+| `~/.hivemindos/wallet-vault.key` | Local wallet-vault key material when `HIVEMINDOS_WALLET_VAULT_KEY` is not configured |
 | `~/.hivemindos/e2e-file-share` | Temporary real-fleet encrypted file-share test artifacts |
 
 ### Obsidian Vault
@@ -275,6 +289,10 @@ Common local variables:
 | `HONEY_LEDGER_REMOTE_URL` | Official or forked Honey ledger worker |
 | `HONEY_LEDGER_ISSUER_ID` | Honey ledger issuer id |
 | `HONEY_LEDGER_SIGNING_SECRET` | Trusted receipt signing secret |
+| `HONEY_BILLING_SIGNING_SECRET` | Trusted managed HONEY credit/debit signing secret |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Operator-side Stripe Checkout and webhook keys for managed HONEY funding |
+| `MANAGED_HONEY_CREDITS_PER_USD` | Display conversion for spend-only managed HONEY credits |
+| `MANAGED_AGENT_MARKUP_BPS` | Managed-agent retail markup over server-side provider cost |
 
 Do not commit private values, Tailnet IPs, wallet keys, or local vault contents.
 

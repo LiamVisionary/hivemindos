@@ -1,7 +1,7 @@
-import { appendFile, mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
+import { appendFile, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "fs/promises";
 import { createHash } from "crypto";
 import { homedir } from "os";
-import { basename, dirname, join, resolve } from "path";
+import { basename, dirname, join, relative, resolve } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import type { BrainSkillInventory, BrainSkillSummary } from "@/lib/services/obsidian/brain-skills";
 import type {
@@ -27,6 +27,9 @@ const ENV_KEY_RE = /\b[A-Z][A-Z0-9_]{5,}\b/g;
 const MAX_AUDIT_FILE_BYTES = 1024 * 1024;
 const AUDITABLE_EXTENSIONS = new Set([".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".sh", ".js", ".ts", ".py"]);
 const EXECUTABLE_EXTENSIONS = new Set([".sh", ".py", ".js", ".ts", ".mjs", ".cjs", ".exe", ".bin", ".so", ".dll", ".dylib"]);
+const PACKAGED_OPTIONAL_ROOT = join(process.cwd(), "packaged-skills", "optional");
+const PACKAGED_DIRECTORY_PACK_PREFIX = "packaged-directory-";
+const SOURCE_METADATA_FILE = ".hivemind-skill-source.json";
 
 const FINDING_RULES: Array<{
   id: string;
@@ -415,6 +418,42 @@ export const SKILL_PACKS: SkillPack[] = [
   ]),
 ];
 
+export async function getSkillPacks(): Promise<SkillPack[]> {
+  const packagedDirectoryPacks = await readPackagedDirectoryPacks().catch(() => []);
+  return [...SKILL_PACKS, ...packagedDirectoryPacks];
+}
+
+async function readPackagedDirectoryPacks(): Promise<SkillPack[]> {
+  const entries = await readdir(PACKAGED_OPTIONAL_ROOT, { withFileTypes: true }).catch(() => []);
+  const packs: SkillPack[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    const groupRoot = join(PACKAGED_OPTIONAL_ROOT, entry.name);
+    const skillPaths = await findPackagedSkillFiles(groupRoot, 4);
+    if (!skillPaths.length) continue;
+    const skills = (await Promise.all(skillPaths.map(packagedCatalogEntry)))
+      .filter((skill): skill is SkillCatalogEntry => Boolean(skill));
+    if (!skills.length) continue;
+    const groupName = titleCase(entry.name);
+    packs.push({
+      id: `${PACKAGED_DIRECTORY_PACK_PREFIX}${safeId(entry.name)}`,
+      name: `${groupName} Optional Skills Directory`,
+      description: `Install all ${skills.length} optional ${entry.name} skills into the shared brain in one pass.`,
+      category: "Pack",
+      capabilities: unionCapabilities(skills),
+      audience: "Agents that need the whole optional directory available from the shared brain.",
+      safety: "Installs local packaged skill files only. Upstream installer commands are not run.",
+      skills: skills.map((skill) => ({
+        slug: skill.slug,
+        name: skill.name,
+        description: skill.description,
+        markdown: "",
+      })),
+    });
+  }
+  return packs.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function bankrDirectoryPack(): SkillPack {
   return {
     id: "bankr-web3-directory",
@@ -700,7 +739,7 @@ export function parseWorkflowActions(markdown: string): WorkflowAction[] {
 
 export async function getSkillCatalog(input: { query?: string; includeRegistry?: boolean; inventory?: BrainSkillInventory | null } = {}) {
   const imported = new Set((input.inventory?.shared ?? []).map((skill) => skill.slug));
-  const entries = [...CURATED_CATALOG];
+  const entries = [...CURATED_CATALOG, ...await readPackagedOptionalCatalog().catch(() => [])];
   if (input.includeRegistry !== false) {
     entries.push(...await fetchSoloRegistryCatalog().catch(() => []));
   }
@@ -708,6 +747,97 @@ export async function getSkillCatalog(input: { query?: string; includeRegistry?:
   return entries
     .map((entry) => ({ ...entry, imported: imported.has(entry.slug) || entry.imported }))
     .filter((entry) => !query || [entry.name, entry.slug, entry.description, entry.source, entry.category ?? "", ...entry.tags].join(" ").toLowerCase().includes(query));
+}
+
+async function readPackagedOptionalCatalog(): Promise<SkillCatalogEntry[]> {
+  const skillPaths = await findPackagedSkillFiles(PACKAGED_OPTIONAL_ROOT, 5);
+  const entries = await Promise.all(skillPaths.map(packagedCatalogEntry));
+  return entries
+    .filter((entry): entry is SkillCatalogEntry => Boolean(entry))
+    .sort((a, b) => (a.category ?? "").localeCompare(b.category ?? "") || a.name.localeCompare(b.name));
+}
+
+async function findPackagedSkillFiles(root: string, maxDepth: number) {
+  const found: string[] = [];
+
+  async function walk(dir: string, depth: number): Promise<void> {
+    if (depth > maxDepth) return;
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      const path = join(dir, entry.name);
+      if (entry.isFile() && entry.name === "SKILL.md") {
+        found.push(path);
+        continue;
+      }
+      if (!entry.isDirectory() || entry.name === ".git" || entry.name === "node_modules") continue;
+      await walk(path, depth + 1);
+    }
+  }
+
+  await walk(root, 0);
+  return found;
+}
+
+async function packagedCatalogEntry(skillPath: string): Promise<SkillCatalogEntry | null> {
+  const markdown = await readFile(skillPath, "utf8").catch(() => "");
+  if (!markdown.trim()) return null;
+  const packageDir = dirname(skillPath);
+  const packagedPath = relative(process.cwd(), packageDir);
+  const metadata = await readPackageSourceMetadata(packageDir);
+  const packageParts = relative(PACKAGED_OPTIONAL_ROOT, packageDir).split(/[\\/]+/).filter(Boolean);
+  const packageSlug = safeId(packageParts.join("-"));
+  const upstreamSlug = String(metadata.upstreamSlug ?? metadata.upstreamName ?? basename(packageDir));
+  const slug = typeof metadata.hiveSlug === "string" && metadata.hiveSlug.trim() ? metadata.hiveSlug : packageSlug;
+  const name = frontmatterField(markdown, "name") || slugToName(upstreamSlug || slug);
+  const description = frontmatterField(markdown, "description") || firstSentence(markdown) || "Optional packaged skill.";
+  const group = packageParts.length > 1 ? packageParts[0] : "Optional";
+  const sourceLabel = typeof metadata.sourceLabel === "string" ? metadata.sourceLabel : undefined;
+  const sourceUrl = typeof metadata.sourceUrl === "string" ? metadata.sourceUrl : undefined;
+  const repository = typeof metadata.repository === "string" ? metadata.repository : undefined;
+  return {
+    id: `packaged-${slug}`,
+    slug,
+    name,
+    description,
+    source: sourceLabel ? `UI Skills: ${sourceLabel}` : "HivemindOS optional packaged skills",
+    sourceType: "pack",
+    category: titleCase(group),
+    tags: ["packaged", "optional", group, ...packageParts.slice(0, -1), upstreamSlug].filter(Boolean),
+    githubUrl: repository || sourceUrl,
+    packagedPath,
+    sourceRef: `packaged:${packagedPath}`,
+    capabilities: inferCapabilities(markdown),
+    envKeys: [...new Set(markdown.match(ENV_KEY_RE) ?? [])].sort(),
+  };
+}
+
+async function readPackageSourceMetadata(packageDir: string): Promise<Record<string, unknown>> {
+  const raw = await readFile(join(packageDir, ".hivemind-skill-source.json"), "utf8").catch(() => "");
+  if (!raw.trim()) return {};
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function frontmatterField(markdown: string, field: string) {
+  const frontmatter = markdown.match(/^---\s*\n([\s\S]*?)\n---/);
+  if (!frontmatter) return "";
+  const match = frontmatter[1].match(new RegExp(`^${field}:\\s*(.+)$`, "im"));
+  return match?.[1]?.replace(/^["']|["']$/g, "").trim() ?? "";
+}
+
+function titleCase(value: string) {
+  return value.replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function slugToName(value: string) {
+  return titleCase(value || "skill");
+}
+
+function unionCapabilities(skills: Array<{ capabilities?: SkillCapability[] }>): SkillCapability[] {
+  return [...new Set(skills.flatMap((skill) => skill.capabilities ?? ["chat" as const]))].sort();
 }
 
 async function fetchSoloRegistryCatalog(): Promise<SkillCatalogEntry[]> {
@@ -844,6 +974,9 @@ export function createSkillDraft(input: {
 }
 
 export async function installSkillPack(input: { packId: string; vaultPath?: string }) {
+  if (input.packId.startsWith(PACKAGED_DIRECTORY_PACK_PREFIX)) {
+    return installPackagedDirectorySkillPack(input);
+  }
   const pack = SKILL_PACKS.find((candidate) => candidate.id === input.packId);
   if (!pack) throw new Error("Unknown skill pack.");
   const vaultPath = resolveObsidianVaultPath(input.vaultPath);
@@ -875,6 +1008,98 @@ export async function installSkillPack(input: { packId: string; vaultPath?: stri
     await writeFile(join(dir, SKILL_MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
     installed.push(skill.slug);
   }
+  return { pack, installed, skipped };
+}
+
+async function installPackagedDirectorySkillPack(input: { packId: string; vaultPath?: string }) {
+  const group = input.packId.slice(PACKAGED_DIRECTORY_PACK_PREFIX.length);
+  const sourceRoot = resolve(PACKAGED_OPTIONAL_ROOT, group);
+  if (sourceRoot !== PACKAGED_OPTIONAL_ROOT && !sourceRoot.startsWith(`${PACKAGED_OPTIONAL_ROOT}/`)) {
+    throw new Error("Packaged directory is outside the optional skills folder.");
+  }
+  const skillPaths = await findPackagedSkillFiles(sourceRoot, 4);
+  const skills = (await Promise.all(skillPaths.map(packagedCatalogEntry)))
+    .filter((skill): skill is SkillCatalogEntry => Boolean(skill));
+  if (!skills.length) throw new Error("No packaged skills were found in that optional directory.");
+
+  const pack = (await readPackagedDirectoryPacks()).find((candidate) => candidate.id === input.packId) ?? {
+    id: input.packId,
+    name: `${titleCase(group)} Optional Skills Directory`,
+    description: `Install all optional ${group} skills into the shared brain in one pass.`,
+    category: "Pack",
+    capabilities: unionCapabilities(skills),
+    skills: skills.map((skill) => ({
+      slug: skill.slug,
+      name: skill.name,
+      description: skill.description,
+      markdown: "",
+    })),
+  };
+  const vaultPath = resolveObsidianVaultPath(input.vaultPath);
+  const skillsFolder = join(vaultPath, "Skills");
+  const installed: string[] = [];
+  const skipped: string[] = [];
+  await mkdir(skillsFolder, { recursive: true });
+
+  for (const skill of skills) {
+    if (!skill.packagedPath) continue;
+    const slug = safeId(skill.slug || skill.name);
+    const sourceDir = resolve(process.cwd(), skill.packagedPath);
+    const packageRoot = resolve(process.cwd(), "packaged-skills");
+    if (sourceDir !== packageRoot && !sourceDir.startsWith(`${packageRoot}/`)) {
+      throw new Error(`Packaged skill ${slug} is outside the packaged-skills folder.`);
+    }
+    const dir = join(skillsFolder, slug);
+    const skillPath = join(dir, "SKILL.md");
+    const existing = await readFile(skillPath, "utf8").catch(() => "");
+    if (existing.trim()) {
+      skipped.push(slug);
+      continue;
+    }
+    const rawMarkdown = await readFile(join(sourceDir, "SKILL.md"), "utf8").catch(() => "");
+    if (!rawMarkdown.trim()) throw new Error(`Packaged skill ${slug} is missing SKILL.md.`);
+    await rm(dir, { recursive: true, force: true });
+    await cp(sourceDir, dir, {
+      recursive: true,
+      force: true,
+      filter: (path) => !path.split("/").some((part) => [".git", "node_modules", ".next", "dist", "build", ".cache", ".archive"].includes(part)),
+    });
+    const markdown = normalizeAgentAgnosticSkill(rawMarkdown, skill.source || skill.packagedPath);
+    await writeFile(skillPath, markdown.endsWith("\n") ? markdown : `${markdown}\n`, "utf8");
+    const audit = await auditSkillDirectory({
+      slug,
+      dir,
+      sourceRef: skill.sourceRef,
+    });
+    if (audit.status === "blocked") {
+      await rm(dir, { recursive: true, force: true });
+      throw new Error(`Skill audit blocked ${slug}: ${audit.findings.map((finding) => finding.title).join(", ")}`);
+    }
+    await writeFile(join(dir, SKILL_MANIFEST_FILE), `${JSON.stringify(createSkillManifest({
+      slug,
+      name: skill.name,
+      description: skill.description,
+      sourceType: "pack",
+      sourceLabel: skill.source,
+      sourceUrl: skill.githubUrl,
+      sourcePath: skill.packagedPath,
+      audit,
+      markdown,
+    }), null, 2)}\n`, "utf8");
+    await writeFile(join(dir, SOURCE_METADATA_FILE), `${JSON.stringify({
+      provider: "packaged-optional",
+      providerLabel: skill.source,
+      sourceUrl: skill.githubUrl,
+      sourcePath: skill.packagedPath,
+      agentAgnostic: true,
+      auditStatus: audit.status,
+      capabilities: audit.capabilities,
+      envKeys: audit.envKeys,
+      importedAt: new Date().toISOString(),
+    }, null, 2)}\n`, "utf8");
+    installed.push(slug);
+  }
+
   return { pack, installed, skipped };
 }
 

@@ -1,10 +1,13 @@
-import { DEFAULT_SHARED_VAULT, RUNTIME_CAPABILITIES, RUNTIME_KINDS, buildAgentCallPreferences, type AgentProfile, type AgentRuntime, type AgentRuntimeKind, type CustomWorkerClassProfile, type RuntimeCapabilities, type SharedVaultConfig } from "@/lib/types/agent-runtime";
+import { DEFAULT_SHARED_VAULT, RUNTIME_CAPABILITIES, RUNTIME_KINDS, buildAgentCallPreferences, normalizeAgentRuntime, type AgentProfile, type AgentRuntime, type AgentRuntimeKind, type CustomWorkerClassProfile, type RuntimeCapabilities, type SharedVaultConfig } from "@/lib/types/agent-runtime";
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { beeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import { createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
 import { normalizeAgentTelemetryUrl } from "@/lib/utils/agent-telemetry-url";
+import { isAutomationTranscriptText } from "@/lib/utils/automation-transcript";
 import type { AgentWalletConfig, HoneyTreasuryConfig } from "@/lib/types/agent-wallet";
 import type { AgentSchedule, AgentSnapshot, AgentTask, ChatCustomFolder, ChatMessage, DiscoveredMachine, HermesUpdateSkillLike, RuntimeIntegrationKey, RuntimeIntegrationStatus, RuntimeSetupDefinition, ScheduleDraft, StoredSharedVaultConfig, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
+import { imageGenerationToApplicationGeneration, normalizeApplicationGenerationUrl, type ChatApplicationGenerationArtifact, type ChatApplicationGenerationCard } from "@/features/dashboard/chat-application-generation";
+import { dashboardStateValue, type DashboardStateSnapshot } from "@/lib/services/dashboard-state-client";
 
 const STORAGE_KEY = "hivemindos.agentProfiles.v1";
 const VAULT_STORAGE_KEY = "hivemindos.sharedVault.v1";
@@ -27,6 +30,7 @@ const STORAGE_SUFFIXES = {
   chatMessages: ".chatMessages.v1",
   chatFolders: ".chatFolders.v1",
   machineNameAliases: ".machineNameAliases.v1",
+  discoveredMachines: ".discoveredMachines.v1",
   fleetSnapshots: ".fleetSnapshots.v1",
 };
 const runtimeCapabilitiesByRuntime = RUNTIME_CAPABILITIES as Record<string, RuntimeCapabilities>;
@@ -68,7 +72,8 @@ export function seedAgents(): AgentProfile[] {
 }
 
 export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
-  const inferredQueen = agent.beeRole === "queen" || /queen|orchestrat|lead|main/i.test(agent.name) || agent.runtime === "openclaw";
+  const runtime = normalizeAgentRuntime(agent.runtime);
+  const inferredQueen = agent.beeRole === "queen" || /queen|orchestrat|lead|main/i.test(agent.name) || runtime === "openclaw";
   const customWorkerClasses = agent.customWorkerClasses?.length
     ? agent.customWorkerClasses
     : agent.customWorkerClass
@@ -77,15 +82,16 @@ export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
   const selectedCustomWorkerClassId = agent.selectedCustomWorkerClassId ?? agent.customWorkerClass?.id;
   return {
     ...agent,
-    localDataDir: agent.runtime === "hermes" && agent.id === "hermes-orchestrator" && !agent.localDataDir
+    runtime,
+    localDataDir: runtime === "hermes" && agent.id === "hermes-orchestrator" && !agent.localDataDir
       ? "~/.hermes"
       : agent.localDataDir,
-    runtimeKind: agent.runtimeKind ?? runtimeKindsByRuntime[agent.runtime],
-    runtimeCapabilities: mergeRuntimeCapabilities(agent.runtime, agent.runtimeCapabilities),
-    a2aUrl: agent.runtime === "aeon" ? agent.a2aUrl ?? agent.gatewayUrl : agent.a2aUrl,
+    runtimeKind: agent.runtimeKind ?? runtimeKindsByRuntime[runtime],
+    runtimeCapabilities: mergeRuntimeCapabilities(runtime, agent.runtimeCapabilities),
+    a2aUrl: runtime === "aeon" ? agent.a2aUrl ?? agent.gatewayUrl : agent.a2aUrl,
     telemetryUrl: normalizeAgentTelemetryUrl(agent.telemetryUrl),
-    aeonBranch: agent.runtime === "aeon" ? agent.aeonBranch ?? "main" : agent.aeonBranch,
-    aeonMode: agent.runtime === "aeon" ? agent.aeonMode ?? "github" : agent.aeonMode,
+    aeonBranch: runtime === "aeon" ? agent.aeonBranch ?? "main" : agent.aeonBranch,
+    aeonMode: runtime === "aeon" ? agent.aeonMode ?? "github" : agent.aeonMode,
     beeRole: agent.beeRole ?? (inferredQueen ? "queen" : "worker"),
     workerClass: agent.workerClass ?? "general",
     customWorkerClasses,
@@ -118,11 +124,16 @@ export function runtimeCan(agent: AgentProfile | null | undefined, capability: k
   return Boolean(runtimeCapabilities(agent)[capability]);
 }
 
-export const HERMES_UPDATE_SKILL_PATTERN = /\b(background|codex|grok|kanban|session search|xai|x search|x-search|twitter|video|imagine|decompose)\b/i;
+export const HERMES_UPDATE_SKILL_PATTERN = /\b(background|codex|grok|kanban|session search|xai|x search|x-search|twitter|image|image-gen|imagine|tts|speech|music|sfx|sound effects|3d|video|decompose)\b/i;
 export const HERMES_UPDATE_INTEGRATION_KEYS = new Set<RuntimeIntegrationKey>([
   "sessionSearch",
   "backgroundTasks",
   "xSearch",
+  "imageGeneration",
+  "ttsGeneration",
+  "musicGeneration",
+  "sfxGeneration",
+  "model3dGeneration",
   "videoGeneration",
   "codexRuntime",
   "kanbanDecompose",
@@ -174,6 +185,16 @@ export function runtimeSetupDefinition(runtime: AgentRuntime, key: RuntimeIntegr
         ],
       };
     }
+    if (key === "imageGeneration") {
+      return {
+        title: "Set up AI images",
+        description: "Enable the Hermes image tool after image-generation provider credentials are available.",
+        steps: ["Configure the image-generation provider credentials.", "Enable the Hermes image_gen tool.", "Refresh runtime integrations."],
+        actions: [
+          { id: "enable-image", label: "Enable images", action: "enable-tool", input: { tool: "image_gen" } },
+        ],
+      };
+    }
     if (key === "codexRuntime") {
       return {
         title: "Set up Codex runtime",
@@ -191,24 +212,12 @@ export function runtimeSetupDefinition(runtime: AgentRuntime, key: RuntimeIntegr
   };
 }
 
-export function readStoredValue(key: string, suffix: string): string | null {
-  if (typeof window === "undefined") return null;
-  const current = window.localStorage.getItem(key);
-  if (current !== null) return current;
-  for (let index = 0; index < window.localStorage.length; index += 1) {
-    const candidateKey = window.localStorage.key(index);
-    if (!candidateKey || candidateKey === key || !candidateKey.endsWith(suffix)) continue;
-    const candidate = window.localStorage.getItem(candidateKey);
-    if (candidate === null) continue;
-    window.localStorage.setItem(key, candidate);
-    return candidate;
-  }
-  return null;
+export function readStoredValue(snapshot: DashboardStateSnapshot, key: string, suffix: string): string | null {
+  return dashboardStateValue(snapshot, key, suffix);
 }
 
-export function parseStoredAgents(): AgentProfile[] {
-  if (typeof window === "undefined") return seedAgents();
-  const raw = readStoredValue(STORAGE_KEY, STORAGE_SUFFIXES.agents);
+export function parseStoredAgents(snapshot: DashboardStateSnapshot = {}): AgentProfile[] {
+  const raw = readStoredValue(snapshot, STORAGE_KEY, STORAGE_SUFFIXES.agents);
   if (!raw) return seedAgents();
   try {
     const parsed = JSON.parse(raw) as AgentProfile[];
@@ -219,9 +228,8 @@ export function parseStoredAgents(): AgentProfile[] {
   }
 }
 
-export function parseStoredVault(): SharedVaultConfig {
-  if (typeof window === "undefined") return DEFAULT_SHARED_VAULT;
-  const raw = readStoredValue(VAULT_STORAGE_KEY, STORAGE_SUFFIXES.vault);
+export function parseStoredVault(snapshot: DashboardStateSnapshot = {}): SharedVaultConfig {
+  const raw = readStoredValue(snapshot, VAULT_STORAGE_KEY, STORAGE_SUFFIXES.vault);
   if (!raw) return DEFAULT_SHARED_VAULT;
   try {
     const parsed = JSON.parse(raw) as StoredSharedVaultConfig;
@@ -285,9 +293,8 @@ export function parseStoredVault(): SharedVaultConfig {
   }
 }
 
-export function parseStoredTasks(): AgentTask[] {
-  if (typeof window === "undefined") return [];
-  const raw = readStoredValue(TASK_STORAGE_KEY, STORAGE_SUFFIXES.tasks);
+export function parseStoredTasks(snapshot: DashboardStateSnapshot = {}): AgentTask[] {
+  const raw = readStoredValue(snapshot, TASK_STORAGE_KEY, STORAGE_SUFFIXES.tasks);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as AgentTask[];
@@ -297,9 +304,8 @@ export function parseStoredTasks(): AgentTask[] {
   }
 }
 
-export function parseStoredSchedules(): AgentSchedule[] {
-  if (typeof window === "undefined") return [];
-  const raw = readStoredValue(SCHEDULE_STORAGE_KEY, STORAGE_SUFFIXES.schedules);
+export function parseStoredSchedules(snapshot: DashboardStateSnapshot = {}): AgentSchedule[] {
+  const raw = readStoredValue(snapshot, SCHEDULE_STORAGE_KEY, STORAGE_SUFFIXES.schedules);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as AgentSchedule[];
@@ -309,15 +315,15 @@ export function parseStoredSchedules(): AgentSchedule[] {
       && typeof schedule?.name === "string"
     )).map((schedule) => ({
       ...schedule,
-      skills: Array.isArray(schedule.skills) ? schedule.skills : [],
-      paths: Array.isArray(schedule.paths) ? schedule.paths : [],
+      skills: Array.isArray(schedule.skills) ? [...new Set(schedule.skills)] : [],
+      paths: Array.isArray(schedule.paths) ? [...new Set(schedule.paths)] : [],
       steps: Array.isArray(schedule.steps)
         ? schedule.steps.map((step, index) => ({
           ...step,
           id: typeof step.id === "string" ? step.id : `step-${schedule.id}-${index}`,
           text: typeof step.text === "string" ? step.text : "",
-          skills: Array.isArray(step.skills) ? step.skills : [],
-          paths: Array.isArray(step.paths) ? step.paths : [],
+          skills: Array.isArray(step.skills) ? [...new Set(step.skills)] : [],
+          paths: Array.isArray(step.paths) ? [...new Set(step.paths)] : [],
           model: typeof step.model === "string" ? step.model : "",
         }))
         : [],
@@ -329,9 +335,8 @@ export function parseStoredSchedules(): AgentSchedule[] {
   }
 }
 
-export function parseStoredChatFolders(): ChatCustomFolder[] {
-  if (typeof window === "undefined") return [];
-  const raw = readStoredValue(CHAT_FOLDER_STORAGE_KEY, STORAGE_SUFFIXES.chatFolders);
+export function parseStoredChatFolders(snapshot: DashboardStateSnapshot = {}): ChatCustomFolder[] {
+  const raw = readStoredValue(snapshot, CHAT_FOLDER_STORAGE_KEY, STORAGE_SUFFIXES.chatFolders);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as ChatCustomFolder[];
@@ -348,10 +353,7 @@ export function parseStoredChatFolders(): ChatCustomFolder[] {
 
 export function isAutomationChatTranscript(messages: ChatMessage[] = []) {
   const transcript = messages.slice(0, 8).map((message) => message.content).join("\n");
-  if (/\[IMPORTANT:\s*The user has invoked the "[^"]+" skill/i.test(transcript)) return true;
-  if (/running as a scheduled cron job/i.test(transcript)) return true;
-  if (/user has invoked the "[^"]+" skill/i.test(transcript)) return true;
-  return false;
+  return isAutomationTranscriptText(transcript);
 }
 
 function normalizedChatMessageContent(message: Pick<ChatMessage, "content">) {
@@ -400,12 +402,23 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
   return output;
 }
 
+function chatMessageHasPersistableContent(message: ChatMessage) {
+  return Boolean(
+    message.content.trim()
+    || message.attachments?.length
+    || message.agentPrompt
+    || message.applicationGeneration
+    || message.imageGeneration
+    || (message.processEvents?.length ?? 0) > 0
+  );
+}
+
 export function compactChatMessagesForStorage(messagesByAgent: Record<string, ChatMessage[]>) {
   return Object.fromEntries(Object.entries(messagesByAgent)
     .map(([agentId, messages]) => [
       agentId,
       dedupeChatTranscript(messages)
-        .filter((message) => message.role !== "system" && (message.content.trim() || message.attachments?.length))
+        .filter((message) => message.role !== "system" && chatMessageHasPersistableContent(message))
         .slice(-120),
     ])
     .filter(([, messages]) => Array.isArray(messages) && messages.length > 0 && !isAutomationChatTranscript(messages)));
@@ -418,9 +431,93 @@ export function chatMessagesStorageStats(messagesByAgent: Record<string, ChatMes
   };
 }
 
-export function parseStoredChatMessages(): Record<string, ChatMessage[]> {
-  if (typeof window === "undefined") return {};
-  const raw = readStoredValue(CHAT_MESSAGES_STORAGE_KEY, STORAGE_SUFFIXES.chatMessages);
+function parseStoredImageGeneration(message: ChatMessage) {
+  const card = message.imageGeneration;
+  if (!card || typeof card !== "object" || typeof card.id !== "string" || typeof card.prompt !== "string") return undefined;
+  const status = card.status === "ready" || card.status === "error" || card.status === "running" ? card.status : "ready";
+  return {
+    id: card.id,
+    prompt: card.prompt,
+    status,
+    appId: typeof card.appId === "string" ? card.appId : undefined,
+    appName: typeof card.appName === "string" ? card.appName : undefined,
+    serviceKind: typeof card.serviceKind === "string" ? card.serviceKind : undefined,
+    modelName: typeof card.modelName === "string" ? card.modelName : undefined,
+    machineName: typeof card.machineName === "string" ? card.machineName : undefined,
+    machineSpecs: typeof card.machineSpecs === "string" ? card.machineSpecs : undefined,
+    images: Array.isArray(card.images)
+      ? card.images
+        .map((image) => ({ image, url: normalizeApplicationGenerationUrl(image?.url) }))
+        .filter((item): item is { image: NonNullable<typeof item.image>; url: string } => Boolean(item.image) && Boolean(item.url))
+        .map(({ image, url }) => ({
+          url,
+          width: typeof image.width === "number" ? image.width : undefined,
+          height: typeof image.height === "number" ? image.height : undefined,
+          seed: typeof image.seed === "string" || typeof image.seed === "number" ? image.seed : undefined,
+        }))
+      : undefined,
+    error: typeof card.error === "string" ? card.error : undefined,
+    createdAt: typeof card.createdAt === "number" ? card.createdAt : undefined,
+    completedAt: typeof card.completedAt === "number" ? card.completedAt : undefined,
+  };
+}
+
+function parseStoredApplicationGenerationArtifact(artifact: unknown): ChatApplicationGenerationArtifact | null {
+  if (!artifact || typeof artifact !== "object") return null;
+  const item = artifact as Partial<ChatApplicationGenerationArtifact>;
+  const url = normalizeApplicationGenerationUrl(item.url);
+  if (!url) return null;
+  const kind = item.kind === "image" || item.kind === "audio" || item.kind === "video" || item.kind === "model3d" || item.kind === "file"
+    ? item.kind
+    : "file";
+  return {
+    kind,
+    url,
+    label: typeof item.label === "string" ? item.label : undefined,
+    mimeType: typeof item.mimeType === "string" ? item.mimeType : undefined,
+    width: typeof item.width === "number" ? item.width : undefined,
+    height: typeof item.height === "number" ? item.height : undefined,
+    durationMs: typeof item.durationMs === "number" ? item.durationMs : undefined,
+    seed: typeof item.seed === "string" || typeof item.seed === "number" ? item.seed : undefined,
+  };
+}
+
+function parseStoredApplicationGeneration(message: ChatMessage): ChatApplicationGenerationCard | undefined {
+  const card = message.applicationGeneration;
+  if (!card || typeof card !== "object" || typeof card.id !== "string" || typeof card.prompt !== "string") {
+    const legacyImageCard = parseStoredImageGeneration(message);
+    return legacyImageCard ? imageGenerationToApplicationGeneration(legacyImageCard) : undefined;
+  }
+  const kind = card.kind === "image" || card.kind === "music" || card.kind === "tts" || card.kind === "model3d" || card.kind === "video"
+    ? card.kind
+    : "image";
+  const status = card.status === "ready" || card.status === "error" || card.status === "running" ? card.status : "ready";
+  return {
+    id: card.id,
+    kind,
+    prompt: card.prompt,
+    status,
+    title: typeof card.title === "string" ? card.title : undefined,
+    appId: typeof card.appId === "string" ? card.appId : undefined,
+    appName: typeof card.appName === "string" ? card.appName : undefined,
+    serviceKind: typeof card.serviceKind === "string" ? card.serviceKind : undefined,
+    modelName: typeof card.modelName === "string" ? card.modelName : undefined,
+    machineName: typeof card.machineName === "string" ? card.machineName : undefined,
+    machineSpecs: typeof card.machineSpecs === "string" ? card.machineSpecs : undefined,
+    artifacts: Array.isArray(card.artifacts)
+      ? card.artifacts.map(parseStoredApplicationGenerationArtifact).filter((artifact): artifact is ChatApplicationGenerationArtifact => Boolean(artifact))
+      : undefined,
+    error: typeof card.error === "string" ? card.error : undefined,
+    createdAt: typeof card.createdAt === "number" ? card.createdAt : undefined,
+    completedAt: typeof card.completedAt === "number" ? card.completedAt : undefined,
+  };
+}
+
+export function parseStoredChatMessages(snapshot: DashboardStateSnapshot = {}): Record<string, ChatMessage[]> {
+  return parseChatMessagesValue(readStoredValue(snapshot, CHAT_MESSAGES_STORAGE_KEY, STORAGE_SUFFIXES.chatMessages));
+}
+
+function parseChatMessagesValue(raw: string | null): Record<string, ChatMessage[]> {
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw) as Record<string, ChatMessage[]>;
@@ -451,6 +548,8 @@ export function parseStoredChatMessages(): Record<string, ChatMessage[]> {
               }))
             : undefined,
           attachments: Array.isArray(message.attachments) ? message.attachments : undefined,
+          applicationGeneration: parseStoredApplicationGeneration(message),
+          imageGeneration: parseStoredImageGeneration(message),
           agentPrompt: message.agentPrompt && typeof message.agentPrompt === "object" && typeof message.agentPrompt.question === "string"
             ? {
               id: typeof message.agentPrompt.id === "string" ? message.agentPrompt.id : `${agentId}-${message.createdAt ?? Date.now()}`,
@@ -468,9 +567,68 @@ export function parseStoredChatMessages(): Record<string, ChatMessage[]> {
   }
 }
 
-export function parseStoredWallets(): Record<string, AgentWalletConfig> {
+// Chats the server never acknowledged saving are stashed in localStorage so a
+// reload during a dev-server restart cannot lose them. Only the unsaved delta
+// is stashed: the full chat blob can exceed localStorage quotas.
+const PENDING_CHAT_SAVES_STORAGE_KEY = "hivemindos.chatMessages.pendingSave.v1";
+
+function chatTranscriptLastActivityAt(messages: ChatMessage[] = []) {
+  return messages.reduce((latest, message) => Math.max(latest, message.createdAt ?? 0), 0);
+}
+
+export function readPendingChatSaves(): Record<string, ChatMessage[]> {
   if (typeof window === "undefined") return {};
-  const raw = readStoredValue(WALLET_STORAGE_KEY, STORAGE_SUFFIXES.wallets);
+  try {
+    return parseChatMessagesValue(window.localStorage.getItem(PENDING_CHAT_SAVES_STORAGE_KEY));
+  } catch {
+    return {};
+  }
+}
+
+export function writePendingChatSaves(pending: Record<string, ChatMessage[]>) {
+  if (typeof window === "undefined") return;
+  try {
+    if (Object.keys(pending).length === 0) {
+      window.localStorage.removeItem(PENDING_CHAT_SAVES_STORAGE_KEY);
+    } else {
+      window.localStorage.setItem(PENDING_CHAT_SAVES_STORAGE_KEY, JSON.stringify(pending));
+    }
+  } catch {
+    // Quota errors leave the previous stash in place; saving stays best-effort.
+  }
+}
+
+export function clearPendingChatSaves() {
+  writePendingChatSaves({});
+}
+
+export function diffChatMessagesForPendingSave(
+  confirmed: Record<string, ChatMessage[]>,
+  next: Record<string, ChatMessage[]>,
+): Record<string, ChatMessage[]> {
+  return Object.fromEntries(Object.entries(next)
+    .filter(([storageKey, transcript]) => {
+      const confirmedTranscript = confirmed[storageKey];
+      return !confirmedTranscript || JSON.stringify(confirmedTranscript) !== JSON.stringify(transcript);
+    }));
+}
+
+export function mergePendingChatMessages(
+  stored: Record<string, ChatMessage[]>,
+  pending: Record<string, ChatMessage[]>,
+): Record<string, ChatMessage[]> {
+  const merged = { ...stored };
+  for (const [storageKey, transcript] of Object.entries(pending)) {
+    if (!transcript.length) continue;
+    if (chatTranscriptLastActivityAt(transcript) >= chatTranscriptLastActivityAt(merged[storageKey])) {
+      merged[storageKey] = transcript;
+    }
+  }
+  return merged;
+}
+
+export function parseStoredWallets(snapshot: DashboardStateSnapshot = {}): Record<string, AgentWalletConfig> {
+  const raw = readStoredValue(snapshot, WALLET_STORAGE_KEY, STORAGE_SUFFIXES.wallets);
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw) as Record<string, AgentWalletConfig>;
@@ -485,13 +643,11 @@ export function parseStoredWallets(): Record<string, AgentWalletConfig> {
 
 export function parseStoredHoneyTreasury(): HoneyTreasuryConfig {
   const fallback = createDefaultHoneyTreasuryConfig();
-  if (typeof window === "undefined") return fallback;
   return fallback;
 }
 
-export function parseStoredHoneyLedgerEnabled(): boolean {
-  if (typeof window === "undefined") return false;
-  const raw = readStoredValue(HONEY_LEDGER_ENABLED_STORAGE_KEY, STORAGE_SUFFIXES.honeyLedgerEnabled);
+export function parseStoredHoneyLedgerEnabled(snapshot: DashboardStateSnapshot = {}): boolean {
+  const raw = readStoredValue(snapshot, HONEY_LEDGER_ENABLED_STORAGE_KEY, STORAGE_SUFFIXES.honeyLedgerEnabled);
   return raw === "true";
 }
 
@@ -501,9 +657,8 @@ export function formatHiveAmount(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: value < 1 ? 6 : 2 });
 }
 
-export function parseStoredDiscoveredMachines(): DiscoveredMachine[] {
-  if (typeof window === "undefined") return [];
-  const raw = window.localStorage.getItem(DISCOVERED_MACHINES_STORAGE_KEY);
+export function parseStoredDiscoveredMachines(snapshot: DashboardStateSnapshot = {}): DiscoveredMachine[] {
+  const raw = readStoredValue(snapshot, DISCOVERED_MACHINES_STORAGE_KEY, STORAGE_SUFFIXES.discoveredMachines);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as DiscoveredMachine[];
@@ -518,9 +673,8 @@ export function parseStoredDiscoveredMachines(): DiscoveredMachine[] {
   }
 }
 
-export function parseStoredFleetSnapshots(): Record<string, AgentSnapshot> {
-  if (typeof window === "undefined") return {};
-  const raw = readStoredValue(FLEET_SNAPSHOTS_STORAGE_KEY, STORAGE_SUFFIXES.fleetSnapshots);
+export function parseStoredFleetSnapshots(snapshot: DashboardStateSnapshot = {}): Record<string, AgentSnapshot> {
+  const raw = readStoredValue(snapshot, FLEET_SNAPSHOTS_STORAGE_KEY, STORAGE_SUFFIXES.fleetSnapshots);
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw) as Record<string, AgentSnapshot>;
@@ -543,9 +697,8 @@ export function parseStoredFleetSnapshots(): Record<string, AgentSnapshot> {
   }
 }
 
-export function parseStoredMachineNameAliases(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  const raw = readStoredValue(MACHINE_NAME_ALIAS_STORAGE_KEY, STORAGE_SUFFIXES.machineNameAliases);
+export function parseStoredMachineNameAliases(snapshot: DashboardStateSnapshot = {}): Record<string, string> {
+  const raw = readStoredValue(snapshot, MACHINE_NAME_ALIAS_STORAGE_KEY, STORAGE_SUFFIXES.machineNameAliases);
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw) as Record<string, string>;
