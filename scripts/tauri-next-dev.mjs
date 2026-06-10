@@ -1,17 +1,35 @@
 import { spawn } from "node:child_process";
-import { createReadStream, mkdirSync, rmSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  createReadStream,
+  mkdirSync,
+  rmSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import { connect, createServer as createNetServer } from "node:net";
 import { extname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const nextEnvPath = fileURLToPath(new URL("../next-env.d.ts", import.meta.url));
-const tsconfigPath = fileURLToPath(new URL("../tsconfig.json", import.meta.url));
-const tauriNextRootDir = fileURLToPath(new URL("../.next-tauri/", import.meta.url));
-const tauriDevServerInfoPath = fileURLToPath(new URL("../.next-tauri/dev-server.json", import.meta.url));
-const loadingDir = fileURLToPath(new URL("../src-tauri/loading/", import.meta.url));
-const loadingHtmlPath = fileURLToPath(new URL("../src-tauri/loading/index.html", import.meta.url));
-const loadingIconPath = fileURLToPath(new URL("../src-tauri/loading/icon-192.png", import.meta.url));
+const tsconfigPath = fileURLToPath(
+  new URL("../tsconfig.json", import.meta.url),
+);
+const tauriNextRootDir = fileURLToPath(
+  new URL("../.next-tauri/", import.meta.url),
+);
+const tauriDevServerInfoPath = fileURLToPath(
+  new URL("../.next-tauri/dev-server.json", import.meta.url),
+);
+const loadingDir = fileURLToPath(
+  new URL("../src-tauri/loading/", import.meta.url),
+);
+const loadingHtmlPath = fileURLToPath(
+  new URL("../src-tauri/loading/index.html", import.meta.url),
+);
+const loadingIconPath = fileURLToPath(
+  new URL("../src-tauri/loading/icon-192.png", import.meta.url),
+);
 const upstreamHost = "localhost";
 const proxyBindHost = process.env.HIVEMINDOS_TAURI_PROXY_BIND_HOST || "0.0.0.0";
 const browserHost = "localhost";
@@ -19,7 +37,9 @@ const browserHost = "localhost";
 function readPort(value, fallback, name) {
   const port = Number(value || fallback);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    console.error(`Invalid ${name} value "${value}". Expected a TCP port from 1 to 65535.`);
+    console.error(
+      `Invalid ${name} value "${value}". Expected a TCP port from 1 to 65535.`,
+    );
     process.exit(1);
   }
   return port;
@@ -37,17 +57,29 @@ function isPortAvailable(port, host = upstreamHost) {
 }
 
 async function findAvailablePort(startPort) {
-  for (let port = startPort; port < startPort + 25 && port <= 65535; port += 1) {
+  for (
+    let port = startPort;
+    port < startPort + 25 && port <= 65535;
+    port += 1
+  ) {
     if (await isPortAvailable(port)) return port;
   }
-  throw new Error(`No available Tauri Next.js backend port found from ${startPort} to ${Math.min(startPort + 24, 65535)}.`);
+  throw new Error(
+    `No available Tauri Next.js backend port found from ${startPort} to ${Math.min(startPort + 24, 65535)}.`,
+  );
 }
 
 const proxyPort = readPort(process.env.PORT, "5021", "PORT");
-const requestedNextPort = readPort(process.env.HIVEMINDOS_TAURI_NEXT_PORT, String(proxyPort + 100), "HIVEMINDOS_TAURI_NEXT_PORT");
+const requestedNextPort = readPort(
+  process.env.HIVEMINDOS_TAURI_NEXT_PORT,
+  String(proxyPort + 100),
+  "HIVEMINDOS_TAURI_NEXT_PORT",
+);
 
 if (!(await isPortAvailable(proxyPort, proxyBindHost))) {
-  console.error(`Tauri loading proxy port ${browserHost}:${proxyPort} is already in use. Stop the existing Tauri dev shell, then run pnpm tauri:dev again.`);
+  console.error(
+    `Tauri loading proxy port ${browserHost}:${proxyPort} is already in use. Stop the existing Tauri dev shell, then run pnpm tauri:dev again.`,
+  );
   process.exit(1);
 }
 
@@ -59,16 +91,23 @@ try {
   process.exit(1);
 }
 const tauriNextDistDir = `.next-tauri/dev-${nextPort}`;
-const tauriNextDir = fileURLToPath(new URL(`../${tauriNextDistDir}/`, import.meta.url));
+const tauriNextDir = fileURLToPath(
+  new URL(`../${tauriNextDistDir}/`, import.meta.url),
+);
 
 if (nextPort !== requestedNextPort) {
-  console.warn(`Tauri Next.js backend port ${requestedNextPort} is already in use; using ${nextPort} with ${tauriNextDistDir}.`);
+  console.warn(
+    `Tauri Next.js backend port ${requestedNextPort} is already in use; using ${nextPort} with ${tauriNextDistDir}.`,
+  );
 }
 
 function restoreNextEnv() {
   try {
     const current = readFileSync(nextEnvPath, "utf8");
-    const restored = current.replace(/import "\.\/\.next-tauri(?:\/dev-\d+)?\/dev\/types\/routes\.d\.ts";/g, 'import "./.next/dev/types/routes.d.ts";');
+    const restored = current.replace(
+      /import "\.\/\.next-tauri(?:\/dev-\d+)?\/dev\/types\/routes\.d\.ts";/g,
+      'import "./.next/dev/types/routes.d.ts";',
+    );
     if (restored !== current) writeFileSync(nextEnvPath, restored);
   } catch {
     // Best-effort cleanup for Next.js' generated type reference.
@@ -82,7 +121,10 @@ function restoreTsconfig() {
     if (!Array.isArray(config.include)) return;
 
     const include = config.include.filter((entry) => {
-      return typeof entry !== "string" || !/^\.next-tauri\/dev-\d+\/(?:dev\/)?types\/\*\*\/\*\.ts$/.test(entry);
+      return (
+        typeof entry !== "string" ||
+        !/^\.next-tauri\/dev-\d+\/(?:dev\/)?types\/\*\*\/\*\.ts$/.test(entry)
+      );
     });
     if (include.length === config.include.length) return;
 
@@ -100,15 +142,22 @@ function restoreGeneratedTypeReferences() {
 
 function writeDevServerInfo() {
   mkdirSync(tauriNextRootDir, { recursive: true });
-  writeFileSync(tauriDevServerInfoPath, JSON.stringify({
-    backendUrl: `http://${upstreamHost}:${nextPort}`,
-    bindHost: proxyBindHost,
-    dashboardPort: proxyPort,
-    dashboardUrl: `http://${browserHost}:${proxyPort}`,
-    nextPort,
-    proxyPort,
-    proxyUrl: `http://${browserHost}:${proxyPort}`,
-  }, null, 2) + "\n");
+  writeFileSync(
+    tauriDevServerInfoPath,
+    JSON.stringify(
+      {
+        backendUrl: `http://${upstreamHost}:${nextPort}`,
+        bindHost: proxyBindHost,
+        dashboardPort: proxyPort,
+        dashboardUrl: `http://${browserHost}:${proxyPort}`,
+        nextPort,
+        proxyPort,
+        proxyUrl: `http://${browserHost}:${proxyPort}`,
+      },
+      null,
+      2,
+    ) + "\n",
+  );
 }
 
 function contentType(path) {
@@ -196,7 +245,8 @@ const devRecoveryScript = String.raw`
 
 function injectDevRecoveryScript(html) {
   if (html.includes("data-hivemindos-tauri-dev-recovery")) return html;
-  if (html.includes("</body>")) return html.replace("</body>", `${devRecoveryScript}</body>`);
+  if (html.includes("</body>"))
+    return html.replace("</body>", `${devRecoveryScript}</body>`);
   return `${html}${devRecoveryScript}`;
 }
 
@@ -210,12 +260,18 @@ function sendLoading(response) {
 }
 
 function isDevReadyPath(url) {
-  return url === "/__hivemindos_dev_ready" || Boolean(url?.startsWith("/__hivemindos_dev_ready?"));
+  return (
+    url === "/__hivemindos_dev_ready" ||
+    Boolean(url?.startsWith("/__hivemindos_dev_ready?"))
+  );
 }
 
 function devReadyScope(url) {
   try {
-    return new URL(url ?? "", "http://localhost").searchParams.get("scope") === "route" ? "route" : "backend";
+    return new URL(url ?? "", "http://localhost").searchParams.get("scope") ===
+      "route"
+      ? "route"
+      : "backend";
   } catch {
     return "backend";
   }
@@ -248,10 +304,17 @@ function checkRouteReady(response) {
     response.writeHead(status, { "Cache-Control": "no-store" });
     response.end();
   };
-  const readinessRequest = httpRequest({ hostname: upstreamHost, port: nextPort, path: "/", method: "HEAD" }, (readinessResponse) => {
-    finish(readinessResponse.statusCode && readinessResponse.statusCode < 500 ? 204 : 503);
-    readinessResponse.resume();
-  });
+  const readinessRequest = httpRequest(
+    { hostname: upstreamHost, port: nextPort, path: "/", method: "HEAD" },
+    (readinessResponse) => {
+      finish(
+        readinessResponse.statusCode && readinessResponse.statusCode < 500
+          ? 204
+          : 503,
+      );
+      readinessResponse.resume();
+    },
+  );
   readinessRequest.setTimeout(2_500, () => {
     readinessRequest.destroy();
     finish(503);
@@ -261,8 +324,12 @@ function checkRouteReady(response) {
 }
 
 function proxyTimeoutForRequest(clientRequest) {
-  if (clientRequest.url?.startsWith("/api/chat/agent-runtime")) return 11 * 60_000;
-  if (clientRequest.url?.startsWith("/api/chat/image-generation")) return 4 * 60_000;
+  if (clientRequest.url?.startsWith("/api/chat/agent-runtime"))
+    return 11 * 60_000;
+  if (clientRequest.url?.startsWith("/api/chat/image-generation"))
+    return 4 * 60_000;
+  // Fleet updates run a remote update plus a verification poll (route maxDuration 360s).
+  if (clientRequest.url?.startsWith("/api/fleet/update")) return 7 * 60_000;
   if (clientRequest.url?.startsWith("/api/")) return 60_000;
   if (clientRequest.headers.accept?.includes("text/html")) return 15_000;
   return 2_500;
@@ -271,26 +338,35 @@ function proxyTimeoutForRequest(clientRequest) {
 function apiFallbackMessage(clientRequest, proxyTimeoutMs, reason) {
   const path = clientRequest.url || "/";
   const seconds = Math.max(1, Math.round(proxyTimeoutMs / 1000));
-  const action = reason === "timeout"
-    ? `timed out after ${seconds}s`
-    : "lost its connection to the Next dev server";
+  const action =
+    reason === "timeout"
+      ? `timed out after ${seconds}s`
+      : "lost its connection to the Next dev server";
   return `HivemindOS dev proxy ${action} while waiting for ${path}. The request may still be blocked behind compilation, a restarted dev server, or a slow connected app. Retry after the dashboard settles.`;
 }
 
-function sendApiFallback(clientRequest, clientResponse, proxyTimeoutMs, reason) {
+function sendApiFallback(
+  clientRequest,
+  clientResponse,
+  proxyTimeoutMs,
+  reason,
+) {
   const status = reason === "timeout" ? 504 : 503;
   const message = apiFallbackMessage(clientRequest, proxyTimeoutMs, reason);
   clientResponse.writeHead(status, {
     "Cache-Control": "no-store",
     "Content-Type": "application/json; charset=utf-8",
   });
-  clientResponse.end(JSON.stringify({
-    ok: false,
-    error: message,
-    code: reason === "timeout" ? "DEV_PROXY_TIMEOUT" : "DEV_PROXY_UNAVAILABLE",
-    path: clientRequest.url || "/",
-    timeoutMs: proxyTimeoutMs,
-  }));
+  clientResponse.end(
+    JSON.stringify({
+      ok: false,
+      error: message,
+      code:
+        reason === "timeout" ? "DEV_PROXY_TIMEOUT" : "DEV_PROXY_UNAVAILABLE",
+      path: clientRequest.url || "/",
+      timeoutMs: proxyTimeoutMs,
+    }),
+  );
 }
 
 function proxyHttp(clientRequest, clientResponse) {
@@ -312,8 +388,13 @@ function proxyHttp(clientRequest, clientResponse) {
       sendApiFallback(clientRequest, clientResponse, proxyTimeoutMs, reason);
       return;
     }
-    clientResponse.writeHead(503, { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" });
-    clientResponse.end(apiFallbackMessage(clientRequest, proxyTimeoutMs, reason));
+    clientResponse.writeHead(503, {
+      "Cache-Control": "no-store",
+      "Content-Type": "text/plain; charset=utf-8",
+    });
+    clientResponse.end(
+      apiFallbackMessage(clientRequest, proxyTimeoutMs, reason),
+    );
   };
 
   const proxyRequest = httpRequest(
@@ -329,7 +410,10 @@ function proxyHttp(clientRequest, clientResponse) {
     },
     (proxyResponse) => {
       handled = true;
-      clientResponse.writeHead(proxyResponse.statusCode ?? 502, proxyResponse.headers);
+      clientResponse.writeHead(
+        proxyResponse.statusCode ?? 502,
+        proxyResponse.headers,
+      );
       proxyResponse.pipe(clientResponse);
     },
   );
@@ -363,7 +447,10 @@ const proxyServer = createServer((request, response) => {
   if (request.url && request.url.startsWith("/loading/")) {
     const fileName = request.url.slice("/loading/".length).split("?")[0];
     if (!fileName.includes("/") && extname(fileName)) {
-      sendFile(response, fileURLToPath(new URL(fileName, `file://${loadingDir}`)));
+      sendFile(
+        response,
+        fileURLToPath(new URL(fileName, `file://${loadingDir}`)),
+      );
       return;
     }
   }
@@ -373,10 +460,14 @@ const proxyServer = createServer((request, response) => {
 
 proxyServer.on("upgrade", (request, socket, head) => {
   const upstream = connect(nextPort, upstreamHost, () => {
-    upstream.write(`${request.method} ${request.url} HTTP/${request.httpVersion}\r\n`);
+    upstream.write(
+      `${request.method} ${request.url} HTTP/${request.httpVersion}\r\n`,
+    );
     for (const [key, value] of Object.entries(request.headers)) {
       if (key.toLowerCase() === "host") continue;
-      upstream.write(`${key}: ${Array.isArray(value) ? value.join(", ") : value}\r\n`);
+      upstream.write(
+        `${key}: ${Array.isArray(value) ? value.join(", ") : value}\r\n`,
+      );
     }
     upstream.write(`host: ${upstreamHost}:${nextPort}\r\n\r\n`);
     upstream.write(head);
@@ -406,17 +497,22 @@ const child = spawn(process.execPath, ["scripts/dev-server.mjs"], {
 
 const voiceWorkerEnabled = process.env.HIVEMINDOS_VOICE_WORKER !== "0";
 const voiceWorker = voiceWorkerEnabled
-  ? spawn(process.execPath, ["scripts/hivemindos-call-agent-worker.mjs", "dev"], {
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      HIVEMINDOS_TAURI_DEV: "1",
-      HIVEMINDOS_DASHBOARD_PORT: String(proxyPort),
-      HIVEMINDOS_DASHBOARD_URL: `http://${browserHost}:${proxyPort}`,
-      LIVEKIT_AGENT_NAME: process.env.LIVEKIT_AGENT_NAME || "hivemindos-call-agent",
-      LIVEKIT_WORKER_PORT: process.env.LIVEKIT_WORKER_PORT || "8386",
-    },
-  })
+  ? spawn(
+      process.execPath,
+      ["scripts/hivemindos-call-agent-worker.mjs", "dev"],
+      {
+        stdio: "inherit",
+        env: {
+          ...process.env,
+          HIVEMINDOS_TAURI_DEV: "1",
+          HIVEMINDOS_DASHBOARD_PORT: String(proxyPort),
+          HIVEMINDOS_DASHBOARD_URL: `http://${browserHost}:${proxyPort}`,
+          LIVEKIT_AGENT_NAME:
+            process.env.LIVEKIT_AGENT_NAME || "hivemindos-call-agent",
+          LIVEKIT_WORKER_PORT: process.env.LIVEKIT_WORKER_PORT || "8386",
+        },
+      },
+    )
   : null;
 
 function stopChildren(signal = "SIGTERM") {
@@ -432,7 +528,9 @@ proxyServer.on("error", (error) => {
 });
 
 proxyServer.listen(proxyPort, proxyBindHost, () => {
-  console.log(`HivemindOS Tauri loading proxy listening on http://${browserHost}:${proxyPort} and ${proxyBindHost}:${proxyPort} -> Next ${nextPort}`);
+  console.log(
+    `HivemindOS Tauri loading proxy listening on http://${browserHost}:${proxyPort} and ${proxyBindHost}:${proxyPort} -> Next ${nextPort}`,
+  );
 });
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
@@ -460,11 +558,15 @@ child.on("error", (error) => {
 
 voiceWorker?.on("exit", (code) => {
   if (code && code !== 0) {
-    console.warn(`HivemindOS call agent worker exited with status ${code}. Next/Tauri dev is still running.`);
+    console.warn(
+      `HivemindOS call agent worker exited with status ${code}. Next/Tauri dev is still running.`,
+    );
   }
 });
 
 voiceWorker?.on("error", (error) => {
-  console.warn("HivemindOS call agent worker could not start. Next/Tauri dev is still running.");
+  console.warn(
+    "HivemindOS call agent worker could not start. Next/Tauri dev is still running.",
+  );
   console.warn(error);
 });

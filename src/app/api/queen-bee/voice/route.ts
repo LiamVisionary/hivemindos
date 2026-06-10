@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { submitQueenBeeMessage } from "@/lib/services/queen-bee/control-plane";
 import { discoverQueenBeeFleetSnapshot } from "@/lib/services/queen-bee/fleet-snapshot";
-import { transcribeAudioWithWhisper, transcriptionApiKey } from "@/lib/services/phone/transcription";
+import {
+  runQueenBeeVoiceTurn,
+  type QueenVoiceHistoryTurn,
+} from "@/lib/services/queen-bee/voice-turn";
+import {
+  transcribeAudioWithWhisper,
+  transcriptionApiKey,
+} from "@/lib/services/phone/transcription";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,13 +33,21 @@ export async function POST(request: NextRequest) {
     if (contentType.includes("multipart/form-data")) {
       return await runVoiceTurn(request);
     }
-    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const body = (await request.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >;
     if (body.action === "speak") {
       return await streamSpokenReply(body);
     }
-    throw new Error(`Unknown Queen Bee voice action: ${String(body.action ?? "")}`);
+    throw new Error(
+      `Unknown Queen Bee voice action: ${String(body.action ?? "")}`,
+    );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Queen Bee voice request failed.";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Queen Bee voice request failed.";
     return NextResponse.json({ ok: false, error: message }, { status: 400 });
   }
 }
@@ -41,18 +55,22 @@ export async function POST(request: NextRequest) {
 async function runVoiceTurn(request: NextRequest) {
   const form = await request.formData();
   const audio = form.get("audio");
-  if (!(audio instanceof Blob)) throw new Error("An audio recording is required.");
-  const signal = AbortSignal.any([request.signal, AbortSignal.timeout(VOICE_TURN_TIMEOUT_MS)]);
+  if (!(audio instanceof Blob))
+    throw new Error("An audio recording is required.");
+  const signal = AbortSignal.any([
+    request.signal,
+    AbortSignal.timeout(VOICE_TURN_TIMEOUT_MS),
+  ]);
   const transcript = await transcribeAudioWithWhisper(audio, signal);
 
   const formText = (key: string) => {
     const value = form.get(key);
     return typeof value === "string" && value.trim() ? value.trim() : undefined;
   };
-  const result = await submitQueenBeeMessage({
-    message: transcript,
-    source: "queen-bee-voice",
-    mode: "act",
+  const result = await runQueenBeeVoiceTurn({
+    origin: request.nextUrl.origin,
+    transcript,
+    history: historyFromForm(form.get("history")),
     vaultPath: formText("vaultPath"),
     brainServicesFolder: formText("brainServicesFolder"),
     kanbanFolder: formText("kanbanFolder"),
@@ -62,21 +80,30 @@ async function runVoiceTurn(request: NextRequest) {
     ),
   });
 
-  return NextResponse.json({
-    ok: true,
-    transcript,
-    reply: spokenReplyFromReceipt(result.receipt?.summary, transcript),
-    taskId: result.task?.id,
-    taskTitle: result.task?.title,
-    created: result.created,
-    route: result.route,
-  });
+  return NextResponse.json({ ok: true, transcript, ...result });
 }
 
-function spokenReplyFromReceipt(summary: unknown, transcript: string) {
-  const text = typeof summary === "string" ? summary.trim() : "";
-  if (text) return text;
-  return `Queen Bee received your request: ${transcript}`;
+function historyFromForm(
+  raw: FormDataEntryValue | null,
+): QueenVoiceHistoryTurn[] {
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (turn): turn is { who: unknown; text: unknown } =>
+          Boolean(turn) && typeof turn === "object",
+      )
+      .map((turn) => ({
+        who: turn.who === "queen" ? ("queen" as const) : ("you" as const),
+        text: typeof turn.text === "string" ? turn.text : "",
+      }))
+      .filter((turn) => turn.text.trim().length > 0)
+      .slice(-12);
+  } catch {
+    return [];
+  }
 }
 
 async function streamSpokenReply(body: Record<string, unknown>) {
@@ -85,7 +112,11 @@ async function streamSpokenReply(body: Record<string, unknown>) {
   const apiKey = await transcriptionApiKey();
   if (!apiKey) {
     return NextResponse.json(
-      { ok: false, error: "No OpenAI voice key is configured; use on-device speech synthesis instead." },
+      {
+        ok: false,
+        error:
+          "No OpenAI voice key is configured; use on-device speech synthesis instead.",
+      },
       { status: 503 },
     );
   }
@@ -105,10 +136,16 @@ async function streamSpokenReply(body: Record<string, unknown>) {
     signal: AbortSignal.timeout(TTS_TIMEOUT_MS),
   });
   if (!response.ok || !response.body) {
-    const data = await response.json().catch(() => null) as { error?: { message?: string } | string } | null;
-    const detail = typeof data?.error === "string" ? data.error : data?.error?.message;
+    const data = (await response.json().catch(() => null)) as {
+      error?: { message?: string } | string;
+    } | null;
+    const detail =
+      typeof data?.error === "string" ? data.error : data?.error?.message;
     return NextResponse.json(
-      { ok: false, error: detail || `Queen Bee TTS returned HTTP ${response.status}.` },
+      {
+        ok: false,
+        error: detail || `Queen Bee TTS returned HTTP ${response.status}.`,
+      },
       { status: 502 },
     );
   }

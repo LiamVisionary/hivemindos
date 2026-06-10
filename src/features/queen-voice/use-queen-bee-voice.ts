@@ -2,7 +2,12 @@
 
 import * as React from "react";
 
-export type QueenVoicePhase = "starting" | "listening" | "thinking" | "speaking" | "error";
+export type QueenVoicePhase =
+  | "starting"
+  | "listening"
+  | "thinking"
+  | "speaking"
+  | "error";
 
 export type QueenVoiceTurn = {
   id: number;
@@ -39,7 +44,11 @@ const ERROR_RESUME_DELAY_MS = 3_500;
 
 function pickRecorderMimeType() {
   if (typeof MediaRecorder === "undefined") return "";
-  return RECORDER_MIME_CANDIDATES.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
+  return (
+    RECORDER_MIME_CANDIDATES.find((candidate) =>
+      MediaRecorder.isTypeSupported(candidate),
+    ) ?? ""
+  );
 }
 
 function utteranceFileName(mimeType: string) {
@@ -53,10 +62,14 @@ async function speakWithBrowserSynthesis(text: string, signal: AbortSignal) {
     utterance.rate = 1.05;
     utterance.onend = () => resolvePlayback();
     utterance.onerror = () => resolvePlayback();
-    signal.addEventListener("abort", () => {
-      speechSynthesis.cancel();
-      resolvePlayback();
-    }, { once: true });
+    signal.addEventListener(
+      "abort",
+      () => {
+        speechSynthesis.cancel();
+        resolvePlayback();
+      },
+      { once: true },
+    );
     speechSynthesis.speak(utterance);
   });
 }
@@ -75,7 +88,10 @@ async function playSpokenReply(text: string, signal: AbortSignal) {
     response = null;
   }
   if (signal.aborted) return;
-  if (!response?.ok || !response.headers.get("content-type")?.includes("audio/")) {
+  if (
+    !response?.ok ||
+    !response.headers.get("content-type")?.includes("audio/")
+  ) {
     await speakWithBrowserSynthesis(text, signal);
     return;
   }
@@ -90,7 +106,8 @@ async function playSpokenReply(text: string, signal: AbortSignal) {
       };
       signal.addEventListener("abort", stop, { once: true });
       audio.onended = () => resolvePlayback();
-      audio.onerror = () => rejectPlayback(new Error("Queen Bee reply audio could not be played."));
+      audio.onerror = () =>
+        rejectPlayback(new Error("Queen Bee reply audio could not be played."));
       void audio.play().catch(rejectPlayback);
     });
   } catch {
@@ -132,15 +149,28 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
     let recorderChunks: Blob[] = [];
     const abort = new AbortController();
     const mimeType = pickRecorderMimeType();
+    // Finalized turns for this session, sent so Queen Bee keeps conversational context.
+    const history: { who: "you" | "queen"; text: string }[] = [];
 
-    const addTurn = (who: QueenVoiceTurn["who"], text: string, live = false) => {
+    const addTurn = (
+      who: QueenVoiceTurn["who"],
+      text: string,
+      live = false,
+    ) => {
       const id = nextTurnId;
       nextTurnId += 1;
-      setTurns((current) => [...current.map((turn) => ({ ...turn, live: false })), { id, who, text, live }]);
+      setTurns((current) => [
+        ...current.map((turn) => ({ ...turn, live: false })),
+        { id, who, text, live },
+      ]);
       return id;
     };
     const updateTurn = (id: number, text: string, live = false) => {
-      setTurns((current) => current.map((turn) => (turn.id === id ? { ...turn, text, live } : turn)));
+      setTurns((current) =>
+        current.map((turn) =>
+          turn.id === id ? { ...turn, text, live } : turn,
+        ),
+      );
     };
     const dropTurn = (id: number) => {
       setTurns((current) => current.filter((turn) => turn.id !== id));
@@ -176,29 +206,48 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
       const youTurnId = addTurn("you", "Transcribing...", true);
       try {
         const form = new FormData();
-        form.set("audio", new File([audio], utteranceFileName(mimeType), { type: audio.type || mimeType || "audio/webm" }));
+        form.set(
+          "audio",
+          new File([audio], utteranceFileName(mimeType), {
+            type: audio.type || mimeType || "audio/webm",
+          }),
+        );
+        form.set("history", JSON.stringify(history.slice(-8)));
         const response = await fetch("/api/queen-bee/voice", {
           method: "POST",
           body: form,
           cache: "no-store",
           signal: abort.signal,
         });
-        const data = await response.json().catch(() => null) as VoiceTurnResponse | null;
+        const data = (await response
+          .json()
+          .catch(() => null)) as VoiceTurnResponse | null;
         if (cancelled) return;
         if (!response.ok || !data?.ok || !data.transcript || !data.reply) {
           dropTurn(youTurnId);
-          failTurn(data?.error || `Queen Bee voice turn returned HTTP ${response.status}.`);
+          failTurn(
+            data?.error ||
+              `Queen Bee voice turn returned HTTP ${response.status}.`,
+          );
           return;
         }
         updateTurn(youTurnId, data.transcript);
         addTurn("queen", data.reply);
+        history.push(
+          { who: "you", text: data.transcript },
+          { who: "queen", text: data.reply },
+        );
         setPhase("speaking");
         await playSpokenReply(data.reply, abort.signal);
         if (!cancelled) startListening();
       } catch (turnError) {
         if (cancelled) return;
         dropTurn(youTurnId);
-        failTurn(turnError instanceof Error ? turnError.message : "Queen Bee voice turn failed.");
+        failTurn(
+          turnError instanceof Error
+            ? turnError.message
+            : "Queen Bee voice turn failed.",
+        );
       }
     };
 
@@ -209,9 +258,16 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
 
       recorderChunks = [];
       try {
-        recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+        recorder = new MediaRecorder(
+          stream,
+          mimeType ? { mimeType } : undefined,
+        );
       } catch (recorderError) {
-        failTurn(recorderError instanceof Error ? recorderError.message : "Microphone recording is unavailable in this webview.");
+        failTurn(
+          recorderError instanceof Error
+            ? recorderError.message
+            : "Microphone recording is unavailable in this webview.",
+        );
         return;
       }
       const activeRecorder = recorder;
@@ -229,7 +285,9 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
       const commitUtterance = () => {
         if (!recorder || recorder.state === "inactive") return;
         recorder.onstop = () => {
-          const blob = new Blob(recorderChunks, { type: mimeType || "audio/webm" });
+          const blob = new Blob(recorderChunks, {
+            type: mimeType || "audio/webm",
+          });
           recorderChunks = [];
           if (!cancelled && blob.size) void runVoiceTurn(blob);
         };
@@ -264,12 +322,20 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
         }
         const utteranceMs = speechStartedAt ? now - speechStartedAt : 0;
         const silenceMs = lastSpeechAt ? now - lastSpeechAt : 0;
-        if ((speechStartedAt && utteranceMs > MIN_UTTERANCE_MS && silenceMs > COMMIT_SILENCE_MS) || utteranceMs > MAX_UTTERANCE_MS) {
+        if (
+          (speechStartedAt &&
+            utteranceMs > MIN_UTTERANCE_MS &&
+            silenceMs > COMMIT_SILENCE_MS) ||
+          utteranceMs > MAX_UTTERANCE_MS
+        ) {
           commitUtterance();
           return;
         }
         // Bound idle recordings so quiet stretches never grow unbounded.
-        if (!speechStartedAt && now - recorderStartedAt > IDLE_RECORDER_RESTART_MS) {
+        if (
+          !speechStartedAt &&
+          now - recorderStartedAt > IDLE_RECORDER_RESTART_MS
+        ) {
           stopRecorder();
           startListening();
           return;
@@ -288,16 +354,21 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
         setSpeechDetected(false);
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error(
-            `Microphone capture is not available in this webview (origin ${location.origin}, secure context ${String(window.isSecureContext)}). `
-            + "On the desktop app this usually means the app bundle is missing NSMicrophoneUsageDescription.",
+            `Microphone capture is not available in this webview (origin ${location.origin}, secure context ${String(window.isSecureContext)}). ` +
+              "On the desktop app this usually means the app bundle is missing NSMicrophoneUsageDescription.",
           );
         }
-        stream = await navigator.mediaDevices.getUserMedia({ audio: ECHO_CANCELLED_AUDIO });
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: ECHO_CANCELLED_AUDIO,
+        });
         streamRef.current = stream;
         if (cancelled) return;
-        const audioWindow = window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext };
-        const AudioContextClass = audioWindow.AudioContext || audioWindow.webkitAudioContext;
-        if (!AudioContextClass) throw new Error("Web Audio is not available in this browser.");
+        const audioWindow = window as Window &
+          typeof globalThis & { webkitAudioContext?: typeof AudioContext };
+        const AudioContextClass =
+          audioWindow.AudioContext || audioWindow.webkitAudioContext;
+        if (!AudioContextClass)
+          throw new Error("Web Audio is not available in this browser.");
         audioContext = new AudioContextClass();
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 1024;
@@ -306,7 +377,11 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
       } catch (connectError) {
         if (!cancelled) {
           setPhase("error");
-          setError(connectError instanceof Error ? connectError.message : "Could not start Queen Bee voice chat.");
+          setError(
+            connectError instanceof Error
+              ? connectError.message
+              : "Could not start Queen Bee voice chat.",
+          );
         }
       }
     }

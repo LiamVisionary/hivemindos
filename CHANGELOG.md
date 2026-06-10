@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-10 16:39:50 WITA +0800 - Improve Voice Turns And Fleet Update Feedback
+
+- Status: Pushed
+- Areas changed: Queen Bee voice chat, phone voice runtime helpers, Fleet update route and notifications, Tauri dev proxy timeout, Fleet roster layout
+- Summary: Queen Bee voice chat now carries short conversational history and can answer conversationally before delegating clear work requests through the Queen Bee control plane. Shared voice-runtime helpers keep phone calls and Queen Bee voice parsing aligned. Fleet update requests now return an "already current" success when a machine already reports the target version, and the dev Tauri proxy allows longer Fleet update calls. Fleet roster rows keep agent summary text visible above the add-agent/action row.
+- Verification: `pnpm exec prettier --check` on the touched files; `pnpm exec eslint` on the touched files; focused `pnpm exec tsc --noEmit --pretty false --skipLibCheck` filter returned no diagnostics for touched files; `git diff --check` passed. Note: formatting normalization expanded the diff in the touched files.
+- Intended commit message: `Improve voice turns and fleet update feedback`
+
 ## 2026-06-10 16:21:44 WITA +0800 - Keep Fleet App Badges Visible While Icons Load
 
 - Status: Pushed
