@@ -102,9 +102,19 @@ type ParsedCommand = { command: string; args: string };
 
 function parseCommand(text: string, botUsername: string): ParsedCommand | null {
   const match = text.match(/^\/([a-zA-Z0-9_]+)(?:@(\S+))?(?:\s+([\s\S]*))?$/);
-  if (!match) return null;
-  if (match[2] && match[2].toLowerCase() !== botUsername.toLowerCase()) return null;
-  return { command: match[1].toLowerCase(), args: (match[3] ?? "").trim() };
+  if (match) {
+    if (match[2] && match[2].toLowerCase() !== botUsername.toLowerCase()) return null;
+    return { command: match[1].toLowerCase(), args: (match[3] ?? "").trim() };
+  }
+  // Mid-message tips: "thanks a lot, /tip 1000" should work — that's how
+  // people naturally tip in replies. Only /tip gets this leniency; firing
+  // /balance off a mid-sentence slash would be noisy.
+  const tip = text.match(/(?:^|\s)\/tip(?:@(\S+))?(?:\s+([\s\S]*))?$/i);
+  if (tip) {
+    if (tip[1] && tip[1].toLowerCase() !== botUsername.toLowerCase()) return null;
+    return { command: "tip", args: (tip[2] ?? "").trim() };
+  }
+  return null;
 }
 
 function displayName(user: TipBotUser): string {
