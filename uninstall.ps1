@@ -51,8 +51,8 @@ function Remove-ManagedBlock($Path) {
 }
 
 function Remove-ClaudeBrainHook {
-  $home = [Environment]::GetFolderPath("UserProfile")
-  $settingsFile = Join-Path $home ".claude\settings.json"
+  $homeDir = [Environment]::GetFolderPath("UserProfile")
+  $settingsFile = Join-Path $homeDir ".claude\settings.json"
   if (-not (Test-Path $settingsFile)) { return }
   $settings = $null
   try { $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json -AsHashtable } catch { return }
@@ -83,31 +83,31 @@ function Remove-ClaudeBrainHook {
 }
 
 function AgentInstructionFiles {
-  $home = [Environment]::GetFolderPath("UserProfile")
+  $homeDir = [Environment]::GetFolderPath("UserProfile")
   @(
-    "$home\.codex\AGENTS.md",
-    "$home\.claude\CLAUDE.md",
-    "$home\.hermes\SOUL.md",
-    "$home\.hermes\AGENTS.md",
-    "$home\.gemini\GEMINI.md",
-    "$home\.openclaw\AGENTS.md",
-    "$home\.aeon\AGENTS.md"
+    "$homeDir\.codex\AGENTS.md",
+    "$homeDir\.claude\CLAUDE.md",
+    "$homeDir\.hermes\SOUL.md",
+    "$homeDir\.hermes\AGENTS.md",
+    "$homeDir\.gemini\GEMINI.md",
+    "$homeDir\.openclaw\AGENTS.md",
+    "$homeDir\.aeon\AGENTS.md"
   )
-  Get-ChildItem "$home\.openclaw" -Directory -Filter "workspace-*" -ErrorAction SilentlyContinue |
+  Get-ChildItem "$homeDir\.openclaw" -Directory -Filter "workspace-*" -ErrorAction SilentlyContinue |
     ForEach-Object { Join-Path $_.FullName "AGENTS.md" }
 }
 
 function AgentSkillDirs {
-  $home = [Environment]::GetFolderPath("UserProfile")
+  $homeDir = [Environment]::GetFolderPath("UserProfile")
   @(
-    "$home\.codex\skills\karpathy-guidelines",
-    "$home\.claude\skills\karpathy-guidelines",
-    "$home\.hermes\skills\karpathy-guidelines",
-    "$home\.gemini\skills\karpathy-guidelines",
-    "$home\.openclaw\skills\karpathy-guidelines",
-    "$home\.aeon\skills\karpathy-guidelines"
+    "$homeDir\.codex\skills\karpathy-guidelines",
+    "$homeDir\.claude\skills\karpathy-guidelines",
+    "$homeDir\.hermes\skills\karpathy-guidelines",
+    "$homeDir\.gemini\skills\karpathy-guidelines",
+    "$homeDir\.openclaw\skills\karpathy-guidelines",
+    "$homeDir\.aeon\skills\karpathy-guidelines"
   )
-  Get-ChildItem "$home\.openclaw" -Directory -Filter "workspace-*" -ErrorAction SilentlyContinue |
+  Get-ChildItem "$homeDir\.openclaw" -Directory -Filter "workspace-*" -ErrorAction SilentlyContinue |
     ForEach-Object { Join-Path $_.FullName "skills\karpathy-guidelines" }
 }
 

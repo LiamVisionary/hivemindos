@@ -716,9 +716,9 @@ function Write-HivemindManagedBlock {
 
 function Install-ClaudeBrainHook {
   if ($env:HIVE_CLAUDE_BRAIN_HOOK -eq "0") { return }
-  $home = [Environment]::GetFolderPath("UserProfile")
-  $settingsFile = Join-Path $home ".claude\settings.json"
-  $hookCommand = Join-Path $home ".local\bin\hive-brain-hook.cmd"
+  $homeDir = [Environment]::GetFolderPath("UserProfile")
+  $settingsFile = Join-Path $homeDir ".claude\settings.json"
+  $hookCommand = Join-Path $homeDir ".local\bin\hive-brain-hook.cmd"
   $parent = Split-Path -Parent $settingsFile
   if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
   $settings = @{}
