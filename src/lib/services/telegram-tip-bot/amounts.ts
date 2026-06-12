@@ -5,17 +5,25 @@
 
 export function parseTokenAmount(input: string, decimals: number): bigint {
   const trimmed = input.trim();
+  // k/m shorthand: 5k = 5,000 and 1.5m = 1,500,000 (case-insensitive).
+  const suffix = trimmed.match(/[km]$/i)?.[0]?.toLowerCase();
+  const body = suffix ? trimmed.slice(0, -1) : trimmed;
   // Commas are accepted only as proper thousands grouping (1,000 or
   // 12,345.67). A bare "1,5" is ambiguous — in many locales it means 1.5 —
   // so reject it rather than silently reading it as 15.
-  if (trimmed.includes(",") && !/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(trimmed)) {
+  if (body.includes(",") && !/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(body)) {
     throw new Error(`"${trimmed}" is ambiguous. Use 1,000 style commas or a plain number like 1000 or 2.5.`);
   }
-  const text = trimmed.replace(/,/g, "");
+  const text = body.replace(/,/g, "");
   if (!/^\d+(\.\d+)?$/.test(text)) {
-    throw new Error(`"${trimmed}" is not a valid amount. Use a plain number like 10 or 2.5.`);
+    throw new Error(`"${trimmed}" is not a valid amount. Use a number like 10, 2.5, 5k, or 1.5m.`);
   }
-  const [whole, fraction = ""] = text.split(".");
+  // Apply the suffix by shifting the decimal point in string space — exact,
+  // no float math near money.
+  const shift = suffix === "k" ? 3 : suffix === "m" ? 6 : 0;
+  let [whole, fraction = ""] = text.split(".");
+  whole += fraction.slice(0, shift).padEnd(shift, "0");
+  fraction = fraction.slice(shift);
   if (fraction.length > decimals) {
     throw new Error(`Too many decimal places (max ${decimals}).`);
   }

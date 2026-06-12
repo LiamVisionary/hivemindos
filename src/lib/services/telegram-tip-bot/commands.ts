@@ -66,6 +66,7 @@ function helpText(config: TipBotConfig): string {
     "",
     `/tip 10 — reply to someone's message to tip them ${symbol}`,
     `/tip 10 @name — tip by username (they get a claim link if I haven't met them)`,
+    "Amounts take 1,000 / 5k / 1.5m shorthand.",
     "/balance — your balance",
     "/deposit — how to top up",
     "/linkwallet 0x… — link your Base wallet (required before depositing)",
