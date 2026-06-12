@@ -5,7 +5,8 @@
 // content-addressable store is never modified.
 const fs = require("fs");
 
-const globPath = require.resolve("next/dist/compiled/glob");
+const resolveFromCwd = (id) => require.resolve(id, { paths: [process.cwd()] });
+const globPath = resolveFromCwd("next/dist/compiled/glob");
 const marker = "HIVE GLOB DIAGNOSTIC";
 const source = fs.readFileSync(globPath, "utf8");
 if (source.includes(marker)) {
@@ -42,3 +43,26 @@ fs.copyFileSync(globPath, `${globPath}.detached`);
 fs.appendFileSync(`${globPath}.detached`, wrapper);
 fs.renameSync(`${globPath}.detached`, globPath);
 console.log(`instrumented: ${globPath}`);
+
+// Also patch @vercel/nft's emitAssetDirectory to log WHICH analyzed file
+// caused a directory-asset glob — the glob stack alone only shows nft
+// internals. Anchors verified unique against nft in next 16.2.6.
+const nftPath = resolveFromCwd("next/dist/compiled/@vercel/nft");
+let nft = fs.readFileSync(nftPath, "utf8");
+const anchor1 = "const emitAssetDirectory=e=>{";
+const anchor2 = '{if(r.log)console.log("Globbing "+u+d);';
+if (nft.includes("__nftDiagFile")) {
+  console.log(`already instrumented: ${nftPath}`);
+} else if (nft.includes(anchor1) && nft.includes(anchor2)) {
+  nft = nft.replace(anchor1, "const __nftDiagFile=e;const emitAssetDirectory=e=>{");
+  nft = nft.replace(
+    anchor2,
+    '{try{process.stderr.write("[nft-diag] asset-dir "+u+d+" from "+__nftDiagFile+"\\n");}catch{};if(r.log)console.log("Globbing "+u+d);'
+  );
+  fs.copyFileSync(nftPath, `${nftPath}.detached`);
+  fs.writeFileSync(`${nftPath}.detached`, nft);
+  fs.renameSync(`${nftPath}.detached`, nftPath);
+  console.log(`instrumented: ${nftPath}`);
+} else {
+  console.log(`nft anchors not found; skipped: ${nftPath}`);
+}

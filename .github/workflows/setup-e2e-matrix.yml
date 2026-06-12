@@ -83,8 +83,10 @@ jobs:
           Write-Host "build exit code: $LASTEXITCODE"
           Write-Host "=== profile scans (with stacks) ==="
           Select-String -Path build-diag.log -Pattern "trace-profile-scandir" -Context 0, 30 | ForEach-Object { $_.Line; $_.Context.PostContext }
+          Write-Host "=== nft asset-dir emissions (file-level) ==="
+          Select-String -Path build-diag.log -Pattern "nft-diag" | ForEach-Object { $_.Line } | Select-Object -First 40
           Write-Host "=== glob diagnostics (with stacks) ==="
-          Select-String -Path build-diag.log -Pattern "glob-diag. pattern" -Context 0, 25 | ForEach-Object { $_.Line; $_.Context.PostContext }
+          Select-String -Path build-diag.log -Pattern "glob-diag. pattern" -Context 0, 25 | ForEach-Object { $_.Line; $_.Context.PostContext } | Select-Object -First 30
           Write-Host "=== EPERM mentions ==="
           Select-String -Path build-diag.log -Pattern "EPERM" -Context 2, 2 | ForEach-Object { $_.Context.PreContext; $_.Line; $_.Context.PostContext }
           Write-Host "=== build tail ==="
