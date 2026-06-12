@@ -70,23 +70,21 @@ jobs:
       - name: Verify dashboard dev server responds
         shell: pwsh
         run: |
-          $responded = $false
+          $healthy = $false
           foreach ($i in 1..90) {
             try {
-              $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5020/" -TimeoutSec 5
+              $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5020/" -TimeoutSec 10
               Write-Host "dashboard responded with HTTP $($response.StatusCode)"
-              $responded = $true
+              $healthy = $true
               break
             } catch {
               if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
-                Write-Host "dashboard responded with HTTP $([int]$_.Exception.Response.StatusCode)"
-                $responded = $true
-                break
+                Write-Host "dashboard responded with HTTP $([int]$_.Exception.Response.StatusCode) - not healthy yet"
               }
               Start-Sleep -Seconds 4
             }
           }
-          if (-not $responded) {
-            Get-Content .next/*.log -ErrorAction SilentlyContinue | Select-Object -Last 100
-            throw "dashboard did not respond on port 5020"
+          if (-not $healthy) {
+            Get-Content .next/*.log -ErrorAction SilentlyContinue | Select-Object -Last 120
+            throw "dashboard did not serve a healthy response on port 5020"
           }

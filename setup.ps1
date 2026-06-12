@@ -798,6 +798,10 @@ if ($SkipDeps) {
   Info "Installing app dependencies"
   $env:NODE_OPTIONS = "$($env:NODE_OPTIONS) --no-deprecation".Trim()
   Invoke-Pnpm @("install", "--frozen-lockfile")
+  if ($LASTEXITCODE -ne 0) {
+    Fail "Dependency install failed (pnpm exit code $LASTEXITCODE)"
+    exit 1
+  }
   Set-Content -Path $depsStamp -Value $depsHash
   Ok "Dependencies installed"
 }
@@ -811,8 +815,12 @@ if ($SkipBuild) {
 } else {
   Info "Building dashboard"
   Invoke-Pnpm @("exec", "next", "build", "--webpack")
-  Set-Content -Path $buildStamp -Value $buildHash
-  Ok "Dashboard built"
+  if ($LASTEXITCODE -ne 0) {
+    Warn "Dashboard production build failed (exit code $LASTEXITCODE); the dev server will compile on demand instead. Rerun setup after fixing the build to cache it."
+  } else {
+    Set-Content -Path $buildStamp -Value $buildHash
+    Ok "Dashboard built"
+  }
 }
 
 $dashboardOpenable = $false
@@ -867,3 +875,8 @@ Write-Host ""
 if ($dashboardOpenable) {
   Open-DashboardIfRequested "http://localhost:$Port"
 }
+
+# Reaching here means setup succeeded; exit explicitly so a lingering
+# $LASTEXITCODE from a non-fatal step (e.g. a skipped production build)
+# does not report failure to callers.
+exit 0
