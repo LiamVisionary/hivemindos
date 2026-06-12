@@ -51,14 +51,26 @@ const nftPath = resolveFromCwd("next/dist/compiled/@vercel/nft");
 let nft = fs.readFileSync(nftPath, "utf8");
 const anchor1 = "const emitAssetDirectory=e=>{";
 const anchor2 = '{if(r.log)console.log("Globbing "+u+d);';
+const anchor3 = "u=f.homedir();if(u&&r.match(a)){e[t]=o.resolve(u,r.substr(2))}";
 if (nft.includes("__nftDiagFile")) {
   console.log(`already instrumented: ${nftPath}`);
 } else if (nft.includes(anchor1) && nft.includes(anchor2)) {
-  nft = nft.replace(anchor1, "const __nftDiagFile=e;const emitAssetDirectory=e=>{");
+  nft = nft.replace(
+    anchor1,
+    'const __nftDiagFile=e;const emitAssetDirectory=e=>{try{process.stderr.write("[nft-emit-raw] "+JSON.stringify(e)+" from "+__nftDiagFile+"\\n");}catch{};'
+  );
   nft = nft.replace(
     anchor2,
     '{try{process.stderr.write("[nft-diag] asset-dir "+u+d+" from "+__nftDiagFile+"\\n");}catch{};if(r.log)console.log("Globbing "+u+d);'
   );
+  if (nft.includes(anchor3)) {
+    nft = nft.replace(
+      anchor3,
+      'u=f.homedir();if(u&&r.match(a)){try{process.stderr.write("[nft-tilde] "+JSON.stringify(r)+"\\n");}catch{};e[t]=o.resolve(u,r.substr(2))}'
+    );
+  } else {
+    console.log("tilde anchor not found; skipped tilde logging");
+  }
   fs.copyFileSync(nftPath, `${nftPath}.detached`);
   fs.writeFileSync(`${nftPath}.detached`, nft);
   fs.renameSync(`${nftPath}.detached`, nftPath);

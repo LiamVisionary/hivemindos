@@ -83,6 +83,8 @@ jobs:
           Write-Host "build exit code: $LASTEXITCODE"
           Write-Host "=== profile scans (with stacks) ==="
           Select-String -Path build-diag.log -Pattern "trace-profile-scandir" -Context 0, 30 | ForEach-Object { $_.Line; $_.Context.PostContext }
+          Write-Host "=== nft raw emissions and tilde expansions ==="
+          Select-String -Path build-diag.log -Pattern "nft-emit-raw|nft-tilde" | ForEach-Object { $_.Line } | Sort-Object -Unique | Select-Object -First 60
           Write-Host "=== nft asset-dir emissions (file-level) ==="
           Select-String -Path build-diag.log -Pattern "nft-diag" | ForEach-Object { $_.Line } | Select-Object -First 40
           Write-Host "=== glob diagnostics (with stacks) ==="
