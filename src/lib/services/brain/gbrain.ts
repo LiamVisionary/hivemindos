@@ -7,9 +7,15 @@ import { isAbsolute, join, relative, resolve, sep } from "path";
 import { promisify } from "util";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { DEFAULT_SHARED_VAULT, type GBrainConfig } from "@/lib/types/agent-runtime";
+import { cachedStatus, invalidateStatus } from "./status-cache";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_TIMEOUT_MS = 45_000;
+// Read-only status probes (doctor/stats/features) — a check that needs
+// longer than this is effectively down, and the phone gives the whole
+// status route only 30s.
+const STATUS_TIMEOUT_MS = 15_000;
+const STATUS_TTL_MS = 15_000;
 const LONG_TIMEOUT_MS = 10 * 60_000;
 const SERVICE_NOTE = "GBrain.md";
 const SKILL_SOURCE_FILE = ".hivemind-skill-source.json";
@@ -301,12 +307,23 @@ async function skillpackSummary(vault: string, config: GBrainConfig) {
   };
 }
 
-export async function getGbrainStatus(input: GBrainInput = {}): Promise<GBrainStatus> {
+/** Cached status — see status-cache.ts. Mutating actions invalidate. */
+export function getGbrainStatus(input: GBrainInput = {}): Promise<GBrainStatus> {
+  return cachedStatus(`gbrain:${JSON.stringify(input)}`, STATUS_TTL_MS, () => loadGbrainStatus(input));
+}
+
+async function loadGbrainStatus(input: GBrainInput = {}): Promise<GBrainStatus> {
   const vault = resolveObsidianVaultPath(input.vaultPath);
   const config = normalizeGBrainConfig(input.gbrain);
   const serviceNotePath = join(brainServicesRoot(vault, input.brainServicesFolder), SERVICE_NOTE);
   const keys = keyStatus();
   const commands: GBrainCommandResult[] = [];
+  // The version probe gates the CLI checks below; the skillpack scan is
+  // pure fs work, so it runs alongside rather than ahead of it.
+  const [skillpack, version] = await Promise.all([
+    skillpackSummary(vault, config),
+    runGbrainCommand(config, ["--version"], { allowFailure: true, timeoutMs: 8_000 }),
+  ]);
   const status: GBrainStatus = {
     ok: false,
     installed: false,
@@ -326,11 +343,10 @@ export async function getGbrainStatus(input: GBrainInput = {}): Promise<GBrainSt
     },
     keyStatus: keys,
     needsKeys: !keys.ZEROENTROPY_API_KEY && !keys.OPENAI_API_KEY && !keys.VOYAGE_API_KEY,
-    skillpack: await skillpackSummary(vault, config),
+    skillpack,
     commands,
   };
 
-  const version = await runGbrainCommand(config, ["--version"], { allowFailure: true, timeoutMs: 8_000 });
   commands.push(version);
   if (!version.ok) {
     return {
@@ -343,23 +359,25 @@ export async function getGbrainStatus(input: GBrainInput = {}): Promise<GBrainSt
   status.connected = true;
   status.version = version.stdout.trim() || version.stderr.trim();
 
-  const doctor = await runGbrainCommand(config, ["doctor", "--json"], { allowFailure: true });
-  commands.push(doctor);
+  // Independent read-only probes — concurrent, so the route costs the
+  // slowest check rather than their sum.
+  const [doctor, stats, features, metadata] = await Promise.all([
+    runGbrainCommand(config, ["doctor", "--json"], { allowFailure: true, timeoutMs: STATUS_TIMEOUT_MS }),
+    runGbrainCommand(config, ["stats", "--json"], { allowFailure: true, timeoutMs: STATUS_TIMEOUT_MS }),
+    runGbrainCommand(config, ["features", "--json"], { allowFailure: true, timeoutMs: STATUS_TIMEOUT_MS }),
+    serviceNoteMetadata(serviceNotePath),
+  ]);
+  commands.push(doctor, stats, features);
   status.doctorOk = doctor.ok;
   status.doctor = parseJsonOutput(doctor.stdout) ?? parseJsonOutput(doctor.stderr);
 
-  const stats = await runGbrainCommand(config, ["stats", "--json"], { allowFailure: true });
-  commands.push(stats);
   const statsPayload = parseJsonOutput(stats.stdout) ?? parseJsonOutput(stats.stderr);
   status.stats = parseStats(statsPayload, `${stats.stdout}\n${stats.stderr}`);
   status.statsText = stats.stdout.trim() || stats.stderr.trim();
 
-  const features = await runGbrainCommand(config, ["features", "--json"], { allowFailure: true });
-  commands.push(features);
   const featurePayload = parseJsonOutput(features.stdout) ?? parseJsonOutput(features.stderr);
   status.features = parseFeatureRecommendations(featurePayload);
 
-  const metadata = await serviceNoteMetadata(serviceNotePath);
   status.lastImport = metadata.lastImport;
   status.lastDream = metadata.lastDream;
   status.ok = Boolean(status.installed && (status.doctorOk || status.stats || status.features));
@@ -418,6 +436,7 @@ export async function installGbrain(input: GBrainInput = {}) {
   commands.push(...importResult.commands);
   await scaffoldGbrainSkillpack({ ...input, gbrain: config });
   await writeGbrainServiceNote({ ...input, gbrain: config, event: "install", summary: "Installed or verified local GBrain and imported the shared vault." });
+  invalidateStatus("gbrain:");
   return { status: await getGbrainStatus({ ...input, gbrain: config }), commands };
 }
 
@@ -426,6 +445,7 @@ export async function connectGbrain(input: GBrainInput = {}) {
   const version = await runGbrainCommand(config, ["--version"], { allowFailure: true, timeoutMs: 8_000 });
   if (!version.ok) throw new Error(version.error || "Could not run the configured GBrain CLI.");
   await writeGbrainServiceNote({ ...input, gbrain: config, event: "connect", summary: "Connected an existing GBrain CLI to HivemindOS." });
+  invalidateStatus("gbrain:");
   return { status: await getGbrainStatus({ ...input, gbrain: config }), commands: [version] };
 }
 
@@ -441,6 +461,7 @@ export async function importVaultToGbrain(input: GBrainInput = {}) {
     commands.push(await runGbrainCommand(config, ["extract", "timeline", "--source", "db"], { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS }));
   }
   await writeGbrainServiceNote({ ...input, gbrain: config, event: "import", summary: `Imported ${noteCount} markdown note${noteCount === 1 ? "" : "s"} into GBrain.` });
+  invalidateStatus("gbrain:");
   return { status: await getGbrainStatus(input), commands };
 }
 
@@ -448,6 +469,7 @@ export async function embedGbrain(input: GBrainInput = {}) {
   const config = normalizeGBrainConfig(input.gbrain);
   const command = await runGbrainCommand(config, ["embed", "--stale"], { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
   await writeGbrainServiceNote({ ...input, gbrain: config, event: "embed", summary: "Refreshed stale GBrain embeddings." });
+  invalidateStatus("gbrain:");
   return { status: await getGbrainStatus(input), commands: [command] };
 }
 
@@ -455,6 +477,7 @@ export async function dreamGbrain(input: GBrainInput = {}) {
   const config = normalizeGBrainConfig(input.gbrain);
   const command = await runGbrainCommand(config, ["dream"], { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
   await writeGbrainServiceNote({ ...input, gbrain: config, event: "dream", summary: "Ran the GBrain dream cycle from HivemindOS." });
+  invalidateStatus("gbrain:");
   return { status: await getGbrainStatus(input), commands: [command] };
 }
 

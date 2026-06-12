@@ -6,9 +6,14 @@ import { isAbsolute, join, relative, resolve, sep } from "path";
 import { promisify } from "util";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { DEFAULT_SHARED_VAULT, type SyntoConfig } from "@/lib/types/agent-runtime";
+import { cachedStatus, invalidateStatus } from "./status-cache";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_TIMEOUT_MS = 45_000;
+// Read-only status probe — a check that needs longer than this is
+// effectively down, and the phone gives the whole status route only 30s.
+const STATUS_TIMEOUT_MS = 15_000;
+const STATUS_TTL_MS = 15_000;
 const LONG_TIMEOUT_MS = 10 * 60_000;
 const SERVICE_NOTE = "Syntho.md";
 const LEGACY_SERVICE_NOTE = "Synto.md";
@@ -315,7 +320,12 @@ export async function writeSyntoServiceNote(input: SyntoInput & { event?: SyntoA
   return { path: relative(vault, notePath), absolutePath: notePath };
 }
 
-export async function getSyntoStatus(input: SyntoInput = {}): Promise<SyntoStatus> {
+/** Cached status — see status-cache.ts. Mutating actions invalidate. */
+export function getSyntoStatus(input: SyntoInput = {}): Promise<SyntoStatus> {
+  return cachedStatus(`synto:${JSON.stringify(input)}`, STATUS_TTL_MS, () => loadSyntoStatus(input));
+}
+
+async function loadSyntoStatus(input: SyntoInput = {}): Promise<SyntoStatus> {
   const vault = resolveObsidianVaultPath(input.vaultPath);
   const root = synthesisRoot(vault, input.synthesisFolder);
   const servicesRoot = brainServicesRoot(vault, input.brainServicesFolder);
@@ -326,11 +336,27 @@ export async function getSyntoStatus(input: SyntoInput = {}): Promise<SyntoStatu
   const stateDbPath = join(root, STATE_DB);
   const packRoot = join(root, "pack");
   const commands: SyntoCommandResult[] = [];
-  const version = await runSyntoCommand(config, ["--version"], { allowFailure: true, timeoutMs: 8_000 });
+  // The version probe and the fs scans are independent — run them together.
+  const [version, initialized, packExists, counts, indexExists, manifestExists] = await Promise.all([
+    runSyntoCommand(config, ["--version"], { allowFailure: true, timeoutMs: 8_000 }),
+    exists(configPath),
+    exists(packRoot),
+    Promise.all([
+      countFiles(join(root, "raw"), (name) => /\.(md|txt)$/i.test(name)),
+      countFiles(join(root, "wiki/.drafts"), (name) => /\.md$/i.test(name)),
+      countFiles(join(root, "wiki"), (name) => /\.md$/i.test(name)),
+      countFiles(join(root, "wiki/sources"), (name) => /\.md$/i.test(name)),
+      countFiles(join(root, "wiki/queries"), (name) => /\.md$/i.test(name)),
+      countFiles(join(root, "wiki/synthesis"), (name) => /\.md$/i.test(name)),
+      countFiles(packRoot, () => true),
+    ]).then(([raw, drafts, articles, sources, queries, synthesis, packFiles]) => ({
+      raw, drafts, articles, sources, queries, synthesis, packFiles,
+    })),
+    exists(join(packRoot, "INDEX.json")),
+    exists(join(packRoot, "manifest.json")),
+  ]);
   commands.push(version);
 
-  const initialized = await exists(configPath);
-  const packExists = await exists(packRoot);
   const status: SyntoStatus = {
     ok: false,
     installed: version.ok,
@@ -347,20 +373,12 @@ export async function getSyntoStatus(input: SyntoInput = {}): Promise<SyntoStatu
       tools: MCP_TOOLS,
       sourceAccessMode: config.sourceAccessMode,
     },
-    counts: {
-      raw: await countFiles(join(root, "raw"), (name) => /\.(md|txt)$/i.test(name)),
-      drafts: await countFiles(join(root, "wiki/.drafts"), (name) => /\.md$/i.test(name)),
-      articles: await countFiles(join(root, "wiki"), (name) => /\.md$/i.test(name)),
-      sources: await countFiles(join(root, "wiki/sources"), (name) => /\.md$/i.test(name)),
-      queries: await countFiles(join(root, "wiki/queries"), (name) => /\.md$/i.test(name)),
-      synthesis: await countFiles(join(root, "wiki/synthesis"), (name) => /\.md$/i.test(name)),
-      packFiles: await countFiles(packRoot, () => true),
-    },
+    counts,
     pack: {
       path: relative(vault, packRoot),
       exists: packExists,
-      indexExists: await exists(join(packRoot, "INDEX.json")),
-      manifestExists: await exists(join(packRoot, "manifest.json")),
+      indexExists,
+      manifestExists,
     },
     commands,
   };
@@ -372,7 +390,7 @@ export async function getSyntoStatus(input: SyntoInput = {}): Promise<SyntoStatu
 
   status.version = version.stdout.trim() || version.stderr.trim();
   if (initialized) {
-    const syntoStatus = await runSyntoCommand(config, ["status", "--vault", root], { allowFailure: true });
+    const syntoStatus = await runSyntoCommand(config, ["status", "--vault", root], { allowFailure: true, timeoutMs: STATUS_TIMEOUT_MS });
     commands.push(syntoStatus);
     status.statusText = syntoStatus.stdout.trim() || syntoStatus.stderr.trim();
     status.ok = syntoStatus.ok;
@@ -441,6 +459,7 @@ export async function installSynto(input: SyntoInput = {}) {
   const initResult = await initializeSynto({ ...input, synto: config });
   commands.push(...initResult.commands);
   await writeSyntoServiceNote({ ...input, synto: config, event: "install", summary: "Installed or verified Syntho and initialized the Synthesis vault." });
+  invalidateStatus("synto:");
   return { status: await getSyntoStatus({ ...input, synto: config }), commands };
 }
 
@@ -449,6 +468,7 @@ export async function connectSynto(input: SyntoInput = {}) {
   const version = await runSyntoCommand(config, ["--version"], { allowFailure: true, timeoutMs: 8_000 });
   if (!version.ok) throw new Error(version.error || "Could not run the configured Syntho CLI.");
   await writeSyntoServiceNote({ ...input, synto: config, event: "connect", summary: "Connected an existing Syntho CLI to HivemindOS." });
+  invalidateStatus("synto:");
   return { status: await getSyntoStatus({ ...input, synto: config }), commands: [version] };
 }
 
@@ -460,6 +480,7 @@ export async function initializeSynto(input: SyntoInput = {}) {
   const init = await runSyntoCommand(config, ["init", root, "--existing", "--non-interactive"], { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
   if (init.ok) await patchSourceAccessMode(root, config.sourceAccessMode);
   await writeSyntoServiceNote({ ...input, synto: config, event: "init", summary: "Initialized the Syntho Synthesis vault." });
+  invalidateStatus("synto:");
   return { status: await getSyntoStatus({ ...input, synto: config }), commands: [init] };
 }
 
@@ -473,6 +494,7 @@ export async function runSyntoPipeline(input: SyntoInput = {}) {
   }
   const command = await runSyntoCommand(config, args, { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
   await writeSyntoServiceNote({ ...input, synto: config, event: "run", summary: "Ran the Syntho ingest and compile pipeline from HivemindOS." });
+  invalidateStatus("synto:");
   return { status: await getSyntoStatus({ ...input, synto: config }), commands: [command] };
 }
 
@@ -483,6 +505,7 @@ export async function maintainSynto(input: SyntoInput & { fix?: boolean } = {}) 
   const args = ["maintain", "--vault", root, input.fix ? "--fix" : "--dry-run"];
   const command = await runSyntoCommand(config, args, { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
   await writeSyntoServiceNote({ ...input, synto: config, event: "maintain", summary: `Ran Syntho maintenance${input.fix ? " with fixes" : " as a dry run"}.` });
+  invalidateStatus("synto:");
   return { output: command.stdout.trim() || command.stderr.trim(), status: await getSyntoStatus({ ...input, synto: config }), commands: [command] };
 }
 
@@ -500,6 +523,7 @@ export async function compareSynto(input: SyntoInput & { heavyModel?: string; fa
   if (Number.isFinite(input.sampleN) && input.sampleN && input.sampleN > 0) args.push("--sample-n", String(Math.floor(input.sampleN)));
   const command = await runSyntoCommand(config, args, { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
   await writeSyntoServiceNote({ ...input, synto: config, event: "compare", summary: `Compared Syntho model output against ${heavyModel || "a challenger model"}.` });
+  invalidateStatus("synto:");
   return { output: command.stdout.trim() || command.stderr.trim(), status: await getSyntoStatus({ ...input, synto: config }), commands: [command] };
 }
 
@@ -509,6 +533,7 @@ export async function evaluateSynto(input: SyntoInput = {}) {
   const root = synthesisRoot(vault, input.synthesisFolder);
   const command = await runSyntoCommand(config, ["eval", "--json", "--vault", root], { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
   await writeSyntoServiceNote({ ...input, synto: config, event: "eval", summary: "Ran Syntho offline structural evaluation." });
+  invalidateStatus("synto:");
   return { output: command.stdout.trim() || command.stderr.trim(), status: await getSyntoStatus({ ...input, synto: config }), commands: [command] };
 }
 
@@ -520,6 +545,7 @@ export async function doctorSynto(input: SyntoInput & { backlog?: boolean } = {}
   if (input.backlog !== false) args.push("--backlog");
   const command = await runSyntoCommand(config, args, { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
   await writeSyntoServiceNote({ ...input, synto: config, event: "doctor", summary: "Ran Syntho doctor diagnostics." });
+  invalidateStatus("synto:");
   return { output: command.stdout.trim() || command.stderr.trim(), status: await getSyntoStatus({ ...input, synto: config }), commands: [command] };
 }
 
@@ -531,6 +557,7 @@ export async function exportSyntoPack(input: SyntoInput = {}) {
   await mkdir(out, { recursive: true });
   const command = await runSyntoCommand(config, ["pack", "export", "--target", "agents", "--out", out, "--vault", root], { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
   await writeSyntoServiceNote({ ...input, synto: config, event: "pack", summary: "Exported the Syntho agent pack into Synthesis/pack." });
+  invalidateStatus("synto:");
   return { output: command.stdout.trim() || command.stderr.trim(), status: await getSyntoStatus({ ...input, synto: config }), commands: [command] };
 }
 
@@ -546,6 +573,7 @@ export async function querySynto(input: SyntoInput & { query?: string; synthesiz
   args.push(query);
   const command = await runSyntoCommand(config, args, { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
   await writeSyntoServiceNote({ ...input, synto: config, event: "query", summary: "Ran a Syntho routed wiki query from the dashboard." });
+  invalidateStatus("synto:");
   return { output: command.stdout.trim() || command.stderr.trim(), status: await getSyntoStatus({ ...input, synto: config }), commands: [command] };
 }
 

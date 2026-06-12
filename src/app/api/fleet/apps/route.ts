@@ -11,7 +11,6 @@ import { hivemindLinkControlUrl } from "@/lib/services/hivemind-link-control";
 export const runtime = "nodejs";
 
 const APPS_CACHE_MS = 60_000;
-const APPS_STALE_MS = 5 * 60_000;
 const APPS_CACHE_FILE = join(homedir(), ".hivemindos", "fleet-apps-cache.json");
 const COLLECTOR_TIMEOUT_MS = 4_500;
 const ICON_PROBE_TIMEOUT_MS = 2_500;
@@ -1348,7 +1347,12 @@ export async function GET(request: NextRequest) {
   if (!forceRefresh && appsCache && now - appsCache.checkedAt < APPS_CACHE_MS) {
     return Response.json(appsCache.payload);
   }
-  if (!forceRefresh && appsCache && now - appsCache.checkedAt < APPS_STALE_MS) {
+  // Any usable cache serves immediately with a background revalidation —
+  // a full discovery can take 10s+ across the tailnet, and blocking a read
+  // on it makes every client (dashboard, phone launcher) hang. Only a
+  // sparse snapshot (discovery misfire) or an explicit refresh=1 waits for
+  // live results.
+  if (!forceRefresh && appsCache && !isSparsePayload(appsCache.payload)) {
     const stalePayload = appsCache.payload;
     if (!appsInFlight) {
       const generation = appsCacheGeneration;

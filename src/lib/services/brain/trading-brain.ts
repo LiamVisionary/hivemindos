@@ -421,15 +421,31 @@ export async function getTradingBrainStatus(input: TradingBrainInput = {}): Prom
   const vault = resolveObsidianVaultPath(input.vaultPath);
   const root = moduleRoot(vault);
   const serviceNotePath = join(brainServicesRoot(vault, input.brainServicesFolder), SERVICE_NOTE);
-  const folders = await Promise.all(REQUIRED_FOLDERS.map(async (folder) => ({
-    path: `${MODULE_ROOT}/${folder}`,
-    exists: await exists(join(root, folder)),
-  })));
-  const files = await Promise.all(REQUIRED_FILES.map(async (file) => ({
-    path: `${MODULE_ROOT}/${file}`,
-    exists: await exists(join(root, file)),
-  })));
-  const installed = folders.every((folder) => folder.exists) && files.every((file) => file.exists) && await exists(serviceNotePath);
+  // Every check is an independent fs walk — run them all together.
+  const [folders, files, serviceNoteExists, counts] = await Promise.all([
+    Promise.all(REQUIRED_FOLDERS.map(async (folder) => ({
+      path: `${MODULE_ROOT}/${folder}`,
+      exists: await exists(join(root, folder)),
+    }))),
+    Promise.all(REQUIRED_FILES.map(async (file) => ({
+      path: `${MODULE_ROOT}/${file}`,
+      exists: await exists(join(root, file)),
+    }))),
+    exists(serviceNotePath),
+    Promise.all([
+      countMarkdownFiles(join(root, "trades/open")),
+      countMarkdownFiles(join(root, "trades/closed")),
+      countMarkdownFiles(join(root, "analysis/performance/weekly")),
+      countMarkdownFiles(join(root, "analysis/edge-reports")),
+      countMarkdownFiles(join(root, "analysis/patterns")),
+      countMarkdownFiles(join(root, "intelligence/market-conditions")),
+      countMarkdownFiles(join(root, "pre-trade")),
+      countMarkdownFiles(join(root, "journal")),
+    ]).then(([openTrades, closedTrades, weeklyAnalyses, monthlyEdgeReports, patternReports, marketBriefs, preTradeBriefs, journalEntries]) => ({
+      openTrades, closedTrades, weeklyAnalyses, monthlyEdgeReports, patternReports, marketBriefs, preTradeBriefs, journalEntries,
+    })),
+  ]);
+  const installed = folders.every((folder) => folder.exists) && files.every((file) => file.exists) && serviceNoteExists;
   return {
     ok: installed,
     installed,
@@ -438,16 +454,7 @@ export async function getTradingBrainStatus(input: TradingBrainInput = {}): Prom
     serviceNotePath: relative(vault, serviceNotePath),
     folders,
     files,
-    counts: {
-      openTrades: await countMarkdownFiles(join(root, "trades/open")),
-      closedTrades: await countMarkdownFiles(join(root, "trades/closed")),
-      weeklyAnalyses: await countMarkdownFiles(join(root, "analysis/performance/weekly")),
-      monthlyEdgeReports: await countMarkdownFiles(join(root, "analysis/edge-reports")),
-      patternReports: await countMarkdownFiles(join(root, "analysis/patterns")),
-      marketBriefs: await countMarkdownFiles(join(root, "intelligence/market-conditions")),
-      preTradeBriefs: await countMarkdownFiles(join(root, "pre-trade")),
-      journalEntries: await countMarkdownFiles(join(root, "journal")),
-    },
+    counts,
     error: installed ? undefined : "Trading Brain has not been installed in the shared vault yet.",
   };
 }
