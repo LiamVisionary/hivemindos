@@ -39,6 +39,9 @@ function detectedTailnetDevOrigins() {
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Pin file tracing to the repo so Next never infers a wider root and walks
+  // directories it cannot read (Windows profile junctions EPERM on scandir).
+  outputFileTracingRoot: projectRoot,
   distDir: isTauriDev ? tauriDevDistDir : isTauriStaticBuild ? ".next-tauri-static-build" : isTauriBuild ? ".next-tauri-build" : ".next",
   output: isTauriStaticBuild ? "export" : isTauriBuild ? "standalone" : undefined,
   // Tauri packaging builds (static export + embedded server) don't gate on

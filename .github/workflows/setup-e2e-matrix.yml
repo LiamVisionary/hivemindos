@@ -52,6 +52,39 @@ jobs:
           tail -100 .next/hivemindos.log || true
           exit 1
 
+  diagnose-windows-build:
+    name: diagnose next build EPERM (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
+
+      - name: next build with profile-scan tracer
+        shell: pwsh
+        env:
+          NODE_OPTIONS: --require ${{ github.workspace }}\scripts\trace-profile-scandir.cjs
+        run: |
+          pnpm exec next build --webpack *>&1 | Tee-Object -FilePath build-diag.log | Out-Null
+          Write-Host "build exit code: $LASTEXITCODE"
+          Write-Host "=== profile scans (with stacks) ==="
+          Select-String -Path build-diag.log -Pattern "trace-profile-scandir" -Context 0, 30 | ForEach-Object { $_.Line; $_.Context.PostContext }
+          Write-Host "=== EPERM mentions ==="
+          Select-String -Path build-diag.log -Pattern "EPERM" -Context 2, 2 | ForEach-Object { $_.Context.PreContext; $_.Line; $_.Context.PostContext }
+          Write-Host "=== build tail ==="
+          Get-Content build-diag.log -Tail 40
+          exit 0
+
   setup-windows:
     name: setup.ps1 (windows-latest)
     runs-on: windows-latest
