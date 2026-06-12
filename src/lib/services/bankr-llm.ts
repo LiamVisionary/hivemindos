@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { AgentProfile } from "@/lib/types/agent-runtime";

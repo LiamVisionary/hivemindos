@@ -1,6 +1,6 @@
 import { appendFile, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "fs/promises";
 import { createHash } from "crypto";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { basename, dirname, join, relative, resolve } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import type { BrainSkillInventory, BrainSkillSummary } from "@/lib/services/obsidian/brain-skills";

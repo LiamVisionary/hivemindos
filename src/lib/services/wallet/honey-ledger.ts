@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "node:path";
 
 import type { HoneyTreasuryConfig } from "@/lib/types/agent-wallet";

@@ -3,6 +3,22 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-12 19:25:00 +0700 - Surface LM Studio Model Loads In Agent Chat And Stop Doomed Tools Retry
+
+- Status: Uncommitted
+- Areas changed: agent runtime route (`src/app/api/chat/agent-runtime/route.ts`)
+- Summary: A chat turn against an LM Studio agent whose model wasn't loaded hung silently for ~75s and then surfaced LM Studio's raw "No models loaded" message (observed with SwarmSovereign: the model lives on an LM Link device whose host was offline, so the JIT load blocked until the link keepalive timed out). Three changes: (1) before the chat fetch, a ~1.5s preflight against LM Studio's `/api/v0/models` detects a cold model and appends a "Loading model" session event — distinguishing a local JIT load from a model served via LM Link — so polling clients (phone, dashboard) show what the turn is waiting on within seconds; (2) a 400 whose body says the model is unavailable no longer triggers the retry-without-tools fallback, which previously started a second doomed JIT load; (3) the user-facing error for that case now names the model and points at `lms load` / LM Link status instead of LM Studio's bare message. Also removed a duplicate `adaptive-model-reliability` import and the `channel-markup` import names that collided with the still-local `createChannelMarkupState`/`routeChannelMarkupDelta` declarations (left by the in-flight restore; the file did not type-check before).
+- Verification: `npx tsc --noEmit` shows zero errors for the route; live E2E against the dev hub (port 5121) with the real SwarmSovereign profile: session gained `Loading model … LM Link device … can stall and fail` at +1.2s, telemetry shows `agent_runtime.lm_studio.model_not_loaded loadState=not-local` and a single upstream fetch (no `tools_unsupported` despite tools being sent), and the turn failed in 1.4s with the actionable message instead of 75s with the raw one. Companion change in HivemindOS Mobile (`store/hubAgentChat.ts`, `store/gatewayStore.ts`) renders these session events as live tool steps during the buffered turn; its unit suite passes (21/21).
+- Intended commit message: `Surface LM Studio model loads in agent chat and stop doomed tools retry`
+
+## 2026-06-12 19:07:50 +0700 - Fix Windows Production Build EPERM By Hiding homedir() From Build Tracing
+
+- Status: Uncommitted
+- Areas changed: new opaque home-dir helper (`src/lib/home-dir.ts`), homedir import swap across 71 server/source files (`src/**`), setup E2E workflow diagnostics (`.github/workflows/setup-e2e-matrix.yml`), tracing diagnostics scripts (`scripts/trace-profile-scandir.cjs`, `scripts/instrument-compiled-glob.cjs`)
+- Summary: `next build --webpack` failed on every Windows machine with `EPERM: operation not permitted, scandir C:\Users\<user>\...` (Cookies/Application Data junctions). Root cause, proven with module-level instrumentation of Next's bundled glob and `@vercel/nft`: nft's static evaluator models the real `os` module, so every traced `join(homedir(), <dynamic>)` in server code emitted the whole user profile as an asset-directory glob (`C:\Users\<user>/**/*`), which EPERMs on protected Windows junctions and also silently walked the entire home directory during macOS/Linux builds. Fix: `homedir()` is now re-exported through `src/lib/home-dir.ts` behind an indirection nft cannot statically evaluate, and all `src/` imports of `homedir` from `os` were swapped to the helper (call sites unchanged).
+- Verification: direct nft probes reproduce the emission with a plain `os` homedir import and show zero emissions through the helper; full sandboxed macOS production build with instrumented nft confirms zero home-rooted asset emissions and a successful build; windows-latest CI build verification pending on the `test/setup-e2e-matrix` branch.
+- Intended commit message: `Hide homedir from build tracing to fix Windows next build EPERM`
+
 ## 2026-06-12 17:48:02 +07 - Verify Fleet Suppression And Snapshot-Loader Work After Revert, Repair Contract Test
 
 - Status: Pushed

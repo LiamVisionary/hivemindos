@@ -9,7 +9,7 @@
 
 import { createPublicKey, verify as cryptoVerify } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { join } from "node:path";
 import type { GitLawbProof } from "@/lib/types/gitlawb";
 

@@ -1,5 +1,6 @@
 import { readFile } from "fs/promises";
-import { homedir, hostname, networkInterfaces } from "os";
+import { hostname, networkInterfaces } from "os";
+import { homedir } from "@/lib/home-dir";
 import { join } from "path";
 
 const LOCAL_COLLECTOR_ENV_FILE = join(homedir(), ".hivemindos", "collector.env");

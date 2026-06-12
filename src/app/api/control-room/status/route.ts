@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { access, readFile, stat } from "fs/promises";
 import { constants } from "fs";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { resolve } from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";

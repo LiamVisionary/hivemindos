@@ -2,7 +2,8 @@ import "server-only";
 
 import { execFile } from "child_process";
 import { access } from "fs/promises";
-import { homedir, platform } from "os";
+import { platform } from "os";
+import { homedir } from "@/lib/home-dir";
 import { join } from "path";
 import { promisify } from "util";
 

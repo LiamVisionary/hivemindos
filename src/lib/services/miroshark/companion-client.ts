@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { randomBytes } from "crypto";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import path from "path";
 import { execFile, spawn } from "child_process";
 import { promisify } from "util";

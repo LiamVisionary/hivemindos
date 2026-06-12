@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { join } from "path";
 import type { AgentRuntime } from "@/lib/types/agent-runtime";
 

@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "crypto";
 import { mkdir, stat, writeFile } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { extname, join } from "path";
 
 // Hub-local cache for generated images that phone clients need to download.

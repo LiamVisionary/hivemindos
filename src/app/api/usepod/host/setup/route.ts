@@ -1,7 +1,7 @@
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import { constants } from "fs";
 import { access, mkdir, readFile, rm, writeFile } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "path";
 import { promisify } from "util";
 import { PublicKey } from "@solana/web3.js";

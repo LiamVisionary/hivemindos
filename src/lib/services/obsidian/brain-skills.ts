@@ -1,7 +1,7 @@
 import { constants } from "fs";
 import { access, cp, mkdir, open, readdir, readFile, rm, stat, writeFile } from "fs/promises";
 import { createHash } from "crypto";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { basename, dirname, join, relative, resolve } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { cachedCall } from "@/lib/services/async-cache";

@@ -1,7 +1,8 @@
 import { execFile } from "child_process";
 import { constants } from "fs";
 import { access, cp, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "fs/promises";
-import { homedir, tmpdir } from "os";
+import { tmpdir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { isAbsolute, join, relative, resolve, sep } from "path";
 import { promisify } from "util";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";

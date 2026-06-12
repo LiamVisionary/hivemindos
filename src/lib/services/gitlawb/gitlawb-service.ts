@@ -1,6 +1,7 @@
 import { access, mkdir, readFile, rm, writeFile } from "fs/promises";
 import { constants, existsSync } from "fs";
-import { tmpdir, homedir } from "os";
+import { tmpdir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { join } from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";

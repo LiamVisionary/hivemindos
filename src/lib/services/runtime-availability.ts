@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { constants, existsSync } from "node:fs";
 import { access } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { AgentRuntime } from "@/lib/types/agent-runtime";

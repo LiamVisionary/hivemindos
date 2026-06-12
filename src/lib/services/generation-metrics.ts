@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "crypto";
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "path";
 import { rememberAgentMemory } from "@/lib/services/obsidian/agent-memory";
 import {

@@ -10,6 +10,7 @@ import { createKeyPairSignerFromBytes } from "@solana/kit";
 import { base58 } from "@scure/base";
 import { privateKeyToAccount } from "viem/accounts";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
+import { homedir } from "@/lib/home-dir";
 
 export type X402Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -72,7 +73,7 @@ type X402SpendRecord = {
   createdAt: string;
 };
 
-const spendLogPath = path.join(os.homedir(), ".hivemindos", "x402-spend-log.json");
+const spendLogPath = path.join(homedir(), ".hivemindos", "x402-spend-log.json");
 const supportedEvmNetworks = new Set(["eip155:8453", "eip155:84532"]);
 const supportedSvmNetworks = new Set(["solana:mainnet", "solana:devnet"]);
 

@@ -1,4 +1,4 @@
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { join } from "path";
 import { readdir, readFile, stat } from "fs/promises";
 

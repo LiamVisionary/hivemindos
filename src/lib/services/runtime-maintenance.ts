@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { access, mkdir, stat, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";

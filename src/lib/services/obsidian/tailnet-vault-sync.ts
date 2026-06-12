@@ -2,7 +2,8 @@ import { spawn } from "child_process";
 import { createHash } from "crypto";
 import { constants } from "fs";
 import { access, copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "fs/promises";
-import { homedir, tmpdir } from "os";
+import { tmpdir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { basename, dirname, extname, join, relative, resolve, sep } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 

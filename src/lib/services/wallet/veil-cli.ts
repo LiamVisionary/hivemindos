@@ -1,6 +1,6 @@
 import { execFile, type ExecFileOptions } from "node:child_process";
 import { access, readFile, realpath } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join, parse } from "node:path";
 import { promisify } from "node:util";
 import {

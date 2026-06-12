@@ -1,5 +1,5 @@
 import { mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { join } from "path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { syncConversationNoteForSession } from "@/lib/services/obsidian/conversation-notes";

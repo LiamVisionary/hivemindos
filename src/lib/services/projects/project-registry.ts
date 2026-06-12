@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "fs";
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import { createHash, randomUUID } from "crypto";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join, resolve } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";

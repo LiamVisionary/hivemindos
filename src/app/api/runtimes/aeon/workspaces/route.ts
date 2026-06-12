@@ -2,7 +2,7 @@ import { constants } from "fs";
 import { access, mkdir, readFile, rename, rm, stat, writeFile } from "fs/promises";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { basename, dirname, join, resolve, sep } from "path";
 import { NextRequest, NextResponse } from "next/server";
 import type { AgentProfile } from "@/lib/types/agent-runtime";

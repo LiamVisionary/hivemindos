@@ -5,6 +5,7 @@ import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
 import type { AgentWalletVaultInfo } from "@/lib/types/agent-wallet";
+import { homedir } from "@/lib/home-dir";
 
 type VaultRecord = AgentWalletVaultInfo & {
   iv: string;
@@ -17,7 +18,7 @@ type VaultFile = {
   records: Record<string, VaultRecord>;
 };
 
-const vaultDir = path.join(os.homedir(), ".hivemindos");
+const vaultDir = path.join(homedir(), ".hivemindos");
 const vaultPath = path.join(vaultDir, "wallet-vault.json");
 const keyPath = path.join(vaultDir, "wallet-vault.key");
 

@@ -1,7 +1,7 @@
 import { execFile } from "child_process";
 import { randomBytes } from "crypto";
 import { mkdir, readFile, readlink, writeFile } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "path";
 import { promisify } from "util";
 import {

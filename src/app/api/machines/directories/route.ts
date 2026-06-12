@@ -1,7 +1,7 @@
 import { execFile } from "child_process";
 import { constants } from "fs";
 import { access, readdir, stat } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { isAbsolute, join, normalize, resolve, sep } from "path";
 import { promisify } from "util";
 

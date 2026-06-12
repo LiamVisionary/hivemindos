@@ -1,5 +1,5 @@
 import { readFileSync } from "fs";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { join } from "path";
 import type { RuntimeAgentVoiceBridge } from "@/lib/services/phone/call-gateway";
 

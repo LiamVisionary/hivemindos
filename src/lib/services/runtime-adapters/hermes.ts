@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join, resolve } from "node:path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { RuntimeAdapter, RuntimeSchedule, RuntimeScheduleAction } from "./types";

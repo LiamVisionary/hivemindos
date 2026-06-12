@@ -2,7 +2,7 @@ import "server-only";
 
 import { spawn } from "child_process";
 import { readFile } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { join } from "path";
 import { USEPOD_API_BASE, type UsePodApiCompatibility, type UsePodRoutingMode } from "@/lib/config/usepod-features";
 import { resolveUsePodUsdcRecipientAddress } from "@/lib/services/usepod/deposit-recipient";

@@ -1,6 +1,6 @@
 import { constants } from "fs";
 import { access, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { basename, dirname, join, resolve, sep } from "path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 

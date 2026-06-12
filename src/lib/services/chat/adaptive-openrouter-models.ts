@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "path";
 import { RUNTIME_CAPABILITIES, type AgentProfile } from "@/lib/types/agent-runtime";
 import { orderAdaptiveModelsByReliability } from "@/lib/services/chat/adaptive-model-reliability";

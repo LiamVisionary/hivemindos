@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { execFile } from "child_process";
 import { access, readFile, stat } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { delimiter, join, resolve } from "path";
 import { promisify } from "util";
 import { HIVEMIND_OS_RUNTIME, getRuntimeUrl, normalizeAgentRuntime, type AgentProfile, type SharedVaultConfig } from "@/lib/types/agent-runtime";
@@ -63,11 +63,8 @@ import {
   prependHivemindSystemMessage,
 } from "@/lib/services/chat/hivemind-system-prompt";
 import { resolveAdaptiveOpenRouterModel, resolveAdaptiveOpenRouterModels } from "@/lib/services/chat/adaptive-openrouter-models";
-import { assessAdaptiveResponseQuality, classifyAdaptiveModelFailure, recordAdaptiveModelOutcome } from "@/lib/services/chat/adaptive-model-reliability";
 import {
-  createChannelMarkupState,
   flushChannelMarkup,
-  routeChannelMarkupDelta,
   routeChannelMarkupText,
 } from "@/lib/services/chat/channel-markup";
 import { isAdaptiveProviderProfile, resolveAdaptiveRoutePlan, type AdaptiveRoutePlan } from "@/lib/services/chat/adaptive-model-router";
@@ -3421,7 +3418,7 @@ async function streamOpenAICompatibleRuntime(
       break;
     }
     lastStatus = upstream.status;
-    const errorText = await upstream.text().catch(() => "");
+    const errorText = upstreamErrorText ?? await upstream.text().catch(() => "");
     recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.upstream_error", {
       ...telemetryPayloadForProfile(candidateProfile),
       url: candidateUrl,
@@ -3445,7 +3442,10 @@ async function streamOpenAICompatibleRuntime(
     if ((adaptiveOpenRouter || adaptiveProvider) && retryableAdaptiveOpenRouterStatus(upstream.status) && attemptedModels.length < routeAttempts.length) {
       continue;
     }
-    await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible upstream error", providerErrorMessage(errorText, upstream.status, model)).catch(() => undefined);
+    const upstreamErrorMessage = isLocalLmStudioProfile(candidateProfile) && isModelUnavailableErrorBody(errorText)
+      ? lmStudioModelUnavailableMessage(model)
+      : providerErrorMessage(errorText, upstream.status, model);
+    await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible upstream error", upstreamErrorMessage).catch(() => undefined);
     await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
     releaseInteractiveRuntime(lockKey);
     return new Response(
@@ -3453,7 +3453,7 @@ async function streamOpenAICompatibleRuntime(
         ? finalAdaptiveOpenRouterError(upstream.status, attemptedModels)
         : adaptiveProvider && retryableAdaptiveOpenRouterStatus(upstream.status)
           ? finalAdaptiveProviderError(upstream.status, attemptedModels)
-        : providerErrorMessage(errorText, upstream.status, model) }) + "data: [DONE]\n\n",
+        : upstreamErrorMessage }) + "data: [DONE]\n\n",
       { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } },
     );
   }

@@ -1,7 +1,8 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { homedir, hostname } from "node:os";
+import { hostname } from "os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 

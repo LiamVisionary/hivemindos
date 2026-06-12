@@ -1,6 +1,6 @@
 import { mkdir, open, readFile, rename, writeFile } from "fs/promises";
 import { existsSync, statSync } from "fs";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { isAbsolute, join, sep } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";

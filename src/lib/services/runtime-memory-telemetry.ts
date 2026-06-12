@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { appendFile, mkdir } from "node:fs/promises";
-import { cpus, freemem, homedir, totalmem } from "node:os";
+import { cpus, freemem, totalmem } from "os";
+import { homedir } from "@/lib/home-dir";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { getHeapSpaceStatistics, getHeapStatistics } from "node:v8";

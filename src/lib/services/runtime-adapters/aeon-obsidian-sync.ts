@@ -2,7 +2,7 @@ import { constants, createWriteStream } from "fs";
 import { access, mkdir, readFile, rm, stat, writeFile } from "fs/promises";
 import { execFile, spawn } from "child_process";
 import { createHash } from "crypto";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { basename, join, resolve } from "path";
 import { promisify } from "util";
 import type { AgentProfile } from "@/lib/types/agent-runtime";

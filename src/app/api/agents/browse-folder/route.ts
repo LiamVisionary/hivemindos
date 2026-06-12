@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { existsSync } from "fs";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { join, sep } from "path";
 
 export const runtime = "nodejs";

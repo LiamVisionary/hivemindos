@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomBytes } from "crypto";
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "path";
 import { finishRuntimeChatSession } from "@/lib/services/chat/runtime-session-store";
 import {

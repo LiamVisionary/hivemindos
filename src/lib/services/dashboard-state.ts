@@ -1,7 +1,7 @@
 import "server-only";
 
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "path";
 
 export type DashboardStateValues = Record<string, string>;

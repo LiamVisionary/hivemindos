@@ -1,5 +1,5 @@
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
 

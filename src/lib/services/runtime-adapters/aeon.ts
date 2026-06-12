@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
 import { execFile, spawn } from "child_process";
 import { promisify } from "util";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { basename, dirname, join, resolve } from "path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { getSharedBrainSkillsCached, syncSharedBrainSkillsToAeon } from "@/lib/services/obsidian/brain-skills";

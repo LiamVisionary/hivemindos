@@ -1,5 +1,5 @@
 import { mkdir, readFile, appendFile } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "path";
 
 export type TelemetrySource = "client" | "route" | "runtime" | "stream";

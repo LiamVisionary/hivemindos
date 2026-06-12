@@ -1,5 +1,5 @@
 import { readFile } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { join } from "path";
 import { RUNTIME_CAPABILITIES, type AgentProfile, type RuntimeCapabilities } from "@/lib/types/agent-runtime";
 

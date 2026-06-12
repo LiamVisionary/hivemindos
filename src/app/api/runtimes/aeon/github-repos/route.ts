@@ -1,7 +1,7 @@
 import { execFile, spawn } from "child_process";
 import { constants } from "fs";
 import { access, mkdir } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { join, resolve, sep } from "path";
 import { promisify } from "util";
 import { NextRequest, NextResponse } from "next/server";

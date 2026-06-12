@@ -1,6 +1,6 @@
 import { constants } from "fs";
 import { accessSync, readdirSync, statSync } from "fs";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { basename, join, resolve } from "path";
 
 export const GENERIC_OBSIDIAN_VAULT_PATH = "~/Documents/Obsidian/hivemindos-vault";

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "node:path";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { parseVeilCliJson, runVeilCli } from "@/lib/services/wallet/veil-cli";
