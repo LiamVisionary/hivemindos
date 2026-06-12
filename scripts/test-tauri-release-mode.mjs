@@ -29,6 +29,14 @@ if (!workflow.includes("Fetch Rust dependencies") || !workflow.includes("cargo f
   fail(`${workflowPath} must fetch locked Rust dependencies before Tauri packaging.`);
 }
 
+if (!workflow.includes("HivemindOS-macos-apple-silicon.dmg")) {
+  fail(`${workflowPath} must use a human-readable Apple Silicon macOS asset name.`);
+}
+
+if (/HivemindOS-macos-aarch64|HivemindOS-macos-arm64\.app\.zip|HivemindOS-macos-x64\.app\.zip/.test(workflow)) {
+  fail(`${workflowPath} must not publish duplicate or jargon-heavy macOS release assets.`);
+}
+
 if (tauriConfig.build?.frontendDist !== "static") {
   fail(`${tauriConfigPath} must keep packaged releases on the static frontendDist.`);
 }

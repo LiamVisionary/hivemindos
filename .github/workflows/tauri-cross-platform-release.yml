@@ -66,12 +66,12 @@ jobs:
             artifact_key: macos-arm64
             os: macos-14
             app_arch: -arm64
-            bundle_glob: src-tauri/target/release/bundle/macos/*.app src-tauri/target/release/bundle/dmg/*.dmg
+            bundle_glob: src-tauri/target/release/bundle/dmg/*.dmg
           - label: macOS Intel
             artifact_key: macos-x64
             os: macos-15-intel
             app_arch: -x64
-            bundle_glob: src-tauri/target/release/bundle/macos/*.app src-tauri/target/release/bundle/dmg/*.dmg
+            bundle_glob: src-tauri/target/release/bundle/dmg/*.dmg
           - label: Windows x64
             artifact_key: windows-x64
             os: windows-latest
@@ -211,44 +211,30 @@ jobs:
           mkdir -p release-assets
           shopt -s nullglob
           for item in ${{ matrix.bundle_glob }}; do
-            if [ -d "$item" ]; then
-              base="$(basename "$item")"
-              # Arch-tag the .app zip so Intel + arm64 macOS builds do not
-              # overwrite each other. DMG names already carry arch.
-              zipname="${base%.app}${{ matrix.app_arch }}.app.zip"
-              ditto -c -k --keepParent "$item" "release-assets/${zipname}" 2>/dev/null || zip -r "release-assets/${zipname}" "$item"
-            else
-              cp "$item" release-assets/
-            fi
-          done
-          for asset in release-assets/*; do
-            case "$(basename "$asset")" in
+            case "$(basename "$item")" in
               *_aarch64.dmg)
-                cp "$asset" release-assets/HivemindOS-macos-aarch64.dmg
+                cp "$item" release-assets/HivemindOS-macos-apple-silicon.dmg
                 ;;
               *_x64.dmg)
-                cp "$asset" release-assets/HivemindOS-macos-x64.dmg
-                ;;
-              *-arm64.app.zip)
-                cp "$asset" release-assets/HivemindOS-macos-arm64.app.zip
-                ;;
-              *-x64.app.zip)
-                cp "$asset" release-assets/HivemindOS-macos-x64.app.zip
+                cp "$item" release-assets/HivemindOS-macos-intel.dmg
                 ;;
               *_x64-setup.exe)
-                cp "$asset" release-assets/HivemindOS-windows-x64-setup.exe
+                cp "$item" release-assets/HivemindOS-windows-x64-setup.exe
                 ;;
               *_x64_en-US.msi)
-                cp "$asset" release-assets/HivemindOS-windows-x64.msi
+                cp "$item" release-assets/HivemindOS-windows-x64.msi
                 ;;
               *_amd64.AppImage)
-                cp "$asset" release-assets/HivemindOS-linux-x64.AppImage
+                cp "$item" release-assets/HivemindOS-linux-x64.AppImage
                 ;;
               *_amd64.deb)
-                cp "$asset" release-assets/HivemindOS-linux-x64.deb
+                cp "$item" release-assets/HivemindOS-linux-x64.deb
                 ;;
               *-1.x86_64.rpm)
-                cp "$asset" release-assets/HivemindOS-linux-x64.rpm
+                cp "$item" release-assets/HivemindOS-linux-x64.rpm
+                ;;
+              *)
+                echo "Skipping non-release bundle asset: $item"
                 ;;
             esac
           done

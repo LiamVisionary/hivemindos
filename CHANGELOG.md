@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-13 00:35:45 +0700 - Clean Up Desktop Release Download Names
+
+- Status: Pushed
+- Areas changed: Tauri release workflow (`.github/workflows/tauri-cross-platform-release.yml`), release-mode guard (`scripts/test-tauri-release-mode.mjs`), GitHub release assets for `v0.2.1`
+- Summary: Desktop release downloads now use only canonical, human-readable asset names instead of publishing both raw Tauri filenames and friendly aliases. The Mac downloads say `macos-apple-silicon` and `macos-intel` so users do not have to decode `aarch64`, and the workflow stops uploading duplicate `.app.zip` archives for normal Mac downloads.
+- Verification: `pnpm test:tauri-release-mode`; `node --check scripts/test-tauri-release-mode.mjs`; `git diff --check -- .github/workflows/tauri-cross-platform-release.yml scripts/test-tauri-release-mode.mjs CHANGELOG.md`; `gh release view v0.2.1 --repo LiamVisionary/hivemindos --json assets,url,tagName`.
+- Intended commit message: `Clean up desktop release asset names`
+
 ## 2026-06-12 23:52:40 +0700 - Make Release Rust Dependency Fetches Retryable
 
 - Status: Pushed
