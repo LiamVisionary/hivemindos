@@ -70,6 +70,10 @@ jobs:
         shell: pwsh
         run: pnpm install --frozen-lockfile
 
+      - name: Instrument bundled glob (fires inside workers too)
+        shell: pwsh
+        run: node scripts/instrument-compiled-glob.cjs
+
       - name: next build with profile-scan tracer
         shell: pwsh
         env:
@@ -79,6 +83,8 @@ jobs:
           Write-Host "build exit code: $LASTEXITCODE"
           Write-Host "=== profile scans (with stacks) ==="
           Select-String -Path build-diag.log -Pattern "trace-profile-scandir" -Context 0, 30 | ForEach-Object { $_.Line; $_.Context.PostContext }
+          Write-Host "=== glob diagnostics (with stacks) ==="
+          Select-String -Path build-diag.log -Pattern "glob-diag. pattern" -Context 0, 25 | ForEach-Object { $_.Line; $_.Context.PostContext }
           Write-Host "=== EPERM mentions ==="
           Select-String -Path build-diag.log -Pattern "EPERM" -Context 2, 2 | ForEach-Object { $_.Context.PreContext; $_.Line; $_.Context.PostContext }
           Write-Host "=== build tail ==="
