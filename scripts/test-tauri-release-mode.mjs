@@ -21,6 +21,14 @@ if (!workflow.includes("static Tauri UI plus native/sidecar backend")) {
   fail(`${workflowPath} should document the release backend mode near the build matrix.`);
 }
 
+if (!workflow.includes("uses: actions/cache@v4") || !workflow.includes("~/.cargo/registry")) {
+  fail(`${workflowPath} must cache Cargo registry dependencies for release builds.`);
+}
+
+if (!workflow.includes("Fetch Rust dependencies") || !workflow.includes("cargo fetch --locked")) {
+  fail(`${workflowPath} must fetch locked Rust dependencies before Tauri packaging.`);
+}
+
 if (tauriConfig.build?.frontendDist !== "static") {
   fail(`${tauriConfigPath} must keep packaged releases on the static frontendDist.`);
 }

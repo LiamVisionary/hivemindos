@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-12 23:52:40 +0700 - Make Release Rust Dependency Fetches Retryable
+
+- Status: Pushed
+- Areas changed: Tauri release workflow (`.github/workflows/tauri-cross-platform-release.yml`), release-mode guard (`scripts/test-tauri-release-mode.mjs`), optimization notes (`OPTIMIZATIONS.md`)
+- Summary: Cross-platform desktop release jobs now cache Cargo registry/git dependencies and run a retrying `cargo fetch --locked` before Tauri packaging. This keeps a transient crates.io EOF, like the Linux `serde_core` download failure in the retried `v0.2.1` run, from sinking the whole release matrix after the static UI has already built.
+- Verification: `pnpm test:tauri-release-mode`; `node --check scripts/test-tauri-release-mode.mjs`; `git diff --check -- .github/workflows/tauri-cross-platform-release.yml scripts/test-tauri-release-mode.mjs CHANGELOG.md OPTIMIZATIONS.md`.
+- Intended commit message: `Retry Cargo dependency fetches in Tauri release workflow`
+
 ## 2026-06-12 23:32:03 +0700 - Make Desktop Release Builds Use Native Full Mode Instead Of Embedded Next
 
 - Status: Pushed

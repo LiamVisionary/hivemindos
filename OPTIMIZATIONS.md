@@ -17,6 +17,16 @@ the engineering memory for optimization decisions and performance traps.
 - Note tradeoffs, cache freshness, fallback behavior, and when the optimization should be revisited.
 - If an optimization affects prompt injection or agent context, state what context is preserved and what is skipped, cached, compacted, or deferred.
 
+## 2026-06-12 23:52 +0700 - Cache And Retry Release Cargo Dependencies
+
+- Problem: After the release workflow moved off embedded Next, the retried `v0.2.1` Linux job built the static UI successfully and then failed in under a minute because Cargo hit an unexpected EOF while downloading `serde_core` from crates.io. This was a transient registry/network failure, but it still blocked release publishing because the matrix is all-or-nothing.
+- Change: `.github/workflows/tauri-cross-platform-release.yml` now caches `~/.cargo/git` and `~/.cargo/registry` by platform plus `src-tauri/Cargo.lock`, then runs a retrying `cargo fetch --locked` before stamping/building the Tauri app. `scripts/test-tauri-release-mode.mjs` guards the cache and prefetch step alongside the embedded-Next release guard.
+- Preserved behavior: Tauri still builds from the checked-in lockfile, and the actual bundling step remains `pnpm tauri:build`. The fetch step only warms dependencies and fails if the locked graph cannot be fetched after retries.
+- Tradeoff: A cold release job can spend up to roughly 150 extra seconds retrying crates.io before failing. That is cheaper than losing a full platform matrix to one transient network EOF after the frontend build.
+- Files: `.github/workflows/tauri-cross-platform-release.yml`, `scripts/test-tauri-release-mode.mjs`, `OPTIMIZATIONS.md`.
+- Verification: `pnpm test:tauri-release-mode`; `node --check scripts/test-tauri-release-mode.mjs`; `git diff --check -- .github/workflows/tauri-cross-platform-release.yml scripts/test-tauri-release-mode.mjs CHANGELOG.md OPTIMIZATIONS.md`.
+- Watch next: If crates.io outages still recur, consider adding a sparse registry mirror or vendored dependency cache rather than expanding retry loops.
+
 ## 2026-06-12 23:32 +0700 - Keep Release Builds Off Embedded Next Standalone
 
 - Problem: The `v0.2.1` cross-platform release run failed on Linux and both macOS jobs in `Build Tauri app`. Linux and macOS Intel hit V8 heap OOM at about 8 GB during `next build --webpack`; macOS Apple Silicon stayed in optimized production build until the 3600s watchdog killed it. Windows only passed because the workflow did not enable `HIVEMINDOS_TAURI_EMBEDDED_NEXT` there, so it used the lighter static Tauri UI path.

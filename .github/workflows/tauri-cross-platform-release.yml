@@ -116,8 +116,33 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+          key: cargo-registry-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            cargo-registry-${{ runner.os }}-
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Fetch Rust dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src-tauri
+          for attempt in 1 2 3 4; do
+            if cargo fetch --locked; then
+              exit 0
+            fi
+            sleep_seconds=$((attempt * 15))
+            echo "cargo fetch failed on attempt ${attempt}; retrying in ${sleep_seconds}s..." >&2
+            sleep "$sleep_seconds"
+          done
+          cargo fetch --locked
 
       - name: Stamp release version
         shell: bash
