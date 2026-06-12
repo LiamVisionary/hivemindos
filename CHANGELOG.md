@@ -5,7 +5,27 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
-- No pending entries.
+## 2026-06-13 02:16:44 +07 +0700 - Prepare v0.2.3 Desktop Release Build
+
+- Status: Pushed
+- Areas changed: app version metadata (`package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`), release workflow dispatch
+- Summary: HivemindOS desktop is prepared for the `v0.2.3` patch release so new downloads include the simplified first-run setup flow, post-setup guided tour, Venice/UsePod wallet flows, setup E2E matrix harness, and updater asset cleanup from the latest pushed `main`.
+- Release-note bullets:
+  - Simplified first-run setup for non-technical users with plain install choices, clearer agent toggles, and platform-aware copy.
+  - Added a post-setup guided dashboard tour that walks through Fleet, Brain, Work, Wallets, More, and Chat.
+  - Added guided Venice and UsePod wallet flows.
+  - Added the repeatable setup E2E matrix harness for macOS, Linux, and Windows.
+  - Cleaned up updater artifacts so desktop downloads and updater files keep canonical names.
+- Verification performed:
+  - `node scripts/bump-app-version.mjs --set 0.2.3`
+  - Package, Tauri config, Cargo manifest, and the `hivemindos-desktop` Cargo lock package entry all validated as `0.2.3`.
+  - `git ls-remote --tags origin refs/tags/v0.2.3` returned no tag.
+  - `gh release view v0.2.3 --repo LiamVisionary/hivemindos` returned no release.
+  - `git diff --check -- CHANGELOG.md package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock`
+- Intended commit-message summary:
+  - `Prepare v0.2.3 release build`
+
+The release workflow will build macOS Apple Silicon, macOS Intel, Windows x64, and Linux x64 assets from `main`, then publish `v0.2.3` only after every platform build succeeds.
 
 ## 2026-06-13 02:12:01 +0700 - Simplify First-Run Setup And Add Post-Setup Guided Tour
 
