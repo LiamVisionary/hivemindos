@@ -55,7 +55,9 @@ jobs:
   windows-production-build:
     name: next build (windows-latest)
     runs-on: windows-latest
-    timeout-minutes: 45
+    # The full webpack production build takes well over 45 minutes on the
+    # 2-core Windows runner now that it no longer fails fast.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -98,7 +100,9 @@ jobs:
       - name: Run full non-interactive Windows setup and verify dashboard
         shell: pwsh
         run: |
-          ./setup.ps1 -NonInteractive
+          # -SkipBuild: the dedicated windows-production-build job covers the
+          # production build; with it inline this job blows its time budget.
+          ./setup.ps1 -NonInteractive -SkipBuild
           if ($LASTEXITCODE -ne 0) { throw "setup.ps1 failed with exit code $LASTEXITCODE" }
 
           Write-Host "=== port 5020 listeners ==="
