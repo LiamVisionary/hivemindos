@@ -750,7 +750,7 @@ function Install-ClaudeBrainHook {
       timeout = 20
     })
   })
-  $hooks["UserPromptSubmit"] = @($filteredGroups)
+  $hooks["UserPromptSubmit"] = $filteredGroups.ToArray()
   $settings | ConvertTo-Json -Depth 20 | Set-Content -Path $settingsFile -Encoding ASCII
   Ok "Installed Claude shared-brain UserPromptSubmit hook"
 }

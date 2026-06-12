@@ -73,7 +73,7 @@ function Remove-ClaudeBrainHook {
     }
   }
   if ($filteredGroups.Count -gt 0) {
-    $hooks["UserPromptSubmit"] = @($filteredGroups)
+    $hooks["UserPromptSubmit"] = $filteredGroups.ToArray()
   } else {
     $hooks.Remove("UserPromptSubmit")
   }
