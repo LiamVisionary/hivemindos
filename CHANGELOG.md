@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-12 22:00:29 +0700 - Prepare v0.2.1 Desktop Release Build
+
+- Status: Pushed
+- Areas changed: app version metadata (`package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`), release workflow dispatch
+- Summary: HivemindOS desktop is prepared for the `v0.2.1` cross-platform release build. The checked-in app metadata now matches the release version so local builds, CI-stamped bundles, and the eventual release tag all agree on `0.2.1`.
+- Verification: `node scripts/bump-app-version.mjs --next` reported `0.2.1` before the bump; `git ls-remote --tags origin refs/tags/v0.2.1` returned no tag; `gh release view v0.2.1 --repo LiamVisionary/hivemindos` returned `release not found`; package/Tauri/Cargo metadata all validate as `0.2.1`; `git diff --check -- CHANGELOG.md package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock`.
+- Intended commit message: `Prepare v0.2.1 release build`
+
 ## 2026-06-12 19:25:00 +0700 - Surface LM Studio Model Loads In Agent Chat And Stop Doomed Tools Retry
 
 - Status: Committed (landed via `cad8b275` "Land in-flight work" together with concurrent-session changes)
