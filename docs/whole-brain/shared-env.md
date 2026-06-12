@@ -86,13 +86,42 @@ Pushes use ready collector `/env` endpoints on trusted machine links. Pulls from
 
 Secret values should not appear in command arguments, logs, shared notes, or chat transcripts.
 
+### Retry Queue
+
+Push replication is no longer fire-and-forget. When a peer cannot take an update — its collector is down, unreachable, or the push fails — the key name, scope, runtime, and per-machine delivery receipts (never values) are queued in:
+
+```text
+~/.hivemindos/env-sync-pending.json
+```
+
+Every later sync-enabled `hive-env-add` run drains the queue automatically, and the telemetry collector retries it on a timer. Queued removals propagate too. Entries clear once every enumerated ready peer has acknowledged, and expire after 14 days. Manual drain:
+
+```bash
+hive-env-add --retry-pending
+```
+
+### Periodic Pull-Reconcile
+
+Each machine's telemetry collector also runs `hive-env-add --sync-maintenance` every 10 minutes (configurable with `AGENT_TELEMETRY_ENV_SYNC_INTERVAL_MS`, disable with `AGENT_TELEMETRY_ENV_SYNC_DISABLED=1`). That retries the queue, then pulls shared keys from every ready peer collector and merges them newest-wins using the per-key `updatedAt` metadata stored next to each env file. A machine that was offline when a key was added converges on its own. Keys removed locally keep a meta timestamp tombstone, so peers holding older copies cannot resurrect them. Manual runs:
+
+```bash
+hive-env-add --pull-reconcile --dry-run   # report what would be merged
+hive-env-add --pull-reconcile             # merge newer/missing peer keys
+curl -X POST http://127.0.0.1:8787/env/sync-maintenance   # collector-driven run now
+```
+
+Maintenance status (last run, last summary, errors) is reported in the collector `/health` payload under `envSync.maintenance`. Reconcile assumes tailnet machines keep reasonable NTP clock sync.
+
 Advanced targeting uses:
 
 ```text
 HIVE_ENV_TAILNET_TARGETS
 HIVE_ENV_TAILNET_USER
 HIVE_ENV_TAILNET_SYNC
+HIVE_ENV_COLLECTOR_PORTS
 ```
+
+Peers are auto-discovered from `tailscale status` and probed for a ready collector; machines that appear under two tailnet nodes (system tailscaled plus embedded link node) are deduplicated by machine id. Prefer auto-discovery: pinning `HIVE_ENV_TAILNET_TARGETS` to raw IPs silently blackholes pushes when a node's address changes. When `HIVE_ENV_COLLECTOR_PORTS` is set explicitly it is authoritative — default ports are not appended.
 
 ## AEON GitHub Secrets
 

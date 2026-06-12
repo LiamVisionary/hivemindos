@@ -10,6 +10,7 @@ import { HexTile } from "./hex-tile";
 import { ListView } from "./list-view";
 import { MapView } from "./map-view";
 import { NetworkGraph } from "./network-graph";
+import { OrbitalGraph } from "./orbital-graph";
 import { FleetConstellationLoading, FleetDispatchLoading, FleetRosterLoading, FleetScanOverlay } from "./fleet-loading";
 import { Roster, type MachineUpdateButtonDetail, type MachineUpdateButtonStatus } from "./roster";
 import { AeonDeleteModal, isAeonAgent, type AeonDeleteDepth, type AeonDeleteProgress, type AeonDeleteResult } from "./aeon-delete-modal";
@@ -32,10 +33,10 @@ import {
 } from "./fleet-data";
 import styles from "./fleet-tokens.module.css";
 
-type ViewMode = "graph" | "map" | "list";
+type ViewMode = "hive" | "graph" | "map" | "list";
 const DISMISSED_ALERTS_STORAGE_KEY = "hivemindos.fleet.dismissedAlerts.v1";
-// Matches the bounce/glow animation length in fleet-tokens.module.css (3 × 880ms).
-const NEW_AGENT_HIGHLIGHT_MS = 2700;
+// Matches the bounce/glow animation length in fleet-tokens.module.css (1 × 880ms).
+const NEW_AGENT_HIGHLIGHT_MS = 900;
 // An arrival older than this is stale (e.g. the user created an agent and only
 // opened the fleet much later) — clear it instead of celebrating.
 const NEW_AGENT_ARRIVAL_WINDOW_MS = 5 * 60_000;
@@ -82,6 +83,8 @@ export interface FleetViewProps {
   onCallAgent?: (m: FleetMachine, a: FleetAgent) => Promise<void> | void;
   onOpenWallet?: (m: FleetMachine, a: FleetAgent) => void;
   onEditSettings?: (m: FleetMachine, a: FleetAgent) => void;
+  /** When provided, the hive view renders a central Queen Bee cell connected to every machine; clicking it opens her settings. */
+  onOpenQueenSettings?: () => void;
   onDuplicate?: (m: FleetMachine, a: FleetAgent) => void;
   onRemove?: (m: FleetMachine, a: FleetAgent, depth?: AeonDeleteDepth, onProgress?: (progress: AeonDeleteProgress) => void) => void | Promise<AeonDeleteResult | void>;
   onDismissAlert?: (alert: FleetAlert) => void;
@@ -135,13 +138,14 @@ export function FleetView({
   onCallAgent,
   onOpenWallet,
   onEditSettings,
+  onOpenQueenSettings,
   onDuplicate,
   onRemove,
   onDismissAlert,
 }: FleetViewProps = {}) {
   const [selected, setSelected] = React.useState<string>(() => preferredInitialMachineId(machines));
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
-  const [view, setView] = React.useState<ViewMode>("graph");
+  const [view, setView] = React.useState<ViewMode>("hive");
   const [dispatchIdx, setDispatchIdx] = React.useState(0);
   const [aeonDeleteTarget, setAeonDeleteTarget] = React.useState<{ machine: FleetMachine; agent: FleetAgent } | null>(null);
   const [dismissedAlertIds, setDismissedAlertIds] = React.useState<Set<string>>(() => new Set());
@@ -554,7 +558,7 @@ export function FleetView({
                 &nbsp; {refreshing ? "scanning swarm" : "live swarm"}
               </div>
               <div className="flex" style={{ gap: 6 }}>
-                {(["graph", "map", "list"] as ViewMode[]).map((v) => (
+                {(["hive", "graph", "map", "list"] as ViewMode[]).map((v) => (
                   <button
                     key={v}
                     onClick={() => setView(v)}
@@ -586,7 +590,7 @@ export function FleetView({
             >
               {initialLoading ? (
                 <FleetConstellationLoading />
-              ) : view === "graph" && (
+              ) : view === "hive" && (
                 <NetworkGraph
                   selected={selectedMachineId}
                   selectedAgentId={selectedAgentId}
@@ -608,12 +612,23 @@ export function FleetView({
                   onCallAgent={handleCallAgent}
                   onOpenWallet={onOpenWallet}
                   onEditSettings={onEditSettings}
+                  onOpenQueenSettings={onOpenQueenSettings}
                   onDuplicate={onDuplicate}
                   onRemove={onRemove ? handleRemove : undefined}
                   selectionTooltipKey={selectionTooltipKey}
                   onOpenSelectionTooltip={setSelectionTooltipKey}
                   onDismissSelectionTooltip={() => setSelectionTooltipKey(null)}
                   newAgentKey={newAgentKey}
+                />
+              )}
+              {!initialLoading && view === "graph" && (
+                <OrbitalGraph
+                  machines={displayMachines}
+                  selected={selectedMachineId}
+                  onSelectMachine={handleSelectMachine}
+                  alerts={displayAlerts}
+                  tasks={displayTasks}
+                  ticker={displayTicker}
                 />
               )}
               {!initialLoading && view === "map" && (

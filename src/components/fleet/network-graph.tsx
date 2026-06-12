@@ -4,6 +4,8 @@
 import * as React from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AddHexCell } from "./add-hex-cell";
+import { BeeIcon } from "./bee-icon";
+import { HexTile } from "./hex-tile";
 import { MachineCluster, type GraphAgentCapabilityBadgeVariant } from "./machine-cluster";
 import { LottieBee } from "./lottie-bee";
 import { type FleetAgent, type FleetAgentChat, type FleetMachine } from "./fleet-data";
@@ -46,6 +48,8 @@ interface NetworkGraphProps {
   /** `machineId:agentId` of a just-added agent — its hex bounces and the view pans to it. */
   newAgentKey?: string | null;
   agentCapabilityBadgeVariant?: GraphAgentCapabilityBadgeVariant;
+  /** When provided, the logical Queen Bee renders as her own central hive cell connected to every machine; clicking opens her settings. */
+  onOpenQueenSettings?: () => void;
 }
 
 const CLUSTER_LAYOUT: Record<string, [number, number]> = {
@@ -73,6 +77,9 @@ const graphScale = (value: number) => value * FLEET_GRAPH_CELL_SCALE;
 const ADD_MACHINE_LABEL_HEIGHT = graphScale(26);
 const ADD_MACHINE_CLEARANCE = graphScale(44);
 const ADD_AGENT_CLEARANCE = graphScale(18);
+// The queen sits as close to the colony's centre as the clusters allow.
+const QUEEN_NODE_ID = "queen-bee";
+const QUEEN_CLEARANCE = graphScale(14);
 const GRAPH_CELL_MARGIN = graphScale(16);
 const ADD_AGENT_SEARCH_EXTRA_CELLS = 60;
 const FLEET_GRAPH_BASE_SIZE = 900;
@@ -130,6 +137,7 @@ export function NetworkGraph({
   onDismissSelectionTooltip,
   newAgentKey,
   agentCapabilityBadgeVariant = "side-rails",
+  onOpenQueenSettings,
 }: NetworkGraphProps) {
   const w = width, h = height;
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
@@ -160,20 +168,34 @@ export function NetworkGraph({
   React.useEffect(() => {
     sessionClusterLayout = layout;
   }, [layout]);
-  const clusters = assignAddCells(machines.map((m) => ({
+  const baseClusters = React.useMemo(() => machines.map((m) => ({
     m,
     cx: layout[m.id][0] * w,
     cy: layout[m.id][1] * h,
     selected: selected === m.id,
     selectedAgentId: selected === m.id ? selectedAgentId : null,
-  })));
-  const addMachinePoint = React.useMemo(() => findAddMachinePoint(clusters, w, h), [clusters, h, w]);
+  })), [machines, layout, w, h, selected, selectedAgentId]);
+  const hasQueen = Boolean(onOpenQueenSettings);
+  const queenPoint = React.useMemo(
+    () => (hasQueen ? findQueenPoint(baseClusters, w, h) : null),
+    [baseClusters, hasQueen, w, h],
+  );
+  const clusters = React.useMemo(() => {
+    const spacedClusters = queenPoint ? pushClustersClearOfQueen(baseClusters, queenPoint) : baseClusters;
+    return assignAddCells(spacedClusters, queenPoint ? [queenCellRect(queenPoint)] : []);
+  }, [baseClusters, queenPoint]);
+  const addMachinePoint = React.useMemo(() => findAddMachinePoint(clusters, w, h, queenPoint), [clusters, h, w, queenPoint]);
   const pos: Record<string, { x: number; y: number }> = Object.fromEntries(
     clusters.map((c) => [c.m.id, { x: c.cx, y: c.cy }]),
   );
-  const latestBeeGraphRef = React.useRef({ edges, pos });
+  if (queenPoint) pos[QUEEN_NODE_ID] = queenPoint;
+  const queenEdges: Array<[string, string]> = queenPoint
+    ? clusters.map((c) => [QUEEN_NODE_ID, c.m.id])
+    : [];
+  const allEdges = [...edges, ...queenEdges];
+  const latestBeeGraphRef = React.useRef({ edges: allEdges, pos });
   const latestClustersRef = React.useRef(clusters);
-  const bounds = React.useMemo(() => contentBounds(clusters, addMachinePoint), [clusters, addMachinePoint]);
+  const bounds = React.useMemo(() => contentBounds(clusters, addMachinePoint, queenPoint), [clusters, addMachinePoint, queenPoint]);
 
   const clampPan = React.useCallback((next: { x: number; y: number }, nextZoom: number) => {
     return {
@@ -189,8 +211,8 @@ export function NetworkGraph({
   }, []);
 
   React.useLayoutEffect(() => {
-    latestBeeGraphRef.current = { edges, pos };
-  }, [edges, pos]);
+    latestBeeGraphRef.current = { edges: allEdges, pos };
+  });
 
   React.useLayoutEffect(() => {
     latestClustersRef.current = clusters;
@@ -432,6 +454,21 @@ export function NetworkGraph({
             />
           );
         })}
+        {/* Honey arcs from the queen to every hive */}
+        {queenEdges.map(([a, b], i) => {
+          const A = pos[a], B = pos[b];
+          if (!A || !B) return null;
+          return (
+            <line
+              key={`queen-${i}`}
+              x1={A.x} y1={A.y} x2={B.x} y2={B.y}
+              stroke="var(--hex-honey-border)"
+              strokeWidth={1.2}
+              strokeDasharray="2 6"
+              opacity={0.55}
+            />
+          );
+        })}
       </svg>
 
       {/* Clusters (frosted glass over the lines) */}
@@ -468,6 +505,57 @@ export function NetworkGraph({
           newAgentKey={newAgentKey}
         />
       ))}
+
+      {/* Queen Bee — the colony's central hive cell */}
+      {queenPoint && onOpenQueenSettings ? (
+        <div
+          className="absolute grid justify-items-center"
+          style={{
+            left: queenPoint.x - HEX_W / 2,
+            top: queenPoint.y - HEX_H / 2,
+            width: HEX_W,
+            gap: graphScale(6),
+          }}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <HexTile
+                size={HEX_W}
+                tone="honey"
+                role="button"
+                tabIndex={0}
+                aria-label="Queen Bee settings"
+                data-fleet-cell-control="true"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenQueenSettings();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  onOpenQueenSettings();
+                }}
+              >
+                <BeeIcon role="queen" size={graphScale(40)} />
+              </HexTile>
+            </TooltipTrigger>
+            <TooltipContent>Queen Bee settings</TooltipContent>
+          </Tooltip>
+          <span
+            className="pointer-events-none text-center"
+            style={{
+              color: "var(--hex-honey-border)",
+              fontFamily: "var(--f-mono)",
+              fontSize: graphScale(10),
+              lineHeight: 1.2,
+              textTransform: "uppercase",
+              letterSpacing: 0.6,
+            }}
+          >
+            queen bee
+          </span>
+        </div>
+      ) : null}
 
       {onAddMachine ? (
         <div
@@ -640,7 +728,7 @@ function stableHash(value: string) {
   return Math.abs(hash);
 }
 
-function assignAddCells(clusters: GraphCluster[]) {
+function assignAddCells(clusters: GraphCluster[], reservedRects: GraphRect[] = []) {
   const existingRects = clusters.map((cluster) => cellsRect(cluster.cx, cluster.cy, cluster.m.agents.length + 1));
   const assignedAddRects: GraphRect[] = [];
 
@@ -650,6 +738,7 @@ function assignAddCells(clusters: GraphCluster[]) {
     const otherRects = [
       ...existingRects.filter((_, rectIndex) => rectIndex !== index),
       ...assignedAddRects,
+      ...reservedRects,
     ];
     const candidates = hexSpiral(existingCount + ADD_AGENT_SEARCH_EXTRA_CELLS).slice(existingCount);
     const addCell = candidates.find(([q, r]) => {
@@ -661,13 +750,72 @@ function assignAddCells(clusters: GraphCluster[]) {
   });
 }
 
-function findAddMachinePoint(clusters: GraphCluster[], width: number, height: number) {
+function findAddMachinePoint(clusters: GraphCluster[], width: number, height: number, queenPoint?: { x: number; y: number } | null) {
   const preferred = { x: width * 0.72, y: height * 0.28 };
-  const clusterRects = clusters.map(clusterRect);
+  const obstacleRects = [
+    ...clusters.map(clusterRect),
+    ...(queenPoint ? [queenCellRect(queenPoint)] : []),
+  ];
   const candidates = addMachineCandidates(preferred, width, height);
   return candidates.find((point) => (
-    clusterRects.every((rect) => !rectsOverlap(addMachineRect(point), rect, ADD_MACHINE_CLEARANCE))
+    obstacleRects.every((rect) => !rectsOverlap(addMachineRect(point), rect, ADD_MACHINE_CLEARANCE))
   )) ?? preferred;
+}
+
+// The queen claims the visual middle of the colony — the centre of the
+// clusters' combined bounding box. She never moves for the machines; any
+// cluster sitting on the centre is pushed outward instead (see
+// pushClustersClearOfQueen), so the hives arrange themselves around her.
+function findQueenPoint(clusters: GraphCluster[], width: number, height: number) {
+  if (!clusters.length) return { x: width * 0.5, y: height * 0.55 };
+  const merged = clusters.map(clusterRect).reduce(mergeRects);
+  return {
+    x: (merged.minX + merged.maxX) / 2,
+    y: (merged.minY + merged.maxY) / 2,
+  };
+}
+
+// Slide any cluster that overlaps the queen's cell directly away from her,
+// just far enough that one axis clears. The default slot grid stacks machines
+// through the centre, so without this there is often no queen-sized gap and
+// she would be exiled to the edge of the constellation.
+function pushClustersClearOfQueen(clusters: GraphCluster[], queenPoint: { x: number; y: number }) {
+  const queenRect = queenCellRect(queenPoint);
+  return clusters.map((cluster) => {
+    const rect = clusterRect(cluster);
+    if (!rectsOverlap(rect, queenRect, QUEEN_CLEARANCE)) return cluster;
+    let dx = cluster.cx - queenPoint.x;
+    let dy = cluster.cy - queenPoint.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 1) {
+      dx = 0;
+      dy = 1;
+    } else {
+      dx /= length;
+      dy /= length;
+    }
+    // Travel needed along the push direction to separate on each axis; the
+    // cheaper axis wins. Both are positive because the rects overlap.
+    const neededX = dx >= 0
+      ? queenRect.maxX + QUEEN_CLEARANCE - rect.minX
+      : rect.maxX - (queenRect.minX - QUEEN_CLEARANCE);
+    const neededY = dy >= 0
+      ? queenRect.maxY + QUEEN_CLEARANCE - rect.minY
+      : rect.maxY - (queenRect.minY - QUEEN_CLEARANCE);
+    const travelX = dx ? neededX / Math.abs(dx) : Infinity;
+    const travelY = dy ? neededY / Math.abs(dy) : Infinity;
+    const travel = Math.max(0, Math.min(travelX, travelY));
+    return { ...cluster, cx: cluster.cx + dx * travel, cy: cluster.cy + dy * travel };
+  });
+}
+
+function queenCellRect(point: { x: number; y: number }): GraphRect {
+  return {
+    minX: point.x - HEX_W / 2,
+    maxX: point.x + HEX_W / 2,
+    minY: point.y - HEX_H / 2,
+    maxY: point.y + HEX_H / 2 + ADD_MACHINE_LABEL_HEIGHT,
+  };
 }
 
 function addMachineCandidates(preferred: { x: number; y: number }, width: number, height: number) {
@@ -781,7 +929,7 @@ function graphTransformValue(transform: GraphViewTransform) {
   return `matrix(${transform.zoom}, 0, 0, ${transform.zoom}, ${transform.x}, ${transform.y})`;
 }
 
-function contentBounds(clusters: GraphCluster[], addMachinePoint?: { x: number; y: number }) {
+function contentBounds(clusters: GraphCluster[], addMachinePoint?: { x: number; y: number }, queenPoint?: { x: number; y: number } | null) {
   const padding = 140;
   if (!clusters.length) return { minX: -padding, minY: -padding, maxX: padding, maxY: padding };
   let minX = Infinity;
@@ -791,6 +939,14 @@ function contentBounds(clusters: GraphCluster[], addMachinePoint?: { x: number; 
 
   for (const cluster of clusters) {
     const rect = clusterRect(cluster);
+    minX = Math.min(minX, rect.minX);
+    maxX = Math.max(maxX, rect.maxX);
+    minY = Math.min(minY, rect.minY);
+    maxY = Math.max(maxY, rect.maxY);
+  }
+
+  if (queenPoint) {
+    const rect = queenCellRect(queenPoint);
     minX = Math.min(minX, rect.minX);
     maxX = Math.max(maxX, rect.maxX);
     minY = Math.min(minY, rect.minY);

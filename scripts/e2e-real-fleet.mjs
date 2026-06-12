@@ -359,33 +359,59 @@ async function testEnvSync(machines) {
   const targets = machines.filter((machine) => machine.capabilities?.envHttpSync);
   assert(targets.length >= 2, "Env propagation tests require at least two env-sync-ready machines.");
   await configureEnvSyncTargets(targets);
-  const runtimeScopes = ["generic", "hermes", "openclaw", "aeon"];
-  const completed = [];
-  for (const runtime of runtimeScopes) {
-    const scoped = runtime === "generic"
-      ? targets
-      : targets.filter((machine) => (machine.capabilities?.runtimes || []).includes(runtime));
-    if (scoped.length < 2) continue;
-    for (const source of scoped) {
-      const key = envKeyFor(source, runtime);
-      const value = `${runId}:${slug(source.device?.name)}:${runtime}`;
-      await collector(source, "/env", {
-        method: "POST",
-        body: JSON.stringify({ scope: runtime === "generic" ? "all" : "agent", runtime, entries: { [key]: value } }),
-        timeoutMs: 60_000,
-      });
-      await convergeEnvValue(scoped, key, value, runtime);
-      await collector(source, "/env", {
-        method: "POST",
-        body: JSON.stringify({ scope: runtime === "generic" ? "all" : "agent", runtime, entries: { [key]: "" } }),
-        timeoutMs: 60_000,
-      });
-      await convergeEnvValue(scoped, key, "", runtime);
-      completed.push({ runtime, source: source.device?.name, checkedMachines: scoped.length });
+  try {
+    const runtimeScopes = ["generic", "hermes", "openclaw", "aeon"];
+    const completed = [];
+    for (const runtime of runtimeScopes) {
+      const scoped = runtime === "generic"
+        ? targets
+        : targets.filter((machine) => (machine.capabilities?.runtimes || []).includes(runtime));
+      if (scoped.length < 2) continue;
+      for (const source of scoped) {
+        const key = envKeyFor(source, runtime);
+        const value = `${runId}:${slug(source.device?.name)}:${runtime}`;
+        await collector(source, "/env", {
+          method: "POST",
+          body: JSON.stringify({ scope: runtime === "generic" ? "all" : "agent", runtime, entries: { [key]: value } }),
+          timeoutMs: 60_000,
+        });
+        await convergeEnvValue(scoped, key, value, runtime);
+        await collector(source, "/env", {
+          method: "POST",
+          body: JSON.stringify({ scope: runtime === "generic" ? "all" : "agent", runtime, entries: { [key]: "" } }),
+          timeoutMs: 60_000,
+        });
+        await convergeEnvValue(scoped, key, "", runtime);
+        completed.push({ runtime, source: source.device?.name, checkedMachines: scoped.length });
+      }
     }
+    assert(completed.length > 0, "No env runtime scope had at least two eligible machines.");
+    return { completed };
+  } finally {
+    await clearEnvSyncTargets(targets);
   }
-  assert(completed.length > 0, "No env runtime scope had at least two eligible machines.");
-  return { completed };
+}
+
+// Pinned raw-IP targets must never outlive the test run: tailnet IPs go stale
+// and a leftover pin silently blackholes every future env push on that machine
+// (this happened in production on 2026-06-02). Clearing restores auto-discovery.
+async function clearEnvSyncTargets(machines) {
+  await Promise.all(machines.map(async (machine) => {
+    try {
+      await collector(machine, "/env", {
+        method: "POST",
+        body: JSON.stringify({
+          scope: "all",
+          runtime: "generic",
+          entries: { HIVE_ENV_TAILNET_TARGETS: "" },
+        }),
+        timeoutMs: 60_000,
+      });
+      summary.cleanup.push({ type: "env-sync-targets", ok: true, machine: machine.device?.name });
+    } catch (error) {
+      summary.cleanup.push({ type: "env-sync-targets", ok: false, machine: machine.device?.name, error: error.message });
+    }
+  }));
 }
 
 async function convergeEnvValue(machines, key, value, runtime) {

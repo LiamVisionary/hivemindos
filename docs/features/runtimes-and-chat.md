@@ -13,6 +13,7 @@ Known runtimes are defined in `src/lib/types/agent-runtime.ts`:
 | OpenClaw          | Gateway     | status, chat, model selection                                                                                                            |
 | Hermes            | Interactive | status, chat, runs, memory, sessions, background tasks, X search, video generation, Codex runtime, Kanban decomposition, model selection |
 | Aeon              | Background  | status, skills, schedules, runs, outputs, memory, background tasks, notifications                                                        |
+| Evo               | Background  | status, runs (experiment tree), background tasks, dashboard URL discovery                                                                 |
 | HivemindOS | Interactive | status, chat, model selection                                                                                                            |
 
 ## How Runtime Settings Work
@@ -55,9 +56,45 @@ That URL is still remote. Preserve the `/peer/...` prefix and port `8788` when s
 
 If a remote Hermes agent fails immediately with "does not have the Hermes chat bridge" or a fast `404`, check whether a Link `/peer/...` URL was accidentally rewritten to the collector port. The healthy path keeps `/peer/...` on `127.0.0.1:8788` and appends collector endpoints under that prefix.
 
+## Adaptive Agents (OpenRouter Free-Model Routing)
+
+An adaptive agent is a Hermes agent whose model is `adaptive` with provider `openrouter` and an optional `adaptiveOpenRouter.fallbackModel` (paid, tried last). Instead of pinning one model, each message routes across OpenRouter's free-model inventory and learns from the results.
+
+How a message picks its model:
+
+- `src/lib/services/chat/adaptive-openrouter-models.ts` filters OpenRouter's inventory to free models matching the request (modalities, use-case keywords, endpoint health), with the inventory cached at `~/.hivemindos/openrouter-models-cache.json`.
+- `src/lib/services/chat/adaptive-model-reliability.ts` then reorders candidates by observed reliability from `~/.hivemindos/openrouter-model-reliability.json`: the most recent model that completed a quality-passing request leads (routing sticks to a known-good model), untried models keep their ranking order, quality-demoted models drop behind untried ones, and models inside a failure cooldown move to the back instead of being dropped.
+- The Hermes path tries up to 5 free candidates plus the paid fallback. Failures classify from the error text and HTTP status: capacity (429/rate limit/quota/overloaded) cools the model for 5 minutes doubling per consecutive hit (capped at 6 hours), unsupported models cool for 24 hours, other transport failures for 15 minutes. One success fully resets a model.
+
+Long-running tasks:
+
+- The 45-second attempt timer only covers time to the first stream byte. Once the stream is flowing, silence means the Hermes CLI is still working, and the idle window is 15 minutes (the collector's CLI chat cap is 20 minutes).
+- The route emits a bare SSE comment every 25 seconds so the browser's stall timer survives silent tool work.
+- When an attempt fails after the Hermes CLI session was created, the next candidate resumes that same session (`--resume`) instead of restarting the task from scratch.
+
+Quality gates ("completed but useless" still demotes):
+
+- Every completed response is graded by `assessAdaptiveResponseQuality`: dead-end refusals with no pivot into an alternative, the prompt echoed back unrequested, and repetition loops fail the gate; everything with substance passes.
+- A failed gate records a `low-quality` outcome and a `Hermes Adaptive quality flag` session event. The response still reaches the user — grading only changes future routing.
+- One bad answer is forgiven; the second consecutive one benches the model for 10 minutes, doubling per repeat. Models under a 50% pass ratio across 3+ graded responses rank below models never tried. A single clean success redeems the model.
+
+The Adaptive provider (`provider: adaptive`, which routes across OpenRouter plus any Models.dev OpenAI-compatible provider with a configured key) shares the same reliability machinery:
+
+- Candidates from every provider are reordered by observed reliability before keyword scores break ties: cooling models sink, quality-demoted models rank below never-tried ones, and the most recent quality-passing winner leads — across providers.
+- Store keys for non-OpenRouter providers are namespaced as `provider::model-id` so a model id shared across providers cannot collide; OpenRouter entries keep the original bare-id format, so existing stores and fleet gossip stay compatible.
+- The direct-API attempt loop records the same outcome taxonomy (capacity, unsupported, failure) per attempt, and the completed response passes through the same quality gate before a success is recorded.
+- When the plan selects the Hermes runtime, the run reuses the full adaptive-OpenRouter loop — per-message failover, session resume on retry, keepalives, and quality gates — instead of pinning the single selected model.
+
+Fleet-wide sharing:
+
+- The fleet shares one OpenRouter API key, so a rate limit observed on one machine applies everywhere. Collectors gossip the reliability store over the tailnet every 10 minutes (`startReliabilitySync` in `scripts/agent-telemetry-collector.mjs`), merging newest-wins per model id from each peer's `GET /reliability/openrouter`. `POST /reliability/sync` triggers a pass manually.
+- Peers are discovered from `tailscale status --json`, probed with a 4-second timeout, and deduplicated by `machineId` so each machine's two tailnet nodes count once. Payloads carry model ids and counters only — no secrets, and no tailnet IPs are persisted.
+- Tune or disable with `AGENT_TELEMETRY_RELIABILITY_SYNC_INTERVAL_MS` (`0` disables). The app re-reads the store file on a 5-second TTL, so gossiped records apply without a restart.
+
 ## What Agents And Chat Can Do
 
 - Runtime/provider/model selection where supported.
+- Adaptive OpenRouter free-model routing with learned reliability, capacity failover, and quality grading.
 - Streaming runtime responses where available.
 - `/swarm [number]` role-specific parallel passes across the best-suited configured chat-capable agents.
 - Session resume and session search.
@@ -93,6 +130,8 @@ The desktop app ships a hands-free voice channel into the Queen Bee control plan
 
 - `src/lib/types/agent-runtime.ts`
 - `src/lib/services/runtime-adapters/**`
+- `src/lib/services/chat/adaptive-openrouter-models.ts`
+- `src/lib/services/chat/adaptive-model-reliability.ts`
 - `src/lib/services/runtime-integrations.ts`
 - `src/lib/services/phone/call-gateway.ts`
 - `src/lib/native/filesystem.ts`

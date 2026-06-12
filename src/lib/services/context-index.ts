@@ -1,6 +1,12 @@
 import { constants } from "fs";
 import { access, mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
 import { basename, dirname, extname, join, relative, sep } from "path";
+import {
+  BANKR_HIVEMIND_INTEGRATION_FACTS,
+  BANKR_PLATFORM_FACTS,
+  BANKR_REPO_REFERENCE_PATH,
+  BANKR_VAULT_REFERENCE_PATH,
+} from "@/lib/services/chat/bankr-capability-context";
 import { getBrainSkillInventory, getSharedBrainSkillsCached } from "@/lib/services/obsidian/brain-skills";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import {
@@ -511,6 +517,37 @@ function localCliToolItems(): ContextIndexItem[] {
       load: {
         type: "none",
         note: "Local CLI capability. Use the agent terminal tool and list targets before sending when needed.",
+      },
+    },
+    {
+      id: "tool-schema:bankr-agent-platform",
+      kind: "tool-schema",
+      title: "Bankr agent platform",
+      summary: "Bankr financial rails and agent runtime: cross-chain wallet, token launching with fee share, trading (swaps, limit/stop/DCA/TWAP, leveraged, Polymarket, NFTs), LLM Gateway credits, automations, x402, skills, and the Bankr skill/CLI/Agent API surfaces.",
+      tags: ["bankr", "crypto", "wallet", "trading", "swap", "token-launch", "llm-gateway", "llm-credits", "max-mode", "automation", "polymarket", "hyperliquid", "x402", "dca", "limit-order", "nft", "capability", "agent", "tool"],
+      aliases: [
+        "what can you do with bankr",
+        "bankr capabilities",
+        "bankr agent",
+        "bankr trading",
+        "launch a token",
+        "token launch fees",
+        "bankr llm credits",
+        "max mode",
+        "bankr cli",
+        "bankr skill",
+        "bankr agent api",
+        "self-funding agent",
+      ],
+      retrievalText: [
+        ...BANKR_PLATFORM_FACTS,
+        ...BANKR_HIVEMIND_INTEGRATION_FACTS,
+        `Full imported Bankr documentation lives at ${BANKR_VAULT_REFERENCE_PATH} in the shared vault and ${BANKR_REPO_REFERENCE_PATH} in the hivemind-os repo; search those for chain matrices, API references, apps, browser automation, memory, and file-storage details.`,
+      ].join(" "),
+      load: {
+        type: "file",
+        target: BANKR_VAULT_REFERENCE_PATH,
+        note: "Vault-relative imported Bankr docs. For live readiness use /api/crypto/capabilities; execution stays behind the Bankr skill/CLI, /api/bankr/llm-credits, and wallet spend gates.",
       },
     },
     {

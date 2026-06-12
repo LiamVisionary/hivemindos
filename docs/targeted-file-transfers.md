@@ -55,13 +55,13 @@ Example manifest shape:
   "note": "source screenshot for preview QA",
   "from": {
     "machineId": "hivemind-machine-sender",
-    "host": "ubuntu-8gb-hel1-2",
+    "host": "ubuntu-vps-1",
     "runtime": "hermes",
     "agentId": "qa-agent"
   },
   "to": {
     "machineId": "hivemind-machine-receiver",
-    "host": "Liams-MacBook-Pro.local",
+    "host": "Workstation.local",
     "runtime": "hermes",
     "agentId": "renderer"
   },
@@ -150,7 +150,7 @@ You can target by host instead of machine id:
 
 ```bash
 hive-transfer send \
-  --toHost Liams-MacBook-Pro.local \
+  --toHost Workstation.local \
   --toRuntime hermes \
   --toAgent renderer \
   ./artifact.zip

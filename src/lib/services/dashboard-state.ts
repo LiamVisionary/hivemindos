@@ -78,3 +78,27 @@ export async function updateDashboardState(input: {
   dashboardStateWriteQueue = dashboardStateWriteQueue.catch(() => emptyState()).then(write);
   return dashboardStateWriteQueue;
 }
+
+/**
+ * Read-modify-write a single state value inside the write queue, so two
+ * concurrent mutations of the same key (e.g. agent-profile upserts from a
+ * phone) can never lose each other's writes.
+ */
+export async function mutateDashboardStateValue(
+  key: string,
+  mutate: (current: string | null) => string,
+): Promise<DashboardStateFile> {
+  const write = async () => {
+    const current = await readDashboardState();
+    const values = { ...current.values, [key]: mutate(current.values[key] ?? null) };
+    const next = {
+      version: 1 as const,
+      values,
+      updatedAt: new Date().toISOString(),
+    };
+    await writeDashboardState(next);
+    return next;
+  };
+  dashboardStateWriteQueue = dashboardStateWriteQueue.catch(() => emptyState()).then(write);
+  return dashboardStateWriteQueue;
+}

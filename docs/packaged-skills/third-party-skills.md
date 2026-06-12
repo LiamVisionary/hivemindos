@@ -37,7 +37,7 @@ Current optional catalog:
 | `design/` UI Skills pack | 109 optional UI and design-engineering skills from the UI Skills directory, grouped as `design/<source>/<skill>/` so duplicate upstream names remain distinct, and installable together through the `Design Optional Skills Directory` pack. |
 | `design/nextlevelbuilder/ui-ux-pro-max` | UI/UX implementation guidance, design stack data, templates, and helper scripts for richer frontend work. |
 
-Optional skills must be self-contained and installable without relying on Liam's local runtime paths.
+Optional skills must be self-contained and installable without relying on any single machine's local runtime paths.
 
 ## Review Rules
 

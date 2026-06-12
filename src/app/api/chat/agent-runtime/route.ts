@@ -45,6 +45,7 @@ import {
 } from "@/lib/services/miroshark/x402-chat-run";
 import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS } from "@/lib/utils/agent-wallet";
 import { activeSharedVault, buildVaultContext } from "@/lib/services/chat/shared-vault-context";
+import { buildBankrCapabilityContext } from "@/lib/services/chat/bankr-capability-context";
 import { buildSharedBrainMemoryContext } from "@/lib/services/chat/shared-brain-memory-context";
 import {
   buildTaskRetrievalContextResult,
@@ -52,6 +53,7 @@ import {
   formatTaskRetrievalFallbackProcessDetail,
   formatTaskRetrievalProcessDetail,
   imageGenerationRequest,
+  requiresCapabilityRouting,
   type TaskRetrievalTelemetry,
 } from "@/lib/services/chat/task-retrieval-context";
 import { runtimeImageGenerationCapabilityContext } from "@/lib/services/chat/runtime-image-generation-capability";
@@ -61,7 +63,15 @@ import {
   prependHivemindSystemMessage,
 } from "@/lib/services/chat/hivemind-system-prompt";
 import { resolveAdaptiveOpenRouterModel, resolveAdaptiveOpenRouterModels } from "@/lib/services/chat/adaptive-openrouter-models";
+import { assessAdaptiveResponseQuality, classifyAdaptiveModelFailure, recordAdaptiveModelOutcome } from "@/lib/services/chat/adaptive-model-reliability";
+import {
+  createChannelMarkupState,
+  flushChannelMarkup,
+  routeChannelMarkupDelta,
+  routeChannelMarkupText,
+} from "@/lib/services/chat/channel-markup";
 import { isAdaptiveProviderProfile, resolveAdaptiveRoutePlan, type AdaptiveRoutePlan } from "@/lib/services/chat/adaptive-model-router";
+import { adaptiveReliabilityKey, assessAdaptiveResponseQuality, classifyAdaptiveModelFailure, recordAdaptiveModelOutcome } from "@/lib/services/chat/adaptive-model-reliability";
 import {
   appendRuntimeChatSessionEvent,
   appendRuntimeChatSessionText,
@@ -70,6 +80,7 @@ import {
   startRuntimeChatSession,
 } from "@/lib/services/chat/runtime-session-store";
 import { canonicalLocalCollectorUrl, isLocalCollectorUrl, remoteCollectorLocalServiceUrl } from "@/lib/services/local-collector-url";
+import { resolveLmStudioFleetBaseUrl } from "@/lib/services/fleet/lmstudio-model-hosts";
 import { RUN_COMMAND_TOOL_NAME, runAgentCommand, runCommandToolDefinition } from "@/lib/services/agent-shell/command-tool";
 import { streamMobileAgentTurn } from "@/lib/services/mobile-agents/chat-turn";
 import { isMobileAgentGatewayUrl } from "@/lib/types/mobile-agents";
@@ -100,9 +111,19 @@ const INTERACTIVE_RUNTIME_LOCK_MS = 130_000;
 const RUNTIME_FETCH_TIMEOUT_MS = 10 * 60 * 1000;
 const CHAT_PREFLIGHT_RUNTIME_CAPABILITY_TIMEOUT_MS = 150;
 const CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS = 900;
+// Capability-shaped prompts ("what can you do with X", trading, wallet, token
+// launch, …) are exactly the turns where dropping the retrieval result leaves
+// the agent blind to its own powers, so they get a larger preflight budget.
+const CHAT_PREFLIGHT_CAPABILITY_ROUTING_TIMEOUT_MS = 2_500;
 const CHAT_PREFLIGHT_MEMORY_TIMEOUT_MS = 650;
 const ADAPTIVE_HERMES_OPENROUTER_FREE_ATTEMPTS = 5;
+// Time allowed for an attempt to produce its first stream byte. Once the
+// stream is flowing, silence means the Hermes CLI is still working (the
+// collector closes the stream when the CLI exits), so the idle window is much
+// longer — just under the collector's 20-minute chat cap.
 const ADAPTIVE_HERMES_OPENROUTER_ATTEMPT_TIMEOUT_MS = 45_000;
+const ADAPTIVE_HERMES_OPENROUTER_STREAM_IDLE_TIMEOUT_MS = 15 * 60_000;
+const ADAPTIVE_HERMES_OPENROUTER_KEEPALIVE_MS = 25_000;
 const DEFAULT_ADAPTIVE_HERMES_OPENROUTER_FALLBACK_MODEL = "openai/gpt-4.1-mini";
 const HIVE_ENV_FILE = join(homedir(), ".hivemindos", ".env");
 const HERMES_ENV_FILE = join(homedir(), ".hermes", ".env");
@@ -1603,14 +1624,22 @@ function extractReasoningChunk(payload: unknown): string {
   if (!payload || typeof payload !== "object") return "";
   const value = payload as {
     reasoning?: string;
-    message?: { reasoning?: string };
-    choices?: Array<{ delta?: { reasoning?: string }; message?: { reasoning?: string } }>;
+    reasoning_content?: string;
+    message?: { reasoning?: string; reasoning_content?: string };
+    choices?: Array<{
+      delta?: { reasoning?: string; reasoning_content?: string };
+      message?: { reasoning?: string; reasoning_content?: string };
+    }>;
   };
   return (
     value.choices?.[0]?.delta?.reasoning ??
+    value.choices?.[0]?.delta?.reasoning_content ??
     value.choices?.[0]?.message?.reasoning ??
+    value.choices?.[0]?.message?.reasoning_content ??
     value.reasoning ??
+    value.reasoning_content ??
     value.message?.reasoning ??
+    value.message?.reasoning_content ??
     ""
   );
 }
@@ -1649,7 +1678,11 @@ type ChannelMarkupState = {
   pending: string;
 };
 
-const channelControlPattern = /<channel>\s*(thought|thinking|analysis|reasoning|final|message|content|assistant|response)\s*<\/channel>|<\|?channel\|?>\s*(thought|thinking|analysis|reasoning|final|message|content|assistant|response)\s*|<\|?message\|?>|<\/channel>/gi;
+// Also matches bare <think>/<thinking> spans: MiniMax, DeepSeek-R1, and Qwen
+// stream reasoning inline in delta.content wrapped in those tags instead of a
+// separate reasoning field (observed 2026-06-11: MiniMax-M2.7 leaked a raw
+// <think> block into a BankrAgent02 chat).
+const channelControlPattern = /<channel>\s*(thought|thinking|analysis|reasoning|final|message|content|assistant|response)\s*<\/channel>|<\|?channel\|?>\s*(thought|thinking|analysis|reasoning|final|message|content|assistant|response)\s*|<\|?message\|?>|<\/channel>|<(?<thinkOpen>think|thinking)>|<\/(?<thinkClose>think|thinking)>/gi;
 
 function createChannelMarkupState(): ChannelMarkupState {
   return { channel: "content", pending: "" };
@@ -1680,11 +1713,17 @@ function routeChannelMarkupDelta(
   for (const match of input.matchAll(channelControlPattern)) {
     const index = match.index ?? 0;
     append(input.slice(cursor, index));
-    const channel = String(match[1] ?? match[2] ?? "").trim().toLowerCase();
-    if (/^(thought|thinking|analysis|reasoning)$/.test(channel)) {
+    if (match.groups?.thinkOpen) {
       state.channel = "thinking";
-    } else if (/^(final|message|content|assistant|response)$/.test(channel)) {
+    } else if (match.groups?.thinkClose) {
       state.channel = "content";
+    } else {
+      const channel = String(match[1] ?? match[2] ?? "").trim().toLowerCase();
+      if (/^(thought|thinking|analysis|reasoning)$/.test(channel)) {
+        state.channel = "thinking";
+      } else if (/^(final|message|content|assistant|response)$/.test(channel)) {
+        state.channel = "content";
+      }
     }
     cursor = index + match[0].length;
   }
@@ -1712,6 +1751,49 @@ function isLocalLmStudioProfile(profile: AgentProfile) {
   return profile.runtime === HIVEMIND_OS_RUNTIME
     && profile.provider === "lm-studio"
     && isLocalCollectorUrl(profile.telemetryUrl);
+}
+
+type LmStudioModelLoadState = "loaded" | "not-loaded" | "not-local" | "unknown";
+
+/**
+ * Ask LM Studio whether the model is already in memory before the chat fetch.
+ * `/api/v0/models` lists only locally-downloaded models with a `state` field;
+ * a model that LM Studio serves from an LM Link device (it shows in
+ * `/v1/models` but not here) reports "not-local". A cold model means the chat
+ * request will block on a JIT load — minutes locally, or a ~70s hang ending in
+ * "No models loaded" when the LM Link host is offline — so callers use this to
+ * tell the session what it's actually waiting on.
+ */
+async function lmStudioModelLoadState(gatewayUrl: string, model: string): Promise<LmStudioModelLoadState> {
+  try {
+    const base = gatewayUrl.trim().replace(/\/+$/, "");
+    const res = await fetch(`${base}/api/v0/models`, { signal: AbortSignal.timeout(1_500) });
+    if (!res.ok) return "unknown";
+    const body = await res.json().catch(() => null) as { data?: Array<{ id?: string; state?: string }> } | null;
+    const entry = body?.data?.find((m) => m?.id === model);
+    if (!entry) return "not-local";
+    return entry.state === "loaded" ? "loaded" : "not-loaded";
+  } catch {
+    return "unknown";
+  }
+}
+
+function lmStudioModelLoadNotice(model: string, loadState: LmStudioModelLoadState) {
+  if (loadState === "not-local") {
+    return `${model} is not downloaded on this machine — LM Studio will try to serve it from an LM Link device. If that device is offline, this can stall for about a minute and then fail.`;
+  }
+  return `${model} is not loaded yet — LM Studio is loading it now. The first reply can take a while.`;
+}
+
+/** A 400 whose body says the model isn't available — not a request-shape
+ *  problem, so retrying (e.g. without tools) would only trigger another
+ *  doomed JIT load. */
+function isModelUnavailableErrorBody(body: string) {
+  return /no models? (?:are currently )?loaded|model (?:is )?not loaded|failed to load model/i.test(body);
+}
+
+function lmStudioModelUnavailableMessage(model: string) {
+  return `LM Studio could not serve "${model}" — it reports no model loaded. The model may need to be loaded (\`lms load ${model}\`), or it lives on an LM Link device that is offline — check LM Link status in LM Studio, then retry.`;
 }
 
 function lmStudioCliEnv() {
@@ -2021,6 +2103,7 @@ async function streamAdaptiveHermesOpenRouterRuntime(
 
       const attemptedModels: string[] = [];
       let lastError = "";
+      let hermesCliSessionId = "";
       try {
         for (const candidateModel of candidateModels) {
           const candidateProfile = profileWithResolvedModel(profile, candidateModel);
@@ -2048,7 +2131,11 @@ async function streamAdaptiveHermesOpenRouterRuntime(
 
           let upstream: Response;
           const attemptController = new AbortController();
-          const attemptTimer = setTimeout(() => attemptController.abort(), ADAPTIVE_HERMES_OPENROUTER_ATTEMPT_TIMEOUT_MS);
+          let attemptTimer = setTimeout(() => attemptController.abort(), ADAPTIVE_HERMES_OPENROUTER_ATTEMPT_TIMEOUT_MS);
+          const refreshAttemptTimer = (ms: number) => {
+            clearTimeout(attemptTimer);
+            attemptTimer = setTimeout(() => attemptController.abort(), ms);
+          };
           try {
             upstream = await fetch(url, {
               method: "POST",
@@ -2068,11 +2155,14 @@ async function streamAdaptiveHermesOpenRouterRuntime(
                 }),
                 rawUserMessage: userText,
                 forceHermesCli: true,
-                disableHermesResume: true,
+                // The HivemindOS runtimeSessionId is not a Hermes CLI session id,
+                // so resume only once a prior attempt reported the real CLI
+                // session — then retries continue its work instead of restarting.
+                disableHermesResume: !hermesCliSessionId,
                 agentMode,
                 mode: agentMode,
-                runtimeSessionId: runtimeSessionId || undefined,
-                hermesSessionId: runtimeSessionId || undefined,
+                runtimeSessionId: hermesCliSessionId || runtimeSessionId || undefined,
+                hermesSessionId: hermesCliSessionId || runtimeSessionId || undefined,
                 message: userText,
                 messages: runtimeMessages,
                 stream: true,
@@ -2100,6 +2190,7 @@ async function streamAdaptiveHermesOpenRouterRuntime(
               remainingCandidates: Math.max(0, candidateModels.length - attemptedModels.length),
               elapsedMs: Date.now() - fetchStartedAt,
             });
+            void recordAdaptiveModelOutcome(candidateModel, classifyAdaptiveModelFailure(lastError), lastError);
             queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive retry", lastError));
             continue;
           }
@@ -2119,6 +2210,7 @@ async function streamAdaptiveHermesOpenRouterRuntime(
               remainingCandidates: Math.max(0, candidateModels.length - attemptedModels.length),
               elapsedMs: Date.now() - fetchStartedAt,
             });
+            void recordAdaptiveModelOutcome(candidateModel, classifyAdaptiveModelFailure(`${upstream.status} ${lastError}`), lastError);
             queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive retry", lastError));
             continue;
           }
@@ -2129,10 +2221,14 @@ async function streamAdaptiveHermesOpenRouterRuntime(
           let sawFirstChunk = false;
           let textDeltaCount = 0;
           const channelMarkupState = createChannelMarkupState();
+          // Bare SSE comments keep the browser's stall timer alive while the
+          // Hermes CLI works silently; they render nothing in the UI.
+          const keepaliveTimer = setInterval(() => safeEnqueue(":\n\n"), ADAPTIVE_HERMES_OPENROUTER_KEEPALIVE_MS);
           try {
             while (true) {
               const { value, done } = await reader.read();
               if (done) break;
+              refreshAttemptTimer(ADAPTIVE_HERMES_OPENROUTER_STREAM_IDLE_TIMEOUT_MS);
               if (!sawFirstChunk) {
                 sawFirstChunk = true;
                 recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.stream.first_chunk", {
@@ -2199,6 +2295,8 @@ async function streamAdaptiveHermesOpenRouterRuntime(
                   } else if (!thinking && isTerminalOpenAiStreamMetadata(parsed)) {
                     continue;
                   } else if (!thinking && parsed?.session) {
+                    const cliSessionId = String(parsed.session?.id ?? parsed.session?.sessionId ?? "").trim();
+                    if (cliSessionId) hermesCliSessionId = cliSessionId;
                     safeEnqueue(ssePayload(parsed));
                   } else if (!thinking) {
                     queueSessionWrite(() => appendRuntimeChatSessionEvent(
@@ -2236,6 +2334,17 @@ async function streamAdaptiveHermesOpenRouterRuntime(
                 }
               }
             }
+            const flushedTail = flushChannelMarkup(channelMarkupState);
+            if (flushedTail.thinking) {
+              queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Thinking", flushedTail.thinking));
+              safeEnqueue(ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: flushedTail.thinking }));
+            }
+            if (flushedTail.content) {
+              fullText += flushedTail.content;
+              textDeltaCount += 1;
+              queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", flushedTail.content));
+              safeEnqueue(ssePayload({ choices: [{ delta: { content: flushedTail.content } }] }));
+            }
           } catch (error) {
             lastError = runtimeStreamErrorMessage(candidateProfile, error);
             recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.stream.failed", {
@@ -2251,9 +2360,18 @@ async function streamAdaptiveHermesOpenRouterRuntime(
             queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive retry", `${candidateModel}: ${lastError}`));
           } finally {
             clearTimeout(attemptTimer);
+            clearInterval(keepaliveTimer);
           }
 
           if (fullText.trim()) {
+            // Quality gate: the response already streamed to the user, so a
+            // fail can't retry this turn — it grades the model for future
+            // routing ("completed but useless" still demotes).
+            const quality = assessAdaptiveResponseQuality(userText, fullText);
+            void recordAdaptiveModelOutcome(candidateModel, quality.ok ? "success" : "low-quality", quality.reason);
+            if (!quality.ok) {
+              queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive quality flag", `${candidateModel}: ${quality.reason}`));
+            }
             const event = await recordChatHoney(candidateProfile, userText, fullText, honeyLedgerEnabled);
             if (event) safeEnqueue(ssePayload({ honey: event }));
             safeEnqueue("data: [DONE]\n\n");
@@ -2286,6 +2404,7 @@ async function streamAdaptiveHermesOpenRouterRuntime(
             lastError,
             streamElapsedMs: Date.now() - fetchStartedAt,
           });
+          void recordAdaptiveModelOutcome(candidateModel, classifyAdaptiveModelFailure(lastError), lastError);
           queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive retry", `${candidateModel}: ${lastError}`));
         }
 
@@ -2351,7 +2470,12 @@ async function streamHttpRuntime(
       if (adaptiveRoutePlan.profile.runtime === HIVEMIND_OS_RUNTIME) {
         return streamOpenAICompatibleRuntime(adaptiveRoutePlan.profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, adaptiveRoutePlan, vaultPromptContext);
       }
-      profile = adaptiveRoutePlan.profile;
+      // A Hermes-selected plan is always OpenRouter-backed. Re-shape to the
+      // adaptive-OpenRouter profile instead of pinning the single selected
+      // model, so the run gets the full optimized loop: per-message failover,
+      // reliability recording, session resume on retry, keepalives, and
+      // quality gates. The fallback model is read from adaptiveRouting.
+      profile = { ...profile, provider: "openrouter", model: "adaptive" };
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "Adaptive provider routing failed." }, { status: 502 });
     }
@@ -2415,6 +2539,19 @@ async function streamHttpRuntime(
   const hermesSlashCommand = profile.runtime === "hermes" && /^\/[^\s/]*(?:\s|$)/.test(inputCheck.text.trim());
   const runtimeMessages = hermesSlashCommand ? messages : prependHivemindSystemMessage(messages, promptEnvelope);
   const runtimeMessage = inputCheck.text;
+  // lm-studio models hosted on another fleet machine resolve automatically:
+  // the hosting machine's collector proxies its LM Studio, and the agent's
+  // hermes run gets that base URL for this turn only.
+  const lmStudioFleetHost = profile.runtime === "hermes" && telemetry?.request
+    ? await resolveLmStudioFleetBaseUrl(runtimeProfile, profile.gatewayUrl || "", telemetry.request.url).catch(() => null)
+    : null;
+  if (lmStudioFleetHost) {
+    await appendRuntimeChatSessionEvent(
+      runtimeSessionId,
+      "Fleet model routing",
+      `${runtimeProfile.model} is hosted on ${lmStudioFleetHost.machineName}; routing this run there.`,
+    ).catch(() => undefined);
+  }
   const workspaceBefore = await readWorkspaceSnapshot(workingDirectory);
   let upstream: Response;
   const fetchStartedAt = Date.now();
@@ -2466,6 +2603,7 @@ async function streamHttpRuntime(
         wallet,
         walletTools: buildWalletTools(wallet),
         context: hermesSlashCommand ? undefined : promptEnvelope.systemContext || undefined,
+        lmStudioBaseUrl: lmStudioFleetHost?.baseUrl || undefined,
       }),
       signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
     });
@@ -2782,6 +2920,19 @@ async function streamHttpRuntime(
             }
           }
         }
+        {
+          const flushedTail = flushChannelMarkup(channelMarkupState);
+          if (flushedTail.thinking) {
+            queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Thinking", flushedTail.thinking));
+            safeEnqueue(ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: flushedTail.thinking }));
+          }
+          if (flushedTail.content) {
+            fullText += flushedTail.content;
+            textDeltaCount += 1;
+            queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", flushedTail.content));
+            safeEnqueue(ssePayload({ choices: [{ delta: { content: flushedTail.content } }] }));
+          }
+        }
         if (!fullText.trim()) {
           const workspaceAfter = await readWorkspaceSnapshot(workingDirectory);
           const summary = workspaceChangeSummary(workspaceBefore, workspaceAfter);
@@ -3049,7 +3200,7 @@ async function streamOpenAICompatibleRuntime(
     ...(offerImageTool ? [imageGenerationToolDefinition()] : []),
     ...(offerCommandTool ? [runCommandToolDefinition()] : []),
   ];
-  let winningRequest: { url: string; headers: Record<string, string>; messages: IncomingMessage[]; model: string; sentTools: boolean } | null = null;
+  let winningRequest: { url: string; headers: Record<string, string>; messages: IncomingMessage[]; model: string; provider: string; sentTools: boolean } | null = null;
   const fetchStartedAt = Date.now();
   let upstream: Response | null = null;
   let model = candidateModels[0] ?? openAICompatibleModel(profile);
@@ -3158,6 +3309,25 @@ async function streamOpenAICompatibleRuntime(
       offerImageTool: sentTools,
       messageCount: modelMessages.length,
     });
+    // A cold LM Studio model makes the chat fetch block on a JIT load with
+    // zero feedback (a dead LM Link host holds it ~70s before failing).
+    // Tell the session up front so polling clients can show what's happening.
+    if (isLocalLmStudioProfile(candidateProfile) && !adaptiveOpenRouter && !adaptiveProvider && !usePodEnabled && !isBankrLlmProfile(candidateProfile)) {
+      const loadState = await lmStudioModelLoadState(candidateProfile.gatewayUrl, candidateModel);
+      if (loadState === "not-loaded" || loadState === "not-local") {
+        recordRuntimeTelemetry(telemetry, "agent_runtime.lm_studio.model_not_loaded", {
+          ...telemetryPayloadForProfile(candidateProfile),
+          model: candidateModel,
+          loadState,
+        });
+        await appendRuntimeChatSessionEvent(
+          runtimeSessionId,
+          "Loading model",
+          lmStudioModelLoadNotice(candidateModel, loadState),
+        ).catch(() => undefined);
+      }
+    }
+    let upstreamErrorText: string | null = null;
     try {
       upstream = await fetch(candidateUrl, {
         method: "POST",
@@ -3167,21 +3337,27 @@ async function streamOpenAICompatibleRuntime(
       });
       // Some OpenAI-compatible providers reject a `tools` array with a 400. Retry the
       // same candidate once without tools so image chats still get a normal text reply.
+      // A model-unavailable 400 is not a tools problem — retrying would only start a
+      // second doomed JIT load, so surface it as-is.
       if (sentTools && !upstream.ok && upstream.status === 400) {
-        recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.tools_unsupported", {
-          ...telemetryPayloadForProfile(candidateProfile),
-          url: candidateUrl,
-          model,
-          status: upstream.status,
-          elapsedMs: Date.now() - fetchStartedAt,
-        });
-        sentTools = false;
-        upstream = await fetch(candidateUrl, {
-          method: "POST",
-          headers: attemptHeaders,
-          body: requestBodyFor(false),
-          signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
-        });
+        upstreamErrorText = await upstream.text().catch(() => "");
+        if (!isModelUnavailableErrorBody(upstreamErrorText)) {
+          recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.tools_unsupported", {
+            ...telemetryPayloadForProfile(candidateProfile),
+            url: candidateUrl,
+            model,
+            status: upstream.status,
+            elapsedMs: Date.now() - fetchStartedAt,
+          });
+          sentTools = false;
+          upstreamErrorText = null;
+          upstream = await fetch(candidateUrl, {
+            method: "POST",
+            headers: attemptHeaders,
+            body: requestBodyFor(false),
+            signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
+          });
+        }
       }
     } catch (error) {
       lastFetchError = error;
@@ -3199,6 +3375,8 @@ async function streamOpenAICompatibleRuntime(
         elapsedMs: Date.now() - fetchStartedAt,
       });
       if ((adaptiveOpenRouter || adaptiveProvider) && attemptedModels.length < routeAttempts.length) {
+        const detail = error instanceof Error ? error.message : String(error);
+        void recordAdaptiveModelOutcome(adaptiveReliabilityKey(routeAttempt.provider, candidateModel), classifyAdaptiveModelFailure(detail), detail);
         continue;
       }
       if (await startLmStudioServerForProfile(candidateProfile, candidateUrl, error)) {
@@ -3218,7 +3396,7 @@ async function streamOpenAICompatibleRuntime(
             elapsedMs: Date.now() - fetchStartedAt,
           });
           if (upstream.ok) {
-            winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, sentTools };
+            winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, provider: routeAttempt.provider, sentTools };
             break;
           }
         } catch (retryError) {
@@ -3239,7 +3417,7 @@ async function streamOpenAICompatibleRuntime(
       return Response.json({ error: runtimeFetchError(candidateProfile, candidateUrl, error) }, { status: 502 });
     }
     if (upstream.ok) {
-      winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, sentTools };
+      winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, provider: routeAttempt.provider, sentTools };
       break;
     }
     lastStatus = upstream.status;
@@ -3257,6 +3435,13 @@ async function streamOpenAICompatibleRuntime(
       remainingCandidates: Math.max(0, routeAttempts.length - attemptedModels.length),
       elapsedMs: Date.now() - fetchStartedAt,
     });
+    if (adaptiveOpenRouter || adaptiveProvider) {
+      void recordAdaptiveModelOutcome(
+        adaptiveReliabilityKey(routeAttempt.provider, candidateModel),
+        classifyAdaptiveModelFailure(`${upstream.status} ${errorText}`),
+        errorText || `HTTP ${upstream.status}`,
+      );
+    }
     if ((adaptiveOpenRouter || adaptiveProvider) && retryableAdaptiveOpenRouterStatus(upstream.status) && attemptedModels.length < routeAttempts.length) {
       continue;
     }
@@ -3317,10 +3502,9 @@ async function streamOpenAICompatibleRuntime(
   if (!contentType.includes("text/event-stream")) {
     const json = await upstream.json().catch(async () => ({ text: await upstream.text().catch(() => "") }));
     const outputCheck = proxyOutput(extractChunk(json));
-    const channelMarkupState = createChannelMarkupState();
     const routed = outputCheck.verdict === "block"
       ? { content: "", thinking: "" }
-      : routeChannelMarkupDelta(outputCheck.text || JSON.stringify(json), channelMarkupState);
+      : routeChannelMarkupText(outputCheck.text || JSON.stringify(json));
     const chunk = routed.content;
     const event = outputCheck.verdict === "block" ? null : await recordChatHoney(profile, userText, chunk, honeyLedgerEnabled);
     if (outputCheck.verdict === "block") {
@@ -3438,6 +3622,16 @@ async function streamOpenAICompatibleRuntime(
               }
             }
           }
+        }
+        const flushedTail = flushChannelMarkup(channelMarkupState);
+        if (flushedTail.thinking) {
+          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Thinking", flushedTail.thinking));
+          controller.enqueue(encoder.encode(ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: flushedTail.thinking })));
+        }
+        if (flushedTail.content) {
+          fullText += flushedTail.content;
+          queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", flushedTail.content));
+          controller.enqueue(encoder.encode(ssePayload({ choices: [{ delta: { content: flushedTail.content } }] })));
         }
         return { toolCalls: [...toolAcc.values()].filter((call) => call.name) };
       };
@@ -3644,6 +3838,17 @@ async function streamOpenAICompatibleRuntime(
           }
           active = continuation;
         }
+        if ((adaptiveOpenRouter || adaptiveProvider) && winningRequest && fullText.trim()) {
+          // Same quality gate as the Hermes adaptive loop: success only counts
+          // once the completed text survives the garbage checks; a fail grades
+          // the model down for future routing without touching this response.
+          const quality = assessAdaptiveResponseQuality(userText, fullText);
+          const reliabilityKey = adaptiveReliabilityKey(winningRequest.provider, winningRequest.model);
+          void recordAdaptiveModelOutcome(reliabilityKey, quality.ok ? "success" : "low-quality", quality.reason);
+          if (!quality.ok) {
+            queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Adaptive quality flag", `${reliabilityKey}: ${quality.reason}`));
+          }
+        }
         const event = await recordChatHoney(profile, userText, fullText, honeyLedgerEnabled);
         if (event) controller.enqueue(encoder.encode(ssePayload({ honey: event })));
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
@@ -3820,6 +4025,9 @@ export async function POST(request: NextRequest) {
     runtimeImageGenerationSource: undefined,
   };
   const emptyTaskRetrievalResult = { context: "", telemetry: null as TaskRetrievalTelemetry | null };
+  const capabilitySearchTimeoutMs = !lowLatencyVoiceTurn && requiresCapabilityRouting(userPrompt)
+    ? CHAT_PREFLIGHT_CAPABILITY_ROUTING_TIMEOUT_MS
+    : CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS;
   const runtimeCapabilityPreflight = lowLatencyVoiceTurn
     ? { value: undefined as Awaited<ReturnType<typeof runtimeImageGenerationCapabilityContext>> | undefined, timedOut: false, failed: false }
     : await bestEffortPreflight(
@@ -3841,7 +4049,7 @@ export async function POST(request: NextRequest) {
           taskPreferences: profile.taskPreferences,
         },
       }),
-      CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS,
+      capabilitySearchTimeoutMs,
       emptyTaskRetrievalResult,
     ),
     lowLatencyVoiceTurn
@@ -3854,13 +4062,21 @@ export async function POST(request: NextRequest) {
   ]);
   const taskRetrievalResult = taskRetrievalPreflight.value;
   const sharedBrainMemoryContext = sharedBrainMemoryPreflight.value;
-  const taskRetrievalContext = taskRetrievalResult.context || buildTaskRetrievalFallbackContext({
-    query: userPrompt,
-    origin: request.url,
-    timeoutMs: CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS,
-    timedOut: taskRetrievalPreflight.timedOut,
-    failed: taskRetrievalPreflight.failed,
-  });
+  // Bankr knowledge is key-gated, not profile-gated: any runtime/provider/model
+  // can use the shared Bankr key, and the briefing must survive a timed-out
+  // capability search, so it rides along with whatever retrieval produced
+  // (results or the fallback notice). Presence check is cached; never the value.
+  const bankrCapabilityContext = await buildBankrCapabilityContext().catch(() => "");
+  const taskRetrievalContext = [
+    taskRetrievalResult.context || buildTaskRetrievalFallbackContext({
+      query: userPrompt,
+      origin: request.url,
+      timeoutMs: capabilitySearchTimeoutMs,
+      timedOut: taskRetrievalPreflight.timedOut,
+      failed: taskRetrievalPreflight.failed,
+    }),
+    bankrCapabilityContext,
+  ].filter(Boolean).join("\n\n");
   await recordRouteTelemetry(request, "agent_runtime.capability_search.completed", {
     ...telemetryPayloadForProfile(profile),
     runtimeSessionId,
@@ -3895,7 +4111,7 @@ export async function POST(request: NextRequest) {
   const capabilitySearchProcessDetail = taskRetrievalResult.telemetry?.queryCount
     ? formatTaskRetrievalProcessDetail(taskRetrievalResult.telemetry)
     : formatTaskRetrievalFallbackProcessDetail({
-      timeoutMs: CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS,
+      timeoutMs: capabilitySearchTimeoutMs,
       timedOut: taskRetrievalPreflight.timedOut,
       failed: taskRetrievalPreflight.failed,
     });

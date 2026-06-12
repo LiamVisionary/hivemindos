@@ -5,6 +5,7 @@ import {
   hivemindLinkControlUrl,
   localTelemetryCollectorUrl,
 } from "@/lib/services/hivemind-link-control";
+import { readStoredAgentProfiles } from "@/lib/services/agent-profile-store";
 import { mobileAgentProfilesForMachine } from "@/lib/services/mobile-agents/fleet";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 
@@ -785,6 +786,37 @@ async function probeCollectorViaTailscale(
   };
 }
 
+/**
+ * Profile edits (dashboard modal, phone agent editor) persist to the
+ * dashboard-state agent store, while discovery re-reads each machine's
+ * collector. Overlay the stored edits onto the collector copies so saved
+ * changes survive every refresh and reach remote clients. Machine-identity
+ * fields stay collector-owned: a stored profile may be stale about where the
+ * agent currently lives.
+ */
+async function overlayStoredAgentProfiles<MachineLike extends { agents: AgentProfile[] }>(
+  machines: MachineLike[],
+): Promise<MachineLike[]> {
+  const stored = await readStoredAgentProfiles().catch(() => []);
+  if (stored.length === 0) return machines;
+  const storedById = new Map(stored.map((profile) => [profile.id, profile]));
+  return machines.map((machine) => ({
+    ...machine,
+    agents: machine.agents.map((agent) => {
+      const edited = agent.id ? storedById.get(agent.id) : undefined;
+      if (!edited) return agent;
+      return {
+        ...agent,
+        ...edited,
+        id: agent.id,
+        machineName: agent.machineName,
+        telemetryUrl: agent.telemetryUrl,
+        collectorCapabilities: agent.collectorCapabilities,
+      };
+    }),
+  }));
+}
+
 async function readDiscovery(
   includeSnapshots: boolean,
   options: DiscoveryProbeOptions,
@@ -913,7 +945,7 @@ async function readDiscovery(
       }
     }),
   );
-  const machines = dedupeMachines(discovered);
+  const machines = await overlayStoredAgentProfiles(dedupeMachines(discovered));
 
   return {
     ok: true,

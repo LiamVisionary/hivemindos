@@ -213,6 +213,9 @@ function taskRetrievalQueries(query: string) {
   if (/\b(wallet|payment|pay|paid|spend|crypto|usdc|x402|usepod|moneyclaw|bankr|trade|trading|fund|funding|private|privately|privacy)\b/.test(normalized)) {
     queries.push({ label: "wallet and payment rails", query: "agent wallet tools payment rails private transfer privacy x402 fetch paid api crypto usdc usepod moneyclaw bankr send balance approval" });
   }
+  if (/\b(bankr|token\s+launch|launch\s+(?:a\s+)?token|llm\s+credits|max\s+mode|polymarket|hyperliquid|limit\s+order|stop\s+order|dca|twap)\b/.test(normalized)) {
+    queries.push({ label: "Bankr agent platform", query: "bankr agent platform trading swap token launch fee share llm gateway credits max mode automations polymarket hyperliquid wallet portfolio" });
+  }
   if (/\b(miroshark|simulation|simulate|rehearsal|social\s+sim|belief\s+drift|prediction\s+market|polymarket|reddit|twitter)\b/.test(normalized)) {
     queries.push({ label: "MiroShark social simulation", query: "MiroShark x402 paid run native chat card social simulation rehearsal prompt url article deep research prediction market report status modal" });
   }
@@ -240,7 +243,8 @@ export function localImageGenerationRequest(query: string) {
 
 export function requiresCapabilityRouting(query: string) {
   return localImageGenerationRequest(query)
-    || /\b(?:capabilit(?:y|ies)|connected app|tool|api|x402|wallet|payment|send|deliver|deploy|workflow|kanban|scheduler|miroshark)\b/i.test(query);
+    || /\b(?:capabilit(?:y|ies)|connected app|tool|api|x402|wallet|payment|send|deliver|deploy|workflow|kanban|scheduler|miroshark|bankr|crypto|trade|trading|token|swap|portfolio)\b/i.test(query)
+    || /\bwhat\b[\s\S]{0,40}\bcan you do\b|\bcan you do with\b/i.test(query);
 }
 
 function shouldRunTaskRetrieval(query: string) {

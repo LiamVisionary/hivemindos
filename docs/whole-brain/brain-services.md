@@ -106,7 +106,7 @@ The API supports:
 The CLI mirrors the same recall path for non-managed agents:
 
 ```bash
-hive-brain answer "what does liam prefer here?"
+hive-brain answer "what does the user prefer here?"
 hive-brain recall "BYOK Agent Calls" --scope full-vault --limit 5
 hive-brain remember --type preference --title "Short title" --content "Durable memory body"
 ```
@@ -165,7 +165,7 @@ Benchmarks from the live local API route at `http://127.0.0.1:5022/api/brain/mem
 
 The pre-index typed-memory markdown scan path measured p50 recall of 99.51ms at 100 memories, 293.49ms at 500 memories, 562.38ms at 1000 memories, and 784.03ms at 1500 memories. The optimized typed Agent Memory index keeps retrieval in the single-digit millisecond range through 500 memories and around 20ms p50 at 1500 memories while preserving perfect synthetic relevance in the benchmark set.
 
-On Liam's current 4,848-note vault, the forced full-vault recall scope has 2,685 eligible markdown notes after generated/runtime/archive exclusions. A live local route smoke test measured one cold full-vault answer at about 2.35s, then warm cached full-vault answers around 0.20s-0.25s for fruit preference recall and around 0.23s-0.35s for secure-reference/project recall, with one dev-server reload outlier at 3.05s. Under default tiered recall, strong distilled memories can return from the typed index without paying that full-vault scan.
+On a reference vault of about 4,800 notes, the forced full-vault recall scope has roughly 2,700 eligible markdown notes after generated/runtime/archive exclusions. A live local route smoke test measured one cold full-vault answer at about 2.35s, then warm cached full-vault answers around 0.20s-0.25s for preference recall and around 0.23s-0.35s for secure-reference/project recall, with one dev-server reload outlier at 3.05s. Under default tiered recall, strong distilled memories can return from the typed index without paying that full-vault scan.
 
 Raw-agent smoke tests confirmed both layers:
 

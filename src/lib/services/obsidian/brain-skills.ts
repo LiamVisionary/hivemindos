@@ -691,7 +691,9 @@ function mergeProviderInventories(
 
 export async function getBrainSkillInventory(
   vaultPath?: string,
-  remoteProviders?: RemoteBrainSkillProviderInventory[],
+  // A promise is accepted so callers can overlap the remote-collector fetch
+  // with the local scans; it's only awaited at the merge step below.
+  remoteProviders?: RemoteBrainSkillProviderInventory[] | Promise<RemoteBrainSkillProviderInventory[]>,
   options: { summaryMode?: SkillSummaryMode } = {},
 ): Promise<BrainSkillInventory> {
   const resolvedVault = resolveObsidianVaultPath(vaultPath);
@@ -734,7 +736,7 @@ export async function getBrainSkillInventory(
     };
   }));
 
-  const providers = mergeProviderInventories(localProviders, remoteProviders, sharedByChecksum, sharedBySlug);
+  const providers = mergeProviderInventories(localProviders, await remoteProviders, sharedByChecksum, sharedBySlug);
   const providerSkills = providers.reduce((sum, provider) => sum + provider.skills.length, 0);
   const importable = providers.reduce((sum, provider) => sum + provider.skills.filter((skill) => !skill.imported).length, 0);
 

@@ -30,7 +30,7 @@ The product starts with machines and agents. Fleet tells you what is online, whi
   </section>
   <section class="docCard">
     <h3>Agents, Runtimes, And Chat</h3>
-    <p>Runtime profiles, model selection, adapter behavior, streaming chat, `/swarm [number]` agent-team passes, attachments, directory context, and phone-call handoff.</p>
+    <p>Runtime profiles, model selection, adaptive free-model routing, adapter behavior, streaming chat, `/swarm [number]` agent-team passes, attachments, directory context, and phone-call handoff.</p>
     <a href="runtimes-and-chat.html">Open agents</a>
   </section>
   <section class="docCard">
@@ -54,6 +54,11 @@ Work is where operator intent turns into agent execution. The board captures rou
     <h3>MiroShark And Runtime Gateways</h3>
     <p>Simulation templates, `/swarm-sim` chat launches, swarm rehearsal, run intelligence, route catalogs, and the minimal runtime-gateway integration points HivemindOS owns.</p>
     <a href="miroshark-and-openclaw.html">Open gateway docs</a>
+  </section>
+  <section class="docCard">
+    <h3>Evo Optimization Runs</h3>
+    <p>Benchmark-driven optimization loops as a managed runtime: gated experiment trees in git worktrees, Hermes-hosted orchestration, experiment status and dashboard discovery, and fleet machines as remote SSH backends.</p>
+    <a href="evo-optimization.html">Open Evo docs</a>
   </section>
 </div>
 
@@ -183,6 +188,7 @@ flowchart TD
   Vault --> Notifications["Notifications"]
   Vault --> Env["Shared env"]
   Runtimes --> OpenClaw["OpenClaw"]
+  Runtimes --> Evo["Evo optimization runs"]
   Runtimes --> MiroShark["MiroShark"]
   MiroShark --> Swarm["Swarm theater"]
   Runtimes --> Wallets["Wallets and tokens"]

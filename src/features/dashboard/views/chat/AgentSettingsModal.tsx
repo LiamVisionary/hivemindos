@@ -2,7 +2,7 @@
 // @ts-nocheck
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BrainCircuit, Check, ChevronRight, Cpu, FolderOpen, KanbanSquare, MessageSquare, Minus, Pencil, Phone, PlugZap, Plus, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Upload, X } from "lucide-react";
 import { AgentCallsSettingsPanel } from "./AgentCallsSettingsPanel";
@@ -19,6 +19,7 @@ import { WorkerTaskPreferencesEditor } from "./WorkerTaskPreferencesEditor";
 import { gateBankrModelsForCredits, selectBestRuntimeModel } from "./runtime-model-registry";
 import { AeonOrb, Btn, Eyebrow, Pill, aeonStyles as styles } from "@/components/aeon/parts";
 import { WorkspaceModal } from "@/components/aeon";
+import { renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
 import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeProfileFeature, runtimeSettingsFeature, type AgentRuntime } from "@/lib/types/agent-runtime";
 
@@ -93,12 +94,87 @@ function Field({ label, children, style }: { label: string; children: React.Reac
   );
 }
 
+const TEXT_COMMIT_DELAY_MS = 200;
+
+// Every text field here commits into DashboardApp state, and each commit
+// re-renders the whole dashboard tree plus this modal. Buffer keystrokes in
+// local state and commit on a short debounce — flushed on blur and unmount —
+// so typing only re-renders the input itself.
+function useBufferedTextField<E extends HTMLInputElement | HTMLTextAreaElement>({
+  value,
+  onChange,
+  onBlur,
+}: {
+  value?: string | number | readonly string[];
+  onChange?: React.ChangeEventHandler<E>;
+  onBlur?: React.FocusEventHandler<E>;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [lastSeenValue, setLastSeenValue] = useState(value);
+  const [hasPendingEdits, setHasPendingEdits] = useState(false);
+  const pendingEventRef = useRef<React.ChangeEvent<E> | null>(null);
+  const commitTimerRef = useRef(0);
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  });
+
+  // Adopt external value writes (preset selection, draft resets) unless the
+  // user has uncommitted keystrokes — those win.
+  if (value !== lastSeenValue) {
+    setLastSeenValue(value);
+    if (!hasPendingEdits) setDraft(value);
+  }
+
+  const flush = useCallback(() => {
+    window.clearTimeout(commitTimerRef.current);
+    const event = pendingEventRef.current;
+    pendingEventRef.current = null;
+    setHasPendingEdits(false);
+    // event.target.value reads the live DOM value, so a flush always commits
+    // the freshest text even if more keystrokes landed after scheduling.
+    if (event) onChangeRef.current?.(event);
+  }, []);
+
+  useEffect(() => flush, [flush]);
+
+  const handleChange = useCallback(
+    (event: React.ChangeEvent<E>) => {
+      setDraft(event.target.value);
+      setHasPendingEdits(true);
+      pendingEventRef.current = event;
+      window.clearTimeout(commitTimerRef.current);
+      commitTimerRef.current = window.setTimeout(flush, TEXT_COMMIT_DELAY_MS);
+    },
+    [flush],
+  );
+
+  const handleBlur = useCallback(
+    (event: React.FocusEvent<E>) => {
+      flush();
+      onBlur?.(event);
+    },
+    [flush, onBlur],
+  );
+
+  if (value === undefined || !onChange) return { value, onChange, onBlur };
+  return { value: draft, onChange: handleChange, onBlur: handleBlur };
+}
+
+function BareTextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  const buffered = useBufferedTextField<HTMLInputElement>(props);
+  return <input {...props} {...buffered} />;
+}
+
 function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} style={{ ...inputStyle, ...(props.style || {}) }} />;
+  const buffered = useBufferedTextField<HTMLInputElement>(props);
+  return <input {...props} {...buffered} style={{ ...inputStyle, ...(props.style || {}) }} />;
 }
 
 function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} style={{ ...inputStyle, minHeight: 92, resize: "vertical", lineHeight: 1.5, ...(props.style || {}) }} />;
+  const buffered = useBufferedTextField<HTMLTextAreaElement>(props);
+  return <textarea {...props} {...buffered} style={{ ...inputStyle, minHeight: 92, resize: "vertical", lineHeight: 1.5, ...(props.style || {}) }} />;
 }
 
 function PanelHead({ eyebrow, title, sub, action }: { eyebrow: string; title: string; sub?: string; action?: React.ReactNode }) {
@@ -352,7 +428,9 @@ export function AgentSettingsModal(props: any) {
   const lmStudioSelectedModelLoaded = Boolean(selectedLmStudioInventoryModel?.loaded || selectedRuntimeModelOption?.subtitle === "Loaded" || selectedRuntimeModelOption?.badge === "Loaded"), lmStudioSelectedModelLoading = Boolean(lmStudioSelected && selectedRuntimeModelId && lmStudioPendingLoadModelKeys.includes(selectedRuntimeModelId) && !lmStudioSelectedModelLoaded);
   const lmStudioSelectedModelNeedsLoad = Boolean(lmStudioSelected && selectedRuntimeModelId && selectedRuntimeModelId !== "adaptive" && (
     selectedLmStudioInventoryModel
-      ? !selectedLmStudioInventoryModel.loaded
+      // Remote entries are served by the machine that hosts them; loading is
+      // managed there, never gated locally.
+      ? !selectedLmStudioInventoryModel.loaded && !selectedLmStudioInventoryModel.remote
       : selectedRuntimeModelOption?.subtitle === "Downloaded" || selectedRuntimeModelOption?.subtitle === "Available"
   ));
   const selectedLmStudioModelLabel = selectedLmStudioInventoryModel?.displayName || selectedRuntimeModelOption?.name || selectedRuntimeModelId, runtimeModelProviderSlug = selectedProviderSlug;
@@ -365,7 +443,9 @@ export function AgentSettingsModal(props: any) {
   const showProviderDiscovery = !runtimeModelProviders.length && !runtimeCanAddGatewayProviders && modelSelectableRuntime && !usePodSelected && !bankrLlmSelected && !adaptiveProviderSelected && !runtimeModelSelectionFresh && !runtimeIntegrationMessage;
   const hideRuntimeSection = !agentCreateMachine && Boolean(runtimeSettings.hidesRuntimeSelectorWhenEditing);
   const runtimeSelectorEntries = Object.entries(RUNTIME_LABELS).filter(([runtime]) => runtime !== HIVEMIND_OS_RUNTIME || activeRuntime === HIVEMIND_OS_RUNTIME);
-  const showWorkerClassSection = !isAutopilotSettings && !(usePodSelected && !usePodSetupComplete);
+  // The queen's role is fixed; her settings never offer worker class changes.
+  const isQueenSettings = !agentCreateMachine && roleModalAgent?.beeRole === "queen";
+  const showWorkerClassSection = !isAutopilotSettings && !(usePodSelected && !usePodSetupComplete) && !isQueenSettings;
   const agentStatus = agentCreateMachine ? "New profile" : roleModalAgent?.telemetryUrl ? "Connected" : "Local profile";
   const targetMachineRuntimes = agentCreateMachine?.capabilities?.runtimes ?? [], targetMachineHasRuntimeInventory = targetMachineRuntimes.length > 0;
   const workerSubtitle = (agentSettingsCustomWorker?.label || agentSettingsWorkerPreset?.label || agentSettingsWorkerLabel || "")
@@ -382,9 +462,11 @@ export function AgentSettingsModal(props: any) {
   useEffect(() => {
     if (!modalOpen || !runtimeModelPanelAvailable || !selectedRuntimeProvider || usePodSelected || bankrLlmSelected || adaptiveProviderSelected || runtimeIntegrationBusy) return;
     const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
-    const currentModelValid = currentModel === "adaptive" && selectedRuntimeProvider.slug === "openrouter"
-      || selectedRuntimeModels.some((model) => model.id === currentModel);
-    if (currentModelValid) return;
+    // A configured model is never silently replaced, even when it is missing
+    // from the discovered inventory — it may be served from a linked remote
+    // device or a machine whose discovery is temporarily unavailable. Only
+    // fill in a default when no model is set at all.
+    if (currentModel) return;
     const bestModel = selectBestRuntimeModel(selectedRuntimeProvider, {
       defaultModel: runtimeSettings.defaultModel,
       runtimeSelectedModel: runtimeModelSelectionsByRuntime?.[activeRuntime]?.model,
@@ -445,6 +527,22 @@ export function AgentSettingsModal(props: any) {
     const continueAfterLoad = window.setTimeout(() => { setLmStudioPendingPrimaryAction(null); if (action === "create" && agentCreateMachine) void createAgentFromModal(); else closeAgentSettingsModal(); }, 0);
     return () => window.clearTimeout(continueAfterLoad);
   }, [agentCreateMachine, closeAgentSettingsModal, createAgentFromModal, lmStudioPendingPrimaryAction, lmStudioSelectedModelLoaded, lmStudioSelectedModelLoading, selectedRuntimeModelId]);
+
+  // Paint the modal shell on the first frame and mount the heavy panel body
+  // one frame later, so the open click gets pixels immediately instead of
+  // waiting for the full panel render.
+  const [panelMounted, setPanelMounted] = useState(false);
+  useEffect(() => {
+    if (!modalOpen || panelMounted) return;
+    let cancelled = false;
+    const frame = window.requestAnimationFrame(() => {
+      if (!cancelled) setPanelMounted(true);
+    });
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [modalOpen, panelMounted]);
 
   if (!modalOpen) return null;
 
@@ -572,7 +670,7 @@ export function AgentSettingsModal(props: any) {
           : defaultNameForRuntime(runtime, provider),
         ...(nextSettings.kind === "autopilot" && aeonWorkerPreset ? {
           workerClass: aeonWorkerPreset.id,
-          skillProfilePrompt: aeonWorkerPreset.taskProfile,
+          skillProfilePrompt: renderBeeSoulTemplate(aeonWorkerPreset.soulTemplate, current.name),
           preferredSkillSlugs: aeonWorkerPreset.skillSlugs,
           aeonLocalPath: current.aeonLocalPath || "~/.aeon",
           aeonRepo: current.aeonRepo || "",
@@ -1331,7 +1429,7 @@ export function AgentSettingsModal(props: any) {
     </div>
   );
 
-  const panelContent = activePanel === "role"
+  const panelContent = !panelMounted ? null : activePanel === "role"
     ? renderRole()
     : activePanel === "connection"
       ? <div style={{ display: "grid", gap: 16 }}><PanelHead eyebrow="Connection" title="AEON connection" sub="Where Autopilot reads its repo and runs its scheduled skills." />{renderAeonConnection()}</div>
@@ -1406,7 +1504,7 @@ export function AgentSettingsModal(props: any) {
               <div style={{ display: "grid", justifyItems: "center", gap: 12, textAlign: "center" }}>
                 <AeonOrb size={92} state={isAutopilotSettings ? "duty" : "idle"} iconSrc={agentSettingsWorkerImage} />
                 <div style={{ display: "grid", gap: 8, width: "100%" }}>
-                  <input
+                  <BareTextInput
                     value={currentName}
                     onChange={(event) => updateName(event.target.value)}
                     placeholder={displayName}

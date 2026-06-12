@@ -52,6 +52,7 @@ export type NormalizedLmStudioModel = {
   paramsString?: string | null;
   sizeBytes?: number | null;
   format?: string | null;
+  remote?: boolean;
 };
 
 function cleanBaseUrl(profile: AgentProfile) {
@@ -323,6 +324,30 @@ export async function discoverLmStudioProviderModels(profile: AgentProfile) {
       modelDiscoveryError = modelDiscoveryError ? `${modelDiscoveryError}; ${restError}` : restError;
     }
   }
+  // The CLI/REST inventories only list models on this machine's disk. The
+  // OpenAI listing also includes models served from linked devices (LM Link),
+  // so merge any extra ids as remote entries instead of dropping them.
+  try {
+    const openAiList = await fetchModels(runtimeProfile);
+    const known = new Set(lmStudioModels.map((model) => model.key));
+    for (const entry of openAiList.data ?? []) {
+      const id = String(entry?.id ?? "").trim();
+      if (!id || known.has(id)) continue;
+      known.add(id);
+      lmStudioModels.push({
+        key: id,
+        displayName: id,
+        type: /embed/i.test(id) ? "embedding" : "llm",
+        // Served from a linked device or API passthrough — load state is
+        // managed on the owning host, never claimed (or gated) here.
+        loaded: false,
+        loadedInstanceIds: [],
+        remote: true,
+      });
+    }
+  } catch {
+    // The OpenAI listing is additive; local inventory already covers offline use.
+  }
   const llmModels = lmStudioModels.filter((model) => model.type === "llm");
   return {
     runtimeProfile,
@@ -436,9 +461,9 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
               ? {
                 id,
                 name: lmStudioModel.displayName,
-                subtitle: lmStudioModel.loaded ? "Loaded" : "Downloaded",
+                subtitle: lmStudioModel.remote ? "Remote" : lmStudioModel.loaded ? "Loaded" : "Downloaded",
                 group: lmStudioModel.paramsString || undefined,
-                badge: lmStudioModel.loaded ? "Loaded" : undefined,
+                badge: lmStudioModel.remote ? "Remote" : lmStudioModel.loaded ? "Loaded" : undefined,
               }
               : { id };
           }),

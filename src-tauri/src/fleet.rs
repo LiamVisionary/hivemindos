@@ -384,16 +384,42 @@ fn tailnet_health(status: Option<&Value>) -> Value {
     json!({ "state": "ok" })
 }
 
+/// Exact machine identity, mirroring `exactMachineIdentity` in the fleet
+/// discover route: the normalized dns label (or name) with only the
+/// `hivemindos` prefix and `local` suffix stripped. The same physical
+/// machine's system node ("liams-macbook-pro") and embedded link node
+/// ("hivemindos-liams-macbook-pro") map to the same identity, while
+/// tailscale's `-N` suffix is KEPT — a `-1` node is a different physical
+/// machine that shares the hostname.
+fn exact_machine_identity(name: &str, dns_name: &str) -> String {
+    let label = normalize_name(&dns_label(dns_name));
+    let value = if label.is_empty() { normalize_name(name) } else { label };
+    let value = value.strip_prefix("hivemindos").unwrap_or(&value);
+    value.strip_suffix("local").unwrap_or(value).to_string()
+}
+
 fn devices_from_status(status: &Value) -> Vec<NativeDevice> {
     let mut devices = Vec::new();
     if let Some(self_peer) = status.get("Self") {
         devices.push(simplify_peer(self_peer, true));
     }
-    let self_key = devices.first().map(|device| device.ip.clone()).unwrap_or_default();
+    let self_ip = devices.first().map(|device| device.ip.clone()).unwrap_or_default();
+    let self_identity = devices
+        .first()
+        .map(|device| exact_machine_identity(&device.name, &device.dns_name))
+        .unwrap_or_default();
     if let Some(peers) = status.get("Peer").and_then(Value::as_object) {
         for peer in peers.values() {
             let device = simplify_peer(peer, false);
-            if !self_key.is_empty() && device.ip == self_key {
+            if !self_ip.is_empty() && device.ip == self_ip {
+                continue;
+            }
+            // This machine's own embedded link node shows up as a peer of the
+            // system tailscaled under a different tailnet IP — same exact
+            // identity means same physical machine, so fold it into self.
+            if !self_identity.is_empty()
+                && exact_machine_identity(&device.name, &device.dns_name) == self_identity
+            {
                 continue;
             }
             devices.push(device);
@@ -407,10 +433,7 @@ fn devices_from_status(status: &Value) -> Vec<NativeDevice> {
         let key = if device.is_self {
             "self".to_string()
         } else {
-            normalize_name(&device.dns_name)
-                .chars()
-                .chain(normalize_name(&device.name).chars())
-                .collect::<String>()
+            exact_machine_identity(&device.name, &device.dns_name)
         };
         seen.entry(if key.is_empty() { device.ip.clone() } else { key }).or_insert(device);
     }
@@ -435,5 +458,55 @@ pub(crate) fn tailscale_devices() -> Result<Value, String> {
             "tailnetHealth": tailnet_health(None),
             "devices": [local_device()],
         })),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn peer(host: &str, dns: &str, ip: &str) -> Value {
+        json!({
+            "HostName": host,
+            "DNSName": dns,
+            "TailscaleIPs": [ip],
+            "OS": "macOS",
+            "Online": true,
+        })
+    }
+
+    #[test]
+    fn folds_own_link_node_into_self_but_keeps_suffixed_machines() {
+        // The system tailscaled sees this machine's own embedded link node as
+        // a peer under a different tailnet IP. Same exact identity → fold into
+        // self. A `-1` node is a DIFFERENT physical machine sharing the
+        // hostname and must survive.
+        let status = json!({
+            "Self": peer("Liams-MacBook-Pro", "liams-macbook-pro.tail1.ts.net.", "100.0.0.1"),
+            "Peer": {
+                "a": peer("Liams-MacBook-Pro", "hivemindos-liams-macbook-pro.tail1.ts.net.", "100.0.0.2"),
+                "b": peer("Liams-MacBook-Pro", "hivemindos-liams-macbook-pro-1.tail1.ts.net.", "100.0.0.3"),
+                "c": peer("ubuntu-8gb-hel1-2", "hivemindos-ubuntu-8gb-hel1-2.tail1.ts.net.", "100.0.0.4"),
+            },
+        });
+        let devices = devices_from_status(&status);
+        assert_eq!(devices.len(), 3);
+        let self_count = devices.iter().filter(|device| device.is_self).count();
+        assert_eq!(self_count, 1);
+        assert!(!devices.iter().any(|device| device.ip == "100.0.0.2"));
+        assert!(devices.iter().any(|device| device.ip == "100.0.0.3"));
+        assert!(devices.iter().any(|device| device.ip == "100.0.0.4"));
+    }
+
+    #[test]
+    fn exact_identity_strips_prefix_and_keeps_suffix() {
+        assert_eq!(
+            exact_machine_identity("This Mac", "liams-macbook-pro.tail1.ts.net"),
+            exact_machine_identity("x", "hivemindos-liams-macbook-pro.tail1.ts.net"),
+        );
+        assert_ne!(
+            exact_machine_identity("x", "hivemindos-liams-macbook-pro-1.tail1.ts.net"),
+            exact_machine_identity("x", "hivemindos-liams-macbook-pro.tail1.ts.net"),
+        );
     }
 }

@@ -38,6 +38,11 @@ HERMES_ENV_FILE = pathlib.Path.home() / ".hermes" / ".env"
 AEON_ENV_FILE = pathlib.Path.home() / ".aeon" / ".env"
 AEON_ENV_SYNC_REPOS_FILE = pathlib.Path.home() / ".hivemindos" / "aeon-env-sync-repos.json"
 AEON_ENV_SYNC_STATE_FILE = pathlib.Path.home() / ".hivemindos" / "aeon-env-sync-state.json"
+ENV_SYNC_PENDING_FILE = pathlib.Path.home() / ".hivemindos" / "env-sync-pending.json"
+ENV_SYNC_PENDING_MAX_AGE_SECONDS = 14 * 24 * 3600
+MACHINE_ID_FILE = pathlib.Path.home() / ".hivemindos" / "machine-id"
+# Tailnet peers that can never host a collector; keep them out of retry accounting.
+COLLECTORLESS_PEER_OS = {"ios", "android"}
 
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 LOCAL_ONLY_KEYS = {
@@ -113,6 +118,10 @@ def collector_ports() -> list[str]:
     raw_ports = os.environ.get("HIVE_ENV_COLLECTOR_PORTS") or local_setting("HIVE_ENV_COLLECTOR_PORTS")
     candidates: list[str] = []
     if raw_ports:
+        # An explicit port list is authoritative; do not fall back to defaults.
+        explicit = [part.strip() for part in raw_ports.split(",") if valid_port(part.strip())]
+        if explicit:
+            return list(dict.fromkeys(explicit))
         candidates.extend(part.strip() for part in raw_ports.split(","))
     candidates.extend([
         os.environ.get("HIVE_ENV_COLLECTOR_PORT", ""),
@@ -832,7 +841,7 @@ def restore_encrypted_backup(args: argparse.Namespace, env_file: pathlib.Path) -
     values = shared_env_values(args, env_file)
     print(f"restored {len(values)} env key{'s' if len(values) != 1 else ''} from encrypted backup")
     if not args.no_tailnet_sync:
-        sync_tailnet_updates(args, values)
+        sync_tailnet_updates(args, values, env_file)
     if not args.no_aeon_auto_sync and args.runtime == "generic":
         auto_sync_aeon_shared_env(args, values)
     return 0
@@ -845,26 +854,47 @@ def tailscale_local_ips(data: dict[str, object]) -> set[str]:
     return {str(value) for value in self_data.get("TailscaleIPs") or []}
 
 
-def tailscale_peer_targets() -> list[dict[str, str]]:
+def local_machine_id() -> str:
+    try:
+        return MACHINE_ID_FILE.read_text().strip()
+    except OSError:
+        return ""
+
+
+def tailnet_peer_status() -> tuple[list[dict[str, str]], list[str]]:
+    """Enumerate online tailnet peers.
+
+    Returns (ready collector targets, online peers without a ready collector).
+    Peers in the second list are NOT silently dropped from sync accounting:
+    callers must report them and keep undelivered updates queued.
+    """
     configured = os.environ.get("HIVE_ENV_TAILNET_TARGETS") or local_setting("HIVE_ENV_TAILNET_TARGETS")
     if configured:
-        return [
-            {"host": target.strip(), "ip": target.strip(), "user": ""}
-            for target in sorted({target.strip() for target in configured.split(",") if target.strip()})
-        ]
+        targets = []
+        unreachable = []
+        for raw_target in sorted({target.strip() for target in configured.split(",") if target.strip()}):
+            env_sync = env_sync_from_collector(raw_target)
+            if env_sync:
+                targets.append({"host": raw_target, "ip": raw_target, **env_sync})
+            else:
+                unreachable.append(raw_target)
+        return targets, unreachable
     cli = tailscale_cli()
     if not cli:
-        return []
+        return [], []
     proc = subprocess.run([cli, "status", "--json"], text=True, capture_output=True, check=False)
     if proc.returncode != 0:
-        return []
+        return [], []
     try:
         data = json.loads(proc.stdout)
     except json.JSONDecodeError:
-        return []
+        return [], []
 
     local_ips = tailscale_local_ips(data)
+    own_machine_id = local_machine_id()
     targets: list[dict[str, str]] = []
+    unreachable: list[str] = []
+    seen_machine_ids: set[str] = set()
     for peer in (data.get("Peer") or {}).values():
         if not isinstance(peer, dict) or peer.get("Online") is False:
             continue
@@ -873,15 +903,35 @@ def tailscale_peer_targets() -> list[dict[str, str]]:
             continue
         target_host = str(peer.get("DNSName") or "").rstrip(".") or ip
         env_sync = env_sync_from_collector(ip)
-        if env_sync:
-            targets.append({"host": target_host, "ip": ip, **env_sync})
-    return sorted(targets, key=lambda target: target["host"])
+        if not env_sync:
+            if str(peer.get("OS") or "").lower() not in COLLECTORLESS_PEER_OS:
+                unreachable.append(target_host)
+            continue
+        machine_id = env_sync.get("machineId") or ""
+        # A machine can appear as two tailnet nodes (system tailscaled +
+        # embedded hivemind-linkd); both reach the same collector.
+        if machine_id and machine_id == own_machine_id:
+            continue
+        if machine_id and machine_id in seen_machine_ids:
+            continue
+        if machine_id:
+            seen_machine_ids.add(machine_id)
+        targets.append({"host": target_host, "ip": ip, **env_sync})
+    return sorted(targets, key=lambda target: target["host"]), sorted(unreachable)
+
+
+def tailscale_peer_targets() -> list[dict[str, str]]:
+    return tailnet_peer_status()[0]
+
+
+def delivery_id(target: dict[str, str]) -> str:
+    return target.get("machineId") or target["host"]
 
 
 def env_sync_from_collector(ip: str) -> dict[str, str] | None:
     for port in collector_ports():
         try:
-            with urllib.request.urlopen(f"http://{ip}:{port}/health", timeout=2) as response:
+            with urllib.request.urlopen(f"http://{ip}:{port}/health", timeout=4) as response:
                 data = json.loads(response.read().decode("utf-8"))
         except Exception:
             continue
@@ -893,7 +943,7 @@ def env_sync_from_collector(ip: str) -> dict[str, str] | None:
             continue
         user = str(env_sync.get("user") or "").strip()
         if KEY_RE.match(user.replace("-", "_")) or re.match(r"^[A-Za-z0-9._-]+$", user):
-            return {"user": user, "port": port}
+            return {"user": user, "port": port, "machineId": str(data.get("machineId") or "")}
     return None
 
 
@@ -985,40 +1035,352 @@ def shared_env_values(args: argparse.Namespace, env_file: pathlib.Path) -> dict[
     }
 
 
-def sync_tailnet_updates(args: argparse.Namespace, updates: dict[str, str]) -> None:
+def read_pending_state() -> dict[str, dict[str, object]]:
+    data = read_plain_json(ENV_SYNC_PENDING_FILE)
+    pending = data.get("pending")
+    if not isinstance(pending, dict):
+        return {}
+    entries: dict[str, dict[str, object]] = {}
+    for key, raw in pending.items():
+        if not isinstance(key, str) or not KEY_RE.match(key) or not isinstance(raw, dict):
+            continue
+        delivered_raw = raw.get("delivered")
+        delivered = (
+            {str(host): float(value) for host, value in delivered_raw.items() if isinstance(value, (int, float))}
+            if isinstance(delivered_raw, dict)
+            else {}
+        )
+        ts = raw.get("ts")
+        entries[key] = {
+            "ts": float(ts) if isinstance(ts, (int, float)) else 0.0,
+            "scope": str(raw.get("scope") or "agent"),
+            "runtime": str(raw.get("runtime") or "generic"),
+            "delivered": delivered,
+        }
+    return entries
+
+
+def write_pending_state(entries: dict[str, dict[str, object]]) -> None:
+    write_json(ENV_SYNC_PENDING_FILE, {"version": 1, "pending": dict(sorted(entries.items()))})
+
+
+def tailnet_verbose() -> bool:
+    return truthy(os.environ.get("HIVE_ENV_TAILNET_VERBOSE") or local_setting("HIVE_ENV_TAILNET_VERBOSE"))
+
+
+def pinned_targets_hint() -> str:
+    """Pinned raw-IP targets go stale and have blackholed sync before; make the pin visible."""
+    if os.environ.get("HIVE_ENV_TAILNET_TARGETS") or local_setting("HIVE_ENV_TAILNET_TARGETS"):
+        return " [targets pinned via HIVE_ENV_TAILNET_TARGETS; prefer auto-discovery — pinned IPs go stale]"
+    return ""
+
+
+def record_pending_outcome(
+    args: argparse.Namespace,
+    updates: dict[str, str],
+    succeeded: list[dict[str, str]],
+    fully_delivered: bool,
+) -> None:
+    entries = read_pending_state()
+    now = time.time()
+    changed = False
+    for key in updates:
+        if key in LOCAL_ONLY_KEYS or not KEY_RE.match(key):
+            continue
+        if fully_delivered:
+            if key in entries:
+                del entries[key]
+                changed = True
+            continue
+        existing = entries.get(key)
+        delivered = dict(existing["delivered"]) if existing else {}
+        for target in succeeded:
+            delivered[delivery_id(target)] = now
+        entries[key] = {
+            "ts": now,
+            "scope": args.scope,
+            "runtime": args.runtime,
+            "delivered": delivered,
+        }
+        changed = True
+    if changed:
+        write_pending_state(entries)
+
+
+def sync_tailnet_updates(
+    args: argparse.Namespace,
+    updates: dict[str, str],
+    env_file: pathlib.Path | None = None,
+) -> None:
     if not updates or not tailnet_sync_enabled(args):
         return
-    targets = tailscale_peer_targets()
+    targets, unreachable = tailnet_peer_status()
     if not targets:
-        print("Hivemind Sync env sync is enabled, but no online ready peers were found")
+        suffix = (
+            f" ({len(unreachable)} online peer{'s' if len(unreachable) != 1 else ''} without a ready collector; update queued for retry)"
+            if unreachable
+            else ""
+        )
+        print("Hivemind Sync env sync is enabled, but no online ready peers were found" + suffix + pinned_targets_hint())
+        record_pending_outcome(args, updates, succeeded=[], fully_delivered=False)
         return
 
     synced = 0
     failed: list[str] = []
-    attempted_targets = 0
+    succeeded: list[dict[str, str]] = []
     for target in targets:
-        attempted_targets += 1
         ok, detail = sync_target_over_collector(target, args, updates)
         if ok:
             synced += 1
+            succeeded.append(target)
         else:
             failed.append(f"{target['host']}: {detail}")
 
+    fully_delivered = not failed and not unreachable
+    record_pending_outcome(args, updates, succeeded=succeeded, fully_delivered=fully_delivered)
+
     if synced:
         print(f"Hivemind Sync env updated {synced} peer{'s' if synced != 1 else ''}")
-    if failed:
-        if truthy(os.environ.get("HIVE_ENV_TAILNET_VERBOSE") or local_setting("HIVE_ENV_TAILNET_VERBOSE")):
+    if failed or unreachable:
+        attempted_targets = len(targets) + len(unreachable)
+        not_ready = len(failed) + len(unreachable)
+        if tailnet_verbose():
+            details = failed + [f"{host}: no ready collector" for host in unreachable]
             print(
-                "Hivemind Sync env skipped "
-                + ", ".join(failed)
+                "Hivemind Sync env queued for retry on "
+                + ", ".join(details)
                 + " (run setup on that machine and ensure the telemetry collector is reachable)",
                 file=sys.stderr,
             )
         else:
             print(
-                f"Hivemind Sync env: {len(failed)} of {attempted_targets} peer{'s' if attempted_targets != 1 else ''} not ready; set HIVE_ENV_TAILNET_VERBOSE=true for details",
+                f"Hivemind Sync env: {not_ready} of {attempted_targets} peer{'s' if attempted_targets != 1 else ''} not ready; update queued for retry (set HIVE_ENV_TAILNET_VERBOSE=true for details)"
+                + pinned_targets_hint(),
                 file=sys.stderr,
             )
+    if env_file is not None:
+        try:
+            drain_pending(args, env_file, exclude=set(updates), quiet=not tailnet_verbose(), peers=(targets, unreachable))
+        except Exception as error:
+            print(f"Hivemind Sync env retry queue error: {error}", file=sys.stderr)
+
+
+def drain_pending(
+    args: argparse.Namespace,
+    env_file: pathlib.Path,
+    exclude: set[str] | None = None,
+    quiet: bool = False,
+    peers: tuple[list[dict[str, str]], list[str]] | None = None,
+) -> dict[str, object]:
+    """Retry queued env updates that have not reached every peer collector yet.
+
+    Values are read fresh from the local store at drain time; the queue file
+    only holds key names, timestamps, and per-machine delivery receipts.
+    """
+    entries = read_pending_state()
+    now = time.time()
+    changed = False
+    summary: dict[str, object] = {"retriedKeys": [], "deliveredTo": [], "expired": 0, "remaining": 0, "unreachable": []}
+
+    for key in list(entries):
+        if now - float(entries[key]["ts"]) > ENV_SYNC_PENDING_MAX_AGE_SECONDS:
+            del entries[key]
+            changed = True
+            summary["expired"] = int(summary["expired"]) + 1
+
+    work = {key: entry for key, entry in entries.items() if not exclude or key not in exclude}
+    if work:
+        targets, unreachable = peers if peers is not None else tailnet_peer_status()
+        summary["unreachable"] = unreachable
+        group_values: dict[tuple[str, str], dict[str, str]] = {}
+        group_meta: dict[tuple[str, str], dict[str, float]] = {}
+        group_args_cache: dict[tuple[str, str], argparse.Namespace] = {}
+
+        def group_context(scope: str, runtime: str) -> tuple[argparse.Namespace, dict[str, str], dict[str, float]]:
+            pair = (scope, runtime)
+            if pair not in group_args_cache:
+                namespace = argparse.Namespace(**vars(args))
+                namespace.scope, namespace.runtime = pair
+                group_args_cache[pair] = namespace
+                group_values[pair] = shared_env_values(namespace, env_file)
+                group_meta[pair] = read_env_meta(env_store_file(namespace, env_file))
+            return group_args_cache[pair], group_values[pair], group_meta[pair]
+
+        pushes: dict[str, dict[tuple[str, str], dict[str, str]]] = {}
+        target_by_id = {delivery_id(target): target for target in targets}
+        for key, entry in list(work.items()):
+            scope, runtime = str(entry["scope"]), str(entry["runtime"])
+            _, values, meta = group_context(scope, runtime)
+            if key in values:
+                value = values[key]
+            elif key in meta:
+                value = ""  # key was removed locally; propagate the removal
+            else:
+                del entries[key]
+                changed = True
+                continue
+            delivered = entry["delivered"]
+            for target_id, target in target_by_id.items():
+                if float(delivered.get(target_id, 0)) >= float(entry["ts"]):
+                    continue
+                pushes.setdefault(target_id, {}).setdefault((scope, runtime), {})[key] = value
+
+        delivered_targets: set[str] = set()
+        for target_id, groups in pushes.items():
+            target = target_by_id[target_id]
+            target_ok = True
+            for (scope, runtime), updates in groups.items():
+                group_namespace, _, _ = group_context(scope, runtime)
+                ok, detail = sync_target_over_collector(target, group_namespace, updates)
+                if ok:
+                    push_time = time.time()
+                    for key in updates:
+                        entries[key]["delivered"][target_id] = push_time
+                        if key not in summary["retriedKeys"]:
+                            summary["retriedKeys"].append(key)
+                    changed = True
+                else:
+                    target_ok = False
+                    if not quiet:
+                        print(f"Hivemind Sync env retry to {target['host']} failed: {detail}", file=sys.stderr)
+            if target_ok:
+                delivered_targets.add(target["host"])
+        summary["deliveredTo"] = sorted(delivered_targets)
+
+        if targets and not unreachable:
+            for key in list(work):
+                if key not in entries:
+                    continue
+                delivered = entries[key]["delivered"]
+                if all(float(delivered.get(target_id, 0)) >= float(entries[key]["ts"]) for target_id in target_by_id):
+                    del entries[key]
+                    changed = True
+
+    summary["remaining"] = len(entries)
+    if changed:
+        write_pending_state(entries)
+    if not quiet and summary["retriedKeys"]:
+        print(
+            f"Hivemind Sync env retried {len(summary['retriedKeys'])} queued key{'s' if len(summary['retriedKeys']) != 1 else ''}"
+            + (f" to {', '.join(summary['deliveredTo'])}" if summary["deliveredTo"] else "")
+        )
+    return summary
+
+
+def fetch_peer_env(target: dict[str, str], args: argparse.Namespace) -> dict[str, object] | None:
+    url = f"http://{target['ip']}:{target['port']}/env?scope={args.scope}&runtime={args.runtime}"
+    try:
+        with urllib.request.urlopen(url, timeout=20) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return None
+    if not isinstance(data, dict) or data.get("ok") is not True:
+        return None
+    return data
+
+
+def pull_reconcile(
+    args: argparse.Namespace,
+    env_file: pathlib.Path,
+    dry_run: bool = False,
+    quiet: bool = False,
+    peers: tuple[list[dict[str, str]], list[str]] | None = None,
+) -> dict[str, object]:
+    """Pull shared env keys from every ready peer collector and merge newer keys.
+
+    Newest-wins per key using the per-key updatedAt metadata that every store
+    keeps next to its env file. Keys removed locally keep a meta timestamp
+    (tombstone), so a peer that still holds an older copy cannot resurrect it.
+    Assumes tailnet machines keep reasonable NTP clock sync.
+    """
+    targets, unreachable = peers if peers is not None else tailnet_peer_status()
+    store = env_store_file(args, env_file)
+    local_meta = read_env_meta(store)
+    local_values = shared_env_values(args, env_file)
+    summary: dict[str, object] = {
+        "peers": [target["host"] for target in targets],
+        "unreachable": unreachable,
+        "pulled": [],
+        "skippedUnknownAge": [],
+        "dryRun": dry_run,
+    }
+
+    # key -> (value, remote ts, source host); keep the newest copy across peers
+    candidates: dict[str, tuple[str, float, str]] = {}
+    for target in targets:
+        data = fetch_peer_env(target, args)
+        if data is None:
+            summary["unreachable"] = sorted({*summary["unreachable"], target["host"]})
+            continue
+        raw_values = data.get("values")
+        raw_updated = data.get("updatedAt")
+        if not isinstance(raw_values, dict):
+            continue
+        updated_at = raw_updated if isinstance(raw_updated, dict) else {}
+        for key, value in raw_values.items():
+            if not isinstance(key, str) or not isinstance(value, str):
+                continue
+            if not KEY_RE.match(key) or key in LOCAL_ONLY_KEYS:
+                continue
+            remote_ts_raw = updated_at.get(key)
+            remote_ts = float(remote_ts_raw) if isinstance(remote_ts_raw, (int, float)) else 0.0
+            best = candidates.get(key)
+            if best is None or remote_ts > best[1]:
+                candidates[key] = (value, remote_ts, target["host"])
+
+    to_apply: dict[str, tuple[str, float, str]] = {}
+    for key, (value, remote_ts, source) in sorted(candidates.items()):
+        local_ts = local_meta.get(key, 0.0)
+        if key in local_values:
+            if local_values[key] == value:
+                continue
+            if remote_ts <= local_ts:
+                continue
+            if local_ts == 0.0:
+                # local copy exists but has no recorded age; do not overwrite blind
+                summary["skippedUnknownAge"].append(key)
+                continue
+        elif local_ts and remote_ts <= local_ts:
+            continue  # tombstoned: removed locally after the peer's copy was written
+        to_apply[key] = (value, remote_ts, source)
+
+    summary["pulled"] = sorted(to_apply)
+    if dry_run or not to_apply:
+        if not quiet and dry_run and to_apply:
+            print("Hivemind Sync env pull-reconcile would pull: " + ", ".join(sorted(to_apply)))
+        return summary
+
+    changed = False
+    for key, (value, _, _) in to_apply.items():
+        changed = apply_update(args, env_file, key, value, quiet=True) or changed
+
+    # adopt the origin's timestamps so reconcile converges instead of ping-ponging
+    meta = read_env_meta(store)
+    for key, (_, remote_ts, _) in to_apply.items():
+        if remote_ts > 0:
+            meta[key] = remote_ts
+    write_env_meta(store, meta)
+
+    # pulled values supersede anything this machine still had queued for those keys
+    entries = read_pending_state()
+    dropped = False
+    for key, (_, remote_ts, _) in to_apply.items():
+        entry = entries.get(key)
+        if entry and remote_ts >= float(entry["ts"]):
+            del entries[key]
+            dropped = True
+    if dropped:
+        write_pending_state(entries)
+
+    maybe_refresh_encrypted_backup(args, env_file)
+    auto_sync_aeon_if_shared_agent_changed(args, env_file, changed)
+    if not quiet:
+        sources = sorted({source for (_, _, source) in to_apply.values()})
+        print(
+            f"Hivemind Sync env pulled {len(to_apply)} key{'s' if len(to_apply) != 1 else ''} from {', '.join(sources)}: "
+            + ", ".join(sorted(to_apply))
+        )
+    return summary
 
 
 def export_json(args: argparse.Namespace, env_file: pathlib.Path) -> None:
@@ -1084,7 +1446,7 @@ def pull_from_peer(args: argparse.Namespace, env_file: pathlib.Path, target: str
     if applied:
         maybe_refresh_encrypted_backup(args, env_file)
     if applied and not args.no_tailnet_sync:
-        sync_tailnet_updates(args, applied_values)
+        sync_tailnet_updates(args, applied_values, env_file)
     auto_sync_aeon_if_shared_agent_changed(args, env_file, changed)
     return 0
 
@@ -1123,6 +1485,26 @@ def parse_args() -> argparse.Namespace:
         default="",
         metavar="USER@HOST",
         help="Pull shared env keys from a trusted Tailnet peer and merge them into this machine.",
+    )
+    parser.add_argument(
+        "--retry-pending",
+        action="store_true",
+        help="Retry queued env updates that have not reached every peer collector yet.",
+    )
+    parser.add_argument(
+        "--pull-reconcile",
+        action="store_true",
+        help="Pull shared env keys from every ready peer collector and merge newer keys into this machine (newest-wins by per-key updatedAt).",
+    )
+    parser.add_argument(
+        "--sync-maintenance",
+        action="store_true",
+        help="Run the retry queue and pull-reconcile once, then print a JSON summary. Used by the telemetry collector's periodic loop.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="With --pull-reconcile or --sync-maintenance, report what would change without writing.",
     )
     parser.add_argument(
         "--conflict",
@@ -1236,12 +1618,32 @@ def main() -> int:
     if args.pull_from:
         return pull_from_peer(args, env_file, args.pull_from)
 
+    if args.sync_maintenance:
+        peers = tailnet_peer_status()
+        drain_summary = drain_pending(args, env_file, quiet=True, peers=peers)
+        pull_summary = pull_reconcile(args, env_file, dry_run=args.dry_run, quiet=True, peers=peers)
+        print(json.dumps({"version": 1, "retry": drain_summary, "pull": pull_summary}, sort_keys=True))
+        return 0
+
+    if args.retry_pending:
+        summary = drain_pending(args, env_file, quiet=False)
+        retried = summary["retriedKeys"]
+        if not retried:
+            print(
+                f"Hivemind Sync env retry queue: nothing to deliver ({summary['remaining']} entr{'ies' if summary['remaining'] != 1 else 'y'} still queued)"
+            )
+        return 0
+
+    if args.pull_reconcile:
+        pull_reconcile(args, env_file, dry_run=args.dry_run)
+        return 0
+
     if args.reconcile:
         values = shared_env_values(args, env_file)
         if not values:
             print("No local shared env keys found to reconcile.", file=sys.stderr)
             return 1
-        sync_tailnet_updates(args, values)
+        sync_tailnet_updates(args, values, env_file)
         maybe_refresh_encrypted_backup(args, env_file)
         if not args.no_aeon_auto_sync and args.runtime == "generic":
             auto_sync_aeon_shared_env(args, values)
@@ -1262,7 +1664,7 @@ def main() -> int:
             changed = apply_update(args, env_file, key, value, quiet=True) or changed
         print(f"imported {len(valid_values)} keys from {source}")
         maybe_refresh_encrypted_backup(args, env_file)
-        sync_tailnet_updates(args, valid_values)
+        sync_tailnet_updates(args, valid_values, env_file)
         auto_sync_aeon_if_shared_agent_changed(args, env_file, changed)
         return 0
 
@@ -1277,12 +1679,12 @@ def main() -> int:
             changed = apply_update(args, env_file, key, value, quiet=True) or changed
         print(f"imported {len(valid_values)} keys from stdin")
         maybe_refresh_encrypted_backup(args, env_file)
-        sync_tailnet_updates(args, valid_values)
+        sync_tailnet_updates(args, valid_values, env_file)
         auto_sync_aeon_if_shared_agent_changed(args, env_file, changed)
         return 0
 
     if not args.assignment:
-        print("Usage: hive-env-add KEY=value, hive-env-add KEY, hive-env-add --import-env, hive-env-add --import-stdin, hive-env-add --reconcile, or hive-env-add --pull-from USER@HOST", file=sys.stderr)
+        print("Usage: hive-env-add KEY=value, hive-env-add KEY, hive-env-add --import-env, hive-env-add --import-stdin, hive-env-add --reconcile, hive-env-add --retry-pending, hive-env-add --pull-reconcile, or hive-env-add --pull-from USER@HOST", file=sys.stderr)
         return 2
 
     if "=" in args.assignment:
@@ -1301,7 +1703,7 @@ def main() -> int:
     changed = apply_update(args, env_file, key, value)
 
     maybe_refresh_encrypted_backup(args, env_file)
-    sync_tailnet_updates(args, {key: value})
+    sync_tailnet_updates(args, {key: value}, env_file)
     auto_sync_aeon_if_shared_agent_changed(args, env_file, changed)
     return 0
 

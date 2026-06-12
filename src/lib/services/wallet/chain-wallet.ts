@@ -517,12 +517,19 @@ async function fetchKnownEvmTokenBalances(
   const prices = await fetchDexScreenerTokenPrices(tokenAddresses);
   const rows = await Promise.all(tokenAddresses.map(async (tokenAddress): Promise<AgentWalletTokenBalance | null> => {
     const contractAddress = tokenAddress as `0x${string}`;
-    const [balanceRaw, decimals, symbol, name] = await Promise.all([
+    const readTokenState = () => Promise.all([
       client.readContract({ address: contractAddress, abi: ERC20_ABI, functionName: "balanceOf", args: [address as `0x${string}`] }),
       client.readContract({ address: contractAddress, abi: ERC20_ABI, functionName: "decimals" }),
       client.readContract({ address: contractAddress, abi: ERC20_ABI, functionName: "symbol" }).catch(() => shortenAddress(tokenAddress)),
       client.readContract({ address: contractAddress, abi: ERC20_ABI, functionName: "name" }).catch(() => shortenAddress(tokenAddress)),
-    ]).catch(() => [0n, 18, shortenAddress(tokenAddress), shortenAddress(tokenAddress)] as const);
+    ]);
+    // Retry once before substituting zeros: public RPC rate limits surface
+    // as transient read failures here, and a faked zero balance silently
+    // drops a token the wallet actually holds (e.g. HIVE) from the list.
+    const [balanceRaw, decimals, symbol, name] = await readTokenState().catch(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      return readTokenState().catch(() => [0n, 18, shortenAddress(tokenAddress), shortenAddress(tokenAddress)] as const);
+    });
     const balance = Number(formatUnits(balanceRaw, Number(decimals)));
     if (balance <= 0) return null;
     return tokenRow({

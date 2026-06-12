@@ -155,7 +155,7 @@ pnpm benchmark:context-savings
 ./scripts/hive-env-run -- pnpm benchmark:e2e-token-savings
 ```
 
-Port `5020` is the normal managed dashboard port. Project rules reserve that port for Liam's managed dev server, so ad hoc testing should use `5021` or higher unless explicitly directed otherwise.
+Port `5020` is the normal managed dashboard port. Project rules reserve that port for the operator's managed dev server, so ad hoc testing should use `5021` or higher unless explicitly directed otherwise.
 
 ## Architecture At A Glance
 
@@ -168,7 +168,7 @@ flowchart LR
   Api --> Collector["Local collector"]
   Api --> Tailnet["Tailscale / Hivemind Link"]
   Tailnet --> RemoteCollectors["Remote collectors"]
-  Collector --> Runtimes["Hermes / OpenClaw / Aeon / Local OpenAI"]
+  Collector --> Runtimes["Hermes / OpenClaw / Aeon / Evo / Local OpenAI"]
   RemoteCollectors --> RemoteRuntimes["Remote runtimes"]
   Api --> Wallets["Wallets / tokens / x402"]
   Api --> Workers["Honey ledger and compute gateway workers"]

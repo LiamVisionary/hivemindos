@@ -88,6 +88,7 @@ export type RuntimeIntegrationStatus = {
         paramsString?: string | null;
         sizeBytes?: number | null;
         format?: string | null;
+        remote?: boolean;
       }>;
       error?: string;
       checkedAt?: string;

@@ -1,9 +1,9 @@
 "use client";
 
-/* eslint-disable react-hooks/immutability, react-hooks/purity */
+/* eslint-disable react-hooks/purity */
 
 import { type ChangeEvent, type Dispatch, type SetStateAction, useMemo } from "react";
-import type { BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { renderBeeSoulTemplate, type BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
 import { HIVEMIND_OS_RUNTIME, runtimeSettingsFeature, type AgentProfile, type AgentRuntime, type BeeWorkerClass, type CustomWorkerClassProfile } from "@/lib/types/agent-runtime";
 import type { BrainSkillSummary, HivemindLinkClientStatus, MachineGroup, RuntimeIntegrationStatus, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
@@ -77,8 +77,9 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
   const { HETZNER_SERVER_TYPE_OPTIONS, agentCreateDraft, agentCreateMachine, agentSettingsCustomWorkers, agentSettingsWorkerClass, agentSettingsWorkerPreset, agents, beeRoleIconPath, beeWorkerPreset, createAgentProfile, customWorkerDraft, customWorkerProfileFromDraft, customWorkerSkillSearch, hivemindLinkBannerDismissed, hivemindLinkConnectedUntil, hivemindLinkStatus, machineInitDraft, roleModalAgent, runRuntimeIntegrationAction, runtimeCount, runtimeIntegrationStatus, runtimeModelDraft, runtimeModelSelectionsByRuntime, setAgentCreateDraft, setAgentWorkerClassView, setCustomWorkerDraft, setCustomWorkerImageError, setCustomWorkerSkillSearch, setRuntimeModelDraft, sharedSkillOptions, updateAgentProfile } = props;
   const agentSettingsSelectedCustomWorkerId = agentCreateMachine ? agentCreateDraft.selectedCustomWorkerClassId : roleModalAgent?.selectedCustomWorkerClassId;
   const agentSettingsCustomWorker = agentSettingsCustomWorkers.find((workerClass) => workerClass.id === agentSettingsSelectedCustomWorkerId);
-  const agentSettingsWorkerLabel = agentSettingsCustomWorker?.label || `${agentSettingsWorkerPreset.label} bee`;
-  const agentSettingsWorkerImage = agentSettingsCustomWorker?.imageSrc || beeRoleIconPath("worker", agentSettingsWorkerClass);
+  const settingsAgentIsQueen = !agentCreateMachine && roleModalAgent?.beeRole === "queen";
+  const agentSettingsWorkerLabel = settingsAgentIsQueen ? "Queen Bee" : agentSettingsCustomWorker?.label || `${agentSettingsWorkerPreset.label} bee`;
+  const agentSettingsWorkerImage = settingsAgentIsQueen ? beeRoleIconPath("queen") : agentSettingsCustomWorker?.imageSrc || beeRoleIconPath("worker", agentSettingsWorkerClass);
   const agentSettingsSkillProfile = agentCreateMachine
     ? agentCreateDraft.skillProfilePrompt
     : roleModalAgent?.skillProfilePrompt ?? agentSettingsWorkerPreset.taskProfile;
@@ -88,18 +89,37 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
   const agentSettingsRuntime = agentCreateMachine ? agentCreateDraft.runtime : roleModalAgent?.runtime ?? "hermes";
   const agentSettingsProvider = agentCreateMachine ? agentCreateDraft.provider ?? "" : roleModalAgent?.provider ?? "";
   const agentSettingsModel = agentCreateMachine ? agentCreateDraft.model ?? "" : roleModalAgent?.model ?? "";
-  const agentSettingsIntegrationTarget = agentCreateMachine
-    ? {
-      ...createAgentProfile(agentCreateDraft.runtime, runtimeCount(agents, agentCreateDraft.runtime) + 1),
-      provider: agentCreateDraft.provider,
-      model: agentCreateDraft.model,
-      adaptiveOpenRouter: agentCreateDraft.adaptiveOpenRouter,
-      adaptiveRouting: agentCreateDraft.adaptiveRouting,
-      usePod: agentCreateDraft.usePod,
-      telemetryUrl: agentCreateMachine.collectorUrl,
-      machineName: agentCreateMachine.name,
-    }
-    : roleModalAgent;
+  // Memoized so the target keeps a stable identity across renders — it feeds
+  // effect dependency arrays in the settings modal (e.g. the LM Studio status
+  // poll), which would otherwise tear down and re-arm on every render.
+  const agentSettingsIntegrationTarget = useMemo(
+    () =>
+      agentCreateMachine
+        ? {
+          ...createAgentProfile(agentCreateDraft.runtime, runtimeCount(agents, agentCreateDraft.runtime) + 1),
+          provider: agentCreateDraft.provider,
+          model: agentCreateDraft.model,
+          adaptiveOpenRouter: agentCreateDraft.adaptiveOpenRouter,
+          adaptiveRouting: agentCreateDraft.adaptiveRouting,
+          usePod: agentCreateDraft.usePod,
+          telemetryUrl: agentCreateMachine.collectorUrl,
+          machineName: agentCreateMachine.name,
+        }
+        : roleModalAgent,
+    [
+      agentCreateDraft.adaptiveOpenRouter,
+      agentCreateDraft.adaptiveRouting,
+      agentCreateDraft.model,
+      agentCreateDraft.provider,
+      agentCreateDraft.runtime,
+      agentCreateDraft.usePod,
+      agentCreateMachine,
+      agents,
+      createAgentProfile,
+      roleModalAgent,
+      runtimeCount,
+    ],
+  );
   const freshRuntimeModelSelection = runtimeIntegrationStatus?.runtime === agentSettingsRuntime
     && runtimeIntegrationStatus.targetKey === runtimeIntegrationTargetKey(agentSettingsIntegrationTarget)
     ? runtimeIntegrationStatus.modelSelection
@@ -109,7 +129,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
   const runtimeModelSelection = agentSettingsRuntime === HIVEMIND_OS_RUNTIME
     ? cachedRuntimeModelSelection ?? freshRuntimeModelSelection
     : freshRuntimeModelSelection ?? cachedRuntimeModelSelection;
-  const runtimeModelProviders = (() => {
+  const runtimeModelProviders = useMemo(() => {
     const baseProviders = runtimeModelSelection?.providers ?? [];
     const modelSettings = runtimeSettingsFeature(agentSettingsRuntime);
     if (modelSettings.modelSource !== "runtime" || agentSettingsRuntime === "aeon") return baseProviders;
@@ -142,7 +162,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
       });
     }
     return [...providersBySlug.values()];
-  })();
+  }, [agentSettingsModel, agentSettingsProvider, agentSettingsRuntime, runtimeModelSelection]);
   const selectedRuntimeProvider = agentSettingsProvider
     ? runtimeModelProviders.find((provider) => provider.slug === agentSettingsProvider)
     : runtimeModelProviders.find((provider) => provider.slug === runtimeModelSelection?.provider)
@@ -181,15 +201,18 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
   };
   const selectAgentWorkerClass = (workerClass: BeeWorkerClass) => {
     const preset = beeWorkerPreset(workerClass);
-    const patch = {
+    const patch: Partial<AgentProfile> = {
       workerClass,
       customWorkerClass: undefined,
       selectedCustomWorkerClassId: undefined,
-      skillProfilePrompt: preset.taskProfile,
       preferredSkillSlugs: preset.skillSlugs,
     };
-    if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
-    else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
+    if (agentCreateMachine) {
+      setAgentCreateDraft((current) => ({ ...current, ...patch, skillProfilePrompt: renderBeeSoulTemplate(preset.soulTemplate, current.name) }));
+    } else if (roleModalAgent) {
+      const currentPrompt = roleModalAgent.skillProfilePrompt?.trim() ?? "";
+      updateAgentProfile(roleModalAgent.id, currentPrompt ? patch : { ...patch, skillProfilePrompt: renderBeeSoulTemplate(preset.soulTemplate, roleModalAgent.name) });
+    }
   };
   const selectCustomWorkerClass = (customWorkerClass: CustomWorkerClassProfile) => {
     const patch = {
@@ -291,7 +314,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
   }, [customWorkerDraft.preferredSkillSlugs, customWorkerSkillSearch, sharedSkillOptions]);
   const selectedHetznerServerType = useMemo(
     () => HETZNER_SERVER_TYPE_OPTIONS.find((option) => option.value === machineInitDraft.serverType) ?? HETZNER_SERVER_TYPE_OPTIONS[0],
-    [machineInitDraft.serverType],
+    [HETZNER_SERVER_TYPE_OPTIONS, machineInitDraft.serverType],
   );
   const showHivemindLinkConnectedBanner = !hivemindLinkBannerDismissed
     && hivemindLinkStatus?.ok === true

@@ -1,0 +1,148 @@
+name: Setup E2E Matrix
+
+# End-to-end exercise of the first-run setup flow on all three desktop
+# platforms. The unix job first runs the exact command line that the Tauri
+# native_setup_run command generates for the "just this computer" option,
+# then a full non-interactive run including the dashboard dev server.
+on:
+  push:
+    branches: [test/setup-e2e-matrix]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  setup-unix:
+    name: setup.sh (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Run the command native_setup_run generates for "just this computer"
+        run: |
+          HIVE_MEMORY_IMPORTS='none' ./setup.sh '--interactive' '--local-only' '--skip-dashboard' '--import-skills=claude,codex' '--share-skills=all'
+
+      - name: Run full non-interactive local setup including dashboard
+        run: HIVE_MEMORY_IMPORTS='none' ./setup.sh --non-interactive --local-only
+
+      - name: Verify dashboard dev server responds
+        run: |
+          for i in $(seq 1 90); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5020/ || true)"
+            if [ "$code" != "000" ] && [ -n "$code" ]; then
+              echo "dashboard responded with HTTP $code"
+              exit 0
+            fi
+            sleep 4
+          done
+          echo "dashboard did not respond on port 5020"
+          tail -100 .next/hivemindos.log || true
+          exit 1
+
+  diagnose-windows-build:
+    name: diagnose next build EPERM (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Instrument bundled glob (fires inside workers too)
+        shell: pwsh
+        run: node scripts/instrument-compiled-glob.cjs
+
+      - name: next build with profile-scan tracer
+        shell: pwsh
+        env:
+          NODE_OPTIONS: --require ${{ github.workspace }}\scripts\trace-profile-scandir.cjs
+        run: |
+          pnpm exec next build --webpack *>&1 | Tee-Object -FilePath build-diag.log | Out-Null
+          Write-Host "build exit code: $LASTEXITCODE"
+          Write-Host "=== profile scans (with stacks) ==="
+          Select-String -Path build-diag.log -Pattern "trace-profile-scandir" -Context 0, 30 | ForEach-Object { $_.Line; $_.Context.PostContext }
+          Write-Host "=== nft asset-dir emissions (file-level) ==="
+          Select-String -Path build-diag.log -Pattern "nft-diag" | ForEach-Object { $_.Line } | Select-Object -First 40
+          Write-Host "=== glob diagnostics (with stacks) ==="
+          Select-String -Path build-diag.log -Pattern "glob-diag. pattern" -Context 0, 25 | ForEach-Object { $_.Line; $_.Context.PostContext } | Select-Object -First 30
+          Write-Host "=== EPERM mentions ==="
+          Select-String -Path build-diag.log -Pattern "EPERM" -Context 2, 2 | ForEach-Object { $_.Context.PreContext; $_.Line; $_.Context.PostContext }
+          Write-Host "=== build tail ==="
+          Get-Content build-diag.log -Tail 40
+          exit 0
+
+  setup-windows:
+    name: setup.ps1 (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      # Setup and verification share one step: the Windows runner kills
+      # step-spawned child processes when a step ends (job objects), so the
+      # dev server from setup.ps1 would be gone before a separate verify step.
+      - name: Run full non-interactive Windows setup and verify dashboard
+        shell: pwsh
+        run: |
+          ./setup.ps1 -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw "setup.ps1 failed with exit code $LASTEXITCODE" }
+
+          Write-Host "=== port 5020 listeners ==="
+          Get-NetTCPConnection -LocalPort 5020 -ErrorAction SilentlyContinue | Format-Table -AutoSize
+          $healthy = $false
+          foreach ($i in 1..30) {
+            try {
+              # Long per-request timeout: the first hit compiles the page on demand.
+              $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5020/" -TimeoutSec 300
+              Write-Host "dashboard responded with HTTP $($response.StatusCode)"
+              $healthy = $true
+              break
+            } catch {
+              if ($i % 5 -eq 0) { Write-Host "attempt ${i}: $($_.Exception.Message)" }
+              Start-Sleep -Seconds 5
+            }
+          }
+          Write-Host "=== dev server stdout ==="
+          Get-Content .next\hivemindos-windows.log -ErrorAction SilentlyContinue
+          Write-Host "=== dev server stderr ==="
+          Get-Content .next\hivemindos-windows.err.log -ErrorAction SilentlyContinue
+          if (-not $healthy) {
+            throw "dashboard did not serve a healthy response on port 5020"
+          }
+
+      # Fresh Windows machines only have Windows PowerShell 5.1; this enters
+      # the script the way a first run would and must re-exec itself into pwsh.
+      - name: Re-run setup through Windows PowerShell 5.1 (re-exec guard)
+        shell: powershell
+        run: |
+          .\setup.ps1 -NonInteractive -SkipDeps -SkipBuild -SkipDashboard
+          if ($LASTEXITCODE -ne 0) { throw "PowerShell 5.1 entry failed with exit code $LASTEXITCODE" }

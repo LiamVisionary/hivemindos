@@ -80,6 +80,7 @@ export function LmStudioModelManager({
     loadedInstanceIds: [] as string[],
     paramsString: model.group,
     format: null,
+    remote: false,
   }));
   const models = inventoryModels.length ? inventoryModels : fallbackModels;
   const actionBusy = busy === "load-model" || busy === "unload-model";
@@ -129,10 +130,12 @@ export function LmStudioModelManager({
               <div style={{ minWidth: 0 }}>
                 <div style={{ color: "var(--fg)", fontSize: 12.5, fontWeight: 750, overflowWrap: "anywhere" }}>{model.displayName || model.key}</div>
                 <div style={{ marginTop: 2, color: "var(--fg-4)", fontSize: 11, lineHeight: 1.35, overflowWrap: "anywhere" }}>
-                  {[model.key, model.paramsString, model.format, model.loaded ? "Loaded" : loading ? "Loading" : "Downloaded"].filter(Boolean).join(" · ")}
+                  {[model.key, model.paramsString, model.format, model.remote ? "Remote device" : model.loaded ? "Loaded" : loading ? "Loading" : "Downloaded"].filter(Boolean).join(" · ")}
                 </div>
               </div>
-              {loading ? (
+              {model.remote ? (
+                <span style={{ color: "var(--fg-4)", fontSize: 11 }}>Managed on host</span>
+              ) : loading ? (
                 <LmStudioLoadProgress />
               ) : model.loaded ? (
                 <Btn variant="ghost" size="sm" disabled={actionBusy} onClick={() => void unloadModel(instanceId)}>Unload</Btn>

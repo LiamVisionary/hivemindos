@@ -144,11 +144,25 @@ export async function appendRuntimeChatSessionText(sessionId: string, role: "ass
   const session = await readSessionFile(sessionPath(sessionId));
   if (!session) return;
   const now = Date.now();
-  const last = session.messages.at(-1);
-  if (role === "assistant" && last?.role === "assistant" && !last.type) {
-    last.content += content;
-    last.createdAt = last.createdAt || now;
-    last.raw = raw ?? last.raw;
+  // Streamed assistant text is interleaved with process events (Thinking,
+  // runtime telemetry), which would otherwise split one turn's reply across
+  // several assistant messages — and session pollers that render "the latest
+  // assistant message" would show only the newest fragment. Merge into the
+  // turn's assistant message as long as only process events sit between them;
+  // user messages and real tool results still start a fresh message.
+  let target: RuntimeChatSessionMessage | undefined;
+  if (role === "assistant") {
+    for (let i = session.messages.length - 1; i >= 0; i -= 1) {
+      const message = session.messages[i];
+      if (message.type === "process") continue;
+      if (message.role === "assistant" && !message.type) target = message;
+      break;
+    }
+  }
+  if (target) {
+    target.content += content;
+    target.createdAt = target.createdAt || now;
+    target.raw = raw ?? target.raw;
   } else {
     session.messages.push({
       index: session.messages.length,

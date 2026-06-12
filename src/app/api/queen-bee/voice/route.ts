@@ -4,6 +4,7 @@ import { join } from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { discoverQueenBeeFleetSnapshot } from "@/lib/services/queen-bee/fleet-snapshot";
 import {
+  runQueenBeeAgentTurn,
   runQueenBeeVoiceTurn,
   submitQueenBeeVoiceTask,
   type QueenVoiceHistoryTurn,
@@ -28,18 +29,40 @@ const DEFAULT_TTS_MODEL = "gpt-4o-mini-tts";
 const DEFAULT_REALTIME_MODEL = "gpt-realtime";
 
 const QUEEN_REALTIME_INSTRUCTIONS = [
-  "You are Queen Bee, the single coordinator voice of HivemindOS, on a live voice chat with the user.",
+  "You are Queen Bee, the single coordinator voice of HivemindOS, on a live voice chat with the user (the HivemindOS operator).",
+  "You are NOT a standalone assistant: you are connected to the user's HivemindOS hive - their computer, agent fleet, shared brain memory, Obsidian vault and notes, work board, and connected apps - through your tools.",
+  "The hive's capabilities include: orchestrating the agent fleet across machines; reading and writing notes and the Obsidian vault; recalling and saving shared brain memory; creating and tracking work board tasks and automations; managing the agents' crypto wallets and payments (Bankr platform actions, Honey treasury, USDC transfers, x402 paid API calls); generating images and media through connected apps; schedules and voice calls.",
+  "Wallet and Bankr requests are HivemindOS agent-wallet operations, not consumer banking - never refuse them as banking; relay them through your tools.",
   "Speak naturally in one to three short sentences. No lists, no markdown, no reasoning preambles.",
-  "When the user clearly asks for work to be done (a job, build, fix, research, automation, reminder, or delegation to the hive), call the create_hive_task tool with a short imperative title and the full request as the message, then briefly confirm what you kicked off using the tool result.",
-  "Greetings, questions, status chat, and thinking-out-loud are just conversation - never create tasks for them.",
+  "Use ask_hivemind_agent whenever the user asks about themselves, their notes, files, projects, memories, fleet, wallets, or anything requiring their computer (opening apps, checking status, reading or writing notes, recalling shared memory, wallet balances and Bankr actions).",
+  "Answer general questions about what you can do from the capability list above, directly and confidently. Use ask_hivemind_agent to verify or perform a SPECIFIC capability (a particular wallet, app, note, or status). Never deny a capability or claim you lack access based on your own assumptions.",
+  "Use create_hive_task when the user clearly asks for longer work to be delegated to the hive (a job, build, fix, research, automation, reminder). Pass a short imperative title and the full request as the message, then briefly confirm what you kicked off using the tool result.",
+  "Greetings and chit-chat are just conversation - no tools needed.",
 ].join(" ");
 
 const QUEEN_REALTIME_TOOLS = [
   {
     type: "function",
+    name: "ask_hivemind_agent",
+    description:
+      "Relay a request to the HivemindOS computer agent, which runs with full capabilities on the user's machine: open apps, read or write notes and the Obsidian vault, recall shared brain memory, check fleet and project status, and answer questions about the user. Returns a spoken-ready result.",
+    parameters: {
+      type: "object",
+      properties: {
+        message: {
+          type: "string",
+          description:
+            "The user's request, in their words, with any needed context.",
+        },
+      },
+      required: ["message"],
+    },
+  },
+  {
+    type: "function",
     name: "create_hive_task",
     description:
-      "Create and delegate a task on the HivemindOS work board. Use ONLY when the user clearly requests work (build, fix, research, automation, reminder, delegation).",
+      "Create and delegate a task on the HivemindOS work board. Use ONLY when the user clearly requests longer work (build, fix, research, automation, reminder, delegation).",
     parameters: {
       type: "object",
       properties: {
@@ -88,6 +111,13 @@ export async function POST(request: NextRequest) {
     }
     if (body.action === "submit-task") {
       return await submitRealtimeTask(request, body);
+    }
+    if (body.action === "agent-turn") {
+      const text = await runQueenBeeAgentTurn(
+        request.nextUrl.origin,
+        String(body.message ?? ""),
+      );
+      return NextResponse.json({ ok: true, text });
     }
     if (body.action === "set-voice") {
       const voice = await writeQueenBeeVoice(String(body.voice ?? ""));

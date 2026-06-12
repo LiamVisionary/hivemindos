@@ -95,7 +95,7 @@ The exact project, skill, and migration folders will vary. The top level shape s
 | `Memory/` | Durable source of truth knowledge: daily briefings, weekly reviews, decisions, meetings, imported sources, book notes, distillations, and conversation mirrors. |
 | `Memory/Conversations/` | Finished HivemindOS chat sessions mirrored as one redacted note per session, organized by agent name. Written on session finish when the shared vault is enabled. Used for cross-session topic recall by all agents. |
 | `Synthesis/` | Generated drafts, connection reports, research summaries, reviewed analysis, Syntho wiki output, and agent-generated outputs. |
-| `Ideas/` | Liam's original thinking, mental models, recurring questions, taste, and personal strategy. |
+| `Ideas/` | The operator's original thinking, mental models, recurring questions, taste, and personal strategy. |
 | `Projects/` | Active work, project-specific context, status deltas, plans, and decisions. |
 | `Operations/` | HivemindOS operational state: automations, work board, notifications, runtime mirrors, secure encrypted backups, vault migrations, access logs, and brain service status. |
 | `Operations/Brain Services/Queen Bee/` | Queen Bee coordination state for one logical assistant identity: policy, current state, dedupe, leases, node annotations, and receipts. |

@@ -8,6 +8,7 @@ export type KnownAgentRuntime =
   | "codex"
   | "claude-code"
   | "aeon"
+  | "evo"
   | typeof HIVEMIND_OS_RUNTIME;
 export type AgentRuntime = KnownAgentRuntime | (string & {});
 export type AgentRuntimeKind =
@@ -528,6 +529,7 @@ export const KNOWN_AGENT_RUNTIMES: KnownAgentRuntime[] = [
   "codex",
   "claude-code",
   "aeon",
+  "evo",
   HIVEMIND_OS_RUNTIME,
 ];
 
@@ -857,6 +859,37 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
           a2aUrl: "gatewayUrl",
           a2aUrlFallback: "http://127.0.0.1:41241",
         },
+      },
+      integration: DEFAULT_RUNTIME_INTEGRATION_FEATURE,
+    },
+    evo: {
+      runtime: "evo",
+      label: "Evo",
+      kind: "background",
+      defaults: {
+        gatewayUrl: "",
+        chatPath: "",
+        statusPath: "",
+      },
+      capabilities: {
+        status: true,
+        runs: true,
+        backgroundTasks: true,
+        skillCapabilities: ["background", "shell", "filesystem", "analytics"],
+      },
+      env: DEFAULT_RUNTIME_ENV_FEATURE,
+      settings: {
+        ...CLI_RUNTIME_SETTINGS,
+        unavailableSubcopy: "Run `uv tool install evo-hq-cli`",
+      },
+      chat: {
+        ...CLI_RUNTIME_CHAT,
+        label: "Evo",
+      },
+      scheduler: DEFAULT_RUNTIME_SCHEDULER_FEATURE,
+      profile: {
+        ...DEFAULT_RUNTIME_PROFILE_FEATURE,
+        defaultWorkerClass: "code",
       },
       integration: DEFAULT_RUNTIME_INTEGRATION_FEATURE,
     },

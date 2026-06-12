@@ -29,6 +29,7 @@ async function checkRuntimeAvailability(runtime: AgentRuntime) {
   if (runtime === "codex") return checkCliRuntime("Codex", process.env.CODEX_BIN, "codex");
   if (runtime === "claude-code") return checkCliRuntime("Claude Code", process.env.CLAUDE_CODE_BIN || process.env.CLAUDE_BIN, "claude");
   if (runtime === "aeon") return checkAeon();
+  if (runtime === "evo") return checkCliRuntime("Evo", process.env.EVO_BIN, "evo");
   if (runtime === HIVEMIND_OS_RUNTIME) return checkOpenAICompatible();
   return { installed: false, detail: `${RUNTIME_LABELS[runtime] ?? runtime} is not installed.` };
 }
@@ -62,13 +63,15 @@ async function checkCliRuntime(label: string, envBin: string | undefined, comman
     join(homedir(), ".nvm", "versions", "node", process.version, "bin", command),
     "/opt/homebrew/bin/" + command,
     "/usr/local/bin/" + command,
-    command,
   ].filter(Boolean) as string[];
-  for (const bin of candidates) {
-    const status = await checkCommand(bin, ["--version"], `${label} is installed.`, `${label} is not installed.`);
-    if (status.installed) return status;
+  // Some CLIs (claude, opencode) take ~10s on a cold --version run, so an
+  // executable on disk counts as installed even when the version probe fails.
+  const existing = candidates.find((path) => existsSync(path));
+  if (existing) {
+    const status = await checkCommand(existing, ["--version"], `${label} is installed.`, "");
+    return status.installed ? status : { installed: true, detail: `${label} is installed.` };
   }
-  return { installed: false, detail: `${label} is not installed.` };
+  return checkCommand(command, ["--version"], `${label} is installed.`, `${label} is not installed.`);
 }
 
 async function checkOpenClaw() {

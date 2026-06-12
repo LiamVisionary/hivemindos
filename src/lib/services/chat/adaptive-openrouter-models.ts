@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import { homedir } from "os";
 import { dirname, join } from "path";
 import { RUNTIME_CAPABILITIES, type AgentProfile } from "@/lib/types/agent-runtime";
+import { orderAdaptiveModelsByReliability } from "@/lib/services/chat/adaptive-model-reliability";
 
 type IncomingMessage = {
   role: string;
@@ -289,7 +290,11 @@ export async function resolveAdaptiveOpenRouterModels(profile: AgentProfile, mes
     ? "OpenRouter did not report any free image-output model that matches this Adaptive request."
     : "OpenRouter did not report any free model that matches this Adaptive request.");
   const ids = rankedCandidates.map((model) => model.id!).filter(Boolean);
-  return fallbackModel && !ids.includes(fallbackModel) ? [...ids, fallbackModel] : ids;
+  // Observed reliability beats keyword ranking: stick with the most recent
+  // model that actually completed a request, and push rate-limited models to
+  // the back until their cooldown expires.
+  const ordered = await orderAdaptiveModelsByReliability(ids).catch(() => ids);
+  return fallbackModel && !ordered.includes(fallbackModel) ? [...ordered, fallbackModel] : ordered;
 }
 
 export async function resolveAdaptiveOpenRouterModel(profile: AgentProfile, messages: IncomingMessage[]) {

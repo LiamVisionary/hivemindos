@@ -1,11 +1,11 @@
 import { DEFAULT_SHARED_VAULT, RUNTIME_CAPABILITIES, RUNTIME_KINDS, buildAgentCallPreferences, normalizeAgentRuntime, type AgentProfile, type AgentRuntime, type AgentRuntimeKind, type CustomWorkerClassProfile, type RuntimeCapabilities, type SharedVaultConfig } from "@/lib/types/agent-runtime";
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
-import { beeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { beeWorkerPreset, renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
 import { createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
 import { normalizeAgentTelemetryUrl } from "@/lib/utils/agent-telemetry-url";
 import { isAutomationTranscriptText } from "@/lib/utils/automation-transcript";
 import type { AgentWalletConfig, HoneyTreasuryConfig } from "@/lib/types/agent-wallet";
-import type { AgentSchedule, AgentSnapshot, AgentTask, ChatCustomFolder, ChatMessage, DiscoveredMachine, HermesUpdateSkillLike, RuntimeIntegrationKey, RuntimeIntegrationStatus, RuntimeSetupDefinition, ScheduleDraft, StoredSharedVaultConfig, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
+import type { AgentSchedule, AgentSnapshot, AgentTask, ChatCustomFolder, ChatMessage, DiscoveredMachine, HermesUpdateSkillLike, RuntimeIntegrationKey, RuntimeIntegrationStatus, RuntimeSetupDefinition, StoredSharedVaultConfig, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
 import { imageGenerationToApplicationGeneration, normalizeApplicationGenerationUrl, type ChatApplicationGenerationArtifact, type ChatApplicationGenerationCard } from "@/features/dashboard/chat-application-generation";
 import { dashboardStateValue, type DashboardStateSnapshot } from "@/lib/services/dashboard-state-client";
 
@@ -97,7 +97,7 @@ export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
     customWorkerClasses,
     selectedCustomWorkerClassId,
     customWorkerClass: customWorkerClasses?.find((workerClass: CustomWorkerClassProfile) => workerClass.id === selectedCustomWorkerClassId) ?? agent.customWorkerClass,
-    skillProfilePrompt: agent.skillProfilePrompt ?? beeWorkerPreset(agent.workerClass ?? "general").taskProfile,
+    skillProfilePrompt: agent.skillProfilePrompt ?? renderBeeSoulTemplate(beeWorkerPreset(agent.workerClass ?? "general").soulTemplate, agent.name),
     preferredSkillSlugs: agent.preferredSkillSlugs ?? beeWorkerPreset(agent.workerClass ?? "general").skillSlugs,
     calls: buildAgentCallPreferences(agent.calls),
     agentEnv: agent.agentEnv && typeof agent.agentEnv === "object" && !Array.isArray(agent.agentEnv)

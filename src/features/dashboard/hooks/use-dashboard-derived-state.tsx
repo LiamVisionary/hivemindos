@@ -18,7 +18,10 @@ import type {
   FleetAgentCapabilityIcon,
 } from "@/components/fleet/fleet-data";
 import { simpleStableHash } from "@/features/dashboard/dashboard-light-helpers";
-import { filterSuppressedAgents } from "@/features/fleet/fleet-identity";
+import {
+  filterSuppressedAgents,
+  machineExactIdentity,
+} from "@/features/fleet/fleet-identity";
 
 const FLEET_CAPABILITY_META: Record<
   string,
@@ -974,12 +977,24 @@ export function useDashboardDerivedState(props: any) {
       for (const item of items) {
         const machineId = stableMachineId(item);
         if (!machineId) continue;
-        const nameIdentity = machineIdentityFromParts(item);
-        const claimed = machineIdByNameIdentity.get(nameIdentity);
-        machineIdByNameIdentity.set(
-          nameIdentity,
-          claimed && claimed !== machineId ? "" : machineId,
+        // Register the exact name identity alongside machineIdentityFromParts:
+        // the self machine resolves to "self" there, but its own embedded link
+        // node can show up as a separate tailnet device whose only handle is
+        // the exact identity ("liamsmacbookpro") — without this entry that
+        // shadow never bridges to the real machine.
+        const identities = new Set(
+          [
+            machineIdentityFromParts(item),
+            machineExactIdentity(item.name, item.dnsName),
+          ].filter(Boolean),
         );
+        for (const nameIdentity of identities) {
+          const claimed = machineIdByNameIdentity.get(nameIdentity);
+          machineIdByNameIdentity.set(
+            nameIdentity,
+            claimed && claimed !== machineId ? "" : machineId,
+          );
+        }
       }
       for (const item of items) {
         const nameIdentity = machineIdentityFromParts(item);

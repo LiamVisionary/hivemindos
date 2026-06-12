@@ -236,6 +236,50 @@ async function runOpenAiConversationTurn(
   return data?.choices?.[0]?.message?.content?.trim() || "";
 }
 
+/**
+ * Routes a spoken request through the full agent runtime harness (system
+ * prompt, capabilities, vault/brain context) and returns the spoken-ready
+ * answer. Used by the realtime session's ask_hivemind_agent tool, so Queen
+ * Bee can reach the user's computer, notes, and shared memory mid-call.
+ */
+export async function runQueenBeeAgentTurn(origin: string, message: string) {
+  const request = message.trim();
+  if (!request) return "The request was empty, so nothing was done.";
+  const agent = await pickConversationAgent();
+  if (!agent) {
+    return "No chat-capable HivemindOS agent is configured yet, so the request could not be run.";
+  }
+  try {
+    const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agent: voiceOptimizedAgent(agent),
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are handling a request relayed from Queen Bee's live voice chat. Do the work with your available capabilities, then answer in one to three short spoken sentences describing the outcome. No markdown, no preambles.",
+          },
+          { role: "user", content: request },
+        ],
+        runtimeSessionId: "queen-bee-voice",
+        agentMode: "act",
+        latencyMode: "voice",
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(45_000),
+    });
+    const text = await readRuntimeResponseText(response);
+    if (text.trim()) return text.trim();
+    return "The agent finished without a spoken result. The local runtime may be down - check the Hermes daemon.";
+  } catch (turnError) {
+    const detail =
+      turnError instanceof Error ? turnError.message : "request failed";
+    return `The HivemindOS agent could not be reached (${detail}). The local runtime may need a restart.`;
+  }
+}
+
 // A live voice turn needs a runtime that answers chat requests directly;
 // background runtimes (e.g. AEON workflows) cannot hold a spoken conversation.
 function supportsLiveChatTurn(profile: AgentProfile) {

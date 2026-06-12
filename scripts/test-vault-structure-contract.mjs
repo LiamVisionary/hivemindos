@@ -4,13 +4,16 @@ import { join } from "node:path";
 
 const root = process.cwd();
 const read = (path) => readFileSync(join(root, path), "utf8");
+// Formatters re-wrap long lines, so compare with whitespace collapsed: the
+// contract guards values and paths, not line breaks.
+const collapse = (text) => text.replace(/\s+/g, " ");
 
 function has(path, token, label = token) {
-  assert.ok(read(path).includes(token), `${path} should contain ${label}`);
+  assert.ok(collapse(read(path)).includes(collapse(token)), `${path} should contain ${label}`);
 }
 
 function lacks(path, token, label = token) {
-  assert.ok(!read(path).includes(token), `${path} should not contain ${label}`);
+  assert.ok(!collapse(read(path)).includes(collapse(token)), `${path} should not contain ${label}`);
 }
 
 const canonicalFolders = [
@@ -97,13 +100,18 @@ has("scripts/seed-vault-foundation.mjs", "Whole Brain.canvas");
 has("scripts/seed-vault-foundation.mjs", "Operations/Brain Services/Queen Bee/Identity.md");
 has("scripts/seed-vault-foundation.mjs", "intent-dedupe.jsonl");
 has("scripts/seed-vault-foundation.mjs", "receipts.jsonl");
-has("src/lib/services/chat/shared-vault-context.ts", "Operations/Brain Services/Queen Bee");
+// The Queen Bee path is composed from the configurable brain-services folder:
+// `${brainServicesFolder || "Operations/Brain Services"}/Queen Bee`.
+has("src/lib/services/chat/shared-vault-context.ts", '"Operations/Brain Services"');
+has("src/lib/services/chat/shared-vault-context.ts", "/Queen Bee", "the Queen Bee child folder under the brain-services folder");
 has("src/lib/services/queen-bee/control-plane.ts", "QUEEN_BEE_FOLDER_NAME");
 has("src/lib/services/queen-bee/control-plane.ts", "chooseQueenBeeDelegate");
 has("src/lib/services/queen-bee/router.ts", "chooseQueenBeeDelegate");
 has("src/lib/services/queen-bee/router.ts", "best available");
 has("src/app/api/queen-bee/route.ts", "protocol: \"hivemind-queen-bee\"");
-has("src/app/api/queen-bee/route.ts", "/api/fleet/discover");
+// Fleet discovery moved behind the discoverQueenBeeFleetSnapshot helper.
+has("src/app/api/queen-bee/route.ts", "discoverQueenBeeFleetSnapshot");
+has("src/lib/services/queen-bee/fleet-snapshot.ts", "/api/fleet/discover");
 has("scripts/vault-doctor.mjs", "Operations/Vault Migrations");
 has("scripts/vault-doctor.mjs", "Operations/Runtime Mirrors/AEON/.aeon");
 has("scripts/vault-doctor.mjs", "hiddenProfileStubs");

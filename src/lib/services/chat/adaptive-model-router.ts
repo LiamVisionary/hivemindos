@@ -3,6 +3,7 @@ import { homedir } from "os";
 import { dirname, join } from "path";
 import { HIVEMIND_OS_RUNTIME, type AgentProfile, type AgentRuntime } from "@/lib/types/agent-runtime";
 import { resolveAdaptiveOpenRouterModels } from "./adaptive-openrouter-models";
+import { adaptiveReliabilityKey, adaptiveReliabilityStates, type AdaptiveReliabilityState } from "./adaptive-model-reliability";
 
 type IncomingMessage = {
   role: string;
@@ -315,8 +316,21 @@ function profileForCandidate(profile: AgentProfile, candidate: AdaptiveRouteCand
   };
 }
 
-function candidateSort(left: AdaptiveRouteCandidate, right: AdaptiveRouteCandidate) {
+function candidateSort(
+  left: AdaptiveRouteCandidate,
+  right: AdaptiveRouteCandidate,
+  reliability: Map<string, AdaptiveReliabilityState>,
+) {
+  const leftState = reliability.get(adaptiveReliabilityKey(left.provider, left.model));
+  const rightState = reliability.get(adaptiveReliabilityKey(right.provider, right.model));
+  // Observed reliability outranks keyword scoring across every provider:
+  // models in a failure cooldown sink, quality-demoted models sink below
+  // never-tried ones, and the most recent quality-passing winner leads.
   return Number(right.free) - Number(left.free)
+    || Number(leftState?.cooling ?? false) - Number(rightState?.cooling ?? false)
+    || Number(leftState?.poorQuality ?? false) - Number(rightState?.poorQuality ?? false)
+    || Number(rightState?.recentWinner ?? false) - Number(leftState?.recentWinner ?? false)
+    || ((rightState?.recentWinner ? rightState.lastSuccessAt : 0) - (leftState?.recentWinner ? leftState.lastSuccessAt : 0))
     || right.score - left.score
     || left.providerName.localeCompare(right.providerName)
     || left.model.localeCompare(right.model);
@@ -339,7 +353,11 @@ export async function resolveAdaptiveRoutePlan(profile: AgentProfile, messages: 
     openRouterCandidates(profile, messages, useCases),
     modelsDevCandidates(profile, messages, useCases),
   ]);
-  const candidates = [...openRouter, ...modelsDev].sort(candidateSort);
+  const unsorted = [...openRouter, ...modelsDev];
+  const reliability = await adaptiveReliabilityStates(
+    unsorted.map((candidate) => adaptiveReliabilityKey(candidate.provider, candidate.model)),
+  ).catch(() => new Map<string, AdaptiveReliabilityState>());
+  const candidates = unsorted.sort((left, right) => candidateSort(left, right, reliability));
   const selected = candidates[0];
   if (!selected) {
     throw new Error("Adaptive could not find a ready free model. Configure OPENROUTER_API_KEY or another Models.dev OpenAI-compatible provider key, then try again.");

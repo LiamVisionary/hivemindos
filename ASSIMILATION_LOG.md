@@ -352,3 +352,73 @@
 - `node scripts/test-miroshark-card-parser.mjs`
 - Focused ESLint on the touched MiroShark parser/render files and regression script
 - Browser smoke on the saved BankrAgent capabilities chat
+## 2026-06-11T01:15:11.552667+00:00 - local-search
+
+- Request: Add canonical HivemindOS bee worker SOUL.md templates and wire Hermes profile creation to use them
+- Source: local-index
+- Query: `Add canonical HivemindOS bee worker SOUL.md templates and wire Hermes profile creation to use them`
+- Decision: no-results
+- Reason: No relevant local index hits after threshold filtering.
+## 2026-06-11T01:15:34.555816+00:00 - triage
+
+- Request: Add canonical HivemindOS bee worker SOUL.md templates and wire Hermes profile creation to use them
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/config/bee-worker-presets.ts
+  - Decision: selected
+  - Reason: typed bee worker matrix owns subclass labels, task profiles, quality bars, and skills
+  - Path: `src/lib/config/bee-worker-presets.ts`
+- scripts/agent-telemetry-collector.mjs
+  - Decision: selected
+  - Reason: Hermes profile creation already writes profile SOUL.md and should use the matrix
+  - Path: `scripts/agent-telemetry-collector.mjs`
+- src/lib/services/chat/hivemind-system-prompt.ts
+  - Decision: inspected
+  - Reason: chat prompt already injects profile role instructions and quality bars from bee presets
+  - Path: `src/lib/services/chat/hivemind-system-prompt.ts`
+- public-github
+  - Decision: rejected
+  - Reason: generic persona template examples are not a compatible donor for HivemindOS-specific bee identity matrix
+## 2026-06-11T01:15:35.322654+00:00 - public-search
+
+- Request: agent SOUL.md persona templates
+- Source: public-github
+- Query: `agent SOUL.md persona templates`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-06-11T01:23:22.635783+00:00 - implementation
+
+- Request: Add canonical HivemindOS bee worker SOUL.md templates and wire Hermes profile creation to use them
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/config/bee-worker-souls.json
+  - Decision: adapted_code
+  - Reason: new canonical compact SOUL template data for queen and worker classes
+  - Path: `src/lib/config/bee-worker-souls.json`
+- src/lib/config/bee-worker-presets.ts
+  - Decision: adapted_code
+  - Reason: bee preset matrix now exposes soulTemplate next to taskProfile and qualityBar
+  - Path: `src/lib/config/bee-worker-presets.ts`
+- scripts/agent-telemetry-collector.mjs
+  - Decision: adapted_code
+  - Reason: Hermes profile creation writes class souls for new agents and imports existing SOUL.md for reported agents
+  - Path: `scripts/agent-telemetry-collector.mjs`
+- src/features/dashboard/hooks/use-agent-settings-controller.tsx
+  - Decision: adapted_code
+  - Reason: existing agent subclass changes preserve non-empty identity prompts while new-agent class selection applies the class soul
+  - Path: `src/features/dashboard/hooks/use-agent-settings-controller.tsx`
+- scripts/test-bee-worker-souls.mjs
+  - Decision: test_adapted
+  - Reason: focused regression check for template shape and preservation wiring
+  - Path: `scripts/test-bee-worker-souls.mjs`
+## 2026-06-11T01:24:49.251356+00:00 - assimilation-manifest
+
+- Request: Add canonical HivemindOS bee worker SOUL.md templates and wire Hermes profile creation to use them
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:src/lib/config/bee-worker-presets.ts => src/lib/config/bee-worker-presets.ts, hivemind-os:scripts/agent-telemetry-collector.mjs => scripts/agent-telemetry-collector.mjs, hivemind-os:src/features/dashboard/hooks/use-agent-settings-controller.tsx => src/features/dashboard/hooks/use-agent-settings-controller.tsx, hivemind-os:src/lib/config/bee-worker-souls.json => src/lib/config/bee-worker-souls.json, hivemind-os:scripts/test-bee-worker-souls.mjs => scripts/test-bee-worker-souls.mjs
+- Verification: Wrote ASSIMILATION.json with 5 entries and custom_code_assessment=balanced.

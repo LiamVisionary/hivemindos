@@ -98,7 +98,7 @@ Benchmarks from the live local API route:
 | 500 | 4.37ms | 5.26ms | 4.68ms | 4.18ms | 1.0 / 1.0 / 1.0 |
 | 1500 | 19.20ms | 31.33ms | 19.37ms | 21.04ms | 1.0 / 1.0 / 1.0 |
 
-Those benchmark rows measure `scope: "agent-memory"`, the typed/proven memory hot path. On Liam's current 4,848-note vault, forced full-vault recall has 2,685 eligible markdown notes after generated/runtime/archive exclusions; a live local route smoke test measured about 2.35s for one cold full-vault answer, then warm cached full-vault answers around 0.20s-0.35s depending on the query, with one dev-server reload outlier. Under default tiered recall, strong distilled memories can return from the typed index without paying that full-vault scan.
+Those benchmark rows measure `scope: "agent-memory"`, the typed/proven memory hot path. On a reference vault of about 4,800 notes, forced full-vault recall has roughly 2,700 eligible markdown notes after generated/runtime/archive exclusions; a live local route smoke test measured about 2.35s for one cold full-vault answer, then warm cached full-vault answers around 0.20s-0.35s depending on the query, with one dev-server reload outlier. Under default tiered recall, strong distilled memories can return from the typed index without paying that full-vault scan.
 
 Before the private index hot path, markdown scanning measured recall p50 of 99.51ms at 100 memories, 293.49ms at 500, 562.38ms at 1000, and 784.03ms at 1500. The indexed path keeps rich memory retrieval in milliseconds while preserving perfect synthetic relevance in the benchmark set.
 

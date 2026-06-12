@@ -19,9 +19,17 @@
 
 ## Safety
 
+- NEVER run `git checkout`, `git restore`, `git reset --hard`, `git clean`, stash-without-pop, or any other git command that can discard uncommitted working-tree changes without EXPLICIT permission from Liam for that exact command. This working tree is shared by many concurrent agent sessions; a bulk revert destroys other sessions' uncommitted work (this happened on 2026-06-12). To undo your own changes, revert only the specific files you yourself edited, or do risky codemods in a disposable `git worktree`.
 - Do not commit local secrets, private Tailnet IPs, personal vault contents, or machine-specific data.
 - Keep collectors private to Tailscale unless the user explicitly asks for another exposure model.
 - Prefer read-only fleet inspection by default. Remote mutation/update endpoints need explicit design and safety review.
+
+## Docs Scope
+
+- `docs/` is public product documentation for HivemindOS users. Never write personal or this-installation content there: no "on this machine" state, no named fleet machines or hostnames, no local workspace/run details, no personal names, paths, or session history.
+- Describe features generically — what the product does on any install — with placeholder examples (`<repo>`, `<host>`) instead of real local values.
+- Personal and operational state belongs elsewhere: Shared Brain Memory / the Obsidian vault for durable facts and setup records, `CHANGELOG.md` for what was changed and how it was verified, and the control room for machine runbooks.
+- Before committing a doc, re-read it as a stranger installing the product: anything they could not reproduce or should not know is in the wrong file.
 
 ## Persistence And Cross-Surface State
 

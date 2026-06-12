@@ -1,0 +1,224 @@
+/* src/components/fleet/orbital-graph.module.css
+   Deep-field "orbital" fleet graph: particle-sphere core + HUD panels.
+   Intentionally blue-monochrome, unlike the teal/gold hex views. */
+
+.root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  container-type: inline-size;
+  container-name: orbital;
+  font-family: var(--f-mono);
+  color: #9fc1ee;
+  background:
+    radial-gradient(120% 95% at 50% 45%, rgba(10, 22, 52, 0.92), rgba(3, 7, 18, 0.98));
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Subtle CRT scanlines over the whole stage. */
+.scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(140, 190, 255, 0.025) 0px,
+    rgba(140, 190, 255, 0.025) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  mix-blend-mode: screen;
+}
+
+.monoCap {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #6f8fc4;
+}
+
+.panel {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.panel > * {
+  pointer-events: auto;
+}
+
+.value {
+  font-size: 11px;
+  color: #cfe4ff;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.bar {
+  position: relative;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(110, 160, 230, 0.16);
+  overflow: hidden;
+}
+
+.barFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(120, 180, 255, 0.55), rgba(170, 215, 255, 0.95));
+}
+
+/* Machine marker on the orbit ring. */
+.marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 0;
+  padding: 4px;
+  cursor: pointer;
+  color: #8fb4e8;
+}
+
+.markerDiamond {
+  width: 9px;
+  height: 9px;
+  transform: rotate(45deg);
+  border: 1px solid rgba(140, 195, 255, 0.75);
+  background: rgba(70, 130, 235, 0.25);
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+
+.markerLabel {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.marker:hover .markerDiamond {
+  background: rgba(140, 195, 255, 0.55);
+}
+
+.markerSelected .markerDiamond {
+  background: rgba(190, 225, 255, 0.95);
+  box-shadow: 0 0 12px rgba(150, 200, 255, 0.85);
+}
+
+.markerSelected {
+  color: #e7f2ff;
+}
+
+.markerWorking .markerDiamond {
+  animation: orbitalBlink 1.6s ease-in-out infinite;
+}
+
+/* Proximity radar. */
+.radar {
+  position: relative;
+  width: 124px;
+  height: 124px;
+  border-radius: 50%;
+  border: 1px solid rgba(120, 175, 255, 0.35);
+  background: radial-gradient(circle, rgba(40, 90, 200, 0.16), rgba(8, 18, 44, 0.55));
+  overflow: hidden;
+}
+
+.radarRing {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(120, 175, 255, 0.18);
+}
+
+.radarSweep {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(130, 190, 255, 0.45), transparent 70deg);
+  animation: orbitalSweep 4s linear infinite;
+}
+
+.radarDot {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #9fd2ff;
+  box-shadow: 0 0 6px rgba(150, 205, 255, 0.9);
+  transform: translate(-50%, -50%);
+}
+
+.logLine {
+  font-size: 9px;
+  line-height: 1.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #7d9fd2;
+}
+
+.primaryCard {
+  border: 1px solid rgba(130, 185, 255, 0.32);
+  background: rgba(8, 16, 38, 0.78);
+  box-shadow: 0 0 28px rgba(50, 110, 230, 0.18);
+  padding: 10px 16px 9px;
+  min-width: 320px;
+  backdrop-filter: blur(4px);
+}
+
+.bigStat {
+  font-family: var(--f-display);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.05;
+  color: #eaf4ff;
+  text-shadow: 0 0 18px rgba(140, 195, 255, 0.55);
+}
+
+.smallStat {
+  font-family: var(--f-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: #b9d6fb;
+}
+
+.agentDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid rgba(150, 200, 255, 0.6);
+}
+
+@keyframes orbitalSweep {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes orbitalBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Tight stages: keep the orb + primary card, drop side instrumentation. */
+@container orbital (max-width: 880px) {
+  .sideOnly {
+    display: none;
+  }
+}

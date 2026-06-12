@@ -31,6 +31,10 @@ export const AGENT_SHELL_COMMANDS = [
   "python",
   "osascript",
   "open",
+  "rg",
+  "grep",
+  "evo",
+  "uv",
 ] as const;
 
 const ALLOWED = new Set<string>(AGENT_SHELL_COMMANDS);
@@ -124,8 +128,9 @@ export function runCommandToolDefinition() {
       name: RUN_COMMAND_TOOL_NAME,
       description:
         "Run a real command on this HivemindOS machine and read its output. Use this to ACTUALLY perform a local action instead of describing or claiming it. " +
-        'Examples: open an app → command "open", args ["-a", "Notes"]; run AppleScript → command "osascript", args ["-e", "tell application \\"Notes\\" to activate"]; check a repo → command "git", args ["status"]. ' +
+        'Examples: open an app → command "open", args ["-a", "Notes"]; run AppleScript → command "osascript", args ["-e", "tell application \\"Notes\\" to activate"]; check a repo → command "git", args ["status"]; search files → command "rg", args ["-il", "Bankr", "/path/to/dir"]. ' +
         `Only these executables are allowed: ${AGENT_SHELL_COMMANDS.join(", ")}. Anything else returns an error you must adapt to. ` +
+        "There is NO shell: pipes (|), redirection, globs, and quoting are not interpreted, and you cannot smuggle a shell line through python3/node as one argument. Pass the executable plus plain args only; output is truncated automatically, so you never need | head. " +
         "Never tell the user an action succeeded unless this tool returned ok:true.",
       parameters: {
         type: "object",

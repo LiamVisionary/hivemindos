@@ -28,9 +28,16 @@ export async function GET(request: NextRequest) {
     // directory scan and remote-provider fetch that the full inventory performs.
     if (request.nextUrl.searchParams.get("shared") === "1") {
       const shared = await getSharedBrainSkillsCached(vaultPath, { summaryMode: "fast" });
+      // Optional `offset`/`limit` page the (cached) shelf so thin clients —
+      // the phone paints its first screen from ~20 skills — don't transfer
+      // the whole list. Without `limit` the response is unchanged.
+      const offset = Math.max(0, Math.floor(Number(request.nextUrl.searchParams.get("offset")) || 0));
+      const limit = Math.floor(Number(request.nextUrl.searchParams.get("limit")) || 0);
       return NextResponse.json({
         ok: true,
         ...shared,
+        shared: limit > 0 ? shared.shared.slice(offset, offset + limit) : shared.shared,
+        sharedTotal: shared.shared.length,
         providers: [],
         totals: { shared: shared.shared.length, providerSkills: 0, importable: 0 },
       });
@@ -42,9 +49,13 @@ export async function GET(request: NextRequest) {
       waitForRemote ? "remote" : "fast",
     ].join(":");
     const inventory = await cachedCall(cacheKey, BRAIN_SKILL_INVENTORY_CACHE_MS, async () => {
-      const remoteProviders = await remoteSkillProviders(request, waitForRemote
+      // Start the remote fetch and the local scan together — the remote
+      // inventories are only consumed at the final merge, so awaiting them
+      // up front would serialize fleet discovery in front of the vault and
+      // provider-home scans.
+      const remoteProviders = remoteSkillProviders(request, waitForRemote
         ? {}
-        : { fleetTimeoutMs: 2_500, collectorTimeoutMs: 2_500 });
+        : { fleetTimeoutMs: 2_500, collectorTimeoutMs: 2_500 }).catch(() => []);
       return getBrainSkillInventory(vaultPath, remoteProviders, { summaryMode: "fast" });
     });
     return NextResponse.json({ ok: true, ...inventory });

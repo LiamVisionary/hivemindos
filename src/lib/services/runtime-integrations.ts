@@ -114,6 +114,29 @@ type HermesSessionRow = {
   excerpt: string | null;
 };
 
+/**
+ * Short TTL memo for the expensive, agent-independent halves of integration
+ * status (hermes CLI sweep, LM Studio inventory). The status route is hit
+ * once per agent — the phone warms every fleet agent at launch and the
+ * desktop modal re-reads on every open — and without this each request
+ * re-spawns CLIs and re-hits provider APIs for a catalog that's identical
+ * across agents on the same machine. Failures are never cached, and the
+ * per-agent overlay (current selection, enabled tools) stays uncached.
+ */
+const CATALOG_CACHE_TTL_MS = 60_000;
+const catalogCache = new Map<string, { at: number; value: Promise<unknown> }>();
+
+function catalogMemo<T>(key: string, compute: () => Promise<T>): Promise<T> {
+  const hit = catalogCache.get(key);
+  if (hit && Date.now() - hit.at < CATALOG_CACHE_TTL_MS) return hit.value as Promise<T>;
+  const value = compute();
+  catalogCache.set(key, { at: Date.now(), value });
+  value.catch(() => {
+    if (catalogCache.get(key)?.value === value) catalogCache.delete(key);
+  });
+  return value;
+}
+
 export async function getRuntimeIntegrationStatus(runtime: AgentRuntime, agent?: AgentProfile): Promise<RuntimeIntegrationStatus> {
   const adapter = getRuntimeAdapter(runtime);
   const capabilities = { ...(RUNTIME_CAPABILITIES[runtime] ?? adapter?.capabilities ?? {}), ...(agent?.runtimeCapabilities ?? {}) };
@@ -151,19 +174,28 @@ export async function getRuntimeIntegrationStatus(runtime: AgentRuntime, agent?:
     };
   }
 
-  const diagnostics: string[] = [];
-  const [version, tools, config, baseModelSelection] = await Promise.all([
-    runHermes(["--version"]).catch((error) => {
-      diagnostics.push(error instanceof Error ? error.message : "Hermes version check failed.");
-      return "";
-    }),
-    runHermes(["tools", "list"]).catch(() => ""),
-    readFile(join(HERMES_HOME, "config.yaml"), "utf8").catch(() => ""),
-    getHermesModelSelection().catch((error) => {
-      diagnostics.push(error instanceof Error ? error.message : "Hermes model inventory failed.");
-      return undefined;
-    }),
-  ]);
+  // Agent-independent: CLI spawns + config read + model inventory — memoized
+  // briefly so a burst of per-agent status requests does the sweep once.
+  // Cached diagnostics ride along; copied below so per-request pushes don't
+  // mutate the cached array.
+  const hermesBase = await catalogMemo("hermes-base", async () => {
+    const sweepDiagnostics: string[] = [];
+    const [version, tools, config, baseModelSelection] = await Promise.all([
+      runHermes(["--version"]).catch((error) => {
+        sweepDiagnostics.push(error instanceof Error ? error.message : "Hermes version check failed.");
+        return "";
+      }),
+      runHermes(["tools", "list"]).catch(() => ""),
+      readFile(join(HERMES_HOME, "config.yaml"), "utf8").catch(() => ""),
+      getHermesModelSelection().catch((error) => {
+        sweepDiagnostics.push(error instanceof Error ? error.message : "Hermes model inventory failed.");
+        return undefined;
+      }),
+    ]);
+    return { version, tools, config, baseModelSelection, diagnostics: sweepDiagnostics };
+  });
+  const { version, tools, config, baseModelSelection } = hermesBase;
+  const diagnostics: string[] = [...hermesBase.diagnostics];
   const { modelSelection, providerStatus } = await augmentGatewayModelProviders(baseModelSelection, diagnostics, agent);
   const toolEnabled = (name: string) => new RegExp(`✓\\s+enabled\\s+${escapeRegExp(name)}\\b`).test(tools);
   const codexConfigured = /provider:\s*openai-codex\b|codex_app_server|codex-runtime/i.test(config);
@@ -262,8 +294,14 @@ async function augmentGatewayModelProviders(
   if (bankrAccess.error) diagnostics.push(`Bankr access status unavailable: ${bankrAccess.error}`);
   const providers = [...(modelSelection?.providers ?? [])];
   const lmStudioGateway = MODEL_PROVIDER_GATEWAYS["lm-studio"];
-  const lmStudio = await discoverLmStudioProviderModels(localOpenAIProviderProfile(agent)).catch((error) => ({
-    runtimeProfile: localOpenAIProviderProfile(agent),
+  // Memoized per resolved endpoint: the discovery spawns `lms ls` / hits the
+  // REST inventory, and for most agents it resolves to the same local URL.
+  const lmStudioProfile = localOpenAIProviderProfile(agent);
+  const lmStudio = await catalogMemo(
+    `lm-studio::${lmStudioProfile.gatewayUrl ?? ""}::${lmStudioProfile.token ?? ""}`,
+    () => discoverLmStudioProviderModels(lmStudioProfile)
+  ).catch((error) => ({
+    runtimeProfile: lmStudioProfile,
     lmStudioModels: [],
     modelDiscoveryError: error instanceof Error ? error.message : "Local OpenAI model discovery failed.",
     lmStudioModelSource: "",
@@ -284,9 +322,9 @@ async function augmentGatewayModelProviders(
         ? {
           id,
           name: model.displayName,
-          subtitle: model.loaded ? "Loaded" : "Downloaded",
+          subtitle: model.remote ? "Remote" : model.loaded ? "Loaded" : "Downloaded",
           group: model.paramsString || undefined,
-          badge: model.loaded ? "Loaded" : undefined,
+          badge: model.remote ? "Remote" : model.loaded ? "Loaded" : undefined,
         }
         : { id };
     }),
@@ -392,9 +430,18 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     const provider = String(input.provider ?? "").trim();
     const model = String(input.model ?? "").trim();
     if (!provider || !model) return { ok: false, error: "Provider and model are required." };
-    if (MODEL_PROVIDER_GATEWAYS[provider]?.hermes) await addHermesProvider(provider, model);
-    await setHermesModel(provider, model);
-    return { ok: true, message: `Hermes default model set to ${provider}/${model}.` };
+    // The shared gateway default in ~/.hermes/config.yaml is owned by the
+    // gateway, never by the app. Model picks are agent-scoped: agents with
+    // their own profile home get model.default in that profile's config.yaml,
+    // and every hermes chat also passes the model per-run via `-m/--provider`.
+    const profileEnv = hermesProfileEnv(agent);
+    if (MODEL_PROVIDER_GATEWAYS[provider]?.hermes) await addHermesProvider(provider, model, profileEnv);
+    else await addHermesModel(provider, model, undefined, profileEnv);
+    if (profileEnv) {
+      await setHermesProfileModel(provider, model, profileEnv);
+      return { ok: true, message: `Hermes model set to ${provider}/${model} for ${agent?.name || "this agent"} only. Gateway default unchanged.` };
+    }
+    return { ok: true, message: `Hermes model ${provider}/${model} registered for ${agent?.name || "this agent"}; chats pass it per-session. Gateway default unchanged.` };
   }
   if (action === "provider-setup-options") {
     const providers = await getHermesProviderSetupOptions();
@@ -573,7 +620,20 @@ print(json.dumps(payload))
   };
 }
 
-async function setHermesModel(provider: string, model: string) {
+/**
+ * HERMES_HOME override pointing at the agent's own profile home, or undefined
+ * when the agent lives in the shared gateway home. Config writes against the
+ * shared home's model default are forbidden — the gateway owns that file.
+ */
+function hermesProfileEnv(agent?: AgentProfile): Record<string, string> | undefined {
+  const raw = String(agent?.localDataDir ?? "").trim();
+  if (!raw) return undefined;
+  const dir = raw.replace(/^~(?=$|\/)/, homedir());
+  if (!dir || dir === HERMES_HOME) return undefined;
+  return { HERMES_HOME: dir };
+}
+
+async function setHermesProfileModel(provider: string, model: string, profileEnv: Record<string, string>) {
   const script = `
 from hermes_cli.config import load_config, save_config
 provider = __PROVIDER__
@@ -590,7 +650,7 @@ if model_cfg.get("base_url"):
 cfg["model"] = model_cfg
 save_config(cfg)
 `;
-  await runHermesPython(script, { __PROVIDER__: provider, __MODEL__: model });
+  await runHermesPython(script, { __PROVIDER__: provider, __MODEL__: model }, profileEnv);
 }
 
 async function setOpenClawModel(provider: string, model: string) {
@@ -651,7 +711,7 @@ function setNested(obj: Record<string, unknown>, path: string, value: unknown) {
   current[parts[parts.length - 1]] = value;
 }
 
-async function addHermesModel(provider: string, model: string, contextLength?: number) {
+async function addHermesModel(provider: string, model: string, contextLength?: number, env?: Record<string, string>) {
   const script = `
 from hermes_cli.config import load_config, save_config
 provider = __PROVIDER__
@@ -687,7 +747,7 @@ save_config(cfg)
     __PROVIDER__: provider,
     __MODEL__: model,
     __CONTEXT_LENGTH__: contextLength ?? 0,
-  });
+  }, env);
 }
 
 async function getHermesProviderSetupOptions() {
@@ -750,7 +810,7 @@ print(json.dumps(payload.get("providers", [])))
   return mapped;
 }
 
-async function addHermesProvider(provider: string, model: string) {
+async function addHermesProvider(provider: string, model: string, env?: Record<string, string>) {
   const script = `
 from hermes_cli.config import load_config, save_config
 from hermes_cli.models import provider_model_ids
@@ -821,7 +881,7 @@ save_config(cfg)
     __PROVIDER__: provider,
     __MODEL__: model,
     __GATEWAY_DEFAULTS__: JSON.stringify(gatewayDefaults),
-  });
+  }, env);
 }
 
 async function loadHiveEnv() {
@@ -852,7 +912,7 @@ async function hermesProcessEnv() {
   };
 }
 
-async function runHermesPython(script: string, values: Record<string, string | number>) {
+async function runHermesPython(script: string, values: Record<string, string | number>, env?: Record<string, string>) {
   if (!existsSync(HERMES_PYTHON) || !existsSync(HERMES_AGENT_DIR)) throw new Error("Hermes Python runtime was not found.");
   let rendered = script;
   for (const [key, value] of Object.entries(values)) {
@@ -860,7 +920,7 @@ async function runHermesPython(script: string, values: Record<string, string | n
   }
   const { stdout } = await execFileAsync(HERMES_PYTHON, ["-c", rendered], {
     cwd: HERMES_AGENT_DIR,
-    env: await hermesProcessEnv(),
+    env: { ...(await hermesProcessEnv()), ...(env ?? {}) },
     timeout: 20_000,
     maxBuffer: 2_000_000,
   });

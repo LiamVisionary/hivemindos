@@ -72,7 +72,7 @@ import { KANBAN_COLUMNS } from "@/lib/types/kanban";
 import { AGENT_PAYMENT_PROVIDER_COPY } from "@/lib/config/agent-payments";
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { providerIconPath, providerIconRenderMode, runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode } from "@/lib/config/runtime-icons";
-import { BEE_WORKER_PRESET_LIST, beeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { BEE_WORKER_PRESET_LIST, beeWorkerPreset, renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
 import { logClientTelemetry } from "@/lib/utils/client-telemetry";
 import { loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue, type DashboardStateSnapshot } from "@/lib/services/dashboard-state-client";
 import { readNativeDashboardBootstrap } from "@/lib/native/dashboard-bootstrap";
@@ -80,6 +80,7 @@ import { getNativeAppVersion } from "@/lib/native/desktop-status";
 import { getNativeFleetAppsCache, getNativeTailscaleDevices } from "@/lib/native/fleet";
 import { readNativeHiveEnv } from "@/lib/native/hive-env";
 import { readNativeMemoryTelemetry } from "@/lib/native/memory";
+import { listenForQueenSettingsOpen } from "@/lib/native/queen-voice-events";
 import {
   buildAgentPaymentPrompt,
   createDefaultAgentWallet,
@@ -409,8 +410,34 @@ const FusionPanel = dynamic(() => import("@/features/dashboard/views/FusionPanel
 const AeonAutopilotPanel = dynamic(() => import("@/components/aeon").then((mod) => mod.AeonAutopilotPanel), { ssr: false, loading: routeLoadingFor("aeon") });
 const PhonePanel = dynamic(() => import("@/features/dashboard/views/PhonePanel").then((mod) => mod.PhonePanel), { ssr: false, loading: routeLoadingFor("phone") });
 const DashboardModals = dynamic(() => import("@/features/dashboard/views/DashboardModals").then((mod) => mod.DashboardModals), { ssr: false });
-const AgentSettingsModal = dynamic(() => import("@/features/dashboard/views/chat/AgentSettingsModal").then((mod) => mod.AgentSettingsModal), { ssr: false });
+const AgentSettingsModal = dynamic(() => import("@/features/dashboard/views/chat/AgentSettingsModal").then((mod) => mod.AgentSettingsModal), {
+  ssr: false,
+  // The chunk is normally preloaded after launch (see the idle preload effect
+  // in DashboardApp); this overlay keeps the first click responsive when the
+  // user beats the preload (worst in dev, where the chunk compiles on demand).
+  loading: () => (
+    <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "grid", placeItems: "center", padding: 20, background: "rgba(2,6,23,0.72)", backdropFilter: "blur(18px)" }}>
+      <LoaderCircle size={28} className="animate-spin" style={{ color: "var(--fg)" }} />
+    </div>
+  ),
+});
 const SkillBrowserModal = dynamic(() => import("@/features/dashboard/views/chat/SkillBrowserModal").then((mod) => mod.SkillBrowserModal), { ssr: false });
+
+// Opening the agent settings modal recomputes runtime availability; the result
+// is usually identical to what's already in state. Returning the current
+// reference lets React bail out instead of re-rendering the whole dashboard.
+function sameRuntimeAvailability(
+  current: Record<string, { installed: boolean; detail: string }>,
+  next: Record<string, { installed: boolean; detail: string }>,
+) {
+  const currentKeys = Object.keys(current);
+  if (currentKeys.length !== Object.keys(next).length) return false;
+  return currentKeys.every((key) => {
+    const a = current[key];
+    const b = next[key];
+    return !!b && a.installed === b.installed && a.detail === b.detail;
+  });
+}
 const NotificationsPanel = dynamic(() => import("@/features/notifications/NotificationsPanel").then((mod) => mod.NotificationsPanel), { ssr: false });
 const ConnectPhoneFab = dynamic(() => import("@/components/phone/ConnectPhoneFab").then((mod) => mod.ConnectPhoneFab), { ssr: false });
 const QueenBeeVoiceOverlay = dynamic(() => import("@/features/queen-voice/QueenBeeVoiceOverlay").then((mod) => mod.QueenBeeVoiceOverlay), { ssr: false });
@@ -549,7 +576,14 @@ function chatMessagesForActiveRun(messages: ChatMessage[], run?: ActiveChatRunRe
   if (!run?.startedAt) return messages;
   const cutoff = run.startedAt - 1_000;
   const recentMessages = messages.filter((message) => !message.createdAt || message.createdAt >= cutoff);
-  return recentMessages.length ? recentMessages : [];
+  // The timestamp cutoff alone can include the previous turn's assistant reply
+  // when the next turn starts within the same second (e.g. a queued message
+  // auto-sending the moment the prior turn finishes), which made the new run
+  // look already answered and killed its thinking indicator. A run's
+  // transcript always starts with its own user prompt, so drop anything
+  // recorded before the first in-window user message.
+  const firstUserIndex = recentMessages.findIndex((message) => message.role === "user");
+  return firstUserIndex >= 0 ? recentMessages.slice(firstUserIndex) : [];
 }
 
 function sessionMessageCreatedAtMs(message: { createdAt?: unknown; timestamp?: unknown }) {
@@ -1221,7 +1255,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     customWorkerClass: undefined,
     customWorkerClasses: [],
     selectedCustomWorkerClassId: undefined,
-    skillProfilePrompt: beeWorkerPreset("general").taskProfile,
+    skillProfilePrompt: renderBeeSoulTemplate(beeWorkerPreset("general").soulTemplate, ""),
     preferredSkillSlugs: beeWorkerPreset("general").skillSlugs,
     useSharedVault: true,
   });
@@ -1416,6 +1450,21 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   } | null>(null);
   const brainDragMovedRef = useRef(false);
 
+  // Warm the agent-settings modal chunk while the app is idle so the first
+  // "add agent" / settings click doesn't stall on an on-demand chunk load
+  // (in dev that load also includes compiling the 3.5k-line module).
+  useEffect(() => {
+    const preload = () => {
+      void import("@/features/dashboard/views/chat/AgentSettingsModal");
+    };
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(preload, { timeout: 2000 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+    const timeoutId = window.setTimeout(preload, 1000);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
   useEffect(() => {
     messagesByAgentRef.current = messagesByAgent;
   }, [messagesByAgent]);
@@ -1435,6 +1484,21 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   useEffect(() => {
     runtimeSessionLoadedByKeyRef.current = runtimeSessionLoadedByKey;
   }, [runtimeSessionLoadedByKey]);
+
+  // Warm the agent-settings modal chunk while the app is idle so the first
+  // "add agent" / settings click doesn't stall on an on-demand chunk load
+  // (in dev that load also includes compiling the 3.5k-line module).
+  useEffect(() => {
+    const preload = () => {
+      void import("@/features/dashboard/views/chat/AgentSettingsModal");
+    };
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(preload, { timeout: 4000 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+    const timeoutId = window.setTimeout(preload, 1500);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   const applyHivemindLinkStatus = useCallback((status: HivemindLinkClientStatus | null) => {
     const previous = hivemindLinkStatusRef.current;
@@ -2575,6 +2639,37 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   );
   const selectedChatHistoryLoading = Boolean(selectedChatStorageKey && chatHistoryLoadingByKey[selectedChatStorageKey]) || selectedChatRuntimeLeafLoading;
   const chatInitialLoading = activeView === "chat" && !hydrated;
+  // "Queen Bee Settings" from the desktop menu/tray opens the agent settings
+  // modal for the queen. The ref keeps the subscription stable across renders.
+  const queenSettingsAgentsRef = useRef<AgentProfile[]>(displayAgents);
+  useEffect(() => {
+    queenSettingsAgentsRef.current = displayAgents;
+  }, [displayAgents]);
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void listenForQueenSettingsOpen(() => {
+      const agents = queenSettingsAgentsRef.current ?? [];
+      const queen = agents.find((agent) => agent.beeRole === "queen")
+        ?? agents.find((agent) => /queen/i.test(agent.name));
+      if (!queen) return;
+      setSelectedAgentId(queen.id);
+      setAgentRenameDraft(queen.name);
+      setAgentRenameEditing(false);
+      setAgentRuntimeFolderEditing(false);
+      setAgentRuntimeFolderStatus("");
+      setAgentRuntimeAdvancedOpen(false);
+      setAgentSettingsPanel("role");
+      setAgentRoleModalId(queen.id);
+    }).then((cleanup) => {
+      if (disposed) cleanup();
+      else unlisten = cleanup;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
   useEffect(() => {
     if (!hydrated || activeView !== "chat" || !selectedAgent || !selectedChatStorageKey) return;
     const element = messagesScrollRef.current;
@@ -3688,18 +3783,22 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     }
     void Promise.resolve().then(() => {
       if (cancelled) return;
-      setRuntimeAvailability(hintedAgents.length
+      const hinted = hintedAgents.length
         ? Object.fromEntries(hintedAgents.map((agent) => [
           agent.runtime,
           { installed: true, detail: `${RUNTIME_LABELS[agent.runtime] ?? agent.runtime} is configured on this machine.` },
         ]))
-        : {});
+        : {};
+      setRuntimeAvailability((current) => sameRuntimeAvailability(current, hinted) ? current : hinted);
     });
     void fetch("/api/runtimes/availability", { cache: "no-store" })
       .then((response) => response.json())
       .then((data) => {
         if (!cancelled && data?.ok && data.runtimes) {
-          setRuntimeAvailability((current) => ({ ...current, ...data.runtimes }));
+          setRuntimeAvailability((current) => {
+            const next = { ...current, ...data.runtimes };
+            return sameRuntimeAvailability(current, next) ? current : next;
+          });
         }
       })
       .catch(() => undefined);

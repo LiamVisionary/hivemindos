@@ -25,7 +25,9 @@ const ECHO_CANCELLED_AUDIO: MediaTrackConstraints = {
   noiseSuppression: true,
 };
 
-const CONNECT_TIMEOUT_MS = 20_000;
+// Past this, give up and let the overlay fall back to the STT+TTS pipeline
+// instead of holding the user on "Connecting...".
+const CONNECT_TIMEOUT_MS = 12_000;
 
 function parseFunctionCall(
   event: RealtimeEvent,
@@ -71,6 +73,33 @@ function parseFunctionCall(
     }
   }
   return null;
+}
+
+async function askHivemindAgent(args: Record<string, unknown>) {
+  const message = typeof args.message === "string" ? args.message.trim() : "";
+  if (!message) return "The relayed request was empty, so nothing was done.";
+  try {
+    const response = await fetch("/api/queen-bee/voice", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "agent-turn", message }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(60_000),
+    });
+    const data = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      text?: string;
+      error?: string;
+    } | null;
+    if (!response.ok || !data?.ok) {
+      return `The HivemindOS agent could not handle that: ${data?.error || `HTTP ${response.status}`}.`;
+    }
+    return (
+      data.text || "The agent completed the request without a spoken result."
+    );
+  } catch (turnError) {
+    return `The HivemindOS agent could not be reached: ${turnError instanceof Error ? turnError.message : "request failed"}.`;
+  }
 }
 
 async function createHiveTask(args: Record<string, unknown>) {
@@ -392,7 +421,9 @@ export function useQueenBeeRealtime(
         const output =
           call.name === "create_hive_task"
             ? await createHiveTask(call.args)
-            : `Unknown tool: ${call.name}`;
+            : call.name === "ask_hivemind_agent"
+              ? await askHivemindAgent(call.args)
+              : `Unknown tool: ${call.name}`;
         send({
           type: "conversation.item.create",
           item: {
@@ -431,14 +462,25 @@ export function useQueenBeeRealtime(
         setError("");
         setTurns([]);
         setFailed(false);
+        const startedAt = performance.now();
+        const mark = (label: string) =>
+          console.info(
+            `[queen-voice] ${label} +${Math.round(performance.now() - startedAt)}ms`,
+          );
 
-        const sessionResponse = await fetch("/api/queen-bee/voice", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "realtime-session" }),
-          cache: "no-store",
-          signal: AbortSignal.timeout(15_000),
-        });
+        // Session mint (server -> OpenAI) and mic permission are independent;
+        // running them serially was costing whole seconds per connect.
+        const [sessionResponse, mediaStream] = await Promise.all([
+          fetch("/api/queen-bee/voice", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action: "realtime-session" }),
+            cache: "no-store",
+            signal: AbortSignal.timeout(15_000),
+          }),
+          navigator.mediaDevices.getUserMedia({ audio: ECHO_CANCELLED_AUDIO }),
+        ]);
+        mark("session+mic ready");
         sessionInfo = ((await sessionResponse.json().catch(() => null)) ??
           {}) as RealtimeSessionInfo;
         if (
@@ -446,16 +488,13 @@ export function useQueenBeeRealtime(
           !sessionInfo.ok ||
           !sessionInfo.clientSecret
         ) {
+          mediaStream.getTracks().forEach((track) => track.stop());
           throw new Error(
             sessionInfo.error ||
               `Realtime session returned HTTP ${sessionResponse.status}.`,
           );
         }
-        if (cancelled) return;
-
-        localStream = await navigator.mediaDevices.getUserMedia({
-          audio: ECHO_CANCELLED_AUDIO,
-        });
+        localStream = mediaStream;
         if (cancelled) return;
         // Live captions run on their own transcription stream, in parallel.
         void startCaptionStream();
@@ -474,6 +513,7 @@ export function useQueenBeeRealtime(
 
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
+        mark("sdp offer ready");
         const callResponse = await fetch(
           "https://api.openai.com/v1/realtime/calls",
           {
@@ -494,6 +534,7 @@ export function useQueenBeeRealtime(
           type: "answer",
           sdp: await callResponse.text(),
         });
+        mark("sdp answer applied");
       } catch (connectError) {
         fail(
           connectError instanceof Error

@@ -1,27 +1,41 @@
 {
-  "created_at": "2026-06-09T17:23:40.780834+00:00",
+  "created_at": "2026-06-11T01:24:49.028708+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
       "source_repo": "hivemind-os",
-      "source_path": "src/features/fleet/fleet-identity.ts",
-      "target_path": "src/features/dashboard/DashboardApp.tsx",
+      "source_path": "src/lib/config/bee-worker-presets.ts",
+      "target_path": "src/lib/config/bee-worker-presets.ts",
       "reuse_type": "adapted_code",
-      "note": "reuse agentWorkspaceKey for persistent discovered-agent tombstones"
+      "note": "extended existing bee worker matrix with canonical soulTemplate data"
     },
     {
       "source_repo": "hivemind-os",
-      "source_path": "src/features/dashboard/hooks/use-dashboard-derived-state.tsx",
-      "target_path": "src/features/dashboard/hooks/use-dashboard-derived-state.tsx",
+      "source_path": "scripts/agent-telemetry-collector.mjs",
+      "target_path": "scripts/agent-telemetry-collector.mjs",
       "reuse_type": "adapted_code",
-      "note": "filter discovered agents before dedupe/display graph derivation"
+      "note": "adapted existing Hermes profile writer to preserve and import SOUL.md"
     },
     {
       "source_repo": "hivemind-os",
-      "source_path": "src/features/dashboard/hooks/use-wallet-files-controller.tsx",
-      "target_path": "src/features/dashboard/hooks/use-wallet-files-controller.tsx",
+      "source_path": "src/features/dashboard/hooks/use-agent-settings-controller.tsx",
+      "target_path": "src/features/dashboard/hooks/use-agent-settings-controller.tsx",
       "reuse_type": "adapted_code",
-      "note": "extend delete path to suppress discovered cache and snapshots"
+      "note": "adapted class selection to preserve existing identity prompts"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/config/bee-worker-souls.json",
+      "target_path": "src/lib/config/bee-worker-souls.json",
+      "reuse_type": "adapted_code",
+      "note": "new project-specific compact bee SOUL template data"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "scripts/test-bee-worker-souls.mjs",
+      "target_path": "scripts/test-bee-worker-souls.mjs",
+      "reuse_type": "test_adapted",
+      "note": "focused template and preservation regression check"
     }
   ]
 }

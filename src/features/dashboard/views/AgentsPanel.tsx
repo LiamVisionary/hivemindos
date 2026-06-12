@@ -206,6 +206,10 @@ export function AgentsPanel(props: AgentsPanelProps) {
     runtimeAgent?: AgentCallRuntimeAgent;
   } | null>(null);
 
+  // The single logical Queen Bee — drives the central hive cell in the graph.
+  const queenAgent = displayAgents.find((agent) => agent.beeRole === "queen")
+    ?? displayAgents.find((agent) => /queen/i.test(agent.name));
+
   const callAgentOnDashboard = useCallback(async (machine: FleetPanelMachine, fleetAgent: FleetPanelAgent): Promise<AgentPhoneCallResult> => {
     const profile = findCallProfile({
       fleetAgent,
@@ -439,6 +443,16 @@ export function AgentsPanel(props: AgentsPanelProps) {
                 setAgentSettingsPanel("role");
                 setAgentRoleModalId(agent.id);
               }}
+              onOpenQueenSettings={queenAgent ? () => {
+                setSelectedAgentId(queenAgent.id);
+                setAgentRenameDraft(queenAgent.name);
+                setAgentRenameEditing(false);
+                setAgentRuntimeFolderEditing(false);
+                setAgentRuntimeFolderStatus("");
+                setAgentRuntimeAdvancedOpen(false);
+                setAgentSettingsPanel("role");
+                setAgentRoleModalId(queenAgent.id);
+              } : undefined}
               onDuplicate={(_, agent) => requestDuplicateAgent(agent.id)}
               onRemove={(machine, agent, depth, onProgress) => deleteAgent(agent.id, {
                 ...(depth ? { aeonDeleteDepth: depth, onProgress } : {}),

@@ -958,6 +958,58 @@ fn claw_gateway_already_listening() -> bool {
     TcpStream::connect(("127.0.0.1", HOSTED_GATEWAY_PORT)).is_ok()
 }
 
+/// Stop a stale hosted gateway so a fresh one can bind 5001. Dev relaunches
+/// (`pnpm tauri dev`) don't go through stop_native_server — a killed dev app
+/// orphans its gateway child, and the adopt-if-listening rule then pins every
+/// later run to that orphan's old backend code. Only a process whose command
+/// line proves it is OUR installed gateway is stopped; any other squatter
+/// keeps the port and we fall back to skipping the host (never steal a port
+/// from an unrelated project). Returns true when the port is free to bind.
+fn stop_stale_hosted_gateway() -> bool {
+    let port_arg = format!("tcp:{HOSTED_GATEWAY_PORT}");
+    let pids = Command::new("/usr/sbin/lsof")
+        .args(["-nP", "-ti", &port_arg, "-sTCP:LISTEN"])
+        .output()
+        .map(|out| String::from_utf8_lossy(&out.stdout).to_string())
+        .unwrap_or_default();
+    let mut stopped_any = false;
+    for pid in pids.split_whitespace() {
+        let command_line = Command::new("/bin/ps")
+            .args(["-o", "command=", "-p", pid])
+            .output()
+            .map(|out| String::from_utf8_lossy(&out.stdout).to_string())
+            .unwrap_or_default();
+        if !command_line.contains(".hivemindos/claw/backend") {
+            eprintln!(
+                "HivemindOS: port {HOSTED_GATEWAY_PORT} is held by a non-gateway process (pid {pid}); leaving it alone"
+            );
+            return false;
+        }
+        eprintln!(
+            "HivemindOS: stopping stale hosted gateway (pid {pid}) to relaunch with current backend code"
+        );
+        // SIGTERM — the backend's shutdown handler reaps its shells and
+        // exits within ~2s on its own.
+        let _ = Command::new("/bin/kill").arg(pid).status();
+        stopped_any = true;
+    }
+    if !stopped_any {
+        // lsof saw nothing (transient listener already gone, or lsof failed).
+        // Report whatever the direct probe says now.
+        return TcpStream::connect(("127.0.0.1", HOSTED_GATEWAY_PORT)).is_err();
+    }
+    for _ in 0..40 {
+        if TcpStream::connect(("127.0.0.1", HOSTED_GATEWAY_PORT)).is_err() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(150));
+    }
+    eprintln!(
+        "HivemindOS: stale gateway did not release port {HOSTED_GATEWAY_PORT} in time; skipping host"
+    );
+    false
+}
+
 /// Spawn the installed claw gateway launcher as a child of this app. Returns
 /// None if the launcher is missing (claw not installed) or the spawn fails.
 fn spawn_hosted_gateway() -> Option<Child> {
@@ -1041,15 +1093,30 @@ pub fn run() {
             // HivemindOS and macOS shows one-click folder prompts. Opt-in;
             // the default leaves the headless launchd gateway untouched.
             if app_should_host_gateway() {
-                if claw_gateway_already_listening() && !app_forces_host_gateway() {
-                    eprintln!(
-                        "HivemindOS: app-hosted gateway skipped because a gateway is already listening on 127.0.0.1:5001"
-                    );
-                } else if let Some(child) = spawn_hosted_gateway() {
-                    if let Ok(mut guard) =
-                        _app.state::<NativeServerState>().gateway_child.lock()
-                    {
-                        *guard = Some(child);
+                // Dev builds (and `force`) RESTART a stale gateway instead of
+                // adopting it, so every `pnpm tauri dev` run serves the current
+                // backend code. Release builds keep the adopt rule: a healthy
+                // production gateway shouldn't bounce on every app launch.
+                let restart_stale = cfg!(debug_assertions) || app_forces_host_gateway();
+                let port_free = if claw_gateway_already_listening() {
+                    if restart_stale {
+                        stop_stale_hosted_gateway()
+                    } else {
+                        eprintln!(
+                            "HivemindOS: app-hosted gateway skipped because a gateway is already listening on 127.0.0.1:5001"
+                        );
+                        false
+                    }
+                } else {
+                    true
+                };
+                if port_free {
+                    if let Some(child) = spawn_hosted_gateway() {
+                        if let Ok(mut guard) =
+                            _app.state::<NativeServerState>().gateway_child.lock()
+                        {
+                            *guard = Some(child);
+                        }
                     }
                 }
             }

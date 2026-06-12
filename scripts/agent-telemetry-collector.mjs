@@ -16,6 +16,7 @@ import {
   readdir,
   readFile,
   readlink,
+  rename,
   rm,
   stat,
   writeFile,
@@ -103,6 +104,9 @@ const hermesApiStartTimeoutMs = Number(
 const hermesChatMode = (
   process.env.AGENT_TELEMETRY_HERMES_CHAT_MODE || "api"
 ).toLowerCase();
+const lmStudioLocalBase = (
+  process.env.LOCAL_OPENAI_BASE_URL || "http://127.0.0.1:1234"
+).replace(/\/+$/, "");
 const syncthingApiBaseUrl =
   process.env.SYNCTHING_API_URL || "http://127.0.0.1:8384";
 const defaultSyncPath = expandHome(
@@ -130,6 +134,13 @@ const projectRegistryPaths = [
   join(homedir(), ".hivemindos", "projects.json"),
 ].filter(Boolean);
 const hermesProfilesDir = join(defaultHermesDir, "profiles");
+const beeWorkerSoulTemplatesPath = join(
+  appDir,
+  "src",
+  "lib",
+  "config",
+  "bee-worker-souls.json",
+);
 const skillProviderRoots = [
   {
     id: "claude",
@@ -224,6 +235,9 @@ const healthCacheMs = Number(
 const appVersionCacheMs = Number(
   process.env.AGENT_TELEMETRY_VERSION_CACHE_MS || 60_000,
 );
+const installedRuntimesCacheMs = Number(
+  process.env.AGENT_TELEMETRY_RUNTIME_PROBE_CACHE_MS || 300_000,
+);
 const hostedAppProbeTimeoutMs = Number(
   process.env.AGENT_TELEMETRY_APP_PROBE_TIMEOUT_MS || 900,
 );
@@ -259,6 +273,8 @@ let healthPayloadCache = null;
 let healthPayloadPromise = null;
 let appVersionCache = null;
 let appVersionPromise = null;
+let installedRuntimesCache = null;
+let installedRuntimesPromise = null;
 const hostedAppAssetUrls = new Map();
 
 function expandHome(path) {
@@ -760,6 +776,65 @@ async function readJsonFile(filePath) {
   }
 }
 
+let beeWorkerSoulTemplatesCache = null;
+
+async function readBeeWorkerSoulTemplates() {
+  if (beeWorkerSoulTemplatesCache) return beeWorkerSoulTemplatesCache;
+  const parsed = await readJsonFile(beeWorkerSoulTemplatesPath);
+  beeWorkerSoulTemplatesCache =
+    parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : {};
+  return beeWorkerSoulTemplatesCache;
+}
+
+function renderBeeSoulTemplateText(template, agentName) {
+  const name = String(agentName || "").trim() || "this agent";
+  return String(template || "")
+    .replaceAll("{{agentName}}", name)
+    .trim();
+}
+
+async function defaultBeeSoulMarkdown(input) {
+  const templates = await readBeeWorkerSoulTemplates();
+  const workerClass = knownBeeWorkerClasses.includes(input?.workerClass)
+    ? input.workerClass
+    : "general";
+  const templateKey = input?.beeRole === "queen" ? "queen" : workerClass;
+  const lines = Array.isArray(templates[templateKey])
+    ? templates[templateKey]
+    : templates.general;
+  const rendered = renderBeeSoulTemplateText(
+    Array.isArray(lines) ? lines.join("\n") : "",
+    input?.name,
+  );
+  return (
+    rendered ||
+    `# Soul\nYou are ${String(input?.name || "this agent").trim()}, a ${workerClass} worker in HivemindOS.`
+  );
+}
+
+async function readHermesSoul(profileDir) {
+  const raw = await readFile(join(profileDir, "SOUL.md"), "utf8").catch(
+    () => "",
+  );
+  return raw.trim().slice(0, 12_000);
+}
+
+async function importHermesAgentSoul(agent) {
+  if (agent.runtime !== "hermes" || agent.skillProfilePrompt?.trim()) {
+    return agent;
+  }
+  const profileDir = expandHome(agent.localDataDir || "");
+  if (!profileDir) return agent;
+  const soul = await readHermesSoul(profileDir);
+  return soul ? { ...agent, skillProfilePrompt: soul } : agent;
+}
+
+async function importHermesAgentSouls(agents) {
+  return Promise.all(agents.map((agent) => importHermesAgentSoul(agent)));
+}
+
 function configuredExpoIconPaths(appJson) {
   const expo = appJson?.expo || appJson;
   return [
@@ -1045,6 +1120,17 @@ function uniqueAgentId(runtime, name) {
 const HIVE_RUNTIME_ID = "hivemind-os";
 const LEGACY_OPENAI_COMPATIBLE_RUNTIME_ID = "openai-compatible";
 const knownRuntimeIds = ["hermes", "openclaw", "aeon", HIVE_RUNTIME_ID];
+const knownBeeWorkerClasses = [
+  "general",
+  "planner",
+  "code",
+  "vision",
+  "writer",
+  "research",
+  "artist",
+  "ops",
+  "qa",
+];
 
 function normalizeRuntimeId(runtime, fallback = "hermes") {
   const value = String(runtime || "").trim();
@@ -1157,17 +1243,7 @@ function normalizeRuntimeAgent(entry) {
     beeRole: ["queen", "worker", "observer", "human"].includes(entry?.beeRole)
       ? entry.beeRole
       : "worker",
-    workerClass: [
-      "general",
-      "planner",
-      "code",
-      "vision",
-      "writer",
-      "research",
-      "artist",
-      "ops",
-      "qa",
-    ].includes(entry?.workerClass)
+    workerClass: knownBeeWorkerClasses.includes(entry?.workerClass)
       ? entry.workerClass
       : "general",
     useSharedVault: entry?.useSharedVault !== false,
@@ -1176,7 +1252,7 @@ function normalizeRuntimeAgent(entry) {
 
 async function configuredRuntimeAgents() {
   const agents = await readRuntimeAgentRegistry();
-  return agents.map(normalizeRuntimeAgent);
+  return importHermesAgentSouls(agents.map(normalizeRuntimeAgent));
 }
 
 async function detectedOpenClawAgent() {
@@ -1209,6 +1285,7 @@ async function createHermesProfileAgent(input) {
   if (profile === "default" || profile === "hermes")
     throw new Error("Choose a non-reserved Hermes profile name.");
   const profileDir = join(hermesProfilesDir, profile);
+  const existingSoul = await readHermesSoul(profileDir);
   const dirs = [
     "memories",
     "sessions",
@@ -1228,6 +1305,9 @@ async function createHermesProfileAgent(input) {
   const provider = String(input.provider || "openai-codex").trim();
   const model = String(input.model || "gpt-5.5").trim();
   const profilePrompt = String(input.skillProfilePrompt || "").trim();
+  const soulPrompt = profilePrompt
+    ? renderBeeSoulTemplateText(profilePrompt, input.name)
+    : existingSoul || (await defaultBeeSoulMarkdown(input));
   await writeFile(
     join(profileDir, "config.yaml"),
     [
@@ -1250,24 +1330,18 @@ async function createHermesProfileAgent(input) {
       .join("\n"),
     { mode: 0o600 },
   );
-  await writeFile(
-    join(profileDir, "SOUL.md"),
-    [
-      `# ${input.name}`,
-      "",
-      profilePrompt ||
-        `You are ${input.name}, a ${input.workerClass || "general"} worker in HivemindOS.`,
-      "",
-    ].join("\n"),
-    { mode: 0o600 },
-  );
+  if (profilePrompt || !existingSoul) {
+    await writeFile(join(profileDir, "SOUL.md"), `${soulPrompt.trim()}\n`, {
+      mode: 0o600,
+    });
+  }
   await writeFile(
     join(profileDir, "profile.json"),
     `${JSON.stringify(
       {
         name: profile,
         display_name: input.name,
-        description: profilePrompt,
+        description: soulPrompt,
         description_auto: false,
       },
       null,
@@ -1275,7 +1349,13 @@ async function createHermesProfileAgent(input) {
     )}\n`,
     { mode: 0o600 },
   );
-  return { profile, profileDir, provider, model };
+  return {
+    profile,
+    profileDir,
+    provider,
+    model,
+    skillProfilePrompt: soulPrompt,
+  };
 }
 
 async function createRuntimeAgent(input) {
@@ -1333,7 +1413,8 @@ async function createRuntimeAgent(input) {
     customWorkerClass: input.customWorkerClass,
     customWorkerClasses: input.customWorkerClasses,
     selectedCustomWorkerClassId: input.selectedCustomWorkerClassId,
-    skillProfilePrompt: input.skillProfilePrompt,
+    skillProfilePrompt:
+      runtimeResult.skillProfilePrompt || input.skillProfilePrompt,
     preferredSkillSlugs: input.preferredSkillSlugs,
     useSharedVault: input.useSharedVault,
   });
@@ -1940,6 +2021,253 @@ function runHiveEnvE2eSync({ key, value, scope = "all", runtime = "generic" }) {
       rejectSync(new Error(output.trim() || "hive-env-add failed."));
     });
   });
+}
+
+const envSyncMaintenanceIntervalMs = Number(
+  process.env.AGENT_TELEMETRY_ENV_SYNC_INTERVAL_MS || 10 * 60_000,
+);
+const envSyncMaintenanceEnabled =
+  !/^(1|true|yes)$/i.test(process.env.AGENT_TELEMETRY_ENV_SYNC_DISABLED || "") &&
+  Number.isFinite(envSyncMaintenanceIntervalMs) &&
+  envSyncMaintenanceIntervalMs > 0;
+let envSyncMaintenanceRunning = false;
+let envSyncMaintenanceStatus = {
+  enabled: envSyncMaintenanceEnabled,
+  intervalMs: envSyncMaintenanceIntervalMs,
+  lastRunAt: null,
+  lastReason: null,
+  lastSummary: null,
+  lastError: null,
+};
+
+async function runEnvSyncMaintenance(reason) {
+  if (envSyncMaintenanceRunning) return envSyncMaintenanceStatus;
+  envSyncMaintenanceRunning = true;
+  try {
+    const envSync = await resolveHiveEnvAdd();
+    if (!envSync.ready) {
+      throw new Error(
+        envSync.error || "hive-env-add is not installed or executable.",
+      );
+    }
+    const { stdout } = await execFileAsync(
+      envSync.command,
+      ["--sync-maintenance"],
+      {
+        timeout: 240_000,
+        maxBuffer: 1_000_000,
+      },
+    );
+    const lines = stdout.trim().split("\n").filter(Boolean);
+    let summary;
+    try {
+      summary = JSON.parse(lines[lines.length - 1] || "{}");
+    } catch {
+      summary = { raw: stdout.trim().slice(0, 2000) };
+    }
+    envSyncMaintenanceStatus = {
+      ...envSyncMaintenanceStatus,
+      lastRunAt: new Date().toISOString(),
+      lastReason: reason,
+      lastSummary: summary,
+      lastError: null,
+    };
+    const retried = summary?.retry?.retriedKeys?.length || 0;
+    const pulled = summary?.pull?.pulled?.length || 0;
+    if (retried || pulled) {
+      console.log(
+        `env sync maintenance (${reason}): retried ${retried} queued key(s), pulled ${pulled} key(s) from peers`,
+      );
+    }
+  } catch (error) {
+    envSyncMaintenanceStatus = {
+      ...envSyncMaintenanceStatus,
+      lastRunAt: new Date().toISOString(),
+      lastReason: reason,
+      lastError: error instanceof Error ? error.message : String(error),
+    };
+    console.warn(
+      `env sync maintenance (${reason}) failed:`,
+      envSyncMaintenanceStatus.lastError,
+    );
+  } finally {
+    envSyncMaintenanceRunning = false;
+  }
+  return envSyncMaintenanceStatus;
+}
+
+function startEnvSyncMaintenance() {
+  if (!envSyncMaintenanceEnabled) return;
+  setTimeout(() => {
+    void runEnvSyncMaintenance("startup");
+  }, 45_000);
+  setInterval(() => {
+    void runEnvSyncMaintenance("interval");
+  }, envSyncMaintenanceIntervalMs);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive-model reliability gossip.
+//
+// The HivemindOS app grades OpenRouter free models per machine in
+// ~/.hivemindos/openrouter-model-reliability.json (successes, capacity
+// cooldowns, quality fails). The fleet shares one OpenRouter API key, so a
+// rate limit observed on one machine applies everywhere — collectors gossip
+// the store over the tailnet and merge newest-wins per model id. Payload is
+// model ids and counters only: no secrets, and no tailnet IPs are persisted.
+const reliabilityStoreFile = join(
+  homedir(),
+  ".hivemindos",
+  "openrouter-model-reliability.json",
+);
+const reliabilitySyncIntervalMs = Number(
+  process.env.AGENT_TELEMETRY_RELIABILITY_SYNC_INTERVAL_MS || 10 * 60_000,
+);
+const reliabilitySyncEnabled =
+  Number.isFinite(reliabilitySyncIntervalMs) && reliabilitySyncIntervalMs > 0;
+const reliabilityPeerTimeoutMs = 4_000;
+// Fleet collectors all listen on the same port; the override exists so tests
+// can run two instances side by side on one machine.
+const reliabilityPeerPort = Number(
+  process.env.AGENT_TELEMETRY_RELIABILITY_PEER_PORT || 0,
+);
+let reliabilitySyncRunning = false;
+let reliabilitySyncStatus = {
+  enabled: reliabilitySyncEnabled,
+  intervalMs: reliabilitySyncIntervalMs,
+  lastRunAt: null,
+  lastReason: null,
+  lastSummary: null,
+  lastError: null,
+};
+
+async function readReliabilityStoreFile() {
+  const raw = await readFile(reliabilityStoreFile, "utf8").catch(() => "");
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.models === "object" && parsed.models) {
+      return parsed;
+    }
+  } catch {
+    /* corrupt store — treat as absent, the app rewrites it */
+  }
+  return null;
+}
+
+function reliabilityRecordFreshness(record) {
+  if (!record || typeof record !== "object") return 0;
+  return Math.max(
+    Number(record.lastSuccessAt) || 0,
+    Number(record.lastFailureAt) || 0,
+  );
+}
+
+async function tailnetPeerHosts() {
+  const { stdout } = await execFileAsync("tailscale", ["status", "--json"], {
+    timeout: 5000,
+    maxBuffer: 1_500_000,
+  });
+  const status = JSON.parse(stdout);
+  const peers = Object.values(status?.Peer ?? {});
+  const hosts = [];
+  for (const peer of peers) {
+    if (peer?.Online === false) continue;
+    const dnsName = String(peer?.DNSName || "").replace(/\.$/, "");
+    const ip = Array.isArray(peer?.TailscaleIPs) ? peer.TailscaleIPs[0] : "";
+    const host = dnsName || ip;
+    if (host) hosts.push(host);
+  }
+  return hosts;
+}
+
+async function runReliabilitySync(reason) {
+  if (reliabilitySyncRunning) return reliabilitySyncStatus;
+  reliabilitySyncRunning = true;
+  try {
+    const [local, selfMachineId, hosts] = await Promise.all([
+      readReliabilityStoreFile(),
+      stableMachineId().catch(() => ""),
+      tailnetPeerHosts(),
+    ]);
+    const merged = { ...(local?.models ?? {}) };
+    const seenMachineIds = new Set(selfMachineId ? [selfMachineId] : []);
+    let peersConsulted = 0;
+    let recordsAdopted = 0;
+    for (const host of hosts) {
+      let payload = null;
+      try {
+        const peerResponse = await fetch(
+          `http://${host}:${reliabilityPeerPort || port}/reliability/openrouter`,
+          { signal: AbortSignal.timeout(reliabilityPeerTimeoutMs) },
+        );
+        if (!peerResponse.ok) continue;
+        payload = await peerResponse.json();
+      } catch {
+        continue;
+      }
+      if (!payload?.ok || !payload.models || typeof payload.models !== "object")
+        continue;
+      // Every machine has two tailnet nodes (system + hivemind-linkd) that
+      // reach the same collector — dedupe by machineId, and skip ourselves.
+      if (payload.machineId) {
+        if (seenMachineIds.has(payload.machineId)) continue;
+        seenMachineIds.add(payload.machineId);
+      }
+      peersConsulted += 1;
+      for (const [modelId, record] of Object.entries(payload.models)) {
+        if (
+          reliabilityRecordFreshness(record) >
+          reliabilityRecordFreshness(merged[modelId])
+        ) {
+          merged[modelId] = record;
+          recordsAdopted += 1;
+        }
+      }
+    }
+    if (recordsAdopted > 0) {
+      const next = {
+        updatedAt: new Date().toISOString(),
+        models: merged,
+      };
+      // Atomic write: the app re-reads this file on a short TTL and must
+      // never observe a partial JSON document.
+      const tmpPath = `${reliabilityStoreFile}.${process.pid}.tmp`;
+      await mkdir(dirname(reliabilityStoreFile), { recursive: true });
+      await writeFile(tmpPath, JSON.stringify(next, null, 2), "utf8");
+      await rename(tmpPath, reliabilityStoreFile);
+      console.log(
+        `reliability sync (${reason}): adopted ${recordsAdopted} fresher model record(s) from ${peersConsulted} peer(s)`,
+      );
+    }
+    reliabilitySyncStatus = {
+      ...reliabilitySyncStatus,
+      lastRunAt: new Date().toISOString(),
+      lastReason: reason,
+      lastSummary: { peersConsulted, recordsAdopted, peerHosts: hosts.length },
+      lastError: null,
+    };
+  } catch (error) {
+    reliabilitySyncStatus = {
+      ...reliabilitySyncStatus,
+      lastRunAt: new Date().toISOString(),
+      lastReason: reason,
+      lastError: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    reliabilitySyncRunning = false;
+  }
+  return reliabilitySyncStatus;
+}
+
+function startReliabilitySync() {
+  if (!reliabilitySyncEnabled) return;
+  setTimeout(() => {
+    void runReliabilitySync("startup");
+  }, 60_000);
+  setInterval(() => {
+    void runReliabilitySync("interval");
+  }, reliabilitySyncIntervalMs);
 }
 
 function startSyncthingDetached() {
@@ -3048,7 +3376,57 @@ async function runOpenClawIntegrationAction(action, input = {}) {
   };
 }
 
-async function runHermesIntegrationAction(action, input = {}) {
+function hermesAgentProfileDir(agent = {}) {
+  const raw =
+    typeof agent.localDataDir === "string" ? agent.localDataDir.trim() : "";
+  if (!raw) return "";
+  const dir = expandHome(raw);
+  return dir && dir !== defaultHermesDir ? dir : "";
+}
+
+// Rewrites only the top-level `model:` block of an agent profile's
+// config.yaml. The shared gateway home's config is never touched here — the
+// gateway default model is owned by the gateway, not by HivemindOS.
+async function setHermesProfileModelConfig(profileDir, provider, model) {
+  const configPath = join(profileDir, "config.yaml");
+  const raw = await readFile(configPath, "utf8").catch(() => "");
+  const modelBlock = [
+    "model:",
+    `  default: ${yamlScalar(model)}`,
+    `  provider: ${yamlScalar(provider)}`,
+  ].join("\n");
+  let next;
+  if (/^model:[ \t]*\n/m.test(raw)) {
+    next = raw.replace(
+      /^model:[ \t]*\n(?:[ \t]+[^\n]*\n?)*/m,
+      `${modelBlock}\n`,
+    );
+  } else {
+    next = raw.trim() ? `${modelBlock}\n${raw}` : `${modelBlock}\n`;
+  }
+  await mkdir(profileDir, { recursive: true, mode: 0o700 });
+  await writeFile(configPath, next, { mode: 0o600 });
+}
+
+async function runHermesIntegrationAction(action, input = {}, agent = {}) {
+  if (action === "set-model") {
+    const provider = String(input.provider || "").trim();
+    const model = String(input.model || "").trim();
+    if (!provider || !model)
+      return { ok: false, error: "Provider and model are required." };
+    const profileDir = hermesAgentProfileDir(agent);
+    if (!profileDir)
+      return {
+        ok: false,
+        error:
+          "This Hermes agent shares the gateway home, and HivemindOS never changes the gateway default model. Create a profile agent to give it its own model.",
+      };
+    await setHermesProfileModelConfig(profileDir, provider, model);
+    return {
+      ok: true,
+      message: `Hermes model set to ${provider}/${model} for this agent profile only. Gateway default unchanged.`,
+    };
+  }
   if (action === "enable-tool") {
     const tool = String(input.tool || "");
     if (!["x_search", "video_gen"].includes(tool))
@@ -4280,7 +4658,7 @@ async function localAgents() {
       machineName: hostname(),
     });
   }
-  return attachAgentDids(agents);
+  return attachAgentDids(await importHermesAgentSouls(agents));
 }
 
 // Every agent gets its own did:key identity (GitLawb's per-agent model), even
@@ -4446,6 +4824,117 @@ async function systemStats() {
   };
 }
 
+// Path candidates use a fast executable check; bare command names fall back
+// to a PATH spawn (some CLIs take ~10s cold, hence the generous timeout).
+async function binaryInstalled(bin) {
+  if (bin.includes(sep) || bin.includes("/")) {
+    return access(expandHome(bin), constants.X_OK)
+      .then(() => true)
+      .catch(() => false);
+  }
+  const result = await execFileAsync(bin, ["--version"], {
+    timeout: 15_000,
+    maxBuffer: 200_000,
+  }).catch(() => null);
+  return Boolean(result);
+}
+
+async function anyBinaryInstalled(candidates) {
+  for (const bin of candidates.filter(Boolean)) {
+    if (await binaryInstalled(bin)) return true;
+  }
+  return false;
+}
+
+function cliRuntimeCandidates(envBin, command) {
+  return [
+    envBin,
+    join(homedir(), ".local", "bin", command),
+    join(homedir(), `.${command}`, "bin", command),
+    join(
+      homedir(),
+      ".nvm",
+      "versions",
+      "node",
+      process.version,
+      "bin",
+      command,
+    ),
+    `/opt/homebrew/bin/${command}`,
+    `/usr/local/bin/${command}`,
+    command,
+  ];
+}
+
+async function detectOpenClawInstalled() {
+  const runnable = await anyBinaryInstalled([
+    process.env.OPENCLAW_BIN,
+    "/usr/local/bin/openclaw",
+    "/usr/bin/openclaw",
+    join(homedir(), ".local", "bin", "openclaw"),
+    join(homedir(), ".volta", "bin", "openclaw"),
+    "openclaw",
+  ]);
+  if (runnable) return true;
+  return access(join(defaultOpenClawDir, "openclaw.json"), constants.R_OK)
+    .then(() => true)
+    .catch(() => false);
+}
+
+async function detectAeonInstalled() {
+  if (process.env.AEON_REPO) return true;
+  return access(join(defaultAeonDir, "aeon.yml"), constants.R_OK)
+    .then(() => true)
+    .catch(() => false);
+}
+
+// Installed runtime CLIs, independent of whether any agent uses them yet —
+// the dashboard gates create-agent runtime cards on this list.
+async function installedRuntimes() {
+  const now = Date.now();
+  if (
+    installedRuntimesCache &&
+    now - installedRuntimesCache.checkedAt < installedRuntimesCacheMs
+  ) {
+    return installedRuntimesCache.value;
+  }
+  if (installedRuntimesPromise) {
+    // Serve a stale list rather than blocking /health on CLI probes.
+    return installedRuntimesCache
+      ? installedRuntimesCache.value
+      : installedRuntimesPromise;
+  }
+  installedRuntimesPromise = (async () => {
+    const checks = await Promise.all([
+      resolveHermesBin()
+        .then((bin) => binaryInstalled(bin))
+        .then((ok) => (ok ? "hermes" : "")),
+      detectOpenClawInstalled().then((ok) => (ok ? "openclaw" : "")),
+      anyBinaryInstalled(
+        cliRuntimeCandidates(process.env.OPENCODE_BIN, "opencode"),
+      ).then((ok) => (ok ? "opencode" : "")),
+      anyBinaryInstalled(
+        cliRuntimeCandidates(process.env.CODEX_BIN, "codex"),
+      ).then((ok) => (ok ? "codex" : "")),
+      anyBinaryInstalled(
+        cliRuntimeCandidates(
+          process.env.CLAUDE_CODE_BIN || process.env.CLAUDE_BIN,
+          "claude",
+        ),
+      ).then((ok) => (ok ? "claude-code" : "")),
+      detectAeonInstalled().then((ok) => (ok ? "aeon" : "")),
+    ]);
+    const value = checks.filter(Boolean);
+    installedRuntimesCache = { checkedAt: Date.now(), value };
+    return value;
+  })().finally(() => {
+    installedRuntimesPromise = null;
+  });
+  return installedRuntimesCache
+    ? installedRuntimesCache.value
+    : installedRuntimesPromise;
+}
+
 async function collectorHealthPayload() {
   const now = Date.now();
   if (
@@ -4457,7 +4946,7 @@ async function collectorHealthPayload() {
   if (healthPayloadPromise) return healthPayloadPromise;
 
   healthPayloadPromise = (async () => {
-    const [syncthing, envSync, agents, machineId, version, system] =
+    const [syncthing, envSync, agents, machineId, version, system, installed] =
       await Promise.all([
         syncthingInstalled(),
         resolveHiveEnvAdd(),
@@ -4465,8 +4954,11 @@ async function collectorHealthPayload() {
         stableMachineId(),
         appVersion(),
         systemStats().catch(() => null),
+        installedRuntimes().catch(() => []),
       ]);
-    const runtimes = [...new Set(agents.map((agent) => agent.runtime))];
+    const runtimes = [
+      ...new Set([...agents.map((agent) => agent.runtime), ...installed]),
+    ];
     const value = {
       ok: true,
       host: hostname(),
@@ -4481,6 +4973,7 @@ async function collectorHealthPayload() {
         user: currentUsername(),
         command: envSync.command,
         error: envSync.error,
+        maintenance: envSyncMaintenanceStatus,
       },
       capabilities: {
         chat: runtimes.includes("hermes"),
@@ -4544,6 +5037,7 @@ async function sendHermesChat(body) {
       maxBuffer: 3_000_000,
       env: runtimeProcessEnv({
         ...agentEnv,
+        ...hermesModelHostEnv(body, agent),
         HERMES_HOME: hermesHome,
         PAGER: "cat",
       }),
@@ -4646,6 +5140,18 @@ function apiServerMessages(body, text, requestMarker = "") {
   return [...markerMessage, { role: "user", content: text }];
 }
 
+// Hermes' built-in lmstudio provider reads LM_BASE_URL at request time, so a
+// model hosted on another fleet machine routes there for this run only — no
+// config files change anywhere.
+function hermesModelHostEnv(body, agent) {
+  const baseUrl =
+    typeof body.lmStudioBaseUrl === "string" ? body.lmStudioBaseUrl.trim() : "";
+  const provider =
+    typeof agent.provider === "string" ? agent.provider.trim() : "";
+  if (!baseUrl || provider !== "lm-studio") return {};
+  return { LM_BASE_URL: baseUrl };
+}
+
 function hermesCliArgs(agent, tailArgs) {
   const args = [];
   const model = typeof agent.model === "string" ? agent.model.trim() : "";
@@ -4666,6 +5172,15 @@ function normalizeHermesSessionId(input) {
   const value = String(input || "").trim();
   if (!value) return "";
   return value.replace(/^session_/, "").replace(/\.json$/, "");
+}
+
+// HivemindOS chat-store session ids (hive-chat-*, hermes-<agent>-<ts>) are not
+// Hermes CLI sessions; passing them to `--resume` makes the CLI exit with
+// "Session not found". Only resume ids the CLI itself issued.
+function isHermesCliSessionId(value) {
+  return (
+    /^\d{8}_\d{6}_[0-9a-z]+$/i.test(value) || /^api-[0-9a-f]+$/i.test(value)
+  );
 }
 
 function hermesSessionIdFromFile(name) {
@@ -5189,8 +5704,19 @@ async function streamHermesChat(body, response) {
     agent.localDataDir || body.localDataDir || defaultHermesDir,
   );
   const agentEnv = hermesContextEnv(safeAgentEnv(body.agentEnv), body.context);
+  // The Hermes gateway API server always runs turns on the gateway's own
+  // default model and ignores per-request model/provider. Agents with their
+  // own model selection or profile home must therefore use the CLI path,
+  // which honors HERMES_HOME plus `-m/--provider`. The gateway default is
+  // never rewritten to work around this.
+  const agentScopedModel = Boolean(
+    (typeof agent.model === "string" && agent.model.trim()) ||
+    (typeof agent.provider === "string" && agent.provider.trim()) ||
+    hermesHome !== defaultHermesDir,
+  );
   if (
     body.forceHermesCli !== true &&
+    !agentScopedModel &&
     hermesChatMode === "api" &&
     (await proxyHermesApiChat(body, response, text, hermesHome))
   )
@@ -5208,7 +5734,11 @@ async function streamHermesChat(body, response) {
     "--source",
     "hivemindos",
   ]);
-  if (runtimeSessionId && body.disableHermesResume !== true)
+  if (
+    runtimeSessionId &&
+    body.disableHermesResume !== true &&
+    isHermesCliSessionId(runtimeSessionId)
+  )
     args.push("--resume", runtimeSessionId);
   const cwd = await resolveChatWorkingDirectory(body.workingDirectory);
   const requestStartedAt = Date.now();
@@ -5217,6 +5747,7 @@ async function streamHermesChat(body, response) {
     cwd,
     env: runtimeProcessEnv({
       ...agentEnv,
+      ...hermesModelHostEnv(body, agent),
       HERMES_HOME: hermesHome,
       HERMES_ACCEPT_HOOKS: "1",
       PAGER: "cat",
@@ -5605,6 +6136,26 @@ const telemetryServer = createServer(async (request, response) => {
     }
     return;
   }
+  if (pathname.startsWith("/lmstudio/")) {
+    // Reverse proxy to this machine's LM Studio server so fleet peers can run
+    // models hosted here with zero manual LM Studio network setup.
+    try {
+      await proxyAppHttp(
+        request,
+        response,
+        `${lmStudioLocalBase}${pathname.slice("/lmstudio".length)}${requestUrl.search}`,
+      );
+    } catch (error) {
+      jsonResponse(response, 502, {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "LM Studio is not reachable on this machine.",
+      });
+    }
+    return;
+  }
   if (pathname.startsWith("/app-proxy/") && request.method) {
     const targetUrl = proxiedAppTarget(pathname, requestUrl.search);
     if (!targetUrl) {
@@ -5719,6 +6270,39 @@ const telemetryServer = createServer(async (request, response) => {
             : "Could not set up Nango on this collector.",
       });
     }
+    return;
+  }
+  if (pathname === "/reliability/openrouter" && request.method === "GET") {
+    const store = await readReliabilityStoreFile();
+    jsonResponse(response, 200, {
+      ok: true,
+      host: hostname(),
+      machineId: await stableMachineId().catch(() => ""),
+      updatedAt: store?.updatedAt ?? null,
+      models: store?.models ?? {},
+    });
+    return;
+  }
+  if (pathname === "/reliability/sync" && request.method === "POST") {
+    const wasRunning = reliabilitySyncRunning;
+    const status = await runReliabilitySync("manual");
+    jsonResponse(response, status.lastError && !wasRunning ? 500 : 200, {
+      ok: wasRunning || !status.lastError,
+      host: hostname(),
+      alreadyRunning: wasRunning,
+      sync: status,
+    });
+    return;
+  }
+  if (pathname === "/env/sync-maintenance" && request.method === "POST") {
+    const wasRunning = envSyncMaintenanceRunning;
+    const status = await runEnvSyncMaintenance("manual");
+    jsonResponse(response, status.lastError && !wasRunning ? 500 : 200, {
+      ok: wasRunning || !status.lastError,
+      host: hostname(),
+      alreadyRunning: wasRunning,
+      maintenance: status,
+    });
     return;
   }
   if (pathname === "/env" && request.method === "GET") {
@@ -6014,7 +6598,11 @@ const telemetryServer = createServer(async (request, response) => {
         jsonResponse(
           response,
           200,
-          await runHermesIntegrationAction(body.action, body.input || {}),
+          await runHermesIntegrationAction(
+            body.action,
+            body.input || {},
+            body.agent || {},
+          ),
         );
         return;
       }
@@ -6358,4 +6946,7 @@ telemetryServer.listen(port, host, () => {
   console.log(`agent telemetry collector listening on ${host}:${port}`);
   void initializeSkillAutoSync();
   void advertiseHubMdns();
+  void installedRuntimes().catch(() => {});
+  startEnvSyncMaintenance();
+  startReliabilitySync();
 });

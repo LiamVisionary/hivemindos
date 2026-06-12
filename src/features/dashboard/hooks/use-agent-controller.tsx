@@ -2,10 +2,10 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { openNativeDirectory } from "@/lib/native/filesystem";
-import type { BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { renderBeeSoulTemplate, type BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import { isMobileMachineOs } from "@/features/fleet/fleet-identity";
 import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
-import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeIntegrationFeature, runtimeLocalDataDirPatch, runtimePostCreateAction, runtimeProfileFeature, runtimeSettingsFeature, type AgentProfile, type AgentRuntime } from "@/lib/types/agent-runtime";
+import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeIntegrationFeature, runtimeLocalDataDirPatch, runtimePostCreateAction, runtimeProfileFeature, runtimeSettingsFeature, type AgentProfile, type AgentRuntime, type BeeWorkerClass } from "@/lib/types/agent-runtime";
 import { DEFAULT_MOBILE_AGENT_MODEL, mobileAgentMachineKey, mobileAgentProfileFromRecord, type MobileAgentHostRecord, type MobileAgentRecord } from "@/lib/types/mobile-agents";
 import type { AgentCreateDraft, AgentSettingsPanel, AgentWorkerClassView, RuntimeModelDraft, RuntimeModelSetupMode } from "@/features/dashboard/agent-settings-types";
 import type { DashboardView, DiscoveredMachine, MachineGroup, RuntimeEnvSyncResponse, RuntimeIntegrationStatus, RuntimeModelSelection, RuntimeSessionSearchResult, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
@@ -16,7 +16,7 @@ type UseAgentControllerProps = {
   agentCreateDraft: AgentCreateDraft;
   agentCreateMachine: MachineGroup | null;
   agents: AgentProfile[];
-  beeWorkerPreset: (workerClass: "general") => BeeWorkerPreset;
+  beeWorkerPreset: (workerClass: BeeWorkerClass) => BeeWorkerPreset;
   collectorKey: (collectorUrl: string) => string;
   createAgentProfile: (runtime: AgentRuntime, index: number) => AgentProfile;
   defaultWorkerClassDraft: () => WorkerClassDraft;
@@ -208,18 +208,21 @@ export function useAgentController(props: UseAgentControllerProps) {
     const runtimeProfile = runtimeProfileFeature(selectedRuntime);
     const autopilotDefaults = runtimeProfile.aeonDefaults;
     const defaultProvider = mobileMachine ? "on-device" : runtimeSettings.defaultProvider || "";
+    const defaultName = name || defaultAgentNameForRuntime(displayAgents.length ? displayAgents : agents, selectedRuntime, RUNTIME_LABELS, { provider: defaultProvider });
+    const defaultWorkerClass = baseAgent.workerClass ?? "general";
+    const defaultWorkerPreset = beeWorkerPreset(defaultWorkerClass);
     setAgentCreateDraft({
-      name: name || defaultAgentNameForRuntime(displayAgents.length ? displayAgents : agents, selectedRuntime, RUNTIME_LABELS, { provider: defaultProvider }),
+      name: defaultName,
       runtime: selectedRuntime,
       provider: defaultProvider,
       model: mobileMachine ? DEFAULT_MOBILE_AGENT_MODEL : runtimeSettings.defaultModel || "",
       calls: baseAgent.calls,
-      workerClass: baseAgent.workerClass ?? "general",
+      workerClass: defaultWorkerClass,
       customWorkerClass: undefined,
       customWorkerClasses: [],
       selectedCustomWorkerClassId: undefined,
-      skillProfilePrompt: beeWorkerPreset("general").taskProfile,
-      preferredSkillSlugs: beeWorkerPreset("general").skillSlugs,
+      skillProfilePrompt: renderBeeSoulTemplate(defaultWorkerPreset.soulTemplate, defaultName),
+      preferredSkillSlugs: defaultWorkerPreset.skillSlugs,
       useSharedVault: true,
       aeonLocalPath: autopilotDefaults ? baseAgent.aeonLocalPath || autopilotDefaults.localPathFallback : undefined,
       aeonRepo: autopilotDefaults ? baseAgent.aeonRepo || "" : undefined,

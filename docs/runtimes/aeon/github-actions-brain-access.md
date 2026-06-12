@@ -49,7 +49,7 @@ Example:
     }
   },
   "repos": {
-    "LiamVisionary/specific-public-repo": {
+    "<owner>/specific-public-repo": {
       "mode": "unrestricted",
       "allowedActions": ["policy", "search", "read", "list", "append", "bulk"],
       "allowNoteOpen": true,

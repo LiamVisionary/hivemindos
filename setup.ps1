@@ -1,4 +1,4 @@
-param(
+﻿param(
   [switch]$NonInteractive,
   [switch]$SkipDeps,
   [switch]$SkipBuild,
@@ -9,6 +9,37 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Fresh Windows ships Windows PowerShell 5.1 only, but this script needs
+# PowerShell 7 (ConvertFrom-Json -AsHashtable and friends). Re-exec under
+# pwsh, installing it first when winget is available.
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+  $pwshCommand = Get-Command pwsh -ErrorAction SilentlyContinue
+  if (-not $pwshCommand -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+    Write-Host "Installing PowerShell 7 (required by HivemindOS setup)" -ForegroundColor Cyan
+    winget install --id Microsoft.PowerShell --exact --accept-package-agreements --accept-source-agreements
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$machinePath;$userPath"
+    $pwshCommand = Get-Command pwsh -ErrorAction SilentlyContinue
+  }
+  if (-not $pwshCommand) {
+    Write-Host "PowerShell 7 is required. Install it first: winget install --id Microsoft.PowerShell" -ForegroundColor Red
+    exit 1
+  }
+  $forwarded = @()
+  foreach ($entry in $PSBoundParameters.GetEnumerator()) {
+    if ($entry.Value -is [System.Management.Automation.SwitchParameter]) {
+      if ($entry.Value.IsPresent) { $forwarded += "-$($entry.Key)" }
+    } else {
+      $forwarded += "-$($entry.Key)"
+      $forwarded += "$($entry.Value)"
+    }
+  }
+  & $pwshCommand.Source -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path @forwarded
+  exit $LASTEXITCODE
+}
+
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 $Missing = New-Object System.Collections.Generic.List[string]
@@ -666,7 +697,10 @@ function Remove-HivemindManagedBlock {
     }
     if (-not $skip) { $next.Add($line) }
   }
-  return $next
+  # The comma prevents PowerShell from unrolling the list on return: an empty
+  # list would become $null and a populated one a fixed-size array, breaking
+  # the caller's .Add()/.RemoveAt() calls.
+  return ,$next
 }
 
 function Write-HivemindManagedBlock {
@@ -713,9 +747,9 @@ function Write-HivemindManagedBlock {
 
 function Install-ClaudeBrainHook {
   if ($env:HIVE_CLAUDE_BRAIN_HOOK -eq "0") { return }
-  $home = [Environment]::GetFolderPath("UserProfile")
-  $settingsFile = Join-Path $home ".claude\settings.json"
-  $hookCommand = Join-Path $home ".local\bin\hive-brain-hook.cmd"
+  $homeDir = [Environment]::GetFolderPath("UserProfile")
+  $settingsFile = Join-Path $homeDir ".claude\settings.json"
+  $hookCommand = Join-Path $homeDir ".local\bin\hive-brain-hook.cmd"
   $parent = Split-Path -Parent $settingsFile
   if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
   $settings = @{}
@@ -747,7 +781,7 @@ function Install-ClaudeBrainHook {
       timeout = 20
     })
   })
-  $hooks["UserPromptSubmit"] = @($filteredGroups)
+  $hooks["UserPromptSubmit"] = $filteredGroups.ToArray()
   $settings | ConvertTo-Json -Depth 20 | Set-Content -Path $settingsFile -Encoding ASCII
   Ok "Installed Claude shared-brain UserPromptSubmit hook"
 }
@@ -795,6 +829,10 @@ if ($SkipDeps) {
   Info "Installing app dependencies"
   $env:NODE_OPTIONS = "$($env:NODE_OPTIONS) --no-deprecation".Trim()
   Invoke-Pnpm @("install", "--frozen-lockfile")
+  if ($LASTEXITCODE -ne 0) {
+    Fail "Dependency install failed (pnpm exit code $LASTEXITCODE)"
+    exit 1
+  }
   Set-Content -Path $depsStamp -Value $depsHash
   Ok "Dependencies installed"
 }
@@ -808,8 +846,12 @@ if ($SkipBuild) {
 } else {
   Info "Building dashboard"
   Invoke-Pnpm @("exec", "next", "build", "--webpack")
-  Set-Content -Path $buildStamp -Value $buildHash
-  Ok "Dashboard built"
+  if ($LASTEXITCODE -ne 0) {
+    Warn "Dashboard production build failed (exit code $LASTEXITCODE); the dev server will compile on demand instead. Rerun setup after fixing the build to cache it."
+  } else {
+    Set-Content -Path $buildStamp -Value $buildHash
+    Ok "Dashboard built"
+  }
 }
 
 $dashboardOpenable = $false
@@ -864,3 +906,8 @@ Write-Host ""
 if ($dashboardOpenable) {
   Open-DashboardIfRequested "http://localhost:$Port"
 }
+
+# Reaching here means setup succeeded; exit explicitly so a lingering
+# $LASTEXITCODE from a non-fatal step (e.g. a skipped production build)
+# does not report failure to callers.
+exit 0

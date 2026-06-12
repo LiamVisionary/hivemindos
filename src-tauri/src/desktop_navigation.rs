@@ -18,6 +18,7 @@ const OPEN_PALETTE_EVENT: &str = "hivemindos:open-command-palette";
 const OPEN_POPOUT_EVENT: &str = "hivemindos:open-popout";
 const RERUN_SETUP_EVENT: &str = "hivemindos:rerun-setup";
 const QUEEN_VOICE_EVENT: &str = "hivemindos:queen-bee-voice";
+const QUEEN_SETTINGS_EVENT: &str = "hivemindos:queen-bee-settings";
 
 #[derive(Deserialize)]
 pub struct RouteWindowTarget {
@@ -79,6 +80,13 @@ fn toggle_queen_voice_chat(app: &AppHandle) {
     log_queen_voice_debug(app, &format!("toggle clicked, emit_ok={}", emitted.is_ok()));
 }
 
+// Opening settings is idempotent, so duplicate tray/menu deliveries need no
+// debounce here.
+fn open_queen_bee_settings(app: &AppHandle) {
+    show_main_window(app);
+    let _ = app.emit(QUEEN_SETTINGS_EVENT, serde_json::json!({ "action": "open" }));
+}
+
 // Temporary diagnostics for the Queen Bee voice toggle: append one line per
 // click so the event path is bisectable without a visible console.
 fn log_queen_voice_debug(app: &AppHandle, message: &str) {
@@ -132,6 +140,7 @@ pub fn app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let new_task = menu_item(app, "nav:new-task", "New Task", Some("CmdOrCtrl+Shift+K"))?;
     let new_chat = menu_item(app, "nav:new-chat", "Agent Chat", Some("CmdOrCtrl+Shift+C"))?;
     let queen_voice = menu_item(app, "queen-voice:toggle", "Voice Chat with Queen Bee", Some("CmdOrCtrl+Shift+V"))?;
+    let queen_settings = menu_item(app, "queen-settings:open", "Queen Bee Settings...", None::<&str>)?;
 
     let show = menu_item(app, "window:show", "Show Main Window", None::<&str>)?;
     let popout_current = menu_item(app, "window:popout-current", "Pop Out Current View", None::<&str>)?;
@@ -192,6 +201,7 @@ pub fn app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
                     &new_task,
                     &new_chat,
                     &queen_voice,
+                    &queen_settings,
                 ],
             )?,
             &Submenu::with_items(
@@ -256,6 +266,8 @@ pub fn handle_menu_event(app: &AppHandle, id: &str) {
     }
     if id == "queen-voice:toggle" {
         toggle_queen_voice_chat(app);
+    } else if id == "queen-settings:open" {
+        open_queen_bee_settings(app);
     } else if id == "window:show" || id == "tray:show" {
         show_main_window(app);
     } else if id == "window:popout-current" {
@@ -270,6 +282,7 @@ pub fn handle_menu_event(app: &AppHandle, id: &str) {
 
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let queen_voice = menu_item(app, "queen-voice:toggle", "Voice Chat with Queen Bee", Some("CmdOrCtrl+Shift+V"))?;
+    let queen_settings = menu_item(app, "queen-settings:open", "Queen Bee Settings...", None::<&str>)?;
     let show = menu_item(app, "tray:show", "Show HivemindOS", None::<&str>)?;
     let palette = menu_item(app, "tray:palette", "Command Palette", Some("CmdOrCtrl+K"))?;
     let fleet = menu_item(app, "nav:agents", "Fleet", Some("CmdOrCtrl+1"))?;
@@ -280,6 +293,7 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         app,
         &[
             &queen_voice,
+            &queen_settings,
             &PredefinedMenuItem::separator(app)?,
             &show,
             &palette,
