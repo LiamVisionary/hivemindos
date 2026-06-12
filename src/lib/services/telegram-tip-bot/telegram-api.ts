@@ -92,6 +92,7 @@ export class TelegramBotApi {
     text: string;
     replyToMessageId?: number;
     inlineKeyboard?: TgInlineKeyboardButton[][];
+    forceReply?: boolean;
   }): Promise<TgMessage> {
     const payload: Record<string, unknown> = {
       chat_id: params.chatId,
@@ -103,6 +104,9 @@ export class TelegramBotApi {
       payload.reply_parameters = { message_id: params.replyToMessageId, allow_sending_without_reply: true };
     }
     if (params.inlineKeyboard) payload.reply_markup = { inline_keyboard: params.inlineKeyboard };
+    // ForceReply opens the user's reply box aimed at this message — used by
+    // the ask-for-missing-arguments flow. selective: only for the asked user.
+    else if (params.forceReply) payload.reply_markup = { force_reply: true, selective: true };
     try {
       return await this.call<TgMessage>("sendMessage", payload);
     } catch (error) {

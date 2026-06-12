@@ -1,7 +1,7 @@
 import "server-only";
 
 import { formatTokenAmount, parseTokenAmount } from "./amounts";
-import { explorerTxUrl, getTreasuryOverview, isEvmAddress } from "./hive-chain";
+import { explorerTxUrl, getTreasuryOverview } from "./hive-chain";
 import {
   applyClaimCredit,
   applyClaimEscrow,
@@ -72,6 +72,8 @@ function helpText(config: TipBotConfig): string {
     "/linkwallet 0x… — link your Base wallet (required before depositing)",
     `/withdraw 25 0x… — send ${symbol} to your wallet on Base (DM me for this)`,
     "/leaderboard [week] — top tippers in this chat",
+    "",
+    "Missing a detail? I'll ask — just reply to my question.",
   ].join("\n");
 }
 
@@ -98,7 +100,44 @@ async function registerSeenUsers(state: TipBotState, message: TgMessage) {
   });
 }
 
-type ParsedCommand = { command: string; args: string };
+type ParsedCommand = { command: string; args: string; targetUserId?: string };
+
+// Ask-instead-of-error: when a command is missing an argument, the bot sends
+// a ForceReply question and remembers it here. The user's reply to that exact
+// message completes the command. In-memory on purpose — prompts are
+// short-lived and a restart just means the user re-runs the command.
+type PendingPrompt = { command: string; userId: string; targetUserId?: string; expiresAt: number };
+const pendingPrompts = new Map<string, PendingPrompt>();
+const PROMPT_TTL_MS = 15 * 60_000;
+
+async function promptForReply(
+  reply: ReplyFn,
+  params: { chatId: number; text: string; command: string; userId: string; targetUserId?: string },
+) {
+  const sent = await reply(params.text, { forceReply: true });
+  if (sent?.message_id) {
+    if (pendingPrompts.size > 500) {
+      for (const [key, prompt] of pendingPrompts) {
+        if (prompt.expiresAt < Date.now()) pendingPrompts.delete(key);
+      }
+    }
+    pendingPrompts.set(`${params.chatId}:${sent.message_id}`, {
+      command: params.command,
+      userId: params.userId,
+      targetUserId: params.targetUserId,
+      expiresAt: Date.now() + PROMPT_TTL_MS,
+    });
+  }
+}
+
+function consumePromptReply(message: TgMessage): ParsedCommand | null {
+  if (!message.reply_to_message || !message.from || !message.text) return null;
+  const key = `${message.chat.id}:${message.reply_to_message.message_id}`;
+  const prompt = pendingPrompts.get(key);
+  if (!prompt || prompt.expiresAt < Date.now() || prompt.userId !== String(message.from.id)) return null;
+  pendingPrompts.delete(key);
+  return { command: prompt.command, args: message.text.trim(), targetUserId: prompt.targetUserId };
+}
 
 function parseCommand(text: string, botUsername: string): ParsedCommand | null {
   const match = text.match(/^\/([a-zA-Z0-9_]+)(?:@(\S+))?(?:\s+([\s\S]*))?$/);
@@ -128,11 +167,17 @@ export async function handleTipBotUpdate(runtime: TipBotRuntime, update: TgUpdat
   const state = await readTipBotState();
   await registerSeenUsers(state, message);
 
-  const parsed = parseCommand(message.text, runtime.config.botUsername);
+  const parsed = parseCommand(message.text, runtime.config.botUsername) ?? consumePromptReply(message);
   if (!parsed) return;
 
-  const reply = (text: string, inlineKeyboard?: Array<Array<{ text: string; url: string }>>) =>
-    runtime.api.sendMessage({ chatId: message.chat.id, text, replyToMessageId: message.message_id, inlineKeyboard });
+  const reply: ReplyFn = (text, extra) =>
+    runtime.api.sendMessage({
+      chatId: message.chat.id,
+      text,
+      replyToMessageId: message.message_id,
+      inlineKeyboard: extra?.inlineKeyboard,
+      forceReply: extra?.forceReply,
+    });
 
   try {
     switch (parsed.command) {
@@ -147,7 +192,7 @@ export async function handleTipBotUpdate(runtime: TipBotRuntime, update: TgUpdat
       case "linkwallet":
         return await handleLinkWallet(runtime, message, parsed.args, reply);
       case "tip":
-        return await handleTip(runtime, message, parsed.args, reply);
+        return await handleTip(runtime, message, parsed.args, reply, parsed.targetUserId);
       case "withdraw":
         return await handleWithdraw(runtime, message, parsed.args, reply);
       case "leaderboard":
@@ -169,7 +214,8 @@ export async function handleTipBotUpdate(runtime: TipBotRuntime, update: TgUpdat
   }
 }
 
-type ReplyFn = (text: string, inlineKeyboard?: Array<Array<{ text: string; url: string }>>) => Promise<unknown>;
+type ReplyExtra = { inlineKeyboard?: Array<Array<{ text: string; url: string }>>; forceReply?: boolean };
+type ReplyFn = (text: string, extra?: ReplyExtra) => Promise<TgMessage>;
 
 async function handleStart(runtime: TipBotRuntime, message: TgMessage, args: string, reply: ReplyFn) {
   const from = message.from as TgUser;
@@ -214,17 +260,19 @@ async function handleBalance(runtime: TipBotRuntime, message: TgMessage, reply: 
     await reply(lines.join("\n"));
     return;
   }
-  // Balances stay out of group chats: DM the number, leave only a pointer.
-  // Telegram blocks bot-initiated DMs until the user has /start-ed the bot.
+  // Prefer DMing the number to keep group chats clean — but the user asked,
+  // so if Telegram won't let us DM them (they never /start-ed the bot), show
+  // it inline rather than turning their question into an errand.
   const dmSent = await runtime.api
     .sendMessage({ chatId: String(from.id), text: lines.join("\n") })
     .then(() => true)
     .catch(() => false);
-  await reply(
-    dmSent
-      ? "📬 Sent your balance to your DMs."
-      : `🔒 I can only show balances in private — tap @${escapeHtml(runtime.config.botUsername)}, press Start, then try /balance again.`,
-  );
+  if (dmSent) {
+    await reply("📬 Sent your balance to your DMs.");
+  } else {
+    lines.push(`<i>Tap @${escapeHtml(runtime.config.botUsername)} and press Start, and I'll keep this private next time.</i>`);
+    await reply(lines.join("\n"));
+  }
 }
 
 async function handleDeposit(runtime: TipBotRuntime, message: TgMessage, reply: ReplyFn) {
@@ -232,10 +280,14 @@ async function handleDeposit(runtime: TipBotRuntime, message: TgMessage, reply: 
   const state = await readTipBotState();
   const user = state.users[String(from.id)];
   if (!user?.linkedWallets.length) {
-    await reply(
-      "Before depositing, link the wallet you'll send from:\n<code>/linkwallet 0xYourAddress</code>\n" +
-        "Deposits are credited by matching the sender address, so I need to know which wallet is yours.",
-    );
+    await promptForReply(reply, {
+      chatId: message.chat.id,
+      text:
+        "Deposits are credited by matching the sender address, so first I need to know which wallet is yours.\n" +
+        "🔗 Reply to this message with your Base wallet address (<code>0x…</code>), then run /deposit again.",
+      command: "linkwallet",
+      userId: String(from.id),
+    });
     return;
   }
   await reply(
@@ -253,8 +305,18 @@ async function handleDeposit(runtime: TipBotRuntime, message: TgMessage, reply: 
 
 async function handleLinkWallet(runtime: TipBotRuntime, message: TgMessage, args: string, reply: ReplyFn) {
   const from = message.from as TgUser;
-  const address = args.split(/\s+/)[0]?.toLowerCase() ?? "";
-  if (!isEvmAddress(address)) throw new Error("Usage: /linkwallet 0xYourBaseAddress");
+  // Accept the address anywhere in the text — pasted alone, or with words
+  // around it. If it's missing, ask for it instead of erroring.
+  const address = args.match(/0x[a-fA-F0-9]{40}/)?.[0]?.toLowerCase();
+  if (!address) {
+    await promptForReply(reply, {
+      chatId: message.chat.id,
+      text: "🔗 Reply to this message with your Base wallet address — it looks like <code>0x</code> followed by 40 characters.",
+      command: "linkwallet",
+      userId: String(from.id),
+    });
+    return;
+  }
   const createdAt = new Date().toISOString();
   await mutateTipBotState((draft) => {
     const owner = Object.values(draft.users).find(
@@ -288,21 +350,48 @@ function resolveTipRecipient(
   return null;
 }
 
-async function handleTip(runtime: TipBotRuntime, message: TgMessage, args: string, reply: ReplyFn) {
+async function handleTip(
+  runtime: TipBotRuntime,
+  message: TgMessage,
+  args: string,
+  reply: ReplyFn,
+  presetTargetUserId?: string,
+) {
   const from = message.from as TgUser;
   const config = runtime.config;
+  const state = await readTipBotState();
   const tokens = args.split(/\s+/).filter(Boolean);
   const amountToken = tokens.find((token) => /^\d/.test(token));
   if (!amountToken) {
-    throw new Error("Usage: reply with /tip 10, or /tip 10 @name");
+    // We know who (reply target) but not how much — ask for the amount.
+    const target = presetTargetUserId
+      ? state.users[presetTargetUserId]
+      : message.reply_to_message?.from && !message.reply_to_message.from.is_bot
+        ? message.reply_to_message.from
+        : undefined;
+    if (target) {
+      const name =
+        "username" in target && target.username
+          ? `@${escapeHtml(target.username)}`
+          : escapeHtml(("firstName" in target ? target.firstName : (target as TgUser).first_name) || "them");
+      await promptForReply(reply, {
+        chatId: message.chat.id,
+        text: `How much ${config.token.symbol} for ${name}? Reply to this message with the amount — 100, 5k, 1.5m all work.`,
+        command: "tip",
+        userId: String(from.id),
+        targetUserId: presetTargetUserId ?? String((target as TgUser).id),
+      });
+      return;
+    }
+    throw new Error("Reply to someone's message with /tip 100, or use /tip 100 @name.");
   }
   const amountRaw = parseTokenAmount(amountToken, config.token.decimals);
   const chatId = message.chat.type === "private" ? undefined : String(message.chat.id);
 
-  const state = await readTipBotState();
   if (state.settings.paused) throw new Error("Tipping is paused right now.");
-  const recipient = resolveTipRecipient(state, message, args);
-  if (!recipient) throw new Error("Tell me who to tip: reply to their message or use /tip 10 @name.");
+  const presetUser = presetTargetUserId ? state.users[presetTargetUserId] : undefined;
+  const recipient = presetUser ? { kind: "stored" as const, user: presetUser } : resolveTipRecipient(state, message, args);
+  if (!recipient) throw new Error("Tell me who to tip: reply to their message or use /tip 100 @name.");
   if (recipient.kind === "user" && recipient.user.is_bot) throw new Error("Bots don't need tips.");
 
   const createdAt = new Date().toISOString();
@@ -342,7 +431,7 @@ async function handleTip(runtime: TipBotRuntime, message: TgMessage, args: strin
       `🍯 ${mentionHtml({ id: String(from.id), username: from.username, firstName: from.first_name })} tipped ` +
         `@${escapeHtml(recipient.username)} ${fmt(config, amountRaw)}!\n` +
         `@${escapeHtml(recipient.username)}: tap below to claim within ${days} day${days === 1 ? "" : "s"} — otherwise it's refunded.`,
-      [[{ text: `🎁 Claim ${fmt(config, amountRaw)}`, url: claimUrl }]],
+      { inlineKeyboard: [[{ text: `🎁 Claim ${fmt(config, amountRaw)}`, url: claimUrl }]] },
     );
     return;
   }
@@ -381,11 +470,21 @@ async function handleWithdraw(runtime: TipBotRuntime, message: TgMessage, args: 
     await reply("DM me to withdraw — keeps the group tidy.");
     return;
   }
-  const tokens = args.split(/\s+/).filter(Boolean);
-  const amountToken = tokens.find((token) => /^\d/.test(token));
-  const address = tokens.find((token) => token.startsWith("0x"));
-  if (!amountToken || !address || !isEvmAddress(address)) {
-    throw new Error("Usage: /withdraw 25 0xYourBaseAddress");
+  const address = args.match(/0x[a-fA-F0-9]{40}/)?.[0];
+  const amountToken = args
+    .split(/\s+/)
+    .filter(Boolean)
+    .find((token) => /^\d/.test(token) && !token.startsWith("0x"));
+  if (!amountToken || !address) {
+    await promptForReply(reply, {
+      chatId: message.chat.id,
+      text:
+        "📤 Reply to this message with the amount and your Base address, like:\n" +
+        `<code>1000 0xYourWallet</code>\nAmounts take 5k / 1.5m shorthand too.`,
+      command: "withdraw",
+      userId: String(from.id),
+    });
+    return;
   }
   const amountRaw = parseTokenAmount(amountToken, config.token.decimals);
   if (config.maxWithdrawalRaw !== null && amountRaw > config.maxWithdrawalRaw) {
