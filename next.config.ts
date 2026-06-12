@@ -42,20 +42,16 @@ const nextConfig: NextConfig = {
   distDir: isTauriDev ? tauriDevDistDir : isTauriStaticBuild ? ".next-tauri-static-build" : isTauriBuild ? ".next-tauri-build" : ".next",
   output: isTauriStaticBuild ? "export" : isTauriBuild ? "standalone" : undefined,
   // Tauri packaging builds (static export + embedded server) don't gate on
-  // type/lint errors — those are enforced in dev and the standalone `build`/
+  // type errors — those are enforced in dev and the standalone `build`/
   // `lint` scripts + CI. The embedded build additionally compiles paths the
   // static build hides (API routes, remotion/), so without this it trips on
   // pre-existing type errors (e.g. an SVG `pathLength` in a Remotion `style`).
+  // (No `eslint` key: Next 16 removed the built-in ESLint integration, so
+  // builds never lint and the key only produces an invalid-config warning.)
   typescript:
     isTauriStaticBuild || isTauriBuild
       ? {
           ignoreBuildErrors: true,
-        }
-      : undefined,
-  eslint:
-    isTauriStaticBuild || isTauriBuild
-      ? {
-          ignoreDuringBuilds: true,
         }
       : undefined,
   trailingSlash: isTauriStaticBuild ? true : undefined,

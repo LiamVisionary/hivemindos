@@ -9,6 +9,9 @@ on:
     branches: [test/setup-e2e-matrix]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   setup-unix:
     name: setup.sh (${{ matrix.os }})
@@ -63,27 +66,27 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Run full non-interactive Windows setup
-        shell: pwsh
-        run: ./setup.ps1 -NonInteractive
-
-      - name: Verify dashboard dev server responds
+      # Setup and verification share one step: the Windows runner kills
+      # step-spawned child processes when a step ends (job objects), so the
+      # dev server from setup.ps1 would be gone before a separate verify step.
+      - name: Run full non-interactive Windows setup and verify dashboard
         shell: pwsh
         run: |
-          Start-Sleep -Seconds 20
-          Write-Host "=== node processes ==="
-          Get-Process node -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, StartTime -AutoSize
+          ./setup.ps1 -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw "setup.ps1 failed with exit code $LASTEXITCODE" }
+
           Write-Host "=== port 5020 listeners ==="
           Get-NetTCPConnection -LocalPort 5020 -ErrorAction SilentlyContinue | Format-Table -AutoSize
           $healthy = $false
-          foreach ($i in 1..60) {
+          foreach ($i in 1..30) {
             try {
-              $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5020/" -TimeoutSec 15
+              # Long per-request timeout: the first hit compiles the page on demand.
+              $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5020/" -TimeoutSec 300
               Write-Host "dashboard responded with HTTP $($response.StatusCode)"
               $healthy = $true
               break
             } catch {
-              if ($i % 10 -eq 0) { Write-Host "attempt ${i}: $($_.Exception.Message)" }
+              if ($i % 5 -eq 0) { Write-Host "attempt ${i}: $($_.Exception.Message)" }
               Start-Sleep -Seconds 5
             }
           }
@@ -91,8 +94,6 @@ jobs:
           Get-Content .next\hivemindos-windows.log -ErrorAction SilentlyContinue
           Write-Host "=== dev server stderr ==="
           Get-Content .next\hivemindos-windows.err.log -ErrorAction SilentlyContinue
-          Write-Host "=== node processes after wait ==="
-          Get-Process node -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, StartTime -AutoSize
           if (-not $healthy) {
             throw "dashboard did not serve a healthy response on port 5020"
           }
