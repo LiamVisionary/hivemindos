@@ -845,7 +845,12 @@ if ($SkipBuild) {
   Ok "Dashboard build already current"
 } else {
   Info "Building dashboard"
+  # The production build needs a larger V8 heap than the Node default
+  # (observed: builds die with SIGABRT/exit 134 around 4-6 GB).
+  $savedNodeOptions = $env:NODE_OPTIONS
+  $env:NODE_OPTIONS = "$($env:NODE_OPTIONS) --max-old-space-size=8192".Trim()
   Invoke-Pnpm @("exec", "next", "build", "--webpack")
+  $env:NODE_OPTIONS = $savedNodeOptions
   if ($LASTEXITCODE -ne 0) {
     Warn "Dashboard production build failed (exit code $LASTEXITCODE); the dev server will compile on demand instead. Rerun setup after fixing the build to cache it."
   } else {

@@ -52,8 +52,8 @@ jobs:
           tail -100 .next/hivemindos.log || true
           exit 1
 
-  diagnose-windows-build:
-    name: diagnose next build EPERM (windows-latest)
+  windows-production-build:
+    name: next build (windows-latest)
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -70,30 +70,13 @@ jobs:
         shell: pwsh
         run: pnpm install --frozen-lockfile
 
-      - name: Instrument bundled glob (fires inside workers too)
-        shell: pwsh
-        run: node scripts/instrument-compiled-glob.cjs
-
-      - name: next build with profile-scan tracer
+      - name: Production build
         shell: pwsh
         env:
-          NODE_OPTIONS: --require ${{ github.workspace }}\scripts\trace-profile-scandir.cjs
+          NODE_OPTIONS: --max-old-space-size=8192
         run: |
-          pnpm exec next build --webpack *>&1 | Tee-Object -FilePath build-diag.log | Out-Null
-          Write-Host "build exit code: $LASTEXITCODE"
-          Write-Host "=== profile scans (with stacks) ==="
-          Select-String -Path build-diag.log -Pattern "trace-profile-scandir" -Context 0, 30 | ForEach-Object { $_.Line; $_.Context.PostContext }
-          Write-Host "=== nft raw emissions and tilde expansions ==="
-          Select-String -Path build-diag.log -Pattern "nft-emit-raw|nft-tilde" | ForEach-Object { $_.Line } | Sort-Object -Unique | Select-Object -First 60
-          Write-Host "=== nft asset-dir emissions (file-level) ==="
-          Select-String -Path build-diag.log -Pattern "nft-diag" | ForEach-Object { $_.Line } | Select-Object -First 40
-          Write-Host "=== glob diagnostics (with stacks) ==="
-          Select-String -Path build-diag.log -Pattern "glob-diag. pattern" -Context 0, 25 | ForEach-Object { $_.Line; $_.Context.PostContext } | Select-Object -First 30
-          Write-Host "=== EPERM mentions ==="
-          Select-String -Path build-diag.log -Pattern "EPERM" -Context 2, 2 | ForEach-Object { $_.Context.PreContext; $_.Line; $_.Context.PostContext }
-          Write-Host "=== build tail ==="
-          Get-Content build-diag.log -Tail 40
-          exit 0
+          pnpm exec next build --webpack
+          if ($LASTEXITCODE -ne 0) { throw "next build failed with exit code $LASTEXITCODE" }
 
   setup-windows:
     name: setup.ps1 (windows-latest)
