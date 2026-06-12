@@ -63,6 +63,23 @@ export type RuntimeIntegrationStatus = {
       httpStatus?: number;
       modelCount?: number;
     };
+    venice?: {
+      authMode?: string;
+      walletVaultId?: string;
+      walletAddress?: string;
+      walletNetwork?: string;
+      apiKeyEnvName?: string;
+      keyPresent?: boolean;
+      balanceUsd?: string;
+      diemBalanceUsd?: string;
+      minimumTopUpUsd?: string;
+      suggestedTopUpUsd?: string;
+      checkedAt?: string;
+      status?: string;
+      message?: string;
+      httpStatus?: number;
+      modelCount?: number;
+    };
     bankr?: {
       creditsBalanceUsd?: number | null;
       balanceLabel?: string;

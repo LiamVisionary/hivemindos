@@ -1250,7 +1250,7 @@ export function WalletPanel(props: WalletPanelProps) {
                     {agentWalletRows.map(({ agent, wallet }, agentIndex) => {
                       const snapshot = getSurvivalSnapshot(wallet);
                       return (
-                        <div role="listitem" key={renderAgentKey(agent, agentIndex)}>
+                        <div role="listitem" data-bee={`wallet-agent-${agent.id}`} key={renderAgentKey(agent, agentIndex)}>
                           <AgentWalletCardCompact
                             agentName={agent.name}
                             agentUsePod={agent.usePod}

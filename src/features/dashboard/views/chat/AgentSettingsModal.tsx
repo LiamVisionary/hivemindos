@@ -11,6 +11,7 @@ import { BankrLowCreditSetup } from "./BankrLowCreditSetup";
 import { BankrSetupStatus } from "./BankrSetupStatus";
 import { GuidedProviderSetup } from "./GuidedProviderSetup";
 import { GuidedUsePodSetup } from "./GuidedUsePodSetup";
+import { GuidedVeniceSetup } from "./GuidedVeniceSetup";
 import { LmStudioLoadProgress, LmStudioModelManager } from "./LmStudioModelManager";
 import { MissingSharedEnvKeySetup } from "./MissingSharedEnvKeySetup";
 import { ModelPillSelector } from "./ModelPillSelector";
@@ -24,6 +25,7 @@ import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
 import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeProfileFeature, runtimeSettingsFeature, type AgentRuntime } from "@/lib/types/agent-runtime";
 
 const USEPOD_PROVIDER = MODEL_PROVIDER_GATEWAYS.usepod;
+const VENICE_PROVIDER = MODEL_PROVIDER_GATEWAYS.venice;
 const BANKR_LLM_BASE_URL = "https://llm.bankr.bot";
 const BANKR_LLM_CHAT_PATH = "/v1/chat/completions";
 const BANKR_LLM_MODELS_PATH = "/v1/models";
@@ -251,6 +253,21 @@ function isUsePodSetupReady(config = {}) {
   return config.lastTestStatus === "ready";
 }
 
+function hasVeniceSetup(config = {}) {
+  return Boolean(
+    config.walletVaultId
+      || config.walletAddress
+      || (config.authMode === "api-key" && config.lastKeyPresent)
+      || config.lastTestStatus
+      || config.lastCheckedAt
+      || typeof config.lastModelCount === "number",
+  );
+}
+
+function isVeniceSetupReady(config = {}) {
+  return config.lastTestStatus === "ready";
+}
+
 export function AgentSettingsModal(props: any) {
   const {
     BEE_WORKER_PRESET_LIST,
@@ -401,6 +418,23 @@ export function AgentSettingsModal(props: any) {
     : null;
   const usePodSetupTarget = unfinishedUsePodAgent ?? usePodDraftSetupTarget ?? agentSettingsIntegrationTarget;
   const usePodRequiresCurrentSetup = usePodSetupStarted || Boolean(unfinishedUsePodAgent);
+  const veniceSelected = selectedProviderSlug === "venice";
+  const veniceConfig = agentCreateMachine ? agentCreateDraft.venice ?? {} : roleModalAgent?.venice ?? {};
+  const veniceSetupComplete = isVeniceSetupReady(veniceConfig);
+  const veniceCreateBlocked = Boolean(agentCreateMachine && veniceSelected && !veniceSetupComplete);
+  const existingVeniceAgents = (displayAgents ?? []).filter((agent) => agent.provider === "venice" && hasVeniceSetup(agent.venice));
+  const completedVeniceWallets = existingVeniceAgents.filter((agent) => isVeniceSetupReady(agent.venice));
+  const veniceDraftSetupTarget = agentCreateMachine
+    ? {
+      id: "new-venice-draft",
+      name: displayName,
+      provider: "venice",
+      model: agentCreateDraft.model,
+      venice: agentCreateDraft.venice,
+    }
+    : null;
+  const veniceSetupTarget = veniceDraftSetupTarget ?? agentSettingsIntegrationTarget;
+  const veniceRequiresCurrentSetup = hasVeniceSetup(veniceConfig);
   const modelSelectableRuntime = Boolean(runtimeCapabilities(agentSettingsIntegrationTarget ?? roleModalAgent)?.modelSelection);
   const hasRuntimeProviders = runtimeModelProviders.length > 0;
   const runtimeCanAddModels = Boolean(runtimeSettings.canAddModels);
@@ -415,7 +449,7 @@ export function AgentSettingsModal(props: any) {
   const bankrCreditStatus = runtimeIntegrationStatus?.providerStatus?.bankr;
   const lmStudioStatus = runtimeIntegrationStatus?.providerStatus?.lmStudio;
   const bankrInitialCredits = bankrCreditStatus ? { ok: true, balanceUsd: bankrCreditStatus.creditsBalanceUsd, balanceLabel: bankrCreditStatus.balanceLabel ?? (bankrCreditStatus.creditsBalanceUsd === null ? "Unknown" : undefined), error: bankrCreditStatus.error } : undefined;
-  const creditProviderBalances = { bankr: bankrCreditStatus?.balanceLabel ?? "", usepod: (() => { const value = runtimeIntegrationStatus?.providerStatus?.usePod?.balanceRemaining || usePodConfig.lastBalanceRemaining || completedUsePodWallets.find((agent) => agent.usePod?.lastBalanceRemaining)?.usePod?.lastBalanceRemaining || ""; return value && /^[\d\s,.]+$/.test(value) ? `$${value.trim()}` : value; })() };
+  const creditProviderBalances = { bankr: bankrCreditStatus?.balanceLabel ?? "", usepod: (() => { const value = runtimeIntegrationStatus?.providerStatus?.usePod?.balanceRemaining || usePodConfig.lastBalanceRemaining || completedUsePodWallets.find((agent) => agent.usePod?.lastBalanceRemaining)?.usePod?.lastBalanceRemaining || ""; return value && /^[\d\s,.]+$/.test(value) ? `$${value.trim()}` : value; })(), venice: (() => { const value = runtimeIntegrationStatus?.providerStatus?.venice?.balanceUsd || veniceConfig.lastBalanceUsd || completedVeniceWallets.find((agent) => agent.venice?.lastBalanceUsd)?.venice?.lastBalanceUsd || ""; return value && /^[\d\s,.]+$/.test(value) ? `$${value.trim()}` : value; })() };
   const runtimeModelOptions = adaptiveProviderSelected
     ? [{ id: "best-free", name: "Best free" }]
     : openRouterSelected
@@ -445,7 +479,7 @@ export function AgentSettingsModal(props: any) {
   const runtimeSelectorEntries = Object.entries(RUNTIME_LABELS).filter(([runtime]) => runtime !== HIVEMIND_OS_RUNTIME || activeRuntime === HIVEMIND_OS_RUNTIME);
   // The queen's role is fixed; her settings never offer worker class changes.
   const isQueenSettings = !agentCreateMachine && roleModalAgent?.beeRole === "queen";
-  const showWorkerClassSection = !isAutopilotSettings && !(usePodSelected && !usePodSetupComplete) && !isQueenSettings;
+  const showWorkerClassSection = !isAutopilotSettings && !(usePodSelected && !usePodSetupComplete) && !(veniceSelected && !veniceSetupComplete) && !isQueenSettings;
   const agentStatus = agentCreateMachine ? "New profile" : roleModalAgent?.telemetryUrl ? "Connected" : "Local profile";
   const targetMachineRuntimes = agentCreateMachine?.capabilities?.runtimes ?? [], targetMachineHasRuntimeInventory = targetMachineRuntimes.length > 0;
   const workerSubtitle = (agentSettingsCustomWorker?.label || agentSettingsWorkerPreset?.label || agentSettingsWorkerLabel || "")
@@ -626,6 +660,14 @@ export function AgentSettingsModal(props: any) {
     await applyUsePodProfile(patch);
   };
 
+  const applyVeniceSetupProfile = async (patch: Record<string, unknown>) => {
+    if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
+    else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
+    // The integrations refresh re-runs the full provider status sweep (seconds);
+    // the wizard only needs the profile state, so let the refresh run behind it.
+    void refreshRuntimeIntegrations({ ...(agentSettingsIntegrationTarget ?? {}), ...patch });
+  };
+
   const openAeonGithubOauth = () => {
     if (aeonOauthConnecting) return;
     setAeonOauthConnecting(true);
@@ -748,6 +790,54 @@ export function AgentSettingsModal(props: any) {
     }
   };
 
+  const selectVeniceProvider = () => {
+    const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
+    const model = currentModel && currentModel !== "adaptive" ? currentModel : VENICE_PROVIDER.defaultModel;
+    const veniceStatus = runtimeIntegrationStatus?.providerStatus?.venice ?? {};
+    const nextVenice = {
+      authMode: veniceConfig.authMode || veniceStatus.authMode || undefined,
+      apiKeyEnvName: veniceConfig.apiKeyEnvName || veniceStatus.apiKeyEnvName || "VENICE_API_KEY",
+      walletVaultId: veniceConfig.walletVaultId || veniceStatus.walletVaultId || "",
+      walletAddress: veniceConfig.walletAddress || veniceStatus.walletAddress || "",
+      walletNetwork: veniceConfig.walletNetwork || veniceStatus.walletNetwork || "",
+      lastBalanceUsd: veniceConfig.lastBalanceUsd || veniceStatus.balanceUsd || "",
+      lastDiemBalanceUsd: veniceConfig.lastDiemBalanceUsd || veniceStatus.diemBalanceUsd || "",
+      lastCheckedAt: veniceConfig.lastCheckedAt || veniceStatus.checkedAt || "",
+      lastTestStatus: veniceConfig.lastTestStatus || veniceStatus.status || "",
+      lastModelCount: veniceConfig.lastModelCount ?? veniceStatus.modelCount,
+      lastKeyPresent: veniceConfig.lastKeyPresent ?? veniceStatus.keyPresent,
+    };
+    const patch = {
+      provider: "venice",
+      model,
+      ...(activeRuntime === HIVEMIND_OS_RUNTIME ? {
+        gatewayUrl: "https://api.venice.ai/api/v1",
+        chatPath: "/chat/completions",
+        statusPath: "/models",
+        token: "",
+      } : {}),
+      venice: nextVenice,
+    };
+    updateAgentRuntimeModel("venice", model);
+    if (agentCreateMachine) {
+      setAgentCreateDraft((current) => ({
+        ...current,
+        ...patch,
+        name: current.name.trim()
+          && current.name !== `${RUNTIME_LABELS[current.runtime] ?? current.runtime} on ${agentCreateMachine.name}`
+          && current.name !== defaultNameForRuntime(current.runtime, current.provider)
+          ? current.name
+          : defaultNameForRuntime(current.runtime, "venice"),
+      }));
+      setRuntimeModelSetupMode(null);
+      return;
+    }
+    if (roleModalAgent) {
+      updateAgentProfile(roleModalAgent.id, patch);
+      setRuntimeModelSetupMode(null);
+    }
+  };
+
   const selectBankrLlmProvider = () => {
     const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
     const bankrProvider = runtimeModelProviders.find((provider) => provider.slug === "bankr");
@@ -852,7 +942,7 @@ export function AgentSettingsModal(props: any) {
   };
 
   const renderProviderModelPanel = () => {
-    if (!runtimeModelPanelAvailable && !usePodSelected) return null;
+    if (!runtimeModelPanelAvailable && !usePodSelected && !veniceSelected) return null;
     return (
       <div style={{ display: "grid", gap: 16 }}>
         {runtimeModelPanelAvailable ? <div>
@@ -899,6 +989,8 @@ export function AgentSettingsModal(props: any) {
               });
               const selectProvider = provider.slug === "usepod"
                 ? selectUsePodProvider
+                : provider.slug === "venice"
+                  ? selectVeniceProvider
                 : provider.slug === "bankr"
                   ? selectBankrLlmProvider
                   : () => updateAgentRuntimeModel(bestProviderModel === "adaptive" ? "openrouter" : provider.slug, bestProviderModel);
@@ -956,7 +1048,23 @@ export function AgentSettingsModal(props: any) {
             ) : null}
           </div>
         </div> : null}
-        {usePodSelected ? (
+        {veniceSelected ? (
+          <div style={{ display: "grid", gap: 12 }}>
+            <GroupLabel>Venice setup</GroupLabel>
+            <div className={fleetClass("agentRuntimeModelSetup", "agentRuntimeModelSetupProvider")}>
+              <GuidedVeniceSetup
+                key={veniceSetupTarget?.id ?? "new-venice"}
+                agent={veniceSetupTarget}
+                busy={runtimeIntegrationBusy}
+                existingWallets={completedVeniceWallets}
+                fleetClass={fleetClass}
+                requireCurrentSetup={veniceRequiresCurrentSetup}
+                onCancel={() => setRuntimeModelSetupMode(null)}
+                onComplete={applyVeniceSetupProfile}
+              />
+            </div>
+          </div>
+        ) : usePodSelected ? (
           <div style={{ display: "grid", gap: 12 }}>
             <GroupLabel>UsePod setup</GroupLabel>
             <div className={fleetClass("agentRuntimeModelSetup", "agentRuntimeModelSetupProvider")}>
@@ -1586,7 +1694,7 @@ export function AgentSettingsModal(props: any) {
               <Btn
                 variant="primary"
                 sheen
-                disabled={primaryActionBusy || usePodCreateBlocked}
+                disabled={primaryActionBusy || usePodCreateBlocked || veniceCreateBlocked}
                 onClick={() => void runPrimarySettingsAction()}
               >
                 {primaryActionLabel}

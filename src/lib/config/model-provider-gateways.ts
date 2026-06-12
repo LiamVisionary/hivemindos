@@ -47,6 +47,21 @@ export const MODEL_PROVIDER_GATEWAYS: Record<string, ModelProviderGateway> = {
       models: [],
     },
   },
+  venice: {
+    slug: "venice",
+    name: "Venice AI",
+    detail: "Private inference · x402",
+    iconPath: "/icons/runtimes/venice-keys.svg",
+    iconMode: "image",
+    fallback: "VE",
+    defaultModel: "llama-3.3-70b",
+    hermes: {
+      name: "Venice AI",
+      baseUrl: "https://api.venice.ai/api/v1",
+      keyEnv: "VENICE_API_KEY",
+      models: ["llama-3.3-70b"],
+    },
+  },
   usepod: {
     slug: "usepod",
     name: "UsePod",

@@ -27,6 +27,7 @@ import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
 import { chatTelemetrySession, chatTelemetryValue } from "@/lib/services/telemetry/chat-dev-telemetry";
 import { normalizeRuntimeStreamEvent, RUNTIME_STREAM_EVENT_TYPES, type RuntimeStreamEvent } from "@/lib/services/runtime-stream-events";
 import { isUsePodProfile, resolveUsePodRuntimeConfig, summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
+import { isVeniceProfile, resolveVeniceRuntimeConfig, summarizeVeniceResponseHeaders } from "@/lib/services/venice";
 import {
   bankrLlmModel,
   isBankrAdaptiveModel,
@@ -3126,6 +3127,26 @@ async function streamOpenAICompatibleRuntime(
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "UsePod setup is incomplete." }, { status: 502 });
   }
+  if (isVeniceProfile(profile)) {
+    try {
+      const veniceConfig = await resolveVeniceRuntimeConfig(profile);
+      if (veniceConfig) {
+        runtimeProfile = {
+          ...profile,
+          gatewayUrl: veniceConfig.baseUrl,
+          chatPath: veniceConfig.chatPath,
+          statusPath: veniceConfig.statusPath,
+          token: "",
+        };
+        // Wallet mode signs a short-lived Sign-In-With-X header per request;
+        // API-key mode is a plain bearer token. Either way the profile token
+        // must stay empty so no stale Authorization header is added.
+        providerHeaders = veniceConfig.headers;
+      }
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : "Venice setup is incomplete." }, { status: 502 });
+    }
+  }
   if (isBankrLlmProfile(profile)) {
     const resolved = await resolveBankrLlmRuntimeProfile(runtimeProfile);
     if (resolved.error) return Response.json({ error: resolved.error }, { status: 400 });
@@ -3487,6 +3508,24 @@ async function streamOpenAICompatibleRuntime(
     });
     await appendRuntimeChatSessionEvent(runtimeSessionId, "UsePod inference metadata", detail).catch(() => undefined);
   }
+  const veniceResponse = isVeniceProfile(profile) ? summarizeVeniceResponseHeaders(upstream.headers) : null;
+  // Forwarded on the SSE response so the dashboard can refresh the stored
+  // prepaid balance right after the chat instead of waiting for a settings
+  // refresh.
+  const providerBalanceHeader = veniceResponse?.balanceRemaining || usePodResponse?.balanceRemaining || "";
+  if (veniceResponse?.balanceRemaining) {
+    recordRuntimeTelemetry(telemetry, "agent_runtime.venice.response", {
+      ...telemetryPayloadForProfile(runtimeProfile),
+      url,
+      model,
+      balanceRemaining: veniceResponse.balanceRemaining,
+    });
+    await appendRuntimeChatSessionEvent(
+      runtimeSessionId,
+      "Venice inference metadata",
+      `Balance remaining: ${veniceResponse.balanceRemaining}`,
+    ).catch(() => undefined);
+  }
 
   if (!upstream.body) {
     await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible response body is empty").catch(() => undefined);
@@ -3523,7 +3562,11 @@ async function streamOpenAICompatibleRuntime(
         : { choices: [{ delta: { content: chunk } }] })
       + (event ? ssePayload({ honey: event }) : "")
       + "data: [DONE]\n\n",
-      { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } },
+      { headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        ...(providerBalanceHeader ? { "X-Provider-Balance-Remaining": providerBalanceHeader } : {}),
+      } },
     );
   }
 
@@ -3881,6 +3924,7 @@ async function streamOpenAICompatibleRuntime(
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
+      ...(providerBalanceHeader ? { "X-Provider-Balance-Remaining": providerBalanceHeader } : {}),
     },
   });
 }

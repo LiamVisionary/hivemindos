@@ -31,9 +31,21 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/LiamVisionary/hivemindos/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVEQkZDQTIzRDU5NDc5Q0QKUldUTmVaVFZJOHEvN1M3RnlIc2FxazFQT2tiajhzNW9JTXBVS21VV0s0VFVvaGFVZjU1Q1B4Wi8K",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "externalBin": [
       "binaries/claw"
     ],

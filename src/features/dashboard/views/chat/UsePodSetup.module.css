@@ -667,6 +667,18 @@
   line-height: 1;
 }
 
+/* Compact single-line variant for credential fields; matches .btn height. */
+.keyInputWrap {
+  min-height: 38px;
+  align-items: center;
+}
+
+.keyInputWrap input {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+}
+
 .transferSplit {
   filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.16));
 }

@@ -640,7 +640,6 @@ function pruneStaticNativeResources(root) {
     "AppIcon-variation-1.icon",
     "AppIcon.icon",
     "app-icon-1024-imagegen-backup.png",
-    "app-icon-1024.png",
     "app-icon-large-bee-1024.png",
     "app-icon-variation-1-1024.png",
     "favicon copy.png",

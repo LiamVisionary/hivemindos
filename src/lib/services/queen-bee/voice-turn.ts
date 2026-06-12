@@ -298,7 +298,7 @@ function isLocalMachineProfile(profile: AgentProfile) {
   return !machine || machine === "this mac" || machine === "local";
 }
 
-async function pickConversationAgent(vaultPath?: string) {
+export async function pickConversationAgent(vaultPath?: string) {
   const profiles = await readVaultAgentProfiles(vaultPath).catch(
     () => [] as AgentProfile[],
   );

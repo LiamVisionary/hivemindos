@@ -238,6 +238,24 @@ export interface UsePodAgentConfig {
   lastTokenSource?: string;
 }
 
+export interface VeniceAgentConfig {
+  authMode?: "x402" | "api-key";
+  apiKeyEnvName?: string;
+  walletVaultId?: string;
+  walletAddress?: string;
+  walletNetwork?: string;
+  lastBalanceUsd?: string;
+  lastDiemBalanceUsd?: string;
+  lastMinimumTopUpUsd?: string;
+  lastSuggestedTopUpUsd?: string;
+  lastCheckedAt?: string;
+  lastTestStatus?: string;
+  lastStatusMessage?: string;
+  lastHttpStatus?: number;
+  lastModelCount?: number;
+  lastKeyPresent?: boolean;
+}
+
 export type AgentVoiceRuntime =
   | "openai-realtime"
   | "grok-voice"
@@ -341,6 +359,7 @@ export interface AgentProfile {
   adaptiveOpenRouter?: AdaptiveOpenRouterConfig;
   adaptiveRouting?: AdaptiveRoutingConfig;
   usePod?: UsePodAgentConfig;
+  venice?: VeniceAgentConfig;
   calls?: AgentCallPreferences;
   agentId?: string;
   sessionKey?: string;

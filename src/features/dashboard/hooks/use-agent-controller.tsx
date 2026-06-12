@@ -334,6 +334,28 @@ export function useAgentController(props: UseAgentControllerProps) {
         },
       });
     }
+    const veniceStatus = data.status.providerStatus?.venice;
+    if (agent.id && agent.provider === "venice" && veniceStatus) {
+      updateAgentProfile(agent.id, {
+        venice: {
+          ...(agent.venice ?? {}),
+          walletVaultId: veniceStatus.walletVaultId || agent.venice?.walletVaultId || "",
+          walletAddress: veniceStatus.walletAddress || agent.venice?.walletAddress || "",
+          walletNetwork: veniceStatus.walletNetwork || agent.venice?.walletNetwork || "",
+          apiKeyEnvName: veniceStatus.apiKeyEnvName || agent.venice?.apiKeyEnvName || "",
+          lastBalanceUsd: veniceStatus.balanceUsd || agent.venice?.lastBalanceUsd || "",
+          lastDiemBalanceUsd: veniceStatus.diemBalanceUsd || agent.venice?.lastDiemBalanceUsd || "",
+          lastMinimumTopUpUsd: veniceStatus.minimumTopUpUsd || agent.venice?.lastMinimumTopUpUsd || "",
+          lastSuggestedTopUpUsd: veniceStatus.suggestedTopUpUsd || agent.venice?.lastSuggestedTopUpUsd || "",
+          lastCheckedAt: veniceStatus.checkedAt || agent.venice?.lastCheckedAt || "",
+          lastTestStatus: veniceStatus.status || agent.venice?.lastTestStatus || "",
+          lastStatusMessage: veniceStatus.message ?? "",
+          lastHttpStatus: veniceStatus.httpStatus ?? agent.venice?.lastHttpStatus,
+          lastModelCount: veniceStatus.modelCount ?? agent.venice?.lastModelCount,
+          lastKeyPresent: veniceStatus.keyPresent ?? agent.venice?.lastKeyPresent,
+        },
+      });
+    }
     if (runtimeIntegrationFeature(data.status.runtime).updateRequirementDetail === "hermes") {
       setHermesUpdateRequiredDetail(hermesUpdateDetail(data.status));
     }
@@ -442,6 +464,7 @@ export function useAgentController(props: UseAgentControllerProps) {
       adaptiveOpenRouter: agentCreateDraft.adaptiveOpenRouter,
       adaptiveRouting: agentCreateDraft.adaptiveRouting,
       usePod: agentCreateDraft.usePod,
+      venice: agentCreateDraft.venice,
       calls: agentCreateDraft.calls,
       localDataDir: autopilotRuntime ? autopilotLocalPath : baseAgent.localDataDir || "",
       aeonLocalPath: autopilotRuntime ? autopilotLocalPath : undefined,

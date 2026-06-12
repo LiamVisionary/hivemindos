@@ -102,6 +102,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
           adaptiveOpenRouter: agentCreateDraft.adaptiveOpenRouter,
           adaptiveRouting: agentCreateDraft.adaptiveRouting,
           usePod: agentCreateDraft.usePod,
+          venice: agentCreateDraft.venice,
           telemetryUrl: agentCreateMachine.collectorUrl,
           machineName: agentCreateMachine.name,
         }
@@ -113,6 +114,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
       agentCreateDraft.provider,
       agentCreateDraft.runtime,
       agentCreateDraft.usePod,
+      agentCreateDraft.venice,
       agentCreateMachine,
       agents,
       createAgentProfile,

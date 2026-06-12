@@ -66,20 +66,20 @@ jobs:
             artifact_key: macos-arm64
             os: macos-14
             app_arch: -arm64
-            bundle_glob: src-tauri/target/release/bundle/dmg/*.dmg
+            bundle_glob: src-tauri/target/release/bundle/dmg/*.dmg src-tauri/target/release/bundle/macos/*.app.tar.gz src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
           - label: macOS Intel
             artifact_key: macos-x64
             os: macos-15-intel
             app_arch: -x64
-            bundle_glob: src-tauri/target/release/bundle/dmg/*.dmg
+            bundle_glob: src-tauri/target/release/bundle/dmg/*.dmg src-tauri/target/release/bundle/macos/*.app.tar.gz src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
           - label: Windows x64
             artifact_key: windows-x64
             os: windows-latest
-            bundle_glob: src-tauri/target/release/bundle/msi/*.msi src-tauri/target/release/bundle/nsis/*.exe
+            bundle_glob: src-tauri/target/release/bundle/msi/*.msi src-tauri/target/release/bundle/nsis/*.exe src-tauri/target/release/bundle/nsis/*.exe.sig
           - label: Linux x64
             artifact_key: linux-x64
             os: ubuntu-22.04
-            bundle_glob: src-tauri/target/release/bundle/appimage/*.AppImage src-tauri/target/release/bundle/deb/*.deb src-tauri/target/release/bundle/rpm/*.rpm
+            bundle_glob: src-tauri/target/release/bundle/appimage/*.AppImage src-tauri/target/release/bundle/appimage/*.AppImage.sig src-tauri/target/release/bundle/deb/*.deb src-tauri/target/release/bundle/rpm/*.rpm
 
     steps:
       - name: Checkout release source
@@ -198,6 +198,11 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Updater artifact signing (createUpdaterArtifacts). The build fails
+          # if this secret is unset — a release without signed updater
+          # artifacts would silently strand existing installs.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
           # Keep enough time for static UI generation plus signed/notarized
           # packaging. The OOM-prone embedded Next fallback is intentionally not
           # part of the cross-platform release path.
@@ -218,14 +223,34 @@ jobs:
               *_x64.dmg)
                 cp "$item" release-assets/HivemindOS-macos-intel.dmg
                 ;;
+              *.app.tar.gz)
+                if [ "${{ matrix.app_arch }}" = "-arm64" ]; then
+                  cp "$item" release-assets/HivemindOS-updater-macos-apple-silicon.app.tar.gz
+                else
+                  cp "$item" release-assets/HivemindOS-updater-macos-intel.app.tar.gz
+                fi
+                ;;
+              *.app.tar.gz.sig)
+                if [ "${{ matrix.app_arch }}" = "-arm64" ]; then
+                  cp "$item" release-assets/HivemindOS-updater-macos-apple-silicon.app.tar.gz.sig
+                else
+                  cp "$item" release-assets/HivemindOS-updater-macos-intel.app.tar.gz.sig
+                fi
+                ;;
               *_x64-setup.exe)
                 cp "$item" release-assets/HivemindOS-windows-x64-setup.exe
+                ;;
+              *_x64-setup.exe.sig)
+                cp "$item" release-assets/HivemindOS-windows-x64-setup.exe.sig
                 ;;
               *_x64_en-US.msi)
                 cp "$item" release-assets/HivemindOS-windows-x64.msi
                 ;;
               *_amd64.AppImage)
                 cp "$item" release-assets/HivemindOS-linux-x64.AppImage
+                ;;
+              *_amd64.AppImage.sig)
+                cp "$item" release-assets/HivemindOS-linux-x64.AppImage.sig
                 ;;
               *_amd64.deb)
                 cp "$item" release-assets/HivemindOS-linux-x64.deb
@@ -271,6 +296,20 @@ jobs:
           pattern: release-assets-*
           path: release-assets
           merge-multiple: true
+
+      - name: Build updater manifest
+        env:
+          RELEASE_VERSION: ${{ github.event.inputs.version }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/build-updater-manifest.mjs \
+            --version "$RELEASE_VERSION" \
+            --repo "$REPOSITORY" \
+            --assets release-assets \
+            --out release-assets/latest.json
+          cat release-assets/latest.json
 
       - name: Create tag and publish release
         env:

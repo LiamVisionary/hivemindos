@@ -2109,6 +2109,9 @@ export function useDashboardDerivedState(props: any) {
           usePod: agentCreateMachine
             ? agentCreateDraft.usePod
             : draftAgent.usePod,
+          venice: agentCreateMachine
+            ? agentCreateDraft.venice
+            : draftAgent.venice,
           telemetryUrl:
             agentCreateMachine?.collectorUrl ?? draftAgent.telemetryUrl,
         }),

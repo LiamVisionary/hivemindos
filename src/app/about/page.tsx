@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { getNativeAppVersion } from "@/lib/native/desktop-status";
+import type { Update } from "@tauri-apps/plugin-updater";
+import { getNativeAppVersion, isPackagedDesktopRuntime } from "@/lib/native/desktop-status";
 import type { AppVersion } from "@/features/dashboard/dashboard-types";
 import styles from "./about.module.css";
 
@@ -22,6 +23,13 @@ function short(value?: string | null) {
   return value ? value.slice(0, 7) : "";
 }
 
+// Tauri plugin errors reject with plain strings, not Error instances.
+function errorText(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error) return error;
+  return fallback;
+}
+
 function isUpdateAvailable(version: AppVersion | null) {
   if (!version?.commit || !version.latestCommit) return false;
   return version.commit !== version.latestCommit;
@@ -36,13 +44,17 @@ async function fetchAppVersion(signal?: AbortSignal): Promise<AppVersion | null>
 
 export default function AboutPage() {
   const [version, setVersion] = useState<AppVersion | null>(null);
+  const [packaged, setPackaged] = useState(false);
   const [checkState, setCheckState] = useState<UpdateCheckState>("idle");
   const [runState, setRunState] = useState<UpdateRunState>("idle");
   const [message, setMessage] = useState("Checking for updates...");
   const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
+  const pendingUpdate = useRef<Update | null>(null);
 
-  const updateAvailable = isUpdateAvailable(version);
-  const testUpdateAvailable = !updateAvailable && checkState === "current";
+  const updateAvailable = packaged
+    ? checkState === "available"
+    : isUpdateAvailable(version);
+  const testUpdateAvailable = !packaged && !updateAvailable && checkState === "current";
   const canCheck = checkState !== "checking" && runState !== "running";
   const canUpdate = (updateAvailable || testUpdateAvailable) && runState !== "running" && checkState !== "checking";
   const statusLabel = checkState === "checking"
@@ -51,7 +63,9 @@ export default function AboutPage() {
       ? "Update Check Failed"
       : updateAvailable
         ? "Update Available"
-        : "Test Update Available";
+        : packaged
+          ? "Up to Date"
+          : "Test Update Available";
   const versionLine = useMemo(() => {
     const displayVersion = version?.version ?? "0.1.0";
     const commit = short(version?.commit);
@@ -64,9 +78,28 @@ export default function AboutPage() {
     setUpdateResult(null);
     setMessage("Checking for updates...");
     try {
+      const isPackaged = await isPackagedDesktopRuntime(signal);
+      if (signal?.aborted) return;
+      setPackaged(isPackaged);
       const nextVersion = await fetchAppVersion(signal);
       if (signal?.aborted) return;
       setVersion(nextVersion);
+
+      if (isPackaged) {
+        const { check } = await import("@tauri-apps/plugin-updater");
+        const update = await check();
+        if (signal?.aborted) return;
+        pendingUpdate.current = update;
+        if (update) {
+          setCheckState("available");
+          setMessage(`Version ${update.version} is ready to install.`);
+        } else {
+          setCheckState("current");
+          setMessage("HivemindOS is up to date.");
+        }
+        return;
+      }
+
       if (isUpdateAvailable(nextVersion)) {
         setCheckState("available");
         setMessage(`Update available: ${short(nextVersion?.latestCommit)} is ready.`);
@@ -77,11 +110,46 @@ export default function AboutPage() {
     } catch (error) {
       if (signal?.aborted) return;
       setCheckState("error");
-      setMessage(error instanceof Error ? error.message : "Could not check for updates.");
+      setMessage(errorText(error, "Could not check for updates."));
     }
   }, []);
 
-  async function runUpdate() {
+  async function runNativeUpdate() {
+    const update = pendingUpdate.current;
+    if (!update) {
+      setRunState("error");
+      setMessage("No downloaded update is pending. Check for updates again.");
+      return;
+    }
+    setRunState("running");
+    setMessage("Downloading update...");
+    try {
+      let totalBytes = 0;
+      let downloadedBytes = 0;
+      await update.downloadAndInstall((event) => {
+        if (event.event === "Started") {
+          totalBytes = event.data.contentLength ?? 0;
+        } else if (event.event === "Progress") {
+          downloadedBytes += event.data.chunkLength;
+          setMessage(totalBytes > 0
+            ? `Downloading update... ${Math.min(100, Math.round((downloadedBytes / totalBytes) * 100))}%`
+            : "Downloading update...");
+        } else if (event.event === "Finished") {
+          setMessage("Installing update...");
+        }
+      });
+      setRunState("success");
+      setMessage("Update installed. Restarting HivemindOS...");
+      // On Windows the installer exits the app itself; elsewhere relaunch.
+      const { relaunch } = await import("@tauri-apps/plugin-process");
+      await relaunch();
+    } catch (error) {
+      setRunState("error");
+      setMessage(errorText(error, "Update failed."));
+    }
+  }
+
+  async function runCheckoutUpdate() {
     if (!version?.appDir) {
       setRunState("error");
       setMessage("Could not find the local HivemindOS checkout for update.");
@@ -110,6 +178,14 @@ export default function AboutPage() {
     }
     setRunState("error");
     setMessage(data?.error ?? "Update failed.");
+  }
+
+  function runUpdate() {
+    if (packaged) {
+      void runNativeUpdate();
+      return;
+    }
+    void runCheckoutUpdate();
   }
 
   useEffect(() => {
@@ -147,9 +223,11 @@ export default function AboutPage() {
               Check again
             </button>
           ) : null}
-          <button className={styles.updateButton} type="button" disabled={!canUpdate} onClick={() => void runUpdate()}>
-            {runState === "running" ? "Updating..." : "Update"}
-          </button>
+          {packaged && !updateAvailable ? null : (
+            <button className={styles.updateButton} type="button" disabled={!canUpdate} onClick={runUpdate}>
+              {runState === "running" ? "Updating..." : updateAvailable ? "Update" : "Run test update"}
+            </button>
+          )}
         </div>
       </section>
       {updateResult?.method || updateResult?.fallbackCommand ? (

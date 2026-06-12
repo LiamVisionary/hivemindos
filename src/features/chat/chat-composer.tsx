@@ -1041,6 +1041,7 @@ export function ComposerField({
             <textarea
               ref={textareaRef}
               value={composerValue}
+              data-bee-composer
               onChange={(event) => {
                 onChange(event.target.value);
                 setSelectedSlashCommandIndex(0);
@@ -1380,6 +1381,7 @@ export function ComposerField({
           <button
             type="submit"
             className={chatClass("composerIconButton", "sendButton")}
+            data-bee-send
             disabled={disabled || !canSend}
             aria-label={busy ? "Queue message" : "Send"}
           >

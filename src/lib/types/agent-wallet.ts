@@ -1,4 +1,4 @@
-export type AgentPaymentProvider = "manual" | "bankr" | "clawcard" | "moneyclaw" | "x402" | "usepod" | "veil";
+export type AgentPaymentProvider = "manual" | "bankr" | "clawcard" | "moneyclaw" | "x402" | "usepod" | "venice" | "veil";
 
 export type AgentSurvivalTier = "dead" | "critical" | "low_compute" | "normal" | "high";
 export type AgentSpendCapAsset = "USDC" | "ETH";

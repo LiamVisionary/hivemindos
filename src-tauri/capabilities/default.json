@@ -4,6 +4,7 @@
   "description": "Capability for the HivemindOS desktop window",
   "windows": [
     "main",
+    "about",
     "route-*"
   ],
   "remote": {
@@ -15,6 +16,8 @@
   "permissions": [
     "core:default",
     "dialog:allow-open",
-    "opener:default"
+    "opener:default",
+    "process:allow-restart",
+    "updater:default"
   ]
 }

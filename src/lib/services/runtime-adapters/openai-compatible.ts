@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { HIVEMIND_OS_RUNTIME, type AgentProfile } from "@/lib/types/agent-runtime";
 import { bankrLlmAuthHeaders, isBankrLlmProfile } from "@/lib/services/bankr-llm";
 import { checkUsePodModels, isUsePodProfile, resolveUsePodRuntimeConfig } from "@/lib/services/usepod";
+import { checkVeniceModels, isVeniceProfile, resolveVeniceRuntimeConfig } from "@/lib/services/venice";
 import type { RuntimeAdapter } from "./types";
 
 const execFileAsync = promisify(execFile);
@@ -73,6 +74,8 @@ function errorMessage(data: OpenAIModelList | null, fallback: string) {
 function providerName(profile: AgentProfile) {
   return isUsePodProfile(profile)
     ? "UsePod"
+    : isVeniceProfile(profile)
+      ? "Venice AI"
     : isBankrLlmProfile(profile)
       ? "Bankr LLM"
       : profile.provider === "ollama"
@@ -147,9 +150,12 @@ async function runLmsJson(args: string[], timeout = 15_000) {
 
 async function fetchModels(profile: AgentProfile): Promise<OpenAIModelList> {
   const usePodConfig = await resolveUsePodRuntimeConfig(profile);
+  const veniceConfig = !usePodConfig ? await resolveVeniceRuntimeConfig(profile) : null;
   const runtimeProfile = usePodConfig
     ? { ...profile, gatewayUrl: usePodConfig.baseUrl, statusPath: usePodConfig.statusPath, token: "" }
-    : profile;
+    : veniceConfig
+      ? { ...profile, gatewayUrl: veniceConfig.baseUrl, statusPath: veniceConfig.statusPath, token: "" }
+      : profile;
   const bankrHeaders = isBankrLlmProfile(runtimeProfile) ? await bankrLlmAuthHeaders(runtimeProfile) : {};
   if (isBankrLlmProfile(runtimeProfile) && !bankrHeaders["X-API-Key"]) {
     throw new Error("BANKR_LLM_KEY is required to list Bankr LLM models.");
@@ -157,6 +163,7 @@ async function fetchModels(profile: AgentProfile): Promise<OpenAIModelList> {
   const response = await fetch(buildRuntimeUrl(runtimeProfile, runtimeProfile.statusPath || "/v1/models"), {
     headers: {
       ...authHeaders(runtimeProfile),
+      ...(veniceConfig?.headers ?? {}),
       ...bankrHeaders,
     },
     cache: "no-store",
@@ -394,16 +401,22 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
   },
   async getStatus(profile) {
     const usePodStatus = isUsePodProfile(profile) ? await checkUsePodModels(profile) : null;
+    const veniceStatus = !usePodStatus && isVeniceProfile(profile) ? await checkVeniceModels(profile) : null;
     const usePodConfig = !usePodStatus ? await resolveUsePodRuntimeConfig(profile) : null;
     const runtimeProfile = usePodConfig
       ? { ...profile, gatewayUrl: usePodConfig.baseUrl, statusPath: usePodConfig.statusPath, token: "" }
-      : profile;
+      : veniceStatus
+        ? { ...profile, gatewayUrl: "https://api.venice.ai/api/v1", statusPath: "/models", token: "" }
+        : profile;
     let modelDiscoveryError = "";
     let lmStudioModels: NormalizedLmStudioModel[] = [];
     let lmStudioModelSource = "";
     let models = configuredModelFallback(profile);
     if (usePodStatus) {
       models = usePodStatus.models.map((model) => model.id);
+    } else if (veniceStatus) {
+      models = veniceStatus.models.length ? veniceStatus.models.map((model) => model.id) : configuredModelFallback(profile);
+      if (!veniceStatus.ok) modelDiscoveryError = veniceStatus.message;
     } else if (profile.provider === "lm-studio") {
       const discovery = await discoverLmStudioProviderModels(runtimeProfile);
       lmStudioModels = discovery.lmStudioModels;
@@ -440,6 +453,24 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
           message: usePodStatus.message,
           httpStatus: usePodStatus.httpStatus,
           modelCount: usePodStatus.modelCount,
+        },
+      } : veniceStatus ? {
+        venice: {
+          authMode: veniceStatus.authMode,
+          walletVaultId: veniceStatus.walletVaultId,
+          walletAddress: veniceStatus.walletAddress,
+          walletNetwork: veniceStatus.walletNetwork,
+          apiKeyEnvName: veniceStatus.apiKeyEnvName,
+          keyPresent: veniceStatus.keyPresent,
+          balanceUsd: veniceStatus.balanceUsd,
+          diemBalanceUsd: veniceStatus.diemBalanceUsd,
+          minimumTopUpUsd: veniceStatus.minimumTopUpUsd,
+          suggestedTopUpUsd: veniceStatus.suggestedTopUpUsd,
+          checkedAt: veniceStatus.checkedAt,
+          status: veniceStatus.status,
+          message: veniceStatus.message,
+          httpStatus: veniceStatus.httpStatus,
+          modelCount: veniceStatus.modelCount,
         },
       } : profile.provider === "lm-studio" ? {
         lmStudio: {

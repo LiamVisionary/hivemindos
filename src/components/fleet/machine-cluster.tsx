@@ -628,6 +628,7 @@ export function MachineCluster({
                 <TooltipTrigger asChild>
                   <AddHexCell
                     size={HEX_W}
+                    data-bee={`fleet-hive-add-${machine.name}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onAddAgent(machine);

@@ -7,7 +7,7 @@ import type {
   AgentWalletConfig,
   X402PaymentRequirement,
 } from "@/lib/types/agent-wallet";
-import type { AgentProfile, UsePodAgentConfig } from "@/lib/types/agent-runtime";
+import type { AgentProfile, UsePodAgentConfig, VeniceAgentConfig } from "@/lib/types/agent-runtime";
 import { agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
 import {
   VEIL_CASH_TRANSFER_CONFIRMATION_LABEL,
@@ -139,6 +139,21 @@ function hasUsePodWalletEvidence(config?: UsePodAgentConfig, balance = getUsePod
   );
 }
 
+export function getVeniceBalanceUsd(config?: VeniceAgentConfig): number | null {
+  return parseWalletBalanceUsd(config?.lastBalanceUsd);
+}
+
+function hasVeniceWalletEvidence(config?: VeniceAgentConfig, balance = getVeniceBalanceUsd(config)) {
+  return Boolean(
+    config?.walletVaultId
+      || config?.walletAddress
+      || config?.lastTestStatus
+      || config?.lastStatusMessage
+      || typeof config?.lastModelCount === "number"
+      || balance !== null
+  );
+}
+
 function hasExplicitWalletProvider(wallet?: AgentWalletConfig) {
   if (!wallet) return false;
   if (wallet.providerSelectedAt) return true;
@@ -155,15 +170,37 @@ function hasExplicitWalletProvider(wallet?: AgentWalletConfig) {
   );
 }
 
-export function resolveAgentWallet(agent: Pick<AgentProfile, "id" | "provider" | "usePod">, wallet?: AgentWalletConfig): AgentWalletConfig {
+export function resolveAgentWallet(agent: Pick<AgentProfile, "id" | "provider" | "usePod" | "venice">, wallet?: AgentWalletConfig): AgentWalletConfig {
   const base = wallet ?? createDefaultAgentWallet(agent.id);
   const usePodBalance = getUsePodBalanceUsd(agent.usePod);
+  const veniceBalance = getVeniceBalanceUsd(agent.venice);
   const provider = hasExplicitWalletProvider(wallet)
     ? base.provider
     : agent.provider === "usepod" || hasUsePodWalletEvidence(agent.usePod, usePodBalance)
       ? "usepod"
-      : base.provider;
+      : agent.provider === "venice" || hasVeniceWalletEvidence(agent.venice, veniceBalance)
+        ? "venice"
+        : base.provider;
   const providerFeatures = agentPaymentProviderFeatures(provider);
+  if (providerFeatures.balanceSource === "venice-runtime") {
+    const venice = agent.venice ?? {};
+    const checkedAtMs = Date.parse(venice.lastCheckedAt ?? "");
+    const hasCheckedAt = Number.isFinite(checkedAtMs);
+    const setupVisible = hasVeniceWalletEvidence(venice, veniceBalance);
+    return {
+      ...base,
+      provider: "venice",
+      enabled: base.enabled || setupVisible || (veniceBalance !== null && veniceBalance > 0),
+      walletAddress: venice.walletAddress || base.walletAddress,
+      network: venice.walletNetwork || base.network || "eip155:8453",
+      tokenSymbol: "USDC",
+      currentBalanceUsd: veniceBalance ?? base.currentBalanceUsd,
+      onchainBalanceUsd: veniceBalance ?? base.onchainBalanceUsd,
+      lastOnchainSyncAt: hasCheckedAt ? checkedAtMs : base.lastOnchainSyncAt,
+      custodyMode: venice.walletVaultId ? "local" : "watch",
+      x402BaseUrl: base.x402BaseUrl || "https://api.venice.ai",
+    };
+  }
   if (providerFeatures.balanceSource !== "usepod-runtime") {
     return base.provider === provider ? base : { ...base, provider };
   }
@@ -189,7 +226,7 @@ export function resolveAgentWallet(agent: Pick<AgentProfile, "id" | "provider" |
 
 export function getDisplayWalletBalanceUsd(config: AgentWalletConfig, now = Date.now()): number {
   const providerFeatures = agentPaymentProviderFeatures(config.provider);
-  if (providerFeatures.balanceSource === "usepod-runtime") {
+  if (providerFeatures.balanceSource === "usepod-runtime" || providerFeatures.balanceSource === "venice-runtime") {
     return normalizeMoney(config.currentBalanceUsd);
   }
   return hasWalletBalanceEvidence(config) ? getEffectiveBalanceUsd(config, now) : 0;
@@ -367,6 +404,8 @@ export function buildAgentPaymentPrompt(config: AgentWalletConfig, snapshot = ge
         ? "x402 wallet payments"
         : config.provider === "usepod"
           ? "UsePod prepaid inference wallet with provider-managed x402 payments"
+          : config.provider === "venice"
+            ? "Venice AI wallet-authenticated inference with a prepaid x402 USDC balance"
           : config.provider === "veil"
             ? "private Base privacy-pool payments via the active privacy rail"
           : "manual wallet accounting";

@@ -563,6 +563,7 @@ export function FleetView({
                     key={v}
                     onClick={() => setView(v)}
                     aria-pressed={view === v}
+                    data-bee={`fleet-view-${v}`}
                     className="uppercase cursor-pointer"
                     style={{
                       fontFamily: "var(--f-mono)", fontSize: 10,

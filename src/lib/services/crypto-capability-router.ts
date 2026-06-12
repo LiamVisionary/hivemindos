@@ -84,15 +84,16 @@ export type CryptoCapabilityRouterInput = {
 const BANKR_ENV_KEYS = ["BANKR_API_KEY", "BANKR_LLM_KEY", "BANKR_MANAGEMENT_KEY"] as const;
 const MONEYCLAW_ENV_KEYS = ["MONEYCLAW_API_KEY"] as const;
 const USEPOD_ENV_KEYS = ["USEPOD_TOKEN"] as const;
+const VENICE_ENV_KEYS = ["VENICE_API_KEY"] as const;
 const VEIL_ENV_KEYS = ["VEIL_KEY"] as const;
 
 const ROUTE_PRIORITY: Record<CryptoCapabilityIntent, CryptoCapabilityProvider[]> = {
-  status: ["moneyclaw", "x402", "veil", "usepod", "bankr"],
+  status: ["moneyclaw", "x402", "veil", "usepod", "venice", "bankr"],
   portfolio: ["bankr", "moneyclaw", "x402", "usepod"],
   receive: ["moneyclaw", "x402", "usepod", "veil"],
   send: ["x402", "moneyclaw", "veil"],
   "private-transfer": ["veil"],
-  "paid-api": ["veil", "x402", "usepod", "moneyclaw"],
+  "paid-api": ["veil", "x402", "usepod", "venice", "moneyclaw"],
   "private-paid-api": ["veil"],
   trade: ["bankr"],
   "card-payment": ["moneyclaw"],
@@ -104,6 +105,7 @@ const PROVIDER_INTENTS: Record<CryptoCapabilityProvider, CryptoCapabilityIntent[
   moneyclaw: ["status", "portfolio", "receive", "send", "paid-api", "card-payment"],
   x402: ["status", "portfolio", "receive", "send", "paid-api"],
   usepod: ["status", "receive", "paid-api"],
+  venice: ["status", "paid-api"],
   veil: ["status", "receive", "send", "private-transfer", "paid-api", "private-paid-api"],
 };
 
@@ -133,6 +135,7 @@ export async function getCryptoCapabilityMap(input: CryptoCapabilityRouterInput 
     moneyClawCapability(input.wallet),
     x402Capability(input),
     podProviderCapability(input.wallet),
+    veniceCapability(input.wallet),
     veilCapability(input),
   ]);
   const selected = selectCryptoProvider(providers, intent, input.preferredProvider);
@@ -295,6 +298,27 @@ async function podProviderCapability(wallet?: Partial<AgentWalletConfig>): Promi
       { intent: "status", method: "POST", route: "/api/usepod/status", note: "Read UsePod token status and model availability." },
       { intent: "paid-api", method: "POST", route: "/api/usepod/status", note: "UsePod handles provider-managed paid inference/paywalls from prepaid balance." },
       { intent: "receive", method: "POST", route: "/api/usepod/deposit-transaction", note: "Prepare UsePod deposit transaction." },
+    ],
+  });
+}
+
+async function veniceCapability(wallet?: Partial<AgentWalletConfig>): Promise<CryptoProviderCapability> {
+  const credentials = await hiveEnvPresence([VENICE_ENV_KEYS[0]]);
+  const walletConnected = Boolean(wallet?.provider === "venice" && wallet.walletAddress);
+  const configured = credentials.some((item) => item.present) || walletConnected;
+  return providerCapability({
+    provider: "venice",
+    configured,
+    spendReady: configured,
+    credentials,
+    missing: configured ? [] : [`Set ${VENICE_ENV_KEYS[0]} or connect a wallet in Venice setup for the agent.`],
+    evidence: [
+      ...(credentials.some((item) => item.present) ? [`${VENICE_ENV_KEYS[0]} is present by key name.`] : []),
+      ...(walletConnected ? ["Venice x402 wallet is present in supplied wallet policy."] : []),
+    ],
+    endpoints: [
+      { intent: "status", method: "POST", route: "/api/venice/status", note: "Read Venice auth status, balance, and model availability." },
+      { intent: "paid-api", method: "POST", route: "/api/venice/wallet", note: "Venice charges inference to the wallet's prepaid x402 balance; top-ups use Base USDC." },
     ],
   });
 }

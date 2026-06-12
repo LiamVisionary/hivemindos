@@ -608,6 +608,7 @@ fn desktop_status(state: tauri::State<NativeServerState>) -> serde_json::Value {
         "latestShortCommit": latest_commit.map(short_commit),
         "updateCommand": "Install the latest HivemindOS desktop build.",
         "runtime": "tauri",
+        "packaged": !cfg!(debug_assertions),
         "phase": if cfg!(debug_assertions) {
             "phase-1-dev"
         } else if port.is_some() {
@@ -1086,6 +1087,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(NativeServerState::new())
         .menu(desktop_navigation::app_menu)
         .on_menu_event(|app, event| {

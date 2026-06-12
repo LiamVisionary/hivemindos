@@ -196,6 +196,7 @@ export function DashboardHeader(props: DashboardHeaderProps) {
                         className={`viewTab ${active ? "active" : ""}`}
                         aria-pressed={active}
                         title={`${item.label}: ${item.detail}`}
+                        data-bee-nav={item.id}
                         onClick={() => selectRoute(item.id)}
                       >
                         {viewIcon(item.id)}

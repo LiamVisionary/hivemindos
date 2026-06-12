@@ -4,6 +4,7 @@ type NativeDesktopStatus = AppVersion & {
   ok?: boolean;
   runtime?: string;
   phase?: string;
+  packaged?: boolean;
   devUrl?: string | null;
   nativeHost?: string;
   nativePort?: number | null;
@@ -21,6 +22,22 @@ export function isTauriDesktopRuntime() {
     typeof window.__TAURI_INTERNALS__ !== "undefined"
     || typeof window.__TAURI__ !== "undefined"
   );
+}
+
+/**
+ * True only in release desktop builds (debug_assertions off), where the
+ * signed tauri-plugin-updater flow is the correct update path. Dev builds
+ * and the plain web app keep the git-checkout update flow.
+ */
+export async function isPackagedDesktopRuntime(signal?: AbortSignal): Promise<boolean> {
+  if (!isTauriDesktopRuntime() || signal?.aborted) return false;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const status = await invoke<NativeDesktopStatus>("desktop_status");
+    return status?.packaged === true;
+  } catch {
+    return false;
+  }
 }
 
 export async function getNativeAppVersion(signal?: AbortSignal): Promise<AppVersion | null> {

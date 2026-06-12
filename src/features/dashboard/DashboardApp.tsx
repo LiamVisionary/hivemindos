@@ -61,7 +61,7 @@ import {
   Users,
   WalletCards,
 } from "lucide-react";
-import type { AdaptiveOpenRouterConfig, AdaptiveRoutingConfig, AgentProfile, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile, RuntimeCapabilities, SharedVaultConfig, UsePodAgentConfig } from "@/lib/types/agent-runtime";
+import type { AdaptiveOpenRouterConfig, AdaptiveRoutingConfig, AgentProfile, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile, RuntimeCapabilities, SharedVaultConfig, UsePodAgentConfig, VeniceAgentConfig } from "@/lib/types/agent-runtime";
 import type { AgentNotification, AgentNotificationSettings, AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import { HIVEMIND_OS_RUNTIME, createAgentProfile, DEFAULT_SHARED_VAULT, RUNTIME_CAPABILITIES, RUNTIME_DEFAULTS, RUNTIME_KINDS, RUNTIME_LABELS } from "@/lib/types/agent-runtime";
 import type { AgentPaymentProvider, AgentWalletConfig, HoneyTreasuryConfig } from "@/lib/types/agent-wallet";
@@ -370,6 +370,9 @@ import { chatTelemetryMessages, chatTelemetrySession } from "@/lib/services/tele
 import { useDashboardNavigationController } from "@/features/dashboard/hooks/use-dashboard-navigation-controller";
 import { DashboardHeader, type DashboardAppCompletionNotification } from "@/features/dashboard/views/DashboardHeader";
 import { DashboardCommandPalette } from "@/features/dashboard/views/DashboardCommandPalette";
+import { useBeePilot } from "@/features/dashboard/bee-pilot/use-bee-pilot";
+import { BeePilotPopup } from "@/features/dashboard/bee-pilot/BeePilotPopup";
+import { BeeCursorOverlay } from "@/features/dashboard/bee-pilot/BeeCursorOverlay";
 const kanbanClass = createStyleClass(kanbanStyles);
 const fleetClass = createStyleClass(fleetStyles);
 const chatClass = createStyleClass(chatStyles);
@@ -441,6 +444,7 @@ function sameRuntimeAvailability(
 const NotificationsPanel = dynamic(() => import("@/features/notifications/NotificationsPanel").then((mod) => mod.NotificationsPanel), { ssr: false });
 const ConnectPhoneFab = dynamic(() => import("@/components/phone/ConnectPhoneFab").then((mod) => mod.ConnectPhoneFab), { ssr: false });
 const QueenBeeVoiceOverlay = dynamic(() => import("@/features/queen-voice/QueenBeeVoiceOverlay").then((mod) => mod.QueenBeeVoiceOverlay), { ssr: false });
+const GuidedDashboardTour = dynamic(() => import("@/features/dashboard/GuidedDashboardTour").then((mod) => mod.GuidedDashboardTour), { ssr: false });
 const NangoIntegrationsView = dynamic(() => import("@/features/integrations/NangoIntegrationsView"), { ssr: false, loading: routeLoadingFor("integrations") });
 const GitLawbIntegrationPanel = dynamic(() => import("@/features/integrations/GitLawbIntegrationPanel"), { ssr: false, loading: routeLoadingFor("integrations") });
 const BRAIN_SKILL_PROVIDER_FALLBACK: BrainSkillProviderInventory[] = [
@@ -529,6 +533,7 @@ function mergeAgentProfiles(current: AgentProfile[], incoming: AgentProfile[]) {
       ...(existing ?? {}),
       ...agent,
       usePod: existing?.usePod || agent.usePod ? { ...(existing?.usePod ?? {}), ...(agent.usePod ?? {}) } : undefined,
+      venice: existing?.venice || agent.venice ? { ...(existing?.venice ?? {}), ...(agent.venice ?? {}) } : undefined,
     }));
   }
   return [...merged.values()];
@@ -1237,6 +1242,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     adaptiveOpenRouter?: AdaptiveOpenRouterConfig;
     adaptiveRouting?: AdaptiveRoutingConfig;
     usePod?: UsePodAgentConfig;
+    venice?: VeniceAgentConfig;
     workerClass: BeeWorkerClass;
     customWorkerClass?: CustomWorkerClassProfile;
     customWorkerClasses: CustomWorkerClassProfile[];
@@ -1251,6 +1257,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     model: "",
     adaptiveRouting: undefined,
     usePod: undefined,
+    venice: undefined,
     workerClass: "general",
     customWorkerClass: undefined,
     customWorkerClasses: [],
@@ -3353,7 +3360,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   }, [activeView, displayAgents, hydrated]);
   // eslint-disable-next-line react-hooks/refs
   dispatchKanbanTaskToAgentRef.current = dispatchKanbanTaskToAgent;
-  const { checkStatus, checkVaultStatus, checkControlRoomStatus, runVaultTailnetSync, pairSyncthingCollector, pairSyncthingVaultSync, inspectBrainNode, startBrainPan, moveBrainPan, endBrainPan, addChatFiles, handleChatFileChange, handleChatFileReferenceDrop, handleChatImageChange, removeChatAttachment, attachChatDirectory, attachChatRecentDirectory, removeChatDirectory, addQuickAddFiles, handleQuickAddFileChange, handleQuickAddImageChange, removeQuickAddAttachment, attachQuickAddDirectory, attachQuickAddRecentDirectory, removeQuickAddDirectory, addKanbanSteerFiles, handleKanbanSteerFileChange, handleKanbanSteerImageChange, removeKanbanSteerAttachment, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, removeKanbanSteerDirectory, updateVoiceTranscript, appendVoiceTranscriptToInput, cleanupVoiceCapture, startVoiceWaveform, startAudioRecording, stopAudioRecording, sendMessage, sendPromptMessage, queuedChatMessages, flushingChatQueueId, removeQueuedChatMessage, sendQueuedChatMessageNow, generateKanbanTaskFromChat, dismissChatKanbanGeneration, chatKanbanGeneration } = useStatusChatInputController({ AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents: displayAgents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy: selectedChatStreaming, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceBands, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent });
+  const { checkStatus, checkVaultStatus, checkControlRoomStatus, runVaultTailnetSync, pairSyncthingCollector, pairSyncthingVaultSync, inspectBrainNode, startBrainPan, moveBrainPan, endBrainPan, addChatFiles, handleChatFileChange, handleChatFileReferenceDrop, handleChatImageChange, removeChatAttachment, attachChatDirectory, attachChatRecentDirectory, removeChatDirectory, addQuickAddFiles, handleQuickAddFileChange, handleQuickAddImageChange, removeQuickAddAttachment, attachQuickAddDirectory, attachQuickAddRecentDirectory, removeQuickAddDirectory, addKanbanSteerFiles, handleKanbanSteerFileChange, handleKanbanSteerImageChange, removeKanbanSteerAttachment, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, removeKanbanSteerDirectory, updateVoiceTranscript, appendVoiceTranscriptToInput, cleanupVoiceCapture, startVoiceWaveform, startAudioRecording, stopAudioRecording, sendMessage, sendPromptMessage, queuedChatMessages, flushingChatQueueId, removeQueuedChatMessage, sendQueuedChatMessageNow, generateKanbanTaskFromChat, dismissChatKanbanGeneration, chatKanbanGeneration } = useStatusChatInputController({ AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents: displayAgents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy: selectedChatStreaming, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceBands, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateAgentProfile, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent });
   const updateFleetSyncAutoRepair = useCallback((deviceID: string, nextState: FleetSyncAutoRepairState | null) => {
     setFleetSyncAutoRepairByDevice((current) => {
       const next = { ...current };
@@ -3847,6 +3854,31 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     tasks,
     vaultPanelMode,
   });
+  const beePilot = useBeePilot({
+    activeView,
+    agents: displayAgents,
+    machineGroups,
+    kanbanTasks: kanbanBoard?.tasks ?? [],
+    sharedVault,
+    navigate: navigateDashboardTarget,
+    openAgentCreationModal,
+    openAgentSettings: (agentId) => {
+      setAgentSettingsPanel("role");
+      setAgentRoleModalId(agentId);
+    },
+    setQuickAddStatus,
+    setQuickAddDraft: (column, text) => setQuickAddDrafts((current) => ({ ...current, [column]: text })),
+    setKanbanSearch,
+    openWalletForAgent: (agentId) => {
+      setSelectedAgentId(agentId);
+      setWalletExpanded(true);
+    },
+    setSchedulerDraftOpen,
+    openSkillBrowser: () => {
+      void openSkillBrowser();
+    },
+    setChatText: setText,
+  });
   useEffect(() => {
     if (!hydrated) return;
     void readNativeDashboardBootstrap({
@@ -3901,8 +3933,31 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         onOpenChange={setCommandPaletteOpen}
         onPopout={popoutDashboardTarget}
       />
+      <BeePilotPopup
+        open={beePilot.open}
+        input={beePilot.input}
+        phase={beePilot.phase}
+        status={beePilot.status}
+        onOpenChange={beePilot.setOpen}
+        onInputChange={beePilot.setInput}
+        onSubmit={(command, origin) => void beePilot.runCommand(command, origin)}
+        onDismissStatus={beePilot.dismissStatus}
+      />
+      <BeeCursorOverlay controller={beePilot.bee} />
       {activeView === "agents" ? <ConnectPhoneFab /> : null}
       <QueenBeeVoiceOverlay />
+      <GuidedDashboardTour
+        selectView={setActiveView}
+        openFirstChat={() => {
+          const target = displayAgents.find((agent) => runtimeCan(agent, "chat"));
+          if (!target) {
+            setActiveView("chat");
+            return false;
+          }
+          startAgentChat(target.id);
+          return true;
+        }}
+      />
       </div></main>
   );
 }
