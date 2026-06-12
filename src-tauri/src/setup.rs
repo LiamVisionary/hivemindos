@@ -37,7 +37,7 @@ struct NativeSetupStatus {
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct NativeSetupRunRequest {
     install_mode: Option<String>,
     skill_agents: Option<Vec<String>>,
@@ -407,8 +407,7 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
     .map_err(|error| error.to_string())
 }
 
-#[tauri::command]
-pub(crate) fn native_setup_run(request: NativeSetupRunRequest) -> Result<serde_json::Value, String> {
+fn build_setup_invocation(request: NativeSetupRunRequest) -> (String, String) {
     let mode = request.install_mode.unwrap_or_else(|| "local".to_string());
     let skill_agents = sanitize_agent_list(request.skill_agents);
     let memory_agents = sanitize_agent_list(request.memory_agents);
@@ -455,6 +454,12 @@ pub(crate) fn native_setup_run(request: NativeSetupRunRequest) -> Result<serde_j
         memory_list = shell_quote(&memory_list),
         args = quoted_args,
     );
+    (mode, command)
+}
+
+#[tauri::command]
+pub(crate) fn native_setup_run(request: NativeSetupRunRequest) -> Result<serde_json::Value, String> {
+    let (mode, command) = build_setup_invocation(request);
     let command_path = write_command_file(&command)?;
     open_command_file(&command_path)?;
 
@@ -465,4 +470,71 @@ pub(crate) fn native_setup_run(request: NativeSetupRunRequest) -> Result<serde_j
         mode,
     })
     .map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Mirrors NativeSetupRunInput in src/lib/native/setup.ts. The frontend must
+    // invoke as { request: <payload> } because the command parameter is named
+    // `request`; this payload is what runNativeSetup sends for the
+    // "just this computer" first-run option.
+    fn frontend_local_payload() -> serde_json::Value {
+        serde_json::json!({
+            "installMode": "local",
+            "skillAgents": ["claude", "codex"],
+            "memoryAgents": [],
+            "importSkills": true,
+            "importMemory": false,
+            "startDashboard": false,
+            "installCollector": true,
+            "buildDashboard": false,
+            "installDeps": true,
+            "force": false,
+        })
+    }
+
+    #[test]
+    fn frontend_payload_deserializes() {
+        let request: NativeSetupRunRequest =
+            serde_json::from_value(frontend_local_payload()).expect("frontend payload must match NativeSetupRunRequest");
+        assert_eq!(request.install_mode.as_deref(), Some("local"));
+    }
+
+    #[test]
+    fn unknown_frontend_fields_are_rejected() {
+        let mut payload = frontend_local_payload();
+        payload["renamedField"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<NativeSetupRunRequest>(payload).is_err());
+    }
+
+    #[test]
+    fn local_mode_builds_local_only_command() {
+        let request: NativeSetupRunRequest = serde_json::from_value(frontend_local_payload()).unwrap();
+        let (mode, command) = build_setup_invocation(request);
+        assert_eq!(mode, "local");
+        assert!(command.contains("./setup.sh"));
+        assert!(command.contains("'--local-only'"));
+        assert!(command.contains("'--skip-dashboard'"));
+        assert!(command.contains("'--import-skills=claude,codex'"));
+        assert!(command.contains("HIVE_MEMORY_IMPORTS='none'"));
+        assert!(!command.contains("'--force'"));
+    }
+
+    #[test]
+    fn empty_request_defaults_to_local_mode() {
+        let request: NativeSetupRunRequest = serde_json::from_value(serde_json::json!({})).unwrap();
+        let (mode, command) = build_setup_invocation(request);
+        assert_eq!(mode, "local");
+        assert!(command.contains("'--local-only'"));
+    }
+
+    #[test]
+    fn setup_mode_args_map_to_script_flags() {
+        assert_eq!(setup_mode_arg("local"), "--local-only");
+        assert_eq!(setup_mode_arg("system-tailscale"), "--system-tailscale");
+        assert_eq!(setup_mode_arg("link"), "--link");
+        assert_eq!(setup_mode_arg("anything-else"), "--local-only");
+    }
 }

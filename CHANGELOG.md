@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-12 12:35:19 +07 +0700 - Fix Native Setup Launch And Add Cross-Platform Setup E2E
+
+- Status: Pushed
+- Areas changed: native setup invoke wrapper (`src/lib/native/setup.ts`), Tauri setup command (`src-tauri/src/setup.rs`), setup E2E workflow (`.github/workflows/setup-e2e-matrix.yml`)
+- Summary: The desktop first-run setup ("just this computer" and the other install modes) failed immediately with `command native_setup_run missing required key request` because the frontend passed the setup options flat instead of nested under the Tauri command's `request` parameter. The invoke payload is now wrapped correctly, the Rust request struct rejects unknown fields so future frontend/Rust payload drift fails loudly, the setup command builder is extracted into a testable function with unit tests covering the exact frontend payload, and a new CI workflow exercises the generated setup command plus full non-interactive setup on macOS, Linux, and Windows runners.
+- Verification: `cargo test --lib setup::` passes (5 tests) in `src-tauri`; cross-platform `setup.sh`/`setup.ps1` E2E runs on the `test/setup-e2e-matrix` branch CI.
+- Intended commit message: `Fix native setup invoke payload and add setup E2E matrix`
+
 ## 2026-06-11 00:18:17 WITA +0800 - Make Release Version Stamping Idempotent
 
 - Status: Pushed

@@ -110,7 +110,7 @@ export async function runNativeSetup(input: NativeSetupRunInput, options?: Nativ
   if (!isTauriDesktopRuntime()) return null;
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    return await invoke<NativeSetupRunResult>("native_setup_run", input);
+    return await invoke<NativeSetupRunResult>("native_setup_run", { request: input });
   } catch (error) {
     return {
       ok: false,
