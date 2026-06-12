@@ -70,21 +70,29 @@ jobs:
       - name: Verify dashboard dev server responds
         shell: pwsh
         run: |
+          Start-Sleep -Seconds 20
+          Write-Host "=== node processes ==="
+          Get-Process node -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, StartTime -AutoSize
+          Write-Host "=== port 5020 listeners ==="
+          Get-NetTCPConnection -LocalPort 5020 -ErrorAction SilentlyContinue | Format-Table -AutoSize
           $healthy = $false
-          foreach ($i in 1..90) {
+          foreach ($i in 1..60) {
             try {
-              $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5020/" -TimeoutSec 10
+              $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5020/" -TimeoutSec 15
               Write-Host "dashboard responded with HTTP $($response.StatusCode)"
               $healthy = $true
               break
             } catch {
-              if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
-                Write-Host "dashboard responded with HTTP $([int]$_.Exception.Response.StatusCode) - not healthy yet"
-              }
-              Start-Sleep -Seconds 4
+              if ($i % 10 -eq 0) { Write-Host "attempt ${i}: $($_.Exception.Message)" }
+              Start-Sleep -Seconds 5
             }
           }
+          Write-Host "=== dev server stdout ==="
+          Get-Content .next\hivemindos-windows.log -ErrorAction SilentlyContinue
+          Write-Host "=== dev server stderr ==="
+          Get-Content .next\hivemindos-windows.err.log -ErrorAction SilentlyContinue
+          Write-Host "=== node processes after wait ==="
+          Get-Process node -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, StartTime -AutoSize
           if (-not $healthy) {
-            Get-Content .next/*.log -ErrorAction SilentlyContinue | Select-Object -Last 120
             throw "dashboard did not serve a healthy response on port 5020"
           }
