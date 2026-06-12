@@ -210,8 +210,21 @@ async function handleBalance(runtime: TipBotRuntime, message: TgMessage, reply: 
   if (openClaims.length) {
     lines.push(`⏳ ${openClaims.length} unclaimed tip${openClaims.length > 1 ? "s" : ""} waiting (refunded if they expire).`);
   }
-  if (message.chat.type !== "private") lines.push("Tip: DM me to keep your balance out of the group.");
-  await reply(lines.join("\n"));
+  if (message.chat.type === "private") {
+    await reply(lines.join("\n"));
+    return;
+  }
+  // Balances stay out of group chats: DM the number, leave only a pointer.
+  // Telegram blocks bot-initiated DMs until the user has /start-ed the bot.
+  const dmSent = await runtime.api
+    .sendMessage({ chatId: String(from.id), text: lines.join("\n") })
+    .then(() => true)
+    .catch(() => false);
+  await reply(
+    dmSent
+      ? "📬 Sent your balance to your DMs."
+      : `🔒 I can only show balances in private — tap @${escapeHtml(runtime.config.botUsername)}, press Start, then try /balance again.`,
+  );
 }
 
 async function handleDeposit(runtime: TipBotRuntime, message: TgMessage, reply: ReplyFn) {
