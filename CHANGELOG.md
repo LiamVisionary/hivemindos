@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-13 00:56:00 +0700 - Prepare v0.2.2 Desktop Release Build
+
+- Status: Pushed
+- Areas changed: app version metadata (`package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`), release workflow dispatch
+- Summary: HivemindOS desktop is prepared for the `v0.2.2` patch release so new downloads include the consent-first packaged first launch fix. This build is intended to replace `v0.2.1` for Mac users who could otherwise see an immediate Documents permission prompt, skip the setup wizard because of stale state, or sit on the Fleet discovery skeleton while native discovery waits on private filesystem work.
+- Verification: `node scripts/bump-app-version.mjs --set 0.2.2`; package and Tauri config versions validate as `0.2.2`; `src-tauri/Cargo.toml` and the `hivemindos-desktop` package entry in `src-tauri/Cargo.lock` validate as `0.2.2`; `git ls-remote --tags origin refs/tags/v0.2.2` returned no tag; `gh release view v0.2.2 --repo LiamVisionary/hivemindos` returned no release; `git diff --check -- CHANGELOG.md package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock`.
+- Intended commit message: `Prepare v0.2.2 release build`
+
 ## 2026-06-13 00:55:00 +0700 - Make Packaged Desktop First Launch Consent-First
 
 - Status: Pushed
