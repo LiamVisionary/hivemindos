@@ -666,7 +666,10 @@ function Remove-HivemindManagedBlock {
     }
     if (-not $skip) { $next.Add($line) }
   }
-  return $next
+  # The comma prevents PowerShell from unrolling the list on return: an empty
+  # list would become $null and a populated one a fixed-size array, breaking
+  # the caller's .Add()/.RemoveAt() calls.
+  return ,$next
 }
 
 function Write-HivemindManagedBlock {
