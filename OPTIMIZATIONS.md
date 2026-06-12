@@ -17,6 +17,16 @@ the engineering memory for optimization decisions and performance traps.
 - Note tradeoffs, cache freshness, fallback behavior, and when the optimization should be revisited.
 - If an optimization affects prompt injection or agent context, state what context is preserved and what is skipped, cached, compacted, or deferred.
 
+## 2026-06-12 23:32 +0700 - Keep Release Builds Off Embedded Next Standalone
+
+- Problem: The `v0.2.1` cross-platform release run failed on Linux and both macOS jobs in `Build Tauri app`. Linux and macOS Intel hit V8 heap OOM at about 8 GB during `next build --webpack`; macOS Apple Silicon stayed in optimized production build until the 3600s watchdog killed it. Windows only passed because the workflow did not enable `HIVEMINDOS_TAURI_EMBEDDED_NEXT` there, so it used the lighter static Tauri UI path.
+- Change: `.github/workflows/tauri-cross-platform-release.yml` no longer opts any release platform into the old embedded Next standalone fallback. The release path is now explicitly static Tauri UI plus native/sidecar backend bridges on every platform. `scripts/test-tauri-release-mode.mjs` and `pnpm test:tauri-release-mode` guard the workflow, Tauri config, and docs so future release changes do not quietly reintroduce the OOM-prone fallback.
+- Preserved behavior: Developers can still opt into the embedded Next fallback for local debugging with `HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 pnpm tauri:prepare` or the existing `tauri:*:server` scripts. Browser/dev builds still serve the full Next app and API routes. Native packaged features must keep using Tauri commands or sidecar services for local backend work.
+- Tradeoff: The packaged desktop app's full-mode contract is now enforced through native bridge/sidecar coverage, not through a bundled Next API server. Any feature that still depends only on a relative `/api/...` route needs a native bridge or sidecar route before it can be considered desktop-release-ready.
+- Files: `.github/workflows/tauri-cross-platform-release.yml`, `docs/native-app.md`, `scripts/test-tauri-release-mode.mjs`, `package.json`, `OPTIMIZATIONS.md`.
+- Verification: `pnpm test:tauri-release-mode`; `node --check scripts/test-tauri-release-mode.mjs`; `python3 /Users/liam/.codex/skills/hive-assimilate/scripts/verify_assimilation_manifest.py`; `git diff --check -- .github/workflows/tauri-cross-platform-release.yml docs/native-app.md scripts/test-tauri-release-mode.mjs package.json OPTIMIZATIONS.md CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl ASSIMILATION.json`. Full `pnpm tauri:prepare` was deferred in this shared dirty worktree because unrelated in-progress API/UI edits could affect the static build.
+- Watch next: Add focused native bridge coverage for high-value remaining `/api/...` callers instead of expanding the embedded fallback. If a future sidecar takes over broad HTTP API compatibility, keep its build independent of Next standalone output tracing.
+
 ## 2026-06-10 19:16 WITA - Longer macOS Embedded Next Release Timeout
 
 - Problem: `v0.1.36` macOS release jobs reached the embedded Next build's 1800 second watchdog after webpack compilation finished. Apple Silicon timed out during page generation; Intel timed out during build trace collection. Windows builds do not use the embedded Next path, and Linux finished successfully.

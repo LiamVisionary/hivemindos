@@ -422,3 +422,59 @@
 - Decision: assimilated
 - Assimilated: hivemind-os:src/lib/config/bee-worker-presets.ts => src/lib/config/bee-worker-presets.ts, hivemind-os:scripts/agent-telemetry-collector.mjs => scripts/agent-telemetry-collector.mjs, hivemind-os:src/features/dashboard/hooks/use-agent-settings-controller.tsx => src/features/dashboard/hooks/use-agent-settings-controller.tsx, hivemind-os:src/lib/config/bee-worker-souls.json => src/lib/config/bee-worker-souls.json, hivemind-os:scripts/test-bee-worker-souls.mjs => scripts/test-bee-worker-souls.mjs
 - Verification: Wrote ASSIMILATION.json with 5 entries and custom_code_assessment=balanced.
+## 2026-06-12T16:30:19.960418+00:00 - local-search
+
+- Request: HivemindOS Tauri bundle full local backend as Node sidecar avoid Next standalone build OOM
+- Source: local-index
+- Query: `HivemindOS Tauri bundle full local backend as Node sidecar avoid Next standalone build OOM`
+- Decision: no-results
+- Reason: No relevant local index hits after threshold filtering.
+## 2026-06-12T16:30:23.533871+00:00 - public-search
+
+- Request: HivemindOS Tauri bundle full local backend as Node sidecar avoid Next standalone build OOM
+- Source: public-github
+- Query: `HivemindOS Tauri bundle full local backend as Node sidecar avoid Next standalone build OOM`
+- Decision: retrieved
+- Reason: Retrieved 1 public candidates from GitHub search.
+
+### Candidates
+- skdrh/tauri-localhost-loader (1 stars, JavaScript)
+  - URL: https://github.com/skdrh/tauri-localhost-loader
+  - Description: It loads the nextjs dynamic application as a sidecar, which mean you can write your nextjs application with this locally as a desktop application.
+## 2026-06-12T16:30:23.578684+00:00 - prebuild-gate
+
+- Request: HivemindOS Tauri bundle full local backend as Node sidecar avoid Next standalone build OOM
+- Source: public-github
+- Query: `HivemindOS Tauri bundle full local backend as Node sidecar avoid Next standalone build OOM`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-06-12T16:33:55.573890+00:00 - triage
+
+- Request: Long-term fix for Tauri release full mode without embedded Next OOM
+- Source: current-workspace
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- hivemind-os:docs/native-app.md
+  - Decision: selected
+  - Reason: documents existing static UI plus embedded fallback release architecture
+- hivemind-os:src-tauri/src/lib.rs
+  - Decision: selected
+  - Reason: existing native bridge and packaged Next fallback launcher
+- skdrh/tauri-localhost-loader
+  - Decision: rejected
+  - Reason: directionally relevant localhost loader but too small and older Tauri config; no code needed beyond existing repo patterns
+## 2026-06-12T16:34:35.385227+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:docs/native-app.md => docs/native-app.md, hivemind-os:src-tauri/src/lib.rs => .github/workflows/tauri-cross-platform-release.yml, hivemind-os:scripts/tauri-build.mjs => scripts/test-tauri-release-mode.mjs
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-12T16:34:56.284921+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:docs/native-app.md => docs/native-app.md, hivemind-os:src-tauri/src/lib.rs => .github/workflows/tauri-cross-platform-release.yml, hivemind-os:src-tauri/tauri.conf.json => scripts/test-tauri-release-mode.mjs, hivemind-os:package.json => package.json
+- Verification: Wrote ASSIMILATION.json with 4 entries and custom_code_assessment=balanced.

@@ -37,13 +37,15 @@ Phase 2 keeps the browser and native app on the same Next.js codebase. The brows
 
 ## Phase 3
 
-Packaged native builds now default to a static Tauri UI:
+Packaged native builds use a static Tauri UI plus native/sidecar backend bridges:
 
 ```bash
 pnpm tauri:prepare
 ```
 
 The prepare step exports the shared dashboard React app into `src-tauri/static`, prunes bulky browser-only icon/source assets, keeps Lottie animation assets, and does not bundle the standalone Next server or a Node.js runtime. In release builds, the Rust shell loads the static webview directly and reports `phase-3-static` from `desktop_status`.
+
+This is the supported full packaged desktop mode. Feature code that needs local files, fleet state, shared-brain data, schedules, runtime files, setup actions, AEON workspace data, deliverables, or usage telemetry must go through a Tauri native command or a bundled sidecar service instead of assuming a relative `/api/...` Next route exists inside the packaged app. A feature is desktop-release-ready only when its local backend dependency has native bridge coverage or a sidecar route; that native bridge coverage gate keeps the static app full-capability without making release CI compile the entire Next API server graph.
 
 Opening the packaged app does not auto-run `setup.sh` or `install.sh`. The first-run setup wizard checks local capabilities from native code, asks the user how to install the hive, detects agent runtimes, lets skills and memory imports be selected independently, then opens an explicit Terminal command only after the user approves it. That terminal setup path runs `setup.sh --interactive ...`, so it can prompt for GitLawb Code Proof CLI and DID preparation. It does not silently start a full GitLawb node or install Docker/Postgres.
 
@@ -54,6 +56,8 @@ HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 pnpm tauri:prepare
 ```
 
 That fallback builds a standalone Next.js server into `src-tauri/resources/hivemindos-next` and copies the active local Node.js runtime into `src-tauri/resources/hivemindos-node`. In release builds the Rust shell detects those resources, starts the bundled server on an ephemeral `127.0.0.1` port, then navigates the native window to it.
+
+Release builds must not enable `HIVEMINDOS_TAURI_EMBEDDED_NEXT`. The standalone fallback makes `next build --webpack` trace every App Router API route and its transitive server dependencies; on standard GitHub runners this path exhausts the Node/V8 heap or times out during output-file tracing. Use `pnpm test:tauri-release-mode` to guard that the cross-platform release workflow stays on static UI plus native/sidecar backend bridges.
 
 The generated `src-tauri/resources` contents are ignored by git and rebuilt for each package. Keep new feature code shared by putting platform differences behind small adapters instead of forking browser and desktop views.
 

@@ -1,41 +1,34 @@
 {
-  "created_at": "2026-06-11T01:24:49.028708+00:00",
+  "created_at": "2026-06-12T16:34:56.245661+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
       "source_repo": "hivemind-os",
-      "source_path": "src/lib/config/bee-worker-presets.ts",
-      "target_path": "src/lib/config/bee-worker-presets.ts",
-      "reuse_type": "adapted_code",
-      "note": "extended existing bee worker matrix with canonical soulTemplate data"
+      "source_path": "docs/native-app.md",
+      "target_path": "docs/native-app.md",
+      "reuse_type": "config_adapted",
+      "note": "formalized existing static UI plus native bridge release mode"
     },
     {
       "source_repo": "hivemind-os",
-      "source_path": "scripts/agent-telemetry-collector.mjs",
-      "target_path": "scripts/agent-telemetry-collector.mjs",
-      "reuse_type": "adapted_code",
-      "note": "adapted existing Hermes profile writer to preserve and import SOUL.md"
+      "source_path": "src-tauri/src/lib.rs",
+      "target_path": ".github/workflows/tauri-cross-platform-release.yml",
+      "reuse_type": "config_adapted",
+      "note": "kept release workflow aligned with existing native bridge/static packaged architecture"
     },
     {
       "source_repo": "hivemind-os",
-      "source_path": "src/features/dashboard/hooks/use-agent-settings-controller.tsx",
-      "target_path": "src/features/dashboard/hooks/use-agent-settings-controller.tsx",
-      "reuse_type": "adapted_code",
-      "note": "adapted class selection to preserve existing identity prompts"
+      "source_path": "src-tauri/tauri.conf.json",
+      "target_path": "scripts/test-tauri-release-mode.mjs",
+      "reuse_type": "config_adapted",
+      "note": "guarded static frontendDist and prepare command as release contract"
     },
     {
       "source_repo": "hivemind-os",
-      "source_path": "src/lib/config/bee-worker-souls.json",
-      "target_path": "src/lib/config/bee-worker-souls.json",
-      "reuse_type": "adapted_code",
-      "note": "new project-specific compact bee SOUL template data"
-    },
-    {
-      "source_repo": "hivemind-os",
-      "source_path": "scripts/test-bee-worker-souls.mjs",
-      "target_path": "scripts/test-bee-worker-souls.mjs",
-      "reuse_type": "test_adapted",
-      "note": "focused template and preservation regression check"
+      "source_path": "package.json",
+      "target_path": "package.json",
+      "reuse_type": "config_adapted",
+      "note": "added release-mode guard beside existing focused test scripts"
     }
   ]
 }

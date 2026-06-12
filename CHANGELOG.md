@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-12 23:32:03 +0700 - Make Desktop Release Builds Use Native Full Mode Instead Of Embedded Next
+
+- Status: Pushed
+- Areas changed: Tauri release workflow (`.github/workflows/tauri-cross-platform-release.yml`), native app docs (`docs/native-app.md`), release-mode guard (`scripts/test-tauri-release-mode.mjs`, `package.json`), optimization notes (`OPTIMIZATIONS.md`)
+- Summary: Cross-platform desktop releases now use the supported packaged mode on every platform: static Tauri UI plus native/sidecar backend bridges. The old embedded Next standalone fallback remains available for local debugging, but release CI no longer enables it on macOS/Linux, avoiding the `next build --webpack` API-route tracing path that exhausted Node heap or timed out during the failed `v0.2.1` run. A new guard test prevents the release workflow from quietly reintroducing the embedded fallback and documents the native bridge coverage gate for desktop features.
+- Verification: `pnpm test:tauri-release-mode`; `node --check scripts/test-tauri-release-mode.mjs`; `python3 /Users/liam/.codex/skills/hive-assimilate/scripts/verify_assimilation_manifest.py`; `git diff --check -- .github/workflows/tauri-cross-platform-release.yml docs/native-app.md scripts/test-tauri-release-mode.mjs package.json OPTIMIZATIONS.md CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl ASSIMILATION.json`. Full `pnpm tauri:prepare` was not run in this shared dirty worktree because unrelated in-progress API/UI edits could affect the static build.
+- Intended commit message: `Use native bridge mode for Tauri release builds`
+
 ## 2026-06-12 22:00:29 +0700 - Prepare v0.2.1 Desktop Release Build
 
 - Status: Pushed

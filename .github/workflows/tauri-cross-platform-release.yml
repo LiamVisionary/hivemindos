@@ -58,11 +58,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Native Apple Silicon (arm64). NOTE: free macos-14 runners have only
-          # ~7 GB RAM, and the embedded Next build needs a ~6-8 GB Node heap
-          # (TAURI_NEXT_BUILD_HEAP_MB), so it may OOM here. For a reliable arm64
-          # dashboard build, use a paid macos-14-xlarge runner; fail-fast:false
-          # keeps the other legs running so the failure is fully diagnosed.
+          # Release builds use the static Tauri UI plus native/sidecar backend
+          # bridges. Do not set HIVEMINDOS_TAURI_EMBEDDED_NEXT here: the old
+          # embedded Next standalone fallback traces every API route and OOMs on
+          # standard CI runners.
           - label: macOS Apple Silicon
             artifact_key: macos-arm64
             os: macos-14
@@ -174,11 +173,9 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Build the full embedded Next server (all API routes -> a working
-          # dashboard) instead of the static export, which strips API routes.
-          HIVEMINDOS_TAURI_EMBEDDED_NEXT: ${{ runner.os != 'Windows' && '1' || '' }}
-          # Standard macOS runners need more time for embedded Next build traces
-          # and signed/notarized packaging.
+          # Keep enough time for static UI generation plus signed/notarized
+          # packaging. The OOM-prone embedded Next fallback is intentionally not
+          # part of the cross-platform release path.
           TAURI_NEXT_BUILD_TIMEOUT_SECONDS: ${{ runner.os == 'macOS' && '3600' || '1800' }}
         run: pnpm tauri:build
 
