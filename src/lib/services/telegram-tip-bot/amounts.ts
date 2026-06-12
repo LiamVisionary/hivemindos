@@ -4,9 +4,16 @@
 // import it directly under node --test.
 
 export function parseTokenAmount(input: string, decimals: number): bigint {
-  const text = input.trim().replace(/,/g, "");
+  const trimmed = input.trim();
+  // Commas are accepted only as proper thousands grouping (1,000 or
+  // 12,345.67). A bare "1,5" is ambiguous — in many locales it means 1.5 —
+  // so reject it rather than silently reading it as 15.
+  if (trimmed.includes(",") && !/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(trimmed)) {
+    throw new Error(`"${trimmed}" is ambiguous. Use 1,000 style commas or a plain number like 1000 or 2.5.`);
+  }
+  const text = trimmed.replace(/,/g, "");
   if (!/^\d+(\.\d+)?$/.test(text)) {
-    throw new Error(`"${input.trim()}" is not a valid amount. Use a plain number like 10 or 2.5.`);
+    throw new Error(`"${trimmed}" is not a valid amount. Use a plain number like 10 or 2.5.`);
   }
   const [whole, fraction = ""] = text.split(".");
   if (fraction.length > decimals) {

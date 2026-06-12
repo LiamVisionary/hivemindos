@@ -41,6 +41,11 @@ test("parseTokenAmount handles decimals and rejects junk", () => {
   assert.equal(parseTokenAmount("10", 18), 10n * 10n ** 18n);
   assert.equal(parseTokenAmount("2.5", 18), 25n * 10n ** 17n);
   assert.equal(parseTokenAmount("1", 0), 1n);
+  assert.equal(parseTokenAmount("1,000", 18), 1000n * 10n ** 18n);
+  assert.equal(parseTokenAmount("12,345.67", 18), parseTokenAmount("12345.67", 18));
+  assert.throws(() => parseTokenAmount("1,5", 18), /ambiguous/);
+  assert.throws(() => parseTokenAmount("1,00", 18), /ambiguous/);
+  assert.throws(() => parseTokenAmount("12,34,567", 18), /ambiguous/);
   assert.throws(() => parseTokenAmount("0", 18), /greater than zero/);
   assert.throws(() => parseTokenAmount("-5", 18), /not a valid amount/);
   assert.throws(() => parseTokenAmount("1.5", 0), /decimal places/);
