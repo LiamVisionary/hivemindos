@@ -1,4 +1,4 @@
-param(
+﻿param(
   [switch]$NonInteractive,
   [switch]$SkipDeps,
   [switch]$SkipBuild,

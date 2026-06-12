@@ -1,4 +1,4 @@
-param(
+﻿param(
   [switch]$Yes,
   [switch]$NonInteractive,
   [int]$Port = 0
