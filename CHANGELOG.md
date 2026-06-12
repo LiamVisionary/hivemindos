@@ -3,6 +3,14 @@
 This file records user-visible changes before they are committed. New work should
 be added here first, then marked `Committed` or `Pushed` after the git action.
 
+## 2026-06-13 00:55:00 +0700 - Make Packaged Desktop First Launch Consent-First
+
+- Status: Pushed
+- Areas changed: packaged desktop startup (`src/lib/native/dashboard-bootstrap.ts`, `src-tauri/src/lib.rs`), native setup status (`src-tauri/src/setup.rs`), first-run setup wizard (`src/features/native/NativeFirstRunOnboarding.tsx`), native env/vault-backed helpers (`src-tauri/src/env.rs`, `src/lib/native/hive-env.ts`, `src/lib/native/phone.ts`, `src/lib/native/scheduler.ts`), regression guard (`scripts/test-native-first-launch-privacy.mjs`, `package.json`)
+- Summary: The packaged desktop app no longer probes the user's Documents-backed vault paths during first launch or broad dashboard bootstrap before the setup wizard has explained local file access. The native setup status check now avoids `~/Documents`, stale pre-consent setup dismissals are invalidated with a new first-run key, and native dashboard bootstrap returns only safe app status until user-approved setup grants private filesystem access. Bootstrap calls also time out instead of leaving the Fleet view stuck behind a perpetual discovery skeleton if a native worker hangs.
+- Verification: `pnpm test:native-first-launch-privacy`; `pnpm exec eslint src/lib/native/dashboard-bootstrap.ts src/lib/native/hive-env.ts src/features/native/NativeFirstRunOnboarding.tsx src/lib/native/phone.ts src/lib/native/scheduler.ts src/features/dashboard/DashboardApp.tsx scripts/test-native-first-launch-privacy.mjs --max-warnings=999` (warnings only in the existing large dashboard file); `pnpm exec tsc --noEmit --pretty false`; `cd src-tauri && cargo test --lib setup::`; `git diff --check -- CHANGELOG.md package.json src-tauri/src/lib.rs src-tauri/src/setup.rs src-tauri/src/env.rs src/features/dashboard/DashboardApp.tsx src/features/native/NativeFirstRunOnboarding.tsx src/lib/native/dashboard-bootstrap.ts src/lib/native/hive-env.ts src/lib/native/phone.ts src/lib/native/scheduler.ts scripts/test-native-first-launch-privacy.mjs`.
+- Intended commit message: `Make packaged desktop first launch consent-first`
+
 ## 2026-06-13 00:35:45 +0700 - Clean Up Desktop Release Download Names
 
 - Status: Pushed

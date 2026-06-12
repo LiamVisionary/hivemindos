@@ -4,6 +4,9 @@ import type { MemoryTelemetryPayload } from "@/lib/types/memory-telemetry";
 import type { RuntimeUsageAnalytics } from "@/lib/services/runtime-usage-analytics";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 
+const NATIVE_PRIVATE_FILESYSTEM_CONSENT_KEY = "hivemindos.nativePrivateFilesystemConsent.v1";
+const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 2_500;
+
 type NativeDesktopStatus = AppVersion & {
   ok?: boolean;
   runtime?: string;
@@ -78,13 +81,48 @@ export type NativeDashboardBootstrap = {
   error?: string;
 };
 
-let cachedBootstrap: { loadedAt: number; payload: NativeDashboardBootstrap } | null = null;
-let inFlightBootstrap: Promise<NativeDashboardBootstrap | null> | null = null;
+let cachedBootstrap: {
+  allowPrivateFilesystem: boolean;
+  loadedAt: number;
+  payload: NativeDashboardBootstrap;
+} | null = null;
+let inFlightBootstrap: {
+  allowPrivateFilesystem: boolean;
+  promise: Promise<NativeDashboardBootstrap | null>;
+} | null = null;
+
+export function grantNativePrivateFilesystemAccess() {
+  try {
+    window.localStorage.setItem(NATIVE_PRIVATE_FILESYSTEM_CONSENT_KEY, "1");
+  } catch {
+    // The native backend remains consent-gated when browser storage is unavailable.
+  }
+}
+
+export function nativePrivateFilesystemAccessGranted() {
+  try {
+    return window.localStorage.getItem(NATIVE_PRIVATE_FILESYSTEM_CONSENT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timeoutId = setTimeout(() => resolve(null), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
 
 export async function readNativeDashboardBootstrap(input: {
   maxAgeMs?: number;
   cacheTtlMs?: number;
   force?: boolean;
+  timeoutMs?: number;
+  allowPrivateFilesystem?: boolean;
   vaultPath?: string;
   kanbanFolder?: string;
   kanbanBoard?: string;
@@ -93,29 +131,41 @@ export async function readNativeDashboardBootstrap(input: {
   if (!isTauriDesktopRuntime()) return null;
   const now = Date.now();
   const cacheTtlMs = input.cacheTtlMs ?? 5_000;
-  if (!input.force && cachedBootstrap && now - cachedBootstrap.loadedAt <= cacheTtlMs) {
+  const allowPrivateFilesystem = input.allowPrivateFilesystem === true && nativePrivateFilesystemAccessGranted();
+  if (
+    !input.force
+    && cachedBootstrap
+    && cachedBootstrap.allowPrivateFilesystem === allowPrivateFilesystem
+    && now - cachedBootstrap.loadedAt <= cacheTtlMs
+  ) {
     return cachedBootstrap.payload;
   }
-  if (!input.force && inFlightBootstrap) return inFlightBootstrap;
+  if (!input.force && inFlightBootstrap?.allowPrivateFilesystem === allowPrivateFilesystem) {
+    return inFlightBootstrap.promise;
+  }
 
-  inFlightBootstrap = (async () => {
+  let promise: Promise<NativeDashboardBootstrap | null> | null = null;
+  promise = (async () => {
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      const payload = await invoke<NativeDashboardBootstrap>("dashboard_bootstrap", {
+      const payload = await withTimeout(invoke<NativeDashboardBootstrap>("dashboard_bootstrap", {
         maxAgeMs: input.maxAgeMs,
+        allowPrivateFilesystem,
         vaultPath: input.vaultPath,
         kanbanFolder: input.kanbanFolder,
         kanbanBoard: input.kanbanBoard,
         scheduledFolder: input.scheduledFolder,
-      });
-      cachedBootstrap = { loadedAt: Date.now(), payload };
+      }), input.timeoutMs ?? DEFAULT_BOOTSTRAP_TIMEOUT_MS);
+      if (!payload) return null;
+      cachedBootstrap = { allowPrivateFilesystem, loadedAt: Date.now(), payload };
       return payload;
     } catch {
       return null;
     } finally {
-      inFlightBootstrap = null;
+      if (inFlightBootstrap?.promise === promise) inFlightBootstrap = null;
     }
   })();
+  inFlightBootstrap = { allowPrivateFilesystem, promise };
 
-  return inFlightBootstrap;
+  return promise;
 }

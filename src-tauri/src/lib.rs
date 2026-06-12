@@ -685,6 +685,7 @@ fn join_scoped_payload(handle: std::thread::ScopedJoinHandle<'_, Value>) -> Valu
 fn dashboard_bootstrap(
     state: tauri::State<NativeServerState>,
     max_age_ms: Option<u64>,
+    allow_private_filesystem: Option<bool>,
     vault_path: Option<String>,
     kanban_folder: Option<String>,
     kanban_board: Option<String>,
@@ -701,10 +702,20 @@ fn dashboard_bootstrap(
     let runtime_usage_key = cache_key("runtime-usage", &[]);
     let scheduler_key = cache_key("scheduler", &[vault_path.as_deref(), scheduled_folder.as_deref()]);
     let desktop_status = desktop_status(state.clone());
+    let allow_private_filesystem = allow_private_filesystem.unwrap_or(false);
+
+    if !allow_private_filesystem {
+        return serde_json::json!({
+            "ok": true,
+            "checkedAt": chrono::Utc::now().to_rfc3339(),
+            "desktopStatus": desktop_status,
+            "appVersion": desktop_status,
+        });
+    }
 
     std::thread::scope(|scope| {
         let state_ref = &state;
-        let hive_env = scope.spawn(move || cached_payload(state_ref, hive_key, || native_payload(env::hive_env_read())));
+        let hive_env = scope.spawn(move || cached_payload(state_ref, hive_key, || native_payload(env::hive_env_read(Some(true)))));
         let fleet_apps = scope.spawn(move || cached_payload(state_ref, fleet_key, || native_payload(fleet::fleet_apps_cache(max_age_ms))));
         let tailscale_devices = scope.spawn(move || cached_payload(state_ref, tailscale_key, || native_payload(fleet::tailscale_devices())));
         let kanban_read = {

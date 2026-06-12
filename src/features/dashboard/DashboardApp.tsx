@@ -1599,6 +1599,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     try {
       const nativeBootstrap = await readNativeDashboardBootstrap({
         maxAgeMs: 5 * 60 * 1000,
+        allowPrivateFilesystem: true,
         vaultPath: sharedVault.enabled ? sharedVault.vaultPath : undefined,
         kanbanFolder: sharedVault.enabled ? sharedVault.kanbanFolder : undefined,
         kanbanBoard: kanbanBoardSlug,
@@ -3851,6 +3852,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     void readNativeDashboardBootstrap({
       maxAgeMs: 5 * 60 * 1000,
       force: true,
+      allowPrivateFilesystem: true,
       vaultPath: sharedVault.enabled ? sharedVault.vaultPath : undefined,
       kanbanFolder: sharedVault.enabled ? sharedVault.kanbanFolder : undefined,
       kanbanBoard: kanbanBoardSlug,

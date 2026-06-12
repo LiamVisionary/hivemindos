@@ -9,9 +9,11 @@ import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
 import { NATIVE_SETUP_DEMO_ENABLED, NATIVE_SETUP_RERUN_EVENT, openFullDiskAccessSettings, readNativeSetupStatus, revealGatewayForFullDiskAccess, runNativeSetup, type NativeDetectedAgentRuntime, type NativeSetupStatus } from "@/lib/native/setup";
 import { runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode } from "@/lib/config/runtime-icons";
+import { grantNativePrivateFilesystemAccess } from "@/lib/native/dashboard-bootstrap";
 import { dashboardStateValue, loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 
-const DISMISS_KEY = "hivemindos.nativeFirstRun.dismissed.v2";
+const DISMISS_KEY = "hivemindos.nativeFirstRun.dismissed.v3";
+const LEGACY_DISMISS_KEY = "hivemindos.nativeFirstRun.dismissed.v2";
 const DISMISS_FALLBACK_KEY = `${DISMISS_KEY}.localFallback`;
 
 type InstallMode = "local" | "link" | "system-tailscale";
@@ -160,12 +162,16 @@ export function NativeFirstRunOnboarding() {
         return;
       }
       if (!isTauriDesktopRuntime()) return;
+      void refreshStatus();
+      const locallyDismissed = readLocalDismissal();
+      setOpen(!locallyDismissed);
       void loadDashboardStateSnapshot().then((snapshot) => {
         const dismissedInDashboardState = dashboardStateValue(snapshot, DISMISS_KEY) === "1";
-        const dismissed = dismissedInDashboardState || readLocalDismissal();
+        const legacyDismissed = dashboardStateValue(snapshot, LEGACY_DISMISS_KEY) === "1";
+        const dismissed = dismissedInDashboardState || locallyDismissed;
+        if (legacyDismissed && !dismissed) void removeDashboardStateValue(LEGACY_DISMISS_KEY);
         setOpen(!dismissed);
         if (dismissed && !dismissedInDashboardState) void saveDashboardStateValue(DISMISS_KEY, "1");
-        void refreshStatus();
       });
     }, 0);
     return () => window.clearTimeout(handle);
@@ -264,7 +270,10 @@ export function NativeFirstRunOnboarding() {
       force: false,
     }, { demoMode });
     setRunning(false);
-    if (result?.ok) void persistDismissal();
+    if (result?.ok) {
+      grantNativePrivateFilesystemAccess();
+      void persistDismissal();
+    }
     setRunStatus(result?.ok ? "Setup has started. Follow any permission prompts that appear." : result?.error ?? "Could not start setup.");
     return Boolean(result?.ok);
   }

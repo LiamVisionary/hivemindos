@@ -183,10 +183,6 @@ fn open_local_collector_port() -> Option<u16> {
         .find(|port| tcp_port_open(*port))
 }
 
-fn default_vault_path() -> Option<PathBuf> {
-    home_dir().map(|home| home.join("Documents/Obsidian/hivemindos-vault"))
-}
-
 fn runtime_home(agent: &str) -> Option<PathBuf> {
     home_dir().map(|home| match agent {
         "codex" => home.join(".codex"),
@@ -362,10 +358,6 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
         .as_ref()
         .map(|dir| dir.join(platform.script_name()))
         .filter(|path| path.exists());
-    let vault_path = default_vault_path();
-    let vault_exists = vault_path
-        .as_ref()
-        .is_some_and(|path| path.exists() && path.is_dir());
     let package_manager_installed = command_exists(platform.pick("brew", "winget"));
     let pnpm_installed = command_exists("pnpm") || command_exists("corepack");
     let tailscale_installed = command_exists("tailscale") || mac_app_exists("Tailscale");
@@ -396,17 +388,8 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
             SetupCheck {
                 id: "vault",
                 label: "Local brain vault",
-                installed: vault_exists,
-                detail: vault_path
-                    .as_ref()
-                    .map(|path| {
-                        if vault_exists {
-                            format!("Found {}", path.display())
-                        } else {
-                            format!("Not found at {}", path.display())
-                        }
-                    })
-                    .unwrap_or_else(|| "No home directory was detected.".to_string()),
+                installed: false,
+                detail: "Checked during setup after you approve local file access.".to_string(),
                 install_command: None,
                 optional: false,
             },
