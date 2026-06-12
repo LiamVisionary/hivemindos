@@ -50,10 +50,12 @@ to migrate from.
 ## How money moves
 
 - **Deposits:** send HIVE on Base from a **linked** wallet to the treasury.
-  The indexer scans `Transfer` logs up to the **finalized** block (no reorg
-  credit) and credits idempotently on `txHash:logIndex`. Transfers from
-  unlinked wallets are not credited automatically (they show up as treasury
-  surplus in `/botstats`).
+  The indexer scans `Transfer` logs up to head minus
+  `TELEGRAM_TIP_BOT_CONFIRMATIONS` blocks (default 15 ≈ 30s on Base — full
+  finality lags 15-25 min, which is unusable deposit UX; raise the knob if
+  you ever take deposits big enough to care about deep reorgs) and credits
+  idempotently on `txHash:logIndex`. Transfers from unlinked wallets are not
+  credited automatically (they show up as treasury surplus in `/botstats`).
 - **Tips:** atomic ledger debit/credit, raw bigint strings, never floats.
 - **Claim links:** tipping an unknown `@name` escrows the amount and posts a
   `t.me/<bot>?start=claim_…` button. Unclaimed tips auto-refund after

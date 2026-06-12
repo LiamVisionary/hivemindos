@@ -25,6 +25,7 @@ export type TipBotConfig = {
   botUsername: string;
   adminIds: Set<string>;
   claimTtlHours: number;
+  depositConfirmations: number;
   maxWithdrawalRaw: bigint | null;
   reviewThresholdRaw: bigint | null;
   withdrawalProvider: "treasury" | "bankr";
@@ -221,7 +222,7 @@ async function handleDeposit(runtime: TipBotRuntime, message: TgMessage, reply: 
       `Linked wallets:\n${user.linkedWallets.map((wallet) => `• <code>${wallet}</code>`).join("\n")}`,
       "",
       `⚠️ Only ${runtime.config.token.symbol} on Base, only from a linked wallet — anything else can't be credited automatically.`,
-      "I'll DM you once the deposit is finalized on-chain (usually a few minutes).",
+      "I'll DM you once the deposit is confirmed — usually under a minute.",
     ].join("\n"),
   );
 }

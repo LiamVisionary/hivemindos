@@ -10,14 +10,15 @@ import {
   type TipBotConfig,
   type TipBotRuntime,
 } from "./commands";
-import { ensureTreasuryWallet, getFinalizedBlockNumber, getHiveTokenMeta, scanHiveDeposits, sendHiveFromTreasury } from "./hive-chain";
+import { ensureTreasuryWallet, getHiveTokenMeta, getSafeDepositBlockNumber, scanHiveDeposits, sendHiveFromTreasury } from "./hive-chain";
 import { applyDepositCredit, claimNextWithdrawal, expireClaims, resolveWithdrawal } from "./ledger";
 import { mutateTipBotState, newLedgerEntryId, readTipBotState } from "./store";
 import { TelegramBotApi } from "./telegram-api";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 
 const POLL_TIMEOUT_SEC = 25;
-const DEPOSIT_SCAN_INTERVAL_MS = 30_000;
+const DEPOSIT_SCAN_INTERVAL_MS = 15_000;
+const DEFAULT_DEPOSIT_CONFIRMATIONS = 15; // ~30s on Base's 2s blocks
 const WITHDRAWAL_INTERVAL_MS = 15_000;
 const CLAIM_SWEEP_INTERVAL_MS = 10 * 60_000;
 const MAX_WITHDRAWAL_ATTEMPTS = 3;
@@ -85,10 +86,12 @@ async function buildConfig(api: TelegramBotApi, botUsername: string): Promise<Ti
       .filter((id) => /^\d+$/.test(id)),
   );
   const claimTtlHours = Number(await tipBotEnv("CLAIM_TTL_HOURS"));
+  const confirmations = Number(await tipBotEnv("CONFIRMATIONS"));
   return {
     botUsername,
     adminIds,
     claimTtlHours: claimTtlHours > 0 ? claimTtlHours : 168,
+    depositConfirmations: confirmations > 0 ? confirmations : DEFAULT_DEPOSIT_CONFIRMATIONS,
     maxWithdrawalRaw: await envRawAmount("MAX_WITHDRAWAL", tokenMeta.decimals),
     reviewThresholdRaw: await envRawAmount("REVIEW_THRESHOLD", tokenMeta.decimals),
     withdrawalProvider,
@@ -119,19 +122,19 @@ async function depositLoop(runner: TipBotRunner, runtime: TipBotRuntime) {
   while (!runner.stopRequested) {
     try {
       const state = await readTipBotState();
-      const finalized = await getFinalizedBlockNumber();
+      const safeBlock = await getSafeDepositBlockNumber(runtime.config.depositConfirmations);
       if (!state.settings.lastScannedBlock) {
         // First boot: start watching from now rather than replaying history.
         await mutateTipBotState((draft) => {
-          draft.settings.lastScannedBlock = finalized.toString();
+          draft.settings.lastScannedBlock = safeBlock.toString();
         });
       } else {
         const fromBlock = BigInt(state.settings.lastScannedBlock) + 1n;
-        if (fromBlock <= finalized) {
+        if (fromBlock <= safeBlock) {
           const logs = await scanHiveDeposits({
             treasuryAddress: runtime.config.treasuryAddress,
             fromBlock,
-            toBlock: finalized,
+            toBlock: safeBlock,
           });
           const credited = await mutateTipBotState((draft) => {
             const walletOwners = new Map<string, string>();
@@ -154,7 +157,7 @@ async function depositLoop(runner: TipBotRunner, runtime: TipBotRuntime) {
               });
               if (deposit) creditedDeposits.push({ userId, amountRaw: deposit.amountRaw, txHash: deposit.txHash });
             }
-            draft.settings.lastScannedBlock = finalized.toString();
+            draft.settings.lastScannedBlock = safeBlock.toString();
             return creditedDeposits;
           });
           for (const deposit of credited) {

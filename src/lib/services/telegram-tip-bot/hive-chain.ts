@@ -135,9 +135,14 @@ export async function sendHiveFromTreasury(toAddress: string, amountRaw: bigint)
   return { txHash };
 }
 
-export async function getFinalizedBlockNumber(): Promise<bigint> {
-  const block = await publicClient().getBlock({ blockTag: "finalized" });
-  return block.number;
+// Deposits credit at head minus a confirmation depth rather than the
+// "finalized" tag: finality lags Base's head by 15-25 minutes, which is
+// useless deposit UX. Base runs a single sequencer with 2s blocks, so a
+// small depth (default 15 ≈ 30s) is plenty for tip-sized amounts.
+export async function getSafeDepositBlockNumber(confirmations: number): Promise<bigint> {
+  const head = await publicClient().getBlockNumber();
+  const depth = BigInt(Math.max(1, Math.floor(confirmations)));
+  return head > depth ? head - depth : 0n;
 }
 
 export async function scanHiveDeposits(params: {
