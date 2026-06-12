@@ -130,3 +130,11 @@ jobs:
           if (-not $healthy) {
             throw "dashboard did not serve a healthy response on port 5020"
           }
+
+      # Fresh Windows machines only have Windows PowerShell 5.1; this enters
+      # the script the way a first run would and must re-exec itself into pwsh.
+      - name: Re-run setup through Windows PowerShell 5.1 (re-exec guard)
+        shell: powershell
+        run: |
+          .\setup.ps1 -NonInteractive -SkipDeps -SkipBuild -SkipDashboard
+          if ($LASTEXITCODE -ne 0) { throw "PowerShell 5.1 entry failed with exit code $LASTEXITCODE" }

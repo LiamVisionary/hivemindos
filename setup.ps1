@@ -9,6 +9,37 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Fresh Windows ships Windows PowerShell 5.1 only, but this script needs
+# PowerShell 7 (ConvertFrom-Json -AsHashtable and friends). Re-exec under
+# pwsh, installing it first when winget is available.
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+  $pwshCommand = Get-Command pwsh -ErrorAction SilentlyContinue
+  if (-not $pwshCommand -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+    Write-Host "Installing PowerShell 7 (required by HivemindOS setup)" -ForegroundColor Cyan
+    winget install --id Microsoft.PowerShell --exact --accept-package-agreements --accept-source-agreements
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$machinePath;$userPath"
+    $pwshCommand = Get-Command pwsh -ErrorAction SilentlyContinue
+  }
+  if (-not $pwshCommand) {
+    Write-Host "PowerShell 7 is required. Install it first: winget install --id Microsoft.PowerShell" -ForegroundColor Red
+    exit 1
+  }
+  $forwarded = @()
+  foreach ($entry in $PSBoundParameters.GetEnumerator()) {
+    if ($entry.Value -is [System.Management.Automation.SwitchParameter]) {
+      if ($entry.Value.IsPresent) { $forwarded += "-$($entry.Key)" }
+    } else {
+      $forwarded += "-$($entry.Key)"
+      $forwarded += "$($entry.Value)"
+    }
+  }
+  & $pwshCommand.Source -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path @forwarded
+  exit $LASTEXITCODE
+}
+
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 $Missing = New-Object System.Collections.Generic.List[string]

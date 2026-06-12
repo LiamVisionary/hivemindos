@@ -5,6 +5,28 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Mirror of the setup.ps1 guard: this script needs PowerShell 7
+# (ConvertFrom-Json -AsHashtable), so re-exec under pwsh from 5.1.
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+  $pwshCommand = Get-Command pwsh -ErrorAction SilentlyContinue
+  if (-not $pwshCommand) {
+    Write-Host "PowerShell 7 is required. Install it first: winget install --id Microsoft.PowerShell" -ForegroundColor Red
+    exit 1
+  }
+  $forwarded = @()
+  foreach ($entry in $PSBoundParameters.GetEnumerator()) {
+    if ($entry.Value -is [System.Management.Automation.SwitchParameter]) {
+      if ($entry.Value.IsPresent) { $forwarded += "-$($entry.Key)" }
+    } else {
+      $forwarded += "-$($entry.Key)"
+      $forwarded += "$($entry.Value)"
+    }
+  }
+  & $pwshCommand.Source -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path @forwarded
+  exit $LASTEXITCODE
+}
+
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 if ($Port -eq 0) { $Port = if ($env:PORT) { [int]$env:PORT } else { 5020 } }

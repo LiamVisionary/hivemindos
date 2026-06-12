@@ -59,6 +59,49 @@ struct NativeSetupRunResult {
     mode: String,
 }
 
+/// Platform matrix for the native setup flow: which setup script runs, how
+/// the generated launcher is written, and which package manager installs
+/// optional tools. Kept as a value (not cfg-gated code paths) so both
+/// variants stay unit-testable from any host OS.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum SetupPlatform {
+    Unix,
+    Windows,
+}
+
+impl SetupPlatform {
+    fn current() -> Self {
+        if cfg!(target_os = "windows") {
+            Self::Windows
+        } else {
+            Self::Unix
+        }
+    }
+
+    fn script_name(self) -> &'static str {
+        match self {
+            Self::Unix => "setup.sh",
+            Self::Windows => "setup.ps1",
+        }
+    }
+
+    fn launcher_extension(self) -> &'static str {
+        match self {
+            // Finder runs .command files in Terminal; Explorer/start runs .cmd
+            // files in a console window.
+            Self::Unix => "command",
+            Self::Windows => "cmd",
+        }
+    }
+
+    fn pick<T>(self, unix: T, windows: T) -> T {
+        match self {
+            Self::Unix => unix,
+            Self::Windows => windows,
+        }
+    }
+}
+
 fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
@@ -66,11 +109,14 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 fn command_exists(name: &str) -> bool {
-    Command::new("sh")
-        .args(["-lc", &format!("command -v {name} >/dev/null 2>&1")])
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    let status = if cfg!(target_os = "windows") {
+        Command::new("where").arg(name).output().map(|output| output.status)
+    } else {
+        Command::new("sh")
+            .args(["-lc", &format!("command -v {name} >/dev/null 2>&1")])
+            .status()
+    };
+    status.map(|status| status.success()).unwrap_or(false)
 }
 
 fn mac_app_exists(name: &str) -> bool {
@@ -216,37 +262,62 @@ fn setup_mode_arg(mode: &str) -> &'static str {
     }
 }
 
-fn setup_root_command() -> String {
+fn app_source_root() -> PathBuf {
+    home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".hivemindos/app-source")
+}
+
+fn setup_root_command(platform: SetupPlatform) -> String {
     if let Ok(current_dir) = std::env::current_dir() {
-        let setup_script = current_dir.join("setup.sh");
-        if setup_script.exists() {
-            return format!("cd {}", shell_quote(&current_dir.display().to_string()));
+        if current_dir.join(platform.script_name()).exists() {
+            return match platform {
+                SetupPlatform::Unix => format!("cd {}", shell_quote(&current_dir.display().to_string())),
+                SetupPlatform::Windows => format!("cd /d \"{}\"", current_dir.display()),
+            };
         }
     }
 
-    let root = home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".hivemindos/app-source");
-    format!(
-        "mkdir -p {parent} && if [ ! -d {root}/.git ]; then git clone https://github.com/LiamVisionary/hivemindos.git {root}; else git -C {root} pull --ff-only; fi && cd {root}",
-        parent = shell_quote(&root.parent().unwrap_or_else(|| Path::new(".")).display().to_string()),
-        root = shell_quote(&root.display().to_string()),
-    )
+    let root = app_source_root();
+    match platform {
+        SetupPlatform::Unix => format!(
+            "mkdir -p {parent} && if [ ! -d {root}/.git ]; then git clone https://github.com/LiamVisionary/hivemindos.git {root}; else git -C {root} pull --ff-only; fi && cd {root}",
+            parent = shell_quote(&root.parent().unwrap_or_else(|| Path::new(".")).display().to_string()),
+            root = shell_quote(&root.display().to_string()),
+        ),
+        SetupPlatform::Windows => {
+            let root = root.display();
+            format!(
+                "if not exist \"{root}\\.git\" (git clone https://github.com/LiamVisionary/hivemindos.git \"{root}\") else (git -C \"{root}\" pull --ff-only)\r\nif errorlevel 1 exit /b 1\r\ncd /d \"{root}\""
+            )
+        }
+    }
 }
 
-fn write_command_file(command: &str) -> Result<PathBuf, String> {
+fn launcher_file_content(command: &str, platform: SetupPlatform) -> String {
+    match platform {
+        SetupPlatform::Unix => format!(
+            "#!/usr/bin/env bash\nset -euo pipefail\n{command}\necho\necho 'HivemindOS setup step finished. You can close this terminal.'\nread -r -p 'Press Return to close...' _\n"
+        ),
+        SetupPlatform::Windows => format!(
+            "@echo off\r\nsetlocal\r\n{command}\r\necho.\r\necho HivemindOS setup step finished. You can close this window.\r\npause\r\n"
+        ),
+    }
+}
+
+fn write_command_file(command: &str, platform: SetupPlatform) -> Result<PathBuf, String> {
     let run_dir = home_dir()
         .ok_or_else(|| "No home directory was detected.".to_string())?
         .join(".hivemindos/setup-runs");
     fs::create_dir_all(&run_dir).map_err(|error| error.to_string())?;
-    let command_path = run_dir.join(format!("hivemindos-setup-{}.command", chrono::Utc::now().timestamp()));
+    let command_path = run_dir.join(format!(
+        "hivemindos-setup-{}.{}",
+        chrono::Utc::now().timestamp(),
+        platform.launcher_extension()
+    ));
     let mut file = fs::File::create(&command_path).map_err(|error| error.to_string())?;
-    writeln!(
-        file,
-        "#!/usr/bin/env bash\nset -euo pipefail\n{}\necho\necho 'HivemindOS setup step finished. You can close this terminal.'\nread -r -p 'Press Return to close...' _",
-        command
-    )
-    .map_err(|error| error.to_string())?;
+    file.write_all(launcher_file_content(command, platform).as_bytes())
+        .map_err(|error| error.to_string())?;
 
     #[cfg(unix)]
     {
@@ -285,16 +356,17 @@ fn open_command_file(path: &Path) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
+    let platform = SetupPlatform::current();
     let current_dir = std::env::current_dir().ok();
     let setup_script = current_dir
         .as_ref()
-        .map(|dir| dir.join("setup.sh"))
+        .map(|dir| dir.join(platform.script_name()))
         .filter(|path| path.exists());
     let vault_path = default_vault_path();
     let vault_exists = vault_path
         .as_ref()
         .is_some_and(|path| path.exists() && path.is_dir());
-    let homebrew_installed = command_exists("brew");
+    let package_manager_installed = command_exists(platform.pick("brew", "winget"));
     let pnpm_installed = command_exists("pnpm") || command_exists("corepack");
     let tailscale_installed = command_exists("tailscale") || mac_app_exists("Tailscale");
     let syncthing_installed = command_exists("syncthing");
@@ -317,7 +389,7 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
                 id: "app",
                 label: "Native app",
                 installed: true,
-                detail: "The desktop app is installed and does not auto-run setup.sh.".to_string(),
+                detail: format!("The desktop app is installed and does not auto-run {}.", platform.script_name()),
                 install_command: None,
                 optional: false,
             },
@@ -347,7 +419,7 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
                 } else {
                     "Optional editor for the shared markdown brain.".to_string()
                 },
-                install_command: Some("brew install --cask obsidian"),
+                install_command: Some(platform.pick("brew install --cask obsidian", "winget install --id Obsidian.Obsidian")),
                 optional: true,
             },
             SetupCheck {
@@ -359,7 +431,7 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
                 } else {
                     "Needed for multi-machine Fleet and private sync.".to_string()
                 },
-                install_command: Some("brew install --cask tailscale"),
+                install_command: Some(platform.pick("brew install --cask tailscale", "winget install --id Tailscale.Tailscale")),
                 optional: true,
             },
             SetupCheck {
@@ -371,9 +443,12 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
                 } else {
                     "Not running locally; local-only app features still work.".to_string()
                 },
-                install_command: setup_script
-                    .as_ref()
-                    .map(|_| "./setup.sh --local-only --skip-build"),
+                install_command: setup_script.as_ref().map(|_| {
+                    platform.pick(
+                        "./setup.sh --local-only --skip-build",
+                        "powershell -ExecutionPolicy Bypass -File .\\setup.ps1",
+                    )
+                }),
                 optional: true,
             },
             SetupCheck {
@@ -385,21 +460,25 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
                 } else {
                     "Optional realtime shared-brain folder sync.".to_string()
                 },
-                install_command: Some("brew install syncthing"),
+                install_command: Some(platform.pick("brew install syncthing", "winget install --id Syncthing.Syncthing")),
                 optional: true,
             },
             SetupCheck {
                 id: "tools",
                 label: "CLI helpers",
-                installed: homebrew_installed && pnpm_installed && gpg_installed && unison_installed,
+                installed: package_manager_installed && pnpm_installed && gpg_installed && unison_installed,
                 detail: format!(
-                    "Homebrew: {}, pnpm/corepack: {}, GPG: {}, Unison: {}",
-                    if homebrew_installed { "yes" } else { "no" },
+                    "{}: {}, pnpm/corepack: {}, GPG: {}, Unison: {}",
+                    platform.pick("Homebrew", "winget"),
+                    if package_manager_installed { "yes" } else { "no" },
                     if pnpm_installed { "yes" } else { "no" },
                     if gpg_installed { "yes" } else { "no" },
                     if unison_installed { "yes" } else { "no" },
                 ),
-                install_command: Some("brew install pnpm gnupg unison"),
+                install_command: Some(platform.pick(
+                    "brew install pnpm gnupg unison",
+                    "winget install --id pnpm.pnpm; winget install --id GnuPG.GnuPG",
+                )),
                 optional: true,
             },
         ],
@@ -407,7 +486,7 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
     .map_err(|error| error.to_string())
 }
 
-fn build_setup_invocation(request: NativeSetupRunRequest) -> (String, String) {
+fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatform) -> (String, String) {
     let mode = request.install_mode.unwrap_or_else(|| "local".to_string());
     let skill_agents = sanitize_agent_list(request.skill_agents);
     let memory_agents = sanitize_agent_list(request.memory_agents);
@@ -423,6 +502,34 @@ fn build_setup_invocation(request: NativeSetupRunRequest) -> (String, String) {
     } else {
         "none".to_string()
     };
+
+    if platform == SetupPlatform::Windows {
+        // setup.ps1 takes a smaller flag surface than setup.sh: it has no
+        // network-mode flags (it detects Tailscale itself), no collector
+        // install, and handles vault/skills seeding internally, so the mode
+        // and import selections have no Windows equivalents to forward.
+        let mut flags = Vec::new();
+        if !request.start_dashboard.unwrap_or(true) {
+            flags.push("-SkipDashboard");
+        }
+        if !request.build_dashboard.unwrap_or(false) {
+            flags.push("-SkipBuild");
+        }
+        if !request.install_deps.unwrap_or(true) {
+            flags.push("-SkipDeps");
+        }
+        if request.force.unwrap_or(false) {
+            flags.push("-Force");
+        }
+        let flags = flags.join(" ");
+        // Prefer PowerShell 7 (pwsh); fall back to the always-present Windows
+        // PowerShell, where setup.ps1 re-checks its own version requirements.
+        let command = format!(
+            "{root}\r\nwhere pwsh >nul 2>&1 && (set \"HIVE_PS=pwsh\") || (set \"HIVE_PS=powershell\")\r\n%HIVE_PS% -ExecutionPolicy Bypass -File setup.ps1 {flags}",
+            root = setup_root_command(platform),
+        );
+        return (mode, command);
+    }
 
     let mut args = vec!["--interactive".to_string(), setup_mode_arg(&mode).to_string()];
     if !request.start_dashboard.unwrap_or(true) {
@@ -450,7 +557,7 @@ fn build_setup_invocation(request: NativeSetupRunRequest) -> (String, String) {
     let quoted_args = args.iter().map(|arg| shell_quote(arg)).collect::<Vec<_>>().join(" ");
     let command = format!(
         "{root}\nHIVE_MEMORY_IMPORTS={memory_list} ./setup.sh {args}\nif [ {memory_list} != 'none' ] && [ -x ./scripts/import-agent-memory.sh ]; then ./scripts/import-agent-memory.sh --sources {memory_list}; fi",
-        root = setup_root_command(),
+        root = setup_root_command(platform),
         memory_list = shell_quote(&memory_list),
         args = quoted_args,
     );
@@ -459,8 +566,9 @@ fn build_setup_invocation(request: NativeSetupRunRequest) -> (String, String) {
 
 #[tauri::command]
 pub(crate) fn native_setup_run(request: NativeSetupRunRequest) -> Result<serde_json::Value, String> {
-    let (mode, command) = build_setup_invocation(request);
-    let command_path = write_command_file(&command)?;
+    let platform = SetupPlatform::current();
+    let (mode, command) = build_setup_invocation(request, platform);
+    let command_path = write_command_file(&command, platform)?;
     open_command_file(&command_path)?;
 
     serde_json::to_value(NativeSetupRunResult {
@@ -512,7 +620,7 @@ mod tests {
     #[test]
     fn local_mode_builds_local_only_command() {
         let request: NativeSetupRunRequest = serde_json::from_value(frontend_local_payload()).unwrap();
-        let (mode, command) = build_setup_invocation(request);
+        let (mode, command) = build_setup_invocation(request, SetupPlatform::Unix);
         assert_eq!(mode, "local");
         assert!(command.contains("./setup.sh"));
         assert!(command.contains("'--local-only'"));
@@ -525,9 +633,63 @@ mod tests {
     #[test]
     fn empty_request_defaults_to_local_mode() {
         let request: NativeSetupRunRequest = serde_json::from_value(serde_json::json!({})).unwrap();
-        let (mode, command) = build_setup_invocation(request);
+        let (mode, command) = build_setup_invocation(request, SetupPlatform::Unix);
         assert_eq!(mode, "local");
         assert!(command.contains("'--local-only'"));
+    }
+
+    #[test]
+    fn windows_command_runs_setup_ps1_with_mapped_flags() {
+        let request: NativeSetupRunRequest = serde_json::from_value(frontend_local_payload()).unwrap();
+        let (mode, command) = build_setup_invocation(request, SetupPlatform::Windows);
+        assert_eq!(mode, "local");
+        assert!(command.contains("setup.ps1"));
+        assert!(command.contains("-SkipDashboard"));
+        assert!(command.contains("-SkipBuild"));
+        assert!(command.contains("where pwsh"));
+        assert!(!command.contains("setup.sh"));
+        assert!(!command.contains("--local-only"));
+        assert!(!command.contains("-Force"));
+    }
+
+    #[test]
+    fn windows_command_maps_force_and_skip_deps() {
+        let mut payload = frontend_local_payload();
+        payload["force"] = serde_json::json!(true);
+        payload["installDeps"] = serde_json::json!(false);
+        let request: NativeSetupRunRequest = serde_json::from_value(payload).unwrap();
+        let (_, command) = build_setup_invocation(request, SetupPlatform::Windows);
+        assert!(command.contains("-Force"));
+        assert!(command.contains("-SkipDeps"));
+    }
+
+    #[test]
+    fn windows_launcher_is_a_batch_file_that_pauses() {
+        let content = launcher_file_content("echo hi", SetupPlatform::Windows);
+        assert!(content.starts_with("@echo off\r\n"));
+        assert!(content.contains("pause"));
+        let unix = launcher_file_content("echo hi", SetupPlatform::Unix);
+        assert!(unix.starts_with("#!/usr/bin/env bash\n"));
+        assert!(unix.contains("read -r -p"));
+    }
+
+    #[test]
+    fn windows_root_command_clones_when_no_local_checkout() {
+        // The repo checkout contains setup.ps1, so the generated root command
+        // pins to the current directory; both variants must target the
+        // platform's own script and shell syntax.
+        let root = setup_root_command(SetupPlatform::Windows);
+        assert!(root.contains("cd /d") || root.contains("git clone"));
+        let unix_root = setup_root_command(SetupPlatform::Unix);
+        assert!(unix_root.contains("cd ") || unix_root.contains("git clone"));
+    }
+
+    #[test]
+    fn platform_matrix_is_consistent() {
+        assert_eq!(SetupPlatform::Unix.script_name(), "setup.sh");
+        assert_eq!(SetupPlatform::Windows.script_name(), "setup.ps1");
+        assert_eq!(SetupPlatform::Unix.launcher_extension(), "command");
+        assert_eq!(SetupPlatform::Windows.launcher_extension(), "cmd");
     }
 
     #[test]
