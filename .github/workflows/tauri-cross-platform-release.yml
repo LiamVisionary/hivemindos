@@ -58,13 +58,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Release builds use the static Tauri UI plus native/sidecar backend
-          # bridges. Do not set HIVEMINDOS_TAURI_EMBEDDED_NEXT here: the old
-          # embedded Next standalone fallback traces every API route and OOMs on
-          # standard CI runners.
+          # Release builds bundle the EMBEDDED Next standalone server
+          # (HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 in the build env) so the packaged
+          # app serves all /api/* routes at runtime — the static-only UI left
+          # ~45 endpoints (machines, agents, wallets, sims, all writes) dead. The
+          # embedded `next build` traces ~155 routes; it OOM'd earlier only
+          # because the V8 heap was capped at 8 GB — TAURI_NEXT_BUILD_HEAP_MB is
+          # now 11 GB and every runner has >=14 GB (Apple Silicon uses xlarge).
           - label: macOS Apple Silicon
             artifact_key: macos-arm64
-            os: macos-14
+            os: macos-14-xlarge
             app_arch: -arm64
             bundle_glob: src-tauri/target/release/bundle/dmg/*.dmg src-tauri/target/release/bundle/macos/*.app.tar.gz src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
           - label: macOS Intel
@@ -202,10 +205,14 @@ jobs:
           # artifacts would silently strand existing installs.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
-          # Keep enough time for static UI generation plus signed/notarized
-          # packaging. The OOM-prone embedded Next fallback is intentionally not
-          # part of the cross-platform release path.
-          TAURI_NEXT_BUILD_TIMEOUT_SECONDS: ${{ runner.os == 'macOS' && '3600' || '1800' }}
+          # Bundle the embedded Next standalone server so the packaged app serves
+          # /api/* at runtime (no static-build endpoint gaps). The embedded build
+          # is heavier (155 routes): give it an 11 GB V8 heap (fits the >=14 GB
+          # runners; 8 GB OOM'd before) and more time.
+          HIVEMINDOS_TAURI_EMBEDDED_NEXT: "1"
+          TAURI_NEXT_BUILD_HEAP_MB: "11264"
+          TAURI_NEXT_BUILD_MEMORY_MB: "13000"
+          TAURI_NEXT_BUILD_TIMEOUT_SECONDS: ${{ runner.os == 'macOS' && '3600' || '2700' }}
         run: pnpm tauri:build
 
       - name: Collect bundle assets
