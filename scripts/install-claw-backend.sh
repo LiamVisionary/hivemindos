@@ -163,13 +163,11 @@ exec "$NODE_BIN" --import tsx "$WORKER_ENTRY" start
 LAUNCH
 chmod +x "$CLAW_HOME/launch-gateway.sh" "$CLAW_HOME/launch-worker.sh"
 
-# Record the binary that actually reads the filesystem (the gateway's Node
-# process) so the desktop app's "pair your phone" onboarding can point macOS
-# Full Disk Access straight at it. The gateway runs as a headless launchd agent,
-# which macOS never lets show a permission prompt — so a one-time grant against
-# this exact binary is what unblocks phone file browsing of protected folders
-# (Downloads/Desktop/Documents).
-printf '%s\n' "$NODE_BIN" > "$CLAW_HOME/gateway-fda-target.txt" 2>/dev/null || true
+# Note: no manual Full Disk Access step anymore. On macOS the desktop app runs
+# the gateway as an app-signed launchd login item (com.hivemindos.claw-gateway
+# -> Contents/MacOS/hivemind-gateway-host), so the gateway inherits the app's
+# TCC identity and macOS shows the standard one-click "Allow" folder prompts
+# attributed to HivemindOS — no binary needs to be dragged into the FDA list.
 
 # Run the voice worker only when LiveKit creds are actually present.
 VOICE_CONFIGURED=0

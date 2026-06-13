@@ -902,22 +902,6 @@ wait_for_local_collector() {
   return 1
 }
 
-maybe_allow_node_through_macos_firewall() {
-  if [[ "$(uname -s)" != "Darwin" || ! -x /usr/libexec/ApplicationFirewall/socketfilterfw ]]; then
-    return
-  fi
-  if ! prompt_yes_no "Allow this collector's Node binary through the macOS firewall for Tailnet dashboards?" "yes"; then
-    echo "Skipping macOS firewall allow-list. If another dashboard cannot reach this collector, allow incoming connections for: $NODE_BIN" >&2
-    return
-  fi
-  if command -v sudo >/dev/null 2>&1; then
-    sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add "$NODE_BIN" >/dev/null 2>&1 || true
-    sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$NODE_BIN" >/dev/null 2>&1 || true
-    echo "Allowed Node collector binary through macOS firewall: $NODE_BIN"
-  else
-    echo "sudo is unavailable; allow incoming connections for this Node binary manually: $NODE_BIN" >&2
-  fi
-}
 
 maybe_disable_tailscale_shields_up() {
   if ! tailscale_status_connected; then
@@ -1171,7 +1155,6 @@ PLIST
     start_hivemind_link_service
   else
     echo "HivemindOS collector installed."
-    maybe_allow_node_through_macos_firewall
   fi
 else
   if [[ "$TAILNET_SYNC_ENABLED" == "true" ]]; then

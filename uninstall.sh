@@ -247,12 +247,16 @@ fi
 
 if ask "Stop and remove the Claw backend service?" "yes"; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
-    plist="$HOME/Library/LaunchAgents/com.hivemindos.claw-backend.plist"
-    if [[ -f "$plist" ]]; then
-      launchctl bootout "gui/$(id -u)/com.hivemindos.claw-backend" >/dev/null 2>&1 || launchctl unload "$plist" >/dev/null 2>&1 || true
-      rm -f "$plist"
-      ok "Removed Claw backend LaunchAgent"
-    fi
+    # com.hivemindos.claw-backend = legacy headless gateway; com.hivemindos.claw-gateway
+    # = the app-signed login item that replaced it.
+    for label in com.hivemindos.claw-backend com.hivemindos.claw-gateway; do
+      plist="$HOME/Library/LaunchAgents/$label.plist"
+      launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || launchctl unload "$plist" >/dev/null 2>&1 || true
+      if [[ -f "$plist" ]]; then
+        rm -f "$plist"
+        ok "Removed $label LaunchAgent"
+      fi
+    done
   elif run_if_exists systemctl; then
     systemctl --user disable --now hivemindos-claw-backend.service >/dev/null 2>&1 || true
     rm -f "$HOME/.config/systemd/user/hivemindos-claw-backend.service"

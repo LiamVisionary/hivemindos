@@ -47,7 +47,8 @@
     "targets": "all",
     "createUpdaterArtifacts": true,
     "externalBin": [
-      "binaries/claw"
+      "binaries/claw",
+      "binaries/hivemind-gateway-host"
     ],
     "macOS": {
       "bundleName": "HivemindOS",
