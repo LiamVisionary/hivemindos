@@ -342,6 +342,12 @@ async function skillSummary(input: {
     ? namespacedSharedSlug(input.basePath, input.skillPath)
     : sanitizeSlug(basename(dirname(input.skillPath)));
   const sourceMetadata = input.provider === "shared" ? await readSourceMetadata(dirname(input.skillPath)) : null;
+  // A NON-shared (e.g. aeon) skill that carries our shared-brain provenance
+  // marker is a MIRROR we previously synced OUT of the shelf — not a native
+  // provider skill. Re-importing it re-namespaces the slug (aeon- -> aeon-aeon-)
+  // and feeds an unbounded duplication loop. Treat it as already-imported so the
+  // import/auto-sync loops skip it (content/slug-independent loop breaker).
+  const isSharedBrainMirror = input.provider !== "shared" && await isManagedSharedSkillMirror(input.skillPath);
   const skillChecksum = mode === "fast" ? checksum(`${fileStats?.size ?? 0}:${markdown}`) : checksum(markdown);
   const existing = input.sharedByChecksum.get(skillChecksum) ?? input.sharedBySlug.get(slug);
   const updatedAt = fileStats?.mtimeMs ?? 0;
@@ -356,7 +362,7 @@ async function skillSummary(input: {
     relativePath: relative(input.basePath, input.skillPath),
     checksum: skillChecksum,
     updatedAt,
-    imported: input.provider === "shared" || Boolean(existing),
+    imported: input.provider === "shared" || Boolean(existing) || isSharedBrainMirror,
     importedAs: existing?.slug,
     sourceStatus: sourceMetadata?.status,
   };
@@ -914,6 +920,13 @@ export async function reconcileBrainSkills(input: {
       activeSources.set(`${source.provider}:${source.slug}`, source);
       const shared = sharedBySlug.get(source.slug);
       if (!shared) {
+        // Never import-new a source that's already a shelf mirror / a checksum
+        // duplicate of an existing shelf skill — that's what re-namespaced the
+        // slug (aeon- -> aeon-aeon-) into an unbounded duplication loop.
+        if (source.imported) {
+          skipped.push({ ...source, reason: "shared-brain mirror" });
+          continue;
+        }
         if (!policy.autoImport) {
           skipped.push({ ...source, reason: "auto-import disabled" });
           continue;
