@@ -24,7 +24,7 @@ const HIVE_ENV_FILE = join(homedir(), ".hivemindos", ".env");
 const HERMES_ENV_FILE = join(homedir(), ".hermes", ".env");
 
 export type VeniceAuthMode = "x402" | "api-key";
-export type VeniceCheckStatus = "ready" | "missing-wallet" | "missing-key" | "needs-funding" | "provider-unavailable" | "error";
+export type VeniceCheckStatus = "ready" | "missing-wallet" | "missing-key" | "needs-funding" | "spend-limit" | "provider-unavailable" | "error";
 
 export type VeniceModel = {
   id: string;
@@ -110,6 +110,25 @@ async function readSharedEnvValue(key: string) {
 
 export function isVeniceProfile(profile: Pick<AgentProfile, "provider">) {
   return profile.provider?.trim().toLowerCase() === "venice";
+}
+
+// API keys never contain internal whitespace, but copying from Venice's key
+// display can embed a newline mid-string. `.trim()` leaves that in place, and
+// the line-based env writer then drops everything after it — so strip ALL
+// whitespace before storing or sending the key anywhere.
+export function sanitizeVeniceApiKey(apiKey: string): string {
+  return (apiKey ?? "").replace(/\s+/g, "");
+}
+
+// Local-only readiness probe: is a usable credential present without any
+// network round-trip to Venice? Lets the setup UI decide instantly whether to
+// show the key prompt or jump straight to model selection.
+export async function veniceKeyPresence(profile?: Pick<AgentProfile, "token" | "venice">): Promise<{ keyPresent: boolean; apiKeyEnvName: string; walletVaultId: string }> {
+  const envName = veniceApiKeyEnvName(profile?.venice);
+  const walletVaultId = profile?.venice?.walletVaultId?.trim() || "";
+  const profileToken = profile?.token?.trim() || "";
+  const keyPresent = Boolean(profileToken) || Boolean(await readSharedEnvValue(envName));
+  return { keyPresent, apiKeyEnvName: envName, walletVaultId };
 }
 
 export function isEvmWalletNetwork(network = "") {
@@ -302,6 +321,32 @@ export async function checkVeniceWalletBalance(wallet: Pick<VeniceWalletBinding,
   };
 }
 
+// Venice's /models endpoint is PUBLIC (200 even with no auth), so it can't
+// confirm a bearer key works. This auth-gated, non-billable endpoint can:
+// 200 = key valid, 401/403 = key rejected. Used to validate api-key setups.
+export async function validateVeniceApiKey(apiKey: string): Promise<{ valid: boolean; httpStatus: number; message: string }> {
+  const key = apiKey.trim();
+  if (!key) return { valid: false, httpStatus: 0, message: "Venice API key is empty." };
+  let response: Response;
+  try {
+    response = await fetch(`${VENICE_API_BASE}/api_keys/rate_limits`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${key}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (error) {
+    // Network failure isn't proof the key is bad; let callers treat it as unknown.
+    throw error instanceof Error ? error : new Error("Could not reach Venice to validate the API key.");
+  }
+  if (response.ok) return { valid: true, httpStatus: response.status, message: "Venice API key is valid." };
+  if (response.status === 401 || response.status === 403) {
+    return { valid: false, httpStatus: response.status, message: "Venice rejected this API key. Check it at venice.ai/settings/api." };
+  }
+  const data = await response.json().catch(() => null) as unknown;
+  return { valid: false, httpStatus: response.status, message: extractErrorMessage(data, `Venice key check returned HTTP ${response.status}.`) };
+}
+
 function extractVeniceModels(data: unknown): VeniceModel[] {
   if (!data || typeof data !== "object") return [];
   const items = Array.isArray((data as Record<string, unknown>).data) ? (data as { data: unknown[] }).data : [];
@@ -320,12 +365,31 @@ function extractVeniceModels(data: unknown): VeniceModel[] {
   return models;
 }
 
-function categorizeVeniceError(status: number, detail: string): VeniceCheckStatus {
+// Maps a Venice error (HTTP status + body text) to a status + user-facing
+// message. Order matters: the spend-limit error text also contains "balance",
+// so it must be matched before the funding heuristic.
+export function interpretVeniceError(status: number, detail: string): { status: VeniceCheckStatus; message: string } {
   const text = detail.toLowerCase();
-  if (status === 401 || status === 403) return "missing-key";
-  if (status === 402 || text.includes("balance") || text.includes("fund") || text.includes("top up") || text.includes("top-up")) return "needs-funding";
-  if (status >= 500) return "provider-unavailable";
-  return "error";
+  if (text.includes("spend limit") || text.includes("spending limit")) {
+    return {
+      status: "spend-limit",
+      message: "This Venice API key has hit its configured USD/DIEM spend limit (even if the account still has balance). Raise or disable the key's spend limit at venice.ai/settings/api, then try again.",
+    };
+  }
+  if (status === 401 || status === 403) {
+    return { status: "missing-key", message: detail || "Venice rejected this API key." };
+  }
+  if (status === 402 || text.includes("balance") || text.includes("fund") || text.includes("top up") || text.includes("top-up")) {
+    return { status: "needs-funding", message: detail || "This Venice wallet needs a top-up before inference." };
+  }
+  if (status >= 500) {
+    return { status: "provider-unavailable", message: detail || `Venice is unavailable right now (HTTP ${status}).` };
+  }
+  return { status: "error", message: detail || `Venice returned HTTP ${status}.` };
+}
+
+function categorizeVeniceError(status: number, detail: string): VeniceCheckStatus {
+  return interpretVeniceError(status, detail).status;
 }
 
 function baseCheckResult(profile: AgentProfile): Omit<VeniceCheckResult, "ok" | "status" | "message"> {
@@ -360,6 +424,24 @@ export async function checkVeniceModels(profile: AgentProfile): Promise<VeniceCh
       status: mode === "api-key" ? "missing-key" : "missing-wallet",
       message: error instanceof Error ? error.message : "Venice authentication is not configured.",
     };
+  }
+
+  // api-key mode: /models is public, so validate the key against an auth-gated
+  // endpoint before claiming the agent is ready. Wallet mode is validated by
+  // the signed balance check below.
+  if (mode === "api-key") {
+    const bearer = auth.headers.Authorization?.replace(/^Bearer\s+/i, "") ?? "";
+    const validation = await validateVeniceApiKey(bearer).catch(() => null);
+    if (validation && !validation.valid) {
+      return {
+        ...base,
+        keyPresent: true,
+        ok: false,
+        status: "missing-key",
+        message: validation.message,
+        httpStatus: validation.httpStatus,
+      };
+    }
   }
 
   let balance: VeniceBalance | null = null;
@@ -398,6 +480,7 @@ export async function checkVeniceModels(profile: AgentProfile): Promise<VeniceCh
   const data = await response.json().catch(async () => ({ error: await response.text().catch(() => "") })) as unknown;
   if (!response.ok) {
     const detail = extractErrorMessage(data, `Venice returned HTTP ${response.status}.`);
+    const interpreted = interpretVeniceError(response.status, detail);
     return {
       ...base,
       ...balanceFields,
@@ -405,8 +488,8 @@ export async function checkVeniceModels(profile: AgentProfile): Promise<VeniceCh
       walletAddress: auth.wallet?.address ?? base.walletAddress,
       walletNetwork: auth.wallet?.network ?? base.walletNetwork,
       ok: false,
-      status: categorizeVeniceError(response.status, detail),
-      message: detail,
+      status: interpreted.status,
+      message: interpreted.message,
       httpStatus: response.status,
     };
   }
@@ -490,13 +573,14 @@ export async function testVeniceChat(profile: AgentProfile, model: string): Prom
   const balanceFields = balanceRemaining ? { balanceUsd: formatUsd(balanceRemaining) || balanceRemaining } : {};
   if (!response.ok) {
     const detail = extractErrorMessage(data, `Venice returned HTTP ${response.status}.`);
+    const interpreted = interpretVeniceError(response.status, detail);
     return {
       ...base,
       ...balanceFields,
       keyPresent: true,
       ok: false,
-      status: categorizeVeniceError(response.status, detail),
-      message: detail,
+      status: interpreted.status,
+      message: interpreted.message,
       httpStatus: response.status,
     };
   }
@@ -639,8 +723,9 @@ export async function topUpVeniceBalance(wallet: VeniceWalletBinding, amountUsd:
 
 export async function saveVeniceApiKey(apiKey: string, envName = VENICE_DEFAULT_KEY_ENV) {
   const key = envName.trim() || VENICE_DEFAULT_KEY_ENV;
-  const value = apiKey.trim();
+  const value = sanitizeVeniceApiKey(apiKey);
   if (!value) throw new Error("Venice API key is required.");
+  if (/\s/.test(value)) throw new Error("Venice API key must not contain spaces or line breaks.");
   if (!/^[A-Z][A-Z0-9_]*$/.test(key)) throw new Error("Venice API key env name must be an uppercase env identifier.");
   await new Promise<void>((resolve, reject) => {
     const child = spawn(join(process.cwd(), "scripts", "hive-env-add"), [

@@ -3,7 +3,9 @@ import { createServer, request as httpRequest } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import {
   constants as cryptoConstants,
+  createDecipheriv,
   createHash,
+  createSecretKey,
   generateKeyPairSync,
   privateDecrypt,
   publicEncrypt,
@@ -355,6 +357,30 @@ function runtimeProcessEnv(extra = {}) {
     PATH: pathParts.join(delimiter),
     ...extra,
   };
+}
+
+// The collector captures process.env at startup, so shared credentials added
+// later (e.g. VENICE_API_KEY saved from the app) never reach spawned runtime
+// children — causing stale/missing-key 401s. Read ~/.hivemindos/.env fresh at
+// spawn time so the latest shared creds win over the stale process env.
+async function readSharedHiveEnvForSpawn() {
+  const raw = await readFile(join(homedir(), ".hivemindos", ".env"), "utf8").catch(() => "");
+  const values = {};
+  for (const rawLine of raw.split(/\r?\n/)) {
+    let line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    if (line.startsWith("export ")) line = line.slice("export ".length).trim();
+    const eq = line.indexOf("=");
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+    if (value.length >= 2 && ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'")))) {
+      value = value.slice(1, -1);
+    }
+    if (value) values[key] = value;
+  }
+  return values;
 }
 
 function hermesContextEnv(agentEnv, context) {
@@ -1280,6 +1306,202 @@ async function detectedOpenClawAgent() {
   });
 }
 
+// ===========================================================================
+// Venice x402 local signing proxy
+// ---------------------------------------------------------------------------
+// Hermes (and any OpenAI-compatible client) can't generate Venice's per-request
+// `X-Sign-In-With-X` wallet signature. This local proxy bridges that: Hermes
+// POSTs plain OpenAI-compatible requests to the collector, which signs a fresh
+// SIWX header with the agent's local wallet and forwards to Venice. This lets a
+// Hermes-runtime agent use Venice x402 WALLET mode (no API key) end to end.
+// ===========================================================================
+const VENICE_API_BASE = "https://api.venice.ai/api/v1";
+const VENICE_SIWX_DOMAIN = "api.venice.ai";
+const VENICE_SIWX_STATEMENT = "Sign in to Venice AI";
+const VENICE_SIWX_EXPIRY_MS = 5 * 60 * 1000;
+const VENICE_SOLANA_CAIP2 = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
+const WALLET_VAULT_DIR = join(homedir(), ".hivemindos");
+const WALLET_VAULT_PATH = join(WALLET_VAULT_DIR, "wallet-vault.json");
+const WALLET_VAULT_KEY_PATH = join(WALLET_VAULT_DIR, "wallet-vault.key");
+
+// Mirrors local-wallet-vault.ts: AES-256-GCM, key = sha256(env or keyfile).
+async function veniceVaultKey() {
+  const envKey = process.env.HIVEMINDOS_WALLET_VAULT_KEY?.trim();
+  if (envKey) return createHash("sha256").update(envKey).digest();
+  const existing = await readFile(WALLET_VAULT_KEY_PATH, "utf8");
+  return createHash("sha256").update(existing.trim()).digest();
+}
+
+async function veniceWalletFromVault(vaultId) {
+  const raw = await readFile(WALLET_VAULT_PATH, "utf8").catch(() => "");
+  const vault = raw ? JSON.parse(raw) : null;
+  const record = vault?.records?.[vaultId];
+  if (!record) throw new Error(`No local wallet found for "${vaultId}".`);
+  const key = await veniceVaultKey();
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    createSecretKey(key),
+    Buffer.from(record.iv, "base64url"),
+  );
+  decipher.setAuthTag(Buffer.from(record.tag, "base64url"));
+  const secret = Buffer.concat([
+    decipher.update(Buffer.from(record.encryptedSecret, "base64url")),
+    decipher.final(),
+  ]).toString("utf8");
+  return { address: record.address, network: String(record.network || ""), secret };
+}
+
+function veniceSiwxMessage({ accountKind, address, uri, chainId, issuedAt, expirationTime, nonce }) {
+  return [
+    `${VENICE_SIWX_DOMAIN} wants you to sign in with your ${accountKind} account:`,
+    address,
+    "",
+    VENICE_SIWX_STATEMENT,
+    "",
+    `URI: ${uri}`,
+    "Version: 1",
+    `Chain ID: ${chainId}`,
+    `Nonce: ${nonce}`,
+    `Issued At: ${issuedAt}`,
+    `Expiration Time: ${expirationTime}`,
+  ].join("\n");
+}
+
+// Builds the base64 X-Sign-In-With-X header for a Base (EVM) or Solana wallet,
+// signing the exact resource URL. Mirrors venice.ts buildVeniceSiwxHeader.
+async function veniceSiwxHeader(wallet, resourceUrl) {
+  const now = Date.now();
+  const issuedAt = new Date(now).toISOString();
+  const expirationTime = new Date(now + VENICE_SIWX_EXPIRY_MS).toISOString();
+  const nonce = randomBytes(12).toString("hex").slice(0, 16);
+  if (wallet.network.startsWith("eip155:")) {
+    const { privateKeyToAccount } = await import("viem/accounts");
+    const account = privateKeyToAccount(wallet.secret);
+    const message = veniceSiwxMessage({ accountKind: "Ethereum", address: account.address, uri: resourceUrl, chainId: 8453, issuedAt, expirationTime, nonce });
+    const signature = await account.signMessage({ message });
+    return Buffer.from(JSON.stringify({ address: account.address, message, signature, timestamp: now, chainId: 8453 }), "utf8").toString("base64");
+  }
+  if (wallet.network.startsWith("solana:")) {
+    const { base58 } = await import("@scure/base");
+    const { createKeyPairSignerFromBytes, createSignableMessage } = await import("@solana/kit");
+    const signer = await createKeyPairSignerFromBytes(base58.decode(wallet.secret));
+    const message = veniceSiwxMessage({ accountKind: "Solana", address: signer.address, uri: resourceUrl, chainId: VENICE_SOLANA_CAIP2, issuedAt, expirationTime, nonce });
+    const [signatures] = await signer.signMessages([createSignableMessage(new TextEncoder().encode(message))]);
+    const sigBytes = signatures[signer.address];
+    if (!sigBytes) throw new Error("Solana wallet did not return a Sign-In-With-X signature.");
+    return Buffer.from(JSON.stringify({ address: signer.address, message, signature: base58.encode(new Uint8Array(sigBytes)), timestamp: now, chainId: VENICE_SOLANA_CAIP2, type: "ed25519" }), "utf8").toString("base64");
+  }
+  throw new Error(`Venice x402 supports Base and Solana wallets; got "${wallet.network}".`);
+}
+
+function isLoopbackRemote(request) {
+  const addr = request.socket?.remoteAddress || "";
+  return addr === "127.0.0.1" || addr === "::1" || addr === "::ffff:127.0.0.1";
+}
+
+// Handles /venice-x402/<walletVaultId>/<venice-subpath>. Signs and forwards to
+// Venice with the wallet's SIWX header, streaming the response back verbatim.
+async function handleVeniceX402Proxy(request, response, pathname, search) {
+  if (!isLoopbackRemote(request)) {
+    jsonResponse(response, 403, { ok: false, error: "Venice x402 proxy is local-only." });
+    return;
+  }
+  const rest = pathname.slice("/venice-x402/".length);
+  const slash = rest.indexOf("/");
+  if (slash <= 0) {
+    jsonResponse(response, 400, { ok: false, error: "Venice x402 proxy path must be /venice-x402/<wallet>/<endpoint>." });
+    return;
+  }
+  const vaultId = decodeURIComponent(rest.slice(0, slash));
+  const subPath = rest.slice(slash + 1).replace(/^\/+/, "");
+  const targetUrl = `${VENICE_API_BASE}/${subPath}${search || ""}`;
+  let wallet;
+  try {
+    wallet = await veniceWalletFromVault(vaultId);
+  } catch (error) {
+    jsonResponse(response, 404, { ok: false, error: error instanceof Error ? error.message : "Wallet not found." });
+    return;
+  }
+  let body;
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    body = Buffer.concat(chunks);
+  }
+  let signInHeader;
+  try {
+    signInHeader = await veniceSiwxHeader(wallet, targetUrl);
+  } catch (error) {
+    jsonResponse(response, 400, { ok: false, error: error instanceof Error ? error.message : "Could not sign the Venice request." });
+    return;
+  }
+  let upstream;
+  try {
+    upstream = await fetch(targetUrl, {
+      method: request.method,
+      headers: {
+        "X-Sign-In-With-X": signInHeader,
+        ...(request.headers["content-type"] ? { "Content-Type": String(request.headers["content-type"]) } : {}),
+        ...(request.headers.accept ? { Accept: String(request.headers.accept) } : {}),
+      },
+      body,
+      signal: AbortSignal.timeout(180_000),
+    });
+  } catch (error) {
+    jsonResponse(response, 502, { ok: false, error: error instanceof Error ? error.message : "Could not reach Venice." });
+    return;
+  }
+  const headers = { "content-type": upstream.headers.get("content-type") || "application/json" };
+  const balance = upstream.headers.get("x-balance-remaining");
+  if (balance) headers["x-balance-remaining"] = balance;
+  response.writeHead(upstream.status, headers);
+  if (upstream.body) {
+    for await (const chunk of upstream.body) response.write(chunk);
+  } else {
+    response.write(Buffer.from(await upstream.arrayBuffer()));
+  }
+  response.end();
+}
+
+// Hermes profiles do NOT inherit provider definitions from the root
+// ~/.hermes/config.yaml, so a profile that selects a custom gateway provider
+// must define it inline or Hermes rejects it ("Unknown provider"). These are
+// the OpenAI-compatible gateway providers HivemindOS offers that Hermes can
+// reach with a bearer key. Mirrors MODEL_PROVIDER_GATEWAYS[*].hermes.
+const HERMES_GATEWAY_PROVIDERS = {
+  venice: { name: "Venice AI", baseUrl: "https://api.venice.ai/api/v1", keyEnv: "VENICE_API_KEY", models: ["llama-3.3-70b"] },
+  bankr: { name: "Bankr LLM", baseUrl: "https://llm.bankr.bot/v1", keyEnv: "BANKR_LLM_KEY", models: [] },
+};
+
+function hermesProvidersBlock(provider, model, agentConfig) {
+  const gateway = HERMES_GATEWAY_PROVIDERS[provider];
+  if (!gateway) return [];
+  let baseUrl = gateway.baseUrl;
+  let keyEnv = gateway.keyEnv;
+  // Venice x402 wallet mode: point Hermes at the local signing proxy (which
+  // injects the SIWX header) instead of api.venice.ai, and send no bearer key.
+  if (provider === "venice") {
+    const venice = agentConfig && typeof agentConfig === "object" ? agentConfig : {};
+    const walletVaultId = String(venice.walletVaultId || "").trim();
+    if (walletVaultId && venice.authMode !== "api-key") {
+      baseUrl = `http://127.0.0.1:${port}/venice-x402/${encodeURIComponent(walletVaultId)}`;
+      keyEnv = "";
+    }
+  }
+  if (!baseUrl) return [];
+  const models = Array.from(new Set([model, ...gateway.models].filter(Boolean)));
+  return [
+    "providers:",
+    `  ${provider}:`,
+    `    name: ${yamlScalar(gateway.name)}`,
+    `    base_url: ${yamlScalar(baseUrl)}`,
+    ...(keyEnv ? [`    key_env: ${yamlScalar(keyEnv)}`] : []),
+    `    default_model: ${yamlScalar(model)}`,
+    "    models:",
+    ...models.map((id) => `      ${yamlScalar(id)}: {}`),
+  ];
+}
+
 async function createHermesProfileAgent(input) {
   const profile = slugify(input.profile || input.name);
   if (profile === "default" || profile === "hermes")
@@ -1317,6 +1539,10 @@ async function createHermesProfileAgent(input) {
       provider === "openai-codex"
         ? "  base_url: https://chatgpt.com/backend-api/codex"
         : "",
+      // Gateway providers (Venice, Bankr) need an inline definition; profiles
+      // don't inherit the root config's providers. Venice wallet mode points
+      // at the local x402 signing proxy.
+      ...hermesProvidersBlock(provider, model, input.venice),
       "image_gen:",
       "  provider: openai-codex",
       "  model: gpt-image-2-medium",
@@ -5743,9 +5969,12 @@ async function streamHermesChat(body, response) {
   const cwd = await resolveChatWorkingDirectory(body.workingDirectory);
   const requestStartedAt = Date.now();
 
+  // Latest shared creds (provider keys) win over the collector's startup env.
+  const sharedHiveEnv = await readSharedHiveEnvForSpawn();
   const child = spawn(await resolveHermesBin(), args, {
     cwd,
     env: runtimeProcessEnv({
+      ...sharedHiveEnv,
       ...agentEnv,
       ...hermesModelHostEnv(body, agent),
       HERMES_HOME: hermesHome,
@@ -6134,6 +6363,10 @@ const telemetryServer = createServer(async (request, response) => {
         error: "App asset is no longer available.",
       });
     }
+    return;
+  }
+  if (pathname.startsWith("/venice-x402/")) {
+    await handleVeniceX402Proxy(request, response, pathname, requestUrl.search);
     return;
   }
   if (pathname.startsWith("/lmstudio/")) {
@@ -6949,4 +7182,31 @@ telemetryServer.listen(port, host, () => {
   void installedRuntimes().catch(() => {});
   startEnvSyncMaintenance();
   startReliabilitySync();
+  startSelfReloadWatcher();
 });
+
+// launchd's WatchPaths is unreliable for in-place edits, so the collector
+// watches its own source instead: on change it exits cleanly and launchd's
+// KeepAlive immediately relaunches it with the new code — no manual kickstart.
+function startSelfReloadWatcher() {
+  if (process.env.AGENT_TELEMETRY_DISABLE_SELF_RELOAD === "1") return;
+  let selfPath;
+  try {
+    selfPath = fileURLToPath(import.meta.url);
+  } catch {
+    return;
+  }
+  let pending = null;
+  try {
+    watch(selfPath, { persistent: false }, () => {
+      if (pending) return;
+      // Debounce: editors emit several events per save.
+      pending = setTimeout(() => {
+        console.log("[collector] source changed — exiting for KeepAlive reload");
+        process.exit(0);
+      }, 400);
+    });
+  } catch {
+    // Auto-reload is a convenience; never block startup on it.
+  }
+}

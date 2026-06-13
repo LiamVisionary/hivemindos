@@ -23,6 +23,7 @@ import { WorkspaceModal } from "@/components/aeon";
 import { renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
 import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeProfileFeature, runtimeSettingsFeature, type AgentRuntime } from "@/lib/types/agent-runtime";
+import { rememberMruRuntime } from "@/features/dashboard/agent-mru-runtime";
 
 const USEPOD_PROVIDER = MODEL_PROVIDER_GATEWAYS.usepod;
 const VENICE_PROVIDER = MODEL_PROVIDER_GATEWAYS.venice;
@@ -699,6 +700,7 @@ export function AgentSettingsModal(props: any) {
       preferAdaptive: true,
     });
     if (agentCreateMachine) {
+      rememberMruRuntime(runtime);
       setAgentCreateDraft((current) => ({
         ...current,
         runtime,
@@ -917,6 +919,7 @@ export function AgentSettingsModal(props: any) {
         aria-pressed={selected}
         disabled={disabled}
         title={runtimeAvailability?.[runtime]?.detail}
+        data-bee={`agent-runtime-${runtime}`}
         onClick={() => updateSettingsRuntime(runtime as AgentRuntime)}
         style={{
           display: "grid",
@@ -952,6 +955,7 @@ export function AgentSettingsModal(props: any) {
               className={styles.interactive}
               type="button"
               aria-pressed={adaptiveProviderSelected}
+              data-bee="agent-provider-adaptive"
               onClick={selectAdaptiveProvider}
               style={{
                 display: "grid",
@@ -1000,6 +1004,7 @@ export function AgentSettingsModal(props: any) {
                   type="button"
                   key={provider.slug}
                   aria-pressed={selected}
+                  data-bee={`agent-provider-${provider.slug}`}
                   onClick={selectProvider}
                   style={{
                     display: "grid",

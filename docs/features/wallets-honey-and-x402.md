@@ -35,6 +35,7 @@ For the ecosystem-level plan behind Honey, HIVE, premium services, treasury rese
 - Validate MoneyClaw keys.
 - Track UsePod prepaid token deposit details and runtime balance/route metadata when UsePod returns it.
 - Execute x402 paid requests through policy-aware helpers.
+- Buy stocks from a prompt through Alpaca (a real brokerage, paper by default) or on-chain tokenized xStocks (a USDC to xStock swap via Jupiter).
 - Select and prepare the best available crypto rail for agent intents such as paid API calls, private transfers, Bankr trading, and LLM credit funding.
 - Observe runtime usage and submit privacy-safe Honey metadata.
 - Hold spend-only managed HONEY credits for no-BYOK managed agents.
@@ -111,6 +112,32 @@ Token-facing surfaces:
 - Honey is tracked as usage-earned accounting. HIVE can be a ledger-only legacy balance or an actual Bankr transfer when the claim path is configured.
 - x402 uses token/payment policy around requests instead of giving runtimes unrestricted wallet access.
 
+## Stock Buying (Alpaca And xStocks)
+
+Agents can buy stocks from a prompt through one unified buy-stock rail with two venues:
+
+- `alpaca`: a real, regulated US brokerage. Market orders go through the Alpaca Trading API. It defaults to paper (simulated) trading, and live trading is reachable only when the wallet sets `alpacaPaper` to false. Alpaca keys load from the shared hive env by name (`ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY`) and are never stored in project files.
+- `xstocks`: on-chain tokenized equities issued by Backed Finance. The rail swaps USDC into the verified xStock SPL token through Jupiter, signed by the agent's existing local Solana wallet. It requires a Solana mainnet wallet plus a little SOL for fees and token-2022 account rent.
+
+How it works:
+
+- The rail lives in `src/lib/services/trading/buy-stock.ts`.
+- The verified mint allowlist lives in `src/lib/config/xstocks-tokens.ts`. xStock tickers resolve only through this allowlist, never live symbol search, because Solana carries many scam copycats reusing each `AAPLx`-style symbol. Every mint is Jupiter-verified and uses the official `Xs` vanity address prefix.
+- Intent flows through the chat runtime as a draft, confirm, execute card, the same pattern as x402. A natural request such as `buy $25 of AAPL on xstocks` produces a Buy stock ready card, and the user replies `confirm` to execute.
+- Every trade requires explicit confirmation, honors a per-trade USD cap (`maxTradeUsd`, falling back to the per-payment cap), and passes through the shared spend-governance chokepoint and ledger, so company kill switches, rolling daily and monthly budgets, and approval escalation all apply.
+- Venue and mode are configured per agent in the Wallets tab: venue (Off, Alpaca, or xStocks), Alpaca paper vs live, and max per trade.
+
+Safety:
+
+- Alpaca defaults to paper. Live is opt-in per wallet.
+- xStock buys resolve only verified mints and require a Solana mainnet wallet.
+- `trade` spends are recorded in the spend ledger like every other rail.
+
+Tests:
+
+- `pnpm test:buy-stock` checks the xStocks allowlist invariants and live Jupiter routability.
+- `pnpm e2e:buy-stock-alpaca` runs an Alpaca paper-order round-trip when keys are present.
+
 ## Wallet Vault Backup
 
 HivemindOS stores local wallet key material under `~/.hivemindos/wallet-vault.json`, encrypted by `~/.hivemindos/wallet-vault.key` unless `HIVEMINDOS_WALLET_VAULT_KEY` is configured. The backup route keeps that local, but still recoverable:
@@ -161,6 +188,8 @@ Claiming:
 ## Main Code Paths
 
 - `src/lib/services/wallet/**`
+- `src/lib/services/trading/buy-stock.ts`
+- `src/lib/config/xstocks-tokens.ts`
 - `src/lib/services/crypto-capability-router.ts`
 - `src/lib/services/shared-hive-env.ts`
 - `src/app/api/crypto/capabilities/route.ts`

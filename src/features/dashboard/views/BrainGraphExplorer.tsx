@@ -9,6 +9,14 @@ import styles from "./BrainGraphExplorer.module.css";
 
 const graphClass = (...classes) => classes.map((className) => styles[className]).filter(Boolean).join(" ");
 
+function uniqueNodesById(nodes: any[]) {
+  const unique = new Map<string, any>();
+  for (const node of nodes) {
+    if (node?.id && !unique.has(node.id)) unique.set(node.id, node);
+  }
+  return [...unique.values()];
+}
+
 export function BrainGraphExplorer(props: any) {
   const {
     Bot,
@@ -67,19 +75,19 @@ export function BrainGraphExplorer(props: any) {
   const brainNodesById = useMemo(() => new Map((brainGraph?.nodes ?? []).map((node) => [node.id, node])), [brainGraph]);
   const selectedOutgoingNodes = useMemo(() => {
     if (!brainGraph || !selectedBrainNode) return [];
-    return brainGraph.links
+    const nodes = brainGraph.links
       .filter((link) => link.source === selectedBrainNode.id)
       .map((link) => brainNodesById.get(link.target))
-      .filter(Boolean)
-      .slice(0, 8);
+      .filter(Boolean);
+    return uniqueNodesById(nodes).slice(0, 8);
   }, [brainGraph, brainNodesById, selectedBrainNode]);
   const selectedBacklinkNodes = useMemo(() => {
     if (!brainGraph || !selectedBrainNode) return [];
-    return brainGraph.links
+    const nodes = brainGraph.links
       .filter((link) => link.target === selectedBrainNode.id)
       .map((link) => brainNodesById.get(link.source))
-      .filter(Boolean)
-      .slice(0, 8);
+      .filter(Boolean);
+    return uniqueNodesById(nodes).slice(0, 8);
   }, [brainGraph, brainNodesById, selectedBrainNode]);
   const relatedTagNodes = useMemo(() => {
     if (!brainGraph || !selectedBrainNode?.tags?.length) return [];

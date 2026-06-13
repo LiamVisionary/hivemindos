@@ -10,6 +10,7 @@ const WORKER_CLASS_ICON: Record<BeeWorkerClass, string> = {
   artist: "/icons/worker-bee-artist-v2.png",
   ops: "/icons/worker-bee-ops-v2.png",
   qa: "/icons/worker-bee-qa-v2.png",
+  security: "/icons/worker-bee-security-v2.png",
 };
 
 export const BEE_ROLE_ICON_PATHS = [

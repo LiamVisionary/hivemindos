@@ -4,6 +4,9 @@ export type AgentSurvivalTier = "dead" | "critical" | "low_compute" | "normal" |
 export type AgentSpendCapAsset = "USDC" | "ETH";
 export type AgentAssetSpendCaps = Partial<Record<AgentSpendCapAsset, number>>;
 
+/** Stock-buying rail: real brokerage (Alpaca) or on-chain tokenized equities (xStocks via Jupiter swap). */
+export type AgentTradingVenue = "alpaca" | "xstocks";
+
 export interface AgentWalletConfig {
   agentId: string;
   enabled: boolean;
@@ -18,6 +21,10 @@ export interface AgentWalletConfig {
   maxPaymentUsd: number;
   assetSpendCaps?: AgentAssetSpendCaps;
   approvalRequiredOverUsd: number;
+  /** Rolling 24h cumulative USD spend cap across all rails. 0/undefined = unlimited. */
+  dailyBudgetUsd?: number;
+  /** Rolling 30d cumulative USD spend cap across all rails. 0/undefined = unlimited. */
+  monthlyBudgetUsd?: number;
   autoPayEnabled: boolean;
   duplicatePaymentGuardEnabled?: boolean;
   duplicatePaymentGuardSeconds?: number;
@@ -25,6 +32,16 @@ export interface AgentWalletConfig {
   moneyClawEnvName: string;
   x402BaseUrl: string;
   veilAutoPrivateX402?: boolean;
+  /** Stock-buying rail selection. Absent = buy-stock disabled for this agent. */
+  tradingVenue?: AgentTradingVenue;
+  /** Shared-hive env var NAME holding the Alpaca API key id (value never stored in project files). */
+  alpacaKeyEnvName?: string;
+  /** Shared-hive env var NAME holding the Alpaca API secret. */
+  alpacaSecretEnvName?: string;
+  /** When false, Alpaca trades route to the live brokerage; defaults to paper (true). */
+  alpacaPaper?: boolean;
+  /** Hard per-trade USD ceiling for the buy-stock rail. 0/undefined falls back to maxPaymentUsd. */
+  maxTradeUsd?: number;
   survivalStartedAt: number;
   updatedAt: number;
   notes: string;

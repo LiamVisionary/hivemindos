@@ -150,6 +150,78 @@
   font-size: 12px;
 }
 
+.pilotThinking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px 2px 2px;
+}
+
+.pilotThinkingLabel {
+  color: var(--foreground);
+  font-size: 13px;
+  background: linear-gradient(90deg, var(--muted) 0%, var(--foreground) 50%, var(--muted) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: beePilotShimmer 1.4s linear infinite;
+}
+
+.pilotDots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.pilotDots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(250, 204, 21, 0.85);
+  animation: beePilotDot 1.2s ease-in-out infinite;
+}
+
+.pilotDots i:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.pilotDots i:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+.pilotInlineMessage {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 9px;
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.pilotInlineMessage[data-state="error"] {
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+}
+
+@keyframes beePilotShimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes beePilotDot {
+  0%, 100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
 .pilotStatusPill {
   position: fixed;
   bottom: 28px;

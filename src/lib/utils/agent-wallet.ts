@@ -30,6 +30,8 @@ export const DEFAULT_AGENT_WALLET: Omit<AgentWalletConfig, "agentId"> = {
     ETH: 0.01,
   },
   approvalRequiredOverUsd: 2,
+  dailyBudgetUsd: 0,
+  monthlyBudgetUsd: 0,
   autoPayEnabled: false,
   duplicatePaymentGuardEnabled: true,
   duplicatePaymentGuardSeconds: DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS,
@@ -413,6 +415,12 @@ export function buildAgentPaymentPrompt(config: AgentWalletConfig, snapshot = ge
     `Payment mode: ${provider}.`,
     `Network: ${config.network}; token: ${config.tokenSymbol}; wallet: ${config.walletAddress || "not yet connected"}.`,
     `Spend cap: $${config.maxPaymentUsd.toFixed(2)} per payment; require approval over $${config.approvalRequiredOverUsd.toFixed(2)}.`,
+    config.approvalRequiredOverUsd > 0
+      ? `Approval is enforced: any single spend over $${config.approvalRequiredOverUsd.toFixed(2)} is paused and escalated to a human as a pending approval. After it is approved, retry the same payment once to execute it.`
+      : "",
+    (config.dailyBudgetUsd ?? 0) > 0 ? `Daily budget: $${(config.dailyBudgetUsd ?? 0).toFixed(2)} rolling 24h across every rail; cumulative spend is enforced, not just per-payment.` : "",
+    (config.monthlyBudgetUsd ?? 0) > 0 ? `Monthly budget: $${(config.monthlyBudgetUsd ?? 0).toFixed(2)} rolling 30d across every rail.` : "",
+    "If this agent is a member of a company, that company's shared budget rollup and kill switch also apply; a frozen company halts all spending regardless of this agent's own limits.",
     config.provider === "veil" ? `ETH transfer cap: ${assetSpendCapFor(config, "ETH").toFixed(6)} ETH.` : "",
     config.enabled ? "Wallet spending is on." : "Wallet spending is off; prepare drafts only and do not execute wallet tools.",
     `Allow auto-use is ${config.autoPayEnabled ? "on within the hard spend cap" : "off; ask before spending"}.`,

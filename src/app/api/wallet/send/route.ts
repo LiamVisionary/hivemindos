@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendUsdc } from "@/lib/services/wallet/chain-wallet";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { requireAuth } from "@/lib/utils/server-auth";
+import { evaluateSpend, loadGovernanceWallet } from "@/lib/services/wallet/spend-governance";
+import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 
 type SendUsdcBody = {
   agentId?: string;
@@ -10,6 +12,7 @@ type SendUsdcBody = {
   maxPaymentUsd?: number;
   autoPayEnabled?: boolean;
   confirmation?: string;
+  approvalToken?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -29,6 +32,34 @@ export async function POST(request: NextRequest) {
     const amountUsd = Number(body.amountUsd);
     const stored = await getWalletSecret(agentId);
     if (!stored) return NextResponse.json({ ok: false, error: "No local wallet exists for this agent." }, { status: 404 });
+
+    // Governance: company kill switch, cumulative budgets, and approval escalation.
+    const governance = await loadGovernanceWallet(agentId);
+    let grantId: string | undefined;
+    let companyId: string | undefined;
+    if (governance) {
+      const decision = await evaluateSpend({
+        wallet: governance.wallet,
+        agentName: governance.agentName,
+        kind: "send",
+        asset: "USDC",
+        amountUsd,
+        target: toAddress,
+        approvalToken: body.approvalToken,
+      });
+      if (decision.decision === "block") {
+        return NextResponse.json({ ok: false, status: "blocked", error: decision.reason }, { status: 403 });
+      }
+      if (decision.decision === "approve") {
+        return NextResponse.json(
+          { ok: false, status: "pending_approval", error: decision.reason, approval: decision.approval },
+          { status: 202 },
+        );
+      }
+      grantId = decision.grant?.id;
+      companyId = decision.companyId;
+    }
+
     const result = await sendUsdc({
       network: stored.info.network,
       secret: stored.secret,
@@ -36,6 +67,16 @@ export async function POST(request: NextRequest) {
       toAddress,
       amountUsd,
     });
+    await appendSpend({
+      agentId,
+      companyId,
+      kind: "send",
+      asset: "USDC",
+      amountUsd,
+      target: shortTarget(toAddress),
+      status: "executed",
+      approvalId: grantId,
+    }).catch(() => {});
     return NextResponse.json({ ok: true, signature: result.signature, network: stored.info.network });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Failed to send USDC" }, { status: 500 });

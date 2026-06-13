@@ -253,38 +253,26 @@ export function GuidedVeniceSetup({
         return;
       }
       try {
-        const response = await fetch("/api/venice/status", {
+        // Fast, local-only check (no Venice round-trip): is a key already
+        // saved? This decides the view in milliseconds so the key prompt never
+        // lingers while a slow /models call runs.
+        const presenceResponse = await fetch("/api/venice/status", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            agent: { ...(agent ?? {}), provider: "venice" },
-            action: "models",
-            model: selectedModel,
-          }),
+          body: JSON.stringify({ agent: { ...(agent ?? {}), provider: "venice" }, action: "key-present" }),
         });
-        const data = await response.json().catch(() => null) as VeniceStatusResponse | null;
-        if (cancelled || !data?.ok || !data.keyPresent || data.authMode !== "api-key") return;
+        const presence = await presenceResponse.json().catch(() => null) as { ok?: boolean; keyPresent?: boolean; apiKeyEnvName?: string } | null;
+        if (cancelled) return;
+        if (!presence?.ok || !presence.keyPresent) return;
+        // Key exists: jump straight to model selection and let the full model
+        // list resolve in the background via the standard check.
         setAuthChoice("api-key");
-        setStatus(data);
-        const resolvedModel = data.models?.some((model) => model.id === selectedModel) ? selectedModel : data.models?.[0]?.id || selectedModel;
-        if (resolvedModel !== selectedModel) setSelectedModel(resolvedModel);
-        if (data.status === "ready" && data.models?.length) {
-          setSetupView("setup");
-          setCurrentStep(3);
-        }
-        await onComplete(profilePatchFromState({
-          authMode: "api-key",
-          apiKeyEnvName: data.apiKeyEnvName ?? "VENICE_API_KEY",
-          lastKeyPresent: true,
-          lastBalanceUsd: data.balanceUsd ?? "",
-          lastCheckedAt: data.checkedAt ?? "",
-          lastTestStatus: data.status ?? "",
-          lastStatusMessage: data.message ?? "",
-          lastHttpStatus: data.httpStatus,
-          lastModelCount: data.modelCount,
-        }, { model: resolvedModel }));
+        setSetupView("setup");
+        setCurrentStep(3);
+        setRecovering(false);
+        void checkVenice({ authMode: "api-key", apiKeyEnvName: presence.apiKeyEnvName ?? "VENICE_API_KEY", lastKeyPresent: true }, { quiet: true });
       } catch {
-        // No saved key (or Venice unreachable) just leaves the normal setup flow.
+        // No saved key (or status unreachable) just leaves the normal setup flow.
       } finally {
         if (!cancelled) setRecovering(false);
       }
@@ -394,6 +382,15 @@ export function GuidedVeniceSetup({
             successTimerRef.current = null;
           }, 1250);
         }
+        setChecking(false);
+        await onComplete(completionPatch);
+        return;
+      }
+      // A saved-but-invalid key authenticates nowhere: send the user back to
+      // step 1 to re-enter it (recovery may have optimistically shown step 3).
+      if (data.status === "missing-key") {
+        setCurrentStep(1);
+        setMessage(data.message ?? "Venice rejected the saved API key. Enter a valid key or connect a wallet.");
         setChecking(false);
         await onComplete(completionPatch);
         return;
@@ -742,16 +739,28 @@ export function GuidedVeniceSetup({
         ) : null}
 
         {setupView === "setup" && currentStep === 1 ? (
+          recovering ? (
+            <div className={`${styles.panel} ${styles.accentCyan} ${styles.create}`}>
+              <div>
+                <span className={styles.eyebrow}>Wallet-authenticated inference</span>
+                <h3>Checking saved setup</h3>
+                <p>Looking for a saved Venice key or wallet before asking you to set one up.</p>
+              </div>
+              <div className={styles.core} aria-hidden="true">
+                <span className={`${styles.ring} ${styles.r1}`} />
+                <span className={`${styles.ring} ${styles.r2}`} />
+                <Hex size={70} style={{ zIndex: 1 }}>
+                  <LoaderCircle className={`${styles.coreIcon} ${styles.spin}`} />
+                </Hex>
+              </div>
+            </div>
+          ) : (
           <>
             <div className={`${styles.panel} ${styles.accentCyan} ${styles.create}`}>
               <div>
                 <span className={styles.eyebrow}>Wallet-authenticated inference</span>
-                <h3>{recovering ? "Checking saved setup" : "Create Base wallet"}</h3>
-                <p>
-                  {recovering
-                    ? "Looking for a saved Venice key or wallet."
-                    : "HivemindOS creates an encrypted local wallet that signs Venice requests over x402. Fund it with Base USDC, then top up a prepaid Venice balance. No Venice account needed."}
-                </p>
+                <h3>Create Base wallet</h3>
+                <p>HivemindOS creates an encrypted local wallet that signs Venice requests over x402. Fund it with Base USDC, then top up a prepaid Venice balance. No Venice account needed.</p>
                 <div className={styles.actionRow}>
                   <button type="button" className={`${styles.btn} ${styles.primary}`} onClick={() => void createWallet()} disabled={isBusy}>
                     {creating ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <PlugZap aria-hidden="true" />}
@@ -788,7 +797,9 @@ export function GuidedVeniceSetup({
                       type="password"
                       autoComplete="off"
                       value={apiKeyDraft}
-                      onChange={(event) => setApiKeyDraft(event.target.value)}
+                      // Strip whitespace/newlines a paste may carry; an embedded
+                      // newline otherwise truncates the key when stored.
+                      onChange={(event) => setApiKeyDraft(event.target.value.replace(/\s+/g, ""))}
                       aria-label="Venice API key"
                       placeholder="sk-..."
                     />
@@ -801,6 +812,7 @@ export function GuidedVeniceSetup({
               </div>
             </div>
           </>
+          )
         ) : null}
 
         {setupView === "setup" && currentStep === 2 ? (

@@ -148,11 +148,11 @@ export function GuidedDashboardTour({ selectView, openFirstChat }: {
             left: rect.left - SPOT_PADDING,
             width: rect.width + SPOT_PADDING * 2,
             height: rect.height + SPOT_PADDING * 2,
-            boxShadow: "0 0 0 9999px rgba(2, 6, 23, 0.72)",
+            boxShadow: "0 0 0 9999px rgba(2, 6, 23, 0.1)",
           }}
         />
       ) : (
-        <div aria-hidden="true" className="fixed inset-0 bg-[rgba(2,6,23,0.72)]" />
+        <div aria-hidden="true" className="fixed inset-0 bg-[rgba(2,6,23,0.1)]" />
       )}
       <section
         className="fixed w-[340px] max-w-[calc(100vw-24px)] rounded-lg border border-[rgba(148,163,184,0.24)] bg-[rgba(8,13,22,0.97)] p-4 text-[var(--foreground)] shadow-2xl"

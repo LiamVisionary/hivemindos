@@ -10,6 +10,8 @@ import {
 import { veilEnvValue } from "@/lib/services/wallet/veil-cli";
 import { executeVeilPrivateTransfer, veilPrivateTransferErrorMessage } from "@/lib/services/wallet/veil-private-transfer";
 import { requireAuth } from "@/lib/utils/server-auth";
+import { evaluateSpend, loadGovernanceWallet } from "@/lib/services/wallet/spend-governance";
+import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +37,7 @@ type VeilTransferBody = {
   autoShield?: boolean;
   duplicateGuardEnabled?: boolean;
   duplicateGuardSeconds?: number | string;
+  approvalToken?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -53,6 +56,36 @@ export async function POST(request: NextRequest) {
     const veilKey = await veilEnvValue("VEIL_KEY");
     if (!veilKey) return sendError("VEIL_KEY is not configured in the server environment. Run Veil setup before private transfers.", 424);
 
+    // Governance: company kill switch, cumulative budgets, and approval escalation.
+    // USDC is 1:1 USD; ETH uses the caller-supplied USD value when available.
+    const usdValue = asset === "USDC" ? Number(amount) : Number(body.amountUsd ?? 0);
+    const governance = body.agentId ? await loadGovernanceWallet(body.agentId.trim()) : null;
+    let grantId: string | undefined;
+    let companyId: string | undefined;
+    if (governance) {
+      const decision = await evaluateSpend({
+        wallet: governance.wallet,
+        agentName: governance.agentName,
+        kind: "veil-transfer",
+        asset,
+        amountUsd: usdValue,
+        assetAmount: Number(amount),
+        target: recipient,
+        approvalToken: body.approvalToken,
+      });
+      if (decision.decision === "block") {
+        return NextResponse.json({ ok: false, status: "blocked", error: decision.reason }, { status: 403 });
+      }
+      if (decision.decision === "approve") {
+        return NextResponse.json(
+          { ok: false, status: "pending_approval", error: decision.reason, approval: decision.approval },
+          { status: 202 },
+        );
+      }
+      grantId = decision.grant?.id;
+      companyId = decision.companyId;
+    }
+
     const result = await executeVeilPrivateTransfer({
       agentId: body.agentId,
       asset,
@@ -63,6 +96,19 @@ export async function POST(request: NextRequest) {
       duplicateGuardEnabled: body.duplicateGuardEnabled !== false,
       duplicateGuardSeconds: normalizeGuardSeconds(body.duplicateGuardSeconds),
     });
+    if (governance) {
+      await appendSpend({
+        agentId: body.agentId!.trim(),
+        companyId,
+        kind: "veil-transfer",
+        asset,
+        amountUsd: usdValue,
+        assetAmount: Number(amount),
+        target: shortTarget(recipient),
+        status: "executed",
+        approvalId: grantId,
+      }).catch(() => {});
+    }
     return NextResponse.json({
       ok: true,
       ...result,

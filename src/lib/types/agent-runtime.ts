@@ -192,7 +192,8 @@ export type BeeWorkerClass =
   | "research"
   | "artist"
   | "ops"
-  | "qa";
+  | "qa"
+  | "security";
 export type AdaptiveOpenRouterUseCase =
   | "auto"
   | "coding"

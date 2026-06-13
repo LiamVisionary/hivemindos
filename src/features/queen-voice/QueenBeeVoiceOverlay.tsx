@@ -139,7 +139,11 @@ function VoicePicker({ onVoiceChanged }: { onVoiceChanged: () => void }) {
  * STT + conversational turn + TTS pipeline when a realtime session cannot be
  * established. Toggled from the menu bar tray icon or Cmd+Shift+V.
  */
-export function QueenBeeVoiceOverlay() {
+export function QueenBeeVoiceOverlay({
+  onDriveDashboard,
+}: {
+  onDriveDashboard?: (command: string) => Promise<string>;
+} = {}) {
   const [open, setOpen] = React.useState(false);
   const [muted, setMuted] = React.useState(false);
   const [voicePickerOpen, setVoicePickerOpen] = React.useState(false);
@@ -160,6 +164,7 @@ export function QueenBeeVoiceOverlay() {
     open && realtimeMode,
     muted,
     handleRealtimeFailed,
+    onDriveDashboard,
   );
   const pipeline = useQueenBeeVoice(open && !realtimeMode, muted);
   const voiceState = realtimeMode ? realtime : pipeline;

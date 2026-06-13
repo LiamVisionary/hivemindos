@@ -1118,6 +1118,9 @@ PLIST
     <key>HIVE_COLLECTOR_ONLY</key><string>$COLLECTOR_ONLY</string>
   </dict>
   <key>RunAtLoad</key><true/>
+  <!-- KeepAlive also powers auto-reload: the collector watches its own source
+       and exits on change, so launchd relaunches it with the new code (see
+       startSelfReloadWatcher in agent-telemetry-collector.mjs). -->
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>$HOME/Library/Logs/agent-telemetry.log</string>
   <key>StandardErrorPath</key><string>$HOME/Library/Logs/agent-telemetry.err.log</string>

@@ -124,6 +124,16 @@ export const BEE_WORKER_PRESETS: Record<BeeWorkerClass, BeeWorkerPreset> = {
     qualityBar: "Done means findings are reproduced, ranked by severity, and backed by file/line or screenshot evidence; a finding that cannot be reproduced is reported as unconfirmed.",
     skillSlugs: ["dogfood", "requesting-code-review", "systematic-debugging", "test-driven-development", "browser", "chrome"],
   },
+  security: {
+    id: "security",
+    label: "Security",
+    summary: "Skill/code audits, threat scanning, and vulnerability triage.",
+    soulTemplate: beeSoulTemplate("security"),
+    modelHint: "Use a strong reasoning model; security judgment (intent, exploitability) rewards capability over speed.",
+    taskProfile: "Security bee: audit skills and code before they run, scan for injection, data exfiltration, credential harvesting, privilege escalation, and supply-chain risk, triage scanner findings to drop false positives, and report each real finding with severity, evidence, and remediation. This class also backs the SkillSpector LLM-semantic pass: when LLM-powered skill security is enabled, the audit pipeline routes its model calls through this agent (or the Queen Bee if no security bee exists). Interpret ambiguous 'is this safe?' tasks as audit work: gather evidence before clearing or blocking.",
+    qualityBar: "Done means every reported risk has a severity, concrete evidence (file/line, matched pattern, or repro), and a remediation or explicit accept-risk note; never clear a skill as safe on assumption alone.",
+    skillSlugs: ["agent-security-auditor", "systematic-debugging", "github-code-review", "codebase-inspection", "karpathy-guidelines"],
+  },
 };
 
 export const BEE_WORKER_PRESET_LIST = Object.values(BEE_WORKER_PRESETS);

@@ -18,6 +18,7 @@ export const BEE_WORKER_CLASSES: Array<{ id: BeeWorkerClass; label: string; desc
   { id: "artist", label: "Artist", description: "Image generation, art direction, and visual assets." },
   { id: "ops", label: "Ops", description: "Deployment, environments, fleet, and system operations." },
   { id: "qa", label: "QA", description: "Testing, verification, and review passes." },
+  { id: "security", label: "Security", description: "Threat scanning, skill/code audits, and vulnerability review." },
 ];
 
 export type BeeAssignment = {
@@ -59,6 +60,14 @@ const CLASS_KEYWORDS: Array<{ workerClass: BeeWorkerClass; priority: number; key
     keywords: [
       { pattern: /screenshot|inspect|ui|ux|screen/i, weight: 3 },
       { pattern: /\bimage\b|visual/i, weight: 1 },
+    ],
+  },
+  {
+    workerClass: "security",
+    priority: 47,
+    keywords: [
+      { pattern: /vulnerab|exploit|malicious|threat|cve\b|injection|exfiltrat|skillspector/i, weight: 4 },
+      { pattern: /security|audit|scan|pentest|penetration|sandbox escape|supply chain/i, weight: 2 },
     ],
   },
   { workerClass: "ops", priority: 45, keywords: [/deploy/i, /server/i, /cron/i, /websocket/i, /mcp/i, /fleet/i, /tailscale/i, /collector/i].map((pattern) => ({ pattern })) },

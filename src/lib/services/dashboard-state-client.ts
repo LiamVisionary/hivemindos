@@ -44,10 +44,26 @@ function scheduleSaveRetry(key: string, fallbackValue: string) {
 const SNAPSHOT_RETRY_DELAYS_MS = [1_000, 2_000, 3_000, 5_000];
 const SNAPSHOT_RETRY_MAX_DELAY_MS = 5_000;
 
+export class DashboardStateAuthError extends Error {
+  constructor(message = "Dashboard authentication is required.") {
+    super(message);
+    this.name = "DashboardStateAuthError";
+  }
+}
+
+function redirectToDashboardUnlock(message?: string): Promise<DashboardStateSnapshot> {
+  if (typeof window === "undefined") {
+    throw new DashboardStateAuthError(message);
+  }
+  const currentRoute = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  window.location.replace(currentRoute);
+  return new Promise(() => {});
+}
+
 // Booting from an empty snapshot is destructive: hydration seeds in-memory state
 // from it, and the next persist overwrites the server's stored values (chat
 // history included). A transient failure (restarting dev server, proxy 503)
-// must therefore block hydration and retry, never resolve to {}.
+// or an auth failure must therefore block hydration, never resolve to {}.
 export async function loadDashboardStateSnapshot(): Promise<DashboardStateSnapshot> {
   if (cachedSnapshot) return cachedSnapshot;
   for (let attempt = 0; ; attempt += 1) {
@@ -55,16 +71,16 @@ export async function loadDashboardStateSnapshot(): Promise<DashboardStateSnapsh
       cache: "no-store",
       headers: { accept: "application/json" },
     }).catch(() => null);
-    const data = await response?.json().catch(() => null) as { ok?: boolean; values?: DashboardStateSnapshot } | null;
+    const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string; values?: DashboardStateSnapshot } | null;
     if (response?.ok && data?.ok && data.values && typeof data.values === "object") {
       cachedSnapshot = data.values;
       return cachedSnapshot;
     }
-    // A non-5xx JSON answer (auth denied, empty store) is the server's real
-    // state, not an outage: return it without caching so a later reload
-    // re-checks instead of reusing the empty result.
+    if (response?.status === 401) {
+      return redirectToDashboardUnlock(data?.error);
+    }
     if (response && response.status < 500 && data) {
-      return data.values && typeof data.values === "object" ? data.values : {};
+      throw new Error(data.error ?? `Dashboard state request failed with HTTP ${response.status}.`);
     }
     const delay = SNAPSHOT_RETRY_DELAYS_MS[attempt] ?? SNAPSHOT_RETRY_MAX_DELAY_MS;
     console.warn(`Dashboard state unavailable (attempt ${attempt + 1}); retrying in ${delay}ms.`);
@@ -80,30 +96,90 @@ export function dashboardStateValue(snapshot: DashboardStateSnapshot, key: strin
   return migratedKey ? snapshot[migratedKey] ?? null : null;
 }
 
-export async function saveDashboardStateValue(key: string, value: string) {
+// Boot and view switches flip a single `hydrated` flag, which fires ~14 separate
+// persist effects in the same commit — each previously its own POST, producing
+// the request storm seen in dev logs. Coalesce every save/remove issued within a
+// tick into one POST carrying all keys (the route accepts `values` + `remove`
+// together). Each caller still gets a Promise<boolean> resolving to whether the
+// batch stored, and failed value writes still fall back to per-key retry.
+let coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+let coalescedValues: DashboardStateSnapshot = {};
+let coalescedRemovals = new Set<string>();
+let coalescedWaiters: Array<(ok: boolean) => void> = [];
+
+function scheduleCoalescedFlush() {
+  if (coalesceTimer) return;
+  coalesceTimer = setTimeout(flushCoalescedState, 0);
+}
+
+function flushCoalescedState() {
+  coalesceTimer = null;
+  const values = coalescedValues;
+  const removals = [...coalescedRemovals];
+  const waiters = coalescedWaiters;
+  coalescedValues = {};
+  coalescedRemovals = new Set();
+  coalescedWaiters = [];
+
+  const hasValues = Object.keys(values).length > 0;
+  if (!hasValues && removals.length === 0) {
+    waiters.forEach((resolve) => resolve(true));
+    return;
+  }
+  for (const key of Object.keys(values)) cancelSaveRetry(key);
+  for (const key of removals) cancelSaveRetry(key);
+
+  void postDashboardState({
+    values: hasValues ? values : undefined,
+    remove: removals.length ? removals : undefined,
+  }).then((saved) => {
+    // Value writes retry per-key on failure; removals stay best-effort as before.
+    if (!saved) {
+      for (const [key, value] of Object.entries(values)) scheduleSaveRetry(key, value);
+    }
+    waiters.forEach((resolve) => resolve(saved));
+  });
+}
+
+export function saveDashboardStateValue(key: string, value: string): Promise<boolean> {
   if (cachedSnapshot) cachedSnapshot = { ...cachedSnapshot, [key]: value };
   cancelSaveRetry(key);
-  const saved = await postDashboardState({ values: { [key]: value } });
-  if (!saved) scheduleSaveRetry(key, value);
-  return saved;
+  coalescedRemovals.delete(key);
+  coalescedValues = { ...coalescedValues, [key]: value };
+  return new Promise<boolean>((resolve) => {
+    coalescedWaiters.push(resolve);
+    scheduleCoalescedFlush();
+  });
 }
 
-export async function saveDashboardStateValues(values: DashboardStateSnapshot) {
+export function saveDashboardStateValues(values: DashboardStateSnapshot): Promise<boolean> {
   if (cachedSnapshot) cachedSnapshot = { ...cachedSnapshot, ...values };
-  for (const key of Object.keys(values)) cancelSaveRetry(key);
-  const saved = await postDashboardState({ values });
-  if (!saved) {
-    for (const [key, value] of Object.entries(values)) scheduleSaveRetry(key, value);
+  for (const key of Object.keys(values)) {
+    cancelSaveRetry(key);
+    coalescedRemovals.delete(key);
   }
-  return saved;
+  coalescedValues = { ...coalescedValues, ...values };
+  return new Promise<boolean>((resolve) => {
+    coalescedWaiters.push(resolve);
+    scheduleCoalescedFlush();
+  });
 }
 
-export async function removeDashboardStateValue(key: string) {
+export function removeDashboardStateValue(key: string): Promise<boolean> {
   if (cachedSnapshot) {
     const next = { ...cachedSnapshot };
     delete next[key];
     cachedSnapshot = next;
   }
   cancelSaveRetry(key);
-  return postDashboardState({ remove: [key] });
+  if (key in coalescedValues) {
+    const next = { ...coalescedValues };
+    delete next[key];
+    coalescedValues = next;
+  }
+  coalescedRemovals.add(key);
+  return new Promise<boolean>((resolve) => {
+    coalescedWaiters.push(resolve);
+    scheduleCoalescedFlush();
+  });
 }

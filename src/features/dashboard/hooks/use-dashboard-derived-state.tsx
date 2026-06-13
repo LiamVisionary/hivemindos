@@ -2024,7 +2024,8 @@ export function useDashboardDerivedState(props: any) {
           activeView === "my-apps" ||
           activeView === "phone" ||
           activeView === "aeon" ||
-          activeView === "fusion")),
+          activeView === "fusion" ||
+          activeView === "governance")),
   );
   const activeHeader = (() => {
     const detail = activeNavItem?.detail ?? "";
@@ -2062,8 +2063,9 @@ export function useDashboardDerivedState(props: any) {
       phone: { label: "Phone", title: "What your phone calls about" },
       aeon: { label: "Aeon", title: "What runs unattended" },
       fusion: { label: "Hive Fusion", title: "What the hive can create" },
+      governance: { label: "Zero Human Company", title: "How the hive is held accountable" },
     };
-    const header = headers[activeView];
+    const header = headers[activeView] ?? { label: "Zero Human Company", title: "" };
     return {
       eyebrow: detail
         ? `Hivemind Dispatch · ${header.label} · ${detail}`

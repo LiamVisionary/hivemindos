@@ -132,7 +132,7 @@ Wallet and token features are explicit rails, not a background permission pool. 
 <div class="docGrid">
   <section class="docCard">
     <h3>Wallets, Tokens, Honey, HIVE, And x402</h3>
-    <p>Agent wallets, crypto rail routing, USDC sends, MoneyClaw, UsePod deposits, wallet-vault backups, Honey rewards, Bankr HIVE claims, and paid requests.</p>
+    <p>Agent wallets, crypto rail routing, USDC sends, MoneyClaw, UsePod deposits, wallet-vault backups, Honey rewards, Bankr HIVE claims, paid requests, and stock buying via Alpaca or on-chain xStocks.</p>
     <a href="wallets-honey-and-x402.html">Open wallet docs</a>
   </section>
   <section class="docCard">

@@ -1,11 +1,11 @@
-import { Activity, AppWindow, Bell, Bot, FolderOpen, MessageSquare, PhoneCall, PlugZap, Search, ShieldCheck, Sparkles, Wrench } from "lucide-react";
+import { Activity, AppWindow, Bell, Bot, FolderOpen, Landmark, MessageSquare, PhoneCall, PlugZap, Search, ShieldCheck, Sparkles, Wrench } from "lucide-react";
 
 import fleetStyles from "@/app/fleet.module.css";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 
 const fleetClass = createStyleClass(fleetStyles);
 
-type MorePanelTarget = "integrations" | "env" | "maintenance" | "sessions" | "tools" | "files" | "notifications" | "messaging" | "memory" | "my-apps" | "phone" | "aeon" | "fusion";
+type MorePanelTarget = "integrations" | "env" | "maintenance" | "sessions" | "tools" | "files" | "notifications" | "messaging" | "memory" | "my-apps" | "phone" | "aeon" | "fusion" | "governance";
 
 export type MorePanelProps = {
   sharedEnvCount?: number;
@@ -44,6 +44,13 @@ export function MorePanel({
       eyebrow: "Autopilot",
       title: "Aeon",
       body: "Manage unattended skills, schedules, workflow runs, and outputs.",
+    },
+    {
+      id: "governance" as const,
+      icon: <Landmark aria-hidden="true" />,
+      eyebrow: "Companies & budgets",
+      title: "Zero Human Company",
+      body: "Group agents into companies, set shared budgets and kill switches, and clear spend approvals.",
     },
     {
       id: "integrations" as const,

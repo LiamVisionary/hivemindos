@@ -102,6 +102,21 @@ async function askHivemindAgent(args: Record<string, unknown>) {
   }
 }
 
+async function driveDashboard(
+  args: Record<string, unknown>,
+  pilot: ((command: string) => Promise<string>) | undefined,
+) {
+  const command = typeof args.command === "string" ? args.command.trim() : "";
+  if (!command) return "No on-screen command was given.";
+  if (!pilot) return "The dashboard isn't available to drive right now.";
+  try {
+    const reply = await pilot(command);
+    return reply || "Done.";
+  } catch (driveError) {
+    return `I couldn't do that on screen: ${driveError instanceof Error ? driveError.message : "request failed"}.`;
+  }
+}
+
 async function createHiveTask(args: Record<string, unknown>) {
   const message = typeof args.message === "string" ? args.message.trim() : "";
   if (!message) return "No task was created: the work request was empty.";
@@ -141,6 +156,7 @@ export function useQueenBeeRealtime(
   active: boolean,
   muted: boolean,
   onFailed?: () => void,
+  onDriveDashboard?: (command: string) => Promise<string>,
 ) {
   const [phase, setPhase] = React.useState<QueenVoicePhase>("starting");
   const [error, setError] = React.useState("");
@@ -150,10 +166,15 @@ export function useQueenBeeRealtime(
   const mutedRef = React.useRef(muted);
   const trackRef = React.useRef<MediaStreamTrack | null>(null);
   const onFailedRef = React.useRef(onFailed);
+  const onDriveDashboardRef = React.useRef(onDriveDashboard);
 
   React.useEffect(() => {
     onFailedRef.current = onFailed;
   }, [onFailed]);
+
+  React.useEffect(() => {
+    onDriveDashboardRef.current = onDriveDashboard;
+  }, [onDriveDashboard]);
 
   React.useEffect(() => {
     mutedRef.current = muted;
@@ -423,7 +444,9 @@ export function useQueenBeeRealtime(
             ? await createHiveTask(call.args)
             : call.name === "ask_hivemind_agent"
               ? await askHivemindAgent(call.args)
-              : `Unknown tool: ${call.name}`;
+              : call.name === "drive_dashboard"
+                ? await driveDashboard(call.args, onDriveDashboardRef.current)
+                : `Unknown tool: ${call.name}`;
         send({
           type: "conversation.item.create",
           item: {

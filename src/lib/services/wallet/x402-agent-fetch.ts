@@ -11,6 +11,12 @@ import { base58 } from "@scure/base";
 import { privateKeyToAccount } from "viem/accounts";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { homedir } from "@/lib/home-dir";
+import {
+  evaluateSpend,
+  loadGovernanceWallet,
+  shouldEvaluateSpend,
+} from "@/lib/services/wallet/spend-governance";
+import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 
 export type X402Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -29,6 +35,8 @@ export type X402FetchInput = {
   body?: unknown;
   policy: X402FetchPolicy;
   confirmation?: string;
+  /** Granted approval id, supplied when retrying an escalated x402 payment. */
+  approvalToken?: string;
 };
 
 export type X402PaymentDiscoveryInput = {
@@ -204,6 +212,28 @@ async function responsePreview(response: Response) {
   return { contentType, bodyPreview: text.slice(0, 8000) };
 }
 
+/**
+ * Tolerant pre-flight: returns the USD amount this call would pay, or null when
+ * the endpoint does not require payment. The unpaid 402 carries no side effect,
+ * so this is safe even for POST.
+ */
+async function discoverX402AmountUsd(input: X402FetchInput): Promise<number | null> {
+  const method = parseX402Method(input.method);
+  const response = await fetch(input.url, {
+    method,
+    headers: {
+      ...redactHeaders(input.headers),
+      ...(input.body == null ? {} : { "Content-Type": "application/json" }),
+    },
+    body: input.body == null || method === "GET" ? undefined : JSON.stringify(input.body),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (response.status !== 402) return null;
+  const required = await paymentRequiredFromResponse(response);
+  const requirement = selectRequirement({ ...input.policy, autoPayEnabled: true }, "PAY_X402")(required.x402Version, required.accepts);
+  return amountFromRequirement(requirement);
+}
+
 export async function executeX402Fetch(input: X402FetchInput): Promise<X402FetchResult> {
   if (!input.policy.enabled) throw new Error("This agent's wallet is not enabled.");
   if (input.policy.provider !== "x402") throw new Error("Set this agent's payment provider to x402 before paid HTTP calls.");
@@ -212,6 +242,30 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
   }
   if (input.policy.network !== input.network) throw new Error("Stored wallet network does not match the x402 policy network.");
   assertPaidUrl(input.url, input.policy.x402BaseUrl);
+
+  // Governance pre-flight: company kill switch, cumulative budgets, approval
+  // escalation. Skipped for agents with no governance configured so default
+  // behaviour and request count are unchanged.
+  const governance = await loadGovernanceWallet(input.agentId);
+  let approvalGrantId: string | undefined;
+  let spendCompanyId: string | undefined;
+  if (governance && (await shouldEvaluateSpend(governance.wallet, input.policy.maxPaymentUsd))) {
+    const preflightAmountUsd = await discoverX402AmountUsd(input);
+    if (preflightAmountUsd != null && preflightAmountUsd > 0) {
+      const decision = await evaluateSpend({
+        wallet: governance.wallet,
+        agentName: governance.agentName,
+        kind: "x402",
+        asset: "USDC",
+        amountUsd: preflightAmountUsd,
+        target: input.url,
+        approvalToken: input.approvalToken,
+      });
+      if (decision.decision !== "allow") throw new Error(decision.reason);
+      approvalGrantId = decision.grant?.id;
+      spendCompanyId = decision.companyId;
+    }
+  }
 
   const method = parseX402Method(input.method);
   let selectedAmountUsd = 0;
@@ -268,6 +322,16 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
       paid,
       createdAt: new Date().toISOString(),
     });
+    await appendSpend({
+      agentId: input.agentId,
+      companyId: spendCompanyId,
+      kind: "x402",
+      asset: "USDC",
+      amountUsd: selectedAmountUsd,
+      target: shortTarget(input.url),
+      status: "executed",
+      approvalId: approvalGrantId,
+    }).catch(() => {});
   }
   return result;
 }

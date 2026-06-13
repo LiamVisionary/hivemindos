@@ -367,7 +367,8 @@ export function useMirosharkBrainController(props: any) {
       vaultPath: requestedVaultPath || undefined,
       force,
     });
-    if (nativeGraph) {
+    const nativeGraphIsEmpty = Boolean(nativeGraph && nativeGraph.nodes.length === 0 && nativeGraph.links.length === 0);
+    if (nativeGraph && !nativeGraphIsEmpty) {
       setBrainGraphLoading(false);
       setBrainGraph(nativeGraph);
       brainGraphLoadedAtRef.current = Date.now();
@@ -382,11 +383,16 @@ export function useMirosharkBrainController(props: any) {
     const response = await fetch("/api/obsidian/graph", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ vaultPath: requestedVaultPath || force }),
+      body: JSON.stringify({ vaultPath: requestedVaultPath || undefined, force }),
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as BrainGraphResponse | null;
     setBrainGraphLoading(false);
     if (!response?.ok || !data?.ok || !data.graph) {
+      if (nativeGraphIsEmpty && nativeGraph) {
+        setBrainGraph(nativeGraph);
+        setBrainGraphStatus(data?.error ?? "Native desktop graph returned 0 notes, and the API fallback is unavailable.");
+        return;
+      }
       setBrainGraphStatus(data?.error ?? "Could not build brain graph.");
       return;
     }

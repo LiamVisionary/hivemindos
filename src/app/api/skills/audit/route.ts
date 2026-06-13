@@ -11,12 +11,16 @@ export async function POST(request: Request) {
       markdown?: string;
       files?: Array<{ path?: string; content?: string }>;
       sourceRef?: string;
+      engine?: "auto" | "regex" | "skillspector";
+      llm?: boolean;
     };
     const audit = await auditSkillInput({
       slug: body.slug,
       markdown: body.markdown,
       files: body.files?.filter((file) => file.path && typeof file.content === "string").map((file) => ({ path: file.path!, content: file.content! })),
       sourceRef: body.sourceRef,
+      engine: body.engine,
+      llm: body.llm,
     });
     await appendSkillAnalyticsEvent({
       skillSlug: body.slug ?? "draft-skill",

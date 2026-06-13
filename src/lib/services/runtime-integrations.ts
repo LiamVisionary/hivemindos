@@ -452,8 +452,13 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     // their own profile home get model.default in that profile's config.yaml,
     // and every hermes chat also passes the model per-run via `-m/--provider`.
     const profileEnv = hermesProfileEnv(agent);
-    if (MODEL_PROVIDER_GATEWAYS[provider]?.hermes) await addHermesProvider(provider, model, profileEnv);
-    else await addHermesModel(provider, model, undefined, profileEnv);
+    // Venice x402 wallet mode can't be reached with a bearer key — Hermes must
+    // route through the collector's local signing proxy, which injects the
+    // SIWX header. Point the provider's base_url there with no key_env.
+    const veniceProxyBase = provider === "venice" ? veniceWalletProxyBase(agent) : null;
+    if (MODEL_PROVIDER_GATEWAYS[provider]?.hermes) {
+      await addHermesProvider(provider, model, profileEnv, veniceProxyBase ? { base_url: veniceProxyBase, key_env: "" } : undefined);
+    } else await addHermesModel(provider, model, undefined, profileEnv);
     if (profileEnv) {
       await setHermesProfileModel(provider, model, profileEnv);
       return { ok: true, message: `Hermes model set to ${provider}/${model} for ${agent?.name || "this agent"} only. Gateway default unchanged.` };
@@ -642,6 +647,24 @@ print(json.dumps(payload))
  * when the agent lives in the shared gateway home. Config writes against the
  * shared home's model default are forbidden — the gateway owns that file.
  */
+// Venice x402 wallet-mode agents route through the collector's local signing
+// proxy (it injects the SIWX header). The proxy runs on the collector host
+// where Hermes also runs, so 127.0.0.1:<collectorPort> is correct regardless
+// of how the dashboard reaches the collector. Returns null for api-key mode.
+function veniceWalletProxyBase(agent?: AgentProfile): string | null {
+  const venice = agent?.venice;
+  const vaultId = String(venice?.walletVaultId ?? "").trim();
+  if (!vaultId || venice?.authMode === "api-key") return null;
+  let port = 8787;
+  try {
+    const parsed = new URL(String(agent?.telemetryUrl ?? ""));
+    if (parsed.port) port = Number(parsed.port);
+  } catch {
+    // No/invalid telemetry URL → default collector port.
+  }
+  return `http://127.0.0.1:${port}/venice-x402/${encodeURIComponent(vaultId)}`;
+}
+
 function hermesProfileEnv(agent?: AgentProfile): Record<string, string> | undefined {
   const raw = String(agent?.localDataDir ?? "").trim();
   if (!raw) return undefined;
@@ -827,7 +850,7 @@ print(json.dumps(payload.get("providers", [])))
   return mapped;
 }
 
-async function addHermesProvider(provider: string, model: string, env?: Record<string, string>) {
+async function addHermesProvider(provider: string, model: string, env?: Record<string, string>, providerOverride?: { base_url?: string; key_env?: string }) {
   const script = `
 from hermes_cli.config import load_config, save_config
 from hermes_cli.models import provider_model_ids
@@ -894,6 +917,12 @@ save_config(cfg)
       key_env: gateway.hermes?.keyEnv,
       models: gateway.hermes?.models,
     }]));
+  // Wallet-mode Venice (and similar) override the base_url to the local signing
+  // proxy and clear key_env so Hermes sends no bearer.
+  if (providerOverride && gatewayDefaults[provider]) {
+    if (typeof providerOverride.base_url === "string") gatewayDefaults[provider].base_url = providerOverride.base_url;
+    if (typeof providerOverride.key_env === "string") gatewayDefaults[provider].key_env = providerOverride.key_env;
+  }
   await runHermesPython(script, {
     __PROVIDER__: provider,
     __MODEL__: model,

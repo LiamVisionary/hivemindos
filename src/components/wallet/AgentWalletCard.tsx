@@ -29,6 +29,7 @@ import type {
   AgentPaymentProvider,
   AgentSpendCapAsset,
   AgentSurvivalSnapshot,
+  AgentTradingVenue,
   AgentWalletConfig,
   HoneyAgentReward,
 } from "@/lib/types/agent-wallet";
@@ -902,6 +903,61 @@ export function AgentWalletCard({
                 onChange={(event) => onUpdateWallet({ maxPaymentUsd: Number(event.target.value) || 0 })}
               />
             </div>
+            <div className={styles.sheetField}>
+              <label htmlFor="wallet-trading-venue">Stock buying</label>
+              <select
+                id="wallet-trading-venue"
+                value={wallet.tradingVenue ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  onUpdateWallet({ tradingVenue: value ? (value as AgentTradingVenue) : undefined });
+                }}
+              >
+                <option value="">Off</option>
+                <option value="alpaca">Alpaca (real brokerage)</option>
+                <option value="xstocks">xStocks (on-chain)</option>
+              </select>
+            </div>
+            {wallet.tradingVenue === "alpaca" ? (
+              <div className={styles.sheetField}>
+                <label htmlFor="wallet-alpaca-mode">Alpaca mode</label>
+                <select
+                  id="wallet-alpaca-mode"
+                  value={wallet.alpacaPaper === false ? "live" : "paper"}
+                  onChange={(event) => onUpdateWallet({ alpacaPaper: event.target.value !== "live" })}
+                >
+                  <option value="paper">Paper (simulated)</option>
+                  <option value="live">LIVE (real money)</option>
+                </select>
+              </div>
+            ) : null}
+            {wallet.tradingVenue ? (
+              <div className={styles.sheetField}>
+                <label htmlFor="wallet-limit-trade">Max per trade</label>
+                <input
+                  id="wallet-limit-trade"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={wallet.maxTradeUsd ?? 0}
+                  onChange={(event) => onUpdateWallet({ maxTradeUsd: Number(event.target.value) || 0 })}
+                  placeholder={`Defaults to max per payment (${formatMoney(wallet.maxPaymentUsd)})`}
+                />
+              </div>
+            ) : null}
+            {wallet.tradingVenue === "alpaca" ? (
+              <p className={styles.sheetHelp}>
+                Alpaca keys load from shared hive env by name
+                (<code>{wallet.alpacaKeyEnvName || "ALPACA_API_KEY_ID"}</code> /{" "}
+                <code>{wallet.alpacaSecretEnvName || "ALPACA_API_SECRET_KEY"}</code>).
+                {wallet.alpacaPaper === false ? " LIVE mode places real brokerage orders." : " Paper mode is simulated — no real money."}
+              </p>
+            ) : wallet.tradingVenue === "xstocks" ? (
+              <p className={styles.sheetHelp}>
+                Swaps USDC → verified xStock tokens via Jupiter. Requires a Solana mainnet wallet.
+                {wallet.network !== "solana:mainnet" ? " This wallet is not on Solana mainnet, so on-chain buys will be rejected." : ""}
+              </p>
+            ) : null}
             {veilRail && privateTransferAssets.includes("ETH") ? (
               <div className={styles.sheetField}>
                 <label htmlFor="wallet-limit-eth">Max ETH transfer</label>
@@ -931,7 +987,32 @@ export function AgentWalletCard({
                 onChange={(event) => onUpdateWallet({ dailyComputeBurnUsd: Number(event.target.value) || 0 })}
               />
             </div>
+            <div className={styles.sheetField}>
+              <label htmlFor="wallet-budget-daily">Daily budget (0 = off)</label>
+              <input
+                id="wallet-budget-daily"
+                type="number"
+                min="0"
+                step="0.01"
+                value={wallet.dailyBudgetUsd ?? 0}
+                onChange={(event) => onUpdateWallet({ dailyBudgetUsd: Number(event.target.value) || 0 })}
+              />
+            </div>
+            <div className={styles.sheetField}>
+              <label htmlFor="wallet-budget-monthly">Monthly budget (0 = off)</label>
+              <input
+                id="wallet-budget-monthly"
+                type="number"
+                min="0"
+                step="0.01"
+                value={wallet.monthlyBudgetUsd ?? 0}
+                onChange={(event) => onUpdateWallet({ monthlyBudgetUsd: Number(event.target.value) || 0 })}
+              />
+            </div>
           </div>
+          <p className={styles.sheetHelp}>
+            Daily/monthly budgets cap cumulative spend across every rail. Add this agent to a company from the Zero Human Company panel for a shared budget and kill switch.
+          </p>
           <button
             type="button"
             className={styles.autoUseToggle}

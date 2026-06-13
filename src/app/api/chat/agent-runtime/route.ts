@@ -20,6 +20,15 @@ import { callVeilMcpTool } from "@/lib/services/wallet/veil-mcp";
 import { executeVeilPrivateTransfer, veilPrivateTransferErrorMessage } from "@/lib/services/wallet/veil-private-transfer";
 import { getWalletBalance } from "@/lib/services/wallet/chain-wallet";
 import { executeX402Fetch, type X402FetchPolicy, type X402FetchResult } from "@/lib/services/wallet/x402-agent-fetch";
+import {
+  executeBuyStock,
+  discoverBuyStockQuote,
+  BUY_STOCK_CONFIRMATION,
+  type BuyStockPolicy,
+  type BuyStockResult,
+} from "@/lib/services/trading/buy-stock";
+import { resolveXStock, supportedXStockTickers } from "@/lib/config/xstocks-tokens";
+import type { AgentTradingVenue } from "@/lib/types/agent-wallet";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
 import { recordHoneyUsage } from "@/lib/services/wallet/honey-ledger";
@@ -27,7 +36,7 @@ import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
 import { chatTelemetrySession, chatTelemetryValue } from "@/lib/services/telemetry/chat-dev-telemetry";
 import { normalizeRuntimeStreamEvent, RUNTIME_STREAM_EVENT_TYPES, type RuntimeStreamEvent } from "@/lib/services/runtime-stream-events";
 import { isUsePodProfile, resolveUsePodRuntimeConfig, summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
-import { isVeniceProfile, resolveVeniceRuntimeConfig, summarizeVeniceResponseHeaders } from "@/lib/services/venice";
+import { interpretVeniceError, isVeniceProfile, resolveVeniceRuntimeConfig, summarizeVeniceResponseHeaders } from "@/lib/services/venice";
 import {
   bankrLlmModel,
   isBankrAdaptiveModel,
@@ -134,6 +143,7 @@ const execFileAsync = promisify(execFile);
 type PrivateTransferDraft = { asset: "USDC"; amount: string; recipient: string };
 type PrivateX402Draft = { url: string; method: "GET" | "POST"; maxPayment: string };
 type PublicX402Draft = { url: string; method: "GET" | "POST"; maxPayment: string };
+type BuyStockDraft = { venue: AgentTradingVenue; ticker: string; notionalUsd?: number; qty?: number };
 type VeilMcpX402Quote = {
   requiresPayment?: boolean;
   supported?: boolean;
@@ -538,6 +548,311 @@ async function maybePrepareNaturalPublicX402(input: {
     url: draft.url,
     method: draft.method,
     maxPayment: draft.maxPayment,
+    hasValidationError: Boolean(validation),
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
+// ---- Buy-stock rail (unified Alpaca / xStocks tool) -------------------------
+
+function buyStockCapUsd(wallet?: AgentWalletConfig): number {
+  if (!wallet) return 0;
+  const explicit = Number(wallet.maxTradeUsd) || 0;
+  return explicit > 0 ? explicit : Number(wallet.maxPaymentUsd) || 0;
+}
+
+function buyStockPolicy(wallet: AgentWalletConfig): BuyStockPolicy {
+  return {
+    enabled: wallet.enabled,
+    network: wallet.network,
+    tradingVenue: wallet.tradingVenue,
+    alpacaKeyEnvName: wallet.alpacaKeyEnvName,
+    alpacaSecretEnvName: wallet.alpacaSecretEnvName,
+    alpacaPaper: wallet.alpacaPaper,
+    maxTradeUsd: wallet.maxTradeUsd,
+    maxPaymentUsd: wallet.maxPaymentUsd,
+  };
+}
+
+function detectBuyStockVenue(text: string, wallet?: AgentWalletConfig): AgentTradingVenue | null {
+  if (/\b(xstock|x-stock|tokeni[sz]ed|on-?chain|solana|jupiter)\b/i.test(text)) return "xstocks";
+  if (/\b(alpaca|brokerage|paper trad|real (?:stock|share|shares))\b/i.test(text)) return "alpaca";
+  return wallet?.tradingVenue ?? null;
+}
+
+const BUY_STOCK_TICKER_STOPWORDS = new Set([
+  "USD", "USDC", "BUY", "THE", "AND", "FOR", "A", "AN", "OK", "GO", "AI", "CEO", "ETF",
+  "NYSE", "US", "PM", "AM", "OF", "IN", "IT", "MY", "I", "SOME", "WORTH", "LIVE",
+]);
+
+function scanBuyStockTicker(text: string): string | null {
+  for (const word of text.toUpperCase().match(/\b[A-Z][A-Z.]{0,9}\b/g) ?? []) {
+    if (resolveXStock(word)) return resolveXStock(word)!.underlying;
+  }
+  for (const word of text.match(/\b[A-Z]{1,5}\b/g) ?? []) {
+    if (!BUY_STOCK_TICKER_STOPWORDS.has(word)) return word;
+  }
+  const phrased = text.match(/\b(?:of|in)\s+([A-Za-z]{1,5})\b/i);
+  return phrased ? phrased[1].toUpperCase() : null;
+}
+
+function parseBuyStockRequest(text: string, wallet?: AgentWalletConfig): BuyStockDraft | null {
+  if (!text) return null;
+  if (/https?:\/\//i.test(text)) return null; // URL present -> x402 territory, not a stock buy.
+  if (!/\b(buy|purchase|invest|acquire|long)\b/i.test(text)) return null;
+  if (!/\b(stock|stocks|share|shares|equit|ticker|xstock|alpaca)\b/i.test(text) && !/\$\s*\d/.test(text)) return null;
+
+  const venue = detectBuyStockVenue(text, wallet);
+  if (!venue) return null;
+
+  const ticker = scanBuyStockTicker(text);
+  if (!ticker) return null;
+
+  const sharesMatch = text.match(/(\d+(?:\.\d+)?)\s*shares?\b/i);
+  const amountMatch = text.match(/\$\s*(\d+(?:\.\d{1,2})?)/)
+    ?? text.match(/(\d+(?:\.\d{1,2})?)\s*(?:usdc|usd|dollars?|bucks)\b/i)
+    ?? text.match(/\b(?:for|worth)\s+\$?(\d+(?:\.\d{1,2})?)\b/i);
+
+  const draft: BuyStockDraft = { venue, ticker };
+  if (sharesMatch && venue === "alpaca") draft.qty = Number(sharesMatch[1]);
+  if (amountMatch) draft.notionalUsd = Number(amountMatch[1]);
+  if (draft.notionalUsd == null && draft.qty == null) return null;
+  return draft;
+}
+
+function isBuyStockDraftText(text: string) {
+  return /\*{0,2}Buy stock ready\*{0,2}/i.test(text);
+}
+
+function parseBuyStockDraft(text: string): BuyStockDraft | null {
+  const venueMatch = text.match(/Venue\s+`?(alpaca|xstocks)`?/i);
+  if (!venueMatch) return null;
+  const venue = venueMatch[1].toLowerCase() as AgentTradingVenue;
+  const qtyForm = text.match(/Buy\s+\*\*(\d+(?:\.\d+)?)\*\*\s+shares?(?:\(s\))?\s+of\s+\*\*([A-Za-z][A-Za-z.]{0,9})\*\*/i);
+  if (qtyForm) return { venue, ticker: qtyForm[2].toUpperCase(), qty: Number(qtyForm[1]) };
+  const notionalForm = text.match(/Buy\s+\*\*([A-Za-z][A-Za-z.]{0,9})\*\*\s+for\s+~?\$(\d+(?:\.\d{1,2})?)/i);
+  if (notionalForm) return { venue, ticker: notionalForm[1].toUpperCase(), notionalUsd: Number(notionalForm[2]) };
+  return null;
+}
+
+function findLatestBuyStockRequest(messages: IncomingMessage[], wallet?: AgentWalletConfig): BuyStockDraft | null {
+  return parseBuyStockRequest(messageText(latestUserMessage(messages)), wallet);
+}
+
+function findBuyStockDraft(messages: IncomingMessage[]): BuyStockDraft | null {
+  for (let index = messages.length - 2; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "assistant") continue;
+    const text = messageText(message);
+    if (!isBuyStockDraftText(text)) continue;
+    return parseBuyStockDraft(text);
+  }
+  return null;
+}
+
+function validateBuyStockDraft(wallet: AgentWalletConfig | undefined, draft: BuyStockDraft, executing: boolean): string {
+  if (!wallet) return "No wallet is configured for this agent.";
+  if (!wallet.tradingVenue) return "Stock buying is off. Set a trading venue (alpaca or xstocks) for this agent first.";
+  if (executing && !wallet.enabled) return "Wallet spending is off for this agent. Turn Spend on before buying.";
+  const cap = buyStockCapUsd(wallet);
+  if (draft.notionalUsd != null) {
+    if (!(draft.notionalUsd > 0)) return "Trade amount must be a positive USD value.";
+    if (cap > 0 && draft.notionalUsd > cap) return `Trade exceeds this agent's per-trade cap ($${cap.toFixed(2)}).`;
+  }
+  if (draft.venue === "xstocks") {
+    if (!resolveXStock(draft.ticker)) return `"${draft.ticker}" is not a verified xStock. Supported: ${supportedXStockTickers().join(", ")}.`;
+    if (wallet.network !== "solana:mainnet") return "xStocks swaps require a Solana mainnet wallet.";
+    if (draft.qty != null && draft.notionalUsd == null) return "On-chain xStock buys are sized in USDC, not share count — give a $ amount.";
+  }
+  if (draft.notionalUsd == null && draft.qty == null) return "Tell me how much to buy — a $ amount, or a share count for Alpaca.";
+  return "";
+}
+
+function buyStockDraftMessage(draft: BuyStockDraft, wallet: AgentWalletConfig | undefined, quoteDetail: string, validation?: string) {
+  if (validation) {
+    return ["**Buy stock unavailable**", "", validation, "", "Fix this blocker, then ask again."].join("\n");
+  }
+  const cap = buyStockCapUsd(wallet);
+  const venueLabel = draft.venue === "alpaca"
+    ? `\`alpaca\` ${wallet?.alpacaPaper === false ? "(LIVE)" : "(paper)"}`
+    : "`xstocks` (on-chain)";
+  const sizeLine = draft.qty != null
+    ? `Buy **${draft.qty}** shares of **${draft.ticker}**`
+    : `Buy **${draft.ticker}** for ~$${(draft.notionalUsd ?? 0).toFixed(2)}`;
+  return [
+    "**Buy stock ready**",
+    "",
+    `Venue ${venueLabel}`,
+    sizeLine,
+    quoteDetail,
+    cap > 0 ? `Per-trade cap **$${cap.toFixed(2)}**` : "",
+    "",
+    wallet?.enabled
+      ? "Reply `confirm` to buy."
+      : "Wallet spending is off, so I prepared the draft only. Turn Spend on before buying.",
+  ].filter(Boolean).join("\n");
+}
+
+function buyStockResultMessage(result: BuyStockResult, executionMs: number) {
+  const head = result.venue === "alpaca"
+    ? `${result.paper ? "paper" : "LIVE"} brokerage order`
+    : "on-chain swap";
+  return [
+    `**Buy stock complete** · ${head}`,
+    "",
+    result.detail,
+    result.priceImpactPct != null ? `Price impact \`${(result.priceImpactPct * 100).toFixed(2)}%\`` : "",
+    `Reference \`${result.reference}\``,
+    "",
+    `Timing **${formatDuration(executionMs)}**`,
+  ].filter(Boolean).join("\n");
+}
+
+function buyStockExecutionSse(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  draft: BuyStockDraft;
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}) {
+  const encoder = new TextEncoder();
+  const readable = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (payload: unknown) => controller.enqueue(encoder.encode(ssePayload(payload)));
+      const sendTool = async (type: string, label: string, detail?: string, status: "running" | "completed" | "failed" = "running") => {
+        const event = { type, toolName: "buyStock", name: "buyStock", message: label, detail, status };
+        send(event);
+        await appendRuntimeChatSessionEvent(input.runtimeSessionId, label, detail, event).catch(() => undefined);
+      };
+      try {
+        const { draft } = input;
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_START, "Preparing stock buy", `${draft.venue}:${draft.ticker}`);
+        const wallet = input.wallet;
+        const validation = validateBuyStockDraft(wallet, draft, true);
+        if (validation) throw new Error(validation);
+
+        let network: string | undefined;
+        let secret: string | undefined;
+        if (draft.venue === "xstocks") {
+          const stored = await getWalletSecret(input.profile.id);
+          if (!stored) throw new Error("No local Solana wallet exists for this agent.");
+          network = stored.info.network;
+          secret = stored.secret;
+        }
+
+        await sendTool(
+          RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS,
+          "Validate trade policy",
+          `Venue ${draft.venue}; cap ${formatMoney(buyStockCapUsd(wallet))} USD.`,
+          "completed",
+        );
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS, "Execute buy", "Submitting the order.", "running");
+        const startedAt = Date.now();
+        const result = await executeBuyStock({
+          agentId: input.profile.id,
+          policy: buyStockPolicy(wallet!),
+          ticker: draft.ticker,
+          notionalUsd: draft.notionalUsd ?? 0,
+          qty: draft.qty,
+          confirmation: BUY_STOCK_CONFIRMATION,
+          network,
+          secret,
+        });
+        const message = buyStockResultMessage(result, Date.now() - startedAt);
+        await recordRouteTelemetry(input.request, "agent_runtime.wallet.buy_stock.completed", {
+          ...telemetryPayloadForProfile(input.profile),
+          venue: result.venue,
+          ticker: result.ticker,
+          notionalUsd: result.notionalUsd,
+          paper: result.paper,
+          elapsedMs: Date.now() - input.routeStartedAt,
+        });
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE, "Buy finished", `Total ${formatDuration(Date.now() - input.routeStartedAt)}.`, "completed");
+        await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message, result).catch(() => undefined);
+        await finishRuntimeChatSession(input.runtimeSessionId, "completed").catch(() => undefined);
+        send({ choices: [{ delta: { content: message } }] });
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        const message = `Buy stock failed: ${detail}`;
+        await recordRouteTelemetry(input.request, "agent_runtime.wallet.buy_stock.failed", {
+          ...telemetryPayloadForProfile(input.profile),
+          venue: input.draft.venue,
+          ticker: input.draft.ticker,
+          error: detail,
+          elapsedMs: Date.now() - input.routeStartedAt,
+        }).catch(() => undefined);
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE, "Buy failed", detail, "failed");
+        await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+        await finishRuntimeChatSession(input.runtimeSessionId, "failed").catch(() => undefined);
+        send({ choices: [{ delta: { content: message } }] });
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
+async function maybeExecuteConfirmedBuyStock(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const latestText = messageText(latestUserMessage(input.messages)).trim();
+  if (!/^(confirm|confirmed|yes|yes,? confirm|go ahead|buy it|do it|execute)$/i.test(latestText)) return null;
+  const draft = findBuyStockDraft(input.messages);
+  if (!draft) return null;
+  return buyStockExecutionSse({ ...input, draft });
+}
+
+async function maybePrepareNaturalBuyStock(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const draft = findLatestBuyStockRequest(input.messages, input.wallet);
+  if (!draft) return null;
+
+  const validation = validateBuyStockDraft(input.wallet, draft, false);
+  let quoteDetail = "";
+  if (!validation && input.wallet) {
+    try {
+      const quote = await discoverBuyStockQuote({
+        policy: buyStockPolicy(input.wallet),
+        ticker: draft.ticker,
+        notionalUsd: draft.notionalUsd ?? 0,
+      });
+      quoteDetail = quote.detail;
+    } catch {
+      quoteDetail = "";
+    }
+  }
+  const message = buyStockDraftMessage(draft, input.wallet, quoteDetail, validation);
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, validation ? "failed" : "completed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.wallet.buy_stock.draft", {
+    ...telemetryPayloadForProfile(input.profile),
+    venue: draft.venue,
+    ticker: draft.ticker,
+    notionalUsd: draft.notionalUsd,
+    qty: draft.qty,
     hasValidationError: Boolean(validation),
     elapsedMs: Date.now() - input.routeStartedAt,
   });
@@ -1922,12 +2237,14 @@ function retryableAdaptiveOpenRouterStatus(status: number) {
 function providerErrorMessage(body: string, status: number, model?: string) {
   const parsed = (() => {
     try {
-      return JSON.parse(body || "{}") as { error?: { message?: string; code?: string | number }; message?: string };
+      return JSON.parse(body || "{}") as { error?: string | { message?: string; code?: string | number }; message?: string };
     } catch {
       return null;
     }
   })();
-  const rawMessage = parsed?.error?.message || parsed?.message || body.trim();
+  // Some providers (e.g. Venice) return `error` as a plain string, not an object.
+  const errorString = typeof parsed?.error === "string" ? parsed.error : parsed?.error?.message;
+  const rawMessage = errorString || parsed?.message || body.trim();
   if (status === 429) {
     return model
       ? `OpenRouter rate-limited ${model}. Adaptive will try another free model when available.`
@@ -3465,7 +3782,9 @@ async function streamOpenAICompatibleRuntime(
     }
     const upstreamErrorMessage = isLocalLmStudioProfile(candidateProfile) && isModelUnavailableErrorBody(errorText)
       ? lmStudioModelUnavailableMessage(model)
-      : providerErrorMessage(errorText, upstream.status, model);
+      : isVeniceProfile(profile)
+        ? interpretVeniceError(upstream.status, providerErrorMessage(errorText, upstream.status, model)).message
+        : providerErrorMessage(errorText, upstream.status, model);
     await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible upstream error", upstreamErrorMessage).catch(() => undefined);
     await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
     releaseInteractiveRuntime(lockKey);
@@ -4171,6 +4490,24 @@ export async function POST(request: NextRequest) {
     runtimeSessionId,
   });
   if (naturalMiroSharkX402) return naturalMiroSharkX402;
+  const confirmedBuyStock = await maybeExecuteConfirmedBuyStock({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (confirmedBuyStock) return confirmedBuyStock;
+  const naturalBuyStock = await maybePrepareNaturalBuyStock({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (naturalBuyStock) return naturalBuyStock;
   const confirmedPrivateX402 = await maybeExecuteConfirmedPrivateX402({
     request,
     routeStartedAt,

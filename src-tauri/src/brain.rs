@@ -342,7 +342,7 @@ pub(crate) fn brain_summary(vault_path: Option<String>) -> Result<serde_json::Va
     let skills_folder = vault.join("Skills");
     let shared = read_shared_skills(&skills_folder);
     let (notes, graph_truncated) = if vault.is_dir() {
-        read_graph_notes(&vault)
+        read_graph_notes(&vault).unwrap_or_else(|_| (Vec::new(), false))
     } else {
         (Vec::new(), false)
     };
@@ -395,30 +395,31 @@ fn is_sync_conflict_file(name: &str) -> bool {
     name.to_lowercase().contains("sync-conflict-") && name.to_lowercase().ends_with(".md")
 }
 
-fn walk_markdown(root: &Path, current: &Path, output: &mut Vec<PathBuf>) {
+fn walk_markdown(root: &Path, current: &Path, output: &mut Vec<PathBuf>) -> Result<(), String> {
     if output.len() >= MAX_GRAPH_NOTES {
-        return;
+        return Ok(());
     }
-    let Ok(entries) = fs::read_dir(current) else {
-        return;
-    };
-    for entry in entries.filter_map(Result::ok) {
+    let entries = fs::read_dir(current)
+        .map_err(|error| format!("Could not read vault folder {}: {error}", current.display()))?;
+    for entry in entries {
         if output.len() >= MAX_GRAPH_NOTES {
             break;
         }
+        let entry = entry.map_err(|error| format!("Could not read a vault entry in {}: {error}", current.display()))?;
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
-        let Ok(file_type) = entry.file_type() else {
-            continue;
-        };
+        let file_type = entry
+            .file_type()
+            .map_err(|error| format!("Could not inspect vault entry {}: {error}", path.display()))?;
         if file_type.is_dir() {
             if !GRAPH_SKIPPED_DIRS.contains(&name.as_str()) {
-                walk_markdown(root, &path, output);
+                walk_markdown(root, &path, output)?;
             }
         } else if file_type.is_file() && name.to_lowercase().ends_with(".md") && !is_sync_conflict_file(&name) && path.starts_with(root) {
             output.push(path);
         }
     }
+    Ok(())
 }
 
 fn extract_wiki_links(content: &str) -> Vec<String> {
@@ -499,9 +500,9 @@ fn extract_tags(content: &str) -> Vec<String> {
     tags
 }
 
-fn read_graph_notes(root: &Path) -> (Vec<GraphNote>, bool) {
+fn read_graph_notes(root: &Path) -> Result<(Vec<GraphNote>, bool), String> {
     let mut paths = Vec::new();
-    walk_markdown(root, root, &mut paths);
+    walk_markdown(root, root, &mut paths)?;
     let truncated = paths.len() >= MAX_GRAPH_NOTES;
     let mut notes = Vec::new();
     for path in paths {
@@ -525,7 +526,7 @@ fn read_graph_notes(root: &Path) -> (Vec<GraphNote>, bool) {
             content,
         });
     }
-    (notes, truncated)
+    Ok((notes, truncated))
 }
 
 fn read_access_events(root: &Path) -> Vec<serde_json::Value> {
@@ -581,7 +582,7 @@ pub(crate) fn brain_graph(vault_path: Option<String>, _force: Option<bool>) -> R
     if !vault.is_dir() {
         return Err("Vault path is not a directory.".to_string());
     }
-    let (notes, truncated) = read_graph_notes(&vault);
+    let (notes, truncated) = read_graph_notes(&vault)?;
     let accesses = read_access_events(&vault);
     let note_paths = notes.iter().map(|note| note.path.clone()).collect::<Vec<_>>();
     let mut accesses_by_note = HashMap::<String, Vec<serde_json::Value>>::new();
@@ -592,15 +593,22 @@ pub(crate) fn brain_graph(vault_path: Option<String>, _force: Option<bool>) -> R
     }
 
     let mut links = Vec::<serde_json::Value>::new();
+    let mut link_keys = HashSet::<String>::new();
     let mut unresolved = HashSet::<String>::new();
     for note in &notes {
         for target in extract_wiki_links(&note.content) {
             if let Some(resolved) = resolve_graph_link(&target, &note_paths) {
-                links.push(serde_json::json!({ "source": note.path, "target": resolved }));
+                let key = format!("{}\u{0}{resolved}", note.path);
+                if link_keys.insert(key) {
+                    links.push(serde_json::json!({ "source": note.path, "target": resolved }));
+                }
             } else {
                 let id = format!("unresolved:{target}");
                 unresolved.insert(id.clone());
-                links.push(serde_json::json!({ "source": note.path, "target": id, "unresolved": true }));
+                let key = format!("{}\u{0}{id}", note.path);
+                if link_keys.insert(key) {
+                    links.push(serde_json::json!({ "source": note.path, "target": id, "unresolved": true }));
+                }
             }
         }
     }

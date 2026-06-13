@@ -110,6 +110,8 @@ export function ModelPillSelector({
               data-selected={selected || undefined}
               aria-selected={selected}
               role="option"
+              data-bee="agent-model"
+              data-bee-model={model.id}
               key={model.id}
               onPointerDown={() => {
                 if (!model.disabled) markOptimisticModel(model.id);

@@ -58,9 +58,9 @@ export const BEE_PILOT_ACTION_CATALOG: BeePilotActionSpec[] = [
   },
   {
     id: "open-agent-create",
-    summary: "Open the add-agent modal so the user can create a new agent. Omit machine to use this machine; pass \"phone\" only when the user explicitly asks for their phone/mobile; pass \"remote\" for another computer (picks the remote with the fewest agents); or pass a known machine name.",
-    params: '{"machine"?: string, "runtime"?: string, "name"?: string}',
-    examples: ["create an agent", "create an agent on my remote machine", "add a new hermes agent named Scout on my phone"],
+    summary: "Open the add-agent modal, then (when asked) pick a runtime and provider by clicking their tiles. Omit machine to use this machine; pass \"phone\" only when explicitly asked; pass \"remote\" for another computer (fewest agents); or a known machine name. runtime is one of: hermes, openclaw, opencode, codex, claude-code, aeon, evo, hivemind-os. provider is one of: venice, usepod, bankr, adaptive, lm-studio, openrouter, openai, anthropic. Omit runtime to keep the user's most-recent runtime.",
+    params: '{"machine"?: string, "runtime"?: string, "provider"?: string, "model"?: string, "name"?: string}',
+    examples: ["create an agent", "create a venice agent", "create a hermes agent with venice", "create an opencode openrouter agent named Scout on my remote machine", "add an agent on my phone"],
   },
   {
     id: "open-agent-settings",
@@ -170,6 +170,78 @@ function normalize(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+// Canonical runtime ids keyed by the words a user might say.
+const RUNTIME_ALIASES: Array<[RegExp, string]> = [
+  [/\b(hermes)\b/, "hermes"],
+  [/\b(openclaw|open claw|claw)\b/, "openclaw"],
+  [/\b(opencode|open code)\b/, "opencode"],
+  [/\b(codex)\b/, "codex"],
+  [/\b(claude[\s-]?code|claudecode|claude)\b/, "claude-code"],
+  [/\b(aeon)\b/, "aeon"],
+  [/\b(evo)\b/, "evo"],
+  [/\b(hivemind[\s-]?os|hivemindos|hivemind|on[\s-]?device)\b/, "hivemind-os"],
+];
+
+// Canonical provider slugs keyed by the words a user might say. Order matters:
+// more specific phrases first so "local openai" beats a bare "openai".
+const PROVIDER_ALIASES: Array<[RegExp, string]> = [
+  [/\b(venice)\b/, "venice"],
+  [/\b(usepod|use pod)\b/, "usepod"],
+  [/\b(bankr)\b/, "bankr"],
+  [/\b(adaptive)\b/, "adaptive"],
+  [/\b(local openai|lm[\s-]?studio|lmstudio)\b/, "lm-studio"],
+  [/\b(open ?router)\b/, "openrouter"],
+  [/\b(anthropic|claude api)\b/, "anthropic"],
+  [/\b(openai|chat ?gpt|gpt)\b/, "openai"],
+];
+
+/** Resolve a runtime word/phrase to a canonical runtime id, or null. */
+export function resolveRuntimeId(value: string | undefined): string | null {
+  const text = normalize(value ?? "");
+  if (!text) return null;
+  for (const [pattern, id] of RUNTIME_ALIASES) {
+    if (pattern.test(text)) return id;
+  }
+  return null;
+}
+
+/** Resolve a provider word/phrase to a canonical provider slug, or null. */
+export function resolveProviderSlug(value: string | undefined): string | null {
+  const text = normalize(value ?? "");
+  if (!text) return null;
+  for (const [pattern, slug] of PROVIDER_ALIASES) {
+    if (pattern.test(text)) return slug;
+  }
+  return null;
+}
+
+// A model name looks like one of these families or carries a size/version digit.
+const MODEL_TOKEN = /\b(gpt[\w.-]*|o[134][\w.-]*|claude[\w.-]*|opus[\w.-]*|sonnet[\w.-]*|haiku[\w.-]*|llama[\w.-]*|mistral[\w.-]*|mixtral[\w.-]*|qwen[\w.-]*|gemini[\w.-]*|deepseek[\w.-]*|grok[\w.-]*|kimi[\w.-]*|nemotron[\w.-]*|phi[\w.-]*|[\w.-]*\d+b)\b/;
+
+/**
+ * Pull a model hint out of the descriptor of a "create ... agent" command,
+ * after the runtime and provider words have been resolved. Conservative: only
+ * returns a token that looks like a model family/size, so stray words never
+ * get mistaken for a model.
+ */
+export function extractModelHint(
+  descriptor: string,
+  runtime: string | null,
+  provider: string | null,
+): string | null {
+  let rest = ` ${normalize(descriptor)} `;
+  for (const [pattern, id] of RUNTIME_ALIASES) {
+    if (id === runtime) rest = rest.replace(pattern, " ");
+  }
+  for (const [pattern, slug] of PROVIDER_ALIASES) {
+    if (slug === provider) rest = rest.replace(pattern, " ");
+  }
+  rest = rest.replace(/\b(a|an|the|new|with|using|on|model)\b/g, " ").replace(/\s+/g, " ").trim();
+  if (!rest) return null;
+  const match = rest.match(MODEL_TOKEN);
+  return match ? match[0] : null;
+}
+
 function matchName(names: string[], query: string): string | null {
   const needle = normalize(query);
   if (!needle) return null;
@@ -205,13 +277,27 @@ export function localBeePilotPlan(input: string, context: BeePilotContext): BeeP
   const lower = normalize(command);
   if (!lower) return null;
 
-  // "create an agent [on <machine>] [named <name>]"
-  const createAgent = lower.match(/^(?:create|add|make|new)\s+(?:an?\s+|new\s+)*agent\b(?:.*?\bon\s+(?<machine>.+?))?(?:\s+(?:named|called)\s+(?<name>.+?))?$/);
+  // "create [a] [runtime] [provider] agent [named <name>] [on <machine>]"
+  const createAgent = command.match(/^(?:create|add|make|new)\s+(?:a\s+|an\s+|new\s+)*(?<desc>[a-z0-9 -]*?)\s*agent\b(?<rest>.*)$/i);
   if (createAgent) {
     const params: Record<string, string> = {};
-    if (createAgent.groups?.machine) params.machine = createAgent.groups.machine;
-    if (createAgent.groups?.name) params.name = createAgent.groups.name;
-    return { reply: "Opening the new agent setup.", steps: [{ action: "open-agent-create", params }] };
+    const rest = createAgent.groups?.rest ?? "";
+    const nameMatch = rest.match(/\b(?:named|called)\s+(?<name>.+?)(?:\s+on\b.*)?$/i);
+    if (nameMatch?.groups?.name) params.name = nameMatch.groups.name.trim();
+    const machineMatch = rest.match(/\bon\s+(?:my\s+)?(?<machine>.+?)(?:\s+(?:named|called)\b.*)?$/i);
+    if (machineMatch?.groups?.machine) params.machine = machineMatch.groups.machine.trim();
+    const desc = createAgent.groups?.desc ?? "";
+    const runtime = resolveRuntimeId(desc);
+    if (runtime) params.runtime = runtime;
+    const provider = resolveProviderSlug(desc);
+    if (provider) params.provider = provider;
+    const model = extractModelHint(desc, runtime, provider);
+    if (model) params.model = model;
+    const detail = model || provider;
+    const reply = detail || runtime
+      ? `Opening the new agent setup${detail ? ` with ${detail}` : ""}.`
+      : "Opening the new agent setup.";
+    return { reply, steps: [{ action: "open-agent-create", params }] };
   }
 
   // "create a wallet for [my] <agent>"

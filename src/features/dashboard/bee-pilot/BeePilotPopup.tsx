@@ -57,13 +57,17 @@ export function BeePilotPopup(props: BeePilotPopupProps) {
   const submit = (command: string) => {
     if (!command.trim() || busy) return;
     // Measure before the popup unmounts so the bee takes off from its icon.
+    // The input is left intact (visible while thinking); the hook clears it
+    // when it closes the popup to begin the automation.
     const iconRect = beeIconRef.current?.getBoundingClientRect();
-    onInputChange("");
     onSubmit(
       command,
       iconRect ? { x: iconRect.left + iconRect.width / 2, y: iconRect.top + iconRect.height / 2 } : undefined,
     );
   };
+
+  const thinking = phase === "thinking";
+  const inlineMessage = (phase === "error" || phase === "done") && status;
 
   return (
     <>
@@ -103,13 +107,31 @@ export function BeePilotPopup(props: BeePilotPopupProps) {
                 }}
               />
             </div>
-            <div className={styles.pilotSuggestions} aria-label="Examples">
-              {SUGGESTIONS.map((suggestion) => (
-                <button key={suggestion} type="button" onClick={() => submit(suggestion)}>
-                  {suggestion}
-                </button>
-              ))}
-            </div>
+            {thinking ? (
+              <div className={styles.pilotThinking} role="status" aria-live="polite">
+                <span className={styles.pilotThinkingLabel}>Queen Bee is thinking</span>
+                <span className={styles.pilotDots} aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              </div>
+            ) : (
+              <>
+                {inlineMessage ? (
+                  <p className={styles.pilotInlineMessage} data-state={phase === "error" ? "error" : undefined} role="status" aria-live="polite">
+                    {status}
+                  </p>
+                ) : null}
+                <div className={styles.pilotSuggestions} aria-label="Examples">
+                  {SUGGESTIONS.map((suggestion) => (
+                    <button key={suggestion} type="button" onClick={() => submit(suggestion)}>
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </section>
         </div>
       ) : null}

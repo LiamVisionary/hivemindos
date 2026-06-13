@@ -8,6 +8,7 @@ import { BrainModule } from "@/features/dashboard/brain-modules";
 import { useEffect, useRef, useState } from "react";
 import { BrainGraphExplorer } from "./BrainGraphExplorer";
 import { BrainServiceOverview, BrainServiceRunResult, BrainServiceSegmentedNav, BrainServiceSettingsDeck } from "./brain-services-ui";
+import { SkillSecurityCard } from "./SkillSecurityCard";
 import brainServiceStyles from "./brain-services.module.css";
 import { Btn } from "@/components/aeon/parts";
 import { AeonSkillBrowserSection, type UnifiedSkillBrowserItem } from "@/components/aeon/skill-browser-section";
@@ -993,7 +994,12 @@ export function VaultPanel(props: any) {
             aria-labelledby={`brain-service-tab-${brainServiceSection}`}
           >
             {brainServiceSection === "overview" ? (
-              <BrainServiceOverview Button={Button} brainClass={brainClass} cards={brainServiceOverviewCards} setActiveSection={setBrainServiceSection} />
+              <>
+                <BrainServiceOverview Button={Button} brainClass={brainClass} cards={brainServiceOverviewCards} setActiveSection={setBrainServiceSection} />
+                <div className={brainClass("brainServiceOverviewGrid")} style={{ marginTop: 16 }}>
+                  <SkillSecurityCard />
+                </div>
+              </>
             ) : brainServiceSection === "settings" ? (
               <BrainServiceSettingsDeck brainClass={brainClass} gbrainSettings={brainModuleById.get("gbrain")?.definition.settings} syntoSettings={brainModuleById.get("synto")?.definition.settings} />
             ) : selectedBrainModule ? (

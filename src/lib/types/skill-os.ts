@@ -38,6 +38,10 @@ export type SkillAuditResult = {
   recommendedAction: string;
   auditedAt: string;
   sourceRef?: string;
+  /** Which detection engine produced these findings. */
+  engine?: "regex" | "skillspector" | "skillspector+llm";
+  /** SkillSpector's own risk recommendation, surfaced when its engine ran. */
+  scannerRecommendation?: string;
 };
 
 export type SkillSourceType = "curated" | "registry" | "github" | "provider" | "shared" | "pack" | "written";

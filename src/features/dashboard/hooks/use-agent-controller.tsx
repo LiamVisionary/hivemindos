@@ -5,6 +5,7 @@ import { openNativeDirectory } from "@/lib/native/filesystem";
 import { renderBeeSoulTemplate, type BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import { isMobileMachineOs } from "@/features/fleet/fleet-identity";
 import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
+import { mruRuntime, rememberMruRuntime } from "@/features/dashboard/agent-mru-runtime";
 import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeIntegrationFeature, runtimeLocalDataDirPatch, runtimePostCreateAction, runtimeProfileFeature, runtimeSettingsFeature, type AgentProfile, type AgentRuntime, type BeeWorkerClass } from "@/lib/types/agent-runtime";
 import { DEFAULT_MOBILE_AGENT_MODEL, mobileAgentMachineKey, mobileAgentProfileFromRecord, type MobileAgentHostRecord, type MobileAgentRecord } from "@/lib/types/mobile-agents";
 import type { AgentCreateDraft, AgentSettingsPanel, AgentWorkerClassView, RuntimeModelDraft, RuntimeModelSetupMode } from "@/features/dashboard/agent-settings-types";
@@ -183,7 +184,9 @@ export function useAgentController(props: UseAgentControllerProps) {
       openSetupModal(machine);
       return;
     }
-    const selectedRuntime = mobileMachine ? HIVEMIND_OS_RUNTIME : runtime ?? selectedAgent?.runtime ?? "hermes";
+    // Adding an agent (not editing): prefer the runtime the user reached for
+    // most recently, falling back to the selected agent's runtime, then Hermes.
+    const selectedRuntime = mobileMachine ? HIVEMIND_OS_RUNTIME : runtime ?? mruRuntime() ?? selectedAgent?.runtime ?? "hermes";
     setAgentRoleModalId("");
     setAgentRenameEditing(false);
     setAgentRuntimeFolderEditing(false);
@@ -517,6 +520,7 @@ export function useAgentController(props: UseAgentControllerProps) {
         : machine
     )));
     setSelectedAgentId(next.id);
+    rememberMruRuntime(runtime);
     closeAgentSettingsModal();
     void onAgentCreated?.(next);
     const postCreateAction = runtimePostCreateAction(runtime);

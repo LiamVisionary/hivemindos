@@ -11,6 +11,8 @@ import type { DashboardRouteTarget } from "@/features/dashboard/dashboard-naviga
 import { dashboardRouteForView, isDashboardView } from "@/features/dashboard/dashboard-navigation";
 import {
   localBeePilotPlan,
+  resolveProviderSlug,
+  resolveRuntimeId,
   type BeePilotPlan,
   type BeePilotStep,
 } from "@/features/dashboard/bee-pilot/bee-pilot-actions";
@@ -106,6 +108,23 @@ async function flyToScreenCenter(bee: BeeFlightController): Promise<void> {
   await bee.flyTo(window.innerWidth / 2, window.innerHeight * 0.32);
 }
 
+/** Fuzzy-match a model hint ("gpt-4o", "70b") against the visible model pills. */
+function findModelPill(hint: string): HTMLElement | null {
+  const want = normalizeName(hint);
+  if (!want) return null;
+  const pills = Array.from(document.querySelectorAll<HTMLElement>('[data-bee="agent-model"]'));
+  const scored = pills.map((pill) => {
+    const id = normalizeName(pill.getAttribute("data-bee-model") ?? "");
+    const text = normalizeName(pill.textContent ?? "");
+    let score = 0;
+    if (id === want) score = 100;
+    else if (id.includes(want) || want.includes(id)) score = 60 + Math.min(want.length, id.length);
+    else if (text.includes(want)) score = 40;
+    return { pill, score };
+  }).filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score);
+  return scored[0]?.pill ?? null;
+}
+
 /**
  * Bee Pilot: the Queen Bee command popup's execution engine. Resolves a typed
  * command into a step plan (deterministic parser first, queen-bee LLM turn as
@@ -173,12 +192,14 @@ export function useBeePilot(deps: BeePilotDeps) {
         }
         const escapedName = machine.name.replace(/["\\]/g, "\\$&");
         const addButton = await waitForElement(`[data-bee="fleet-hive-add-${escapedName}"]`, 4_000);
-        if (addButton && !params.runtime && !params.name) {
-          // The real fleet button opens the modal itself, so the click lands first.
+        const wantsName = Boolean(params.name);
+        if (addButton && !wantsName) {
+          // The real fleet add-cell opens the modal itself, so the click lands
+          // first; runtime/provider are then picked by clicking modal tiles.
           await beeClick(bee, addButton);
         } else {
-          // Custom runtime/name needs the handler; bounce on the cell first so
-          // the modal never appears before the bee's click.
+          // A custom name needs the handler to seed the draft; bounce on the
+          // cell first so the modal never appears before the bee's click.
           if (addButton) {
             await scrollElementIntoView(addButton);
             await bee.flyToElement(addButton);
@@ -186,7 +207,46 @@ export function useBeePilot(deps: BeePilotDeps) {
             await flyToScreenCenter(bee);
           }
           await bee.bounce();
-          current.openAgentCreationModal(machine, params.runtime as AgentRuntime | undefined, params.name ?? "");
+          // Pass no runtime so the modal opens on the most-recent runtime; the
+          // requested runtime is then selected by clicking its tile below.
+          current.openAgentCreationModal(machine, undefined, params.name ?? "");
+        }
+        // Pick the runtime tile when asked and it isn't already selected.
+        const runtimeId = resolveRuntimeId(params.runtime);
+        if (runtimeId) {
+          const tile = await waitForElement(`[data-bee="agent-runtime-${runtimeId}"]`, 5_000);
+          if (tile && tile.getAttribute("aria-pressed") !== "true") {
+            setStatus(`Selecting the ${runtimeId} runtime...`);
+            await beeClick(bee, tile);
+            await wait(300);
+          }
+        }
+        // Pick the provider tile when asked (waits for the provider panel/models).
+        const providerSlug = resolveProviderSlug(params.provider);
+        if (providerSlug) {
+          const tile = await waitForElement(`[data-bee="agent-provider-${providerSlug}"]`, 6_000);
+          if (!tile) {
+            return `Opened the agent setup, but ${providerSlug} isn't an available provider on ${machine.name}.`;
+          }
+          if (tile.getAttribute("aria-pressed") !== "true") {
+            setStatus(`Selecting ${providerSlug}...`);
+            await beeClick(bee, tile);
+          }
+        }
+        // Pick a specific model when asked (the model list is always visible
+        // once a non-adaptive provider is selected). Fuzzy-match the hint so
+        // "gpt-4o" finds "openai/gpt-4o-2024-..." etc.
+        if (params.model) {
+          await waitForElement('[data-bee="agent-model"]', 6_000);
+          const pill = findModelPill(params.model);
+          if (pill) {
+            if (pill.getAttribute("aria-selected") !== "true") {
+              setStatus(`Selecting the ${params.model} model...`);
+              await beeClick(bee, pill);
+            }
+          } else {
+            return `Set up the agent, but I couldn't find a "${params.model}" model for that provider.`;
+          }
         }
         return null;
       }
@@ -358,55 +418,124 @@ export function useBeePilot(deps: BeePilotDeps) {
     return data.plan;
   }, []);
 
+  // After a run settles, hide the bee and let the status reset to idle unless a
+  // newer run has taken over.
+  const scheduleCleanup = useCallback((runId: number, hideBee: boolean) => {
+    if (hideBee) window.setTimeout(() => bee.hide(), 700);
+    window.setTimeout(() => {
+      if (runIdRef.current === runId) setPhase((value) => (value === "flying" || value === "thinking" ? value : "idle"));
+    }, 5_000);
+  }, [bee]);
+
+  // Fly the bee through a resolved plan's steps. Shared by the typed palette
+  // and the voice path; returns the final spoken-ready note.
+  const executePlan = useCallback(async (
+    plan: BeePilotPlan,
+    origin: { x: number; y: number } | undefined,
+    runId: number,
+  ): Promise<string> => {
+    setPhase("flying");
+    setStatus(plan.reply);
+    bee.showAt(origin?.x ?? window.innerWidth / 2, origin?.y ?? Math.min(220, window.innerHeight * 0.25));
+    try {
+      let note: string | null = null;
+      for (const step of plan.steps) {
+        if (runIdRef.current !== runId) return note ?? plan.reply;
+        note = await runStep(step);
+        if (note) break;
+        await wait(180);
+      }
+      if (runIdRef.current !== runId) return note ?? plan.reply;
+      const finalNote = note ?? plan.reply;
+      setStatus(finalNote);
+      setPhase("done");
+      return finalNote;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "That command didn't work.";
+      if (runIdRef.current === runId) {
+        setStatus(message);
+        setPhase("error");
+      }
+      return message;
+    } finally {
+      if (runIdRef.current === runId) scheduleCleanup(runId, true);
+    }
+  }, [bee, runStep, scheduleCleanup]);
+
   const runCommand = useCallback(async (command: string, origin?: { x: number; y: number }) => {
     const trimmed = command.trim();
     if (!trimmed || phase === "thinking" || phase === "flying") return;
     const runId = runIdRef.current + 1;
     runIdRef.current = runId;
+    // Keep the command palette open and show a thinking state inside it while
+    // Queen Bee resolves the plan; only close it once automation begins.
     setPhase("thinking");
-    setStatus("Queen Bee is thinking...");
-    setOpen(false);
+    setStatus("");
+    let plan: BeePilotPlan;
     try {
-      const plan = await resolvePlan(trimmed);
-      if (runIdRef.current !== runId) return;
-      if (!plan.steps.length) {
-        setStatus(plan.reply);
-        setPhase("error");
-        return;
-      }
-      setPhase("flying");
-      setStatus(plan.reply);
-      // Take off from where the popup's bee icon sat, so the bee appears to
-      // fly out of the popup instead of popping in somewhere below the fold.
-      bee.showAt(origin?.x ?? window.innerWidth / 2, origin?.y ?? Math.min(220, window.innerHeight * 0.25));
-      let note: string | null = null;
-      for (const step of plan.steps) {
-        if (runIdRef.current !== runId) return;
-        note = await runStep(step);
-        if (note) break;
-        await wait(180);
-      }
-      if (runIdRef.current !== runId) return;
-      setStatus(note ?? plan.reply);
-      setPhase("done");
+      plan = await resolvePlan(trimmed);
     } catch (error) {
       if (runIdRef.current !== runId) return;
       setStatus(error instanceof Error ? error.message : "That command didn't work.");
       setPhase("error");
-    } finally {
-      if (runIdRef.current === runId) {
-        window.setTimeout(() => bee.hide(), 700);
-        window.setTimeout(() => {
-          if (runIdRef.current === runId) setPhase((value) => (value === "flying" || value === "thinking" ? value : "idle"));
-        }, 5_000);
-      }
+      scheduleCleanup(runId, false);
+      return;
     }
-  }, [bee, phase, resolvePlan, runStep]);
+    if (runIdRef.current !== runId) return;
+    if (!plan.steps.length) {
+      // Nothing to drive: keep the palette open and answer inline.
+      setStatus(plan.reply);
+      setPhase("error");
+      scheduleCleanup(runId, false);
+      return;
+    }
+    // Plan ready: close the palette and begin the automation.
+    setInput("");
+    setOpen(false);
+    await executePlan(plan, origin, runId);
+  }, [phase, resolvePlan, executePlan, scheduleCleanup]);
+
+  /**
+   * Voice entry point: resolves the plan, returns the spoken-ready reply right
+   * away (so Queen Bee can confirm), and flies the automation in the
+   * background. The palette is never opened.
+   */
+  const runVoiceCommand = useCallback(async (command: string): Promise<string> => {
+    const trimmed = command.trim();
+    if (!trimmed) return "I didn't catch an on-screen command.";
+    const runId = runIdRef.current + 1;
+    runIdRef.current = runId;
+    setOpen(false);
+    setPhase("thinking");
+    setStatus("");
+    let plan: BeePilotPlan;
+    try {
+      plan = await resolvePlan(trimmed);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "I couldn't read that on-screen command.";
+      if (runIdRef.current === runId) {
+        setStatus(message);
+        setPhase("error");
+        scheduleCleanup(runId, false);
+      }
+      return message;
+    }
+    if (runIdRef.current !== runId) return "";
+    if (!plan.steps.length) {
+      setStatus(plan.reply);
+      setPhase("error");
+      scheduleCleanup(runId, false);
+      return plan.reply;
+    }
+    // Speak the confirmation now; let the bee fly the UI in the background.
+    void executePlan(plan, undefined, runId);
+    return plan.reply;
+  }, [resolvePlan, executePlan, scheduleCleanup]);
 
   const dismissStatus = useCallback(() => {
     setPhase("idle");
     setStatus("");
   }, []);
 
-  return { bee, open, setOpen, input, setInput, phase, status, runCommand, dismissStatus };
+  return { bee, open, setOpen, input, setInput, phase, status, runCommand, runVoiceCommand, dismissStatus };
 }

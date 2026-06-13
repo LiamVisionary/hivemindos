@@ -24,6 +24,7 @@ const expected = [
   "artist",
   "ops",
   "qa",
+  "security",
 ];
 
 function assert(condition, message) {

@@ -37,6 +37,7 @@ const QUEEN_REALTIME_INSTRUCTIONS = [
   "Use ask_hivemind_agent whenever the user asks about themselves, their notes, files, projects, memories, fleet, wallets, or anything requiring their computer (opening apps, checking status, reading or writing notes, recalling shared memory, wallet balances and Bankr actions).",
   "Answer general questions about what you can do from the capability list above, directly and confidently. Use ask_hivemind_agent to verify or perform a SPECIFIC capability (a particular wallet, app, note, or status). Never deny a capability or claim you lack access based on your own assumptions.",
   "Use create_hive_task when the user clearly asks for longer work to be delegated to the hive (a job, build, fix, research, automation, reminder). Pass a short imperative title and the full request as the message, then briefly confirm what you kicked off using the tool result.",
+  "Use drive_dashboard when the user wants to SEE or DO something in the on-screen dashboard they are looking at: open or switch a screen (wallets, work board, agents/fleet, chat, schedules, brain), create an agent (optionally naming a runtime, provider, model, or machine), create a wallet for one of their agents, add a task to the board, or open an agent's settings or chat. Pass the user's request VERBATIM as the command; a visible bee flies the interface and clicks for them, and you confirm what happened from the tool result. Prefer drive_dashboard over ask_hivemind_agent for anything they want to navigate to or operate in the app.",
   "Greetings and chit-chat are just conversation - no tools needed.",
 ].join(" ");
 
@@ -76,6 +77,23 @@ const QUEEN_REALTIME_TOOLS = [
         },
       },
       required: ["message"],
+    },
+  },
+  {
+    type: "function",
+    name: "drive_dashboard",
+    description:
+      "Operate the on-screen HivemindOS dashboard the user is looking at: open/switch screens (wallets, work board/kanban, agents/fleet, chat, schedules, brain), create an agent (optionally naming a runtime, provider, model, or machine), create a wallet for a named agent, add a task to the board, or open an agent's settings or chat. A visible honey-bee cursor flies the interface and performs the clicks. Use this whenever the user wants to navigate to, see, or do something in the app in front of them.",
+    parameters: {
+      type: "object",
+      properties: {
+        command: {
+          type: "string",
+          description:
+            "The user's on-screen request, in their own words (e.g. 'open my wallets', 'create a wallet for my Aeon agent on this Mac', 'create a hermes venice agent', 'draft an X post about the hive').",
+        },
+      },
+      required: ["command"],
     },
   },
 ];
