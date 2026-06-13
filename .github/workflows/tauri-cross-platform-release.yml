@@ -58,13 +58,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Release builds use the static Tauri UI plus native/sidecar backend
-          # bridges. Do not set HIVEMINDOS_TAURI_EMBEDDED_NEXT here: the old
-          # embedded Next standalone fallback traces every API route and OOMs on
-          # standard CI runners.
+          # Release builds bundle the embedded Next standalone server
+          # (HIVEMINDOS_TAURI_EMBEDDED_NEXT=1, set in the build step env) so the
+          # packaged app actually serves /api/* at runtime. The static-only UI
+          # shipped no API server, so the dashboard could never reach
+          # /api/dashboard/state and hung on the loading screen. The embedded
+          # `next build` traces ~155 API routes and needs ~8 GB heap; every
+          # runner below has >=14 GB. The standard 7 GB macos-14 arm runner OOMs,
+          # so Apple Silicon uses the larger macos-14-xlarge.
           - label: macOS Apple Silicon
             artifact_key: macos-arm64
-            os: macos-14
+            os: macos-14-xlarge
             app_arch: -arm64
             bundle_glob: src-tauri/target/release/bundle/dmg/*.dmg src-tauri/target/release/bundle/macos/*.app.tar.gz src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
           - label: macOS Intel
@@ -202,10 +206,14 @@ jobs:
           # artifacts would silently strand existing installs.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
-          # Keep enough time for static UI generation plus signed/notarized
-          # packaging. The OOM-prone embedded Next fallback is intentionally not
-          # part of the cross-platform release path.
-          TAURI_NEXT_BUILD_TIMEOUT_SECONDS: ${{ runner.os == 'macOS' && '3600' || '1800' }}
+          # Bundle the embedded Next standalone server so the packaged app serves
+          # /api/* at runtime (see the matrix comment). Without this the release
+          # ships a static UI with no API server and the dashboard hangs on load.
+          HIVEMINDOS_TAURI_EMBEDDED_NEXT: "1"
+          # Embedded `next build` (155 API routes) is heavier than the old static
+          # export, so allow more time for the UI build plus signed/notarized
+          # packaging.
+          TAURI_NEXT_BUILD_TIMEOUT_SECONDS: ${{ runner.os == 'macOS' && '3600' || '2700' }}
         run: pnpm tauri:build
 
       - name: Collect bundle assets
