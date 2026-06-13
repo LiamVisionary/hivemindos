@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-14 00:05:00 +0700 - Document landing-page / release-asset contract
+  - Status: Uncommitted
+  - Areas changed: new `LANDING_PAGE.md`, pointer section in `AGENTS.md`
+  - Summary: Records how the separate landing-site repo consumes this repo's GitHub releases — download cards use version-independent `releases/latest/download/<stable-asset>` URLs, so a new Latest release is served automatically. Documents that the stable installer filenames (`HivemindOS-macos-apple-silicon.dmg`, etc.) are a contract shared by the release workflow's "Collect bundle assets" step, `scripts/build-updater-manifest.mjs`, and the landing page: renaming an asset silently breaks both downloads and the auto-updater. Doc-only housekeeping.
+  - Verification: doc-only; no code or build affected.
+  - Intended commit message: `Document landing-page / release-asset contract`
+
 - 2026-06-13 14:49:41 +0700 - Add Buy-Stock Rail (Alpaca + On-Chain xStocks)
   - Status: Uncommitted
   - Areas changed: new buy-stock service (`src/lib/services/trading/buy-stock.ts`), verified xStocks mint allowlist (`src/lib/config/xstocks-tokens.ts`), wallet types + spend ledger (`src/lib/types/agent-wallet.ts`, `src/lib/services/wallet/spend-ledger.ts`), agent chat runtime wiring (`src/app/api/chat/agent-runtime/route.ts`), wallet config UI (`src/components/wallet/AgentWalletCard.tsx`), tests (`scripts/test-buy-stock-xstocks.mjs`, `scripts/e2e-buy-stock-alpaca.mjs`, `scripts/e2e-buy-stock-xstocks-swap.mjs`, `package.json`), docs (`docs/features/wallets-honey-and-x402.md`, `docs/features/index.md`)
