@@ -79,6 +79,27 @@ export type SnapshotRetryInfo = {
   kind: SnapshotRetryKind;
 };
 
+export class DashboardStateAuthError extends Error {
+  constructor(message = "Dashboard authentication is required.") {
+    super(message);
+    this.name = "DashboardStateAuthError";
+  }
+}
+
+// On auth denial we must not return {} (that would hydrate a fake-empty
+// dashboard). In the browser, navigate to the current route so the app falls
+// back to its unlock flow; the returned promise never resolves, so hydration
+// can't seed {} while navigation is in flight. With no window (server/SSR)
+// there is nothing to navigate to, so surface the error to the caller.
+function redirectToDashboardUnlock(message?: string): Promise<DashboardStateSnapshot> {
+  if (typeof window === "undefined") {
+    throw new DashboardStateAuthError(message);
+  }
+  const currentRoute = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  window.location.replace(currentRoute);
+  return new Promise(() => {});
+}
+
 // The retry loop never gives up (see above), so a *persistent* backend failure
 // would otherwise hang hydration — and every dashboard loading screen with it —
 // indefinitely. onRetry lets the caller surface a recoverable "still connecting"
@@ -106,14 +127,20 @@ export async function loadDashboardStateSnapshot(
       cache: "no-store",
       headers: { accept: "application/json" },
     }).catch(() => null);
-    const data = await response?.json().catch(() => null) as { ok?: boolean; values?: DashboardStateSnapshot } | null;
+    const data = await response?.json().catch(() => null) as { ok?: boolean; values?: DashboardStateSnapshot; error?: string } | null;
     if (response?.ok && data?.ok && data.values && typeof data.values === "object") {
       cachedSnapshot = data.values;
       return cachedSnapshot;
     }
-    // A non-5xx JSON answer (auth denied, empty store) is the server's real
-    // state, not an outage: return it without caching so a later reload
-    // re-checks instead of reusing the empty result.
+    // Auth denial is NOT an empty dashboard. Treating a 401 as {} would hydrate
+    // a fake-empty UI (0 notes) and mask an expired session; bounce to the
+    // unlock flow instead so the user re-authenticates rather than seeing empty.
+    if (response?.status === 401) {
+      return redirectToDashboardUnlock(data?.error);
+    }
+    // Any other non-5xx JSON answer (e.g. a legitimately empty store) is the
+    // server's real state, not an outage: return it without caching so a later
+    // reload re-checks instead of reusing the empty result.
     if (response && response.status < 500 && data) {
       return data.values && typeof data.values === "object" ? data.values : {};
     }
