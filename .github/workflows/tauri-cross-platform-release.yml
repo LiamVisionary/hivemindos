@@ -116,15 +116,14 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
+      # Caches the cargo registry/git AND the compiled src-tauri/target, so the
+      # release build doesn't recompile every Tauri dependency crate from
+      # scratch on each run (the dominant cost). Keyed on the Rust toolchain +
+      # Cargo.lock; only the app crate itself recompiles after a version stamp.
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/git
-            ~/.cargo/registry
-          key: cargo-registry-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            cargo-registry-${{ runner.os }}-
+          workspaces: src-tauri
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
