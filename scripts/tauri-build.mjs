@@ -711,24 +711,30 @@ function materializeResourceSymlinks(root) {
 }
 
 function copyRequiredRuntimePackage(packageName) {
-  const source = join(
-    projectRoot,
-    "node_modules",
-    ".pnpm",
-    "node_modules",
-    ...packageName.split("/"),
-  );
+  // Resolve the package's REAL directory. pnpm puts DIRECT deps (react,
+  // react-dom) behind a top-level symlink and hoists TRANSITIVE deps
+  // (scheduler, @next/env, ...) under .pnpm/node_modules — check both, then
+  // dereference the symlink so we copy real files, not a (possibly dangling)
+  // link. This is why the original `.pnpm/node_modules`-only lookup could never
+  // stage react/react-dom: they don't live there.
+  const segments = packageName.split("/");
+  const candidates = [
+    join(projectRoot, "node_modules", ...segments),
+    join(projectRoot, "node_modules", ".pnpm", "node_modules", ...segments),
+  ];
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (!found) {
+    throw new Error(
+      `Unable to find required runtime package ${packageName} (looked in: ${candidates.join(", ")})`,
+    );
+  }
+  const source = realpathSync(found);
   const target = join(
     serverResourceDir,
     "node_modules",
-    ...packageName.split("/"),
+    ...segments,
   );
 
-  if (!existsSync(source)) {
-    throw new Error(
-      `Unable to find required runtime package ${packageName} at ${source}`,
-    );
-  }
   if (existsSync(target)) {
     return;
   }
@@ -745,6 +751,15 @@ function copyRequiredRuntimePackages() {
     "caniuse-lite",
     "postcss",
     "styled-jsx",
+    // React runtime — required for SSR / RSC. materializeResourceSymlinks drops
+    // these as dangling pnpm symlinks and the standalone trace does not re-add
+    // them, so the embedded server crashed on boot with "Cannot find module
+    // 'react'" (verified: staging react + react-dom + scheduler makes server.js
+    // boot and serve / + /api/* correctly). react / react-dom are direct deps
+    // (top-level symlinks); scheduler is react-dom's hoisted transitive dep.
+    "react",
+    "react-dom",
+    "scheduler",
   ]) {
     copyRequiredRuntimePackage(packageName);
   }
