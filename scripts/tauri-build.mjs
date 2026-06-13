@@ -777,10 +777,22 @@ function copyRequiredRuntimePackages() {
 
 function writeEmbeddedStaticStub() {
   mkdirSync(staticResourceDir, { recursive: true });
-  writeFileSync(
-    join(staticResourceDir, "README.md"),
-    "# Static Tauri UI\n\nRun `pnpm tauri:prepare` without `HIVEMINDOS_TAURI_EMBEDDED_NEXT=1` to regenerate this directory.\n",
-  );
+  // In embedded mode the real UI is served by the bundled Node server, which
+  // takes ~1-3s to boot. Rust's setup() now spawns that server on a BACKGROUND
+  // thread and navigates the window to it once ready, so the Tauri window needs
+  // an instant frontendDist to paint meanwhile. Ship the branded loading shell
+  // (src-tauri/loading-shell/) as that frontendDist so first paint is immediate
+  // (and it reads live native data via window.__TAURI__) instead of a blank page.
+  const loadingShellDir = join(projectRoot, "src-tauri", "loading-shell");
+  if (existsSync(join(loadingShellDir, "index.html"))) {
+    cpSync(loadingShellDir, staticResourceDir, { recursive: true });
+  } else {
+    // Fallback: never ship a window with no index.html (blank/404 on boot).
+    writeFileSync(
+      join(staticResourceDir, "index.html"),
+      '<!doctype html><meta charset="utf-8"><title>HivemindOS</title><body style="margin:0;height:100vh;background:#080a0f"></body>',
+    );
+  }
 }
 
 function runEmbeddedNextBuild(fingerprint) {

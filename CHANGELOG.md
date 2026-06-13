@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-14 00:30:00 +0700 - Instant-paint launch for the embedded desktop app
+  - Status: Uncommitted
+  - Areas changed: async embedded boot + navigate-on-ready (`src-tauri/src/lib.rs`), branded loading shell (`src-tauri/loading-shell/index.html`), ship shell as embedded frontendDist (`scripts/tauri-build.mjs`), expose the Tauri bridge to the shell (`src-tauri/tauri.conf.json` `withGlobalTauri`)
+  - Summary: The desktop app now paints instantly at launch instead of showing a frozen blank window for 1-3s while its local server boots. Previously the embedded build spawned the bundled Node server synchronously inside Tauri's setup() on the main thread, freezing the whole app (no paint) until the server's port opened. Now the server boots on a background thread and the window immediately shows a branded HivemindOS loading screen served from a local file — which reads live data from the native Rust commands (This Mac + how many tailnet machines are online) so the first thing you see is real, not just a spinner. When the server is ready the window swaps to the full dashboard automatically; if it never comes up, the existing local-server error page is shown. Everything degrades gracefully: if a native read is unavailable the stat is hidden and the branded loader still shows.
+  - Verification: `cargo check --release` (the boot path is release-only); `node --check scripts/tauri-build.mjs`; `pnpm check:tauri-acl` (36 commands in lockstep); JSON config validated. True first-paint timing is a GUI behavior — to be confirmed on a desktop build/launch (the shell + async boot are structurally verified in the bundle).
+  - Intended commit message: `Instant-paint launch: async embedded boot + native loading shell`
+
 - 2026-06-14 00:05:00 +0700 - Document landing-page / release-asset contract
   - Status: Uncommitted
   - Areas changed: new `LANDING_PAGE.md`, pointer section in `AGENTS.md`

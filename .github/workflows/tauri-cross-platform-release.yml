@@ -11,6 +11,10 @@ on:
         description: Branch, tag, or SHA to build
         required: true
         default: main
+      prerelease:
+        description: Publish as a pre-release (downloadable, but does NOT move the updater / auto-update installs)
+        required: false
+        default: "false"
 
 permissions:
   contents: write
@@ -406,6 +410,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ github.event.inputs.version }}
           REPOSITORY: ${{ github.repository }}
+          PRERELEASE: ${{ github.event.inputs.prerelease }}
         shell: bash
         run: |
           set -euo pipefail
@@ -433,7 +438,18 @@ jobs:
           git tag -a "$release_tag" -m "HivemindOS ${release_tag}"
           git push origin "$release_tag"
 
+          # A pre-release stays OFF GitHub's /releases/latest/ pointer, so the
+          # updater (releases/latest/download/latest.json) does NOT pick it up and
+          # existing installs do not auto-update. Promote later with
+          # `gh release edit <tag> --prerelease=false` to make it Latest.
+          prerelease_flag=()
+          if [ "${PRERELEASE:-false}" = "true" ]; then
+            prerelease_flag=(--prerelease)
+            echo "Publishing ${release_tag} as a PRE-RELEASE (no auto-update)."
+          fi
+
           gh release create "$release_tag" release-assets/* \
             --repo "$REPOSITORY" \
             --title "$release_tag" \
+            "${prerelease_flag[@]}" \
             --generate-notes
