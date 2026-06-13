@@ -19,6 +19,7 @@
     "tauri:prepare:server": "HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 node scripts/stage-tauri-claw-sidecar.mjs && HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 node scripts/tauri-build.mjs",
     "tauri:prepare:server:fresh": "HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 HIVEMINDOS_TAURI_FORCE_NEXT_BUILD=1 node scripts/stage-tauri-claw-sidecar.mjs && HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 HIVEMINDOS_TAURI_FORCE_NEXT_BUILD=1 node scripts/tauri-build.mjs",
     "tauri:phase2-required": "pnpm tauri:prepare",
+    "check:tauri-acl": "node scripts/check-tauri-command-acl.mjs",
     "tauri:build": "tauri build",
     "tauri:build:server": "HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 tauri build",
     "tauri:build:server:fast": "HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 tauri build --no-bundle",

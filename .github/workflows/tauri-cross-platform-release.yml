@@ -106,6 +106,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: next-standalone
+          # CRITICAL: upload-artifact@v4 defaults include-hidden-files to false and
+          # prunes any dot-prefixed directory + its entire subtree. The Next standalone
+          # nests its compiled server output in standalone/.next-tauri-build/ (distDir)
+          # and traced packages in node_modules/.pnpm/ — both dot-dirs. Without this,
+          # server.js uploads but the server chunks/required-server-files.json do NOT,
+          # so the downloaded standalone has no server behind it (green CI, broken app).
+          include-hidden-files: true
           path: |
             .next-tauri-build/standalone
             .next-tauri-build/static
@@ -242,6 +249,12 @@ jobs:
         with:
           name: next-standalone
           path: .next-tauri-build
+
+      - name: Verify Tauri command ACL surface is in lockstep
+        # Fails the build with a readable diff if a #[tauri::command] is missing
+        # from build.rs / capabilities (would crash at runtime with "not allowed
+        # by ACL"). Cheap insurance against the per-command declaration tax.
+        run: node scripts/check-tauri-command-acl.mjs
 
       - name: Build Tauri app
         env:
