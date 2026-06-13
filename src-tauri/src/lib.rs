@@ -999,6 +999,22 @@ fn retire_legacy_launchd_gateway() {
     };
     let service = format!("gui/{uid}/com.hivemindos.claw-backend");
     let _ = Command::new("launchctl").args(["bootout", &service]).status();
+    // bootout is async — the legacy node (which binds 5001) may still be tearing
+    // down. WAIT for it to fully unload before we let the new login item bind
+    // 5001, so the two gateways can't double-bind / race the port. The legacy job
+    // has KeepAlive, so freeing the port by-PID before it's unloaded would just
+    // let it respawn.
+    for _ in 0..8 {
+        let still_loaded = Command::new("launchctl")
+            .args(["print", &service])
+            .output()
+            .map(|out| out.status.success())
+            .unwrap_or(false);
+        if !still_loaded {
+            break;
+        }
+        std::thread::sleep(Duration::from_secs(1));
+    }
     let _ = Command::new("launchctl").args(["disable", &service]).status();
     if let Some(home) = home_dir() {
         let plist = home

@@ -247,6 +247,10 @@ export function machineNetworkIssue(
         'curl "http://127.0.0.1:${AGENT_TELEMETRY_PORT}/health"',
         'curl "http://${HIVE_LINK_CONTROL:-127.0.0.1:8788}/status"',
         "lsof -nP -iTCP:${AGENT_TELEMETRY_PORT} -sTCP:LISTEN",
+        "",
+        "# If local health works but remote curl times out on macOS (collector inbound firewall)",
+        'sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add "$(command -v node)"',
+        'sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$(command -v node)"',
       ],
     };
   }

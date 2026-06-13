@@ -213,6 +213,12 @@ if [ "${1:-}" = "run" ]; then
   code=$?
   [ "$code" -ne 0 ] && exit "$code"
 
+  # Build the gateway-host helper for THIS host so the dev bundle nests a correct
+  # arch copy (it's not staged by the dev flow). This makes it candidate #1 in
+  # find_gateway_host_source, so a stale-arch staged binary can't be picked.
+  cargo build --release --manifest-path "$ROOT/src-tauri/gateway-host/Cargo.toml" >/dev/null 2>&1 \
+    || printf '[dev-codesign] WARNING: could not build gateway-host helper; dev login-item gateway will be skipped\n' >&2
+
   # Prefer launching the bundled binary (claw nested -> inherits the grant). Fall back to
   # the raw, re-signed binary if bundling fails (dev still runs, just without claw writes).
   LAUNCH_BIN="$APP_BIN"
