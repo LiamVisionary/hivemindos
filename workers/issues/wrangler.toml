@@ -1,0 +1,20 @@
+name = "hivemindos-issues"
+main = "src/index.ts"
+compatibility_date = "2025-05-23"
+
+[vars]
+CORS_ORIGIN = "*"
+# Max issue reports accepted from a single install per UTC day (abuse cap).
+DAILY_REPORT_CAP = "200"
+
+# Created with `pnpm d1:create` (wrangler d1 create hivemindos_issues). Paste the
+# returned database_id here before the first deploy.
+[[d1_databases]]
+binding = "DB"
+database_name = "hivemindos_issues"
+database_id = "fd363e01-db8b-4f4b-8856-f808317560c2"
+
+# Read endpoint (GET /issues) is gated on a bearer token. Set it with:
+#   wrangler secret put ISSUES_READ_TOKEN
+# Reports (POST /issues) are intentionally unauthenticated so any install can
+# phone home a broken-boot; abuse is bounded by DAILY_REPORT_CAP + size limits.

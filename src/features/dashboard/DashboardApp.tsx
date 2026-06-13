@@ -74,7 +74,8 @@ import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { providerIconPath, providerIconRenderMode, runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode } from "@/lib/config/runtime-icons";
 import { BEE_WORKER_PRESET_LIST, beeWorkerPreset, renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
 import { logClientTelemetry } from "@/lib/utils/client-telemetry";
-import { loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue, type DashboardStateSnapshot } from "@/lib/services/dashboard-state-client";
+import { clearReportedIssue, reportIssue } from "@/lib/utils/issue-reporter";
+import { loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue, type DashboardStateSnapshot, type SnapshotRetryInfo } from "@/lib/services/dashboard-state-client";
 import { readNativeDashboardBootstrap } from "@/lib/native/dashboard-bootstrap";
 import { getNativeAppVersion } from "@/lib/native/desktop-status";
 import { getNativeFleetAppsCache, getNativeTailscaleDevices } from "@/lib/native/fleet";
@@ -394,6 +395,41 @@ function DashboardRouteLoading({ detail, label, view }: DashboardRouteLoadingPro
     <section className={vaultClass("brainGraphPanel", "tabPanel")} aria-label={routeTitle} data-hivemindos-route-loading="true">
       <div className={vaultClass("brainGraphCanvas")}>
         <BrainGraphLoader title={routeTitle} detail={routeDetail} />
+      </div>
+    </section>
+  );
+}
+// Shown when hydration can't reach the local dashboard service after several
+// tries. The snapshot loader keeps retrying in the background and this notice
+// auto-clears the moment it succeeds, so a transient slow start just flashes
+// briefly; a persistent failure gets a readable, recoverable screen instead of
+// an endless honeycomb spinner that needs devtools to diagnose.
+const HYDRATION_STALL_THRESHOLD = 5;
+function HydrationStalledNotice({ info }: { info: SnapshotRetryInfo }) {
+  const reason = info.kind === "network"
+    ? "The local HivemindOS service isn't responding yet."
+    : info.kind === "server"
+      ? `The local HivemindOS service returned an error${info.status ? ` (${info.status})` : ""}.`
+      : "The local HivemindOS service returned an unexpected response.";
+  return (
+    <section
+      className={vaultClass("brainGraphPanel", "tabPanel")}
+      aria-label="Connecting to HivemindOS"
+      data-hivemindos-hydration-stalled={info.kind}
+      style={{ position: "fixed", inset: 0, zIndex: 9999, background: "var(--bg, #060a08)", display: "flex", alignItems: "center", justifyContent: "center" }}
+    >
+      <div className={vaultClass("brainGraphCanvas")} style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", maxWidth: 420, padding: 24, gap: 16 }}>
+        <BrainGraphLoader title="Still connecting to HivemindOS…" detail={`${reason} It will connect automatically the moment it's ready.`} />
+        <button
+          type="button"
+          onClick={() => { if (typeof window !== "undefined") window.location.reload(); }}
+          style={{ padding: "8px 18px", borderRadius: 10, border: "1px solid var(--accent-strong, #2f6b52)", background: "transparent", color: "var(--accent-strong, #6fe0b0)", fontSize: 13, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em", textTransform: "uppercase" }}
+        >
+          Reload now
+        </button>
+        <p style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.6, margin: 0 }}>
+          Still stuck after reloading? Fully quit and reopen the app. If it persists, send a photo of this screen to support.
+        </p>
       </div>
     </section>
   );
@@ -1045,6 +1081,9 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   // Initialize all persisted state with deterministic seed values so SSR and
   // first client render match. Server-backed dashboard state is read inside a useEffect below.
   const [hydrated, setHydrated] = useState(false);
+  // Non-null once the snapshot load has failed enough times to warrant telling
+  // the user (see HydrationStalledNotice). Cleared on successful hydration.
+  const [hydrationStalled, setHydrationStalled] = useState<SnapshotRetryInfo | null>(null);
   const dashboardStateRef = useRef<DashboardStateSnapshot>({});
   const [agents, setAgents] = useState<AgentProfile[]>(seedAgents);
   const agentVaultHydratedRef = useRef(false);
@@ -1858,8 +1897,23 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-    const dashboardState = await loadDashboardStateSnapshot();
+    const dashboardState = await loadDashboardStateSnapshot((info) => {
+      if (cancelled || info.attempt < HYDRATION_STALL_THRESHOLD) return;
+      setHydrationStalled(info);
+      // Record the broken boot centrally (anonymized) so it's visible without
+      // the user opening devtools. reportIssue de-dupes per session.
+      reportIssue({
+        kind: "hydration_stall",
+        detail: `Dashboard never hydrated: /api/dashboard/state ${info.kind}${info.status ? ` ${info.status}` : ""}`,
+        failureKind: info.kind,
+        status: info.status,
+        attempt: info.attempt,
+        severity: "error",
+      });
+    });
     if (cancelled) return;
+    setHydrationStalled(null);
+    clearReportedIssue("hydration_stall");
     dashboardStateRef.current = dashboardState;
     const storedAgents = parseStoredAgents(dashboardState);
     const routeTarget = dashboardTargetFromSearch(window.location.search);
@@ -3898,6 +3952,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
 
   return (
     <main className="shell commandShell">
+      {!hydrated && hydrationStalled ? <HydrationStalledNotice info={hydrationStalled} /> : null}
       <DashboardHeader {...{ Image, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, activeHeader, activeView, appCompletionNotification, appVersion, isWorkView, kanbanBoard, navItems, notificationClass, notificationSummary, setActiveView, setKanbanLoading, viewIcon }} />
       <div className="commandMain" style={chatRouteShellStyle}>
       <Suspense fallback={<DashboardRouteLoading view={activeView} />}>
