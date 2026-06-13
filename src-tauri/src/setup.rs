@@ -277,14 +277,14 @@ fn setup_root_command(platform: SetupPlatform) -> String {
     let root = app_source_root();
     match platform {
         SetupPlatform::Unix => format!(
-            "mkdir -p {parent} && if [ ! -d {root}/.git ]; then git clone https://github.com/LiamVisionary/hivemindos.git {root}; else git -C {root} pull --ff-only; fi && cd {root}",
+            "mkdir -p {parent} && if [ ! -d {root}/.git ]; then git clone https://github.com/LiamVisionary/hivemindos.git {root}; elif ! git -C {root} pull --ff-only; then echo 'app-source clone is stale/diverged; recloning a fresh copy...' && rm -rf {root} && git clone https://github.com/LiamVisionary/hivemindos.git {root}; fi && cd {root}",
             parent = shell_quote(&root.parent().unwrap_or_else(|| Path::new(".")).display().to_string()),
             root = shell_quote(&root.display().to_string()),
         ),
         SetupPlatform::Windows => {
             let root = root.display();
             format!(
-                "if not exist \"{root}\\.git\" (git clone https://github.com/LiamVisionary/hivemindos.git \"{root}\") else (git -C \"{root}\" pull --ff-only)\r\nif errorlevel 1 exit /b 1\r\ncd /d \"{root}\""
+                "if not exist \"{root}\\.git\" (git clone https://github.com/LiamVisionary/hivemindos.git \"{root}\") else (git -C \"{root}\" pull --ff-only || (echo app-source clone is stale/diverged; recloning a fresh copy... & rmdir /s /q \"{root}\" & git clone https://github.com/LiamVisionary/hivemindos.git \"{root}\"))\r\nif errorlevel 1 exit /b 1\r\ncd /d \"{root}\""
             )
         }
     }
