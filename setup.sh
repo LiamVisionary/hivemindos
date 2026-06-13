@@ -2075,40 +2075,11 @@ copy_dashboard_token_if_requested() {
   [[ -f "$env_file" ]] || return 0
   token="$(awk -F= '$1 == "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN" { sub(/^[^=]*=/, ""); print; exit }' "$env_file")"
   [[ -n "$token" ]] || return 0
-
-  if [[ "$(uname -s)" == "Darwin" && -n "$(command -v pbcopy 2>/dev/null || true)" ]]; then
-    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
-      printf "%s" "$token" | pbcopy
-      ok "Copied dashboard unlock token to clipboard"
-    fi
-    return 0
-  fi
-
-  if [[ -n "$(command -v wl-copy 2>/dev/null || true)" ]]; then
-    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
-      printf "%s" "$token" | wl-copy
-      ok "Copied dashboard unlock token to clipboard"
-    fi
-    return 0
-  fi
-
-  if [[ -n "$(command -v xclip 2>/dev/null || true)" ]]; then
-    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
-      printf "%s" "$token" | xclip -selection clipboard
-      ok "Copied dashboard unlock token to clipboard"
-    fi
-    return 0
-  fi
-
-  if [[ -n "$(command -v xsel 2>/dev/null || true)" ]]; then
-    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
-      printf "%s" "$token" | xsel --clipboard --input
-      ok "Copied dashboard unlock token to clipboard"
-    fi
-    return 0
-  fi
-
-  warn "No clipboard command found; use the copy command printed below."
+  # No prompt: the desktop app unlocks itself with this token automatically (it's
+  # saved to your env), so there's nothing to copy to continue. The token is only
+  # needed to open the dashboard in a BROWSER; grab it from the env file if so.
+  info "Dashboard unlock token is saved in ${env_file} under HIVEMINDOS_DASHBOARD_DEVICE_TOKEN (the app uses it automatically; copy it from there only for browser access)."
+  return 0
 }
 
 dashboard_openable="false"

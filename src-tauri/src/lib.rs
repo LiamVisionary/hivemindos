@@ -22,6 +22,7 @@ mod env;
 mod fleet;
 mod kanban;
 mod memory;
+mod obsidian;
 mod phone;
 mod runtime_files;
 mod runtime_usage;
@@ -1228,6 +1229,7 @@ pub fn run() {
             setup::native_setup_run,
             setup::native_setup_status,
             scheduler::scheduler_shared_schedules,
+            obsidian::obsidian_agents,
             dashboard_state::dashboard_state_read,
             dashboard_state::dashboard_state_write,
             deliverables::download_aeon_deliverable,

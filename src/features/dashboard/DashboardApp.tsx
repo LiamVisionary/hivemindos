@@ -79,6 +79,7 @@ import { loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardSta
 import { readNativeDashboardBootstrap } from "@/lib/native/dashboard-bootstrap";
 import { getNativeAppVersion } from "@/lib/native/desktop-status";
 import { getNativeFleetAppsCache, getNativeTailscaleDevices } from "@/lib/native/fleet";
+import { getNativeObsidianAgents } from "@/lib/native/obsidian";
 import { readNativeHiveEnv } from "@/lib/native/hive-env";
 import { readNativeMemoryTelemetry } from "@/lib/native/memory";
 import { listenForQueenSettingsOpen } from "@/lib/native/queen-voice-events";
@@ -2030,10 +2031,14 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     if (!hydrated || !sharedVault.enabled || agentVaultHydratedRef.current) return;
     let cancelled = false;
     void (async () => {
-      const response = await fetch(`/api/obsidian/agents?vaultPath=${encodeURIComponent(sharedVault.vaultPath || "")}`, { cache: "no-store" }).catch(() => null);
-      const data = await response?.json().catch(() => null) as { ok?: boolean; agents?: AgentProfile[] } | null;
+      // Static desktop build has no /api server — read vault agents natively.
+      const native = await getNativeObsidianAgents(sharedVault.vaultPath || "");
+      const data = native ?? await (async () => {
+        const response = await fetch(`/api/obsidian/agents?vaultPath=${encodeURIComponent(sharedVault.vaultPath || "")}`, { cache: "no-store" }).catch(() => null);
+        return await response?.json().catch(() => null) as { ok?: boolean; agents?: AgentProfile[] } | null;
+      })();
       if (cancelled) return;
-      if (response?.ok && data?.ok && Array.isArray(data.agents) && data.agents.length) {
+      if (data?.ok && Array.isArray(data.agents) && data.agents.length) {
         setAgents((current) => mergeAgentProfiles(current, data.agents ?? []));
       }
       agentVaultHydratedRef.current = true;
