@@ -18,6 +18,7 @@ import {
   type TipBotState,
   type TipBotUser,
 } from "./ledger";
+import { parseCommand, resolveTipRecipient, type ParsedCommand } from "./parse";
 import { mutateTipBotState, newClaimToken, newLedgerEntryId, newWithdrawalId, readTipBotState } from "./store";
 import { escapeHtml, mentionHtml, type TelegramBotApi, type TgMessage, type TgUpdate, type TgUser } from "./telegram-api";
 
@@ -100,8 +101,6 @@ async function registerSeenUsers(state: TipBotState, message: TgMessage) {
   });
 }
 
-type ParsedCommand = { command: string; args: string; targetUserId?: string };
-
 // Ask-instead-of-error: when a command is missing an argument, the bot sends
 // a ForceReply question and remembers it here. The user's reply to that exact
 // message completes the command. In-memory on purpose — prompts are
@@ -137,23 +136,6 @@ function consumePromptReply(message: TgMessage): ParsedCommand | null {
   if (!prompt || prompt.expiresAt < Date.now() || prompt.userId !== String(message.from.id)) return null;
   pendingPrompts.delete(key);
   return { command: prompt.command, args: message.text.trim(), targetUserId: prompt.targetUserId };
-}
-
-function parseCommand(text: string, botUsername: string): ParsedCommand | null {
-  const match = text.match(/^\/([a-zA-Z0-9_]+)(?:@(\S+))?(?:\s+([\s\S]*))?$/);
-  if (match) {
-    if (match[2] && match[2].toLowerCase() !== botUsername.toLowerCase()) return null;
-    return { command: match[1].toLowerCase(), args: (match[3] ?? "").trim() };
-  }
-  // Mid-message tips: "thanks a lot, /tip 1000" should work — that's how
-  // people naturally tip in replies. Only /tip gets this leniency; firing
-  // /balance off a mid-sentence slash would be noisy.
-  const tip = text.match(/(?:^|\s)\/tip(?:@(\S+))?(?:\s+([\s\S]*))?$/i);
-  if (tip) {
-    if (tip[1] && tip[1].toLowerCase() !== botUsername.toLowerCase()) return null;
-    return { command: "tip", args: (tip[2] ?? "").trim() };
-  }
-  return null;
 }
 
 function displayName(user: TipBotUser): string {
@@ -334,22 +316,6 @@ async function handleLinkWallet(runtime: TipBotRuntime, message: TgMessage, args
   await reply(`🔗 Linked <code>${address}</code>. Deposits from it are credited automatically — see /deposit.`);
 }
 
-function resolveTipRecipient(
-  state: TipBotState,
-  message: TgMessage,
-  args: string,
-): { kind: "user"; user: TgUser } | { kind: "stored"; user: TipBotUser } | { kind: "claim"; username: string } | null {
-  const textMention = message.entities?.find((entity) => entity.type === "text_mention" && entity.user);
-  if (textMention?.user) return { kind: "user", user: textMention.user };
-  const usernameToken = args.split(/\s+/).find((token) => token.startsWith("@") && token.length > 1);
-  if (usernameToken) {
-    const stored = findUserByUsername(state, usernameToken);
-    return stored ? { kind: "stored", user: stored } : { kind: "claim", username: usernameToken.slice(1) };
-  }
-  if (message.reply_to_message?.from) return { kind: "user", user: message.reply_to_message.from };
-  return null;
-}
-
 async function handleTip(
   runtime: TipBotRuntime,
   message: TgMessage,
@@ -360,7 +326,7 @@ async function handleTip(
   const from = message.from as TgUser;
   const config = runtime.config;
   const state = await readTipBotState();
-  const tokens = args.split(/\s+/).filter(Boolean);
+  const tokens = args.split(/\s+/).filter(Boolean).map((token) => token.replace(/[.,!?;:]+$/, ""));
   const amountToken = tokens.find((token) => /^\d/.test(token));
   if (!amountToken) {
     // We know who (reply target) but not how much — ask for the amount.
@@ -390,7 +356,7 @@ async function handleTip(
 
   if (state.settings.paused) throw new Error("Tipping is paused right now.");
   const presetUser = presetTargetUserId ? state.users[presetTargetUserId] : undefined;
-  const recipient = presetUser ? { kind: "stored" as const, user: presetUser } : resolveTipRecipient(state, message, args);
+  const recipient = presetUser ? { kind: "stored" as const, user: presetUser } : resolveTipRecipient(state, message, config.botUsername);
   if (!recipient) throw new Error("Tell me who to tip: reply to their message or use /tip 100 @name.");
   if (recipient.kind === "user" && recipient.user.is_bot) throw new Error("Bots don't need tips.");
 

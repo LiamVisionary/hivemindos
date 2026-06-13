@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { formatTokenAmount, parseTokenAmount } from "../src/lib/services/telegram-tip-bot/amounts.ts";
+import { parseCommand, resolveTipRecipient } from "../src/lib/services/telegram-tip-bot/parse.ts";
 import {
   applyClaimCredit,
   applyClaimEscrow,
@@ -36,6 +37,49 @@ function seededState() {
   state.balances["1"] = parseTokenAmount("100", 18).toString();
   return state;
 }
+
+function groupMessage(text, extra = {}) {
+  return { message_id: 1, chat: { id: -100, type: "supergroup" }, from: { id: 9, username: "tipper" }, text, ...extra };
+}
+
+test("parseCommand finds /tip mid-message but anchors other commands", () => {
+  assert.deepEqual(parseCommand("/tip 100 @bob", "thebot"), { command: "tip", args: "100 @bob" });
+  assert.deepEqual(parseCommand("thanks a lot, /tip 5m", "thebot"), { command: "tip", args: "5m" });
+  // The reported bug: mention before /tip — parseCommand keeps only post-/tip args.
+  assert.deepEqual(parseCommand("reported a bug so @bob /tip 5m", "thebot"), { command: "tip", args: "5m" });
+  assert.equal(parseCommand("please check my /balance now", "thebot"), null); // only /tip is lenient
+  assert.equal(parseCommand("/tip@otherbot 5", "thebot"), null); // addressed to a different bot
+});
+
+test("resolveTipRecipient: mention anywhere in the sentence, not just after /tip", () => {
+  const state = seededState();
+  // The exact failing message — @bob sits BEFORE /tip.
+  const recipient = resolveTipRecipient(state, groupMessage("reported a bug so @bob /tip 5m"), "thebot");
+  assert.deepEqual(recipient, { kind: "stored", user: state.users["2"] });
+});
+
+test("resolveTipRecipient: unknown @username becomes a claim, trailing punctuation stripped", () => {
+  const state = seededState();
+  assert.deepEqual(resolveTipRecipient(state, groupMessage("/tip 5 @carol!"), "thebot"), { kind: "claim", username: "carol" });
+});
+
+test("resolveTipRecipient: text_mention entity (no public username) resolves to the user", () => {
+  const state = seededState();
+  const msg = groupMessage("/tip 5 Carol", {
+    entities: [{ type: "text_mention", offset: 8, length: 5, user: { id: 3, first_name: "Carol" } }],
+  });
+  assert.deepEqual(resolveTipRecipient(state, msg, "thebot"), { kind: "user", user: { id: 3, first_name: "Carol" } });
+});
+
+test("resolveTipRecipient: ignores a mention of the bot itself, falls back to reply target", () => {
+  const state = seededState();
+  const msg = groupMessage("/tip@thebot 5", { reply_to_message: { message_id: 7, from: { id: 2, username: "bob" } } });
+  assert.deepEqual(resolveTipRecipient(state, msg, "thebot"), { kind: "user", user: { id: 2, username: "bob" } });
+});
+
+test("resolveTipRecipient: no target at all returns null", () => {
+  assert.equal(resolveTipRecipient(seededState(), groupMessage("/tip 5"), "thebot"), null);
+});
 
 test("parseTokenAmount handles decimals and rejects junk", () => {
   assert.equal(parseTokenAmount("10", 18), 10n * 10n ** 18n);
