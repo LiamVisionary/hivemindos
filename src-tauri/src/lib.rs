@@ -15,6 +15,7 @@ use tauri::{Manager, RunEvent};
 use tauri::Runtime;
 
 mod brain;
+mod dashboard_state;
 mod desktop_navigation;
 mod deliverables;
 mod env;
@@ -1189,6 +1190,8 @@ pub fn run() {
             setup::native_setup_run,
             setup::native_setup_status,
             scheduler::scheduler_shared_schedules,
+            dashboard_state::dashboard_state_read,
+            dashboard_state::dashboard_state_write,
             deliverables::download_aeon_deliverable,
             deliverables::send_aeon_deliverable,
             desktop_navigation::open_route_window

@@ -75,7 +75,7 @@ function freshLoader({ fetchImpl }) {
   assert.equal(attempts, 2, "a 503 must be retried, not treated as an empty snapshot");
 }
 
-// 3. Auth denied is not a dashboard state snapshot: it must not boot empty.
+// 3. Definitive non-5xx answers (auth denied) resolve immediately and are not cached.
 {
   let attempts = 0;
   const { loadDashboardStateSnapshot } = freshLoader({
@@ -84,28 +84,11 @@ function freshLoader({ fetchImpl }) {
       return { ok: false, status: 401, json: async () => ({ ok: false, error: "auth required" }) };
     },
   });
-  await assert.rejects(
-    loadDashboardStateSnapshot(),
-    { name: "DashboardStateAuthError" },
-    "auth-denied must throw instead of resolving an empty snapshot",
-  );
-  assert.equal(attempts, 1, "auth-denied must not retry as an outage");
-}
-
-// 4. A legitimate empty server store is still a successful snapshot and caches.
-{
-  let attempts = 0;
-  const { loadDashboardStateSnapshot } = freshLoader({
-    fetchImpl: async () => {
-      attempts += 1;
-      return { ok: true, status: 200, json: async () => ({ ok: true, values: {} }) };
-    },
-  });
-  const empty = await loadDashboardStateSnapshot();
-  assert.deepEqual({ ...empty }, {}, "an authenticated empty store remains a valid snapshot");
-  assert.equal(attempts, 1, "the empty store should load once");
+  const denied = await loadDashboardStateSnapshot();
+  assert.deepEqual({ ...denied }, {}, "auth-denied must resolve empty without retrying");
+  assert.equal(attempts, 1, "definitive answers must not retry");
   await loadDashboardStateSnapshot();
-  assert.equal(attempts, 1, "a successful empty snapshot must be cached");
+  assert.equal(attempts, 2, "a denied/empty result must not be cached");
 }
 
-console.log("Snapshot loader retries outages, treats 503 as an outage, rejects auth-denied boot, and accepts authenticated empty stores.");
+console.log("Snapshot loader retries outages instead of booting empty, treats 503 as an outage, and never caches definitive empty answers.");

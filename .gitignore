@@ -50,7 +50,12 @@ strix_runs/
 src-tauri/binaries/
 
 # Local build/cache outputs
-hivemind-linkd
+# NOTE: anchor to the built binary paths only. A bare `hivemind-linkd` also
+# matched the cmd/hivemind-linkd/ SOURCE directory, which silently un-tracked
+# shell.go (defining shellPathPrefix etc.) and broke the hivemind-linkd build
+# on every clean checkout.
+/bin/hivemind-linkd
+/cmd/hivemind-linkd/hivemind-linkd
 __pycache__/
 *.pyc
 
