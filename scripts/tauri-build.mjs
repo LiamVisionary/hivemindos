@@ -754,31 +754,31 @@ function runEmbeddedNextBuild(fingerprint) {
 
   try {
     writeBuildNextEnv();
-    run(
-      "scripts/run-with-memory-limit.sh",
-      [
-        "--limit-mb",
-        buildMemoryMb,
-        "--timeout-seconds",
-        buildTimeoutSeconds,
-        "--",
-        "pnpm",
-        "exec",
-        "next",
-        "build",
-        // Use webpack like the static build does. Turbopack rejects this
-        // codebase's `:global {}` CSS module block and the API routes' dynamic
-        // execFile/fs patterns; webpack tolerates them.
-        "--webpack",
-      ],
-      {
-        env: {
-          HIVEMINDOS_TAURI_BUILD: "1",
-          NODE_OPTIONS:
-            `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${buildHeapMb}`.trim(),
-        },
-      },
-    );
+    const embeddedEnv = {
+      HIVEMINDOS_TAURI_BUILD: "1",
+      NODE_OPTIONS:
+        `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${buildHeapMb}`.trim(),
+    };
+    // Use webpack like the static build does. Turbopack rejects this codebase's
+    // `:global {}` CSS module block and the API routes' dynamic execFile/fs
+    // patterns; webpack tolerates them.
+    const nextBuildArgs = ["exec", "next", "build", "--webpack"];
+    if (process.platform === "win32") {
+      // Windows can't exec the bash run-with-memory-limit.sh wrapper (the static
+      // path handles this the same way). Run next directly via cmd; the
+      // NODE_OPTIONS heap cap still bounds memory.
+      run(
+        process.env.ComSpec || "cmd.exe",
+        ["/d", "/c", "pnpm", ...nextBuildArgs],
+        { env: embeddedEnv },
+      );
+    } else {
+      run(
+        "scripts/run-with-memory-limit.sh",
+        ["--limit-mb", buildMemoryMb, "--timeout-seconds", buildTimeoutSeconds, "--", "pnpm", ...nextBuildArgs],
+        { env: embeddedEnv },
+      );
+    }
   } finally {
     restoreNextEnv();
   }
