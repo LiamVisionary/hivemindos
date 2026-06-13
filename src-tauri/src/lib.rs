@@ -833,6 +833,69 @@ fn forward_between(client: TcpStream, upstream: TcpStream) {
     let _ = pump.join();
 }
 
+/// Where the embedded Next server's captured stdout/stderr is written.
+#[cfg(not(debug_assertions))]
+fn native_server_log_path() -> Option<PathBuf> {
+    home_dir().map(|home| home.join(".hivemindos").join("native-server.log"))
+}
+
+/// Open (truncate) the server log and return stdout/stderr handles pointed at
+/// it. Best-effort: if the file can't be opened, fall back to /dev/null so a
+/// logging hiccup never blocks the server from starting.
+#[cfg(not(debug_assertions))]
+fn native_server_log_stdio(path: Option<&Path>) -> (Stdio, Stdio) {
+    let Some(path) = path else {
+        return (Stdio::null(), Stdio::null());
+    };
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    match fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(path)
+    {
+        Ok(file) => match file.try_clone() {
+            Ok(clone) => (Stdio::from(file), Stdio::from(clone)),
+            Err(_) => (Stdio::from(file), Stdio::null()),
+        },
+        Err(_) => (Stdio::null(), Stdio::null()),
+    }
+}
+
+/// Read the last ~4 KB of the server log for inclusion in an error message.
+#[cfg(not(debug_assertions))]
+fn read_native_server_log_tail(path: &Path) -> String {
+    const MAX: usize = 4000;
+    match fs::read(path) {
+        Ok(bytes) => {
+            let start = bytes.len().saturating_sub(MAX);
+            String::from_utf8_lossy(&bytes[start..]).into_owned()
+        }
+        Err(_) => String::new(),
+    }
+}
+
+/// Percent-encode HTML for a `data:` URL fallback page (no deps, no asset
+/// needed) so we can show a readable error if the embedded server won't boot.
+#[cfg(not(debug_assertions))]
+fn percent_encode_for_data_url(input: &str) -> String {
+    let mut out = String::with_capacity(input.len() * 3);
+    for &byte in input.as_bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char);
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
+#[cfg(not(debug_assertions))]
+const NATIVE_SERVER_ERROR_HTML: &str = "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body style=\"font-family:-apple-system,system-ui,Segoe UI,sans-serif;background:#0b0b0f;color:#e7e7ea;margin:0;padding:48px;line-height:1.55\"><h2 style=\"margin:0 0 12px\">HivemindOS couldn't start its local server</h2><p style=\"color:#a7a7b0;max-width:560px\">The app is running, but the dashboard backend failed to boot, so machines, agents and wallets can't load. Re-launching usually retries.</p><p style=\"color:#a7a7b0;max-width:560px\">If it keeps failing, share these two files:</p><pre style=\"background:#15151c;padding:14px 16px;border-radius:10px;white-space:pre-wrap;color:#cfcfe6\">~/.hivemindos/native-server.log\n~/.hivemindos/native-panic.log</pre></body></html>";
+
 #[cfg(not(debug_assertions))]
 fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16, String), Box<dyn std::error::Error>> {
     let (server_js, node_path) = packaged_next_server_paths(app)?;
@@ -849,6 +912,15 @@ fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16, String), Bo
 
     let auth = ensure_native_dashboard_auth(app)?;
     let port = reserve_local_port()?;
+
+    // Capture the embedded server's own stdout/stderr. They used to both go to
+    // /dev/null, so a boot failure (a JIT-blocked node, a missing standalone
+    // trace file, a wrong-arch binary) left no trace and surfaced only as an
+    // opaque "port did not open in 25s". Now the cause lands in
+    // ~/.hivemindos/native-server.log and in the returned error.
+    let log_path = native_server_log_path();
+    let (stdout, stderr) = native_server_log_stdio(log_path.as_deref());
+
     let mut command = Command::new(&node_path);
     command
         .arg(&server_js)
@@ -862,8 +934,8 @@ fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16, String), Bo
         .env(DASHBOARD_DEVICE_TOKEN_KEY, &auth.token)
         .env(NATIVE_BOOTSTRAP_TOKEN_KEY, &auth.bootstrap_token)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stdout(stdout)
+        .stderr(stderr);
 
     #[cfg(target_os = "windows")]
     command.creation_flags(CREATE_NO_WINDOW);
@@ -871,8 +943,27 @@ fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16, String), Bo
     let mut child = command.spawn()?;
 
     if let Err(message) = wait_for_native_server(port) {
+        // Surface why: if node already exited, include its status; always append
+        // the tail of its own log so the real error (not just "port never
+        // opened") reaches native-panic.log and the user.
+        let exit = child.try_wait().ok().flatten();
         let _ = child.kill();
-        return Err(message.into());
+        let exited = match exit {
+            Some(status) => format!(" (node process exited: {status})"),
+            None => " (node process still running but unresponsive)".to_string(),
+        };
+        let tail = log_path
+            .as_deref()
+            .map(read_native_server_log_tail)
+            .unwrap_or_default();
+        let where_log = log_path
+            .as_deref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "no log path".to_string());
+        return Err(
+            format!("{message}{exited}\n--- embedded server log tail ({where_log}) ---\n{tail}")
+                .into(),
+        );
     }
 
     // Expose the loopback dashboard to a paired phone over the tailnet only.
@@ -1181,18 +1272,60 @@ pub fn run() {
             {
                 let app = _app;
                 if has_packaged_next_server(app) {
-                    let (child, port, token) = spawn_native_next_server(app)?;
-                    let state = app.state::<NativeServerState>();
-                    *state.child.lock().map_err(|_| "Native server lock poisoned")? = Some(child);
-                    *state.port.lock().map_err(|_| "Native server port lock poisoned")? = Some(port);
-                    *state.dashboard_token.lock().map_err(|_| "Native server token lock poisoned")? = Some(token.clone());
-
-                    let window = app
-                        .get_webview_window("main")
-                        .ok_or("Missing main HivemindOS window")?;
-                    let mut url = url::Url::parse(&format!("http://{NATIVE_BIND_HOST}:{port}/"))?;
-                    url.set_fragment(Some(&format!("hivemindos_native_bootstrap={token}")));
-                    window.navigate(url)?;
+                    // A failure here must NOT crash the app. Previously `?` bubbled
+                    // the error out of setup(), so `.build(...).expect(...)` panicked
+                    // and a server that couldn't boot took the whole window down with
+                    // it. Now we log the cause (with the server's own log tail) and
+                    // show a readable error page instead of dying on launch.
+                    match spawn_native_next_server(app) {
+                        Ok((child, port, token)) => {
+                            let state = app.state::<NativeServerState>();
+                            if let Ok(mut guard) = state.child.lock() {
+                                *guard = Some(child);
+                            }
+                            if let Ok(mut guard) = state.port.lock() {
+                                *guard = Some(port);
+                            }
+                            if let Ok(mut guard) = state.dashboard_token.lock() {
+                                *guard = Some(token.clone());
+                            }
+                            if let Some(window) = app.get_webview_window("main") {
+                                match url::Url::parse(&format!("http://{NATIVE_BIND_HOST}:{port}/")) {
+                                    Ok(mut url) => {
+                                        url.set_fragment(Some(&format!(
+                                            "hivemindos_native_bootstrap={token}"
+                                        )));
+                                        if let Err(error) = window.navigate(url) {
+                                            eprintln!(
+                                                "HivemindOS: could not navigate to embedded server: {error}"
+                                            );
+                                        }
+                                    }
+                                    Err(error) => {
+                                        eprintln!("HivemindOS: bad embedded server URL: {error}");
+                                    }
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            let message = format!("embedded Next server did not start: {error}");
+                            eprintln!("HivemindOS: {message}");
+                            append_native_panic_log(
+                                "embedded server start",
+                                &message,
+                                "kept app alive; showed local-server error page",
+                            );
+                            if let Some(window) = app.get_webview_window("main") {
+                                let data_url = format!(
+                                    "data:text/html;charset=utf-8,{}",
+                                    percent_encode_for_data_url(NATIVE_SERVER_ERROR_HTML)
+                                );
+                                if let Ok(url) = url::Url::parse(&data_url) {
+                                    let _ = window.navigate(url);
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
