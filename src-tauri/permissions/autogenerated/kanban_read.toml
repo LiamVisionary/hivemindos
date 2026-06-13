@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kanban-read"
+description = "Enables the kanban_read command without any pre-configured scope."
+commands.allow = ["kanban_read"]
+
+[[permission]]
+identifier = "deny-kanban-read"
+description = "Denies the kanban_read command without any pre-configured scope."
+commands.deny = ["kanban_read"]

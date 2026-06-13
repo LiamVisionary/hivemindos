@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-native-setup-run"
+description = "Enables the native_setup_run command without any pre-configured scope."
+commands.allow = ["native_setup_run"]
+
+[[permission]]
+identifier = "deny-native-setup-run"
+description = "Denies the native_setup_run command without any pre-configured scope."
+commands.deny = ["native_setup_run"]

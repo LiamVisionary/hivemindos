@@ -59,6 +59,16 @@ const forceEmbeddedNextBuild =
   process.env.HIVEMINDOS_TAURI_FORCE_NEXT_BUILD === "1";
 const reuseEmbeddedNextBuild =
   process.env.HIVEMINDOS_TAURI_REUSE_EMBEDDED_NEXT !== "0";
+// Build ONLY the arch-independent Next standalone (no per-platform staging), so
+// a single CI job can produce it once and share it to every platform build.
+const standaloneOnly =
+  process.env.HIVEMINDOS_TAURI_STANDALONE_ONLY === "1";
+// A platform build trusts a standalone that a prior job already built and
+// downloaded here, skipping its own ~20-min `next build`. The fingerprint is
+// platform-specific so the normal reuse check can't match across jobs — this
+// flag is the explicit cross-job handoff.
+const usePrebuiltStandalone =
+  process.env.HIVEMINDOS_TAURI_PREBUILT_STANDALONE === "1";
 const optimizePngAssets = process.env.HIVEMINDOS_TAURI_OPTIMIZE_PNGS === "1";
 const originalNextEnv = existsSync(nextEnvPath)
   ? readFileSync(nextEnvPath, "utf8")
@@ -781,6 +791,18 @@ function runEmbeddedNextBuild(fingerprint) {
     return;
   }
 
+  if (usePrebuiltStandalone) {
+    if (!existsSync(standaloneServer)) {
+      throw new Error(
+        `HIVEMINDOS_TAURI_PREBUILT_STANDALONE=1 but no prebuilt standalone at ${standaloneServer} — the shared standalone artifact was not downloaded into ${nextBuildDir}.`,
+      );
+    }
+    console.log(
+      `Using prebuilt Next standalone at ${standaloneServer} (skipping the ~20-min next build).`,
+    );
+    return;
+  }
+
   try {
     writeBuildNextEnv();
     const embeddedEnv = {
@@ -872,6 +894,31 @@ function buildEmbeddedNextResources() {
   copyEmbeddedNextResources(fingerprint);
 }
 
+function buildEmbeddedNextStandaloneOnly() {
+  // Produce ONLY the arch-independent Next standalone (server.js + traced
+  // node_modules) plus the .next static assets, so ONE CI job can build it and
+  // every platform job consumes it via HIVEMINDOS_TAURI_PREBUILT_STANDALONE=1.
+  // No node binary copy / signing here — those are per-platform and run in the
+  // platform job's staging step (copyEmbeddedNextResources).
+  const fingerprint = buildEmbeddedFingerprint();
+  mkdirSync(nextBuildDir, { recursive: true });
+  runEmbeddedNextBuild(fingerprint);
+  if (!existsSync(standaloneServer)) {
+    throw new Error(
+      `Standalone-only build did not produce ${standaloneServer}`,
+    );
+  }
+  // Dereference pnpm symlinks NOW so the uploaded artifact is portable across
+  // OSes — Windows artifact extraction can't restore Unix symlinks, which would
+  // leave node_modules dangling on the Windows platform build. After this the
+  // standalone is plain files; the platform job's own materialize is then a
+  // no-op. (Skipped on a cache hit where it's already materialized.)
+  materializeResourceSymlinks(standaloneDir);
+  console.log(
+    `Standalone-only build ready (symlinks materialized): ${standaloneServer} (+ ${join(nextBuildDir, "static")})`,
+  );
+}
+
 function buildStaticNativeResources() {
   rmSync(staticResourceDir, { force: true, recursive: true });
   rmSync(serverResourceDir, { force: true, recursive: true });
@@ -908,7 +955,14 @@ function buildStaticNativeResources() {
   );
 }
 
-if (embeddedNextMode) {
+if (standaloneOnly) {
+  if (!embeddedNextMode) {
+    throw new Error(
+      "HIVEMINDOS_TAURI_STANDALONE_ONLY=1 requires HIVEMINDOS_TAURI_EMBEDDED_NEXT=1",
+    );
+  }
+  buildEmbeddedNextStandaloneOnly();
+} else if (embeddedNextMode) {
   buildEmbeddedNextResources();
 } else {
   buildStaticNativeResources();

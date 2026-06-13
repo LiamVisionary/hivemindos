@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dashboard-state-read"
+description = "Enables the dashboard_state_read command without any pre-configured scope."
+commands.allow = ["dashboard_state_read"]
+
+[[permission]]
+identifier = "deny-dashboard-state-read"
+description = "Denies the dashboard_state_read command without any pre-configured scope."
+commands.deny = ["dashboard_state_read"]

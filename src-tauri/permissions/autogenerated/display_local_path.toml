@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-display-local-path"
+description = "Enables the display_local_path command without any pre-configured scope."
+commands.allow = ["display_local_path"]
+
+[[permission]]
+identifier = "deny-display-local-path"
+description = "Denies the display_local_path command without any pre-configured scope."
+commands.deny = ["display_local_path"]

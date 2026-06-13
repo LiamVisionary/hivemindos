@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-aeon-outputs"
+description = "Enables the list_aeon_outputs command without any pre-configured scope."
+commands.allow = ["list_aeon_outputs"]
+
+[[permission]]
+identifier = "deny-list-aeon-outputs"
+description = "Denies the list_aeon_outputs command without any pre-configured scope."
+commands.deny = ["list_aeon_outputs"]

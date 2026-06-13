@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-obsidian-agents"
+description = "Enables the obsidian_agents command without any pre-configured scope."
+commands.allow = ["obsidian_agents"]
+
+[[permission]]
+identifier = "deny-obsidian-agents"
+description = "Denies the obsidian_agents command without any pre-configured scope."
+commands.deny = ["obsidian_agents"]

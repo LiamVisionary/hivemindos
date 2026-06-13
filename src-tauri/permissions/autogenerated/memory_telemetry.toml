@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-memory-telemetry"
+description = "Enables the memory_telemetry command without any pre-configured scope."
+commands.allow = ["memory_telemetry"]
+
+[[permission]]
+identifier = "deny-memory-telemetry"
+description = "Denies the memory_telemetry command without any pre-configured scope."
+commands.deny = ["memory_telemetry"]
