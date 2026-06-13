@@ -1331,6 +1331,7 @@ configure_shared_skills() {
 
   imports="$(normalize_agent_list "${imports:-none}")"
   targets="$(normalize_agent_list "${targets:-none}")"
+  info "→ Syncing the shared skill shelf and installing agent hooks… (this can take a moment)"
   ./scripts/seed-shared-skills.sh --import-sources "$imports" --share-targets "$targets"
 }
 
@@ -1766,6 +1767,7 @@ ensure_gitlawb_code_proof() {
         should_register="false"
       fi
       if [[ "$should_register" == "true" ]]; then
+        info "→ Registering this machine's GitLawb DID with $gitlawb_node… (this can take a moment)"
         if GITLAWB_NODE="$gitlawb_node" gl register >/dev/null 2>&1; then
           ok "GitLawb DID registered with $gitlawb_node"
         else
@@ -1935,6 +1937,7 @@ No provider secrets are stored in this note.
 EOF
 fi
 
+info "→ Seeding the shared brain vault (notes, skills, context)… (this can take a moment)"
 node "$ROOT/scripts/seed-vault-foundation.mjs" \
   --vault "$shared_vault_path" \
   --scheduled-folder "$scheduled_folder" \
@@ -1984,6 +1987,7 @@ else
   if setup_is_interactive; then
     hermes_restart_mode="ask"
   fi
+  info "→ Building and installing the collector and Hivemind Link… (this can take a minute)"
   HIVE_SETUP_NETWORK_MANAGED="true" HIVE_SETUP_TAILNET_SYNC_ENABLED="$tailnet_sync_enabled" HIVE_LINK_ENABLED="$hivemind_link_enabled" AGENT_TELEMETRY_PORT="$COLLECTOR_PORT" AGENT_TELEMETRY_HERMES_RESTART="${AGENT_TELEMETRY_HERMES_RESTART:-$hermes_restart_mode}" ./scripts/install-telemetry-collector.sh
   # Install + supervise the Claw backend so the Claw Code Mobile app works on a
   # machine that only ran HivemindOS setup (its coding agent runs here, reached
