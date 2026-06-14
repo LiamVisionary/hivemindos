@@ -925,6 +925,18 @@ fn start_native_next_server(
 
     let mut command = Command::new(&node_path);
     command
+        // Node realpath-resolves the main-module path at startup. On Windows,
+        // Tauri's resource_dir() yields an extended-length (verbatim) path
+        // (\\?\C:\...\server.js) and Node's realpathSync chokes on it with
+        // "EISDIR: illegal operation on a directory, lstat 'C:'", so the
+        // embedded server never starts and every launch lands on the
+        // "couldn't start its local server" page (Windows has been broken this
+        // way since the first embedded release). --preserve-symlinks-main skips
+        // that realpath of the entry script, fixing it while keeping the
+        // verbatim prefix (so deep node_modules paths stay long-path-safe).
+        // Reproduced + fix-validated on windows-latest. Harmless on macOS/Linux
+        // (the standalone's main path has no symlink to preserve).
+        .arg("--preserve-symlinks-main")
         .arg(&server_js)
         .current_dir(&server_dir)
         .env("HOSTNAME", NATIVE_BIND_HOST)

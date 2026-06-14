@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-14 01:30:00 +0700 - Fix Windows: embedded server never started (EISDIR on drive root)
+  - Status: Uncommitted
+  - Areas changed: Node spawn flag in the embedded boot (`src-tauri/src/lib.rs` `start_native_next_server`); removed the one-off `\.github/workflows/debug-windows-server-boot.yml` diagnostic
+  - Summary: Fixes the Windows-only "HivemindOS couldn't start its local server" error that hit every Windows install since the first embedded release (v0.2.10). The Tauri runtime hands Node the embedded server path in Windows extended-length (verbatim) form (`\\?\C:\...\server.js`); Node realpath-resolves the main module at startup and crashes on that form with `EISDIR: illegal operation on a directory, lstat 'C:'`, so the dashboard backend never booted and every launch (and "rerun setup") landed on the error page. The fix launches Node with `--preserve-symlinks-main`, which skips the realpath of the entry script while keeping the long-path-safe prefix. macOS/Linux are unaffected.
+  - Verification: Reproduced AND fix-validated on a windows-latest runner: the verbatim path crashes with the exact user error, and the same path with `--preserve-symlinks-main` boots and serves (SSR + /api). `cargo check --release` passes. NOTE: a fully-broken Windows install can't auto-update (the updater runs in the dashboard, which never loaded), so affected users must download the fixed build once.
+  - Intended commit message: `Fix Windows embedded server boot: --preserve-symlinks-main (EISDIR on \\?\ path)`
+
 - 2026-06-14 00:30:00 +0700 - Instant-paint launch for the embedded desktop app
   - Status: Uncommitted
   - Areas changed: async embedded boot + navigate-on-ready (`src-tauri/src/lib.rs`), branded loading shell (`src-tauri/loading-shell/index.html`), ship shell as embedded frontendDist (`scripts/tauri-build.mjs`), expose the Tauri bridge to the shell (`src-tauri/tauri.conf.json` `withGlobalTauri`)
