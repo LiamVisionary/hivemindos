@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-project-terminal"
+description = "Enables the open_project_terminal command without any pre-configured scope."
+commands.allow = ["open_project_terminal"]
+
+[[permission]]
+identifier = "deny-open-project-terminal"
+description = "Denies the open_project_terminal command without any pre-configured scope."
+commands.deny = ["open_project_terminal"]

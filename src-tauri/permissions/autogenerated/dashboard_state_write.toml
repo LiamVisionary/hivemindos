@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dashboard-state-write"
+description = "Enables the dashboard_state_write command without any pre-configured scope."
+commands.allow = ["dashboard_state_write"]
+
+[[permission]]
+identifier = "deny-dashboard-state-write"
+description = "Denies the dashboard_state_write command without any pre-configured scope."
+commands.deny = ["dashboard_state_write"]

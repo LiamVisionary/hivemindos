@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-aeon-runs"
+description = "Enables the list_aeon_runs command without any pre-configured scope."
+commands.allow = ["list_aeon_runs"]
+
+[[permission]]
+identifier = "deny-list-aeon-runs"
+description = "Denies the list_aeon_runs command without any pre-configured scope."
+commands.deny = ["list_aeon_runs"]

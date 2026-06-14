@@ -26,6 +26,11 @@ const targetPath = join(binariesDir, `claw-${target.triple}${target.exe}`);
 mkdirSync(binariesDir, { recursive: true });
 rmSync(targetPath, { force: true });
 
+// Build + stage the in-bundle gateway-host helper (a second externalBin). Must
+// run before the claw staging exits, and before the app build's validation of
+// externalBin paths. See src-tauri/gateway-host.
+stageGatewayHost(target);
+
 const localSource = findLocalClawBinary(target);
 if (localSource) {
   copyExecutable(localSource, targetPath);
@@ -46,6 +51,32 @@ if (target.clawArchive) {
 
 stageFallbackLauncher(target, targetPath);
 console.log(`[tauri-sidecar] staged fallback launcher for ${target.triple}`);
+
+function stageGatewayHost(target) {
+  const manifest = join(projectRoot, "src-tauri", "gateway-host", "Cargo.toml");
+  const dest = join(
+    binariesDir,
+    `hivemind-gateway-host-${target.triple}${target.exe}`,
+  );
+  rmSync(dest, { force: true });
+  const cargoArgs = ["build", "--release", "--manifest-path", manifest];
+  if (target.cargoTarget) cargoArgs.push("--target", target.cargoTarget);
+  const built = spawnSync("cargo", cargoArgs, { stdio: "inherit" });
+  if (built.status !== 0) {
+    throw new Error(
+      `[tauri-sidecar] failed to build gateway-host helper (exit ${built.status ?? "unknown"})`,
+    );
+  }
+  const releaseDir = target.cargoTarget
+    ? join(projectRoot, "src-tauri", "gateway-host", "target", target.cargoTarget, "release")
+    : join(projectRoot, "src-tauri", "gateway-host", "target", "release");
+  const builtBinary = join(releaseDir, `hivemind-gateway-host${target.exe}`);
+  if (!existsSync(builtBinary)) {
+    throw new Error(`[tauri-sidecar] gateway-host binary missing at ${builtBinary}`);
+  }
+  copyExecutable(builtBinary, dest);
+  console.log(`[tauri-sidecar] staged gateway-host for ${target.triple}`);
+}
 
 function sidecarTarget() {
   if (process.platform === "darwin" && process.arch === "arm64") {

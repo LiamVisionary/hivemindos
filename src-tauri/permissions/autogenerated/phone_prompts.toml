@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-phone-prompts"
+description = "Enables the phone_prompts command without any pre-configured scope."
+commands.allow = ["phone_prompts"]
+
+[[permission]]
+identifier = "deny-phone-prompts"
+description = "Denies the phone_prompts command without any pre-configured scope."
+commands.deny = ["phone_prompts"]

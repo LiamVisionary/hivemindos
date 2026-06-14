@@ -1761,13 +1761,19 @@ ensure_gitlawb_code_proof() {
       set_env_local "GITLAWB_NODE" "$gitlawb_node"
       printf "%s\n" "$gitlawb_node" > "$HOME/.hivemindos/gitlawb/node-url"
       local should_register="true"
+      if setup_is_interactive && [[ -z "${HIVE_GITLAWB_REGISTER:-}" ]]; then
+        info "GitLawb (\"Code Proof\") gives this machine a verifiable identity (a DID) so the work"
+        info "your agents push can carry a tamper-proof signature of where it came from."
+        info "Registering publishes only this machine's PUBLIC id to ${gitlawb_node}; no private"
+        info "keys leave this computer. Optional - skip it and set it up later from Integrations."
+      fi
       if [[ "${HIVE_GITLAWB_REGISTER:-}" =~ ^(0|false|no|off)$ ]]; then
         should_register="false"
       elif setup_is_interactive && [[ -z "${HIVE_GITLAWB_REGISTER:-}" ]] && ! prompt_yes_no "Register this machine's GitLawb DID with $gitlawb_node?" "yes"; then
         should_register="false"
       fi
       if [[ "$should_register" == "true" ]]; then
-        info "→ Registering this machine's GitLawb DID with $gitlawb_node… (this can take a moment)"
+        info "→ Registering with the GitLawb network (${gitlawb_node})… (this can take a moment)"
         if GITLAWB_NODE="$gitlawb_node" gl register >/dev/null 2>&1; then
           ok "GitLawb DID registered with $gitlawb_node"
         else
@@ -2069,40 +2075,11 @@ copy_dashboard_token_if_requested() {
   [[ -f "$env_file" ]] || return 0
   token="$(awk -F= '$1 == "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN" { sub(/^[^=]*=/, ""); print; exit }' "$env_file")"
   [[ -n "$token" ]] || return 0
-
-  if [[ "$(uname -s)" == "Darwin" && -n "$(command -v pbcopy 2>/dev/null || true)" ]]; then
-    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
-      printf "%s" "$token" | pbcopy
-      ok "Copied dashboard unlock token to clipboard"
-    fi
-    return 0
-  fi
-
-  if [[ -n "$(command -v wl-copy 2>/dev/null || true)" ]]; then
-    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
-      printf "%s" "$token" | wl-copy
-      ok "Copied dashboard unlock token to clipboard"
-    fi
-    return 0
-  fi
-
-  if [[ -n "$(command -v xclip 2>/dev/null || true)" ]]; then
-    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
-      printf "%s" "$token" | xclip -selection clipboard
-      ok "Copied dashboard unlock token to clipboard"
-    fi
-    return 0
-  fi
-
-  if [[ -n "$(command -v xsel 2>/dev/null || true)" ]]; then
-    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
-      printf "%s" "$token" | xsel --clipboard --input
-      ok "Copied dashboard unlock token to clipboard"
-    fi
-    return 0
-  fi
-
-  warn "No clipboard command found; use the copy command printed below."
+  # No prompt: the desktop app unlocks itself with this token automatically (it's
+  # saved to your env), so there's nothing to copy to continue. The token is only
+  # needed to open the dashboard in a BROWSER; grab it from the env file if so.
+  info "Dashboard unlock token is saved in ${env_file} under HIVEMINDOS_DASHBOARD_DEVICE_TOKEN (the app uses it automatically; copy it from there only for browser access)."
+  return 0
 }
 
 dashboard_openable="false"

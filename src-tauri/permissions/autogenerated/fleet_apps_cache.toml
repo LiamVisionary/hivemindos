@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fleet-apps-cache"
+description = "Enables the fleet_apps_cache command without any pre-configured scope."
+commands.allow = ["fleet_apps_cache"]
+
+[[permission]]
+identifier = "deny-fleet-apps-cache"
+description = "Denies the fleet_apps_cache command without any pre-configured scope."
+commands.deny = ["fleet_apps_cache"]

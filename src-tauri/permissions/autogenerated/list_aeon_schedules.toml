@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-aeon-schedules"
+description = "Enables the list_aeon_schedules command without any pre-configured scope."
+commands.allow = ["list_aeon_schedules"]
+
+[[permission]]
+identifier = "deny-list-aeon-schedules"
+description = "Denies the list_aeon_schedules command without any pre-configured scope."
+commands.deny = ["list_aeon_schedules"]

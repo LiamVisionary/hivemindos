@@ -31,6 +31,11 @@
 - Personal and operational state belongs elsewhere: Shared Brain Memory / the Obsidian vault for durable facts and setup records, `CHANGELOG.md` for what was changed and how it was verified, and the control room for machine runbooks.
 - Before committing a doc, re-read it as a stranger installing the product: anything they could not reproduce or should not know is in the wrong file.
 
+## Landing Page & Release Assets
+
+- The public download/landing site is a **separate Next.js repo**; this repo's `src/app/page.tsx` is the dashboard root, not the landing page. The landing page links to version-independent `https://github.com/LiamVisionary/hivemindos/releases/latest/download/<asset>` URLs, so a new Latest release is served automatically.
+- The release workflow's stable asset filenames are a **contract** with the landing page and the auto-updater. Do not rename a release asset without updating the workflow's "Collect bundle assets" step, `scripts/build-updater-manifest.mjs`, and the landing repo's download cards together. See [`LANDING_PAGE.md`](LANDING_PAGE.md).
+
 ## Persistence And Cross-Surface State
 
 - Do not rely on browser-only storage such as `localStorage`, `sessionStorage`, IndexedDB, or webview cache for durable HivemindOS data. The app must work consistently across Tauri builds, the local dev build, and ordinary browsers.

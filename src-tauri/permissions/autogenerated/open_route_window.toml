@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-route-window"
+description = "Enables the open_route_window command without any pre-configured scope."
+commands.allow = ["open_route_window"]
+
+[[permission]]
+identifier = "deny-open-route-window"
+description = "Denies the open_route_window command without any pre-configured scope."
+commands.deny = ["open_route_window"]

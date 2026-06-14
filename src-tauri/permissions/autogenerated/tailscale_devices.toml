@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tailscale-devices"
+description = "Enables the tailscale_devices command without any pre-configured scope."
+commands.allow = ["tailscale_devices"]
+
+[[permission]]
+identifier = "deny-tailscale-devices"
+description = "Denies the tailscale_devices command without any pre-configured scope."
+commands.deny = ["tailscale_devices"]

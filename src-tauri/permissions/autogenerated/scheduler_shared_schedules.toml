@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-scheduler-shared-schedules"
+description = "Enables the scheduler_shared_schedules command without any pre-configured scope."
+commands.allow = ["scheduler_shared_schedules"]
+
+[[permission]]
+identifier = "deny-scheduler-shared-schedules"
+description = "Denies the scheduler_shared_schedules command without any pre-configured scope."
+commands.deny = ["scheduler_shared_schedules"]

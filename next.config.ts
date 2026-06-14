@@ -39,6 +39,13 @@ function detectedTailnetDevOrigins() {
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // The embedded build compiles all ~155 API routes and is memory-heavy; this
+  // trades a little build time to cut webpack's peak memory so it stays under
+  // the heap cap on CI runners (avoids the 8 GB OOM). Next 15.2+.
+  experimental:
+    isTauriBuild || isTauriStaticBuild
+      ? { webpackMemoryOptimizations: true }
+      : undefined,
   // Pin file tracing to the repo so Next never infers a wider root and walks
   // directories it cannot read (Windows profile junctions EPERM on scandir).
   outputFileTracingRoot: projectRoot,

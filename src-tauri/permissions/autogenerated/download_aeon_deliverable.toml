@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-download-aeon-deliverable"
+description = "Enables the download_aeon_deliverable command without any pre-configured scope."
+commands.allow = ["download_aeon_deliverable"]
+
+[[permission]]
+identifier = "deny-download-aeon-deliverable"
+description = "Denies the download_aeon_deliverable command without any pre-configured scope."
+commands.deny = ["download_aeon_deliverable"]

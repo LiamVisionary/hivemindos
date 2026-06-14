@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aeon-repo-sync"
+description = "Enables the aeon_repo_sync command without any pre-configured scope."
+commands.allow = ["aeon_repo_sync"]
+
+[[permission]]
+identifier = "deny-aeon-repo-sync"
+description = "Denies the aeon_repo_sync command without any pre-configured scope."
+commands.deny = ["aeon_repo_sync"]

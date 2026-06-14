@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-native-dashboard-unlock-token"
+description = "Enables the native_dashboard_unlock_token command without any pre-configured scope."
+commands.allow = ["native_dashboard_unlock_token"]
+
+[[permission]]
+identifier = "deny-native-dashboard-unlock-token"
+description = "Denies the native_dashboard_unlock_token command without any pre-configured scope."
+commands.deny = ["native_dashboard_unlock_token"]

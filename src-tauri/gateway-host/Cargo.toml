@@ -1,0 +1,26 @@
+# Standalone helper crate, kept SEPARATE from hivemindos-desktop on purpose:
+# it is staged as a Tauri externalBin (binaries/hivemind-gateway-host), so it
+# must be built BEFORE the app's build script validates externalBin paths. A
+# same-crate [[bin]] would be circular (build.rs needs the staged file that the
+# build produces). `[workspace]` makes this its own root so it never gets pulled
+# into the app package. Identity comes from the inside-out codesign step, not
+# from sharing the crate — so a separate crate is signed identically.
+[workspace]
+
+[package]
+name = "hivemind-gateway-host"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "hivemind-gateway-host"
+path = "src/main.rs"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[profile.release]
+opt-level = "z"
+strip = true
+panic = "abort"

@@ -719,6 +719,15 @@ choose_link_tailnet_port() {
     return
   fi
 
+  # The collector binds loopback (127.0.0.1) in Link mode while hivemind-linkd
+  # exposes the same port number on the *tailnet interface* (tsnet) — the two do
+  # not collide. A HivemindOS collector already on LINK_TAILNET_PORT is the
+  # expected occupant, so keep the canonical port instead of drifting it (e.g.
+  # 8787 -> 8789) on every reinstall.
+  if collector_health_is_hivemind "$LINK_TAILNET_PORT"; then
+    return
+  fi
+
   local requested_port="$LINK_TAILNET_PORT"
   local control_port="${LINK_CONTROL##*:}"
   local candidate
@@ -949,6 +958,11 @@ wait_for_local_collector() {
   return 1
 }
 
+# Allow the collector's Node binary to accept INBOUND connections through the
+# macOS Application Firewall. This is about network reachability of the collector
+# from other machines' dashboards — it is unrelated to the gateway's file-access
+# (TCC) grant, which the app-signed login item handles. Only matters when the
+# collector binds 0.0.0.0 (a --system-tailscale install without tailscale serve).
 maybe_allow_node_through_macos_firewall() {
   if [[ "$(uname -s)" != "Darwin" || ! -x /usr/libexec/ApplicationFirewall/socketfilterfw ]]; then
     return
@@ -1262,6 +1276,15 @@ SERVICE
     fi
   fi
 
+  # Resilience: Restart=always does NOT cover a clean `systemctl stop`, so if any
+  # step between stopping and restarting the collector below aborts (set -euo
+  # pipefail), the collector would be left dead (0 agents) until a human
+  # intervened — impossible on boxes with no shell access. Guarantee it comes
+  # back on exit no matter how this script ends.
+  _restore_collector_on_exit() {
+    systemctl --user start agent-telemetry.service >/dev/null 2>&1 || true
+  }
+  trap _restore_collector_on_exit EXIT
   systemctl --user stop agent-telemetry.service >/dev/null 2>&1 || true
   systemctl --user reset-failed agent-telemetry.service >/dev/null 2>&1 || true
   stop_existing_listener
@@ -1286,6 +1309,41 @@ SERVICE
   systemctl --user daemon-reload
   systemctl --user enable agent-telemetry.service
   systemctl --user restart agent-telemetry.service
+  # Collector is back up cleanly; the abort safety-net is no longer needed.
+  trap - EXIT
+
+  # Self-heal watchdog: a light timer that re-starts the collector whenever it is
+  # found stopped — e.g. an external `systemctl stop`, or an interrupted update on
+  # an OLDER build that predates the trap above. `start` is a no-op when it is
+  # already running. This gives the Linux collector the same always-up guarantee
+  # macOS gets from launchd KeepAlive, so a downed collector self-recovers within
+  # minutes without any shell access.
+  WATCHDOG_SERVICE="$HOME/.config/systemd/user/agent-telemetry-watchdog.service"
+  WATCHDOG_TIMER="$HOME/.config/systemd/user/agent-telemetry-watchdog.timer"
+  cat > "$WATCHDOG_SERVICE" <<'WATCHDOG_SERVICE_UNIT'
+[Unit]
+Description=HivemindOS telemetry collector watchdog
+After=agent-telemetry.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'systemctl --user is-active --quiet agent-telemetry.service || systemctl --user start agent-telemetry.service'
+WATCHDOG_SERVICE_UNIT
+  cat > "$WATCHDOG_TIMER" <<'WATCHDOG_TIMER_UNIT'
+[Unit]
+Description=HivemindOS telemetry collector watchdog timer
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=3min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
+WATCHDOG_TIMER_UNIT
+  systemctl --user daemon-reload
+  systemctl --user enable agent-telemetry-watchdog.timer >/dev/null 2>&1 || true
+  systemctl --user restart agent-telemetry-watchdog.timer >/dev/null 2>&1 || true
   if [[ "$LINK_ACTIVE" == "true" ]]; then
     prepare_hivemind_link_state_dir
     LINK_SERVICE="$HOME/.config/systemd/user/hivemindos-linkd.service"

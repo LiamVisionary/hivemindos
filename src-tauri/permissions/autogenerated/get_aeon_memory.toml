@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-aeon-memory"
+description = "Enables the get_aeon_memory command without any pre-configured scope."
+commands.allow = ["get_aeon_memory"]
+
+[[permission]]
+identifier = "deny-get-aeon-memory"
+description = "Denies the get_aeon_memory command without any pre-configured scope."
+commands.deny = ["get_aeon_memory"]

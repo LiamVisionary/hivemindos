@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { Check, ChevronLeft, Copy, FolderOpen, LoaderCircle, Lock, Network, RefreshCcw, ShieldCheck, Smartphone, Sparkles, X } from "lucide-react";
+import { Check, ChevronLeft, Copy, LoaderCircle, Lock, Network, RefreshCcw, ShieldCheck, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
-import { NATIVE_SETUP_DEMO_ENABLED, NATIVE_SETUP_RERUN_EVENT, openFullDiskAccessSettings, readNativeSetupStatus, revealGatewayForFullDiskAccess, runNativeSetup, type NativeDetectedAgentRuntime, type NativeSetupStatus } from "@/lib/native/setup";
+import { NATIVE_SETUP_DEMO_ENABLED, NATIVE_SETUP_RERUN_EVENT, readNativeSetupStatus, runNativeSetup, type NativeDetectedAgentRuntime, type NativeSetupStatus } from "@/lib/native/setup";
 import { requestGuidedTour } from "@/lib/native/guided-tour";
 import { runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode } from "@/lib/config/runtime-icons";
 import { grantNativePrivateFilesystemAccess } from "@/lib/native/dashboard-bootstrap";
@@ -75,7 +75,7 @@ function stepHeaders(device: string, isMac: boolean, isWindows: boolean): Record
       ? { title: "Welcome to HivemindOS", subtitle: "One click and your hive sets itself up." }
       : { title: "You're all set", subtitle: "HivemindOS takes care of everything from here." },
     pairing: isMac
-      ? { title: "One last thing", subtitle: "Use HivemindOS from your phone — optional." }
+      ? { title: "You're all set", subtitle: "Your phone reaches this Mac automatically — even when the app is closed." }
       : { title: "All set", subtitle: "Setup is running in the background." },
   };
 }
@@ -145,8 +145,6 @@ export function NativeFirstRunOnboarding() {
   const [memoryAgents, setMemoryAgents] = useState<string[]>(ALL_AGENT_IDS);
   const [running, setRunning] = useState(false);
   const [runStatus, setRunStatus] = useState("");
-  const [pairingExpanded, setPairingExpanded] = useState(false);
-  const [pairingStatus, setPairingStatus] = useState("");
   const [stepHeight, setStepHeight] = useState<number | null>(null);
   const stepContentRef = useRef<HTMLDivElement | null>(null);
 
@@ -238,7 +236,7 @@ export function NativeFirstRunOnboarding() {
       observer?.disconnect();
       window.removeEventListener("resize", updateHeight);
     };
-  }, [open, step, status, skillAgents, memoryAgents, running, runStatus, pairingExpanded, pairingStatus]);
+  }, [open, step, status, skillAgents, memoryAgents, running, runStatus]);
 
   if (!open || !status) return null;
 
@@ -313,26 +311,6 @@ export function NativeFirstRunOnboarding() {
     } catch {
       setRunStatus("Could not copy automatically. You can select the command text below.");
     }
-  }
-
-  async function openFolderAccessSettings() {
-    setPairingStatus("");
-    const ok = demoMode ? true : await openFullDiskAccessSettings();
-    if (!ok) {
-      setPairingStatus(
-        "Couldn't open Settings automatically — open System Settings → Privacy & Security → Full Disk Access.",
-      );
-    }
-  }
-
-  async function revealGatewayBinary() {
-    setPairingStatus("");
-    const ok = demoMode ? true : await revealGatewayForFullDiskAccess();
-    setPairingStatus(
-      ok
-        ? "Finder is highlighting “HivemindOS Gateway”. Drag it into the Full Disk Access list (or click +, then add it) and switch it on."
-        : "Couldn't reveal the file automatically. Make sure HivemindOS is installed on this Mac, then try again.",
-    );
   }
 
   return (
@@ -455,76 +433,20 @@ export function NativeFirstRunOnboarding() {
             </div>
           ) : null}
 
-          {step === "pairing" && !isMac ? (
+          {step === "pairing" ? (
             <div className="rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.46)] p-5">
               <div className="flex items-center gap-3">
                 <Check aria-hidden="true" className="h-6 w-6 text-[var(--accent-strong)]" />
                 <div>
-                  <h3 className="text-lg font-semibold">Setup is running</h3>
+                  <h3 className="text-lg font-semibold">You're all set</h3>
                   <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                    You can close this window — HivemindOS will finish up in the background. If a window pops up asking for permission, just click OK or Allow.
+                    You can close this window — HivemindOS finishes up in the background.
+                    {isMac
+                      ? " Your phone can reach this Mac automatically, even when the app is closed. The first time it opens a file, just tap “Allow” on the one-time prompt."
+                      : " If a window pops up asking for permission, just click OK or Allow."}
                   </p>
                 </div>
               </div>
-            </div>
-          ) : null}
-
-          {step === "pairing" && isMac ? (
-            <div className="rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.46)] p-5">
-              <div className="flex items-center gap-3">
-                <Smartphone aria-hidden="true" className="h-6 w-6 text-[var(--accent-strong)]" />
-                <div>
-                  <h3 className="text-lg font-semibold">Use HivemindOS on your phone</h3>
-                  <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                    Your phone can see and work with the files on this Mac. Your Mac just needs you to allow it once.
-                  </p>
-                </div>
-              </div>
-
-              {!pairingExpanded ? (
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <Button type="button" onClick={() => setPairingExpanded(true)}>
-                    <Lock aria-hidden="true" />
-                    Set it up
-                  </Button>
-                  <Button type="button" variant="secondary" onClick={dismiss}>
-                    Skip for now
-                  </Button>
-                </div>
-              ) : (
-                <div className="mt-5 space-y-3">
-                  <p className="text-sm leading-6 text-[var(--muted)]">
-                    Two quick steps, one time only. After this, your phone can reach this Mac anytime — even when this app is closed.
-                  </p>
-                  <div className="rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.32)] p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--button-primary)] text-xs font-semibold text-[var(--button-primary-foreground)]">1</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold">Open the settings page</div>
-                        <p className="mt-1 text-xs leading-5 text-[var(--muted)]">This button takes you straight to the right spot.</p>
-                        <Button type="button" variant="secondary" className="mt-2" onClick={() => void openFolderAccessSettings()}>
-                          <ShieldCheck aria-hidden="true" />
-                          Open the settings
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.32)] p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--button-primary)] text-xs font-semibold text-[var(--button-primary-foreground)]">2</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold">Add “HivemindOS Gateway” to the list</div>
-                        <p className="mt-1 text-xs leading-5 text-[var(--muted)]">We’ll highlight the file for you. Drag it into the settings list and switch it on.</p>
-                        <Button type="button" variant="secondary" className="mt-2" onClick={() => void revealGatewayBinary()}>
-                          <FolderOpen aria-hidden="true" />
-                          Show me the file
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  {pairingStatus ? <p className="text-sm leading-6 text-[var(--muted)]">{pairingStatus}</p> : null}
-                </div>
-              )}
             </div>
           ) : null}
           </div>

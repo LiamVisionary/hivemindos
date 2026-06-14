@@ -57,6 +57,9 @@ BUNDLE="$TARGET_DIR/HivemindOS.app"
 BUNDLE_MACOS="$BUNDLE/Contents/MacOS"
 BUNDLE_BIN="$BUNDLE_MACOS/HivemindOS"
 BUNDLE_CLAW="$BUNDLE_MACOS/claw"
+# The gateway-host helper nested beside claw, so the dev login-item gateway runs
+# the app-identity-signed helper exactly like prod (see lib.rs install_gateway_login_item).
+BUNDLE_GW="$BUNDLE_MACOS/hivemind-gateway-host"
 
 # Pick a claw to nest: the dev tree's own copy first (what the gateway already used),
 # then the release app's bundled claw, then the installed copy. First hit wins.
@@ -67,6 +70,20 @@ find_claw_source() {
     "$ROOT/src-tauri/target/release/bundle/macos/HivemindOS.app/Contents/MacOS/claw" \
     "$HOME/.hivemindos/claw/bin/claw"; do
     if [ -f "$c" ]; then printf '%s' "$c"; return 0; fi
+  done
+  return 1
+}
+
+# The gateway-host helper: the freshly built standalone crate first, then the
+# staged externalBin copy, then a prior release bundle. First hit wins.
+find_gateway_host_source() {
+  local g
+  for g in \
+    "$ROOT/src-tauri/gateway-host/target/release/hivemind-gateway-host" \
+    "$ROOT/src-tauri/binaries/hivemind-gateway-host-aarch64-apple-darwin" \
+    "$ROOT/src-tauri/binaries/hivemind-gateway-host-x86_64-apple-darwin" \
+    "$ROOT/src-tauri/target/release/bundle/macos/HivemindOS.app/Contents/MacOS/hivemind-gateway-host"; do
+    if [ -f "$g" ]; then printf '%s' "$g"; return 0; fi
   done
   return 1
 }
@@ -149,6 +166,13 @@ assemble_and_sign_bundle() {
     printf '[dev-codesign] WARNING: no claw binary found to nest — agent writes to protected folders will fail\n' >&2
   fi
 
+  local src_gw
+  if src_gw="$(find_gateway_host_source)"; then
+    cp -f "$src_gw" "$BUNDLE_GW" || return 1
+  else
+    printf '[dev-codesign] WARNING: no gateway-host helper found to nest — dev login-item gateway will lack the app TCC identity\n' >&2
+  fi
+
   local ent_args=()
   [ -f "$ENTITLEMENTS" ] && ent_args=(--entitlements "$ENTITLEMENTS")
 
@@ -157,6 +181,10 @@ assemble_and_sign_bundle() {
   if [ -f "$BUNDLE_CLAW" ]; then
     codesign --force --timestamp=none -s "$SIGN_ID" -i claw "$BUNDLE_CLAW" >/dev/null 2>&1 \
       || printf '[dev-codesign] WARNING: could not sign nested claw\n' >&2
+  fi
+  if [ -f "$BUNDLE_GW" ]; then
+    codesign --force --timestamp=none -s "$SIGN_ID" -i hivemind-gateway-host "$BUNDLE_GW" >/dev/null 2>&1 \
+      || printf '[dev-codesign] WARNING: could not sign nested gateway-host helper\n' >&2
   fi
 
   if codesign --force --timestamp=none -s "$SIGN_ID" -i "$BUNDLE_ID" "${ent_args[@]}" "$BUNDLE" >/dev/null 2>&1; then
@@ -184,6 +212,12 @@ if [ "${1:-}" = "run" ]; then
   cargo build "${cargo_flags[@]}"
   code=$?
   [ "$code" -ne 0 ] && exit "$code"
+
+  # Build the gateway-host helper for THIS host so the dev bundle nests a correct
+  # arch copy (it's not staged by the dev flow). This makes it candidate #1 in
+  # find_gateway_host_source, so a stale-arch staged binary can't be picked.
+  cargo build --release --manifest-path "$ROOT/src-tauri/gateway-host/Cargo.toml" >/dev/null 2>&1 \
+    || printf '[dev-codesign] WARNING: could not build gateway-host helper; dev login-item gateway will be skipped\n' >&2
 
   # Prefer launching the bundled binary (claw nested -> inherits the grant). Fall back to
   # the raw, re-signed binary if bundling fails (dev still runs, just without claw writes).

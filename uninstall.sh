@@ -202,6 +202,9 @@ if ask "Remove HivemindOS telemetry collector service?" "yes"; then
     rm -f "$HOME/.hivemindos/bin/HivemindOS Collector"
     ok "Removed HivemindOS Collector helper if present"
   elif run_if_exists systemctl; then
+    systemctl --user disable --now agent-telemetry-watchdog.timer >/dev/null 2>&1 || true
+    rm -f "$HOME/.config/systemd/user/agent-telemetry-watchdog.timer" \
+          "$HOME/.config/systemd/user/agent-telemetry-watchdog.service"
     systemctl --user disable --now agent-telemetry.service >/dev/null 2>&1 || true
     rm -f "$HOME/.config/systemd/user/agent-telemetry.service"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
@@ -249,12 +252,15 @@ fi
 
 if ask "Stop and remove the Claw backend service?" "yes"; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
-    for label in com.hivemindos.claw-backend com.hivemindos.voice-worker com.hivemindos.claw-voice-worker; do
+    # com.hivemindos.claw-backend = legacy headless gateway; com.hivemindos.claw-gateway
+    # = the app-signed login item that replaced it. voice-worker/claw-voice-worker = legacy voice helpers.
+    for label in com.hivemindos.claw-backend com.hivemindos.claw-gateway com.hivemindos.voice-worker com.hivemindos.claw-voice-worker; do
       plist="$HOME/Library/LaunchAgents/$label.plist"
-      [[ -f "$plist" ]] || continue
       launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || launchctl unload "$plist" >/dev/null 2>&1 || true
-      rm -f "$plist"
-      ok "Removed Claw/HivemindOS LaunchAgent $label"
+      if [[ -f "$plist" ]]; then
+        rm -f "$plist"
+        ok "Removed $label LaunchAgent"
+      fi
     done
     rm -f "$HOME/.hivemindos/bin/HivemindOS Voice Worker"
     ok "Removed HivemindOS Voice Worker helper if present"

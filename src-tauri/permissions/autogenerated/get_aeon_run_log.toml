@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-aeon-run-log"
+description = "Enables the get_aeon_run_log command without any pre-configured scope."
+commands.allow = ["get_aeon_run_log"]
+
+[[permission]]
+identifier = "deny-get-aeon-run-log"
+description = "Denies the get_aeon_run_log command without any pre-configured scope."
+commands.deny = ["get_aeon_run_log"]
