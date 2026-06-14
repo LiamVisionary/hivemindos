@@ -672,6 +672,15 @@ choose_link_tailnet_port() {
     return
   fi
 
+  # The collector binds loopback (127.0.0.1) in Link mode while hivemind-linkd
+  # exposes the same port number on the *tailnet interface* (tsnet) — the two do
+  # not collide. A HivemindOS collector already on LINK_TAILNET_PORT is the
+  # expected occupant, so keep the canonical port instead of drifting it (e.g.
+  # 8787 -> 8789) on every reinstall.
+  if collector_health_is_hivemind "$LINK_TAILNET_PORT"; then
+    return
+  fi
+
   local requested_port="$LINK_TAILNET_PORT"
   local control_port="${LINK_CONTROL##*:}"
   local candidate

@@ -4827,6 +4827,85 @@ async function processSeen(agent) {
     );
 }
 
+// Reads model.default / model.provider / model.base_url from a Hermes
+// config.yaml's top-level `model:` block (no YAML dependency). Lets the
+// collector report a Hermes agent's real provider/model instead of leaving the
+// dashboard to fall back to a default (which surfaced as a wrong "Local OpenAI"
+// provider for codex agents).
+async function readHermesModelConfig(configDir) {
+  const raw = await readFile(join(configDir, "config.yaml"), "utf8").catch(
+    () => "",
+  );
+  if (!raw) return null;
+  let inModelBlock = false;
+  const out = {};
+  for (const line of raw.split(/\r?\n/)) {
+    if (/^model:\s*$/.test(line)) {
+      inModelBlock = true;
+      continue;
+    }
+    if (!inModelBlock) continue;
+    if (/^\S/.test(line)) break; // dedent — end of the model: block
+    const match = line.match(/^\s+(default|provider|base_url):\s*(.+?)\s*$/);
+    if (!match) continue;
+    const value = match[2]
+      .replace(/\s+#.*$/, "")
+      .replace(/^["']|["']$/g, "")
+      .trim();
+    if (!value) continue;
+    if (match[1] === "default") out.model = value;
+    else if (match[1] === "provider") out.provider = value;
+    else out.baseUrl = value;
+  }
+  return out.model || out.provider ? out : null;
+}
+
+// Hermes profiles under ~/.hermes/profiles/* are distinct agents, but the
+// runtime-agents registry that normally surfaces them can be missing or wiped.
+// Enumerate the profiles not already covered by the registry so each persona
+// shows up with its real provider/model. Reserved/internal profiles are skipped.
+const RESERVED_HERMES_PROFILE_SLUGS = new Set([
+  "default",
+  "hermes",
+  "runtime-capability-probe",
+]);
+
+async function detectedHermesProfileAgents(coveredAgentIds) {
+  const entries = await readdir(hermesProfilesDir, {
+    withFileTypes: true,
+  }).catch(() => []);
+  const agents = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const slug = entry.name;
+    if (RESERVED_HERMES_PROFILE_SLUGS.has(slug)) continue;
+    if (coveredAgentIds.has(slug)) continue;
+    const profileDir = join(hermesProfilesDir, slug);
+    const model = await readHermesModelConfig(profileDir);
+    if (!model) continue; // not a configured Hermes profile
+    const profileJson = await readJsonFile(join(profileDir, "profile.json"));
+    const name =
+      (profileJson?.display_name && String(profileJson.display_name)) ||
+      (profileJson?.name && String(profileJson.name)) ||
+      slug;
+    agents.push(
+      normalizeRuntimeAgent({
+        id: `hermes-${slug}`,
+        name,
+        runtime: "hermes",
+        agentId: slug,
+        gatewayUrl: "",
+        chatPath: "/chat",
+        statusPath: "/health",
+        provider: model.provider,
+        model: model.model,
+        localDataDir: profileDir,
+      }),
+    );
+  }
+  return agents;
+}
+
 async function localAgents() {
   const agents = [];
   const hermesDb = join(defaultHermesDir, "state.db");
@@ -4834,6 +4913,7 @@ async function localAgents() {
     .then(() => true)
     .catch(() => false);
   if (hermesAvailable) {
+    const rootModel = await readHermesModelConfig(defaultHermesDir);
     agents.push({
       id: `hermes-${hostname()
         .toLowerCase()
@@ -4844,9 +4924,20 @@ async function localAgents() {
       agentId: "local-hermes",
       localDataDir: defaultHermesDir,
       machineName: hostname(),
+      ...(rootModel?.provider ? { provider: rootModel.provider } : {}),
+      ...(rootModel?.model ? { model: rootModel.model } : {}),
     });
   }
-  agents.push(...(await configuredRuntimeAgents()));
+  const configuredAgents = await configuredRuntimeAgents();
+  agents.push(...configuredAgents);
+  if (hermesAvailable) {
+    const coveredHermesProfiles = new Set(
+      configuredAgents
+        .filter((agent) => agent.runtime === "hermes")
+        .map((agent) => agent.agentId),
+    );
+    agents.push(...(await detectedHermesProfileAgents(coveredHermesProfiles)));
+  }
   const openClawAgent = await detectedOpenClawAgent();
   if (openClawAgent && !agents.some((agent) => agent.runtime === "openclaw")) {
     agents.push(openClawAgent);
