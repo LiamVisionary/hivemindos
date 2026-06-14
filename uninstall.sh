@@ -200,6 +200,9 @@ if ask "Remove HivemindOS telemetry collector service?" "yes"; then
       ok "Removed LaunchAgent $label"
     done
   elif run_if_exists systemctl; then
+    systemctl --user disable --now agent-telemetry-watchdog.timer >/dev/null 2>&1 || true
+    rm -f "$HOME/.config/systemd/user/agent-telemetry-watchdog.timer" \
+          "$HOME/.config/systemd/user/agent-telemetry-watchdog.service"
     systemctl --user disable --now agent-telemetry.service >/dev/null 2>&1 || true
     rm -f "$HOME/.config/systemd/user/agent-telemetry.service"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
