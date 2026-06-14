@@ -1,0 +1,82 @@
+name: Debug Windows embedded server boot
+
+# One-off diagnostic: reproduce the "HivemindOS couldn't start its local server"
+# error reported on Windows by staging the EXACT embedded bundle the app ships
+# (the shared ubuntu-built Next standalone + a Windows node.exe) and running
+# server.js on windows-latest, capturing stdout/stderr so we see the real crash.
+# Remove this workflow once the Windows boot failure is fixed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      standalone_run_id:
+        description: Run id that produced the next-standalone artifact to test
+        required: true
+        default: "27474308251"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  repro:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.6.12
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download the shared Next standalone (same artifact shipped to Windows)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download ${{ github.event.inputs.standalone_run_id }} -R ${{ github.repository }} -n next-standalone -D .next-tauri-build
+
+      - name: Stage the embedded bundle exactly like the release build
+        env:
+          HIVEMINDOS_TAURI_EMBEDDED_NEXT: "1"
+          HIVEMINDOS_TAURI_PREBUILT_STANDALONE: "1"
+        run: node scripts/tauri-build.mjs
+
+      - name: Boot the bundled server and capture the crash
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $node = "src-tauri/resources/hivemindos-node/node.exe"
+          $server = "src-tauri/resources/hivemindos-next/server.js"
+          if (-not (Test-Path $node))   { Write-Host "MISSING bundled node.exe at $node"; }
+          if (-not (Test-Path $server)) { Write-Host "MISSING server.js at $server"; }
+          Write-Host "=== bundled hivemindos-next top-level ==="
+          Get-ChildItem "src-tauri/resources/hivemindos-next" -Force | Select-Object Mode,Name | Format-Table -AutoSize
+          Write-Host "=== node_modules present? ==="
+          @("react","react-dom","next","@next/env","styled-jsx") | ForEach-Object {
+            $p = "src-tauri/resources/hivemindos-next/node_modules/$_"
+            Write-Host ("  {0}: {1}" -f $_, (Test-Path $p))
+          }
+          $env:PORT = "5099"; $env:HOSTNAME = "127.0.0.1"; $env:NODE_ENV = "production"; $env:HIVEMINDOS_NATIVE = "1"
+          Write-Host "=== launching server.js with bundled node.exe ==="
+          $log = "server-boot.log"
+          $proc = Start-Process -FilePath $node -ArgumentList $server -RedirectStandardOutput $log -RedirectStandardError "server-boot.err.log" -PassThru -NoNewWindow
+          $ok = $false
+          for ($i = 0; $i -lt 25; $i++) {
+            Start-Sleep -Seconds 1
+            try { $r = Invoke-WebRequest -Uri "http://127.0.0.1:5099/" -UseBasicParsing -TimeoutSec 3; if ($r.StatusCode -ge 200) { $ok = $true; break } } catch {}
+            if ($proc.HasExited) { Write-Host "server process EXITED early (code $($proc.ExitCode))"; break }
+          }
+          Write-Host ("=== server booted: {0} ===" -f $ok)
+          Write-Host "=== STDOUT ==="; if (Test-Path $log) { Get-Content $log }
+          Write-Host "=== STDERR (the crash) ==="; if (Test-Path "server-boot.err.log") { Get-Content "server-boot.err.log" }
+          if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+          if (-not $ok) { exit 1 }
