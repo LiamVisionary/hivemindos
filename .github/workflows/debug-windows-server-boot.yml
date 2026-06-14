@@ -50,33 +50,44 @@ jobs:
           HIVEMINDOS_TAURI_PREBUILT_STANDALONE: "1"
         run: node scripts/tauri-build.mjs
 
-      - name: Boot the bundled server and capture the crash
+      - name: Reproduce the EISDIR-on-C crash and validate the fix
         shell: pwsh
         run: |
           $ErrorActionPreference = "Continue"
-          $node = "src-tauri/resources/hivemindos-node/node.exe"
-          $server = "src-tauri/resources/hivemindos-next/server.js"
-          if (-not (Test-Path $node))   { Write-Host "MISSING bundled node.exe at $node"; }
-          if (-not (Test-Path $server)) { Write-Host "MISSING server.js at $server"; }
-          Write-Host "=== bundled hivemindos-next top-level ==="
-          Get-ChildItem "src-tauri/resources/hivemindos-next" -Force | Select-Object Mode,Name | Format-Table -AutoSize
-          Write-Host "=== node_modules present? ==="
-          @("react","react-dom","next","@next/env","styled-jsx") | ForEach-Object {
-            $p = "src-tauri/resources/hivemindos-next/node_modules/$_"
-            Write-Host ("  {0}: {1}" -f $_, (Test-Path $p))
+          $node = (Resolve-Path "src-tauri/resources/hivemindos-node/node.exe").Path
+          $absServer = (Resolve-Path "src-tauri/resources/hivemindos-next/server.js").Path
+          # Tauri's resource_dir() hands Node a Windows extended-length (verbatim)
+          # path like \\?\C:\...\server.js. Reproduce that exact form here.
+          $verbatim = "\\?\" + $absServer
+          $env:HOSTNAME = "127.0.0.1"; $env:NODE_ENV = "production"; $env:HIVEMINDOS_NATIVE = "1"
+
+          function Try-Boot($label, $argList, $port) {
+            Write-Host ""
+            Write-Host ("===== CASE: {0} =====" -f $label)
+            Write-Host ("  node $($argList -join ' ')")
+            $env:PORT = "$port"
+            $out = "out-$port.log"; $err = "err-$port.log"
+            $p = Start-Process -FilePath $node -ArgumentList $argList -RedirectStandardOutput $out -RedirectStandardError $err -PassThru -NoNewWindow
+            $ok = $false
+            for ($i = 0; $i -lt 20; $i++) {
+              Start-Sleep -Seconds 1
+              try { $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -UseBasicParsing -TimeoutSec 3; if ($r.StatusCode -ge 200) { $ok = $true; break } } catch {}
+              if ($p.HasExited) { break }
+            }
+            Write-Host ("  -> booted: {0} (exited early: {1})" -f $ok, $p.HasExited)
+            if (Test-Path $err) { $e = Get-Content $err; if ($e) { Write-Host "  STDERR:"; $e | Select-Object -First 12 | ForEach-Object { Write-Host "    $_" } } }
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+            return $ok
           }
-          $env:PORT = "5099"; $env:HOSTNAME = "127.0.0.1"; $env:NODE_ENV = "production"; $env:HIVEMINDOS_NATIVE = "1"
-          Write-Host "=== launching server.js with bundled node.exe ==="
-          $log = "server-boot.log"
-          $proc = Start-Process -FilePath $node -ArgumentList $server -RedirectStandardOutput $log -RedirectStandardError "server-boot.err.log" -PassThru -NoNewWindow
-          $ok = $false
-          for ($i = 0; $i -lt 25; $i++) {
-            Start-Sleep -Seconds 1
-            try { $r = Invoke-WebRequest -Uri "http://127.0.0.1:5099/" -UseBasicParsing -TimeoutSec 3; if ($r.StatusCode -ge 200) { $ok = $true; break } } catch {}
-            if ($proc.HasExited) { Write-Host "server process EXITED early (code $($proc.ExitCode))"; break }
-          }
-          Write-Host ("=== server booted: {0} ===" -f $ok)
-          Write-Host "=== STDOUT ==="; if (Test-Path $log) { Get-Content $log }
-          Write-Host "=== STDERR (the crash) ==="; if (Test-Path "server-boot.err.log") { Get-Content "server-boot.err.log" }
-          if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
-          if (-not $ok) { exit 1 }
+
+          $a = Try-Boot "A control: plain absolute path"               @($absServer) 5101
+          $b = Try-Boot "B reproduce: verbatim \\?\ path (Tauri form)" @($verbatim) 5102
+          $c = Try-Boot "C fix1: verbatim + --preserve-symlinks-main"  @("--preserve-symlinks-main", $verbatim) 5103
+          $d = Try-Boot "D fix2: normalized abs + --preserve-symlinks-main" @("--preserve-symlinks-main", $absServer) 5104
+
+          Write-Host ""
+          Write-Host ("SUMMARY: A(plain)=$a  B(verbatim/repro)=$b  C(verbatim+flag)=$c  D(plain+flag)=$d")
+          # The fix is validated if the verbatim form crashes (B=false) but the
+          # flagged verbatim form boots (C=true). Fail the job only if the fix
+          # candidate C did not boot.
+          if (-not $c) { Write-Host "FIX CANDIDATE C FAILED"; exit 1 }
