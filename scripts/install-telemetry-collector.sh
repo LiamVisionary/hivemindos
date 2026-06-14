@@ -1224,9 +1224,12 @@ SERVICE
     systemctl --user start agent-telemetry.service >/dev/null 2>&1 || true
   }
   trap _restore_collector_on_exit EXIT
-  systemctl --user stop agent-telemetry.service >/dev/null 2>&1 || true
+  # ROOT-CAUSE FIX (atomic reinstall): prepare everything — write the unit,
+  # daemon-reload, enable — while the EXISTING collector keeps RUNNING, and only
+  # stop + restart at the very last moment. An abort during the slow/failure-prone
+  # steps (unit write, daemon-reload) then leaves the OLD collector serving
+  # instead of stranding the machine. The EXIT trap above is the final backstop.
   systemctl --user reset-failed agent-telemetry.service >/dev/null 2>&1 || true
-  stop_existing_listener
   SERVICE="$HOME/.config/systemd/user/agent-telemetry.service"
   mkdir -p "$(dirname "$SERVICE")"
   cat > "$SERVICE" <<SERVICE
@@ -1247,6 +1250,11 @@ WantedBy=default.target
 SERVICE
   systemctl --user daemon-reload
   systemctl --user enable agent-telemetry.service
+  # Last-moment atomic handover: stop the old instance, clear any stray listener,
+  # then start fresh on the new unit. This vulnerable window is now just these
+  # adjacent commands, not the whole unit-write/daemon-reload sequence above.
+  systemctl --user stop agent-telemetry.service >/dev/null 2>&1 || true
+  stop_existing_listener
   systemctl --user restart agent-telemetry.service
   # Collector is back up cleanly; the abort safety-net is no longer needed.
   trap - EXIT
