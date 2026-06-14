@@ -1215,6 +1215,15 @@ SERVICE
     fi
   fi
 
+  # Resilience: Restart=always does NOT cover a clean `systemctl stop`, so if any
+  # step between stopping and restarting the collector below aborts (set -euo
+  # pipefail), the collector would be left dead (0 agents) until a human
+  # intervened — impossible on boxes with no shell access. Guarantee it comes
+  # back on exit no matter how this script ends.
+  _restore_collector_on_exit() {
+    systemctl --user start agent-telemetry.service >/dev/null 2>&1 || true
+  }
+  trap _restore_collector_on_exit EXIT
   systemctl --user stop agent-telemetry.service >/dev/null 2>&1 || true
   systemctl --user reset-failed agent-telemetry.service >/dev/null 2>&1 || true
   stop_existing_listener
@@ -1239,6 +1248,41 @@ SERVICE
   systemctl --user daemon-reload
   systemctl --user enable agent-telemetry.service
   systemctl --user restart agent-telemetry.service
+  # Collector is back up cleanly; the abort safety-net is no longer needed.
+  trap - EXIT
+
+  # Self-heal watchdog: a light timer that re-starts the collector whenever it is
+  # found stopped — e.g. an external `systemctl stop`, or an interrupted update on
+  # an OLDER build that predates the trap above. `start` is a no-op when it is
+  # already running. This gives the Linux collector the same always-up guarantee
+  # macOS gets from launchd KeepAlive, so a downed collector self-recovers within
+  # minutes without any shell access.
+  WATCHDOG_SERVICE="$HOME/.config/systemd/user/agent-telemetry-watchdog.service"
+  WATCHDOG_TIMER="$HOME/.config/systemd/user/agent-telemetry-watchdog.timer"
+  cat > "$WATCHDOG_SERVICE" <<'WATCHDOG_SERVICE_UNIT'
+[Unit]
+Description=HivemindOS telemetry collector watchdog
+After=agent-telemetry.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'systemctl --user is-active --quiet agent-telemetry.service || systemctl --user start agent-telemetry.service'
+WATCHDOG_SERVICE_UNIT
+  cat > "$WATCHDOG_TIMER" <<'WATCHDOG_TIMER_UNIT'
+[Unit]
+Description=HivemindOS telemetry collector watchdog timer
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=3min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
+WATCHDOG_TIMER_UNIT
+  systemctl --user daemon-reload
+  systemctl --user enable agent-telemetry-watchdog.timer >/dev/null 2>&1 || true
+  systemctl --user restart agent-telemetry-watchdog.timer >/dev/null 2>&1 || true
   if [[ "$LINK_ACTIVE" == "true" ]]; then
     prepare_hivemind_link_state_dir
     LINK_SERVICE="$HOME/.config/systemd/user/hivemindos-linkd.service"
