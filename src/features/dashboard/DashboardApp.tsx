@@ -1599,6 +1599,16 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       && devices.every((device) => device.self || device.ip === "127.0.0.1");
     if (!localOnlyStatusFallback) {
       setTailscaleDevices(devices);
+    } else {
+      // status-unavailable + self-only: either a momentary Tailscale blip OR a
+      // fresh machine with no Tailscale at all (every new Windows/Linux install).
+      // Don't clobber an EXISTING multi-machine fleet down to just self — but on a
+      // FRESH install (no prior fleet) we MUST still surface self, otherwise the
+      // fleet view is empty: no self "This Mac" cell and no add-agent cell (that
+      // hex lives inside a machine cluster), just a perpetual loading spinner with
+      // no way to onboard a first agent. So fall back to showing self only when we
+      // have nothing yet.
+      setTailscaleDevices((current) => (current.length > 0 ? current : devices));
     }
     if (devices.length > 0 && !localOnlyStatusFallback) {
       setDiscoveredMachines((current) => mergeDiscoveredMachines(current, devicesToDiscoveredMachines(devices)));

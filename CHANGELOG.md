@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-14 02:10:00 +0700 - Fix empty Fleet view on a fresh install (self machine never showed)
+  - Status: Uncommitted
+  - Areas changed: tailnet device handling on the dashboard (`src/features/dashboard/DashboardApp.tsx` `refreshTailscaleDevices`)
+  - Summary: Fixes a brand-new install (e.g. Windows, no Tailscale, no agents) showing an empty Fleet view — no "This Mac" self cell and no "add agent" cell, just a perpetual loading swarm with no way to onboard a first agent. The native fleet read correctly returns the local self device, but the client's `localOnlyStatusFallback` guard (meant to avoid clobbering an existing multi-machine fleet during a momentary Tailscale outage) was discarding that self device on a fresh machine that has no Tailscale at all. With zero machines the hive renders only its loading skeleton, and the add-agent cell never appears because it lives inside a machine cluster. Now the guard only suppresses the self-only update when a fleet already exists; on a fresh box it surfaces the self machine, so the Fleet view always shows "This Mac" plus the add-agent affordance.
+  - Verification: traced the full render path (FleetView -> NetworkGraph -> MachineCluster add-hex-cell; machineGroups -> fleetViewData filter, which passes any `machine.self`); confirmed the self device passes the filter once set. `pnpm exec eslint` on the changed file. Live fresh-install fleet to be confirmed on the affected Windows machine after the build.
+  - Intended commit message: `Fix empty fleet on fresh install: surface self machine when no prior fleet`
+
 - 2026-06-14 01:30:00 +0700 - Fix Windows: embedded server never started (EISDIR on drive root)
   - Status: Uncommitted
   - Areas changed: Node spawn flag in the embedded boot (`src-tauri/src/lib.rs` `start_native_next_server`); removed the one-off `\.github/workflows/debug-windows-server-boot.yml` diagnostic
