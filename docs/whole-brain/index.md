@@ -11,7 +11,7 @@ It is not one magic database. The real anchor is a normal Obsidian markdown vaul
 
 <section class="atlasHero">
   <strong>Short version:</strong>
-  <p>The vault is the durable shared brain. Shared Brain Memory gives agents private millisecond typed-memory recall first, then broader full-vault context retrieval when distilled memory is not enough. The Obsidian Native Brain Pack gives agents shared skills for Markdown, Bases, and Canvas, while the other brain services can index, compile, visualize, or repair the vault without replacing it.</p>
+  <p>The vault is the durable shared brain. Shared Brain Memory gives agents private millisecond typed-memory recall first, then broader full-vault context retrieval when distilled memory is not enough. Compiled Knowledge turns reviewed source material into searchable entity/concept/summary wiki pages with graph-native lookups. OKF export turns selected memory and conversation notes into a portable markdown bundle for outside agents and catalog tools. The Obsidian Native Brain Pack gives agents shared skills for Markdown, Bases, and Canvas, while the other brain services can index, compile, visualize, or repair the vault without replacing it.</p>
 </section>
 
 ## Component Pages
@@ -24,7 +24,7 @@ It is not one magic database. The real anchor is a normal Obsidian markdown vaul
   </section>
   <section class="docCard">
     <h3>Brain Services</h3>
-    <p>Shared Brain Memory, GBrain, Syntho, Trading Brain, the Brain Graph, the context index, and service notes.</p>
+    <p>Shared Brain Memory, Compiled Knowledge search, OKF exchange bundles, GBrain, Syntho, Trading Brain, the Brain Graph, the context index, and service notes.</p>
     <a href="brain-services.html">Open services</a>
   </section>
   <section class="docCard">
@@ -82,6 +82,7 @@ flowchart TD
   Vault --> SyncOwner["Hivemind Sync"]
   SyncOwner --> VaultOwner["External sync / HivemindOS Syncthing / manual repair"]
   SyncOwner --> Transfers[".hivemindos-transfers handoffs"]
+  Vault --> QMD["QMD markdown search"]
   Vault --> GBrain["GBrain retrieval"]
   Vault --> Syntho["Syntho reviewed synthesis"]
   Vault --> Operations["Operations state"]
@@ -95,6 +96,7 @@ The important split is access path, not storage path:
 - Raw or non-managed runtimes use `hive-brain`, which tries `/api/brain/memory` first and falls back to local vault/index search.
 - Claude Code also gets `hive-brain-hook` as a `UserPromptSubmit` hook, so raw Claude prompts can receive relevant full-vault context before answering.
 - Durable memory writes still go to typed Agent Memory notes; broad recall can read normal vault notes when the typed layer is not enough.
+- OKF export writes selected memory and conversation concepts to `Operations/Brain Services/OKF Export/` for outside agents, catalogs, and graph tools without changing the native vault.
 - The Obsidian Native Brain Pack lets agents write durable notes, `.base` views, and `.canvas` maps in formats Obsidian can open directly.
 
 ## Source Of Truth

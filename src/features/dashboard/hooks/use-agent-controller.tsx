@@ -224,7 +224,8 @@ export function useAgentController(props: UseAgentControllerProps) {
       customWorkerClass: undefined,
       customWorkerClasses: [],
       selectedCustomWorkerClassId: undefined,
-      skillProfilePrompt: renderBeeSoulTemplate(defaultWorkerPreset.soulTemplate, defaultName),
+      soulPrompt: renderBeeSoulTemplate(defaultWorkerPreset.soulTemplate, defaultName),
+      skillProfilePrompt: defaultWorkerPreset.taskProfile,
       preferredSkillSlugs: defaultWorkerPreset.skillSlugs,
       useSharedVault: true,
       aeonLocalPath: autopilotDefaults ? baseAgent.aeonLocalPath || autopilotDefaults.localPathFallback : undefined,
@@ -412,7 +413,12 @@ export function useAgentController(props: UseAgentControllerProps) {
         machineName: mobileMachineTailnetName(machine),
         name: draftName,
         model: agentCreateDraft.model?.trim() || DEFAULT_MOBILE_AGENT_MODEL,
-        systemPrompt: agentCreateDraft.skillProfilePrompt?.trim() || undefined,
+        systemPrompt: [
+          agentCreateDraft.soulPrompt?.trim(),
+          agentCreateDraft.skillProfilePrompt?.trim()
+            ? `Suited for: ${agentCreateDraft.skillProfilePrompt.trim()}`
+            : "",
+        ].filter(Boolean).join("\n\n") || undefined,
       }),
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as { ok?: boolean; agent?: MobileAgentRecord; error?: string } | null;
@@ -421,12 +427,17 @@ export function useAgentController(props: UseAgentControllerProps) {
       setRuntimeIntegrationMessage(data?.error ?? "Could not create the phone-hosted agent on that machine.");
       return;
     }
-    const next = normalizeAgentProfile(mobileAgentProfileFromRecord(data.agent, {
-      machineName: machine.name,
-      // Phones expose no collector URL; the machine key (the raw fleet device
-      // name) is what the dashboard groups agents onto machines with.
-      telemetryUrl: machine.collectorUrl || machine.key,
-    }));
+    const next = normalizeAgentProfile({
+      ...mobileAgentProfileFromRecord(data.agent, {
+        machineName: machine.name,
+        // Phones expose no collector URL; the machine key (the raw fleet device
+        // name) is what the dashboard groups agents onto machines with.
+        telemetryUrl: machine.collectorUrl || machine.key,
+      }),
+      soulPrompt: agentCreateDraft.soulPrompt,
+      skillProfilePrompt: agentCreateDraft.skillProfilePrompt,
+      preferredSkillSlugs: agentCreateDraft.preferredSkillSlugs,
+    });
     setAgents((current) => [...current.filter((agent) => agent.id !== next.id), next]);
     setDiscoveredMachines((current) => current.map((discovered) => (
       discovered.device.name === machine.key || discovered.device.name === machine.name
@@ -481,6 +492,7 @@ export function useAgentController(props: UseAgentControllerProps) {
       customWorkerClass: agentCreateDraft.customWorkerClass,
       customWorkerClasses: agentCreateDraft.customWorkerClasses,
       selectedCustomWorkerClassId: agentCreateDraft.selectedCustomWorkerClassId,
+      soulPrompt: agentCreateDraft.soulPrompt,
       skillProfilePrompt: agentCreateDraft.skillProfilePrompt,
       preferredSkillSlugs: agentCreateDraft.preferredSkillSlugs,
       taskPreferences: agentCreateDraft.taskPreferences,

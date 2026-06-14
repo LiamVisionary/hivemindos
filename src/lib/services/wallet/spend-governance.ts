@@ -85,6 +85,25 @@ export async function loadGovernanceWallet(agentId: string): Promise<{ wallet: A
   return { wallet: record.wallet, agentName: record.agentName };
 }
 
+/**
+ * Resolve the governance wallet for a spend. Prefers the agent's persisted wallet
+ * config; when none exists but the agent is a company member, synthesizes a
+ * minimal company-only wallet (no per-agent budgets/approval) so the company kill
+ * switch + budgets STILL bind and the spend is tagged with its companyId. Returns
+ * null only when neither a wallet config nor a company applies, so rails can keep
+ * skipping governance entirely for truly ungoverned agents.
+ */
+export async function resolveSpendGovernance(
+  agentId: string,
+): Promise<{ wallet: SpendGovernanceWallet; agentName?: string } | null> {
+  const direct = await loadGovernanceWallet(agentId);
+  if (direct) return { wallet: direct.wallet, agentName: direct.agentName };
+  if (!agentId?.trim()) return null;
+  const company = await getCompanyForAgent(agentId.trim());
+  if (company) return { wallet: { agentId: agentId.trim(), approvalRequiredOverUsd: 0 } };
+  return null;
+}
+
 export function governanceActive(wallet: SpendGovernanceWallet): boolean {
   if ((wallet.dailyBudgetUsd ?? 0) > 0) return true;
   if ((wallet.monthlyBudgetUsd ?? 0) > 0) return true;

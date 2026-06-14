@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { mkdir, readdir, readFile, unlink, writeFile } from "fs/promises";
 import { join, resolve, sep } from "path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { readVaultAgentProfiles } from "@/lib/services/obsidian/agent-profiles";
 import {
@@ -300,6 +301,39 @@ function spokenVoiceRuntimeFailure(error: unknown) {
   return "I couldn't reach that agent for this call. Try again in a moment.";
 }
 
+// The voice-turn pipeline (dashboard agent call + telephony, both via this
+// route) used to swallow the real upstream error into a generic spoken line,
+// leaving no trace to debug from. Record the actual failure so a dropped turn
+// has a telemetry breadcrumb (agent, stage, error, whether it was aborted).
+function recordVoiceTurnFailure(
+  agent: AgentProfile | null,
+  stage: "runtime-connect" | "stream",
+  detail: { error: unknown; appId?: string; model?: string; voice?: string; aborted?: boolean; spoke?: boolean; httpStatus?: number },
+) {
+  const reason = detail.error instanceof Error ? detail.error.message : String(detail.error || "");
+  console.error(`[phone-voice] ${stage} failed for ${agent?.name || agent?.id || "agent"}: ${reason}`);
+  void recordTelemetryBatch([{
+    source: "route",
+    type: "phone.voice.turn_failed",
+    threadId: agent?.id ? `voice-${agent.id}` : null,
+    runId: null,
+    payload: {
+      stage,
+      agentId: agent?.id ?? null,
+      agentName: agent?.name ?? null,
+      runtime: agent?.runtime ?? null,
+      provider: agent?.provider ?? null,
+      appId: detail.appId ?? null,
+      model: detail.model ?? null,
+      voice: detail.voice ?? null,
+      aborted: detail.aborted ?? false,
+      spoke: detail.spoke ?? false,
+      httpStatus: detail.httpStatus ?? null,
+      error: reason.slice(0, 600),
+    },
+  }]).catch(() => undefined);
+}
+
 async function fetchRuntimeVoiceTurn(
   request: NextRequest,
   body: Record<string, unknown>,
@@ -459,6 +493,7 @@ async function streamAgentLocalTtsAudio(
   const model = typeof localTts.model === "string" ? localTts.model.trim() : "";
   const voice = typeof localTts.voice === "string" ? localTts.voice.trim() : "";
   const message = typeof body.message === "string" ? body.message.trim() : "";
+  const voiceAgent = body.agent && typeof body.agent === "object" ? (body.agent as AgentProfile) : null;
   if (!appId) throw new Error("A validated local TTS app is required.");
   if (!message) throw new Error("A spoken request is required.");
 
@@ -488,6 +523,13 @@ async function streamAgentLocalTtsAudio(
           ? error.message
           : `Runtime returned HTTP ${runtimeResponse.status}.`,
     );
+    recordVoiceTurnFailure(voiceAgent, "runtime-connect", {
+      error: text || `Runtime returned HTTP ${runtimeResponse.status}.`,
+      appId,
+      model,
+      voice,
+      httpStatus: runtimeResponse.status,
+    });
     return Response.json(
       {
         ok: false,
@@ -615,6 +657,14 @@ async function streamAgentLocalTtsAudio(
           );
         controller.close();
       } catch (error) {
+        recordVoiceTurnFailure(voiceAgent, "stream", {
+          error,
+          appId,
+          model,
+          voice,
+          aborted: streamSignal.aborted,
+          spoke,
+        });
         if (!spoke && !streamSignal.aborted) {
           try {
             await speakSegment(spokenVoiceRuntimeFailure(error));

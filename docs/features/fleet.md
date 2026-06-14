@@ -1,3 +1,7 @@
+---
+title: "Fleet"
+---
+
 # Fleet
 
 Fleet is the machine view.

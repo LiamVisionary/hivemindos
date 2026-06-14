@@ -1,3 +1,7 @@
+---
+title: "Hivemind Sync Handoff Transfers"
+---
+
 # Hivemind Sync Handoff Transfers
 
 Hivemind Sync handoff transfers let one machine, runtime, or agent leave files for another agent without broadcasting the work item to every process watching the shared vault.

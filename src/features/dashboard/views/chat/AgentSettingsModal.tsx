@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BrainCircuit, Check, ChevronRight, Cpu, FolderOpen, KanbanSquare, MessageSquare, Minus, Pencil, Phone, PlugZap, Plus, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Upload, X } from "lucide-react";
+import { BrainCircuit, Check, ChevronDown, ChevronRight, ChevronUp, Cpu, FolderOpen, KanbanSquare, KeyRound, MessageSquare, Minus, Pencil, Phone, PlugZap, Plus, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Upload, X } from "lucide-react";
 import { AgentCallsSettingsPanel } from "./AgentCallsSettingsPanel";
 import { AdaptiveProviderSettings } from "./AdaptiveProviderSettings";
 import { BankrLowCreditSetup } from "./BankrLowCreditSetup";
@@ -22,6 +22,7 @@ import { AeonOrb, Btn, Eyebrow, Pill, aeonStyles as styles } from "@/components/
 import { WorkspaceModal } from "@/components/aeon";
 import { renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
+import { providerCatalogEntry } from "@/lib/config/provider-catalog";
 import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeProfileFeature, runtimeSettingsFeature, type AgentRuntime } from "@/lib/types/agent-runtime";
 import { rememberMruRuntime } from "@/features/dashboard/agent-mru-runtime";
 
@@ -293,6 +294,7 @@ export function AgentSettingsModal(props: any) {
     agentSettingsProvider,
     agentSettingsRuntime,
     agentSettingsSelectedCustomWorkerId,
+    agentSettingsSoulPrompt,
     agentSettingsSkillProfile,
     agentSettingsTitle,
     agentSettingsWorkerClass,
@@ -359,6 +361,7 @@ export function AgentSettingsModal(props: any) {
     toggleCustomWorkerSkill,
     updateAgentProfile,
     updateAgentRuntimeModel,
+    updateAgentSoulPrompt,
     updateAgentSkillProfile,
     uploadCustomWorkerImage,
     workerCapabilityBadges,
@@ -366,8 +369,18 @@ export function AgentSettingsModal(props: any) {
 
   const [aeonOauthConnecting, setAeonOauthConnecting] = useState(false);
   const [aeonWorkspaceOpen, setAeonWorkspaceOpen] = useState(false);
+  const [savedAgentSouls, setSavedAgentSouls] = useState([]);
+  const [savedAgentSoulsStatus, setSavedAgentSoulsStatus] = useState("");
+  const [soulSaveTitle, setSoulSaveTitle] = useState("");
   const [lmStudioEmptyDiscoveryGraceActive, setLmStudioEmptyDiscoveryGraceActive] = useState(false);
+  const [showAllProviders, setShowAllProviders] = useState(false);
+  const [envPresentKeys, setEnvPresentKeys] = useState(() => new Set());
+  const [envHermesKeys, setEnvHermesKeys] = useState(() => new Set());
+  const [envLoaded, setEnvLoaded] = useState(false);
+  const [envRefreshKey, setEnvRefreshKey] = useState(0);
+  const [fetchedProviderModels, setFetchedProviderModels] = useState(() => ({}));
   const [lmStudioPendingLoadModelKeys, setLmStudioPendingLoadModelKeys] = useState<string[]>([]), [lmStudioPendingPrimaryAction, setLmStudioPendingPrimaryAction] = useState<"save" | "create" | null>(null);
+  const soulFileInputRef = useRef<HTMLInputElement | null>(null);
   const portalTarget = typeof document === "undefined" ? null : document.body;
   const modalOpen = Boolean(portalTarget && (roleModalAgent || agentCreateMachine));
 
@@ -383,9 +396,24 @@ export function AgentSettingsModal(props: any) {
   const bankrLlmSelected = selectedProviderSlug === "bankr";
   const lmStudioSelected = selectedProviderSlug === "lm-studio";
   const adaptiveProviderSelected = selectedProviderSlug === "adaptive";
+  const selectedCatalogEntry = providerCatalogEntry(selectedProviderSlug);
+  const providerConfigured = (slug) => {
+    const entry = providerCatalogEntry(slug);
+    if (!entry) return true;
+    if (entry.virtual || entry.keyless) return true;
+    return Boolean(entry.keyEnv && envPresentKeys.has(entry.keyEnv));
+  };
+  const providerNeedsKey = (slug) => {
+    if (!envLoaded) return false;
+    const entry = providerCatalogEntry(slug);
+    return Boolean(entry?.keyEnv) && !entry?.guidedSetup && !providerConfigured(slug);
+  };
+  const selectedNeedsKey = providerNeedsKey(selectedProviderSlug);
   const defaultNameForRuntime = (runtime: AgentRuntime, provider = "") => defaultAgentNameForRuntime(displayAgents ?? [], runtime, RUNTIME_LABELS, { provider });
   const currentName = agentCreateMachine ? agentCreateDraft.name : roleModalAgent?.name ?? "";
   const displayName = currentName || defaultNameForRuntime(activeRuntime, selectedProviderSlug);
+  const currentSoulPrompt = agentSettingsSoulPrompt ?? "";
+  const defaultSubclassSoul = renderBeeSoulTemplate(agentSettingsWorkerPreset.soulTemplate, currentName || displayName);
   const adaptiveOpenRouterSelected = openRouterSelected && selectedRuntimeModelId === "adaptive";
   const agentTaskPreferences = (agentCreateMachine ? agentCreateDraft.taskPreferences : roleModalAgent?.taskPreferences) ?? [];
   const updateAgentTaskPreferences = (next) => {
@@ -394,6 +422,121 @@ export function AgentSettingsModal(props: any) {
     } else if (roleModalAgent) {
       updateAgentProfile(roleModalAgent.id, { taskPreferences: next });
     }
+  };
+  const refreshSavedAgentSouls = useCallback(async () => {
+    try {
+      const response = await fetch("/api/agents/souls", { cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) throw new Error(data.error || "Could not load saved SOUL.md files.");
+      setSavedAgentSouls(Array.isArray(data.souls) ? data.souls : []);
+      setSavedAgentSoulsStatus("");
+    } catch (error) {
+      setSavedAgentSoulsStatus(error instanceof Error ? error.message : "Could not load saved SOUL.md files.");
+    }
+  }, []);
+  useEffect(() => {
+    if (!modalOpen) return;
+    const timer = window.setTimeout(() => {
+      void refreshSavedAgentSouls();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [modalOpen, refreshSavedAgentSouls]);
+  useEffect(() => {
+    if (!modalOpen) return;
+    let cancelled = false;
+    void (async () => {
+      const response = await fetch("/api/env", { credentials: "same-origin", headers: { Accept: "application/json" } }).catch(() => null);
+      if (!response || !response.ok) return;
+      const data = await response.json().catch(() => null);
+      if (cancelled || !data) return;
+      const present = new Set();
+      const hermes = new Set();
+      const collect = (source, into) => {
+        for (const key of Object.keys(source?.values ?? {})) {
+          present.add(key);
+          if (into) into.add(key);
+        }
+      };
+      collect(data.sharedSource, null);
+      for (const source of data.runtimeSources ?? []) collect(source, source?.runtime === "hermes" ? hermes : null);
+      if (cancelled) return;
+      setEnvPresentKeys(present);
+      setEnvHermesKeys(hermes);
+      setEnvLoaded(true);
+    })();
+    return () => { cancelled = true; };
+  }, [modalOpen, envRefreshKey]);
+  useEffect(() => {
+    if (!modalOpen || !envLoaded) return;
+    // Fetch the real, full model list for every configured live-capable provider
+    // (OpenAI/Anthropic/Groq/Gemini/Venice/UsePod) so tiles + dropdowns reflect
+    // the provider's actual catalog, not the Hermes-configured subset. Runs in
+    // parallel, off the critical path, so it never blocks the status sweep.
+    // OpenRouter is excluded (huge catalog; reached via Adaptive/inventory).
+    const liveCapable = (slug) => {
+      const entry = providerCatalogEntry(slug);
+      if (!entry?.keyEnv || entry.virtual || slug === "openrouter") return false;
+      // UsePod has no catalog base URL (its proxy URL is derived from the shared
+      // token in the route), so include it explicitly for the provider-level
+      // model count; per-agent token selection still lives in its guided setup.
+      return Boolean(entry.baseUrl) || slug === "usepod";
+    };
+    const targets = [...new Set(runtimeModelProviders.map((provider) => provider.slug))].filter((slug) => {
+      const entry = providerCatalogEntry(slug);
+      return liveCapable(slug) && entry?.keyEnv && envPresentKeys.has(entry.keyEnv) && !(slug in fetchedProviderModels);
+    });
+    if (!targets.length) return;
+    let cancelled = false;
+    targets.forEach((slug) => {
+      void (async () => {
+        const response = await fetch(`/api/providers/models?provider=${encodeURIComponent(slug)}`, {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        }).catch(() => null);
+        const data = response && response.ok ? await response.json().catch(() => null) : null;
+        if (cancelled) return;
+        setFetchedProviderModels((current) => (slug in current ? current : { ...current, [slug]: Array.isArray(data?.models) ? data.models : [] }));
+      })();
+    });
+    return () => { cancelled = true; };
+  }, [modalOpen, envLoaded, runtimeModelProviders, envPresentKeys, fetchedProviderModels]);
+  const importSoulFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const content = (await file.text()).trim();
+      if (!content) throw new Error("That SOUL.md is empty.");
+      updateAgentSoulPrompt(content);
+      setSavedAgentSoulsStatus(`Imported ${file.name}.`);
+    } catch (error) {
+      setSavedAgentSoulsStatus(error instanceof Error ? error.message : "Could not import that SOUL.md.");
+    }
+  };
+  const saveCurrentSoulAsNew = async () => {
+    const title = soulSaveTitle.trim();
+    const content = currentSoulPrompt.trim();
+    if (!title || !content) return;
+    try {
+      const response = await fetch("/api/agents/souls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, content }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) throw new Error(data.error || "Could not save SOUL.md.");
+      setSoulSaveTitle("");
+      setSavedAgentSoulsStatus("Saved as a new SOUL.md.");
+      await refreshSavedAgentSouls();
+    } catch (error) {
+      setSavedAgentSoulsStatus(error instanceof Error ? error.message : "Could not save SOUL.md.");
+    }
+  };
+  const loadSavedSoul = (id) => {
+    const savedSoul = savedAgentSouls.find((soul) => soul.id === id);
+    if (!savedSoul?.content) return;
+    updateAgentSoulPrompt(savedSoul.content);
+    setSavedAgentSoulsStatus(`Loaded ${savedSoul.title}.`);
   };
   const adaptiveOpenRouter = agentCreateMachine ? agentCreateDraft.adaptiveOpenRouter ?? {} : roleModalAgent?.adaptiveOpenRouter ?? {};
   const adaptiveRouting = agentCreateMachine ? agentCreateDraft.adaptiveRouting ?? {} : roleModalAgent?.adaptiveRouting ?? {};
@@ -451,11 +594,18 @@ export function AgentSettingsModal(props: any) {
   const lmStudioStatus = runtimeIntegrationStatus?.providerStatus?.lmStudio;
   const bankrInitialCredits = bankrCreditStatus ? { ok: true, balanceUsd: bankrCreditStatus.creditsBalanceUsd, balanceLabel: bankrCreditStatus.balanceLabel ?? (bankrCreditStatus.creditsBalanceUsd === null ? "Unknown" : undefined), error: bankrCreditStatus.error } : undefined;
   const creditProviderBalances = { bankr: bankrCreditStatus?.balanceLabel ?? "", usepod: (() => { const value = runtimeIntegrationStatus?.providerStatus?.usePod?.balanceRemaining || usePodConfig.lastBalanceRemaining || completedUsePodWallets.find((agent) => agent.usePod?.lastBalanceRemaining)?.usePod?.lastBalanceRemaining || ""; return value && /^[\d\s,.]+$/.test(value) ? `$${value.trim()}` : value; })(), venice: (() => { const value = runtimeIntegrationStatus?.providerStatus?.venice?.balanceUsd || veniceConfig.lastBalanceUsd || completedVeniceWallets.find((agent) => agent.venice?.lastBalanceUsd)?.venice?.lastBalanceUsd || ""; return value && /^[\d\s,.]+$/.test(value) ? `$${value.trim()}` : value; })() };
+  // Prefer the live-fetched catalog when it has more models than the
+  // Hermes-configured subset, so providers like Venice/UsePod show their full
+  // model list instead of just the few entries configured in Hermes.
+  const fetchedSelectedModels = fetchedProviderModels[selectedProviderSlug] ?? [];
+  const effectiveSelectedModels = fetchedSelectedModels.length > (selectedRuntimeModels?.length ?? 0)
+    ? fetchedSelectedModels
+    : (selectedRuntimeModels ?? []);
   const runtimeModelOptions = adaptiveProviderSelected
     ? [{ id: "best-free", name: "Best free" }]
     : openRouterSelected
-    ? [{ id: "adaptive", name: "Adaptive" }, ...selectedRuntimeModels.filter((model) => model.id !== "adaptive")]
-    : gateBankrModelsForCredits(selectedRuntimeModels, bankrLlmSelected && bankrLowCredits);
+    ? [{ id: "adaptive", name: "Adaptive" }, ...effectiveSelectedModels.filter((model) => model.id !== "adaptive")]
+    : gateBankrModelsForCredits(effectiveSelectedModels, bankrLlmSelected && bankrLowCredits);
   const lmStudioInventoryModelCount = lmStudioStatus?.models?.length ?? 0;
   const lmStudioHasDiscoveredModels = runtimeModelOptions.length > 0 || lmStudioInventoryModelCount > 0;
   const lmStudioDiscoveryPending = Boolean(lmStudioSelected && !lmStudioHasDiscoveredModels && (runtimeIntegrationBusy === "status" || lmStudioEmptyDiscoveryGraceActive));
@@ -714,7 +864,8 @@ export function AgentSettingsModal(props: any) {
           : defaultNameForRuntime(runtime, provider),
         ...(nextSettings.kind === "autopilot" && aeonWorkerPreset ? {
           workerClass: aeonWorkerPreset.id,
-          skillProfilePrompt: renderBeeSoulTemplate(aeonWorkerPreset.soulTemplate, current.name),
+          soulPrompt: renderBeeSoulTemplate(aeonWorkerPreset.soulTemplate, current.name),
+          skillProfilePrompt: aeonWorkerPreset.taskProfile,
           preferredSkillSlugs: aeonWorkerPreset.skillSlugs,
           aeonLocalPath: current.aeonLocalPath || "~/.aeon",
           aeonRepo: current.aeonRepo || "",
@@ -946,6 +1097,19 @@ export function AgentSettingsModal(props: any) {
 
   const renderProviderModelPanel = () => {
     if (!runtimeModelPanelAvailable && !usePodSelected && !veniceSelected) return null;
+    const PROVIDER_TILE_LIMIT = 8;
+    // Surface providers the user has actually configured first (keyed/keyless/
+    // virtual, or carrying real models from the runtime inventory), then the rest
+    // A–Z, so the visible top-8 favors usable providers over the catalog tail.
+    const providerReady = (provider) =>
+      providerConfigured(provider.slug) ||
+      (provider.source !== "catalog" && provider.source !== "HivemindOS provider gateway" && (provider.totalModels || 0) > 0);
+    const sortedProviders = [...runtimeModelProviders].sort((a, b) => {
+      const readyDelta = (providerReady(a) ? 0 : 1) - (providerReady(b) ? 0 : 1);
+      return readyDelta || String(a.name).localeCompare(String(b.name));
+    });
+    const visibleProviders = showAllProviders ? sortedProviders : sortedProviders.slice(0, PROVIDER_TILE_LIMIT);
+    const hiddenProviderCount = Math.max(0, sortedProviders.length - PROVIDER_TILE_LIMIT);
     return (
       <div style={{ display: "grid", gap: 16 }}>
         {runtimeModelPanelAvailable ? <div>
@@ -975,8 +1139,22 @@ export function AgentSettingsModal(props: any) {
               </span>
               <small style={{ color: "var(--fg-4)", fontSize: 10.5, lineHeight: 1.3 }}>Best free route</small>
             </button>
-            {runtimeModelProviders.map((provider) => {
-              const selected = provider.slug === selectedProviderSlug, providerCreditBadge = creditProviderBalances[provider.slug] || "", providerLoading = provider.totalModels === 0 && (runtimeIntegrationBusy === "status" || (provider.slug === "bankr" && !runtimeModelSelectionFresh && !runtimeIntegrationStatus?.providerStatus?.bankr?.checkedAt));
+            {visibleProviders.map((provider) => {
+              const selected = provider.slug === selectedProviderSlug, providerCreditBadge = creditProviderBalances[provider.slug] || "";
+              // Gateways seed a single placeholder `defaultModel` until the status
+              // sweep returns the real inventory; show "Loading models" during the
+              // sweep instead of a misleading "1 model" (Hive Fusion's count is
+              // real/stable, so it's excluded).
+              const providerInventoryPlaceholder = provider.source === "HivemindOS provider gateway" && provider.slug !== "hive-fusion";
+              const providerLoading = (provider.totalModels === 0 && (runtimeIntegrationBusy === "status" || (provider.slug === "bankr" && !runtimeModelSelectionFresh && !runtimeIntegrationStatus?.providerStatus?.bankr?.checkedAt)))
+                || (providerInventoryPlaceholder && runtimeIntegrationBusy === "status");
+              const providerCatalog = providerCatalogEntry(provider.slug);
+              // Live-fetched catalogs (Venice/UsePod/OpenAI/…) override the
+              // Hermes-configured subset count when they carry more models.
+              const liveModelCount = fetchedProviderModels[provider.slug]?.length ?? 0;
+              const effectiveTotalModels = Math.max(provider.totalModels || 0, liveModelCount);
+              const providerKeyMissing = providerNeedsKey(provider.slug);
+              const providerKeySetNoModels = !providerKeyMissing && envLoaded && Boolean(providerCatalog?.keyEnv) && providerConfigured(provider.slug) && effectiveTotalModels === 0;
               const lmStudioProviderModels = provider.slug === "lm-studio" ? (lmStudioStatus?.models?.filter((model) => model.type === "llm") ?? []) : [];
               const lmStudioLoadedCount = lmStudioProviderModels.filter((model) => model.loaded).length;
               const providerModelDetail = providerLoading
@@ -984,8 +1162,8 @@ export function AgentSettingsModal(props: any) {
                 : provider.slug === "lm-studio" && lmStudioDiscoveryPending
                   ? <><Repeat2 className="animate-spin" size={11} aria-hidden="true" /> Discovering models</>
                 : provider.slug === "lm-studio" && lmStudioProviderModels.length
-                  ? `${lmStudioProviderModels.length} downloaded · ${lmStudioLoadedCount} loaded`
-                  : `${provider.totalModels} model${provider.totalModels === 1 ? "" : "s"}`;
+                  ? `${lmStudioProviderModels.length} model${lmStudioProviderModels.length === 1 ? "" : "s"} · ${lmStudioLoadedCount} loaded`
+                  : `${effectiveTotalModels} model${effectiveTotalModels === 1 ? "" : "s"}`;
               const bestProviderModel = selectBestRuntimeModel(provider, {
                 defaultModel: runtimeSettings.defaultModel,
                 runtimeSelectedModel: runtimeModelSelectionsByRuntime?.[activeRuntime]?.model,
@@ -1022,14 +1200,16 @@ export function AgentSettingsModal(props: any) {
                   <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                     {iconMark({
                       label: provider.name,
-                      iconPath: MODEL_PROVIDER_GATEWAYS[provider.slug]?.iconPath ?? providerIconPath(provider),
-                      iconMode: MODEL_PROVIDER_GATEWAYS[provider.slug]?.iconMode ?? providerIconRenderMode(provider),
-                      fallback: MODEL_PROVIDER_GATEWAYS[provider.slug]?.fallback,
+                      iconPath: MODEL_PROVIDER_GATEWAYS[provider.slug]?.iconPath ?? providerCatalog?.iconPath ?? providerIconPath(provider),
+                      iconMode: MODEL_PROVIDER_GATEWAYS[provider.slug]?.iconMode ?? providerCatalog?.iconMode ?? providerIconRenderMode(provider),
+                      fallback: MODEL_PROVIDER_GATEWAYS[provider.slug]?.fallback ?? providerCatalog?.fallback,
                       size: 26,
                     })}
                     <strong style={{ color: selected ? "var(--cyan-3)" : "var(--fg)", fontSize: 13, lineHeight: 1.2, overflowWrap: "anywhere" }}>{provider.name}</strong>
                   </span>
-                  <small style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--fg-4)", fontSize: 10.5, lineHeight: 1.3 }}>{providerModelDetail}</small>
+                  <small style={{ display: "inline-flex", alignItems: "center", gap: 5, color: providerKeyMissing ? "var(--fg-3)" : "var(--fg-4)", fontSize: 10.5, lineHeight: 1.3 }}>
+                    {providerKeyMissing ? <><KeyRound aria-hidden="true" size={11} /> Add key</> : providerKeySetNoModels ? <><Check aria-hidden="true" size={11} /> Key set</> : providerModelDetail}
+                  </small>
                   {providerCreditBadge ? <span aria-label={`${provider.name} remaining balance ${providerCreditBadge}`} style={{ position: "absolute", right: 9, bottom: 7, maxWidth: "48%", border: "1px solid rgba(94,234,212,0.22)", borderRadius: 999, background: "rgba(20,184,166,0.1)", padding: "2px 7px", color: "var(--cyan-3)", fontSize: 10, fontWeight: 800, lineHeight: 1.2, overflowWrap: "anywhere", textAlign: "right" }}>{providerCreditBadge}</span> : null}
                 </button>
               );
@@ -1052,6 +1232,15 @@ export function AgentSettingsModal(props: any) {
               </button>
             ) : null}
           </div>
+          {hiddenProviderCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowAllProviders((current) => !current)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 8, padding: 0, border: "none", background: "transparent", color: "var(--fg-3)", cursor: "pointer", fontSize: 11.5, fontWeight: 600 }}
+            >
+              {showAllProviders ? <><ChevronUp size={13} aria-hidden="true" /> View less</> : <><ChevronDown size={13} aria-hidden="true" /> View all {sortedProviders.length} providers</>}
+            </button>
+          ) : null}
         </div> : null}
         {veniceSelected ? (
           <div style={{ display: "grid", gap: 12 }}>
@@ -1105,6 +1294,20 @@ export function AgentSettingsModal(props: any) {
             busy={Boolean(runtimeIntegrationBusy)}
             onRefresh={() => refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)}
           />
+        ) : selectedNeedsKey ? (
+          <div style={{ display: "grid", gap: 12 }}>
+            <GroupLabel>{selectedCatalogEntry?.name || "Provider"} key</GroupLabel>
+            <MissingSharedEnvKeySetup
+              apiKeyName={selectedCatalogEntry.keyEnv}
+              providerLabel={selectedCatalogEntry?.name}
+              hermesProvider={selectedCatalogEntry?.slug}
+              hermesKeyPresent={envHermesKeys.has(selectedCatalogEntry?.keyEnv)}
+              onSaved={async () => {
+                await refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined);
+                setEnvRefreshKey((current) => current + 1);
+              }}
+            />
+          </div>
         ) : !adaptiveProviderSelected ? (
           <div style={{ display: "grid", gap: 9 }}>
             <GroupLabel>Model</GroupLabel>
@@ -1244,7 +1447,7 @@ export function AgentSettingsModal(props: any) {
             <input ref={customWorkerImageInputRef} type="file" accept="image/*" onChange={uploadCustomWorkerImage} hidden />
             {customWorkerImageError ? <p style={{ margin: "7px 0 0", color: "var(--danger-2)", fontSize: 12 }}>{customWorkerImageError}</p> : null}
           </div>
-          <Field label="Suited-for prompt"><TextArea value={customWorkerDraft.skillProfilePrompt} onChange={(event) => setCustomWorkerDraft((current) => ({ ...current, skillProfilePrompt: event.target.value }))} /></Field>
+          <Field label="Suited for"><TextArea value={customWorkerDraft.skillProfilePrompt} onChange={(event) => setCustomWorkerDraft((current) => ({ ...current, skillProfilePrompt: event.target.value }))} /></Field>
           <Field label="Shared brain skills">
             <TextInput value={customWorkerSkillSearch} onChange={(event) => setCustomWorkerSkillSearch(event.target.value)} placeholder="Search by skill name or keyword" />
           </Field>
@@ -1300,7 +1503,29 @@ export function AgentSettingsModal(props: any) {
               </div>
             </div>
           </div>
-          <Field label="Suited-for prompt"><TextArea value={agentSettingsSkillProfile} onChange={(event) => updateAgentSkillProfile(event.target.value)} /></Field>
+          <Field label="Soul">
+            <div style={{ display: "grid", gap: 8 }}>
+              <TextArea value={currentSoulPrompt} onChange={(event) => updateAgentSoulPrompt(event.target.value)} />
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                <select value="" onChange={(event) => { loadSavedSoul(event.target.value); event.target.value = ""; }} style={{ ...inputStyle, flex: "1 1 220px" }}>
+                  <option value="">Load saved SOUL.md...</option>
+                  {savedAgentSouls.map((soul) => <option key={soul.id} value={soul.id}>{soul.title}</option>)}
+                </select>
+                <Btn variant="ghost" size="sm" onClick={() => soulFileInputRef.current?.click()}>Import SOUL.md</Btn>
+                <Btn variant="ghost" size="sm" onClick={() => updateAgentSoulPrompt(defaultSubclassSoul)}>Reset to subclass soul</Btn>
+                <Btn variant="ghost" size="sm" disabled={!currentSoulPrompt.trim()} onClick={() => setSoulSaveTitle((current) => current || `${displayName || agentSettingsWorkerLabel} soul`)}>Name to save</Btn>
+              </div>
+              {soulSaveTitle ? (
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(160px, 1fr) auto", gap: 8, alignItems: "center" }}>
+                  <TextInput value={soulSaveTitle} onChange={(event) => setSoulSaveTitle(event.target.value)} placeholder="Saved soul name" />
+                  <Btn variant="primary" size="sm" disabled={!soulSaveTitle.trim() || !currentSoulPrompt.trim()} onClick={() => void saveCurrentSoulAsNew()}>Save as new SOUL.md</Btn>
+                </div>
+              ) : null}
+              <input ref={soulFileInputRef} type="file" accept=".md,text/markdown,text/plain" onChange={(event) => void importSoulFile(event)} hidden />
+              {savedAgentSoulsStatus ? <p style={{ margin: 0, color: savedAgentSoulsStatus.toLowerCase().startsWith("could not") || savedAgentSoulsStatus.toLowerCase().includes("required") || savedAgentSoulsStatus.toLowerCase().includes("exists") ? "var(--danger-2)" : "var(--fg-4)", fontSize: 12 }}>{savedAgentSoulsStatus}</p> : null}
+            </div>
+          </Field>
+          <Field label="Suited for"><TextArea value={agentSettingsSkillProfile} onChange={(event) => updateAgentSkillProfile(event.target.value)} /></Field>
           <div>
             <GroupLabel>Seeded shared-brain skills</GroupLabel>
             <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>

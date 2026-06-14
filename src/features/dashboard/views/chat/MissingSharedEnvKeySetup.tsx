@@ -10,6 +10,10 @@ type MissingSharedEnvKeySetupProps = {
   envPath?: string;
   detail?: string;
   issue?: "missing" | "invalid";
+  /** When set, also propagate the saved key into Hermes' env store. */
+  hermesProvider?: string;
+  /** Whether Hermes already holds this key (gates the overwrite toggle). */
+  hermesKeyPresent?: boolean;
   onSaved?: () => void | Promise<void>;
 };
 
@@ -43,6 +47,8 @@ export function MissingSharedEnvKeySetup({
   envPath = "~/.hivemindos/.env",
   detail,
   issue = "missing",
+  hermesProvider,
+  hermesKeyPresent = false,
   onSaved,
 }: MissingSharedEnvKeySetupProps) {
   const [value, setValue] = useState("");
@@ -50,6 +56,7 @@ export function MissingSharedEnvKeySetup({
   const [status, setStatus] = useState("");
   const [explaining, setExplaining] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [updateHermes, setUpdateHermes] = useState(false);
   const [successFading, setSuccessFading] = useState(false);
   const fadeTimerRef = useRef<number | null>(null);
   const refreshTimerRef = useRef<number | null>(null);
@@ -89,6 +96,23 @@ export function MissingSharedEnvKeySetup({
       if (!result.ok) {
         setStatus(result.error || `Could not save ${apiKeyName}.`);
         return;
+      }
+      // Propagate the credential into Hermes' env store so Hermes-runtime agents
+      // can use it: auto-write when Hermes doesn't have it; only overwrite an
+      // existing Hermes key when the user opted in via the toggle.
+      if (hermesProvider && (!hermesKeyPresent || updateHermes)) {
+        const hermesResponse = await fetch("/api/env", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify({ sourceId: "runtime-hermes", key: apiKeyName, value: trimmed }),
+        }).catch(() => null);
+        const hermesResult = await readEnvSaveResponse(hermesResponse, apiKeyName).catch(() => ({ ok: false, error: "" }));
+        if (!hermesResult.ok) {
+          // Shared save succeeded; surface the Hermes failure without losing the key.
+          setStatus(`Saved ${apiKeyName} to the shared hive env, but could not update Hermes: ${hermesResult.error || "unknown error"}.`);
+          return;
+        }
       }
       setValue("");
       setStatus("");
@@ -206,8 +230,20 @@ export function MissingSharedEnvKeySetup({
         </button>
       </div>
 
+      {hermesProvider && hermesKeyPresent ? (
+        <label className="flex items-start gap-2 text-xs leading-5 text-[var(--muted)]">
+          <input
+            type="checkbox"
+            checked={updateHermes}
+            onChange={(event) => setUpdateHermes(event.target.checked)}
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--accent-strong)]"
+          />
+          <span>Hermes already has a {providerLabel} key configured — also update Hermes with this one.</span>
+        </label>
+      ) : null}
       <p className="m-0 text-xs leading-5 text-[var(--muted)]">
         Or run <code className="font-mono text-[var(--foreground)]">hive-env-add {apiKeyName}</code>, or add it to <code className="font-mono text-[var(--foreground)]">{envPath}</code>.
+        {hermesProvider && !hermesKeyPresent ? " Saving also adds it to Hermes." : ""}
       </p>
       {detail ? <p className="m-0 text-xs leading-5 text-[var(--muted)]">{detail}</p> : null}
       {status ? <p className="m-0 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] px-3 py-2 text-xs text-[var(--foreground)]">{status}</p> : null}

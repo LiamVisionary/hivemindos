@@ -15,7 +15,7 @@ import { AeonSkillBrowserSection, type UnifiedSkillBrowserItem } from "@/compone
 import { SectionModeHeader } from "./WorkSectionHeader";
 
 export function VaultPanel(props: any) {
-  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, KeyRound, LoaderCircle, MemoryCell, Network, PlugZap, RefreshCcw, Repeat2, Sparkles, activeView, brainGraph, brainGraphEdgePath, brainGraphLoading, brainGraphStats, brainGraphStatus, brainNodePoints, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, openSkillBrowser, pairSyncthingVaultSync, queryGbrainFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setGbrainQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, splitBrainLabel, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus } = props;
+  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, KeyRound, LoaderCircle, MemoryCell, Network, PlugZap, RefreshCcw, Repeat2, Search, Sparkles, activeView, brainGraph, brainGraphEdgePath, brainGraphLoading, brainGraphStats, brainGraphStatus, brainNodePoints, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, openSkillBrowser, pairSyncthingVaultSync, qmdActionStatus, qmdBusy, qmdQuery, qmdQueryResult, qmdStatus, queryGbrainFromDashboard, queryQmdFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshQmdStatus, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runQmdAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setGbrainQuery, setQmdQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, splitBrainLabel, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus } = props;
   const brainClass = (...classes) => classes.map((className) => brainServiceStyles[className] || vaultClass(className)).filter(Boolean).join(" ");
   const gbrainMetric = (keys: string[]) => {
     const stats = gbrainStatus?.stats ?? {};
@@ -25,11 +25,13 @@ export function VaultPanel(props: any) {
     }
     return "—";
   };
+  const qmdMetric = (value: unknown) => (typeof value === "number" || typeof value === "string" ? value : "—");
   const gbrainKeys = gbrainStatus?.keyStatus ?? {};
   const gbrainRecommendations = gbrainStatus?.features?.recommendations ?? [];
   const [brainModuleSuccess, setBrainModuleSuccess] = useState<Record<string, boolean>>({});
   const [brainServiceSection, setBrainServiceSection] = useState("overview");
   const previousGbrainBusyRef = useRef("");
+  const previousQmdBusyRef = useRef("");
   const previousSyntoBusyRef = useRef("");
   const previousTradingBrainBusyRef = useRef("");
   const tradingCounts = tradingBrainStatus?.counts ?? {};
@@ -89,6 +91,17 @@ export function VaultPanel(props: any) {
     }
   }, [gbrainBusy, gbrainStatus?.installed]);
   useEffect(() => {
+    const previousBusy = previousQmdBusyRef.current;
+    previousQmdBusyRef.current = qmdBusy;
+    if ((previousBusy === "install" || previousBusy === "connect") && !qmdBusy && qmdStatus?.installed) {
+      setBrainModuleSuccess((current) => ({ ...current, qmd: true }));
+      const timer = window.setTimeout(() => {
+        setBrainModuleSuccess((current) => ({ ...current, qmd: false }));
+      }, 2000);
+      return () => window.clearTimeout(timer);
+    }
+  }, [qmdBusy, qmdStatus?.installed]);
+  useEffect(() => {
     const previousBusy = previousSyntoBusyRef.current;
     previousSyntoBusyRef.current = syntoBusy;
     if ((previousBusy === "install" || previousBusy === "connect") && !syntoBusy && syntoStatus?.installed) {
@@ -121,6 +134,17 @@ export function VaultPanel(props: any) {
     : gbrainFailedInstallMessage.includes("ENOENT") || gbrainFailedInstallMessage.includes("Could not run the configured GBrain CLI")
       ? "GBrain CLI was not found. Use Install GBrain, or set the CLI path before connecting an existing install."
       : gbrainFailedInstallMessage;
+  const qmdStatusNote = qmdStatus?.error?.includes("ENOENT") || qmdStatus?.error?.includes("not found")
+    ? "QMD CLI is not available on this machine yet."
+    : qmdStatus?.error ?? "";
+  const qmdFailedInstallMessage = !qmdStatus?.installed && !qmdBusy && qmdActionStatus && !qmdActionStatus.includes("ready to install")
+    ? qmdActionStatus
+    : "";
+  const qmdInstallFailureLabel = qmdFailedInstallMessage.includes("npm is required")
+    ? "QMD install needs Node/npm first. Install Node/npm, then press Install QMD again."
+    : qmdFailedInstallMessage.includes("ENOENT") || qmdFailedInstallMessage.includes("Could not run the configured QMD CLI")
+      ? "QMD CLI was not found. Use Install QMD, or set the CLI path before connecting an existing install."
+      : qmdFailedInstallMessage;
   const syntoStatusNote = syntoStatus?.error?.includes("ENOENT") || syntoStatus?.error?.includes("not found")
     ? "Syntho CLI is not available on this machine yet."
     : syntoStatus?.error ?? "";
@@ -140,6 +164,15 @@ export function VaultPanel(props: any) {
       : gbrainStatus?.installed
         ? "installed"
         : gbrainInstallFailureLabel
+          ? "failed"
+          : "install";
+  const qmdInstallState = brainModuleSuccess.qmd
+    ? "success"
+    : qmdBusy === "install" || qmdBusy === "connect"
+      ? "installing"
+      : qmdStatus?.installed
+        ? "installed"
+        : qmdInstallFailureLabel
           ? "failed"
           : "install";
   const syntoInstallState = brainModuleSuccess.synto
@@ -163,18 +196,22 @@ export function VaultPanel(props: any) {
   const brainServiceFooterStatus = [
     tradingBrainStatus?.installed || tradingBrainBusy === "install" ? tradingBrainActionStatus : "",
     syntoStatus?.installed || syntoBusy === "install" || syntoBusy === "connect" ? syntoActionStatus : "",
+    qmdStatus?.installed || qmdBusy === "install" || qmdBusy === "connect" || qmdBusy === "index" || qmdBusy === "embed" ? qmdActionStatus : "",
     gbrainStatus?.installed || gbrainBusy === "install" || gbrainBusy === "connect" ? gbrainActionStatus : "",
   ].find(Boolean) || "";
   const syntoOutputHints = `${syntoActionStatus}\n${syntoQueryResult}`;
   const syntoNeedsModelSetup = /ollama|model/i.test(syntoOutputHints) && /missing|not running|not found|failed|error/i.test(syntoOutputHints);
   const gbrainSetupSteps = ["Check Bun runtime", "Install GBrain CLI", "Initialize local brain", "Import shared vault", "Refresh stale embeddings", "Extract graph links", "Scaffold retrieval skills"];
+  const qmdSetupSteps = ["Check npm runtime", "Install QMD CLI", "Add shared vault collection", "Build SQLite/BM25 index", "Refresh local vectors"];
   const syntoSetupSteps = ["Install Syntho CLI", "Initialize Synthesis", "Run doctor checks", "Prepare MCP surface"];
   const tradingBrainSetupSteps = ["Create vault folders", "Write trading templates", "Seed runtime guidance", "Verify scaffold"];
   const syntoModuleEnabled = Boolean(syntoStatus?.installed && sharedVault.synto.enabled);
   const gbrainModuleEnabled = Boolean(gbrainStatus?.installed && sharedVault.gbrain.enabled);
+  const qmdModuleEnabled = Boolean(qmdStatus?.installed && sharedVault.qmd.enabled);
   const tradingBrainModuleEnabled = Boolean(tradingBrainStatus?.installed && sharedVault.tradingBrainEnabled);
   const syntoModuleAvailable = Boolean(syntoStatus?.installed || syntoBusy === "install" || syntoBusy === "connect" || brainModuleSuccess.synto);
   const gbrainModuleAvailable = Boolean(gbrainStatus?.installed || gbrainBusy === "install" || gbrainBusy === "connect" || brainModuleSuccess.gbrain);
+  const qmdModuleAvailable = Boolean(qmdStatus?.installed || qmdBusy === "install" || qmdBusy === "connect" || brainModuleSuccess.qmd);
   const tradingBrainModuleAvailable = Boolean(tradingBrainStatus?.installed || tradingBrainBusy === "install" || brainModuleSuccess["trading-brain"]);
   const brainModules = [
     new BrainModule({
@@ -320,6 +357,144 @@ export function VaultPanel(props: any) {
               <option value="http">HTTP</option>
               <option value="disabled">Disabled</option>
             </select>
+          </label>
+        </div>
+      ),
+    }),
+    new BrainModule({
+      id: "qmd",
+      name: "QMD",
+      icon: <Search aria-hidden="true" />,
+      statusLabel: qmdInstallState === "installed" ? qmdStatus?.ok ? "Indexed" : "Needs index" : qmdInstallState === "installing" ? "Installing" : "Optional",
+      statusTone: qmdStatus?.ok ? "live" : "idle",
+      active: qmdStatus?.installed,
+      title: "Local markdown search over the brain",
+      description: "Install QMD when you want fast BM25, vector, and hybrid search over the shared Obsidian vault without sending memory to a hosted service.",
+      install: {
+        state: qmdInstallState,
+        buttonLabel: "Install QMD",
+        disabled: Boolean(qmdBusy) || !sharedVault.enabled,
+        failureLabel: qmdInstallFailureLabel,
+        icon: qmdBusy === "install" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />,
+        installingLabel: qmdBusy === "connect" ? "Connecting QMD runtime" : "Installing and indexing QMD",
+        onInstall: () => void runQmdAction("install"),
+        setupSteps: qmdSetupSteps,
+        successLabel: "Installed!",
+        features: [
+          <>BM25 keyword search for exact names, commands, and error strings</>,
+          <>Local vector search for semantic recall across markdown notes</>,
+          <>Hybrid query mode for agent preflight retrieval</>,
+          <>SQLite index and GGUF models stay outside the vault</>,
+        ],
+        secondaryActions: [
+          {
+            key: "connect",
+            label: "Connect existing",
+            disabled: Boolean(qmdBusy) || !sharedVault.enabled,
+            icon: qmdBusy === "connect" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <PlugZap aria-hidden="true" />,
+            onClick: () => void runQmdAction("connect"),
+          },
+        ],
+      },
+      stats: [
+        { key: "docs", label: "Docs", value: qmdMetric(qmdStatus?.documents ?? qmdStatus?.collection?.files), icon: <FileText aria-hidden="true" /> },
+        { key: "vectors", label: "Vectors", value: qmdMetric(qmdStatus?.vectors), icon: <Network aria-hidden="true" /> },
+        { key: "pending", label: "Pending", value: qmdMetric(qmdStatus?.pendingEmbeddings), icon: <Activity aria-hidden="true" /> },
+        { key: "mcp", label: "MCP", value: qmdStatus?.mcp?.mode ?? sharedVault.qmd.mcpMode, icon: <PlugZap aria-hidden="true" /> },
+      ],
+      badges: [
+        "Brain Speed++",
+        ...(qmdStatusNote ? [qmdStatusNote] : []),
+        <>Collection {qmdStatus?.collection?.exists ? "ready" : "missing"}</>,
+        <>Index {qmdStatus?.indexExists ? "ready" : "missing"}</>,
+        sharedVault.qmd.searchMode,
+      ],
+      primaryAction: {
+        key: "query",
+        label: "Search QMD",
+        disabled: Boolean(qmdBusy) || !qmdStatus?.installed || !qmdQuery.trim(),
+        icon: qmdBusy === "query" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Search aria-hidden="true" />,
+        onClick: () => void queryQmdFromDashboard(),
+      },
+      actions: [
+        {
+          key: "index",
+          label: "Refresh index",
+          disabled: Boolean(qmdBusy) || !qmdStatus?.installed,
+          icon: qmdBusy === "index" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />,
+          onClick: () => void runQmdAction("index"),
+        },
+        {
+          key: "embed",
+          label: "Refresh vectors",
+          disabled: Boolean(qmdBusy) || !qmdStatus?.installed,
+          icon: qmdBusy === "embed" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Network aria-hidden="true" />,
+          onClick: () => void runQmdAction("embed"),
+        },
+      ],
+      body: (
+        <div className={brainClass("gbrainQueryBox")}>
+          <label>
+            <span>Search</span>
+            <textarea
+              value={qmdQuery}
+              onChange={(event) => setQmdQuery(event.target.value)}
+              rows={3}
+              placeholder="What should agents do before relying on prior decisions?"
+            />
+          </label>
+        </div>
+      ),
+      result: qmdQueryResult || qmdActionStatus ? <BrainServiceRunResult label="QMD result" output={qmdQueryResult} status={qmdActionStatus} /> : null,
+      settings: (
+        <div className={brainClass("brainServiceSettings")}>
+          <label className={brainClass("brainServiceToggle")}>
+            {qmdStatus?.installed ? (
+              <>
+                <input
+                  type="checkbox"
+                  checked={sharedVault.qmd.enabled}
+                  onChange={(event) => updateSharedVault({ qmd: { ...sharedVault.qmd, enabled: event.target.checked } })}
+                />
+                {sharedVault.qmd.enabled ? "QMD integration enabled" : "QMD integration disabled"}
+              </>
+            ) : (
+              <Button type="button" size="sm" variant="secondary" disabled={Boolean(qmdBusy) || !sharedVault.enabled} onClick={() => void runQmdAction("install")}>
+                {qmdBusy === "install" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />}
+                Install QMD
+              </Button>
+            )}
+          </label>
+          <label>
+            Search mode
+            <select
+              value={sharedVault.qmd.searchMode}
+              onChange={(event) => updateSharedVault({ qmd: { ...sharedVault.qmd, searchMode: event.target.value } })}
+            >
+              <option value="bm25">BM25 keyword</option>
+              <option value="vector">Vector semantic</option>
+              <option value="hybrid">Hybrid, no rerank</option>
+              <option value="hybrid-rerank">Hybrid with rerank</option>
+            </select>
+          </label>
+          <label>
+            MCP mode
+            <select
+              value={sharedVault.qmd.mcpMode}
+              onChange={(event) => updateSharedVault({ qmd: { ...sharedVault.qmd, mcpMode: event.target.value } })}
+            >
+              <option value="stdio">stdio</option>
+              <option value="http">HTTP</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </label>
+          <label className={brainClass("brainServiceToggle")}>
+            <input
+              type="checkbox"
+              checked={sharedVault.qmd.autoEmbed}
+              onChange={(event) => updateSharedVault({ qmd: { ...sharedVault.qmd, autoEmbed: event.target.checked } })}
+            />
+            {sharedVault.qmd.autoEmbed ? "One-click setup refreshes vectors" : "One-click setup skips vector refresh"}
           </label>
         </div>
       ),
@@ -634,7 +809,7 @@ export function VaultPanel(props: any) {
     }),
   ];
   const brainModuleById = new Map(brainModules.map((module) => [module.definition.id, module]));
-  const brainServiceSections = [{ id: "overview", label: "Overview", icon: <Activity aria-hidden="true" /> }, ...(syntoModuleAvailable ? [{ id: "synto", label: "Syntho", icon: <FileText aria-hidden="true" /> }] : []), ...(gbrainModuleAvailable ? [{ id: "gbrain", label: "GBrain", icon: <BrainCircuit aria-hidden="true" /> }] : []), ...(tradingBrainModuleAvailable ? [{ id: "trading-brain", label: "Trading", icon: <Activity aria-hidden="true" /> }] : []), { id: "synthesis", label: "Synthesis", icon: <Sparkles aria-hidden="true" /> }, { id: "settings", label: "Settings", icon: <KeyRound aria-hidden="true" /> }];
+  const brainServiceSections = [{ id: "overview", label: "Overview", icon: <Activity aria-hidden="true" /> }, ...(syntoModuleAvailable ? [{ id: "synto", label: "Syntho", icon: <FileText aria-hidden="true" /> }] : []), ...(gbrainModuleAvailable ? [{ id: "gbrain", label: "GBrain", icon: <BrainCircuit aria-hidden="true" /> }] : []), ...(qmdModuleAvailable ? [{ id: "qmd", label: "QMD", icon: <Search aria-hidden="true" /> }] : []), ...(tradingBrainModuleAvailable ? [{ id: "trading-brain", label: "Trading", icon: <Activity aria-hidden="true" /> }] : []), { id: "synthesis", label: "Synthesis", icon: <Sparkles aria-hidden="true" /> }, { id: "settings", label: "Settings", icon: <KeyRound aria-hidden="true" /> }];
   useEffect(() => { if (!brainServiceSections.some((section) => section.id === brainServiceSection)) setBrainServiceSection("overview"); }, [brainServiceSection, brainServiceSections]);
   const brainServiceOverviewCards = [
     {
@@ -685,6 +860,32 @@ export function VaultPanel(props: any) {
         progressLabel: gbrainBusy === "connect" ? "Connecting GBrain runtime" : "Installing GBrain retrieval core",
         setupSteps: gbrainSetupSteps,
         state: gbrainInstallState,
+      },
+    },
+    {
+      id: "qmd",
+      bullets: ["Indexes markdown into local SQLite", "Supports BM25, vector, and hybrid search", "Keeps fast retrieval available over CLI or MCP"],
+      eyebrow: "Markdown search",
+      title: "QMD",
+      detail: qmdStatus?.installed
+        ? `${qmdMetric(qmdStatus.documents ?? qmdStatus.collection?.files)} document${(qmdStatus.documents ?? qmdStatus.collection?.files) === 1 ? "" : "s"} indexed for ${sharedVault.qmd.searchMode} search`
+        : "Optional local QMD search over the shared vault.",
+      status: "Brain Speed++",
+      tone: qmdStatus?.ok ? "live" : "idle",
+      icon: <Search aria-hidden="true" />,
+      enabled: qmdModuleEnabled,
+      canToggle: Boolean(qmdStatus?.installed),
+      toggleLabel: qmdModuleEnabled ? "QMD enabled" : "Enable QMD",
+      onToggle: (enabled) => updateSharedVault({ qmd: { ...sharedVault.qmd, enabled } }),
+      action: qmdStatus?.installed ? "Open QMD" : "Install QMD",
+      installAction: {
+        disabled: Boolean(qmdBusy) || !sharedVault.enabled,
+        icon: qmdBusy === "install" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />,
+        label: "Install QMD",
+        onClick: () => void runQmdAction("install"),
+        progressLabel: qmdBusy === "connect" ? "Connecting QMD runtime" : "Installing and indexing QMD",
+        setupSteps: qmdSetupSteps,
+        state: qmdInstallState,
       },
     },
     {
@@ -978,9 +1179,9 @@ export function VaultPanel(props: any) {
               <p>Keep the shared brain calm: review status at a glance, then open Syntho, GBrain, Trading Brain, or Synthesis only when you need that workflow.</p>
             </div>
             <div className={brainClass("brainServicesHeroActions")}>
-              <Button type="button" size="sm" variant="secondary" onClick={() => { void refreshGbrainStatus(); void refreshSyntoStatus(); void refreshTradingBrainStatus(); }} disabled={Boolean(gbrainBusy) || Boolean(syntoBusy) || Boolean(tradingBrainBusy)}>
-                {gbrainBusy === "status" || syntoBusy === "status" || tradingBrainBusy === "status" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
-                {gbrainBusy === "status" || syntoBusy === "status" || tradingBrainBusy === "status" ? "Checking" : "Refresh"}
+              <Button type="button" size="sm" variant="secondary" onClick={() => { void refreshGbrainStatus(); void refreshQmdStatus(); void refreshSyntoStatus(); void refreshTradingBrainStatus(); }} disabled={Boolean(gbrainBusy) || Boolean(qmdBusy) || Boolean(syntoBusy) || Boolean(tradingBrainBusy)}>
+                {gbrainBusy === "status" || qmdBusy === "status" || syntoBusy === "status" || tradingBrainBusy === "status" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
+                {gbrainBusy === "status" || qmdBusy === "status" || syntoBusy === "status" || tradingBrainBusy === "status" ? "Checking" : "Refresh"}
               </Button>
             </div>
           </div>
@@ -1001,7 +1202,7 @@ export function VaultPanel(props: any) {
                 </div>
               </>
             ) : brainServiceSection === "settings" ? (
-              <BrainServiceSettingsDeck brainClass={brainClass} gbrainSettings={brainModuleById.get("gbrain")?.definition.settings} syntoSettings={brainModuleById.get("synto")?.definition.settings} />
+              <BrainServiceSettingsDeck brainClass={brainClass} gbrainSettings={brainModuleById.get("gbrain")?.definition.settings} qmdSettings={brainModuleById.get("qmd")?.definition.settings} syntoSettings={brainModuleById.get("synto")?.definition.settings} />
             ) : selectedBrainModule ? (
               <div className={brainClass("brainServiceGrid")}>
                 {selectedBrainModule.render({ Button, vaultClass: brainClass })}

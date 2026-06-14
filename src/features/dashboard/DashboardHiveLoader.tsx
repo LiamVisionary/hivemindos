@@ -1,9 +1,9 @@
 "use client";
 
-import vaultStyles from "@/app/vault.module.css";
 import { createStyleClass } from "@/features/dashboard/style-classes";
+import loaderStyles from "./DashboardHiveLoader.module.css";
 
-const vaultClass = createStyleClass(vaultStyles);
+const loaderClass = createStyleClass(loaderStyles);
 const BRAIN_LOADER_RADIUS = 20;
 const BRAIN_LOADER_CENTER = { x: 64, y: 64 };
 const BRAIN_LOADER_COORDS = [
@@ -86,9 +86,9 @@ export function DashboardHiveLoader({
   title?: string;
 }) {
   return (
-    <div className={vaultClass("brainLoader", compact && "compact", inline && "inline")} role="status" aria-live="polite">
-      <svg className={vaultClass("brainLoaderComb")} viewBox="8 10 112 108" aria-hidden="true">
-        <g className={vaultClass("brainLoaderCells")}>
+    <div className={loaderClass("brainLoader", compact && "compact", inline && "inline")} role="status" aria-live="polite">
+      <svg className={loaderClass("brainLoaderComb")} viewBox="8 10 112 108" aria-hidden="true">
+        <g className={loaderClass("brainLoaderCells")}>
           {BRAIN_LOADER_COORDS.map((coord, index) => {
             const center = brainLoaderCenter(coord);
             return (
@@ -100,7 +100,7 @@ export function DashboardHiveLoader({
             );
           })}
         </g>
-        <g className={vaultClass("brainLoaderEdges")}>
+        <g className={loaderClass("brainLoaderEdges")}>
           {BRAIN_LOADER_EDGES.map((edge) => (
             <line
               key={edge.key}
@@ -116,7 +116,7 @@ export function DashboardHiveLoader({
         <strong>{title}</strong>
         <span>{detail}</span>
       </div>
-      <div className={vaultClass("brainLoadingRail")} aria-hidden="true">
+      <div className={loaderClass("brainLoadingRail")} aria-hidden="true">
         <span />
       </div>
     </div>

@@ -1,3 +1,7 @@
+---
+title: "MiroShark"
+---
+
 # MiroShark
 
 MiroShark is the optional companion for scenario rehearsal and swarm simulation.

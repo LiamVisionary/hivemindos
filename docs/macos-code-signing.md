@@ -1,3 +1,7 @@
+---
+title: "macOS code signing & notarization"
+---
+
 # macOS code signing & notarization
 
 The HivemindOS desktop app must be **Developer ID signed and notarized** so it

@@ -28,6 +28,8 @@ async function checkRuntimeAvailability(runtime: AgentRuntime) {
   if (runtime === "opencode") return checkCliRuntime("OpenCode", process.env.OPENCODE_BIN, "opencode");
   if (runtime === "codex") return checkCliRuntime("Codex", process.env.CODEX_BIN, "codex");
   if (runtime === "claude-code") return checkCliRuntime("Claude Code", process.env.CLAUDE_CODE_BIN || process.env.CLAUDE_BIN, "claude");
+  if (runtime === "openhands") return checkCliRuntime("OpenHands", process.env.OPENHANDS_BIN, "openhands");
+  if (runtime === "aider") return checkCliRuntime("Aider", process.env.AIDER_BIN, "aider");
   if (runtime === "aeon") return checkAeon();
   if (runtime === "evo") return checkCliRuntime("Evo", process.env.EVO_BIN, "evo");
   if (runtime === HIVEMIND_OS_RUNTIME) return checkOpenAICompatible();

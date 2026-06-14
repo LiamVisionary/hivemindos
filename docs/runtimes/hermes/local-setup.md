@@ -1,3 +1,7 @@
+---
+title: "HivemindOS Local Setup"
+---
+
 # HivemindOS Local Setup
 
 Use a local, read-only by default clone of `shannhk/hermes-agent-control-room` as the seed for VPS and Hermes deployment workflows:

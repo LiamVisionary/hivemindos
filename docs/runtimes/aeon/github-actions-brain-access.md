@@ -1,3 +1,7 @@
+---
+title: "AEON GitHub Actions Brain Access"
+---
+
 # AEON GitHub Actions Brain Access
 
 AEON GitHub Actions runs can join the HivemindOS tailnet as short-lived clients and call any online HivemindOS brain peer.

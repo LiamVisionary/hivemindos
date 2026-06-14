@@ -1,3 +1,7 @@
+---
+title: "Bankr Documentation"
+---
+
 # Bankr Documentation
 
 > Documentation for Bankr - financial rails for self-sustaining AI agents. Launch tokens, earn fees, and pay for compute automatically.

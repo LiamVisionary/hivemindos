@@ -13,7 +13,7 @@ import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { homedir } from "@/lib/home-dir";
 import {
   evaluateSpend,
-  loadGovernanceWallet,
+  resolveSpendGovernance,
   shouldEvaluateSpend,
 } from "@/lib/services/wallet/spend-governance";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
@@ -246,25 +246,27 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
   // Governance pre-flight: company kill switch, cumulative budgets, approval
   // escalation. Skipped for agents with no governance configured so default
   // behaviour and request count are unchanged.
-  const governance = await loadGovernanceWallet(input.agentId);
+  // resolveSpendGovernance also covers company members without their own wallet
+  // config so the company kill switch/budgets bind for them too.
+  const governance = await resolveSpendGovernance(input.agentId);
   let approvalGrantId: string | undefined;
   let spendCompanyId: string | undefined;
   if (governance && (await shouldEvaluateSpend(governance.wallet, input.policy.maxPaymentUsd))) {
     const preflightAmountUsd = await discoverX402AmountUsd(input);
-    if (preflightAmountUsd != null && preflightAmountUsd > 0) {
-      const decision = await evaluateSpend({
-        wallet: governance.wallet,
-        agentName: governance.agentName,
-        kind: "x402",
-        asset: "USDC",
-        amountUsd: preflightAmountUsd,
-        target: input.url,
-        approvalToken: input.approvalToken,
-      });
-      if (decision.decision !== "allow") throw new Error(decision.reason);
-      approvalGrantId = decision.grant?.id;
-      spendCompanyId = decision.companyId;
-    }
+    // Always evaluate (amount 0 when undiscoverable) so the company kill switch
+    // blocks even when the paid amount can't be priced ahead of time.
+    const decision = await evaluateSpend({
+      wallet: governance.wallet,
+      agentName: governance.agentName,
+      kind: "x402",
+      asset: "USDC",
+      amountUsd: preflightAmountUsd != null && preflightAmountUsd > 0 ? preflightAmountUsd : 0,
+      target: input.url,
+      approvalToken: input.approvalToken,
+    });
+    if (decision.decision !== "allow") throw new Error(decision.reason);
+    approvalGrantId = decision.grant?.id;
+    spendCompanyId = decision.companyId;
   }
 
   const method = parseX402Method(input.method);

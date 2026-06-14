@@ -46,6 +46,46 @@ const TOOLS = [
     description: "Prepare a spend-gated crypto/payment action draft and return the provider endpoint, request body, approval need, and missing readiness.",
     inputSchema: cryptoSchema(["intent"]),
   },
+  {
+    name: "compile_brain_knowledge",
+    description: "Compile source text into HivemindOS compiled-knowledge wiki pages with entities, concepts, summaries, frontmatter, and wikilinks.",
+    inputSchema: knowledgeCompileSchema(),
+  },
+  {
+    name: "brain_graph_overview",
+    description: "Return a compact graph overview for a compiled-knowledge domain: counts, hubs, and orphan totals.",
+    inputSchema: knowledgeSchema([]),
+  },
+  {
+    name: "brain_search_knowledge",
+    description: "Search a compiled-knowledge domain with weighted title, slug, tags, frontmatter, and markdown body matches.",
+    inputSchema: knowledgeSearchSchema(),
+  },
+  {
+    name: "brain_get_node",
+    description: "Fetch one compiled-knowledge node with body, outgoing links, and backlinks.",
+    inputSchema: knowledgeSchema(["slug"]),
+  },
+  {
+    name: "brain_get_backlinks",
+    description: "List every compiled-knowledge page that links to a node.",
+    inputSchema: knowledgeSchema(["slug"]),
+  },
+  {
+    name: "scan_brain_wiki_health",
+    description: "Scan a compiled-knowledge domain for broken links, orphans, duplicate slugs, and missing backlinks.",
+    inputSchema: knowledgeSchema([]),
+  },
+  {
+    name: "fix_brain_wiki_issue",
+    description: "Apply one safe compiled-knowledge health fix, such as a suggested broken-link retarget or missing backlink.",
+    inputSchema: knowledgeFixSchema(),
+  },
+  {
+    name: "shared_brain_contract",
+    description: "Explain whether a write is allowed under HivemindOS personal, agent-to-agent, or human-collective shared-brain contribution rules.",
+    inputSchema: sharedContractSchema(),
+  },
 ];
 
 function handoffSchema(required) {
@@ -83,6 +123,93 @@ function cryptoSchema(required) {
       body: { description: "JSON body for paid API/x402 requests." },
       recipientAddress: { type: "string", description: "Recipient wallet address for send/private-transfer intents." },
       amount: { description: "Asset amount for private transfer intents." },
+    },
+  };
+}
+
+function knowledgeSchema(required) {
+  return {
+    type: "object",
+    required,
+    properties: {
+      domain: { type: "string", description: "Compiled-knowledge domain. Defaults to shared-brain." },
+      vaultPath: { type: "string", description: "Optional shared vault path override." },
+      slug: { type: "string", description: "Node slug, such as hivemindos or compiled-knowledge." },
+    },
+  };
+}
+
+function knowledgeCompileSchema() {
+  return {
+    type: "object",
+    required: ["title", "content"],
+    properties: {
+      domain: { type: "string", description: "Compiled-knowledge domain. Defaults to shared-brain." },
+      vaultPath: { type: "string", description: "Optional shared vault path override." },
+      title: { type: "string" },
+      content: { type: "string" },
+      summary: { type: "string" },
+      sourcePath: { type: "string" },
+      tags: { type: "array", items: { type: "string" } },
+      entities: { type: "array", items: knowledgeDraftSchema() },
+      concepts: { type: "array", items: knowledgeDraftSchema() },
+      collaborationMode: { type: "string", enum: ["personal", "agent-to-agent", "human-collective"] },
+      optedInDomain: { type: "string", description: "Personal opted-in domain for human collective contributions." },
+    },
+  };
+}
+
+function knowledgeSearchSchema() {
+  return {
+    type: "object",
+    required: ["query"],
+    properties: {
+      domain: { type: "string", description: "Compiled-knowledge domain. Defaults to shared-brain." },
+      vaultPath: { type: "string", description: "Optional shared vault path override." },
+      query: { type: "string", description: "Search query for compiled entity, concept, and summary pages." },
+      limit: { type: "number", description: "Maximum results to return, from 1 to 50." },
+      types: { type: "array", items: { type: "string", enum: ["entity", "concept", "summary"] } },
+    },
+  };
+}
+
+function knowledgeDraftSchema() {
+  return {
+    type: "object",
+    required: ["name"],
+    properties: {
+      name: { type: "string" },
+      slug: { type: "string" },
+      description: { type: "string" },
+      facts: { type: "array", items: { type: "string" } },
+      tags: { type: "array", items: { type: "string" } },
+      related: { type: "array", items: { type: "string" } },
+    },
+  };
+}
+
+function knowledgeFixSchema() {
+  return {
+    type: "object",
+    required: ["issueId"],
+    properties: {
+      domain: { type: "string" },
+      vaultPath: { type: "string" },
+      issueId: { type: "string" },
+    },
+  };
+}
+
+function sharedContractSchema() {
+  return {
+    type: "object",
+    properties: {
+      domain: { type: "string" },
+      actorKind: { type: "string", enum: ["human", "agent"] },
+      collaborationMode: { type: "string", enum: ["personal", "agent-to-agent", "human-collective"] },
+      operation: { type: "string", enum: ["compile", "fix-health", "dismiss-health", "direct-edit"] },
+      readonly: { type: "boolean" },
+      optedInDomain: { type: "string" },
     },
   };
 }
@@ -197,6 +324,43 @@ async function callTool(name, args = {}) {
       ...cryptoArgs(args),
     });
   }
+  if (name === "compile_brain_knowledge") {
+    return callDashboard("/api/brain/knowledge", "POST", {
+      action: "compile",
+      actorKind: "agent",
+      collaborationMode: args.collaborationMode || "agent-to-agent",
+      ...knowledgeArgs(args),
+    });
+  }
+  if (name === "brain_graph_overview") {
+    return callDashboard("/api/brain/knowledge", "POST", { action: "graph-overview", ...knowledgeArgs(args) });
+  }
+  if (name === "brain_search_knowledge") {
+    return callDashboard("/api/brain/knowledge", "POST", { action: "search", ...knowledgeArgs(args) });
+  }
+  if (name === "brain_get_node") {
+    return callDashboard("/api/brain/knowledge", "POST", { action: "get-node", ...knowledgeArgs(args) });
+  }
+  if (name === "brain_get_backlinks") {
+    return callDashboard("/api/brain/knowledge", "POST", { action: "get-backlinks", ...knowledgeArgs(args) });
+  }
+  if (name === "scan_brain_wiki_health") {
+    return callDashboard("/api/brain/knowledge", "POST", { action: "scan-health", ...knowledgeArgs(args) });
+  }
+  if (name === "fix_brain_wiki_issue") {
+    return callDashboard("/api/brain/knowledge", "POST", { action: "fix-health", ...knowledgeArgs(args) });
+  }
+  if (name === "shared_brain_contract") {
+    return callDashboard("/api/brain/knowledge", "POST", {
+      action: "shared-contract",
+      domain: args.domain,
+      actorKind: args.actorKind,
+      collaborationMode: args.collaborationMode,
+      operation: args.operation,
+      readonly: args.readonly,
+      optedInDomain: args.optedInDomain,
+    });
+  }
   const actionByTool = {
     plan_handoff: "plan",
     handoff_file: "send-file",
@@ -219,6 +383,14 @@ async function callTool(name, args = {}) {
 function cryptoArgs(args) {
   const output = {};
   for (const key of ["intent", "agentId", "preferredProvider", "wallet", "amountUsd", "asset", "url", "method", "headers", "body", "recipientAddress", "amount"]) {
+    if (args[key] !== undefined) output[key] = args[key];
+  }
+  return output;
+}
+
+function knowledgeArgs(args) {
+  const output = {};
+  for (const key of ["domain", "vaultPath", "slug", "title", "content", "summary", "sourcePath", "tags", "entities", "concepts", "collaborationMode", "optedInDomain", "issueId", "query", "limit", "types"]) {
     if (args[key] !== undefined) output[key] = args[key];
   }
   return output;

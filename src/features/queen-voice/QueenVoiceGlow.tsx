@@ -3,105 +3,132 @@
 import * as React from "react";
 import styles from "./queen-voice.module.css";
 
-// Apple Intelligence palette from jacobamobin/AppleIntelligenceGlowEffect.
-const GLOW_COLORS = [
-  "#BC82F3",
-  "#F5B9EA",
-  "#8D9FFF",
-  "#FF6778",
-  "#FFBA71",
-  "#C686FF",
-];
+type GlowFrame = {
+  height: number;
+  inset: number;
+  path: string;
+  radius: number;
+  width: number;
+};
 
-// Ring stack from the original effect: width (px) / blur (px).
-const GLOW_LAYERS = [
-  { width: 6, blur: 0 },
-  { width: 9, blur: 4 },
-  { width: 11, blur: 12 },
-  { width: 15, blur: 15 },
-];
-
-const RETARGET_INTERVAL_MS = 700;
-const SMOOTHING_PER_FRAME = 0.055;
-const ROTATION_DEGREES_PER_SECOND = 6;
-
-function randomSortedStops() {
-  return Array.from({ length: GLOW_COLORS.length }, () => Math.random()).sort(
-    (a, b) => a - b,
-  );
+function roundedRectPath(width: number, height: number, inset: number, radius: number) {
+  const x = inset;
+  const y = inset;
+  const w = Math.max(0, width - inset * 2);
+  const h = Math.max(0, height - inset * 2);
+  const r = Math.min(radius, w / 2, h / 2);
+  return [
+    `M ${x + r} ${y}`,
+    `H ${x + w - r}`,
+    `Q ${x + w} ${y} ${x + w} ${y + r}`,
+    `V ${y + h - r}`,
+    `Q ${x + w} ${y + h} ${x + w - r} ${y + h}`,
+    `H ${x + r}`,
+    `Q ${x} ${y + h} ${x} ${y + h - r}`,
+    `V ${y + r}`,
+    `Q ${x} ${y} ${x + r} ${y}`,
+    "Z",
+  ].join(" ");
 }
 
-function gradientString(stops: number[], rotationDeg: number) {
-  const entries = stops.map(
-    (stop, index) => `${GLOW_COLORS[index]} ${(stop * 100).toFixed(2)}%`,
-  );
-  // Close the ring with the first color so the conic seam never shows.
-  entries.push(`${GLOW_COLORS[0]} 100%`);
-  return `conic-gradient(from ${rotationDeg.toFixed(2)}deg, ${entries.join(", ")})`;
+function glowFrameFromViewport(width: number, height: number): GlowFrame {
+  const vmin = Math.min(width, height) / 100;
+  const inset = Math.min(14, Math.max(8, vmin * 0.72));
+  const radius = Math.min(48, Math.max(32, vmin * 2.9));
+  return {
+    height,
+    inset,
+    path: roundedRectPath(width, height, inset, radius),
+    radius,
+    width,
+  };
 }
 
-/**
- * Screen-perimeter glow: four stacked conic-gradient rings whose color stop
- * positions drift toward freshly randomized targets, like the SwiftUI
- * original's 0.5s re-randomize + 1s ease animation, plus a slow rotation.
- */
-export function QueenVoiceGlow({ active }: { active: boolean }) {
-  const rootRef = React.useRef<HTMLDivElement | null>(null);
+function useGlowFrame(active: boolean) {
+  const [frame, setFrame] = React.useState<GlowFrame | null>(null);
 
   React.useEffect(() => {
     if (!active) return undefined;
-    const root = rootRef.current;
-    if (!root) return undefined;
-
-    let frame = 0;
-    let lastFrameAt = performance.now();
-    let rotation = -90;
-    const current = randomSortedStops();
-    let target = randomSortedStops();
-    const retarget = window.setInterval(() => {
-      target = randomSortedStops();
-    }, RETARGET_INTERVAL_MS);
-
-    const tick = (now: number) => {
-      const deltaSeconds = Math.min(0.1, (now - lastFrameAt) / 1000);
-      lastFrameAt = now;
-      rotation += ROTATION_DEGREES_PER_SECOND * deltaSeconds;
-      for (let index = 0; index < current.length; index += 1) {
-        current[index] +=
-          (target[index] - current[index]) * SMOOTHING_PER_FRAME;
-      }
-      root.style.setProperty(
-        "--queen-glow-gradient",
-        gradientString(current, rotation),
-      );
-      frame = window.requestAnimationFrame(tick);
+    const updateFrame = () => {
+      setFrame(glowFrameFromViewport(window.innerWidth, window.innerHeight));
     };
-    frame = window.requestAnimationFrame(tick);
-
-    return () => {
-      window.clearInterval(retarget);
-      window.cancelAnimationFrame(frame);
-    };
+    updateFrame();
+    window.addEventListener("resize", updateFrame);
+    return () => window.removeEventListener("resize", updateFrame);
   }, [active]);
+
+  return frame;
+}
+
+/**
+ * Screen-perimeter glow. The rounded rectangle is drawn from measured viewport
+ * geometry so it follows the app chrome, while CSS breathes the blurred
+ * full-path strokes for soft Apple-style bloom.
+ */
+export function QueenVoiceGlow({ active }: { active: boolean }) {
+  const frame = useGlowFrame(active);
 
   return (
     <div
-      ref={rootRef}
+      data-queen-glow-root=""
       className={`${styles.glowRoot} ${active ? styles.glowRootActive : ""}`}
       aria-hidden="true"
     >
-      {GLOW_LAYERS.map((layer) => (
-        <div
-          key={`${layer.width}-${layer.blur}`}
-          className={styles.glowLayer}
+      {frame ? (
+        <svg
+          className={styles.glowSvg}
+          data-queen-glow-frame=""
+          data-queen-glow-inset={frame.inset.toFixed(2)}
+          data-queen-glow-radius={frame.radius.toFixed(2)}
+          viewBox={`0 0 ${frame.width} ${frame.height}`}
+          width={frame.width}
+          height={frame.height}
           style={
             {
-              "--ring-width": `${layer.width}px`,
-              "--ring-blur": `${layer.blur}px`,
+              "--queen-glow-inset-px": `${frame.inset}px`,
+              "--queen-glow-radius-px": `${frame.radius}px`,
             } as React.CSSProperties
           }
-        />
-      ))}
+        >
+          <defs>
+            <linearGradient
+              id="queen-voice-glow-gradient"
+              gradientUnits="userSpaceOnUse"
+              x1="0"
+              y1="0"
+              x2={frame.width}
+              y2={frame.height}
+            >
+              <stop offset="0%" stopColor="#ffba71" />
+              <stop offset="18%" stopColor="#ff6778" />
+              <stop offset="42%" stopColor="#bc82f3" />
+              <stop offset="64%" stopColor="#8d9fff" />
+              <stop offset="82%" stopColor="#f5b9ea" />
+              <stop offset="100%" stopColor="#ff6778" />
+            </linearGradient>
+          </defs>
+          <g className={styles.glowBreath}>
+            <path
+              className={styles.glowTraceOuter}
+              data-queen-glow-layer=""
+              d={frame.path}
+              stroke="url(#queen-voice-glow-gradient)"
+            />
+            <path
+              className={styles.glowTraceBloom}
+              data-queen-glow-layer=""
+              d={frame.path}
+              stroke="url(#queen-voice-glow-gradient)"
+            />
+            <path
+              className={styles.glowTraceCore}
+              data-queen-glow-layer=""
+              d={frame.path}
+              stroke="url(#queen-voice-glow-gradient)"
+            />
+          </g>
+        </svg>
+      ) : null}
     </div>
   );
 }

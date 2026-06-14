@@ -11,7 +11,7 @@ import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 import {
   evaluateSpend,
-  loadGovernanceWallet,
+  resolveSpendGovernance,
   shouldEvaluateSpend,
 } from "@/lib/services/wallet/spend-governance";
 import type { AgentTradingVenue, AgentWalletConfig } from "@/lib/types/agent-wallet";
@@ -268,8 +268,9 @@ export async function executeBuyStock(input: BuyStockInput): Promise<BuyStockRes
   }
 
   // Governance pre-flight: company kill switch, rolling budgets, approval
-  // escalation. Skipped entirely for agents with no governance configured.
-  const governance = await loadGovernanceWallet(input.agentId);
+  // escalation. resolveSpendGovernance also covers company members without their
+  // own wallet config so the company kill switch/budgets bind for them too.
+  const governance = await resolveSpendGovernance(input.agentId);
   let approvalGrantId: string | undefined;
   let companyId: string | undefined;
   if (governance && (await shouldEvaluateSpend(governance.wallet, maxTradeUsd(input.policy)))) {

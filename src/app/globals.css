@@ -250,8 +250,12 @@ a {
   z-index: -1;
   pointer-events: none;
   content: "";
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='54' height='62' viewBox='0 0 54 62'%3E%3Cpolygon points='27,1 53,16 53,46 27,61 1,46 1,16' fill='none' stroke='%235eead4' stroke-opacity='.08' stroke-width='.6'/%3E%3C/svg%3E");
-  background-position: 0 -16px;
+  /* Seamless honeycomb: same pointy-top, vertical-sided hex shape as the fleet
+     hive (H = W*2/√3), tiled on a full 2-row vertical period so edges connect
+     exactly. Generated to keep vertical edges off the tile boundary. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2754%27 height=%2793.531%27 viewBox=%270 0 54 93.531%27 fill=%27none%27 stroke=%27%235eead4%27 stroke-opacity=%27.08%27 stroke-width=%27.6%27%3E%3Cpolygon points=%27-13.5%2C15.588%2013.5%2C31.177%2013.5%2C62.354%20-13.5%2C77.942%20-40.5%2C62.354%20-40.5%2C31.177%27/%3E%3Cpolygon points=%2713.5%2C62.354%2040.5%2C77.942%2040.5%2C109.119%2013.5%2C124.708%20-13.5%2C109.119%20-13.5%2C77.942%27/%3E%3Cpolygon points=%2713.5%2C-31.177%2040.5%2C-15.588%2040.5%2C15.588%2013.5%2C31.177%20-13.5%2C15.588%20-13.5%2C-15.588%27/%3E%3Cpolygon points=%2740.5%2C15.588%2067.5%2C31.177%2067.5%2C62.354%2040.5%2C77.942%2013.5%2C62.354%2013.5%2C31.177%27/%3E%3Cpolygon points=%2767.5%2C62.354%2094.5%2C77.942%2094.5%2C109.119%2067.5%2C124.708%2040.5%2C109.119%2040.5%2C77.942%27/%3E%3Cpolygon points=%2767.5%2C-31.177%2094.5%2C-15.588%2094.5%2C15.588%2067.5%2C31.177%2040.5%2C15.588%2040.5%2C-15.588%27/%3E%3C/svg%3E");
+  background-size: 54px 93.531px;
+  background-position: 0 0;
   mask-image: linear-gradient(90deg, black, black 78%, transparent);
 }
 
@@ -443,6 +447,64 @@ a {
 
 .topbarMasthead > * {
   min-width: 0;
+}
+
+/* macOS desktop: titleBarStyle "Overlay" makes content fill the whole window
+   with the traffic lights floating on top (no system header band). The top bar
+   becomes the draggable chrome and gets a top inset so the logo/title clear the
+   traffic lights. Interactive children opt out of dragging. */
+.macDesktopChrome .commandTopbar {
+  -webkit-app-region: drag;
+  padding-top: 28px;
+}
+
+.macDesktopChrome .commandTopbar :where(button, a, nav, input, select, textarea, label, [role="button"], [role="tab"]) {
+  -webkit-app-region: no-drag;
+}
+
+.topbarMasthead.hasUpdateAction {
+  grid-template-columns: minmax(220px, 1fr) minmax(0, auto) auto;
+}
+
+.appUpdateButton {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  justify-self: end;
+  gap: 7px;
+  padding: 0 14px;
+  border: 1px solid rgba(94, 234, 212, 0.5);
+  border-radius: 9999px;
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.2), rgba(45, 212, 191, 0.06));
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 120ms ease;
+}
+
+.appUpdateButton:hover {
+  border-color: rgba(94, 234, 212, 0.75);
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.3), rgba(45, 212, 191, 0.12));
+}
+
+.appUpdateButton:active {
+  transform: translateY(1px);
+}
+
+.appUpdateButton:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.appUpdateDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--accent-strong);
+  box-shadow: 0 0 8px var(--accent-strong);
 }
 
 .mobileRouteShell,

@@ -1,3 +1,7 @@
+---
+title: "Hivemind Sync And Tailscale Architecture"
+---
+
 # Hivemind Sync And Tailscale Architecture
 
 HivemindOS treats the shared brain as a normal local markdown folder.

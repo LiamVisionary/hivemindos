@@ -97,7 +97,8 @@ export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
     customWorkerClasses,
     selectedCustomWorkerClassId,
     customWorkerClass: customWorkerClasses?.find((workerClass: CustomWorkerClassProfile) => workerClass.id === selectedCustomWorkerClassId) ?? agent.customWorkerClass,
-    skillProfilePrompt: agent.skillProfilePrompt ?? renderBeeSoulTemplate(beeWorkerPreset(agent.workerClass ?? "general").soulTemplate, agent.name),
+    soulPrompt: agent.soulPrompt ?? renderBeeSoulTemplate(beeWorkerPreset(agent.workerClass ?? "general").soulTemplate, agent.name),
+    skillProfilePrompt: agent.skillProfilePrompt ?? beeWorkerPreset(agent.workerClass ?? "general").taskProfile,
     preferredSkillSlugs: agent.preferredSkillSlugs ?? beeWorkerPreset(agent.workerClass ?? "general").skillSlugs,
     calls: buildAgentCallPreferences(agent.calls),
     agentEnv: agent.agentEnv && typeof agent.agentEnv === "object" && !Array.isArray(agent.agentEnv)
@@ -286,6 +287,7 @@ export function parseStoredVault(snapshot: DashboardStateSnapshot = {}): SharedV
       synthesisFolder: storedSynthesisFolder || DEFAULT_SHARED_VAULT.synthesisFolder,
       brainServicesFolder: migratedBrainServicesFolder || DEFAULT_SHARED_VAULT.brainServicesFolder,
       gbrain: { ...DEFAULT_SHARED_VAULT.gbrain, ...(storedVault.gbrain ?? {}) },
+      qmd: { ...DEFAULT_SHARED_VAULT.qmd, ...(storedVault.qmd ?? {}) },
       synto: { ...DEFAULT_SHARED_VAULT.synto, ...(storedVault.synto ?? {}) },
     };
   } catch {

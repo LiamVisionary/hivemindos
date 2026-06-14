@@ -1,3 +1,7 @@
+---
+title: "Generated Media Signing"
+---
+
 # Generated Media Signing
 
 How generated images reach phone clients privately: hub-side caching plus

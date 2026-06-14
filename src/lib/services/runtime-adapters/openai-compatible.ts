@@ -36,6 +36,7 @@ type LmStudioRawModel = {
   size_bytes?: number | null;
   sizeBytes?: number | null;
   format?: string | null;
+  deviceIdentifier?: string | null;
 };
 
 type LmStudioModelInventory = {
@@ -208,15 +209,21 @@ function normalizeLmStudioModels(payload: LmStudioModelInventory | LmStudioRawMo
         paramsString: model.params_string ?? model.paramsString ?? null,
         sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : null,
         format: model.format,
+        // LM Studio's CLI inventory tags models shared from a linked device
+        // (LM Link) with a non-null deviceIdentifier; local on-disk models have
+        // null. The REST inventory omits the field, so models stay local there.
+        remote: Boolean(model.deviceIdentifier),
       };
     })
     .filter((model): model is NonNullable<typeof model> => Boolean(model));
-  const seen = new Set<string>();
-  return normalized.filter((model) => {
-    if (seen.has(model.key)) return false;
-    seen.add(model.key);
-    return true;
-  });
+  // Collapse duplicate keys, preferring the local copy when the same model is
+  // both on this disk and shared from a linked device, so it loads locally.
+  const byKey = new Map<string, (typeof normalized)[number]>();
+  for (const model of normalized) {
+    const existing = byKey.get(model.key);
+    if (!existing || (existing.remote && !model.remote)) byKey.set(model.key, model);
+  }
+  return [...byKey.values()];
 }
 
 function markLoadedLmStudioModels(models: NormalizedLmStudioModel[], loadedModels: unknown[]) {

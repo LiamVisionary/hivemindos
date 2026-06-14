@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendUsdc } from "@/lib/services/wallet/chain-wallet";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { requireAuth } from "@/lib/utils/server-auth";
-import { evaluateSpend, loadGovernanceWallet } from "@/lib/services/wallet/spend-governance";
+import { evaluateSpend, resolveSpendGovernance } from "@/lib/services/wallet/spend-governance";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 
 type SendUsdcBody = {
@@ -34,7 +34,9 @@ export async function POST(request: NextRequest) {
     if (!stored) return NextResponse.json({ ok: false, error: "No local wallet exists for this agent." }, { status: 404 });
 
     // Governance: company kill switch, cumulative budgets, and approval escalation.
-    const governance = await loadGovernanceWallet(agentId);
+    // resolveSpendGovernance also covers company members that lack their own wallet
+    // config, so the company kill switch/budgets bind for them too.
+    const governance = await resolveSpendGovernance(agentId);
     let grantId: string | undefined;
     let companyId: string | undefined;
     if (governance) {

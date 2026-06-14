@@ -1,3 +1,7 @@
+---
+title: "Work Board And Scheduler"
+---
+
 # Work Board And Scheduler
 
 The Work board is where intent turns into agent work.

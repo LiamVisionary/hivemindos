@@ -27,8 +27,38 @@ const appApiDir = join(projectRoot, "src", "app", "api");
 const staticHiddenApiDir = join(projectRoot, ".next-tauri", "hidden-app-api");
 const resourcesDir = join(projectRoot, "src-tauri", "resources");
 const staticResourceDir = join(projectRoot, "src-tauri", "static");
+// The same entitlements the Tauri bundler signs the app with. The bundled node
+// sidecar JIT-compiles, so it must be signed WITH these (allow-jit /
+// allow-unsigned-executable-memory) under the hardened runtime or macOS kills it
+// on boot. Keep this in lockstep with tauri.conf.json's bundle.macOS.entitlements.
+const macEntitlementsPath = join(projectRoot, "src-tauri", "Entitlements.plist");
 const serverResourceDir = join(resourcesDir, "hivemindos-next");
 const nodeResourceDir = join(resourcesDir, "hivemindos-node");
+const backgroundHelperSource = join(
+  projectRoot,
+  "scripts",
+  "hivemindos-background-helper.c",
+);
+const backgroundHelpers =
+  process.platform === "darwin"
+    ? [
+        {
+          resourceDir: "hivemindos-collector-helper",
+          binaryName: "HivemindOS Collector",
+          identifier: "com.hivemindos.collector-helper",
+        },
+        {
+          resourceDir: "hivemindos-sync-helper",
+          binaryName: "HivemindOS Sync",
+          identifier: "com.hivemindos.sync-helper",
+        },
+        {
+          resourceDir: "hivemindos-voice-worker-helper",
+          binaryName: "HivemindOS Voice Worker",
+          identifier: "com.hivemindos.voice-worker-helper",
+        },
+      ]
+    : [];
 const standaloneDir = join(nextBuildDir, "standalone");
 const standaloneServer = join(standaloneDir, "server.js");
 const embeddedFingerprintFile = join(
@@ -388,6 +418,36 @@ function optimizeMacosNodeBinary(path) {
 
   runQuiet("/usr/bin/strip", ["-x", path]);
   const signingIdentity = process.env.APPLE_SIGNING_IDENTITY?.trim();
+  // Sign node WITH the app entitlements (allow-jit etc.). Without them a
+  // hardened-runtime node is killed by the kernel the instant V8 JITs, so the
+  // embedded server never opens its port and the app crashes on launch. Ad-hoc
+  // local builds (no Developer ID) also get the entitlements so a self-signed
+  // dev DMG behaves like the released one.
+  const entitlementsArgs = existsSync(macEntitlementsPath)
+    ? ["--entitlements", macEntitlementsPath]
+    : [];
+  const signArgs = signingIdentity
+    ? [
+        "--force",
+        "--timestamp",
+        "--options",
+        "runtime",
+        ...entitlementsArgs,
+        "--sign",
+        signingIdentity,
+        path,
+      ]
+    : ["--force", "--options", "runtime", ...entitlementsArgs, "--sign", "-", path];
+  runQuiet("/usr/bin/codesign", signArgs);
+  chmodExecutable(path);
+}
+
+function signMacosBackgroundHelper(path, identifier) {
+  if (process.platform !== "darwin") {
+    return;
+  }
+
+  const signingIdentity = process.env.APPLE_SIGNING_IDENTITY?.trim();
   const signArgs = signingIdentity
     ? [
         "--force",
@@ -396,11 +456,53 @@ function optimizeMacosNodeBinary(path) {
         "runtime",
         "--sign",
         signingIdentity,
+        "-i",
+        identifier,
         path,
       ]
-    : ["--force", "--sign", "-", path];
+    : [
+        "--force",
+        "--options",
+        "runtime",
+        "--sign",
+        "-",
+        "-i",
+        identifier,
+        path,
+      ];
   runQuiet("/usr/bin/codesign", signArgs);
-  chmodExecutable(path);
+}
+
+function buildBackgroundHelpers() {
+  for (const helper of backgroundHelpers) {
+    rmSync(join(resourcesDir, helper.resourceDir), {
+      force: true,
+      recursive: true,
+    });
+  }
+  if (process.platform !== "darwin") {
+    return;
+  }
+  if (!existsSync(backgroundHelperSource)) {
+    throw new Error(`Missing background helper source at ${backgroundHelperSource}`);
+  }
+
+  for (const helper of backgroundHelpers) {
+    const helperResourceDir = join(resourcesDir, helper.resourceDir);
+    const helperTarget = join(helperResourceDir, helper.binaryName);
+    mkdirSync(helperResourceDir, { recursive: true });
+    run("cc", [
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      backgroundHelperSource,
+      "-o",
+      helperTarget,
+    ]);
+    chmodExecutable(helperTarget);
+    signMacosBackgroundHelper(helperTarget, helper.identifier);
+  }
 }
 
 function scrubPackagedResources() {
@@ -831,6 +933,7 @@ function buildEmbeddedNextResources() {
   mkdirSync(resourcesDir, { recursive: true });
   rmSync(staticResourceDir, { force: true, recursive: true });
   writeEmbeddedStaticStub();
+  buildBackgroundHelpers();
 
   if (packagedEmbeddedResourcesAreReusable(fingerprint)) {
     console.log(
@@ -851,6 +954,7 @@ function buildStaticNativeResources() {
   rmSync(nextStaticBuildDir, { force: true, recursive: true });
   rmSync(nextStaticOutDir, { force: true, recursive: true });
   mkdirSync(resourcesDir, { recursive: true });
+  buildBackgroundHelpers();
 
   hideApiRoutesForStaticBuild();
   try {

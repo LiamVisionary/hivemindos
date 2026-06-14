@@ -1,3 +1,7 @@
+---
+title: "GitLawb Code Proof"
+---
+
 # GitLawb Code Proof
 
 GitLawb gives HivemindOS a signed code proof layer.

@@ -1,3 +1,7 @@
+---
+title: "Product And UI"
+---
+
 # Product And UI
 
 These docs describe how HivemindOS should feel and behave.

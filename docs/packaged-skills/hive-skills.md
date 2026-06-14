@@ -17,6 +17,7 @@ These skills are auto-installed into the shared brain because they are foundatio
 | `hive-skill-fusion` | Turns a capability request into a reusable shared-brain skill. |
 | `hive-workflow-fusion` | Composes multi-step hive workflows from skills, apps, agents, and tools. |
 | `hive-aeon-fusion` | Converts reusable hive workflows into AEON-ready agent duties when appropriate. |
+| `hive-brain-compiled-wiki` | Teaches agents how to compile durable findings into HivemindOS entity/concept/summary wiki pages, search/query the compiled graph through MCP, repair wiki health, and respect human collective shared-brain mirrors without restricting normal agent-to-agent work. |
 
 ## Supporting Hive Search Commands
 
@@ -28,6 +29,8 @@ hive-brain recall "query" --scope full-vault --limit 8
 ```
 
 `hive-brain answer` returns a concise grounded answer. `hive-brain recall` returns a hit list. Both try the running HivemindOS brain API first and fall back to local vault/index search, so raw agents can use the same private brain without needing dashboard-routed context.
+
+For durable synthesized wiki knowledge, use the auto-installed `hive-brain-compiled-wiki` skill instead of broad recall. It teaches agents to call `brain_search_knowledge` first for compiled entity, concept, and summary pages, then follow up with `brain_get_node`, `brain_get_backlinks`, or `brain_graph_overview` when they need graph detail.
 
 ## Hive Assimilate
 

@@ -654,7 +654,7 @@ export function brainLoaderEdgeLines() {
 export const BRAIN_LOADER_EDGES = brainLoaderEdgeLines();
 
 export function BrainGraphLoader({
-  compact = false,
+  compact = true,
   detail = "Reading vault notes and link edges",
   inline = false,
   title = "Mapping shared brain",

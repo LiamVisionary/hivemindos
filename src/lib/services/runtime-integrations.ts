@@ -298,33 +298,37 @@ async function augmentGatewayModelProviders(
 ) {
   if (!agent) return { modelSelection, providerStatus };
   const bankrGateway = MODEL_PROVIDER_GATEWAYS.bankr;
-  const bankr = await listBankrLlmModels(agent).catch((error) => ({
-    models: [],
-    error: error instanceof Error ? error.message : "Bankr LLM model discovery failed.",
-  }));
-  const bankrAccess = await bankrLlmAccessStatus().catch((error) => ({
+  const lmStudioGateway = MODEL_PROVIDER_GATEWAYS["lm-studio"];
+  // Run the independent gateway probes concurrently: Bankr model discovery +
+  // Bankr access status (network) and LM Studio discovery (`lms ls`/REST,
+  // memoized per resolved endpoint) no longer serialize, so the settings status
+  // sweep waits the slowest probe instead of their sum.
+  const lmStudioProfile = localOpenAIProviderProfile(agent);
+  const [bankr, bankrAccess, lmStudio] = await Promise.all([
+    listBankrLlmModels(agent).catch((error) => ({
+      models: [],
+      error: error instanceof Error ? error.message : "Bankr LLM model discovery failed.",
+    })),
+    bankrLlmAccessStatus().catch((error) => ({
       clubActive: null,
       creditsBalanceUsd: null,
       error: error instanceof Error ? error.message : "Bankr access check failed.",
-    }));
+    })),
+    catalogMemo(
+      `lm-studio::${lmStudioProfile.gatewayUrl ?? ""}::${lmStudioProfile.token ?? ""}`,
+      () => discoverLmStudioProviderModels(lmStudioProfile),
+    ).catch((error) => ({
+      runtimeProfile: lmStudioProfile,
+      lmStudioModels: [],
+      modelDiscoveryError: error instanceof Error ? error.message : "Local OpenAI model discovery failed.",
+      lmStudioModelSource: "",
+      models: [],
+    })),
+  ]);
   if (bankr.error) diagnostics.push(`Bankr LLM models unavailable: ${bankr.error}`);
   if (bankrAccess.error) diagnostics.push(`Bankr access status unavailable: ${bankrAccess.error}`);
-  const providers = [...(modelSelection?.providers ?? [])];
-  const lmStudioGateway = MODEL_PROVIDER_GATEWAYS["lm-studio"];
-  // Memoized per resolved endpoint: the discovery spawns `lms ls` / hits the
-  // REST inventory, and for most agents it resolves to the same local URL.
-  const lmStudioProfile = localOpenAIProviderProfile(agent);
-  const lmStudio = await catalogMemo(
-    `lm-studio::${lmStudioProfile.gatewayUrl ?? ""}::${lmStudioProfile.token ?? ""}`,
-    () => discoverLmStudioProviderModels(lmStudioProfile)
-  ).catch((error) => ({
-    runtimeProfile: lmStudioProfile,
-    lmStudioModels: [],
-    modelDiscoveryError: error instanceof Error ? error.message : "Local OpenAI model discovery failed.",
-    lmStudioModelSource: "",
-    models: [],
-  }));
   if (lmStudio.modelDiscoveryError) diagnostics.push(`Local OpenAI model discovery unavailable: ${lmStudio.modelDiscoveryError}`);
+  const providers = [...(modelSelection?.providers ?? [])];
   const lmStudioModels = lmStudio.models.length
     ? lmStudio.models
     : agent.provider === "lm-studio" && agent.model?.trim()
@@ -339,9 +343,9 @@ async function augmentGatewayModelProviders(
         ? {
           id,
           name: model.displayName,
-          subtitle: model.remote ? "Remote" : model.loaded ? "Loaded" : "Downloaded",
+          subtitle: model.loaded ? "Loaded" : model.remote ? "Available" : "Downloaded",
           group: model.paramsString || undefined,
-          badge: model.remote ? "Remote" : model.loaded ? "Loaded" : undefined,
+          badge: model.remote ? "LM Link" : "Local",
         }
         : { id };
     }),
@@ -408,6 +412,7 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     const provider = String(input.provider ?? "").trim();
     const model = String(input.model ?? "").trim();
     if (!provider || !model) return { ok: false, error: "Provider and model are required." };
+    if (provider === "hive-fusion") return { ok: false, error: "Hive Fusion is a HivemindOS-native compound model and cannot be set as a CLI runtime model." };
     await setOpenClawModel(provider, model);
     return { ok: true, message: `OpenClaw default model set to ${provider}/${model}.` };
   }
@@ -447,6 +452,7 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     const provider = String(input.provider ?? "").trim();
     const model = String(input.model ?? "").trim();
     if (!provider || !model) return { ok: false, error: "Provider and model are required." };
+    if (provider === "hive-fusion") return { ok: false, error: "Hive Fusion is a HivemindOS-native compound model and cannot be set as a CLI runtime model." };
     // The shared gateway default in ~/.hermes/config.yaml is owned by the
     // gateway, never by the app. Model picks are agent-scoped: agents with
     // their own profile home get model.default in that profile's config.yaml,

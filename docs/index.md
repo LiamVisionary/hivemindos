@@ -21,6 +21,8 @@ description: Local-first agent fleet control room documentation.
   <li>Next.js 16 / React 19</li>
   <li>Tauri desktop target</li>
   <li>Collector-first fleet model</li>
+  <li>OKF brain export</li>
+  <li>Compiled brain search</li>
 </ul>
 
 <figure class="imagePlate imagePlateHero">
@@ -58,7 +60,7 @@ description: Local-first agent fleet control room documentation.
   </section>
   <section class="docCard">
     <h3>Whole Brain</h3>
-    <p>Understand the shared Obsidian vault, canonical folder map, brain services, shared skills, sync health, and architecture sync rules.</p>
+    <p>Understand the shared Obsidian vault, canonical folder map, compiled wiki search, brain services, OKF export, shared skills, sync health, and architecture sync rules.</p>
     <a href="whole-brain/">Open whole brain</a>
   </section>
   <section class="docCard">

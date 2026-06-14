@@ -160,6 +160,11 @@ export async function bankrCommandEnv() {
   return env;
 }
 
+export async function bankrApiKey() {
+  const { apiKey } = await bankrCommandCredentials();
+  return apiKey;
+}
+
 async function bankrCommandCredentials() {
   const raw = await readFile(HIVE_ENV_FILE, "utf8").catch(() => "");
   const sharedEnv = parseEnvFile(raw);

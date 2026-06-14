@@ -14,7 +14,7 @@ import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import type { DashboardView, RuntimeUsageAnalytics, WalletActionState, WalletMoneyClawStatus, WalletVaultBackupStatus } from "@/features/dashboard/dashboard-types";
 import { exportAgentWalletSecret, exportPersonalWalletGroupSecret } from "./wallet-secret-export-actions";
-import { WalletUsageLoading } from "./WalletPanelLoading";
+import { PersonalWalletsChecking, WalletUsageLoading } from "./WalletPanelLoading";
 import personalStyles from "./PersonalWallets.module.css";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
@@ -388,6 +388,7 @@ export function WalletPanel(props: WalletPanelProps) {
   const [bankrClaimStatus, setBankrClaimStatus] = useState("");
   const [bankrRecipientAddress, setBankrRecipientAddress] = useState("");
   const [personalWallets, setPersonalWallets] = useState<PersonalWallet[]>([]);
+  const [personalWalletsChecking, setPersonalWalletsChecking] = useState(true);
   const [personalWalletActions, setPersonalWalletActions] = useState<Record<string, WalletActionState>>({});
   const [personalImportOpen, setPersonalImportOpen] = useState(false);
   const [personalImportDraft, setPersonalImportDraft] = useState({
@@ -481,7 +482,9 @@ export function WalletPanel(props: WalletPanelProps) {
         return fresh.length ? [...fresh, ...current] : current;
       });
     }
-    void loadPersonalWalletVault();
+    void loadPersonalWalletVault().finally(() => {
+      if (!cancelled) setPersonalWalletsChecking(false);
+    });
     return () => {
       cancelled = true;
     };
@@ -1230,6 +1233,8 @@ export function WalletPanel(props: WalletPanelProps) {
                       );
                     })}
                   </div>
+                ) : personalWalletsChecking ? (
+                  <PersonalWalletsChecking />
                 ) : (
                   <div className={walletClass("walletEmpty")}>
                     <strong>No user wallets yet</strong>

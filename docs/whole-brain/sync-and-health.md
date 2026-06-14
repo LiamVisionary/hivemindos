@@ -62,6 +62,24 @@ The doctor checks:
 - legacy `Notes/` content
 - legacy root `Scheduled/` state
 
+## Compiled Knowledge Health
+
+Compiled Knowledge has its own graph-aware health scan through:
+
+```text
+/api/brain/knowledge
+```
+
+Use `action: "scan-health"` to find broken wikilinks, orphan entity/concept pages, duplicate slugs, and missing backlinks inside `Synthesis/Compiled Knowledge/<domain>/wiki/`. Use `action: "fix-health"` only for safe deterministic fixes, such as a suggested broken-link retarget or a missing backlink. Review-only issues stay visible until a human or agent explicitly dismisses them with `action: "dismiss-health"`.
+
+Dismissals live in the compiled wiki domain at:
+
+```text
+Synthesis/Compiled Knowledge/<domain>/wiki/.health-dismissed.jsonl
+```
+
+This keeps maintenance decisions with the compiled wiki so they can sync with the same vault owner.
+
 ## Migration Manifests
 
 Fixes write JSONL manifests under:

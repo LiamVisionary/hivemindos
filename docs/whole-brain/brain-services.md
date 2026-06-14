@@ -1,6 +1,6 @@
 ---
 title: Whole Brain Services
-description: GBrain, Syntho, Brain Graph, context index, and optional service layers.
+description: QMD, GBrain, Syntho, Brain Graph, context index, and optional service layers.
 ---
 
 # Brain Services
@@ -66,6 +66,14 @@ Operations/Brain Services/Agent Memory Index.jsonl
 
 The index is a materialized retrieval view for typed Agent Memory inside the private vault. It includes memory content so typed recall can avoid reopening every Agent Memory markdown note on the hot path. Markdown notes remain the durable human-readable source, and typed recall falls back to markdown when the index is absent or older sparse entries cannot be used.
 
+Full-vault recall has its own generated lexical index at:
+
+```text
+Operations/Brain Services/Full Vault Search Index.jsonl
+```
+
+That index is inspired by QMD's useful non-embedding pieces: markdown collections, compact term-frequency records, and BM25-style lexical ranking before source notes are loaded. It maps normal vault folders to collections such as `memory`, `projects`, `synthesis`, `operations`, and `skills`, and supports lightweight query filters such as `collection:projects`, `path:Synthesis/`, quoted phrases, and `-excluded` terms. It does not store embeddings or call a model.
+
 When the tiered path augments with full-vault recall, it includes normal vault markdown from `Memory/`, `Projects/`, `Synthesis/`, `Ideas/`, `Operations/`, `Skills/`, templates, and shared context notes. It intentionally includes `Operations/Secure/` reference/status notes so agents can know which credential names exist or are set. Plaintext secret values still belong only in shared env or encrypted artifacts and must not be printed, copied, summarized, or saved as memory.
 
 Optional GitLawb memory receipts are appended at:
@@ -73,6 +81,24 @@ Optional GitLawb memory receipts are appended at:
 ```text
 Operations/Brain Services/Agent Memory Proofs.jsonl
 ```
+
+### OKF exchange bundles
+
+HivemindOS can export the typed shared-brain layer as an Open Knowledge Format v0.1 exchange bundle without changing the native Obsidian vault. The exporter reads Agent Memory and conversation mirror notes, writes OKF concept documents with YAML frontmatter plus markdown bodies, generates `index.md` and `log.md`, then validates the result with the permissive OKF conformance rule: every non-reserved concept `.md` file must have parseable frontmatter and a non-empty `type`.
+
+Access path:
+
+```text
+/api/brain/okf
+```
+
+Default export path:
+
+```text
+Operations/Brain Services/OKF Export/
+```
+
+Use `POST /api/brain/okf` with `action: "export"` and optional `include: "agent-memory" | "conversations" | "all"`, `vaultPath`, `outputPath`, and `clean`. Use `GET /api/brain/okf?bundlePath=...` or `POST` with `action: "validate"` to validate a bundle. This is an interoperability surface for outside OKF tools and agents; the canonical editable brain remains the normal HivemindOS vault.
 
 ### Conversation notes
 
@@ -92,14 +118,14 @@ Each note carries `type: conversation` frontmatter (session, agent, runtime, cha
 
 ### Search policy
 
-All content searches over the vault and conversations use ripgrep (`rg`) first, fall back to plain `grep` when `rg` is unavailable, and only fall back to a full filesystem walk when neither binary works. Server recall uses `src/lib/services/search/ripgrep-search.ts` to shortlist candidate notes for query recalls instead of reading every vault file; the `hive-brain` CLI implements the same chain for its local fallback.
+All content searches over the vault and conversations use ripgrep (`rg`) first, fall back to plain `grep` when `rg` is unavailable, and only fall back to a full filesystem walk when neither binary works. Full-vault recall first tries the generated lexical index for ranked candidates, then falls back to `src/lib/services/search/ripgrep-search.ts` when the index is unavailable. The `hive-brain` CLI implements the same generated-index-first local fallback.
 
 The API supports:
 
 - `remember`: save a typed memory note.
 - `recall`: retrieve relevant shared-brain memories and vault notes by query, type, tags, project, and optional `scope`.
 - `answer`: return a grounded memory context pack from the matching memories and vault notes.
-- `rebuild-index`: scan existing markdown memory notes and append rich searchable entries to the private index.
+- `rebuild-index`: scan existing markdown memory notes, append rich searchable entries to the private typed-memory index, and refresh the generated full-vault lexical index unless `includeFullVault: false` is passed.
 - `proof: true`: attach a GitLawb memory receipt for this write.
 - `proof: "auto"`: attach receipts for durable memory types and high-confidence facts.
 
@@ -153,7 +179,7 @@ The pack is curated from [`kepano/obsidian-skills`](https://github.com/kepano/ob
 
 ### Local-First Memory Benchmarks
 
-Shared Brain Memory is intentionally local-first. The default tiered path keeps common preference, decision, instruction, and durable fact recall on the typed Agent Memory hot path. That hot path reads a private JSONL retrieval view inside the vault, so agents avoid a network call and avoid rescanning typed memory notes after the first index build. When distilled memory is weak, full-vault recall broadens the search to thousands of markdown notes, pays a cold local disk scan, then reuses a short in-process vault record cache for follow-up calls. Markdown notes remain human-readable, private, and syncable through the user's chosen vault sync owner.
+Shared Brain Memory is intentionally local-first. The default tiered path keeps common preference, decision, instruction, and durable fact recall on the typed Agent Memory hot path. That hot path reads a private JSONL retrieval view inside the vault, so agents avoid a network call and avoid rescanning typed memory notes after the first index build. When distilled memory is weak, full-vault recall broadens the search to thousands of markdown notes through the generated BM25-lite lexical index, then loads only ranked candidate source notes before answering. Markdown notes remain human-readable, private, and syncable through the user's chosen vault sync owner.
 
 Benchmarks from the live local API route at `http://127.0.0.1:5022/api/brain/memory`:
 
@@ -165,7 +191,7 @@ Benchmarks from the live local API route at `http://127.0.0.1:5022/api/brain/mem
 
 The pre-index typed-memory markdown scan path measured p50 recall of 99.51ms at 100 memories, 293.49ms at 500 memories, 562.38ms at 1000 memories, and 784.03ms at 1500 memories. The optimized typed Agent Memory index keeps retrieval in the single-digit millisecond range through 500 memories and around 20ms p50 at 1500 memories while preserving perfect synthetic relevance in the benchmark set.
 
-On a reference vault of about 4,800 notes, the forced full-vault recall scope has roughly 2,700 eligible markdown notes after generated/runtime/archive exclusions. A live local route smoke test measured one cold full-vault answer at about 2.35s, then warm cached full-vault answers around 0.20s-0.25s for preference recall and around 0.23s-0.35s for secure-reference/project recall, with one dev-server reload outlier at 3.05s. Under default tiered recall, strong distilled memories can return from the typed index without paying that full-vault scan.
+On a large reference vault of 28,549 markdown files, the generated full-vault lexical index scanned 26,019 eligible notes, indexed 25,995 notes, built in about 9.2s, and produced a 70.6 MB JSONL index. A five-query old-vs-indexed latency benchmark improved from 2,285ms median old full-vault recall to 118ms median indexed recall, a 19.4x median speedup, with identical top-1 results for all five queries. A seven-query quality benchmark over named project, operations, skill, secure-reference, imported-source, and intake targets found no relevance regression: both old and indexed search hit Top-1 for six exact expected notes, both missed one ambiguous Bankr imported-source query, and cached indexed median latency was 27.75ms versus 4,506.20ms for the old `rg`-first baseline. Run `pnpm benchmark:shared-brain-search` for the deterministic fixture or `node scripts/benchmark-shared-brain-search-quality.mjs --vault <vault>` for a live vault.
 
 Raw-agent smoke tests confirmed both layers:
 
@@ -180,6 +206,65 @@ Primary sources:
 - `/api/brain/memory`
 - `scripts/hive-brain`
 - `scripts/hive-brain-hook`
+
+## Compiled Knowledge
+
+Compiled Knowledge is the HivemindOS-native version of the compiled-wiki pattern. It turns important source material, research findings, and conversation conclusions into durable Obsidian pages under:
+
+```text
+Synthesis/Compiled Knowledge/<domain>/
+```
+
+Each domain has immutable-ish `raw/` inputs plus a `wiki/` with `entities/`, `concepts/`, `summaries/`, `index.md`, and `log.md`. Writes go through one service chokepoint that performs atomic file writes, frontmatter injection, bare-slug wikilink normalization, page merge behavior, index updates, and append-only logging.
+
+The runtime API is:
+
+```text
+/api/brain/knowledge
+```
+
+Supported actions include `compile`, `status`, `graph-overview`, `graph`, `search`, `get-node`, `get-backlinks`, `scan-health`, `fix-health`, `dismiss-health`, and `shared-contract`.
+
+External agents can use the same surface through `hivemind-mcp` tools:
+
+- `compile_brain_knowledge`
+- `brain_search_knowledge`
+- `brain_graph_overview`
+- `brain_get_node`
+- `brain_get_backlinks`
+- `scan_brain_wiki_health`
+- `fix_brain_wiki_issue`
+- `shared_brain_contract`
+
+The search tool ranks compiled wiki pages with title, slug, tag/frontmatter, path, and markdown body matches, using the same ripgrep-first content policy as broad shared-brain search. The graph tools expose nodes, edges, outgoing links, backlinks, hub counts, and orphan counts as structured data so agents can reason over the brain as a graph rather than only as search snippets.
+
+### Compiled Retrieval Snapshot
+
+On a synthetic 720-page compiled wiki with 1,440 wikilinks, the compiled-brain path keeps agent retrieval in the low double-digit millisecond range while returning structured graph-native results:
+
+| Operation | Median latency | Response shape |
+| --- | ---: | --- |
+| Compiled wiki search | 67.18ms | Ranked entity/concept/summary hits with matched fields and compact snippets |
+| Graph overview | 39.45ms | 720 nodes, 1,440 edges, top hubs, orphan counts |
+| Node lookup | 31.71ms | One compiled page with body, outgoing links, and backlinks |
+| Backlink lookup | 32.44ms | Direct backlink list for one compiled node |
+| Health scan | 62.47ms | Broken links, orphans, duplicate slugs, missing backlinks |
+
+These numbers come from the deterministic local benchmark command `pnpm benchmark:compiled-knowledge`. They are intended as a product performance snapshot, not a hosted-service SLA; real vault shape, disk speed, and sync state can change absolute timings.
+
+### Human Collective Contract
+
+For multiple-human shared brains, HivemindOS follows the Curator-style contribution shape: contributors write to their personal opted-in domains, then push contributions, synthesis rebuilds the shared output, and everyone pulls the `shared-*` mirror. Direct writes to a human collective mirror are refused when the caller selects `collaborationMode: "human-collective"`.
+
+This does not make normal HivemindOS agent-to-agent collaboration stricter. Internal agents should use `collaborationMode: "agent-to-agent"` and may continue to use shared vault writes, handoffs, Kanban, and Shared Brain Memory under normal HivemindOS policy unless a domain is explicitly marked read-only.
+
+Primary sources:
+
+- `src/lib/services/obsidian/compiled-knowledge.ts`
+- `src/lib/services/brain/shared-contribution-contract.ts`
+- `/api/brain/knowledge`
+- `scripts/hivemind-mcp`
+- `packaged-skills/auto-install/hive-brain-compiled-wiki/SKILL.md`
 
 ## Brain Graph
 
@@ -205,6 +290,23 @@ Primary sources:
 
 - `src/lib/services/brain/gbrain.ts`
 - `/api/brain/gbrain/*`
+
+## QMD
+
+QMD is an optional local markdown search service for the shared vault. HivemindOS can install the `@tobilu/qmd` CLI, add the shared vault as a QMD collection, refresh the local SQLite/BM25 index, refresh vectors, and query BM25, vector, hybrid, or hybrid-reranked search from Brain Services.
+
+QMD keeps generated search artifacts outside the vault in the user's local QMD cache. The vault receives only the managed service note.
+
+Service note:
+
+```text
+Operations/Brain Services/QMD.md
+```
+
+Primary sources:
+
+- `src/lib/services/brain/qmd.ts`
+- `/api/brain/qmd/*`
 
 ## Syntho
 

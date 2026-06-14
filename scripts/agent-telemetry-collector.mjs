@@ -848,13 +848,13 @@ async function readHermesSoul(profileDir) {
 }
 
 async function importHermesAgentSoul(agent) {
-  if (agent.runtime !== "hermes" || agent.skillProfilePrompt?.trim()) {
+  if (agent.runtime !== "hermes" || agent.soulPrompt?.trim()) {
     return agent;
   }
   const profileDir = expandHome(agent.localDataDir || "");
   if (!profileDir) return agent;
   const soul = await readHermesSoul(profileDir);
-  return soul ? { ...agent, skillProfilePrompt: soul } : agent;
+  return soul ? { ...agent, soulPrompt: soul } : agent;
 }
 
 async function importHermesAgentSouls(agents) {
@@ -1526,10 +1526,13 @@ async function createHermesProfileAgent(input) {
   );
   const provider = String(input.provider || "openai-codex").trim();
   const model = String(input.model || "gpt-5.5").trim();
-  const profilePrompt = String(input.skillProfilePrompt || "").trim();
-  const soulPrompt = profilePrompt
-    ? renderBeeSoulTemplateText(profilePrompt, input.name)
-    : existingSoul || (await defaultBeeSoulMarkdown(input));
+  const suitedForPrompt = String(input.skillProfilePrompt || "").trim();
+  const incomingSoul = String(input.soulPrompt || "").trim();
+  const soulPrompt =
+    existingSoul ||
+    (incomingSoul
+      ? renderBeeSoulTemplateText(incomingSoul, input.name)
+      : await defaultBeeSoulMarkdown(input));
   await writeFile(
     join(profileDir, "config.yaml"),
     [
@@ -1556,7 +1559,7 @@ async function createHermesProfileAgent(input) {
       .join("\n"),
     { mode: 0o600 },
   );
-  if (profilePrompt || !existingSoul) {
+  if (!existingSoul) {
     await writeFile(join(profileDir, "SOUL.md"), `${soulPrompt.trim()}\n`, {
       mode: 0o600,
     });
@@ -1567,7 +1570,7 @@ async function createHermesProfileAgent(input) {
       {
         name: profile,
         display_name: input.name,
-        description: soulPrompt,
+        description: suitedForPrompt || soulPrompt,
         description_auto: false,
       },
       null,
@@ -1580,7 +1583,8 @@ async function createHermesProfileAgent(input) {
     profileDir,
     provider,
     model,
-    skillProfilePrompt: soulPrompt,
+    soulPrompt,
+    skillProfilePrompt: suitedForPrompt,
   };
 }
 
@@ -1639,6 +1643,7 @@ async function createRuntimeAgent(input) {
     customWorkerClass: input.customWorkerClass,
     customWorkerClasses: input.customWorkerClasses,
     selectedCustomWorkerClassId: input.selectedCustomWorkerClassId,
+    soulPrompt: runtimeResult.soulPrompt || input.soulPrompt,
     skillProfilePrompt:
       runtimeResult.skillProfilePrompt || input.skillProfilePrompt,
     preferredSkillSlugs: input.preferredSkillSlugs,
@@ -7186,9 +7191,15 @@ telemetryServer.listen(port, host, () => {
 });
 
 // launchd's WatchPaths is unreliable for in-place edits, so the collector
-// watches its own source instead: on change it exits cleanly and launchd's
-// KeepAlive immediately relaunches it with the new code — no manual kickstart.
-function startSelfReloadWatcher() {
+// watches its own source instead: on a real code change it exits cleanly and
+// launchd's KeepAlive relaunches it with the new code — no manual kickstart.
+//
+// IMPORTANT: gate on CONTENT HASH, not raw fs events. fs.watch fires on mtime
+// touches, atomic-save renames, and Syncthing/editor writes that don't change
+// content; reacting to every event sent this into a restart LOOP (hundreds of
+// reloads) that knocked the collector offline and broke in-flight voice calls.
+// A startup grace period also breaks any tight relaunch loop.
+async function startSelfReloadWatcher() {
   if (process.env.AGENT_TELEMETRY_DISABLE_SELF_RELOAD === "1") return;
   let selfPath;
   try {
@@ -7196,15 +7207,32 @@ function startSelfReloadWatcher() {
   } catch {
     return;
   }
+  const hashSelf = async () => {
+    try {
+      return createHash("sha256").update(await readFile(selfPath)).digest("hex");
+    } catch {
+      return "";
+    }
+  };
+  const baselineHash = await hashSelf();
+  if (!baselineHash) return;
+  const startedAt = Date.now();
   let pending = null;
+  let reloading = false;
   try {
     watch(selfPath, { persistent: false }, () => {
-      if (pending) return;
-      // Debounce: editors emit several events per save.
-      pending = setTimeout(() => {
+      if (reloading) return;
+      if (pending) clearTimeout(pending);
+      pending = setTimeout(async () => {
+        pending = null;
+        // Ignore events right after launch so a misbehaving write can't loop us.
+        if (Date.now() - startedAt < 5_000) return;
+        const nextHash = await hashSelf();
+        if (!nextHash || nextHash === baselineHash) return; // content unchanged
+        reloading = true;
         console.log("[collector] source changed — exiting for KeepAlive reload");
         process.exit(0);
-      }, 400);
+      }, 1_000);
     });
   } catch {
     // Auto-reload is a convenience; never block startup on it.

@@ -54,9 +54,9 @@ export const BANKR_PLATFORM_FACTS = [
 
 export const BANKR_HIVEMIND_INTEGRATION_FACTS = [
   "Bankr is a shared capability, not a provider feature: any agent on any runtime/provider/model can use it through the configured shared Bankr key.",
-  "In HivemindOS, start crypto work at GET/POST /api/crypto/capabilities (intents: status, portfolio, trade, fund-llm-credits, paid-api, and more); it reports Bankr readiness by credential key name (BANKR_API_KEY, BANKR_LLM_KEY, BANKR_MANAGEMENT_KEY) and prepares gated request drafts.",
-  "Execution paths from HivemindOS: the Bankr skill/CLI for trades and portfolio reads after approval, and POST /api/bankr/llm-credits for LLM credit funding (requires the FUND_BANKR_LLM_CREDITS confirmation).",
-  "Spend discipline: start read-only (price checks, balances, portfolio). Trades, token launches, transfers, and credit funding need the wallet Spend gate and explicit user approval of a concrete draft (asset, amount, chain, recipient/market). Never reveal or request keys; refer to credentials by key name and set/missing status only.",
+  "In HivemindOS, start crypto work at GET/POST /api/crypto/capabilities (intents: status, portfolio, trade, token-launch, polymarket, hyperliquid, automation, nft, agent-job, fund-llm-credits, paid-api, and more); it reports Bankr readiness by credential key name (BANKR_API_KEY, BANKR_LLM_KEY, BANKR_MANAGEMENT_KEY) and prepares gated request drafts.",
+  "Execution paths from HivemindOS: native chat Bankr actions and POST /api/bankr/actions for Bankr wallet portfolio reads, swaps, token launches, Polymarket, Hyperliquid, recurring automations, NFT actions, and Bankr Agent API jobs; POST /api/bankr/llm-credits funds LLM credits and requires the FUND_BANKR_LLM_CREDITS confirmation.",
+  "Spend discipline: start read-only (price checks, balances, portfolio, job status, market search). Swaps, token launches, transfers, Polymarket bets, Hyperliquid positions, automations, NFT mutations, and credit funding need explicit user approval of a concrete draft. Never reveal or request keys; refer to credentials by key name and set/missing status only.",
 ] as const;
 
 /** Distilled Bankr briefing when a key is configured; a do-not-role-play

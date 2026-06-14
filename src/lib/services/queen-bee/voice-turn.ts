@@ -17,6 +17,7 @@ import {
   submitQueenBeeMessage,
   type QueenBeeFleetMachine,
 } from "@/lib/services/queen-bee/control-plane";
+import { queenVoicePreferencePreamble } from "@/lib/services/queen-bee/voice-preferences";
 
 // Spoken turns need tight budgets: a slow runtime attempt costs silence.
 const AGENT_TURN_TIMEOUT_MS = 10_000;
@@ -142,6 +143,11 @@ async function conversationTurnText(options: {
   vaultPath?: string;
   marks?: Record<string, number>;
 }) {
+  // Standing preferences ("call me boss") splice onto the system prompt so
+  // both the runtime brain and the OpenAI fallback honor them every turn. Note
+  // this fallback path can only HONOR stored preferences, not capture new ones
+  // (it has no tool to call); capture happens in the default realtime session.
+  const systemPreamble = await queenVoicePreferencePreamble();
   const agent = (await runtimeTurnCoolingDown())
     ? null
     : await pickConversationAgent(options.vaultPath);
@@ -153,6 +159,7 @@ async function conversationTurnText(options: {
         agent,
         options.transcript,
         options.history,
+        systemPreamble,
       );
       if (options.marks)
         options.marks.agentTurnMs = Date.now() - agentStartedAt;
@@ -170,7 +177,11 @@ async function conversationTurnText(options: {
   }
   const openAiStartedAt = Date.now();
   try {
-    return await runOpenAiConversationTurn(options.transcript, options.history);
+    return await runOpenAiConversationTurn(
+      options.transcript,
+      options.history,
+      systemPreamble,
+    );
   } catch (fallbackError) {
     console.warn(
       "[queen-bee-voice] OpenAI conversation fallback failed; submitting utterance to the control plane:",
@@ -186,13 +197,17 @@ async function conversationTurnText(options: {
 function conversationMessages(
   transcript: string,
   history: QueenVoiceHistoryTurn[],
+  systemPreamble?: string,
 ) {
   const historyMessages = history.slice(-MAX_HISTORY_TURNS).map((turn) => ({
     role: turn.who === "queen" ? "assistant" : "user",
     content: turn.text.slice(0, 600),
   }));
+  const system = systemPreamble?.trim()
+    ? `${QUEEN_VOICE_SYSTEM_PROMPT} ${systemPreamble.trim()}`
+    : QUEEN_VOICE_SYSTEM_PROMPT;
   return [
-    { role: "system", content: QUEEN_VOICE_SYSTEM_PROMPT },
+    { role: "system", content: system },
     ...historyMessages,
     { role: "user", content: transcript },
   ];
@@ -201,6 +216,7 @@ function conversationMessages(
 async function runOpenAiConversationTurn(
   transcript: string,
   history: QueenVoiceHistoryTurn[],
+  systemPreamble?: string,
 ) {
   const apiKey = await transcriptionApiKey();
   if (!apiKey) {
@@ -217,7 +233,7 @@ async function runOpenAiConversationTurn(
     body: JSON.stringify({
       model:
         process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_VOICE_CHAT_FALLBACK_MODEL,
-      messages: conversationMessages(transcript, history),
+      messages: conversationMessages(transcript, history, systemPreamble),
       max_tokens: 300,
       temperature: 0.6,
     }),
@@ -249,6 +265,7 @@ export async function runQueenBeeAgentTurn(origin: string, message: string) {
   if (!agent) {
     return "No chat-capable HivemindOS agent is configured yet, so the request could not be run.";
   }
+  const preferencePreamble = await queenVoicePreferencePreamble();
   try {
     const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
       method: "POST",
@@ -259,7 +276,8 @@ export async function runQueenBeeAgentTurn(origin: string, message: string) {
           {
             role: "system",
             content:
-              "You are handling a request relayed from Queen Bee's live voice chat. Do the work with your available capabilities, then answer in one to three short spoken sentences describing the outcome. No markdown, no preambles.",
+              "You are handling a request relayed from Queen Bee's live voice chat. Do the work with your available capabilities, then answer in one to three short spoken sentences describing the outcome. No markdown, no preambles." +
+              (preferencePreamble ? ` ${preferencePreamble}` : ""),
           },
           { role: "user", content: request },
         ],
@@ -322,13 +340,14 @@ async function runRuntimeConversationTurn(
   agent: AgentProfile,
   transcript: string,
   history: QueenVoiceHistoryTurn[],
+  systemPreamble?: string,
 ) {
   const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       agent: voiceOptimizedAgent(agent),
-      messages: conversationMessages(transcript, history),
+      messages: conversationMessages(transcript, history, systemPreamble),
       runtimeSessionId: "queen-bee-voice",
       agentMode: "act",
       latencyMode: "voice",

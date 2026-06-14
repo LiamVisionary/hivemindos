@@ -51,6 +51,7 @@ export type AgentCallIdentity = {
   voiceRuntime?: string;
   voiceModelId?: string;
   voiceId?: string;
+  soulPrompt?: string;
   skillProfilePrompt?: string;
   preferredSkillSlugs?: string[];
   aeonRepo?: string;
@@ -347,7 +348,8 @@ async function buildAeonCallBriefing(input: AgentCallInput) {
     localPath ? `Local AEON workspace: ${localPath}.` : "",
     machineName ? `Host machine: ${machineName}.` : "",
     preferredSkillSlugs.length ? `Preferred Hivemind skills: ${preferredSkillSlugs.join(", ")}.` : "",
-    clean(input.agent.skillProfilePrompt) ? `Hivemind profile prompt: ${clean(input.agent.skillProfilePrompt)}` : "",
+    clean(input.agent.soulPrompt) ? `Hivemind soul:\n${clean(input.agent.soulPrompt)}` : "",
+    clean(input.agent.skillProfilePrompt) ? `Suited for: ${clean(input.agent.skillProfilePrompt)}` : "",
     task ? `Current work: ${task}.` : "",
     ...aeonContext,
     "Conversation rule: use this context to answer Liam's questions directly. Do not volunteer a status update, digest plan, or configuration checklist unless Liam asks for status, setup, or next steps.",

@@ -1,3 +1,7 @@
+---
+title: "HivemindOS UI/UX Philosophy"
+---
+
 # HivemindOS UI/UX Philosophy
 
 For the short implementation checklist, see [UI Rules](ui-rules.md).

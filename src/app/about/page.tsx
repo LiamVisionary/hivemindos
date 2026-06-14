@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { getNativeAppVersion, isPackagedDesktopRuntime } from "@/lib/native/desktop-status";
+import { installNativeUpdate, updaterErrorText } from "@/lib/native/updater";
 import type { AppVersion } from "@/features/dashboard/dashboard-types";
 import styles from "./about.module.css";
 
@@ -21,13 +22,6 @@ type UpdateResult = {
 
 function short(value?: string | null) {
   return value ? value.slice(0, 7) : "";
-}
-
-// Tauri plugin errors reject with plain strings, not Error instances.
-function errorText(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === "string" && error) return error;
-  return fallback;
 }
 
 function isUpdateAvailable(version: AppVersion | null) {
@@ -110,7 +104,7 @@ export default function AboutPage() {
     } catch (error) {
       if (signal?.aborted) return;
       setCheckState("error");
-      setMessage(errorText(error, "Could not check for updates."));
+      setMessage(updaterErrorText(error, "Could not check for updates."));
     }
   }, []);
 
@@ -124,28 +118,21 @@ export default function AboutPage() {
     setRunState("running");
     setMessage("Downloading update...");
     try {
-      let totalBytes = 0;
-      let downloadedBytes = 0;
-      await update.downloadAndInstall((event) => {
-        if (event.event === "Started") {
-          totalBytes = event.data.contentLength ?? 0;
-        } else if (event.event === "Progress") {
-          downloadedBytes += event.data.chunkLength;
-          setMessage(totalBytes > 0
-            ? `Downloading update... ${Math.min(100, Math.round((downloadedBytes / totalBytes) * 100))}%`
+      await installNativeUpdate(update, (progress) => {
+        if (progress.phase === "downloading") {
+          setMessage(progress.percent !== null
+            ? `Downloading update... ${progress.percent}%`
             : "Downloading update...");
-        } else if (event.event === "Finished") {
+        } else if (progress.phase === "installing") {
           setMessage("Installing update...");
+        } else {
+          setRunState("success");
+          setMessage("Update installed. Restarting HivemindOS...");
         }
       });
-      setRunState("success");
-      setMessage("Update installed. Restarting HivemindOS...");
-      // On Windows the installer exits the app itself; elsewhere relaunch.
-      const { relaunch } = await import("@tauri-apps/plugin-process");
-      await relaunch();
     } catch (error) {
       setRunState("error");
-      setMessage(errorText(error, "Update failed."));
+      setMessage(updaterErrorText(error, "Update failed."));
     }
   }
 

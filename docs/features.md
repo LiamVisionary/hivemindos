@@ -1,3 +1,7 @@
+---
+title: "Feature Guide"
+---
+
 # Feature Guide
 
 The feature guide moved here:

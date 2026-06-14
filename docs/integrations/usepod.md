@@ -1,3 +1,7 @@
+---
+title: "UsePod"
+---
+
 # UsePod
 
 UsePod is an OpenAI-compatible inference marketplace.

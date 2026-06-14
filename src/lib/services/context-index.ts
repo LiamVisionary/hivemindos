@@ -9,6 +9,8 @@ import {
 } from "@/lib/services/chat/bankr-capability-context";
 import { getBrainSkillInventory, getSharedBrainSkillsCached } from "@/lib/services/obsidian/brain-skills";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
+import { externalAgentProviderItems } from "@/lib/services/external-agent-providers";
+import { HIVE_MCP_SERVER_CATALOG } from "@/lib/services/mcp/catalog";
 import {
   USEPOD_COMPATIBILITY_MATRIX,
   USEPOD_FUNDING_MATRIX,
@@ -501,6 +503,40 @@ function localCliToolItems(): ContextIndexItem[] {
       },
     },
     {
+      id: "tool-schema:hive-brain-compiled-wiki",
+      kind: "tool-schema",
+      title: "HivemindOS compiled brain",
+      summary: "Compile durable source material into Obsidian entity/concept/summary wiki pages, search the compiled wiki, query the compiled graph, and repair compiled-wiki health.",
+      tags: ["brain", "compiled-wiki", "knowledge", "obsidian", "wikilink", "graph", "search", "mcp", "health", "entity", "concept", "summary", "shared-brain"],
+      aliases: [
+        "compile to brain",
+        "save to compiled wiki",
+        "knowledge compiler",
+        "graph-native brain",
+        "compiled brain search",
+        "search compiled knowledge",
+        "wiki health",
+        "brain backlinks",
+        "shared brain contract",
+        "curator-style brain",
+      ],
+      retrievalText: [
+        "Use /api/brain/knowledge when the user wants durable research findings, source material, or conversation conclusions compiled into HivemindOS' Obsidian brain as entities, concepts, and summaries.",
+        "POST /api/brain/knowledge with action compile accepts title, content, optional summary, tags, entities, concepts, domain, actorKind, collaborationMode, and optedInDomain. Generated files live under Synthesis/Compiled Knowledge/<domain>/ with raw input, wiki/entities, wiki/concepts, wiki/summaries, index.md, and log.md.",
+        "The same route supports status, graph-overview, graph, search, get-node, get-backlinks, scan-health, fix-health, dismiss-health, and shared-contract actions. GET /api/brain/knowledge?action=search&q=<query> searches compiled wiki pages; POST action search accepts query, limit, and optional types.",
+        "MCP path: run hivemind-mcp as a stdio MCP server. It exposes compile_brain_knowledge, brain_search_knowledge, brain_graph_overview, brain_get_node, brain_get_backlinks, scan_brain_wiki_health, fix_brain_wiki_issue, and shared_brain_contract.",
+        "Use brain_search_knowledge before broad full-vault recall when the user is looking for synthesized compiled-wiki entities, concepts, or summaries. Use hive-brain answer first for typed preferences, decisions, instructions, commitments, or general project memory.",
+        "Human collective shared-brain mode follows the Curator-style contract: write to the contributor's personal opted-in domain, then push/synthesize/pull the shared mirror. This does not restrict ordinary agent-to-agent HivemindOS collaboration; use collaborationMode agent-to-agent for internal agent work.",
+      ].join(" "),
+      route: "/api/brain/knowledge",
+      methods: ["GET", "POST"],
+      load: {
+        type: "api",
+        target: "/api/brain/knowledge",
+        note: "Use for durable compiled wiki writes, compiled-wiki search, and graph-native reads. Use /api/brain/memory first for typed preferences, decisions, instructions, and facts.",
+      },
+    },
+    {
       id: "tool-schema:local-cli:hermes-send",
       kind: "tool-schema",
       title: "hermes send CLI",
@@ -547,7 +583,7 @@ function localCliToolItems(): ContextIndexItem[] {
       load: {
         type: "file",
         target: BANKR_VAULT_REFERENCE_PATH,
-        note: "Vault-relative imported Bankr docs. For live readiness use /api/crypto/capabilities; execution stays behind the Bankr skill/CLI, /api/bankr/llm-credits, and wallet spend gates.",
+        note: "Vault-relative imported Bankr docs. For live readiness use /api/crypto/capabilities; execution uses native Bankr chat actions, /api/bankr/actions, /api/bankr/llm-credits, and explicit approval gates.",
       },
     },
     {
@@ -569,13 +605,13 @@ function localCliToolItems(): ContextIndexItem[] {
         "bankr x402 veil moneyclaw",
       ],
       retrievalText: [
-        "Use /api/crypto/capabilities as the first stop when a workflow needs crypto, wallet, payments, paid APIs, x402, private transfers, Bankr trading, MoneyClaw, Veil Cash, or UsePod prepaid rails.",
+        "Use /api/crypto/capabilities as the first stop when a workflow needs crypto, wallet, payments, paid APIs, x402, private transfers, Bankr trading, Bankr token launches, Polymarket, Hyperliquid, NFT actions, recurring Bankr automations, MoneyClaw, Veil Cash, or UsePod prepaid rails.",
         "This is the unified capability layer for agent decisions: it reports provider readiness by key name only, selects the best configured rail for an intent, and prepares the existing provider endpoint request body without executing money movement itself.",
-        "GET /api/crypto/capabilities?intent=<status|portfolio|receive|send|private-transfer|paid-api|private-paid-api|trade|card-payment|fund-llm-credits>&agentId=<id> returns the capability map. POST { action: 'select', intent, agentId, wallet, preferredProvider? } selects a rail. POST { action: 'prepare', intent, agentId, wallet, url?, recipientAddress?, amountUsd?, asset? } returns the endpoint, draft body, missing readiness, approval requirement, and confirmation token expected by the existing gated route.",
+        "GET /api/crypto/capabilities?intent=<status|portfolio|receive|send|private-transfer|paid-api|private-paid-api|trade|token-launch|polymarket|hyperliquid|automation|nft|agent-job|card-payment|fund-llm-credits>&agentId=<id> returns the capability map. POST { action: 'select', intent, agentId, wallet, preferredProvider? } selects a rail. POST { action: 'prepare', intent, agentId, wallet, url?, recipientAddress?, amountUsd?, asset? } returns the endpoint, draft body, missing readiness, approval requirement, and confirmation token expected by the existing gated route.",
         "MCP path: run hivemind-mcp as a stdio MCP server. It exposes crypto_capabilities for readiness, select_crypto_rail for no-side-effect provider selection, and prepare_crypto_action for provider endpoint/request-body drafts.",
-        "The router covers Bankr for trading and LLM credit funding, x402 for public paid API fetches and local-wallet USDC sends, Veil for private transfers and private x402, MoneyClaw for card/web payment readiness, and UsePod for prepaid provider-managed paid inference/paywalls.",
-        "Execution remains with the existing hardened routes: /api/wallet/x402, /api/wallet/veil/x402, /api/wallet/veil/transfer, /api/wallet/send, /api/wallet/moneyclaw, /api/usepod/status, /api/usepod/deposit-transaction, and /api/bankr/llm-credits, or the Bankr skill/CLI for trades.",
-        "Side-effect policy: call status/select/prepare first; do not execute sends, trades, paid API calls, card payments, private transfers, or LLM credit funding unless wallet Spend and caps allow it or the user has explicitly confirmed the prepared draft. Never ask for, print, store, or summarize private keys, seed phrases, API keys, card details, or wallet secrets.",
+        "The router covers Bankr for wallet portfolio, swaps/trades, token launches, Polymarket, Hyperliquid, recurring automations, NFT actions, Agent API jobs, and LLM credit funding; x402 for public paid API fetches and local-wallet USDC sends; Veil for private transfers and private x402; MoneyClaw for card/web payment readiness; and UsePod for prepaid provider-managed paid inference/paywalls.",
+        "Execution remains with hardened routes and gates: /api/bankr/actions, /api/bankr/llm-credits, /api/wallet/x402, /api/wallet/veil/x402, /api/wallet/veil/transfer, /api/wallet/send, /api/wallet/moneyclaw, /api/usepod/status, and /api/usepod/deposit-transaction.",
+        "Side-effect policy: call status/select/prepare first; do not execute sends, swaps, trades, token launches, bets, leverage positions, NFT mutations, automations, paid API calls, card payments, private transfers, or LLM credit funding unless wallet Spend and caps allow it or the user has explicitly confirmed the prepared draft. Never ask for, print, store, or summarize private keys, seed phrases, API keys, card details, or wallet secrets.",
       ].join(" "),
       route: "/api/crypto/capabilities",
       methods: ["GET", "POST"],
@@ -937,6 +973,32 @@ function runtimeItems(): ContextIndexItem[] {
   });
 }
 
+function mcpCatalogItems(): ContextIndexItem[] {
+  return HIVE_MCP_SERVER_CATALOG.map((server) => ({
+    id: `mcp-catalog:${server.id}`,
+    kind: "tool-schema",
+    title: server.name,
+    summary: server.summary,
+    tags: tagParts(server.id, server.name, server.source, ...server.categories, ...server.capabilities, "mcp", "catalog"),
+    aliases: uniqueList([server.id, server.name, ...server.categories, ...server.capabilities, ...server.credentialKeys]),
+    retrievalText: retrievalText([
+      server.summary,
+      `repo: ${server.repoUrl}`,
+      `credential keys: ${server.credentialKeys.join(", ") || "none"}`,
+      `side effects: ${server.sideEffects.join(", ")}`,
+      `install hint: ${server.installHint}`,
+      `safety: ${server.safetyNote}`,
+    ]),
+    route: "/api/mcp/catalog",
+    methods: ["GET"],
+    load: {
+      type: "api",
+      target: `/api/mcp/catalog?q=${encodeURIComponent(server.id)}`,
+      note: "Curated MCP catalog entry. Verify credentials and side effects before installing or running the server.",
+    },
+  }));
+}
+
 async function docFileStats(): Promise<FileStatEntry[]> {
   const roots = DOC_ROOTS.map((root) => join(workspaceRoot(), root));
   const files = (await Promise.all(roots.map((root) => walkFiles(root, [], 500)))).flat()
@@ -1151,7 +1213,7 @@ function scheduleFsSourceRefresh(state: FsIndexState, options: ContextIndexOptio
 
 function perRequestItems(options: ContextIndexOptions, wants: (kind: ContextIndexKind) => boolean): ContextIndexItem[] {
   return [
-    ...(wants("tool-schema") ? localCliToolItems() : []),
+    ...(wants("tool-schema") ? [...localCliToolItems(), ...externalAgentProviderItems(), ...mcpCatalogItems()] : []),
     ...(wants("connected-app") || wants("app-endpoint") ? connectedAppItems(options.connectedApps) : []),
     ...(wants("runtime") ? runtimeItems() : []),
   ].filter((item) => wants(item.kind));

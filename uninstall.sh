@@ -199,6 +199,8 @@ if ask "Remove HivemindOS telemetry collector service?" "yes"; then
       rm -f "$plist"
       ok "Removed LaunchAgent $label"
     done
+    rm -f "$HOME/.hivemindos/bin/HivemindOS Collector"
+    ok "Removed HivemindOS Collector helper if present"
   elif run_if_exists systemctl; then
     systemctl --user disable --now agent-telemetry.service >/dev/null 2>&1 || true
     rm -f "$HOME/.config/systemd/user/agent-telemetry.service"
@@ -247,17 +249,24 @@ fi
 
 if ask "Stop and remove the Claw backend service?" "yes"; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
-    plist="$HOME/Library/LaunchAgents/com.hivemindos.claw-backend.plist"
-    if [[ -f "$plist" ]]; then
-      launchctl bootout "gui/$(id -u)/com.hivemindos.claw-backend" >/dev/null 2>&1 || launchctl unload "$plist" >/dev/null 2>&1 || true
+    for label in com.hivemindos.claw-backend com.hivemindos.voice-worker com.hivemindos.claw-voice-worker; do
+      plist="$HOME/Library/LaunchAgents/$label.plist"
+      [[ -f "$plist" ]] || continue
+      launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || launchctl unload "$plist" >/dev/null 2>&1 || true
       rm -f "$plist"
-      ok "Removed Claw backend LaunchAgent"
-    fi
+      ok "Removed Claw/HivemindOS LaunchAgent $label"
+    done
+    rm -f "$HOME/.hivemindos/bin/HivemindOS Voice Worker"
+    ok "Removed HivemindOS Voice Worker helper if present"
   elif run_if_exists systemctl; then
     systemctl --user disable --now hivemindos-claw-backend.service >/dev/null 2>&1 || true
+    systemctl --user disable --now hivemindos-voice-worker.service >/dev/null 2>&1 || true
+    systemctl --user disable --now hivemindos-claw-voice-worker.service >/dev/null 2>&1 || true
     rm -f "$HOME/.config/systemd/user/hivemindos-claw-backend.service"
+    rm -f "$HOME/.config/systemd/user/hivemindos-voice-worker.service"
+    rm -f "$HOME/.config/systemd/user/hivemindos-claw-voice-worker.service"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
-    ok "Removed Claw backend systemd service"
+    ok "Removed Claw backend and voice worker systemd services"
   fi
 fi
 
@@ -347,12 +356,15 @@ fi
 
 if ask "Stop and remove the HivemindOS Syncthing service wrapper?" "yes"; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
-    plist="$HOME/Library/LaunchAgents/com.hivemindos.syncthing.plist"
-    if [[ -f "$plist" ]]; then
-      launchctl bootout "gui/$(id -u)/com.hivemindos.syncthing" >/dev/null 2>&1 || launchctl unload "$plist" >/dev/null 2>&1 || true
+    for label in com.hivemindos.syncthing com.omni-agent-hivemind.syncthing; do
+      plist="$HOME/Library/LaunchAgents/$label.plist"
+      [[ -f "$plist" ]] || continue
+      launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || launchctl unload "$plist" >/dev/null 2>&1 || true
       rm -f "$plist"
-      ok "Removed HivemindOS Syncthing LaunchAgent"
-    fi
+      ok "Removed HivemindOS Syncthing LaunchAgent $label"
+    done
+    rm -f "$HOME/.hivemindos/bin/HivemindOS Sync"
+    ok "Removed HivemindOS Sync helper if present"
   elif run_if_exists systemctl; then
     systemctl --user disable --now hivemindos-syncthing.service >/dev/null 2>&1 || true
     rm -f "$HOME/.config/systemd/user/hivemindos-syncthing.service"

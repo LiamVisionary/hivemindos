@@ -3,6 +3,7 @@ import { access, appendFile, mkdir, readdir, readFile, stat, writeFile } from "f
 import { createHash } from "crypto";
 import { basename, dirname, join, relative, resolve, sep } from "path";
 import { readGitLawbStatus, sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
+import { rebuildFullVaultSearchIndex, searchFullVaultSearchIndex } from "@/lib/services/obsidian/full-vault-search-index";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { listFilesMatchingTerms, searchTermsFromQuery } from "@/lib/services/search/ripgrep-search";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
@@ -54,6 +55,8 @@ export type AgentMemoryRecord = {
   proofHash?: string;
   proofPath?: string;
   actorDid?: string;
+  searchScore?: number;
+  searchCollection?: string;
 };
 
 export type AgentMemoryProofMode = boolean | "auto";
@@ -99,6 +102,7 @@ export type RecallAgentMemoryInput = {
 
 export type RebuildAgentMemoryIndexInput = {
   vaultPath?: string;
+  includeFullVault?: boolean;
 };
 
 const MEMORY_FOLDER = "Memory/Distillations/Agent Memory";
@@ -428,6 +432,7 @@ function scoreMemory(record: AgentMemoryRecord, input: RecallAgentMemoryInput) {
   }
 
   if (input.type && record.type === normalizeMemoryType(input.type)) score += 10;
+  if (record.searchScore) score += Math.min(30, Math.max(0, Math.round(record.searchScore)));
   score += Math.round(record.confidence * 10);
   if (record.tags.includes("agent-memory") || record.notePath.startsWith(`${MEMORY_FOLDER}/`)) score += 4;
   if (record.tags.includes("vault-note")) score += 1;
@@ -686,9 +691,31 @@ async function candidateVaultFiles(root: string, query?: string): Promise<string
 }
 
 async function readVaultNoteRecords(root: string, query?: string) {
-  const cacheKey = `${root} ${searchTermsFromQuery(query).join(" ")}`;
+  const cacheKey = `${root}::${searchTermsFromQuery(query).join(" ")}`;
   const cached = vaultRecordsCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt <= VAULT_RECORD_CACHE_TTL_MS) return cached.records;
+  const indexed = query?.trim()
+    ? await searchFullVaultSearchIndex({ root, query, limit: 400 }).catch(() => null)
+    : null;
+  if (indexed?.hits.length) {
+    const records: AgentMemoryRecord[] = [];
+    for (const hit of indexed.hits) {
+      const file = join(root, hit.path);
+      assertInside(root, file);
+      if (shouldSkipVaultPath(root, file, false)) continue;
+      const st = await stat(file).catch(() => null);
+      if (!st || st.size > MAX_VAULT_NOTE_BYTES) continue;
+      const markdown = await readFile(file, "utf8").catch(() => "");
+      const record = recordFromVaultMarkdown(root, file, markdown, st.mtimeMs);
+      if (record) {
+        record.searchScore = hit.score;
+        record.searchCollection = hit.collection;
+        records.push(record);
+      }
+    }
+    vaultRecordsCache.set(cacheKey, { cachedAt: Date.now(), records });
+    return records;
+  }
   const files = await candidateVaultFiles(root, query);
   const records: AgentMemoryRecord[] = [];
   for (const file of files) {
@@ -961,13 +988,17 @@ export async function rebuildAgentMemoryIndex(input: RebuildAgentMemoryIndexInpu
   }));
   await appendFile(file, lines.length ? `${lines.join("\n")}\n` : "", "utf8");
   memoryIndexCache.delete(root);
-  const st = await stat(file).catch(() => null);
+  const [st, fullVaultIndex] = await Promise.all([
+    stat(file).catch(() => null),
+    input.includeFullVault === false ? Promise.resolve(undefined) : rebuildFullVaultSearchIndex({ root }),
+  ]);
   return {
     vaultPath: root,
     indexPath: INDEX_PATH,
     scanned: records.length,
     appended: lines.length,
     bytes: st?.size ?? 0,
+    fullVaultIndex,
     rebuiltAt: startedAt,
   };
 }
@@ -1087,6 +1118,8 @@ export async function answerFromAgentMemory(input: RecallAgentMemoryInput = {}) 
     hit.tailnetName ? `Tailnet Name: ${hit.tailnetName}` : "",
     hit.tailnetDnsName ? `Tailnet DNS: ${hit.tailnetDnsName}` : "",
     hit.collectorUrl ? `Collector URL: ${hit.collectorUrl}` : "",
+    hit.searchCollection ? `Collection: ${hit.searchCollection}` : "",
+    hit.searchScore ? `Lexical Score: ${hit.searchScore.toFixed(1)}` : "",
     hit.proofId ? `GitLawb Memory Proof: ${hit.proofId}` : "",
     hit.proofStatus ? `Proof Status: ${hit.proofStatus}` : "",
     hit.actorDid ? `Actor DID: ${hit.actorDid}` : "",

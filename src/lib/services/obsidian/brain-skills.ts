@@ -901,6 +901,13 @@ export async function reconcileBrainSkills(input: {
   await mkdir(before.skillsFolder, { recursive: true });
 
   const sharedBySlug = new Map(before.shared.map((skill) => [skill.slug, skill]));
+  // Content index so we never re-import a skill whose exact body already lives in
+  // the shelf under a different slug. Without this, a managed mirror that round-trips
+  // through a runtime (e.g. ~/.aeon/skills) and back into the provider inventory under
+  // a re-prefixed slug (aeon-foo, aeon-aeon-foo, ...) fails the slug-only check below
+  // and gets copied again with a fresh nextDestinationSlug name every reconcile,
+  // which is exactly how the Skills folder exploded into 15k+ aeon-* duplicates.
+  const sharedByChecksum = new Map(before.shared.map((skill) => [skill.checksum, skill]));
   const imported: BrainSkillSummary[] = [];
   const updated: BrainSkillSummary[] = [];
   const markedMissing: BrainSkillSummary[] = [];
@@ -914,6 +921,12 @@ export async function reconcileBrainSkills(input: {
       activeSources.set(`${source.provider}:${source.slug}`, source);
       const shared = sharedBySlug.get(source.slug);
       if (!shared) {
+        const contentMatch = source.imported || sharedByChecksum.get(source.checksum);
+        if (contentMatch) {
+          // Already present under another slug — skip instead of minting a duplicate.
+          skipped.push({ ...source, reason: "already present in shared brain (content match)" });
+          continue;
+        }
         if (!policy.autoImport) {
           skipped.push({ ...source, reason: "auto-import disabled" });
           continue;
@@ -930,6 +943,7 @@ export async function reconcileBrainSkills(input: {
         imported.push(copied);
         sharedBySlug.set(destinationSlug, copied);
         sharedBySlug.set(source.slug, copied);
+        if (copied.checksum) sharedByChecksum.set(copied.checksum, copied);
         continue;
       }
 

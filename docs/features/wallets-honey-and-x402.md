@@ -1,3 +1,7 @@
+---
+title: "Wallets, Tokens, Honey, HIVE, And x402"
+---
+
 # Wallets, Tokens, Honey, HIVE, And x402
 
 Wallets give agents controlled money rails.

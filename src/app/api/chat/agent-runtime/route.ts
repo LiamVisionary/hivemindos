@@ -35,6 +35,7 @@ import { recordHoneyUsage } from "@/lib/services/wallet/honey-ledger";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
 import { chatTelemetrySession, chatTelemetryValue } from "@/lib/services/telemetry/chat-dev-telemetry";
 import { normalizeRuntimeStreamEvent, RUNTIME_STREAM_EVENT_TYPES, type RuntimeStreamEvent } from "@/lib/services/runtime-stream-events";
+import { isFusionProfile, streamFusionResponse } from "@/lib/services/fusion/route-stream";
 import { isUsePodProfile, resolveUsePodRuntimeConfig, summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
 import { interpretVeniceError, isVeniceProfile, resolveVeniceRuntimeConfig, summarizeVeniceResponseHeaders } from "@/lib/services/venice";
 import {
@@ -44,6 +45,20 @@ import {
   resolveBankrLlmRuntimeProfile,
   resolveAdaptiveBankrLlmModels,
 } from "@/lib/services/bankr-llm";
+import {
+  bankrActionDraftMessage,
+  bankrActionResultMessage,
+  bankrActionRequiresConfirmation,
+  bankrActionToolDefinition,
+  BANKR_ACTION_TOOL_NAME,
+  classifyBankrActionPrompt,
+  executeBankrAction,
+  isBankrActionConfirmationText,
+  parseBankrActionDraftMessage,
+  runBankrActionTool,
+  validateBankrActionReadiness,
+  type BankrActionDraft,
+} from "@/lib/services/bankr-actions";
 import {
   buildMiroSharkChatCard,
   executeMiroSharkChatRun,
@@ -1448,6 +1463,159 @@ function publicX402ResultMessage(result: X402FetchResult, executionMs: number) {
 
 function publicX402ErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+// ---- Bankr native action rail ------------------------------------------------
+
+function findBankrActionDraft(messages: IncomingMessage[]): BankrActionDraft | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role !== "assistant") continue;
+    const draft = parseBankrActionDraftMessage(messageText(message));
+    if (draft) return draft;
+  }
+  return null;
+}
+
+function bankrActionExecutionSse(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  draft: BankrActionDraft;
+  runtimeSessionId: string;
+}) {
+  const encoder = new TextEncoder();
+  const readable = new ReadableStream({
+    async start(controller) {
+      const startedAt = Date.now();
+      const detail = input.draft.jobId ? `Job ${input.draft.jobId}` : input.draft.prompt;
+      const send = (payload: RuntimeStreamEvent | Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(ssePayload(payload)));
+      };
+      try {
+        send({
+          type: RUNTIME_STREAM_EVENT_TYPES.TOOL_START,
+          toolName: BANKR_ACTION_TOOL_NAME,
+          name: BANKR_ACTION_TOOL_NAME,
+          message: "Bankr action",
+          detail,
+          status: "running",
+        });
+        await appendRuntimeChatSessionEvent(input.runtimeSessionId, "Bankr action", detail).catch(() => undefined);
+        await recordRouteTelemetry(input.request, "agent_runtime.bankr_action.started", {
+          ...telemetryPayloadForProfile(input.profile),
+          intent: input.draft.intent,
+          readOnly: input.draft.readOnly,
+          hasJobId: Boolean(input.draft.jobId),
+          elapsedMs: Date.now() - input.routeStartedAt,
+        });
+        const result = await executeBankrAction(input.draft);
+        const message = bankrActionResultMessage(result);
+        send({
+          type: RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
+          toolName: BANKR_ACTION_TOOL_NAME,
+          name: BANKR_ACTION_TOOL_NAME,
+          message: "Bankr action complete",
+          detail: result.status || result.jobId || result.threadId || "Completed",
+          status: "completed",
+        });
+        send({ choices: [{ delta: { content: message } }] });
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message, result.raw).catch(() => undefined);
+        await finishRuntimeChatSession(input.runtimeSessionId, "completed").catch(() => undefined);
+        await recordRouteTelemetry(input.request, "agent_runtime.bankr_action.completed", {
+          ...telemetryPayloadForProfile(input.profile),
+          intent: input.draft.intent,
+          readOnly: input.draft.readOnly,
+          status: result.status ?? null,
+          jobId: result.jobId ?? null,
+          threadId: result.threadId ?? null,
+          executionMs: Date.now() - startedAt,
+          elapsedMs: Date.now() - input.routeStartedAt,
+        });
+      } catch (error) {
+        const message = `Bankr action failed: ${error instanceof Error ? error.message : String(error)}`;
+        send({
+          type: RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
+          toolName: BANKR_ACTION_TOOL_NAME,
+          name: BANKR_ACTION_TOOL_NAME,
+          message: "Bankr action failed",
+          detail: message,
+          status: "failed",
+        });
+        send({ choices: [{ delta: { content: message } }] });
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+        await finishRuntimeChatSession(input.runtimeSessionId, "failed").catch(() => undefined);
+        await recordRouteTelemetry(input.request, "agent_runtime.bankr_action.failed", {
+          ...telemetryPayloadForProfile(input.profile),
+          intent: input.draft.intent,
+          readOnly: input.draft.readOnly,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          executionMs: Date.now() - startedAt,
+          elapsedMs: Date.now() - input.routeStartedAt,
+        });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
+async function maybeExecuteConfirmedBankrAction(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const latestText = messageText(latestUserMessage(input.messages)).trim();
+  if (!isBankrActionConfirmationText(latestText)) return null;
+  const draft = findBankrActionDraft(input.messages);
+  if (!draft || !bankrActionRequiresConfirmation(draft)) return null;
+  const validation = await validateBankrActionReadiness();
+  if (validation) {
+    const message = bankrActionDraftMessage(draft, validation);
+    await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+    await finishRuntimeChatSession(input.runtimeSessionId, "failed").catch(() => undefined);
+    return privateTransferSse(message);
+  }
+  return bankrActionExecutionSse({ ...input, draft });
+}
+
+async function maybeHandleNaturalBankrAction(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const draft = classifyBankrActionPrompt(messageText(latestUserMessage(input.messages)));
+  if (!draft) return null;
+  const validation = await validateBankrActionReadiness();
+  if (validation || bankrActionRequiresConfirmation(draft)) {
+    const message = bankrActionDraftMessage(draft, validation);
+    await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+    await finishRuntimeChatSession(input.runtimeSessionId, validation ? "failed" : "completed").catch(() => undefined);
+    await recordRouteTelemetry(input.request, "agent_runtime.bankr_action.draft", {
+      ...telemetryPayloadForProfile(input.profile),
+      intent: draft.intent,
+      readOnly: draft.readOnly,
+      hasValidationError: Boolean(validation),
+      elapsedMs: Date.now() - input.routeStartedAt,
+    });
+    return privateTransferSse(message);
+  }
+  return bankrActionExecutionSse({ ...input, draft });
 }
 
 function privateX402ResultMessage(result: VeilMcpX402Result, draft: PrivateX402Draft, executionMs: number) {
@@ -3362,6 +3530,7 @@ function imageGenerationToolDefinition() {
 }
 
 type AccumulatedToolCall = { id: string; name: string; arguments: string };
+type ToolCallOutcome = { toolResultContent: string; fallbackText: string; finalText?: string };
 
 function parseToolCallArguments(raw: string): Record<string, unknown> {
   try {
@@ -3529,10 +3698,12 @@ async function streamOpenAICompatibleRuntime(
   // actual local-execution loop (allowlisted commands) instead of letting it
   // role-play "I ran osascript…". Agents without the capability are unchanged.
   const offerCommandTool = profile.runtimeCapabilities?.skillActions === true;
+  const offerBankrTool = /\b(bankr|bnkr|polymarket|hyperliquid|token\s+launch|launch\s+a\s+token|swap|dca|twap|nft|portfolio|wallet\s+balance|agent\s+api)\b/i.test(userText);
   // Tool definitions advertised on every request attempt. Empty → no tools
   // field is sent and the chat path is byte-for-byte unchanged.
   const toolDefinitions = [
     ...(offerImageTool ? [imageGenerationToolDefinition()] : []),
+    ...(offerBankrTool ? [bankrActionToolDefinition()] : []),
     ...(offerCommandTool ? [runCommandToolDefinition()] : []),
   ];
   let winningRequest: { url: string; headers: Record<string, string>; messages: IncomingMessage[]; model: string; provider: string; sentTools: boolean } | null = null;
@@ -4133,10 +4304,78 @@ async function streamOpenAICompatibleRuntime(
         };
       };
 
+      const runBankrToolCall = async (call: AccumulatedToolCall): Promise<ToolCallOutcome> => {
+        const args = parseToolCallArguments(call.arguments);
+        const prompt = typeof args.prompt === "string" && args.prompt.trim() ? args.prompt.trim() : userText;
+        const label = "Bankr action";
+        controller.enqueue(encoder.encode(ssePayload({
+          type: RUNTIME_STREAM_EVENT_TYPES.TOOL_START,
+          toolName: BANKR_ACTION_TOOL_NAME,
+          name: BANKR_ACTION_TOOL_NAME,
+          message: label,
+          detail: prompt,
+          status: "running",
+        })));
+        queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, label, prompt));
+        recordRuntimeTelemetry(telemetry, "agent_runtime.bankr_action_tool.dispatch", {
+          ...telemetryPayloadForProfile(profile),
+          intent: typeof args.intent === "string" ? args.intent : null,
+          hasJobId: typeof args.jobId === "string" && Boolean(args.jobId.trim()),
+        });
+        try {
+          const outcome = await runBankrActionTool({ ...args, prompt });
+          const message = typeof outcome.message === "string" && outcome.message.trim()
+            ? outcome.message.trim()
+            : outcome.ok
+              ? "Bankr action complete."
+              : `Bankr action failed: ${typeof outcome.error === "string" ? outcome.error : "unknown error"}`;
+          controller.enqueue(encoder.encode(ssePayload({
+            type: RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
+            toolName: BANKR_ACTION_TOOL_NAME,
+            name: BANKR_ACTION_TOOL_NAME,
+            message: outcome.ok ? "Bankr action ready" : "Bankr action failed",
+            detail: message.slice(0, 500),
+            status: outcome.ok ? "completed" : "failed",
+          })));
+          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, outcome.ok ? "Bankr action finished" : "Bankr action failed", message.slice(0, 500)));
+          recordRuntimeTelemetry(telemetry, outcome.ok ? "agent_runtime.bankr_action_tool.completed" : "agent_runtime.bankr_action_tool.failed", {
+            ...telemetryPayloadForProfile(profile),
+            prepared: outcome.ok && "prepared" in outcome ? outcome.prepared === true : false,
+            errorMessage: outcome.ok ? null : outcome.error ?? null,
+          });
+          return {
+            toolResultContent: JSON.stringify(outcome),
+            fallbackText: message,
+            finalText: message,
+          };
+        } catch (error) {
+          const message = `Bankr action failed: ${error instanceof Error ? error.message : String(error)}`;
+          controller.enqueue(encoder.encode(ssePayload({
+            type: RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
+            toolName: BANKR_ACTION_TOOL_NAME,
+            name: BANKR_ACTION_TOOL_NAME,
+            message: "Bankr action failed",
+            detail: message,
+            status: "failed",
+          })));
+          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Bankr action failed", message));
+          recordRuntimeTelemetry(telemetry, "agent_runtime.bankr_action_tool.failed", {
+            ...telemetryPayloadForProfile(profile),
+            errorMessage: error instanceof Error ? error.message : String(error),
+          });
+          return {
+            toolResultContent: JSON.stringify({ ok: false, error: message }),
+            fallbackText: message,
+            finalText: message,
+          };
+        }
+      };
+
       // Dispatch one accumulated tool call by name. Unknown tools return an
       // error result so the model can recover instead of stalling.
-      const runToolCall = async (call: AccumulatedToolCall) => {
+      const runToolCall = async (call: AccumulatedToolCall): Promise<ToolCallOutcome> => {
         if (call.name === IMAGE_GENERATION_TOOL_NAME) return runImageToolCall(call);
+        if (call.name === BANKR_ACTION_TOOL_NAME) return runBankrToolCall(call);
         if (call.name === RUN_COMMAND_TOOL_NAME) return runCommandToolCall(call);
         return {
           toolResultContent: JSON.stringify({ ok: false, error: `Unknown tool: ${call.name}` }),
@@ -4163,12 +4402,21 @@ async function streamOpenAICompatibleRuntime(
           const assistantToolCalls: Array<Record<string, unknown>> = [];
           const toolResultMessages: Array<Record<string, unknown>> = [];
           const fallbacks: string[] = [];
+          const finalTexts: string[] = [];
           for (const call of toolCalls) {
             const callId = call.id || `call_${call.name}`;
             const outcome = await runToolCall(call);
             assistantToolCalls.push({ id: callId, type: "function", function: { name: call.name, arguments: call.arguments || "{}" } });
             toolResultMessages.push({ role: "tool", tool_call_id: callId, content: outcome.toolResultContent });
             if (outcome.fallbackText) fallbacks.push(outcome.fallbackText);
+            if (outcome.finalText) finalTexts.push(outcome.finalText);
+          }
+          if (finalTexts.length) {
+            const finalText = finalTexts.join("\n\n");
+            controller.enqueue(encoder.encode(ssePayload({ choices: [{ delta: { content: finalText } }] })));
+            fullText += finalText;
+            queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", finalText));
+            break;
           }
           conversation.push({ role: "assistant", content: "", tool_calls: assistantToolCalls });
           conversation.push(...toolResultMessages);
@@ -4333,6 +4581,20 @@ export async function POST(request: NextRequest) {
   }
   const vault = activeSharedVault(profile, sharedVault);
   runtimeSessionId = createRuntimeChatSessionId(profile, runtimeSessionId || clientRunId);
+  if (isFusionProfile(profile)) {
+    // Hive Fusion compound model: fan out to a panel of configured models,
+    // judge their responses, and stream a synthesized answer. Runs before the
+    // heavy single-model preflight since Fusion orchestrates its own panel.
+    await recordRouteTelemetry(request, "agent_runtime.dispatch.fusion", {
+      ...telemetryPayloadForProfile(profile),
+      promptLength: userPrompt.length,
+      runtimeSessionId,
+      chatStorageKey: chatStorageKey || null,
+      agentMode,
+      elapsedMs: Date.now() - routeStartedAt,
+    });
+    return streamFusionResponse({ profile, messages, runtimeSessionId, request, routeStartedAt });
+  }
   if (isMobileAgentGatewayUrl(profile.gatewayUrl)) {
     // Phone-hosted agent: the hub cannot call the phone, so the turn is queued
     // as a job the phone app polls for (see lib/services/mobile-agents) and
@@ -4490,6 +4752,22 @@ export async function POST(request: NextRequest) {
     runtimeSessionId,
   });
   if (naturalMiroSharkX402) return naturalMiroSharkX402;
+  const confirmedBankrAction = await maybeExecuteConfirmedBankrAction({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    runtimeSessionId,
+  });
+  if (confirmedBankrAction) return confirmedBankrAction;
+  const naturalBankrAction = await maybeHandleNaturalBankrAction({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    runtimeSessionId,
+  });
+  if (naturalBankrAction) return naturalBankrAction;
   const confirmedBuyStock = await maybeExecuteConfirmedBuyStock({
     request,
     routeStartedAt,

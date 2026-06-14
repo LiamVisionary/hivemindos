@@ -1,3 +1,7 @@
+---
+title: "Env, Files, Notifications, And Maintenance"
+---
+
 # Env, Files, Notifications, And Maintenance
 
 These are the utility surfaces that keep the control room usable over time: shared env, constrained file access, notifications, memory telemetry, and repair checks.

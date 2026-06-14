@@ -1,3 +1,7 @@
+---
+title: "Evo Optimization Runtime"
+---
+
 # Evo Optimization Runtime
 
 [Evo](https://github.com/evo-hq/evo) (Apache-2.0) is an autoresearch orchestrator: it runs

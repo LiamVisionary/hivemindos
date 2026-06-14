@@ -11,11 +11,14 @@ import type { DashboardRouteTarget } from "@/features/dashboard/dashboard-naviga
 import { dashboardRouteForView, isDashboardView } from "@/features/dashboard/dashboard-navigation";
 import {
   localBeePilotPlan,
+  planOpensModal,
   resolveProviderSlug,
   resolveRuntimeId,
   type BeePilotPlan,
   type BeePilotStep,
 } from "@/features/dashboard/bee-pilot/bee-pilot-actions";
+
+export type RunVoiceCommandOptions = { onModalOpen?: () => void };
 import { BeeFlightController } from "@/features/dashboard/bee-pilot/bee-flight";
 import { beeClick, beeType, scrollElementIntoView, wait, waitForElement } from "@/features/dashboard/bee-pilot/dom-actions";
 
@@ -233,19 +236,25 @@ export function useBeePilot(deps: BeePilotDeps) {
             await beeClick(bee, tile);
           }
         }
-        // Pick a specific model when asked (the model list is always visible
-        // once a non-adaptive provider is selected). Fuzzy-match the hint so
-        // "gpt-4o" finds "openai/gpt-4o-2024-..." etc.
+        // Pick a specific model when asked. The model list only renders once a
+        // configured provider is selected; providers that still need setup
+        // (e.g. an unconfigured UsePod/Venice) show their setup panel instead
+        // and expose no model pills. In that case leave the provider selected
+        // and skip the model quietly - there is nothing to pick yet.
         if (params.model) {
-          await waitForElement('[data-bee="agent-model"]', 6_000);
-          const pill = findModelPill(params.model);
-          if (pill) {
-            if (pill.getAttribute("aria-selected") !== "true") {
-              setStatus(`Selecting the ${params.model} model...`);
-              await beeClick(bee, pill);
+          const modelListReady = await waitForElement('[data-bee="agent-model"]', 4_000);
+          if (modelListReady) {
+            const pill = findModelPill(params.model);
+            if (pill) {
+              if (pill.getAttribute("aria-selected") !== "true") {
+                setStatus(`Selecting the ${params.model} model...`);
+                await beeClick(bee, pill);
+              }
+            } else {
+              return `Set up the agent, but I couldn't find a "${params.model}" model for that provider.`;
             }
-          } else {
-            return `Set up the agent, but I couldn't find a "${params.model}" model for that provider.`;
+          } else if (providerSlug) {
+            return `Selected ${providerSlug} - finish setting it up to choose the ${params.model} model.`;
           }
         }
         return null;
@@ -500,7 +509,7 @@ export function useBeePilot(deps: BeePilotDeps) {
    * away (so Queen Bee can confirm), and flies the automation in the
    * background. The palette is never opened.
    */
-  const runVoiceCommand = useCallback(async (command: string): Promise<string> => {
+  const runVoiceCommand = useCallback(async (command: string, opts?: RunVoiceCommandOptions): Promise<string> => {
     const trimmed = command.trim();
     if (!trimmed) return "I didn't catch an on-screen command.";
     const runId = runIdRef.current + 1;
@@ -527,6 +536,9 @@ export function useBeePilot(deps: BeePilotDeps) {
       scheduleCleanup(runId, false);
       return plan.reply;
     }
+    // Only step out of the way when this plan actually opens a modal; plain
+    // navigation keeps the chat history visible.
+    if (planOpensModal(plan)) opts?.onModalOpen?.();
     // Speak the confirmation now; let the bee fly the UI in the background.
     void executePlan(plan, undefined, runId);
     return plan.reply;

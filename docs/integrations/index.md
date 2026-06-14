@@ -1,3 +1,7 @@
+---
+title: "Integrations"
+---
+
 # Integrations
 
 Integration docs are grouped by companion or external system.

@@ -2,7 +2,16 @@
 
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { Check, Crown, Mic, MicOff, Settings2, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Crown,
+  Mic,
+  MicOff,
+  Settings2,
+  X,
+} from "lucide-react";
 import { listenForQueenVoiceToggle } from "@/lib/native/queen-voice-events";
 import { QueenVoiceGlow } from "./QueenVoiceGlow";
 import { useQueenBeeRealtime } from "./use-queen-bee-realtime";
@@ -12,6 +21,15 @@ import {
   type QueenVoiceTurn,
 } from "./use-queen-bee-voice";
 import styles from "./queen-voice.module.css";
+
+const QUEEN_VOICE_ACTIVATION_SOUND_SRC = "/audio/sfx/scifi-ping.wav";
+
+function playQueenVoiceActivationSound() {
+  if (typeof Audio === "undefined") return;
+  const audio = new Audio(QUEEN_VOICE_ACTIVATION_SOUND_SRC);
+  audio.volume = 0.72;
+  void audio.play().catch(() => undefined);
+}
 
 function statusLabel(
   phase: QueenVoicePhase,
@@ -35,31 +53,64 @@ function statusDotClass(phase: QueenVoicePhase) {
   return "";
 }
 
-function TranscriptTurns({ turns }: { turns: QueenVoiceTurn[] }) {
+function TranscriptTurns({
+  turns,
+  minimized,
+  onToggleMinimize,
+}: {
+  turns: QueenVoiceTurn[];
+  minimized: boolean;
+  onToggleMinimize: () => void;
+}) {
   const panelRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
+    if (minimized) return;
     const panel = panelRef.current;
     if (panel) panel.scrollTop = panel.scrollHeight;
-  }, [turns]);
+  }, [turns, minimized]);
 
   if (!turns.length) return null;
   return (
-    <div ref={panelRef} className={styles.transcriptPanel} aria-live="polite">
-      {turns.map((turn) => (
-        <div key={turn.id} className={styles.turn}>
-          <span
-            className={`${styles.turnWho} ${turn.who === "queen" ? styles.turnWhoQueen : styles.turnWhoYou}`}
-          >
-            {turn.who === "queen" ? "Queen Bee" : "You"}
-          </span>
-          <p
-            className={`${styles.turnText} ${turn.live ? styles.turnTextLive : ""}`}
-          >
-            {turn.text}
-          </p>
+    <div
+      className={`${styles.transcriptPanel} ${minimized ? styles.transcriptPanelMinimized : ""}`}
+    >
+      <button
+        type="button"
+        className={styles.minimizeButton}
+        onClick={onToggleMinimize}
+        aria-label={minimized ? "Expand chat history" : "Minimize chat history"}
+        aria-pressed={minimized}
+        title={minimized ? "Expand chat history" : "Minimize chat history"}
+      >
+        {minimized ? (
+          <ChevronUp size={16} aria-hidden="true" />
+        ) : (
+          <ChevronDown size={16} aria-hidden="true" />
+        )}
+      </button>
+      {minimized ? null : (
+        <div
+          ref={panelRef}
+          className={styles.transcriptScroll}
+          aria-live="polite"
+        >
+          {turns.slice(-3).map((turn) => (
+            <div key={turn.id} className={styles.turn}>
+              <span
+                className={`${styles.turnWho} ${turn.who === "queen" ? styles.turnWhoQueen : styles.turnWhoYou}`}
+              >
+                {turn.who === "queen" ? "Queen Bee" : "You"}
+              </span>
+              <p
+                className={`${styles.turnText} ${turn.live ? styles.turnTextLive : ""}`}
+              >
+                {turn.text}
+              </p>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -142,11 +193,15 @@ function VoicePicker({ onVoiceChanged }: { onVoiceChanged: () => void }) {
 export function QueenBeeVoiceOverlay({
   onDriveDashboard,
 }: {
-  onDriveDashboard?: (command: string) => Promise<string>;
+  onDriveDashboard?: (
+    command: string,
+    opts?: { onModalOpen?: () => void },
+  ) => Promise<string>;
 } = {}) {
   const [open, setOpen] = React.useState(false);
   const [muted, setMuted] = React.useState(false);
   const [voicePickerOpen, setVoicePickerOpen] = React.useState(false);
+  const [minimized, setMinimized] = React.useState(false);
   // Bumping the nonce restarts the realtime session (e.g. new voice).
   const [sessionNonce, setSessionNonce] = React.useState(0);
   const [realtimeFailedNonce, setRealtimeFailedNonce] = React.useState(-1);
@@ -160,11 +215,21 @@ export function QueenBeeVoiceOverlay({
     // Remember which session failed so this nonce falls back to the pipeline.
     setRealtimeFailedNonce(sessionNonceRef.current);
   }, []);
+  // Drive the dashboard; collapse the chat out of the way ONLY when the bee
+  // opens a modal (it would otherwise cover it). Plain navigation keeps the
+  // chat history visible.
+  const driveDashboard = React.useCallback(
+    async (command: string) => {
+      if (!onDriveDashboard) return "The dashboard isn't available to drive right now.";
+      return onDriveDashboard(command, { onModalOpen: () => setMinimized(true) });
+    },
+    [onDriveDashboard],
+  );
   const realtime = useQueenBeeRealtime(
     open && realtimeMode,
     muted,
     handleRealtimeFailed,
-    onDriveDashboard,
+    onDriveDashboard ? driveDashboard : undefined,
   );
   const pipeline = useQueenBeeVoice(open && !realtimeMode, muted);
   const voiceState = realtimeMode ? realtime : pipeline;
@@ -178,9 +243,14 @@ export function QueenBeeVoiceOverlay({
       const now = Date.now();
       if (now - lastToggleAt < 300) return;
       lastToggleAt = now;
-      setOpen((current) => !current);
+      setOpen((current) => {
+        const next = !current;
+        if (next) playQueenVoiceActivationSound();
+        return next;
+      });
       setMuted(false);
       setVoicePickerOpen(false);
+      setMinimized(false);
       setSessionNonce((current) => current + 1);
     }).then((cleanup) => {
       if (disposed) cleanup();
@@ -211,7 +281,11 @@ export function QueenBeeVoiceOverlay({
         role="dialog"
         aria-label="Queen Bee voice chat"
       >
-        <TranscriptTurns turns={voiceState.turns} />
+        <TranscriptTurns
+          turns={voiceState.turns}
+          minimized={minimized}
+          onToggleMinimize={() => setMinimized((current) => !current)}
+        />
         {voicePickerOpen ? (
           <VoicePicker
             onVoiceChanged={() => {

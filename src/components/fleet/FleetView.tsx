@@ -336,14 +336,12 @@ export function FleetView({
           display: "grid", gridTemplateRows: showMasthead ? "auto 1fr" : "1fr",
         }}
       >
-        {/* Decorative backdrop — radial honey/cyan glow + hex texture */}
+        {/* Decorative backdrop — low-contrast hex texture without a center bloom */}
         <div
           aria-hidden
           className="absolute inset-0 pointer-events-none"
           style={{
-            background:
-              "radial-gradient(circle at 50% 38%, rgba(255,212,90,0.10), transparent 50%)," +
-              "radial-gradient(circle at 80% 80%, rgba(45,212,191,0.08), transparent 50%)",
+            background: "transparent",
           }}
         />
         <svg
@@ -584,8 +582,7 @@ export function FleetView({
               className={`${styles.stageFrame} relative grid overflow-hidden rounded-2xl`}
               style={{
                 border: "1px solid rgba(148,163,184,0.16)",
-                background:
-                  "radial-gradient(ellipse at center, rgba(255,212,90,0.06), transparent 60%), rgba(16,20,29,0.78)",
+                background: "rgba(16,20,29,0.78)",
                 placeItems: view === "list" ? "stretch" : "center",
               }}
             >

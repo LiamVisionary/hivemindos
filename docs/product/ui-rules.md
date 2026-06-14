@@ -1,3 +1,7 @@
+---
+title: "HivemindOS UI Rules"
+---
+
 # HivemindOS UI Rules
 
 These are the short rules. For the full rationale and screen guidance, see [UI/UX Philosophy](design-philosophy.md).

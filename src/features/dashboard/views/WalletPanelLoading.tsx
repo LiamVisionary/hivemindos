@@ -65,6 +65,14 @@ function PersonalWalletCardLoading({ index }: { index: number }) {
   );
 }
 
+export function PersonalWalletsChecking() {
+  return (
+    <div className={personalClass("personalWalletGrid")} role="list" aria-label="Checking local wallets" aria-busy="true">
+      <PersonalWalletCardLoading index={0} />
+    </div>
+  );
+}
+
 function AgentWalletTileLoading({ index }: { index: number }) {
   return (
     <article className={walletClass("walletSkeletonTile")} role="listitem" style={{ opacity: 1 - index * 0.06 }}>

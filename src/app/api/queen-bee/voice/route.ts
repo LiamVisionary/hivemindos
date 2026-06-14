@@ -16,6 +16,10 @@ import {
   writeQueenBeeVoice,
 } from "@/lib/services/queen-bee/voice-settings";
 import {
+  addQueenBeeVoicePreference,
+  queenVoicePreferencePreamble,
+} from "@/lib/services/queen-bee/voice-preferences";
+import {
   transcribeAudioWithWhisper,
   transcriptionApiKey,
 } from "@/lib/services/phone/transcription";
@@ -38,6 +42,7 @@ const QUEEN_REALTIME_INSTRUCTIONS = [
   "Answer general questions about what you can do from the capability list above, directly and confidently. Use ask_hivemind_agent to verify or perform a SPECIFIC capability (a particular wallet, app, note, or status). Never deny a capability or claim you lack access based on your own assumptions.",
   "Use create_hive_task when the user clearly asks for longer work to be delegated to the hive (a job, build, fix, research, automation, reminder). Pass a short imperative title and the full request as the message, then briefly confirm what you kicked off using the tool result.",
   "Use drive_dashboard when the user wants to SEE or DO something in the on-screen dashboard they are looking at: open or switch a screen (wallets, work board, agents/fleet, chat, schedules, brain), create an agent (optionally naming a runtime, provider, model, or machine), create a wallet for one of their agents, add a task to the board, or open an agent's settings or chat. Pass the user's request VERBATIM as the command; a visible bee flies the interface and clicks for them, and you confirm what happened from the tool result. Prefer drive_dashboard over ask_hivemind_agent for anything they want to navigate to or operate in the app.",
+  "When the user states a LASTING preference about how you should talk to or treat them - how to address them ('call me boss'), a language, a tone, or how long your replies should be - call remember_preference with that preference the moment they say it, then confirm naturally. This is what makes the preference stick across future voice chats; agreeing without calling the tool will not be remembered.",
   "Greetings and chit-chat are just conversation - no tools needed.",
 ].join(" ");
 
@@ -96,6 +101,23 @@ const QUEEN_REALTIME_TOOLS = [
       required: ["command"],
     },
   },
+  {
+    type: "function",
+    name: "remember_preference",
+    description:
+      "Save a DURABLE preference about how Queen Bee should address, talk to, or treat the user in future voice chats - e.g. how to address them ('call me boss'), a preferred language, tone, or how short/long replies should be. Call this the moment the user states such a lasting preference, then confirm it naturally. Do NOT use it for one-off requests, tasks, or facts to look up - only for standing preferences that should persist across sessions.",
+    parameters: {
+      type: "object",
+      properties: {
+        preference: {
+          type: "string",
+          description:
+            "The standing preference as a short imperative you can follow later, e.g. 'Address the user as \"boss\".' or 'Keep replies very short.' or 'Reply in Spanish.'",
+        },
+      },
+      required: ["preference"],
+    },
+  },
 ];
 
 /**
@@ -140,6 +162,13 @@ export async function POST(request: NextRequest) {
     if (body.action === "set-voice") {
       const voice = await writeQueenBeeVoice(String(body.voice ?? ""));
       return NextResponse.json({ ok: true, voice });
+    }
+    if (body.action === "remember-preference") {
+      const preference =
+        typeof body.preference === "string" ? body.preference.trim() : "";
+      if (!preference) throw new Error("A preference is required.");
+      const preferences = await addQueenBeeVoicePreference(preference);
+      return NextResponse.json({ ok: true, preferences });
     }
     throw new Error(
       `Unknown Queen Bee voice action: ${String(body.action ?? "")}`,
@@ -187,6 +216,12 @@ async function mintRealtimeSession() {
   }
   const voice = await readQueenBeeVoice();
   const model = process.env.OPENAI_REALTIME_MODEL || DEFAULT_REALTIME_MODEL;
+  // Splice any standing user preferences ("call me boss") onto the base
+  // instructions so every new session opens already knowing them.
+  const preferencePreamble = await queenVoicePreferencePreamble();
+  const instructions = preferencePreamble
+    ? `${QUEEN_REALTIME_INSTRUCTIONS} ${preferencePreamble}`
+    : QUEEN_REALTIME_INSTRUCTIONS;
   const response = await fetch(
     "https://api.openai.com/v1/realtime/client_secrets",
     {
@@ -200,7 +235,7 @@ async function mintRealtimeSession() {
         session: {
           type: "realtime",
           model,
-          instructions: QUEEN_REALTIME_INSTRUCTIONS,
+          instructions,
           audio: { output: { voice } },
         },
       }),
@@ -242,7 +277,7 @@ async function mintRealtimeSession() {
     clientSecret,
     model,
     voice,
-    instructions: QUEEN_REALTIME_INSTRUCTIONS,
+    instructions,
     tools: QUEEN_REALTIME_TOOLS,
   });
 }

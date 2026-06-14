@@ -1,3 +1,7 @@
+---
+title: "Tailnet Generation Skills"
+---
+
 # Tailnet Generation Skills
 
 HivemindOS can document private generation services as shared skills.

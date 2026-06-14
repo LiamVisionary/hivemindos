@@ -1,0 +1,156 @@
+top_links:
+  - title: Features
+    url: /features/
+  - title: Whole Brain
+    url: /whole-brain/
+  - title: Skills
+    url: /packaged-skills/
+  - title: Architecture
+    url: /architecture/
+  - title: Integrations
+    url: /integrations/
+  - title: Preview
+    url: /preview.html
+
+sections:
+  - title: Start Here
+    items:
+      - title: Overview
+        url: /
+      - title: Feature Guide
+        url: /features/
+      - title: Diagrams And Maps
+        url: /diagrams.html
+      - title: Native App
+        url: /native-app.html
+      - title: Slash Commands
+        url: /slash-commands.html
+
+  - title: Product
+    items:
+      - title: Product Home
+        url: /product/
+      - title: Design Philosophy
+        url: /product/design-philosophy.html
+      - title: UI Rules
+        url: /product/ui-rules.html
+
+  - title: Core Systems
+    items:
+      - title: Features
+        url: /features/
+        children:
+          - title: Fleet
+            url: /features/fleet.html
+          - title: Agents And Chat
+            url: /features/runtimes-and-chat.html
+          - title: Calling
+            url: /features/calling.html
+          - title: Work And Scheduler
+            url: /features/work-and-scheduler.html
+          - title: Brain, Vault, And Skills
+            url: /features/brain-vault-and-skills.html
+          - title: Hivemind Sync
+            url: /features/hivemind-sync.html
+          - title: Hive Fusion
+            url: /features/hive-fusion.html
+          - title: Token And Cost Savings
+            url: /features/token-and-cost-savings.html
+          - title: Wallets, Honey, And x402
+            url: /features/wallets-honey-and-x402.html
+          - title: Evo Optimization
+            url: /features/evo-optimization.html
+          - title: Env, Notifications, Maintenance
+            url: /features/env-files-notifications-maintenance.html
+          - title: Integrations And Work History
+            url: /features/integrations-and-work-history.html
+          - title: MiroShark And OpenClaw
+            url: /features/miroshark-and-openclaw.html
+
+      - title: Whole Brain
+        url: /whole-brain/
+        children:
+          - title: Vault Map
+            url: /whole-brain/vault-map.html
+          - title: Brain Services
+            url: /whole-brain/brain-services.html
+          - title: Shared Skills
+            url: /whole-brain/shared-skills.html
+          - title: Shared Env
+            url: /whole-brain/shared-env.html
+          - title: Sync And Health
+            url: /whole-brain/sync-and-health.html
+          - title: Architecture Sync
+            url: /whole-brain/architecture-sync.html
+          - title: Code Map
+            url: /whole-brain/code-map.html
+
+      - title: Packaged Skills
+        url: /packaged-skills/
+        children:
+          - title: Hive Skills
+            url: /packaged-skills/hive-skills.html
+          - title: Third-party Skills
+            url: /packaged-skills/third-party-skills.html
+
+  - title: Architecture
+    items:
+      - title: Architecture Home
+        url: /architecture/
+      - title: API And Storage
+        url: /architecture/api-and-storage.html
+      - title: Syncing And Tailscale
+        url: /architecture/syncing-and-tailscale.html
+      - title: Fleet Telemetry
+        url: /architecture/tailscale-fleet-telemetry.html
+      - title: Generated Media Signing
+        url: /architecture/generated-media-signing.html
+      - title: Targeted File Transfers
+        url: /targeted-file-transfers.html
+      - title: Tailnet Generation Skills
+        url: /tailnet-generation-skills.html
+      - title: macOS Code Signing
+        url: /macos-code-signing.html
+
+  - title: Integrations
+    items:
+      - title: Integrations Home
+        url: /integrations/
+      - title: GitLawb Code Proof
+        url: /integrations/gitlawb.html
+      - title: UsePod
+        url: /integrations/usepod.html
+      - title: MiroShark
+        url: /integrations/miroshark/
+        children:
+          - title: Companion
+            url: /integrations/miroshark/companion.html
+          - title: Todo
+            url: /integrations/miroshark/todo.html
+
+  - title: Runtimes
+    items:
+      - title: Runtime Guides
+        url: /runtimes/
+      - title: Hermes Local Setup
+        url: /runtimes/hermes/local-setup.html
+      - title: AEON GitHub Actions Brain Access
+        url: /runtimes/aeon/github-actions-brain-access.html
+
+  - title: Monetization
+    items:
+      - title: Monetization Home
+        url: /monetization/
+      - title: Ecosystem Plan
+        url: /monetization/ecosystem-plan.html
+      - title: Honey And HIVE Treasury
+        url: /monetization/honey-hive-treasury.html
+      - title: Paid Features
+        url: /monetization/paid-features/
+      - title: Hivemind Cloud Agent Calls
+        url: /monetization/paid-features/hivemind-cloud-agent-calls.html
+
+  - title: Reference
+    items:
+      - title: Bankr Platform Reference
+        url: /bankr/bankr-platform-reference.html

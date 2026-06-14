@@ -78,7 +78,7 @@ function DashboardFrameLoading() {
         fontFamily: "Geist, system-ui, sans-serif",
       }}
     >
-      <DashboardHiveLoader title={routeTitle} detail={routeDetail} />
+      <DashboardHiveLoader compact title={routeTitle} detail={routeDetail} />
     </main>
   );
 }

@@ -1,3 +1,7 @@
+---
+title: "Agents, Runtimes, And Chat"
+---
+
 # Agents, Runtimes, And Chat
 
 Agents are local profiles with enough context to do real work.
@@ -91,6 +95,25 @@ Fleet-wide sharing:
 - Peers are discovered from `tailscale status --json`, probed with a 4-second timeout, and deduplicated by `machineId` so each machine's two tailnet nodes count once. Payloads carry model ids and counters only — no secrets, and no tailnet IPs are persisted.
 - Tune or disable with `AGENT_TELEMETRY_RELIABILITY_SYNC_INTERVAL_MS` (`0` disables). The app re-reads the store file on a 5-second TTL, so gossiped records apply without a restart.
 
+## Hive Fusion (Compound Model)
+
+Hive Fusion is a native compound model: instead of asking one model, a prompt is fanned out to a **panel** of configured models in parallel, a **judge** model extracts the structure of their answers, and a **synthesizer** writes the final answer grounded in that analysis. It is HivemindOS's own implementation of the panel → judge → synthesize pattern, provider-agnostic over the gateways you already have configured.
+
+Selecting it: the model picker exposes a `Hive Fusion` provider whose model, `hive-fusion-native`, runs the local panel across your configured providers. OpenRouter's *hosted* compound model is a plain OpenRouter slug, so it is offered separately as `openrouter/fusion` under the **OpenRouter** provider tile — a `MODEL_PROVIDER_GATEWAYS` entry keyed off `OPENROUTER_API_KEY` in the shared hive env, so it appears on every runtime (its model dropdown also offers Adaptive free-routing). It is served by the normal OpenRouter path — no Fusion orchestration runs locally for it. (Programmatically, `agent.fusion.mode: "openrouter"` also routes the native `hive-fusion` provider to the hosted model with optional custom-panel `plugins`.)
+
+Any agent on any runtime can select `Hive Fusion`; the chat send path is unchanged (it still POSTs to `/api/chat/agent-runtime`). The route detects `provider: "hive-fusion"` and delegates to the Fusion orchestrator before the single-model preflight (`isFusionProfile` / `streamFusionResponse` in `src/lib/services/fusion/route-stream.ts`); selecting it never writes a Hermes/OpenClaw gateway model.
+
+How a native run works (`src/lib/services/fusion/orchestrator.ts`):
+
+1. **Resolve the panel** (`catalog.ts`). The default panel mirrors the budget-panel idea: when `OPENROUTER_API_KEY` is set, it fills with diverse budget models from OpenRouter's live free inventory (reusing the Adaptive resolver, falling back to a static list if the inventory is unreachable), then tops up from any other configured provider. Providers are resolved from the shared hive env (`OPENROUTER_API_KEY`, `VENICE_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY`, `BANKR_LLM_KEY`, or a local OpenAI-compatible base URL). With only one provider configured it degrades to a low-diversity single-member panel (the judge + synthesizer still add structure) and surfaces a note rather than failing.
+2. **Fan out** to every panel member in parallel via OpenAI-compatible `/chat/completions` (`client.ts`). A member that fails or times out is dropped; the run continues as long as at least one succeeds.
+3. **Judge** (only when ≥2 members succeed): a judge model returns JSON capturing consensus, contradictions, partial coverage, unique insights, blind spots, and a recommended focus (`prompts.ts`). Malformed judge output falls back gracefully and never aborts the run.
+4. **Synthesize**: a synthesizer model streams the final answer grounded in the analysis and the panel's source answers. If synthesis itself fails, Fusion returns the strongest panel answer rather than erroring.
+
+Customising the panel: set `agent.fusion` (`FusionAgentConfig`) to override `participants`, `judge`, `synthesizer` (each a `{ provider, model }` from the Fusion catalog), `maxParticipants` (default 3), or `mode` (`"native"` | `"openrouter"`) — mirroring OpenRouter's custom-panel option.
+
+Streaming: the synthesizer answer streams as the assistant message, while each panel member and the judge surface as tool/reasoning process events (the panel plan and judge analysis appear as reasoning chips). The orchestrator is dependency-injectable and covered by `scripts/test-fusion.mjs` (`pnpm test:fusion`).
+
 ## What Agents And Chat Can Do
 
 - Runtime/provider/model selection where supported.
@@ -132,6 +155,7 @@ The desktop app ships a hands-free voice channel into the Queen Bee control plan
 - `src/lib/services/runtime-adapters/**`
 - `src/lib/services/chat/adaptive-openrouter-models.ts`
 - `src/lib/services/chat/adaptive-model-reliability.ts`
+- `src/lib/services/fusion/**` (Hive Fusion compound model: catalog, client, prompts, orchestrator, route-stream)
 - `src/lib/services/runtime-integrations.ts`
 - `src/lib/services/phone/call-gateway.ts`
 - `src/lib/native/filesystem.ts`

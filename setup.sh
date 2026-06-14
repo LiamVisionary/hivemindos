@@ -1890,7 +1890,7 @@ if [[ ! -f "$shared_vault_path/$brain_services_folder/README.md" ]]; then
   cat > "$shared_vault_path/$brain_services_folder/README.md" <<'EOF'
 # Brain Services
 
-Status notes for optional HivemindOS brain services. GBrain and Syntho can be connected from the dashboard without storing provider secrets in the vault.
+Status notes for HivemindOS brain services. Shared Brain Memory uses a generated full-vault lexical index by default at \`Operations/Brain Services/Full Vault Search Index.jsonl\`; QMD, GBrain, and Syntho can be connected from the dashboard without storing provider secrets in the vault.
 EOF
 fi
 

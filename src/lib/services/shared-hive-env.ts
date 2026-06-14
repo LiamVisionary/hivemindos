@@ -38,6 +38,19 @@ export async function anyHiveEnvPresent(keys: readonly string[]) {
   };
 }
 
+export async function readSharedHiveEnvValues(): Promise<Record<string, string>> {
+  const raw = await readFile(HIVE_ENV_FILE, "utf8").catch(() => "");
+  const values: Record<string, string> = {};
+  for (const line of raw.split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+    if (!match) continue;
+    const key = cleanEnvKey(match[1]);
+    const value = parseRawEnvValue(match[2]);
+    if (value) values[key] = value;
+  }
+  return values;
+}
+
 function cleanEnvKey(key: string) {
   const trimmed = key.trim();
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) throw new Error(`Invalid env key: ${key}`);
@@ -49,7 +62,13 @@ function parseEnvFileValue(raw: string, key: string) {
   const pattern = new RegExp(`^\\s*(?:export\\s+)?${escaped}\\s*=\\s*(.*)\\s*$`, "m");
   const match = raw.match(pattern);
   if (!match) return "";
-  const value = match[1].trim();
+  const value = parseRawEnvValue(match[1]);
+  if (!value) return "";
+  return value;
+}
+
+function parseRawEnvValue(rawValue: string) {
+  const value = rawValue.trim();
   if (!value) return "";
   if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
     return value.slice(1, -1).replaceAll("\0", "").trim();

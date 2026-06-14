@@ -5,6 +5,7 @@ import {
   submitQueenBeeMessage,
 } from "@/lib/services/queen-bee/control-plane";
 import { discoverQueenBeeFleetSnapshot } from "@/lib/services/queen-bee/fleet-snapshot";
+import { createQueenBeePrdTasks } from "@/lib/services/queen-bee/prd-decomposition";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,23 @@ export async function POST(request: NextRequest) {
       const result = await initializeQueenBeeControlPlane(options);
       return NextResponse.json({ ok: true, protocol: "hivemind-queen-bee", ...publicState(result) });
     }
+    const fleetSnapshot = Array.isArray(body.fleetSnapshot)
+      ? body.fleetSnapshot
+      : await discoverQueenBeeFleetSnapshot(request.nextUrl.origin, request.headers.get("x-hivemindos-device-token"));
+    if (body.action === "decompose-prd") {
+      const result = await createQueenBeePrdTasks({
+        ...options,
+        prd: body.prd ?? body.message,
+        title: body.title ?? body.taskTitle,
+        source: body.source,
+        priority: body.priority,
+        projectId: body.projectId,
+        maxTasks: body.maxTasks,
+        preview: Boolean(body.preview),
+        fleetSnapshot,
+      });
+      return NextResponse.json({ ok: true, protocol: "hivemind-queen-bee", ...result });
+    }
     const result = await submitQueenBeeMessage({
       ...options,
       message: body.message,
@@ -37,9 +55,7 @@ export async function POST(request: NextRequest) {
       taskTitle: body.taskTitle,
       agentId: body.agentId,
       machineId: body.machineId,
-      fleetSnapshot: Array.isArray(body.fleetSnapshot)
-        ? body.fleetSnapshot
-        : await discoverQueenBeeFleetSnapshot(request.nextUrl.origin, request.headers.get("x-hivemindos-device-token")),
+      fleetSnapshot,
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {

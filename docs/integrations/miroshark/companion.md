@@ -1,3 +1,7 @@
+---
+title: "MiroShark Companion Integration"
+---
+
 # MiroShark Companion Integration
 
 MiroShark support is optional.

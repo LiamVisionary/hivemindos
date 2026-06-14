@@ -1,3 +1,7 @@
+---
+title: "Tailscale Fleet Telemetry"
+---
+
 # Tailscale Fleet Telemetry
 
 HivemindOS monitors agents across machines by polling a tiny read-only collector over a private Tailscale or Hivemind Link path.

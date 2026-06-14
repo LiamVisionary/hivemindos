@@ -13,6 +13,8 @@ SETUP_TAILNET_SYNC_ENABLED="${HIVE_SETUP_TAILNET_SYNC_ENABLED:-false}"
 LINK_ENABLED="${HIVE_LINK_ENABLED:-false}"
 COLLECTOR_ONLY="${HIVE_COLLECTOR_ONLY:-}"
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/macos-background-helpers.sh
+. "$APP_DIR/scripts/macos-background-helpers.sh"
 COLLECTOR="$APP_DIR/scripts/agent-telemetry-collector.mjs"
 SYNCTHING_RUNNER="$APP_DIR/scripts/run-syncthing.sh"
 LINK_BIN="${HIVE_LINK_BIN:-$APP_DIR/bin/hivemind-linkd}"
@@ -37,6 +39,13 @@ LINK_CONTROL_STATUS_URL="http://$LINK_CONTROL/status"
 LINK_CONTROL_HEALTH_URL="http://$LINK_CONTROL/health"
 SYSTEM_TAILNET_SERVE_ACTIVE="false"
 NODE_BIN="$(command -v node)"
+MACOS_BACKGROUND_HELPER_SOURCE="$APP_DIR/scripts/hivemindos-background-helper.c"
+MACOS_COLLECTOR_HELPER_NAME="HivemindOS Collector"
+MACOS_COLLECTOR_HELPER_ID="com.hivemindos.collector-helper"
+MACOS_COLLECTOR_HELPER_HOME="$HOME/.hivemindos/bin/$MACOS_COLLECTOR_HELPER_NAME"
+MACOS_SYNC_HELPER_NAME="HivemindOS Sync"
+MACOS_SYNC_HELPER_ID="com.hivemindos.sync-helper"
+MACOS_SYNC_HELPER_HOME="$HOME/.hivemindos/bin/$MACOS_SYNC_HELPER_NAME"
 
 if [[ -z "${HIVE_LINK_CONTROL:-}" && -f "$HOME/.hivemindos/collector.env" ]]; then
   EXISTING_LINK_CONTROL="$(awk -F= '$1=="HIVE_LINK_CONTROL"{print substr($0, index($0, "=") + 1)}' "$HOME/.hivemindos/collector.env" | tail -1)"
@@ -70,6 +79,43 @@ fi
 # The collector imports bonjour-service; make sure it resolves even when the full
 # workspace install never ran (collector-only machines). No-op otherwise.
 "$APP_DIR/scripts/ensure-collector-deps.sh"
+
+resolve_macos_collector_program_arguments() {
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    printf "<string>%s</string>\n    <string>%s</string>" "$NODE_BIN" "$COLLECTOR"
+    return 0
+  fi
+
+  if [[ -n "${HIVE_COLLECTOR_HELPER_BIN:-}" && -x "${HIVE_COLLECTOR_HELPER_BIN:-}" ]]; then
+    printf "<string>%s</string>\n    <string>%s</string>\n    <string>%s</string>" "$HIVE_COLLECTOR_HELPER_BIN" "$NODE_BIN" "$COLLECTOR"
+    return 0
+  fi
+
+  local helper_path
+  if helper_path="$(hivemindos_resolve_background_helper \
+    "$MACOS_COLLECTOR_HELPER_NAME" \
+    "$MACOS_COLLECTOR_HELPER_ID" \
+    "$MACOS_BACKGROUND_HELPER_SOURCE" \
+    "$MACOS_COLLECTOR_HELPER_HOME" \
+    "$APP_DIR/src-tauri/resources/hivemindos-collector-helper/$MACOS_COLLECTOR_HELPER_NAME" \
+    "$APP_DIR/resources/hivemindos-collector-helper/$MACOS_COLLECTOR_HELPER_NAME")"; then
+    printf "<string>%s</string>\n    <string>%s</string>\n    <string>%s</string>" "$helper_path" "$NODE_BIN" "$COLLECTOR"
+    return 0
+  fi
+
+  echo "Warning: could not build HivemindOS Collector helper; falling back to raw Node in the LaunchAgent." >&2
+  printf "<string>%s</string>\n    <string>%s</string>" "$NODE_BIN" "$COLLECTOR"
+}
+
+resolve_macos_sync_helper() {
+  hivemindos_resolve_background_helper \
+    "$MACOS_SYNC_HELPER_NAME" \
+    "$MACOS_SYNC_HELPER_ID" \
+    "$MACOS_BACKGROUND_HELPER_SOURCE" \
+    "$MACOS_SYNC_HELPER_HOME" \
+    "$APP_DIR/src-tauri/resources/hivemindos-sync-helper/$MACOS_SYNC_HELPER_NAME" \
+    "$APP_DIR/resources/hivemindos-sync-helper/$MACOS_SYNC_HELPER_NAME"
+}
 
 run_privileged() {
   if [[ "$(id -u)" == "0" ]]; then
@@ -156,6 +202,7 @@ build_hivemind_linkd_if_enabled() {
   [[ "$LINK_ENABLED" == "true" ]] || return 1
   if [[ -x "$LINK_BIN" ]]; then
     if [[ "$LINK_BIN" -nt "$APP_DIR/cmd/hivemind-linkd/main.go" && "$LINK_BIN" -nt "$APP_DIR/go.mod" && "$LINK_BIN" -nt "$APP_DIR/go.sum" ]]; then
+      hivemindos_sign_macos_binary "$LINK_BIN" "com.hivemindos.linkd"
       return 0
     fi
   fi
@@ -1053,16 +1100,32 @@ choose_system_tailnet_collector_port
 choose_link_local_collector_port
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
-  if [[ "$TAILNET_SYNC_ENABLED" == "true" ]]; then
+  SYNCTHING_PLIST="$HOME/Library/LaunchAgents/com.hivemindos.syncthing.plist"
+  LEGACY_SYNCTHING_PLIST="$HOME/Library/LaunchAgents/com.omni-agent-hivemind.syncthing.plist"
+  launchctl_bounded 5 bootout "gui/$(id -u)/com.omni-agent-hivemind.syncthing" >/dev/null 2>&1 || launchctl_bounded 5 unload "$LEGACY_SYNCTHING_PLIST" >/dev/null 2>&1 || true
+  rm -f "$LEGACY_SYNCTHING_PLIST"
+  if [[ "$TAILNET_SYNC_ENABLED" == "true" || -f "$SYNCTHING_PLIST" ]]; then
     install_syncthing_if_missing
     if command -v syncthing >/dev/null 2>&1; then
       SYNCTHING_BIN="$(command -v syncthing)"
-      if "$SYNCTHING_BIN" --help 2>/dev/null | grep -q '^  serve '; then
-        SYNCTHING_COMMAND="exec '$SYNCTHING_BIN' serve --no-browser --gui-address=127.0.0.1:8384"
+      SYNCTHING_HELPER="$(resolve_macos_sync_helper || true)"
+      SYNCTHING_HELP="$("$SYNCTHING_BIN" --help 2>/dev/null || true)"
+      if grep -q '^  serve ' <<<"$SYNCTHING_HELP"; then
+        SYNCTHING_ARGUMENTS="    <string>serve</string>
+    <string>--no-browser</string>
+    <string>--gui-address=127.0.0.1:8384</string>"
       else
-        SYNCTHING_COMMAND="exec '$SYNCTHING_BIN' -no-browser -gui-address=127.0.0.1:8384"
+        SYNCTHING_ARGUMENTS="    <string>-no-browser</string>
+    <string>-gui-address=127.0.0.1:8384</string>"
       fi
-      SYNCTHING_PLIST="$HOME/Library/LaunchAgents/com.hivemindos.syncthing.plist"
+      if [[ -n "$SYNCTHING_HELPER" && -x "$SYNCTHING_HELPER" ]]; then
+        SYNCTHING_PROGRAM_ARGUMENTS="    <string>$SYNCTHING_HELPER</string>
+    <string>$SYNCTHING_BIN</string>
+$SYNCTHING_ARGUMENTS"
+      else
+        SYNCTHING_PROGRAM_ARGUMENTS="    <string>$SYNCTHING_BIN</string>
+$SYNCTHING_ARGUMENTS"
+      fi
       mkdir -p "$(dirname "$SYNCTHING_PLIST")"
       cat > "$SYNCTHING_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -1072,9 +1135,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   <key>Label</key><string>com.hivemindos.syncthing</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/sh</string>
-    <string>-lc</string>
-    <string>$SYNCTHING_COMMAND</string>
+$SYNCTHING_PROGRAM_ARGUMENTS
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -1098,6 +1159,7 @@ PLIST
 
   PLIST="$HOME/Library/LaunchAgents/com.agent-control-room.telemetry.plist"
   mkdir -p "$(dirname "$PLIST")"
+  COLLECTOR_PROGRAM_ARGUMENTS="$(resolve_macos_collector_program_arguments)"
   cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -1106,8 +1168,7 @@ PLIST
   <key>Label</key><string>com.agent-control-room.telemetry</string>
   <key>ProgramArguments</key>
   <array>
-    <string>$NODE_BIN</string>
-    <string>$COLLECTOR</string>
+    $COLLECTOR_PROGRAM_ARGUMENTS
   </array>
   <key>EnvironmentVariables</key>
   <dict>

@@ -1,3 +1,7 @@
+---
+title: "Feature Guide"
+---
+
 # Feature Guide
 
 HivemindOS is a control room for local agent fleets.
@@ -90,7 +94,7 @@ The shared brain is a normal Obsidian vault, not a proprietary database. Hivemin
 <div class="docGrid">
   <section class="docCard">
     <h3>Brain, Vault, And Skills</h3>
-    <p>Obsidian vault routing, graph access, shared skills, GBrain, Syntho, Trading Brain, Synthesis, and sync ownership.</p>
+    <p>Obsidian vault routing, compiled wiki search, graph access, shared skills, GBrain, Syntho, Trading Brain, Synthesis, OKF export, and sync ownership.</p>
     <a href="brain-vault-and-skills.html">Open brain docs</a>
   </section>
   <section class="docCard">
@@ -105,7 +109,7 @@ The shared brain is a normal Obsidian vault, not a proprietary database. Hivemin
   </section>
   <section class="docCard">
     <h3>Whole Brain</h3>
-    <p>The separated GitHub Pages guide for vault structure, brain services, shared skills, sync health, and architecture sync rules.</p>
+    <p>The separated GitHub Pages guide for vault structure, compiled knowledge, brain services, OKF exchange bundles, shared skills, sync health, and architecture sync rules.</p>
     <a href="../whole-brain/">Open whole brain</a>
   </section>
   <section class="docCard">
@@ -144,6 +148,11 @@ Wallet and token features are explicit rails, not a background permission pool. 
     <h3>Integrations And Work History</h3>
     <p>GitLawb Code Proof, Nango, GitHub OAuth fallback, My Apps, API-service launchers, phone pairing, dynamic changelog, and work history.</p>
     <a href="integrations-and-work-history.html">Open integrations</a>
+  </section>
+  <section class="docCard">
+    <h3>Agent Provider Integrations</h3>
+    <p>External agent providers, MCP catalog discovery, Browser Use, OpenHands, Aider, n8n, Agentic Inbox, and Queen Bee PRD decomposition.</p>
+    <a href="agent-provider-integrations.html">Open provider docs</a>
   </section>
 </div>
 

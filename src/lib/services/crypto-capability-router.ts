@@ -2,6 +2,7 @@ import "server-only";
 
 import type { AgentPaymentProvider, AgentSpendCapAsset, AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { AGENT_PAYMENT_PROVIDER_FEATURES, agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
+import { BANKR_ACTION_CONFIRMATION } from "@/lib/services/bankr-actions";
 import { VEIL_CASH_NETWORK, VEIL_CASH_TRANSFER_CONFIRMATION_LABEL } from "@/lib/config/veil-cash";
 import { anyHiveEnvPresent, hiveEnvPresence, type HiveEnvPresence } from "@/lib/services/shared-hive-env";
 import { getWalletInfo } from "@/lib/services/wallet/local-wallet-vault";
@@ -16,6 +17,12 @@ export type CryptoCapabilityIntent =
   | "paid-api"
   | "private-paid-api"
   | "trade"
+  | "token-launch"
+  | "polymarket"
+  | "hyperliquid"
+  | "automation"
+  | "nft"
+  | "agent-job"
   | "card-payment"
   | "fund-llm-credits";
 
@@ -78,6 +85,7 @@ export type CryptoCapabilityRouterInput = {
   preferredProvider?: CryptoCapabilityProvider;
   amountUsd?: number;
   asset?: AgentSpendCapAsset;
+  prompt?: string;
   live?: boolean;
 };
 
@@ -96,12 +104,18 @@ const ROUTE_PRIORITY: Record<CryptoCapabilityIntent, CryptoCapabilityProvider[]>
   "paid-api": ["veil", "x402", "usepod", "venice", "moneyclaw"],
   "private-paid-api": ["veil"],
   trade: ["bankr"],
+  "token-launch": ["bankr"],
+  polymarket: ["bankr"],
+  hyperliquid: ["bankr"],
+  automation: ["bankr"],
+  nft: ["bankr"],
+  "agent-job": ["bankr"],
   "card-payment": ["moneyclaw"],
   "fund-llm-credits": ["bankr"],
 };
 
 const PROVIDER_INTENTS: Record<CryptoCapabilityProvider, CryptoCapabilityIntent[]> = {
-  bankr: ["status", "portfolio", "trade", "fund-llm-credits"],
+  bankr: ["status", "portfolio", "trade", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job", "fund-llm-credits"],
   moneyclaw: ["status", "portfolio", "receive", "send", "paid-api", "card-payment"],
   x402: ["status", "portfolio", "receive", "send", "paid-api"],
   usepod: ["status", "receive", "paid-api"],
@@ -116,6 +130,13 @@ export function normalizeCryptoIntent(value: unknown): CryptoCapabilityIntent {
   if (normalized === "x402" || normalized === "paid-api-call" || normalized === "paywall") return "paid-api";
   if (normalized === "private-x402" || normalized === "private-paid-api-call") return "private-paid-api";
   if (normalized === "bankr-llm" || normalized === "llm-credits") return "fund-llm-credits";
+  if (normalized === "swap" || normalized === "swaps" || normalized === "trading") return "trade";
+  if (normalized === "token" || normalized === "launch" || normalized === "deploy-token") return "token-launch";
+  if (normalized === "poly" || normalized === "prediction-market" || normalized === "prediction-markets") return "polymarket";
+  if (normalized === "hyper" || normalized === "perp" || normalized === "perps" || normalized === "leverage") return "hyperliquid";
+  if (normalized === "automations" || normalized === "recurring" || normalized === "dca" || normalized === "twap") return "automation";
+  if (normalized === "nfts") return "nft";
+  if (normalized === "bankr-agent" || normalized === "agent-api" || normalized === "job") return "agent-job";
   if (isCryptoCapabilityIntent(normalized)) return normalized;
   return "status";
 }
@@ -146,7 +167,7 @@ export async function getCryptoCapabilityMap(input: CryptoCapabilityRouterInput 
     selected,
     providers,
     sideEffects: [
-      "Any send, trade, paid API call, card payment, private transfer, or LLM credit funding is a spend action.",
+      "Any send, trade, token launch, Polymarket bet, Hyperliquid position, NFT mutation, automation, paid API call, card payment, private transfer, or LLM credit funding is a spend or state-changing action.",
       "The router only selects and prepares; execution stays with the existing provider endpoint or skill approval gate.",
       "Private transfers and private x402 require explicit reviewed confirmation.",
     ],
@@ -180,14 +201,15 @@ export async function prepareCryptoAction(input: CryptoCapabilityRouterInput & {
 
   const endpoint = selected.endpoints.find((item) => item.intent === intent) ?? selected.endpoints[0];
   const requestBody = requestBodyForIntent(selected.provider, intent, input);
+  const requiresApproval = selected.requiresApproval || bankrIntentRequiresApproval(intent, selected.provider);
   return {
     intent,
     provider: selected.provider,
     ready: selected.ready,
-    mode: selected.requiresApproval || !selected.spendReady ? "prepare" : "execute",
+    mode: requiresApproval || !selected.spendReady ? "prepare" : "execute",
     endpoint: endpoint ? { method: endpoint.method, route: endpoint.route, skill: endpoint.skill } : undefined,
     requestBody,
-    requiresApproval: selected.requiresApproval,
+    requiresApproval,
     confirmation: confirmationForIntent(intent, selected.provider),
     missing: selected.missing,
     guidance: guidanceForIntent(intent, selected),
@@ -226,9 +248,15 @@ async function bankrCapability(): Promise<CryptoProviderCapability> {
     missing: configured ? [] : [`Set one of ${BANKR_ENV_KEYS.join(", ")}.`],
     evidence: configured ? ["Bankr credential is present by key name."] : [],
     endpoints: [
-      { intent: "trade", skill: "bankr", note: "Use the Bankr skill or CLI for trading after policy approval." },
+      { intent: "portfolio", method: "POST", route: "/api/bankr/actions", note: "Read Bankr wallet portfolio with PnL and NFT context." },
+      { intent: "trade", method: "POST", route: "/api/bankr/actions", note: "Prepare or execute Bankr swaps/trades through the native approval gate." },
+      { intent: "token-launch", method: "POST", route: "/api/bankr/actions", note: "Prepare a natural-language Bankr token launch for explicit user confirmation." },
+      { intent: "polymarket", method: "POST", route: "/api/bankr/actions", note: "Search Polymarket read-only or prepare a Bankr prediction-market action for confirmation." },
+      { intent: "hyperliquid", method: "POST", route: "/api/bankr/actions", note: "Read Hyperliquid state or prepare a leverage/spot action for confirmation." },
+      { intent: "automation", method: "POST", route: "/api/bankr/actions", note: "Prepare recurring Bankr automations such as DCA, TWAP, limit, stop, or scheduled agent commands." },
+      { intent: "nft", method: "POST", route: "/api/bankr/actions", note: "Read NFT data or prepare NFT buy/sell/mint/transfer actions through Bankr." },
+      { intent: "agent-job", method: "POST", route: "/api/bankr/actions", note: "Run a Bankr Agent API prompt or inspect an existing Agent API job." },
       { intent: "fund-llm-credits", method: "POST", route: "/api/bankr/llm-credits", note: "Requires FUND_BANKR_LLM_CREDITS confirmation." },
-      { intent: "portfolio", skill: "bankr", note: "Use Bankr wallet portfolio commands for read-only portfolio checks." },
     ],
   });
 }
@@ -434,6 +462,15 @@ function requestBodyForIntent(
       confirmation: confirmationForIntent(intent, provider),
     };
   }
+  if (provider === "bankr" && intent !== "fund-llm-credits") {
+    return {
+      agentId: input.agentId,
+      intent,
+      prompt: input.prompt,
+      action: intent === "portfolio" ? "execute" : "prepare",
+      confirmation: confirmationForIntent(intent, provider),
+    };
+  }
   return {
     agentId: input.agentId,
     policy: input.wallet,
@@ -444,7 +481,8 @@ function guidanceForIntent(intent: CryptoCapabilityIntent, selected: CryptoProvi
   if (!selected.ready) return `Configure ${selected.label}: ${selected.missing.join(" ")}`;
   if (intent === "private-transfer") return `Review recipient, asset, amount, and cap, then execute ${selected.endpoints.find((endpoint) => endpoint.intent === intent)?.route}.`;
   if (intent === "paid-api" || intent === "private-paid-api") return `Use ${selected.label} for this paid API call and keep the request under the supplied wallet policy cap.`;
-  if (intent === "trade") return "Use the Bankr skill/CLI after the user approves the trade intent, market, amount, and risk bounds.";
+  if (selected.provider === "bankr" && intent === "portfolio") return "Use /api/bankr/actions for a read-only Bankr wallet portfolio check.";
+  if (selected.provider === "bankr" && ["trade", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job"].includes(intent)) return "Use /api/bankr/actions to prepare the Bankr action; execute only after the user confirms the reviewed draft.";
   return `Use ${selected.label} for ${intent}.`;
 }
 
@@ -452,8 +490,13 @@ function confirmationForIntent(intent: CryptoCapabilityIntent, provider: CryptoC
   if (intent === "private-transfer") return VEIL_CASH_TRANSFER_CONFIRMATION_LABEL;
   if (intent === "private-paid-api" || (intent === "paid-api" && provider === "veil")) return "VEIL_X402";
   if (intent === "send") return "SEND_USDC";
+  if (provider === "bankr" && ["trade", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job"].includes(intent)) return BANKR_ACTION_CONFIRMATION;
   if (intent === "fund-llm-credits") return "FUND_BANKR_LLM_CREDITS";
   return undefined;
+}
+
+function bankrIntentRequiresApproval(intent: CryptoCapabilityIntent, provider: CryptoCapabilityProvider) {
+  return provider === "bankr" && ["trade", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job"].includes(intent);
 }
 
 function walletSpendEnabled(wallet?: Partial<AgentWalletConfig>) {
@@ -476,6 +519,12 @@ function isCryptoCapabilityIntent(value: string): value is CryptoCapabilityInten
     "paid-api",
     "private-paid-api",
     "trade",
+    "token-launch",
+    "polymarket",
+    "hyperliquid",
+    "automation",
+    "nft",
+    "agent-job",
     "card-payment",
     "fund-llm-credits",
   ].includes(value);

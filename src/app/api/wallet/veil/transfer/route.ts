@@ -10,7 +10,7 @@ import {
 import { veilEnvValue } from "@/lib/services/wallet/veil-cli";
 import { executeVeilPrivateTransfer, veilPrivateTransferErrorMessage } from "@/lib/services/wallet/veil-private-transfer";
 import { requireAuth } from "@/lib/utils/server-auth";
-import { evaluateSpend, loadGovernanceWallet } from "@/lib/services/wallet/spend-governance";
+import { evaluateSpend, resolveSpendGovernance } from "@/lib/services/wallet/spend-governance";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 
 export const runtime = "nodejs";
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     // Governance: company kill switch, cumulative budgets, and approval escalation.
     // USDC is 1:1 USD; ETH uses the caller-supplied USD value when available.
     const usdValue = asset === "USDC" ? Number(amount) : Number(body.amountUsd ?? 0);
-    const governance = body.agentId ? await loadGovernanceWallet(body.agentId.trim()) : null;
+    const governance = body.agentId ? await resolveSpendGovernance(body.agentId.trim()) : null;
     let grantId: string | undefined;
     let companyId: string | undefined;
     if (governance) {

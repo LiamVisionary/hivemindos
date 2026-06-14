@@ -1,7 +1,7 @@
 import { HIVEMIND_OS_RUNTIME, normalizeAgentRuntime, type AgentRuntime, type KnownAgentRuntime } from "@/lib/types/agent-runtime";
 import type { RuntimeAdapter } from "./types";
 import { aeonAdapter } from "./aeon";
-import { claudeCodeAdapter, codexAdapter, opencodeAdapter } from "./cli-runtimes";
+import { aiderAdapter, claudeCodeAdapter, codexAdapter, opencodeAdapter, openHandsAdapter } from "./cli-runtimes";
 import { evoAdapter } from "./evo";
 import { hermesAdapter } from "./hermes";
 import { openAICompatibleAdapter } from "./openai-compatible";
@@ -13,6 +13,8 @@ export const RUNTIME_ADAPTERS: Record<KnownAgentRuntime, RuntimeAdapter> = {
   opencode: opencodeAdapter,
   codex: codexAdapter,
   "claude-code": claudeCodeAdapter,
+  openhands: openHandsAdapter,
+  aider: aiderAdapter,
   aeon: aeonAdapter,
   evo: evoAdapter,
   [HIVEMIND_OS_RUNTIME]: openAICompatibleAdapter,

@@ -1,3 +1,7 @@
+---
+title: "Integrations And Work History"
+---
+
 # Integrations And Work History
 
 Integrations connect HivemindOS to outside systems without letting those systems own the local control room.

@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowLeft, Ban, Clock3, Copy, ExternalLink, LoaderCircle, Maximize2, Minimize2, RefreshCcw, Route, Sparkles, Star, XOctagon } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Ban, Clock3, Copy, Download, ExternalLink, LoaderCircle, Maximize2, Minimize2, Play, RefreshCcw, Route, Search, Sparkles, Square, Star, Trash2, XOctagon } from "lucide-react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { AGENT_APP_CATALOG } from "@/features/dashboard/agent-capability-catalog";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
+import { AgentReachSetupWizard } from "@/features/dashboard/views/AgentReachSetupWizard";
 import { AppPreferencesCard, matchAppPreference, type AppPreferenceRecord } from "@/features/dashboard/views/AppPreferencesCard";
 import { getNativeFleetAppsCache } from "@/lib/native/fleet";
 
@@ -75,11 +77,262 @@ type FleetAppsPayload = {
   error?: string;
 };
 
+type InstallableServiceStatus = {
+  id: "n8n" | "browser-use" | "agentic-inbox" | "openhands" | "aider" | "agent-reach";
+  name: string;
+  installed: boolean;
+  running: boolean;
+  version?: string;
+  openUrl?: string;
+  detail: string;
+  installMethod: "docker" | "uv" | "uv-tool" | "pipx" | "cloudflare-worker";
+  requirements: string[];
+  sourceUrl: string;
+  provenance?: {
+    packageName: string;
+    packageManager: string;
+    installCommand: string;
+    updatePolicy: string;
+  };
+  securityNotes?: string[];
+  permissions?: {
+    fullAccess: boolean;
+    label: string;
+    detail: string;
+    approvedAt?: string;
+  };
+  projectDir?: string;
+  preflight?: Array<{ key: string; ok: boolean; detail: string }>;
+  preflightActions?: Array<{
+    action: InstallableServiceAction;
+    label: string;
+    detail: string;
+    disabled?: boolean;
+  }>;
+};
+
+type InstallableServiceAction =
+  | "status"
+  | "install"
+  | "start"
+  | "stop"
+  | "install-pipx"
+  | "install-agent-reach-x"
+  | "check-agent-reach-x-auth"
+  | "agent-reach-doctor"
+  | "test-agent-reach-x-profile"
+  | "reset-agent-reach-x";
+
+type InstallableServiceActionResponse = {
+  ok?: boolean;
+  error?: string;
+  service?: InstallableServiceStatus;
+  result?: unknown;
+};
+
 type MyAppsPanelProps = {
   activeView: DashboardView;
   fleetClass: ClassNameBuilder;
   formatRelativeTime: (timestamp: number) => string;
 };
+
+function isInstallOnlyCliService(service: InstallableServiceStatus | undefined) {
+  return service?.installMethod === "uv-tool" || service?.installMethod === "pipx";
+}
+
+function installableServiceLabel(id: string, action: InstallableServiceAction, service?: InstallableServiceStatus) {
+  const preflightAction = service?.preflightActions?.find((item) => item.action === action);
+  if (preflightAction) return preflightAction.label;
+  if (action === "status") return "Refresh";
+  if (action === "install-pipx") return "Install pipx";
+  if (action === "install-agent-reach-x") return "Enable X search";
+  if (action === "check-agent-reach-x-auth") return "Check X auth";
+  if (action === "agent-reach-doctor") return "Refresh channels";
+  if (action === "test-agent-reach-x-profile") return "Test X profile";
+  if (action === "reset-agent-reach-x") return "Reset X setup";
+  if (isInstallOnlyCliService(service) && service?.installed) return "Installed";
+  if (id === "agentic-inbox") return action === "install" ? "Setup" : action === "start" ? "Deploy" : "Disable";
+  if (id === "browser-use") return action === "install" ? "Install" : action === "start" ? "Open" : "Close";
+  return action === "install" ? "Install" : action === "start" ? "Start" : "Stop";
+}
+
+function installableServiceAction(serviceId: string, service: InstallableServiceStatus | undefined): InstallableServiceAction {
+  if (serviceId === "agentic-inbox") return service?.installed ? "start" : "install";
+  if (isInstallOnlyCliService(service)) return "install";
+  return service?.running ? "stop" : service?.installed ? "start" : "install";
+}
+
+function installableServiceBlocked(service: InstallableServiceStatus | undefined, action: InstallableServiceAction) {
+  if (!service) return false;
+  if (action === "install-pipx") return false;
+  if (
+    action === "install-agent-reach-x" ||
+    action === "check-agent-reach-x-auth" ||
+    action === "agent-reach-doctor" ||
+    action === "test-agent-reach-x-profile" ||
+    action === "reset-agent-reach-x"
+  ) return false;
+  if (isInstallOnlyCliService(service) && service.installed) return true;
+  if (action === "install" && /required before|is required before|is required to install/i.test(service.detail)) return true;
+  if (service.id === "agentic-inbox" && action === "start") return Boolean(service.preflight?.some((item) => !item.ok));
+  return false;
+}
+
+function InstallableServiceActionIcon({ action }: { action: InstallableServiceAction }) {
+  if (action === "start") return <Play aria-hidden="true" />;
+  if (action === "stop") return <Square aria-hidden="true" />;
+  if (action === "check-agent-reach-x-auth") return <RefreshCcw aria-hidden="true" />;
+  if (action === "agent-reach-doctor") return <RefreshCcw aria-hidden="true" />;
+  if (action === "test-agent-reach-x-profile") return <Search aria-hidden="true" />;
+  if (action === "reset-agent-reach-x") return <Trash2 aria-hidden="true" />;
+  return <Download aria-hidden="true" />;
+}
+
+function confirmSensitiveInstallableServiceAction(action: InstallableServiceAction) {
+  if (action === "check-agent-reach-x-auth") {
+    return window.confirm([
+      "Agent Reach will run twitter-cli's X auth check now.",
+      "It first looks for TWITTER_AUTH_TOKEN and TWITTER_CT0. If those are absent, macOS may show a Keychain prompt saying security wants Chrome Safe Storage access so twitter-cli can decrypt local browser cookies for X/Twitter.",
+      "Continue only if you want Agent Reach to use this authenticated X session.",
+    ].join("\n\n"));
+  }
+  if (action === "reset-agent-reach-x") {
+    return window.confirm([
+      "Reset the optional Agent Reach X setup?",
+      "This uninstalls the HivemindOS-managed twitter-cli backend. It does not delete Chrome cookies, revoke macOS Keychain decisions, or remove shared env keys.",
+    ].join("\n\n"));
+  }
+  return true;
+}
+
+function BrowserUseFullPermissionsModal({
+  busy,
+  onClose,
+  onUnlock,
+}: {
+  busy: boolean;
+  onClose: () => void;
+  onUnlock: () => void;
+}) {
+  const [unlockValue, setUnlockValue] = useState(0);
+  const unlockTrackRef = useRef<HTMLDivElement | null>(null);
+  const portalTarget = typeof document === "undefined" ? null : document.body;
+
+  const unlockValueFromClientX = useCallback((clientX: number) => {
+    const rect = unlockTrackRef.current?.getBoundingClientRect();
+    if (!rect) return 0;
+    const thumbSize = 52;
+    const travel = Math.max(1, rect.width - thumbSize - 8);
+    const next = ((clientX - rect.left - thumbSize / 2) / travel) * 100;
+    return Math.max(0, Math.min(100, next));
+  }, []);
+
+  const finishUnlockDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const next = unlockValueFromClientX(event.clientX);
+    if (next >= 96) {
+      setUnlockValue(100);
+      onUnlock();
+      return;
+    }
+    setUnlockValue(0);
+  }, [onUnlock, unlockValueFromClientX]);
+
+  if (!portalTarget) return null;
+
+  return createPortal((
+    <div
+      role="presentation"
+      onClick={() => { if (!busy) onClose(); }}
+      className="fixed inset-0 z-[90] grid place-items-center bg-[rgba(2,6,23,0.76)] p-4 backdrop-blur-md"
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="browser-use-full-permissions-title"
+        onClick={(event) => event.stopPropagation()}
+        className="w-full max-w-[520px] rounded-md border border-[rgba(251,191,36,0.34)] bg-[rgba(15,23,42,0.98)] p-5 text-[var(--foreground)] shadow-[0_28px_90px_rgba(0,0,0,0.5)]"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="eyebrow text-[#fde68a]">Browser Use permissions</p>
+            <h3 id="browser-use-full-permissions-title" className="m-0 text-xl font-black leading-tight">
+              Enable full browser permissions?
+            </h3>
+          </div>
+          <Button type="button" size="icon-sm" variant="secondary" aria-label="Cancel full permissions" onClick={onClose} disabled={busy}>
+            <XOctagon aria-hidden="true" />
+          </Button>
+        </div>
+
+        <div className="mt-4 grid gap-2 rounded-md border border-[rgba(251,191,36,0.22)] bg-[rgba(251,191,36,0.07)] p-3 text-sm leading-6 text-[var(--muted)]">
+          <span>Agents will be able to run high-agency Browser Use actions from this machine.</span>
+          <span>This includes Browser Use Cloud task creation, uploads, JavaScript eval, and real Chrome profile or CDP launch options where the bridge supports them.</span>
+          <span>Only enable this if you trust the agents and the sites they will operate on.</span>
+        </div>
+
+        <div className="mt-4 rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(2,6,23,0.58)] p-3">
+          <div className="mb-2 font-mono text-[11px] font-black uppercase text-[#fde68a]">Slide to unlock full permissions</div>
+          <div
+            ref={unlockTrackRef}
+            role="slider"
+            aria-label="Slide to unlock Browser Use full permissions"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(unlockValue)}
+            tabIndex={0}
+            onPointerDown={(event) => {
+              if (busy) return;
+              event.currentTarget.setPointerCapture(event.pointerId);
+              setUnlockValue(unlockValueFromClientX(event.clientX));
+            }}
+            onPointerMove={(event) => {
+              if (!event.currentTarget.hasPointerCapture(event.pointerId) || busy) return;
+              setUnlockValue(unlockValueFromClientX(event.clientX));
+            }}
+            onPointerUp={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+              if (!busy) finishUnlockDrag(event);
+            }}
+            onPointerCancel={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+              setUnlockValue(0);
+            }}
+            className="relative grid h-[58px] touch-none select-none items-center overflow-hidden rounded-full border border-[rgba(251,191,36,0.34)] bg-[linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] shadow-[inset_0_2px_12px_rgba(0,0,0,0.48)]"
+          >
+            <div
+              aria-hidden="true"
+              className="absolute inset-1 max-w-[calc(100%-8px)] rounded-full bg-[linear-gradient(90deg,rgba(251,191,36,0.30),rgba(251,191,36,0.08))]"
+              style={{
+                width: `calc(${unlockValue}% + 52px)`,
+                transition: unlockValue === 0 ? "width 180ms ease" : "none",
+              }}
+            />
+            <div
+              aria-hidden="true"
+              className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-xs font-black text-[#fde68a]"
+              style={{
+                opacity: Math.max(0.22, 1 - unlockValue / 82),
+                transition: unlockValue === 0 ? "opacity 180ms ease" : "none",
+              }}
+            >
+              slide to enable
+            </div>
+            <div
+              aria-hidden="true"
+              className="absolute top-1 grid h-[50px] w-[50px] place-items-center rounded-full border border-white/30 bg-[linear-gradient(180deg,#fff8e1,#fde68a)] text-[#713f12] shadow-[0_10px_24px_rgba(0,0,0,0.34)]"
+              style={{
+                left: `calc(4px + ${unlockValue}% - ${unlockValue * 0.58}px)`,
+                transition: unlockValue === 0 ? "left 180ms ease" : "none",
+              }}
+            >
+              <AlertTriangle aria-hidden="true" className="h-4 w-4" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  ), portalTarget);
+}
 
 const loadingIconThemes = [
   "from-teal-300/25 to-emerald-500/10",
@@ -367,6 +620,10 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
   const [copiedRouteKey, setCopiedRouteKey] = useState("");
   const [taskActionStatus, setTaskActionStatus] = useState("");
   const [busyTaskAction, setBusyTaskAction] = useState("");
+  const [installableServices, setInstallableServices] = useState<Record<string, InstallableServiceStatus>>({});
+  const [busyServiceAction, setBusyServiceAction] = useState("");
+  const [browserUsePermissionPromptOpen, setBrowserUsePermissionPromptOpen] = useState(false);
+  const [agentReachSetupOpen, setAgentReachSetupOpen] = useState(false);
   const previousActiveViewRef = useRef<DashboardView | null>(null);
 
   const refresh = useCallback(async (force = false) => {
@@ -440,6 +697,99 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
     };
   }, [activeView]);
 
+  const refreshInstallableServices = useCallback(async () => {
+    const installable = AGENT_APP_CATALOG.filter((app) => app.installableServiceId);
+    const bulkData = await fetch("/api/fleet/apps/installable-services", { cache: "no-store" })
+      .then((response) => response.json().catch(() => null))
+      .catch(() => null) as { ok?: boolean; services?: InstallableServiceStatus[] } | null;
+    if (bulkData?.ok && Array.isArray(bulkData.services)) {
+      const next: Record<string, InstallableServiceStatus> = {};
+      for (const service of bulkData.services) next[service.id] = service;
+      setInstallableServices(next);
+      return;
+    }
+    const entries = await Promise.allSettled(installable.map(async (app) => {
+      const id = app.installableServiceId!;
+      const serviceResponse = await fetch(`/api/fleet/apps/installable-services?id=${encodeURIComponent(id)}`, { cache: "no-store" });
+      const data = await serviceResponse.json().catch(() => null) as { ok?: boolean; service?: InstallableServiceStatus } | null;
+      return data?.ok && data.service ? [id, data.service] as const : null;
+    }));
+    const next: Record<string, InstallableServiceStatus> = {};
+    for (const entry of entries) {
+      if (entry.status === "fulfilled" && entry.value) next[entry.value[0]] = entry.value[1];
+    }
+    setInstallableServices(next);
+  }, []);
+
+  useEffect(() => {
+    if (activeView !== "my-apps") return;
+    const timer = window.setTimeout(() => {
+      void refreshInstallableServices();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeView, refreshInstallableServices]);
+
+  const runInstallableServiceAction = useCallback(async (
+    id: string,
+    action: InstallableServiceAction,
+    input?: { profileUrl?: string; maxPosts?: number; maxReplies?: number },
+  ): Promise<InstallableServiceActionResponse | null> => {
+    if (!confirmSensitiveInstallableServiceAction(action)) return null;
+    setBusyServiceAction(`${id}:${action}`);
+    setStatusTone("info");
+    const label = installableServiceLabel(id, action);
+    setStatus(`${label} ${id}...`);
+    try {
+      const response = await fetch("/api/fleet/apps/installable-services", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action, input }),
+      });
+      const data = await response.json().catch(() => null) as InstallableServiceActionResponse | null;
+      if (!response.ok || !data?.ok || !data.service) throw new Error(data?.error || "Service action failed.");
+      setInstallableServices((current) => ({ ...current, [id]: data.service! }));
+      setStatus(data.service.detail);
+      if (!["status", "agent-reach-doctor", "check-agent-reach-x-auth", "test-agent-reach-x-profile"].includes(action)) await refresh(true);
+      return data;
+    } catch (error) {
+      setStatusTone("error");
+      setStatus(error instanceof Error ? error.message : "Service action failed.");
+      return { ok: false, error: error instanceof Error ? error.message : "Service action failed." };
+    } finally {
+      setBusyServiceAction("");
+    }
+  }, [refresh]);
+
+  const setBrowserUseFullPermissions = useCallback(async (fullAccess: boolean) => {
+    setBusyServiceAction(`browser-use:permissions`);
+    setStatusTone("info");
+    setStatus(fullAccess ? "Enabling Browser Use full permissions..." : "Returning Browser Use to limited permissions...");
+    try {
+      const response = await fetch("/api/browser-use", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set-full-permissions", fullAccess }),
+      });
+      const data = await response.json().catch(() => null) as { ok?: boolean; error?: string; service?: InstallableServiceStatus } | null;
+      if (!response.ok || !data?.ok || !data.service) throw new Error(data?.error || "Could not update Browser Use permissions.");
+      setInstallableServices((current) => ({ ...current, "browser-use": data.service! }));
+      setStatus(data.service.permissions?.detail || data.service.detail);
+      if (fullAccess) setBrowserUsePermissionPromptOpen(false);
+    } catch (error) {
+      setStatusTone("error");
+      setStatus(error instanceof Error ? error.message : "Could not update Browser Use permissions.");
+    } finally {
+      setBusyServiceAction("");
+    }
+  }, []);
+
+  const refreshAllApps = useCallback(async () => {
+    await Promise.all([
+      refresh(true),
+      refreshInstallableServices(),
+    ]);
+  }, [refresh, refreshInstallableServices]);
+
   const rememberAppPreference = useCallback((preference: AppPreferenceRecord) => {
     setAppPreferences((current) => [...current.filter((entry) => entry.appId !== preference.appId), preference]);
   }, []);
@@ -473,6 +823,7 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
   }
   const readyMachines = visibleMachineKeys.size;
   const reportingMachines = reportingMachineKeys.size;
+  const browserUsePermissionsBusy = busyServiceAction === "browser-use:permissions";
 
   const copyRoute = async (route: ApiServiceRoute) => {
     await navigator.clipboard.writeText(route.url || route.path).catch(() => undefined);
@@ -523,7 +874,7 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
             Apps & Services
           </Button>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="secondary" onClick={() => void refresh(true)} disabled={loading}>
+            <Button type="button" size="sm" variant="secondary" onClick={() => void refreshAllApps()} disabled={loading}>
               {loading ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <RefreshCcw aria-hidden="true" />}
               Refresh
             </Button>
@@ -808,7 +1159,7 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
           <p>Running Tailnet services plus installable providers that humans can open and agents can call.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="secondary" onClick={() => void refresh(true)} disabled={loading}>
+          <Button type="button" size="sm" variant="secondary" onClick={() => void refreshAllApps()} disabled={loading}>
             {loading ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <RefreshCcw aria-hidden="true" />}
             Refresh
           </Button>
@@ -886,30 +1237,158 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
           </span>
         </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {AGENT_APP_CATALOG.map((app) => (
-            <article key={app.id} className="grid gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4">
-              <div>
-                <span className="font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">{app.category}</span>
-                <strong className="mt-1 block text-sm text-[var(--foreground)]">{app.name}</strong>
-              </div>
-              <p className="m-0 text-xs leading-5 text-[var(--muted)]">{app.description}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {[...app.badges, ...app.handles.slice(0, 2)].map((label) => (
-                  <span key={label} className="rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(15,23,42,0.58)] px-2 py-1 text-[11px] font-bold text-[var(--muted)]">
-                    {label}
-                  </span>
-                ))}
-              </div>
-              <Button type="button" size="sm" variant="secondary" className="w-fit" asChild>
-                <a href={app.sourceUrl} target="_blank" rel="noreferrer">
-                  <ExternalLink aria-hidden="true" />
-                  Source
-                </a>
-              </Button>
-            </article>
-          ))}
+          {AGENT_APP_CATALOG.map((app) => {
+            const service = app.installableServiceId ? installableServices[app.installableServiceId] : undefined;
+            const serviceAction = app.installableServiceId ? installableServiceAction(app.installableServiceId, service) : "install";
+            const serviceBusy = app.installableServiceId ? busyServiceAction.startsWith(`${app.installableServiceId}:`) : false;
+            const serviceBlocked = installableServiceBlocked(service, serviceAction);
+            const servicePreflightActions = (service?.preflightActions ?? []).filter((preflightAction) => preflightAction.action !== "test-agent-reach-x-profile");
+            return (
+              <article key={app.id} className="grid gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4">
+                <div>
+                  <span className="font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">{app.category}</span>
+                  <strong className="mt-1 block text-sm text-[var(--foreground)]">{app.name}</strong>
+                </div>
+                <p className="m-0 text-xs leading-5 text-[var(--muted)]">{app.description}</p>
+                {service ? (
+                  <p className="m-0 rounded-md border border-[rgba(94,234,212,0.18)] bg-[rgba(20,184,166,0.07)] px-2 py-1.5 text-[11px] leading-4 text-[var(--muted)]">
+                    {service.detail}
+                  </p>
+                ) : null}
+                {service?.provenance ? (
+                  <div className="grid gap-1 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.24)] px-2 py-1.5 text-[11px] leading-4 text-[var(--muted)]">
+                    <span>
+                      {service.provenance.packageManager}: {service.provenance.packageName}{service.version ? ` v${service.version}` : ""}
+                    </span>
+                    <span>{service.provenance.updatePolicy}</span>
+                  </div>
+                ) : null}
+                {service?.securityNotes?.length ? (
+                  <div className="grid gap-1 rounded-md border border-[rgba(251,191,36,0.22)] bg-[rgba(251,191,36,0.07)] px-2 py-1.5 text-[11px] leading-4 text-[var(--muted)]">
+                    {service.securityNotes.slice(0, 3).map((note) => <span key={note}>{note}</span>)}
+                  </div>
+                ) : null}
+                {service?.preflight?.length ? (
+                  <div className="grid gap-1 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.20)] px-2 py-1.5 text-[11px] leading-4 text-[var(--muted)]">
+                    {service.preflight.map((item) => (
+                      <div key={item.key} className="flex items-start gap-2">
+                        <span
+                          aria-hidden="true"
+                          className={[
+                            "mt-[5px] block h-2 w-2 shrink-0 rounded-full",
+                            item.ok ? "bg-[var(--accent-strong)]" : "bg-[#fbbf24]",
+                          ].join(" ")}
+                        />
+                        <span>{item.detail}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap gap-1.5">
+                  {[...app.badges, ...app.handles.slice(0, 2)].map((label) => (
+                    <span key={label} className="rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(15,23,42,0.58)] px-2 py-1 text-[11px] font-bold text-[var(--muted)]">
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {app.installableServiceId ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={serviceAction === "stop" ? "secondary" : "default"}
+                      className="w-fit"
+                      isLoading={serviceBusy}
+                      disabled={serviceBusy || serviceBlocked}
+                      onClick={() => void runInstallableServiceAction(app.installableServiceId!, serviceAction)}
+                    >
+                      <InstallableServiceActionIcon action={serviceAction} />
+                      {installableServiceLabel(app.installableServiceId!, serviceAction, service)}
+                    </Button>
+                  ) : null}
+                  {app.installableServiceId ? servicePreflightActions.map((preflightAction) => (
+                    <Button
+                      key={preflightAction.action}
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="w-fit"
+                      title={preflightAction.detail}
+                      isLoading={busyServiceAction === `${app.installableServiceId}:${preflightAction.action}`}
+                      disabled={serviceBusy || preflightAction.disabled}
+                      onClick={() => void runInstallableServiceAction(app.installableServiceId!, preflightAction.action)}
+                    >
+                      <InstallableServiceActionIcon action={preflightAction.action} />
+                      {installableServiceLabel(app.installableServiceId!, preflightAction.action, service)}
+                    </Button>
+                  )) : null}
+                  {app.installableServiceId === "browser-use" && service?.permissions ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={service.permissions.fullAccess ? "secondary" : "default"}
+                      className="w-fit"
+                      isLoading={serviceBusy && busyServiceAction === "browser-use:permissions"}
+                      disabled={serviceBusy}
+                      onClick={() => {
+                        if (service.permissions?.fullAccess) {
+                          void setBrowserUseFullPermissions(false);
+                          return;
+                        }
+                        setBrowserUsePermissionPromptOpen(true);
+                      }}
+                    >
+                      <AlertTriangle aria-hidden="true" />
+                      {service.permissions.fullAccess ? "Full permissions on" : "Full permissions"}
+                    </Button>
+                  ) : null}
+                  {app.installableServiceId === "agent-reach" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="w-fit"
+                      disabled={serviceBusy}
+                      onClick={() => {
+                        setAgentReachSetupOpen(true);
+                        void runInstallableServiceAction("agent-reach", "status");
+                      }}
+                    >
+                      <Sparkles aria-hidden="true" />
+                      Setup
+                    </Button>
+                  ) : null}
+                  <Button type="button" size="sm" variant="secondary" className="w-fit" asChild>
+                    <a href={app.sourceUrl} target="_blank" rel="noreferrer">
+                      <ExternalLink aria-hidden="true" />
+                      Source
+                    </a>
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
+      {browserUsePermissionPromptOpen ? (
+        <BrowserUseFullPermissionsModal
+          busy={browserUsePermissionsBusy}
+          onClose={() => {
+            if (!browserUsePermissionsBusy) setBrowserUsePermissionPromptOpen(false);
+          }}
+          onUnlock={() => void setBrowserUseFullPermissions(true)}
+        />
+      ) : null}
+      {agentReachSetupOpen ? (
+        <AgentReachSetupWizard
+          service={installableServices["agent-reach"]}
+          busyAction={busyServiceAction}
+          onAction={(action, input) => runInstallableServiceAction("agent-reach", action, input)}
+          onClose={() => {
+            if (!busyServiceAction.startsWith("agent-reach:")) setAgentReachSetupOpen(false);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

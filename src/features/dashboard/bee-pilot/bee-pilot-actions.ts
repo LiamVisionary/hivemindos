@@ -134,6 +134,23 @@ export function isBeePilotActionId(value: unknown): value is BeePilotActionId {
   return typeof value === "string" && (BEE_PILOT_ACTION_IDS as readonly string[]).includes(value);
 }
 
+/**
+ * Actions that pop a real overlay modal (vs. inline UI or navigation). The
+ * voice overlay minimizes only for these so the chat history stays visible
+ * during plain navigation. create-wallet is inline (the wallet card confirms
+ * in place), so it is intentionally excluded.
+ */
+export const MODAL_OPENING_ACTIONS: ReadonlySet<BeePilotActionId> = new Set<BeePilotActionId>([
+  "open-agent-create",
+  "open-agent-settings",
+  "create-schedule",
+  "open-skill-browser",
+]);
+
+export function planOpensModal(plan: BeePilotPlan): boolean {
+  return plan.steps.some((step) => MODAL_OPENING_ACTIONS.has(step.action));
+}
+
 const MAX_PLAN_STEPS = 6;
 
 /** Extracts and validates a Bee Pilot plan from raw model text (strict-JSON-with-slack). */
@@ -168,6 +185,10 @@ export function parseBeePilotPlan(text: string): BeePilotPlan | null {
 
 function normalize(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // Canonical runtime ids keyed by the words a user might say.
@@ -277,23 +298,30 @@ export function localBeePilotPlan(input: string, context: BeePilotContext): BeeP
   const lower = normalize(command);
   if (!lower) return null;
 
-  // "create [a] [runtime] [provider] agent [named <name>] [on <machine>]"
-  const createAgent = command.match(/^(?:create|add|make|new)\s+(?:a\s+|an\s+|new\s+)*(?<desc>[a-z0-9 -]*?)\s*agent\b(?<rest>.*)$/i);
-  if (createAgent) {
+  // "create [a] [runtime] [provider] [model] agent [named <name>] [on <machine>]"
+  // runtime/provider/model can appear before OR after the word "agent"
+  // ("a hermes agent with usepod and gpt-5.5"), so resolve from the whole spec.
+  // The wallet guard keeps "create a wallet for my <x> agent" out of here.
+  const createAgent = command.match(/^(?:create|add|make|new)\b(?<spec>.*)$/i);
+  const createAgentSpec = createAgent?.groups?.spec ?? "";
+  if (createAgent && /\bagent\b/i.test(createAgentSpec) && !/\bwallet\b/i.test(createAgentSpec)) {
     const params: Record<string, string> = {};
-    const rest = createAgent.groups?.rest ?? "";
-    const nameMatch = rest.match(/\b(?:named|called)\s+(?<name>.+?)(?:\s+on\b.*)?$/i);
+    const nameMatch = createAgentSpec.match(/\b(?:named|called)\s+(?<name>.+?)(?:\s+on\b.*)?$/i);
     if (nameMatch?.groups?.name) params.name = nameMatch.groups.name.trim();
-    const machineMatch = rest.match(/\bon\s+(?:my\s+)?(?<machine>.+?)(?:\s+(?:named|called)\b.*)?$/i);
+    const machineMatch = createAgentSpec.match(/\bon\s+(?:my\s+)?(?<machine>.+?)(?:\s+(?:named|called)\b.*)?$/i);
     if (machineMatch?.groups?.machine) params.machine = machineMatch.groups.machine.trim();
-    const desc = createAgent.groups?.desc ?? "";
-    const runtime = resolveRuntimeId(desc);
+    // Strip the name/machine clauses so they can't be misread as a runtime
+    // (e.g. an agent named "Claude") or provider.
+    let cleanSpec = createAgentSpec;
+    if (params.name) cleanSpec = cleanSpec.replace(new RegExp(`\\b(?:named|called)\\s+${escapeRegExp(params.name)}`, "i"), " ");
+    if (params.machine) cleanSpec = cleanSpec.replace(new RegExp(`\\bon\\s+(?:my\\s+)?${escapeRegExp(params.machine)}`, "i"), " ");
+    const runtime = resolveRuntimeId(cleanSpec);
     if (runtime) params.runtime = runtime;
-    const provider = resolveProviderSlug(desc);
+    const provider = resolveProviderSlug(cleanSpec);
     if (provider) params.provider = provider;
-    const model = extractModelHint(desc, runtime, provider);
+    const model = extractModelHint(cleanSpec, runtime, provider);
     if (model) params.model = model;
-    const detail = model || provider;
+    const detail = [provider, model].filter(Boolean).join(" + ");
     const reply = detail || runtime
       ? `Opening the new agent setup${detail ? ` with ${detail}` : ""}.`
       : "Opening the new agent setup.";

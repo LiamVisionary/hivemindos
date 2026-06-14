@@ -14,6 +14,7 @@ export type AgentCreateDraft = {
   customWorkerClass?: CustomWorkerClassProfile;
   customWorkerClasses: CustomWorkerClassProfile[];
   selectedCustomWorkerClassId?: string;
+  soulPrompt?: string;
   skillProfilePrompt: string;
   preferredSkillSlugs: string[];
   taskPreferences?: WorkerTaskPreference[];

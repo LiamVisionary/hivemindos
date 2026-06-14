@@ -7,14 +7,17 @@ import { spawnSync } from "node:child_process";
 
 const MEMORY_FOLDER = "Memory/Distillations/Agent Memory";
 const INDEX_PATH = "Operations/Brain Services/Agent Memory Index.jsonl";
-const MAX_VAULT_FILES = 5000;
+const FULL_VAULT_INDEX_PATH = "Operations/Brain Services/Full Vault Search Index.jsonl";
+const MAX_VAULT_FILES = 50000;
 const MAX_VAULT_BYTES = 256 * 1024;
+const MAX_INDEX_TERMS_PER_NOTE = 900;
 const LOW_SIGNAL_WORDS = new Set(["agent", "agents", "brain", "hivemindos", "memory", "memories", "note", "notes", "shared", "vault"]);
 const EXCLUDE_PARTS = new Set([".git", ".obsidian", ".trash", ".hivemindos-transfers", "node_modules"]);
 const EXCLUDE_PREFIXES = [
   "Operations/Runtime Mirrors/",
   "Operations/Brain Services/Agent Memory Index.jsonl",
   "Operations/Brain Services/Agent Memory Proofs.jsonl",
+  FULL_VAULT_INDEX_PATH,
   "Operations/Vault Migrations/",
   "Archive/",
 ];
@@ -285,6 +288,7 @@ function score(record, query) {
     if (content.includes(word)) { value += 4; matched.add(word); }
     if ((record.source || "").toLowerCase().includes(word) || record.notePath.toLowerCase().includes(word)) { value += 2; matched.add(word); }
   }
+  if (record.searchScore) value += Math.min(30, Math.max(0, Math.round(record.searchScore)));
   value += Math.round((record.confidence || 0.62) * 10);
   if (record.notePath.startsWith(`${MEMORY_FOLDER}/`)) value += 4;
   return { score: value, matched: [...matched] };
@@ -364,6 +368,144 @@ function searchVaultFiles(root, query) {
     .slice(0, MAX_VAULT_FILES);
 }
 
+function collectionForPath(notePath) {
+  const first = notePath.split("/")[0]?.toLowerCase() || "root";
+  return ["intake", "memory", "projects", "synthesis", "ideas", "operations", "skills", "templates"].includes(first) ? first : "root";
+}
+
+function termCounts(terms) {
+  const counts = new Map();
+  for (const term of terms) counts.set(term, (counts.get(term) || 0) + 1);
+  return Object.fromEntries([...counts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, MAX_INDEX_TERMS_PER_NOTE));
+}
+
+function fullVaultIndexRecord(root, file) {
+  const st = fs.statSync(file);
+  if (st.size > MAX_VAULT_BYTES) return null;
+  const markdown = fs.readFileSync(file, "utf8");
+  const { fields, body } = parseFrontmatter(markdown);
+  const notePath = rel(root, file);
+  const title = String(fields.get("title") || (body.match(/^#\s+(.+)$/m) || [])[1] || path.basename(file, ".md")).trim();
+  const headings = [...body.matchAll(/^#{1,4}\s+(.+)$/gm)].map((match) => match[1].trim()).slice(0, 32);
+  const tags = Array.isArray(fields.get("tags")) ? fields.get("tags").map((tag) => String(tag).toLowerCase()) : [];
+  const frontmatterType = typeof fields.get("type") === "string" ? String(fields.get("type")) : undefined;
+  const tokens = words([title, headings.join(" "), tags.join(" "), frontmatterType, body.replace(/^#\s+.+$/gm, " ")].filter(Boolean).join("\n"));
+  if (!tokens.length) return null;
+  return {
+    schema: "hivemindos.full-vault-search.v1",
+    path: notePath,
+    collection: collectionForPath(notePath),
+    title,
+    headings,
+    tags,
+    frontmatterType,
+    mtimeMs: st.mtimeMs,
+    size: st.size,
+    documentLength: tokens.length,
+    terms: termCounts(tokens),
+    excerpt: compact(body.replace(/^#\s+.+$/gm, " ")),
+  };
+}
+
+function rebuildFullVaultIndex(root) {
+  const records = [];
+  for (const file of walk(root)) {
+    if (rel(root, file).startsWith(`${MEMORY_FOLDER}/`)) continue;
+    const record = fullVaultIndexRecord(root, file);
+    if (record) records.push(record);
+  }
+  const file = path.join(root, FULL_VAULT_INDEX_PATH);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : ""), "utf8");
+  return records;
+}
+
+function readFullVaultIndex(root) {
+  const file = path.join(root, FULL_VAULT_INDEX_PATH);
+  if (!fs.existsSync(file)) return rebuildFullVaultIndex(root);
+  const records = [];
+  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const parsed = JSON.parse(line);
+      if (parsed.schema === "hivemindos.full-vault-search.v1" && parsed.path && parsed.terms) records.push(parsed);
+    } catch {
+      // Ignore corrupt generated rows; explicit rebuild repairs the index.
+    }
+  }
+  return records.length ? records : rebuildFullVaultIndex(root);
+}
+
+function parseFullVaultQuery(query) {
+  const lexLines = String(query || "").split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /^lex:/i.test(line))
+    .map((line) => line.replace(/^lex:\s*/i, ""));
+  const source = lexLines.length ? lexLines.join(" ") : String(query || "");
+  const phrases = [...source.matchAll(/"([^"]+)"/g)].map((match) => match[1].toLowerCase()).filter(Boolean);
+  const terms = [];
+  const negativeTerms = [];
+  const collections = [];
+  const pathPrefixes = [];
+  for (const raw of source.replace(/"([^"]+)"/g, " ").split(/\s+/).filter(Boolean)) {
+    const value = raw.toLowerCase().replace(/^["']|["']$/g, "");
+    const [key, ...rest] = value.split(":");
+    const filter = rest.join(":");
+    if (rest.length && filter) {
+      if (key === "collection" || key === "c") collections.push(filter);
+      else if (key === "path") pathPrefixes.push(filter.replace(/^\/+/, ""));
+      else terms.push(...words(filter));
+    } else if (value.startsWith("-")) {
+      negativeTerms.push(...words(value.slice(1)));
+    } else {
+      terms.push(...words(value));
+    }
+  }
+  return { terms: [...new Set(terms)], negativeTerms: [...new Set(negativeTerms)], phrases, collections, pathPrefixes };
+}
+
+function searchFullVaultIndex(root, query, limit = 400) {
+  const parsed = parseFullVaultQuery(query);
+  const records = readFullVaultIndex(root).filter((record) => {
+    if (parsed.collections.length && !parsed.collections.includes(record.collection)) return false;
+    if (parsed.pathPrefixes.length && !parsed.pathPrefixes.some((prefix) => record.path.toLowerCase().startsWith(prefix))) return false;
+    if (parsed.negativeTerms.some((term) => record.terms[term])) return false;
+    return true;
+  });
+  const averageLength = records.reduce((sum, record) => sum + record.documentLength, 0) / Math.max(1, records.length);
+  const docFreq = new Map(parsed.terms.map((term) => [term, records.reduce((count, record) => count + (record.terms[term] ? 1 : 0), 0)]));
+  const hasSearchTerms = parsed.terms.length || parsed.phrases.length;
+  return records.map((record) => {
+    const matched = new Set();
+    let searchScore = 0;
+    const title = record.title.toLowerCase();
+    const headings = (record.headings || []).join(" ").toLowerCase();
+    const haystack = `${title} ${headings} ${record.path.toLowerCase()} ${record.excerpt.toLowerCase()}`;
+    for (const term of parsed.terms) {
+      const frequency = record.terms[term] || 0;
+      if (!frequency) continue;
+      const df = docFreq.get(term) || 1;
+      const idf = Math.log(1 + (records.length - df + 0.5) / (df + 0.5));
+      const denominator = frequency + 1.2 * (1 - 0.75 + 0.75 * (record.documentLength / Math.max(1, averageLength)));
+      searchScore += idf * ((frequency * 2.2) / denominator);
+      if (title.includes(term)) searchScore += 3;
+      if (headings.includes(term)) searchScore += 1.5;
+      matched.add(term);
+    }
+    for (const phrase of parsed.phrases) {
+      if (haystack.includes(phrase)) {
+        searchScore += title.includes(phrase) ? 8 : 4;
+        matched.add(`"${phrase}"`);
+      }
+    }
+    return { ...record, searchScore: Math.round(searchScore * 100) / 10, matched: [...matched] };
+  }).filter((hit) => !hasSearchTerms || hit.matched.length)
+    .sort((left, right) => right.searchScore - left.searchScore || right.mtimeMs - left.mtimeMs)
+    .slice(0, limit);
+}
+
 function recordsFromIndex(root) {
   const file = path.join(root, INDEX_PATH);
   if (!fs.existsSync(file)) return [];
@@ -428,11 +570,18 @@ function fallbackRecall(input) {
     return { ok: true, source: "local-fallback", recallScope: "agent-memory", augmentedFromVault: false, hits: memoryHits };
   }
   const byPath = new Map();
-  const fullVaultFiles = searchVaultFiles(root, input.query) ?? walk(root);
+  const indexedHits = input.query?.trim() ? searchFullVaultIndex(root, input.query, 400) : [];
+  const fullVaultFiles = indexedHits.length ? indexedHits.map((hit) => path.join(root, hit.path)) : searchVaultFiles(root, input.query) ?? walk(root);
+  const scoreByPath = new Map(indexedHits.map((hit) => [hit.path, hit.searchScore]));
+  const collectionByPath = new Map(indexedHits.map((hit) => [hit.path, hit.collection]));
   for (const file of fullVaultFiles) {
     if (rel(root, file).startsWith(`${MEMORY_FOLDER}/`)) continue;
     const record = recordFromMarkdown(root, file, false);
-    if (record) byPath.set(record.notePath, record);
+    if (record) {
+      record.searchScore = scoreByPath.get(record.notePath);
+      record.searchCollection = collectionByPath.get(record.notePath);
+      byPath.set(record.notePath, record);
+    }
   }
   for (const record of memoryRecords) byPath.set(record.notePath, record);
   return {

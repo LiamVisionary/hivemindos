@@ -1,3 +1,7 @@
+---
+title: "Native App"
+---
+
 # Native App
 
 HivemindOS has a Tauri desktop target.
