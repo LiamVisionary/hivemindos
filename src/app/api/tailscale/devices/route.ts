@@ -180,6 +180,14 @@ function isMacDevice(device: ReturnType<typeof simplifyDevice>) {
   return /^(macos|darwin)$/i.test(device.os);
 }
 
+// Windows / Linux desktops are real HivemindOS machines too. They were being
+// dropped by dedupeDevices (which only kept mac/mobile/link devices), so a
+// Windows or Linux install never saw its own machine in the fleet — no self
+// cell, no add-agent cell, and any agents on it were invisible.
+function isDesktopDevice(device: ReturnType<typeof simplifyDevice>) {
+  return /^(windows|linux)$/i.test(device.os);
+}
+
 function hasNeverHandshake(value?: string) {
   return !value || value.startsWith("0001-01-01");
 }
@@ -292,8 +300,10 @@ function dedupeDevices(devices: ReturnType<typeof simplifyDevice>[]) {
   }
   return [...byIdentity.values()].filter(
     (device) =>
+      device.self || // never drop this machine's own self device (any OS)
       isHivemindLinkDevice(device) ||
       isMacDevice(device) ||
+      isDesktopDevice(device) ||
       isMobileDevice(device),
   );
 }

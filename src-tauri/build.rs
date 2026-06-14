@@ -71,6 +71,8 @@ fn main() {
                 "kanban_read",
                 "memory_telemetry",
                 "phone_prompts",
+                "native_boot_status",
+                "retry_native_server",
                 "runtime_files",
                 "runtime_usage",
                 "native_setup_run",

@@ -91,7 +91,14 @@ fn local_collector_url() -> String {
 fn local_device() -> NativeDevice {
     NativeDevice {
         is_self: true,
-        name: "This Mac".to_string(),
+        name: if cfg!(target_os = "windows") {
+            "This PC"
+        } else if cfg!(target_os = "macos") {
+            "This Mac"
+        } else {
+            "This Machine"
+        }
+        .to_string(),
         dns_name: String::new(),
         os: std::env::consts::OS.to_string(),
         online: true,
