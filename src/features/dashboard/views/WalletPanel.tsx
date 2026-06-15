@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, Dispatch, ElementType, SetStateAction } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -375,7 +375,10 @@ function personalWalletFromVaultInfo(wallet: PersonalWalletVaultInfo): PersonalW
   };
 }
 
-export function WalletPanel(props: WalletPanelProps) {
+export const WalletPanel = memo(WalletPanelComponent);
+
+// Memoized (see export above) so unrelated background re-renders skip this panel.
+function WalletPanelComponent(props: WalletPanelProps) {
   const { AGENT_PAYMENT_PROVIDER_COPY, AgentWalletCard, AgentWalletCardCompact, Button, ChevronLeft, Download, HandCoins, LoaderCircle, RUNTIME_LABELS, RefreshCcw, activeView, claimAllHoneyToBankrHive, copyPaymentPrompt, createLocalWallet, displayAgents, enableHoneyLedger, exportWalletSecrets, formatHiveAmount, formatRelativeTime, getSurvivalSnapshot, honeyLedgerEnabled, honeyStats, hydrated, initializeCoreWalletRails, moneyClawStatusByEnvName, refreshRuntimeIntegrations, refreshRuntimeUsage, refreshWalletBalance, renderAgentKey, resetWalletBurnClock, returnAllHiveToHoney, runWalletVaultBackupAction, runtimeUsage, runtimeUsageLoading, saveMoneyClawKey, selectedAgent, selectedHoneyReward, selectedWallet, selectedWalletSnapshot, sharedVault, sendWalletUsdc, setSelectedAgentId, setWalletExpanded, setWalletPanelMode, testX402Fetch, updateAgentProfile, updateWallet, updateWalletAction, vaultClass, walletActionsByAgent, walletClass, walletExpanded, walletPanelMode, walletStats, walletVaultBackupBusy, walletVaultBackupMessage, walletVaultBackupStatus, walletsByAgent } = props;
   const refreshedUsePodAgentIds = useRef<Set<string>>(new Set());
   const [bankrClaimBusy, setBankrClaimBusy] = useState(false);

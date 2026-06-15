@@ -20,7 +20,7 @@ import {
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import { LottiePlayer } from "@/components/ui/lottie-player";
 import { HIVEMIND_OS_RUNTIME } from "@/lib/types/agent-runtime";
-import { Fragment, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 const hiveClass = createStyleClass(hiveChatStyles);
 
@@ -344,7 +344,10 @@ function makeMetricRows(selectedAgent: any, runtimeLabel: string, providerLabel:
   ];
 }
 
-export function ChatPanel(props: any) {
+export const ChatPanel = memo(ChatPanelComponent);
+
+// Memoized (see export above) so unrelated background re-renders skip this panel.
+function ChatPanelComponent(props: any) {
   const {
     Activity,
     AgentResponseLoader,

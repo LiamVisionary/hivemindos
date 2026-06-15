@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import type { ComponentType, Dispatch, ElementType, MutableRefObject, SetStateAction } from "react";
 import { AgentCallModal, type AgentCallLiveKit, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent } from "@/components/fleet/agent-call-modal";
 import type { FleetViewProps } from "@/components/fleet/FleetView";
@@ -151,7 +151,13 @@ function findCallProfile(input: {
   return contextualAeons.length === 1 ? contextualAeons[0] : undefined;
 }
 
-export function AgentsPanel(props: AgentsPanelProps) {
+export const AgentsPanel = memo(AgentsPanelComponent);
+
+// Wrapped in memo above so background re-renders of DashboardApp (fleet polls,
+// chat streams, the voice waveform) skip this panel when its own props are
+// referentially unchanged. Function declaration is hoisted, so the memo() call
+// above resolves it fine.
+function AgentsPanelComponent(props: AgentsPanelProps) {
   const {
     Button,
     Check,
