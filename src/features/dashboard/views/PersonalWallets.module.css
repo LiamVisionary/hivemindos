@@ -590,6 +590,7 @@
   font-weight: 800;
   line-height: 1;
   cursor: pointer;
+  text-decoration: none;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
 

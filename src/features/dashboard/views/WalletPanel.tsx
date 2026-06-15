@@ -3,7 +3,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, Dispatch, ElementType, SetStateAction } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Check, Copy, Download as DownloadIcon, KeyRound, List, LockKeyhole, Plus, RefreshCcw as RefreshIcon, Send, Shuffle, WalletCards, X } from "lucide-react";
 import type { AgentWalletCardProps } from "@/components/wallet/AgentWalletCard";
 import type { AgentWalletCardCompactProps } from "@/components/wallet/AgentWalletCardCompact";
@@ -399,15 +399,10 @@ function WalletPanelComponent(props: WalletPanelProps) {
   const [personalRecoveryWords, setPersonalRecoveryWords] = useState(() => emptyRecoveryPhraseWords());
   const [personalImportStatus, setPersonalImportStatus] = useState("");
   const [copiedAddressKey, setCopiedAddressKey] = useState("");
-  const [stakeRouteOpening, setStakeRouteOpening] = useState(false);
   const autoRefreshPersonalWalletsRef = useRef(new Set<string>());
-  const router = useRouter();
   const nativeDesktopRuntime = useMemo(() => isTauriDesktopRuntime(), []);
   const bankrRecipientReady = /^0x[a-fA-F0-9]{40}$/.test(bankrRecipientAddress.trim());
-  const showPersonalWalletsChecking = personalWalletsChecking
-    && activeView === "wallet"
-    && walletPanelMode === "wallets";
-  const openStakeRoute = useCallback(() => { setStakeRouteOpening(true); window.setTimeout(() => router.push("/stake"), 0); }, [router]);
+  const showPersonalWalletsChecking = personalWalletsChecking && activeView === "wallet" && walletPanelMode === "wallets";
   const effectiveSelectedWallet = selectedAgent && selectedWallet ? resolveAgentWallet(selectedAgent, selectedWallet) : selectedWallet;
   const effectiveSelectedWalletSnapshot = effectiveSelectedWallet ? getSurvivalSnapshot(effectiveSelectedWallet) : selectedWalletSnapshot;
   const agentWalletRows = useMemo<AgentWalletRow[]>(() => (
@@ -467,12 +462,8 @@ function WalletPanelComponent(props: WalletPanelProps) {
 
   useEffect(() => {
     if (activeView !== "wallet" || walletPanelMode !== "wallets") return;
-    router.prefetch("/stake");
     let cancelled = false;
-    // A new load is starting: show the skeleton until this run commits or
-    // definitively settles. Without this reset, re-entering the wallets view
-    // would leave the flag false from a prior run and skip the skeleton.
-    setPersonalWalletsChecking(true);
+    void Promise.resolve().then(() => { if (!cancelled) setPersonalWalletsChecking(true); });
     async function loadPersonalWalletVault() {
       const params = sharedVault.vaultPath.trim() ? `?vaultPath=${encodeURIComponent(sharedVault.vaultPath.trim())}` : "";
       const response = await fetch(`/api/wallet/personal${params}`, { headers: { accept: "application/json" } }).catch(() => null);
@@ -480,8 +471,6 @@ function WalletPanelComponent(props: WalletPanelProps) {
         ok?: boolean;
         wallets?: PersonalWalletVaultInfo[];
       } | null;
-      // The effect re-ran (view/mode/vaultPath changed) before this settled; the
-      // newer run owns the checking flag, so leave it alone here.
       if (cancelled) return;
       if (!response?.ok || !data?.ok || !Array.isArray(data.wallets)) return;
       const vaultWallets = data.wallets
@@ -494,10 +483,6 @@ function WalletPanelComponent(props: WalletPanelProps) {
         return fresh.length ? [...fresh, ...current] : current;
       });
     }
-    // Only clear the skeleton once the load has actually settled for THIS run.
-    // A cancelled run (effect re-ran mid-flight) must not flip the flag off, or
-    // the skeleton vanishes while the newer load is still in flight and content
-    // is not yet committed.
     void loadPersonalWalletVault().finally(() => {
       if (cancelled) return;
       setPersonalWalletsChecking(false);
@@ -505,8 +490,7 @@ function WalletPanelComponent(props: WalletPanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [activeView, router, sharedVault.vaultPath, walletPanelMode]);
-
+  }, [activeView, sharedVault.vaultPath, walletPanelMode]);
   const persistPersonalWalletRecords = useCallback((wallets: PersonalWallet[]) => {
     const vaultPath = sharedVault.vaultPath.trim() || undefined;
     void fetch("/api/wallet/personal", {
@@ -1009,7 +993,7 @@ function WalletPanelComponent(props: WalletPanelProps) {
                     <p>Personal wallets stay above agent wallets and can quick-send to any saved user or agent address.</p>
                   </div>
                   <div className={personalClass("personalWalletActions")}>
-                    <button type="button" className={personalClass("personalStakeRouteLink")} onClick={openStakeRoute} disabled={stakeRouteOpening}><LockKeyhole aria-hidden="true" /> {stakeRouteOpening ? "Opening..." : "Stake HIVE"}</button>
+                    <Link href="/stake" className={personalClass("personalStakeRouteLink")}><LockKeyhole aria-hidden="true" /> Stake HIVE</Link>
                     <Button
                       type="button"
                       size="sm"
@@ -1233,7 +1217,7 @@ function WalletPanelComponent(props: WalletPanelProps) {
                                       </span>
                                     </div>
                                     {canStakeHive ? (
-                                      <button type="button" className={personalClass("personalTokenStakeButton")} onClick={openStakeRoute} disabled={stakeRouteOpening}><LockKeyhole aria-hidden="true" /><span>{stakeRouteOpening ? "Opening..." : "Stake"}</span></button>
+                                      <Link href="/stake" className={personalClass("personalTokenStakeButton")}><LockKeyhole aria-hidden="true" /><span>Stake</span></Link>
                                     ) : null}
                                   </div>
                                 </div>

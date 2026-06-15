@@ -2444,3 +2444,124 @@
 - docs/monetization/paid-features/index.md
   - Decision: adapted_code
   - Reason: added managed-service checkout discount rule
+## 2026-06-15T14:42:11.437996+00:00 - local-search
+
+- Request: Fix HivemindOS wallet Stake button delay and duplicate loading screen before stake page
+- Source: local-index
+- Query: `Fix HivemindOS wallet Stake button delay and duplicate loading screen before stake page`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/ai-companion-website
+  - URL: https://github.com/LiamVisionary/ai-companion-website
+  - Description: LiamVisionary/ai-companion-website AI Powered Companion Landing Page TypeScript
+## 2026-06-15T14:42:14.972142+00:00 - public-search
+
+- Request: Fix HivemindOS wallet Stake button delay and duplicate loading screen before stake page
+- Source: public-github
+- Query: `Fix HivemindOS wallet Stake button delay and duplicate loading screen before stake page`
+- Decision: retrieved
+- Reason: Retrieved 5 public candidates from GitHub search.
+
+### Candidates
+- DEEP13-2-5/Wallet (1 stars, TypeScript)
+  - URL: https://github.com/DEEP13-2-5/Wallet
+  - Description: Web3 Wallet Dashboard is a React-based dApp that connects to MetaMask, displays the user's wallet address, ETH balance, and network info. Built with ethers.js and hooks, it includes optional features like DAI token balance, ENS name, dark/l
+- aikonre/token-balance-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/aikonre/token-balance-dashboard
+  - Description: A simple token balance checker built with React. Simulates checking token balances for a given wallet address
+- mohammedazfersheikh/fullstack-web3-token-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/mohammedazfersheikh/fullstack-web3-token-dashboard
+  - Description: A complete end-to-end Web3 application built with React (Vite), Node.js/Express, and Ethers.js that demonstrates real-world decentralized application architecture. This project includes a backend API for blockchain data fetching and a moder
+- prakarsh-spheron/Wallet-Dashboard-Demo (1 stars, MIT License)
+  - URL: https://github.com/prakarsh-spheron/Wallet-Dashboard-Demo
+  - Description: Demo using the token balances react component to create a Wallet Dashboard
+- shubhbatra1991/OpenDeFi-Analytics- (0 stars, MIT License)
+  - URL: https://github.com/shubhbatra1991/OpenDeFi-Analytics-
+  - Description: Building a analytics dashboard where users connect a wallet and see token balances, portfolio value, and recent transactions in real time, using Next.js/React on the frontend and a .NET/Azure API backend.
+## 2026-06-15T14:42:15.047499+00:00 - prebuild-gate
+
+- Request: Fix HivemindOS wallet Stake button delay and duplicate loading screen before stake page
+- Source: public-github
+- Query: `Fix HivemindOS wallet Stake button delay and duplicate loading screen before stake page`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-06-15T14:43:27.987136+00:00 - triage
+
+- Request: Fix HivemindOS wallet Stake button delay and duplicate loading screen before stake page
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: selected
+  - Reason: existing stake button navigation surface where router push/opening state caused visible waiting
+  - Path: `src/features/dashboard/views/WalletPanel.tsx`
+- src/app/stake/StakePageClient.tsx
+  - Decision: selected
+  - Reason: existing stake route data boot blocks wallet list on full balance refresh
+  - Path: `src/app/stake/StakePageClient.tsx`
+- src/app/stake/loading.tsx
+  - Decision: selected
+  - Reason: route-level loading shell is the user-visible extra screen
+  - Path: `src/app/stake/loading.tsx`
+- DEEP13-2-5/Wallet
+  - Decision: rejected
+  - Reason: generic MetaMask dashboard; no HivemindOS App Router/Tauri wallet refresh flow to reuse
+- aikonre/token-balance-dashboard
+  - Decision: rejected
+  - Reason: simulated token checker; no production route transition or refresh strategy
+- mohammedazfersheikh/fullstack-web3-token-dashboard
+  - Decision: rejected
+  - Reason: mismatched stack and backend; no extractable fix for this local route
+## 2026-06-15T14:44:47.996107+00:00 - implementation
+
+- Request: Fix HivemindOS wallet Stake button delay and duplicate loading screen before stake page
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: adapted_code
+  - Reason: removed the prior router Opening state and reused existing stake controls as direct Next /stake links
+  - Path: `src/features/dashboard/views/WalletPanel.tsx`
+- src/app/stake/StakePageClient.tsx
+  - Decision: adapted_code
+  - Reason: reused existing non-refresh load branch so saved wallets paint before background balance refresh
+  - Path: `src/app/stake/StakePageClient.tsx`
+- src/app/stake/loading.tsx
+  - Decision: rejected
+  - Reason: deleted custom route shell because it created the second loading screen the user reported
+  - Path: `src/app/stake/loading.tsx`
+## 2026-06-15T14:51:08.683072+00:00 - verification
+
+- Request: Fix HivemindOS wallet Stake button delay and duplicate loading screen before stake page
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused ESLint passed for WalletPanel and StakePageClient; filtered typecheck produced no diagnostics for touched stake/wallet paths; focused git diff --check passed; temporary dev server on 127.0.0.1:5023 rendered /stake without the removed loading shell; screenshot saved to tmp/stake-route-smoke.png; route answered in 30-103ms once warm while slow wallet balance refresh continued in background; check-file-sizes still reports unrelated pre-existing oversized files but no longer reports WalletPanel.tsx.
+
+### Candidates
+- http://127.0.0.1:5023/stake
+  - Decision: inspected
+  - Reason: in-app browser saw stake hero and Stake available HIVE section with hasLoadingShell=false
+  - Path: `tmp/stake-route-smoke.png`
+## 2026-06-15T14:56:03.269876+00:00 - triage
+
+- Request: Fix HIVE staking local wallet row secret lookup failure
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/app/api/wallet/personal/route.ts
+  - Decision: selected
+  - Reason: personal wallet GET merges Obsidian ledger rows and encrypted local vault rows by address
+  - Path: `src/app/api/wallet/personal/route.ts`
+- src/lib/services/wallet/local-wallet-vault.ts
+  - Decision: selected-donor
+  - Reason: encrypted wallet vault stores signing secrets keyed by agentId and exposes public wallet infos
+  - Path: `src/lib/services/wallet/local-wallet-vault.ts`
+- src/app/api/hive/stake/route.ts
+  - Decision: inspected
+  - Reason: stake route correctly refuses when the sent agentId does not exist in encrypted vault
+  - Path: `src/app/api/hive/stake/route.ts`

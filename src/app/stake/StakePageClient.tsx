@@ -50,6 +50,11 @@ type StakePageClientProps = {
   stakingContractAddress: string;
 };
 
+type LoadWalletsOptions = {
+  refresh?: boolean;
+  walletList?: PersonalWallet[];
+};
+
 function walletKey(wallet: Pick<PersonalWallet, "network" | "address">) {
   return `${wallet.network}:${wallet.address.toLowerCase()}`;
 }
@@ -153,32 +158,41 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
     setStakeStatuses(Object.fromEntries(data.statuses.map((row) => [row.address.toLowerCase(), row])));
   }, []);
 
-  const loadWallets = useCallback(async (options: { refresh?: boolean } = {}) => {
-    setLoading(true);
+  const loadWallets = useCallback(async (options: LoadWalletsOptions = {}) => {
+    const showInitialLoading = !options.refresh;
+    if (showInitialLoading) setLoading(true);
     setError("");
     try {
-      const loaded = await fetchPersonalWallets();
+      const loaded = options.walletList ?? await fetchPersonalWallets();
       const baseWallets = loaded.filter((wallet) => wallet.network === "eip155:8453" && isEvmAddress(wallet.address));
       if (!options.refresh) {
         setWallets(loaded);
         void loadStakeStatuses(loaded);
-        setLoading(false);
-        return;
+        return loaded;
       }
       const refreshed = await Promise.all(baseWallets.map((wallet) => refreshWallet(wallet).catch(() => wallet)));
       const byKey = new Map(refreshed.map((wallet) => [walletKey(wallet), wallet]));
       const nextWallets = loaded.map((wallet) => byKey.get(walletKey(wallet)) ?? wallet);
       setWallets(nextWallets);
       void loadStakeStatuses(nextWallets);
+      return nextWallets;
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load HIVE staking wallets.");
+      return [];
     } finally {
-      setLoading(false);
+      if (showInitialLoading) setLoading(false);
     }
   }, [loadStakeStatuses]);
 
   useEffect(() => {
-    void loadWallets({ refresh: true });
+    let cancelled = false;
+    void loadWallets().then((loaded) => {
+      if (cancelled || !loaded.length) return;
+      void loadWallets({ refresh: true, walletList: loaded });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [loadWallets]);
 
   async function connectBrowserWallet() {

@@ -203,13 +203,13 @@ async function retrySolanaRpc<T>(operation: () => Promise<T>) {
 
 function knownEvmTokenAddresses(network: SupportedWalletNetwork) {
   if (network !== "eip155:8453") return [evmUsdc(network)];
-  return uniqueStrings([
+  return uniqueEvmAddresses([
     BASE_USDC,
     BASE_USDT,
     BASE_HIVE,
     process.env.HIVE_TOKEN_ADDRESS?.trim(),
     process.env.NEXT_PUBLIC_HIVE_TOKEN_ADDRESS?.trim(),
-  ]).filter((address) => /^0x[a-fA-F0-9]{40}$/.test(address));
+  ]);
 }
 
 export function generateWallet(networkInput: string): GeneratedWalletSecret {
@@ -286,8 +286,6 @@ export async function getWalletBalance(address: string, networkInput: string): P
     ]);
     const tokenBalance = Number(formatUnits(tokenRaw, 6));
     const nativeBalance = Number(formatEther(nativeRaw));
-    const hydratedIndexedTokens = await hydrateEvmIndexedTokenQuotes(indexedTokens, network);
-    const knownTokens = await fetchKnownEvmTokenBalances(address, network, hydratedIndexedTokens);
     const nativeToken = tokenRow({
       symbol: "ETH",
       name: "Ether",
@@ -306,9 +304,14 @@ export async function getWalletBalance(address: string, networkInput: string): P
       tokenAddress: evmUsdc(network),
       iconUrl: USDC_ICON_URL,
     });
+    const hydratedIndexedTokens = await hydrateEvmIndexedTokenQuotes(indexedTokens, network);
+    const indexedOrFallbackTokens = hydratedIndexedTokens.some((token) => tokenAddressEquals(token, evmUsdc(network)))
+      ? hydratedIndexedTokens
+      : [...hydratedIndexedTokens, fallbackUsdc];
+    const knownTokens = await fetchKnownEvmTokenBalances(address, network, indexedOrFallbackTokens);
     const tokens = mergeTokenRows([
       nativeToken,
-      ...(hydratedIndexedTokens.length ? hydratedIndexedTokens : [fallbackUsdc]),
+      ...indexedOrFallbackTokens,
       ...knownTokens,
     ]);
     return {
@@ -729,6 +732,10 @@ function mergeTokenRows(tokens: AgentWalletTokenBalance[]) {
     });
 }
 
+function tokenAddressEquals(token: AgentWalletTokenBalance, address: string) {
+  return token.tokenAddress?.toLowerCase() === address.toLowerCase();
+}
+
 function totalTokenValueUsd(tokens: AgentWalletTokenBalance[]) {
   const quoted = tokens
     .map((token) => token.valueUsd)
@@ -759,6 +766,17 @@ function shortenAddress(address: string) {
 
 function uniqueStrings(values: Array<string | null | undefined>) {
   return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))];
+}
+
+function uniqueEvmAddresses(values: Array<string | null | undefined>) {
+  const byAddress = new Map<string, string>();
+  for (const value of values) {
+    const address = value?.trim();
+    if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) continue;
+    const key = address.toLowerCase();
+    if (!byAddress.has(key)) byAddress.set(key, address);
+  }
+  return [...byAddress.values()];
 }
 
 function chunkArray<T>(values: T[], size: number) {

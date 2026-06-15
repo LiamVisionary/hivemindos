@@ -12,12 +12,26 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Verification: Focused `git diff --check` passed; public-doc hygiene search found no local paths or secrets in the updated staking doc; search confirmed the removed internal contract checklist terms no longer appear on the public staking page.
   - Intended commit message: `Make HIVE staking docs user-facing`
 
+- 2026-06-15 21:44:04 +0700 - Remove Stake Button Double Loading Wait
+  - Status: Uncommitted
+  - Areas changed: Wallets stake navigation and stake page boot (`src/features/dashboard/views/WalletPanel.tsx`, `src/features/dashboard/views/PersonalWallets.module.css`, `src/app/stake/StakePageClient.tsx`, `src/app/stake/loading.tsx`), changelog, assimilation log
+  - Summary: The Wallets view `Stake` button no longer sits in an `Opening...` state before showing a second loading screen. Stake controls now navigate as direct `/stake` links, the custom route loading shell was removed, and the stake page paints from saved wallet data first while Base balance and stake status refreshes continue in the background.
+  - Verification: `pnpm exec eslint src/features/dashboard/views/WalletPanel.tsx src/app/stake/StakePageClient.tsx --max-warnings=0` passed; filtered `pnpm exec tsc --noEmit --pretty false --skipLibCheck` produced no diagnostics for touched stake/wallet paths; focused `git diff --check` passed; temporary dev server on `127.0.0.1:5023` rendered `/stake` without the removed loading shell, with browser smoke confirming the stake hero and `Stake available HIVE` section; screenshot saved to `tmp/stake-route-smoke.png`. `node scripts/check-file-sizes.mjs` still reports unrelated pre-existing oversized files, but no longer reports `WalletPanel.tsx`.
+  - Intended commit message: `Remove stake button double loading wait`
+
 - 2026-06-15 21:36:05 +0700 - Document HIVE Payment Discount Policy
   - Status: Pushed
   - Areas changed: Monetization docs (`docs/monetization/hive-staking-and-community-tiers.md`, `docs/monetization/index.md`, `docs/monetization/ecosystem-plan.md`, `docs/monetization/honey-hive-treasury.md`, `docs/monetization/paid-features/index.md`), changelog
   - Summary: Documents that paying with HIVE can earn a small checkout discount on eligible Hive Cloud, managed compute, managed HONEY credit, marketplace, and hosted service purchases. The policy keeps staking discounts as the larger tiered incentive, lets HIVE payment and staking discounts stack only up to a capped maximum, and protects pricing from falling below direct infrastructure, provider, payment-processing, or pass-through costs.
   - Verification: Focused `git diff --check` passed for the touched monetization docs, changelog, and assimilation logs; public-doc hygiene search found no local paths or personal operational details in the updated docs; assimilation manifest verification passed.
   - Intended commit message: `Document HIVE payment discount policy`
+
+- 2026-06-15 21:33:48 +0700 - Stop Base USDC Double Counting In Wallet Balances
+  - Status: Uncommitted
+  - Areas changed: Wallet balance service (`src/lib/services/wallet/chain-wallet.ts`), changelog
+  - Summary: Fixes My wallets showing an inflated portfolio total when the Base token indexer is unavailable or omits indexed token rows. The balance refresh now treats the direct USDC contract read as the fallback baseline before discovering additional known Base tokens, so USDC is not counted once from the fallback path and again from the known-token path. This keeps HIVE and other known token discovery while making the headline wallet total match actual on-chain spendable USDC.
+  - Verification: `pnpm exec eslint src/lib/services/wallet/chain-wallet.ts --max-warnings=0` passed; filtered `pnpm exec tsc --noEmit --pretty false --skipLibCheck` returned no diagnostics for `src/lib/services/wallet/chain-wallet.ts` or `src/app/api/wallet/balance`; patched live service read returned Base at `$2292.20` with USDC `1848.01797`, HIVE `181164410.8115`, and ETH `0.035322696`; Solana read returned `$89.03`; focused `git diff --check` passed.
+  - Intended commit message: `Stop double counting Base USDC wallet balances`
 
 - 2026-06-15 21:32:39 +0700 - Separate HIVE Payments From x402 Asset Claims
   - Status: Pushed
