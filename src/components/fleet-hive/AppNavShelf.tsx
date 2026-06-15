@@ -101,11 +101,12 @@ function resolveActive(view: DashboardView): string {
   }
 }
 
-function NavShelfItem({ id, label, active, onNavigate, badge }: {
+function NavShelfItem({ id, label, active, onNavigate, onPrefetch, badge }: {
   id: DashboardView;
   label: string;
   active: boolean;
   onNavigate: (id: DashboardView) => void;
+  onPrefetch?: (id: DashboardView) => void;
   badge?: number;
 }) {
   return (
@@ -116,6 +117,8 @@ function NavShelfItem({ id, label, active, onNavigate, badge }: {
       aria-current={active ? "page" : undefined}
       data-bee-nav={id}
       onClick={() => onNavigate(id)}
+      onMouseEnter={() => onPrefetch?.(id)}
+      onFocus={() => onPrefetch?.(id)}
       title={label}
     >
       <span className="fr-nav-ico"><FrNavIcon id={id} /></span>
@@ -128,6 +131,7 @@ function NavShelfItem({ id, label, active, onNavigate, badge }: {
 export function AppNavShelf({
   activeView,
   onNavigate,
+  onPrefetch,
   theme,
   onToggleTheme,
   brandSrc = "/icon-512.png",
@@ -136,6 +140,7 @@ export function AppNavShelf({
 }: {
   activeView: DashboardView;
   onNavigate: (id: DashboardView) => void;
+  onPrefetch?: (id: DashboardView) => void;
   theme: ShelfTheme;
   onToggleTheme: () => void;
   brandSrc?: string;
@@ -203,7 +208,7 @@ export function AppNavShelf({
         {GROUPS.map((g, i) => (
           <Fragment key={i}>
             {g.map((it) => (
-              <NavShelfItem key={it.id} id={it.id} label={it.label} active={active === it.id} onNavigate={onNavigate} />
+              <NavShelfItem key={it.id} id={it.id} label={it.label} active={active === it.id} onNavigate={onNavigate} onPrefetch={onPrefetch} />
             ))}
             {i < GROUPS.length - 1 ? <div className="fr-nav-div" /> : null}
           </Fragment>
@@ -224,7 +229,7 @@ export function AppNavShelf({
               <span className="fr-nav-label">{updateLabel}</span>
             </button>
           ) : null}
-          <NavShelfItem id="more" label="More" active={active === "more"} onNavigate={onNavigate} badge={notificationUnread} />
+          <NavShelfItem id="more" label="More" active={active === "more"} onNavigate={onNavigate} onPrefetch={onPrefetch} badge={notificationUnread} />
           <button type="button" className="fr-nav" onClick={onToggleTheme} title="Toggle light and dark">
             <span className="fr-nav-ico">{theme === "light" ? <MoonIcon /> : <SunIcon />}</span>
             <span className="fr-nav-label">{theme === "light" ? "Dark mode" : "Light mode"}</span>

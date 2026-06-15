@@ -1566,6 +1566,94 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     return () => window.clearTimeout(timeoutId);
   }, []);
 
+  // Warm the lazily-imported view panels during idle time so the FIRST switch
+  // to each view doesn't stall on an on-demand chunk load. This is the dominant
+  // cause of "the tab highlights instantly but the view appears 2-3s later":
+  // each view is a dynamic(() => import(...)) and the chunk is only loaded on
+  // first navigation (in dev that load also compiles the 1.5k+ line panel via
+  // webpack). Imported one at a time on successive idle ticks so we never spike
+  // the dev server, which has a memory ceiling and restarts under load. Agents
+  // is the default view and is already loaded, so it is omitted; most-trafficked
+  // views come first so they warm soonest.
+  useEffect(() => {
+    let cancelled = false;
+    let handle: { type: "idle" | "timeout"; id: number } | null = null;
+    const loaders: Array<() => Promise<unknown>> = [
+      () => import("@/features/dashboard/views/KanbanPanel"),
+      () => import("@/features/dashboard/views/VaultPanel"),
+      () => import("@/features/dashboard/views/ChatPanel"),
+      () => import("@/features/dashboard/views/WalletPanel"),
+      () => import("@/features/dashboard/MorePanel"),
+      () => import("@/features/dashboard/views/UtilityPanels"),
+      () => import("@/features/dashboard/views/SchedulerPanel"),
+      () => import("@/features/dashboard/views/SwarmPanel"),
+      () => import("@/features/dashboard/views/PhonePanel"),
+      () => import("@/features/dashboard/views/FusionPanel"),
+      () => import("@/features/dashboard/views/GovernancePanel"),
+      () => import("@/components/aeon"),
+      () => import("@/features/integrations/NangoIntegrationsView"),
+      () => import("@/features/integrations/GitLawbIntegrationPanel"),
+    ];
+    let index = 0;
+    const runNext = () => {
+      if (cancelled || index >= loaders.length) return;
+      const loader = loaders[index];
+      index += 1;
+      // Kick off the import, then schedule the next only after it settles, so we
+      // compile/fetch one chunk at a time instead of all at once.
+      void loader().catch(() => undefined).finally(() => {
+        if (!cancelled) schedule();
+      });
+    };
+    const schedule = () => {
+      if (cancelled || index >= loaders.length) return;
+      if ("requestIdleCallback" in window) {
+        handle = { type: "idle", id: window.requestIdleCallback(runNext, { timeout: 3000 }) };
+      } else {
+        handle = { type: "timeout", id: window.setTimeout(runNext, 250) };
+      }
+    };
+    // Defer the start so first paint and launch-critical work win the main thread.
+    const startId = window.setTimeout(schedule, 1500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(startId);
+      if (handle?.type === "idle" && "cancelIdleCallback" in window) window.cancelIdleCallback(handle.id);
+      else if (handle?.type === "timeout") window.clearTimeout(handle.id);
+    };
+  }, []);
+
+  // Prefetch a view's lazy chunk the moment the user hovers/focuses its nav
+  // button, so the chunk is already loading during the (typically 300-800ms)
+  // hover->click gap. This makes even the first click to a not-yet-idle-warmed
+  // view feel instant instead of waiting on the on-demand import inside the
+  // transition. Each view is prefetched at most once.
+  const prefetchedViewsRef = useRef<Set<DashboardView>>(new Set());
+  const prefetchView = useCallback((view: DashboardView) => {
+    if (prefetchedViewsRef.current.has(view)) return;
+    prefetchedViewsRef.current.add(view);
+    const load: () => Promise<unknown> = (() => {
+      switch (view) {
+        case "kanban":
+        case "history": return () => import("@/features/dashboard/views/KanbanPanel");
+        case "vault": return () => import("@/features/dashboard/views/VaultPanel");
+        case "chat": return () => import("@/features/dashboard/views/ChatPanel");
+        case "wallet": return () => import("@/features/dashboard/views/WalletPanel");
+        case "more": return () => import("@/features/dashboard/MorePanel");
+        case "scheduler": return () => import("@/features/dashboard/views/SchedulerPanel");
+        case "swarm": return () => import("@/features/dashboard/views/SwarmPanel");
+        case "phone": return () => import("@/features/dashboard/views/PhonePanel");
+        case "fusion": return () => import("@/features/dashboard/views/FusionPanel");
+        case "governance": return () => import("@/features/dashboard/views/GovernancePanel");
+        case "aeon": return () => import("@/components/aeon");
+        case "integrations": return () => import("@/features/integrations/NangoIntegrationsView");
+        case "agents": return () => Promise.resolve();
+        default: return () => import("@/features/dashboard/views/UtilityPanels");
+      }
+    })();
+    void load().catch(() => undefined);
+  }, []);
+
   const applyHivemindLinkStatus = useCallback((status: HivemindLinkClientStatus | null) => {
     const previous = hivemindLinkStatusRef.current;
     const reachedRunning = status?.ok === true && previous?.ok !== true;
@@ -4201,6 +4289,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
           consume a grid row in .commandShell (which would push .commandMain down). */}
       <AppNavShelf
         activeView={requestedView}
+        onPrefetch={prefetchView}
         onNavigate={(id) => {
           if (id === requestedView && id === activeView) return;
           setRequestedView(id);
