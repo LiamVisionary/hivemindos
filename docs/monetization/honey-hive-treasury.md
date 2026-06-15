@@ -135,11 +135,15 @@ Staking should provide ecosystem benefits rather than simply printing more token
 Potential future benefits:
 
 - Marketplace fee discounts.
+- Hive Cloud and managed compute discounts.
+- Managed HONEY credit purchase discounts or bonuses.
 - Priority compute access.
 - Governance voting.
 - Premium features.
 - Higher Honey earning multipliers.
 - Early access to new functionality.
+
+Managed-service discounts should apply to HivemindOS platform margin, not raw third-party provider cost. Non-stakers should still be able to buy the same paid services at the standard fiat, card, managed HONEY credit, or enterprise price.
 
 The first staking design uses fixed HIVE tiers for community alignment rather than per-use token spending. See [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for the Holder, Supporter, Builder, Curator, Operator, and Visionary model.
 

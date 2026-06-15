@@ -112,3 +112,11 @@ Managed compute runs agents and swarms on Hivemind infrastructure with usage-bas
 The Agent Marketplace can support paid agents, swarms, workflows, and templates, with Hivemind taking a marketplace fee.
 
 Enterprise covers SSO, teams, compliance, private deployments, and support contracts.
+
+## HIVE Staker Discounts
+
+HIVE staking can make paid managed services cheaper without making them HIVE-only.
+
+Eligible discounts may apply to Hive Cloud subscriptions, managed compute, managed HONEY credit purchases, Agent Marketplace platform fees, and hosted team, memory, monitoring, or orchestration add-ons. Non-stakers should still be able to buy the same paid services at the standard fiat, card, managed HONEY credit, or enterprise price.
+
+Discounts apply to HivemindOS platform margin, not raw provider or infrastructure cost. A checkout should not discount below direct compute cost, provider API cost, payment processor fees, or other pass-through costs needed to deliver the service.

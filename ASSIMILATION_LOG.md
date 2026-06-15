@@ -2349,3 +2349,19 @@
   - Decision: inspected
   - Reason: in-app browser selected a Fleet Hive agent and saw the adapted Holdings block in the right-side panel
   - Path: `src/components/fleet-hive/AgentHoldings.tsx`
+## 2026-06-15T12:22:10.581364+00:00 - implementation
+
+- Request: Document HIVE staker discounts for Hive Cloud and managed services
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- docs/monetization/hive-staking-and-community-tiers.md
+  - Decision: adapted_code
+  - Reason: extended existing staking tier doc with managed-service discount ladder and margin-floor rule
+- docs/monetization/honey-hive-treasury.md
+  - Decision: adapted_code
+  - Reason: mirrored staking discount benefit in token/treasury model
+- docs/monetization/index.md
+  - Decision: adapted_code
+  - Reason: mirrored paid-service boundary for HIVE staker discounts without HIVE-only lockout

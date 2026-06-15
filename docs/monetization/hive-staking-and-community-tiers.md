@@ -26,6 +26,7 @@ It can unlock:
 - Marketplace trust signals.
 - Honey multipliers.
 - Marketplace fee discounts.
+- Hive Cloud and managed-service discounts.
 
 It should not be the only way to access optional paid product features.
 
@@ -149,6 +150,35 @@ These thresholds are fixed in HIVE at launch. They should not float minute-by-mi
 
 Early believers take more risk while the ecosystem is smaller, so they may earn meaningful status earlier. If HIVE appreciates later, those early locked positions become harder to replicate, which is part of the alignment mechanic.
 
+## Managed Service Discounts
+
+HIVE staking can discount paid HivemindOS-managed services without making those services HIVE-only.
+
+Discounts may apply to:
+
+- Hive Cloud subscriptions.
+- Managed compute.
+- Managed HONEY credit purchases.
+- Agent Marketplace platform fees.
+- Hosted team, memory, monitoring, and orchestration add-ons.
+
+Non-stakers should still be able to buy the same paid services at the standard fiat, card, managed HONEY credit, or enterprise price. The HIVE path is the aligned-user price, not the only checkout path.
+
+Launch discount ladder:
+
+| Tier      | Standing managed-service discount |
+| --------- | --------------------------------: |
+| Holder    |                                0% |
+| Supporter |                                5% |
+| Builder   |                               10% |
+| Curator   |                               15% |
+| Operator  |                               20% |
+| Visionary |                               25% |
+
+Discounts should apply to HivemindOS platform margin, not raw third-party provider cost. A paid service should never be discounted below direct infrastructure cost, provider API cost, payment processor fees, or other pass-through costs needed to deliver the service.
+
+This keeps the token benefit real while avoiding a trap where staking creates negative-margin cloud usage.
+
 ## Tier Benefits
 
 ### Holder
@@ -161,6 +191,7 @@ Benefits:
 - Basic profile/status surface.
 - Eligibility for public holder announcements.
 - Basic governance signaling in non-binding polls.
+- Standard managed-service pricing.
 
 Holder should not unlock the most valuable rooms or rights. It proves setup and alignment, not deep contribution.
 
@@ -175,6 +206,7 @@ Benefits:
 - Small Honey multiplier.
 - Access to selected early updates.
 - Stronger governance signal than Holder.
+- 5% managed-service discount on eligible HivemindOS platform margin.
 
 ### Builder
 
@@ -188,6 +220,7 @@ Benefits:
 - Higher Honey multiplier.
 - Contributor reputation surface.
 - Eligibility for builder-only experiments.
+- 10% managed-service discount on eligible HivemindOS platform margin.
 
 ### Curator
 
@@ -201,6 +234,7 @@ Benefits:
 - Eligibility for curator-assisted bounty review.
 - Marketplace trust signal for agents, swarms, workflows, and templates.
 - Higher marketplace visibility for published work.
+- 15% managed-service discount on eligible HivemindOS platform margin.
 
 Curator does not mean unilateral payout power. Admins or a multisig should retain final treasury and dispute control at launch.
 
@@ -216,6 +250,7 @@ Benefits:
 - Priority access to alpha workflows.
 - Higher Honey multiplier.
 - Lower marketplace fee tier.
+- 20% managed-service discount on eligible HivemindOS platform margin.
 - Higher bounty boost visibility.
 - Eligibility to help curate bounty categories and marketplace policy.
 - Trusted seller or trusted contributor status for published agents and workflows.
@@ -231,6 +266,7 @@ Benefits:
 - Visionary badge.
 - Highest Honey multiplier.
 - Lowest marketplace fee tier.
+- 25% managed-service discount on eligible HivemindOS platform margin.
 - Highest bounty boost visibility.
 - Highest-signal private room.
 - Earliest access to experimental monetization workflows.

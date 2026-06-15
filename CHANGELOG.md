@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-15 19:20:30 +0700 - Document HIVE Staker Managed-Service Discounts
+  - Status: Pushed
+  - Areas changed: Monetization docs (`docs/monetization/hive-staking-and-community-tiers.md`, `docs/monetization/honey-hive-treasury.md`, `docs/monetization/index.md`), changelog
+  - Summary: Clarifies that HIVE staking can discount Hive Cloud, managed compute, managed HONEY credit purchases, marketplace platform fees, and hosted service add-ons without making those paid services HIVE-only. The staking docs now define a launch discount ladder from Supporter through Visionary, keep Holder as a status-only tier for standard managed-service pricing, and state that discounts apply to HivemindOS platform margin rather than raw provider, infrastructure, or payment-processing costs.
+  - Verification: Focused `git diff --check` passed for the touched monetization docs, changelog, and assimilation logs; public-doc hygiene search found no local paths or personal operational details in the updated docs; assimilation manifest verification passed.
+  - Intended commit message: `Document HIVE staker managed-service discounts`
+
 - 2026-06-15 18:14:52 +0700 - Replace Fleet Hive Agent Holdings Panel
   - Status: Uncommitted
   - Areas changed: Fleet Hive selected-agent panel and holdings styles (`src/components/fleet-hive/AgentHoldings.tsx`, `src/components/fleet-hive/HivePanel.tsx`, `src/components/fleet-hive/FleetHiveView.tsx`, `src/components/fleet-hive/fleet-hive.css`), Fleet wallet prop wiring (`src/components/fleet/FleetView.tsx`, `src/features/dashboard/views/AgentsPanel.tsx`, `src/features/dashboard/DashboardApp.tsx`), HIVE token badge asset (`public/hive-icon.png`), assimilation log
