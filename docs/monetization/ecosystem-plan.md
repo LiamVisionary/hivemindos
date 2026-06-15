@@ -64,7 +64,7 @@ Creators can choose the business model that fits the asset:
 | Bounty funded | Community or treasury-funded creation of a requested asset |
 | Commission on earnings | The creator earns a percentage of revenue generated through the workflow |
 
-Payments can use ordinary checkout rails, managed HONEY credits, HIVE, or other supported crypto rails such as x402-enabled pay-per-use.
+Payments can use ordinary checkout rails, managed HONEY credits, HIVE, or other supported crypto rails. Pay-per-use workflows can also use x402 endpoints with the assets those endpoints explicitly accept.
 
 HIVE staking should improve marketplace economics and trust: lower platform fees, stronger creator badges, curation rights, private opportunity rooms, and better distribution surfaces for high-quality listings. HIVE payment should be available as a rail, but staking should remain the alignment layer around the marketplace rather than the only way to buy.
 

@@ -2403,3 +2403,22 @@
 - docs/monetization/honey-hive-treasury.md
   - Decision: adapted_code
   - Reason: added HIVE payment utility to token model
+## 2026-06-15T14:33:00.965402+00:00 - implementation
+
+- Request: Remove unnecessary public claim that HIVE automatically works with x402 while keeping HIVE payment utility
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- docs/monetization/hive-staking-and-community-tiers.md
+  - Decision: adapted_code
+  - Reason: separated HIVE checkout utility from x402 endpoint asset support
+- docs/monetization/ecosystem-plan.md
+  - Decision: adapted_code
+  - Reason: clarified x402 endpoints use explicitly accepted assets
+- docs/monetization/honey-hive-treasury.md
+  - Decision: adapted_code
+  - Reason: removed HIVE pay-per-use through x402 wording
+- docs/monetization/paid-features/index.md
+  - Decision: adapted_code
+  - Reason: clarified x402 payments use endpoint-accepted assets

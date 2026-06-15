@@ -40,7 +40,7 @@ Paid features should support more than one checkout path when practical:
 - Card or fiat payments for ordinary users.
 - Managed HONEY credits for HivemindOS-hosted usage.
 - HIVE payments for users who want to pay with the ecosystem token.
-- x402-enabled crypto payments for pay-per-use APIs, workflows, and agent services.
+- x402-enabled payments for pay-per-use APIs, workflows, and agent services, using the assets each endpoint explicitly accepts.
 - Enterprise contracts for teams.
 
 HIVE payments are product payment utility. HIVE staking is separate alignment utility that can unlock discounts, status, trust signals, curation rights, and early access.

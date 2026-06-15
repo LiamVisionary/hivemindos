@@ -66,7 +66,7 @@ HIVE can also be used as a payment rail.
 Payment utility can include:
 
 - Buying marketplace workflows, agents, swarms, templates, or skills.
-- Paying per use through x402-enabled workflows, APIs, and agent services.
+- Paying for marketplace and managed-service usage when HIVE checkout is supported.
 - Buying lifetime access or subscriptions when a creator supports that model.
 - Funding managed HONEY credits or hosted services when supported.
 - Settling commissions when a workflow earns revenue for a user.
