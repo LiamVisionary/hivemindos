@@ -64,14 +64,26 @@ export function isMacMachineOs(os?: string) {
   return /^(macos|darwin)$/i.test(os ?? "");
 }
 
+// Windows reports "windows" (native bridge, std::env::consts::OS) or "win32"
+// (HTTP route, process.platform); Linux reports "linux". Both spellings count.
+export function isDesktopMachineOs(os?: string) {
+  return /^(windows|win32|linux)$/i.test(os ?? "");
+}
+
 export function isVisibleFleetMachine(
-  machine: Pick<FleetMachineIdentity, "name" | "dnsName" | "os">,
+  machine: Pick<FleetMachineIdentity, "self" | "name" | "dnsName" | "os">,
 ) {
+  // The local machine is ALWAYS a fleet member — never filter out self. On a
+  // Windows/Linux install its name ("This PC") and OS match no other clause, so
+  // without this exemption the box's own cell (and the add-agent cell that
+  // lives inside it) never render and any local agents stay invisible.
   // Mobile devices are fleet members too: a phone running HivemindOS Mobile
   // joins the tailnet to reach the hub, so it shows up as an iOS/Android peer.
   return (
+    Boolean(machine.self) ||
     isHivemindMachineName(machine.name, machine.dnsName) ||
     isMacMachineOs(machine.os) ||
+    isDesktopMachineOs(machine.os) ||
     isMobileMachineOs(machine.os)
   );
 }

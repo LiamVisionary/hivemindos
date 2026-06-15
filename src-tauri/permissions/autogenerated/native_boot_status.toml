@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-native-boot-status"
+description = "Enables the native_boot_status command without any pre-configured scope."
+commands.allow = ["native_boot_status"]
+
+[[permission]]
+identifier = "deny-native-boot-status"
+description = "Denies the native_boot_status command without any pre-configured scope."
+commands.deny = ["native_boot_status"]

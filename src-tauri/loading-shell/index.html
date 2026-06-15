@@ -160,6 +160,36 @@
       <div class="stats" id="stats"></div>
     </div>
 
+    <!-- Shown by JS (native_boot_status poll) only if the embedded server fails to boot. -->
+    <div
+      id="error-stage"
+      style="display:none; height:100%; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:32px; box-sizing:border-box; text-align:center;"
+    >
+      <div class="wordmark" style="font-size:20px;">Hivemind<span class="os">OS</span></div>
+      <div style="font-size:18px; font-weight:640; color:var(--text);">Couldn't start the local server</div>
+      <div style="font-size:13px; color:var(--muted); max-width:520px; line-height:1.55;">
+        The app is running, but its dashboard backend didn't start — so machines, agents and
+        wallets can't load. <b style="color:var(--text); font-weight:600;">Retry</b> usually fixes
+        it. If it keeps failing, tap <b style="color:var(--text); font-weight:600;">Copy error</b>
+        and send it over.
+      </div>
+      <pre
+        id="error-log"
+        style="width:min(680px,90vw); max-height:34vh; overflow:auto; margin:6px 0 0; padding:12px 14px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); color:#cfcfe6; font-size:11.5px; line-height:1.5; white-space:pre-wrap; text-align:left;"
+      ></pre>
+      <div style="display:flex; gap:10px; align-items:center; margin-top:4px;">
+        <button
+          id="retry-btn"
+          style="font:inherit; font-size:13px; font-weight:600; padding:9px 20px; border-radius:9px; border:none; cursor:pointer; background:var(--honey); color:#1a1206;"
+        >Retry</button>
+        <button
+          id="copy-btn"
+          style="font:inherit; font-size:13px; font-weight:600; padding:9px 18px; border-radius:9px; cursor:pointer; background:transparent; color:var(--text); border:1px solid rgba(255,255,255,0.14);"
+        >Copy error</button>
+        <span id="error-status" style="font-size:12px; color:var(--muted);"></span>
+      </div>
+    </div>
+
     <script>
       (function () {
         "use strict";
@@ -223,12 +253,122 @@
             }
           }
           if (status && typeof status === "object" && status.version) {
+            window.__hivemindosVersion = status.version;
             addStat("v" + status.version, "This Mac");
           }
           if (statsEl.children.length > 0) {
             statusEl.textContent = "Loading your hive…";
           }
         });
+
+        // ----- boot-failure recovery -----------------------------------------
+        // While the Node server comes up, poll its status. If it fails to boot,
+        // swap the loader for an interactive error screen (log + Copy + Retry).
+        // On success the Rust side navigates this window to the dashboard, so
+        // the poll simply stops being observed.
+        var stageEl = document.querySelector(".stage");
+        var errorStage = document.getElementById("error-stage");
+        var errorLog = document.getElementById("error-log");
+        var retryBtn = document.getElementById("retry-btn");
+        var copyBtn = document.getElementById("copy-btn");
+        var errorStatusEl = document.getElementById("error-status");
+        var reportedFailure = false;
+        var pollTimer = null;
+
+        function installId() {
+          try {
+            var k = "hivemindos.installId.v1";
+            var v = localStorage.getItem(k);
+            if (!v) {
+              v = "shell-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+              localStorage.setItem(k, v);
+            }
+            return v;
+          } catch (e) {
+            return "shell-unknown";
+          }
+        }
+
+        // The static error page can't reach our analytics from Node (the server
+        // never started), but the webview can POST directly. Anonymous: kind,
+        // version, coarse UA, the log tail — never user content, paths or IPs.
+        function reportBootFailure(detail) {
+          try {
+            fetch("https://hivemindos-issues.hivemindos.workers.dev/issues", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              keepalive: true,
+              body: JSON.stringify({
+                kind: "native_server_boot_failed",
+                severity: "error",
+                installId: installId(),
+                appVersion: window.__hivemindosVersion || "",
+                platform: (navigator.userAgent || "").slice(0, 180),
+                detail: String(detail || "").slice(0, 4000),
+                failureKind: "native_server_boot",
+                context: "loading-shell",
+              }),
+            }).catch(function () {});
+          } catch (e) {}
+        }
+
+        function showError(detail) {
+          if (stageEl) stageEl.style.display = "none";
+          errorLog.textContent = detail || "No server log was captured.";
+          errorStage.style.display = "flex";
+          if (!reportedFailure) {
+            reportedFailure = true;
+            reportBootFailure(detail);
+          }
+        }
+
+        if (copyBtn) {
+          copyBtn.addEventListener("click", function () {
+            var text = errorLog.textContent || "";
+            function done(ok) {
+              errorStatusEl.textContent = ok ? "Copied." : "Copy failed — select the text above.";
+              setTimeout(function () { errorStatusEl.textContent = ""; }, 2500);
+            }
+            try {
+              navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+            } catch (e) { done(false); }
+          });
+        }
+
+        if (retryBtn) {
+          retryBtn.addEventListener("click", function () {
+            retryBtn.disabled = true;
+            errorStatusEl.textContent = "Restarting the server…";
+            callNative("retry_native_server", {}, 6000).then(function (res) {
+              retryBtn.disabled = false;
+              if (res && res.ok) {
+                errorStatusEl.textContent = "";
+                reportedFailure = false;
+                errorStage.style.display = "none";
+                if (stageEl) stageEl.style.display = "flex";
+                statusEl.textContent = "Restarting the hive…";
+                startPolling();
+              } else {
+                errorStatusEl.textContent = res && res.error ? "Still couldn't start." : "Retry unavailable.";
+              }
+            });
+          });
+        }
+
+        function pollBootStatus() {
+          callNative("native_boot_status", {}, 2500).then(function (res) {
+            if (res && res.state === "failed") {
+              showError(res.detail);
+              return; // stop polling; Retry resumes it
+            }
+            pollTimer = setTimeout(pollBootStatus, 1500);
+          });
+        }
+        function startPolling() {
+          if (pollTimer) clearTimeout(pollTimer);
+          pollBootStatus();
+        }
+        startPolling();
       })();
     </script>
   </body>

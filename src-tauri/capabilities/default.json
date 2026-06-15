@@ -45,6 +45,8 @@
     "allow-kanban-read",
     "allow-memory-telemetry",
     "allow-phone-prompts",
+    "allow-native-boot-status",
+    "allow-retry-native-server",
     "allow-runtime-files",
     "allow-runtime-usage",
     "allow-native-setup-run",

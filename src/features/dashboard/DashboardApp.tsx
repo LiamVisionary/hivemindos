@@ -1603,7 +1603,20 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       error?: string;
     } | null;
     const data = useNativeData ? nativeData : fallbackData ?? nativeData;
-    const devices = data?.devices ?? [];
+    let devices = data?.devices ?? [];
+    // The native desktop command ALWAYS returns a local "self" device, even with
+    // no Tailscale installed. The selected source above can be the HTTP endpoint,
+    // whose no-Tailscale response may not carry self — so if the chosen devices
+    // lack a self, re-inject the native self. This guarantees a fresh desktop
+    // install always shows its own machine cell + the add-agent cell (the add hex
+    // lives inside a machine cluster, so zero machines = no way to onboard).
+    // `nativeData` is null on the web build, so this is naturally desktop-only.
+    if (!devices.some((device) => device.self)) {
+      const nativeSelf = (nativeData?.devices ?? []).find((device) => device.self);
+      if (nativeSelf) {
+        devices = [nativeSelf, ...devices];
+      }
+    }
     const localOnlyStatusFallback = data?.tailnetHealth?.state === "status-unavailable"
       && devices.length <= 1
       && devices.every((device) => device.self || device.ip === "127.0.0.1");

@@ -262,6 +262,12 @@ function isMacDevice(device: Device) {
   return /^(macos|darwin)$/i.test(device.os);
 }
 
+// Windows / Linux desktops are real HivemindOS machines; keep them (and self)
+// so a Windows/Linux install sees its own machine + agents in the fleet.
+function isDesktopDevice(device: Device) {
+  return /^(windows|linux)$/i.test(device.os);
+}
+
 const STALE_OFFLINE_NODE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function machineFamilyBase(device: Device) {
@@ -322,8 +328,10 @@ function dedupeDevices(devices: Device[]) {
   }
   return [...byIdentity.values()].filter(
     (device) =>
+      device.self || // never drop this machine's own self device (any OS)
       isHivemindLinkDevice(device) ||
       isMacDevice(device) ||
+      isDesktopDevice(device) ||
       isMobileDevice(device),
   );
 }

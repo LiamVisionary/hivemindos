@@ -75,6 +75,11 @@ struct NativeServerState {
     port: Mutex<Option<u16>>,
     dashboard_token: Mutex<Option<String>>,
     cache: Mutex<HashMap<String, NativeCacheEntry>>,
+    // Set (to the error + server-log tail) when the embedded server fails to
+    // boot. The loading shell polls `native_boot_status`; when this is Some it
+    // shows an interactive error screen (log + Copy + Retry) instead of a frozen
+    // loader. Always present (debug builds never set it; the shell is release-only).
+    boot_error: Mutex<Option<String>>,
 }
 
 #[cfg(not(debug_assertions))]
@@ -91,6 +96,7 @@ impl NativeServerState {
             port: Mutex::new(None),
             dashboard_token: Mutex::new(None),
             cache: Mutex::new(HashMap::new()),
+            boot_error: Mutex::new(None),
         }
     }
 }
@@ -750,7 +756,16 @@ fn reserve_local_port() -> Result<u16, Box<dyn std::error::Error>> {
 
 #[cfg(not(debug_assertions))]
 fn wait_for_native_server(port: u16) -> Result<(), String> {
-    let deadline = Instant::now() + Duration::from_secs(25);
+    // 60s, not 25s: a fresh Windows install with Defender real-time scanning the
+    // just-extracted node.exe + thousands of node_modules files can take far
+    // longer than 25s on the very first boot. The window shows the animated
+    // loading shell the entire time (not a frozen blank), so a longer ceiling
+    // only helps. Overridable for CI/tests via HIVEMINDOS_NATIVE_BOOT_TIMEOUT_SECS.
+    let timeout_secs = std::env::var("HIVEMINDOS_NATIVE_BOOT_TIMEOUT_SECS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(60);
+    let deadline = Instant::now() + Duration::from_secs(timeout_secs);
 
     while Instant::now() < deadline {
         if TcpStream::connect((NATIVE_BIND_HOST, port)).is_ok() {
@@ -759,11 +774,13 @@ fn wait_for_native_server(port: u16) -> Result<(), String> {
         std::thread::sleep(Duration::from_millis(150));
     }
 
-    Err(format!("Next server did not open port {port} within 25 seconds"))
+    Err(format!("Next server did not open port {port} within {timeout_secs} seconds"))
 }
 
 #[cfg(not(debug_assertions))]
-fn packaged_next_server_paths(app: &tauri::App) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>> {
+fn packaged_next_server_paths<R: Runtime>(
+    app: &impl Manager<R>,
+) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>> {
     let resource_dir = app.path().resource_dir()?;
     let server_dir = resource_dir.join("resources").join("hivemindos-next");
     let server_js = server_dir.join("server.js");
@@ -779,7 +796,7 @@ fn packaged_next_server_paths(app: &tauri::App) -> Result<(PathBuf, PathBuf), Bo
 }
 
 #[cfg(not(debug_assertions))]
-fn has_packaged_next_server(app: &tauri::App) -> bool {
+fn has_packaged_next_server<R: Runtime>(app: &impl Manager<R>) -> bool {
     packaged_next_server_paths(app)
         .map(|(server_js, node_path)| server_js.exists() && node_path.exists())
         .unwrap_or(false)
@@ -877,28 +894,9 @@ fn read_native_server_log_tail(path: &Path) -> String {
     }
 }
 
-/// Percent-encode HTML for a `data:` URL fallback page (no deps, no asset
-/// needed) so we can show a readable error if the embedded server won't boot.
 #[cfg(not(debug_assertions))]
-fn percent_encode_for_data_url(input: &str) -> String {
-    let mut out = String::with_capacity(input.len() * 3);
-    for &byte in input.as_bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(byte as char);
-            }
-            _ => out.push_str(&format!("%{byte:02X}")),
-        }
-    }
-    out
-}
-
-#[cfg(not(debug_assertions))]
-const NATIVE_SERVER_ERROR_HTML: &str = "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body style=\"font-family:-apple-system,system-ui,Segoe UI,sans-serif;background:#0b0b0f;color:#e7e7ea;margin:0;padding:48px;line-height:1.55\"><h2 style=\"margin:0 0 12px\">HivemindOS couldn't start its local server</h2><p style=\"color:#a7a7b0;max-width:560px\">The app is running, but the dashboard backend failed to boot, so machines, agents and wallets can't load. Re-launching usually retries.</p><p style=\"color:#a7a7b0;max-width:560px\">If it keeps failing, share these two files:</p><pre style=\"background:#15151c;padding:14px 16px;border-radius:10px;white-space:pre-wrap;color:#cfcfe6\">~/.hivemindos/native-server.log\n~/.hivemindos/native-panic.log</pre></body></html>";
-
-#[cfg(not(debug_assertions))]
-fn start_native_next_server(
-    app: &tauri::App,
+fn start_native_next_server<R: Runtime>(
+    app: &impl Manager<R>,
 ) -> Result<(Child, u16, String, Option<PathBuf>), Box<dyn std::error::Error>> {
     let (server_js, node_path) = packaged_next_server_paths(app)?;
     let server_dir = server_js
@@ -1022,7 +1020,17 @@ fn await_native_server_then_navigate(
                 &full,
                 "kept app alive; showed local-server error page",
             );
-            navigate_main_window_to_error(&handle);
+            // Publish the failure to shared state. The loading shell is still on
+            // screen (we did NOT navigate away), and its native_boot_status poll
+            // picks this up and swaps to the interactive error screen (log + Copy
+            // + Retry) — which also reports the failure to telemetry from the
+            // webview, the one place that can reach the network here. Re-acquire
+            // state inline so its borrow drops with this statement (the `state`
+            // binding above is borrowed for the child reclaim and would outlive
+            // the lock guard otherwise -> E0597).
+            if let Ok(mut guard) = handle.state::<NativeServerState>().boot_error.lock() {
+                *guard = Some(full);
+            }
         }
     }
 }
@@ -1046,24 +1054,6 @@ fn navigate_main_window_to_server(handle: &tauri::AppHandle, port: u16, token: &
                 Err(error) => {
                     eprintln!("HivemindOS: bad embedded server URL: {error}");
                 }
-            }
-        }
-    });
-}
-
-/// Navigate the main window to the local-server error page. Marshalled to the
-/// main thread (called from the boot background thread).
-#[cfg(not(debug_assertions))]
-fn navigate_main_window_to_error(handle: &tauri::AppHandle) {
-    let inner = handle.clone();
-    let _ = handle.run_on_main_thread(move || {
-        if let Some(window) = inner.get_webview_window("main") {
-            let data_url = format!(
-                "data:text/html;charset=utf-8,{}",
-                percent_encode_for_data_url(NATIVE_SERVER_ERROR_HTML)
-            );
-            if let Ok(url) = url::Url::parse(&data_url) {
-                let _ = window.navigate(url);
             }
         }
     });
@@ -1315,6 +1305,66 @@ fn stop_native_server(state: tauri::State<NativeServerState>) {
     }
 }
 
+/// Boot status the loading shell polls. While the embedded server is still
+/// coming up this is "booting"; if it failed, "failed" plus the error + server
+/// log tail so the shell can render an interactive error screen (Copy + Retry).
+/// (Once the server is ready the window has navigated to it, so the shell never
+/// observes a "ready" here.)
+#[tauri::command]
+fn native_boot_status(state: tauri::State<NativeServerState>) -> serde_json::Value {
+    let detail = state.boot_error.lock().ok().and_then(|guard| guard.clone());
+    match detail {
+        Some(detail) => serde_json::json!({ "state": "failed", "detail": detail }),
+        None => serde_json::json!({ "state": "booting" }),
+    }
+}
+
+/// Re-attempt the embedded server boot from the error screen's Retry button,
+/// WITHOUT restarting the whole app (the prior "rerun setup" menu item did
+/// nothing because it needed the server). Kills any old child, clears the prior
+/// error, and re-runs the spawn + background readiness wait (which navigates to
+/// the dashboard on success, or re-sets boot_error on failure).
+#[tauri::command]
+fn retry_native_server(app: tauri::AppHandle) -> serde_json::Value {
+    #[cfg(not(debug_assertions))]
+    {
+        let state = app.state::<NativeServerState>();
+        if let Ok(mut guard) = state.boot_error.lock() {
+            *guard = None;
+        }
+        if let Ok(mut guard) = state.child.lock() {
+            if let Some(mut child) = guard.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+        match start_native_next_server(&app) {
+            Ok((child, port, token, log_path)) => {
+                if let Ok(mut guard) = state.child.lock() {
+                    *guard = Some(child);
+                }
+                let handle = app.clone();
+                std::thread::spawn(move || {
+                    await_native_server_then_navigate(handle, port, token, log_path);
+                });
+                serde_json::json!({ "ok": true })
+            }
+            Err(error) => {
+                let message = format!("retry could not start the embedded server: {error}");
+                if let Ok(mut guard) = state.boot_error.lock() {
+                    *guard = Some(message.clone());
+                }
+                serde_json::json!({ "ok": false, "error": message })
+            }
+        }
+    }
+    #[cfg(debug_assertions)]
+    {
+        let _ = app;
+        serde_json::json!({ "ok": false, "error": "retry is only available in packaged builds" })
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     install_native_panic_logger();
@@ -1402,14 +1452,11 @@ pub fn run() {
                                 &message,
                                 "kept app alive; showed local-server error page",
                             );
-                            if let Some(window) = app.get_webview_window("main") {
-                                let data_url = format!(
-                                    "data:text/html;charset=utf-8,{}",
-                                    percent_encode_for_data_url(NATIVE_SERVER_ERROR_HTML)
-                                );
-                                if let Ok(url) = url::Url::parse(&data_url) {
-                                    let _ = window.navigate(url);
-                                }
+                            // Surface to the loading shell (still on screen) via its
+                            // native_boot_status poll -> interactive error screen.
+                            if let Ok(mut guard) = app.state::<NativeServerState>().boot_error.lock()
+                            {
+                                *guard = Some(message);
                             }
                         }
                     }
@@ -1444,6 +1491,8 @@ pub fn run() {
             kanban::kanban_read,
             memory::memory_telemetry,
             phone::phone_prompts,
+            native_boot_status,
+            retry_native_server,
             runtime_files::runtime_files,
             runtime_usage::runtime_usage,
             setup::native_setup_run,
