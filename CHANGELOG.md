@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-15 10:37:50 +0700 - Fix Windows/Linux Empty Fleet (Front-End Visibility Filter)
+  - Status: Pushed (v0.2.15)
+  - Areas changed: Fleet machine visibility filter (`src/features/fleet/fleet-identity.ts`), regression test + script wiring (`scripts/test-fleet-windows-visibility.mjs`, `package.json`)
+  - Summary: A fresh Windows (or Linux) desktop still showed a completely empty Fleet view on v0.2.14 — no self machine cell and no add-agent cell — because the client-side `isVisibleFleetMachine` filter only kept Mac, mobile, or `hivemindos-*`-named machines. The local self device (`name: "This PC"`, `os: "win32"`/`"windows"`) matched no clause and was dropped from `machineGroups` after the v0.2.14 route-level fix already let it through, so `displayMachines` was empty and the add-agent hex (which lives inside the machine cluster) never rendered. The filter now always keeps `self` and adds a Windows/Linux desktop OS clause (matching both the `win32` HTTP-route spelling and the `windows` native-bridge spelling). The route-level `dedupeDevices` fix shipped in v0.2.14 stays in place; this closes the second, client-side layer it never covered.
+  - Verification: `pnpm test:fleet-windows-visibility` passes, and was confirmed to FAIL against the pre-fix predicate (Windows self dropped) to prove the test reproduces the bug; `pnpm typecheck` clean on the changed file; `pnpm exec eslint src/features/fleet/fleet-identity.ts scripts/test-fleet-windows-visibility.mjs` passed. The test also includes a source-level drift guard asserting both route `dedupeDevices` keep `device.self` + `isDesktopDevice`, because the v0.2.14 route fix was silently dropped by a branch merge once already.
+  - Intended commit message: `Fix Windows/Linux empty fleet: keep self in front-end visibility filter`
+
 - 2026-06-14 17:37:22 +0700 - Add Agent Reach Guided Channel Setup Wizard
   - Status: Uncommitted
   - Areas changed: Agent Reach installable service backend/actions (`src/lib/services/installable-services.ts`, `src/app/api/fleet/apps/installable-services/route.ts`), Apps & Services Agent Reach setup UI (`src/features/dashboard/views/MyAppsPanel.tsx`, `src/features/dashboard/views/AgentReachSetupWizard.tsx`, `src/features/dashboard/agent-capability-catalog.ts`)

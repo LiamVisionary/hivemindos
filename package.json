@@ -33,6 +33,7 @@
     "test:queen-echo": "node scripts/test-queen-echo-detection.mjs",
     "test:dashboard-nav": "node scripts/test-dashboard-nav.mjs",
     "test:fleet-agent-suppression": "node scripts/test-fleet-agent-suppression.mjs",
+    "test:fleet-windows-visibility": "node scripts/test-fleet-windows-visibility.mjs",
     "test:dashboard-state-snapshot": "node scripts/test-dashboard-state-snapshot.mjs",
     "test:native-first-launch-privacy": "node scripts/test-native-first-launch-privacy.mjs",
     "test:tauri-release-mode": "node scripts/test-tauri-release-mode.mjs",
