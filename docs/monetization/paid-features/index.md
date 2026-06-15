@@ -45,6 +45,8 @@ Paid features should support more than one checkout path when practical:
 
 HIVE payments are product payment utility. HIVE staking is separate alignment utility that can unlock discounts, status, trust signals, curation rights, and early access.
 
+Eligible managed services can offer a small HIVE checkout discount, such as 3-5%, when users pay with HIVE. That payment discount can stack with staking tier discounts up to a capped maximum, such as 30% of eligible platform margin. Discounts should never reduce pricing below direct compute, provider, payment-processing, or other pass-through costs.
+
 ## Planned Paid Paths
 
 | Paid path         | What HivemindOS operates                               |

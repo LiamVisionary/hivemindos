@@ -68,6 +68,8 @@ Payments can use ordinary checkout rails, managed HONEY credits, HIVE, or other 
 
 HIVE staking should improve marketplace economics and trust: lower platform fees, stronger creator badges, curation rights, private opportunity rooms, and better distribution surfaces for high-quality listings. HIVE payment should be available as a rail, but staking should remain the alignment layer around the marketplace rather than the only way to buy.
 
+Paying with HIVE can also earn a small checkout discount on eligible managed services. That payment discount can stack with staking discounts up to a capped maximum, but discounts should apply only to HivemindOS platform margin and never reduce pricing below direct service cost.
+
 ### Enterprise
 
 Business customers can pay for:

@@ -2422,3 +2422,25 @@
 - docs/monetization/paid-features/index.md
   - Decision: adapted_code
   - Reason: clarified x402 payments use endpoint-accepted assets
+## 2026-06-15T14:38:29.125966+00:00 - implementation
+
+- Request: Document HIVE checkout discount stacking with HIVE staking discounts for managed/cloud services
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- docs/monetization/hive-staking-and-community-tiers.md
+  - Decision: adapted_code
+  - Reason: added HIVE payment discount, stacking cap, and margin-floor policy
+- docs/monetization/index.md
+  - Decision: adapted_code
+  - Reason: mirrored HIVE checkout discount policy in monetization overview
+- docs/monetization/ecosystem-plan.md
+  - Decision: adapted_code
+  - Reason: added marketplace/managed-service HIVE payment discount guardrail
+- docs/monetization/honey-hive-treasury.md
+  - Decision: adapted_code
+  - Reason: added HIVE payment discount to token utility model
+- docs/monetization/paid-features/index.md
+  - Decision: adapted_code
+  - Reason: added managed-service checkout discount rule

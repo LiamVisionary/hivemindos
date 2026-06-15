@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-15 21:36:05 +0700 - Document HIVE Payment Discount Policy
+  - Status: Pushed
+  - Areas changed: Monetization docs (`docs/monetization/hive-staking-and-community-tiers.md`, `docs/monetization/index.md`, `docs/monetization/ecosystem-plan.md`, `docs/monetization/honey-hive-treasury.md`, `docs/monetization/paid-features/index.md`), changelog
+  - Summary: Documents that paying with HIVE can earn a small checkout discount on eligible Hive Cloud, managed compute, managed HONEY credit, marketplace, and hosted service purchases. The policy keeps staking discounts as the larger tiered incentive, lets HIVE payment and staking discounts stack only up to a capped maximum, and protects pricing from falling below direct infrastructure, provider, payment-processing, or pass-through costs.
+  - Verification: Focused `git diff --check` passed for the touched monetization docs, changelog, and assimilation logs; public-doc hygiene search found no local paths or personal operational details in the updated docs; assimilation manifest verification passed.
+  - Intended commit message: `Document HIVE payment discount policy`
+
 - 2026-06-15 21:32:39 +0700 - Separate HIVE Payments From x402 Asset Claims
   - Status: Pushed
   - Areas changed: Monetization docs (`docs/monetization/ecosystem-plan.md`, `docs/monetization/honey-hive-treasury.md`, `docs/monetization/hive-staking-and-community-tiers.md`, `docs/monetization/paid-features/index.md`), changelog

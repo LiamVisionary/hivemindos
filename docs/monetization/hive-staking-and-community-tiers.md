@@ -186,6 +186,24 @@ Discounts may apply to:
 
 Non-stakers should still be able to buy the same paid services at the standard fiat, card, managed HONEY credit, or enterprise price. The HIVE path is the aligned-user price, not the only checkout path.
 
+HIVE can lower managed-service pricing in two separate ways:
+
+- HIVE payment discount: a small checkout discount when the user pays with HIVE.
+- HIVE staking discount: a tiered discount based on active staked HIVE.
+
+Recommended launch policy:
+
+| Discount source | Discount |
+| --- | ---: |
+| Pay with HIVE | 3-5% |
+| Supporter stake | 5% |
+| Builder stake | 10% |
+| Curator stake | 15% |
+| Operator stake | 20% |
+| Visionary stake | 25% |
+
+The HIVE payment discount can stack with the staking discount, but the combined discount should be capped. A reasonable launch cap is 30% of eligible HivemindOS platform margin.
+
 Launch discount ladder:
 
 | Tier      | Standing managed-service discount |

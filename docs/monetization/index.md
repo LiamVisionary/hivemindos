@@ -138,6 +138,8 @@ HIVE staking can make paid managed services cheaper without making them HIVE-onl
 
 Eligible discounts may apply to Hive Cloud subscriptions, managed compute, managed HONEY credit purchases, Agent Marketplace platform fees, and hosted team, memory, monitoring, or orchestration add-ons. Non-stakers should still be able to buy the same paid services at the standard fiat, card, managed HONEY credit, or enterprise price.
 
+HIVE can lower managed-service pricing in two ways: paying with HIVE can earn a small checkout discount, and staking HIVE can earn a tiered platform-margin discount. The launch target is a 3-5% checkout discount for HIVE payment, plus the staking tier discount when eligible, capped at 30% combined.
+
 Discounts apply to HivemindOS platform margin, not raw provider or infrastructure cost. A checkout should not discount below direct compute cost, provider API cost, payment processor fees, or other pass-through costs needed to deliver the service.
 
 ## HIVE Community Utility
