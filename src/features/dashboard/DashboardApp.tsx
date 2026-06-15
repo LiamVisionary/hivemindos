@@ -2,7 +2,7 @@
 // @ts-nocheck
 
 "use client";
-import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type PointerEvent } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState, useTransition, type ChangeEvent, type PointerEvent } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import {
@@ -1428,6 +1428,13 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   const [mirosharkHelperPending, setMirosharkHelperPending] = useState<"ask" | "suggest" | "">("");
   const [mirosharkHelperStatus, setMirosharkHelperStatus] = useState("");
   const [activeView, setActiveView] = useState<DashboardView>(initialView ?? "agents");
+  // requestedView updates urgently for instant nav-rail feedback; activeView is
+  // switched inside a transition so mounting the (heavy, unvirtualized) target
+  // panel no longer blocks the click. They re-sync whenever activeView settles,
+  // which also keeps the rail highlight correct for programmatic navigation.
+  const [requestedView, setRequestedView] = useState<DashboardView>(initialView ?? "agents");
+  const [isViewPending, startViewTransition] = useTransition();
+  useEffect(() => { setRequestedView(activeView); }, [activeView]);
   const [dashboardTheme, setDashboardTheme] = useState<DashboardTheme>("dark");
   const [chatStreamingByKey, setChatStreamingByKey] = useState<Record<string, ChatStreamState>>({});
   const chatStreamingByKeyRef = useRef<Record<string, ChatStreamState>>({});
@@ -3304,7 +3311,27 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
             seen.add(key);
             merged.push(entry);
           }
-          return { ...current, [storageKey]: merged.slice(-80) };
+          const nextEntries = merged.slice(-80);
+          const prevEntries = current[storageKey] ?? [];
+          // Bail out (return the same object reference) when the polled process
+          // log is unchanged, so a 5-12s poll that found nothing new doesn't
+          // re-render DashboardApp and the active panel. Mirrors the equality
+          // guard the sibling setMessagesByAgent already uses below.
+          if (
+            prevEntries.length === nextEntries.length
+            && prevEntries.every((entry, index) => {
+              const other = nextEntries[index];
+              return !!other
+                && other.label === entry.label
+                && (other.detail ?? "") === (entry.detail ?? "")
+                && other.at === entry.at
+                && (other.runId ?? "") === (entry.runId ?? "")
+                && (other.status ?? "") === (entry.status ?? "");
+            })
+          ) {
+            return current;
+          }
+          return { ...current, [storageKey]: nextEntries };
         });
         if (visibleSessionMessages.length) {
           setMessagesByAgent((current) => {
@@ -4173,10 +4200,12 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       {/* The fixed left rail + transient toast live OUTSIDE <main> so they don't
           consume a grid row in .commandShell (which would push .commandMain down). */}
       <AppNavShelf
-        activeView={activeView}
+        activeView={requestedView}
         onNavigate={(id) => {
+          if (id === requestedView && id === activeView) return;
+          setRequestedView(id);
           if (id === "kanban" && !kanbanBoard) setKanbanLoading(true);
-          setActiveView(id);
+          startViewTransition(() => setActiveView(id));
         }}
         theme={dashboardTheme === "hive-light" ? "light" : "dark"}
         onToggleTheme={() => setDashboardTheme((current) => (current === "hive-light" ? "dark" : "hive-light"))}
@@ -4185,6 +4214,14 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       />
       {appCompletionNotification ? (
         <DashboardAppCompletionToast key={appCompletionNotification.id} notification={appCompletionNotification} />
+      ) : null}
+      {/* Thin top bar while a view switch renders in the background (transition
+          pending). Fixed-position so it never relayouts the heavy panel tree. */}
+      {isViewPending ? (
+        <div
+          aria-hidden="true"
+          style={{ position: "fixed", insetInline: 0, top: 0, height: 2, zIndex: 9999, background: "var(--accent-strong, #6fe0b0)", opacity: 0.85, pointerEvents: "none" }}
+        />
       ) : null}
       <main className="shell commandShell">
       <div className="commandMain" style={chatRouteShellStyle}>

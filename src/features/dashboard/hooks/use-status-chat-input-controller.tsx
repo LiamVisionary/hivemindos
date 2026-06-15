@@ -636,7 +636,16 @@ export function useStatusChatInputController(props: any) {
     voiceAudioContextRef.current = audioContext;
     const data = new Uint8Array(analyser.frequencyBinCount);
     const bands = 18;
+    // Throttle waveform state updates. The analyser ticks at ~60fps, but
+    // pushing setVoiceBands every frame re-renders DashboardApp (and every
+    // unmemoized view panel) 60x/second for the whole recording. Sampling every
+    // 5th frame (~12fps) is visually indistinguishable for a level meter and
+    // cuts the recording-time re-render load by 5x.
+    let frame = 0;
     const tick = () => {
+      voiceAnimationRef.current = window.requestAnimationFrame(tick);
+      frame = (frame + 1) % 5;
+      if (frame !== 0) return;
       analyser.getByteFrequencyData(data);
       const binSize = Math.max(1, Math.floor(data.length / bands));
       const next = Array.from({ length: bands }, (_, index) => {
@@ -646,7 +655,6 @@ export function useStatusChatInputController(props: any) {
         return Math.min(1, average / 180);
       });
       setVoiceBands(next);
-      voiceAnimationRef.current = window.requestAnimationFrame(tick);
     };
     tick();
   }

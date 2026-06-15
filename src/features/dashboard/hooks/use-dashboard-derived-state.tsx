@@ -23,6 +23,12 @@ import {
   machineExactIdentity,
 } from "@/features/fleet/fleet-identity";
 
+// Hoisted so the alternation is compiled once instead of being re-created on
+// every .test() call inside the per-agent fleetViewData loop (which runs over
+// every agent on every fleet/poll-driven recompute).
+const FLEET_ALERT_ERROR_PATTERN =
+  /\b(error|failed|failure|blocked|unavailable|unauthorized|forbidden|timeout|missing|not found|needs|invalid|rejected|login|auth)\b/i;
+
 const FLEET_CAPABILITY_META: Record<
   string,
   {
@@ -1157,6 +1163,14 @@ export function useDashboardDerivedState(props: any) {
   );
 
   const fleetViewData = useMemo(() => {
+    // O(1) lookups for the tasks/alerts loops below. Previously each work item
+    // and each agent did a linear displayAgents.find + machineGroups.find (with
+    // an inner .some), i.e. O(tasks * agents * machines) on every recompute.
+    const agentById = new Map(displayAgents.map((item) => [item.id, item]));
+    const machineByAgentId = new Map<string, (typeof machineGroups)[number]>();
+    machineGroups.forEach((group) => {
+      group.agents.forEach((item) => machineByAgentId.set(item.id, group));
+    });
     const rosterMachineGroups = machineGroups.filter(
       (machine) =>
         machine.key !== "unassigned" &&
@@ -1271,16 +1285,13 @@ export function useDashboardDerivedState(props: any) {
               primaryWork?.lastMessage,
               primaryWork?.sourceDetail,
             ].join("\n");
-            const snapshotErrorIsFailure =
-              /\b(error|failed|failure|blocked|unavailable|unauthorized|forbidden|timeout|missing|not found|needs|invalid|rejected|login|auth)\b/i.test(
-                snapshot?.error ?? "",
-              );
+            const snapshotErrorIsFailure = FLEET_ALERT_ERROR_PATTERN.test(
+              snapshot?.error ?? "",
+            );
             const activityStatus = primaryWork
               ? primaryWork.source === "hermes-state" &&
                 primaryWorkFailed &&
-                !/\b(error|failed|failure|blocked|unavailable|unauthorized|forbidden|timeout|missing|not found|needs|invalid|rejected|login|auth)\b/i.test(
-                  primaryWorkFailureText,
-                )
+                !FLEET_ALERT_ERROR_PATTERN.test(primaryWorkFailureText)
                 ? "unknown"
                 : primaryWork.status
               : snapshotErrorIsFailure
@@ -1334,10 +1345,8 @@ export function useDashboardDerivedState(props: any) {
       .map((machine) => [machines[0]?.id ?? machine.id, machine.id]);
     const tasks: FleetTask[] = Object.entries(agentWorkById).flatMap(
       ([agentId, work]) => {
-        const agent = displayAgents.find((item) => item.id === agentId);
-        const machine = machineGroups.find((group) =>
-          group.agents.some((item) => item.id === agentId),
-        );
+        const agent = agentById.get(agentId);
+        const machine = machineByAgentId.get(agentId);
         return work.slice(0, 3).map(
           (task): FleetTask => ({
             id: task.id,
@@ -1426,9 +1435,7 @@ export function useDashboardDerivedState(props: any) {
         }),
       ...displayAgents.flatMap((agent) => {
         const snapshot = fleetSnapshots[agent.id];
-        const machine = machineGroups.find((group) =>
-          group.agents.some((item) => item.id === agent.id),
-        );
+        const machine = machineByAgentId.get(agent.id);
         if (snapshot?.error) {
           return [
             {

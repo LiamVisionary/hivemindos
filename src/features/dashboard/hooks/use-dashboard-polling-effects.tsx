@@ -288,6 +288,7 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
     const graphId = mirosharkRun.graphId;
     const projectId = mirosharkRun.projectId;
     let inFlight = false;
+    let lastPollSig = "";
     const controllers = new Set<AbortController>();
     const pollRun = async () => {
       if (inFlight) return;
@@ -304,7 +305,14 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
       try {
         const data = await response?.json().catch(() => null) as MiroSharkRunResult | null;
         if (data) {
-          setMirosharkRun((current) => ({ ...(current ?? {}), ...data }));
+          // Skip the state update (and the full-app re-render it triggers) when
+          // the 2s poll returns byte-identical data — the common case during
+          // long idle stretches of a running simulation.
+          const sig = JSON.stringify(data);
+          if (sig !== lastPollSig) {
+            lastPollSig = sig;
+            setMirosharkRun((current) => ({ ...(current ?? {}), ...data }));
+          }
         }
       } finally {
         controllers.delete(controller);
