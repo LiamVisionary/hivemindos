@@ -1183,28 +1183,28 @@ export function AeonAutopilotPanel({
         postJson<{ analytics?: RuntimeAnalytics }>("/api/runtimes/aeon/analytics", body),
         postJson<{ memory?: RuntimeMemorySnapshot }>("/api/runtimes/aeon/memory", body),
       ]);
-      const runtimeRuns = runsRes.runs ?? [];
-      const mappedOutputs = (outputsRes.outputs ?? []).map(runtimeOutputToAeon);
+      const runtimeRuns = runsRes?.runs ?? [];
+      const mappedOutputs = (outputsRes?.outputs ?? []).map(runtimeOutputToAeon);
       const mappedAgent = hydrateAgentWithRuntime(baseAgent, {
         ...emptyRuntimeData(),
-        status: statusRes.status,
+        status: statusRes?.status,
       });
       setRuntimeDataByAgent((current) => ({
         ...current,
         [profile.id]: {
           loading: false,
           error: "",
-          status: statusRes.status,
-          skills: (skillsRes.skills ?? []).map(runtimeSkillToAeon),
+          status: statusRes?.status,
+          skills: (skillsRes?.skills ?? []).map(runtimeSkillToAeon),
           runs: runtimeRuns.map(runtimeRunToAeon),
           runtimeRuns,
           outputs: mappedOutputs,
           deliverables: [...deliverables, ...mappedOutputs.map((output) => outputToDeliverable(output, mappedAgent))],
-          analytics: runtimeAnalyticsToAeon(analyticsRes.analytics),
+          analytics: runtimeAnalyticsToAeon(analyticsRes?.analytics),
           pulse: pulseFromRuns(runtimeRuns),
           secrets: current[profile.id]?.secrets ?? [],
-          paths: runtimePaths(mappedAgent, memoryRes.memory),
-          memory: runtimeMemoryToAeon(memoryRes.memory),
+          paths: runtimePaths(mappedAgent, memoryRes?.memory),
+          memory: runtimeMemoryToAeon(memoryRes?.memory),
           repoSync: current[profile.id]?.repoSync,
         },
       }));

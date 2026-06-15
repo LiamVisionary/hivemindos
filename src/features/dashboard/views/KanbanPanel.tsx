@@ -200,8 +200,12 @@ function KanbanPanelComponent(props: any) {
     else setWorkHistoryLoading(true);
     setWorkHistoryError("");
     return fetch(`/api/work-history?${params.toString()}`, { signal: options.signal })
-      .then((response) => response.json())
-      .then((data: WorkHistoryPayload) => {
+      // Parse defensively: a non-JSON response (e.g. an SPA/HTML fallback when no
+      // /api server is present, or a server error page) otherwise throws a raw
+      // engine parse error ("The string did not match the expected pattern") that
+      // surfaces as a scary red banner. Fall back to a clean message instead.
+      .then((response) => response.json().catch(() => null))
+      .then((data: WorkHistoryPayload | null) => {
         if (!data?.ok) throw new Error(data?.error || "Could not load work history.");
         setWorkHistory((current) => append
           ? {
