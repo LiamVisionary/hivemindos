@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-15 21:13:47 +0700 - Clarify HIVE Marketplace Utility
+  - Status: Pushed
+  - Areas changed: Monetization docs (`docs/monetization/hive-staking-and-community-tiers.md`, `docs/monetization/honey-hive-treasury.md`, `docs/monetization/index.md`), changelog
+  - Summary: Makes the HIVE staking utility clearer for readers who do not immediately understand curator rights or ecosystem ops influence. The staking docs now explain Curator as a marketplace power-user tier with early opportunity access, trusted recommender reputation, and better distribution surfaces for quality listings; define private opportunity rooms; and clarify that Operator/Visionary ops influence means stronger roadmap, bounty, marketplace, and grant signaling without treasury control, user-fund access, or unilateral payout authority.
+  - Verification: Focused `git diff --check` passed for the touched monetization docs, changelog, and assimilation logs; public-doc hygiene search found no local paths or personal operational details in the updated docs; assimilation manifest verification passed.
+  - Intended commit message: `Clarify HIVE marketplace utility`
+
 - 2026-06-15 19:20:30 +0700 - Document HIVE Staker Managed-Service Discounts
   - Status: Pushed
   - Areas changed: Monetization docs (`docs/monetization/hive-staking-and-community-tiers.md`, `docs/monetization/honey-hive-treasury.md`, `docs/monetization/index.md`), changelog

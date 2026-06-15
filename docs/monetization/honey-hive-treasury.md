@@ -134,6 +134,10 @@ Staking should provide ecosystem benefits rather than simply printing more token
 
 Potential future benefits:
 
+- Status tiers and HIVE profile badges.
+- Private opportunity rooms.
+- Marketplace curation rights.
+- Bounty boost visibility and curator eligibility.
 - Marketplace fee discounts.
 - Hive Cloud and managed compute discounts.
 - Managed HONEY credit purchase discounts or bonuses.
@@ -144,6 +148,8 @@ Potential future benefits:
 - Early access to new functionality.
 
 Managed-service discounts should apply to HivemindOS platform margin, not raw third-party provider cost. Non-stakers should still be able to buy the same paid services at the standard fiat, card, managed HONEY credit, or enterprise price.
+
+Marketplace curation and ecosystem ops influence should be treated as reputation and signaling utility, not admin control. Curators can help surface quality work and get closer to early opportunities. Operators and Visionaries can help prioritize roadmap, bounty, grant, and marketplace-policy direction. Final treasury execution, payout disputes, user funds, and contract controls should remain with explicit admin or multisig processes until the system is mature enough for stronger governance.
 
 The first staking design uses fixed HIVE tiers for community alignment rather than per-use token spending. See [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for the Holder, Supporter, Builder, Curator, Operator, and Visionary model.
 

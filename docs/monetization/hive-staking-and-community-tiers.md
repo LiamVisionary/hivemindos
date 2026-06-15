@@ -142,8 +142,8 @@ The tier names are social titles, but each title should map to real privileges.
 | Holder     |    1m HIVE | Wallet-linked identity and basic status   |
 | Supporter  |   10m HIVE | Community access and stronger signal      |
 | Builder    |   50m HIVE | Early workflows and contributor status    |
-| Curator    |  100m HIVE | Bounty and marketplace curation eligibility |
-| Operator   |  250m HIVE | Ecosystem operations and higher influence |
+| Curator    |  100m HIVE | Marketplace power-user status and bounty curation eligibility |
+| Operator   |  250m HIVE | Ecosystem operations influence and higher trust |
 | Visionary  |    1b HIVE | Highest alignment, access, and status     |
 
 These thresholds are fixed in HIVE at launch. They should not float minute-by-minute with price.
@@ -234,9 +234,14 @@ Benefits:
 - Eligibility for curator-assisted bounty review.
 - Marketplace trust signal for agents, swarms, workflows, and templates.
 - Higher marketplace visibility for published work.
+- Access to curator opportunity rooms when available.
+- Reputation as a trusted recommender for useful agents and workflows.
+- Better distribution surfaces for the curator's own marketplace listings, subject to quality rules.
 - 15% managed-service discount on eligible HivemindOS platform margin.
 
 Curator does not mean unilateral payout power. Admins or a multisig should retain final treasury and dispute control at launch.
+
+Curator should feel like: “I am a trusted marketplace power user with early access to opportunities and a better path to distribution.”
 
 ### Operator
 
@@ -247,6 +252,7 @@ Benefits:
 - Operator badge.
 - Higher governance weight on roadmap and community votes.
 - Private operator room.
+- Access to operator opportunity rooms when available.
 - Priority access to alpha workflows.
 - Higher Honey multiplier.
 - Lower marketplace fee tier.
@@ -269,6 +275,7 @@ Benefits:
 - 25% managed-service discount on eligible HivemindOS platform margin.
 - Highest bounty boost visibility.
 - Highest-signal private room.
+- Highest-signal opportunity room access.
 - Earliest access to experimental monetization workflows.
 - Ability to propose official bounty boards or themed grant rounds.
 - Priority listing for marketplace agents and workflows.
@@ -277,6 +284,36 @@ Benefits:
 Visionary should feel like: “I am a major aligned backer and ecosystem tastemaker.”
 
 Visionary is not treasury control. Visionaries can propose, signal, curate, and boost. Final execution of treasury spending should remain with admin or multisig controls.
+
+## Marketplace Curation
+
+Marketplace curation means trusted stakers help separate signal from noise in the HivemindOS economy.
+
+The marketplace can include:
+
+- Agents.
+- Swarms.
+- Workflows.
+- Skills and plugins.
+- Zero-human company templates.
+- Monetization playbooks.
+- Automation packages.
+
+Curators are not admins. They should not be able to seize listings, move user funds, or unilaterally approve treasury payouts.
+
+Curators can help with:
+
+- Tagging and categorizing submissions.
+- Recommending high-quality agents, workflows, and templates.
+- Flagging spam, scams, broken tools, or low-effort clones.
+- Nominating useful listings for featured collections.
+- Helping review bounty submissions before admin acceptance.
+- Building trusted collections around specific use cases.
+- Giving high-signal feedback on marketplace rules and fee policy.
+
+The user-facing benefit is deal flow, reputation, and distribution. A good curator gets closer to useful opportunities before they are crowded, builds a visible track record for taste, and can earn better visibility for their own listings if they keep quality high.
+
+In simple terms: Curator is the marketplace power-user tier.
 
 ## Alpha Rooms
 
@@ -291,6 +328,43 @@ They can include:
 - Operator and Visionary strategy discussions.
 
 If an alpha-room experiment becomes a stable paid product feature, it should eventually have a non-crypto paid path.
+
+## Private Opportunity Rooms
+
+Private opportunity rooms are early-access channels for high-signal members.
+
+They can include:
+
+- New bounties before they are promoted publicly.
+- Requests from users or companies looking for custom agents, workflows, or automations.
+- Zero-human company monetization workflows.
+- Marketplace launch opportunities.
+- Creators looking for collaborators.
+- Grant opportunities or treasury-backed project themes.
+- Early agent and template listings that need testers.
+
+These rooms are about access to opportunities, not permanent product lockouts. If an opportunity becomes a normal product feature, it should eventually have a non-crypto paid path.
+
+Public wording should prefer “private opportunity room” over “deal-flow room.” It is clearer and less finance-coded.
+
+## Ecosystem Ops Influence
+
+Ecosystem ops influence means higher-tier stakers get a stronger voice in community and marketplace operating decisions.
+
+Operators and Visionaries can help signal on:
+
+- Roadmap priorities.
+- Which bounty themes should get promoted.
+- Which alpha workflows should be expanded.
+- Marketplace categories and quality standards.
+- Curation rules.
+- Community grant priorities.
+- Partnership ideas.
+- Fee policy for marketplace and managed-service surfaces.
+
+This is influence, not control. It should not grant admin access to user funds, direct treasury control, unilateral payout approval, staking-contract control, or control over other users' accounts or agents.
+
+In simple terms: higher-tier stakers get a louder and more trusted voice because they have more HIVE locked and more ecosystem alignment at stake.
 
 ## Governance
 

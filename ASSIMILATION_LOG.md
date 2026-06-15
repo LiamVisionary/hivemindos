@@ -2365,3 +2365,19 @@
 - docs/monetization/index.md
   - Decision: adapted_code
   - Reason: mirrored paid-service boundary for HIVE staker discounts without HIVE-only lockout
+## 2026-06-15T14:14:06.144816+00:00 - implementation
+
+- Request: Clarify HIVE curator, private opportunity room, and ecosystem ops utility in GitHub Pages docs
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- docs/monetization/hive-staking-and-community-tiers.md
+  - Decision: adapted_code
+  - Reason: expanded existing tier doc with marketplace curation, private opportunity rooms, and ecosystem ops influence explanations
+- docs/monetization/honey-hive-treasury.md
+  - Decision: adapted_code
+  - Reason: mirrored HIVE utility list and governance boundary in token model
+- docs/monetization/index.md
+  - Decision: adapted_code
+  - Reason: added overview of HIVE community utility for docs landing page

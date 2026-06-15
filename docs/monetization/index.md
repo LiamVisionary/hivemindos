@@ -62,7 +62,7 @@ If a feature needs HivemindOS to provide hosted infrastructure, shared room orch
   </section>
   <section class="docCard">
     <h3>HIVE Staking And Community Tiers</h3>
-    <p>The stake-to-unlock model for holder identity, alpha rooms, bounties, curator rights, governance signaling, Operator status, and Visionary access.</p>
+    <p>The stake-to-unlock model for holder identity, alpha rooms, bounties, marketplace curation, private opportunity rooms, governance signaling, Operator influence, and Visionary access.</p>
     <a href="hive-staking-and-community-tiers.html">Open staking tiers</a>
   </section>
 </div>
@@ -120,3 +120,11 @@ HIVE staking can make paid managed services cheaper without making them HIVE-onl
 Eligible discounts may apply to Hive Cloud subscriptions, managed compute, managed HONEY credit purchases, Agent Marketplace platform fees, and hosted team, memory, monitoring, or orchestration add-ons. Non-stakers should still be able to buy the same paid services at the standard fiat, card, managed HONEY credit, or enterprise price.
 
 Discounts apply to HivemindOS platform margin, not raw provider or infrastructure cost. A checkout should not discount below direct compute cost, provider API cost, payment processor fees, or other pass-through costs needed to deliver the service.
+
+## HIVE Community Utility
+
+HIVE staking also powers community utility around the future Agent Marketplace and bounty economy.
+
+Curators are marketplace power users who help surface useful agents, workflows, templates, skills, and bounties. Their benefit is early opportunity access, reputation as trusted recommenders, and better distribution surfaces for their own high-quality listings.
+
+Operators and Visionaries get stronger ecosystem ops influence: roadmap signaling, bounty theme prioritization, marketplace quality standards, grant direction, and strategy-room access. This influence does not grant treasury control, admin access to user funds, or unilateral payout authority.
