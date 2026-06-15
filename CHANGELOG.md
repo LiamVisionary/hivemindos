@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-15 21:52:50 +0700 - Make HIVE Staking Docs User-Facing
+  - Status: Pushed
+  - Areas changed: Public monetization docs (`docs/monetization/hive-staking-and-community-tiers.md`), changelog
+  - Summary: Replaces the internal staking contract checklist on the public HIVE staking page with a user-facing custody and safety explanation. The docs now explain staking, unstaking, cooldowns, admin boundaries, and the alignment signal without publishing Solidity method names or launch engineering requirements as product copy.
+  - Verification: Focused `git diff --check` passed; public-doc hygiene search found no local paths or secrets in the updated staking doc; search confirmed the removed internal contract checklist terms no longer appear on the public staking page.
+  - Intended commit message: `Make HIVE staking docs user-facing`
+
 - 2026-06-15 21:36:05 +0700 - Document HIVE Payment Discount Policy
   - Status: Pushed
   - Areas changed: Monetization docs (`docs/monetization/hive-staking-and-community-tiers.md`, `docs/monetization/index.md`, `docs/monetization/ecosystem-plan.md`, `docs/monetization/honey-hive-treasury.md`, `docs/monetization/paid-features/index.md`), changelog

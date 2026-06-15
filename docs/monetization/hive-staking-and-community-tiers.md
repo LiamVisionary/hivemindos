@@ -89,45 +89,32 @@ The v1 staking system should be non-custodial:
 
 The Telegram tip bot ledger can still handle tips and bounty escrow, but it should not be the canonical staking system. Staking should happen on-chain so users can verify custody and exit rules directly.
 
-## Contract Requirements
+## Custody And Safety
 
-The v1 contract should stay simple.
+HIVE staking is designed to be simple and easy to reason about.
 
-Required behavior:
+When a user stakes HIVE, the tokens move from their wallet into the staking contract. The contract records the wallet's active stake so HivemindOS can read the wallet's tier for badges, alpha access, discounts, governance signaling, bounty visibility, and marketplace reputation.
 
-- Stake HIVE.
-- Request unstake.
-- Withdraw after the cooldown.
-- Read a wallet's active staked balance.
-- Read a wallet's pending unstake amount.
-- Read when pending unstake becomes withdrawable.
-- Emit events for stake, unstake request, withdrawal, pause, and cooldown changes.
+The staking system is not a yield farm. It is not designed around rewards emissions, slashing, lock extensions, or complicated token mechanics. The value of staking comes from the product, community, marketplace, and reputation layers that read the staked balance.
 
-Recommended public methods:
+The user flow is:
 
-```solidity
-stake(uint256 amount)
-requestUnstake(uint256 amount)
-withdrawUnstaked()
-stakedBalanceOf(address account) view returns (uint256)
-pendingUnstakeOf(address account) view returns (uint256)
-unstakeAvailableAt(address account) view returns (uint256)
-```
+1. Stake HIVE.
+2. Keep the active tier while the HIVE remains staked.
+3. Request unstaking when ready to exit.
+4. Wait through the visible cooldown.
+5. Withdraw the HIVE back to the wallet.
 
-Recommended safety rules:
+Safety principles:
 
-- No rewards emission at launch.
-- No admin withdrawal of user stake.
-- No admin function that can move user principal.
-- A short unstake cooldown, such as 3 to 7 days, to reduce flash-staking.
-- A bounded cooldown setting so governance or admins cannot silently trap users.
-- Pausable staking for emergencies.
-- User-controlled withdrawal even if product permissions are paused.
-- Multisig ownership for pause and parameter controls.
-- Verified source code on Base.
-- Base Sepolia testing before Base mainnet deployment.
+- Users keep the right to withdraw their own unstaked HIVE after the cooldown.
+- Product or community permissions can pause without giving an admin control over user principal.
+- Admin controls should not be able to move user stake.
+- Any cooldown should be bounded and visible before staking.
+- Emergency pause controls should be limited to protecting the system, not trapping users.
+- Staking should stay separate from treasury spending, bounty payouts, and marketplace payment custody.
 
-The contract should be boring on purpose. The value is the social, product, and community layer that reads staking state, not a complex yield mechanism.
+The staking layer is boring on purpose. The interesting part is what HivemindOS can build around a public, wallet-readable signal of alignment.
 
 ## How Users Stake
 
@@ -432,7 +419,7 @@ At launch:
 - Cancelled or expired bounties refund boosters exactly by ledger entry.
 - Admins handle acceptance and disputes.
 
-The staking contract should decide who is eligible to curate, amplify bounty visibility, or receive higher boost weight. The bounty funds themselves can remain in the existing Telegram escrow ledger until a separate bounty escrow contract is worth the extra complexity.
+Staked tier status can decide who is eligible to curate, amplify bounty visibility, or receive higher boost weight. The bounty funds themselves can remain in the existing Telegram escrow ledger until a separate bounty escrow contract is worth the extra complexity.
 
 ## Tier Review Policy
 
