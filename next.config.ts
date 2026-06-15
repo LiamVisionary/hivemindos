@@ -38,7 +38,14 @@ function detectedTailnetDevOrigins() {
 }
 
 const nextConfig: NextConfig = {
-  reactStrictMode: true,
+  // Dev-only knob: React StrictMode double-invokes every render and effect under
+  // `next dev`, which roughly doubles the cost of a dashboard view switch.
+  // Production builds never double-invoke, so this flag has ZERO effect on the
+  // packaged app — it only changes the dev experience. StrictMode is a known
+  // dev-perf drag for this large dashboard, so default it OFF for snappier dev;
+  // set HIVEMINDOS_DEV_STRICT=1 to restore the double-invoke checks when hunting
+  // effect-cleanup / render-purity bugs.
+  reactStrictMode: process.env.HIVEMINDOS_DEV_STRICT === "1",
   // The embedded build compiles all ~155 API routes and is memory-heavy; this
   // trades a little build time to cut webpack's peak memory so it stays under
   // the heap cap on CI runners (avoids the 8 GB OOM). Next 15.2+.
