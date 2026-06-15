@@ -1716,3 +1716,636 @@
 - public-github-search
   - Decision: rejected
   - Reason: assimilation search returned generic benchmark repos, no usable HivemindOS vault-search implementation donor
+## 2026-06-14T13:00:15.827917+00:00 - public-search
+
+- Request: Tencent Hunyuan Hy-Memory agent memory framework
+- Source: public-github
+- Query: `Tencent Hunyuan Hy-Memory agent memory framework`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-06-14T13:13:28.126632+00:00 - implementation
+
+- Request: Add Hy-Memory-inspired memory evolution to HivemindOS Shared Brain Memory
+- Source: hy-memory package artifacts + current-workspace
+- Selected backbone: local-project:hivemind-os shared brain memory service
+- Verification: pnpm test:agent-memory-evolution; pnpm test:shared-brain-index; pnpm test:vault-structure; focused ESLint; git diff --check; node --check scripts
+
+### Candidates
+- hy-memory-1.2.18:hy_memory/models/memory.py
+  - Decision: adapted_code
+  - Reason: EVOLVE fields supersedes/superseded_by/is_latest and cognitive layer vocabulary mapped into Agent Memory frontmatter
+- hy-memory-1.2.18:hy_memory/pipelines/_retrieval/evolution.py
+  - Decision: adapted_code
+  - Reason: chain expansion/dedup idea adapted to local JSONL+markdown recall as evolutionChain
+- hermes-hy-memory-0.2.7:provider.py
+  - Decision: adapted_code
+  - Reason: passive prefetch/sync-turn lifecycle mapped to HivemindOS recall context and API-backed hive-brain evolve command
+- local-project:hivemind-os:src/lib/services/obsidian/agent-memory.ts
+  - Decision: selected-backbone
+  - Reason: existing typed memory/index/proof service extended in place
+- local-project:hivemind-os:scripts/hive-brain
+  - Decision: selected-donor
+  - Reason: raw-agent CLI fallback extended to hide superseded current hits while rendering chains
+- public-github-search
+  - Decision: rejected
+  - Reason: no usable Hy-Memory public repository found; package artifacts and local service were stronger donors
+## 2026-06-14T13:13:36.015602+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hy-memory-1.2.18:hy_memory/models/memory.py => src/lib/services/obsidian/agent-memory.ts, hy-memory-1.2.18:hy_memory/pipelines/_retrieval/evolution.py => src/lib/services/obsidian/agent-memory.ts, hermes-hy-memory-0.2.7:provider.py => scripts/hive-brain, local-project:hivemind-os:src/lib/services/obsidian/agent-memory.ts => src/lib/services/obsidian/agent-memory.ts, local-project:hivemind-os:scripts/hive-brain => scripts/hive-brain
+- Verification: Wrote ASSIMILATION.json with 5 entries and custom_code_assessment=balanced.
+## 2026-06-15T04:10:44.228476+00:00 - asset-reuse
+
+- Request: Replace the Queen Bee icon with the supplied edited-photo-2.png artwork
+- Source: user-supplied local asset
+- Decision: assimilated
+- Selected backbone: local-project:hivemind-os existing icon asset paths
+- Assimilated: /Users/liam/Downloads/edited-photo-2.png => public/icons/queen-bee-v2.png; /Users/liam/Downloads/edited-photo-2.png => public/icons/queen-bee.png
+- Verification: file/sips/shasum confirmed both replacements are 256x256 RGBA; cmp confirmed both Queen Bee paths are identical; git diff --check passed; visual inspection confirmed icon render.
+
+### Candidates
+- local-project:hivemind-os
+  - Decision: selected
+  - Reason: existing beeRoleIconPath and fleet app-icon matcher already use stable Queen Bee asset paths
+  - Path: `src/lib/config/bee-role-icons.ts`
+- /Users/liam/Downloads/edited-photo-2.png
+  - Decision: asset_copied
+  - Reason: user supplied authoritative replacement artwork
+  - Path: `edited-photo-2.png`
+## 2026-06-15T04:14:13.886494+00:00 - fleet-ui-scale
+
+- Request: Make the Queen Bee icon 50% bigger in the Fleet Hive view
+- Source: local-project:hivemind-os
+- Decision: adapted_code
+- Selected backbone: src/components/fleet/bee-icon.tsx
+- Assimilated: src/components/fleet/bee-icon.tsx => src/components/fleet/bee-icon.tsx
+- Verification: pnpm exec eslint src/components/fleet/bee-icon.tsx --max-warnings=0 passed; git diff --check passed for the Fleet icon component, changelog, and Queen Bee PNG assets.
+
+### Candidates
+- src/components/fleet/bee-icon.tsx
+  - Decision: selected
+  - Reason: Fleet Hive centralizes bee rendering through BeeIcon, so Queen Bee can scale there without changing other app surfaces
+  - Path: `src/components/fleet/bee-icon.tsx`
+- src/components/fleet/network-graph.tsx
+  - Decision: inspected
+  - Reason: Queen Bee hive cell calls BeeIcon role queen, so the central scale applies in the main Fleet Hive graph
+  - Path: `src/components/fleet/network-graph.tsx`
+- src/components/fleet/footers.tsx
+  - Decision: inspected
+  - Reason: Fleet footer agent badges call BeeIcon and inherit the same Queen Bee scale when applicable
+  - Path: `src/components/fleet/footers.tsx`
+## 2026-06-15T04:15:46.406858+00:00 - asset-reuse
+
+- Request: Replace the regular worker bee icon with the supplied edited-photo-4.png artwork
+- Source: user-supplied local asset
+- Decision: assimilated
+- Selected backbone: local-project:hivemind-os default worker bee asset paths
+- Assimilated: /Users/liam/Downloads/edited-photo-4.png => public/icons/worker-bee-general-v5.png; /Users/liam/Downloads/edited-photo-4.png => public/icons/worker-bee-v2.png; /Users/liam/Downloads/edited-photo-4.png => public/icons/worker-bee.png
+- Verification: file/sips/shasum confirmed all three generic worker replacements are 256x256 RGBA; cmp confirmed the generic worker paths are identical; visual inspection confirmed icon render; focused eslint and git diff --check passed.
+
+### Candidates
+- src/lib/config/bee-role-icons.ts
+  - Decision: selected
+  - Reason: default worker role maps to /icons/worker-bee-general-v5.png, making it the active regular worker asset
+  - Path: `src/lib/config/bee-role-icons.ts`
+- /Users/liam/Downloads/edited-photo-4.png
+  - Decision: asset_copied
+  - Reason: user supplied authoritative regular worker replacement artwork
+  - Path: `edited-photo-4.png`
+## 2026-06-15T04:33:02.320523+00:00 - asset-reuse
+
+- Request: Replace the Queen Bee icon again with the supplied edited-photo-6.png artwork
+- Source: user-supplied local asset
+- Decision: assimilated
+- Selected backbone: local-project:hivemind-os Queen Bee asset paths
+- Assimilated: /Users/liam/Downloads/edited-photo-6.png => public/icons/queen-bee-v2.png; /Users/liam/Downloads/edited-photo-6.png => public/icons/queen-bee.png
+- Verification: file/sips/shasum confirmed both Queen Bee replacements are 256x256 RGBA; cmp confirmed both Queen Bee paths are identical; visual inspection confirmed icon render; focused eslint and git diff --check passed.
+
+### Candidates
+- src/lib/config/bee-role-icons.ts
+  - Decision: selected
+  - Reason: Queen role maps to /icons/queen-bee-v2.png, with legacy /icons/queen-bee.png used by fleet app icon matching
+  - Path: `src/lib/config/bee-role-icons.ts`
+- /Users/liam/Downloads/edited-photo-6.png
+  - Decision: asset_copied
+  - Reason: user supplied authoritative replacement Queen Bee artwork
+  - Path: `edited-photo-6.png`
+## 2026-06-15T04:37:59+00:00 - local-palette-reuse
+
+- Request: Make Telegram rich leaderboard and bounty tables use the Claw mobile light-mode colors
+- Source: user-supplied local project `/Users/liam/Documents/code/projects/claw-code-mobile-private`
+- Decision: assimilated
+- Selected backbone: local-project:hivemind-os Telegram rich table helpers
+- Assimilated: `/Users/liam/Documents/code/projects/claw-code-mobile-private/constants/palette.ts` Terracotta light palette => `src/lib/services/telegram-tip-bot/rich-formatting.ts` palette constants and `src/lib/services/telegram-tip-bot/card-renderer.ts` Playwright-rendered PNG card CSS
+- Verification: Telegram Bot API docs inspected; rich HTML supports `<b>`, `<i>`, `<code>`, and tables, but not CSS color styles. `node --test scripts/test-telegram-tip-bot.mjs` passed with 30 tests; focused ESLint passed; filtered TypeScript produced no touched-path diagnostics; Playwright smoke rendered `/tmp/hive-telegram-card-smoke.png`.
+
+### Candidates
+- `/Users/liam/Documents/code/projects/claw-code-mobile-private/constants/palette.ts`
+  - Decision: selected
+  - Reason: authoritative local source of the Claw mobile light palettes, including Terracotta light tokens
+  - Path: `constants/palette.ts`
+- Telegram Bot API rich HTML docs
+  - Decision: inspected
+  - Reason: confirmed exact color CSS cannot be emitted safely because only listed rich HTML tags are supported
+  - Path: `https://core.telegram.org/bots/api#rich-message-formatting-options`
+## 2026-06-15T04:48:07.820706+00:00 - asset-reuse
+
+- Request: Replace the worker bee icon with the supplied edited-photo-7.png artwork
+- Source: user-supplied local asset
+- Decision: assimilated
+- Selected backbone: local-project:hivemind-os default worker bee asset paths
+- Assimilated: /Users/liam/Downloads/edited-photo-7.png => public/icons/worker-bee-general-v5.png; /Users/liam/Downloads/edited-photo-7.png => public/icons/worker-bee-v2.png; /Users/liam/Downloads/edited-photo-7.png => public/icons/worker-bee.png
+- Verification: file/sips/shasum confirmed all three generic worker replacements are 256x256 RGBA; cmp confirmed generic worker paths are identical; visual inspection confirmed icon render; focused eslint and git diff --check passed.
+
+### Candidates
+- src/lib/config/bee-role-icons.ts
+  - Decision: selected
+  - Reason: default worker role maps to /icons/worker-bee-general-v5.png, with generic legacy paths preserved for older references
+  - Path: `src/lib/config/bee-role-icons.ts`
+- /Users/liam/Downloads/edited-photo-7.png
+  - Decision: asset_copied
+  - Reason: user supplied authoritative replacement worker bee artwork
+  - Path: `edited-photo-7.png`
+## 2026-06-15T05:08:02.390643+00:00 - deploy-bundle-fix
+
+- Request: Fix Telegram tip bot deploy failing on Playwright chromium-bidi during esbuild
+- Source: local-project:hivemind-os
+- Selected backbone: scripts/telegram-tip-bot-daemon.mjs
+- Note: No public GitHub donor needed: the authoritative local daemon comment already documented the correct esbuild flag, and local repro/verification confirmed the deployment-specific mismatch.
+- Verification: Local esbuild reproduced the Playwright `chromium-bidi` bundle failure before the fix; local esbuild with `--packages=external` produced `/tmp/telegram-tip-bot-after.mjs` at 97.5kb; `bash -n scripts/deploy-telegram-tip-bot.sh` passed; `node --test scripts/test-telegram-tip-bot.mjs` passed; `scripts/deploy-telegram-tip-bot.sh --skip-tests` rebuilt/restarted the VPS service and verified `hivemind-tipbot` is active as `@HiveTipBot`.
+
+### Candidates
+- scripts/telegram-tip-bot-daemon.mjs
+  - Decision: selected
+  - Reason: documented standalone daemon build already requires --packages=external
+  - Path: `scripts/telegram-tip-bot-daemon.mjs`
+- scripts/deploy-telegram-tip-bot.sh
+  - Decision: adapted_code
+  - Reason: remote deploy build command now matches daemon bundling contract
+  - Path: `scripts/deploy-telegram-tip-bot.sh`
+- node_modules/playwright-core/lib/coreBundle.js
+  - Decision: inspected
+  - Reason: esbuild failure came from forced bundling of Playwright optional Chromium BiDi internals
+  - Path: `node_modules/playwright-core/lib/coreBundle.js`
+## 2026-06-15T05:13:56.833836+00:00 - generated-asset-reuse
+
+- Request: Generate new icons for worker subclasses with gpt-image-2 using the current worker bee image as the input reference
+- Source: OpenAI Image API gpt-image-2 plus local worker bee reference
+- Decision: assimilated
+- Selected backbone: public/icons/worker-bee-general-v5.png
+- Assimilated: public/icons/worker-bee-general-v5.png + gpt-image-2 prompts => public/icons/worker-bee-planner-v2.png, public/icons/worker-bee-code-v2.png, public/icons/worker-bee-vision-v2.png, public/icons/worker-bee-writer-v2.png, public/icons/worker-bee-research-v2.png, public/icons/worker-bee-artist-v2.png, public/icons/worker-bee-ops-v2.png, public/icons/worker-bee-qa-v2.png, public/icons/worker-bee-security-v2.png
+- Verification: Generated nine subclass edits with gpt-image-2 from the current regular worker bee reference on a flat #ff00ff chroma-key background; removed key with remove_chroma_key.py; validated 256x256 RGBA finals with alpha extrema (0,255) and transparent corners; inspected contact sheet tmp/imagegen/worker-subclasses/contact-sheet-final-256.png; focused eslint and git diff --check passed.
+
+### Candidates
+- public/icons/worker-bee-general-v5.png
+  - Decision: selected
+  - Reason: current regular worker bee input reference requested by the user
+  - Path: `public/icons/worker-bee-general-v5.png`
+- OpenAI Image API gpt-image-2
+  - Decision: selected
+  - Reason: user explicitly corrected model choice to gpt-image-2; used chroma-key plus local alpha removal because gpt-image-2 does not support native transparent background
+  - Path: `tmp/imagegen/worker-subclasses`
+## 2026-06-15T06:01:34.987516+00:00 - discovery
+
+- Request: Add HIVE v1 non-custodial staking contract and app-side tier resolver
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- shared-brain
+  - Decision: rejected
+  - Reason: no prior HIVE staking contract implementation found
+  - Path: `hive-brain answer`
+- current-project
+  - Decision: selected
+  - Reason: existing viem dependency and HIVE chain service can support app-side reads
+  - Path: `src/lib/services/telegram-tip-bot/hive-chain.ts`
+- OpenZeppelin/contracts
+  - Decision: selected-donor
+  - Reason: standard audited ERC20, SafeERC20, Ownable, Pausable, ReentrancyGuard primitives for staking vault
+  - Path: `contracts`
+## 2026-06-15T06:01:43.907824+00:00 - public-search
+
+- Request: OpenZeppelin ERC20 staking contract cooldown withdraw stakedBalanceOf
+- Source: public-github
+- Query: `OpenZeppelin ERC20 staking contract cooldown withdraw stakedBalanceOf`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-06-15T06:05:34.983382+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-project:hivemind-os:src/lib/services/telegram-tip-bot/hive-chain.ts => src/lib/services/hive-staking.ts, OpenZeppelin/openzeppelin-contracts:contracts/token/ERC20/utils/SafeERC20.sol => contracts/src/HiveStakeVault.sol, OpenZeppelin/openzeppelin-contracts:contracts/access/Ownable.sol => contracts/src/HiveStakeVault.sol, OpenZeppelin/openzeppelin-contracts:contracts/utils/Pausable.sol => contracts/src/HiveStakeVault.sol, OpenZeppelin/openzeppelin-contracts:contracts/utils/ReentrancyGuard.sol => contracts/src/HiveStakeVault.sol
+- Verification: Wrote ASSIMILATION.json with 5 entries and custom_code_assessment=balanced.
+## 2026-06-15T06:29:17.524877+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-project:hivemind-os:src/app/api/wallet/personal/route.ts => src/app/stake/StakePageClient.tsx, local-project:hivemind-os:src/app/api/wallet/balance/route.ts => src/app/stake/StakePageClient.tsx, local-project:hivemind-os:src/features/dashboard/views/WalletPanel.tsx => src/app/stake/StakePageClient.tsx, local-project:hivemind-os:src/lib/services/hive-staking-client.ts => src/features/dashboard/views/WalletPanel.tsx, local-project:hivemind-os:src/lib/services/hive-staking-client.ts => src/app/stake/StakePageClient.tsx
+- Verification: Wrote ASSIMILATION.json with 5 entries and custom_code_assessment=balanced.
+## 2026-06-15T06:35:14.621674+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-project:hivemind-os:src/app/api/wallet/send/route.ts => src/app/api/hive/stake/route.ts, local-project:hivemind-os:src/lib/services/wallet/chain-wallet.ts => src/lib/services/hive-staking-local.ts, local-project:hivemind-os:src/lib/services/wallet/local-wallet-vault.ts => src/app/api/hive/stake/route.ts, local-project:hivemind-os:src/lib/native/desktop-status.ts => src/app/stake/StakePageClient.tsx, local-project:hivemind-os:src/app/api/wallet/personal/route.ts => src/app/stake/StakePageClient.tsx
+- Verification: Wrote ASSIMILATION.json with 5 entries and custom_code_assessment=balanced.
+## 2026-06-15T07:36:10.311138+00:00 - verification
+
+- Request: Clean Foundry lint warnings in HIVE staking contract before deploy
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- contracts/src/HiveStakeVault.sol
+  - Decision: adapted_code
+  - Reason: added Forge lint suppressions with safety rationale for uint64 cooldown timestamp and block.timestamp cooldown comparison
+## 2026-06-15T07:41:44.632026+00:00 - public-search
+
+- Request: React capability graph selected candidates orbit shelf UI
+- Source: public-github
+- Query: `React capability graph selected candidates orbit shelf UI`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-06-15T07:47:36.097854+00:00 - implementation
+
+- Request: Fix Hive Fusion orbit/shelf so irrelevant capability cards do not fly into orbit for skill creation
+- Source: shared-brain+current-project
+- Query: `Hive Fusion orbit shelf selected capabilities noisy candidates Base news X post skill creation fix`
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+- Assimilated: src/lib/services/fusion/fusion-skill.ts<=shared skill selection/alternates contract; src/features/dashboard/views/fusion-showcase/ConstellationHero.tsx<=existing shelf/orbit renderer
+- Verification: node scripts/test-fusion-skill-selection.mjs; node scripts/test-fusion.mjs; focused eslint; git diff --check
+- Note: Public GitHub search returned no suitable extractable candidates; current project code was the correct backbone.
+
+### Candidates
+- Skills/hive-skill-fusion/SKILL.md
+  - Decision: selected-donor
+  - Reason: Defines selected components vs alternates contract
+  - Path: `/Users/liam/Documents/Obsidian/hivemindos-vault/Skills/hive-skill-fusion/SKILL.md`
+- Skills/hive-capability-search/SKILL.md
+  - Decision: selected-donor
+  - Reason: Ranking rules require selected plus alternates, not arbitrary fill
+  - Path: `/Users/liam/Documents/Obsidian/hivemindos-vault/Skills/hive-capability-search/SKILL.md`
+## 2026-06-15T09:08:54.400735+00:00 - implementation
+
+- Request: Add a Stake HIVE nav button to the HivemindOS More view
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/MorePanel.tsx
+  - Decision: adapted_code
+  - Reason: reused existing More panel card grid and added a /stake route launcher
+## 2026-06-15T09:38:41.199116+00:00 - implementation
+
+- Request: Fix HIVE staking page saying contract not configured after deployment
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/services/shared-hive-env.ts
+  - Decision: adapted_code
+  - Reason: reused runtime shared env reader for staking overrides while keeping public Base defaults
+- src/app/stake/page.tsx
+  - Decision: adapted_code
+  - Reason: server-resolved staking config passed to client page
+- src/lib/services/hive-staking.ts
+  - Decision: adapted_code
+  - Reason: public deployed Base vault default
+## 2026-06-15T09:41:40.835588+00:00 - shared-brain
+
+- Request: Fix fleet graph and fleet hive chat input focus outline
+- Source: hive-brain
+
+### Candidates
+- hive-brain:full-vault
+  - Decision: inspected
+  - Reason: queried fleet hive chat pill focus outline context
+## 2026-06-15T09:42:14.410933+00:00 - local-search
+
+- Request: Fix HivemindOS fleet hive chat input focus outline
+- Source: local-index
+- Query: `Fix HivemindOS fleet hive chat input focus outline`
+- Decision: no-results
+- Reason: No relevant local index hits after threshold filtering.
+## 2026-06-15T09:42:18.543738+00:00 - public-search
+
+- Request: Fix HivemindOS fleet hive chat input focus outline
+- Source: public-github
+- Query: `Fix HivemindOS fleet hive chat input focus outline`
+- Decision: retrieved
+- Reason: Retrieved 4 public candidates from GitHub search.
+
+### Candidates
+- krotrn/Chat_App (8 stars, TypeScript, MIT License)
+  - URL: https://github.com/krotrn/Chat_App
+  - Description: ChatApp — A production-grade, real-time messaging client built with Next.js 15, React 19, and TypeScript. Featuring Socket.IO-powered WebSockets, Redux Toolkit state management, Auth.js v5 authentication, Prisma-backed PostgreSQL user store
+- PranshuChauhan149/Track-Cart (3 stars, TypeScript)
+  - URL: https://github.com/PranshuChauhan149/Track-Cart
+  - Description: Track & Cart is a full-stack grocery delivery platform built with Next.js 15, MongoDB, NextAuth, and Socket.io. It features live map tracking for orders, real-time chat between users and delivery partners, AI-powered assistance, smooth Fram
+- selfabhijeetkumar/NEXUS-AI--CHATBOT- (2 stars, TypeScript)
+  - URL: https://github.com/selfabhijeetkumar/NEXUS-AI--CHATBOT-
+  - Description: A futuristic AI chat platform built with Next.js, React Three Fiber & Framer Motion — featuring 3D neural network visualizations, multi-model support (GPT-4, Claude, Gemini), real-time streaming, slash commands, and an immersive glassmorphi
+- niquewill/Consumer_Complaint (2 stars, HTML)
+  - URL: https://github.com/niquewill/Consumer_Complaint
+  - Description: Overview There are quite a few apps in the market that provide a public forum for bringing up complaints so they can get resolved. With these apps, customers could easily submit their complaints to companies via them and deliver them to the
+## 2026-06-15T09:42:18.633652+00:00 - prebuild-gate
+
+- Request: Fix HivemindOS fleet hive chat input focus outline
+- Source: public-github
+- Query: `Fix HivemindOS fleet hive chat input focus outline`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-06-15T09:42:29.158915+00:00 - triage
+
+- Request: Fix fleet graph and fleet hive chat input focus outline
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/components/fleet-hive/ChatPill.tsx
+  - Decision: selected
+  - Reason: shared chat pill used by Fleet Hive and legacy fleet graph/list/map views
+  - Path: `src/components/fleet-hive/ChatPill.tsx`
+- src/components/fleet-hive/fleet-hive.css
+  - Decision: selected
+  - Reason: existing fr-chat focus styles own the pill expansion and visual ring
+  - Path: `src/components/fleet-hive/fleet-hive.css`
+- krotrn/Chat_App
+  - Decision: rejected
+  - Reason: generic chat app unrelated to this local focus-ring bug
+- PranshuChauhan149/Track-Cart
+  - Decision: rejected
+  - Reason: delivery chat app with no relevant fleet chat pill source
+- selfabhijeetkumar/NEXUS-AI--CHATBOT-
+  - Decision: rejected
+  - Reason: full chatbot platform unrelated to this targeted CSS fix
+## 2026-06-15T09:43:22.813370+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-project:hivemind-os:src/components/fleet-hive/ChatPill.tsx => src/components/fleet-hive/fleet-hive.css
+- Verification: Wrote ASSIMILATION.json with 1 entries and custom_code_assessment=balanced.
+## 2026-06-15T09:50:51.599954+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-project:hivemind-os:src/components/fleet-hive/ChatPill.tsx => src/components/fleet-hive/fleet-hive.css, local-project:hivemind-os:src/components/fleet-hive/FleetHiveView.tsx => src/components/fleet-hive/fleet-hive.css, local-project:hivemind-os:src/components/fleet-hive/fleet-hive.css => src/components/fleet-hive/fleet-hive.css
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-15T10:01:25.544854+00:00 - triage
+
+- Request: Fix Fleet Hive add-agent cell overlapping Queen Bee
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Note: Pinned source was the current HivemindOS Fleet Hive implementation plus the user screenshot; no public GitHub search was needed for this internal geometry bug.
+
+### Candidates
+- src/components/fleet-hive/hive-geometry.ts
+  - Decision: selected
+  - Reason: owns machine ring, agent petal slot generation, add-agent slot selection, and content bounds for the Fleet Hive layout
+  - Path: `src/components/fleet-hive/hive-geometry.ts`
+- src/components/fleet-hive/HiveStage.tsx
+  - Decision: inspected
+  - Reason: renders add-agent cells directly from layout[m.id].addPos, confirming the collision should be fixed in geometry rather than render branching
+  - Path: `src/components/fleet-hive/HiveStage.tsx`
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: inspected
+  - Reason: uses frBuildLayout/frContentBounds as the single scaled hive layout source
+  - Path: `src/components/fleet-hive/FleetHiveView.tsx`
+## 2026-06-15T10:04:40.387712+00:00 - verification
+
+- Request: Fix Fleet Hive add-agent cell overlapping Queen Bee
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Note: Verification: focused geometry regression covered 12 machine-count layouts x 31 agent-count cases; ESLint passed for hive-geometry.ts; focused git diff --check passed; in-app browser smoke on 127.0.0.1:5021 loaded Fleet with 4 machines/12 agents and measured zero rectangle overlap between Queen Bee and all add-agent cells.
+
+### Candidates
+- src/components/fleet-hive/hive-geometry.ts
+  - Decision: adapted_code
+  - Reason: filtered generated machine petal slots through Queen-cell clearance before assigning real agents or the add-agent affordance
+  - Path: `src/components/fleet-hive/hive-geometry.ts`
+## 2026-06-15T10:18:27.545077+00:00 - local-search
+
+- Request: Add resilient Base RPC fallbacks and contained wallet balance error UI in HivemindOS Wallets view
+- Source: local-index
+- Query: `Add resilient Base RPC fallbacks and contained wallet balance error UI in HivemindOS Wallets view`
+- Decision: no-results
+- Reason: No relevant local index hits after threshold filtering.
+## 2026-06-15T10:18:32.461866+00:00 - public-search
+
+- Request: Add resilient Base RPC fallbacks and contained wallet balance error UI in HivemindOS Wallets view
+- Source: public-github
+- Query: `Add resilient Base RPC fallbacks and contained wallet balance error UI in HivemindOS Wallets view`
+- Decision: retrieved
+- Reason: Retrieved 5 public candidates from GitHub search.
+
+### Candidates
+- DEEP13-2-5/Wallet (1 stars, TypeScript)
+  - URL: https://github.com/DEEP13-2-5/Wallet
+  - Description: Web3 Wallet Dashboard is a React-based dApp that connects to MetaMask, displays the user's wallet address, ETH balance, and network info. Built with ethers.js and hooks, it includes optional features like DAI token balance, ENS name, dark/l
+- aikonre/token-balance-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/aikonre/token-balance-dashboard
+  - Description: A simple token balance checker built with React. Simulates checking token balances for a given wallet address
+- mohammedazfersheikh/fullstack-web3-token-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/mohammedazfersheikh/fullstack-web3-token-dashboard
+  - Description: A complete end-to-end Web3 application built with React (Vite), Node.js/Express, and Ethers.js that demonstrates real-world decentralized application architecture. This project includes a backend API for blockchain data fetching and a moder
+- prakarsh-spheron/Wallet-Dashboard-Demo (1 stars, MIT License)
+  - URL: https://github.com/prakarsh-spheron/Wallet-Dashboard-Demo
+  - Description: Demo using the token balances react component to create a Wallet Dashboard
+- shubhbatra1991/OpenDeFi-Analytics- (0 stars, MIT License)
+  - URL: https://github.com/shubhbatra1991/OpenDeFi-Analytics-
+  - Description: Building a analytics dashboard where users connect a wallet and see token balances, portfolio value, and recent transactions in real time, using Next.js/React on the frontend and a .NET/Azure API backend.
+## 2026-06-15T10:18:32.538570+00:00 - prebuild-gate
+
+- Request: Add resilient Base RPC fallbacks and contained wallet balance error UI in HivemindOS Wallets view
+- Source: public-github
+- Query: `Add resilient Base RPC fallbacks and contained wallet balance error UI in HivemindOS Wallets view`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-06-15T10:18:59.373326+00:00 - public-search
+
+- Request: Add resilient Base RPC fallbacks and contained wallet balance error UI in HivemindOS Wallets view
+- Source: public-github
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- DEEP13-2-5/Wallet
+  - Decision: rejected
+  - Reason: generic React wallet dashboard, no HivemindOS route or viem fallback source
+- aikonre/token-balance-dashboard
+  - Decision: rejected
+  - Reason: simulated token balance checker, not production RPC fallback logic
+- mohammedazfersheikh/fullstack-web3-token-dashboard
+  - Decision: rejected
+  - Reason: generic ethers dashboard with mismatched stack and no extractable HivemindOS-specific path
+- prakarsh-spheron/Wallet-Dashboard-Demo
+  - Decision: rejected
+  - Reason: component demo, no server-side Base RPC resilience
+- shubhbatra1991/OpenDeFi-Analytics-
+  - Decision: rejected
+  - Reason: analytics dashboard concept, mismatched backend stack
+## 2026-06-15T10:18:59.374604+00:00 - triage
+
+- Request: Add resilient Base RPC fallbacks and contained wallet balance error UI in HivemindOS Wallets view
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Skills/hivemindos-wallet-rails/SKILL.md
+  - Decision: selected-donor
+  - Reason: documents mainnet.base.org over-rate-limit wallet failure and alternate RPC probing
+  - Path: `/Users/liam/Documents/Obsidian/hivemindos-vault/Skills/hivemindos-wallet-rails/SKILL.md`
+- src/lib/services/wallet/chain-wallet.ts
+  - Decision: selected
+  - Reason: existing wallet balance service and Base RPC selection point
+  - Path: `src/lib/services/wallet/chain-wallet.ts`
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: selected
+  - Reason: existing personal wallet refresh and error render path
+  - Path: `src/features/dashboard/views/WalletPanel.tsx`
+- src/features/dashboard/views/PersonalWallets.module.css
+  - Decision: selected
+  - Reason: existing personal wallet status styles
+  - Path: `src/features/dashboard/views/PersonalWallets.module.css`
+## 2026-06-15T10:23:10.766852+00:00 - implementation
+
+- Request: Fix Wallets view HIVE token Stake button causing full app reload
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: adapted_code
+  - Reason: reused existing wallet HIVE stake affordances and converted raw anchors to Next Link navigation
+## 2026-06-15T10:23:30.915175+00:00 - assimilation-manifest
+
+- Request: Add resilient Base RPC fallbacks and contained wallet balance error UI in HivemindOS Wallets view
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: shared-skill:Skills/hivemindos-wallet-rails/SKILL.md => src/lib/services/wallet/chain-wallet.ts, local-project:src/lib/services/wallet/chain-wallet.ts => src/lib/services/wallet/chain-wallet.ts, local-project:src/features/dashboard/views/PersonalWallets.module.css => src/features/dashboard/views/PersonalWallets.module.css, local-project:src/app/api/wallet/balance/route.ts => src/app/api/wallet/balance/route.ts
+- Verification: Wrote ASSIMILATION.json with 4 entries and custom_code_assessment=balanced.
+## 2026-06-15T10:29:29.657352+00:00 - implementation
+
+- Request: Make Wallets view Stake HIVE navigation start immediately
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: adapted_code
+  - Reason: used Next router prefetch/push with immediate opening state for /stake
+- src/app/loading.tsx
+  - Decision: style_adapted
+  - Reason: created stake route loading shell with existing route loading conventions and stake page styles
+## 2026-06-15T10:33:42.217060+00:00 - implementation
+
+- Request: Fix Stake HIVE tiers showing reached from wallet balance before staking
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/services/hive-staking.ts
+  - Decision: adapted_code
+  - Reason: reused getHiveStakeStatus contract reader for active staked balance
+- src/app/stake/StakePageClient.tsx
+  - Decision: adapted_code
+  - Reason: changed tier progress from available HIVE to active on-chain stake
+- src/app/api/hive/stake/status/route.ts
+  - Decision: adapted_code
+  - Reason: server-side stake status API mirrors existing authenticated hive stake route pattern
+## 2026-06-15T10:57:00.960933+00:00 - implementation
+
+- Request: Reduce Wallets to Stake navigation delay and diagnose app-wide route slowness
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/services/hive-staking.ts
+  - Decision: selected
+  - Reason: public deployed Base staking vault default already exists and should be reused for stake route shell
+- src/app/stake/page.tsx
+  - Decision: adapted_code
+  - Reason: removed dynamic shared-env page render dependency and used public staking default with public env override
+- OPTIMIZATIONS.md
+  - Decision: adapted_code
+  - Reason: recorded route timing evidence, stale dev-server risk, and follow-up performance guidance
+## 2026-06-15T10:59:01.997269+00:00 - implementation
+
+- Request: Reduce Wallets to Stake navigation delay and diagnose app-wide route slowness
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: adapted_code
+  - Reason: deferred router.push by one tick after optimistic Opening state so click feedback can paint before destination fetch
+## 2026-06-15T11:15:40.305964+00:00 - triage
+
+- Request: Replace the holdings section of the Fleet Hive selected-agent right side panel with /Users/liam/Downloads/wallet-drop-in
+- Source: pinned-local-source
+- Selected backbone: /Users/liam/Downloads/wallet-drop-in
+- Note: Pinned source was supplied by the user, so no public GitHub search was needed.
+
+### Candidates
+- /Users/liam/Downloads/wallet-drop-in/AgentHoldings.tsx
+  - Decision: selected
+  - Reason: drop-in component supplies the holdings header, ranked token rows, HIVE icon handling, and See full wallet action
+  - Path: `AgentHoldings.tsx`
+- /Users/liam/Downloads/wallet-drop-in/wallet-data.ts
+  - Decision: selected-donor
+  - Reason: currency metadata plus formatting and ranking helpers adapted into the repo component
+  - Path: `wallet-data.ts`
+- /Users/liam/Downloads/wallet-drop-in/public/hive-icon.png
+  - Decision: asset_copied
+  - Reason: HIVE token badge copied into public/hive-icon.png
+  - Path: `public/hive-icon.png`
+- src/components/fleet-hive/HivePanel.tsx
+  - Decision: selected
+  - Reason: existing selected-agent right-side panel where the holdings block belongs
+  - Path: `src/components/fleet-hive/HivePanel.tsx`
+- src/components/fleet/FleetView.tsx + src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: selected-donor
+  - Reason: existing Fleet prop boundary used to pass wallet configs into the Hive view
+  - Path: `src/components/fleet/FleetView.tsx`
+## 2026-06-15T11:16:30.927745+00:00 - assimilation-manifest
+
+- Request: Replace the holdings section of the Fleet Hive selected-agent right side panel with /Users/liam/Downloads/wallet-drop-in
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-wallet-drop-in:AgentHoldings.tsx => src/components/fleet-hive/AgentHoldings.tsx, local-wallet-drop-in:wallet-data.ts => src/components/fleet-hive/AgentHoldings.tsx, local-wallet-drop-in:README.md => src/components/fleet-hive/HivePanel.tsx, local-wallet-drop-in:public/hive-icon.png => public/hive-icon.png
+- Verification: Wrote ASSIMILATION.wallet-holdings.json with 4 entries and custom_code_assessment=balanced.
+## 2026-06-15T11:16:57.619971+00:00 - verification
+
+- Request: Replace the holdings section of the Fleet Hive selected-agent right side panel with /Users/liam/Downloads/wallet-drop-in
+- Source: current-project
+- Selected backbone: /Users/liam/Downloads/wallet-drop-in
+- Verification: Focused ESLint passed; focused git diff --check passed; filtered tsc produced no diagnostics for Fleet Hive/Dashboard touched paths; full tsc remains blocked by unrelated promo-videos/remotion/src-tauri resource diagnostics; ASSIMILATION.wallet-holdings.json verified with 4 entries.
+
+### Candidates
+- src/components/fleet-hive/AgentHoldings.tsx
+  - Decision: adapted_code
+  - Reason: drop-in holdings UI adapted to Fleet Hive CSS and real wallet config fallback
+  - Path: `src/components/fleet-hive/AgentHoldings.tsx`
+- public/hive-icon.png
+  - Decision: asset_copied
+  - Reason: HIVE token badge copied from the pinned drop-in
+  - Path: `public/hive-icon.png`
+## 2026-06-15T11:22:33.997287+00:00 - browser-smoke
+
+- Request: Replace the holdings section of the Fleet Hive selected-agent right side panel with /Users/liam/Downloads/wallet-drop-in
+- Source: current-project
+- Selected backbone: /Users/liam/Downloads/wallet-drop-in
+- Verification: Temporary dev server on 127.0.0.1:5022 rendered Fleet Hive; selected-agent panel showed Holdings, No holdings yet, and See full wallet; clicking See full wallet navigated to ?view=wallet. Dev server was stopped after smoke.
+
+### Candidates
+- http://127.0.0.1:5022/?view=agents
+  - Decision: inspected
+  - Reason: in-app browser selected a Fleet Hive agent and saw the adapted Holdings block in the right-side panel
+  - Path: `src/components/fleet-hive/AgentHoldings.tsx`

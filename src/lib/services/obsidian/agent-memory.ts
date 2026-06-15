@@ -27,6 +27,28 @@ export const AGENT_MEMORY_TYPES = [
 
 export type AgentMemoryType = (typeof AGENT_MEMORY_TYPES)[number];
 
+export const AGENT_MEMORY_COGNITIVE_STAGES = ["system1", "system2"] as const;
+export type AgentMemoryCognitiveStage = (typeof AGENT_MEMORY_COGNITIVE_STAGES)[number];
+
+export const AGENT_MEMORY_EVOLUTION_TYPES = ["override", "supplement", "temporal", "negate", "conflict"] as const;
+export type AgentMemoryEvolutionType = (typeof AGENT_MEMORY_EVOLUTION_TYPES)[number];
+
+export const AGENT_MEMORY_SOURCE_TYPES = ["explicit", "inferred", "composite"] as const;
+export type AgentMemorySourceType = (typeof AGENT_MEMORY_SOURCE_TYPES)[number];
+
+export type AgentMemoryChainItem = {
+  id: string;
+  title: string;
+  content: string;
+  status: AgentMemoryRecord["status"];
+  notePath: string;
+  createdAt: string;
+  updatedAt: string;
+  cognitiveStage?: AgentMemoryCognitiveStage;
+  evolutionType?: AgentMemoryEvolutionType;
+  evolutionReason?: string;
+};
+
 export type AgentMemoryRecord = {
   id: string;
   type: AgentMemoryType;
@@ -34,6 +56,15 @@ export type AgentMemoryRecord = {
   content: string;
   confidence: number;
   status: "active" | "superseded" | "archived";
+  cognitiveStage?: AgentMemoryCognitiveStage;
+  supersedes?: string[];
+  supersededBy?: string[];
+  evolutionRootId?: string;
+  evolutionType?: AgentMemoryEvolutionType;
+  evolutionReason?: string;
+  evidenceCount?: number;
+  sourceType?: AgentMemorySourceType;
+  metaTags?: string[];
   tags: string[];
   source?: string;
   agentName?: string;
@@ -65,6 +96,7 @@ export type AgentMemoryHit = AgentMemoryRecord & {
   score: number;
   matched: string[];
   excerpt: string;
+  evolutionChain?: AgentMemoryChainItem[];
 };
 
 export type RememberAgentMemoryInput = {
@@ -73,6 +105,10 @@ export type RememberAgentMemoryInput = {
   title?: string;
   content?: string;
   confidence?: number;
+  cognitiveStage?: string;
+  evidenceCount?: number;
+  sourceType?: string;
+  metaTags?: string[];
   tags?: string[];
   source?: string;
   agentName?: string;
@@ -87,6 +123,13 @@ export type RememberAgentMemoryInput = {
   sessionId?: string;
   project?: string;
   proof?: AgentMemoryProofMode;
+};
+
+export type EvolveAgentMemoryInput = RememberAgentMemoryInput & {
+  memoryId?: string;
+  supersedes?: string[];
+  evolutionType?: string;
+  evolutionReason?: string;
 };
 
 export type RecallAgentMemoryInput = {
@@ -144,6 +187,9 @@ const VAULT_NOTE_TYPE_MAP: Array<[RegExp, AgentMemoryType]> = [
 ];
 
 const VALID_MEMORY_TYPES = new Set<AgentMemoryType>(AGENT_MEMORY_TYPES);
+const VALID_COGNITIVE_STAGES = new Set<AgentMemoryCognitiveStage>(AGENT_MEMORY_COGNITIVE_STAGES);
+const VALID_EVOLUTION_TYPES = new Set<AgentMemoryEvolutionType>(AGENT_MEMORY_EVOLUTION_TYPES);
+const VALID_SOURCE_TYPES = new Set<AgentMemorySourceType>(AGENT_MEMORY_SOURCE_TYPES);
 const AUTO_PROOF_TYPES = new Set<AgentMemoryType>(["instruction", "decision", "commitment", "preference", "artifact"]);
 const LOW_SIGNAL_QUERY_WORDS = new Set(["agent", "agents", "brain", "hivemindos", "memory", "memories", "note", "notes", "shared", "vault"]);
 const memoryIndexCache = new Map<string, MemoryIndexCacheEntry>();
@@ -161,6 +207,15 @@ type AgentMemoryProofReceipt = GitLawbProof & {
     notePath: string;
     contentHash: string;
     recordHash: string;
+    cognitiveStage?: AgentMemoryCognitiveStage;
+    supersedes?: string[];
+    supersededBy?: string[];
+    evolutionRootId?: string;
+    evolutionType?: AgentMemoryEvolutionType;
+    evolutionReason?: string;
+    evidenceCount?: number;
+    sourceType?: AgentMemorySourceType;
+    metaTags?: string[];
     previousProofHash?: string;
     agentName?: string;
     agentId?: string;
@@ -190,6 +245,15 @@ type AgentMemoryIndexEntry = {
   title?: string;
   content?: string;
   status?: AgentMemoryRecord["status"];
+  cognitiveStage?: string;
+  supersedes?: string[];
+  supersededBy?: string[];
+  evolutionRootId?: string;
+  evolutionType?: string;
+  evolutionReason?: string;
+  evidenceCount?: number;
+  sourceType?: string;
+  metaTags?: string[];
   notePath?: string;
   confidence?: number;
   tags?: string[];
@@ -279,11 +343,50 @@ function normalizeConfidence(value?: number) {
   return Math.min(1, Math.max(0, value));
 }
 
+function normalizeCognitiveStage(value?: string, fallback: AgentMemoryCognitiveStage = "system1") {
+  const normalized = value?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "") || fallback;
+  if (!VALID_COGNITIVE_STAGES.has(normalized as AgentMemoryCognitiveStage)) {
+    throw new Error(`Unsupported memory cognitive stage "${value}". Use one of: ${AGENT_MEMORY_COGNITIVE_STAGES.join(", ")}.`);
+  }
+  return normalized as AgentMemoryCognitiveStage;
+}
+
+function normalizeEvolutionType(value?: string) {
+  if (!value?.trim()) return undefined;
+  const normalized = value.trim().toLowerCase().replace(/[^a-z]+/g, "-");
+  if (!VALID_EVOLUTION_TYPES.has(normalized as AgentMemoryEvolutionType)) {
+    throw new Error(`Unsupported memory evolution type "${value}". Use one of: ${AGENT_MEMORY_EVOLUTION_TYPES.join(", ")}.`);
+  }
+  return normalized as AgentMemoryEvolutionType;
+}
+
+function normalizeSourceType(value?: string) {
+  if (!value?.trim()) return undefined;
+  const normalized = value.trim().toLowerCase().replace(/[^a-z]+/g, "-");
+  if (!VALID_SOURCE_TYPES.has(normalized as AgentMemorySourceType)) {
+    throw new Error(`Unsupported memory source type "${value}". Use one of: ${AGENT_MEMORY_SOURCE_TYPES.join(", ")}.`);
+  }
+  return normalized as AgentMemorySourceType;
+}
+
+function normalizeEvidenceCount(value?: number) {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value)) throw new Error("Memory evidenceCount must be a positive integer.");
+  return Math.max(1, Math.trunc(value));
+}
+
 function normalizeTags(values?: string[]) {
   return [...new Set((values ?? [])
     .map((value) => value.trim().toLowerCase())
     .filter((value) => /^[a-z0-9][a-z0-9/_-]{0,48}$/.test(value)))]
     .slice(0, 12);
+}
+
+function normalizeMemoryIds(values?: string[]) {
+  return [...new Set((values ?? [])
+    .map((value) => value.trim())
+    .filter((value) => /^[A-Za-z0-9._:-]{3,128}$/.test(value)))]
+    .slice(0, 24);
 }
 
 function shouldWriteProof(type: AgentMemoryType, confidence: number, mode?: AgentMemoryProofMode) {
@@ -361,7 +464,15 @@ function recordSearchText(record: AgentMemoryRecord) {
     record.title,
     record.content,
     record.type,
+    record.cognitiveStage,
+    record.evolutionType,
+    record.evolutionReason,
+    record.sourceType,
     record.tags.join(" "),
+    record.metaTags?.join(" "),
+    record.supersedes?.join(" "),
+    record.supersededBy?.join(" "),
+    record.evolutionRootId,
     record.source,
     record.project,
     record.agentName,
@@ -499,6 +610,15 @@ function recordFromMarkdown(root: string, file: string, markdown: string): Agent
     content: bodyContent(body),
     confidence: normalizeConfidence(Number(fields.get("confidence") ?? 0.7)),
     status: fields.get("status") === "superseded" || fields.get("status") === "archived" ? fields.get("status") as AgentMemoryRecord["status"] : "active",
+    cognitiveStage: typeof fields.get("cognitiveStage") === "string" ? normalizeCognitiveStage(String(fields.get("cognitiveStage"))) : undefined,
+    supersedes: normalizeMemoryIds(cleanStringArray(fields.get("supersedes"))),
+    supersededBy: normalizeMemoryIds(cleanStringArray(fields.get("supersededBy"))),
+    evolutionRootId: typeof fields.get("evolutionRootId") === "string" ? String(fields.get("evolutionRootId")) : undefined,
+    evolutionType: typeof fields.get("evolutionType") === "string" ? normalizeEvolutionType(String(fields.get("evolutionType"))) : undefined,
+    evolutionReason: typeof fields.get("evolutionReason") === "string" ? String(fields.get("evolutionReason")) : undefined,
+    evidenceCount: typeof fields.get("evidenceCount") === "number" ? normalizeEvidenceCount(Number(fields.get("evidenceCount"))) : undefined,
+    sourceType: typeof fields.get("sourceType") === "string" ? normalizeSourceType(String(fields.get("sourceType"))) : undefined,
+    metaTags: normalizeTags(cleanStringArray(fields.get("metaTags"))),
     tags: Array.isArray(fields.get("tags")) ? normalizeTags(fields.get("tags") as string[]) : [],
     source: typeof fields.get("source") === "string" ? String(fields.get("source")) : undefined,
     agentName: typeof fields.get("agentName") === "string" ? String(fields.get("agentName")) : undefined,
@@ -558,6 +678,10 @@ function cleanIndexString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function cleanStringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && Boolean(entry.trim())) : undefined;
+}
+
 function recordFromIndexEntry(entry: AgentMemoryIndexEntry): AgentMemoryRecord | null {
   if (entry.action !== "remember") return null;
   const id = cleanIndexString(entry.id);
@@ -575,6 +699,15 @@ function recordFromIndexEntry(entry: AgentMemoryIndexEntry): AgentMemoryRecord |
     content,
     confidence: normalizeConfidence(Number(entry.confidence ?? 0.7)),
     status,
+    cognitiveStage: entry.cognitiveStage ? normalizeCognitiveStage(entry.cognitiveStage) : undefined,
+    supersedes: normalizeMemoryIds(entry.supersedes),
+    supersededBy: normalizeMemoryIds(entry.supersededBy),
+    evolutionRootId: cleanIndexString(entry.evolutionRootId),
+    evolutionType: entry.evolutionType ? normalizeEvolutionType(entry.evolutionType) : undefined,
+    evolutionReason: cleanIndexString(entry.evolutionReason),
+    evidenceCount: entry.evidenceCount === undefined ? undefined : normalizeEvidenceCount(Number(entry.evidenceCount)),
+    sourceType: entry.sourceType ? normalizeSourceType(entry.sourceType) : undefined,
+    metaTags: Array.isArray(entry.metaTags) ? normalizeTags(entry.metaTags) : [],
     tags: Array.isArray(entry.tags) ? normalizeTags(entry.tags) : [],
     source: cleanIndexString(entry.source),
     agentName: cleanIndexString(entry.agentName),
@@ -608,6 +741,15 @@ function indexEntryForRecord(record: AgentMemoryRecord) {
     title: record.title,
     content: record.content,
     status: record.status,
+    cognitiveStage: record.cognitiveStage,
+    supersedes: record.supersedes,
+    supersededBy: record.supersededBy,
+    evolutionRootId: record.evolutionRootId,
+    evolutionType: record.evolutionType,
+    evolutionReason: record.evolutionReason,
+    evidenceCount: record.evidenceCount,
+    sourceType: record.sourceType,
+    metaTags: record.metaTags,
     notePath: record.notePath,
     confidence: record.confidence,
     tags: record.tags,
@@ -773,6 +915,46 @@ function hitsFromRecords(records: AgentMemoryRecord[], input: RecallAgentMemoryI
     .slice(0, limit);
 }
 
+function chainItemForRecord(record: AgentMemoryRecord): AgentMemoryChainItem {
+  return {
+    id: record.id,
+    title: record.title,
+    content: record.content,
+    status: record.status,
+    notePath: record.notePath,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    cognitiveStage: record.cognitiveStage,
+    evolutionType: record.evolutionType,
+    evolutionReason: record.evolutionReason,
+  };
+}
+
+function traceEvolutionChain(record: AgentMemoryRecord, byId: Map<string, AgentMemoryRecord>, visited = new Set<string>()): AgentMemoryRecord[] {
+  if (visited.has(record.id)) return [];
+  visited.add(record.id);
+  const ancestors = (record.supersedes ?? [])
+    .map((id) => byId.get(id))
+    .filter((ancestor): ancestor is AgentMemoryRecord => Boolean(ancestor))
+    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
+    .flatMap((ancestor) => traceEvolutionChain(ancestor, byId, visited));
+  return [record, ...ancestors];
+}
+
+function attachEvolutionChains(hits: AgentMemoryHit[], memoryRecords: AgentMemoryRecord[]) {
+  const byId = new Map(memoryRecords.map((record) => [record.id, record]));
+  return hits.map((hit) => {
+    const sourceRecord = byId.get(hit.id);
+    if (!sourceRecord) return hit;
+    const chain = traceEvolutionChain(sourceRecord, byId);
+    if (chain.length <= 1) return hit;
+    return {
+      ...hit,
+      evolutionChain: chain.map(chainItemForRecord),
+    };
+  });
+}
+
 function shouldUseDistilledMemoryOnly(input: RecallAgentMemoryInput, hits: AgentMemoryHit[]) {
   if (!input.query?.trim()) return true;
   const topHit = hits[0];
@@ -791,6 +973,15 @@ function memoryMarkdown(record: AgentMemoryRecord) {
       title: record.title,
       status: record.status,
       confidence: record.confidence,
+      cognitiveStage: record.cognitiveStage,
+      supersedes: record.supersedes,
+      supersededBy: record.supersededBy,
+      evolutionRootId: record.evolutionRootId,
+      evolutionType: record.evolutionType,
+      evolutionReason: record.evolutionReason,
+      evidenceCount: record.evidenceCount,
+      sourceType: record.sourceType,
+      metaTags: record.metaTags,
       tags: record.tags,
       source: record.source,
       agentName: record.agentName,
@@ -821,6 +1012,15 @@ function memoryMarkdown(record: AgentMemoryRecord) {
     "",
     `- Type: ${record.type}`,
     `- Confidence: ${record.confidence.toFixed(2)}`,
+    record.cognitiveStage ? `- Cognitive Stage: ${record.cognitiveStage}` : "",
+    record.evolutionType ? `- Evolution Type: ${record.evolutionType}` : "",
+    record.evolutionReason ? `- Evolution Reason: ${record.evolutionReason}` : "",
+    record.evolutionRootId ? `- Evolution Root: ${record.evolutionRootId}` : "",
+    record.supersedes?.length ? `- Supersedes: ${record.supersedes.join(", ")}` : "",
+    record.supersededBy?.length ? `- Superseded By: ${record.supersededBy.join(", ")}` : "",
+    record.evidenceCount ? `- Evidence Count: ${record.evidenceCount}` : "",
+    record.sourceType ? `- Source Type: ${record.sourceType}` : "",
+    record.metaTags?.length ? `- Meta Tags: ${record.metaTags.join(", ")}` : "",
     record.source ? `- Source: ${record.source}` : "",
     record.agentName ? `- Agent: ${record.agentName}` : "",
     record.machineName ? `- Machine: ${record.machineName}` : "",
@@ -871,6 +1071,15 @@ function memoryRecordHash(record: AgentMemoryRecord) {
     contentHash: sha256(record.content.trim()),
     confidence: record.confidence,
     status: record.status,
+    cognitiveStage: record.cognitiveStage,
+    supersedes: record.supersedes,
+    supersededBy: record.supersededBy,
+    evolutionRootId: record.evolutionRootId,
+    evolutionType: record.evolutionType,
+    evolutionReason: record.evolutionReason,
+    evidenceCount: record.evidenceCount,
+    sourceType: record.sourceType,
+    metaTags: record.metaTags,
     tags: record.tags,
     source: record.source,
     agentName: record.agentName,
@@ -922,6 +1131,15 @@ async function createMemoryProofReceipt(root: string, record: AgentMemoryRecord)
     notePath: record.notePath,
     contentHash,
     recordHash,
+    cognitiveStage: record.cognitiveStage,
+    supersedes: record.supersedes,
+    supersededBy: record.supersededBy,
+    evolutionRootId: record.evolutionRootId,
+    evolutionType: record.evolutionType,
+    evolutionReason: record.evolutionReason,
+    evidenceCount: record.evidenceCount,
+    sourceType: record.sourceType,
+    metaTags: record.metaTags,
     previousProofHash,
     agentName: record.agentName,
     agentId: record.agentId,
@@ -1025,6 +1243,10 @@ export async function rememberAgentMemory(input: RememberAgentMemoryInput) {
     content,
     confidence: normalizeConfidence(input.confidence),
     status: "active",
+    cognitiveStage: normalizeCognitiveStage(input.cognitiveStage),
+    evidenceCount: normalizeEvidenceCount(input.evidenceCount),
+    sourceType: normalizeSourceType(input.sourceType),
+    metaTags: normalizeTags(input.metaTags),
     tags: normalizeTags(input.tags),
     source: input.source?.trim() || undefined,
     agentName: input.agentName?.trim() || undefined,
@@ -1070,13 +1292,125 @@ export async function rememberAgentMemory(input: RememberAgentMemoryInput) {
   return { vaultPath: root, record, possibleConflicts, proof: proofReceipt };
 }
 
+function requireSupersededRecords(records: AgentMemoryRecord[], input: EvolveAgentMemoryInput) {
+  const ids = normalizeMemoryIds([
+    ...(input.supersedes ?? []),
+    ...(input.memoryId ? [input.memoryId] : []),
+  ]);
+  if (!ids.length) throw new Error("evolve requires memoryId or supersedes.");
+  const byId = new Map(records.map((record) => [record.id, record]));
+  const selected = ids.map((id) => byId.get(id));
+  const missing = ids.filter((id, index) => !selected[index]);
+  if (missing.length) throw new Error(`Could not find memory id${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}.`);
+  return selected.filter((record): record is AgentMemoryRecord => Boolean(record));
+}
+
+function mergeEvolutionTags(input: EvolveAgentMemoryInput, previous: AgentMemoryRecord[]) {
+  return normalizeTags([
+    ...previous.flatMap((record) => record.tags),
+    ...(input.tags ?? []),
+    "evolved",
+  ]);
+}
+
+export async function evolveAgentMemory(input: EvolveAgentMemoryInput) {
+  const content = input.content?.trim();
+  if (!content) throw new Error("Evolved memory content is required.");
+  const root = resolveObsidianVaultPath(input.vaultPath, { requireWritable: true });
+  await access(root, constants.R_OK | constants.W_OK);
+  const memoryRecords = await readMemoryRecords(root);
+  const previousRecords = requireSupersededRecords(memoryRecords, input);
+  const primary = previousRecords[0];
+  const type = input.type ? normalizeMemoryType(input.type) : primary.type;
+  const now = new Date().toISOString();
+  const hash = createHash("sha256").update(`${type}\n${content}`).digest("hex").slice(0, 10);
+  const title = input.title?.trim() || primary.title || compactContent(content, 80);
+  const id = `mem-${now.replace(/[^0-9]/g, "").slice(0, 14)}-${hash}`;
+  const folder = join(root, MEMORY_FOLDER, type);
+  const file = join(folder, `${now.slice(0, 10)}-${safeSlug(title)}-${hash}.md`);
+  assertInside(root, file);
+  await mkdir(folder, { recursive: true });
+
+  const previousIds = previousRecords.map((record) => record.id);
+  const record: AgentMemoryRecord = {
+    id,
+    type,
+    title,
+    content,
+    confidence: normalizeConfidence(input.confidence ?? Math.max(...previousRecords.map((item) => item.confidence), 0.7)),
+    status: "active",
+    cognitiveStage: normalizeCognitiveStage(input.cognitiveStage, "system2"),
+    supersedes: previousIds,
+    evolutionRootId: primary.evolutionRootId || primary.id,
+    evolutionType: normalizeEvolutionType(input.evolutionType) ?? "override",
+    evolutionReason: input.evolutionReason?.trim() || undefined,
+    evidenceCount: normalizeEvidenceCount(input.evidenceCount) ?? previousRecords.reduce((sum, item) => sum + (item.evidenceCount ?? 1), 0),
+    sourceType: normalizeSourceType(input.sourceType) ?? "composite",
+    metaTags: normalizeTags([...(primary.metaTags ?? []), ...(input.metaTags ?? []), "recently_changed"]),
+    tags: mergeEvolutionTags(input, previousRecords),
+    source: input.source?.trim() || primary.source,
+    agentName: input.agentName?.trim() || primary.agentName,
+    agentId: input.agentId?.trim() || primary.agentId,
+    runtime: input.runtime?.trim() || primary.runtime,
+    machineName: input.machineName?.trim() || primary.machineName,
+    machineId: input.machineId?.trim() || primary.machineId,
+    tailnetId: input.tailnetId?.trim() || primary.tailnetId,
+    tailnetName: input.tailnetName?.trim() || primary.tailnetName,
+    tailnetDnsName: input.tailnetDnsName?.trim() || primary.tailnetDnsName,
+    collectorUrl: input.collectorUrl?.trim() || primary.collectorUrl,
+    sessionId: input.sessionId?.trim() || primary.sessionId,
+    project: input.project?.trim() || primary.project,
+    createdAt: now,
+    updatedAt: now,
+    notePath: toVaultPath(root, file),
+  };
+
+  const proofReceipt = shouldWriteProof(type, record.confidence, input.proof)
+    ? await createMemoryProofReceipt(root, record)
+    : undefined;
+  if (proofReceipt) {
+    record.proofId = proofReceipt.id;
+    record.proofStatus = proofReceipt.status;
+    record.proofHash = proofReceipt.metadata.proofHash;
+    record.proofPath = PROOF_INDEX_PATH;
+    record.actorDid = proofReceipt.actorDid;
+  }
+
+  const supersededRecords = previousRecords.map((previous) => ({
+    ...previous,
+    status: "superseded" as const,
+    supersededBy: normalizeMemoryIds([...(previous.supersededBy ?? []), id]),
+    updatedAt: now,
+  }));
+
+  for (const superseded of supersededRecords) {
+    const supersededFile = join(root, superseded.notePath);
+    assertInside(root, supersededFile);
+    await writeFile(supersededFile, memoryMarkdown(superseded), { encoding: "utf8", mode: 0o600 });
+    await appendIndex(root, superseded);
+  }
+
+  await writeFile(file, memoryMarkdown(record), { encoding: "utf8", mode: 0o600 });
+  if (proofReceipt) {
+    record.proofPath = await appendProof(root, proofReceipt);
+  }
+  await appendIndex(root, record);
+  return {
+    vaultPath: root,
+    record,
+    superseded: supersededRecords,
+    evolutionChain: traceEvolutionChain(record, new Map([...memoryRecords, record, ...supersededRecords].map((item) => [item.id, item]))).map(chainItemForRecord),
+    proof: proofReceipt,
+  };
+}
+
 export async function recallAgentMemory(input: RecallAgentMemoryInput = {}) {
   const root = resolveObsidianVaultPath(input.vaultPath);
   await access(root, constants.R_OK);
   const limit = Math.min(Math.max(Math.trunc(Number(input.limit ?? 8)), 1), 50);
   const scope = normalizeRecallScope(input.scope);
   const memoryRecords = await readMemoryRecords(root);
-  const memoryHits = hitsFromRecords(memoryRecords, input, limit);
+  const memoryHits = attachEvolutionChains(hitsFromRecords(memoryRecords, input, limit), memoryRecords);
   if (scope === "agent-memory" || (scope === "tiered" && shouldUseDistilledMemoryOnly(input, memoryHits))) {
     return {
       vaultPath: root,
@@ -1087,7 +1421,7 @@ export async function recallAgentMemory(input: RecallAgentMemoryInput = {}) {
     };
   }
   const records = await readFullVaultRecords(root, memoryRecords, input.query);
-  const hits = hitsFromRecords(records, input, limit);
+  const hits = attachEvolutionChains(hitsFromRecords(records, input, limit), memoryRecords);
   return {
     vaultPath: root,
     query: input.query?.trim() || "",
@@ -1098,12 +1432,32 @@ export async function recallAgentMemory(input: RecallAgentMemoryInput = {}) {
   };
 }
 
+function hitSummary(hit: AgentMemoryHit, index: number) {
+  const evolved = hit.evolutionChain && hit.evolutionChain.length > 1
+    ? `, evolved ${hit.evolutionChain.length} versions`
+    : "";
+  return `${index + 1}. ${hit.title} (${hit.type}, confidence ${hit.confidence.toFixed(2)}, score ${hit.score}${evolved}) - ${hit.excerpt}`;
+}
+
+function chainContext(hit: AgentMemoryHit) {
+  if (!hit.evolutionChain || hit.evolutionChain.length <= 1) return "";
+  return [
+    "Evolution Chain:",
+    ...hit.evolutionChain.map((item, index) => {
+      const label = index === 0 ? "Latest" : `Previous ${index}`;
+      const reason = item.evolutionReason ? `; reason: ${item.evolutionReason}` : "";
+      const stage = item.cognitiveStage ? `; stage: ${item.cognitiveStage}` : "";
+      return `- ${label}: ${item.title} (${item.status}${stage}${reason}) - ${compactContent(item.content, 220)}`;
+    }),
+  ].join("\n");
+}
+
 export async function answerFromAgentMemory(input: RecallAgentMemoryInput = {}) {
   const result = await recallAgentMemory(input);
   const answer = result.hits.length
     ? [
       `Found ${result.hits.length} relevant shared-brain memor${result.hits.length === 1 ? "y/note" : "ies/notes"}.`,
-      ...result.hits.slice(0, 6).map((hit, index) => `${index + 1}. ${hit.title} (${hit.type}, confidence ${hit.confidence.toFixed(2)}, score ${hit.score}) - ${hit.excerpt}`),
+      ...result.hits.slice(0, 6).map(hitSummary),
     ].join("\n")
     : "No matching shared-brain memories or vault notes were found.";
   const context = result.hits.map((hit, index) => [
@@ -1124,6 +1478,7 @@ export async function answerFromAgentMemory(input: RecallAgentMemoryInput = {}) 
     hit.proofStatus ? `Proof Status: ${hit.proofStatus}` : "",
     hit.actorDid ? `Actor DID: ${hit.actorDid}` : "",
     hit.proofHash ? `Proof Hash: ${hit.proofHash}` : "",
+    chainContext(hit),
     `Created: ${hit.createdAt}`,
     `Content: ${hit.excerpt}`,
   ].filter(Boolean).join("\n")).join("\n\n");

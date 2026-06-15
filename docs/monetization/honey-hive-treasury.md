@@ -141,6 +141,8 @@ Potential future benefits:
 - Higher Honey earning multipliers.
 - Early access to new functionality.
 
+The first staking design uses fixed HIVE tiers for community alignment rather than per-use token spending. See [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for the Holder, Supporter, Builder, Curator, Operator, and Visionary model.
+
 ## Ecosystem Loop
 
 <ol class="valueWheel" aria-label="Honey and HIVE ecosystem loop">
@@ -159,5 +161,5 @@ Funded Honey rewards feed back into product usage: people use HivemindOS, earn H
 
 <nav class="nextNav" aria-label="Monetization reading path">
   <a href="ecosystem-plan.html">Previous: Ecosystem Plan</a>
-  <a href="paid-features/">Next: Paid Features</a>
+  <a href="hive-staking-and-community-tiers.html">Next: HIVE Staking And Community Tiers</a>
 </nav>

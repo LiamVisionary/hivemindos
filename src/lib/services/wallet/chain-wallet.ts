@@ -7,7 +7,7 @@ import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL, Transaction, sendAndC
 import { mnemonicToSeedSync, validateMnemonic } from "@scure/bip39";
 import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import bs58 from "bs58";
-import { createPublicClient, createWalletClient, formatEther, formatUnits, http, parseUnits } from "viem";
+import { createPublicClient, createWalletClient, fallback, formatEther, formatUnits, http, parseUnits, webSocket } from "viem";
 import { base, baseSepolia } from "viem/chains";
 import { generatePrivateKey, mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import type { AgentWalletBalance, AgentWalletTokenBalance } from "@/lib/types/agent-wallet";
@@ -135,6 +135,39 @@ function evmRpc(network: SupportedWalletNetwork) {
   return process.env.BASE_RPC_URL || "https://mainnet.base.org";
 }
 
+function envRpcUrls(value: string | undefined) {
+  return (value || "")
+    .split(/[,\s]+/)
+    .map((url) => url.trim())
+    .filter(Boolean);
+}
+
+function evmReadRpcUrls(network: SupportedWalletNetwork) {
+  if (network === "eip155:84532") {
+    return uniqueStrings([
+      ...envRpcUrls(process.env.BASE_SEPOLIA_RPC_URL),
+      "https://sepolia.base.org",
+    ]);
+  }
+  return uniqueStrings([
+    ...envRpcUrls(process.env.BASE_RPC_URL),
+    "https://mainnet.base.org",
+    "https://base.api.pocket.network",
+    "https://base-rpc.publicnode.com",
+    "https://1rpc.io/base",
+    "wss://base-rpc.publicnode.com",
+  ]);
+}
+
+function evmReadTransport(network: SupportedWalletNetwork) {
+  return fallback(
+    evmReadRpcUrls(network).map((url) => url.startsWith("wss://")
+      ? webSocket(url, { retryCount: 1, timeout: 8_000 })
+      : http(url, { retryCount: 1, timeout: 8_000 })),
+    { retryCount: 0 },
+  );
+}
+
 function evmUsdc(network: SupportedWalletNetwork) {
   return network === "eip155:84532" ? BASE_SEPOLIA_USDC : BASE_USDC;
 }
@@ -239,7 +272,7 @@ export async function getWalletBalance(address: string, networkInput: string): P
   const network = assertNetwork(networkInput);
   if (!address.trim()) throw new Error("Wallet address is required.");
   if (network.startsWith("eip155:")) {
-    const client = createPublicClient({ chain: evmChain(network), transport: http(evmRpc(network)) });
+    const client = createPublicClient({ chain: evmChain(network), transport: evmReadTransport(network) });
     const [tokenRaw, nativeRaw, prices, indexedTokens] = await Promise.all([
       client.readContract({
         address: evmUsdc(network),
@@ -511,7 +544,7 @@ async function fetchKnownEvmTokenBalances(
   network: SupportedWalletNetwork,
   indexedTokens: AgentWalletTokenBalance[],
 ): Promise<AgentWalletTokenBalance[]> {
-  const client = createPublicClient({ chain: evmChain(network), transport: http(evmRpc(network)) });
+  const client = createPublicClient({ chain: evmChain(network), transport: evmReadTransport(network) });
   const indexedAddresses = new Set(indexedTokens.map((token) => token.tokenAddress?.toLowerCase()).filter(Boolean));
   const tokenAddresses = knownEvmTokenAddresses(network).filter((tokenAddress) => !indexedAddresses.has(tokenAddress.toLowerCase()));
   const prices = await fetchDexScreenerTokenPrices(tokenAddresses);

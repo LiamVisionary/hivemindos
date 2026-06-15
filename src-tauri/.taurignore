@@ -1,0 +1,13 @@
+# Tauri dev-watcher ignore (gitignore syntax, relative to src-tauri/).
+#
+# Tauri only auto-ignores the top-level `target/` dir, NOT the nested
+# gateway-host crate target. During `tauri dev` the app re-signs/re-stages the
+# gateway-host helper (and nested sidecars) on every launch, which the watcher
+# would otherwise see as a source change -> rebuild -> relaunch -> re-sign ->
+# infinite rebuild loop spawning app instances back to back.
+#
+# These are build OUTPUTS, never hand-edited source — safe to ignore from the
+# watcher. (build.rs still validates externalBin via cargo rerun-if-changed,
+# independent of this watcher.)
+gateway-host/target/
+binaries/

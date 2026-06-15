@@ -1,13 +1,16 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ComponentType, Dispatch, ElementType, MutableRefObject, SetStateAction } from "react";
 import { AgentCallModal, type AgentCallLiveKit, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent } from "@/components/fleet/agent-call-modal";
 import type { FleetViewProps } from "@/components/fleet/FleetView";
+import { FleetHiveView } from "@/components/fleet-hive";
+import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import type { AeonDeleteDepth, AeonDeleteProgress, AeonDeleteResult } from "@/components/fleet/roster";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import type { DashboardView, HivemindLinkClientStatus, MachineGroup } from "@/features/dashboard/dashboard-types";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
 type IconComponent = ElementType<{
@@ -89,6 +92,7 @@ type AgentsPanelProps = {
   showHivemindLinkSignInBanner: boolean;
   startAgentChat: (agentId: string, options?: { fresh?: boolean }) => void;
   startAgentWorkChat: (agentId: string, task?: string) => void;
+  walletsByAgent: Record<string, AgentWalletConfig>;
 };
 
 type FleetPanelMachine = FleetViewData["machines"][number];
@@ -111,6 +115,8 @@ type AgentPhoneCallResult = {
     };
   };
 };
+
+const FLEET_LAYOUT_STORAGE_KEY = "hivemindos.fleet.layout.v1";
 
 function resultHasDashboardVoice(data: AgentPhoneCallResult | null) {
   const call = data?.result?.call;
@@ -193,6 +199,7 @@ export function AgentsPanel(props: AgentsPanelProps) {
     showHivemindLinkSignInBanner,
     startAgentChat,
     startAgentWorkChat,
+    walletsByAgent,
   } = props;
   const [agentCallSession, setAgentCallSession] = useState<{
     machine: FleetPanelMachine;
@@ -209,6 +216,31 @@ export function AgentsPanel(props: AgentsPanelProps) {
   // The single logical Queen Bee — drives the central hive cell in the graph.
   const queenAgent = displayAgents.find((agent) => agent.beeRole === "queen")
     ?? displayAgents.find((agent) => /queen/i.test(agent.name));
+
+  // Fleet layout: the redesigned "hive" is the default; "classic" falls back to
+  // the legacy three-column FleetView. The choice is persisted across sessions.
+  const [fleetLayout, setFleetLayout] = useState<"hive" | "classic">("hive");
+  useEffect(() => {
+    let cancelled = false;
+    void loadDashboardStateSnapshot().then((snapshot) => {
+      if (cancelled) return;
+      const stored = dashboardStateValue(snapshot, FLEET_LAYOUT_STORAGE_KEY);
+      if (stored === "classic" || stored === "hive") setFleetLayout(stored);
+    });
+    return () => { cancelled = true; };
+  }, []);
+  const chooseFleetLayout = useCallback((layout: "hive" | "classic") => {
+    setFleetLayout(layout);
+    void saveDashboardStateValue(FLEET_LAYOUT_STORAGE_KEY, layout);
+  }, []);
+
+  // "Message the hive": dispatch a task to the Queen orchestrator when present.
+  const handleSendHiveMessage = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (queenAgent) startAgentWorkChat(queenAgent.id, trimmed);
+    else if (displayAgents[0]) startAgentChat(displayAgents[0].id, { fresh: true });
+  }, [displayAgents, queenAgent, startAgentChat, startAgentWorkChat]);
 
   const callAgentOnDashboard = useCallback(async (machine: FleetPanelMachine, fleetAgent: FleetPanelAgent): Promise<AgentPhoneCallResult> => {
     const profile = findCallProfile({
@@ -303,6 +335,76 @@ export function AgentsPanel(props: AgentsPanelProps) {
     }
   }, [callAgentOnDashboard]);
 
+  // Shared props consumed by both the new Hive layout and the legacy FleetView.
+  const fleetProps: FleetViewProps = {
+    machines: fleetViewData.machines,
+    tasks: fleetViewData.tasks,
+    alerts: fleetViewData.alerts,
+    ticker: fleetViewData.ticker,
+    edges: fleetViewData.edges,
+    hostedApps: fleetHostedApps,
+    loading: fleetDiscoveryLoading,
+    mastheadMode: "mobile",
+    recentAgentArrival,
+    onRecentAgentArrivalSeen,
+    onAddAgent: (machine) => {
+      const group = machineGroups.find((item) => item.key === machine.id);
+      if (group) addAgentToMachine(group);
+    },
+    onAddMachine: openMachineInitModal,
+    autoUpdatePaused: fleetAutoUpdatePaused,
+    onToggleAutoUpdatePaused: onToggleFleetAutoUpdatePaused,
+    updateStatusByMachine: fleetUpdateStatusByMachine,
+    updateDetailByMachine: fleetUpdateDetailByMachine,
+    walletsByAgent,
+    onUpdateMachine: (machine) => {
+      const group = machineGroups.find((item) => item.key === machine.id);
+      if (group) void runMachineUpdate(group);
+    },
+    onDismissAlert: (alert) => {
+      if (alert.id.startsWith("notification-")) {
+        markNotificationRead(alert.id.slice("notification-".length));
+      }
+    },
+    onRenameMachine: renameMachine,
+    onOpenCodeProof: () => setActiveView("integrations"),
+    onFixSyncIssue,
+    onOpenChat: (_, agent) => startAgentChat(agent.id, { fresh: true }),
+    onOpenTaskChat: (_, agent, chat) => startAgentWorkChat(agent.id, chat?.id ?? chat?.task ?? agent.task),
+    onCallAgent: openAgentPhoneCall,
+    onOpenWallet: (_, agent) => {
+      setSelectedAgentId(agent.id);
+      setActiveView("wallet");
+    },
+    onEditSettings: (_, agent) => {
+      setSelectedAgentId(agent.id);
+      setAgentRenameDraft(agent.name);
+      setAgentRenameEditing(false);
+      setAgentRuntimeFolderEditing(false);
+      setAgentRuntimeFolderStatus("");
+      setAgentRuntimeAdvancedOpen(false);
+      setAgentSettingsPanel("role");
+      setAgentRoleModalId(agent.id);
+    },
+    onOpenQueenSettings: queenAgent ? () => {
+      setSelectedAgentId(queenAgent.id);
+      setAgentRenameDraft(queenAgent.name);
+      setAgentRenameEditing(false);
+      setAgentRuntimeFolderEditing(false);
+      setAgentRuntimeFolderStatus("");
+      setAgentRuntimeAdvancedOpen(false);
+      setAgentSettingsPanel("role");
+      setAgentRoleModalId(queenAgent.id);
+    } : undefined,
+    onDuplicate: (_, agent) => requestDuplicateAgent(agent.id),
+    onRemove: (machine, agent, depth, onProgress) => deleteAgent(agent.id, {
+      ...(depth ? { aeonDeleteDepth: depth, onProgress } : {}),
+      machine,
+      fleetAgent: agent,
+    }),
+  };
+  const layoutToggle = <FleetLayoutToggle layout={fleetLayout} onChoose={chooseFleetLayout} />;
+
   return (
     <>
       {activeView === "agents" ? (
@@ -393,73 +495,15 @@ export function AgentsPanel(props: AgentsPanelProps) {
               />
             </div>
           ) : null}
-          <div className={`${fleetClass("fleetViewport")} fleetViewportShell`}>
-            <FleetView
-              machines={fleetViewData.machines}
-              tasks={fleetViewData.tasks}
-              alerts={fleetViewData.alerts}
-              ticker={fleetViewData.ticker}
-              edges={fleetViewData.edges}
-              hostedApps={fleetHostedApps}
-              loading={fleetDiscoveryLoading}
-              mastheadMode="mobile"
-              recentAgentArrival={recentAgentArrival}
-              onRecentAgentArrivalSeen={onRecentAgentArrivalSeen}
-              onAddAgent={(machine) => {
-                const group = machineGroups.find((item) => item.key === machine.id);
-                if (group) addAgentToMachine(group);
-              }}
-              onAddMachine={openMachineInitModal}
-              autoUpdatePaused={fleetAutoUpdatePaused}
-              onToggleAutoUpdatePaused={onToggleFleetAutoUpdatePaused}
-              updateStatusByMachine={fleetUpdateStatusByMachine}
-              updateDetailByMachine={fleetUpdateDetailByMachine}
-              onUpdateMachine={(machine) => {
-                const group = machineGroups.find((item) => item.key === machine.id);
-                if (group) void runMachineUpdate(group);
-              }}
-              onDismissAlert={(alert) => {
-                if (alert.id.startsWith("notification-")) {
-                  markNotificationRead(alert.id.slice("notification-".length));
-                }
-              }}
-              onRenameMachine={renameMachine}
-              onOpenCodeProof={() => setActiveView("integrations")}
-              onFixSyncIssue={onFixSyncIssue}
-              onOpenChat={(_, agent) => startAgentChat(agent.id, { fresh: true })}
-              onOpenTaskChat={(_, agent, chat) => startAgentWorkChat(agent.id, chat?.id ?? chat?.task ?? agent.task)}
-              onCallAgent={openAgentPhoneCall}
-              onOpenWallet={(_, agent) => {
-                setSelectedAgentId(agent.id);
-                setActiveView("wallet");
-              }}
-              onEditSettings={(_, agent) => {
-                setSelectedAgentId(agent.id);
-                setAgentRenameDraft(agent.name);
-                setAgentRenameEditing(false);
-                setAgentRuntimeFolderEditing(false);
-                setAgentRuntimeFolderStatus("");
-                setAgentRuntimeAdvancedOpen(false);
-                setAgentSettingsPanel("role");
-                setAgentRoleModalId(agent.id);
-              }}
-              onOpenQueenSettings={queenAgent ? () => {
-                setSelectedAgentId(queenAgent.id);
-                setAgentRenameDraft(queenAgent.name);
-                setAgentRenameEditing(false);
-                setAgentRuntimeFolderEditing(false);
-                setAgentRuntimeFolderStatus("");
-                setAgentRuntimeAdvancedOpen(false);
-                setAgentSettingsPanel("role");
-                setAgentRoleModalId(queenAgent.id);
-              } : undefined}
-              onDuplicate={(_, agent) => requestDuplicateAgent(agent.id)}
-              onRemove={(machine, agent, depth, onProgress) => deleteAgent(agent.id, {
-                ...(depth ? { aeonDeleteDepth: depth, onProgress } : {}),
-                machine,
-                fleetAgent: agent,
-              })}
-            />
+          <div className={`${fleetClass("fleetViewport")} fleetViewportShell`} style={{ position: "relative" }}>
+            {fleetLayout === "hive" ? (
+              <FleetHiveView {...fleetProps} onSendMessage={handleSendHiveMessage} layoutToggle={layoutToggle} />
+            ) : (
+              <>
+                <FleetView {...fleetProps} />
+                <div style={{ position: "absolute", top: 12, right: 18, zIndex: 50 }}>{layoutToggle}</div>
+              </>
+            )}
           </div>
           {agentCallSession ? (
             <AgentCallModal
@@ -497,5 +541,57 @@ export function AgentsPanel(props: AgentsPanelProps) {
         </section>
       ) : null}
     </>
+  );
+}
+
+function FleetLayoutToggle({ layout, onChoose }: { layout: "hive" | "classic"; onChoose: (layout: "hive" | "classic") => void }) {
+  const options: Array<{ id: "hive" | "classic"; label: string; title: string }> = [
+    { id: "hive", label: "Hive", title: "Redesigned hive layout" },
+    { id: "classic", label: "Classic", title: "Legacy three-column layout" },
+  ];
+  return (
+    <div
+      role="group"
+      aria-label="Fleet layout"
+      style={{
+        display: "inline-flex",
+        gap: 2,
+        padding: 2,
+        borderRadius: 9999,
+        border: "1px solid rgba(148,163,184,0.28)",
+        background: "rgba(12,13,17,0.55)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+      }}
+    >
+      {options.map((option) => {
+        const active = layout === option.id;
+        return (
+          <button
+            key={option.id}
+            type="button"
+            aria-pressed={active}
+            title={option.title}
+            onClick={() => onChoose(option.id)}
+            style={{
+              cursor: "pointer",
+              border: 0,
+              borderRadius: 9999,
+              padding: "4px 12px",
+              fontFamily: "var(--f-mono, ui-monospace, SFMono-Regular, Menlo, monospace)",
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              background: active ? "rgba(231,180,92,0.16)" : "transparent",
+              color: active ? "#e7b45c" : "rgba(148,163,184,0.9)",
+              transition: "background 140ms ease, color 140ms ease",
+            }}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }

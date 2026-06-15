@@ -122,6 +122,14 @@ export interface Colony {
   lastDispatchedAt?: number;
   /** True only when an explicit apex goal is set (not the derived fallback) — gates dispatch. */
   hasApexGoal?: boolean;
+  /** True when perpetual autonomy is on — the driver keeps re-dispatching until stopped/frozen. */
+  autonomy?: boolean;
+  /**
+   * Raw, unformatted identity + apex-goal values used to seed the edit form.
+   * Distinct from the display fields above (`apex`, `ticker`, …) which carry
+   * derived fallbacks and `$`/`%` formatting — this is what the user actually set.
+   */
+  edit: CreateForm;
 }
 
 /** A fully-configured agent from the org roster, available to assign. */

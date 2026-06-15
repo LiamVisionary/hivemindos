@@ -165,38 +165,62 @@ a {
 }
 
 .commandShell {
+  /* The old top header is gone: navigation now lives in the fixed left rail
+     (AppNavShelf). A single full-height row holds the active view, inset from
+     the rail by --shelf-w. */
+  --shelf-w: 72px;
+  position: relative;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   width: 100vw;
   height: 100dvh;
   min-height: 0;
   max-width: none;
-  gap: 14px;
-  align-items: start;
+  gap: 0;
+  align-items: stretch;
   margin: 0;
   overflow: hidden;
-  padding: 0;
+  padding: 0 0 0 var(--shelf-w);
   animation: commandShellEnter 0.28s ease-out both;
 }
 
 @keyframes commandShellEnter {
+  /* Animate opacity only — a persistent transform here would make .commandShell
+     a containing block for the fixed left rail (AppNavShelf), pinning it to the
+     72px padding edge instead of the viewport. */
   from {
     opacity: 0;
-    transform: translateY(10px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
+/* macOS overlay title bar: a thin draggable strip across the top of the content
+   area so the frameless window can be moved without grabbing the narrow rail.
+   Sits above content but below modals; kept short to avoid trapping clicks. */
+.macDesktopChrome .commandShell::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: var(--shelf-w, 72px);
+  right: 0;
+  height: 14px;
+  z-index: 70;
+  -webkit-app-region: drag;
+}
+
+
 .commandMain {
-  width: min(1560px, calc(100vw - 28px));
+  width: min(1560px, calc(100vw - 28px - var(--shelf-w, 72px)));
   height: 100%;
   min-width: 0;
   min-height: 0;
-  margin: 0 auto;
+  /* Flush-left against the rail (no auto-centering) so views don't leave a dark
+     gap between themselves and the nav shelf. Chat/agents full-bleed via inline
+     style; the rest keep the 1560px readability cap but hug the rail. */
+  margin: 0;
   overflow: hidden;
 }
 
@@ -1175,6 +1199,7 @@ h1 {
   }
 
   .commandShell {
+    --shelf-w: 56px;
     display: block;
     gap: 0;
     height: 100dvh;

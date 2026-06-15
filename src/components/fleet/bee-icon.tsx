@@ -7,6 +7,7 @@ import type { BeeWorkerClass } from "@/lib/types/agent-runtime";
 import { cn } from "@/lib/utils/cn";
 
 type BeeRole = "queen" | "worker";
+const FLEET_QUEEN_BEE_ICON_SCALE = 1.5;
 
 interface BeeIconProps {
   role?: BeeRole;
@@ -22,12 +23,13 @@ interface BeeIconProps {
  */
 export function BeeIcon({ role = "worker", workerClass = "general", size = 24, dim = false, className }: BeeIconProps) {
   const src = beeRoleIconPath(role, workerClass);
+  const displaySize = role === "queen" ? Math.round(size * FLEET_QUEEN_BEE_ICON_SCALE) : size;
   return (
     <Image
       src={src}
       alt=""
-      width={size}
-      height={size}
+      width={displaySize}
+      height={displaySize}
       draggable={false}
       className={cn("block object-contain pointer-events-none", className)}
       style={{

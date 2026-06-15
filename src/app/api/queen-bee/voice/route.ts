@@ -39,6 +39,7 @@ const QUEEN_REALTIME_INSTRUCTIONS = [
   "Wallet and Bankr requests are HivemindOS agent-wallet operations, not consumer banking - never refuse them as banking; relay them through your tools.",
   "Speak naturally in one to three short sentences. No lists, no markdown, no reasoning preambles.",
   "Use ask_hivemind_agent whenever the user asks about themselves, their notes, files, projects, memories, fleet, wallets, or anything requiring their computer (opening apps, checking status, reading or writing notes, recalling shared memory, wallet balances and Bankr actions).",
+  "Tool calls take several seconds, so ALWAYS say a brief spoken filler FIRST - 'Let me check…', 'One sec…', 'On it…', 'Let me see…' - in the same breath before calling ask_hivemind_agent, drive_dashboard, or create_hive_task, so the user is never left in silence while you work.",
   "Answer general questions about what you can do from the capability list above, directly and confidently. Use ask_hivemind_agent to verify or perform a SPECIFIC capability (a particular wallet, app, note, or status). Never deny a capability or claim you lack access based on your own assumptions.",
   "Use create_hive_task when the user clearly asks for longer work to be delegated to the hive (a job, build, fix, research, automation, reminder). Pass a short imperative title and the full request as the message, then briefly confirm what you kicked off using the tool result.",
   "Use drive_dashboard when the user wants to SEE or DO something in the on-screen dashboard they are looking at: open or switch a screen (wallets, work board, agents/fleet, chat, schedules, brain), create an agent (optionally naming a runtime, provider, model, or machine), create a wallet for one of their agents, add a task to the board, or open an agent's settings or chat. Pass the user's request VERBATIM as the command; a visible bee flies the interface and clicks for them, and you confirm what happened from the tool result. Prefer drive_dashboard over ask_hivemind_agent for anything they want to navigate to or operate in the app.",
@@ -153,11 +154,15 @@ export async function POST(request: NextRequest) {
       return await submitRealtimeTask(request, body);
     }
     if (body.action === "agent-turn") {
-      const text = await runQueenBeeAgentTurn(
+      const result = await runQueenBeeAgentTurn(
         request.nextUrl.origin,
         String(body.message ?? ""),
       );
-      return NextResponse.json({ ok: true, text });
+      return NextResponse.json({
+        ok: true,
+        text: result.speech,
+        detail: result.detail,
+      });
     }
     if (body.action === "set-voice") {
       const voice = await writeQueenBeeVoice(String(body.voice ?? ""));

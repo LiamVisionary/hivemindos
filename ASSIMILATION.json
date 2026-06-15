@@ -1,34 +1,34 @@
 {
-  "created_at": "2026-06-14T03:33:54.808084+00:00",
+  "created_at": "2026-06-15T10:23:30.856009+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
-      "source_repo": "jacobamobin/AppleIntelligenceGlowEffect",
-      "source_path": "IOS.swift",
-      "target_path": "src/features/queen-voice/QueenVoiceGlow.tsx",
+      "source_repo": "shared-skill",
+      "source_path": "Skills/hivemindos-wallet-rails/SKILL.md",
+      "target_path": "src/lib/services/wallet/chain-wallet.ts",
       "reuse_type": "adapted_code",
-      "note": "ported GlowEffect's shared six-color gradient, single retarget timer, and 0.5s stop-refresh cadence into the existing React animation loop"
+      "note": "encoded documented Base RPC rate-limit fallback workflow into default balance reads"
     },
     {
-      "source_repo": "jacobamobin/AppleIntelligenceGlowEffect",
-      "source_path": "IOS.swift",
-      "target_path": "src/features/queen-voice/QueenVoiceGlow.tsx",
+      "source_repo": "local-project",
+      "source_path": "src/lib/services/wallet/chain-wallet.ts",
+      "target_path": "src/lib/services/wallet/chain-wallet.ts",
       "reuse_type": "adapted_code",
-      "note": "translated the reference stacked RoundedRectangle stroke layers into SVG rect strokes with per-layer Gaussian blur filters"
+      "note": "reused existing EVM balance service and changed read transport selection in place"
     },
     {
-      "source_repo": "jacobamobin/AppleIntelligenceGlowEffect",
-      "source_path": "IOS.swift",
-      "target_path": "src/features/queen-voice/queen-voice.module.css",
+      "source_repo": "local-project",
+      "source_path": "src/features/dashboard/views/PersonalWallets.module.css",
+      "target_path": "src/features/dashboard/views/PersonalWallets.module.css",
       "reuse_type": "adapted_code",
-      "note": "replaced Chromium CSS masked-border compositing with SVG stroke styling so the perimeter fades as a glow instead of hard bands"
+      "note": "reused existing personal wallet status styles and bounded error overflow"
     },
     {
-      "source_repo": "jacobamobin/AppleIntelligenceGlowEffect",
-      "source_path": "IOS.swift",
-      "target_path": "src/features/queen-voice/queen-voice.module.css",
+      "source_repo": "local-project",
+      "source_path": "src/app/api/wallet/balance/route.ts",
+      "target_path": "src/app/api/wallet/balance/route.ts",
       "reuse_type": "adapted_code",
-      "note": "kept the screen-hugging rounded-rectangle perimeter geometry while avoiding vertical overscan drift from the earlier CSS mask port"
+      "note": "reused existing balance route and sanitized provider errors"
     }
   ]
 }

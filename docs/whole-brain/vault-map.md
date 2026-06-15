@@ -148,6 +148,7 @@ Shared Brain Memory has two recall layers:
 
 - Typed durable memories live in `Memory/Distillations/Agent Memory/`.
 - The private hot-path index lives in `Operations/Brain Services/Agent Memory Index.jsonl`.
+- Memory evolution is represented in note frontmatter with `supersedes`, `supersededBy`, `evolutionRootId`, `evolutionType`, `evolutionReason`, and `cognitiveStage`; newer active notes replace older superseded notes without deleting history.
 - The default full-vault lexical search service is documented in `Operations/Brain Services/Full Vault Search Index.md`.
 - The generated full-vault lexical index lives in `Operations/Brain Services/Full Vault Search Index.jsonl` and ranks regular markdown by collection, path, phrase, exclusion, and BM25-style term frequency before source notes are loaded. It is generated state and can be rebuilt from markdown notes.
 - Optional hash-only GitLawb receipts live in `Operations/Brain Services/Agent Memory Proofs.jsonl`.

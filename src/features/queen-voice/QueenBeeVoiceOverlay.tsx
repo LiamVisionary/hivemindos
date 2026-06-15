@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   Crown,
+  FileText,
   Mic,
   MicOff,
   Settings2,
@@ -24,10 +25,29 @@ import styles from "./queen-voice.module.css";
 
 const QUEEN_VOICE_ACTIVATION_SOUND_SRC = "/audio/sfx/scifi-ping.wav";
 
+// Spoken while a tool call runs (the 10-15s dead-air pause), so the user knows
+// Queen Bee is working rather than stuck. One is picked per pause and held.
+const QUEEN_THINKING_FILLERS = [
+  "Let me check…",
+  "On it…",
+  "Let me see…",
+  "Searching your hive…",
+  "One sec, looking that up…",
+];
+
 function playQueenVoiceActivationSound() {
   if (typeof Audio === "undefined") return;
   const audio = new Audio(QUEEN_VOICE_ACTIVATION_SOUND_SRC);
   audio.volume = 0.72;
+  void audio.play().catch(() => undefined);
+}
+
+// A softer cue the moment Queen Bee starts working a tool call.
+function playQueenThinkingSound() {
+  if (typeof Audio === "undefined") return;
+  const audio = new Audio(QUEEN_VOICE_ACTIVATION_SOUND_SRC);
+  audio.volume = 0.4;
+  audio.playbackRate = 0.82;
   void audio.play().catch(() => undefined);
 }
 
@@ -57,10 +77,16 @@ function TranscriptTurns({
   turns,
   minimized,
   onToggleMinimize,
+  thinking,
+  thinkingLabel,
+  onShowDetail,
 }: {
   turns: QueenVoiceTurn[];
   minimized: boolean;
   onToggleMinimize: () => void;
+  thinking: boolean;
+  thinkingLabel: string;
+  onShowDetail: (detail: string) => void;
 }) {
   const panelRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -68,9 +94,9 @@ function TranscriptTurns({
     if (minimized) return;
     const panel = panelRef.current;
     if (panel) panel.scrollTop = panel.scrollHeight;
-  }, [turns, minimized]);
+  }, [turns, minimized, thinking]);
 
-  if (!turns.length) return null;
+  if (!turns.length && !thinking) return null;
   return (
     <div
       className={`${styles.transcriptPanel} ${minimized ? styles.transcriptPanelMinimized : ""}`}
@@ -107,8 +133,29 @@ function TranscriptTurns({
               >
                 {turn.text}
               </p>
+              {turn.detail ? (
+                <button
+                  type="button"
+                  className={styles.detailButton}
+                  onClick={() => onShowDetail(turn.detail ?? "")}
+                >
+                  <FileText size={12} aria-hidden="true" />
+                  Show what she found
+                </button>
+              ) : null}
             </div>
           ))}
+          {thinking ? (
+            <div className={styles.turn}>
+              <span className={`${styles.turnWho} ${styles.turnWhoQueen}`}>
+                Queen Bee
+              </span>
+              <p className={`${styles.turnText} ${styles.turnTextThinking}`}>
+                {thinkingLabel || "Checking"}
+                <span className={styles.thinkingDots} aria-hidden="true" />
+              </p>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
@@ -234,6 +281,25 @@ export function QueenBeeVoiceOverlay({
   const pipeline = useQueenBeeVoice(open && !realtimeMode, muted);
   const voiceState = realtimeMode ? realtime : pipeline;
 
+  // When Queen Bee starts working a tool call she goes silent for several
+  // seconds; cue a soft sound and a held filler line so the pause reads as
+  // "working", not "stuck".
+  const [thinkingFiller, setThinkingFiller] = React.useState("");
+  const [detailContent, setDetailContent] = React.useState<string | null>(null);
+  const prevPhaseRef = React.useRef<QueenVoicePhase>("starting");
+  React.useEffect(() => {
+    const previous = prevPhaseRef.current;
+    prevPhaseRef.current = voiceState.phase;
+    if (voiceState.phase === "thinking" && previous !== "thinking") {
+      setThinkingFiller(
+        QUEEN_THINKING_FILLERS[
+          Math.floor(Math.random() * QUEEN_THINKING_FILLERS.length)
+        ],
+      );
+      playQueenThinkingSound();
+    }
+  }, [voiceState.phase]);
+
   React.useEffect(() => {
     let unlisten: (() => void) | undefined;
     let disposed = false;
@@ -265,11 +331,14 @@ export function QueenBeeVoiceOverlay({
   React.useEffect(() => {
     if (!open) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      // The details modal closes first; a second Escape ends the chat.
+      if (detailContent !== null) setDetailContent(null);
+      else setOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+  }, [open, detailContent]);
 
   if (!open || typeof document === "undefined") return null;
 
@@ -285,7 +354,40 @@ export function QueenBeeVoiceOverlay({
           turns={voiceState.turns}
           minimized={minimized}
           onToggleMinimize={() => setMinimized((current) => !current)}
+          thinking={voiceState.phase === "thinking"}
+          thinkingLabel={thinkingFiller}
+          onShowDetail={setDetailContent}
         />
+        {detailContent !== null ? (
+          <div
+            className={styles.detailBackdrop}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Queen Bee details"
+            onClick={() => setDetailContent(null)}
+          >
+            <div
+              className={styles.detailModal}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className={styles.detailModalHeader}>
+                <span className={styles.detailModalTitle}>
+                  <Crown size={14} aria-hidden="true" />
+                  What Queen Bee found
+                </span>
+                <button
+                  type="button"
+                  className={styles.detailModalClose}
+                  onClick={() => setDetailContent(null)}
+                  aria-label="Close details"
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              </div>
+              <div className={styles.detailModalBody}>{detailContent}</div>
+            </div>
+          </div>
+        ) : null}
         {voicePickerOpen ? (
           <VoicePicker
             onVoiceChanged={() => {

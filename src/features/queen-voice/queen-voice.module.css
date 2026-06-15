@@ -203,6 +203,143 @@
   font-style: italic;
 }
 
+.turnTextThinking {
+  color: rgba(255, 186, 113, 0.9);
+  font-style: italic;
+  animation: queenVoiceThinkingBreath 1.4s ease-in-out infinite;
+}
+
+.thinkingDots::after {
+  content: "";
+  animation: queenVoiceThinkingDots 1.2s steps(4, end) infinite;
+}
+
+@keyframes queenVoiceThinkingBreath {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes queenVoiceThinkingDots {
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75% {
+    content: "...";
+  }
+}
+
+.detailButton {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 186, 113, 0.4);
+  background: rgba(255, 186, 113, 0.12);
+  color: #ffd1a1;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.detailButton:hover {
+  background: rgba(255, 186, 113, 0.22);
+  border-color: rgba(255, 186, 113, 0.7);
+}
+
+.detailBackdrop {
+  pointer-events: auto;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(4, 6, 10, 0.62);
+  backdrop-filter: blur(6px);
+}
+
+.detailModal {
+  display: flex;
+  flex-direction: column;
+  width: min(680px, calc(100vw - 64px));
+  max-height: min(72vh, 720px);
+  border-radius: 18px;
+  background: rgba(12, 14, 20, 0.97);
+  border: 1px solid rgba(255, 186, 113, 0.32);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.detailModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 186, 113, 0.18);
+}
+
+.detailModalTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ffba71;
+}
+
+.detailModalClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(235, 239, 250, 0.2);
+  background: rgba(235, 239, 250, 0.08);
+  color: rgba(235, 239, 250, 0.92);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.detailModalClose:hover {
+  background: rgba(235, 239, 250, 0.18);
+  border-color: rgba(235, 239, 250, 0.45);
+}
+
+.detailModalBody {
+  padding: 16px 18px 20px;
+  overflow-y: auto;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: rgba(235, 239, 250, 0.92);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .controlBar {
   pointer-events: auto;
   display: flex;

@@ -30,6 +30,8 @@ export type QueenBeeMessageInput = QueenBeeOptions & {
   agentId?: string | null;
   machineId?: string | null;
   fleetSnapshot?: QueenBeeFleetMachine[] | null;
+  /** Explicit worker-class hints for routing (e.g. ["code"]); defaults to []. */
+  skills?: string[] | null;
 };
 
 export type QueenBeeFleetMachine = {
@@ -207,7 +209,7 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   const createdAt = new Date().toISOString();
   const projectRegistry = await readQueenBeeProjectRegistry(input.vaultPath);
   const outcomes = await readQueenBeeOutcomeStats().catch(() => ({}));
-  const delegation = chooseQueenBeeDelegate({ title, body: message, skills: [], projectRegistry }, input.fleetSnapshot ?? [], { outcomes });
+  const delegation = chooseQueenBeeDelegate({ title, body: message, skills: input.skills ?? [], projectRegistry }, input.fleetSnapshot ?? [], { outcomes });
   const selectedAgentName = delegation.agent?.name || delegation.agent?.id || delegation.agent?.agentId;
   const selectedMachineName = delegation.machine?.device?.name || delegation.machine?.key;
 
@@ -218,7 +220,7 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
     status: mode === "plan" ? "ideas" : "ready",
     priority: input.priority || "normal",
     workspace: "scratch",
-    skills: ["hivemindos-coordination", delegation.workerClass],
+    skills: ["hivemindos-coordination", delegation.workerClass, ...(input.skills ?? [])],
     targetMachine: delegation.machine ? {
       key: delegation.machine.key || delegation.machine.device?.machineId || selectedMachineName || "unknown",
       name: selectedMachineName || "Unknown machine",

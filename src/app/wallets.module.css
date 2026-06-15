@@ -1167,20 +1167,43 @@
 
 .walletSkeletonPanel {
   pointer-events: none;
+  /* Skeleton palette — matched to the Fleet / Stake view tokens. */
+  --skeleton-base: rgba(148, 163, 184, 0.13);
+  --skeleton-sheen: rgba(94, 234, 212, 0.30);
+  --skeleton-sheen-honey: rgba(255, 212, 90, 0.22);
+  --skeleton-tile-border: rgba(148, 163, 184, 0.16);
+  --skeleton-tile-glow: rgba(45, 212, 191, 0.10);
 }
 
+/* A single shimmer bar. The base is a soft tinted fill; a narrow specular
+   highlight sweeps across on top, which reads as a polished glass shimmer
+   instead of the old muddy full-width band. */
 .walletSkeleton {
+  position: relative;
   display: inline-block;
   max-width: 100%;
+  overflow: hidden;
   border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(148, 163, 184, 0.10), rgba(94, 234, 212, 0.18), rgba(148, 163, 184, 0.10));
+  background: var(--skeleton-base);
+}
+
+.walletSkeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    var(--skeleton-sheen) 48%,
+    var(--skeleton-sheen-honey) 56%,
+    transparent 80%
+  );
   background-size: 220% 100%;
-  animation: walletSkeletonSweep 1.45s ease-in-out infinite;
+  animation: walletSkeletonSweep 1.6s ease-in-out infinite;
 }
 
 .walletSkeletonBlock {
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 .walletSkeletonCircle {
@@ -1195,13 +1218,24 @@
   width: 100%;
   min-height: 178px;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid var(--skeleton-tile-border);
   border-radius: 18px;
   background:
-    radial-gradient(circle at 50% -20%, rgba(45, 212, 191, 0.07), transparent 55%),
-    linear-gradient(180deg, rgba(15, 19, 27, 0.92), rgba(6, 9, 14, 0.94));
+    radial-gradient(circle at 50% -20%, var(--skeleton-tile-glow), transparent 55%),
+    linear-gradient(180deg, rgba(22, 28, 42, 0.62), rgba(16, 21, 31, 0.52));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
   padding: 18px 18px 16px;
+  animation: walletSkeletonBreathe 2.4s ease-in-out infinite;
 }
+
+/* Stagger the breathing so a grid of tiles shimmers like a wave rather than
+   pulsing in unison. nth-child keeps it data-free and layout-shift free. */
+.walletSkeletonTile:nth-child(2) { animation-delay: 0.18s; }
+.walletSkeletonTile:nth-child(3) { animation-delay: 0.36s; }
+.walletSkeletonTile:nth-child(4) { animation-delay: 0.54s; }
+.walletSkeletonTile:nth-child(5) { animation-delay: 0.72s; }
+.walletSkeletonTile:nth-child(6) { animation-delay: 0.9s; }
 
 .walletSkeletonTileHead,
 .walletSkeletonTileFoot {
@@ -1226,9 +1260,9 @@
 }
 
 .walletUsageSkeletonGrid > div {
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: rgba(16, 21, 31, 0.52);
   padding: 14px;
 }
 
@@ -1243,8 +1277,43 @@
 }
 
 @keyframes walletSkeletonSweep {
-  0% { background-position: 180% 0; }
-  100% { background-position: -80% 0; }
+  0% { background-position: 150% 0; }
+  100% { background-position: -50% 0; }
+}
+
+@keyframes walletSkeletonBreathe {
+  0%, 100% { opacity: 0.78; }
+  50% { opacity: 1; }
+}
+
+/* Respect reduced-motion: drop the sweep/breathe to a calm static tint. */
+@media (prefers-reduced-motion: reduce) {
+  .walletSkeleton::after { animation: none; }
+  .walletSkeletonTile { animation: none; }
+  .walletSkeleton {
+    background: linear-gradient(90deg, var(--skeleton-base), var(--skeleton-sheen), var(--skeleton-base));
+  }
+}
+
+/* Hive-light theme — warm honey-forward skeleton on the light surface. */
+:global(:root[data-theme="hive-light"]) .walletSkeletonPanel {
+  --skeleton-base: rgba(92, 75, 45, 0.16);
+  --skeleton-sheen: rgba(184, 130, 22, 0.30);
+  --skeleton-sheen-honey: rgba(255, 212, 90, 0.4);
+  --skeleton-tile-border: rgba(92, 75, 45, 0.28);
+  --skeleton-tile-glow: rgba(184, 130, 22, 0.14);
+}
+
+:global(:root[data-theme="hive-light"]) .walletSkeletonTile {
+  background:
+    radial-gradient(circle at 50% -20%, var(--skeleton-tile-glow), transparent 55%),
+    linear-gradient(180deg, rgba(248, 240, 220, 0.86), rgba(238, 226, 196, 0.7));
+  box-shadow: 0 16px 40px rgba(74, 56, 18, 0.16);
+}
+
+:global(:root[data-theme="hive-light"]) .walletUsageSkeletonGrid > div {
+  border-color: rgba(92, 75, 45, 0.22);
+  background: rgba(255, 250, 235, 0.55);
 }
 
 /* ─── Responsive ──────────────────────────────────────────────────── */

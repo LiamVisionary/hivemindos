@@ -34,6 +34,7 @@ Current auto-install set:
 - `hive-assimilate` for mandatory pre-build search across the shared brain, user projects, local/private indexes, and public GitHub before software creation.
 - `hive-pulse` for built-in last-30-days signal briefs across Reddit, X, YouTube, TikTok, Hacker News, Polymarket, GitHub, and web sources. It bundles the pinned MIT licensed `mvanhorn/last30days-skill` engine with Hive-facing instructions, audit notes, a setup-installed command shim, and a local deterministic default path for out-of-the-box use.
 - `hive-capability-search`, `hive-skill-fusion`, `hive-workflow-fusion`, and `hive-aeon-fusion` for capability discovery and reusable hive workflows.
+- `hive-brain-memory` for typed Shared Brain Memory recall, durable writes, and memory evolution with superseded-history preservation.
 - `hive-brain-compiled-wiki` for HivemindOS compiled-brain entity/concept/summary writes, compiled-wiki search, graph-native MCP reads, wiki health, and shared-brain contribution contracts.
 - Obsidian Native Brain Pack: `obsidian-markdown`, `obsidian-bases`, `json-canvas`, and optional `defuddle`, curated from `kepano/obsidian-skills` so agents can write Obsidian-native notes, Bases, Canvas maps, and clean web-source markdown.
 

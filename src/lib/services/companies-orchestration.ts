@@ -1,8 +1,9 @@
 import "server-only";
 
 import type { Company } from "@/lib/types/company";
-import { decomposePrdToTaskDrafts } from "@/lib/services/queen-bee/prd-decomposition";
+import { decomposePrdToTaskDrafts, type QueenBeePrdTaskDraft } from "@/lib/services/queen-bee/prd-decomposition";
 import { submitQueenBeeMessage, type QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
+import { llmDecomposeApexGoal } from "@/lib/services/companies-goal-planner";
 
 /**
  * Company orchestration bridge: turn a company's apex goal into a per-role work
@@ -41,17 +42,23 @@ export function scopeFleetToMembers(fleet: QueenBeeFleetMachine[], agentIds: str
   return scoped;
 }
 
-/** Mirror of the queen-bee router's chat-capability gate (kept dependency-free). */
+/**
+ * Mirror of queen-bee/router.ts `isChatCapable` EXACTLY (keep in sync). The
+ * driver's dispatchable-member count MUST match who the router will actually
+ * delegate to — otherwise we'd count agents the router leaves "pending" and
+ * keep re-dispatching "queen-bee" tasks that never execute. Only `hermes`
+ * runtime or an explicit chat capability flag qualifies.
+ */
 function isMemberChatCapable(
   agent: NonNullable<QueenBeeFleetMachine["agents"]>[number],
   machineCapabilities?: Record<string, unknown>,
 ): boolean {
-  const runtime = (agent.runtime || "").toLowerCase();
-  if (runtime === "hermes" || runtime === "aeon" || runtime === "openclaw") return true;
-  if (agent.runtimeCapabilities?.chat) return true;
-  if (agent.collectorCapabilities?.chat) return true;
-  if (machineCapabilities?.chat) return true;
-  return false;
+  return (
+    agent.runtime === "hermes" ||
+    agent.runtimeCapabilities?.chat === true ||
+    agent.collectorCapabilities?.chat === true ||
+    machineCapabilities?.chat === true
+  );
 }
 
 /** How many member agents are online AND chat-capable (i.e. can actually run work now). */
@@ -111,13 +118,15 @@ export type CompanyDispatchResult = {
   delegatedCount: number;
   pickupCount: number;
   dispatchableMembers: number;
+  /** "llm" when the LLM brain authored the plan, "heuristic" when it fell back. */
+  planner: "llm" | "heuristic";
   tasks: CompanyDispatchTask[];
 };
 
 export async function dispatchCompanyGoal(
   company: Company,
   fleetSnapshot: QueenBeeFleetMachine[],
-  opts: { maxTasks?: number } = {},
+  opts: { maxTasks?: number; origin?: string; vaultPath?: string } = {},
 ): Promise<CompanyDispatchResult> {
   const goal = company.apexGoal?.title?.trim();
   if (!goal) throw new Error("Set an apex goal before launching work.");
@@ -125,8 +134,22 @@ export async function dispatchCompanyGoal(
 
   const scoped = scopeFleetToMembers(fleetSnapshot, company.agentIds);
   const dispatchableMembers = countDispatchableMembers(scoped);
-  const { prd, title } = buildApexBrief(company);
-  const { drafts } = decomposePrdToTaskDrafts(prd, { title, maxTasks: Math.max(1, Math.min(opts.maxTasks ?? 6, 8)) });
+  const maxTasks = Math.max(1, Math.min(opts.maxTasks ?? 6, 8));
+
+  // Prefer an LLM-authored, goal-specific plan via queen-bee's brain order
+  // (the company's own agent first, then OpenAI). Fall back to the deterministic
+  // per-role heuristic brief when no brain is reachable, so dispatch never blocks.
+  let drafts: QueenBeePrdTaskDraft[];
+  let planner: "llm" | "heuristic";
+  const llmDrafts = await llmDecomposeApexGoal(company, { origin: opts.origin, vaultPath: opts.vaultPath, maxTasks }).catch(() => null);
+  if (llmDrafts && llmDrafts.length > 0) {
+    drafts = llmDrafts;
+    planner = "llm";
+  } else {
+    const { prd, title } = buildApexBrief(company);
+    drafts = decomposePrdToTaskDrafts(prd, { title, maxTasks }).drafts;
+    planner = "heuristic";
+  }
 
   // A per-dispatch run id keeps each explicit "Launch / Re-launch" a fresh queen-bee
   // intent (distinct fingerprint) so it actually creates tasks + schedules pickup,
@@ -146,6 +169,8 @@ export async function dispatchCompanyGoal(
         priority: "high",
         source: `company:${company.id}:${runId}`,
         fleetSnapshot: scoped,
+        skills: draft.skills,
+        vaultPath: opts.vaultPath,
       });
       tasks.push({
         taskId: result.task.id,
@@ -166,6 +191,7 @@ export async function dispatchCompanyGoal(
     delegatedCount: tasks.filter((t) => t.delegated).length,
     pickupCount: tasks.filter((t) => t.pickupScheduled).length,
     dispatchableMembers,
+    planner,
     tasks,
   };
 }

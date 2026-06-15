@@ -15,9 +15,11 @@ import type {
   Approval,
   Colony,
   CompanyStatus,
+  CreateForm,
   GovEvent,
   Issue,
   IssueStatus,
+  MetricUnit,
   PoolAgent,
   Priority,
   Role,
@@ -440,5 +442,17 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
     frozen: company.frozen,
     lastDispatchedAt: company.lastDispatchedAt,
     hasApexGoal: Boolean(company.apexGoal?.title?.trim()),
+    autonomy: Boolean(company.autonomy),
+    // Raw values for the edit form — the user's own input, not the derived
+    // display fallbacks (`apex`, formatted target, etc.).
+    edit: {
+      name: safeName,
+      ticker,
+      sector: company.sector || "",
+      apexTitle: company.apexGoal?.title || "",
+      apexMetric: company.apexGoal?.metric || "",
+      apexTarget: company.apexGoal?.target || "",
+      metricUnit: (company.apexGoal?.unit as MetricUnit) || "number",
+    } satisfies CreateForm,
   };
 }

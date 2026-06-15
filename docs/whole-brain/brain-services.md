@@ -48,7 +48,7 @@ Access paths:
 | HivemindOS-managed chat runtimes | Runtime context injection plus `/api/brain/memory` | The app recalls before dispatching supported runtime turns. |
 | Raw Codex, Hermes, Gemini, OpenClaw, Aeon, or shell agents | `hive-brain answer "<query>"` | The CLI tries the local API, then falls back to local vault/index search. |
 | Raw Claude Code | `hive-brain-hook` registered as `UserPromptSubmit`, plus the same `hive-brain` CLI | The hook injects relevant context before Claude answers, including full-vault hits outside Agent Memory. |
-| Durable memory writes | `/api/brain/memory` or `hive-brain remember ...` | Writes are typed notes in Agent Memory with optional GitLawb receipts. |
+| Durable memory writes | `/api/brain/memory`, `hive-brain remember ...`, or `hive-brain evolve ...` | Writes are typed notes in Agent Memory with optional GitLawb receipts; evolved writes preserve superseded history. |
 
 The raw-agent rule is deliberate: agents should not need to know which port the dashboard is using, and they should still recall when the dashboard is not running.
 
@@ -123,6 +123,7 @@ All content searches over the vault and conversations use ripgrep (`rg`) first, 
 The API supports:
 
 - `remember`: save a typed memory note.
+- `evolve`: save a new active memory while marking older Agent Memory notes as `superseded`.
 - `recall`: retrieve relevant shared-brain memories and vault notes by query, type, tags, project, and optional `scope`.
 - `answer`: return a grounded memory context pack from the matching memories and vault notes.
 - `rebuild-index`: scan existing markdown memory notes, append rich searchable entries to the private typed-memory index, and refresh the generated full-vault lexical index unless `includeFullVault: false` is passed.
@@ -135,7 +136,10 @@ The CLI mirrors the same recall path for non-managed agents:
 hive-brain answer "what does the user prefer here?"
 hive-brain recall "BYOK Agent Calls" --scope full-vault --limit 5
 hive-brain remember --type preference --title "Short title" --content "Durable memory body"
+hive-brain evolve --memory-id mem-... --content "Updated durable memory body"
 ```
+
+Memory evolution keeps agent memory from becoming a pile of contradictory notes. A normal `remember` call is the fast System 1 capture path. When a later reviewed fact, preference, instruction, or decision replaces an older one, callers use `action: "evolve"` with `memoryId` or `supersedes`. HivemindOS writes a new active note with `cognitiveStage: "system2"`, records `supersedes`, `supersededBy`, `evolutionRootId`, `evolutionType`, and optional `evolutionReason`, then appends replacement rows to `Agent Memory Index.jsonl`. Recall and answer return the latest active chain head while including prior versions as `evolutionChain` evidence.
 
 The prompt hook is intentionally small and local:
 

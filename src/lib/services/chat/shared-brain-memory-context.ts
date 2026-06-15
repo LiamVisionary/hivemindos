@@ -14,7 +14,7 @@ export async function buildSharedBrainMemoryContext(sharedVault: SharedVaultConf
       "Relevant shared-brain memories:",
       result.answer,
       "",
-      "Use these memories and vault notes as durable user/project context. If they conflict with the current user message, the current user message wins and the conflict should be noted.",
+      "Use these memories and vault notes as durable user/project context. Evolved memories show the latest memory plus prior versions; treat the latest active version as current unless the user corrects it. If they conflict with the current user message, the current user message wins and the conflict should be noted.",
     ].join("\n");
   } catch (error) {
     return [

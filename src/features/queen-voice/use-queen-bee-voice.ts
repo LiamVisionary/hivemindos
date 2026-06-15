@@ -20,6 +20,8 @@ export type QueenVoiceTurn = {
   who: "you" | "queen";
   text: string;
   live?: boolean;
+  /** Richer findings (markdown) Queen Bee pulled, shown in a modal on demand. */
+  detail?: string;
 };
 
 type VoiceTurnResponse = {

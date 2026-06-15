@@ -52,6 +52,7 @@ The HivemindOS Hive skills are included by default:
 | `hive-skill-fusion` | Turns a capability request into a reusable shared-brain skill. |
 | `hive-workflow-fusion` | Composes multi-step hive workflows from skills, apps, agents, and tools. |
 | `hive-aeon-fusion` | Converts reusable hive workflows into AEON-ready agent duties when appropriate. |
+| `hive-brain-memory` | Teaches agents the typed Shared Brain Memory workflow: recall, durable writes, and memory evolution with superseded-history preservation. |
 | `hive-brain-compiled-wiki` | Teaches agents the HivemindOS compiled-brain workflow: entity/concept/summary writes, compiled-wiki search, graph-native MCP reads, wiki health, and human collective shared-brain contribution rules. |
 
 The Obsidian Native Brain Pack is also included by default:

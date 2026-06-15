@@ -27,8 +27,14 @@ new dependencies (raw Telegram Bot API over fetch, viem for Base).
 | `/linkwallet 0x…` | anywhere | register the wallet you deposit from (required; max 5) |
 | `/deposit` | anywhere | treasury address + rules |
 | `/withdraw 25 0x…` | DM only | queued on-chain send, DM'd tx link |
-| `/leaderboard [week]` | group | top tippers/receivers in that chat |
-| `/pause` `/resume` `/approve <id>` `/reject <id>` `/botstats` | admin | controls + solvency check |
+| `/leaderboard [week]` | group | rich-table top tippers/receivers in that chat |
+| `/bounty create <title> \| reward <amount> \| due <date optional>` | group/DM | lock a creator reward into a community bounty |
+| `/bounties` | group/DM | rich-table active bounty board |
+| `/bounty <id>` | group/DM | bounty detail, pot, submissions, and status |
+| `/boost <id> <amount>` | group/DM | debit your internal balance and lock it into the bounty escrow |
+| `/submit <id> <url or note>` | group/DM | submit work for admin review |
+| `/accept <id> @user` `/refund <id> [dispute]` | admin | pay a winner, refund escrow, or mark a dispute |
+| `/pause` `/resume` `/approve <id>` `/reject <id>` `/botstats` `/bountystats` | admin | controls + solvency/checks |
 
 ## Custody modes (withdrawals)
 
@@ -60,8 +66,37 @@ to migrate from.
 - **Claim links:** tipping an unknown `@name` escrows the amount and posts a
   `t.me/<bot>?start=claim_…` button. Unclaimed tips auto-refund after
   `TELEGRAM_TIP_BOT_CLAIM_TTL_HOURS` (default 168 = 7 days).
+- **Bounties:** `/bounty create` debits the creator reward into the local
+  ledger escrow. `/boost` debits boosters into the same escrow. `/accept`
+  credits the full pot to the selected winner's internal balance; withdrawals
+  still use the normal Base/Bankr rails. `/refund` returns the creator reward
+  and each active boost exactly by ledger entry. Due-date expiry uses the same
+  refund path.
 - **Withdrawals:** debit immediately, queue, send with 3 retries, refund on
   final failure or admin rejection.
+
+## Community bounties and alpha rooms
+
+Bounties are v0 off-chain escrow, not on-chain smart-contract escrow. The
+treasury must remain solvent for all user balances, open claims, queued
+withdrawals, and active bounty pots; `/botstats` includes bounty escrow in
+liabilities. Admins are responsible for acceptance, refunds, and disputes at
+launch. Marking a bounty disputed keeps escrow locked until an admin resolves
+it by policy.
+
+Use $HIVE-only access for community/alignment surfaces: governance signaling,
+holder identity/status badges, curator eligibility, bounty boosting, and
+early-access alpha rooms. Alpha rooms are early access and community status
+channels, including zero-human company monetization workflows; they are not
+permanent product lockouts. Paid product features should still have non-crypto
+paths such as card, fiat subscriptions, managed HONEY credits, or fiat-backed
+plans.
+
+`/leaderboard`, `/bounties`, and `/bountystats` render Claw-light themed PNG
+cards first so Telegram can show the warm cream/terracotta palette exactly. If
+image rendering or upload fails, the bot falls back to Telegram Bot API 10.1
+`sendRichMessage` tables (`<table bordered striped>`), then simple HTML
+`sendMessage` output.
 
 ## Guardrails
 
@@ -83,4 +118,5 @@ node --test scripts/test-telegram-tip-bot.mjs
 ```
 
 Covers tip atomicity, claim lifecycle/expiry, deposit idempotency, withdrawal
-review/refund flows, leaderboard windows, and the liabilities invariant.
+review/refund flows, leaderboard windows, bounty lifecycle/refunds, rich-table
+escaping, and the liabilities invariant.

@@ -194,6 +194,39 @@ export function ZeroHumanCompaniesView() {
     return result.company?.id ?? null;
   }, [membersFromCrew, refresh]);
 
+  const handleEditCompany = React.useCallback(async (companyId: string, form: CreateForm): Promise<void> => {
+    // Identity + apex-goal edit only — crew, budget, and tracked progress are
+    // preserved (upsert merges; omitted fields keep their existing values).
+    setBusyId(companyId);
+    try {
+      const existing = data.find((e) => e.company.id === companyId)?.company;
+      // Always send apexGoal: when all three fields are blank the store normalizes
+      // it to undefined (clears the goal); otherwise we keep the tracked
+      // current/progress so editing the wording doesn't reset the metric.
+      const apexGoal = {
+        title: form.apexTitle || undefined,
+        metric: form.apexMetric || undefined,
+        target: form.apexTarget || undefined,
+        unit: form.metricUnit,
+        current: existing?.apexGoal?.current,
+        progress: existing?.apexGoal?.progress,
+      };
+      const result = await postCompanies({
+        action: "upsert",
+        id: companyId,
+        name: form.name,
+        ticker: form.ticker || undefined,
+        sector: form.sector || undefined,
+        apexGoal,
+      });
+      if (!result.ok) setError(result.error || "Could not save changes.");
+      else setError(null);
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [data, refresh]);
+
   const handleAddAgents = React.useCallback(async (companyId: string, crew: Agent[]): Promise<void> => {
     // Server-authoritative additive merge — no read-merge-write race. reportsTo is
     // left null; the org chart recomputes it to the company's Queen on render.
@@ -273,12 +306,26 @@ export function ZeroHumanCompaniesView() {
         const d = json.dispatch ?? {};
         const n = d.taskCount ?? 0;
         const live = d.dispatchableMembers ?? 0;
+        const plan = d.planner === "llm" ? "AI-planned" : "auto-planned";
         setNotice(
           live > 0
-            ? `Launched ${n} task${n === 1 ? "" : "s"} to ${live} online agent${live === 1 ? "" : "s"} — work is running now.`
-            : `Queued ${n} task${n === 1 ? "" : "s"} on the board. No member agents are online yet; they'll start as soon as one comes online.`,
+            ? `Launched ${n} ${plan} task${n === 1 ? "" : "s"} to ${live} online agent${live === 1 ? "" : "s"} — autonomy is running; it keeps working until you stop it.`
+            : `Queued ${n} ${plan} task${n === 1 ? "" : "s"}. Autonomy is on — work starts as soon as a member agent comes online.`,
         );
       }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [refresh]);
+
+  const handleStopAutonomy = React.useCallback(async (companyId: string) => {
+    setBusyId(companyId);
+    setNotice(null);
+    try {
+      const result = await postCompanies({ action: "stop-autonomy", id: companyId });
+      if (!result.ok) setError(result.error || "Could not stop autonomy.");
+      else { setError(null); setNotice("Autonomy stopped — in-flight tasks finish, no new work will be dispatched."); }
       await refresh();
     } finally {
       setBusyId(null);
@@ -295,12 +342,14 @@ export function ZeroHumanCompaniesView() {
       busyId={busyId}
       onRefresh={() => void refresh()}
       onCreateCompany={handleCreateCompany}
+      onEditCompany={handleEditCompany}
       onAddAgents={handleAddAgents}
       onApprove={(_companyId, approvalId) => void decideApproval(approvalId, "approved")}
       onReject={(_companyId, approvalId) => void decideApproval(approvalId, "denied")}
       onFreeze={(companyId, frozen) => void handleFreeze(companyId, frozen)}
       onDelete={(companyId) => void handleDelete(companyId)}
       onDispatch={(companyId) => void handleDispatch(companyId)}
+      onStopAutonomy={(companyId) => void handleStopAutonomy(companyId)}
     />
   );
 }

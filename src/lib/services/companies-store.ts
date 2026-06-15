@@ -278,6 +278,7 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     revenue: input.revenue !== undefined ? normalizeRevenue(input.revenue) : existing?.revenue,
     members: members ?? undefined,
     lastDispatchedAt: existing?.lastDispatchedAt,
+    autonomy: existing?.autonomy,
   };
 
   const next = existing
@@ -293,6 +294,17 @@ export async function markCompanyDispatched(id: string, when = Date.now()): Prom
   const company = records.find((record) => record.id === id);
   if (!company) return null;
   company.lastDispatchedAt = when;
+  company.updatedAt = new Date().toISOString();
+  await writeRaw(records);
+  return company;
+}
+
+/** Turn perpetual autonomy on/off for a company (the driver's per-company gate). */
+export async function setCompanyAutonomy(id: string, enabled: boolean): Promise<Company | null> {
+  const records = await readRaw();
+  const company = records.find((record) => record.id === id);
+  if (!company) return null;
+  company.autonomy = enabled;
   company.updatedAt = new Date().toISOString();
   await writeRaw(records);
   return company;

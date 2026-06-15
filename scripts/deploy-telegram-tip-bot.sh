@@ -47,7 +47,7 @@ ssh "${SSH_OPTS[@]}" "$HOST" bash -s <<REMOTE || die "remote build/restart faile
 set -euo pipefail
 cd "$REMOTE_DIR"
 npx -y esbuild@0.25.5 scripts/telegram-tip-bot-daemon.mjs \
-  --bundle --platform=node --format=esm --alias:@=./src \
+  --bundle --platform=node --format=esm --packages=external --alias:@=./src \
   --alias:server-only=./scripts/shims/empty.mjs \
   --banner:js='import { createRequire } from "node:module"; const require = createRequire(import.meta.url);' \
   --outfile=dist/telegram-tip-bot.mjs

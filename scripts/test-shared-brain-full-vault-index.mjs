@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -57,6 +57,40 @@ const index = await readFile(indexPath, "utf8");
 assert.match(index, /hivemindos\.full-vault-search\.v1/);
 assert.match(index, /"collection":"projects"/);
 
+await appendFile(indexPath, `${JSON.stringify({
+  schema: "hivemindos.full-vault-search.v1",
+  path: "Skills/missing-stale-skill/SKILL.md",
+  collection: "skills",
+  title: "Missing stale skill",
+  headings: ["Missing stale skill"],
+  tags: [],
+  mtimeMs: Date.now(),
+  size: 100,
+  documentLength: 6,
+  terms: { missing: 2, stale: 2, skill: 2 },
+  excerpt: "This generated row points at a missing file.",
+})}\n`, "utf8");
+
+const staleResult = spawnSync("node", [
+  "scripts/hive-brain",
+  "answer",
+  "missing stale skill",
+  "--no-api",
+  "--vault",
+  vault,
+  "--scope",
+  "full-vault",
+  "--limit",
+  "3",
+], {
+  cwd: root,
+  encoding: "utf8",
+  timeout: 20_000,
+});
+assert.equal(staleResult.status, 0, staleResult.stderr || staleResult.stdout);
+assert.doesNotMatch(staleResult.stdout, /ENOENT/);
+assert.match(staleResult.stdout, /No matching shared-brain memories or vault notes were found|Recall scope:/);
+
 for (const [path, tokens] of [
   ["src/lib/services/obsidian/full-vault-search-index.ts", [
     "FULL_VAULT_SEARCH_INDEX_PATH",
@@ -76,6 +110,7 @@ for (const [path, tokens] of [
     "FULL_VAULT_INDEX_PATH",
     "searchFullVaultIndex",
     "collections.push",
+    "fs.existsSync(file)",
   ]],
 ]) {
   const content = await readFile(join(root, path), "utf8");

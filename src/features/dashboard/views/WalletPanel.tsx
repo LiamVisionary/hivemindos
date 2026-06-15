@@ -3,28 +3,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, Dispatch, ElementType, SetStateAction } from "react";
 import Image from "next/image";
-import { Check, Copy, Download as DownloadIcon, KeyRound, List, Plus, RefreshCcw as RefreshIcon, Send, Shuffle, WalletCards, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Check, Copy, Download as DownloadIcon, KeyRound, List, LockKeyhole, Plus, RefreshCcw as RefreshIcon, Send, Shuffle, WalletCards, X } from "lucide-react";
 import type { AgentWalletCardProps } from "@/components/wallet/AgentWalletCard";
 import type { AgentWalletCardCompactProps } from "@/components/wallet/AgentWalletCardCompact";
 import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { AgentPaymentProvider, AgentSurvivalSnapshot, AgentWalletConfig, AgentWalletTokenBalance, HoneyAgentReward } from "@/lib/types/agent-wallet";
 import { resolveAgentWallet } from "@/lib/utils/agent-wallet";
+import { isBaseHiveTokenLike, switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import type { DashboardView, RuntimeUsageAnalytics, WalletActionState, WalletMoneyClawStatus, WalletVaultBackupStatus } from "@/features/dashboard/dashboard-types";
 import { exportAgentWalletSecret, exportPersonalWalletGroupSecret } from "./wallet-secret-export-actions";
-import { PersonalWalletsChecking, WalletUsageLoading } from "./WalletPanelLoading";
+import { AgentWalletsChecking, PersonalWalletsChecking, WalletUsageLoading } from "./WalletPanelLoading";
 import personalStyles from "./PersonalWallets.module.css";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
-
 type WalletStats = {
   enabled: number;
   balance: number;
   critical: number;
 };
-
 type HoneyStats = {
   totalHoney: number;
   availableHoney: number;
@@ -35,28 +35,23 @@ type HoneyStats = {
   rewardPoolSharePercent: number;
   hivePerMillionTokens: number;
 };
-
 type PaymentProviderCopy = Record<AgentPaymentProvider, {
   label: string;
   summary: string;
   setup: string;
 }>;
-
 type IconComponent = ElementType<{
   "aria-hidden"?: boolean | "true" | "false";
   className?: string;
   height?: number;
   width?: number;
 }>;
-
 type EthereumProvider = {
   request: (input: { method: string; params?: unknown[] }) => Promise<unknown>;
 };
-
 type WalletWindow = Window & {
   ethereum?: EthereumProvider;
 };
-
 type PersonalWallet = {
   id: string;
   name: string;
@@ -72,7 +67,6 @@ type PersonalWallet = {
   createdAt: number;
   updatedAt: number;
 };
-
 type PersonalWalletVaultInfo = {
   agentId: string;
   id?: string;
@@ -187,6 +181,7 @@ type WalletPanelProps = {
   getSurvivalSnapshot: (wallet: AgentWalletConfig) => AgentSurvivalSnapshot;
   honeyLedgerEnabled: boolean;
   honeyStats: HoneyStats;
+  hydrated: boolean;
   initializeCoreWalletRails: (agentId: string) => Promise<void>;
   moneyClawStatusByEnvName: Record<string, WalletMoneyClawStatus | null | undefined>;
   refreshRuntimeUsage: () => void | Promise<void>;
@@ -381,7 +376,7 @@ function personalWalletFromVaultInfo(wallet: PersonalWalletVaultInfo): PersonalW
 }
 
 export function WalletPanel(props: WalletPanelProps) {
-  const { AGENT_PAYMENT_PROVIDER_COPY, AgentWalletCard, AgentWalletCardCompact, Button, ChevronLeft, Download, HandCoins, LoaderCircle, RUNTIME_LABELS, RefreshCcw, activeView, claimAllHoneyToBankrHive, copyPaymentPrompt, createLocalWallet, displayAgents, enableHoneyLedger, exportWalletSecrets, formatHiveAmount, formatRelativeTime, getSurvivalSnapshot, honeyLedgerEnabled, honeyStats, initializeCoreWalletRails, moneyClawStatusByEnvName, refreshRuntimeIntegrations, refreshRuntimeUsage, refreshWalletBalance, renderAgentKey, resetWalletBurnClock, returnAllHiveToHoney, runWalletVaultBackupAction, runtimeUsage, runtimeUsageLoading, saveMoneyClawKey, selectedAgent, selectedHoneyReward, selectedWallet, selectedWalletSnapshot, sharedVault, sendWalletUsdc, setSelectedAgentId, setWalletExpanded, setWalletPanelMode, testX402Fetch, updateAgentProfile, updateWallet, updateWalletAction, vaultClass, walletActionsByAgent, walletClass, walletExpanded, walletPanelMode, walletStats, walletVaultBackupBusy, walletVaultBackupMessage, walletVaultBackupStatus, walletsByAgent } = props;
+  const { AGENT_PAYMENT_PROVIDER_COPY, AgentWalletCard, AgentWalletCardCompact, Button, ChevronLeft, Download, HandCoins, LoaderCircle, RUNTIME_LABELS, RefreshCcw, activeView, claimAllHoneyToBankrHive, copyPaymentPrompt, createLocalWallet, displayAgents, enableHoneyLedger, exportWalletSecrets, formatHiveAmount, formatRelativeTime, getSurvivalSnapshot, honeyLedgerEnabled, honeyStats, hydrated, initializeCoreWalletRails, moneyClawStatusByEnvName, refreshRuntimeIntegrations, refreshRuntimeUsage, refreshWalletBalance, renderAgentKey, resetWalletBurnClock, returnAllHiveToHoney, runWalletVaultBackupAction, runtimeUsage, runtimeUsageLoading, saveMoneyClawKey, selectedAgent, selectedHoneyReward, selectedWallet, selectedWalletSnapshot, sharedVault, sendWalletUsdc, setSelectedAgentId, setWalletExpanded, setWalletPanelMode, testX402Fetch, updateAgentProfile, updateWallet, updateWalletAction, vaultClass, walletActionsByAgent, walletClass, walletExpanded, walletPanelMode, walletStats, walletVaultBackupBusy, walletVaultBackupMessage, walletVaultBackupStatus, walletsByAgent } = props;
   const refreshedUsePodAgentIds = useRef<Set<string>>(new Set());
   const [bankrClaimBusy, setBankrClaimBusy] = useState(false);
   const [bankrConnectBusy, setBankrConnectBusy] = useState(false);
@@ -401,9 +396,15 @@ export function WalletPanel(props: WalletPanelProps) {
   const [personalRecoveryWords, setPersonalRecoveryWords] = useState(() => emptyRecoveryPhraseWords());
   const [personalImportStatus, setPersonalImportStatus] = useState("");
   const [copiedAddressKey, setCopiedAddressKey] = useState("");
+  const [stakeRouteOpening, setStakeRouteOpening] = useState(false);
   const autoRefreshPersonalWalletsRef = useRef(new Set<string>());
+  const router = useRouter();
   const nativeDesktopRuntime = useMemo(() => isTauriDesktopRuntime(), []);
   const bankrRecipientReady = /^0x[a-fA-F0-9]{40}$/.test(bankrRecipientAddress.trim());
+  const showPersonalWalletsChecking = personalWalletsChecking
+    && activeView === "wallet"
+    && walletPanelMode === "wallets";
+  const openStakeRoute = useCallback(() => { setStakeRouteOpening(true); window.setTimeout(() => router.push("/stake"), 0); }, [router]);
   const effectiveSelectedWallet = selectedAgent && selectedWallet ? resolveAgentWallet(selectedAgent, selectedWallet) : selectedWallet;
   const effectiveSelectedWalletSnapshot = effectiveSelectedWallet ? getSurvivalSnapshot(effectiveSelectedWallet) : selectedWalletSnapshot;
   const agentWalletRows = useMemo<AgentWalletRow[]>(() => (
@@ -463,7 +464,12 @@ export function WalletPanel(props: WalletPanelProps) {
 
   useEffect(() => {
     if (activeView !== "wallet" || walletPanelMode !== "wallets") return;
+    router.prefetch("/stake");
     let cancelled = false;
+    // A new load is starting: show the skeleton until this run commits or
+    // definitively settles. Without this reset, re-entering the wallets view
+    // would leave the flag false from a prior run and skip the skeleton.
+    setPersonalWalletsChecking(true);
     async function loadPersonalWalletVault() {
       const params = sharedVault.vaultPath.trim() ? `?vaultPath=${encodeURIComponent(sharedVault.vaultPath.trim())}` : "";
       const response = await fetch(`/api/wallet/personal${params}`, { headers: { accept: "application/json" } }).catch(() => null);
@@ -471,7 +477,10 @@ export function WalletPanel(props: WalletPanelProps) {
         ok?: boolean;
         wallets?: PersonalWalletVaultInfo[];
       } | null;
-      if (cancelled || !response?.ok || !data?.ok || !Array.isArray(data.wallets)) return;
+      // The effect re-ran (view/mode/vaultPath changed) before this settled; the
+      // newer run owns the checking flag, so leave it alone here.
+      if (cancelled) return;
+      if (!response?.ok || !data?.ok || !Array.isArray(data.wallets)) return;
       const vaultWallets = data.wallets
         .map(personalWalletFromVaultInfo)
         .filter((wallet): wallet is PersonalWallet => Boolean(wallet));
@@ -482,13 +491,18 @@ export function WalletPanel(props: WalletPanelProps) {
         return fresh.length ? [...fresh, ...current] : current;
       });
     }
+    // Only clear the skeleton once the load has actually settled for THIS run.
+    // A cancelled run (effect re-ran mid-flight) must not flip the flag off, or
+    // the skeleton vanishes while the newer load is still in flight and content
+    // is not yet committed.
     void loadPersonalWalletVault().finally(() => {
-      if (!cancelled) setPersonalWalletsChecking(false);
+      if (cancelled) return;
+      setPersonalWalletsChecking(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [activeView, sharedVault.vaultPath, walletPanelMode]);
+  }, [activeView, router, sharedVault.vaultPath, walletPanelMode]);
 
   const persistPersonalWalletRecords = useCallback((wallets: PersonalWallet[]) => {
     const vaultPath = sharedVault.vaultPath.trim() || undefined;
@@ -535,20 +549,7 @@ export function WalletPanel(props: WalletPanelProps) {
         return;
       }
 
-      await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x2105" }] }).catch(async (error: unknown) => {
-        const code = typeof error === "object" && error && "code" in error ? Number(error.code) : 0;
-        if (code !== 4902) return;
-        await provider.request({
-          method: "wallet_addEthereumChain",
-          params: [{
-            chainId: "0x2105",
-            chainName: "Base",
-            nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-            rpcUrls: ["https://mainnet.base.org"],
-            blockExplorerUrls: ["https://basescan.org"],
-          }],
-        });
-      });
+      await switchBrowserWalletToBase(provider);
 
       setBankrRecipientAddress(address);
       void saveDashboardStateValue(BANKR_RECIPIENT_STORAGE_KEY, address);
@@ -829,8 +830,8 @@ export function WalletPanel(props: WalletPanelProps) {
     };
     updatePersonalWallet(wallet.id, updatedWallet);
     persistPersonalWalletRecords([updatedWallet]);
-    const tokenCount = data.balance.tokens?.length ?? 0;
-    updatePersonalAction(wallet.id, { busy: false, error: "", message: tokenCount > 2 ? `Portfolio refreshed: ${tokenCount} tokens.` : "Portfolio refreshed." });
+  const tokenCount = data.balance.tokens?.length ?? 0;
+  updatePersonalAction(wallet.id, { busy: false, error: "", message: tokenCount > 2 ? `Portfolio refreshed: ${tokenCount} tokens.` : "Portfolio refreshed." });
   }, [persistPersonalWalletRecords, updatePersonalAction, updatePersonalWallet]);
 
   useEffect(() => {
@@ -1005,6 +1006,7 @@ export function WalletPanel(props: WalletPanelProps) {
                     <p>Personal wallets stay above agent wallets and can quick-send to any saved user or agent address.</p>
                   </div>
                   <div className={personalClass("personalWalletActions")}>
+                    <button type="button" className={personalClass("personalStakeRouteLink")} onClick={openStakeRoute} disabled={stakeRouteOpening}><LockKeyhole aria-hidden="true" /> {stakeRouteOpening ? "Opening..." : "Stake HIVE"}</button>
                     <Button
                       type="button"
                       size="sm"
@@ -1211,21 +1213,29 @@ export function WalletPanel(props: WalletPanelProps) {
                             </button>
                           </div>
                           <div className={personalClass("personalTokenList")} aria-label={`${group.name} tokens`}>
-                            {tokenRows.map((token) => (
-                              <div key={`${token.network}-${token.isNative ? "native" : token.tokenAddress || token.symbol}`} className={personalClass("personalTokenRow")}>
-                                <PersonalTokenIcon token={token} />
-                                <div>
-                                  <strong>{token.symbol}</strong>
-                                  <span>{networkLabel(token.network)} · {formatToken(token.balance)} {token.name}</span>
+                            {tokenRows.map((token) => {
+                              const canStakeHive = isBaseHiveTokenLike(token);
+                              return (
+                                <div key={`${token.network}-${token.isNative ? "native" : token.tokenAddress || token.symbol}`} className={personalClass("personalTokenRowWrap")}>
+                                  <div className={personalClass("personalTokenRow", canStakeHive && "personalTokenRowWithAction")}>
+                                    <PersonalTokenIcon token={token} />
+                                    <div className={personalClass("personalTokenMeta")}>
+                                      <strong>{token.symbol}</strong>
+                                      <span>{networkLabel(token.network)} · {formatToken(token.balance)} {token.name}</span>
+                                    </div>
+                                    <div className={personalClass("personalTokenValue")}>
+                                      <strong>{token.valueUsd == null ? "No quote" : formatMoney(token.valueUsd)}</strong>
+                                      <span data-tone={(token.priceChange24hPct ?? 0) >= 0 ? "up" : "down"}>
+                                        {token.priceChange24hPct == null ? "24h --" : `${token.priceChange24hPct >= 0 ? "+" : ""}${token.priceChange24hPct.toFixed(2)}%`}
+                                      </span>
+                                    </div>
+                                    {canStakeHive ? (
+                                      <button type="button" className={personalClass("personalTokenStakeButton")} onClick={openStakeRoute} disabled={stakeRouteOpening}><LockKeyhole aria-hidden="true" /><span>{stakeRouteOpening ? "Opening..." : "Stake"}</span></button>
+                                    ) : null}
+                                  </div>
                                 </div>
-                                <div>
-                                  <strong>{token.valueUsd == null ? "No quote" : formatMoney(token.valueUsd)}</strong>
-                                  <span data-tone={(token.priceChange24hPct ?? 0) >= 0 ? "up" : "down"}>
-                                    {token.priceChange24hPct == null ? "24h --" : `${token.priceChange24hPct >= 0 ? "+" : ""}${token.priceChange24hPct.toFixed(2)}%`}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                           {action.message ? <p className={personalClass("personalWalletStatus")} data-tone="ok">{action.message}</p> : null}
                           {action.error ? <p className={personalClass("personalWalletStatus")} data-tone="error">{action.error}</p> : null}
@@ -1233,7 +1243,7 @@ export function WalletPanel(props: WalletPanelProps) {
                       );
                     })}
                   </div>
-                ) : personalWalletsChecking ? (
+                ) : showPersonalWalletsChecking ? (
                   <PersonalWalletsChecking />
                 ) : (
                   <div className={walletClass("walletEmpty")}>
@@ -1274,6 +1284,8 @@ export function WalletPanel(props: WalletPanelProps) {
                       );
                     })}
                   </div>
+                ) : !hydrated ? (
+                  <AgentWalletsChecking />
                 ) : (
                   <div className={walletClass("walletEmpty")}>
                     <strong>No agents yet</strong>

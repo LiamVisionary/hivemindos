@@ -11,8 +11,12 @@ export type CockpitHandlers = {
   onReject: (approvalId: string) => void;
   onFreeze: (frozen: boolean) => void;
   onDelete: () => void;
-  /** Decompose the apex goal + dispatch it to the crew for autonomous execution. */
+  /** Launch perpetual autonomy: decompose the apex goal + dispatch to the crew. */
   onDispatch: () => void;
+  /** Stop perpetual autonomy (no new dispatches; in-flight work finishes). */
+  onStopAutonomy: () => void;
+  /** Open the edit modal (name, ticker, sector, apex goal). */
+  onEdit: () => void;
   /** Approval/company id currently mutating, to disable its controls. */
   busyId: string | null;
 };
@@ -339,6 +343,13 @@ export function Cockpit({
             <h1 style={{ margin: 0, fontFamily: "var(--f-display)", fontSize: 34, fontWeight: 600, letterSpacing: -1, lineHeight: 1 }}>{c.name}</h1>
             <span style={{ fontFamily: "var(--f-mono)", fontSize: 11.5, color: "var(--fg-4)", padding: "2px 7px", border: "1px solid var(--line)", borderRadius: 5 }}>{c.ticker}</span>
             <StatusPill status={c.status} />
+            <button
+              onClick={handlers.onEdit}
+              title="Edit name, ticker, sector & apex goal"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "1px solid var(--line-2)", borderRadius: 8, cursor: "pointer", color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 10.5, padding: "4px 10px", textTransform: "uppercase", letterSpacing: 0.06 }}
+            >
+              ✎ edit
+            </button>
           </div>
           <div style={{ display: "flex", gap: 14, marginTop: 9, flexWrap: "wrap", fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>
             <span>{c.sector}</span><span style={{ opacity: 0.5 }}>·</span>
@@ -375,39 +386,62 @@ export function Cockpit({
         <Panel>
           {/* autonomous-execution CTA: decompose the apex goal + dispatch to the crew */}
           {(() => {
-            const dispatchBusy = handlers.busyId === c.id;
+            const busy = handlers.busyId === c.id;
             const launchedAgo = dispatchedAgo(c.lastDispatchedAt);
             const noGoal = !c.hasApexGoal;
-            const disabled = dispatchBusy || c.frozen || c.agents.length === 0 || noGoal;
+            const running = Boolean(c.autonomy) && !c.frozen;
+            const launchDisabled = busy || c.frozen || c.agents.length === 0 || noGoal;
             return (
               <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, paddingBottom: 16, borderBottom: "1px solid var(--line)", flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 220 }}>
-                  <span className="mono-cap" style={{ color: "var(--honey-2)" }}>autonomous execution</span>
+                  <span className="mono-cap" style={{ color: running ? "var(--cyan-2)" : "var(--honey-2)", display: "inline-flex", alignItems: "center", gap: 7 }}>
+                    {running ? <span className="dot live" style={{ color: "var(--cyan)" }} /> : null}
+                    {running ? "autonomous · running" : "autonomous execution"}
+                  </span>
                   <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-3)", marginTop: 5, lineHeight: 1.5 }}>
                     {c.frozen
-                      ? "Company is frozen — unfreeze it in Treasury to dispatch work."
+                      ? "Company is frozen — unfreeze it in Treasury to run autonomously."
                       : c.agents.length === 0
-                        ? "Staff the company first, then launch work toward the apex goal."
+                        ? "Staff the company first, then launch it toward the apex goal."
                         : noGoal
                           ? "Set an apex goal for this company before launching work."
-                          : "Decompose the apex goal into tasks and dispatch them to the crew. Online agents claim and run the work autonomously, spending within the company budget."}
-                    {launchedAgo ? <span style={{ color: "var(--fg-4)" }}> · last launched {launchedAgo}</span> : null}
+                          : running
+                            ? "The crew keeps pursuing this goal on its own — re-dispatching whenever the board goes idle — until you stop it. Spend stays within the company budget."
+                            : "Launch the crew to pursue this goal autonomously, continuously, until you stop it. Online agents run the work; spend stays within the company budget."}
+                    {launchedAgo ? <span style={{ color: "var(--fg-4)" }}> · last dispatched {launchedAgo}</span> : null}
                   </div>
                 </div>
-                <button
-                  disabled={disabled}
-                  onClick={handlers.onDispatch}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap",
-                    padding: "9px 16px", borderRadius: 9, cursor: disabled ? "not-allowed" : "pointer",
-                    fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 700, letterSpacing: 0.06,
-                    border: "1px solid color-mix(in srgb, var(--honey) 50%, transparent)",
-                    background: disabled ? "var(--bg-3)" : "var(--honey-2)",
-                    color: disabled ? "var(--fg-4)" : "var(--bg-0)", opacity: disabled ? 0.6 : 1,
-                  }}
-                >
-                  {dispatchBusy ? "Launching…" : launchedAgo ? "Re-launch work" : "▶ Launch work toward goal"}
-                </button>
+                {running ? (
+                  <button
+                    disabled={busy}
+                    onClick={handlers.onStopAutonomy}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap",
+                      padding: "9px 16px", borderRadius: 9, cursor: busy ? "not-allowed" : "pointer",
+                      fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 700, letterSpacing: 0.06,
+                      border: "1px solid color-mix(in srgb, var(--warn) 50%, transparent)",
+                      background: "color-mix(in srgb, var(--warn) 14%, transparent)",
+                      color: "var(--warn)", opacity: busy ? 0.6 : 1,
+                    }}
+                  >
+                    {busy ? "…" : "■ Stop autonomy"}
+                  </button>
+                ) : (
+                  <button
+                    disabled={launchDisabled}
+                    onClick={handlers.onDispatch}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap",
+                      padding: "9px 16px", borderRadius: 9, cursor: launchDisabled ? "not-allowed" : "pointer",
+                      fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 700, letterSpacing: 0.06,
+                      border: "1px solid color-mix(in srgb, var(--honey) 50%, transparent)",
+                      background: launchDisabled ? "var(--bg-3)" : "var(--honey-2)",
+                      color: launchDisabled ? "var(--fg-4)" : "var(--bg-0)", opacity: launchDisabled ? 0.6 : 1,
+                    }}
+                  >
+                    {busy ? "Launching…" : launchedAgo ? "▶ Re-launch autonomy" : "▶ Launch autonomous work"}
+                  </button>
+                )}
               </div>
             );
           })()}

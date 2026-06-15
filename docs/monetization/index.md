@@ -26,11 +26,16 @@ The ecosystem plan keeps that boundary explicit: HivemindOS remains free and ope
   </li>
   <li>
     <span>3</span>
+    <a href="hive-staking-and-community-tiers.html">HIVE Staking And Community Tiers</a>
+    <small>Stake-to-unlock, tier benefits, alpha rooms, bounties, governance, and review policy.</small>
+  </li>
+  <li>
+    <span>4</span>
     <a href="paid-features/">Paid Features</a>
     <small>The rule for paid infrastructure and the current paid-feature shelf.</small>
   </li>
   <li>
-    <span>4</span>
+    <span>5</span>
     <a href="paid-features/hivemind-cloud-agent-calls.html">Cloud Agent Calls</a>
     <small>The first concrete paid feature example.</small>
   </li>
@@ -54,6 +59,11 @@ If a feature needs HivemindOS to provide hosted infrastructure, shared room orch
     <h3>Honey, HIVE, And Treasury</h3>
     <p>The contribution and ownership layers: Honey earning paths, HIVE claims, treasury strategy, buybacks, future burns, and staking.</p>
     <a href="honey-hive-treasury.html">Open token model</a>
+  </section>
+  <section class="docCard">
+    <h3>HIVE Staking And Community Tiers</h3>
+    <p>The stake-to-unlock model for holder identity, alpha rooms, bounties, curator rights, governance signaling, Operator status, and Visionary access.</p>
+    <a href="hive-staking-and-community-tiers.html">Open staking tiers</a>
   </section>
 </div>
 

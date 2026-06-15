@@ -16,7 +16,9 @@ async function loadState(): Promise<TipBotState> {
   try {
     const raw = await fs.readFile(STORE_PATH, "utf8");
     const parsed = JSON.parse(raw) as TipBotState;
-    return parsed?.version === 1 ? parsed : emptyTipBotState();
+    if (parsed?.version !== 1) return emptyTipBotState();
+    parsed.bounties ??= {};
+    return parsed;
   } catch {
     return emptyTipBotState();
   }
@@ -75,6 +77,18 @@ export function newLedgerEntryId(): string {
 // Short, chat-friendly id for withdrawals (admins type it into /approve).
 export function newWithdrawalId(): string {
   return `w${randomBytes(4).toString("hex")}`;
+}
+
+export function newBountyId(): string {
+  return `b${randomBytes(4).toString("hex")}`;
+}
+
+export function newBountyBoostId(): string {
+  return `bb${randomBytes(4).toString("hex")}`;
+}
+
+export function newBountySubmissionId(): string {
+  return `s${randomBytes(4).toString("hex")}`;
 }
 
 // Deep-link payloads allow [A-Za-z0-9_-]{1,64}; base64url fits exactly.

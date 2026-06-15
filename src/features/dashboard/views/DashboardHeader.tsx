@@ -266,7 +266,7 @@ export function DashboardHeader(props: DashboardHeaderProps) {
   );
 }
 
-function DashboardAppCompletionToast({ notification }: { notification: DashboardAppCompletionNotification }) {
+export function DashboardAppCompletionToast({ notification }: { notification: DashboardAppCompletionNotification }) {
   const [brokenIcon, setBrokenIcon] = useState(false);
   const iconUrl = notification.app?.iconUrl;
   const initials = notification.app?.initials ?? notification.initials ?? "HM";

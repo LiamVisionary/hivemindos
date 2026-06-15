@@ -5,6 +5,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { BeeIcon } from "./bee-icon";
 import { HexTile } from "./hex-tile";
 import { ListView } from "./list-view";
@@ -85,6 +86,10 @@ export interface FleetViewProps {
   onEditSettings?: (m: FleetMachine, a: FleetAgent) => void;
   /** When provided, the hive view renders a central Queen Bee cell connected to every machine; clicking it opens her settings. */
   onOpenQueenSettings?: () => void;
+  /** "Message the hive" composer (new Hive layout only; legacy FleetView ignores it). */
+  onSendMessage?: (text: string) => void;
+  /** Optional wallet configs used by the Fleet Hive selected-agent holdings panel. */
+  walletsByAgent?: Record<string, AgentWalletConfig>;
   onDuplicate?: (m: FleetMachine, a: FleetAgent) => void;
   onRemove?: (m: FleetMachine, a: FleetAgent, depth?: AeonDeleteDepth, onProgress?: (progress: AeonDeleteProgress) => void) => void | Promise<AeonDeleteResult | void>;
   onDismissAlert?: (alert: FleetAlert) => void;

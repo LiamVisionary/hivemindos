@@ -243,11 +243,49 @@ export function AgentBrowserModal({
   );
 }
 
-// ── create-company flow (2 steps) ─────────────────────────────────────────
+// ── identity form (shared by create step 0 + edit) ────────────────────────
 type FormState = Required<Pick<CreateForm, "name">> & {
   ticker: string; sector: string; apexTitle: string; apexMetric: string; apexTarget: string; metricUnit: MetricUnit; _tickerTouched?: boolean;
 };
 
+/** Collect a company's name/ticker/sector + apex goal. Used by both the create
+ *  flow's first step and the standalone edit modal. */
+function IdentityFields({ form, setForm }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>> }) {
+  const set = (k: "name" | "sector" | "apexTitle" | "apexMetric" | "apexTarget", v: string) =>
+    setForm((f) => ({ ...f, [k]: v, ...(k === "name" && !f._tickerTouched ? { ticker: v.replace(/[^a-z]/gi, "").slice(0, 4).toUpperCase() } : {}) }));
+  const targetPlaceholder = METRIC_TYPE_OPTIONS.find((o) => o.value === form.metricUnit)?.placeholder ?? "5,000";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 12 }}>
+        <Field label="Company name"><TextInput value={form.name} placeholder="e.g. Aperture Labs" onChange={(e) => set("name", e.target.value)} autoFocus /></Field>
+        <Field label="Ticker"><TextInput value={form.ticker} placeholder="APRT" maxLength={5} onChange={(e) => setForm((f) => ({ ...f, ticker: e.target.value.toUpperCase(), _tickerTouched: true }))} /></Field>
+      </div>
+      <Field label="Sector"><TextInput value={form.sector} placeholder="e.g. Developer Tools" onChange={(e) => set("sector", e.target.value)} /></Field>
+      <div style={{ height: 1, background: "var(--line)", margin: "2px 0" }} />
+      <Field label="Apex goal" hint="The single strategic mandate every agent aligns to."><TextInput value={form.apexTitle} placeholder="e.g. Become the default agent API layer" onChange={(e) => set("apexTitle", e.target.value)} /></Field>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 170px", gap: 12 }}>
+        <Field label="Tracked metric"><TextInput value={form.apexMetric} placeholder="e.g. weekly active SDKs" onChange={(e) => set("apexMetric", e.target.value)} /></Field>
+        <Field label="Metric type" hint="Sets formatting & card layout">
+          <Select value={form.metricUnit} onChange={(v) => setForm((f) => ({ ...f, metricUnit: v as MetricUnit }))} options={METRIC_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))} />
+        </Field>
+      </div>
+      <Field label="Target" hint={form.metricUnit === "currency" ? "USD — the $ is added for you" : form.metricUnit === "percent" ? "The % is added for you" : form.metricUnit === "users" ? "Daily active users (DAU)" : "A plain number target"}>
+        <TextInput value={form.apexTarget} placeholder={targetPlaceholder} onChange={(e) => set("apexTarget", e.target.value)} />
+      </Field>
+    </div>
+  );
+}
+
+/** Snapshot the editable identity/goal fields out of the form, trimmed. */
+function readForm(form: FormState): CreateForm {
+  return {
+    name: form.name.trim(), ticker: form.ticker.trim(), sector: form.sector.trim(),
+    apexTitle: form.apexTitle.trim(), apexMetric: form.apexMetric.trim(), apexTarget: form.apexTarget.trim(),
+    metricUnit: form.metricUnit,
+  };
+}
+
+// ── create-company flow (2 steps) ─────────────────────────────────────────
 export function CreateCompanyModal({
   agentPool, busy, theme, onClose, onCreate,
 }: {
@@ -257,14 +295,8 @@ export function CreateCompanyModal({
   const [step, setStep] = React.useState(0);
   const [form, setForm] = React.useState<FormState>({ name: "", ticker: "", sector: "", apexTitle: "", apexMetric: "", apexTarget: "", metricUnit: "number" });
   const [crew, setCrew] = React.useState<Agent[]>([]);
-  const set = (k: "name" | "sector" | "apexTitle" | "apexMetric" | "apexTarget", v: string) =>
-    setForm((f) => ({ ...f, [k]: v, ...(k === "name" && !f._tickerTouched ? { ticker: v.replace(/[^a-z]/gi, "").slice(0, 4).toUpperCase() } : {}) }));
   const canNext = form.name.trim().length > 0;
-  const targetPlaceholder = METRIC_TYPE_OPTIONS.find((o) => o.value === form.metricUnit)?.placeholder ?? "5,000";
-  const create = () => onCreate(
-    { name: form.name.trim(), ticker: form.ticker.trim(), sector: form.sector.trim(), apexTitle: form.apexTitle.trim(), apexMetric: form.apexMetric.trim(), apexTarget: form.apexTarget.trim(), metricUnit: form.metricUnit },
-    crew.map((a) => ({ ...a })),
-  );
+  const create = () => onCreate(readForm(form), crew.map((a) => ({ ...a })));
 
   const steps = ["Identity", "Founding crew"];
   return (
@@ -292,27 +324,49 @@ export function CreateCompanyModal({
       }
     >
       {step === 0 ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 12 }}>
-            <Field label="Company name"><TextInput value={form.name} placeholder="e.g. Aperture Labs" onChange={(e) => set("name", e.target.value)} autoFocus /></Field>
-            <Field label="Ticker"><TextInput value={form.ticker} placeholder="APRT" maxLength={5} onChange={(e) => setForm((f) => ({ ...f, ticker: e.target.value.toUpperCase(), _tickerTouched: true }))} /></Field>
-          </div>
-          <Field label="Sector"><TextInput value={form.sector} placeholder="e.g. Developer Tools" onChange={(e) => set("sector", e.target.value)} /></Field>
-          <div style={{ height: 1, background: "var(--line)", margin: "2px 0" }} />
-          <Field label="Apex goal" hint="The single strategic mandate every agent aligns to."><TextInput value={form.apexTitle} placeholder="e.g. Become the default agent API layer" onChange={(e) => set("apexTitle", e.target.value)} /></Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 170px", gap: 12 }}>
-            <Field label="Tracked metric"><TextInput value={form.apexMetric} placeholder="e.g. weekly active SDKs" onChange={(e) => set("apexMetric", e.target.value)} /></Field>
-            <Field label="Metric type" hint="Sets formatting & card layout">
-              <Select value={form.metricUnit} onChange={(v) => setForm((f) => ({ ...f, metricUnit: v as MetricUnit }))} options={METRIC_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))} />
-            </Field>
-          </div>
-          <Field label="Target" hint={form.metricUnit === "currency" ? "USD — the $ is added for you" : form.metricUnit === "percent" ? "The % is added for you" : form.metricUnit === "users" ? "Daily active users (DAU)" : "A plain number target"}>
-            <TextInput value={form.apexTarget} placeholder={targetPlaceholder} onChange={(e) => set("apexTarget", e.target.value)} />
-          </Field>
-        </div>
+        <IdentityFields form={form} setForm={setForm} />
       ) : (
         <CrewBuilder crew={crew} setCrew={setCrew} agentPool={agentPool} seedQueen />
       )}
+    </Modal>
+  );
+}
+
+// ── edit-company flow (identity + apex goal; crew is managed separately) ───
+export function EditCompanyModal({
+  initial, busy, theme, onClose, onSave,
+}: {
+  initial: CreateForm; busy?: boolean; theme?: Theme;
+  onClose: () => void; onSave: (form: CreateForm) => void;
+}) {
+  const [form, setForm] = React.useState<FormState>({
+    name: initial.name ?? "",
+    ticker: initial.ticker ?? "",
+    sector: initial.sector ?? "",
+    apexTitle: initial.apexTitle ?? "",
+    apexMetric: initial.apexMetric ?? "",
+    apexTarget: initial.apexTarget ?? "",
+    metricUnit: initial.metricUnit ?? "number",
+    // The company already has a ticker — don't auto-rewrite it when the name changes.
+    _tickerTouched: true,
+  });
+  const canSave = form.name.trim().length > 0;
+  return (
+    <Modal
+      title="Edit company"
+      subtitle={`Update ${initial.name || "this company"}'s identity & apex goal`}
+      theme={theme}
+      onClose={onClose}
+      width={620}
+      footer={
+        <>
+          <span style={{ flex: 1, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>Manage the crew from the company’s Team tab.</span>
+          <GhostBtn onClick={onClose}>Cancel</GhostBtn>
+          <PrimaryBtn disabled={!canSave || busy} onClick={() => onSave(readForm(form))}>{busy ? "Saving…" : "Save changes"}</PrimaryBtn>
+        </>
+      }
+    >
+      <IdentityFields form={form} setForm={setForm} />
     </Modal>
   );
 }

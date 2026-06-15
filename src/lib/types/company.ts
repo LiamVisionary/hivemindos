@@ -110,6 +110,12 @@ export interface Company {
   members?: CompanyMember[];
   /** When the apex goal was last decomposed + dispatched to the crew (epoch ms). */
   lastDispatchedAt?: number;
+  /**
+   * Perpetual autonomy: when true, the company-autonomy driver keeps re-dispatching
+   * the apex goal whenever the crew goes idle, until this is turned off or the
+   * company is frozen. Set on "Launch", cleared on "Stop".
+   */
+  autonomy?: boolean;
 }
 
 export interface CompanySpendRollup {

@@ -11,7 +11,7 @@ import {
   type TipBotRuntime,
 } from "./commands";
 import { ensureTreasuryWallet, getHiveTokenMeta, getSafeDepositBlockNumber, scanHiveDeposits, sendHiveFromTreasury } from "./hive-chain";
-import { applyDepositCredit, claimNextWithdrawal, expireClaims, resolveWithdrawal } from "./ledger";
+import { applyDepositCredit, claimNextWithdrawal, expireBounties, expireClaims, resolveWithdrawal } from "./ledger";
 import { mutateTipBotState, newLedgerEntryId, readTipBotState } from "./store";
 import { TelegramBotApi } from "./telegram-api";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
@@ -226,15 +226,24 @@ async function withdrawalLoop(runner: TipBotRunner, runtime: TipBotRuntime) {
 async function claimSweepLoop(runner: TipBotRunner, runtime: TipBotRuntime) {
   while (!runner.stopRequested) {
     try {
-      const refunded = await mutateTipBotState((draft) =>
-        expireClaims(draft, { now: new Date().toISOString(), makeEntryId: newLedgerEntryId }).map((claim) => ({ ...claim })),
-      );
-      for (const claim of refunded) {
+      const now = new Date().toISOString();
+      const expired = await mutateTipBotState((draft) => ({
+        claims: expireClaims(draft, { now, makeEntryId: newLedgerEntryId }).map((claim) => ({ ...claim })),
+        bounties: expireBounties(draft, { now, makeEntryId: newLedgerEntryId }).map((bounty) => ({ ...bounty })),
+      }));
+      for (const claim of expired.claims) {
         await notifyUser(
           runtime,
           claim.fromUserId,
           `↩️ Your tip of ${formatTokenAmount(claim.amountRaw, runtime.config.token.decimals)} ${runtime.config.token.symbol} ` +
             `to @${claim.toUsername} expired unclaimed and was refunded.`,
+        );
+      }
+      for (const bounty of expired.bounties) {
+        await notifyUser(
+          runtime,
+          bounty.creatorUserId,
+          `↩️ Bounty <code>${bounty.id}</code> expired and its reward/boost escrow was refunded.`,
         );
       }
     } catch (error) {
@@ -275,6 +284,10 @@ export async function startTelegramTipBot(): Promise<TipBotRunnerStatus> {
       { command: "linkwallet", description: "Link your Base wallet for deposits" },
       { command: "withdraw", description: "Withdraw to your wallet (DM only)" },
       { command: "leaderboard", description: "Top tippers in this chat" },
+      { command: "bounties", description: "Show active community bounties" },
+      { command: "bounty", description: "Create or inspect a bounty" },
+      { command: "boost", description: "Boost a bounty with your HIVE balance" },
+      { command: "submit", description: "Submit work for a bounty" },
       { command: "help", description: "How this works" },
     ])
     .catch(() => undefined);

@@ -105,13 +105,14 @@ This vault is the shared brain for HivemindOS agents. It should stay useful to h
 ## Agent Write Policy
 
 - Read \`AGENTS.md\`, \`Shared Context.md\`, and this contract before durable edits.
-- Use \`hive-brain answer "<query>"\` or \`/api/brain/memory\` for shared-brain recall and durable shared memories. Raw/non-managed agents should prefer \`hive-brain\` because it discovers the running API and falls back to local vault/index search. Claude Code may also receive shared-brain context automatically through the setup-installed \`hive-brain-hook\` \`UserPromptSubmit\` hook.
+- Use \`hive-brain answer "<query>"\` or \`/api/brain/memory\` for shared-brain recall and durable shared memories. Raw/non-managed agents should prefer \`hive-brain\` because it discovers the running API and falls back to local vault/index search. Claude Code may also receive shared-brain context automatically through the setup-installed \`hive-brain-hook\` \`UserPromptSubmit\` hook. Load the \`hive-brain-memory\` skill when recalling, writing, correcting, or evolving typed Shared Brain Memory.
 - Default recall/answer is tiered: check typed Agent Memory first, return it when the distilled hit is strong, and otherwise augment with relevant markdown from the full shared vault.
 - Full-vault recall uses the generated lexical search index at \`${folders.brainServicesFolder}/Full Vault Search Index.jsonl\` first, then ripgrep/plain grep/full walk only when the index is unavailable or empty.
 - Use \`--scope agent-memory\` or \`scope: "agent-memory"\` for typed/proven memory only; use \`--scope full-vault\` or \`scope: "full-vault"\` to force broad vault recall.
 - For synthesized entity/concept/summary knowledge under \`Synthesis/Compiled Knowledge/<domain>/\`, load the \`hive-brain-compiled-wiki\` skill and prefer \`brain_search_knowledge\` or \`/api/brain/knowledge\` action \`search\` before broad full-vault recall.
 - Recall before relying on prior preferences, decisions, instructions, goals, commitments, artifacts, lessons, or project context.
 - Save shared memories under \`Memory/Distillations/Agent Memory/\` through the API, include available agent/runtime/machine/Tailnet provenance, and prefer \`proof: "auto"\` unless explicit proof is requested.
+- Use \`action: "evolve"\` or \`hive-brain evolve --memory-id <id> --content <text>\` when a reviewed durable memory replaces an older one. Evolved memories preserve prior versions with \`supersedes\`, \`supersededBy\`, \`evolutionRootId\`, \`evolutionType\`, \`evolutionReason\`, and \`cognitiveStage\`; the latest active version is current truth and prior versions are history/evidence.
 - Never store raw Tailnet IPs, provider secrets, private keys, bearer tokens, or plaintext sensitive data in memory notes or proof receipts.
 - \`${folders.secureFolder}/\` reference/status notes are searchable during full-vault recall so agents can know which credential names exist or are set, but plaintext secret values must stay out of notes and responses.
 - Run the memory API \`rebuild-index\` action after importing or manually editing agent memory notes; it refreshes typed Agent Memory and, by default, the generated full-vault lexical index.
@@ -505,6 +506,7 @@ HivemindOS seeds a small Obsidian-native skill pack into the shared Skills shelf
 - \`obsidian-bases\`: YAML \`.base\` files for native database-like views over vault notes.
 - \`json-canvas\`: Obsidian \`.canvas\` files for visual maps, project boards, flowcharts, and concept graphs.
 - \`defuddle\`: optional clean web-page-to-markdown extraction when the CLI is installed.
+- \`hive-brain-memory\`: HivemindOS typed Shared Brain Memory playbook for recall, durable writes, and evolving stale memories while preserving superseded history.
 - \`hive-brain-compiled-wiki\`: HivemindOS compiled-brain playbook for entity/concept/summary wiki writes, compiled-wiki search, graph-native MCP reads, wiki health, and human collective shared-brain contribution rules.
 
 ## Seeded Native Views
@@ -840,6 +842,7 @@ function workflowPrompt(workflow, folders) {
     "Use --scope agent-memory or scope: \"agent-memory\" for typed/proven memory only; use --scope full-vault or scope: \"full-vault\" to force broad vault recall.",
     "Recall before depending on prior preferences, decisions, instructions, goals, commitments, artifacts, lessons, or project context.",
     "When saving shared memories, include available agent/runtime/machine/Tailnet provenance and use proof: \"auto\" unless explicit proof is requested.",
+    "When a durable memory changes, use action: \"evolve\" or hive-brain evolve so the new active memory supersedes older notes without deleting history.",
     "Use hive-handoff, /api/handoff, /handoff-task, or hivemind-mcp for fleet-aware file and task handoffs; ask for a missing task before using task handoff.",
     "Never delete files. Move or archive only when the task explicitly says to do so.",
     `Treat ${folders.kanbanFolder} and ${folders.scheduledFolder} as operational state, not permanent knowledge.`,

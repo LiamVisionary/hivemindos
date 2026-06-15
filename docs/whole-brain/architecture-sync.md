@@ -58,6 +58,7 @@ For Shared Brain Memory specifically, the required set also includes:
 - `src/lib/services/context-index.ts`
 - `scripts/hive-brain`
 - `scripts/hive-brain-hook`
+- `scripts/benchmark-agent-memory-evolution.mjs`
 - `docs/whole-brain/brain-services.md`
 - `docs/features/brain-vault-and-skills.md`
 

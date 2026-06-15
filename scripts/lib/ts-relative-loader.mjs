@@ -16,8 +16,24 @@ import { fileURLToPath } from "node:url";
 const CANDIDATE_EXTENSIONS = [".ts", ".tsx", ".mts", ".mjs", ".js", "/index.ts", "/index.tsx"];
 
 export async function resolve(specifier, context, nextResolve) {
+  if (specifier === "server-only") {
+    return { url: "data:text/javascript,export default undefined;", shortCircuit: true };
+  }
   const isRelative = specifier.startsWith("./") || specifier.startsWith("../");
+  const isProjectAlias = specifier.startsWith("@/");
   const hasExtension = /\.[mc]?[jt]sx?$/.test(specifier);
+  if (isProjectAlias) {
+    const base = new URL(`../../src/${specifier.slice(2)}`, import.meta.url);
+    if (hasExtension && existsSync(fileURLToPath(base))) {
+      return nextResolve(base.href, context);
+    }
+    for (const ext of CANDIDATE_EXTENSIONS) {
+      const candidate = new URL(base.href + ext);
+      if (existsSync(fileURLToPath(candidate))) {
+        return nextResolve(candidate.href, context);
+      }
+    }
+  }
   if (isRelative && !hasExtension && context.parentURL) {
     const base = new URL(specifier, context.parentURL);
     for (const ext of CANDIDATE_EXTENSIONS) {

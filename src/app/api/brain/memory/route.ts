@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   answerFromAgentMemory,
+  evolveAgentMemory,
   recallAgentMemory,
   rememberAgentMemory,
   rebuildAgentMemoryIndex,
+  type EvolveAgentMemoryInput,
   type RecallAgentMemoryInput,
   type RebuildAgentMemoryIndexInput,
   type RememberAgentMemoryInput,
@@ -44,12 +46,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => ({})) as (RememberAgentMemoryInput & RecallAgentMemoryInput & RebuildAgentMemoryIndexInput & {
-      action?: "remember" | "recall" | "answer" | "rebuild-index";
+    const body = await request.json().catch(() => ({})) as (RememberAgentMemoryInput & EvolveAgentMemoryInput & RecallAgentMemoryInput & RebuildAgentMemoryIndexInput & {
+      action?: "remember" | "evolve" | "recall" | "answer" | "rebuild-index";
     });
     const action = body.action ?? "recall";
     if (action === "remember") {
       const result = await rememberAgentMemory(body);
+      return NextResponse.json({ ok: true, action, ...result });
+    }
+    if (action === "evolve") {
+      const result = await evolveAgentMemory(body);
       return NextResponse.json({ ok: true, action, ...result });
     }
     if (action === "answer") {

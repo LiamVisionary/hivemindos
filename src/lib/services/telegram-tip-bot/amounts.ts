@@ -41,3 +41,24 @@ export function formatTokenAmount(raw: bigint | string, decimals: number): strin
   const fraction = (value % divisor).toString().padStart(decimals, "0").replace(/0+$/, "");
   return `${negative ? "-" : ""}${whole}${fraction ? `.${fraction}` : ""}`;
 }
+
+export function formatCompactTokenAmount(raw: bigint | string, decimals: number): string {
+  let value = typeof raw === "string" ? BigInt(raw) : raw;
+  const negative = value < 0n;
+  if (negative) value = -value;
+  const token = 10n ** BigInt(decimals);
+  const tiers = [
+    { threshold: 1_000_000_000n, suffix: "b" },
+    { threshold: 1_000_000n, suffix: "m" },
+    { threshold: 1_000n, suffix: "k" },
+  ];
+  const wholeTokens = value / token;
+  const tier = tiers.find((candidate) => wholeTokens >= candidate.threshold);
+  if (!tier) return `${negative ? "-" : ""}${formatTokenAmount(value, decimals)}`;
+
+  const divisor = token * tier.threshold;
+  const whole = value / divisor;
+  const tenth = ((value % divisor) * 10n) / divisor;
+  const decimal = tenth > 0n ? `.${tenth}` : "";
+  return `${negative ? "-" : ""}${whole}${decimal}${tier.suffix}`;
+}

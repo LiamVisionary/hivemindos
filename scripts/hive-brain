@@ -27,10 +27,12 @@ function usage() {
   hive-brain answer "query" [--limit N] [--scope tiered|agent-memory|full-vault] [--json]
   hive-brain recall "query" [--limit N] [--scope tiered|agent-memory|full-vault] [--json]
   hive-brain remember --type TYPE --title TITLE --content TEXT [--tag TAG] [--source TEXT]
+  hive-brain evolve --memory-id ID --content TEXT [--title TITLE] [--reason TEXT]
 
 Examples:
   hive-brain answer "what fruit does liam like?"
   hive-brain recall "BYOK Agent Calls" --scope full-vault --limit 5
+  hive-brain evolve --memory-id mem-... --content "Updated durable memory"
   hive-brain answer "query" --no-api
 `);
 }
@@ -83,6 +85,27 @@ function parseArgs(argv) {
       index += 1;
     } else if (arg === "--content") {
       input.content = next;
+      index += 1;
+    } else if (arg === "--memory-id") {
+      input.memoryId = next;
+      index += 1;
+    } else if (arg === "--supersedes") {
+      input.supersedes = String(next || "").split(",").map((id) => id.trim()).filter(Boolean);
+      index += 1;
+    } else if (arg === "--reason" || arg === "--evolution-reason") {
+      input.evolutionReason = next;
+      index += 1;
+    } else if (arg === "--evolution-type") {
+      input.evolutionType = next;
+      index += 1;
+    } else if (arg === "--cognitive-stage") {
+      input.cognitiveStage = next;
+      index += 1;
+    } else if (arg === "--source-type") {
+      input.sourceType = next;
+      index += 1;
+    } else if (arg === "--evidence-count") {
+      input.evidenceCount = Number(next || "");
       index += 1;
     } else if (arg === "--source") {
       input.source = next;
@@ -196,6 +219,36 @@ async function callApi(input) {
           content: input.content,
           tags: input.tags,
           source: input.source || "hive-brain cli",
+          vaultPath: input.vaultPath,
+          agentName: input.agentName,
+          agentId: input.agentId,
+          runtime: input.runtime,
+          machineName: input.machineName,
+          machineId: input.machineId,
+          tailnetId: input.tailnetId,
+          tailnetName: input.tailnetName,
+          tailnetDnsName: input.tailnetDnsName,
+          collectorUrl: input.collectorUrl,
+          sessionId: input.sessionId,
+          project: input.project,
+          proof: "auto",
+        });
+      }
+      if (input.action === "evolve") {
+        return await requestJson(base, "POST", {
+          action: "evolve",
+          memoryId: input.memoryId,
+          supersedes: input.supersedes,
+          type: input.type,
+          title: input.title,
+          content: input.content,
+          tags: input.tags,
+          source: input.source || "hive-brain cli",
+          cognitiveStage: input.cognitiveStage,
+          evidenceCount: input.evidenceCount,
+          sourceType: input.sourceType,
+          evolutionType: input.evolutionType,
+          evolutionReason: input.evolutionReason,
           vaultPath: input.vaultPath,
           agentName: input.agentName,
           agentId: input.agentId,
@@ -520,9 +573,19 @@ function recordsFromIndex(root) {
         title: entry.title,
         content: entry.content,
         type: entry.memoryType || "context",
+        status: entry.status || "active",
+        cognitiveStage: entry.cognitiveStage,
+        supersedes: Array.isArray(entry.supersedes) ? entry.supersedes : [],
+        supersededBy: Array.isArray(entry.supersededBy) ? entry.supersededBy : [],
+        evolutionRootId: entry.evolutionRootId,
+        evolutionType: entry.evolutionType,
+        evolutionReason: entry.evolutionReason,
         confidence: Number(entry.confidence || 0.7),
         tags: Array.isArray(entry.tags) ? entry.tags : [],
+        metaTags: Array.isArray(entry.metaTags) ? entry.metaTags : [],
         source: entry.source,
+        createdAt: entry.createdAt,
+        updatedAt: entry.updatedAt,
         notePath: entry.notePath,
       });
     } catch {
@@ -547,9 +610,19 @@ function recordFromMarkdown(root, file, typedOnly = false) {
     title,
     content,
     type: fields.get("memoryType") || fields.get("type") || "context",
+    status: fields.get("status") || "active",
+    cognitiveStage: fields.get("cognitiveStage"),
+    supersedes: Array.isArray(fields.get("supersedes")) ? fields.get("supersedes") : [],
+    supersededBy: Array.isArray(fields.get("supersededBy")) ? fields.get("supersededBy") : [],
+    evolutionRootId: fields.get("evolutionRootId"),
+    evolutionType: fields.get("evolutionType"),
+    evolutionReason: fields.get("evolutionReason"),
     confidence: typedOnly ? Number(fields.get("confidence") || 0.7) : 0.62,
     tags: Array.isArray(fields.get("tags")) ? fields.get("tags") : notePath.split("/").slice(0, 3).map((part) => part.toLowerCase()),
+    metaTags: Array.isArray(fields.get("metaTags")) ? fields.get("metaTags") : [],
     source: `Vault note: ${notePath}`,
+    createdAt: fields.get("createdAt"),
+    updatedAt: fields.get("updatedAt"),
     notePath,
   };
 }
@@ -564,7 +637,8 @@ function fallbackRecall(input) {
     const folder = path.join(root, MEMORY_FOLDER);
     if (fs.existsSync(folder)) memoryRecords = walk(folder).map((file) => recordFromMarkdown(root, file, true)).filter(Boolean);
   }
-  const memoryHits = rank(memoryRecords, input.query, limit);
+  const activeMemoryRecords = memoryRecords.filter((record) => !record.status || record.status === "active");
+  const memoryHits = attachEvolutionChains(rank(activeMemoryRecords, input.query, limit), memoryRecords);
   const strong = memoryHits[0] && (memoryHits[0].score >= 32 || (memoryHits[0].score >= 24 && memoryHits[0].confidence >= 0.85 && memoryHits[0].matched.length >= 2));
   if (scope === "agent-memory" || (scope !== "full-vault" && strong)) {
     return { ok: true, source: "local-fallback", recallScope: "agent-memory", augmentedFromVault: false, hits: memoryHits };
@@ -576,22 +650,63 @@ function fallbackRecall(input) {
   const collectionByPath = new Map(indexedHits.map((hit) => [hit.path, hit.collection]));
   for (const file of fullVaultFiles) {
     if (rel(root, file).startsWith(`${MEMORY_FOLDER}/`)) continue;
-    const record = recordFromMarkdown(root, file, false);
+    if (!fs.existsSync(file)) continue;
+    let record = null;
+    try {
+      record = recordFromMarkdown(root, file, false);
+    } catch {
+      continue;
+    }
     if (record) {
       record.searchScore = scoreByPath.get(record.notePath);
       record.searchCollection = collectionByPath.get(record.notePath);
       byPath.set(record.notePath, record);
     }
   }
-  for (const record of memoryRecords) byPath.set(record.notePath, record);
+  for (const record of activeMemoryRecords) byPath.set(record.notePath, record);
   return {
     ok: true,
     source: "local-fallback",
     recallScope: "full-vault",
     augmentedFromVault: scope !== "full-vault",
     memoryHitCount: memoryHits.length,
-    hits: rank([...byPath.values()], input.query, limit),
+    hits: attachEvolutionChains(rank([...byPath.values()], input.query, limit), memoryRecords),
   };
+}
+
+function chainItem(record) {
+  return {
+    id: record.id,
+    title: record.title,
+    content: record.content,
+    status: record.status || "active",
+    notePath: record.notePath,
+    cognitiveStage: record.cognitiveStage,
+    evolutionType: record.evolutionType,
+    evolutionReason: record.evolutionReason,
+  };
+}
+
+function traceEvolutionChain(record, byId, seen = new Set()) {
+  if (!record || seen.has(record.id)) return [];
+  seen.add(record.id);
+  const ancestors = (record.supersedes || [])
+    .map((id) => byId.get(id))
+    .filter(Boolean)
+    .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")))
+    .flatMap((ancestor) => traceEvolutionChain(ancestor, byId, seen));
+  return [record, ...ancestors];
+}
+
+function attachEvolutionChains(hits, allMemoryRecords) {
+  const byId = new Map(allMemoryRecords.map((record) => [record.id, record]));
+  return hits.map((hit) => {
+    const source = byId.get(hit.id);
+    if (!source) return hit;
+    const chain = traceEvolutionChain(source, byId);
+    if (chain.length <= 1) return hit;
+    return { ...hit, evolutionChain: chain.map(chainItem) };
+  });
 }
 
 function rank(records, query, limit) {
@@ -607,29 +722,51 @@ function rank(records, query, limit) {
 
 function formatResult(result, action) {
   if (action === "recall") {
-    return result.hits.map((hit, index) => `${index + 1}. ${hit.title}\n   path: ${hit.notePath}\n   score: ${hit.score}; matched: ${(hit.matched || []).join(", ") || "none"}\n   ${hit.excerpt}`).join("\n\n")
+    return result.hits.map((hit, index) => {
+      const chain = formatEvolutionChain(hit);
+      return `${index + 1}. ${hit.title}\n   path: ${hit.notePath}\n   score: ${hit.score}; matched: ${(hit.matched || []).join(", ") || "none"}${hit.evolutionChain?.length > 1 ? `; evolved: ${hit.evolutionChain.length} versions` : ""}\n   ${hit.excerpt}${chain ? `\n${chain}` : ""}`;
+    }).join("\n\n")
       || "No matching shared-brain memories or vault notes were found.";
   }
   return [
     `Recall scope: ${result.recallScope || "unknown"}${result.augmentedFromVault ? " (augmented from full vault)" : ""}`,
-    ...(result.hits || []).slice(0, 6).map((hit, index) => `${index + 1}. ${hit.title} (${hit.type || "context"}, score ${hit.score})\n   Path: ${hit.notePath}\n   ${hit.excerpt}`),
+    ...(result.hits || []).slice(0, 6).map((hit, index) => {
+      const evolved = hit.evolutionChain?.length > 1 ? `, evolved ${hit.evolutionChain.length} versions` : "";
+      const chain = formatEvolutionChain(hit);
+      return `${index + 1}. ${hit.title} (${hit.type || "context"}, score ${hit.score}${evolved})\n   Path: ${hit.notePath}\n   ${hit.excerpt}${chain ? `\n${chain}` : ""}`;
+    }),
   ].join("\n") || "No matching shared-brain memories or vault notes were found.";
+}
+
+function formatEvolutionChain(hit) {
+  if (!hit.evolutionChain || hit.evolutionChain.length <= 1) return "";
+  return [
+    "   Evolution:",
+    ...hit.evolutionChain.map((item, index) => {
+      const label = index === 0 ? "Latest" : `Previous ${index}`;
+      const reason = item.evolutionReason ? `; reason: ${item.evolutionReason}` : "";
+      const stage = item.cognitiveStage ? `; stage: ${item.cognitiveStage}` : "";
+      return `   - ${label}: ${item.title} (${item.status || "active"}${stage}${reason}) - ${compact(item.content, 180)}`;
+    }),
+  ].join("\n");
 }
 
 async function main() {
   const input = parseArgs(process.argv);
-  if (input.help || !["answer", "recall", "remember"].includes(input.action)) {
+  if (input.help || !["answer", "recall", "remember", "evolve"].includes(input.action)) {
     usage();
     process.exit(input.help ? 0 : 2);
   }
-  if (input.action !== "remember" && !input.query) throw new Error("A query is required.");
+  if (!["remember", "evolve"].includes(input.action) && !input.query) throw new Error("A query is required.");
   if (input.action === "remember" && !input.content) throw new Error("remember requires --content.");
+  if (input.action === "evolve" && !input.content) throw new Error("evolve requires --content.");
+  if (input.action === "evolve" && !input.memoryId && !input.supersedes?.length) throw new Error("evolve requires --memory-id or --supersedes.");
   let result;
   try {
     result = await callApi(input);
     result.source = result.source || "api";
   } catch (error) {
-    if (input.action === "remember") throw error;
+    if (input.action === "remember" || input.action === "evolve") throw error;
     result = fallbackRecall(input);
     result.apiError = error instanceof Error ? error.message : String(error);
   }
@@ -638,6 +775,10 @@ async function main() {
   } else if (input.action === "remember") {
     console.log(`Remembered: ${result.record?.title || input.title || compact(input.content, 80)}`);
     if (result.record?.notePath) console.log(`Path: ${result.record.notePath}`);
+  } else if (input.action === "evolve") {
+    console.log(`Evolved: ${result.record?.title || input.title || compact(input.content, 80)}`);
+    if (result.record?.notePath) console.log(`Path: ${result.record.notePath}`);
+    if (result.superseded?.length) console.log(`Superseded: ${result.superseded.map((record) => record.id).join(", ")}`);
   } else {
     console.log(formatResult(result, input.action));
   }

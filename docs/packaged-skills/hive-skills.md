@@ -17,6 +17,7 @@ These skills are auto-installed into the shared brain because they are foundatio
 | `hive-skill-fusion` | Turns a capability request into a reusable shared-brain skill. |
 | `hive-workflow-fusion` | Composes multi-step hive workflows from skills, apps, agents, and tools. |
 | `hive-aeon-fusion` | Converts reusable hive workflows into AEON-ready agent duties when appropriate. |
+| `hive-brain-memory` | Teaches agents how to recall typed Shared Brain Memory, write durable reviewed facts, and evolve stale memories while preserving superseded history. |
 | `hive-brain-compiled-wiki` | Teaches agents how to compile durable findings into HivemindOS entity/concept/summary wiki pages, search/query the compiled graph through MCP, repair wiki health, and respect human collective shared-brain mirrors without restricting normal agent-to-agent work. |
 
 ## Supporting Hive Search Commands
@@ -26,9 +27,10 @@ There is no separate packaged skill named `hive-find` or `hive-search` in this r
 ```bash
 hive-brain answer "query"
 hive-brain recall "query" --scope full-vault --limit 8
+hive-brain evolve --memory-id mem-... --content "Updated durable memory"
 ```
 
-`hive-brain answer` returns a concise grounded answer. `hive-brain recall` returns a hit list. Both try the running HivemindOS brain API first and fall back to local vault/index search, so raw agents can use the same private brain without needing dashboard-routed context.
+`hive-brain answer` returns a concise grounded answer. `hive-brain recall` returns a hit list. Both try the running HivemindOS brain API first and fall back to local vault/index search, so raw agents can use the same private brain without needing dashboard-routed context. `hive-brain evolve` is the API-backed write path for replacing reviewed stale memory while preserving superseded history. Use the auto-installed `hive-brain-memory` skill for the full recall/remember/evolve policy.
 
 For durable synthesized wiki knowledge, use the auto-installed `hive-brain-compiled-wiki` skill instead of broad recall. It teaches agents to call `brain_search_knowledge` first for compiled entity, concept, and summary pages, then follow up with `brain_get_node`, `brain_get_backlinks`, or `brain_graph_overview` when they need graph detail.
 
@@ -72,6 +74,8 @@ The repository source is:
 ```text
 packaged-skills/auto-install/hive-assimilate/SKILL.md
 packaged-skills/auto-install/hive-pulse/SKILL.md
+packaged-skills/auto-install/hive-brain-memory/SKILL.md
+packaged-skills/auto-install/hive-brain-compiled-wiki/SKILL.md
 ```
 
 Setup mirrors it into the shared brain at:
@@ -79,6 +83,8 @@ Setup mirrors it into the shared brain at:
 ```text
 Skills/hive-assimilate/SKILL.md
 Skills/hive-pulse/SKILL.md
+Skills/hive-brain-memory/SKILL.md
+Skills/hive-brain-compiled-wiki/SKILL.md
 ```
 
 Do not create duplicate shared-brain copies of the same Hive skill. If an imported runtime carries an equivalent workflow under another name, keep `hive-assimilate` as the canonical shared-brain skill.

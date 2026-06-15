@@ -1,0 +1,587 @@
+/* src/app/stake/stake.module.css
+   HIVE staking view. Palette and typography are matched to the Fleet view
+   (see src/components/fleet/fleet-tokens.module.css): teal accents for
+   actions, honey accents for HIVE values, glassy translucent surfaces, and a
+   Space Grotesk display / mono-cap type system. Tokens are scoped to .page so
+   they don't leak, and a [data-theme="hive-light"] block mirrors the Fleet
+   view's light theme. */
+
+.page {
+  /* Type tokens mirrored from the Fleet view. */
+  --s-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --s-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+
+  /* Surface + accent tokens — dark mode defaults. */
+  --s-page-glow: rgba(45, 212, 191, 0.14);
+  --s-page-base: linear-gradient(180deg, #0b1118 0%, #070a10 100%);
+
+  --s-surface: linear-gradient(180deg, rgba(22, 28, 42, 0.62), rgba(16, 21, 31, 0.52));
+  --s-surface-inset: rgba(8, 12, 19, 0.40);
+  --s-border: rgba(148, 163, 184, 0.16);
+  --s-border-soft: rgba(148, 163, 184, 0.12);
+  --s-shadow: 0 22px 60px rgba(0, 0, 0, 0.34);
+
+  --s-teal: rgba(45, 212, 191, 1);
+  --s-teal-strong: rgba(94, 234, 212, 1);
+  --s-teal-bg: rgba(45, 212, 191, 0.12);
+  --s-teal-border: rgba(94, 234, 212, 0.42);
+  --s-teal-glow: rgba(45, 212, 191, 0.40);
+
+  --s-honey: rgba(255, 212, 90, 1);
+  --s-honey-bg: linear-gradient(180deg, rgba(255, 212, 90, 0.20), rgba(242, 183, 5, 0.06));
+  --s-honey-border: rgba(255, 212, 90, 0.58);
+  --s-honey-glow: rgba(255, 212, 90, 0.30);
+
+  --s-danger: rgba(251, 113, 133, 1);
+
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, var(--s-page-glow), transparent 34rem),
+    radial-gradient(circle at 82% -10%, var(--s-honey-glow), transparent 30rem),
+    var(--s-page-base);
+  color: var(--foreground);
+  font-family: var(--s-display);
+}
+
+/* Hive-light theme mirror — matches the Fleet view's light palette. */
+:global([data-theme="hive-light"]) .page {
+  --s-page-glow: rgba(13, 142, 126, 0.16);
+  --s-page-base: linear-gradient(180deg, #efe4c6 0%, #e4d4ac 100%);
+
+  --s-surface: linear-gradient(180deg, rgba(248, 240, 220, 0.86), rgba(238, 226, 196, 0.74));
+  --s-surface-inset: rgba(255, 250, 235, 0.55);
+  --s-border: rgba(92, 75, 45, 0.32);
+  --s-border-soft: rgba(92, 75, 45, 0.2);
+  --s-shadow: 0 18px 48px rgba(74, 56, 18, 0.18);
+
+  --s-teal: rgba(13, 142, 126, 1);
+  --s-teal-strong: rgba(13, 90, 78, 1);
+  --s-teal-bg: rgba(13, 142, 126, 0.16);
+  --s-teal-border: rgba(13, 90, 78, 0.5);
+  --s-teal-glow: rgba(13, 142, 126, 0.26);
+
+  --s-honey: rgba(140, 94, 10, 1);
+  --s-honey-bg: linear-gradient(180deg, rgba(184, 130, 22, 0.28), rgba(140, 94, 10, 0.1));
+  --s-honey-border: rgba(106, 69, 5, 0.6);
+  --s-honey-glow: rgba(184, 130, 22, 0.22);
+
+  --s-danger: rgba(180, 35, 66, 1);
+}
+
+.shell {
+  display: grid;
+  width: min(1180px, calc(100% - 32px));
+  gap: 18px;
+  margin: 0 auto;
+  padding: 32px 0 56px;
+}
+
+/* ── Shared surface treatment ─────────────────────────────────────────── */
+.topBar,
+.hero,
+.panel {
+  border: 1px solid var(--s-border);
+  border-radius: 16px;
+  background: var(--s-surface);
+  box-shadow: var(--s-shadow);
+  backdrop-filter: blur(14px);
+}
+
+/* ── Top bar ──────────────────────────────────────────────────────────── */
+.topBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+}
+
+.topBar a,
+.ghostButton,
+.primaryButton,
+.smallButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 10px;
+  font-family: var(--s-display);
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease,
+    transform 160ms ease, box-shadow 160ms ease;
+}
+
+.topBar a svg,
+.ghostButton svg,
+.primaryButton svg,
+.smallButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+.topBar a,
+.ghostButton,
+.smallButton {
+  border: 1px solid var(--s-border);
+  background: var(--s-surface-inset);
+  color: var(--foreground);
+}
+
+.topBar a,
+.ghostButton {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.primaryButton {
+  min-height: 42px;
+  border: 1px solid var(--s-teal-border);
+  background: var(--s-teal-bg);
+  color: var(--s-teal-strong);
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+.smallButton {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.topBar a:hover,
+.ghostButton:hover:not(:disabled),
+.smallButton:hover:not(:disabled) {
+  border-color: var(--s-teal-border);
+  background: var(--s-teal-bg);
+  color: var(--foreground);
+  transform: translateY(-1px);
+}
+
+.primaryButton:hover:not(:disabled) {
+  border-color: var(--s-teal-strong);
+  background: var(--s-teal-bg);
+  color: var(--s-teal-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 0 22px var(--s-teal-glow);
+}
+
+.ghostButton:disabled,
+.primaryButton:disabled,
+.smallButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ── Hero ─────────────────────────────────────────────────────────────── */
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 26px;
+  padding: 30px;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 78% 14%, var(--s-honey-glow), transparent 60%);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.heroCopy,
+.summary {
+  position: relative;
+  z-index: 1;
+}
+
+.heroCopy {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--s-honey);
+  font-family: var(--s-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.eyebrow svg {
+  width: 14px;
+  height: 14px;
+}
+
+.hero h1 {
+  margin: 0;
+  max-width: 720px;
+  font-family: var(--s-display);
+  font-size: clamp(30px, 4.4vw, 54px);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+}
+
+.hero p,
+.panelIntro,
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.benefits {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.benefits span {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--s-border-soft);
+  border-radius: 11px;
+  background: var(--s-surface-inset);
+  padding: 11px 12px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.benefits span::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--s-honey);
+  box-shadow: 0 0 10px var(--s-honey-glow);
+}
+
+/* ── Hero summary stat cards ──────────────────────────────────────────── */
+.summary {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.summaryCard {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--s-border);
+  border-radius: 14px;
+  background: var(--s-surface-inset);
+  padding: 16px;
+}
+
+.summaryCardFeature {
+  border-color: var(--s-honey-border);
+  background: var(--s-honey-bg);
+}
+
+.summaryCard span {
+  color: var(--muted);
+  font-family: var(--s-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.summaryCard strong {
+  font-family: var(--s-display);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.summaryCardFeature strong {
+  color: var(--s-honey);
+}
+
+/* ── Panels ───────────────────────────────────────────────────────────── */
+.panel {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+}
+
+.panelHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.panelHeader h2 {
+  margin: 2px 0 0;
+  font-family: var(--s-display);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── Tier ladder ──────────────────────────────────────────────────────── */
+.tierGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 12px;
+}
+
+.tierCard {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--s-border);
+  border-radius: 14px;
+  background: var(--s-surface-inset);
+  padding: 14px;
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.tierCard:hover {
+  transform: translateY(-2px);
+  border-color: var(--s-teal-border);
+}
+
+/* Tier the wallet's current active stake already clears. */
+.tierCardReached {
+  border-color: var(--s-honey-border);
+  background: var(--s-honey-bg);
+  box-shadow: 0 0 18px var(--s-honey-glow);
+}
+
+/* The next tier to aim for. */
+.tierCardNext {
+  border-color: var(--s-teal-border);
+  box-shadow: 0 0 16px var(--s-teal-glow);
+}
+
+.tierTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tierCard strong {
+  font-family: var(--s-display);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.tierBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-family: var(--s-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tierBadgeReached {
+  border: 1px solid var(--s-honey-border);
+  background: rgba(255, 212, 90, 0.14);
+  color: var(--s-honey);
+}
+
+.tierBadgeNext {
+  border: 1px solid var(--s-teal-border);
+  background: var(--s-teal-bg);
+  color: var(--s-teal-strong);
+}
+
+.tierThreshold {
+  font-family: var(--s-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--s-teal-strong);
+}
+
+.tierCardReached .tierThreshold {
+  color: var(--s-honey);
+}
+
+.tierCard p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* ── Wallet rows ──────────────────────────────────────────────────────── */
+.walletList {
+  display: grid;
+  gap: 12px;
+}
+
+.walletRow {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) minmax(140px, 0.7fr) minmax(230px, 1.1fr);
+  gap: 14px;
+  align-items: center;
+  border: 1px solid var(--s-border);
+  border-radius: 14px;
+  background: var(--s-surface-inset);
+  padding: 16px;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.walletRow:hover {
+  border-color: var(--s-teal-border);
+  box-shadow: 0 0 16px var(--s-teal-glow);
+}
+
+.walletMain,
+.walletBalance,
+.stakeBox {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.walletMain strong {
+  font-family: var(--s-display);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.walletMain span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-family: var(--s-mono);
+  font-size: 11px;
+}
+
+.custodyDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.custodyDotLocal {
+  background: var(--s-teal-strong);
+  box-shadow: 0 0 8px var(--s-teal-glow);
+}
+
+.walletBalance strong {
+  font-family: var(--s-display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--s-honey);
+  line-height: 1;
+}
+
+.walletBalance span {
+  color: var(--muted);
+  font-family: var(--s-mono);
+  font-size: 11px;
+}
+
+.stakeForm {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) max-content max-content;
+  gap: 8px;
+}
+
+.stakeForm input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  border: 1px solid var(--s-border);
+  border-radius: 10px;
+  background: var(--s-surface-inset);
+  color: var(--foreground);
+  padding: 0 12px;
+  font-family: var(--s-mono);
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.stakeForm input::placeholder {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.stakeForm input:focus {
+  border-color: var(--s-teal-border);
+  box-shadow: 0 0 0 3px var(--s-teal-bg);
+}
+
+/* ── Status messages ──────────────────────────────────────────────────── */
+.status {
+  margin: 0;
+  font-family: var(--s-mono);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.status[data-tone="ok"] {
+  color: var(--s-teal-strong);
+}
+
+.status[data-tone="error"] {
+  color: var(--s-danger);
+}
+
+.empty {
+  border: 1px dashed var(--s-border);
+  border-radius: 14px;
+  padding: 22px;
+  color: var(--muted);
+  text-align: center;
+  font-family: var(--s-mono);
+  font-size: 13px;
+}
+
+@media (max-width: 860px) {
+  .hero,
+  .walletRow {
+    grid-template-columns: 1fr;
+  }
+
+  .benefits {
+    grid-template-columns: 1fr;
+  }
+
+  .stakeForm {
+    grid-template-columns: 1fr 1fr;
+  }
+}

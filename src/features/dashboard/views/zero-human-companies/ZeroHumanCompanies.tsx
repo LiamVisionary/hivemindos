@@ -5,7 +5,7 @@
 import React from "react";
 import { Portfolio } from "./ColonyCards";
 import { Cockpit, type CockpitHandlers } from "./Cockpit";
-import { CreateCompanyModal, AgentBrowserModal } from "./Modals";
+import { CreateCompanyModal, EditCompanyModal, AgentBrowserModal } from "./Modals";
 import type { Agent, CardStyle, Colony, CreateForm, Density, PoolAgent, Theme } from "./types";
 
 function HiveLogo({ size = 40 }: { size?: number }) {
@@ -93,14 +93,18 @@ export interface ZeroHumanCompaniesProps {
   onRefresh: () => void;
   /** Found a company. Returns the new company id (to auto-open it) or null. */
   onCreateCompany: (form: CreateForm, crew: Agent[]) => Promise<string | null>;
+  /** Edit an existing company's identity + apex goal (crew unchanged). */
+  onEditCompany: (companyId: string, form: CreateForm) => Promise<void>;
   /** Add staged crew to an existing company. */
   onAddAgents: (companyId: string, crew: Agent[]) => Promise<void>;
   onApprove: (companyId: string, approvalId: string) => void;
   onReject: (companyId: string, approvalId: string) => void;
   onFreeze: (companyId: string, frozen: boolean) => void;
   onDelete: (companyId: string) => void;
-  /** Decompose the apex goal + dispatch it to the crew (autonomous execution). */
+  /** Launch perpetual autonomy: decompose the apex goal + dispatch to the crew. */
   onDispatch: (companyId: string) => void;
+  /** Stop perpetual autonomy (no new dispatches; in-flight work finishes). */
+  onStopAutonomy: (companyId: string) => void;
   theme?: Theme;
   cardStyle?: CardStyle;
   density?: Density;
@@ -109,11 +113,11 @@ export interface ZeroHumanCompaniesProps {
 
 export default function ZeroHumanCompanies({
   colonies, agentPool, loading, error, notice, busyId, onRefresh,
-  onCreateCompany, onAddAgents, onApprove, onReject, onFreeze, onDelete, onDispatch,
+  onCreateCompany, onEditCompany, onAddAgents, onApprove, onReject, onFreeze, onDelete, onDispatch, onStopAutonomy,
   theme = "dark", cardStyle = "detailed", density = "comfortable", showBudget = true,
 }: ZeroHumanCompaniesProps) {
   const [openId, setOpenId] = React.useState<string | null>(null);
-  const [modal, setModal] = React.useState<{ type: "create" } | { type: "browse"; id: string } | null>(null);
+  const [modal, setModal] = React.useState<{ type: "create" } | { type: "edit"; id: string } | { type: "browse"; id: string } | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const closeModal = React.useCallback(() => setModal(null), []);
 
@@ -126,6 +130,15 @@ export default function ZeroHumanCompanies({
       const newId = await onCreateCompany(form, crew);
       setModal(null);
       if (newId) setOpenId(newId);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  const handleEdit = async (id: string, form: CreateForm) => {
+    setSubmitting(true);
+    try {
+      await onEditCompany(id, form);
+      setModal(null);
     } finally {
       setSubmitting(false);
     }
@@ -146,6 +159,8 @@ export default function ZeroHumanCompanies({
     onFreeze: (frozen) => onFreeze(colony.id, frozen),
     onDelete: () => onDelete(colony.id),
     onDispatch: () => onDispatch(colony.id),
+    onStopAutonomy: () => onStopAutonomy(colony.id),
+    onEdit: () => setModal({ type: "edit", id: colony.id }),
     busyId,
   };
 
@@ -205,6 +220,12 @@ export default function ZeroHumanCompanies({
       {modal && modal.type === "create" && (
         <CreateCompanyModal agentPool={agentPool} busy={submitting} theme={theme} onClose={closeModal} onCreate={handleCreate} />
       )}
+      {modal && modal.type === "edit" && (() => {
+        const target = colonies.find((c) => c.id === modal.id);
+        return target ? (
+          <EditCompanyModal initial={target.edit} busy={submitting} theme={theme} onClose={closeModal} onSave={(form) => handleEdit(modal.id, form)} />
+        ) : null;
+      })()}
       {modal && modal.type === "browse" && (() => {
         const target = colonies.find((c) => c.id === modal.id);
         return target ? (

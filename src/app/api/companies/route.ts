@@ -8,10 +8,12 @@ import {
   markCompanyDispatched,
   readCompanies,
   setCompanyAgents,
+  setCompanyAutonomy,
   setCompanyFrozen,
   upsertCompany,
 } from "@/lib/services/companies-store";
 import { dispatchCompanyGoal } from "@/lib/services/companies-orchestration";
+import { ensureCompanyAutonomyDriver } from "@/lib/services/company-autonomy-driver";
 import type { QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import type {
   CompanyApexGoal,
@@ -93,9 +95,19 @@ export async function POST(request: NextRequest) {
       if (!company.apexGoal?.title?.trim()) return NextResponse.json({ ok: false, error: "Set an apex goal before launching work." }, { status: 400 });
       if (!company.agentIds?.length) return NextResponse.json({ ok: false, error: "Staff the company with at least one agent first." }, { status: 400 });
       if (company.frozen) return NextResponse.json({ ok: false, error: "Company is frozen — unfreeze it before launching work." }, { status: 400 });
-      const dispatch = await dispatchCompanyGoal(company, Array.isArray(body.fleetSnapshot) ? body.fleetSnapshot : [], { maxTasks: body.maxTasks });
+      // Enter perpetual autonomy BEFORE dispatching: if the dispatch fails midway,
+      // the company stays autonomous and the driver re-dispatches on its next tick.
+      await setCompanyAutonomy(company.id, true);
+      ensureCompanyAutonomyDriver();
+      const dispatch = await dispatchCompanyGoal(company, Array.isArray(body.fleetSnapshot) ? body.fleetSnapshot : [], { maxTasks: body.maxTasks, origin: request.nextUrl.origin });
       await markCompanyDispatched(company.id, Date.now());
       return NextResponse.json({ ok: true, dispatch });
+    }
+    if (action === "stop-autonomy") {
+      if (!body.id?.trim()) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
+      const company = await setCompanyAutonomy(body.id.trim(), false);
+      if (!company) return NextResponse.json({ ok: false, error: "Company not found." }, { status: 404 });
+      return NextResponse.json({ ok: true, company });
     }
     if (action === "delete") {
       if (!body.id?.trim()) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });

@@ -81,9 +81,17 @@ function parseFunctionCall(
   return null;
 }
 
-async function askHivemindAgent(args: Record<string, unknown>) {
+// Returns the spoken summary fed back to the model, plus an optional richer
+// `detail` (markdown) the overlay can surface in a "what she found" modal.
+async function askHivemindAgent(
+  args: Record<string, unknown>,
+): Promise<{ speech: string; detail: string }> {
   const message = typeof args.message === "string" ? args.message.trim() : "";
-  if (!message) return "The relayed request was empty, so nothing was done.";
+  if (!message)
+    return {
+      speech: "The relayed request was empty, so nothing was done.",
+      detail: "",
+    };
   try {
     const response = await fetch("/api/queen-bee/voice", {
       method: "POST",
@@ -95,16 +103,25 @@ async function askHivemindAgent(args: Record<string, unknown>) {
     const data = (await response.json().catch(() => null)) as {
       ok?: boolean;
       text?: string;
+      detail?: string;
       error?: string;
     } | null;
     if (!response.ok || !data?.ok) {
-      return `The HivemindOS agent could not handle that: ${data?.error || `HTTP ${response.status}`}.`;
+      return {
+        speech: `The HivemindOS agent could not handle that: ${data?.error || `HTTP ${response.status}`}.`,
+        detail: "",
+      };
     }
-    return (
-      data.text || "The agent completed the request without a spoken result."
-    );
+    return {
+      speech:
+        data.text || "The agent completed the request without a spoken result.",
+      detail: typeof data.detail === "string" ? data.detail : "",
+    };
   } catch (turnError) {
-    return `The HivemindOS agent could not be reached: ${turnError instanceof Error ? turnError.message : "request failed"}.`;
+    return {
+      speech: `The HivemindOS agent could not be reached: ${turnError instanceof Error ? turnError.message : "request failed"}.`,
+      detail: "",
+    };
   }
 }
 
@@ -233,12 +250,13 @@ export function useQueenBeeRealtime(
       who: QueenVoiceTurn["who"],
       text: string,
       live = false,
+      detail?: string,
     ) => {
       const id = nextTurnId;
       nextTurnId += 1;
       setTurns((current) => [
         ...current.map((turn) => ({ ...turn, live: false })),
-        { id, who, text, live },
+        { id, who, text, live, detail },
       ]);
       return id;
     };
@@ -255,6 +273,9 @@ export function useQueenBeeRealtime(
 
     let liveQueenTurnId = 0;
     let liveQueenText = "";
+    // Detail content from a tool call, attached to the spoken turn it produces
+    // so the overlay can offer a "what she found" modal on that turn.
+    let pendingQueenDetail = "";
     // The Queen's last words linger briefly after she stops so a just-committed
     // input turn can still be matched against them (liveQueenText is cleared the
     // instant her response ends).
@@ -494,7 +515,13 @@ export function useQueenBeeRealtime(
       ) {
         liveQueenText = `${liveQueenText}${payload.delta}`.slice(-1_000);
         if (!liveQueenTurnId) {
-          liveQueenTurnId = addTurn("queen", liveQueenText, true);
+          liveQueenTurnId = addTurn(
+            "queen",
+            liveQueenText,
+            true,
+            pendingQueenDetail || undefined,
+          );
+          pendingQueenDetail = "";
         } else {
           updateTurn(liveQueenTurnId, liveQueenText, true);
         }
@@ -513,16 +540,25 @@ export function useQueenBeeRealtime(
       if (call && !handledFunctionCalls.has(call.callId)) {
         handledFunctionCalls.add(call.callId);
         setPhase("thinking");
-        const output =
-          call.name === "create_hive_task"
-            ? await createHiveTask(call.args)
-            : call.name === "ask_hivemind_agent"
-              ? await askHivemindAgent(call.args)
-              : call.name === "drive_dashboard"
-                ? await driveDashboard(call.args, onDriveDashboardRef.current)
-                : call.name === "remember_preference"
-                  ? await rememberPreference(call.args)
-                  : `Unknown tool: ${call.name}`;
+        let output: string;
+        if (call.name === "create_hive_task") {
+          output = await createHiveTask(call.args);
+        } else if (call.name === "ask_hivemind_agent") {
+          const result = await askHivemindAgent(call.args);
+          output = result.speech;
+          // Hold the findings for the spoken turn this tool call triggers.
+          if (result.detail.trim()) {
+            pendingQueenDetail = pendingQueenDetail
+              ? `${pendingQueenDetail}\n\n---\n\n${result.detail.trim()}`
+              : result.detail.trim();
+          }
+        } else if (call.name === "drive_dashboard") {
+          output = await driveDashboard(call.args, onDriveDashboardRef.current);
+        } else if (call.name === "remember_preference") {
+          output = await rememberPreference(call.args);
+        } else {
+          output = `Unknown tool: ${call.name}`;
+        }
         send({
           type: "conversation.item.create",
           item: {

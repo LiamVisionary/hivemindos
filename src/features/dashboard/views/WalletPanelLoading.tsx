@@ -92,6 +92,14 @@ function AgentWalletTileLoading({ index }: { index: number }) {
   );
 }
 
+export function AgentWalletsChecking() {
+  return (
+    <div className={walletClass("walletGridList")} role="list" aria-label="Loading agent wallets" aria-busy="true">
+      {Array.from({ length: 4 }, (_, index) => <AgentWalletTileLoading key={index} index={index} />)}
+    </div>
+  );
+}
+
 function HiveRailLoading() {
   return (
     <aside className={walletClass("hiveRail")} aria-label="Loading Bankr rewards" aria-busy="true">

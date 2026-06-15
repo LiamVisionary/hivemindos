@@ -45,6 +45,38 @@
   gap: 8px;
 }
 
+.personalStakeRouteLink {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid rgba(45, 212, 191, 0.22);
+  border-radius: 8px;
+  background: rgba(45, 212, 191, 0.10);
+  color: var(--accent-strong);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.personalStakeRouteLink:hover,
+.personalStakeRouteLink:focus-visible {
+  border-color: rgba(45, 212, 191, 0.38);
+  background: rgba(45, 212, 191, 0.15);
+  color: var(--foreground);
+  transform: translateY(-1px);
+}
+
+.personalStakeRouteLink svg {
+  width: 14px;
+  height: 14px;
+}
+
 .personalConnectorStatus {
   margin: -4px 0 0;
   border: 1px solid rgba(45, 212, 191, 0.16);
@@ -402,6 +434,12 @@
   color: var(--foreground);
 }
 
+.personalTokenRowWrap {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
 .personalTokenRow {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr) max-content;
@@ -413,6 +451,10 @@
   background: rgba(15, 23, 42, 0.60);
   padding: 10px 16px 10px 12px;
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.personalTokenRowWithAction {
+  grid-template-columns: 48px minmax(0, 1fr) max-content max-content;
 }
 
 .personalTokenRow:hover {
@@ -496,13 +538,14 @@
   text-shadow: 0 1px 10px rgba(2, 6, 23, 0.44);
 }
 
-.personalTokenRow div {
+.personalTokenMeta,
+.personalTokenValue {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
-.personalTokenRow div:last-child {
+.personalTokenValue {
   min-width: 82px;
   text-align: right;
 }
@@ -520,7 +563,7 @@
   line-height: 1.25;
 }
 
-.personalTokenRow div:last-child strong {
+.personalTokenValue strong {
   font-size: 14.5px;
 }
 
@@ -532,12 +575,47 @@
   color: #fda4af;
 }
 
+.personalTokenStakeButton {
+  display: inline-flex;
+  height: 36px;
+  min-width: 78px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(45, 212, 191, 0.22);
+  border-radius: 999px;
+  background: rgba(45, 212, 191, 0.10);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.personalTokenStakeButton:hover:not(:disabled),
+.personalTokenStakeButton:focus-visible:not(:disabled) {
+  border-color: rgba(45, 212, 191, 0.40);
+  background: rgba(45, 212, 191, 0.16);
+  color: var(--foreground);
+  transform: translateY(-1px);
+}
+
+.personalTokenStakeButton svg {
+  width: 14px;
+  height: 14px;
+}
+
 .personalWalletStatus {
+  box-sizing: border-box;
   margin: 0;
+  max-width: 100%;
   border-radius: 8px;
   padding: 8px 10px;
   font-size: 12px;
   line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .personalWalletStatus[data-tone="ok"] {
@@ -546,6 +624,8 @@
 }
 
 .personalWalletStatus[data-tone="error"] {
+  max-height: 112px;
+  overflow: auto;
   background: rgba(251, 113, 133, 0.12);
   color: #fda4af;
 }
@@ -557,5 +637,17 @@
 
   .recoveryPhraseGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .personalTokenRow,
+  .personalTokenRowWithAction {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .personalTokenValue,
+  .personalTokenStakeButton {
+    grid-column: 2;
+    justify-self: start;
+    text-align: left;
   }
 }
