@@ -2381,3 +2381,25 @@
 - docs/monetization/index.md
   - Decision: adapted_code
   - Reason: added overview of HIVE community utility for docs landing page
+## 2026-06-15T14:22:24.786709+00:00 - implementation
+
+- Request: Document HIVE and x402 workflow payment utility in GitHub Pages monetization docs
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- docs/monetization/index.md
+  - Decision: adapted_code
+  - Reason: added payment rails section and marketplace pricing model summary
+- docs/monetization/hive-staking-and-community-tiers.md
+  - Decision: adapted_code
+  - Reason: separated HIVE payment utility from staking utility
+- docs/monetization/ecosystem-plan.md
+  - Decision: adapted_code
+  - Reason: expanded Agent Marketplace business models and HIVE/x402 payment rails
+- docs/monetization/paid-features/index.md
+  - Decision: adapted_code
+  - Reason: documented paid-feature checkout rails and HIVE staking/payment distinction
+- docs/monetization/honey-hive-treasury.md
+  - Decision: adapted_code
+  - Reason: added HIVE payment utility to token model

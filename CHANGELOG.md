@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-15 21:22:05 +0700 - Document HIVE Workflow Payment Utility
+  - Status: Pushed
+  - Areas changed: Monetization docs (`docs/monetization/index.md`, `docs/monetization/ecosystem-plan.md`, `docs/monetization/honey-hive-treasury.md`, `docs/monetization/hive-staking-and-community-tiers.md`, `docs/monetization/paid-features/index.md`), changelog
+  - Summary: Clarifies that HIVE is both a first-class payment rail and the staking alignment layer. The monetization docs now explain that users can pay for marketplace workflows, agents, swarms, templates, managed credits, pay-per-use services, lifetime access, subscriptions, and workflow commission/revenue-share obligations with HIVE or x402 where supported, while fiat/card, managed HONEY credits, and enterprise paths remain available. The docs also separate spending HIVE for products from staking HIVE for discounts, status, distribution, curation, alpha access, and governance signal.
+  - Verification: Focused `git diff --check` passed for the touched monetization docs, changelog, and assimilation logs; public-doc hygiene search found no local paths or personal operational details in the updated docs; assimilation manifest verification passed.
+  - Intended commit message: `Document HIVE workflow payment utility`
+
 - 2026-06-15 21:13:47 +0700 - Clarify HIVE Marketplace Utility
   - Status: Pushed
   - Areas changed: Monetization docs (`docs/monetization/hive-staking-and-community-tiers.md`, `docs/monetization/honey-hive-treasury.md`, `docs/monetization/index.md`), changelog

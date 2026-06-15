@@ -30,7 +30,29 @@ It can unlock:
 
 It should not be the only way to access optional paid product features.
 
-Paid product features should remain available through non-crypto paths such as card payments, fiat subscriptions, managed HONEY credits, or enterprise contracts. HIVE staking can make those paths better, cheaper, higher-status, or more powerful, but it should not make ordinary paid users feel locked out of the product.
+Paid product features should remain available through multiple payment paths: card payments, fiat subscriptions, managed HONEY credits, x402 crypto payments, HIVE payments, or enterprise contracts. HIVE staking can make those paths better, cheaper, higher-status, or more powerful, but it should not make ordinary paid users feel locked out of the product.
+
+## HIVE Payment Utility Vs Staking Utility
+
+HIVE has two jobs in the ecosystem.
+
+Payment utility:
+
+- Buy marketplace workflows, agents, swarms, templates, or skills.
+- Pay per use through x402-enabled services.
+- Buy lifetime access to a workflow or template.
+- Pay for managed HONEY credits or other hosted service credits when supported.
+- Settle creator commissions or revenue-share obligations when a workflow generates earnings.
+
+Staking utility:
+
+- Unlock holder identity, status, and reputation.
+- Receive managed-service and marketplace-fee discounts.
+- Get earlier access to alpha workflows and private opportunity rooms.
+- Earn marketplace trust signals and better distribution surfaces.
+- Qualify for curation, bounty, and governance signaling roles.
+
+In short: users may spend HIVE when they choose HIVE as a payment rail, and stake HIVE when they want alignment benefits. HIVE is useful, but it is not a forced toll booth.
 
 ## Why Stake Instead Of Spend
 
@@ -131,7 +153,7 @@ After staking, the same wallet can be linked to community surfaces:
 - Bounty curator eligibility.
 - Marketplace seller or contributor status.
 
-Users who do not use crypto can still buy product features through fiat, subscriptions, managed HONEY credits, or enterprise contracts. They simply do not receive the HIVE-only community alignment signals unless they stake.
+Users who do not use crypto can still buy product features through fiat, subscriptions, managed HONEY credits, or enterprise contracts. Crypto-native users can also pay with HIVE or other supported crypto rails, including x402 where available. Users simply do not receive the HIVE-only community alignment signals unless they stake.
 
 ## Launch Tiers
 

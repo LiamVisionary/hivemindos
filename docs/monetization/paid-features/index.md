@@ -35,13 +35,23 @@ Do not make users pay just because the UI got nicer.
 
 Charge when HivemindOS is operating something on their behalf: cloud rooms, shared voice infrastructure, hosted reliability, premium orchestration, or future managed compute.
 
+Paid features should support more than one checkout path when practical:
+
+- Card or fiat payments for ordinary users.
+- Managed HONEY credits for HivemindOS-hosted usage.
+- HIVE payments for users who want to pay with the ecosystem token.
+- x402-enabled crypto payments for pay-per-use APIs, workflows, and agent services.
+- Enterprise contracts for teams.
+
+HIVE payments are product payment utility. HIVE staking is separate alignment utility that can unlock discounts, status, trust signals, curation rights, and early access.
+
 ## Planned Paid Paths
 
 | Paid path         | What HivemindOS operates                               |
 | ----------------- | ------------------------------------------------------ |
 | Hive Cloud        | Deployment, hosted memory, team workspaces, monitoring |
 | Managed compute   | Agent and swarm runtime capacity                       |
-| Agent Marketplace | Paid agents, swarms, workflows, and templates          |
+| Agent Marketplace | Paid agents, swarms, workflows, templates, and commissions on workflow earnings |
 | Enterprise        | SSO, compliance, private deployments, and support      |
 
 <nav class="nextNav" aria-label="Monetization reading path">

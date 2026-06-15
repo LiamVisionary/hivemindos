@@ -53,6 +53,21 @@ Buy and sell:
 
 Hivemind can take a marketplace fee.
 
+Creators can choose the business model that fits the asset:
+
+| Model | What the buyer gets |
+| --- | --- |
+| Free | Public or community workflow access |
+| Pay-per-use | A charged run each time the workflow is executed |
+| Lifetime access | One-time purchase for ongoing access to a workflow or template |
+| Subscription | Recurring access to a maintained agent, workflow, or playbook |
+| Bounty funded | Community or treasury-funded creation of a requested asset |
+| Commission on earnings | The creator earns a percentage of revenue generated through the workflow |
+
+Payments can use ordinary checkout rails, managed HONEY credits, HIVE, or other supported crypto rails such as x402-enabled pay-per-use.
+
+HIVE staking should improve marketplace economics and trust: lower platform fees, stronger creator badges, curation rights, private opportunity rooms, and better distribution surfaces for high-quality listings. HIVE payment should be available as a rail, but staking should remain the alignment layer around the marketplace rather than the only way to buy.
+
 ### Enterprise
 
 Business customers can pay for:

@@ -101,6 +101,23 @@ Users can start without provider API keys. HivemindOS quotes the task, lets the 
 
 Official credit changes are spoof-resistant: credits are written only from verified funding events, and debits are signed by trusted managed runtimes after provider usage is observed server-side.
 
+## Payment Rails
+
+Paid HivemindOS services and marketplace items should support multiple payment rails.
+
+Supported or planned rails include:
+
+- Card and fiat checkout.
+- Managed HONEY credits.
+- Crypto payments.
+- HIVE payments.
+- x402-enabled pay-per-use payments.
+- Enterprise invoices or contracts.
+
+HIVE is a first-class payment rail and the staking alignment layer. Users can spend HIVE when they choose it as the payment method, and they can stake HIVE when they want status, discounts, trust, distribution, early access, curation rights, and governance signal.
+
+The product rule is: HIVE can be used to pay, but HIVE should not be the only way to access ordinary paid services.
+
 ## Revenue Sources
 
 Optional premium services may include Hive Cloud, managed compute, the Agent Marketplace, and Enterprise.
@@ -110,6 +127,8 @@ Hive Cloud covers one-click deployment, managed infrastructure, hosted memory, t
 Managed compute runs agents and swarms on Hivemind infrastructure with usage-based pricing.
 
 The Agent Marketplace can support paid agents, swarms, workflows, and templates, with Hivemind taking a marketplace fee.
+
+Marketplace creators can choose pricing models such as free, pay-per-use, lifetime access, subscription access, bounty-funded creation, or commissions on revenue generated through a workflow.
 
 Enterprise covers SSO, teams, compliance, private deployments, and support contracts.
 
