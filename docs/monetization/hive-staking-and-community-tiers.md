@@ -27,6 +27,7 @@ It can unlock:
 - Honey multipliers.
 - Marketplace fee discounts.
 - Hive Cloud and managed-service discounts.
+- Visionary council access for the highest tier.
 
 It should not be the only way to access optional paid product features.
 
@@ -51,6 +52,7 @@ Staking utility:
 - Get earlier access to alpha workflows and private opportunity rooms.
 - Earn marketplace trust signals and better distribution surfaces.
 - Qualify for curation, bounty, and governance signaling roles.
+- Qualify for top-tier council access when the user reaches the Visionary tier.
 
 In short: users may spend HIVE when they choose HIVE as a payment rail, and stake HIVE when they want alignment benefits. HIVE is useful, but it is not a forced toll booth.
 
@@ -153,7 +155,7 @@ The tier names are social titles, but each title should map to real privileges.
 | Builder    |   50m HIVE | Early workflows and contributor status    |
 | Curator    |  100m HIVE | Marketplace power-user status and bounty curation eligibility |
 | Operator   |  250m HIVE | Ecosystem operations influence and higher trust |
-| Visionary  |    1b HIVE | Highest alignment, access, and status     |
+| Visionary  |    1b HIVE | Highest alignment, access, status, and council eligibility |
 
 These thresholds are fixed in HIVE at launch. They should not float minute-by-minute with price.
 
@@ -304,13 +306,48 @@ Benefits:
 - Highest-signal private room.
 - Highest-signal opportunity room access.
 - Earliest access to experimental monetization workflows.
+- Eligibility for a scarce Visionary council seat with direct roadmap access.
 - Ability to propose official bounty boards or themed grant rounds.
 - Priority listing for marketplace agents and workflows.
 - Public recognition as a top aligned backer, when the user opts in.
 
-Visionary should feel like: “I am a major aligned backer and ecosystem tastemaker.”
+Visionary should feel like: “I am a major aligned backer with early visibility and a real channel into what gets built next.”
 
-Visionary is not treasury control. Visionaries can propose, signal, curate, and boost. Final execution of treasury spending should remain with admin or multisig controls.
+Visionary is not treasury control. Visionaries can preview, propose, advise, signal, curate, and boost. Final execution of treasury spending should remain with admin or multisig controls.
+
+## Visionary Council
+
+The Visionary tier should have one benefit that is not just “more discount.”
+
+The top tier can unlock eligibility for a small Visionary council: a scarce access-and-influence room with direct access to the developer or core team, early sight of roadmap direction, and a structured channel to advise on what ships, which opportunities open, and which ecosystem priorities deserve attention.
+
+This is the non-substitutable benefit at the top of the ladder. A non-staker can pay the standard price for managed services. A non-staker can buy a marketplace workflow when it is public. But direct access to the builder, early roadmap context, and a seat in the strategy room should not be purchasable with a card. That makes the Visionary tier meaningfully different from Operator instead of only adding a larger percentage discount.
+
+Council access should follow two hard boundaries.
+
+First: influence, not control. The council can advise, preview, propose, and be heard. It should not receive admin access, treasury control, user-fund control, smart-contract control, binding vote authority, unilateral payout approval, or the ability to force a product decision. It is a high-signal advisory surface, not a legal or financial governance body.
+
+Second: real scarcity. Direct developer access has a hard supply cap because the developer's time is limited. The council should only promise a cadence the team can honor indefinitely, such as a fixed quarterly briefing plus a private async channel. If demand exceeds available seats, HivemindOS should publish the seat cap, eligibility rules, and any rotation or waitlist policy before expanding access.
+
+Recommended launch shape:
+
+- Visionary stake qualifies a wallet for council eligibility.
+- Active seats are opt-in and limited to a small published cap.
+- The default cadence is a quarterly roadmap and opportunity briefing.
+- The async council channel is for roadmap feedback, alpha workflow feedback, marketplace quality signals, bounty themes, and high-signal ecosystem opportunities.
+- Council participation requires active stake and good standing.
+- Losing the Visionary tier pauses the seat at the next review window.
+
+The council sits above alpha rooms in the access ladder:
+
+```text
+Visibility
+  -> private opportunity rooms
+  -> early alpha workflows
+  -> Visionary council access
+```
+
+The point is not to sell control. The point is to make the most aligned stakers closer to the conversation, while keeping execution responsibility and user-fund safety separate.
 
 ## Marketplace Curation
 
@@ -353,6 +390,7 @@ They can include:
 - Bounty board previews.
 - Product roadmap previews.
 - Operator and Visionary strategy discussions.
+- Visionary council briefings when available.
 
 If an alpha-room experiment becomes a stable paid product feature, it should eventually have a non-crypto paid path.
 
@@ -388,6 +426,7 @@ Operators and Visionaries can help signal on:
 - Community grant priorities.
 - Partnership ideas.
 - Fee policy for marketplace and managed-service surfaces.
+- Visionary council discussion topics, when the council is active.
 
 This is influence, not control. It should not grant admin access to user funds, direct treasury control, unilateral payout approval, staking-contract control, or control over other users' accounts or agents.
 
@@ -455,6 +494,7 @@ Recommended rules:
 The staking layer should avoid creating unnecessary security or governance risk.
 
 - Do not give any tier unilateral treasury control.
+- Do not treat the Visionary council as binding governance or control over funds.
 - Do not let social status bypass safety review.
 - Keep admin or multisig control over treasury payouts at launch.
 - Keep non-crypto paid paths open for product access.

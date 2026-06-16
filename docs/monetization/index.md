@@ -62,7 +62,7 @@ If a feature needs HivemindOS to provide hosted infrastructure, shared room orch
   </section>
   <section class="docCard">
     <h3>HIVE Staking And Community Tiers</h3>
-    <p>The stake-to-unlock model for holder identity, alpha rooms, bounties, marketplace curation, private opportunity rooms, governance signaling, Operator influence, and Visionary access.</p>
+    <p>The stake-to-unlock model for holder identity, alpha rooms, bounties, marketplace curation, private opportunity rooms, governance signaling, Operator influence, and Visionary council access.</p>
     <a href="hive-staking-and-community-tiers.html">Open staking tiers</a>
   </section>
 </div>
@@ -148,4 +148,4 @@ HIVE staking also powers community utility around the future Agent Marketplace a
 
 Curators are marketplace power users who help surface useful agents, workflows, templates, skills, and bounties. Their benefit is early opportunity access, reputation as trusted recommenders, and better distribution surfaces for their own high-quality listings.
 
-Operators and Visionaries get stronger ecosystem ops influence: roadmap signaling, bounty theme prioritization, marketplace quality standards, grant direction, and strategy-room access. This influence does not grant treasury control, admin access to user funds, or unilateral payout authority.
+Operators and Visionaries get stronger ecosystem ops influence: roadmap signaling, bounty theme prioritization, marketplace quality standards, grant direction, and strategy-room access. Visionary can also qualify for a scarce council seat with direct roadmap access and a structured channel to advise the developer or core team. This influence does not grant treasury control, admin access to user funds, binding voting authority, or unilateral payout authority.

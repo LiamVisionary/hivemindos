@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-16 09:21:40 +0700 - Add Visionary Council Utility
+  - Status: Pushed
+  - Areas changed: Monetization docs (`docs/monetization/hive-staking-and-community-tiers.md`, `docs/monetization/index.md`, `docs/monetization/honey-hive-treasury.md`, `docs/monetization/ecosystem-plan.md`), changelog
+  - Summary: Adds Visionary council access as the top-tier HIVE staking utility. The docs now describe the council as scarce direct roadmap access and an advisory channel to the developer or core team, while keeping the boundaries explicit: influence, not control; no treasury access, user-fund control, binding votes, contract control, or unilateral payout authority.
+  - Verification: Focused `git diff --check` passed; public-doc hygiene search found no local paths or secrets in the updated monetization docs; council-boundary search confirmed the updated docs explicitly reject treasury control, admin access, binding votes, contract control, and unilateral payout authority.
+  - Intended commit message: `Add Visionary council utility`
+
 - 2026-06-15 21:52:50 +0700 - Make HIVE Staking Docs User-Facing
   - Status: Pushed
   - Areas changed: Public monetization docs (`docs/monetization/hive-staking-and-community-tiers.md`), changelog
