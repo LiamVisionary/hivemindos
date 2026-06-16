@@ -71,9 +71,9 @@ Hold or stake HIVE
   -> unstake when benefits are no longer wanted
 ```
 
-The result is a structural sink. Supply stays locked for as long as people want the benefits.
+The result is locked supply. HIVE stays out of circulation for as long as people want the benefits.
 
-Buybacks can still support the ecosystem, but buybacks are a flow. Staking is a stock: it removes tokens from circulation while the user wants access, status, and influence.
+Buybacks can still support the ecosystem, but they are a separate mechanism. Stake-lock is the supply sink: tokens are locked while the user wants status, access, discounts, and influence. Buybacks are revenue-backed momentum: they can support demand while revenue flows, but they are not a guaranteed price floor and should not be described like one.
 
 ## V1 Staking Model
 
@@ -329,13 +329,15 @@ First: influence, not control. The council can advise, preview, propose, and be 
 
 Second: real scarcity. Direct developer access has a hard supply cap because the developer's time is limited. The council should only promise a cadence the team can honor indefinitely, such as a fixed quarterly briefing plus a private async channel. If demand exceeds available seats, HivemindOS should publish the seat cap, eligibility rules, and any rotation or waitlist policy before expanding access.
 
+Third: rule-based good standing. Good standing should be narrow and objective, not open-ended discretion. A seat can pause for hard violations such as scams, harassment, doxxing, spam, abusive behavior, evading community safety rules, or attempts to manipulate payouts, user funds, or access checks. It should not pause because someone gives critical feedback, disagrees with direction, or holds an unpopular but good-faith opinion.
+
 Recommended launch shape:
 
 - Visionary stake qualifies a wallet for council eligibility.
 - Active seats are opt-in and limited to a small published cap.
 - The default cadence is a quarterly roadmap and opportunity briefing.
 - The async council channel is for roadmap feedback, alpha workflow feedback, marketplace quality signals, bounty themes, and high-signal ecosystem opportunities.
-- Council participation requires active stake and good standing.
+- Council participation requires active stake and rule-based good standing.
 - Losing the Visionary tier pauses the seat at the next review window.
 
 The council sits above alpha rooms in the access ladder:

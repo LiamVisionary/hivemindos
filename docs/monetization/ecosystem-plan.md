@@ -111,7 +111,7 @@ Growth includes marketing, partnerships, community, and user acquisition.
 
 Treasury builds long-term ecosystem reserves.
 
-Buybacks are used to acquire HIVE from the open market.
+Buybacks are used to acquire HIVE from the open market when revenue supports them. They are revenue-backed momentum, not a guaranteed demand floor. Stake-lock remains the locked-supply mechanism; buybacks remain the revenue-driven support mechanism.
 
 ## Value Wheel
 
@@ -123,16 +123,17 @@ Buybacks are used to acquire HIVE from the open market.
   <li><span>5</span><strong>Strengthen ecosystem</strong></li>
   <li><span>6</span><strong>More adoption</strong></li>
   <li><span>7</span><strong>More revenue</strong></li>
-  <li><span>8</span><strong>Treasury and buybacks</strong></li>
-  <li><span>9</span><strong>Fund Honey rewards</strong></li>
-  <li><span>10</span><strong>More usage</strong></li>
+  <li><span>8</span><strong>Treasury reserves</strong></li>
+  <li><span>9</span><strong>Revenue-backed buybacks</strong></li>
+  <li><span>10</span><strong>Fund Honey rewards</strong></li>
+  <li><span>11</span><strong>More usage</strong></li>
 </ol>
 
-Step 10 feeds back into Step 1: more usage makes the product more useful, gives more people a reason to participate, and restarts the loop.
+Step 11 feeds back into Step 1: more usage makes the product more useful, gives more people a reason to participate, and restarts the loop.
 
 ## One-Sentence Pitch
 
-HivemindOS is a free and open-source operating system for AI agents. Users earn Honey by participating in the ecosystem through usage, creation, contribution, and growth. Honey can be claimed for HIVE, while revenue from optional premium services funds operations, ecosystem growth, treasury reserves, and HIVE buybacks, creating a sustainable flywheel between product adoption and token value.
+HivemindOS is a free and open-source operating system for AI agents. Users earn Honey by participating in the ecosystem through usage, creation, contribution, and growth. Honey can be claimed for HIVE, while revenue from optional premium services funds operations, ecosystem growth, treasury reserves, and revenue-backed HIVE buybacks, creating a sustainable flywheel between product adoption and token value.
 
 <nav class="nextNav" aria-label="Monetization reading path">
   <a href="index.html">Back to monetization</a>
