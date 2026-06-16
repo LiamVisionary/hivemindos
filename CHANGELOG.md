@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-16 22:44:18 +0700 - Clarify HIVE Council And Sink Framing
+  - Status: Pushed
+  - Areas changed: Monetization docs (`docs/monetization/hive-staking-and-community-tiers.md`, `docs/monetization/honey-hive-treasury.md`, `docs/monetization/ecosystem-plan.md`, `docs/monetization/index.md`), changelog
+  - Summary: Tightens the Visionary council policy and separates stake-lock from buybacks in the token utility docs. Council seats are now described as a scarce promise of developer time with a sustainable cadence and narrow, rule-based good-standing requirements, while buybacks are framed as revenue-backed momentum rather than a guaranteed demand floor.
+  - Verification: Focused `git diff --check` passed; public-doc hygiene search found no local paths or secrets in the updated monetization docs; council and sink framing search confirmed the docs now include rule-based good standing, hard-violation examples, revenue-backed buybacks, and explicit no-demand-floor language.
+  - Intended commit message: `Clarify HIVE council and sink framing`
+
 - 2026-06-16 09:21:40 +0700 - Add Visionary Council Utility
   - Status: Pushed
   - Areas changed: Monetization docs (`docs/monetization/hive-staking-and-community-tiers.md`, `docs/monetization/index.md`, `docs/monetization/honey-hive-treasury.md`, `docs/monetization/ecosystem-plan.md`), changelog

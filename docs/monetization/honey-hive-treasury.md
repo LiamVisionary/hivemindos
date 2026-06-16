@@ -107,6 +107,13 @@ More users
   -> More HIVE demand
 ```
 
+Buybacks should be described as revenue-backed momentum, not a demand floor. They can support the ecosystem while premium services generate revenue, but they are not guaranteed support and should not be blended with stake-lock when explaining token utility.
+
+Stake-lock and buybacks do different jobs:
+
+- Stake-lock removes HIVE from circulation while users want staking benefits.
+- Buybacks use revenue to acquire HIVE for the treasury when the business can support them.
+
 ## Treasury Strategy
 
 Initial strategy:
@@ -178,8 +185,9 @@ The first staking design uses fixed HIVE tiers for community alignment rather th
   <li><span>5</span><strong>Strengthen ecosystem</strong></li>
   <li><span>6</span><strong>More adoption</strong></li>
   <li><span>7</span><strong>More revenue</strong></li>
-  <li><span>8</span><strong>Treasury and buybacks</strong></li>
-  <li><span>9</span><strong>Fund Honey rewards</strong></li>
+  <li><span>8</span><strong>Treasury reserves</strong></li>
+  <li><span>9</span><strong>Revenue-backed buybacks</strong></li>
+  <li><span>10</span><strong>Fund Honey rewards</strong></li>
 </ol>
 
 Funded Honey rewards feed back into product usage: people use HivemindOS, earn Honey for useful participation, and push more activity into the ecosystem.

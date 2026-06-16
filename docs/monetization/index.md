@@ -9,7 +9,7 @@ HivemindOS should be useful before anyone pays for a cloud feature. Start here w
 
 The line is simple: local-first control room features stay available by default, and paid services cover infrastructure that costs real money to run or maintain for users.
 
-The ecosystem plan keeps that boundary explicit: HivemindOS remains free and open source, while optional premium services fund company operations, growth, treasury reserves, and HIVE buybacks.
+The ecosystem plan keeps that boundary explicit: HivemindOS remains free and open source, while optional premium services fund company operations, growth, treasury reserves, and revenue-backed HIVE buybacks.
 
 ## Recommended Path
 
