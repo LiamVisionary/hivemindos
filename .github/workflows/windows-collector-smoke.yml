@@ -1,0 +1,65 @@
+name: Windows Collector Smoke
+
+# Confirms the agent telemetry collector (the local agent bridge a machine needs
+# to host agents) actually boots and serves /health on Windows. Windows
+# agent-hosting was never wired up (setup.ps1 installs no collector), so this is
+# the free CI gate before building the Windows collector-install path.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or SHA to test
+        required: false
+        default: main
+
+jobs:
+  collector-windows-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install the collector's only third-party dep
+        shell: pwsh
+        run: npm install --no-save bonjour-service
+
+      - name: Boot collector and probe /health on Windows
+        shell: pwsh
+        run: |
+          $port = 8799
+          $env:AGENT_TELEMETRY_PORT = "$port"
+          $env:AGENT_TELEMETRY_HOST = "127.0.0.1"
+          Write-Host "Booting agent-telemetry-collector.mjs on 127.0.0.1:$port ..."
+          $proc = Start-Process -FilePath "node" `
+            -ArgumentList "scripts/agent-telemetry-collector.mjs" `
+            -PassThru -NoNewWindow `
+            -RedirectStandardOutput "collector-out.log" `
+            -RedirectStandardError "collector-err.log"
+          $ok = $false
+          for ($i = 0; $i -lt 40; $i++) {
+            if ($proc.HasExited) { Write-Host "collector process exited early (exit code $($proc.ExitCode))"; break }
+            try {
+              $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "http://127.0.0.1:$port/health"
+              if ($r.StatusCode -eq 200) { $ok = $true; break }
+            } catch {}
+            Start-Sleep -Seconds 1
+          }
+          Write-Host "=== collector stdout (tail 60) ==="
+          if (Test-Path collector-out.log) { Get-Content collector-out.log -Tail 60 }
+          Write-Host "=== collector stderr (tail 60) ==="
+          if (Test-Path collector-err.log) { Get-Content collector-err.log -Tail 60 }
+          if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+          if (-not $ok) {
+            Write-Error "FAIL: collector /health did not respond 200 on Windows"
+            exit 1
+          }
+          Write-Host "PASS: collector booted and /health responded 200 on Windows"
