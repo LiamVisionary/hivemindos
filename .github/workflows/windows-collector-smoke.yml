@@ -6,6 +6,9 @@ name: Windows Collector Smoke
 # the free CI gate before building the Windows collector-install path.
 
 on:
+  push:
+    branches:
+      - ci/windows-collector-smoke
   workflow_dispatch:
     inputs:
       ref:
@@ -21,7 +24,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref }}
+          ref: ${{ github.event.inputs.ref || github.sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
