@@ -265,7 +265,9 @@ function isMacDevice(device: Device) {
 // Windows / Linux desktops are real HivemindOS machines; keep them (and self)
 // so a Windows/Linux install sees its own machine + agents in the fleet.
 function isDesktopDevice(device: Device) {
-  return /^(windows|linux)$/i.test(device.os);
+  // process.platform reports "win32"; the native bridge reports "windows".
+  // Match both so a Windows device is never dropped (mirrors isDesktopMachineOs).
+  return /^(windows|win32|linux)$/i.test(device.os);
 }
 
 const STALE_OFFLINE_NODE_MS = 7 * 24 * 60 * 60 * 1000;

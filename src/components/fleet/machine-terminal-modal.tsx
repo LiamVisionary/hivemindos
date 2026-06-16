@@ -34,8 +34,9 @@ function shellSessionIdForMachine(machine: FleetMachine) {
 }
 
 function shortenCwd(cwd: string): string {
-  if (!cwd) return "~";
-  const parts = cwd.split("/").filter(Boolean);
+  if (!cwd) return "";
+  // Split on both separators so Windows paths (C:\Users\foo\bar) shorten too.
+  const parts = cwd.split(/[\\/]/).filter(Boolean);
   if (parts.length <= 3) return cwd;
   return ".../" + parts.slice(-2).join("/");
 }
@@ -277,7 +278,7 @@ export function MachineTerminalModal({ machine, onClose }: MachineTerminalModalP
             <div className={styles.bufferEmpty}>
               {connection === "connecting"
                 ? "Connecting to shell…"
-                : `Interactive shell at ${cwdLabel || "~"}.\nType a command and hit return.`}
+                : `Interactive shell at ${cwdLabel || "the working directory"}.\nType a command and press Enter.`}
             </div>
           ) : null}
           {lines.map((line, i) => (
