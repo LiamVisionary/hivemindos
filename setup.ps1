@@ -24,7 +24,29 @@ if ($PSVersionTable.PSVersion.Major -lt 6) {
     $pwshCommand = Get-Command pwsh -ErrorAction SilentlyContinue
   }
   if (-not $pwshCommand) {
-    Write-Host "PowerShell 7 is required. Install it first: winget install --id Microsoft.PowerShell" -ForegroundColor Red
+    # No winget (e.g. Windows Server, or a client missing App Installer): install
+    # PowerShell 7 from Microsoft's official installer script so setup is
+    # automatic EVERYWHERE, not just where winget exists. Without this, setup
+    # exits here and never reaches dependency install or the collector install.
+    Write-Host "Installing PowerShell 7 from the official Microsoft installer (winget not available)" -ForegroundColor Cyan
+    try {
+      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+      $installScript = Invoke-RestMethod -UseBasicParsing -Uri "https://aka.ms/install-powershell.ps1"
+      & ([scriptblock]::Create($installScript)) -UseMSI -Quiet
+      $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+      $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+      $env:Path = "$machinePath;$userPath"
+      $pwshCommand = Get-Command pwsh -ErrorAction SilentlyContinue
+      if (-not $pwshCommand) {
+        $pwshDefault = Join-Path $env:ProgramFiles "PowerShell\7\pwsh.exe"
+        if (Test-Path $pwshDefault) { $pwshCommand = Get-Command $pwshDefault -ErrorAction SilentlyContinue }
+      }
+    } catch {
+      Write-Host "Automatic PowerShell 7 install failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+  }
+  if (-not $pwshCommand) {
+    Write-Host "PowerShell 7 is required and could not be installed automatically. Install it from https://aka.ms/powershell-release?tag=stable then re-run setup." -ForegroundColor Red
     exit 1
   }
   $forwarded = @()

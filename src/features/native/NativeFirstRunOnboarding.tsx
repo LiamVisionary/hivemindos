@@ -162,6 +162,13 @@ export function NativeFirstRunOnboarding() {
   const step = wizardSteps.includes(rawStep) ? rawStep : wizardSteps[0];
   const selectedMode = modes.find((item) => item.id === mode) ?? modes[1];
   const stepShellStyle = stepHeight === null ? undefined : { height: `min(${stepHeight + 40}px, calc(100vh - 15rem))` };
+  // The local collector starts only near the END of setup.ps1, so its check
+  // flips to installed once setup has actually finished. Gate the "pairing"
+  // step's "all set / take the tour" UI on it — otherwise the tour appears the
+  // instant setup is *launched* (while the terminal is still mid-install), which
+  // reads as "done" when it is not.
+  const collectorReady = Boolean(status?.checks?.find((check) => check.id === "collector")?.installed);
+  const setupSettled = demoMode || collectorReady;
 
   const refreshStatus = useCallback(async () => {
     if (!demoMode && !isTauriDesktopRuntime()) return;
@@ -196,6 +203,16 @@ export function NativeFirstRunOnboarding() {
     }, 0);
     return () => window.clearTimeout(handle);
   }, [demoMode, refreshStatus]);
+
+  // While the "pairing" step waits for setup to finish, keep refreshing status
+  // so the screen flips from "finishing setup" to "all set" the moment the
+  // local collector comes up.
+  useEffect(() => {
+    if (step !== "pairing" || setupSettled) return;
+    if (!demoMode && !isTauriDesktopRuntime()) return;
+    const id = window.setInterval(() => { void refreshStatus(); }, 4000);
+    return () => window.clearInterval(id);
+  }, [step, setupSettled, demoMode, refreshStatus]);
 
   useEffect(() => {
     if (!isTauriDesktopRuntime()) return;
@@ -436,14 +453,24 @@ export function NativeFirstRunOnboarding() {
           {step === "pairing" ? (
             <div className="rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.46)] p-5">
               <div className="flex items-center gap-3">
-                <Check aria-hidden="true" className="h-6 w-6 text-[var(--accent-strong)]" />
+                {setupSettled ? (
+                  <Check aria-hidden="true" className="h-6 w-6 text-[var(--accent-strong)]" />
+                ) : (
+                  <LoaderCircle aria-hidden="true" className="h-6 w-6 animate-spin text-[var(--muted)]" />
+                )}
                 <div>
-                  <h3 className="text-lg font-semibold">You're all set</h3>
+                  <h3 className="text-lg font-semibold">{setupSettled ? "You're all set" : "Finishing setup…"}</h3>
                   <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                    You can close this window — HivemindOS finishes up in the background.
-                    {isMac
-                      ? " Your phone can reach this Mac automatically, even when the app is closed. The first time it opens a file, just tap “Allow” on the one-time prompt."
-                      : " If a window pops up asking for permission, just click OK or Allow."}
+                    {setupSettled ? (
+                      <>
+                        You can close this window — HivemindOS finishes up in the background.
+                        {isMac
+                          ? " Your phone can reach this Mac automatically, even when the app is closed. The first time it opens a file, just tap “Allow” on the one-time prompt."
+                          : " If a window pops up asking for permission, just click OK or Allow."}
+                      </>
+                    ) : (
+                      "Setup is still running in the other window — this can take a few minutes while it installs dependencies and the local agent bridge. This screen updates on its own when it finishes."
+                    )}
                   </p>
                 </div>
               </div>
@@ -472,15 +499,22 @@ export function NativeFirstRunOnboarding() {
                 Start setup
               </Button>
             ) : step === "pairing" ? (
-              <>
-                <Button type="button" variant="secondary" onClick={dismiss}>
-                  I’ll explore on my own
+              setupSettled ? (
+                <>
+                  <Button type="button" variant="secondary" onClick={dismiss}>
+                    I’ll explore on my own
+                  </Button>
+                  <Button type="button" onClick={() => { dismiss(); requestGuidedTour(); }}>
+                    <Sparkles aria-hidden="true" />
+                    Show me around
+                  </Button>
+                </>
+              ) : (
+                <Button type="button" variant="ghost" onClick={dismiss}>
+                  <X aria-hidden="true" />
+                  Close — I’ll come back
                 </Button>
-                <Button type="button" onClick={() => { dismiss(); requestGuidedTour(); }}>
-                  <Sparkles aria-hidden="true" />
-                  Show me around
-                </Button>
-              </>
+              )
             ) : step === "agents" ? (
               <Button type="button" onClick={() => setStep("run")}>
                 <Sparkles aria-hidden="true" />
