@@ -197,10 +197,10 @@ function MessageActions({
   );
 }
 
-function MessageFooter({ actions, timeLabel }: { actions?: React.ReactNode; timeLabel?: string }) {
+function MessageFooter({ actions, align = "agent", timeLabel }: { actions?: React.ReactNode; align?: "agent" | "user"; timeLabel?: string }) {
   if (!timeLabel && !actions) return null;
   return (
-    <div className="fr-chat-message-footer">
+    <div className={`fr-chat-message-footer ${align === "user" ? "is-user" : "is-agent"}`}>
       {timeLabel ? <time className="fr-chat-message-time">{timeLabel}</time> : null}
       {actions}
     </div>
@@ -367,7 +367,7 @@ export function MessageThread({
                   {ChatMarkdown ? <ChatMarkdown text={markdownText(content || "(sent attachments)")} className="fr-chat-markdown" /> : renderInline(content || "(sent attachments)")}
                 </div>
                 <AttachmentPills FileText={FileText} attachments={attachments} />
-                <MessageFooter timeLabel={timeLabel} actions={<MessageActions {...actionProps} />} />
+                <MessageFooter align="user" timeLabel={timeLabel} actions={<MessageActions {...actionProps} />} />
               </article>
               {userLiveEvents.length ? <ProcessPanel iconProps={iconProps} active={busy || processEventsAreActive(userLiveEvents)} events={userLiveEvents} /> : null}
             </Fragment>
@@ -415,7 +415,7 @@ export function MessageThread({
                     <InteractivePromptControls disabled={false} options={promptUi.options} sendPromptMessage={sendPromptMessage} Send={Send} />
                   ) : null}
                 </div>
-                {!(busy && index === messages.length - 1) ? <MessageFooter timeLabel={timeLabel} actions={<MessageActions {...actionProps} />} /> : null}
+                {!(busy && index === messages.length - 1) ? <MessageFooter align="agent" timeLabel={timeLabel} actions={<MessageActions {...actionProps} />} /> : null}
               </article>
             ) : null}
           </Fragment>

@@ -310,9 +310,18 @@
   min-width: 0;
   min-height: 28px;
   align-items: center;
+  gap: 8px;
+}
+
+.fr-chat-message-footer.is-agent {
+  justify-content: flex-start;
+  justify-self: start;
+  margin-left: 14px;
+}
+
+.fr-chat-message-footer.is-user {
   justify-content: flex-end;
   justify-self: end;
-  gap: 8px;
 }
 
 .fr-chat-message-footer .fr-chat-action-row {
