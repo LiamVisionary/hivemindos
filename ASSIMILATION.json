@@ -1,34 +1,27 @@
 {
-  "created_at": "2026-06-15T10:23:30.856009+00:00",
+  "created_at": "2026-06-16T15:01:43.625520+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
-      "source_repo": "shared-skill",
-      "source_path": "Skills/hivemindos-wallet-rails/SKILL.md",
-      "target_path": "src/lib/services/wallet/chain-wallet.ts",
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/features/dashboard/views/zero-human-companies/Cockpit.tsx",
+      "target_path": "src/features/dashboard/views/zero-human-companies/Cockpit.tsx",
       "reuse_type": "adapted_code",
-      "note": "encoded documented Base RPC rate-limit fallback workflow into default balance reads"
+      "note": "existing Treasury section and team agent row controls adapted for finance-only configure and readable spend bars"
     },
     {
       "source_repo": "local-project",
-      "source_path": "src/lib/services/wallet/chain-wallet.ts",
-      "target_path": "src/lib/services/wallet/chain-wallet.ts",
+      "source_path": "hivemind-os:src/features/dashboard/views/zero-human-companies/Modals.tsx",
+      "target_path": "src/features/dashboard/views/zero-human-companies/Modals.tsx",
       "reuse_type": "adapted_code",
-      "note": "reused existing EVM balance service and changed read transport selection in place"
+      "note": "existing edit modal helpers and member payload save shape reused for TreasurySettingsModal"
     },
     {
       "source_repo": "local-project",
-      "source_path": "src/features/dashboard/views/PersonalWallets.module.css",
-      "target_path": "src/features/dashboard/views/PersonalWallets.module.css",
+      "source_path": "hivemind-os:src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx",
+      "target_path": "src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx",
       "reuse_type": "adapted_code",
-      "note": "reused existing personal wallet status styles and bounded error overflow"
-    },
-    {
-      "source_repo": "local-project",
-      "source_path": "src/app/api/wallet/balance/route.ts",
-      "target_path": "src/app/api/wallet/balance/route.ts",
-      "reuse_type": "adapted_code",
-      "note": "reused existing balance route and sanitized provider errors"
+      "note": "existing discriminated modal state reused for treasury-specific route"
     }
   ]
 }

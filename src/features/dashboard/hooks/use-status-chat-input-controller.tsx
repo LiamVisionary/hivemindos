@@ -7,8 +7,7 @@ import { resolveDashboardSlashCommand } from "@/features/chat/dashboard-slash-co
 import { createFileReferenceAttachments } from "@/features/chat/chat-file-references";
 import { runtimeChatFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
-import { handleDashboardHandoffTaskCommand } from "./dashboard-handoff-command";
-import { handleDashboardSwarmCommand, handleDashboardSwarmSimCommand } from "./dashboard-swarm-command";
+import { handleStatusChatDashboardCommand } from "./status-chat-dashboard-command-router";
 import { compactRepeatedAssistantText, extractGeneratedKanbanTask, kanbanBodyWithFullSource, nextChatTextDelta, processLabelFromComment, processLabelFromRuntimeEvent, processLabelFromSessionMessage, runtimePromptFromPayload, yieldChatPaint } from "./status-chat-input-helpers";
 import { handleNativeImageGenerationCommand } from "./status-chat-image-generation";
 import { appendPreviewMessagesForActiveChat, applicationGenerationSignature, buildActiveImageGenerationCard, cloneApplicationGenerationCard, findLatestAssistantIndexAfterLastUser, imageGenerationCardContent, imageGenerationCompletionPatchFromText, processEventSignature, shouldStartImageGenerationCard } from "./status-chat-process-image-generation";
@@ -863,31 +862,7 @@ export function useStatusChatInputController(props: any) {
     if (outgoingAttachments.length === 0 && outgoingDirectories.length === 0 && await handleNativeImageGenerationCommand({ rawPrompt: prompt, prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey: chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey), chatAutoScrollRef, clearChatComposerDraft, appendMessage, appendPreviewMessages, setMessagesByAgent, setSelectedChatPreview })) return;
     if (dashboardCommand) {
       const selectedStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
-      const userMessage = { role: "user", content: prompt, surface: "chat" };
-      if (dashboardCommand.name === "handoff-task") {
-        await handleDashboardHandoffTaskCommand({ prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey, appendMessage, appendPreviewMessages, setText, setAttachmentError, setAttachmentMenuOpen, setMessagesByAgent, setSelectedChatPreview });
-        return;
-      }
-      if (dashboardCommand.name === "swarm") {
-        await handleDashboardSwarmCommand({ agents: agents ?? [], prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey, appendMessage, appendPreviewMessages, chatSetupIssue, setText, setAttachmentError, setAttachmentMenuOpen, setMessagesByAgent, setSelectedChatPreview, sharedVault, workingDirectory: selectedChatDirectoryPath, walletsByAgent, createDefaultAgentWallet, honeyLedgerEnabled });
-        return;
-      }
-      if (dashboardCommand.name === "swarm-sim") {
-        await handleDashboardSwarmSimCommand({ agents: agents ?? [], appOrigin: window.location.origin, prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey, appendMessage, appendPreviewMessages, chatSetupIssue, setText, setAttachmentError, setAttachmentMenuOpen, setMessagesByAgent, setSelectedChatPreview, sharedVault, workingDirectory: selectedChatDirectoryPath, walletsByAgent, createDefaultAgentWallet, honeyLedgerEnabled });
-        return;
-      }
-      const assistantMessage = { role: "assistant", content: dashboardCommand.reply, surface: "chat" };
-      appendMessage(selectedAgent.id, userMessage, selectedStorageKey);
-      appendMessage(selectedAgent.id, assistantMessage, selectedStorageKey);
-      appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [userMessage, assistantMessage]);
-      if (queuedMessage.clearComposer !== false) setText("");
-      setAttachmentError("");
-      setAttachmentMenuOpen(false);
-      setActiveView?.(dashboardCommand.view);
-      if (dashboardCommand.refresh === "diagnostics") void refreshMaintenanceReport?.();
-      if (dashboardCommand.refresh === "sessions") void searchAllRuntimeSessions?.("");
-      if (dashboardCommand.refresh === "usage") void refreshRuntimeUsage?.();
-      if (dashboardCommand.refresh === "notifications") void refreshNotifications?.();
+      await handleStatusChatDashboardCommand({ dashboardCommand, prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey, appendMessage, appendPreviewMessages, setText, setAttachmentError, setAttachmentMenuOpen, setMessagesByAgent, setSelectedChatPreview, agents, chatSetupIssue, sharedVault, selectedChatDirectoryPath, walletsByAgent, createDefaultAgentWallet, honeyLedgerEnabled, queuedMessage, setActiveView, refreshMaintenanceReport, searchAllRuntimeSessions, refreshRuntimeUsage, refreshNotifications });
       return;
     }
     const outgoingDirectorySummary = outgoingDirectories.length

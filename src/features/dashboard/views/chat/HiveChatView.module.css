@@ -35,6 +35,90 @@
   transition: grid-template-columns 340ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+:global(:root[data-theme="hive-light"]) .hiveChatRoot {
+  --hive-bg-0: #f1ede3;
+  --hive-bg-1: #f6f2e9;
+  --hive-bg-2: #fbf8f1;
+  --hive-bg-3: #f4efe4;
+  --hive-bg-4: #e8dfcf;
+  --hive-line: rgba(54, 46, 30, 0.10);
+  --hive-line-2: rgba(54, 46, 30, 0.16);
+  --hive-hex-line: rgba(54, 46, 30, 0.08);
+  --hive-fg: #221d14;
+  --hive-fg-2: #5e574b;
+  --hive-fg-3: #867d6e;
+  --hive-fg-4: #a59b89;
+  --hive-cyan: #5f8f5a;
+  --hive-cyan-2: #4f7d4b;
+  --hive-cyan-3: #376739;
+  --hive-honey: #b07f1c;
+  --hive-honey-2: #936811;
+  --hive-danger: #c0524d;
+  --hive-danger-2: #963a37;
+  --hive-panel: linear-gradient(180deg, rgba(251, 248, 241, 0.94), rgba(244, 239, 228, 0.82));
+  --hive-panel-card: linear-gradient(180deg, rgba(255, 252, 246, 0.88), rgba(244, 239, 228, 0.76));
+}
+
+:global(:root[data-theme="hive-light"]) .hiveChatRail,
+:global(:root[data-theme="hive-light"]) .hiveChatHeader,
+:global(:root[data-theme="hive-light"]) .hiveChatShelf,
+:global(:root[data-theme="hive-light"]) .hiveComposerDock {
+  background: rgba(251, 248, 241, 0.88);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveChatMain {
+  background: rgba(246, 242, 233, 0.52);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveRailSearch,
+:global(:root[data-theme="hive-light"]) .hiveAgentMenuSearch,
+:global(:root[data-theme="hive-light"]) .hiveAgentMenuIcon,
+:global(:root[data-theme="hive-light"]) .hiveMetaPill,
+:global(:root[data-theme="hive-light"]) .hiveAttachmentCard,
+:global(:root[data-theme="hive-light"]) .hiveTerminalBlock,
+:global(:root[data-theme="hive-light"]) .hiveQueueItem,
+:global(:root[data-theme="hive-light"]) .hiveShelfPanel {
+  border-color: var(--hive-line-2);
+  background: rgba(255, 252, 246, 0.74);
+  color: var(--hive-fg-2);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveAgentCard,
+:global(:root[data-theme="hive-light"]) .hiveAgentMenu,
+:global(:root[data-theme="hive-light"]) .hiveComposerForm,
+:global(:root[data-theme="hive-light"]) .hiveProcessPanel,
+:global(:root[data-theme="hive-light"]) .hiveProcessRow {
+  border-color: var(--hive-line-2);
+  background: var(--hive-panel-card);
+  box-shadow: 0 18px 44px rgba(80, 60, 20, 0.11);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveAgentCard:hover,
+:global(:root[data-theme="hive-light"]) .hiveAgentCard:focus-visible,
+:global(:root[data-theme="hive-light"]) .hiveAgentMenuList button:hover,
+:global(:root[data-theme="hive-light"]) .hiveAgentMenuList button:focus-visible,
+:global(:root[data-theme="hive-light"]) .hiveAgentMenuList button.active,
+:global(:root[data-theme="hive-light"]) .hiveNavRow:hover,
+:global(:root[data-theme="hive-light"]) .hiveNavRow.active {
+  border-color: rgba(95, 143, 90, 0.28);
+  background: rgba(95, 143, 90, 0.10);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveUserBubble {
+  border-color: rgba(95, 143, 90, 0.24);
+  background: rgba(95, 143, 90, 0.10);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveChatRoot :where(input, textarea, pre) {
+  background: rgba(255, 252, 246, 0.82);
+  color: var(--hive-fg);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveChatRoot input::placeholder,
+:global(:root[data-theme="hive-light"]) .hiveChatRoot textarea::placeholder {
+  color: var(--hive-fg-4);
+}
+
 .shelfOpen {
   grid-template-columns: 264px minmax(0, 1fr) 336px;
 }

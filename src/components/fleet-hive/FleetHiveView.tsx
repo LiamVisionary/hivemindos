@@ -24,17 +24,18 @@ import {
   type FleetAgent, type FleetMachine,
 } from "@/components/fleet/fleet-data";
 import type { FleetViewProps } from "@/components/fleet/FleetView";
-import { OrbitalGraph } from "@/components/fleet/orbital-graph";
+import { HudClock, OrbitalGraph } from "@/components/fleet/orbital-graph";
 import { MapView } from "@/components/fleet/map-view";
 import { ListView } from "@/components/fleet/list-view";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { emitQueenVoiceToggle } from "@/lib/native/queen-voice-events";
 import { HIVE_H, HIVE_W, frBuildLayout, frContentBounds } from "./hive-geometry";
 import { mapFleetMachines } from "./fleet-hive-mappers";
 import type { HiveAgent, HiveMachine, HiveSelection } from "./fleet-hive-types";
 import { HiveStage } from "./HiveStage";
 import { HivePanel, type HivePanelHandlers } from "./HivePanel";
 import { TopBar } from "./TopBar";
-import { ChatPill } from "./ChatPill";
+import { useFrTheme } from "./use-fr-theme";
 import "./fleet-hive.css";
 
 // A just-created agent stays spotlighted for one bounce/glow cycle.
@@ -49,6 +50,8 @@ const PANEL_W = 340;
 // Fitting that whole canvas to the area reproduces the drop-in's cell size as
 // the default ("100%"); the user zooms/pans out from there.
 const BASELINE_CANVAS_W = 1440;
+const GRAPH_LAYOUT_TOGGLE_HUD_TOP = 86;
+const GRAPH_LAYOUT_TOGGLE_SELECTED_HUD_TOP = 158;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 1.25; // ± button multiplier
@@ -125,10 +128,14 @@ export function FleetHiveView({
   onOpenQueenSettings,
   onDuplicate,
   onRemove,
-  onSendMessage,
   walletsByAgent,
   layoutToggle,
-}: FleetViewProps & { layoutToggle?: React.ReactNode } = {}) {
+  onViewModeChange,
+}: FleetViewProps & {
+  layoutToggle?: React.ReactNode;
+  onViewModeChange?: (mode: FleetViewMode) => void;
+} = {}) {
+  const frTheme = useFrTheme();
   // tasks/alerts/ticker/edges drive the graph/map view modes (the hive mode
   // itself surfaces live agent state directly rather than the dispatch rails).
 
@@ -157,6 +164,10 @@ export function FleetHiveView({
   // View mode (parity with the legacy FleetView toolbar). "hive" is the new hex
   // layout; graph/map/list reuse the existing visualisations inside this chrome.
   const [viewMode, setViewMode] = React.useState<FleetViewMode>("hive");
+  const chooseViewMode = React.useCallback((mode: FleetViewMode) => {
+    setViewMode(mode);
+    onViewModeChange?.(mode);
+  }, [onViewModeChange]);
   const [selectionTooltipKey, setSelectionTooltipKey] = React.useState<string | null>(null);
   const [area, setArea] = React.useState<{ w: number; h: number; full: number }>({ w: 0, h: 0, full: 0 });
   // User-controlled zoom (1 = drop-in baseline size) + pan offset, in screen px.
@@ -279,11 +290,14 @@ export function FleetHiveView({
   // so it doesn't also (de)select a cell; a tap with no movement clicks through.
   const onPanPointerDown = React.useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return;
+    e.preventDefault();
+    window.getSelection()?.removeAllRanges();
     const start = { x: e.clientX, y: e.clientY, ox: view.x, oy: view.y, moved: false };
     const onMove = (ev: PointerEvent) => {
       const dx = ev.clientX - start.x;
       const dy = ev.clientY - start.y;
       if (!start.moved && Math.hypot(dx, dy) < 4) return;
+      ev.preventDefault();
       start.moved = true;
       setView((v) => ({ ...v, x: start.ox + dx, y: start.oy + dy }));
     };
@@ -357,6 +371,7 @@ export function FleetHiveView({
     onAddAgent: onAddAgent ? (m) => onAddAgent(m.source) : undefined,
     onAddMachine,
     onOpenQueenSettings,
+    onCallQueen: () => emitQueenVoiceToggle(),
     onUpdateMachine: onUpdateMachine ? (m) => onUpdateMachine(m.source) : undefined,
     onRenameMachine: onRenameMachine ? (m) => {
       const next = window.prompt("Rename machine", m.name);
@@ -382,7 +397,7 @@ export function FleetHiveView({
     <TooltipProvider delayDuration={120}>
     <div
       className="fr-root"
-      data-fr-theme="dark"
+      data-fr-theme={frTheme}
       style={{
         height: "100%", width: "100%", display: "flex", flexDirection: "column",
         background: "var(--bg)", position: "relative", overflow: "hidden",
@@ -395,10 +410,15 @@ export function FleetHiveView({
         {layoutToggle ? (
           <div style={{ position: "absolute", top: 14, left: 14, zIndex: 30 }}>{layoutToggle}</div>
         ) : null}
-        {/* view-mode (hive/graph/map/list) switcher — top centre, like legacy */}
+        {/* view-mode (hive/graph/map/list) switcher — right-aligned with the hive canvas */}
         {!initialLoading ? (
-          <div style={{ position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 30 }}>
-            <ViewModeToggle mode={viewMode} onChoose={setViewMode} />
+          <div style={{ position: "absolute", top: 14, right: viewMode === "hive" ? PANEL_W + 16 : 18, zIndex: 30 }}>
+            <ViewModeToggle mode={viewMode} onChoose={chooseViewMode} />
+          </div>
+        ) : null}
+        {viewMode === "graph" && !initialLoading ? (
+          <div className="fr-graph-clock" aria-label="Current time">
+            <HudClock />
           </div>
         ) : null}
         {initialLoading ? (
@@ -490,13 +510,16 @@ export function FleetHiveView({
                   alerts={alerts}
                   tasks={tasks}
                   ticker={ticker}
+                  showClock={false}
+                  leftHudInset={16}
+                  topLeftHudTop={layoutToggle ? GRAPH_LAYOUT_TOGGLE_HUD_TOP : 14}
+                  selectedHudTop={layoutToggle ? GRAPH_LAYOUT_TOGGLE_SELECTED_HUD_TOP : 84}
+                  topRightHudTop={58}
                 />
               </div>
             ) : viewMode === "map" ? (
               <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", overflow: "hidden" }}>
                 <MapView
-                  width={840}
-                  height={840}
                   machines={machines}
                   edges={edges}
                   selected={selectedMachineId}
@@ -539,15 +562,8 @@ export function FleetHiveView({
           </>
         )}
       </div>
-      <ChatPill
-        placeholder="Ask the hive to dispatch a task…"
-        offsetX={viewMode === "hive" ? PANEL_W / 2 : 0}
-        tone={viewMode === "hive" ? "hive" : "legacy"}
-        // In the legacy graph/map/list views the centre is busy (orbit core,
-        // map, list rows); tuck the pill into the clear bottom-left corner.
-        wrapStyle={viewMode === "hive" ? undefined : { left: 18, bottom: 18, transform: "none" }}
-        onSend={onSendMessage}
-      />
+      {/* The "Message the hive" pill now lives app-wide (PersistentHiveChat at
+          the dashboard root) so it persists across every view, not just here. */}
 
       {aeonDeleteTarget && onRemove ? (
         <AeonDeleteModal

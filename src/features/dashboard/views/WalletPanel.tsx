@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, Dispatch, ElementType, SetStateAction } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Check, Copy, Download as DownloadIcon, KeyRound, List, LockKeyhole, Plus, RefreshCcw as RefreshIcon, Send, Shuffle, WalletCards, X } from "lucide-react";
+import { Copy, Download as DownloadIcon, KeyRound, LockKeyhole, Plus, RefreshCcw as RefreshIcon, Send, Shuffle, WalletCards, X } from "lucide-react";
 import type { AgentWalletCardProps } from "@/components/wallet/AgentWalletCard";
 import type { AgentWalletCardCompactProps } from "@/components/wallet/AgentWalletCardCompact";
 import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
@@ -17,6 +17,9 @@ import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValu
 import type { DashboardView, RuntimeUsageAnalytics, WalletActionState, WalletMoneyClawStatus, WalletVaultBackupStatus } from "@/features/dashboard/dashboard-types";
 import { exportAgentWalletSecret, exportPersonalWalletGroupSecret } from "./wallet-secret-export-actions";
 import { AgentWalletsChecking, PersonalWalletsChecking, WalletUsageLoading } from "./WalletPanelLoading";
+import { PersonalWalletMenu } from "./PersonalWalletMenu";
+import { appendFreshImportedWallets, planImportedWalletMerge } from "./personal-wallet-import-merge";
+import { stakeHrefForPersonalToken, walletCustodySummary } from "./personal-stake-link";
 import personalStyles from "./PersonalWallets.module.css";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
@@ -83,12 +86,10 @@ type PersonalWalletVaultInfo = {
   createdAt?: string | number;
   updatedAt?: number;
 };
-
 type PersonalPortfolioToken = AgentWalletTokenBalance & {
   walletId: string;
   walletName: string;
 };
-
 type PersonalWalletGroup = {
   id: string;
   name: string;
@@ -98,19 +99,16 @@ type PersonalWalletGroup = {
   nativeSummary: string;
   primaryWallet: PersonalWallet;
 };
-
 type AgentWalletRow = {
   agent: AgentProfile;
   hasWallet: boolean;
   wallet: AgentWalletConfig;
 };
-
 const BANKR_RECIPIENT_STORAGE_KEY = "hivemindos.bankrRecipientAddress";
 const PERSONAL_WALLET_PORTFOLIO_VERSION = 7;
 const RECOVERY_PHRASE_WORD_COUNT = 12;
 const RECOVERY_PHRASE_WALLET_ID_SUFFIX = /:(?:eip155-\d+|solana-[a-z0-9-]+)$/i;
 const personalClass = createStyleClass(personalStyles);
-
 function emptyRecoveryPhraseWords() {
   return Array.from({ length: RECOVERY_PHRASE_WORD_COUNT }, () => "");
 }
@@ -399,6 +397,7 @@ function WalletPanelComponent(props: WalletPanelProps) {
   const [personalRecoveryWords, setPersonalRecoveryWords] = useState(() => emptyRecoveryPhraseWords());
   const [personalImportStatus, setPersonalImportStatus] = useState("");
   const [copiedAddressKey, setCopiedAddressKey] = useState("");
+  const personalReimportAgentIdRef = useRef("");
   const autoRefreshPersonalWalletsRef = useRef(new Set<string>());
   const nativeDesktopRuntime = useMemo(() => isTauriDesktopRuntime(), []);
   const bankrRecipientReady = /^0x[a-fA-F0-9]{40}$/.test(bankrRecipientAddress.trim());
@@ -578,13 +577,23 @@ function WalletPanelComponent(props: WalletPanelProps) {
     }));
   }, []);
 
-  function copyPersonalAddress(wallet: PersonalWallet) {
+  function copyPersonalAddress(wallet: Pick<PersonalWallet, "id" | "address">) {
     const key = `${wallet.id}:${wallet.address}`;
     void navigator.clipboard?.writeText(wallet.address);
     setCopiedAddressKey(key);
     window.setTimeout(() => {
       setCopiedAddressKey((current) => current === key ? "" : current);
     }, 1800);
+  }
+
+  function reimportPersonalWalletGroup(group: PersonalWalletGroup) {
+    const wallet = group.wallets.find((row) => row.network === "eip155:8453") ?? group.primaryWallet;
+    const recoveryGroup = group.wallets.length > 1 || normalizePersonalWalletImportSource(wallet.id, wallet.importedFrom) === "recovery-phrase";
+    setPersonalImportDraft({ name: group.name, network: wallet.network, importKind: recoveryGroup ? "recovery-phrase" : "private-key", secret: "", address: "" });
+    personalReimportAgentIdRef.current = recoveryGroup ? group.id : wallet.id;
+    setPersonalRecoveryWords(emptyRecoveryPhraseWords());
+    setPersonalImportStatus(recoveryGroup ? "Reimport the recovery phrase to restore local signer access for this account." : "Reimport the private key to restore local signer access for this wallet.");
+    setPersonalImportOpen(true);
   }
 
   function updatePersonalImportKind(importKind: "private-key" | "recovery-phrase" | "watch") {
@@ -653,7 +662,7 @@ function WalletPanelComponent(props: WalletPanelProps) {
   }
 
   async function importPersonalWallet() {
-    const walletId = createPersonalWalletId();
+    const walletId = personalReimportAgentIdRef.current || createPersonalWalletId();
     const name = personalImportDraft.name.trim() || "My wallet";
     const network = personalImportDraft.network;
     if (personalImportDraft.importKind === "watch") {
@@ -680,6 +689,7 @@ function WalletPanelComponent(props: WalletPanelProps) {
       };
       setPersonalWallets((current) => [row, ...current]);
       persistPersonalWalletRecords([row]);
+      personalReimportAgentIdRef.current = "";
       setPersonalImportOpen(false);
       setPersonalImportStatus("View-only wallet added.");
       return;
@@ -734,20 +744,24 @@ function WalletPanelComponent(props: WalletPanelProps) {
       createdAt: now,
       updatedAt: now,
     }));
-    const existingWallets = new Set(personalWallets.map(personalWalletKey));
-    const freshRows = importedRows.filter((wallet) => !existingWallets.has(personalWalletKey(wallet)));
+    const { freshRows, upgradedRows, wallets: upgradedWallets } = planImportedWalletMerge(personalWallets, importedRows, now);
     if (!freshRows.length) {
-      setPersonalImportStatus(importedRows.length > 1 ? "Those recovery phrase accounts are already in My wallets." : "That wallet is already in My wallets.");
+      if (!upgradedRows.length) {
+        setPersonalImportStatus(importedRows.length > 1 ? "Those recovery phrase accounts are already in My wallets." : "That wallet is already in My wallets.");
+        return;
+      }
+      setPersonalWallets(upgradedWallets);
+      upgradedRows.forEach((wallet) => void refreshPersonalWalletBalance(wallet));
+      personalReimportAgentIdRef.current = "";
+      setPersonalRecoveryWords(emptyRecoveryPhraseWords());
+      setPersonalImportOpen(false);
+      setPersonalImportStatus(importedRows.length > 1 ? "Signer access restored for the matching wallet rows." : "Signer access restored for this wallet.");
       return;
     }
-    setPersonalWallets((current) => {
-      const existing = new Set(current.map(personalWalletKey));
-      return [...freshRows.filter((wallet) => !existing.has(personalWalletKey(wallet))), ...current];
-    });
-    freshRows.forEach((wallet) => {
-      void refreshPersonalWalletBalance(wallet);
-    });
+    setPersonalWallets((current) => appendFreshImportedWallets(current, freshRows));
+    freshRows.forEach((wallet) => void refreshPersonalWalletBalance(wallet));
     setPersonalImportDraft((current) => ({ ...current, secret: "", address: "" }));
+    personalReimportAgentIdRef.current = "";
     setPersonalRecoveryWords(emptyRecoveryPhraseWords());
     setPersonalImportOpen(false);
     setPersonalImportStatus(freshRows.length > 1 ? `Imported ${freshRows.length} recovery phrase accounts. Refreshing token lists...` : "Wallet imported. Refreshing token list...");
@@ -784,6 +798,7 @@ function WalletPanelComponent(props: WalletPanelProps) {
         updatedAt: now,
       }, ...current]);
       setPersonalImportStatus("Browser wallet added as view-only.");
+      personalReimportAgentIdRef.current = "";
       setPersonalImportOpen(false);
     } catch (error) {
       setPersonalImportStatus(error instanceof Error ? error.message : "Could not connect browser wallet.");
@@ -999,6 +1014,7 @@ function WalletPanelComponent(props: WalletPanelProps) {
                       size="sm"
                       variant="secondary"
                       onClick={() => {
+                        personalReimportAgentIdRef.current = "";
                         setPersonalImportStatus("");
                         setPersonalImportOpen((open) => !open);
                       }}
@@ -1137,37 +1153,18 @@ function WalletPanelComponent(props: WalletPanelProps) {
                           <header className={personalClass("personalWalletTop")}>
                             <div>
                               <strong>{group.name}</strong>
-                              <span>{group.primaryWallet.custodyMode === "local" ? "Spendable" : "View-only"} · {group.wallets.length} {group.wallets.length === 1 ? "chain" : "chains"}</span>
+                              <span>{walletCustodySummary(group.wallets)}</span>
                             </div>
-                            <div className={personalClass("addressMenu")}>
-                              <Button type="button" variant="ghost" size="icon-sm" className={personalClass("addressListButton")} aria-label={`${group.name} addresses`}>
-                                <List aria-hidden="true" />
-                              </Button>
-                              <div className={personalClass("addressTooltip")} role="tooltip">
-                                {group.wallets.map((wallet) => {
-                                  const copied = copiedAddressKey === `${wallet.id}:${wallet.address}`;
-                                  return (
-                                    <div key={wallet.id}>
-                                      <span>
-                                        <strong>{networkLabel(wallet.network)}</strong>
-                                        <small>{shortenAddress(wallet.address)}</small>
-                                      </span>
-                                      <Button
-                                        type="button"
-                                        variant={copied ? "secondary" : "ghost"}
-                                        size="icon-xs"
-                                        className={personalClass("addressCopyButton")}
-                                        onClick={() => copyPersonalAddress(wallet)}
-                                        aria-label={`Copy ${networkLabel(wallet.network)} address`}
-                                        title={copied ? "Copied" : "Copy address"}
-                                      >
-                                        {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-                                      </Button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
+                            <PersonalWalletMenu
+                              Button={Button}
+                              copiedAddressKey={copiedAddressKey}
+                              label={group.name}
+                              networkLabel={networkLabel}
+                              onCopyAddress={copyPersonalAddress}
+                              onReimport={() => reimportPersonalWalletGroup(group)}
+                              shortenAddress={shortenAddress}
+                              wallets={group.wallets}
+                            />
                           </header>
                           <div className={personalClass("personalWalletBalance")}>
                             <strong>{formatMoney(group.totalValueUsd)}</strong>
@@ -1201,6 +1198,7 @@ function WalletPanelComponent(props: WalletPanelProps) {
                           </div>
                           <div className={personalClass("personalTokenList")} aria-label={`${group.name} tokens`}>
                             {tokenRows.map((token) => {
+                              const tokenWallet = group.wallets.find((wallet) => wallet.id === token.walletId);
                               const canStakeHive = isBaseHiveTokenLike(token);
                               return (
                                 <div key={`${token.network}-${token.isNative ? "native" : token.tokenAddress || token.symbol}`} className={personalClass("personalTokenRowWrap")}>
@@ -1216,8 +1214,12 @@ function WalletPanelComponent(props: WalletPanelProps) {
                                         {token.priceChange24hPct == null ? "24h --" : `${token.priceChange24hPct >= 0 ? "+" : ""}${token.priceChange24hPct.toFixed(2)}%`}
                                       </span>
                                     </div>
-                                    {canStakeHive ? (
-                                      <Link href="/stake" className={personalClass("personalTokenStakeButton")}><LockKeyhole aria-hidden="true" /><span>Stake</span></Link>
+                                    {canStakeHive && tokenWallet ? (
+                                      tokenWallet.custodyMode === "local" || !nativeDesktopRuntime ? (
+                                        <Link href={stakeHrefForPersonalToken(tokenWallet, token)} className={personalClass("personalTokenStakeButton")}><LockKeyhole aria-hidden="true" /><span>Stake</span></Link>
+                                      ) : (
+                                        <button type="button" className={personalClass("personalTokenStakeButton")} disabled title="Import this Base wallet locally before staking in the desktop app."><LockKeyhole aria-hidden="true" /><span>View-only</span></button>
+                                      )
                                     ) : null}
                                   </div>
                                 </div>

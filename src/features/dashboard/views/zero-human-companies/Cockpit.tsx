@@ -1,6 +1,7 @@
 "use client";
 // Zero Human Companies — single colony cockpit (tabbed).
 import React from "react";
+import { Settings2 } from "lucide-react";
 import { STATE_COLOR, Ring, RoleGlyph, StatusPill, BurnBar, SectionLabel, Panel } from "./primitives";
 import { IssueBoard } from "./IssueBoard";
 import { STATUS_TONE } from "./data";
@@ -15,8 +16,12 @@ export type CockpitHandlers = {
   onDispatch: () => void;
   /** Stop perpetual autonomy (no new dispatches; in-flight work finishes). */
   onStopAutonomy: () => void;
-  /** Open the edit modal (name, ticker, sector, apex goal). */
+  /** Open the full company editor. */
   onEdit: () => void;
+  /** Open the treasury-only editor. */
+  onEditTreasury: () => void;
+  /** Open one member agent's company settings. */
+  onEditAgent: (agentId: string) => void;
   /** Approval/company id currently mutating, to disable its controls. */
   busyId: string | null;
 };
@@ -33,32 +38,38 @@ function dispatchedAgo(ms?: number): string | null {
 }
 
 // ── Org chart ────────────────────────────────────────────────────────────
-function OrgChart({ colony, wide }: { colony: Colony; wide?: boolean }) {
+function OrgChart({ colony, wide, onEditAgent }: { colony: Colony; wide?: boolean; onEditAgent?: (agentId: string) => void }) {
   const queen = colony.agents.find((a) => a.role === "Queen");
   const reports = colony.agents.filter((a) => a.role !== "Queen");
+  const editFor = (agent: Agent) => {
+    const agentId = agent.id;
+    return agentId ? () => onEditAgent?.(agentId) : undefined;
+  };
   if (wide) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {queen && <AgentNode agent={queen} head />}
+        {queen && <AgentNode agent={queen} head onEdit={editFor(queen)} />}
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
-          {reports.map((a) => <AgentNode key={a.id ?? a.name} agent={a} flat />)}
+          {reports.map((a) => <AgentNode key={a.id ?? a.name} agent={a} flat onEdit={editFor(a)} />)}
         </div>
       </div>
     );
   }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {queen && <AgentNode agent={queen} head />}
+      {queen && <AgentNode agent={queen} head onEdit={editFor(queen)} />}
       <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingLeft: 14, borderLeft: "1px solid var(--line-2)", marginLeft: 18 }}>
-        {reports.map((a) => <AgentNode key={a.id ?? a.name} agent={a} />)}
+        {reports.map((a) => <AgentNode key={a.id ?? a.name} agent={a} onEdit={editFor(a)} />)}
       </div>
     </div>
   );
 }
 
-function AgentNode({ agent: a, head, flat }: { agent: Agent; head?: boolean; flat?: boolean }) {
+function AgentNode({ agent: a, head, flat, onEdit }: { agent: Agent; head?: boolean; flat?: boolean; onEdit?: () => void }) {
   const sc = STATE_COLOR[a.state] || "var(--fg-4)";
   const overBudget = a.budgetPct >= 80;
+  const budgetTone = overBudget ? "var(--danger-2)" : "var(--honey-2)";
+  const capLabel = a._cap ? `$${a._cap}/day cap` : "uncapped";
   return (
     <div style={{
       position: "relative", display: "flex", gap: 11, alignItems: "flex-start",
@@ -76,15 +87,26 @@ function AgentNode({ agent: a, head, flat }: { agent: Agent; head?: boolean; fla
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--f-mono)", fontSize: 9.5, color: sc, textTransform: "uppercase" }}>
             <span className={"dot" + (a.state === "working" ? " live" : "")} style={{ color: sc }} />{a.state}
           </span>
+          {onEdit ? (
+            <button
+              onClick={onEdit}
+              aria-label={`Edit ${a.name}`}
+              title={`Edit ${a.name}`}
+              style={{ width: 28, height: 28, flexShrink: 0, display: "inline-grid", placeItems: "center", cursor: "pointer", border: "1px solid var(--line-2)", borderRadius: 8, background: "transparent", color: "var(--fg-4)" }}
+            >
+              <Settings2 size={14} strokeWidth={1.8} />
+            </button>
+          ) : null}
         </div>
         <div style={{ fontSize: 11.5, lineHeight: 1.4, color: "var(--fg-3)", marginTop: 4, textWrap: "pretty" }}>{a.task}</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 7 }}>
-          <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--fg-4)" }}>{a.runtime}</span>
-          <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ flex: 1, maxWidth: 110, height: 4, borderRadius: 999, background: "var(--bg-4)", overflow: "hidden" }}>
-              <span style={{ display: "block", width: a.budgetPct + "%", height: "100%", background: overBudget ? "var(--danger)" : "var(--honey)" }} />
-            </span>
-            <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: overBudget ? "var(--danger-2)" : "var(--fg-4)" }}>{a.budgetPct}% cap</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 9, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)", border: "1px solid var(--line)", borderRadius: 6, background: "color-mix(in srgb, var(--fg) 5%, transparent)", padding: "2px 6px" }}>{a.runtime}</span>
+          <span style={{ flex: "1 1 120px", minWidth: 120, maxWidth: 180, height: 8, borderRadius: 999, border: "1px solid color-mix(in srgb, var(--fg) 14%, transparent)", background: "color-mix(in srgb, var(--fg) 11%, var(--bg-3))", overflow: "hidden" }} aria-label={`${a.budgetPct}% of daily cap used`}>
+            <span style={{ display: "block", width: a.budgetPct + "%", height: "100%", minWidth: a.budgetPct > 0 ? 3 : 0, background: overBudget ? "var(--danger)" : "var(--honey-2)", boxShadow: a.budgetPct > 0 ? `0 0 8px ${budgetTone}` : undefined }} />
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "baseline", gap: 5, whiteSpace: "nowrap", fontFamily: "var(--f-mono)", fontVariantNumeric: "tabular-nums" }}>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: budgetTone }}>{a.budgetPct}% used</span>
+            <span style={{ fontSize: 9.5, color: "var(--fg-3)" }}>{capLabel}</span>
           </span>
         </div>
       </div>
@@ -216,6 +238,75 @@ function ActivityTicker({ colony }: { colony: Colony }) {
   );
 }
 
+function TokenCapitalPanel({ colony: c }: { colony: Colony }) {
+  const tc = c.tokenCapital;
+  const gatePct = tc.evalGates > 0 ? Math.round((tc.passedEvalGates / tc.evalGates) * 100) : 0;
+  const stats = [
+    { label: "learning assets", value: tc.learningAssets },
+    { label: "workflows", value: tc.workflowAssets },
+    { label: "experiments", value: tc.experiments },
+    { label: "frontier", value: tc.frontierCandidates },
+    { label: "avoid", value: tc.antiPatterns },
+    { label: "distill", value: tc.distillationQueue },
+  ];
+  return (
+    <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(300px, 420px) minmax(0, 1fr)", alignItems: "start" }}>
+      <Panel>
+        <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>company veteran layer</span>}>token capital</SectionLabel>
+        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+          <Ring pct={tc.score} size={94} stroke={7} color={tc.score >= 70 ? "var(--cyan)" : tc.score >= 35 ? "var(--honey)" : "var(--fg-4)"}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "var(--f-display)", fontSize: 26, fontWeight: 600, lineHeight: 1 }}>{tc.score}</div>
+              <div style={{ fontFamily: "var(--f-mono)", fontSize: 8, color: "var(--fg-4)", letterSpacing: 0.08 }}>CAPITAL</div>
+            </div>
+          </Ring>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, letterSpacing: -0.25 }}>Private learning loop</div>
+            <div style={{ marginTop: 7, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-3)", lineHeight: 1.6 }}>
+              Work, evals, receipts, artifacts, and avoided failure modes compound here so the company can swap models without losing its operating memory.
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(2, minmax(0, 1fr))", marginTop: 18 }}>
+          <MiniMetric label="model independence" value={`${tc.modelIndependence}%`} />
+          <MiniMetric label="14d learning velocity" value={String(tc.learningVelocity)} />
+          <MiniMetric label="eval pass rate" value={tc.evalGates ? `${gatePct}%` : "none"} />
+          <MiniMetric label="assets per $1" value={tc.spendEfficiency == null ? "n/a" : String(tc.spendEfficiency)} />
+        </div>
+      </Panel>
+
+      <Panel>
+        <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--cyan-2)" }}>evo-style search</span>}>learning assets · eval frontier</SectionLabel>
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}>
+          {stats.map((item) => (
+            <div key={item.label} style={{ borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)", padding: "11px 12px" }}>
+              <div style={{ fontFamily: "var(--f-display)", fontSize: 24, fontWeight: 600, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{item.value}</div>
+              <div className="mono-cap" style={{ color: "var(--fg-4)", marginTop: 6 }}>{item.label}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+          {tc.notes.map((note) => (
+            <div key={note} style={{ display: "flex", gap: 9, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-3)", lineHeight: 1.5 }}>
+              <span style={{ color: note.includes("No ") || note.includes("Launch ") ? "var(--honey-2)" : "var(--cyan-2)" }}>•</span>
+              <span>{note}</span>
+            </div>
+          ))}
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)", padding: "10px 11px" }}>
+      <div style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      <div className="mono-cap" style={{ color: "var(--fg-4)", marginTop: 5 }}>{label}</div>
+    </div>
+  );
+}
+
 function TreasurySection({ colony: c, handlers }: { colony: Colony; handlers: CockpitHandlers }) {
   const busy = handlers.busyId === c.id;
   const [confirmDelete, setConfirmDelete] = React.useState(false);
@@ -223,7 +314,15 @@ function TreasurySection({ colony: c, handlers }: { colony: Colony; handlers: Co
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(280px, 360px) minmax(0,1fr)", alignItems: "start" }}>
         <Panel>
-          <SectionLabel>treasury · USDC burn</SectionLabel>
+          <SectionLabel right={
+            <button
+              onClick={handlers.onEditTreasury}
+              title="Configure treasury"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", border: "1px solid color-mix(in srgb, var(--honey) 45%, transparent)", borderRadius: 8, background: "color-mix(in srgb, var(--honey) 12%, transparent)", color: "var(--honey-2)", fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 600, padding: "5px 11px", textTransform: "uppercase", letterSpacing: 0.06 }}
+            >
+              <Settings2 size={13} strokeWidth={1.8} /> Configure
+            </button>
+          }>treasury · USDC burn</SectionLabel>
           <BurnBar today={c.burn.today} cap={c.burn.cap} week={c.burn.week} runway={c.burn.runway} />
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--line)", fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)", lineHeight: 1.6 }}>
             Per-agent daily caps enforced at dispatch. Work pauses before overspend — never after the invoice.
@@ -237,14 +336,18 @@ function TreasurySection({ colony: c, handlers }: { colony: Colony; handlers: Co
             <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
               {c.agents.map((a) => {
                 const over = a.budgetPct >= 80;
+                const cap = a._cap ? `$${a._cap}/day` : "uncapped";
                 return (
-                  <div key={a.id ?? a.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div key={a.id ?? a.name} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                     <RoleGlyph role={a.role} size={22} />
-                    <span style={{ width: 92, fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name}</span>
-                    <span style={{ flex: 1, height: 5, borderRadius: 999, background: "var(--bg-3)", overflow: "hidden" }}>
-                      <span style={{ display: "block", width: a.budgetPct + "%", height: "100%", background: over ? "var(--danger)" : "var(--honey)" }} />
+                    <span style={{ flex: "0 1 140px", minWidth: 92, fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 500, lineHeight: 1.3 }}>{a.name}</span>
+                    <span style={{ flex: "1 1 150px", minWidth: 130, height: 8, borderRadius: 999, border: "1px solid color-mix(in srgb, var(--fg) 14%, transparent)", background: "color-mix(in srgb, var(--fg) 11%, var(--bg-3))", overflow: "hidden" }} aria-label={`${a.name} used ${a.budgetPct}% of daily cap`}>
+                      <span style={{ display: "block", width: a.budgetPct + "%", minWidth: a.budgetPct > 0 ? 3 : 0, height: "100%", background: over ? "var(--danger)" : "var(--honey-2)" }} />
                     </span>
-                    <span style={{ width: 40, textAlign: "right", fontFamily: "var(--f-mono)", fontSize: 11, color: over ? "var(--danger-2)" : "var(--fg-3)", fontVariantNumeric: "tabular-nums" }}>{a.budgetPct}%</span>
+                    <span style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "baseline", gap: 5, fontFamily: "var(--f-mono)", fontVariantNumeric: "tabular-nums" }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: over ? "var(--danger-2)" : "var(--honey-2)" }}>{a.budgetPct}% used</span>
+                      <span style={{ fontSize: 9.5, color: "var(--fg-4)" }}>{cap}</span>
+                    </span>
                   </div>
                 );
               })}
@@ -313,6 +416,7 @@ export function Cockpit({
 
   const tabs: { key: string; label: string; badge?: number | null }[] = [
     { key: "board", label: "Board" },
+    { key: "learning", label: "Learning", badge: c.tokenCapital.distillationQueue || null },
     { key: "team", label: "Team" },
     { key: "approvals", label: "Approvals", badge: c.approvals.length || null },
     { key: "governance", label: "Governance" },
@@ -345,7 +449,7 @@ export function Cockpit({
             <StatusPill status={c.status} />
             <button
               onClick={handlers.onEdit}
-              title="Edit name, ticker, sector & apex goal"
+              title="Edit company details"
               style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "1px solid var(--line-2)", borderRadius: 8, cursor: "pointer", color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 10.5, padding: "4px 10px", textTransform: "uppercase", letterSpacing: 0.06 }}
             >
               ✎ edit
@@ -467,6 +571,8 @@ export function Cockpit({
         </Panel>
       )}
 
+      {active === "learning" && <TokenCapitalPanel colony={c} />}
+
       {active === "team" && (
         <Panel>
           <SectionLabel right={
@@ -475,7 +581,7 @@ export function Cockpit({
           {c.agents.length === 0 ? (
             <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)", padding: "16px 0" }}>No agents yet — use “+ add agent” to staff this company from your roster.</div>
           ) : (
-            <OrgChart colony={c} wide />
+            <OrgChart colony={c} wide onEditAgent={handlers.onEditAgent} />
           )}
         </Panel>
       )}

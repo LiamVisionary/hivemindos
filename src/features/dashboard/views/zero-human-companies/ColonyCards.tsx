@@ -218,12 +218,46 @@ function NewColonyCard({ onClick, minimal }: { onClick: () => void; minimal: boo
   );
 }
 
+function LoadingColonyCard({ minimal }: { minimal: boolean }) {
+  const bars = minimal ? [66, 44, 54] : [58, 76, 38];
+  return (
+    <div
+      className="zhc-loading-card"
+      style={{
+        borderRadius: 14,
+        border: "1px solid var(--line)",
+        display: "grid",
+        minHeight: minimal ? 360 : 220,
+        padding: minimal ? 22 : 24,
+        background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-2) 88%, transparent), color-mix(in srgb, var(--bg-1) 82%, transparent))",
+        boxShadow: "inset 0 1px 0 color-mix(in srgb, var(--fg) 5%, transparent)",
+        overflow: "hidden",
+        position: "relative",
+      }}
+    >
+      <div style={{ alignSelf: "start" }}>
+        <div className="mono-cap" style={{ color: "var(--cyan-2)" }}>syncing registry</div>
+        <div style={{ marginTop: 12, width: "56%", height: 22, borderRadius: 6, background: "var(--line-2)" }} />
+      </div>
+      <div style={{ alignSelf: "center", display: "grid", gap: 10 }}>
+        {bars.map((width, index) => (
+          <div key={index} style={{ width: `${width}%`, height: 9, borderRadius: 999, background: "var(--line)" }} />
+        ))}
+      </div>
+      <div style={{ alignSelf: "end", display: "flex", gap: 16, borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+        <div style={{ width: 92, height: 11, borderRadius: 999, background: "var(--line)" }} />
+        <div style={{ width: 68, height: 11, borderRadius: 999, background: "var(--line)" }} />
+      </div>
+    </div>
+  );
+}
+
 export function Portfolio({
-  colonies, density, showBudget, onOpen, onCreate, cardStyle, emptyHint,
+  colonies, density, showBudget, onOpen, onCreate, cardStyle, emptyHint, showCreate = true, loading = false,
 }: {
   colonies: Colony[]; density: Density; showBudget: boolean;
   onOpen: (id: string) => void; onCreate: () => void; cardStyle: CardStyle;
-  emptyHint?: React.ReactNode;
+  emptyHint?: React.ReactNode; showCreate?: boolean; loading?: boolean;
 }) {
   const Card = cardStyle === "minimal" ? MinimalColonyCard : ColonyCard;
   const minW = cardStyle === "minimal" ? 320 : 360;
@@ -231,8 +265,9 @@ export function Portfolio({
     <div style={{ padding: "26px 36px 48px" }}>
       {emptyHint}
       <div style={{ display: "grid", gap: cardStyle === "minimal" ? 16 : 18, gridTemplateColumns: `repeat(auto-fill, minmax(${minW}px, 1fr))` }}>
+        {loading ? <LoadingColonyCard minimal={cardStyle === "minimal"} /> : null}
         {colonies.map((c) => <Card key={c.id} colony={c} density={density} showBudget={showBudget} onOpen={onOpen} />)}
-        <NewColonyCard onClick={onCreate} minimal={cardStyle === "minimal"} />
+        {showCreate ? <NewColonyCard onClick={onCreate} minimal={cardStyle === "minimal"} /> : null}
       </div>
     </div>
   );

@@ -73,8 +73,8 @@ function DashboardFrameLoading() {
         position: "relative",
         overflow: "hidden",
         padding: 24,
-        background: "#080a0f",
-        color: "#f4f7fb",
+        background: "var(--background, #f4efe4)",
+        color: "var(--foreground, #221d14)",
         fontFamily: "Geist, system-ui, sans-serif",
       }}
     >

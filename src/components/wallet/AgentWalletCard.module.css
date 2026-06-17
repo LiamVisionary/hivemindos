@@ -1358,6 +1358,103 @@ button.railItem:active {
   color: var(--foreground);
 }
 
+:global(:root[data-theme="hive-light"]) .usePodPrimaryBalance,
+:global(:root[data-theme="hive-light"]) .usePodAdvancedSegmented,
+:global(:root[data-theme="hive-light"]) .usePodAdvancedGrid > div,
+:global(:root[data-theme="hive-light"]) .readOnlyField,
+:global(:root[data-theme="hive-light"]) .usePodRepair,
+:global(:root[data-theme="hive-light"]) .railItem,
+:global(:root[data-theme="hive-light"]) .moneyClawModal,
+:global(:root[data-theme="hive-light"]) .modalToggle,
+:global(:root[data-theme="hive-light"]) .terminalAlternative,
+:global(:root[data-theme="hive-light"]) .holdings,
+:global(:root[data-theme="hive-light"]) .token,
+:global(:root[data-theme="hive-light"]) .banner,
+:global(:root[data-theme="hive-light"]) .advanced {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .modalBackdrop {
+  background: rgba(34, 29, 20, 0.34);
+}
+
+:global(:root[data-theme="hive-light"]) .usePodAdvancedSegment,
+:global(:root[data-theme="hive-light"]) .railItem span,
+:global(:root[data-theme="hive-light"]) .railItem small,
+:global(:root[data-theme="hive-light"]) .railFooter span,
+:global(:root[data-theme="hive-light"]) .modalField span,
+:global(:root[data-theme="hive-light"]) .modalToggle small,
+:global(:root[data-theme="hive-light"]) .sheetHelp,
+:global(:root[data-theme="hive-light"]) .sheetField label,
+:global(:root[data-theme="hive-light"]) .fieldLabel,
+:global(:root[data-theme="hive-light"]) .holdingsHeader small,
+:global(:root[data-theme="hive-light"]) .tokenSub,
+:global(:root[data-theme="hive-light"]) .tokenAmount small {
+  color: var(--text-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .usePodAdvancedSegmentActive,
+:global(:root[data-theme="hive-light"]) .usePodAdvancedSegment:hover,
+:global(:root[data-theme="hive-light"]) .usePodAdvancedSegment:focus-visible,
+:global(:root[data-theme="hive-light"]) .sheetCopy:hover,
+:global(:root[data-theme="hive-light"]) .token:hover {
+  background: rgba(176, 127, 28, 0.12);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .usePodRepair input,
+:global(:root[data-theme="hive-light"]) .modalField input,
+:global(:root[data-theme="hive-light"]) .sheetField input,
+:global(:root[data-theme="hive-light"]) .sheetField select,
+:global(:root[data-theme="hive-light"]) .sheetField textarea {
+  border-color: var(--line);
+  background: var(--field);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .modalField input:focus,
+:global(:root[data-theme="hive-light"]) .sheetField input:focus,
+:global(:root[data-theme="hive-light"]) .sheetField select:focus,
+:global(:root[data-theme="hive-light"]) .sheetField textarea:focus {
+  border-color: var(--accent-strong);
+  outline-color: rgba(176, 127, 28, 0.24);
+}
+
+:global(:root[data-theme="hive-light"]) .sheetAddress,
+:global(:root[data-theme="hive-light"]) .terminalAlternative code {
+  border-color: var(--line);
+  background: var(--field);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .tokenAction {
+  border-color: rgba(176, 127, 28, 0.34);
+  background: rgba(176, 127, 28, 0.14);
+  color: var(--accent-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .tokenAction:hover:not(:disabled),
+:global(:root[data-theme="hive-light"]) .modalSaveButton {
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  color: var(--button-primary-foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .banner[data-tone="danger"],
+:global(:root[data-theme="hive-light"]) .modalError,
+:global(:root[data-theme="hive-light"]) .sheetStatus[data-tone="error"] {
+  color: #8e3328;
+}
+
+:global(:root[data-theme="hive-light"]) .banner[data-tone="warn"] {
+  color: #6f5625;
+}
+
+:global(:root[data-theme="hive-light"]) .banner[data-tone="off"] {
+  color: var(--text-soft);
+}
+
 @media (max-width: 420px) {
   .railStackHeader,
   .railFooter {

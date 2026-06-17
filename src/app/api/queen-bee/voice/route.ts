@@ -1,4 +1,5 @@
 import { appendFile, mkdir } from "fs/promises";
+import * as net from "net";
 import { homedir } from "@/lib/home-dir";
 import { join } from "path";
 import { NextRequest, NextResponse } from "next/server";
@@ -23,103 +24,34 @@ import {
   transcribeAudioWithWhisper,
   transcriptionApiKey,
 } from "@/lib/services/phone/transcription";
+import {
+  QUEEN_INSTRUCTIONS,
+  QUEEN_VOICE_STYLE,
+  queenChatTools,
+  queenRealtimeTools,
+} from "@/lib/services/queen-bee/queen-brain";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// Some networks' TCP handshake to OpenAI exceeds Node's default 250ms
+// happy-eyeballs (autoSelectFamily) attempt window, so server-side fetches fail
+// with ETIMEDOUT even though the host is reachable. Widen the attempt timeout.
+try {
+  (net as unknown as { setDefaultAutoSelectFamilyAttemptTimeout?: (ms: number) => void })
+    .setDefaultAutoSelectFamilyAttemptTimeout?.(3000);
+} catch {
+  // older Node without the helper — nothing to do
+}
 
 const VOICE_TURN_TIMEOUT_MS = 60_000;
 const TTS_TIMEOUT_MS = 30_000;
 const DEFAULT_TTS_MODEL = "gpt-4o-mini-tts";
 const DEFAULT_REALTIME_MODEL = "gpt-realtime";
 
-const QUEEN_REALTIME_INSTRUCTIONS = [
-  "You are Queen Bee, the single coordinator voice of HivemindOS, on a live voice chat with the user (the HivemindOS operator).",
-  "You are NOT a standalone assistant: you are connected to the user's HivemindOS hive - their computer, agent fleet, shared brain memory, Obsidian vault and notes, work board, and connected apps - through your tools.",
-  "The hive's capabilities include: orchestrating the agent fleet across machines; reading and writing notes and the Obsidian vault; recalling and saving shared brain memory; creating and tracking work board tasks and automations; managing the agents' crypto wallets and payments (Bankr platform actions, Honey treasury, USDC transfers, x402 paid API calls); generating images and media through connected apps; schedules and voice calls.",
-  "Wallet and Bankr requests are HivemindOS agent-wallet operations, not consumer banking - never refuse them as banking; relay them through your tools.",
-  "Speak naturally in one to three short sentences. No lists, no markdown, no reasoning preambles.",
-  "Use ask_hivemind_agent whenever the user asks about themselves, their notes, files, projects, memories, fleet, wallets, or anything requiring their computer (opening apps, checking status, reading or writing notes, recalling shared memory, wallet balances and Bankr actions).",
-  "Tool calls take several seconds, so ALWAYS say a brief spoken filler FIRST - 'Let me check…', 'One sec…', 'On it…', 'Let me see…' - in the same breath before calling ask_hivemind_agent, drive_dashboard, or create_hive_task, so the user is never left in silence while you work.",
-  "Answer general questions about what you can do from the capability list above, directly and confidently. Use ask_hivemind_agent to verify or perform a SPECIFIC capability (a particular wallet, app, note, or status). Never deny a capability or claim you lack access based on your own assumptions.",
-  "Use create_hive_task when the user clearly asks for longer work to be delegated to the hive (a job, build, fix, research, automation, reminder). Pass a short imperative title and the full request as the message, then briefly confirm what you kicked off using the tool result.",
-  "Use drive_dashboard when the user wants to SEE or DO something in the on-screen dashboard they are looking at: open or switch a screen (wallets, work board, agents/fleet, chat, schedules, brain), create an agent (optionally naming a runtime, provider, model, or machine), create a wallet for one of their agents, add a task to the board, or open an agent's settings or chat. Pass the user's request VERBATIM as the command; a visible bee flies the interface and clicks for them, and you confirm what happened from the tool result. Prefer drive_dashboard over ask_hivemind_agent for anything they want to navigate to or operate in the app.",
-  "When the user states a LASTING preference about how you should talk to or treat them - how to address them ('call me boss'), a language, a tone, or how long your replies should be - call remember_preference with that preference the moment they say it, then confirm naturally. This is what makes the preference stick across future voice chats; agreeing without calling the tool will not be remembered.",
-  "Greetings and chit-chat are just conversation - no tools needed.",
-].join(" ");
-
-const QUEEN_REALTIME_TOOLS = [
-  {
-    type: "function",
-    name: "ask_hivemind_agent",
-    description:
-      "Relay a request to the HivemindOS computer agent, which runs with full capabilities on the user's machine: open apps, read or write notes and the Obsidian vault, recall shared brain memory, check fleet and project status, and answer questions about the user. Returns a spoken-ready result.",
-    parameters: {
-      type: "object",
-      properties: {
-        message: {
-          type: "string",
-          description:
-            "The user's request, in their words, with any needed context.",
-        },
-      },
-      required: ["message"],
-    },
-  },
-  {
-    type: "function",
-    name: "create_hive_task",
-    description:
-      "Create and delegate a task on the HivemindOS work board. Use ONLY when the user clearly requests longer work (build, fix, research, automation, reminder, delegation).",
-    parameters: {
-      type: "object",
-      properties: {
-        title: {
-          type: "string",
-          description: "Short imperative summary of the work.",
-        },
-        message: {
-          type: "string",
-          description: "The full work request, in the user's words.",
-        },
-      },
-      required: ["message"],
-    },
-  },
-  {
-    type: "function",
-    name: "drive_dashboard",
-    description:
-      "Operate the on-screen HivemindOS dashboard the user is looking at: open/switch screens (wallets, work board/kanban, agents/fleet, chat, schedules, brain), create an agent (optionally naming a runtime, provider, model, or machine), create a wallet for a named agent, add a task to the board, or open an agent's settings or chat. A visible honey-bee cursor flies the interface and performs the clicks. Use this whenever the user wants to navigate to, see, or do something in the app in front of them.",
-    parameters: {
-      type: "object",
-      properties: {
-        command: {
-          type: "string",
-          description:
-            "The user's on-screen request, in their own words (e.g. 'open my wallets', 'create a wallet for my Aeon agent on this Mac', 'create a hermes venice agent', 'draft an X post about the hive').",
-        },
-      },
-      required: ["command"],
-    },
-  },
-  {
-    type: "function",
-    name: "remember_preference",
-    description:
-      "Save a DURABLE preference about how Queen Bee should address, talk to, or treat the user in future voice chats - e.g. how to address them ('call me boss'), a preferred language, tone, or how short/long replies should be. Call this the moment the user states such a lasting preference, then confirm it naturally. Do NOT use it for one-off requests, tasks, or facts to look up - only for standing preferences that should persist across sessions.",
-    parameters: {
-      type: "object",
-      properties: {
-        preference: {
-          type: "string",
-          description:
-            "The standing preference as a short imperative you can follow later, e.g. 'Address the user as \"boss\".' or 'Keep replies very short.' or 'Reply in Spanish.'",
-        },
-      },
-      required: ["preference"],
-    },
-  },
-];
+// Voice modality = the one shared Queen brain + a spoken-style addendum.
+const QUEEN_REALTIME_INSTRUCTIONS = `${QUEEN_INSTRUCTIONS}${QUEEN_VOICE_STYLE}`;
+const QUEEN_REALTIME_TOOLS = queenRealtimeTools();
 
 /**
  * Voice front door for the Queen Bee control plane.
@@ -174,6 +106,9 @@ export async function POST(request: NextRequest) {
       if (!preference) throw new Error("A preference is required.");
       const preferences = await addQueenBeeVoicePreference(preference);
       return NextResponse.json({ ok: true, preferences });
+    }
+    if (body.action === "chat-turn") {
+      return await runQueenChatTurn(body);
     }
     throw new Error(
       `Unknown Queen Bee voice action: ${String(body.action ?? "")}`,
@@ -285,6 +220,74 @@ async function mintRealtimeSession() {
     instructions,
     tools: QUEEN_REALTIME_TOOLS,
   });
+}
+
+// One step of the TYPED Queen chat brain: the SAME instructions + tools as the
+// voice session, run through OpenAI chat completions. Returns the assistant
+// message (text and/or tool calls) for the client to act on and loop. When no
+// OpenAI key exists we flag `fallback` so the client uses the heuristic planner
+// (the "runtime can't do tool calls" path).
+const QUEEN_CHAT_MODEL_FALLBACK = "gpt-4o-mini";
+
+async function runQueenChatTurn(body: Record<string, unknown>) {
+  const apiKey = await transcriptionApiKey();
+  if (!apiKey) {
+    return NextResponse.json({ ok: false, fallback: true, error: "no-openai-key" });
+  }
+  const incoming = Array.isArray(body.messages) ? body.messages : [];
+  const preamble = await queenVoicePreferencePreamble();
+  const system = preamble ? `${QUEEN_INSTRUCTIONS} ${preamble}` : QUEEN_INSTRUCTIONS;
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        model: process.env.OPENAI_VOICE_CHAT_MODEL || QUEEN_CHAT_MODEL_FALLBACK,
+        messages: [{ role: "system", content: system }, ...incoming],
+        tools: queenChatTools(),
+        tool_choice: "auto",
+        temperature: 0.4,
+        max_tokens: 500,
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
+    });
+    const data = (await response.json().catch(() => null)) as {
+      choices?: Array<{
+        message?: {
+          content?: string | null;
+          tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: string } }>;
+        };
+      }>;
+      error?: { message?: string } | string;
+    } | null;
+    if (!response.ok) {
+      const detail = typeof data?.error === "string" ? data.error : data?.error?.message;
+      return NextResponse.json({ ok: false, fallback: true, error: detail || `chat turn HTTP ${response.status}` });
+    }
+    const message = data?.choices?.[0]?.message ?? {};
+    const toolCalls = Array.isArray(message.tool_calls)
+      ? message.tool_calls
+          .filter((tc) => tc?.function?.name)
+          .map((tc) => ({
+            id: String(tc.id ?? ""),
+            name: String(tc.function?.name ?? ""),
+            arguments: String(tc.function?.arguments ?? "{}"),
+          }))
+      : [];
+    return NextResponse.json({
+      ok: true,
+      content: typeof message.content === "string" ? message.content : "",
+      toolCalls,
+      assistant: message,
+    });
+  } catch (error) {
+    return NextResponse.json({
+      ok: false,
+      fallback: true,
+      error: error instanceof Error ? error.message : "chat turn failed",
+    });
+  }
 }
 
 // Tool endpoint for the realtime session's create_hive_task function call.

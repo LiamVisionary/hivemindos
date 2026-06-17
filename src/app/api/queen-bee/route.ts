@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
       taskTitle: body.taskTitle,
       agentId: body.agentId,
       machineId: body.machineId,
+      skills: Array.isArray(body.skills) ? body.skills.filter((skill: unknown) => typeof skill === "string") : undefined,
       fleetSnapshot,
     });
     return NextResponse.json({ ok: true, ...result });

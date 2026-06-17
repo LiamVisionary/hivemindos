@@ -35,6 +35,13 @@ type HiveEnvImportPreview = {
   entries: HiveEnvImportEntry[];
   error?: string;
 };
+type SystemCockpitCheck = { id: string; label: string; status: string; detail: string };
+type SystemCockpitHealth = { ok: boolean; status: string; generatedAt: string; checks: SystemCockpitCheck[] };
+type SystemCockpitSmokeItem = { id: string; label: string; status: string; detail: string; nextAction?: string };
+type SystemCockpitSmoke = { ok: boolean; generatedAt: string; items: SystemCockpitSmokeItem[] };
+type SystemCockpitCookbookEntry = { id: string; title: string; area: string; severity: string; symptoms: string[]; fixes: string[] };
+type SystemCockpitModelFit = { machineId: string; machineName: string; tier: string; label: string; rationale: string[]; preferredProviders: string[]; caution?: string };
+type SystemCockpitLiveProbe = { id: string; label: string; status: "ok" | "degraded" | "down"; detail: string };
 type IconComponent = ElementType<{
   "aria-hidden"?: boolean | "true" | "false";
   className?: string;
@@ -173,6 +180,13 @@ export function UtilityPanels(props: UtilityPanelsProps) {
   );
   const envPanelVisible = activeView === "env" || (activeView === "vault" && vaultPanelMode === "env");
   const [aeonSecretStatus, setAeonSecretStatus] = useState<RuntimeSecretStatus | null>(null);
+  const [systemHealth, setSystemHealth] = useState<SystemCockpitHealth | null>(null);
+  const [systemSmoke, setSystemSmoke] = useState<SystemCockpitSmoke | null>(null);
+  const [systemCookbook, setSystemCookbook] = useState<SystemCockpitCookbookEntry[]>([]);
+  const [systemModelFit, setSystemModelFit] = useState<SystemCockpitModelFit[]>([]);
+  const [systemLiveProbes, setSystemLiveProbes] = useState<SystemCockpitLiveProbe[]>([]);
+  const [systemCockpitLoading, setSystemCockpitLoading] = useState(false);
+  const [systemCockpitError, setSystemCockpitError] = useState("");
   useEffect(() => {
     if (!envPanelVisible || !aeonAgent) return;
     let cancelled = false;
@@ -190,6 +204,70 @@ export function UtilityPanels(props: UtilityPanelsProps) {
       cancelled = true;
     };
   }, [aeonAgent, envPanelVisible, sharedVault.vaultPath]);
+  useEffect(() => {
+    if (activeView !== "maintenance") return;
+    let cancelled = false;
+    Promise.resolve()
+      .then(() => {
+        if (cancelled) return Promise.reject(new Error("cancelled"));
+        setSystemCockpitLoading(true);
+        setSystemCockpitError("");
+        const modelFit = fetch("/api/fleet/discover?stale=1&includeSnapshots=0")
+          .then((response) => response.ok ? response.json() : Promise.reject(new Error("Fleet discovery unavailable.")))
+          .then((fleet) => fetch("/api/system/model-fit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ machines: Array.isArray(fleet?.machines) ? fleet.machines : [] }),
+          }))
+          .then((response) => response.ok ? response.json() : Promise.reject(new Error("Model-fit recommendations unavailable.")))
+          .catch(() => ({ recommendations: [] }));
+        const liveProbe = Promise.allSettled([
+          fetch("/api/fleet/discover?stale=1&includeSnapshots=0").then((response) => response.ok ? response.json() : Promise.reject(new Error("Fleet unavailable."))),
+          fetch("/api/runtimes/availability").then((response) => response.ok ? response.json() : Promise.reject(new Error("Runtime availability unavailable."))),
+          fetch("/api/syncthing/status").then((response) => response.ok ? response.json() : Promise.reject(new Error("Syncthing unavailable."))),
+          fetch("/api/miroshark/status").then((response) => response.ok ? response.json() : Promise.reject(new Error("MiroShark unavailable."))),
+          fetch("/api/brain/services/status").then((response) => response.ok ? response.json() : Promise.reject(new Error("Brain services unavailable."))),
+        ]).then(([fleet, runtimes, syncthing, miroshark, brain]) => {
+          const fleetMachines = fleet.status === "fulfilled" && Array.isArray(fleet.value?.machines) ? fleet.value.machines : [];
+          const readyCollectors = fleetMachines.filter((machine: { collector?: unknown }) => machine.collector === "ready" || /^https?:\/\//.test(String(machine.collector ?? ""))).length;
+          const runtimeCount = runtimes.status === "fulfilled" && runtimes.value?.runtimes && typeof runtimes.value.runtimes === "object" ? Object.keys(runtimes.value.runtimes).length : 0;
+          const syncthingOk = syncthing.status === "fulfilled" && syncthing.value?.ok !== false;
+          const mirosharkRunning = miroshark.status === "fulfilled" && Boolean(miroshark.value?.install?.running);
+          const brainOk = brain.status === "fulfilled" && brain.value?.ok !== false;
+          return [
+            { id: "fleet-collectors", label: "Fleet collectors", status: readyCollectors ? "ok" : fleet.status === "fulfilled" ? "degraded" : "down", detail: readyCollectors ? `${readyCollectors} ready collector${readyCollectors === 1 ? "" : "s"}` : "No ready collectors reported." },
+            { id: "runtime-availability", label: "Runtime availability", status: runtimeCount ? "ok" : runtimes.status === "fulfilled" ? "degraded" : "down", detail: runtimeCount ? `${runtimeCount} runtime records available.` : "No runtime availability records returned." },
+            { id: "syncthing", label: "Syncthing", status: syncthingOk ? "ok" : "degraded", detail: syncthingOk ? "Syncthing status route answered." : "Syncthing status needs attention." },
+            { id: "miroshark", label: "MiroShark", status: mirosharkRunning ? "ok" : miroshark.status === "fulfilled" ? "degraded" : "down", detail: mirosharkRunning ? "MiroShark companion is running." : "MiroShark companion is not running or not reachable." },
+            { id: "brain-services", label: "Brain services", status: brainOk ? "ok" : "degraded", detail: brainOk ? "Brain services status route answered." : "Brain services status needs attention." },
+          ] satisfies SystemCockpitLiveProbe[];
+        });
+        return Promise.all([
+          fetch("/api/system/health").then((response) => response.ok ? response.json() : Promise.reject(new Error("System health unavailable."))),
+          fetch("/api/system/smoke-checklist").then((response) => response.ok ? response.json() : Promise.reject(new Error("Smoke checklist unavailable."))),
+          fetch("/api/system/troubleshooting?limit=4").then((response) => response.ok ? response.json() : Promise.reject(new Error("Troubleshooting cookbook unavailable."))),
+          modelFit,
+          liveProbe,
+        ]);
+      })
+      .then(([health, smoke, cookbook, modelFit, liveProbe]) => {
+        if (cancelled) return;
+        setSystemHealth(health);
+        setSystemSmoke(smoke);
+        setSystemCookbook(Array.isArray(cookbook?.entries) ? cookbook.entries : []);
+        setSystemModelFit(Array.isArray(modelFit?.recommendations) ? modelFit.recommendations : []);
+        setSystemLiveProbes(liveProbe);
+      })
+      .catch((error) => {
+        if (!cancelled) setSystemCockpitError(error instanceof Error ? error.message : "System cockpit failed to load.");
+      })
+      .finally(() => {
+        if (!cancelled) setSystemCockpitLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeView]);
   const missingAeonSecrets = (aeonSecretStatus?.keys ?? []).filter((secret) => !secret.isSet);
   return (<>
       {activeView === "more" ? (
@@ -458,8 +536,8 @@ export function UtilityPanels(props: UtilityPanelsProps) {
 
 	          {sharedEnvImportOpen && portalTarget ? createPortal((
 	            <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-8" role="dialog" aria-modal="true" aria-label="Add from .env">
-	              <div className="grid max-h-[88vh] w-full max-w-4xl overflow-hidden rounded-md border border-[rgba(148,163,184,0.20)] bg-[rgba(5,8,13,0.98)] shadow-2xl">
-	                <div className="flex items-start justify-between gap-4 border-b border-[rgba(148,163,184,0.14)] p-6">
+	              <div className="grid max-h-[88vh] w-full max-w-4xl overflow-hidden rounded-md border border-[var(--line)] bg-[var(--surface)] shadow-2xl">
+	                <div className="flex items-start justify-between gap-4 border-b border-[var(--line)] p-6">
 	                  <div>
 	                    <p className="eyebrow">Bulk import</p>
 	                    <h3 className="m-0 text-3xl font-bold">Add from .env</h3>
@@ -475,7 +553,7 @@ export function UtilityPanels(props: UtilityPanelsProps) {
 	                    onChange={(event) => setSharedEnvImportText(event.target.value)}
 	                    placeholder={"KEY_1=VALUE_1\nKEY_2=VALUE_2\nKEY_3=VALUE_3"}
 	                    spellCheck={false}
-	                    className="min-h-72 resize-y rounded-md border border-[rgba(94,234,212,0.34)] bg-[rgba(2,6,23,0.66)] p-4 font-mono text-sm text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.72)]"
+	                    className="min-h-72 resize-y rounded-md border border-[var(--line)] bg-[var(--field)] p-4 font-mono text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent-strong)]"
 	                  />
 	                  <div className="flex flex-wrap items-center justify-between gap-3">
 	                    <p className="m-0 text-xs text-[var(--muted)]">
@@ -501,8 +579,8 @@ export function UtilityPanels(props: UtilityPanelsProps) {
 	                    </label>
 	                  </div>
 	                  {sharedEnvImport.entries.length ? (
-	                    <div className="max-h-48 overflow-auto rounded-md border border-[rgba(148,163,184,0.14)]">
-	                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-b border-[rgba(148,163,184,0.14)] px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] text-[var(--muted)]">
+	                    <div className="max-h-48 overflow-auto rounded-md border border-[var(--line)]">
+	                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-b border-[var(--line)] px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] text-[var(--muted)]">
 	                        <span>Key</span>
 	                        <span>Status</span>
 	                      </div>
@@ -517,7 +595,7 @@ export function UtilityPanels(props: UtilityPanelsProps) {
 	                    </div>
 	                  ) : null}
 	                </div>
-		                <div className="flex flex-wrap items-center gap-3 border-t border-[rgba(148,163,184,0.14)] px-6 pb-12 pt-5">
+		                <div className="flex flex-wrap items-center gap-3 border-t border-[var(--line)] px-6 pb-12 pt-5">
 		                  <Button type="button" size="sm" className="h-9 px-4 text-sm" onClick={() => void importSharedEnvEntries()} disabled={sharedEnvImporting || sharedEnvImportDiff.length === 0}>
 		                    {sharedEnvImporting ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Check aria-hidden="true" />}
 		                    Set variables
@@ -701,6 +779,82 @@ export function UtilityPanels(props: UtilityPanelsProps) {
         </div>
         {maintenanceMessage ? <p className="mt-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] px-3 py-2 text-xs text-[var(--foreground)]">{maintenanceMessage}</p> : null}
         {maintenanceReport?.error ? <p className="mt-3 text-xs text-[#fecdd3]">{maintenanceReport.error}</p> : null}
+        <div className="mt-4 grid gap-3">
+          <section className="grid gap-3 rounded-md border border-[rgba(94,234,212,0.18)] bg-[rgba(20,184,166,0.06)] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="eyebrow">System cockpit</p>
+                <h3 className="m-0 text-base font-bold">Health and first-run smoke</h3>
+                <p className="m-0 mt-1 text-xs text-[var(--muted)]">Secret-free readiness checks, setup smoke items, and short repair guidance.</p>
+              </div>
+              <span className={`rounded-full border px-3 py-1 text-xs font-bold ${systemHealth?.status === "ok" ? "border-[rgba(34,197,94,0.24)] text-[#bbf7d0]" : "border-[rgba(251,191,36,0.26)] text-[#fde68a]"}`}>
+                {systemCockpitLoading ? "loading" : systemHealth?.status ?? "not checked"}
+              </span>
+            </div>
+            {systemCockpitError ? <p className="m-0 text-xs text-[#fecdd3]">{systemCockpitError}</p> : null}
+            <div className="grid gap-3 xl:grid-cols-2">
+              <div className="grid gap-2">
+                {(systemHealth?.checks ?? []).map((check) => (
+                  <div key={check.id} className="rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.48)] p-3">
+                    <strong className={check.status === "ok" ? "text-[#bbf7d0]" : check.status === "disabled" ? "text-[var(--muted)]" : "text-[#fde68a]"}>
+                      {check.status} · {check.label}
+                    </strong>
+                    <p className="m-0 mt-1 text-xs leading-5 text-[var(--muted)]">{check.detail}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-2">
+                {(systemSmoke?.items ?? []).slice(0, 8).map((smoke) => (
+                  <div key={smoke.id} className="rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.48)] p-3">
+                    <strong className={smoke.status === "pass" ? "text-[#bbf7d0]" : smoke.status === "manual" ? "text-[var(--accent-strong)]" : "text-[#fde68a]"}>
+                      {smoke.status} · {smoke.label}
+                    </strong>
+                    <p className="m-0 mt-1 text-xs leading-5 text-[var(--muted)]">{smoke.detail}</p>
+                    {smoke.nextAction ? <p className="m-0 mt-1 text-xs text-[var(--foreground)]">{smoke.nextAction}</p> : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {systemLiveProbes.length ? (
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+                {systemLiveProbes.map((probe) => (
+                  <article key={probe.id} className="rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.48)] p-3">
+                    <strong className={probe.status === "ok" ? "text-[#bbf7d0]" : probe.status === "degraded" ? "text-[#fde68a]" : "text-[#fecdd3]"}>
+                      {probe.status}
+                    </strong>
+                    <h4 className="m-0 mt-1 text-sm font-bold">{probe.label}</h4>
+                    <p className="m-0 mt-1 text-xs leading-5 text-[var(--muted)]">{probe.detail}</p>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+            {systemCookbook.length ? (
+              <div className="grid gap-2 md:grid-cols-2">
+                {systemCookbook.map((entry) => (
+                  <article key={entry.id} className="rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.48)] p-3">
+                    <p className="eyebrow">{entry.area} · {entry.severity}</p>
+                    <h4 className="m-0 text-sm font-bold">{entry.title}</h4>
+                    <p className="m-0 mt-1 text-xs leading-5 text-[var(--muted)]">{entry.symptoms[0]}</p>
+                    <p className="m-0 mt-1 text-xs text-[var(--foreground)]">{entry.fixes[0]}</p>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+            {systemModelFit.length ? (
+              <div className="grid gap-2 md:grid-cols-2">
+                {systemModelFit.slice(0, 4).map((fit) => (
+                  <article key={fit.machineId} className="rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.48)] p-3">
+                    <p className="eyebrow">{fit.tier}</p>
+                    <h4 className="m-0 text-sm font-bold">{fit.machineName}: {fit.label}</h4>
+                    <p className="m-0 mt-1 text-xs leading-5 text-[var(--muted)]">{fit.rationale[0]}</p>
+                    <p className="m-0 mt-1 text-xs text-[var(--foreground)]">{fit.preferredProviders.slice(0, 3).join(" · ")}</p>
+                    {fit.caution ? <p className="m-0 mt-1 text-xs text-[#fde68a]">{fit.caution}</p> : null}
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        </div>
         <div className="mt-4 grid gap-3">
           {(maintenanceReport?.checks ?? []).map((check) => (
             <article key={check.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4">

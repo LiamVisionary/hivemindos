@@ -27,43 +27,51 @@ function HiveCell({
   selected?: boolean; dim?: boolean; pulse?: boolean; bounce?: boolean;
   onClick?: () => void; title?: string; children?: React.ReactNode; z?: number;
 }) {
-  const ringScale = selected ? 1.08 : 1;
   return (
     <div
       onClick={(e) => { e.stopPropagation(); onClick?.(); }}
       title={title}
       className="fr-cell"
+      data-selected={selected ? "true" : undefined}
       style={{
         position: "absolute", left: x, top: y, width: size, height: size,
-        transform: `translate(-50%, -50%) scale(${ringScale})`,
-        zIndex: z ?? (selected ? 6 : 4), cursor: onClick ? "pointer" : "default",
-        transition: "transform .4s cubic-bezier(.2,.8,.2,1), opacity .4s",
+        // the outer node only holds the absolute-centering; the lift layer below
+        // owns scale/translate (selection + hover) entirely in CSS, so neither
+        // fights this inline transform.
+        transform: "translate(-50%, -50%)",
+        ["--fr-z" as string]: z ?? (selected ? 6 : 4),
+        cursor: onClick ? "pointer" : "default",
+        transition: "opacity .4s",
         opacity: dim ? 0.4 : 1,
-        animation: bounce ? "fr-breathe 0.88s ease" : undefined,
-      }}
+      } as React.CSSProperties}
     >
-      {tone.glow ? (
+      <div
+        className="fr-cell-lift"
+        style={{ animation: bounce ? "fr-breathe 0.88s ease" : undefined }}
+      >
+        {tone.glow ? (
+          <div
+            style={{
+              position: "absolute", inset: -size * 0.34, borderRadius: "50%",
+              background: `radial-gradient(circle, ${tone.glow}, transparent 68%)`,
+              animation: pulse ? "fr-cell-breathe 3.2s ease-in-out infinite" : undefined,
+              pointerEvents: "none",
+            }}
+          />
+        ) : null}
         <div
           style={{
-            position: "absolute", inset: -size * 0.34, borderRadius: "50%",
-            background: `radial-gradient(circle, ${tone.glow}, transparent 68%)`,
-            animation: pulse ? "fr-cell-breathe 3.2s ease-in-out infinite" : undefined,
-            pointerEvents: "none",
+            position: "absolute", inset: 0, clipPath: FR_HEX_CLIP,
+            background: tone.fill, border: "0",
+            boxShadow: `inset 0 0 0 1.4px ${tone.border}, inset 0 ${size * 0.5}px ${size * 0.6}px -${size * 0.4}px rgba(255,255,255,0.06)`,
+            backdropFilter: "blur(7px)", WebkitBackdropFilter: "blur(7px)",
           }}
         />
-      ) : null}
-      <div
-        style={{
-          position: "absolute", inset: 0, clipPath: FR_HEX_CLIP,
-          background: tone.fill, border: "0",
-          boxShadow: `inset 0 0 0 1.4px ${tone.border}, inset 0 ${size * 0.5}px ${size * 0.6}px -${size * 0.4}px rgba(255,255,255,0.06)`,
-          backdropFilter: "blur(7px)", WebkitBackdropFilter: "blur(7px)",
-        }}
-      />
-      <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} aria-hidden>
-        <polygon points="50,2 92,25 92,75 50,98 8,75 8,25" fill="none" stroke={tone.border} strokeWidth={selected ? 2 : 1.3} strokeLinejoin="round" />
-      </svg>
-      <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>{children}</div>
+        <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} aria-hidden>
+          <polygon points="50,2 92,25 92,75 50,98 8,75 8,25" fill="none" stroke={tone.border} strokeWidth={selected ? 2 : 1.3} strokeLinejoin="round" />
+        </svg>
+        <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>{children}</div>
+      </div>
     </div>
   );
 }
@@ -167,7 +175,7 @@ function AddAgentCell({ x, y, size, dim, title, label, onClick }: { x: number; y
           style={{
             position: "absolute", left: "50%", top: "100%", transform: "translate(-50%, 4px)",
             whiteSpace: "nowrap", pointerEvents: "none",
-            fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 11.5,
+            fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 15,
             letterSpacing: "-0.02em", color: "var(--fg-3)",
           }}
         >{label}</span>
@@ -201,8 +209,8 @@ export function HiveStage({
   onAddMachine,
   onOpenQueenSettings,
   newAgentId,
-  workerBeeSrc = "/icons/worker-bee.png",
-  queenBeeSrc = "/icons/queen-bee.png",
+  workerBeeSrc = "/icons/worker-bee-general-v5.png",
+  queenBeeSrc = "/icons/queen-bee-v2.png",
 }: {
   machines: HiveMachine[];
   sel: HiveSelection;
@@ -253,7 +261,7 @@ export function HiveStage({
               <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={workerBeeSrc} alt="" width={62} height={62}
+                  src={agent.iconSrc || workerBeeSrc} alt="" width={81} height={81}
                   style={{ transform: "translateY(-4%)", opacity: agent.state === "ready" && !selected ? 0.78 : 1, filter: "drop-shadow(0 2px 5px rgba(0,0,0,0.4))" }}
                 />
               </span>
@@ -295,7 +303,7 @@ export function HiveStage({
               {/* icon centred in the hex; the name hugs the lower edges using
                   the same edge-label logic as the agent cells. */}
               <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
-                <MachineKindIcon kind={m.kind} size={30} color={selected ? "var(--honey)" : m.role === "Primary" ? "var(--honey)" : "var(--fg-2)"} />
+                <MachineKindIcon kind={m.kind} size={39} color={selected ? "var(--honey)" : m.role === "Primary" ? "var(--honey)" : "var(--fg-2)"} />
               </span>
               <AgentEdgeName name={m.name} selected={selected} />
             </HiveCell>
@@ -320,24 +328,29 @@ export function HiveStage({
         onClick={(e) => { e.stopPropagation(); onSelect({ type: "queen" }); }}
         onDoubleClick={(e) => { e.stopPropagation(); onOpenQueenSettings?.(); }}
         title={onOpenQueenSettings ? "The Queen · orchestrator (double-click to open settings)" : "The Queen · orchestrator"}
+        className="fr-queen-cell"
+        data-selected={sel.type === "queen" ? "true" : undefined}
         style={{
           position: "absolute", left: QX, top: QY, width: 150, height: 150,
-          transform: `translate(-50%, -50%) scale(${sel.type === "queen" ? 1.05 : 1})`,
-          cursor: "pointer", zIndex: 9, transition: "transform .4s cubic-bezier(.2,.8,.2,1)",
+          transform: "translate(-50%, -50%)", cursor: "pointer", zIndex: 9,
         }}
       >
-        <div style={{ position: "absolute", inset: -30, borderRadius: "50%", background: "radial-gradient(circle, var(--honey-soft), transparent 66%)", animation: "fr-cell-breathe 4s ease-in-out infinite", pointerEvents: "none" }} />
-        <div style={{ position: "absolute", inset: 0, clipPath: FR_HEX_CLIP, background: "color-mix(in srgb, var(--honey) 16%, var(--panel))", backdropFilter: "blur(7px)", WebkitBackdropFilter: "blur(7px)" }} />
-        <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} aria-hidden>
-          <polygon points="50,2 92,25 92,75 50,98 8,75 8,25" fill="none" stroke={sel.type === "queen" ? "var(--honey)" : "var(--honey-line)"} strokeWidth={sel.type === "queen" ? 2.2 : 1.6} strokeLinejoin="round" />
-        </svg>
-        <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={queenBeeSrc} alt="" width={91} height={91} style={{ filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.45))" }} />
-        </div>
-        <div style={{ position: "absolute", left: "50%", top: "calc(100% + 6px)", transform: "translateX(-50%)", textAlign: "center", pointerEvents: "none" }}>
-          <div style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 13, color: "var(--honey)" }}>Queen</div>
-          <div style={{ fontSize: 9.5, color: "var(--fg-4)", fontFamily: "var(--f-mono)", marginTop: 1 }}>orchestrator</div>
+        {/* inner lift layer — selection scale + hover lift live in CSS, mirroring
+            the worker/machine cells. */}
+        <div className="fr-queen-lift">
+          <div style={{ position: "absolute", inset: -30, borderRadius: "50%", background: "radial-gradient(circle, var(--honey-soft), transparent 66%)", animation: "fr-cell-breathe 4s ease-in-out infinite", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", inset: 0, clipPath: FR_HEX_CLIP, background: "color-mix(in srgb, var(--honey) 16%, var(--panel))", backdropFilter: "blur(7px)", WebkitBackdropFilter: "blur(7px)" }} />
+          <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} aria-hidden>
+            <polygon points="50,2 92,25 92,75 50,98 8,75 8,25" fill="none" stroke={sel.type === "queen" ? "var(--honey)" : "var(--honey-line)"} strokeWidth={sel.type === "queen" ? 2.2 : 1.6} strokeLinejoin="round" />
+          </svg>
+          <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={queenBeeSrc} alt="" width={91} height={91} style={{ filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.45))" }} />
+          </div>
+          <div style={{ position: "absolute", left: "50%", top: "calc(100% + 6px)", transform: "translateX(-50%)", textAlign: "center", pointerEvents: "none" }}>
+            <div style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 13, color: "var(--honey)" }}>Queen</div>
+            <div style={{ fontSize: 9.5, color: "var(--fg-4)", fontFamily: "var(--f-mono)", marginTop: 1 }}>orchestrator</div>
+          </div>
         </div>
       </div>
     </div>

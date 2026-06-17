@@ -46,6 +46,9 @@ const nextConfig: NextConfig = {
   // set HIVEMINDOS_DEV_STRICT=1 to restore the double-invoke checks when hunting
   // effect-cleanup / render-purity bugs.
   reactStrictMode: process.env.HIVEMINDOS_DEV_STRICT === "1",
+  // Dev-only chrome: hide Next's floating tools badge so it doesn't cover
+  // dashboard UI while still keeping compile/runtime error overlays enabled.
+  devIndicators: false,
   // The embedded build compiles all ~155 API routes and is memory-heavy; this
   // trades a little build time to cut webpack's peak memory so it stays under
   // the heap cap on CI runners (avoids the 8 GB OOM). Next 15.2+.

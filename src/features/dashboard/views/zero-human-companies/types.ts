@@ -57,6 +57,23 @@ export interface Burn {
   runway: number;
 }
 
+export interface TokenCapital {
+  score: number;
+  learningAssets: number;
+  workflowAssets: number;
+  evalGates: number;
+  passedEvalGates: number;
+  experiments: number;
+  committedExperiments: number;
+  frontierCandidates: number;
+  antiPatterns: number;
+  distillationQueue: number;
+  learningVelocity: number;
+  spendEfficiency: number | null;
+  modelIndependence: number;
+  notes: string[];
+}
+
 export interface Revenue {
   /** "users" renders DAU/MAU; otherwise a currency headline */
   kind?: "users" | "revenue";
@@ -109,6 +126,7 @@ export interface Colony {
   apex: ApexGoal;
   workBlock: WorkBlock;
   burn: Burn;
+  tokenCapital: TokenCapital;
   revenue?: Revenue;
   velocity: number[];
   approvals: Approval[];
@@ -125,11 +143,11 @@ export interface Colony {
   /** True when perpetual autonomy is on — the driver keeps re-dispatching until stopped/frozen. */
   autonomy?: boolean;
   /**
-   * Raw, unformatted identity + apex-goal values used to seed the edit form.
-   * Distinct from the display fields above (`apex`, `ticker`, …) which carry
-   * derived fallbacks and `$`/`%` formatting — this is what the user actually set.
+   * Raw, unformatted company values used to seed the edit form. Distinct from
+   * display fields above (`apex`, `ticker`, …), which carry derived fallbacks
+   * and `$`/`%` formatting — this is what the user actually set.
    */
-  edit: CreateForm;
+  edit: CompanyEditForm;
 }
 
 /** A fully-configured agent from the org roster, available to assign. */
@@ -154,4 +172,39 @@ export interface CreateForm {
   apexMetric?: string;
   apexTarget?: string;
   metricUnit?: MetricUnit;
+}
+
+export interface CompanyMemberEdit {
+  agentId: string;
+  name: string;
+  role: Role;
+  companyCap?: number;
+  task?: string;
+  state?: AgentState | "";
+  reportsTo?: string | null;
+  runtime?: string;
+  model?: string;
+}
+
+export interface CompanyEditForm extends CreateForm {
+  charter?: string;
+  blurb?: string;
+  dailyBudgetUsd?: number;
+  monthlyBudgetUsd?: number;
+  totalBudgetUsd?: number;
+  status?: CompanyStatus | "";
+  alignment?: number;
+  apexCurrent?: string;
+  apexProgress?: number;
+  frozen?: boolean;
+  revenueKind?: "users" | "revenue" | "";
+  revenueLabel?: string;
+  revenueValue?: string;
+  revenueTarget?: string;
+  revenueMau?: string;
+  revenuePct?: number;
+  revenueDelta?: string;
+  revenueUp?: boolean;
+  revenueIsApex?: boolean;
+  members?: CompanyMemberEdit[];
 }

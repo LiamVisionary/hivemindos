@@ -87,7 +87,7 @@ The v1 staking system should be non-custodial:
 - The contract records each wallet's staked balance.
 - HivemindOS, Telegram permissions, alpha-room checks, governance polls, and marketplace reputation read the staked balance.
 - Users can request unstaking.
-- After a visible cooldown, users withdraw their HIVE back to the same wallet.
+- After a visible cooldown, users withdraw their HIVE back to the same wallet. The launch cooldown is 3 days.
 
 The Telegram tip bot ledger can still handle tips and bounty escrow, but it should not be the canonical staking system. Staking should happen on-chain so users can verify custody and exit rules directly.
 
@@ -486,7 +486,8 @@ Recommended rules:
 
 - Users can request unstaking at any time.
 - Benefits pause when active stake falls below the tier threshold.
-- A short cooldown can prevent flash-staking, such as 3 to 7 days.
+- The launch cooldown is 3 days, which is long enough to reduce flash-staking without making normal exits feel trapped.
+- Governance may keep a bounded maximum, such as 7 days, but the active cooldown should remain visible before users stake.
 - The cooldown should be clear before staking.
 - Pending unstake should not count toward tier status.
 - After the cooldown, users withdraw from the contract back to their wallet.

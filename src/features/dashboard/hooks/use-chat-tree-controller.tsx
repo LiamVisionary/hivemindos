@@ -5,6 +5,7 @@
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { stripJsonRenderPayload } from "@/components/json-render/JsonRenderSurface";
 import { createNativeLocalFolder } from "@/lib/native/filesystem";
 import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 import { chatTelemetryMessages, chatTelemetrySession } from "@/lib/services/telemetry/chat-dev-telemetry";
@@ -43,10 +44,14 @@ function hasReadableChatMessages(messages: ChatMessage[] = [], isManualAgentChat
 function chatSearchContent(messages: ChatMessage[] = []) {
   return messages
     .slice(-80)
-    .map((message) => message.content?.trim() ?? "")
+    .map((message) => stripJsonRenderPayload(message.content ?? "").trim())
     .filter(Boolean)
     .join("\n")
     .slice(0, 24000);
+}
+
+function chatPreviewContent(message?: ChatMessage) {
+  return stripJsonRenderPayload(message?.content ?? "").trim();
 }
 
 function chatLeafMatchesAgentId(leafKey: string, agentId: string) {
@@ -129,9 +134,9 @@ export function useChatTreeController(props: any) {
   }, [messagesByAgent]);
 
   const conversationTitle = useCallback((agentId: string) => {
-    const firstUserMessage = (messagesByAgent[agentId] ?? [])
+    const firstUser = (messagesByAgent[agentId] ?? [])
       .find((message) => message.role === "user" && isManualAgentChatMessage(message))
-      ?.content.trim();
+    const firstUserMessage = chatPreviewContent(firstUser);
     return firstUserMessage ? firstUserMessage.slice(0, 56) : "Previous chat";
   }, [messagesByAgent]);
 
@@ -341,15 +346,15 @@ export function useChatTreeController(props: any) {
       const { agentId, leafKey: storedLeafKey } = chatStorageIdentity(storageKey);
       if (!agentId || !storedLeafKey || storedLeafKey === `agent-${agentId}` || storedLeafKey.startsWith("task-")) continue;
       const manualMessages = storedMessages.filter(isManualAgentChatMessage);
-      if (!manualMessages.some((message) => message.content.trim())) continue;
+      if (!manualMessages.some((message) => chatPreviewContent(message))) continue;
       if (isAutomationHydratedTranscript(manualMessages)) continue;
-      const firstUser = manualMessages.find((message) => message.role === "user" && message.content.trim());
-      const lastMessage = [...manualMessages].reverse().find((message) => message.content.trim());
+      const firstUser = manualMessages.find((message) => message.role === "user" && chatPreviewContent(message));
+      const lastMessage = [...manualMessages].reverse().find((message) => chatPreviewContent(message));
       const item: ChatTreeItem = {
         agentId,
         key: storedLeafKey,
-        title: firstUser?.content.trim().slice(0, 56) || "Previous chat",
-        subtitle: lastMessage?.content.trim().slice(0, 80) || agentId,
+        title: chatPreviewContent(firstUser).slice(0, 56) || "Previous chat",
+        subtitle: chatPreviewContent(lastMessage).slice(0, 80) || agentId,
         updatedAt: Math.max(...manualMessages.map((message) => Number(message.createdAt || 0))),
         rank: 4,
         active: selectedAgentId === agentId && selectedChatLeafKey === storedLeafKey,

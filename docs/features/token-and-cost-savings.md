@@ -170,11 +170,14 @@ It bounds retrieval and returns:
 - selected components per intent
 - alternatives
 - available agents/apps/tools
+- delivery channels such as slash commands, API routes, MCP tools, CLIs, or dashboard surfaces
 - required credential keys by name only
 - side-effect gates
 - missing pieces
 
 This avoids a common expensive pattern: the agent repeatedly searches tools, docs, runtime skills, and app surfaces because it never formed a compact capability map.
+
+For example, a request like "build this with parallel agents" can map to the dashboard `/swarm-goal` delivery channel. Capability search should surface the command, its Queen Bee `/api/queen-bee` backend, the side effect that it creates a Work Board task, and the fact that autonomous pickup can start act-mode work.
 
 ## Fusion Skills
 

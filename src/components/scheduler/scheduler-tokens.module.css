@@ -15,17 +15,17 @@
   --panel-card-grad: linear-gradient(180deg, rgba(22,28,42,0.72), rgba(16,21,31,0.62));
 }
 :global([data-theme="hive-light"]) .root {
-  --hex-default-bg: linear-gradient(180deg, rgba(217,200,158,0.78), rgba(195,174,128,0.62));
-  --hex-default-border: rgba(92,75,45,0.55);
-  --hex-honey-bg: linear-gradient(180deg, rgba(184,130,22,0.50), rgba(140,94,10,0.22));
-  --hex-honey-border: rgba(106,69,5,0.78);
-  --hex-active-border: rgba(13,90,78,0.78);
-  --hex-add-stroke: rgba(13,90,78,0.78);
-  --hex-hover-stroke: rgba(13,90,78,1);
-  --panel-bg: rgba(240,232,216,0.94);
-  --panel-bg-soft: rgba(232,223,203,0.82);
-  --panel-grad: linear-gradient(180deg, rgba(240,232,216,0.94), rgba(223,212,190,0.86));
-  --panel-card-grad: linear-gradient(180deg, rgba(245,238,222,0.92), rgba(232,223,203,0.78));
+  --hex-default-bg: linear-gradient(180deg, rgba(255,252,246,0.86), rgba(244,239,228,0.70));
+  --hex-default-border: rgba(54,46,30,0.26);
+  --hex-honey-bg: linear-gradient(180deg, rgba(176,127,28,0.28), rgba(176,127,28,0.10));
+  --hex-honey-border: rgba(147,104,17,0.48);
+  --hex-active-border: rgba(95,143,90,0.56);
+  --hex-add-stroke: rgba(95,143,90,0.60);
+  --hex-hover-stroke: rgba(79,125,75,0.92);
+  --panel-bg: rgba(251,248,241,0.94);
+  --panel-bg-soft: rgba(244,239,228,0.82);
+  --panel-grad: linear-gradient(180deg, rgba(251,248,241,0.94), rgba(244,239,228,0.82));
+  --panel-card-grad: linear-gradient(180deg, rgba(255,252,246,0.88), rgba(244,239,228,0.76));
 }
 .dot {
   display: inline-block; width: 6px; height: 6px; border-radius: 9999px;

@@ -54,7 +54,7 @@ type CompanyBody = {
   sector?: string;
   blurb?: string;
   status?: string;
-  alignment?: number;
+  alignment?: number | string | null;
   apexGoal?: CompanyApexGoal;
   revenue?: CompanyRevenue;
   members?: CompanyMember[];

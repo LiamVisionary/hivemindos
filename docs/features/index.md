@@ -34,7 +34,7 @@ The product starts with machines and agents. Fleet tells you what is online, whi
   </section>
   <section class="docCard">
     <h3>Agents, Runtimes, And Chat</h3>
-    <p>Runtime profiles, model selection, adaptive free-model routing, adapter behavior, streaming chat, `/swarm [number]` agent-team passes, attachments, directory context, and phone-call handoff.</p>
+    <p>Runtime profiles, model selection, adaptive free-model routing, adapter behavior, streaming chat, `/swarm [number]` agent-team passes, `/swarm-goal` build orchestration, attachments, directory context, and phone-call handoff.</p>
     <a href="runtimes-and-chat.html">Open agents</a>
   </section>
   <section class="docCard">
@@ -46,12 +46,12 @@ The product starts with machines and agents. Fleet tells you what is online, whi
 
 ## Work Loop
 
-Work is where operator intent turns into agent execution. The board captures rough ideas, promotes ready tasks, tracks claimed work, stores comments and run records, and turns finished output into deliverables. Scheduler adds repeated background work. Chat can launch `/swarm [number]` agent-team passes for parallel role-specific analysis. Swarm and MiroShark handle rehearsal, `/swarm-sim` simulations, and heavier analysis workflows.
+Work is where operator intent turns into agent execution. The board captures rough ideas, promotes ready tasks, tracks claimed work, stores comments and run records, and turns finished output into deliverables. Scheduler adds repeated background work. Chat can launch `/swarm [number]` agent-team passes for parallel role-specific analysis, or `/swarm-goal <build request>` to rewrite a loose build request and hand it to Queen Bee for parallel agent execution. Swarm and MiroShark handle rehearsal, `/swarm-sim` simulations, and heavier analysis workflows.
 
 <div class="docGrid">
   <section class="docCard">
     <h3>Work Board And Scheduler</h3>
-    <p>Kanban tasks, project provenance, Code Proof badges, agent dispatch, deliverables, schedules, machine-aware folder picking, background jobs, and work history.</p>
+    <p>Kanban tasks, zero-human company learning loops, project provenance, Code Proof badges, agent dispatch, deliverables, schedules, machine-aware folder picking, background jobs, and work history.</p>
     <a href="work-and-scheduler.html">Open work docs</a>
   </section>
   <section class="docCard">

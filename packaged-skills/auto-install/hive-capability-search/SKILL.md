@@ -15,7 +15,7 @@ Search only surfaces available to the current agent/runtime:
 
 - Shared brain skill index: read `Skills/README.md` at most once, then load only directly relevant `Skills/<slug>/SKILL.md` files.
 - Packaged auto-install skills and installed optional skills exposed through the context index or shared skill shelf.
-- Runtime/provider skills, tool schemas, app schemas, API routes, and local CLI capabilities exposed to the agent.
+- Runtime/provider skills, tool schemas, slash commands, app schemas, API routes, and local CLI capabilities exposed to the agent.
 - Connected apps/endpoints through the app discovery/catalog surfaces and app request proxy. Do not hard-code Tailnet endpoints, private IPs, local machine names, or transient URLs.
 - Existing specialty agents and agent subclasses when the runtime exposes them.
 - Workspace docs/files only when task-relevant.
@@ -54,6 +54,7 @@ Return a compact capability map:
 - `alternates`: viable fallback components and when to use them
 - `agents`: specialty agents or subclasses that should own work, if any
 - `apps`: discovered app/endpoints selected through catalog logic, not hard-coded endpoints
+- `delivery`: slash commands, API routes, MCP tools, CLIs, or dashboard surfaces that should carry the selected capability when relevant
 - `credentials`: required env keys or status checks by name only, never values
 - `side_effects`: publish/send/pay/deploy/mutate actions and required approval gates
 - `gaps`: missing, ambiguous, or unavailable components
@@ -63,6 +64,6 @@ Return a compact capability map:
 
 For fusion callers, include enough proof that the selected parts are reachable:
 
-- Retrieval hit, skill path, app catalog entry, route/tool schema, runtime capability, agent profile, or status endpoint.
+- Retrieval hit, skill path, slash-command metadata, app catalog entry, route/tool schema, runtime capability, agent profile, or status endpoint.
 - For media generation capabilities, require later artifact verification before claiming success.
 - For external delivery capabilities, require later provider/tool receipts such as `success: true`, `message_id`, URL, transaction id, post id, or equivalent.

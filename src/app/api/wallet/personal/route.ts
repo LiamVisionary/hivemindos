@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { listWalletInfos } from "@/lib/services/wallet/local-wallet-vault";
 import { readWalletLedger, writeWalletRecord } from "@/lib/services/obsidian/wallet-ledger";
-import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
+import type { AgentWalletConfig, AgentWalletTokenBalance, AgentWalletVaultInfo } from "@/lib/types/agent-wallet";
 import { createDefaultAgentWallet } from "@/lib/utils/agent-wallet";
 import { requireAuth } from "@/lib/utils/server-auth";
 
@@ -21,6 +21,12 @@ type PersonalWalletRecord = {
   lastOnchainSyncAt?: number;
   createdAt?: number;
   updatedAt?: number;
+};
+
+type PersonalWalletResponse = PersonalWalletRecord & {
+  agentId: string;
+  tokens: AgentWalletTokenBalance[];
+  portfolioVersion: number;
 };
 
 const RECOVERY_PHRASE_WALLET_ID_SUFFIX = /:(?:eip155-\d+|solana-[a-z0-9-]+)$/i;
@@ -65,6 +71,48 @@ function personalWalletFromAgentWallet(agentId: string, agentName: string, walle
     lastOnchainSyncAt: wallet.lastOnchainSyncAt || 0,
     createdAt: wallet.updatedAt || 0,
     updatedAt: wallet.updatedAt || 0,
+  } satisfies PersonalWalletResponse;
+}
+
+function walletAccountKey(input: Pick<PersonalWalletRecord, "network" | "address">) {
+  return `${input.network}:${input.address.toLowerCase()}`;
+}
+
+function walletFromVaultInfo(wallet: AgentWalletVaultInfo): PersonalWalletResponse {
+  const timestamp = Date.parse(wallet.createdAt) || Date.now();
+  return {
+    agentId: wallet.agentId,
+    id: wallet.agentId,
+    name: personalWalletName(wallet.agentId, "", wallet.network),
+    address: wallet.address,
+    network: wallet.network,
+    custodyMode: wallet.custodyMode,
+    importedFrom: personalWalletImportSource(wallet.agentId, wallet.custodyMode),
+    currentBalanceUsd: 0,
+    nativeBalance: 0,
+    tokens: [],
+    portfolioVersion: 0,
+    lastOnchainSyncAt: 0,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+function ledgerWalletWithSignerTruth(wallet: PersonalWalletResponse, vaultByAccount: Map<string, AgentWalletVaultInfo>): PersonalWalletResponse {
+  const vaultWallet = vaultByAccount.get(walletAccountKey(wallet));
+  if (!vaultWallet) {
+    return {
+      ...wallet,
+      custodyMode: "watch",
+      importedFrom: "watch",
+    };
+  }
+  return {
+    ...wallet,
+    agentId: vaultWallet.agentId,
+    id: vaultWallet.agentId,
+    custodyMode: vaultWallet.custodyMode,
+    importedFrom: personalWalletImportSource(vaultWallet.agentId, vaultWallet.custodyMode),
   };
 }
 
@@ -97,31 +145,18 @@ export async function GET(request: Request) {
       readWalletLedger(vaultPath),
       listWalletInfos({ agentIdPrefix: "user:" }),
     ]);
+    const vaultByAccount = new Map(vaultWallets.map((wallet) => [walletAccountKey(wallet), wallet]));
     const ledgerWallets = ledger.records
       .filter((record) => record.agentId.startsWith("user:"))
       .map((record) => personalWalletFromAgentWallet(record.agentId, record.agentName, record.wallet))
-      .filter((wallet): wallet is NonNullable<typeof wallet> => Boolean(wallet));
-    const existing = new Set(ledgerWallets.map((wallet) => `${wallet.network}:${wallet.address.toLowerCase()}`));
+      .filter((wallet): wallet is NonNullable<typeof wallet> => Boolean(wallet))
+      .map((wallet) => ledgerWalletWithSignerTruth(wallet, vaultByAccount));
+    const existing = new Set(ledgerWallets.map(walletAccountKey));
     const wallets = [
       ...ledgerWallets,
       ...vaultWallets
-        .filter((wallet) => !existing.has(`${wallet.network}:${wallet.address.toLowerCase()}`))
-        .map((wallet) => ({
-          agentId: wallet.agentId,
-          id: wallet.agentId,
-          name: personalWalletName(wallet.agentId, "", wallet.network),
-          address: wallet.address,
-          network: wallet.network,
-          custodyMode: wallet.custodyMode,
-          importedFrom: personalWalletImportSource(wallet.agentId, wallet.custodyMode),
-          currentBalanceUsd: 0,
-          nativeBalance: 0,
-          tokens: [],
-          portfolioVersion: 0,
-          lastOnchainSyncAt: 0,
-          createdAt: Date.parse(wallet.createdAt) || Date.now(),
-          updatedAt: Date.parse(wallet.createdAt) || Date.now(),
-        })),
+        .filter((wallet) => !existing.has(walletAccountKey(wallet)))
+        .map(walletFromVaultInfo),
     ];
     return NextResponse.json({ ok: true, wallets });
   } catch (error) {

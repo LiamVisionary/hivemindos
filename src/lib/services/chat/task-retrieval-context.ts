@@ -2,6 +2,7 @@ import { beeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import { searchContextIndex, type ContextConnectedApp, type ContextConnectedAppRoute, type ContextIndexItem } from "@/lib/services/context-index";
 import { applyAppPreferences, readAppPreferences, usageNoteAffinity } from "@/lib/services/fleet/app-preferences";
 import { generationMetricsContext } from "@/lib/services/generation-metrics";
+import { untrustedContextMessage } from "@/lib/services/security/untrusted-context";
 import type { BeeWorkerClass, SharedVaultConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
 
 const CONNECTED_APPS_PREFLIGHT_TIMEOUT_MS = 250;
@@ -479,7 +480,7 @@ export async function buildTaskRetrievalContextResult(input: {
     userAppPreferenceContext(connectedApps, trimmed),
     imageGenerationCapabilityContext(trimmed, input.runtime, connectedApps),
     generationPerformanceContext,
-    ...hits.map(formatTaskRetrievalItem),
+    hits.length ? untrustedContextMessage("Hive capability search hits", hits.map(formatTaskRetrievalItem).join("\n")).content : "",
   ].filter(Boolean).join("\n");
   return { context, telemetry };
 }

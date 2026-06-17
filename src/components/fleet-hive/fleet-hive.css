@@ -70,8 +70,10 @@
   --honey-soft: rgba(176, 127, 28, 0.12);
   --honey-line: rgba(176, 127, 28, 0.34);
 
-  --live: #1d8e7c;
-  --live-soft: rgba(29, 142, 124, 0.12);
+  /* warm sage (ref success #6b8f5e) rather than the dark-theme cool teal —
+     reads as a calm "live/working" signal against the warm cream + honey. */
+  --live: #5f8f5a;
+  --live-soft: rgba(95, 143, 90, 0.14);
 
   --danger: #c0524d;
   --danger-soft: rgba(192, 82, 77, 0.12);
@@ -80,6 +82,65 @@
 }
 
 .fr-root * { box-sizing: border-box; }
+
+.fr-cell,
+.fr-cell *,
+.fr-addcell,
+.fr-addcell * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Cells rest on the comb, then lift on hover. The .fr-cell / .fr-queen-cell node
+   owns absolute-centering + stacking; the inner .fr-cell-lift / .fr-queen-lift
+   node owns scale + translate (selection via [data-selected], hover via :hover)
+   entirely in CSS — plain transforms so the tween always fires. Sweep the cursor
+   across the hive and each cell rises, then settles back gracefully. */
+.fr-cell { z-index: var(--fr-z, 4); }
+.fr-cell:hover { z-index: 30; }
+
+.fr-cell-lift,
+.fr-queen-lift {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  transform: translateY(0) scale(1);
+  transition:
+    transform 0.5s cubic-bezier(0.22, 0.61, 0.18, 1),
+    filter 0.5s cubic-bezier(0.22, 0.61, 0.18, 1);
+  will-change: transform;
+}
+
+/* selected cells rest slightly enlarged */
+.fr-cell[data-selected="true"] > .fr-cell-lift { transform: translateY(0) scale(1.08); }
+.fr-queen-cell[data-selected="true"] > .fr-queen-lift { transform: translateY(0) scale(1.05); }
+
+/* hover lifts the cell off the comb (scales relative to its resting size) */
+.fr-cell:hover > .fr-cell-lift {
+  transform: translateY(-6px) scale(1.05);
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.42));
+}
+.fr-cell[data-selected="true"]:hover > .fr-cell-lift {
+  transform: translateY(-6px) scale(1.11);
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.42));
+}
+.fr-queen-cell:hover > .fr-queen-lift {
+  transform: translateY(-8px) scale(1.04);
+  filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.5));
+}
+.fr-queen-cell[data-selected="true"]:hover > .fr-queen-lift {
+  transform: translateY(-8px) scale(1.08);
+  filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.5));
+}
+
+/* reduced motion: keep the hover lift as feedback, just drop the animated tween */
+@media (prefers-reduced-motion: reduce) {
+  .fr-cell-lift,
+  .fr-queen-lift {
+    transition: none;
+  }
+}
 
 /* quiet scrollbars */
 .fr-scroll { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
@@ -247,13 +308,11 @@
 /* focus ring */
 .fr-root :focus-visible { outline: 2px solid var(--honey-line); outline-offset: 2px; }
 
-/* honeycomb backdrop texture, faded toward the centre */
+/* connected-hex backdrop texture, matching the Fleet loading shell and faded
+   toward the centre so it does not compete with the machine/agent cells. */
 .fr-comb-texture {
-  background-image:
-    linear-gradient(60deg, transparent 47%, color-mix(in srgb, var(--honey) 7%, transparent) 48%, color-mix(in srgb, var(--honey) 7%, transparent) 52%, transparent 53%),
-    linear-gradient(-60deg, transparent 47%, color-mix(in srgb, var(--honey) 7%, transparent) 48%, color-mix(in srgb, var(--honey) 7%, transparent) 52%, transparent 53%),
-    linear-gradient(0deg, transparent 47%, color-mix(in srgb, var(--honey) 7%, transparent) 48%, color-mix(in srgb, var(--honey) 7%, transparent) 52%, transparent 53%);
-  background-size: 54px 94px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2754%27 height=%2793.531%27 viewBox=%270 0 54 93.531%27 fill=%27none%27 stroke=%27%23e7b45c%27 stroke-opacity=%27.08%27 stroke-width=%27.6%27%3E%3Cpolygon points=%27-13.5%2C15.588%2013.5%2C31.177%2013.5%2C62.354%20-13.5%2C77.942%20-40.5%2C62.354%20-40.5%2C31.177%27/%3E%3Cpolygon points=%2713.5%2C62.354%2040.5%2C77.942%2040.5%2C109.119%2013.5%2C124.708%20-13.5%2C109.119%20-13.5%2C77.942%27/%3E%3Cpolygon points=%2713.5%2C-31.177%2040.5%2C-15.588%2040.5%2C15.588%2013.5%2C31.177%20-13.5%2C15.588%20-13.5%2C-15.588%27/%3E%3Cpolygon points=%2740.5%2C15.588%2067.5%2C31.177%2067.5%2C62.354%2040.5%2C77.942%2013.5%2C62.354%2013.5%2C31.177%27/%3E%3Cpolygon points=%2767.5%2C62.354%2094.5%2C77.942%2094.5%2C109.119%2067.5%2C124.708%2040.5%2C109.119%2040.5%2C77.942%27/%3E%3Cpolygon points=%2767.5%2C-31.177%2094.5%2C-15.588%2094.5%2C15.588%2067.5%2C31.177%2040.5%2C15.588%2040.5%2C-15.588%27/%3E%3C/svg%3E");
+  background-size: 54px 93.531px;
   -webkit-mask-image: radial-gradient(circle at 506px 474px, transparent 30%, #000 78%);
   mask-image: radial-gradient(circle at 506px 474px, transparent 30%, #000 78%);
 }
@@ -274,14 +333,25 @@
   content: "";
   position: absolute;
   inset: 0;
-  opacity: 0.5;
-  background-image:
-    linear-gradient(60deg, transparent 47%, color-mix(in srgb, var(--honey) 7%, transparent) 48%, color-mix(in srgb, var(--honey) 7%, transparent) 52%, transparent 53%),
-    linear-gradient(-60deg, transparent 47%, color-mix(in srgb, var(--honey) 7%, transparent) 48%, color-mix(in srgb, var(--honey) 7%, transparent) 52%, transparent 53%),
-    linear-gradient(0deg, transparent 47%, color-mix(in srgb, var(--honey) 7%, transparent) 48%, color-mix(in srgb, var(--honey) 7%, transparent) 52%, transparent 53%);
-  background-size: 54px 94px;
-  -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 18%, #000 72%);
-  mask-image: radial-gradient(circle at 50% 50%, transparent 18%, #000 72%);
+  opacity: 0.62;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2754%27 height=%2793.531%27 viewBox=%270 0 54 93.531%27 fill=%27none%27 stroke=%27%23e7b45c%27 stroke-opacity=%27.08%27 stroke-width=%27.6%27%3E%3Cpolygon points=%27-13.5%2C15.588%2013.5%2C31.177%2013.5%2C62.354%20-13.5%2C77.942%20-40.5%2C62.354%20-40.5%2C31.177%27/%3E%3Cpolygon points=%2713.5%2C62.354%2040.5%2C77.942%2040.5%2C109.119%2013.5%2C124.708%20-13.5%2C109.119%20-13.5%2C77.942%27/%3E%3Cpolygon points=%2713.5%2C-31.177%2040.5%2C-15.588%2040.5%2C15.588%2013.5%2C31.177%20-13.5%2C15.588%20-13.5%2C-15.588%27/%3E%3Cpolygon points=%2740.5%2C15.588%2067.5%2C31.177%2067.5%2C62.354%2040.5%2C77.942%2013.5%2C62.354%2013.5%2C31.177%27/%3E%3Cpolygon points=%2767.5%2C62.354%2094.5%2C77.942%2094.5%2C109.119%2067.5%2C124.708%2040.5%2C109.119%2040.5%2C77.942%27/%3E%3Cpolygon points=%2767.5%2C-31.177%2094.5%2C-15.588%2094.5%2C15.588%2067.5%2C31.177%2040.5%2C15.588%2040.5%2C-15.588%27/%3E%3C/svg%3E");
+  background-size: 54px 93.531px;
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 20%, rgba(0, 0, 0, 0.42) 58%, #000 80%);
+  mask-image: radial-gradient(circle at 50% 50%, transparent 20%, rgba(0, 0, 0, 0.42) 58%, #000 80%);
+}
+.fr-root[data-fr-theme="light"] .fr-hive-backdrop::before,
+.fr-root[data-fr-theme="light"] .fr-comb-texture {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2754%27 height=%2793.531%27 viewBox=%270 0 54 93.531%27 fill=%27none%27 stroke=%27%23b07f1c%27 stroke-opacity=%27.1%27 stroke-width=%27.6%27%3E%3Cpolygon points=%27-13.5%2C15.588%2013.5%2C31.177%2013.5%2C62.354%20-13.5%2C77.942%20-40.5%2C62.354%20-40.5%2C31.177%27/%3E%3Cpolygon points=%2713.5%2C62.354%2040.5%2C77.942%2040.5%2C109.119%2013.5%2C124.708%20-13.5%2C109.119%20-13.5%2C77.942%27/%3E%3Cpolygon points=%2713.5%2C-31.177%2040.5%2C-15.588%2040.5%2C15.588%2013.5%2C31.177%20-13.5%2C15.588%20-13.5%2C-15.588%27/%3E%3Cpolygon points=%2740.5%2C15.588%2067.5%2C31.177%2067.5%2C62.354%2040.5%2C77.942%2013.5%2C62.354%2013.5%2C31.177%27/%3E%3Cpolygon points=%2767.5%2C62.354%2094.5%2C77.942%2094.5%2C109.119%2067.5%2C124.708%2040.5%2C109.119%2040.5%2C77.942%27/%3E%3Cpolygon points=%2767.5%2C-31.177%2094.5%2C-15.588%2094.5%2C15.588%2067.5%2C31.177%2040.5%2C15.588%2040.5%2C-15.588%27/%3E%3C/svg%3E");
+}
+
+.fr-graph-clock {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 28;
+  transform: translateX(-50%);
+  pointer-events: none;
+  text-align: center;
 }
 
 /* ---- dashed "add agent" cell hover ---- */
@@ -349,8 +419,8 @@
 /* ---- "Message the hive" chat pill ---- */
 .fr-chat-wrap { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 40; }
 .fr-chat {
-  display: flex; align-items: center; gap: 11px;
-  height: 52px; padding: 0 8px 0 16px;
+  display: flex; align-items: center; justify-content: center; gap: 11px;
+  height: 52px; padding: 0 16px;
   border-radius: 99px; cursor: text;
   background: color-mix(in srgb, var(--panel) 86%, transparent);
   border: 1px solid var(--line-2);
@@ -359,12 +429,12 @@
   width: 232px;
   transition: width .46s cubic-bezier(.2, .8, .2, 1), border-color .3s, box-shadow .3s;
 }
-.fr-chat:hover, .fr-chat:focus-within { width: 540px; border-color: var(--honey-line); box-shadow: 0 26px 60px -22px rgba(0, 0, 0, 0.66), 0 0 0 4px var(--honey-soft); }
+.fr-chat:hover, .fr-chat:focus-within { justify-content: flex-start; width: 540px; padding: 0 8px 0 16px; border-color: var(--honey-line); box-shadow: 0 26px 60px -22px rgba(0, 0, 0, 0.66), 0 0 0 4px var(--honey-soft); }
 .fr-chat:focus-within { outline: 2px solid color-mix(in srgb, var(--honey-line) 76%, transparent); outline-offset: 3px; }
 .fr-chat-orb { position: relative; width: 26px; height: 26px; flex: 0 0 auto; display: grid; place-items: center; }
 .fr-chat-orb .ring { position: absolute; inset: 0; border-radius: 99px; background: radial-gradient(circle at 50% 50%, var(--honey-soft), transparent 70%); animation: fr-breathe 3.4s ease-in-out infinite; }
 .fr-chat-orb .core { width: 9px; height: 9px; border-radius: 99px; background: var(--honey); box-shadow: 0 0 10px var(--honey); }
-.fr-chat-label { font-size: 13.5px; color: var(--fg-2); white-space: nowrap; flex: 1 1 auto; transition: opacity .2s; }
+.fr-chat-label { font-size: 13.5px; color: var(--fg-2); white-space: nowrap; flex: 0 0 auto; transition: opacity .2s; }
 .fr-chat:hover .fr-chat-label, .fr-chat:focus-within .fr-chat-label { display: none; }
 .fr-chat-field { flex: 1 1 auto; min-width: 0; opacity: 0; width: 0; pointer-events: none; display: flex; align-items: center; }
 .fr-chat:hover .fr-chat-field, .fr-chat:focus-within .fr-chat-field { opacity: 1; width: auto; pointer-events: auto; transition: opacity .3s .12s; }
@@ -401,6 +471,10 @@
 .fr-act-primary:hover { filter: brightness(1.05); background: var(--honey); color: #1a1305; }
 .fr-act-danger { color: var(--danger); border-color: var(--danger-soft); }
 .fr-act-danger:hover { background: var(--danger-soft); color: var(--danger); }
+
+/* Queen overview actions: compact, content-sized pills (the default .fr-act is
+   flex:1/full-width, which gets too big once there are three of them). */
+.fr-queen-actions .fr-act { flex: 0 0 auto; padding: 7px 13px; font-size: 12px; white-space: nowrap; }
 .fr-chip {
   display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
   font-size: 11.5px; font-family: var(--f-mono); color: var(--fg-3);

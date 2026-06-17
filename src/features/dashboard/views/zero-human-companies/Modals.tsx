@@ -7,7 +7,19 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { RoleGlyph, SectionLabel } from "./primitives";
 import { assignAgent } from "./data";
-import type { Agent, Colony, CreateForm, MetricUnit, PoolAgent, Theme } from "./types";
+import type {
+  Agent,
+  AgentState,
+  Colony,
+  CompanyEditForm,
+  CompanyMemberEdit,
+  CompanyStatus,
+  CreateForm,
+  MetricUnit,
+  PoolAgent,
+  Role,
+  Theme,
+} from "./types";
 
 // ── shared input primitives ──────────────────────────────────────────────
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -38,6 +50,18 @@ function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
+function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const [focus, setFocus] = React.useState(false);
+  return (
+    <textarea
+      {...props}
+      onFocus={() => setFocus(true)}
+      onBlur={() => setFocus(false)}
+      style={{ ...inputStyle, minHeight: 76, resize: "vertical", lineHeight: 1.45, borderColor: focus ? "var(--honey-2)" : "var(--line-2)", ...(props.style || {}) }}
+    />
+  );
+}
+
 function Select({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
   const [focus, setFocus] = React.useState(false);
   return (
@@ -61,6 +85,39 @@ const METRIC_TYPE_OPTIONS: { value: MetricUnit; label: string; placeholder: stri
   { value: "currency", label: "Currency (USD)", placeholder: "40k" },
   { value: "users", label: "Users (DAU/MAU)", placeholder: "50,000" },
 ];
+
+const ROLE_OPTIONS: Role[] = ["Queen", "Engineer", "Product", "Designer", "QA", "DevOps", "Auditor", "Growth", "Research", "Treasury"];
+const STATE_OPTIONS: { value: AgentState | ""; label: string }[] = [
+  { value: "", label: "Auto" },
+  { value: "working", label: "Working" },
+  { value: "reviewing", label: "Reviewing" },
+  { value: "scheduled", label: "Scheduled" },
+  { value: "ready", label: "Ready" },
+  { value: "idle", label: "Idle" },
+  { value: "blocked", label: "Blocked" },
+  { value: "setup", label: "Setup" },
+];
+const STATUS_OPTIONS: { value: CompanyStatus | ""; label: string }[] = [
+  { value: "", label: "Auto" },
+  { value: "shipping", label: "Shipping" },
+  { value: "drift", label: "Drift" },
+  { value: "review", label: "Review" },
+  { value: "setup", label: "Setup" },
+  { value: "paused", label: "Paused" },
+];
+
+function optionalNumber(value: string): number | undefined {
+  if (value.trim() === "") return undefined;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
+}
+
+function clampedNumber(value: string, max?: number): number | undefined {
+  const numeric = optionalNumber(value);
+  if (numeric === undefined) return undefined;
+  const rounded = Math.round(Math.max(0, numeric) * 100) / 100;
+  return max === undefined ? rounded : Math.min(max, rounded);
+}
 
 // ── modal shell ──────────────────────────────────────────────────────────
 // Rendered through a portal to <body> (wrapped in a themed .zhc-root so the
@@ -250,7 +307,7 @@ type FormState = Required<Pick<CreateForm, "name">> & {
 
 /** Collect a company's name/ticker/sector + apex goal. Used by both the create
  *  flow's first step and the standalone edit modal. */
-function IdentityFields({ form, setForm }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>> }) {
+function IdentityFields<T extends FormState>({ form, setForm }: { form: T; setForm: React.Dispatch<React.SetStateAction<T>> }) {
   const set = (k: "name" | "sector" | "apexTitle" | "apexMetric" | "apexTarget", v: string) =>
     setForm((f) => ({ ...f, [k]: v, ...(k === "name" && !f._tickerTouched ? { ticker: v.replace(/[^a-z]/gi, "").slice(0, 4).toUpperCase() } : {}) }));
   const targetPlaceholder = METRIC_TYPE_OPTIONS.find((o) => o.value === form.metricUnit)?.placeholder ?? "5,000";
@@ -332,14 +389,42 @@ export function CreateCompanyModal({
   );
 }
 
-// ── edit-company flow (identity + apex goal; crew is managed separately) ───
-export function EditCompanyModal({
-  initial, busy, theme, onClose, onSave,
-}: {
-  initial: CreateForm; busy?: boolean; theme?: Theme;
-  onClose: () => void; onSave: (form: CreateForm) => void;
-}) {
-  const [form, setForm] = React.useState<FormState>({
+// ── edit-company flow (full metadata + treasury + member controls) ─────────
+type EditFormState = FormState & {
+  charter: string;
+  blurb: string;
+  dailyBudgetUsd?: number;
+  monthlyBudgetUsd?: number;
+  totalBudgetUsd?: number;
+  status: CompanyStatus | "";
+  alignment?: number;
+  apexCurrent: string;
+  apexProgress?: number;
+  frozen: boolean;
+  revenueKind: "users" | "revenue" | "";
+  revenueLabel: string;
+  revenueValue: string;
+  revenueTarget: string;
+  revenueMau: string;
+  revenuePct?: number;
+  revenueDelta: string;
+  revenueUp: boolean;
+  revenueIsApex: boolean;
+  members: CompanyMemberEdit[];
+};
+
+function normalizeMemberEdit(member: CompanyMemberEdit): CompanyMemberEdit {
+  return {
+    ...member,
+    name: member.name || member.agentId,
+    task: member.task ?? "",
+    state: member.state ?? "",
+    reportsTo: member.reportsTo ?? null,
+  };
+}
+
+function initialEditState(initial: CompanyEditForm): EditFormState {
+  return {
     name: initial.name ?? "",
     ticker: initial.ticker ?? "",
     sector: initial.sector ?? "",
@@ -347,26 +432,532 @@ export function EditCompanyModal({
     apexMetric: initial.apexMetric ?? "",
     apexTarget: initial.apexTarget ?? "",
     metricUnit: initial.metricUnit ?? "number",
-    // The company already has a ticker — don't auto-rewrite it when the name changes.
     _tickerTouched: true,
-  });
+    charter: initial.charter ?? "",
+    blurb: initial.blurb ?? "",
+    dailyBudgetUsd: initial.dailyBudgetUsd,
+    monthlyBudgetUsd: initial.monthlyBudgetUsd,
+    totalBudgetUsd: initial.totalBudgetUsd,
+    status: initial.status ?? "",
+    alignment: initial.alignment,
+    apexCurrent: initial.apexCurrent ?? "",
+    apexProgress: initial.apexProgress,
+    frozen: Boolean(initial.frozen),
+    revenueKind: initial.revenueKind ?? "",
+    revenueLabel: initial.revenueLabel ?? "",
+    revenueValue: initial.revenueValue ?? "",
+    revenueTarget: initial.revenueTarget ?? "",
+    revenueMau: initial.revenueMau ?? "",
+    revenuePct: initial.revenuePct,
+    revenueDelta: initial.revenueDelta ?? "",
+    revenueUp: initial.revenueUp ?? true,
+    revenueIsApex: initial.revenueIsApex ?? false,
+    members: (initial.members ?? []).map(normalizeMemberEdit),
+  };
+}
+
+function memberPayload(member: CompanyMemberEdit): CompanyMemberEdit {
+  return {
+    agentId: member.agentId,
+    name: member.name,
+    role: member.role,
+    companyCap: member.companyCap,
+    task: member.task?.trim(),
+    state: member.state,
+    reportsTo: member.reportsTo ?? null,
+    runtime: member.runtime,
+    model: member.model,
+  };
+}
+
+function readEditForm(form: EditFormState): CompanyEditForm {
+  return {
+    ...readForm(form),
+    charter: form.charter.trim(),
+    blurb: form.blurb.trim(),
+    dailyBudgetUsd: form.dailyBudgetUsd,
+    monthlyBudgetUsd: form.monthlyBudgetUsd,
+    totalBudgetUsd: form.totalBudgetUsd,
+    status: form.status,
+    alignment: form.alignment,
+    apexCurrent: form.apexCurrent.trim(),
+    apexProgress: form.apexProgress,
+    frozen: form.frozen,
+    revenueKind: form.revenueKind,
+    revenueLabel: form.revenueLabel.trim(),
+    revenueValue: form.revenueValue.trim(),
+    revenueTarget: form.revenueTarget.trim(),
+    revenueMau: form.revenueMau.trim(),
+    revenuePct: form.revenuePct,
+    revenueDelta: form.revenueDelta.trim(),
+    revenueUp: form.revenueUp,
+    revenueIsApex: form.revenueIsApex,
+    members: form.members.map(memberPayload),
+  };
+}
+
+function EditSection({ title, right, children }: { title: string; right?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div style={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg-1)", padding: 16 }}>
+      <SectionLabel right={right}>{title}</SectionLabel>
+      {children}
+    </div>
+  );
+}
+
+function NumericInput({
+  value, onChange, placeholder, step = 1, max,
+}: {
+  value?: number; onChange: (value: number | undefined) => void; placeholder?: string; step?: number; max?: number;
+}) {
+  return (
+    <TextInput
+      type="number"
+      min={0}
+      max={max}
+      step={step}
+      value={value ?? ""}
+      placeholder={placeholder}
+      onChange={(event) => onChange(clampedNumber(event.target.value, max))}
+    />
+  );
+}
+
+function ToggleRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: 9, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-3)", cursor: "pointer" }}>
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} style={{ accentColor: "var(--honey-2)" }} />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+function MemberEditRow({
+  member, onChange, onRemove,
+}: {
+  member: CompanyMemberEdit; onChange: (member: CompanyMemberEdit) => void; onRemove: () => void;
+}) {
+  return (
+    <div style={{ display: "grid", gap: 10, gridTemplateColumns: "minmax(170px, 1.2fr) minmax(120px, 0.8fr) minmax(120px, 0.8fr) minmax(90px, 0.6fr) minmax(220px, 1.3fr) auto", alignItems: "end", padding: "12px 0", borderTop: "1px solid var(--line)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        <RoleGlyph role={member.role} size={30} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: "var(--f-display)", fontSize: 13.5, fontWeight: 600, color: "var(--fg)", lineHeight: 1.25 }}>{member.name}</div>
+          <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", marginTop: 3, lineHeight: 1.35 }}>
+            {member.runtime || "Agent"}{member.model ? ` · ${member.model}` : ""}
+          </div>
+        </div>
+      </div>
+      <Field label="Role">
+        <Select value={member.role} onChange={(value) => onChange({ ...member, role: value as Role })} options={ROLE_OPTIONS.map((role) => ({ value: role, label: role }))} />
+      </Field>
+      <Field label="State">
+        <Select value={member.state ?? ""} onChange={(value) => onChange({ ...member, state: value as AgentState | "" })} options={STATE_OPTIONS} />
+      </Field>
+      <Field label="Cap">
+        <NumericInput value={member.companyCap} step={5} placeholder="0" onChange={(value) => onChange({ ...member, companyCap: value })} />
+      </Field>
+      <Field label="Task">
+        <TextInput value={member.task ?? ""} placeholder="Current work caption" onChange={(event) => onChange({ ...member, task: event.target.value })} />
+      </Field>
+      <button
+        onClick={onRemove}
+        aria-label={`Remove ${member.name}`}
+        style={{ width: 34, height: 34, display: "grid", placeItems: "center", cursor: "pointer", border: "1px solid var(--line-2)", borderRadius: 8, background: "transparent", color: "var(--fg-4)", fontSize: 13 }}
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+export function EditCompanyModal({
+  initial, busy, theme, onClose, onSave,
+}: {
+  initial: CompanyEditForm; busy?: boolean; theme?: Theme;
+  onClose: () => void; onSave: (form: CompanyEditForm) => void;
+}) {
+  const [form, setForm] = React.useState<EditFormState>(() => initialEditState(initial));
   const canSave = form.name.trim().length > 0;
+  const updateMember = (agentId: string, next: CompanyMemberEdit) => setForm((current) => ({
+    ...current,
+    members: current.members.map((member) => (member.agentId === agentId ? next : member)),
+  }));
+  const removeMember = (agentId: string) => setForm((current) => ({
+    ...current,
+    members: current.members.filter((member) => member.agentId !== agentId),
+  }));
+
   return (
     <Modal
       title="Edit company"
-      subtitle={`Update ${initial.name || "this company"}'s identity & apex goal`}
+      subtitle={`Update ${initial.name || "this company"}'s identity, treasury, metrics, and crew fields`}
       theme={theme}
       onClose={onClose}
-      width={620}
+      width={1040}
       footer={
         <>
-          <span style={{ flex: 1, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>Manage the crew from the company’s Team tab.</span>
+          <span style={{ flex: 1, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>
+            Saves company metadata, treasury caps, revenue metrics, and member fields.
+          </span>
           <GhostBtn onClick={onClose}>Cancel</GhostBtn>
-          <PrimaryBtn disabled={!canSave || busy} onClick={() => onSave(readForm(form))}>{busy ? "Saving…" : "Save changes"}</PrimaryBtn>
+          <PrimaryBtn disabled={!canSave || busy} onClick={() => onSave(readEditForm(form))}>{busy ? "Saving…" : "Save changes"}</PrimaryBtn>
         </>
       }
     >
-      <IdentityFields form={form} setForm={setForm} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <EditSection title="identity · mandate">
+          <IdentityFields form={form} setForm={setForm} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16 }}>
+            <Field label="Charter">
+              <TextArea value={form.charter} placeholder="Founder-set direction" onChange={(event) => setForm((current) => ({ ...current, charter: event.target.value }))} />
+            </Field>
+            <Field label="Blurb">
+              <TextArea value={form.blurb} placeholder="One-line company tagline" onChange={(event) => setForm((current) => ({ ...current, blurb: event.target.value }))} />
+            </Field>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 130px", gap: 12, marginTop: 16 }}>
+            <Field label="Current metric value">
+              <TextInput value={form.apexCurrent} placeholder="0" onChange={(event) => setForm((current) => ({ ...current, apexCurrent: event.target.value }))} />
+            </Field>
+            <Field label="Goal progress">
+              <NumericInput value={form.apexProgress} max={100} placeholder="0" onChange={(value) => setForm((current) => ({ ...current, apexProgress: value }))} />
+            </Field>
+          </div>
+        </EditSection>
+
+        <EditSection title="treasury · governance">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+            <Field label="Daily budget USD">
+              <NumericInput value={form.dailyBudgetUsd} step={5} placeholder="0" onChange={(value) => setForm((current) => ({ ...current, dailyBudgetUsd: value }))} />
+            </Field>
+            <Field label="Monthly budget USD">
+              <NumericInput value={form.monthlyBudgetUsd} step={25} placeholder="0" onChange={(value) => setForm((current) => ({ ...current, monthlyBudgetUsd: value }))} />
+            </Field>
+            <Field label="Lifetime budget USD">
+              <NumericInput value={form.totalBudgetUsd} step={50} placeholder="0" onChange={(value) => setForm((current) => ({ ...current, totalBudgetUsd: value }))} />
+            </Field>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 130px 1fr", gap: 12, marginTop: 16, alignItems: "end" }}>
+            <Field label="Status override">
+              <Select value={form.status} onChange={(value) => setForm((current) => ({ ...current, status: value as CompanyStatus | "" }))} options={STATUS_OPTIONS} />
+            </Field>
+            <Field label="Alignment">
+              <NumericInput value={form.alignment} max={100} placeholder="Auto" onChange={(value) => setForm((current) => ({ ...current, alignment: value }))} />
+            </Field>
+            <div style={{ display: "flex", alignItems: "center", minHeight: 37 }}>
+              <ToggleRow label="Freeze company spend" checked={form.frozen} onChange={(checked) => setForm((current) => ({ ...current, frozen: checked }))} />
+            </div>
+          </div>
+        </EditSection>
+
+        <EditSection title="revenue · headline metric">
+          <div style={{ display: "grid", gridTemplateColumns: "150px 1fr 1fr", gap: 12 }}>
+            <Field label="Metric kind">
+              <Select
+                value={form.revenueKind}
+                onChange={(value) => setForm((current) => ({ ...current, revenueKind: value as "users" | "revenue" | "" }))}
+                options={[
+                  { value: "", label: "None" },
+                  { value: "revenue", label: "Revenue" },
+                  { value: "users", label: "Users" },
+                ]}
+              />
+            </Field>
+            <Field label="Label">
+              <TextInput value={form.revenueLabel} placeholder="MRR, DAU, pipeline" onChange={(event) => setForm((current) => ({ ...current, revenueLabel: event.target.value }))} />
+            </Field>
+            <Field label="Value">
+              <TextInput value={form.revenueValue} placeholder="$0, 250 users" onChange={(event) => setForm((current) => ({ ...current, revenueValue: event.target.value }))} />
+            </Field>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 130px 130px", gap: 12, marginTop: 16 }}>
+            <Field label="Target">
+              <TextInput value={form.revenueTarget} placeholder="$10k, 5,000 users" onChange={(event) => setForm((current) => ({ ...current, revenueTarget: event.target.value }))} />
+            </Field>
+            <Field label="MAU">
+              <TextInput value={form.revenueMau} placeholder="Optional" onChange={(event) => setForm((current) => ({ ...current, revenueMau: event.target.value }))} />
+            </Field>
+            <Field label="Progress">
+              <NumericInput value={form.revenuePct} max={100} placeholder="0" onChange={(value) => setForm((current) => ({ ...current, revenuePct: value }))} />
+            </Field>
+            <Field label="Trend">
+              <Select value={form.revenueUp ? "up" : "down"} onChange={(value) => setForm((current) => ({ ...current, revenueUp: value === "up" }))} options={[{ value: "up", label: "Up" }, { value: "down", label: "Down" }]} />
+            </Field>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, marginTop: 16, alignItems: "end" }}>
+            <Field label="Delta">
+              <TextInput value={form.revenueDelta} placeholder="+12% this week" onChange={(event) => setForm((current) => ({ ...current, revenueDelta: event.target.value }))} />
+            </Field>
+            <div style={{ minHeight: 37, display: "flex", alignItems: "center" }}>
+              <ToggleRow label="Use as apex metric" checked={form.revenueIsApex} onChange={(checked) => setForm((current) => ({ ...current, revenueIsApex: checked }))} />
+            </div>
+          </div>
+        </EditSection>
+
+        <EditSection title="crew · member fields" right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{form.members.length} members</span>}>
+          {form.members.length === 0 ? (
+            <div style={{ borderRadius: 10, border: "1px dashed var(--line-2)", padding: "18px 12px", textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>
+              No crew members are assigned.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {form.members.map((member) => (
+                <MemberEditRow
+                  key={member.agentId}
+                  member={member}
+                  onChange={(next) => updateMember(member.agentId, next)}
+                  onRemove={() => removeMember(member.agentId)}
+                />
+              ))}
+            </div>
+          )}
+        </EditSection>
+      </div>
+    </Modal>
+  );
+}
+
+function editableMemberFor(colony: Colony, agentId: string): CompanyMemberEdit | null {
+  const saved = colony.edit.members?.find((member) => member.agentId === agentId);
+  const agent = colony.agents.find((item) => item.id === agentId);
+  if (saved) {
+    return normalizeMemberEdit({
+      ...saved,
+      companyCap: saved.companyCap ?? agent?._cap,
+      runtime: saved.runtime ?? agent?.runtime,
+      model: saved.model ?? agent?.model,
+    });
+  }
+  if (!agent?.id) return null;
+  return {
+    agentId: agent.id,
+    name: agent.name,
+    role: agent.role,
+    companyCap: agent._cap,
+    task: agent.task,
+    state: agent.state,
+    reportsTo: null,
+    runtime: agent.runtime,
+    model: agent.model,
+  };
+}
+
+function editableMembersForCompany(colony: Colony): CompanyMemberEdit[] {
+  const activeMembers = colony.agents
+    .map((agent) => agent.id ? editableMemberFor(colony, agent.id) : null)
+    .filter((member): member is CompanyMemberEdit => Boolean(member));
+  const activeIds = new Set(activeMembers.map((member) => member.agentId));
+  const savedOnlyMembers = (colony.edit.members ?? [])
+    .filter((member) => !activeIds.has(member.agentId))
+    .map(normalizeMemberEdit);
+  return [...activeMembers, ...savedOnlyMembers];
+}
+
+type TreasuryFormState = {
+  dailyBudgetUsd?: number;
+  monthlyBudgetUsd?: number;
+  totalBudgetUsd?: number;
+  frozen: boolean;
+  members: CompanyMemberEdit[];
+};
+
+function initialTreasuryForm(colony: Colony): TreasuryFormState {
+  return {
+    dailyBudgetUsd: colony.edit.dailyBudgetUsd,
+    monthlyBudgetUsd: colony.edit.monthlyBudgetUsd,
+    totalBudgetUsd: colony.edit.totalBudgetUsd,
+    frozen: Boolean(colony.edit.frozen ?? colony.frozen),
+    members: editableMembersForCompany(colony),
+  };
+}
+
+function TreasuryMemberCapRow({
+  member, agent, onChangeCap,
+}: {
+  member: CompanyMemberEdit; agent?: Agent; onChangeCap: (value: number | undefined) => void;
+}) {
+  const used = agent?.budgetPct ?? 0;
+  const over = used >= 80;
+  const cap = member.companyCap ?? agent?._cap;
+  const walletCap = agent?.walletCap ?? 0;
+  const overWallet = walletCap > 0 && (cap ?? 0) > walletCap;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", padding: "12px 0", borderTop: "1px solid var(--line)" }}>
+      <div style={{ flex: "1 1 210px", minWidth: 180, display: "flex", alignItems: "center", gap: 10 }}>
+        <RoleGlyph role={member.role} size={30} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: "var(--f-display)", fontSize: 13.5, fontWeight: 650, color: "var(--fg)", lineHeight: 1.25 }}>{member.name}</div>
+          <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", marginTop: 3, lineHeight: 1.35 }}>
+            {member.role}{member.runtime ? ` · ${member.runtime}` : ""}{member.model ? ` · ${member.model}` : ""}
+          </div>
+        </div>
+      </div>
+      <div style={{ flex: "1 1 220px", minWidth: 190 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 7, fontFamily: "var(--f-mono)", fontVariantNumeric: "tabular-nums", marginBottom: 6, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: over ? "var(--danger-2)" : "var(--honey-2)" }}>{used}% used</span>
+          <span style={{ fontSize: 10, color: "var(--fg-4)" }}>{cap ? `$${cap}/day cap` : "uncapped"}</span>
+        </div>
+        <div style={{ height: 8, borderRadius: 999, border: "1px solid color-mix(in srgb, var(--fg) 14%, transparent)", background: "color-mix(in srgb, var(--fg) 11%, var(--bg-3))", overflow: "hidden" }} aria-label={`${member.name} used ${used}% of daily cap`}>
+          <span style={{ display: "block", width: used + "%", minWidth: used > 0 ? 3 : 0, height: "100%", background: over ? "var(--danger)" : "var(--honey-2)" }} />
+        </div>
+        {walletCap > 0 ? (
+          <div style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: overWallet ? "var(--danger-2)" : "var(--fg-4)", marginTop: 5 }}>
+            {overWallet ? `Above wallet cap of $${walletCap}/day` : `Wallet cap $${walletCap}/day`}
+          </div>
+        ) : null}
+      </div>
+      <div style={{ flex: "0 1 150px", minWidth: 132 }}>
+        <Field label="Daily cap">
+          <NumericInput value={member.companyCap} step={5} placeholder="0" onChange={onChangeCap} />
+        </Field>
+      </div>
+    </div>
+  );
+}
+
+export function TreasurySettingsModal({
+  colony, busy, theme, onClose, onSave,
+}: {
+  colony: Colony; busy?: boolean; theme?: Theme;
+  onClose: () => void; onSave: (form: CompanyEditForm) => void;
+}) {
+  const [form, setForm] = React.useState<TreasuryFormState>(() => initialTreasuryForm(colony));
+  const totalDailyCaps = form.members.reduce((sum, member) => sum + (member.companyCap ?? 0), 0);
+  const updateCap = (agentId: string, value: number | undefined) => setForm((current) => ({
+    ...current,
+    members: current.members.map((member) => (member.agentId === agentId ? { ...member, companyCap: value } : member)),
+  }));
+  const save = () => {
+    onSave({
+      ...colony.edit,
+      dailyBudgetUsd: form.dailyBudgetUsd,
+      monthlyBudgetUsd: form.monthlyBudgetUsd,
+      totalBudgetUsd: form.totalBudgetUsd,
+      frozen: form.frozen,
+      members: form.members.map(memberPayload),
+    });
+  };
+
+  return (
+    <Modal
+      title="Configure treasury"
+      subtitle={`${colony.name} · company budgets and agent spend caps`}
+      theme={theme}
+      onClose={onClose}
+      width={860}
+      footer={
+        <>
+          <span style={{ flex: 1, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>
+            Saves only company budgets, spend freeze, and member daily caps.
+          </span>
+          <GhostBtn onClick={onClose}>Cancel</GhostBtn>
+          <PrimaryBtn disabled={busy} onClick={save}>{busy ? "Saving…" : "Save treasury"}</PrimaryBtn>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <EditSection title="company budget">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
+            <Field label="Daily budget USD">
+              <NumericInput value={form.dailyBudgetUsd} step={5} placeholder="0" onChange={(value) => setForm((current) => ({ ...current, dailyBudgetUsd: value }))} />
+            </Field>
+            <Field label="Monthly budget USD">
+              <NumericInput value={form.monthlyBudgetUsd} step={25} placeholder="0" onChange={(value) => setForm((current) => ({ ...current, monthlyBudgetUsd: value }))} />
+            </Field>
+            <Field label="Lifetime budget USD">
+              <NumericInput value={form.totalBudgetUsd} step={50} placeholder="0" onChange={(value) => setForm((current) => ({ ...current, totalBudgetUsd: value }))} />
+            </Field>
+          </div>
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
+            <ToggleRow label="Freeze company spend" checked={form.frozen} onChange={(checked) => setForm((current) => ({ ...current, frozen: checked }))} />
+          </div>
+        </EditSection>
+
+        <EditSection title="agent spend caps" right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>${totalDailyCaps}/day allocated</span>}>
+          {form.members.length === 0 ? (
+            <div style={{ borderRadius: 10, border: "1px dashed var(--line-2)", padding: "18px 12px", textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>
+              No crew members are assigned.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {form.members.map((member) => (
+                <TreasuryMemberCapRow
+                  key={member.agentId}
+                  member={member}
+                  agent={colony.agents.find((agent) => agent.id === member.agentId)}
+                  onChangeCap={(value) => updateCap(member.agentId, value)}
+                />
+              ))}
+            </div>
+          )}
+        </EditSection>
+      </div>
+    </Modal>
+  );
+}
+
+export function AgentMemberSettingsModal({
+  colony, agentId, busy, theme, onClose, onSave,
+}: {
+  colony: Colony; agentId: string; busy?: boolean; theme?: Theme;
+  onClose: () => void; onSave: (form: CompanyEditForm) => void;
+}) {
+  const initial = React.useMemo(() => editableMemberFor(colony, agentId), [agentId, colony]);
+  const [member, setMember] = React.useState<CompanyMemberEdit | null>(initial);
+
+  if (!member) return null;
+
+  const save = () => {
+    const existing = editableMembersForCompany(colony);
+    const nextMembers = existing.some((item) => item.agentId === member.agentId)
+      ? existing.map((item) => (item.agentId === member.agentId ? member : item))
+      : [...existing, member];
+    onSave({ ...colony.edit, members: nextMembers.map(memberPayload) });
+  };
+
+  return (
+    <Modal
+      title="Edit agent"
+      subtitle={`${member.name} · ${colony.name}`}
+      theme={theme}
+      onClose={onClose}
+      width={560}
+      footer={
+        <>
+          <span style={{ flex: 1, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>
+            Updates this agent’s company role, work state, task caption, and daily cap.
+          </span>
+          <GhostBtn onClick={onClose}>Cancel</GhostBtn>
+          <PrimaryBtn disabled={busy} onClick={save}>{busy ? "Saving…" : "Save agent"}</PrimaryBtn>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg-2)", padding: "12px 14px" }}>
+          <RoleGlyph role={member.role} size={34} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: "var(--f-display)", fontSize: 15, fontWeight: 700, color: "var(--fg)" }}>{member.name}</div>
+            <div style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", marginTop: 4 }}>
+              {member.runtime || "Agent"}{member.model ? ` · ${member.model}` : ""}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label="Role">
+            <Select value={member.role} onChange={(value) => setMember((current) => current ? { ...current, role: value as Role } : current)} options={ROLE_OPTIONS.map((role) => ({ value: role, label: role }))} />
+          </Field>
+          <Field label="State">
+            <Select value={member.state ?? ""} onChange={(value) => setMember((current) => current ? { ...current, state: value as AgentState | "" } : current)} options={STATE_OPTIONS} />
+          </Field>
+        </div>
+        <Field label="Daily company cap">
+          <NumericInput value={member.companyCap} step={5} placeholder="0" onChange={(value) => setMember((current) => current ? { ...current, companyCap: value } : current)} />
+        </Field>
+        <Field label="Task caption">
+          <TextArea value={member.task ?? ""} placeholder="Current work caption" onChange={(event) => setMember((current) => current ? { ...current, task: event.target.value } : current)} />
+        </Field>
+      </div>
     </Modal>
   );
 }

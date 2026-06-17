@@ -101,17 +101,17 @@ export default function DashboardUnlockRecovery({ authSecretPresent, deviceToken
           justifySelf: "center",
           border: 0,
           background: "transparent",
-          color: "#94a3b8",
+          color: "var(--accent-strong, #936811)",
           cursor: "pointer",
           fontSize: 13,
-          fontWeight: 700,
+          fontWeight: 800,
           padding: "4px 6px",
         }}
       >
         {open ? "Back to token input" : "Need the token?"}
       </button>
       {nativeUnlockState === "signing-in" ? (
-        <p style={{ margin: 0, color: "#94a3b8", fontSize: 12, fontWeight: 700, textAlign: "center" }}>
+        <p style={{ margin: 0, color: "var(--muted, #867d6e)", fontSize: 12, fontWeight: 700, textAlign: "center" }}>
           Opening signed desktop session...
         </p>
       ) : null}
@@ -121,18 +121,18 @@ export default function DashboardUnlockRecovery({ authSecretPresent, deviceToken
           style={{
             display: "grid",
             gap: 14,
-            border: "1px solid #263247",
+            border: "1px solid var(--line, rgba(54, 46, 30, 0.16))",
             borderRadius: 8,
-            background: "#0c1220",
+            background: "var(--surface-strong, rgba(244, 239, 228, 0.94))",
             padding: 14,
-            boxShadow: "0 18px 50px rgba(0, 0, 0, 0.22)",
+            boxShadow: "0 18px 42px rgba(82, 61, 22, 0.12)",
           }}
         >
           <div style={{ display: "grid", gap: 9 }}>
             <StatusLine ok={authSecretPresent} label="Auth secret" missingLabel="Missing" />
             <StatusLine ok={deviceTokenPresent} label="Device token" missingLabel="Missing" />
           </div>
-          <p style={{ margin: 0, color: "#cbd5e1", fontSize: 13, lineHeight: 1.55 }}>
+          <p style={{ margin: 0, color: "var(--text-soft, #5e574b)", fontSize: 13, lineHeight: 1.55 }}>
             {nativeMode
               ? "The desktop app creates local auth automatically. If this screen stays locked, quit and reopen HivemindOS."
               : "Run these from the HivemindOS project folder. The token value is never exposed through this locked page."}
@@ -168,13 +168,13 @@ export default function DashboardUnlockRecovery({ authSecretPresent, deviceToken
             </div>
           ) : null}
           {!deviceTokenPresent || !authSecretPresent ? (
-            <p style={{ margin: 0, color: "#94a3b8", fontSize: 12, lineHeight: 1.5 }}>
+            <p style={{ margin: 0, color: "var(--muted, #867d6e)", fontSize: 12, lineHeight: 1.5 }}>
               {nativeMode
                 ? "Desktop auth is missing. Reopening the app should create a fresh local auth file."
                 : "Restart the dashboard after changing auth values so the server loads the new env."}
             </p>
           ) : (
-            <p style={{ margin: 0, color: "#94a3b8", fontSize: 12, lineHeight: 1.5 }}>
+            <p style={{ margin: 0, color: "var(--muted, #867d6e)", fontSize: 12, lineHeight: 1.5 }}>
               {nativeMode
                 ? (nativeUnlockState === "failed" ? "Automatic desktop sign-in failed. Quit and reopen HivemindOS to retry." : "Desktop auth is ready and should open automatically.")
                 : <>Manual fallback: open <code style={codeStyle}>.env.local</code> and copy <code style={codeStyle}>HIVEMINDOS_DASHBOARD_DEVICE_TOKEN</code>.</>}
@@ -235,12 +235,12 @@ async function writeClipboardText(value: string) {
 
 function StatusLine({ ok, label, missingLabel }: { ok: boolean; label: string; missingLabel: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, color: "#e2e8f0", fontSize: 13 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, color: "var(--foreground, #221d14)", fontSize: 13 }}>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-        {ok ? <Check size={15} color="#86efac" /> : <KeyRound size={15} color="#fca5a5" />}
+        {ok ? <Check size={15} color="#356b2f" /> : <KeyRound size={15} color="#8e3328" />}
         {label}
       </span>
-      <strong style={{ color: ok ? "#86efac" : "#fca5a5", fontSize: 12 }}>{ok ? "Present" : missingLabel}</strong>
+      <strong style={{ color: ok ? "#356b2f" : "#8e3328", fontSize: 12 }}>{ok ? "Present" : missingLabel}</strong>
     </div>
   );
 }
@@ -253,7 +253,7 @@ function CommandButton({ command, copied, failed, icon, label, onCopy }: {
   label: string;
   onCopy: (command: string) => Promise<void>;
 }) {
-  const statusColor = copied ? "#86efac" : failed ? "#fca5a5" : "#cbd5e1";
+  const statusColor = copied ? "#356b2f" : failed ? "#8e3328" : "var(--text-soft, #5e574b)";
   const statusText = copied ? "Copied" : failed ? "Failed" : "Copy";
   return (
     <button
@@ -265,10 +265,10 @@ function CommandButton({ command, copied, failed, icon, label, onCopy }: {
         alignItems: "center",
         gap: 10,
         width: "100%",
-        border: "1px solid #334155",
+        border: "1px solid var(--line, rgba(54, 46, 30, 0.16))",
         borderRadius: 8,
-        background: "#111827",
-        color: "#f8fafc",
+        background: "var(--field, rgba(255, 252, 246, 0.92))",
+        color: "var(--foreground, #221d14)",
         cursor: "pointer",
         padding: "10px 11px",
         textAlign: "left",
@@ -301,10 +301,10 @@ function ActionButton({ icon, label, title, onClick }: {
         justifyContent: "center",
         gap: 8,
         width: "100%",
-        border: "1px solid #334155",
+        border: "1px solid var(--line, rgba(54, 46, 30, 0.16))",
         borderRadius: 8,
-        background: "#111827",
-        color: "#e2e8f0",
+        background: "var(--field, rgba(255, 252, 246, 0.92))",
+        color: "var(--foreground, #221d14)",
         cursor: "pointer",
         padding: "10px 11px",
         fontSize: 12,
@@ -319,10 +319,10 @@ function ActionButton({ icon, label, title, onClick }: {
 }
 
 const codeStyle = {
-  border: "1px solid rgba(148, 163, 184, 0.22)",
+  border: "1px solid var(--line, rgba(54, 46, 30, 0.16))",
   borderRadius: 6,
-  background: "rgba(15, 23, 42, 0.72)",
-  color: "#e2e8f0",
+  background: "var(--field, rgba(255, 252, 246, 0.92))",
+  color: "var(--foreground, #221d14)",
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
   fontSize: 12,
   padding: "2px 5px",

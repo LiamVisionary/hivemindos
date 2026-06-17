@@ -1,4 +1,54 @@
 # Hive Assimilation Log
+## 2026-06-16T13:00:47+00:00 - correction
+
+- Request: Fix enlarged Fleet Hive cell overlap and detached add-agent slot.
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/components/fleet-hive/hive-geometry.ts
+  - Decision: adapted_code
+  - Reason: owns shared cell size, machine orbit radius, add-machine radius, and agent-slot connectivity for the redesigned Hive layout.
+  - Path: `src/components/fleet-hive/hive-geometry.ts`
+- src/components/fleet-hive/HiveStage.tsx
+  - Decision: selected
+  - Reason: already renders the 30% larger cells/icons; no extra rendering changes were needed after correcting geometry.
+  - Path: `src/components/fleet-hive/HiveStage.tsx`
+- public GitHub
+  - Decision: rejected
+  - Reason: this is a local HivemindOS layout-regression correction using existing pure geometry helpers; external donor code would not improve the fix.
+
+## 2026-06-16T12:50:40+00:00 - implementation
+
+- Request: Stack Fleet Graph mode/status HUD below the Hive/Classic layout toggle
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: adapted_code
+  - Reason: host chrome owns the Hive/Classic toggle and can pass graph-specific HUD offsets
+  - Path: `src/components/fleet-hive/FleetHiveView.tsx`
+- src/components/fleet/orbital-graph.tsx
+  - Decision: adapted_code
+  - Reason: existing top-left and selected-node HUD panels needed vertical offset props instead of a sideways clearance, and the bottom primary telemetry card moved into the right diagnostics stack
+  - Path: `src/components/fleet/orbital-graph.tsx`
+- src/components/fleet/orbital-graph.module.css
+  - Decision: adapted_code
+  - Reason: primary telemetry card gained a compact vertical variant for the right-side diagnostics column
+  - Path: `src/components/fleet/orbital-graph.module.css`
+- src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: adapted_code
+  - Reason: owns Fleet layout state and now reports the Hive-only chat inset based on the active Fleet sub-view
+  - Path: `src/features/dashboard/views/AgentsPanel.tsx`
+- src/features/dashboard/DashboardApp.tsx
+  - Decision: adapted_code
+  - Reason: app-wide Queen chat dock now uses the Fleet-reported inset instead of assuming every Agents view has a right panel
+  - Path: `src/features/dashboard/DashboardApp.tsx`
+- public GitHub
+  - Decision: rejected
+  - Reason: small internal HivemindOS HUD placement tweak with existing local components; external donor would not add reusable source
+
 ## 2026-06-09T17:23:17.174970+00:00 - local-search
 
 - Request: Persist deletion of auto-discovered agents in HivemindOS fleet graph with tombstones
@@ -1986,11 +2036,11 @@
 - Skills/hive-skill-fusion/SKILL.md
   - Decision: selected-donor
   - Reason: Defines selected components vs alternates contract
-  - Path: `/Users/liam/Documents/Obsidian/hivemindos-vault/Skills/hive-skill-fusion/SKILL.md`
+  - Path: `vault:/Skills/hive-skill-fusion/SKILL.md`
 - Skills/hive-capability-search/SKILL.md
   - Decision: selected-donor
   - Reason: Ranking rules require selected plus alternates, not arbitrary fill
-  - Path: `/Users/liam/Documents/Obsidian/hivemindos-vault/Skills/hive-capability-search/SKILL.md`
+  - Path: `vault:/Skills/hive-capability-search/SKILL.md`
 ## 2026-06-15T09:08:54.400735+00:00 - implementation
 
 - Request: Add a Stake HIVE nav button to the HivemindOS More view
@@ -2201,7 +2251,7 @@
 - Skills/hivemindos-wallet-rails/SKILL.md
   - Decision: selected-donor
   - Reason: documents mainnet.base.org over-rate-limit wallet failure and alternate RPC probing
-  - Path: `/Users/liam/Documents/Obsidian/hivemindos-vault/Skills/hivemindos-wallet-rails/SKILL.md`
+  - Path: `vault:/Skills/hivemindos-wallet-rails/SKILL.md`
 - src/lib/services/wallet/chain-wallet.ts
   - Decision: selected
   - Reason: existing wallet balance service and Base RPC selection point
@@ -2565,3 +2615,1461 @@
   - Decision: inspected
   - Reason: stake route correctly refuses when the sent agentId does not exist in encrypted vault
   - Path: `src/app/api/hive/stake/route.ts`
+## 2026-06-15T15:01:05.096008+00:00 - implementation
+
+- Request: Fix HIVE staking local wallet row secret lookup failure
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/app/api/wallet/personal/route.ts
+  - Decision: adapted_code
+  - Reason: merged Obsidian ledger balance rows with encrypted-vault signer truth by network/address, downgrading missing keys to watch mode
+  - Path: `src/app/api/wallet/personal/route.ts`
+- src/lib/services/wallet/local-wallet-vault.ts
+  - Decision: selected-donor
+  - Reason: public wallet metadata from listWalletInfos determines whether a local signer actually exists without exposing secrets
+  - Path: `src/lib/services/wallet/local-wallet-vault.ts`
+## 2026-06-15T15:02:55.258956+00:00 - verification
+
+- Request: Fix HIVE staking local wallet row secret lookup failure
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused ESLint passed for personal wallet API, WalletPanel, and StakePageClient; filtered typecheck produced no diagnostics for touched wallet/stake paths; focused git diff --check passed; non-secret metadata check showed the current Base ledger row has no matching encrypted-vault key and now resolves to watch; in-app browser smoke on 127.0.0.1:5023/stake showed My wallet Base as view-only, not local signer, with no No local wallet exists error.
+
+### Candidates
+- src/app/api/wallet/personal/route.ts
+  - Decision: adapted_code
+  - Reason: verified signer truth merge prevents missing-key ledger rows from being advertised as local signers
+  - Path: `src/app/api/wallet/personal/route.ts`
+## 2026-06-15T15:21:08.277391+00:00 - implementation
+
+- Request: Clarify HIVE unstake cooldown duration
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Assimilated: hivemind-os:contracts/README.md + src/lib/services/hive-staking.ts => src/app/api/hive/stake/status/route.ts, src/app/stake/StakePageClient.tsx, docs/monetization/hive-staking-and-community-tiers.md
+- Verification: Live Base contract read confirmed cooldown=259200 seconds (3 days) and maxCooldown=604800 seconds (7 days); ESLint passed; filtered TypeScript check produced no touched-path diagnostics; focused git diff --check passed.
+- Note: No contract redeploy needed because active cooldown is already 3 days; change exposes and explains the live value.
+
+### Candidates
+- contracts/README.md
+  - Decision: selected
+  - Reason: documents recommended initialCooldown of 259200 seconds and maxCooldown of 604800 seconds
+  - Path: `contracts/README.md`
+- src/lib/services/hive-staking.ts
+  - Decision: selected
+  - Reason: existing contract status read exposes cooldown from getStakeStatus
+  - Path: `src/lib/services/hive-staking.ts`
+- src/app/api/hive/stake/status/route.ts
+  - Decision: selected
+  - Reason: API boundary for wallet stake status rows
+  - Path: `src/app/api/hive/stake/status/route.ts`
+- docs/monetization/hive-staking-and-community-tiers.md
+  - Decision: selected
+  - Reason: public doc needed launch cooldown wording
+  - Path: `docs/monetization/hive-staking-and-community-tiers.md`
+## 2026-06-15T15:28:25.059177+00:00 - verification
+
+- Request: Clarify HIVE unstake cooldown duration
+- Source: current-project
+- Decision: assimilated
+- Reason: Stake status API now separates contract cooldown metadata from wallet status rows so the staking page can show the active 3-day cooldown even when wallet-specific reads are absent or dropped.
+- Verification: ESLint passed for staking service, status API, stake page, and personal wallet API; filtered TypeScript check produced no touched-path diagnostics; focused git diff --check passed; browser smoke showed UNSTAKE COOLDOWN | 3 days.
+## 2026-06-15T15:39:02.660006+00:00 - triage
+
+- Request: Fix Wallets HIVE Stake navigation losing wallet context and mislabeling local signer state
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Assimilated: hivemind-os:src/features/dashboard/views/WalletPanel.tsx + src/app/stake/StakePageClient.tsx + src/app/api/wallet/personal/route.ts => src/features/dashboard/views/WalletPanel.tsx, src/features/dashboard/views/PersonalWallets.module.css, src/app/stake/StakePageClient.tsx
+- Verification: ESLint passed; filtered TypeScript check produced no touched-path diagnostics; focused git diff --check passed; browser smoke confirmed seeded /stake paints HIVE row immediately without empty/connect-wallet state.
+
+### Candidates
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: selected
+  - Reason: owns Wallets HIVE token-row Stake action and personal wallet grouping
+  - Path: `src/features/dashboard/views/WalletPanel.tsx`
+- src/app/stake/StakePageClient.tsx
+  - Decision: selected
+  - Reason: owns stake page boot, wallet refresh, local/view-only signing copy, and HIVE row rendering
+  - Path: `src/app/stake/StakePageClient.tsx`
+- src/app/api/wallet/personal/route.ts
+  - Decision: selected-donor
+  - Reason: authoritative server-side signer truth for local vs view-only wallet rows
+  - Path: `src/app/api/wallet/personal/route.ts`
+- local wallet vault metadata
+  - Decision: inspected
+  - Reason: non-secret metadata confirmed the current Base row has no matching local signer, so desktop should not present it as signable
+  - Path: `~/.hivemindos/wallet-vault.json`
+- public GitHub
+  - Decision: rejected
+  - Reason: internal HivemindOS wallet-state handoff with no reusable external candidate needed
+## 2026-06-15T15:42:44.474393+00:00 - refactor
+
+- Request: Fix Wallets HIVE Stake navigation losing wallet context and mislabeling local signer state
+- Source: current-project
+- Decision: assimilated
+- Reason: Extracted the stake URL construction into a focused helper so WalletPanel stays below the project file-size ceiling while preserving the Wallets-to-Stake handoff.
+- Assimilated: hivemind-os:src/features/dashboard/views/WalletPanel.tsx => src/features/dashboard/views/personal-stake-link.ts + src/features/dashboard/views/WalletPanel.tsx
+- Verification: wc -l confirmed WalletPanel.tsx is 1499 lines; final ESLint, filtered TypeScript, and diff-check passed.
+## 2026-06-16T02:01:40.894511+00:00 - implementation
+
+- Request: Clarify mixed custody personal wallet card label
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Assimilated: hivemind-os:src/features/dashboard/views/WalletPanel.tsx + src/features/dashboard/views/personal-stake-link.ts => src/features/dashboard/views/personal-stake-link.ts, src/features/dashboard/views/WalletPanel.tsx
+- Note: Shared brain and ledger inspection showed the target case is a grouped account with Base watch-only plus Solana local, so the card needs aggregate custody copy instead of primary-row custody copy.
+
+### Candidates
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: selected
+  - Reason: renders grouped personal wallet card summary
+  - Path: `src/features/dashboard/views/WalletPanel.tsx`
+- src/features/dashboard/views/personal-stake-link.ts
+  - Decision: selected-donor
+  - Reason: existing focused Wallets-to-Stake helper module keeps WalletPanel under file-size limit
+  - Path: `src/features/dashboard/views/personal-stake-link.ts`
+- Projects/HivemindOS/Wallets/user_mq522kzb-i27uew_eip155-8453.md
+  - Decision: selected
+  - Reason: Base side is watch-only ledger evidence
+  - Path: `vault:/Projects/HivemindOS/Wallets/user_mq522kzb-i27uew_eip155-8453.md`
+- Projects/HivemindOS/Wallets/user_mq522kzb-i27uew_solana-mainnet.md
+  - Decision: selected
+  - Reason: Solana side is local ledger evidence
+  - Path: `vault:/Projects/HivemindOS/Wallets/user_mq522kzb-i27uew_solana-mainnet.md`
+## 2026-06-16T02:03:38.702413+00:00 - verification
+
+- Request: Clarify mixed custody personal wallet card label
+- Source: current-project
+- Decision: assimilated
+- Reason: Wallet card summary now uses aggregate custody counts instead of primary wallet custody.
+- Verification: ESLint passed for WalletPanel and personal-stake-link; filtered TypeScript produced no touched-path diagnostics; focused git diff --check passed; wc -l kept WalletPanel at 1499 lines; helper sanity check returned the expected mixed/all-local/all-watch labels.
+## 2026-06-16T02:11:39.083043+00:00 - implementation
+
+- Request: Fix cramped HIVE token row view-only UI
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Assimilated: hivemind-os:src/features/dashboard/views/PersonalWallets.module.css => src/features/dashboard/views/PersonalWallets.module.css
+- Note: Changed the existing action-row grid instead of adding markup, keeping WalletPanel untouched and under the file-size ceiling.
+
+### Candidates
+- src/features/dashboard/views/PersonalWallets.module.css
+  - Decision: selected
+  - Reason: owns personal wallet token row grid and existing mobile breakpoint
+  - Path: `src/features/dashboard/views/PersonalWallets.module.css`
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: inspected
+  - Reason: confirms HIVE token row action uses personalTokenStakeButton inside personalTokenRowWithAction
+  - Path: `src/features/dashboard/views/WalletPanel.tsx`
+## 2026-06-16T02:12:40.676687+00:00 - verification
+
+- Request: Fix cramped HIVE token row view-only UI
+- Source: current-project
+- Decision: assimilated
+- Reason: Existing token-row CSS now uses two-line grid areas for rows with Stake/View-only actions.
+- Verification: Focused git diff --check passed; wc -l confirmed WalletPanel.tsx remains 1499 lines; in-app browser inspection found HIVE row action placed below the value line in a taller row.
+## 2026-06-16T02:16:14.468085+00:00 - implementation
+
+- Request: Add hierarchical personal wallet menu with Addresses and Settings/Reimport
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Assimilated: hivemind-os:src/features/dashboard/views/WalletPanel.tsx + src/features/dashboard/views/PersonalWallets.module.css => src/features/dashboard/views/PersonalWalletMenu.tsx, src/features/dashboard/views/WalletPanel.tsx, src/features/dashboard/views/PersonalWallets.module.css
+- Note: Reimport reuses the existing Add/import wallet flow and preselects recovery phrase for grouped/recovery accounts.
+
+### Candidates
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: selected
+  - Reason: existing personal wallet card and import modal state/action wiring
+  - Path: `src/features/dashboard/views/WalletPanel.tsx`
+- src/features/dashboard/views/PersonalWallets.module.css
+  - Decision: selected
+  - Reason: existing address tooltip/menu styling surface
+  - Path: `src/features/dashboard/views/PersonalWallets.module.css`
+- src/features/dashboard/views/PersonalWalletMenu.tsx
+  - Decision: adapted_code
+  - Reason: new extracted component built from the existing flat address tooltip markup
+  - Path: `src/features/dashboard/views/PersonalWalletMenu.tsx`
+- public GitHub
+  - Decision: rejected
+  - Reason: no external candidate needed for internal wallet menu and import-flow integration
+## 2026-06-16T02:18:01.351534+00:00 - verification
+
+- Request: Add hierarchical personal wallet menu with Addresses and Settings/Reimport
+- Source: current-project
+- Decision: assimilated
+- Reason: Nested wallet menu component reuses the existing dashboard button system, address copy flow, and import modal state.
+- Verification: ESLint passed for WalletPanel, PersonalWalletMenu, and personal-stake-link; filtered TypeScript produced no touched-path diagnostics; focused git diff --check passed; wc -l confirmed WalletPanel.tsx is 1496 lines; in-app browser DOM check found Addresses, Settings, and Reimport in the nested menu.
+## 2026-06-16T02:34:08.849969+00:00 - implementation
+
+- Request: Integrate human/token capital learning loops into zero-human companies using evo-hq/evo
+- Source: pinned-public-repo+current-project+shared-brain
+- Selected backbone: local-project:hivemind-os zero-human company + Work Board loop stack
+- Note: Full evo repo audit flagged destructive-command fixtures and drain/plugin operational code; reuse was deliberately narrowed to inert frontier/gate/experiment algorithms and docs.
+
+### Candidates
+- evo-hq/evo:adapted_code:frontier strategy registry, Pareto per-task experiment selection, gates, and experiment tree concepts:plugins/evo/src/evo/frontier_strategies.py
+- evo-hq/evo:test_adapted:frontier strategy fixture semantics for per-task specialists, task floors, min direction, and dominated branch pruning:tests/unit/test_frontier_strategies.py
+- hivemind-os:adapted_code:existing KanbanLoopSpec/Evo-style optimizer primitives reused for company dispatch and cockpit summaries:src/lib/services/kanban/loop-optimizer.ts
+- hivemind-os:adapted_code:existing zero-human company cockpit and mappers extended with token-capital summaries:src/features/dashboard/views/zero-human-companies
+## 2026-06-16T03:24:50.237243+00:00 - implementation
+
+- Request: Fix zero-human-company Queen Bee delegation for multi-agent companies
+- Source: shared-brain+workspace
+- Query: `Queen Bee router zero human company delegation company tasks dispatchable members assignee queen-bee`
+- Selected backbone: local-project:hivemind-os
+- Assimilated: Adapted existing Queen Bee router collector eligibility guard; added regression based on existing script-style tests and autonomous pickup contract.
+- Verification: Pending: pnpm test:queen-bee:router; eslint; E2E dispatch proof
+
+### Candidates
+- Operations/Brain Services/Queen Bee/Routing Policy.md
+  - Decision: selected
+  - Reason: confirms Fleet discovery plus Work Board are canonical routing primitives
+- src/lib/services/queen-bee/router.ts
+  - Decision: adapted_code
+  - Reason: existing candidate scoring and collector guard reused for URL-backed collectors
+- scripts/test-queen-bee-autonomous-pickup.mjs
+  - Decision: test_adapted
+  - Reason: existing autonomous pickup contract shaped the router regression test
+## 2026-06-16T03:30:05.396629+00:00 - assimilation-manifest
+
+- Request: Fix zero-human-company Queen Bee delegation for multi-agent companies
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-hivemind-os:src/lib/services/queen-bee/router.ts => src/lib/services/queen-bee/router.ts, local-hivemind-os:scripts/test-queen-bee-autonomous-pickup.mjs => scripts/test-queen-bee-router-delegation.mjs
+- Verification: Wrote ASSIMILATION.json with 2 entries and custom_code_assessment=balanced.
+## 2026-06-16T03:30:52.774414+00:00 - assimilation-manifest
+
+- Request: Fix zero-human-company Queen Bee delegation for multi-agent companies
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-hivemind-os:src/lib/services/queen-bee/router.ts => src/lib/services/queen-bee/router.ts, local-hivemind-os:scripts/test-queen-bee-autonomous-pickup.mjs => scripts/test-queen-bee-router-delegation.mjs, local-hivemind-os:package.json => package.json
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-16T03:31:07.942769+00:00 - assimilation-manifest
+
+- Request: Fix zero-human-company Queen Bee delegation for multi-agent companies
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-hivemind-os:src/lib/services/queen-bee/router.ts => src/lib/services/queen-bee/router.ts, local-hivemind-os:src/lib/services/queen-bee/control-plane.ts => scripts/test-queen-bee-router-delegation.mjs, local-hivemind-os:package.json => package.json
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-16T03:57:07.765605+00:00 - implementation
+
+- Request: Fix Base wallet reimport saying already in My wallets without upgrading view-only row
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Assimilated: hivemind-os:src/features/dashboard/views/WalletPanel.tsx + src/app/api/wallet/import/route.ts + src/app/api/wallet/personal/route.ts => src/features/dashboard/views/WalletPanel.tsx, src/features/dashboard/views/personal-wallet-import-merge.ts
+- Note: Reimport now passes the selected wallet group root into the import API and upgrades matching existing rows to local instead of returning the duplicate-wallet message.
+
+### Candidates
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: selected
+  - Reason: client import flow displayed already-in-wallets duplicate message and owns reimport target state
+  - Path: `src/features/dashboard/views/WalletPanel.tsx`
+- src/app/api/wallet/import/route.ts
+  - Decision: selected-donor
+  - Reason: existing import API stores recovery phrase wallets with chain-specific agent IDs
+  - Path: `src/app/api/wallet/import/route.ts`
+- src/app/api/wallet/personal/route.ts
+  - Decision: selected-donor
+  - Reason: existing signer-truth merge by network/address upgrades rows when vault secret exists
+  - Path: `src/app/api/wallet/personal/route.ts`
+- local wallet vault metadata
+  - Decision: inspected
+  - Reason: confirmed Base signer still missing while Solana signer duplicates exist after reimport attempt
+  - Path: `~/.hivemindos/wallet-vault.json`
+## 2026-06-16T03:57:59.493754+00:00 - verification
+
+- Request: Fix Base wallet reimport saying already in My wallets without upgrading view-only row
+- Source: current-project
+- Decision: assimilated
+- Reason: Existing duplicate import flow now upgrades matching wallet rows instead of leaving Base view-only with an already-in-wallets message.
+- Verification: ESLint passed for WalletPanel, personal-wallet-import-merge, and PersonalWalletMenu; filtered TypeScript produced no touched-path diagnostics; focused git diff --check passed; wc -l confirmed WalletPanel.tsx is 1500 lines; non-secret vault metadata confirmed Base signer is still absent before retrying fixed reimport.
+## 2026-06-16T04:00:11.113746+00:00 - implementation
+
+- Request: Fix zero-human-company Work Board race during concurrent autonomous pickup
+- Source: shared-brain+workspace
+- Query: `Kanban Work Board concurrent writes autonomous pickup lost tasks writeBoard race`
+- Selected backbone: local-project:hivemind-os
+- Assimilated: Adapted existing in-process mutation queue pattern into Kanban local store and added an isolated concurrent create/claim/block regression.
+- Verification: Pending: pnpm test:kanban:concurrency; pnpm test:queen-bee:router; E2E four-task dispatch
+
+### Candidates
+- src/lib/services/mobile-agents/store.ts
+  - Decision: adapted_code
+  - Reason: in-process promise mutex pattern for file read-modify-write queues
+- src/lib/services/dashboard-state.ts
+  - Decision: adapted_code
+  - Reason: dashboard state read-modify-write queue pattern
+- src/lib/services/kanban/local-kanban-store.ts
+  - Decision: adapted_code
+  - Reason: existing Kanban mutation/write path wrapped with per-board queue
+## 2026-06-16T04:04:02.464986+00:00 - assimilation-manifest
+
+- Request: Fix zero-human-company Work Board race during concurrent autonomous pickup
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-hivemind-os:src/lib/services/mobile-agents/store.ts => src/lib/services/kanban/mutation-queue.ts, local-hivemind-os:src/lib/services/dashboard-state.ts => src/lib/services/kanban/mutation-queue.ts, local-hivemind-os:src/lib/services/kanban/local-kanban-store.ts => scripts/test-kanban-concurrent-mutations.mjs
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-16T04:04:33.475925+00:00 - assimilation-manifest
+
+- Request: Fix zero-human-company Work Board race during concurrent autonomous pickup
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-hivemind-os:src/lib/services/mobile-agents/store.ts => src/lib/services/kanban/mutation-queue.ts, local-hivemind-os:src/lib/services/dashboard-state.ts => src/lib/services/kanban/mutation-queue.ts, local-hivemind-os:package.json => package.json
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-16T04:39:26.423790+00:00 - triage
+
+- Request: Implement vercel-labs/json-render in HivemindOS chat
+- Source: pinned-github
+- Selected backbone: vercel-labs/json-render
+
+### Candidates
+- vercel-labs/json-render:README.md
+  - Decision: selected
+  - Reason: documents React renderer install, catalog, registry, flat root/elements spec, and guarded generative UI workflow
+- vercel-labs/json-render:packages/react/src/schema.ts
+  - Decision: selected
+  - Reason: defines React spec shape with root, elements, props, children, and visibility
+- vercel-labs/json-render:packages/react/src/renderer.tsx
+  - Decision: selected
+  - Reason: provides Renderer, JSONUIProvider, and registry behavior through @json-render/react
+- vercel-labs/json-render:packages/shadcn/src/components.tsx
+  - Decision: rejected
+  - Reason: large UI dependency surface; local HivemindOS catalog avoids extra components and dependencies
+- local-project:hivemind-os:src/features/dashboard/views/ChatPanel.tsx
+  - Decision: selected
+  - Reason: active dashboard chat surface for assistant output rendering
+- local-project:hivemind-os:src/components/ChatMessage.tsx
+  - Decision: selected
+  - Reason: generic UIMessage tool payload fallback currently prints JSON
+## 2026-06-16T04:52:14.949098+00:00 - implementation
+
+- Request: Implement vercel-labs/json-render in HivemindOS chat
+- Source: selected-github-code
+- Selected backbone: vercel-labs/json-render
+- Verification: Focused ESLint passed; filtered TypeScript for touched files returned no diagnostics; git diff --check passed; dev server on 127.0.0.1:5024 served the chat route and was stopped.
+
+### Candidates
+- vercel-labs/json-render:README.md=>src/components/json-render/JsonRenderSurface.tsx
+  - Decision: adapted_code
+  - Reason: adapted the React quick-start catalog, registry, Renderer, and flat root/elements spec into a local guarded HivemindOS chat renderer
+- vercel-labs/json-render:packages/react/src/schema.ts=>src/components/json-render/JsonRenderSurface.tsx
+  - Decision: adapted_code
+  - Reason: used the React schema contract to sanitize root/elements/props/children before rendering
+- vercel-labs/json-render:packages/react/src/renderer.tsx=>src/components/json-render/JsonRenderSurface.tsx
+  - Decision: adapted_code
+  - Reason: wired JSONUIProvider and Renderer through the published @json-render/react package
+- local-project:hivemind-os:src/features/dashboard/views/ChatPanel.tsx=>src/features/dashboard/views/ChatPanel.tsx
+  - Decision: adapted_code
+  - Reason: hooked fenced specs into the active dashboard chat render path
+- local-project:hivemind-os:src/components/ChatMessage.tsx=>src/components/ChatMessage.tsx
+  - Decision: adapted_code
+  - Reason: hooked tool input/output spec rendering into the existing JSON fallback block
+## 2026-06-16T05:17:11.935332+00:00 - implementation
+
+- Request: Fix Fleet Hive drag text selecting hive labels
+- Source: shared-brain+current-project
+- Query: `HivemindOS fleet hive drag text selection labels selectable while panning`
+- Selected backbone: local-project:hivemind-os
+- Assimilated: hivemind-os:src/components/fleet-hive/FleetHiveView.tsx + src/components/fleet-hive/HiveStage.tsx + src/components/fleet-hive/fleet-hive.css => src/components/fleet-hive/FleetHiveView.tsx, src/components/fleet-hive/fleet-hive.css
+- Verification: Pending focused ESLint and diff checks.
+
+### Candidates
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: adapted_code
+  - Reason: existing wheel/drag pan handler is the active interaction surface
+  - Path: `src/components/fleet-hive/FleetHiveView.tsx`
+- src/components/fleet-hive/HiveStage.tsx
+  - Decision: selected
+  - Reason: existing HiveCell/AddAgentCell labels and SVG text identified as selectable descendants
+  - Path: `src/components/fleet-hive/HiveStage.tsx`
+- src/components/fleet-hive/fleet-hive.css
+  - Decision: adapted_code
+  - Reason: existing scoped fleet hive CSS extended with no-selection guards
+  - Path: `src/components/fleet-hive/fleet-hive.css`
+- public GitHub
+  - Decision: rejected
+  - Reason: internal browser gesture leak in an existing HivemindOS view; no external donor needed
+## 2026-06-16T05:19:44.434017+00:00 - verification
+
+- Request: Fix Fleet Hive drag text selecting hive labels
+- Source: current-project+in-app-browser
+- Decision: assimilated
+- Reason: Fleet Hive drag now suppresses default text selection and hive labels are non-selectable.
+- Verification: pnpm exec eslint src/components/fleet-hive/FleetHiveView.tsx --max-warnings=0 passed; focused git diff --check passed; in-app browser smoke on 127.0.0.1:5024 found 21 hive cells, confirmed cell/SVG/add-label user-select none, simulated a drag, and window.getSelection stayed empty.
+## 2026-06-16T05:42:18.390918+00:00 - implementation
+
+- Request: Center the app-wide Message the hive input
+- Source: current-project+live-browser
+- Query: `PersistentHiveChat Message the hive horizontal centering dashboard layout`
+- Selected backbone: local-project:hivemind-os
+- Assimilated: hivemind-os:src/features/queen-voice/PersistentHiveChat.tsx + src/components/fleet-hive/ChatPill.tsx + src/components/fleet-hive/fleet-hive.css => src/features/queen-voice/PersistentHiveChat.tsx
+- Verification: Pending focused ESLint and in-app browser centering smoke.
+
+### Candidates
+- src/features/queen-voice/PersistentHiveChat.tsx
+  - Decision: adapted_code
+  - Reason: owns app-wide Message the hive dock and fixed positioning
+  - Path: `src/features/queen-voice/PersistentHiveChat.tsx`
+- src/components/fleet-hive/ChatPill.tsx
+  - Decision: selected
+  - Reason: existing reusable pill supports wrapStyle overrides
+  - Path: `src/components/fleet-hive/ChatPill.tsx`
+- src/components/fleet-hive/fleet-hive.css
+  - Decision: inspected
+  - Reason: confirms default fr-chat-wrap uses absolute center but can be overridden inline
+  - Path: `src/components/fleet-hive/fleet-hive.css`
+## 2026-06-16T05:43:54.807648+00:00 - verification
+
+- Request: Center the app-wide Message the hive input
+- Source: current-project
+- Decision: assimilated
+- Reason: PersistentHiveChat now renders through a body portal in a full-width fixed flex dock, so centering is owned by the viewport-level dock rather than the ChatPill wrapper.
+- Verification: pnpm exec eslint src/features/queen-voice/PersistentHiveChat.tsx --max-warnings=0 passed; focused git diff --check passed. In-app browser reload/navigation on 127.0.0.1:5024 was blocked by browser URL policy, so post-patch live measurement was not completed.
+## 2026-06-16T06:45:07.690855+00:00 - local-search
+
+- Request: Add a HivemindOS /swarm-goal slash command that rewrites a build prompt and submits it to Queen Bee orchestration
+- Source: local-index
+- Query: `Add a HivemindOS /swarm-goal slash command that rewrites a build prompt and submits it to Queen Bee orchestration`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/skills
+  - URL: https://github.com/LiamVisionary/skills
+  - Description: LiamVisionary/skills All versions of all skills that are on clawhub.com archived
+## 2026-06-16T06:45:10.943489+00:00 - public-search
+
+- Request: Add a HivemindOS /swarm-goal slash command that rewrites a build prompt and submits it to Queen Bee orchestration
+- Source: public-github
+- Query: `Add a HivemindOS /swarm-goal slash command that rewrites a build prompt and submits it to Queen Bee orchestration`
+- Decision: retrieved
+- Reason: Retrieved 1 public candidates from GitHub search.
+
+### Candidates
+- HexSleeves/waggle (1 stars, Go, MIT License)
+  - URL: https://github.com/HexSleeves/waggle
+  - Description: Multi-agent orchestration framework — a Queen agent manages, delegates to, and synthesizes work from Worker Bee sub-agents via coding CLI adapters (Claude Code, Codex, OpenCode)
+## 2026-06-16T06:45:11.027464+00:00 - prebuild-gate
+
+- Request: Add a HivemindOS /swarm-goal slash command that rewrites a build prompt and submits it to Queen Bee orchestration
+- Source: public-github
+- Query: `Add a HivemindOS /swarm-goal slash command that rewrites a build prompt and submits it to Queen Bee orchestration`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-06-16T06:50:16.482300+00:00 - final
+
+- Request: Add /swarm-goal slash command for prompt rewrite and Queen Bee orchestration
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Note: Shared brain recall found command-development and Hermes command debugging notes; current project command router and Queen Bee API were a stronger fit than public candidates.
+
+### Candidates
+- src/features/dashboard/hooks/dashboard-swarm-command.ts
+  - Decision: adapted_code
+  - Reason: existing dashboard slash-command async handler and command message update pattern
+- src/features/dashboard/hooks/dashboard-handoff-command.ts
+  - Decision: adapted_code
+  - Reason: append/clear/replace command chat helpers reused by new handler
+- src/app/api/queen-bee/route.ts
+  - Decision: adapted_code
+  - Reason: existing Queen Bee task submission API extended to forward skill hints
+- src/lib/services/queen-bee/control-plane.ts
+  - Decision: adapted_code
+  - Reason: existing Queen Bee work-board delegation and autonomous pickup path used unchanged
+- HexSleeves/waggle
+  - Decision: rejected
+  - Reason: public Go multi-agent framework was wrong stack for dashboard command integration and audit_candidate_repo.py blocked on high findings
+## 2026-06-16T07:11:53.987655+00:00 - verification
+
+- Request: Center the app-wide Message the hive input
+- Source: current-project
+- Decision: assimilated
+- Reason: PersistentHiveChat uses explicit left/right/100vw body-portal docking, and collapsed ChatPill content now centers with symmetric padding and non-growing label flex.
+- Verification: pnpm exec eslint src/features/queen-voice/PersistentHiveChat.tsx --max-warnings=0 passed; focused git diff --check passed. In-app browser reload/navigation on 127.0.0.1:5024 was blocked by browser URL policy, so post-patch live measurement was not completed.
+## 2026-06-16T07:20:56.631002+00:00 - implementation
+
+- Request: Center Message the hive in the Fleet Hive open canvas space
+- Source: current-project+user-screenshot
+- Selected backbone: local-project:hivemind-os
+- Assimilated: hivemind-os:src/features/queen-voice/PersistentHiveChat.tsx + src/features/dashboard/DashboardApp.tsx + src/components/fleet-hive/FleetHiveView.tsx => src/features/queen-voice/PersistentHiveChat.tsx, src/features/dashboard/DashboardApp.tsx
+- Verification: Pending focused ESLint and diff checks.
+
+### Candidates
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: selected
+  - Reason: defines the always-open Hive detail panel as 340px wide
+  - Path: `src/components/fleet-hive/FleetHiveView.tsx`
+- src/features/queen-voice/PersistentHiveChat.tsx
+  - Decision: adapted_code
+  - Reason: body-portal dock now accepts a right inset to center within available canvas space
+  - Path: `src/features/queen-voice/PersistentHiveChat.tsx`
+- src/features/dashboard/DashboardApp.tsx
+  - Decision: adapted_code
+  - Reason: passes the Fleet/Agents right-panel inset to the persistent hive chat dock
+  - Path: `src/features/dashboard/DashboardApp.tsx`
+## 2026-06-16T07:21:57.932316+00:00 - verification
+
+- Request: Center Message the hive in the Fleet Hive open canvas space
+- Source: current-project
+- Decision: assimilated
+- Reason: Fleet/Agents passes the 340px Hive detail-panel inset to the persistent chat dock, so the dock centers inside the open hive canvas rather than the full viewport.
+- Verification: pnpm exec eslint src/features/queen-voice/PersistentHiveChat.tsx --max-warnings=0 passed; focused git diff --check passed. DashboardApp errors-only lint is blocked by unrelated existing react-hooks/set-state-in-effect at DashboardApp.tsx:1439.
+## 2026-06-16T07:23:13.292982+00:00 - discovery-surface
+
+- Request: Expose /swarm-goal through HivemindOS capability search
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Note: Question confirmed /swarm-goal was in slash command docs/autocomplete but not yet first-class in context-index capability retrieval.
+
+### Candidates
+- src/lib/services/context-index.ts
+  - Decision: adapted_code
+  - Reason: existing tool-schema capability registry extended with dashboard /swarm-goal delivery channel
+- packaged-skills/auto-install/hive-capability-search/SKILL.md
+  - Decision: adapted_code
+  - Reason: capability-search contract updated to include slash commands and delivery channels
+- Skills/hive-capability-search/SKILL.md
+  - Decision: adapted_code
+  - Reason: shared vault mirror updated to match packaged skill
+- scripts/test-context-index-swarm-goal.mjs
+  - Decision: test_adapted
+  - Reason: new context-index retrieval regression for /swarm-goal
+## 2026-06-16T11:34:04.560096+00:00 - triage
+
+- Request: Fix HivemindOS dashboard [object Event] runtime error when rapidly navigating views
+- Source: shared-brain+workspace
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Memory/Distillations/Agent Memory/instruction/2026-06-13-prioritize-root-cause-over-fallback-fixes-576631cdcb.md
+  - Decision: selected
+  - Reason: debugging instruction says root cause first
+- src/features/dashboard/DashboardApp.tsx
+  - Decision: selected
+  - Reason: contains dynamic route imports, idle/hover prefetch, and transition-based navigation implicated by quick view switching
+- src/features/dashboard/AppNavShelf.tsx
+  - Decision: selected
+  - Reason: passes hover/focus prefetch triggers into dynamic route import prefetcher
+## 2026-06-16T11:39:06.193912+00:00 - implementation
+
+- Request: Fix HivemindOS dashboard [object Event] runtime error when rapidly navigating views
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Pending focused eslint and diff checks
+
+### Candidates
+- src/features/dashboard/DashboardApp.tsx
+  - Decision: adapted_code
+  - Reason: existing lazy route preloading and dynamic panel shell now catch non-critical import rejections and isolate route chunk failures
+- src/components/fleet-hive/AppNavShelf.tsx
+  - Decision: selected
+  - Reason: hover/focus prefetch call site verified; no changes needed
+## 2026-06-16T11:40:10.514490+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-hivemind-os:src/features/dashboard/DashboardApp.tsx => src/features/dashboard/DashboardApp.tsx, local-hivemind-os:src/components/fleet-hive/AppNavShelf.tsx => src/features/dashboard/DashboardApp.tsx
+- Verification: Wrote ASSIMILATION.json with 2 entries and custom_code_assessment=balanced.
+## 2026-06-16T11:41:49.326574+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-hivemind-os:src/features/dashboard/DashboardApp.tsx => src/features/dashboard/DashboardApp.tsx, local-hivemind-os:src/features/dashboard/DashboardApp.tsx => src/features/dashboard/DashboardApp.tsx, local-hivemind-os:src/components/fleet-hive/AppNavShelf.tsx => src/features/dashboard/DashboardApp.tsx
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-16T11:41:49.349424+00:00 - verification
+
+- Request: Fix HivemindOS dashboard [object Event] runtime error when rapidly navigating views
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused git diff --check passed; focused eslint parsed the file but remains blocked by existing react-hooks/set-state-in-effect at DashboardApp.tsx:1489
+
+### Candidates
+- src/features/dashboard/DashboardApp.tsx
+  - Decision: adapted_code
+  - Reason: preload catches and route error boundary added
+## 2026-06-16T11:40:59+00:00 - implementation
+
+- Request: Diagnose and reduce Stake HIVE view navigation lag
+- Source: shared-brain+workspace+optimization-notes
+- Selected backbone: local-project:hivemind-os
+- Assimilated: hivemind-os:src/lib/services/hive-staking.ts + src/lib/services/hive-staking-client.ts + src/app/stake/StakePageClient.tsx + OPTIMIZATIONS.md => src/lib/config/hive-staking.ts, src/lib/services/hive-staking.ts, src/lib/services/hive-staking-client.ts, src/app/stake/StakePageClient.tsx, src/app/api/hive/stake/status/route.ts
+- Verification: Focused ESLint passed; HIVE staking assertion script passed; filtered TypeScript produced no touched-path diagnostics; focused diff check passed. Live `5020` timing was unavailable because no server was listening.
+
+### Candidates
+- OPTIMIZATIONS.md
+  - Decision: selected
+  - Reason: prior stake route latency entry identified stale dev servers and route static/prefetch work already completed
+- src/lib/services/hive-staking.ts
+  - Decision: adapted_code
+  - Reason: public constants were split into a browser-safe config while preserving server RPC helpers and re-exports
+- src/lib/services/hive-staking-client.ts
+  - Decision: adapted_code
+  - Reason: browser signing helper now lazy-loads viem only when encoding stake transactions
+- src/app/api/hive/stake/status/route.ts
+  - Decision: adapted_code
+  - Reason: status route now avoids empty-address RPC work and reuses one contract metadata read for wallet rows
+- public GitHub
+  - Decision: rejected
+  - Reason: internal Next route/client-bundle performance issue with existing HivemindOS staking code; no external donor was needed
+## 2026-06-16T11:46:59.936097+00:00 - verification
+
+- Request: Fix HivemindOS dashboard [object Event] runtime error when rapidly navigating views
+- Source: browser-smoke
+- Selected backbone: local-project:hivemind-os
+- Verification: Browser smoke passed; temporary dev server stopped after verification
+
+### Candidates
+- http://127.0.0.1:5026/?view=agents
+  - Decision: inspected
+  - Reason: rapid nav smoke clicked Work, Brain, Chat, Wallets, and More without runtime overlay or console errors
+## 2026-06-16T11:59:23.514546+00:00 - implementation
+
+- Request: Fix Fleet Hive agent icons to use subclass and custom uploaded icons
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused eslint --quiet passed; focused diff check passed; full typecheck blocked by unrelated generated/promo-video/Tauri resource diagnostics
+
+### Candidates
+- src/features/dashboard/views/chat/chat-panel-helpers.ts
+  - Decision: selected
+  - Reason: existing selectedAgentIcon precedence confirmed custom uploaded icon before worker-class fallback
+- src/features/dashboard/hooks/use-dashboard-derived-state.tsx
+  - Decision: adapted_code
+  - Reason: fleet payload now carries custom worker class icon fields from agent profiles
+- src/components/fleet-hive/fleet-hive-mappers.ts
+  - Decision: adapted_code
+  - Reason: Hive agent mapper resolves queen/custom/subclass icon source
+- src/components/fleet-hive/HiveStage.tsx
+  - Decision: adapted_code
+  - Reason: Hive agent cells render per-agent iconSrc instead of one hardcoded worker bee
+- public GitHub
+  - Decision: rejected
+  - Reason: internal HivemindOS data-shape regression; external donor not needed
+## 2026-06-16T12:04:12.708814+00:00 - verification
+
+- Request: Fix Fleet Hive agent icons to use subclass and custom uploaded icons
+- Source: local-playwright-smoke
+- Selected backbone: local-project:hivemind-os
+- Verification: Temporary dev server on 127.0.0.1:5027 returned /?view=agents with HTTP 200 and no Playwright pageerror/console errors; dashboard lock prevented authenticated visual icon inspection; server was stopped after smoke.
+
+### Candidates
+- http://127.0.0.1:5027/?view=agents
+  - Decision: inspected
+  - Reason: route compiled and rendered dashboard lock with no browser runtime errors
+## 2026-06-16T12:06:29.556119+00:00 - implementation
+
+- Request: Align Fleet Hive view mode toggle to the right
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Pending focused eslint and diff check
+
+### Candidates
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: adapted_code
+  - Reason: reused existing absolute toolbar placement and PANEL_W detail-panel constant to right-align the Hive/Graph/Map/List switcher
+- src/components/fleet-hive/FleetHiveView.tsx zoom controls
+  - Decision: selected-donor
+  - Reason: existing bottom-right control already aligns to PANEL_W + 16
+- public GitHub
+  - Decision: rejected
+  - Reason: internal layout tweak with local placement constants; no external donor needed
+## 2026-06-16T12:06:57.574264+00:00 - implementation
+
+- Request: Hide the Next.js dev tools floating badge in HivemindOS dev UI
+- Source: shared-brain+current-project+official-docs
+- Selected backbone: local-project:hivemind-os
+- Assimilated: hivemind-os:next.config.ts existing dev-only configuration + Next.js official devIndicators docs + installed next config types => next.config.ts devIndicators false
+- Not assimilated: public GitHub rejected because the installed Next config and official docs provided the exact supported setting
+- Verification: Pending focused config validation
+
+### Candidates
+- hive-brain full-vault recall
+  - Decision: inspected
+  - Reason: no stronger project-specific memory found for this badge
+- next.config.ts
+  - Decision: adapted_code
+  - Reason: existing dev-only config cluster extended with devIndicators false
+- nextjs.org devIndicators docs
+  - Decision: selected
+  - Reason: official source confirms devIndicators false hides the indicator while keeping error overlays
+## 2026-06-16T12:07:04.877172+00:00 - verification
+
+- Request: Align Fleet Hive view mode toggle to the right
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused eslint passed for FleetHiveView; focused diff check passed
+
+### Candidates
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: adapted_code
+  - Reason: view mode toggle now uses right positioning with PANEL_W offset in Hive mode
+## 2026-06-16T12:08:22.459859+00:00 - verification
+
+- Request: Hide the Next.js dev tools floating badge in HivemindOS dev UI
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Assimilated: hivemind-os:next.config.ts existing dev-only configuration + Next.js official devIndicators docs + installed next config types => next.config.ts devIndicators false
+- Not assimilated: public GitHub rejected because the installed Next config and official docs provided the exact supported setting
+- Verification: pnpm exec eslint next.config.ts --max-warnings=0 passed; Next config loader returned {"devIndicators":false}; focused git diff --check passed; temporary next dev on 127.0.0.1:5028 accepted config but full page smoke was blocked by unrelated fusion.module.css:215 CSS-module parse error.
+
+### Candidates
+- next.config.ts
+  - Decision: adapted_code
+  - Reason: devIndicators false added next to existing dev-only config knobs
+- CHANGELOG.md
+  - Decision: adapted_code
+  - Reason: unreleased local dev UX entry added
+## 2026-06-16T12:10:29.954093+00:00 - implementation
+
+- Request: Move Fleet classic layout toggle into dispatch rail and remove live dispatch label
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Pending focused eslint and diff checks
+
+### Candidates
+- src/components/fleet/FleetView.tsx
+  - Decision: adapted_code
+  - Reason: classic dispatch rail now renders the host-provided layout toggle where the live dispatch label was
+- src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: adapted_code
+  - Reason: classic branch now passes layoutToggle into FleetView instead of overlaying it
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: selected-donor
+  - Reason: new hive view already accepts host-provided layoutToggle as in-canvas chrome
+- public GitHub
+  - Decision: rejected
+  - Reason: internal HivemindOS layout placement change; external donor not needed
+## 2026-06-16T12:11:10.980239+00:00 - verification
+
+- Request: Move Fleet classic layout toggle into dispatch rail and remove live dispatch label
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused eslint pending; focused diff check pending
+
+### Candidates
+- src/components/fleet/FleetView.tsx
+  - Decision: adapted_code
+  - Reason: dispatch label removed and layout toggle rendered right-aligned above dispatch card
+- src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: adapted_code
+  - Reason: classic FleetView receives layoutToggle prop instead of overlay wrapper
+## 2026-06-16T12:11:36.395414+00:00 - verification
+
+- Request: Move Fleet classic layout toggle into dispatch rail and remove live dispatch label
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: pnpm exec eslint src/components/fleet/FleetView.tsx src/features/dashboard/views/AgentsPanel.tsx --quiet passed; focused git diff --check passed
+
+### Candidates
+- src/components/fleet/FleetView.tsx
+  - Decision: adapted_code
+  - Reason: dispatch label removed and layout toggle rendered right-aligned above dispatch card
+- src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: adapted_code
+  - Reason: classic FleetView receives layoutToggle prop instead of overlay wrapper
+## 2026-06-16T12:13:35.910566+00:00 - triage
+
+- Request: Change the redesigned Fleet Hive view background from triangles/diamonds to the subtle connected hexagons used by the Fleet loading screen
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: pending focused diff and CSS checks
+
+### Candidates
+- src/components/fleet/fleet-loading.tsx
+  - Decision: selected-donor
+  - Reason: provides the existing Fleet loading shell SVG connected-hex grid pattern
+  - Path: `src/components/fleet/fleet-loading.tsx`
+- src/components/fleet-hive/fleet-hive.css
+  - Decision: adapted_code
+  - Reason: owns the redesigned Fleet Hive backdrop texture and can reuse the loading grid as a subtle CSS data texture
+  - Path: `src/components/fleet-hive/fleet-hive.css`
+- public-github
+  - Decision: not-assimilated
+  - Reason: not searched because the needed visual pattern already exists in the current project and external sources would not improve this internal brand-consistency change
+## 2026-06-16T12:14:28.129037+00:00 - verification
+
+- Request: Change the redesigned Fleet Hive view background from triangles/diamonds to the subtle connected hexagons used by the Fleet loading screen
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: git diff --check -- src/components/fleet-hive/fleet-hive.css CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl passed; pnpm exec eslint src/components/fleet-hive/FleetHiveView.tsx --quiet passed; standalone CSS parser unavailable because no PostCSS/lightningcss package is resolvable in this checkout
+
+### Candidates
+- src/components/fleet/fleet-loading.tsx
+  - Decision: selected-donor
+  - Reason: existing loading shell connected-hex SVG pattern reused as the visual source
+  - Path: `src/components/fleet/fleet-loading.tsx`
+- src/components/fleet-hive/fleet-hive.css
+  - Decision: adapted_code
+  - Reason: replaced angled gradient texture with subtle loading-style connected hex data texture
+  - Path: `src/components/fleet-hive/fleet-hive.css`
+## 2026-06-16T12:23:29.295823+00:00 - correction
+
+- Request: Correct Fleet Hive backdrop to match the real connected honeycomb loading-screen pattern
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: pending corrected patch and browser smoke
+
+### Candidates
+- src/app/globals.css
+  - Decision: selected-donor
+  - Reason: contains the actual seamless connected honeycomb loading-screen pattern the user pointed to
+  - Path: `src/app/globals.css`
+- src/components/fleet-hive/fleet-hive.css
+  - Decision: adapted_code
+  - Reason: target backdrop CSS needs the same shared-edge honeycomb tile, faded for the Hive view
+  - Path: `src/components/fleet-hive/fleet-hive.css`
+## 2026-06-16T12:25:28.999609+00:00 - implementation
+
+- Request: Correct classic Fleet layout toggle placement to live swarm slot and restore dispatch label
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Pending focused eslint and diff check
+
+### Candidates
+- src/components/fleet/FleetView.tsx
+  - Decision: adapted_code
+  - Reason: layout toggle replaces live swarm label in stage toolbar; dispatch rail label restored
+- src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: selected
+  - Reason: continues passing layoutToggle into FleetView
+## 2026-06-16T12:27:19.048157+00:00 - verification
+
+- Request: Correct Fleet Hive backdrop to match the real connected honeycomb loading-screen pattern
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: git diff --check passed; pnpm exec eslint src/components/fleet-hive/FleetHiveView.tsx --quiet passed; browser smoke on 127.0.0.1:5029/?view=agents confirmed backgroundSize 54px 93.531px, seamless tile markers present, old 48px single-hex marker absent, and no runtime overlay
+
+### Candidates
+- src/app/globals.css
+  - Decision: selected-donor
+  - Reason: actual seamless connected honeycomb loading-shell pattern copied as source texture
+  - Path: `src/app/globals.css`
+- src/components/fleet-hive/fleet-hive.css
+  - Decision: adapted_code
+  - Reason: Fleet Hive backdrop now uses the same 54px by 93.531px shared-edge honeycomb tile, recolored and faded
+  - Path: `src/components/fleet-hive/fleet-hive.css`
+## 2026-06-16T12:29:31.708872+00:00 - verification
+
+- Request: Correct classic Fleet layout toggle placement to live swarm slot and restore dispatch label
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: pnpm exec eslint src/components/fleet/FleetView.tsx src/features/dashboard/views/AgentsPanel.tsx --quiet passed; focused git diff --check passed; search confirmed The dispatch · live is restored in FleetView and live swarm/scanning swarm no longer appear in FleetView
+
+### Candidates
+- src/components/fleet/FleetView.tsx
+  - Decision: adapted_code
+  - Reason: layout toggle replaces live swarm slot in stage toolbar; dispatch rail label restored
+- src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: selected
+  - Reason: continues passing layoutToggle into FleetView
+## 2026-06-16T12:35:14.878400+00:00 - implementation
+
+- Request: Make Fleet Hive agent and machine cells 30 percent bigger with icons and text
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Pending focused eslint and diff checks
+
+### Candidates
+- src/components/fleet-hive/hive-geometry.ts
+  - Decision: adapted_code
+  - Reason: shared CELL constant increased from 85 to 110.5 so agent and machine cells grow 30 percent and tessellation geometry follows
+- src/components/fleet-hive/HiveStage.tsx
+  - Decision: adapted_code
+  - Reason: fixed agent image, machine glyph, and add-label sizes increased 30 percent while edge labels scale with SVG cells
+- public GitHub
+  - Decision: rejected
+  - Reason: internal HivemindOS visual sizing change using local geometry constants; no external donor needed
+## 2026-06-16T12:35:57.136775+00:00 - public-search
+
+- Request: React dashboard graph header clock toggle overlap
+- Source: public-github
+- Query: `React dashboard graph header clock toggle overlap`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-06-16T12:36:51.547508+00:00 - verification
+
+- Request: Make Fleet Hive agent and machine cells 30 percent bigger with icons and text
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: pnpm exec eslint src/components/fleet-hive/HiveStage.tsx src/components/fleet-hive/hive-geometry.ts --quiet passed; focused git diff --check passed; size markers confirmed CELL=110.5, agent icon=81, machine icon=39, add label=15
+
+### Candidates
+- src/components/fleet-hive/hive-geometry.ts
+  - Decision: adapted_code
+  - Reason: shared CELL constant increased 30 percent
+- src/components/fleet-hive/HiveStage.tsx
+  - Decision: adapted_code
+  - Reason: fixed icon and add-label sizes scaled with larger cells
+## 2026-06-16T12:38:22.796731+00:00 - implementation
+
+- Request: Move Fleet Hive Graph time display to top center and shift graph HUD clear of Hive Classic toggle
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Pending focused lint, diff check, and browser smoke
+
+### Candidates
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: adapted_code
+  - Reason: reused the existing Hive chrome overlay positions to render the graph clock at top center and pass graph HUD inset props
+- src/components/fleet/orbital-graph.tsx
+  - Decision: adapted_code
+  - Reason: exported the existing HUD clock and parameterized left/top-right HUD positions for host chrome
+- src/components/fleet-hive/fleet-hive.css
+  - Decision: adapted_code
+  - Reason: added scoped centered graph clock overlay styling
+- public GitHub
+  - Decision: rejected
+  - Reason: bounded search found no reusable candidates; internal HivemindOS chrome layout fix is best served by local components
+## 2026-06-16T12:44:57.106057+00:00 - triage
+
+- Request: Improve AgentSettingsModal portrait visual by making icon and hive larger and removing animated ring
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Skills/hivemindos-feature-development/SKILL.md
+  - Decision: selected
+  - Reason: repo workflow confirms changelog, scoped local components, and verification expectations
+  - Path: `SKILL.md`
+- src/components/aeon/parts.tsx
+  - Decision: selected-donor
+  - Reason: AeonOrb geometry and colors establish current hex/orb motif used by the modal
+  - Path: `src/components/aeon/parts.tsx`
+- src/features/dashboard/views/chat/AgentSettingsModal.tsx
+  - Decision: selected
+  - Reason: contains the settings sidebar portrait use site
+  - Path: `src/features/dashboard/views/chat/AgentSettingsModal.tsx`
+- public GitHub
+  - Decision: rejected
+  - Reason: small HivemindOS-specific visual refinement; no external implementation source needed after local primitive audit
+## 2026-06-16T12:49:58.540750+00:00 - triage
+
+- Request: Assimilate safe Odysseus improvements into HivemindOS
+- Source: pinned-github
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- pewdiepie-archdaemon/odysseus
+  - Decision: rejected
+  - Reason: AGPL-3.0-or-later source is useful for requirements but not copied or translated into MIT HivemindOS without relicensing
+  - Path: `README.md ROADMAP.md THREAT_MODEL.md docs/setup.md`
+- src/lib/utils/server-auth.ts
+  - Decision: selected
+  - Reason: existing HivemindOS dashboard auth boundary informs authenticated system health route
+- src/lib/services/obsidian/vault-path.ts
+  - Decision: selected
+  - Reason: existing vault path resolver reused by system health checks
+- src/app/api/brain/services/status/route.ts
+  - Decision: selected
+  - Reason: existing aggregate status route pattern reused for authenticated health spine
+## 2026-06-16T12:49:58.898003+00:00 - implementation
+
+- Request: Assimilate safe Odysseus improvements into HivemindOS
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- docs/THREAT_MODEL.md
+  - Decision: adapted_docs
+  - Reason: new HivemindOS-specific threat model written clean-room from product boundaries
+- src/lib/services/security/untrusted-context.ts
+  - Decision: adapted_code
+  - Reason: new TypeScript helper for guarded untrusted source-data injection
+- src/lib/services/system/system-health.ts
+  - Decision: adapted_code
+  - Reason: new local static health collector built on existing vault/env/project conventions
+- src/app/api/system/health/route.ts
+  - Decision: adapted_code
+  - Reason: new authenticated route exposing the health collector
+- scripts/test-untrusted-context.mjs
+  - Decision: test_adapted
+  - Reason: regression coverage for guard escaping and metadata
+- scripts/test-system-health.mjs
+  - Decision: test_adapted
+  - Reason: regression coverage for health rollup and local fixtures
+## 2026-06-16T12:51:46.199359+00:00 - implementation
+
+- Request: Improve AgentSettingsModal portrait visual by making icon and hive larger and removing animated ring
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/components/aeon/parts.tsx
+  - Decision: adapted_code
+  - Reason: transplanted the existing static hex geometry, tone colors, glow treatment, and icon fallback shape into a modal-specific static portrait
+  - Path: `src/features/dashboard/views/chat/AgentSettingsPortrait.tsx`
+- src/features/dashboard/views/chat/AgentSettingsModal.tsx
+  - Decision: adapted_code
+  - Reason: replaced only the sidebar AeonOrb hero with AgentSettingsPortrait, leaving shared AEON usages unchanged
+  - Path: `src/features/dashboard/views/chat/AgentSettingsModal.tsx`
+## 2026-06-16T12:51:46.222558+00:00 - verification
+
+- Request: Improve AgentSettingsModal portrait visual by making icon and hive larger and removing animated ring
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsPortrait.tsx src/features/dashboard/views/chat/AgentSettingsModal.tsx --quiet
+  - Decision: selected
+  - Reason: passed
+- git diff --check -- touched files
+  - Decision: selected
+  - Reason: passed
+- curl -I http://127.0.0.1:5030/?view=agents
+  - Decision: selected
+  - Reason: returned HTTP 200 from existing local dev server; exact modal visual smoke blocked because local state had zero agents/machines and no settings entry point
+## 2026-06-16T12:52:09.628723+00:00 - verification
+
+- Request: Stack Fleet Graph mode/status HUD below the Hive/Classic layout toggle
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Note: Verification pending focused eslint, diff check, and browser smoke.
+
+### Candidates
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: adapted_code
+  - Reason: passes vertical HUD offsets to the graph view instead of horizontal clearance
+- src/components/fleet/orbital-graph.tsx
+  - Decision: adapted_code
+  - Reason: parameterizes top-left and selected-node HUD vertical positions
+- public GitHub
+  - Decision: rejected
+  - Reason: small internal HivemindOS HUD placement tweak with existing local components
+## 2026-06-16T13:02:45.495909+00:00 - implementation
+
+- Request: Center Fleet Graph Map List chat input while preserving Hive right panel inset
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Note: Verification pending focused lint, diff check, and browser smoke.
+
+### Candidates
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: adapted_code
+  - Reason: reports active Fleet sub-view when the Hive/Graph/Map/List toggle changes
+- src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: adapted_code
+  - Reason: computes the app-wide chat inset only for Hive layout plus Hive sub-view
+- src/features/dashboard/DashboardApp.tsx
+  - Decision: adapted_code
+  - Reason: uses the Fleet-reported chat inset instead of hard-coding 340px for all Agents views
+- public GitHub
+  - Decision: rejected
+  - Reason: internal HivemindOS layout-state fix using local components
+## 2026-06-16T13:05:48.755860+00:00 - implementation
+
+- Request: Move Fleet Graph primary telemetry card into right diagnostics column
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Note: Verification pending focused lint, diff check, and browser smoke.
+
+### Candidates
+- src/components/fleet/orbital-graph.tsx
+  - Decision: adapted_code
+  - Reason: moves primary telemetry from bottom-center overlay into the right diagnostics HUD stack
+- src/components/fleet/orbital-graph.module.css
+  - Decision: adapted_code
+  - Reason: adds a vertical primary-card variant sized for the diagnostics column
+- public GitHub
+  - Decision: rejected
+  - Reason: internal HivemindOS HUD composition tweak using local graph component
+## 2026-06-16T13:16:56.606733+00:00 - verification
+
+- Request: Stack Fleet Graph HUD, center non-Hive chat input, and make telemetry a right-side playing card
+- Source: current-project+browser-smoke
+- Selected backbone: local-project:hivemind-os
+- Note: Focused eslint and diff checks passed. Browser smoke on 127.0.0.1:5031 confirmed centered Graph chat pill and HUD below layout toggle; fixed headless desktop was blocked by dashboard token lock, and final card shape was tuned from Liam's desktop screenshot.
+
+### Candidates
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: adapted_code
+  - Reason: passes graph HUD offsets and reports Fleet sub-view changes
+- src/components/fleet/orbital-graph.tsx
+  - Decision: adapted_code
+  - Reason: moves primary telemetry into diagnostics stack and limits diagnostic preview
+- src/components/fleet/orbital-graph.module.css
+  - Decision: adapted_code
+  - Reason: styles telemetry as a lower narrow playing-card aspect panel
+- src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: adapted_code
+  - Reason: only reports Hive right-panel inset while Hive sub-view is active
+- src/features/dashboard/DashboardApp.tsx
+  - Decision: adapted_code
+  - Reason: uses reported chat inset for PersistentHiveChat
+## 2026-06-16T13:29:42.396926+00:00 - implementation
+
+- Request: Finish remaining Odysseus-inspired HivemindOS improvements
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/UtilityPanels.tsx
+  - Decision: adapted_code
+  - Reason: Diagnostics panel extended with health, first-run smoke, and troubleshooting cockpit cards
+- src/lib/services/system/smoke-checklist.ts
+  - Decision: adapted_code
+  - Reason: first-run checklist derived from system health evidence
+- src/lib/services/system/troubleshooting-cookbook.ts
+  - Decision: adapted_code
+  - Reason: self-host repair cookbook captured as structured entries
+- src/lib/services/system/model-fit.ts
+  - Decision: adapted_code
+  - Reason: Fleet machine facts mapped to local/hosted model recommendations
+- src/lib/services/fusion/blind-compare.ts
+  - Decision: adapted_code
+  - Reason: blind compare slots and reveal map for Hive Fusion reliability workflows
+- src/lib/services/fusion/prompts.ts
+  - Decision: adapted_code
+  - Reason: Fusion source answers now wrapped as untrusted source data
+## 2026-06-16T13:35:27.915798+00:00 - implementation
+
+- Request: Align Fleet Graph primary telemetry playing card to the right edge
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Note: User screenshot showed the card inset from the right edge because primaryCardVertical used a 50px right margin.
+
+### Candidates
+- src/components/fleet/orbital-graph.module.css
+  - Decision: adapted_code
+  - Reason: remove the temporary right margin from the vertical telemetry card
+- public GitHub
+  - Decision: rejected
+  - Reason: single local CSS alignment fix
+## 2026-06-16T13:39:10.408448+00:00 - implementation
+
+- Request: Restore graph-view Message the hive legacy blue tone
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/components/fleet-hive/ChatPill.tsx
+  - Decision: selected
+  - Reason: already supports hive and legacy tones
+- src/features/queen-voice/PersistentHiveChat.tsx
+  - Decision: adapted_code
+  - Reason: needs a tone prop because the pill now lives app-wide
+- src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: adapted_code
+  - Reason: already tracks Fleet sub-view state for chat placement and can also report tone
+- src/features/dashboard/DashboardApp.tsx
+  - Decision: adapted_code
+  - Reason: passes Fleet-reported tone into PersistentHiveChat
+- public GitHub
+  - Decision: rejected
+  - Reason: local regression restoring existing local theme logic
+## 2026-06-16T13:45:18.862009+00:00 - implementation
+
+- Request: Lower Fleet Graph primary telemetry playing card
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/components/fleet/orbital-graph.module.css
+  - Decision: adapted_code
+  - Reason: increase vertical card top margin from 22px to 42px
+- public GitHub
+  - Decision: rejected
+  - Reason: single local HUD spacing tweak
+## 2026-06-16T13:46:42.347147+00:00 - triage
+
+- Request: Fix Fleet Map view framing and make graph the only legacy chat tone
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/components/fleet/map-view.tsx
+  - Decision: selected
+  - Reason: owns map projection and node/label placement
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: selected
+  - Reason: wraps map view in redesigned Fleet chrome
+- src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: selected
+  - Reason: tracks Fleet sub-view for app-wide chat behavior
+- src/features/queen-voice/PersistentHiveChat.tsx
+  - Decision: selected
+  - Reason: app-wide chat pill receives tone
+- public GitHub
+  - Decision: rejected
+  - Reason: internal HivemindOS regression in local map/chat wiring
+## 2026-06-16T13:48:54.256478+00:00 - implementation
+
+- Request: Fix Fleet Map view framing and make graph the only legacy chat tone
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Note: Verification pending focused lint and diff check.
+
+### Candidates
+- src/components/fleet/map-view.tsx
+  - Decision: adapted_code
+  - Reason: map now sizes to viewport when no explicit dimensions are supplied and spreads nearby projected pins
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: adapted_code
+  - Reason: redesigned chrome no longer forces map width/height to 840 square
+- src/components/fleet/FleetView.tsx
+  - Decision: adapted_code
+  - Reason: classic map also stops forcing 840 square dimensions
+- src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: adapted_code
+  - Reason: chat tone is legacy only for graph sub-view
+- src/features/queen-voice/PersistentHiveChat.tsx
+  - Decision: adapted_code
+  - Reason: app-wide chat accepts the restored tone prop
+## 2026-06-16T14:11:00.919007+00:00 - triage
+
+- Request: Fix Zero Human Companies initial empty loading state
+- Source: shared-brain+workspace
+- Selected backbone: local-project:hivemind-os
+- Note: No external source needed; bug is local state orchestration in existing feature.
+
+### Candidates
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx
+  - Decision: selected
+  - Reason: current live container owns the blocking Promise.all and can be adapted surgically
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx
+  - Decision: selected
+  - Reason: presentational masthead/portfolio loading copy explains empty-looking state
+- src/features/dashboard/views/zero-human-companies/ColonyCards.tsx
+  - Decision: selected
+  - Reason: portfolio create-card rendering explains false empty UI
+## 2026-06-16T14:14:39.268330+00:00 - implementation
+
+- Request: Fix Zero Human Companies initial empty loading state
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx
+  - Decision: adapted_code
+  - Reason: applied companies-first refresh using existing mapper/state pipeline, with approvals/agents/kanban as independent enrichment
+  - Path: `src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx`
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx
+  - Decision: adapted_code
+  - Reason: passes first-sync create-card visibility from existing loading/colonies state
+  - Path: `src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx`
+- src/features/dashboard/views/zero-human-companies/ColonyCards.tsx
+  - Decision: adapted_code
+  - Reason: keeps existing portfolio create affordance but hides it during unresolved first sync
+  - Path: `src/features/dashboard/views/zero-human-companies/ColonyCards.tsx`
+- Skills/local-control-panel-webapps/references/civitai-model-manager-base-models-and-loading.md
+  - Decision: selected-donor
+  - Reason: shared-brain precedent for avoiding false zero inventory while loading
+  - Path: `vault:/Skills/local-control-panel-webapps/references/civitai-model-manager-base-models-and-loading.md`
+- public GitHub
+  - Decision: rejected
+  - Reason: local HivemindOS state-orchestration bug with no external reusable source needed
+## 2026-06-16T14:26:27.793146+00:00 - verification
+
+- Request: Fix Zero Human Companies initial empty loading state
+- Source: current-project+browser-smoke
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused ESLint passed for ZeroHumanCompaniesView, ZeroHumanCompanies, and ColonyCards; focused git diff --check passed; static loading-flow sanity confirmed companies fetch sets loading false before enrichment allSettled and first-sync create-card gating is wired; in-app browser smoke on temporary 127.0.0.1:5032 was attempted but blocked by existing unrelated fusion-showcase/fusion.module.css CSS-module parse error.
+
+### Candidates
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx
+  - Decision: adapted_code
+  - Reason: verified companies-first paint before enrichment requests
+  - Path: `src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx`
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx
+  - Decision: adapted_code
+  - Reason: verified initialLoading gates only first-sync create-card visibility
+  - Path: `src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx`
+- src/features/dashboard/views/zero-human-companies/ColonyCards.tsx
+  - Decision: adapted_code
+  - Reason: verified Portfolio can hide NewColonyCard without removing it for normal empty state
+  - Path: `src/features/dashboard/views/zero-human-companies/ColonyCards.tsx`
+## 2026-06-16T14:27:01.657881+00:00 - public-search
+
+- Request: React TypeScript edit company treasury budget members modal
+- Source: public-github
+- Query: `React TypeScript edit company treasury budget members modal`
+- Decision: retrieved
+- Reason: Retrieved 5 public candidates from GitHub search.
+
+### Candidates
+- EnhancedJax/Bagels (2812 stars, Python, GNU General Public License v3.0)
+  - URL: https://github.com/EnhancedJax/Bagels
+  - Description: Powerful expense tracker that lives in your terminal.
+- rafsoh/dimeApp (1788 stars, Swift, GNU General Public License v3.0)
+  - URL: https://github.com/rafsoh/dimeApp
+  - Description: Dime is a beautiful expense tracker built with iOS design guidelines in mind.
+- Tanq16/ExpenseOwl (1445 stars, HTML, MIT License)
+  - URL: https://github.com/Tanq16/ExpenseOwl
+  - Description: Extremely simple, self-hosted expense tracker with a beautiful UI.
+- jakubgarfield/expenses (1280 stars, JavaScript, MIT License)
+  - URL: https://github.com/jakubgarfield/expenses
+  - Description: 💰Expense tracker using Google Sheets 📉 as a storage written in React
+- williamlmao/plaid-to-gsheets (105 stars, JavaScript, MIT License)
+  - URL: https://github.com/williamlmao/plaid-to-gsheets
+  - Description: Automate a personal finance dashboard using the Plaid API, Google Sheets, and Data Studio. Build transformation rules to categorize everything to your liking. Easily add data from non-plaid sources. This system takes a bit of work to set up
+## 2026-06-16T14:35:59.111510+00:00 - implementation
+
+- Request: Add a way to edit everything in the Zero Human Company treasury section
+- Source: current-workspace
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/zero-human-companies/Modals.tsx
+  - Decision: adapted_code
+  - Reason: expanded existing Create/Edit modal primitives, identity fields, and crew row budget controls into a full-company editor
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx
+  - Decision: adapted_code
+  - Reason: reused existing /api/companies upsert mutation path for broader save payload
+- src/lib/services/companies-store.ts
+  - Decision: adapted_code
+  - Reason: reused existing normalization/merge semantics and added clearable field handling
+- public-github:expense-tracker candidates
+  - Decision: rejected
+  - Reason: wrong domain/framework fit; current HivemindOS module already provides the concrete editable company patterns
+## 2026-06-16T14:35:59.158255+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-project:hivemind-os:src/features/dashboard/views/zero-human-companies/Modals.tsx => src/features/dashboard/views/zero-human-companies/Modals.tsx, local-project:hivemind-os:src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx => src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx, local-project:hivemind-os:src/lib/services/companies-store.ts => src/lib/services/companies-store.ts
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-16T14:45:38.362997+00:00 - implementation
+
+- Request: Add small settings icons on each Zero Human Company Team agent card to edit that member
+- Source: current-workspace
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/zero-human-companies/Cockpit.tsx
+  - Decision: adapted_code
+  - Reason: reused AgentNode/OrgChart team rendering to add icon-only per-agent settings actions
+- src/features/dashboard/views/zero-human-companies/Modals.tsx
+  - Decision: adapted_code
+  - Reason: reused existing company-member edit fields and modal primitives for a focused agent settings modal
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx
+  - Decision: adapted_code
+  - Reason: reused existing controlled modal router and company edit save path
+## 2026-06-16T14:47:42.496871+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-project:hivemind-os:src/features/dashboard/views/zero-human-companies/Cockpit.tsx => src/features/dashboard/views/zero-human-companies/Cockpit.tsx, local-project:hivemind-os:src/features/dashboard/views/zero-human-companies/Modals.tsx => src/features/dashboard/views/zero-human-companies/Modals.tsx, local-project:hivemind-os:src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx => src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-16T14:54:49.769839+00:00 - implementation
+
+- Request: Fix readability of the Zero Human Company Team agent row budget bar
+- Source: current-workspace
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/zero-human-companies/Cockpit.tsx
+  - Decision: adapted_code
+  - Reason: reused existing AgentNode budget row and adjusted contrast, rail, and label copy
+## 2026-06-16T14:54:50.186924+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-project:hivemind-os:src/features/dashboard/views/zero-human-companies/Cockpit.tsx => src/features/dashboard/views/zero-human-companies/Cockpit.tsx
+- Verification: Wrote ASSIMILATION.json with 1 entries and custom_code_assessment=balanced.
+## 2026-06-16T15:01:43.423007+00:00 - correction
+
+- Request: Correct Zero Human Company Treasury configure to edit only financial controls
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Note: User clarified Treasury configure should mean financial/treasury settings only, not the full company editor.
+
+### Candidates
+- src/features/dashboard/views/zero-human-companies/Cockpit.tsx
+  - Decision: adapted_code
+  - Reason: existing Treasury tab and handler contract split into finance-only configure route
+- src/features/dashboard/views/zero-human-companies/Modals.tsx
+  - Decision: adapted_code
+  - Reason: existing company edit/member save primitives reused for treasury-only budgets and agent caps modal
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx
+  - Decision: adapted_code
+  - Reason: existing modal routing extended with treasury-specific modal state
+## 2026-06-16T15:01:43.772972+00:00 - assimilation-manifest
+
+- Request: (not provided)
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-project:hivemind-os:src/features/dashboard/views/zero-human-companies/Cockpit.tsx => src/features/dashboard/views/zero-human-companies/Cockpit.tsx, local-project:hivemind-os:src/features/dashboard/views/zero-human-companies/Modals.tsx => src/features/dashboard/views/zero-human-companies/Modals.tsx, local-project:hivemind-os:src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx => src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-16T15:37:46+00:00 - implementation
+
+- Request: Extend the Fleet Hive light mode coloring through the whole app
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Note: Shared brain recall for light-mode theming preferences returned no strong theme-specific memory, so the current Fleet Hive light palette and local token systems were treated as authoritative.
+
+### Candidates
+- src/components/fleet-hive/fleet-hive.css
+  - Decision: adapted_code
+  - Reason: reused the warm-paper Fleet Hive light palette as the canonical app light-mode direction
+- src/app/globals.css
+  - Decision: adapted_code
+  - Reason: extended existing global theme variables and scoped dashboard compatibility selectors instead of rewriting every legacy Tailwind class by hand
+- src/features/dashboard/views/chat/HiveChatView.module.css
+  - Decision: adapted_code
+  - Reason: reused the module's existing token boundary to add light-mode rail, card, composer, menu, and bubble surfaces
+- src/features/dashboard/views/fusion-showcase/fusion.module.css
+  - Decision: adapted_code
+  - Reason: reused the showcase token set and replaced dark-only shell/node/chip surfaces with matching light-mode tokens
+- src/app/fusion-showcase/fusion-showcase.module.css and src/app/fusion-showcase/page.tsx
+  - Decision: adapted_code
+  - Reason: reused the standalone showcase layout and aligned its route-local light skin and card accent data with the Fleet Hive palette
+- src/app/about/about.module.css, src/app/connect-phone/page.tsx, src/app/e2e/agent-call/AgentCallE2EHarness.tsx
+  - Decision: adapted_code
+  - Reason: reused each small standalone route's existing structure and replaced hard-coded grayscale/dark inline surfaces with warm-light route tokens
+- src/app/integrations/integrations.module.css
+  - Decision: adapted_code
+  - Reason: reused the route's existing section/card class structure and added a route-scoped light theme layer
+- src/features/dashboard/views/zero-human-companies/theme.css
+  - Decision: adapted_code
+  - Reason: reused the existing Zero Human Companies theme contract and wired dashboard light mode into the governance panel
+- src/components/aeon/aeon-tokens.module.css, src/components/scheduler/scheduler-tokens.module.css, src/components/swarm/swarm-tokens.module.css, src/components/task-modal/task-modal.module.css, src/features/dashboard/views/chat/poly-market-modal/poly-modal.module.css, src/app/stake/stake.module.css
+  - Decision: adapted_code
+  - Reason: reused each component's light token block and aligned it with the shared Fleet Hive warm-paper palette
+- public-github theme candidates
+  - Decision: rejected
+  - Reason: current HivemindOS Fleet Hive view and local CSS-module token packs provide the exact product palette and route structure; external UI themes would be lower-fidelity donors
+## 2026-06-16T18:36:11.235759+00:00 - implementation
+
+- Request: Fix Zero Human Companies black first-sync loading state
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx
+  - Decision: adapted_code
+  - Reason: masthead now shows pending registry state instead of zero metrics during first sync
+  - Path: `src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx`
+- src/features/dashboard/views/zero-human-companies/ColonyCards.tsx
+  - Decision: adapted_code
+  - Reason: portfolio now renders a first-sync loading card when create card is suppressed
+  - Path: `src/features/dashboard/views/zero-human-companies/ColonyCards.tsx`
+- src/features/dashboard/views/zero-human-companies/theme.css
+  - Decision: adapted_code
+  - Reason: adds scoped ZHC loading sweep animation
+  - Path: `src/features/dashboard/views/zero-human-companies/theme.css`
+- Skills/local-control-panel-webapps/references/civitai-model-manager-base-models-and-loading.md
+  - Decision: selected-donor
+  - Reason: shared-brain precedent for not showing false zero/blank inventory during loading
+  - Path: `vault:/Skills/local-control-panel-webapps/references/civitai-model-manager-base-models-and-loading.md`
+## 2026-06-16T18:37:56.785449+00:00 - verification
+
+- Request: Fix Zero Human Companies black first-sync loading state
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused ESLint passed for ZeroHumanCompanies.tsx and ColonyCards.tsx; focused git diff --check passed; static loading-card sanity confirmed the portfolio renders LoadingColonyCard before company cards, keeps the create-card gate intact, and masthead pending placeholders are wired. In-app browser reload against 127.0.0.1:5032 was blocked by net::ERR_BLOCKED_BY_CLIENT, so visual smoke was not completed.
+
+### Candidates
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx
+  - Decision: adapted_code
+  - Reason: verified pending masthead copy and metric placeholders for first sync
+  - Path: `src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx`
+- src/features/dashboard/views/zero-human-companies/ColonyCards.tsx
+  - Decision: adapted_code
+  - Reason: verified loading card renders while create card is hidden during first sync
+  - Path: `src/features/dashboard/views/zero-human-companies/ColonyCards.tsx`
+- src/features/dashboard/views/zero-human-companies/theme.css
+  - Decision: adapted_code
+  - Reason: verified scoped loading sweep animation exists
+  - Path: `src/features/dashboard/views/zero-human-companies/theme.css`

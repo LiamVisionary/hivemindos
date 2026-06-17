@@ -1311,6 +1311,9 @@ export function useDashboardDerivedState(props: any) {
               role: beeRoleLabel(agent.beeRole),
               beeRole: agent.beeRole,
               workerClass: agent.workerClass ?? "general",
+              customWorkerClass: agent.customWorkerClass,
+              customWorkerClasses: agent.customWorkerClasses,
+              selectedCustomWorkerClassId: agent.selectedCustomWorkerClassId,
               wallet: wallet.enabled
                 ? `$${survival.effectiveBalanceUsd.toFixed(2)}`
                 : "off",

@@ -1,4 +1,5 @@
 import type { FusionAnalysis, FusionMessage, FusionParticipantResult } from "./types";
+import { untrustedContextMessage } from "@/lib/services/security/untrusted-context";
 
 /** Flatten an OpenAI-style message content into plain text. */
 export function messageText(content: FusionMessage["content"]): string {
@@ -34,6 +35,10 @@ function transcript(results: FusionParticipantResult[]): string {
     .join("\n\n");
 }
 
+function guardedTranscript(label: string, results: FusionParticipantResult[]): string {
+  return untrustedContextMessage(label, transcript(results)).content;
+}
+
 export const JUDGE_SYSTEM_PROMPT = [
   "You are the JUDGE in a compound-model pipeline. Several independent models each answered the same task.",
   "Your job is NOT to answer the task. Your job is to extract the STRUCTURE across their answers so a synthesizer can write one grounded answer.",
@@ -53,7 +58,7 @@ export function buildJudgeUserPrompt(question: string, results: FusionParticipan
     question || "(see responses)",
     "",
     "PANEL RESPONSES:",
-    transcript(results),
+    guardedTranscript("Hive Fusion panel responses", results),
     "",
     "Return the structured JSON analysis now.",
   ].join("\n");
@@ -81,7 +86,7 @@ export function buildSynthesizerUserPrompt(
     parts.push("");
   }
   parts.push("SOURCE ANSWERS (for grounding; cite facts, not their existence):");
-  parts.push(transcript(results));
+  parts.push(guardedTranscript("Hive Fusion source answers", results));
   parts.push("");
   parts.push("Write the final answer now.");
   return parts.join("\n");

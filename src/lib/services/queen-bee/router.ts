@@ -176,7 +176,7 @@ export function chooseQueenBeeDelegate(task: QueenBeeTaskIntent, machines: Queen
 }
 
 function candidateAgents(machine: QueenBeeMachine, workerClass: QueenBeeWorkerClass, task: QueenBeeTaskIntent, options: QueenBeeRouterOptions): ScoredCandidate[] {
-  if (machine.collector && machine.collector !== "ready") return [];
+  if (!isCollectorUsable(machine.collector)) return [];
   if (machine.device?.online === false) return [];
   return (machine.agents ?? [])
     .filter((agent) => agent.beeRole !== "observer" && agent.beeRole !== "human")
@@ -404,6 +404,14 @@ function normalizeProjectSlug(value: string) {
 
 function isChatCapable(agent: QueenBeeAgent, machine: QueenBeeMachine) {
   return agent.runtime === "hermes" || agent.runtimeCapabilities?.chat === true || agent.collectorCapabilities?.chat === true || machine.capabilities?.chat === true;
+}
+
+function isCollectorUsable(collector?: string) {
+  if (!collector) return true;
+  const normalized = collector.trim().toLowerCase();
+  if (!normalized || normalized === "ready") return true;
+  if (normalized.startsWith("http://") || normalized.startsWith("https://")) return true;
+  return false;
 }
 
 function normalizeWorkerClass(value?: string | null): QueenBeeWorkerClass | null {

@@ -63,6 +63,20 @@ What the Work board can do:
 - Capture quick-add text, files, images, directories, target machine, and voice transcripts directly in each lane.
 - Steer active tasks with comments, attachments, target-lane selection, and interruption/reclaim actions.
 
+### Queen Bee Swarm Goals
+
+`/swarm-goal <build request>` is the chat shortcut for turning a rough software idea into Queen Bee-orchestrated work.
+
+The command expands a short request into a more complete build brief, including:
+
+- the thing to build and likely framework
+- expected features
+- interaction, animation, and behavior details
+- mood, visual direction, environment context, and effects
+- explicit instructions for the coordinator to create a goal, split work into independent pieces, spawn parallel agents, and give each worker its own dedicated `/goal`
+
+After rewriting the prompt, HivemindOS submits it to `/api/queen-bee`. Queen Bee records the request as a Work Board task, ranks online chat-capable fleet agents by worker class and routing context, writes the normal receipt trail, and can schedule autonomous pickup for act-mode tasks. Use ordinary Queen Bee or Work Board planning flows when you want to inspect routing without starting the build.
+
 ### Loop Contracts And Eval Gates
 
 Loop-aware Work Board tasks can carry a `loop` contract. The contract records the mode (`closed`, `open`, or `optimizer`), goal, success criteria, retry/runtime budget, handoff rules, required evidence, and named eval gates.
@@ -81,6 +95,23 @@ The API exposes this through `/api/kanban` actions:
 
 - `loop-discover`: attach or update benchmark discovery, gates, success criteria, and frontier strategy.
 - `loop-record`: append/update one experiment and optional anti-pattern records, then refresh the observation summary.
+
+### Zero-Human Company Learning Loops
+
+Zero-human companies use the same loop contract as their private learning layer. When a company launches its apex goal, HivemindOS decomposes the goal into Work Board tasks and attaches an optimizer loop to each dispatched task.
+
+The default company loop is non-blocking at creation time: agents can finish useful work, while eval gates, evidence requirements, experiment candidates, and Pareto frontier metadata are preserved for later review. This gives the company a model-independent "company veteran" layer made of outcomes, artifacts, workflows, receipts, avoided failure modes, and private eval structure.
+
+The Zero Human Company cockpit summarizes that layer as token capital:
+
+- learning assets from completed work, durable outputs, committed experiments, and anti-patterns
+- workflow assets from reusable task skills and committed loop branches
+- private eval gates and pass rate
+- Evo-style frontier candidates and experiment count
+- distillation queue for completed work that should be reviewed before it becomes durable Shared Brain Memory
+- model-independence score from runtime diversity, eval structure, and Evo-compatible frontier metadata
+
+This keeps the company learning loop owned by the workspace rather than any single model. Future workers can change, but the company's charter, evals, receipts, artifacts, and reviewed memory remain portable.
 
 ## Note Intake And Work History
 

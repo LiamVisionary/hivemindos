@@ -69,7 +69,7 @@ const fusionSkills: FusionSkillCard[] = [
     slug: "hive-skill-fusion",
     description: "Turns a natural-language capability request into a durable shared skill by discovering and combining the best available tools, apps, agents, credentials, and delivery channels.",
     signal: "Reusable skill synthesis",
-    accent: "#00a89d",
+    accent: "#5f8f5a",
     kind: "skill",
   },
   {
@@ -77,7 +77,7 @@ const fusionSkills: FusionSkillCard[] = [
     slug: "hive-workflow-fusion",
     description: "Builds and runs an adaptive execution graph for a multi-step task, choosing operators, sequencing handoffs, verifying artifacts, and requiring real delivery receipts.",
     signal: "End-to-end orchestration",
-    accent: "#f4b63f",
+    accent: "#b07f1c",
     kind: "workflow",
   },
   {
@@ -85,7 +85,7 @@ const fusionSkills: FusionSkillCard[] = [
     slug: "hive-aeon-fusion",
     description: "Converts fused skills and workflows into AEON-ready background duties with cadence, readiness checks, retry policy, artifact paths, and approval gates.",
     signal: "Autonomous duty conversion",
-    accent: "#8b5cf6",
+    accent: "#7f6bb2",
     kind: "aeon",
   },
 ];

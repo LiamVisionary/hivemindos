@@ -43,31 +43,31 @@
 }
 
 :global([data-theme="hive-light"]) .root {
-  --hex-default-bg: linear-gradient(180deg, rgba(217, 200, 158, 0.78), rgba(195, 174, 128, 0.62));
-  --hex-default-border: rgba(92, 75, 45, 0.55);
+  --hex-default-bg: linear-gradient(180deg, rgba(255, 252, 246, 0.86), rgba(244, 239, 228, 0.70));
+  --hex-default-border: rgba(54, 46, 30, 0.26);
 
-  --hex-active-bg: linear-gradient(180deg, rgba(13, 142, 126, 0.36), rgba(13, 142, 126, 0.14));
-  --hex-active-border: rgba(13, 90, 78, 0.78);
-  --hex-active-glow: rgba(13, 142, 126, 0.32);
+  --hex-active-bg: linear-gradient(180deg, rgba(95, 143, 90, 0.28), rgba(95, 143, 90, 0.10));
+  --hex-active-border: rgba(95, 143, 90, 0.56);
+  --hex-active-glow: rgba(95, 143, 90, 0.24);
 
-  --hex-honey-bg: linear-gradient(180deg, rgba(184, 130, 22, 0.50), rgba(140, 94, 10, 0.22));
-  --hex-honey-border: rgba(106, 69, 5, 0.78);
-  --hex-honey-glow: rgba(184, 130, 22, 0.35);
+  --hex-honey-bg: linear-gradient(180deg, rgba(176, 127, 28, 0.28), rgba(176, 127, 28, 0.10));
+  --hex-honey-border: rgba(147, 104, 17, 0.48);
+  --hex-honey-glow: rgba(176, 127, 28, 0.24);
 
-  --hex-danger-bg: linear-gradient(180deg, rgba(180, 35, 66, 0.36), rgba(180, 35, 66, 0.12));
-  --hex-danger-border: rgba(143, 29, 44, 0.72);
+  --hex-danger-bg: linear-gradient(180deg, rgba(192, 82, 77, 0.24), rgba(192, 82, 77, 0.10));
+  --hex-danger-border: rgba(150, 58, 55, 0.48);
 
-  --panel-bg: rgba(240, 232, 216, 0.94);
-  --panel-bg-soft: rgba(232, 223, 203, 0.82);
-  --panel-bg-deep: rgba(223, 212, 190, 0.92);
-  --panel-grad: linear-gradient(180deg, rgba(240,232,216,0.94), rgba(223,212,190,0.86));
-  --panel-card-grad: linear-gradient(180deg, rgba(245,238,222,0.92), rgba(232,223,203,0.78));
-  --code-bg: rgba(232, 223, 203, 0.78);
+  --panel-bg: rgba(251, 248, 241, 0.94);
+  --panel-bg-soft: rgba(244, 239, 228, 0.82);
+  --panel-bg-deep: rgba(244, 239, 228, 0.92);
+  --panel-grad: linear-gradient(180deg, rgba(251,248,241,0.94), rgba(244,239,228,0.82));
+  --panel-card-grad: linear-gradient(180deg, rgba(255,252,246,0.88), rgba(244,239,228,0.76));
+  --code-bg: rgba(255, 252, 246, 0.78);
 
-  --hex-add-stroke: rgba(13, 90, 78, 0.78);
-  --hex-hover-stroke: rgba(13, 90, 78, 1);
-  --edge-stroke-start: rgba(13, 90, 78, 0.78);
-  --edge-stroke-end: rgba(106, 69, 5, 0.78);
+  --hex-add-stroke: rgba(95, 143, 90, 0.60);
+  --hex-hover-stroke: rgba(79, 125, 75, 0.92);
+  --edge-stroke-start: rgba(95, 143, 90, 0.60);
+  --edge-stroke-end: rgba(147, 104, 17, 0.58);
 }
 
 .hexInteractive { cursor: pointer; }

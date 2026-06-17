@@ -319,3 +319,64 @@
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
 }
+
+:global(:root[data-theme="hive-light"]) .agentPhoneSetupCard,
+:global(:root[data-theme="hive-light"]) .agentCallScheduleCard,
+:global(:root[data-theme="hive-light"]) .localTtsSection,
+:global(:root[data-theme="hive-light"]) .localTtsCard,
+:global(:root[data-theme="hive-light"]) .agentPhoneSteps li,
+:global(:root[data-theme="hive-light"]) .agentCallSwitch,
+:global(:root[data-theme="hive-light"]) .agentCallToggleRow {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .localTtsCard:hover,
+:global(:root[data-theme="hive-light"]) .localTtsCard:focus-visible,
+:global(:root[data-theme="hive-light"]) .localTtsCardSelected,
+:global(:root[data-theme="hive-light"]) .agentPhoneSteps b {
+  border-color: var(--accent-strong);
+  background: var(--button-accent);
+  color: var(--accent-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .agentCallsHeader p,
+:global(:root[data-theme="hive-light"]) .agentPhoneSetupCopy p,
+:global(:root[data-theme="hive-light"]) .agentPhoneSteps p,
+:global(:root[data-theme="hive-light"]) .agentCallMuted,
+:global(:root[data-theme="hive-light"]) .localTtsSectionHeader span,
+:global(:root[data-theme="hive-light"]) .localTtsCard small,
+:global(:root[data-theme="hive-light"]) .localTtsCard em,
+:global(:root[data-theme="hive-light"]) .localTtsCard dt,
+:global(:root[data-theme="hive-light"]) .agentPhoneQrWrap code,
+:global(:root[data-theme="hive-light"]) .agentCallToggleRow small,
+:global(:root[data-theme="hive-light"]) .agentCallTestMessage {
+  color: var(--text-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .agentCallsHeader strong,
+:global(:root[data-theme="hive-light"]) .agentPhoneSetupCopy strong,
+:global(:root[data-theme="hive-light"]) .agentCallScheduleTop strong,
+:global(:root[data-theme="hive-light"]) .localTtsSectionHeader strong,
+:global(:root[data-theme="hive-light"]) .localTtsCard strong,
+:global(:root[data-theme="hive-light"]) .localTtsCard dd,
+:global(:root[data-theme="hive-light"]) .agentPhoneSteps strong,
+:global(:root[data-theme="hive-light"]) .agentCallToggleRow strong {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .agentPhoneSetupCopy > span,
+:global(:root[data-theme="hive-light"]) .agentCallScheduleTop span,
+:global(:root[data-theme="hive-light"]) .ok,
+:global(:root[data-theme="hive-light"]) .localTtsStatusOk {
+  color: var(--success, #406f53);
+}
+
+:global(:root[data-theme="hive-light"]) .agentPhoneError,
+:global(:root[data-theme="hive-light"]) .error,
+:global(:root[data-theme="hive-light"]) .localTtsStatusError,
+:global(:root[data-theme="hive-light"]) .localTtsCard p {
+  color: var(--danger, #a23a35) !important;
+}

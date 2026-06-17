@@ -39,12 +39,13 @@ Known runtimes are defined in `src/lib/types/agent-runtime.ts`:
 
 ### Chat Swarm Commands
 
-Dashboard chat owns two HivemindOS swarm commands before the message reaches the selected runtime:
+Dashboard chat owns HivemindOS swarm commands before the message reaches the selected runtime:
 
 - `/swarm [number] <task>` selects a team of configured chat-capable agents from the current Fleet roster, skips agents with known setup issues, matches the task against existing bee worker classes, asks each selected agent for a role-specific pass, and returns one combined swarm packet in the active chat. Omit the number for automatic sizing, or lead with a number such as `/swarm 2 verify this patch` to cap the pass count.
+- `/swarm-goal <build request>` rewrites a loose build request into a fuller build prompt, appends explicit instructions for the coordinator to create a goal and spawn parallel agents with dedicated `/goal` scopes, then submits the expanded request to Queen Bee through `/api/queen-bee`. This creates a Work Board task and can trigger autonomous pickup when a matching chat-capable worker is available.
 - `/swarm-sim <scenario>` sends the scenario to the MiroShark swarm route and returns the queued simulation status so the run can be followed from chat or the Swarm view.
 
-The composer swarm button prepares `/swarm ` in the input. It does not run anything until the user sends the message. The command path records the user command, shows a pending assistant reply, and replaces it with either the swarm packet, the queued MiroShark run, or an actionable setup/error message.
+The composer swarm button prepares `/swarm ` in the input. It does not run anything until the user sends the message. The command path records the user command, shows a pending assistant reply, and replaces it with either the swarm packet, the Queen Bee submission receipt, the queued MiroShark run, or an actionable setup/error message.
 
 Test the command path with `node scripts/e2e-dashboard-swarm-command.mjs` for deterministic browser regression coverage, or `node scripts/e2e-dashboard-swarm-command.mjs --real` to discover real local Fleet agents and run the actual `/api/chat/agent-runtime` path without interception. Add `--require-completion` when the test should fail unless at least one real runtime returns assistant text.
 
@@ -110,6 +111,13 @@ How a native run works (`src/lib/services/fusion/orchestrator.ts`):
 3. **Judge** (only when ≥2 members succeed): a judge model returns JSON capturing consensus, contradictions, partial coverage, unique insights, blind spots, and a recommended focus (`prompts.ts`). Malformed judge output falls back gracefully and never aborts the run.
 4. **Synthesize**: a synthesizer model streams the final answer grounded in the analysis and the panel's source answers. If synthesis itself fails, Fusion returns the strongest panel answer rather than erroring.
 
+Blind compare: the Fusion service layer can now prepare anonymized answer slots
+through `/api/fusion/blind-compare`. The route hides model labels until the
+operator records a slot choice, then reveals the slot-to-model map so votes can
+feed future reliability and routing work without biasing the initial judgement.
+Fusion's judge and synthesizer prompts also wrap panel/source answers as
+untrusted source data before using them for analysis.
+
 Customising the panel: set `agent.fusion` (`FusionAgentConfig`) to override `participants`, `judge`, `synthesizer` (each a `{ provider, model }` from the Fusion catalog), `maxParticipants` (default 3), or `mode` (`"native"` | `"openrouter"`) — mirroring OpenRouter's custom-panel option.
 
 Streaming: the synthesizer answer streams as the assistant message, while each panel member and the judge surface as tool/reasoning process events (the panel plan and judge analysis appear as reasoning chips). The orchestrator is dependency-injectable and covered by `scripts/test-fusion.mjs` (`pnpm test:fusion`).
@@ -120,6 +128,7 @@ Streaming: the synthesizer answer streams as the assistant message, while each p
 - Adaptive OpenRouter free-model routing with learned reliability, capacity failover, and quality grading.
 - Streaming runtime responses where available.
 - `/swarm [number]` role-specific parallel passes across the best-suited configured chat-capable agents.
+- `/swarm-goal <build request>` prompt expansion plus Queen Bee Work Board delegation for parallel build tasks.
 - Session resume and session search.
 - Attachments and linked directories for task context.
 - Send-to-Kanban from chat messages.

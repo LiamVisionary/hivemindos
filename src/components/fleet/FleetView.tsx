@@ -90,6 +90,8 @@ export interface FleetViewProps {
   onSendMessage?: (text: string) => void;
   /** Optional wallet configs used by the Fleet Hive selected-agent holdings panel. */
   walletsByAgent?: Record<string, AgentWalletConfig>;
+  /** Optional host-provided Hive/Classic switcher, rendered in the classic stage toolbar. */
+  layoutToggle?: React.ReactNode;
   onDuplicate?: (m: FleetMachine, a: FleetAgent) => void;
   onRemove?: (m: FleetMachine, a: FleetAgent, depth?: AeonDeleteDepth, onProgress?: (progress: AeonDeleteProgress) => void) => void | Promise<AeonDeleteResult | void>;
   onDismissAlert?: (alert: FleetAlert) => void;
@@ -144,6 +146,7 @@ export function FleetView({
   onOpenWallet,
   onEditSettings,
   onOpenQueenSettings,
+  layoutToggle,
   onDuplicate,
   onRemove,
   onDismissAlert,
@@ -556,10 +559,11 @@ export function FleetView({
             style={{ minHeight: 0 }}
           >
             <div className={styles.stageToolbar}>
-              <div className={styles.monoCap} style={{ color: "var(--accent-strong)" }}>
-                <span className={`${styles.dot} ${styles.dotLive}`} style={{ color: "var(--accent)" }} />
-                &nbsp; {refreshing ? "scanning swarm" : "live swarm"}
-              </div>
+              {layoutToggle ? (
+                <div>{layoutToggle}</div>
+              ) : (
+                <div aria-hidden="true" />
+              )}
               <div className="flex" style={{ gap: 6 }}>
                 {(["hive", "graph", "map", "list"] as ViewMode[]).map((v) => (
                   <button
@@ -653,7 +657,6 @@ export function FleetView({
                   selectionTooltipKey={selectionTooltipKey}
                   onOpenSelectionTooltip={setSelectionTooltipKey}
                   onDismissSelectionTooltip={() => setSelectionTooltipKey(null)}
-                  width={840} height={840}
                 />
               )}
               {!initialLoading && view === "list" && (

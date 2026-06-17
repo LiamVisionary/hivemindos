@@ -80,6 +80,7 @@ function trimmed(value: unknown): string | undefined {
 }
 
 function normalizeAlignment(value: unknown): number | undefined {
+  if (value === null || value === "") return undefined;
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return undefined;
   return Math.max(0, Math.min(100, Math.round(numeric)));
@@ -102,7 +103,7 @@ function normalizeApexGoal(value: unknown): CompanyApexGoal | undefined {
   const current = trimmed(raw.current);
   // Keep the goal if there's any substance to it, even without an explicit title.
   if (!title && !metric && !target) return undefined;
-  const progress = Number(raw.progress);
+  const progress = raw.progress === null || raw.progress === "" ? NaN : Number(raw.progress);
   return {
     title: title || metric || "Apex goal",
     metric,
@@ -234,7 +235,7 @@ export type UpsertCompanyInput = {
   sector?: string;
   blurb?: string;
   status?: CompanyStatus | string;
-  alignment?: number;
+  alignment?: number | string | null;
   apexGoal?: CompanyApexGoal;
   revenue?: CompanyRevenue;
   members?: CompanyMember[];
@@ -260,7 +261,7 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     id: existing?.id ?? input.id?.trim() ?? randomUUID(),
     name,
     agentIds,
-    charter: input.charter?.trim() || existing?.charter,
+    charter: input.charter !== undefined ? trimmed(input.charter) : existing?.charter,
     dailyBudgetUsd: input.dailyBudgetUsd !== undefined ? normalizeBudget(input.dailyBudgetUsd) : existing?.dailyBudgetUsd,
     monthlyBudgetUsd: input.monthlyBudgetUsd !== undefined ? normalizeBudget(input.monthlyBudgetUsd) : existing?.monthlyBudgetUsd,
     totalBudgetUsd: input.totalBudgetUsd !== undefined ? normalizeBudget(input.totalBudgetUsd) : existing?.totalBudgetUsd,

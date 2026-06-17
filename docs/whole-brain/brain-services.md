@@ -31,11 +31,13 @@ For code work, Queen Bee uses the GitLawb/project registry as the project graph 
 
 ## Context Index
 
-The context index is the lightweight retrieval surface for code, tools, runtime capabilities, docs, connected apps, and shared skills.
+The context index is the lightweight retrieval surface for code, tools, runtime capabilities, docs, connected apps, shared skills, and command delivery channels.
 
 It helps agents find the right surface before they load huge files or schemas.
 
 Primary source: `src/lib/services/context-index.ts`
+
+Capability search can use context-index hits to select dashboard slash commands as delivery channels. For example, `/swarm-goal <build request>` is indexed as a dashboard/Queen Bee delivery path for build requests that should be rewritten, split across parallel agents, and recorded as Work Board tasks through `/api/queen-bee`.
 
 ## Shared Brain Memory
 

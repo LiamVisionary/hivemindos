@@ -22,20 +22,20 @@
   --tm-f-mono: ui-monospace,"JetBrains Mono",SFMono-Regular,Menlo,monospace;
 }
 :global([data-theme="hive-light"]) .root {
-  --tm-fg: #2a1c05;
-  --tm-fg-2: #4a3a1f;
-  --tm-fg-3: #6e5c3d;
-  --tm-fg-4: #8a7a5a;
-  --tm-line: rgba(92,75,45,0.18);
-  --tm-line-2: rgba(92,75,45,0.32);
-  --tm-bg-2: #ede4c8;
-  --tm-bg-3: #ddd0a8;
-  --tm-bg-4: #d0c190;
-  --tm-panel: rgba(240,232,216,0.97);
-  --tm-panel-soft: rgba(232,223,203,0.82);
-  --tm-honey-border: rgba(106,69,5,0.78);
-  --tm-cyan-3: #0c5a4e;
-  --tm-add: rgba(13,90,78,0.78);
+  --tm-fg: #221d14;
+  --tm-fg-2: #5e574b;
+  --tm-fg-3: #867d6e;
+  --tm-fg-4: #a59b89;
+  --tm-line: rgba(54,46,30,0.10);
+  --tm-line-2: rgba(54,46,30,0.16);
+  --tm-bg-2: #fbf8f1;
+  --tm-bg-3: #f4efe4;
+  --tm-bg-4: #e8dfcf;
+  --tm-panel: rgba(251,248,241,0.97);
+  --tm-panel-soft: rgba(244,239,228,0.82);
+  --tm-honey-border: rgba(147,104,17,0.48);
+  --tm-cyan-3: #376739;
+  --tm-add: rgba(95,143,90,0.60);
 }
 .monoCap {
   font-family: var(--tm-f-mono);

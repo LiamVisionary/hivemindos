@@ -17,16 +17,22 @@ export const HIVE_W = 1012;
 export const HIVE_H = 980;
 export const QX = 506;
 export const QY = 474;
-export const RING = 238; // machine ring radius
 
 // Machines and agents share ONE cell size so they tessellate seamlessly.
-export const CELL = 85;
+const CELL_SCALE = 1.3;
+const BASE_CELL = 85;
+const BASE_RING = 238;
+const BASE_ADD_MACHINE_GAP = 122;
+const BASE_CLEARANCE_PAD = 16;
+
+export const CELL = BASE_CELL * CELL_SCALE;
+export const RING = BASE_RING * CELL_SCALE; // machine ring radius
 export const MACHINE_SIZE = CELL;
 export const AGENT_SIZE = CELL;
 
 const APO = 0.43;
 const QUEEN_SIZE = 150;
-const QUEEN_CLEARANCE = QUEEN_SIZE / 2 + CELL / 2 + 16;
+const QUEEN_CLEARANCE = QUEEN_SIZE / 2 + CELL / 2 + BASE_CLEARANCE_PAD * CELL_SCALE;
 
 export interface Pt {
   x: number;
@@ -69,7 +75,11 @@ export function frAgentSlots(mx: number, my: number, ang: number, n: number): Pt
   const norm = ((ang % 360) + 360) % 360;
   const startDir = ((Math.round(norm / 60) % 6) + 6) % 6;
   const out: Pt[] = [];
-  for (let ring = 1; out.length < n; ring++) {
+  const isConnectedSlot = (pos: Pt) =>
+    Math.hypot(pos.x - mx, pos.y - my) <= dist * 1.08
+    || out.some((slot) => Math.hypot(pos.x - slot.x, pos.y - slot.y) <= dist * 1.08);
+  const maxRing = Math.max(8, n + 6);
+  for (let ring = 1; out.length < n && ring <= maxRing; ring++) {
     const s = step(startDir);
     let px = mx + s.x * ring;
     let py = my + s.y * ring;
@@ -77,7 +87,7 @@ export function frAgentSlots(mx: number, my: number, ang: number, n: number): Pt
       const walk = step(startDir + 2 + side);
       for (let i = 0; i < ring && out.length < n; i++) {
         const pos = { x: px, y: py };
-        if (frClearsQueen(pos)) out.push(pos);
+        if (frClearsQueen(pos) && isConnectedSlot(pos)) out.push(pos);
         px += walk.x;
         py += walk.y;
       }
@@ -96,7 +106,7 @@ export function frClearsQueen(pos: Pt): boolean {
  *  to land directly below the Queen. */
 export function frAddMachinePos(machines: HiveMachine[]): Pt {
   const total = machines.length;
-  const radius = RING + 122; // just beyond the agent petals
+  const radius = RING + BASE_ADD_MACHINE_GAP * CELL_SCALE; // just beyond the agent petals
   if (total === 0) return frPolar(QX, QY, radius, 90); // straight down when empty
   const angs = machines
     .map((_, i) => ((frMachineAngle(i, total) % 360) + 360) % 360)

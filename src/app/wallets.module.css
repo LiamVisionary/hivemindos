@@ -1478,3 +1478,137 @@
 :global(:root[data-theme="hive-light"]) .hiveRailAgent {
   border-color: rgba(185, 139, 47, 0.2);
 }
+
+:global(:root[data-theme="hive-light"]) .walletSegmented,
+:global(:root[data-theme="hive-light"]) .vaultSegmented,
+:global(:root[data-theme="hive-light"]) .usagePanel,
+:global(:root[data-theme="hive-light"]) .hiveRailLegacy,
+:global(:root[data-theme="hive-light"]) .hiveRailAgent,
+:global(:root[data-theme="hive-light"]) .walletRunbook section,
+:global(:root[data-theme="hive-light"]) .walletRunbook details,
+:global(:root[data-theme="hive-light"]) .survivalStrip > div {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .walletSegmentActive,
+:global(:root[data-theme="hive-light"]) .vaultSegment.walletSegmentActive {
+  background: rgba(176, 127, 28, 0.16);
+  color: var(--accent-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .walletSegment,
+:global(:root[data-theme="hive-light"]) .vaultSegment,
+:global(:root[data-theme="hive-light"]) .walletBackBtn,
+:global(:root[data-theme="hive-light"]) .hiveRailStats dt,
+:global(:root[data-theme="hive-light"]) .hiveRailDetails dt,
+:global(:root[data-theme="hive-light"]) .hiveRailBlurb,
+:global(:root[data-theme="hive-light"]) .hiveRailLegacy p,
+:global(:root[data-theme="hive-light"]) .honeyAgentPanel p,
+:global(:root[data-theme="hive-light"]) .survivalStrip span,
+:global(:root[data-theme="hive-light"]) .survivalStrip p,
+:global(:root[data-theme="hive-light"]) .walletForm small,
+:global(:root[data-theme="hive-light"]) .walletRunbook p,
+:global(:root[data-theme="hive-light"]) .walletFormHeader p,
+:global(:root[data-theme="hive-light"]) .walletEmpty {
+  color: var(--text-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .walletSegment:hover,
+:global(:root[data-theme="hive-light"]) .walletBackBtn:hover,
+:global(:root[data-theme="hive-light"]) .hiveRailDetails summary,
+:global(:root[data-theme="hive-light"]) .walletAgentButton strong,
+:global(:root[data-theme="hive-light"]) .walletFormHeader h3,
+:global(:root[data-theme="hive-light"]) .walletRunbook h3,
+:global(:root[data-theme="hive-light"]) .walletEmpty strong {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .walletBackBtn:hover,
+:global(:root[data-theme="hive-light"]) .walletActions button:not([data-slot="button"]):hover {
+  background: rgba(176, 127, 28, 0.12);
+  color: var(--accent-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveLedgerDormant,
+:global(:root[data-theme="hive-light"]) .hiveRailDormant {
+  border-color: var(--line);
+  background: var(--surface-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveLedgerDormant::before {
+  background: rgba(54, 46, 30, 0.24);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveLedgerGrid,
+:global(:root[data-theme="hive-light"]) .hiveLedgerMeta,
+:global(:root[data-theme="hive-light"]) .walletRunbook section,
+:global(:root[data-theme="hive-light"]) .walletRunbook details,
+:global(:root[data-theme="hive-light"]) .walletDisclosure[open],
+:global(:root[data-theme="hive-light"]) .walletDisclosure[open] summary {
+  border-color: var(--line);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveLedgerGrid > *:not(:first-child),
+:global(:root[data-theme="hive-light"]) .honeyAgentGrid span + span {
+  border-left-color: rgba(176, 127, 28, 0.18);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveRailRecipient input {
+  border-color: var(--line);
+  background: var(--field);
+  color: var(--foreground);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.34);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveRailRecipient input:focus,
+:global(:root[data-theme="hive-light"]) .walletForm input:focus,
+:global(:root[data-theme="hive-light"]) .walletForm select:focus,
+:global(:root[data-theme="hive-light"]) .walletForm textarea:focus {
+  border-color: var(--accent-strong);
+  outline-color: rgba(176, 127, 28, 0.24);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveRailRecipient input[aria-invalid="true"] {
+  border-color: rgba(192, 82, 77, 0.64);
+}
+
+:global(:root[data-theme="hive-light"]) .hiveRailClaimStatus,
+:global(:root[data-theme="hive-light"]) .walletAutopay,
+:global(:root[data-theme="hive-light"]) .walletPrimaryAction,
+:global(:root[data-theme="hive-light"]) .walletDisclosure,
+:global(:root[data-theme="hive-light"]) .walletActions button:not([data-slot="button"]) {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .walletAgentButton {
+  border-left-color: transparent;
+  background: transparent;
+  color: var(--text-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .walletAgentButton span,
+:global(:root[data-theme="hive-light"]) .walletAgentButton small {
+  color: var(--muted);
+}
+
+:global(:root[data-theme="hive-light"]) .walletAgentButton[data-tier="normal"]::before {
+  background: var(--live);
+}
+
+:global(:root[data-theme="hive-light"]) .survivalStrip.normal > div {
+  border-left-color: var(--live);
+}
+
+:global(:root[data-theme="hive-light"]) .walletSkeletonPanel {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+:global(:root[data-theme="hive-light"]) .walletSkeletonBlock,
+:global(:root[data-theme="hive-light"]) .walletSkeletonCircle {
+  background: linear-gradient(90deg, rgba(92, 75, 45, 0.14), rgba(176, 127, 28, 0.18), rgba(92, 75, 45, 0.14));
+}

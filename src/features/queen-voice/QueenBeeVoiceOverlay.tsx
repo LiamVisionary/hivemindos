@@ -19,8 +19,8 @@ import { useQueenBeeRealtime } from "./use-queen-bee-realtime";
 import {
   useQueenBeeVoice,
   type QueenVoicePhase,
-  type QueenVoiceTurn,
 } from "./use-queen-bee-voice";
+import { useQueenChat, type QueenChatTurn } from "./queen-chat-store";
 import styles from "./queen-voice.module.css";
 
 const QUEEN_VOICE_ACTIVATION_SOUND_SRC = "/audio/sfx/scifi-ping.wav";
@@ -81,7 +81,7 @@ function TranscriptTurns({
   thinkingLabel,
   onShowDetail,
 }: {
-  turns: QueenVoiceTurn[];
+  turns: QueenChatTurn[];
   minimized: boolean;
   onToggleMinimize: () => void;
   thinking: boolean;
@@ -129,9 +129,15 @@ function TranscriptTurns({
                 {turn.who === "queen" ? "Queen Bee" : "You"}
               </span>
               <p
-                className={`${styles.turnText} ${turn.live ? styles.turnTextLive : ""}`}
+                className={`${styles.turnText} ${turn.live ? styles.turnTextLive : ""} ${turn.pending && !turn.text ? styles.turnTextThinking : ""}`}
               >
-                {turn.text}
+                {turn.pending && !turn.text ? (
+                  // steady label keeps the bubble height stable while the dots
+                  // animation cycles through its empty frame
+                  <>Thinking<span className={styles.thinkingDots} aria-hidden="true" /></>
+                ) : (
+                  turn.text
+                )}
               </p>
               {turn.detail ? (
                 <button
@@ -281,6 +287,44 @@ export function QueenBeeVoiceOverlay({
   const pipeline = useQueenBeeVoice(open && !realtimeMode, muted);
   const voiceState = realtimeMode ? realtime : pipeline;
 
+  // The shared Queen conversation (typed + voice live here together).
+  const chat = useQueenChat();
+  const { upsertTurn: chatUpsertTurn, removeTurn: chatRemoveTurn } = chat;
+
+  // Bridge voice turns into the shared store (append-only diff). Namespace ids
+  // per voice session so turns from different sessions never collide, and mirror
+  // the hooks' echo-drops by removing ids that vanished since the last tick.
+  const voiceSeenRef = React.useRef<Set<string>>(new Set());
+  const voiceSessionRef = React.useRef(0);
+  const prevSessionNonceRef = React.useRef(sessionNonce);
+  const prevRealtimeModeRef = React.useRef(realtimeMode);
+  React.useEffect(() => {
+    if (sessionNonce !== prevSessionNonceRef.current || realtimeMode !== prevRealtimeModeRef.current) {
+      prevSessionNonceRef.current = sessionNonce;
+      prevRealtimeModeRef.current = realtimeMode;
+      voiceSessionRef.current += 1;
+      voiceSeenRef.current = new Set();
+    }
+    const sid = voiceSessionRef.current;
+    const currentIds = new Set<string>();
+    for (const turn of voiceState.turns) {
+      const storeId = `voice-${sid}-${turn.id}`;
+      currentIds.add(storeId);
+      chatUpsertTurn({
+        id: storeId,
+        who: turn.who,
+        text: turn.text,
+        live: turn.live,
+        detail: turn.detail,
+        source: "voice",
+      });
+    }
+    for (const prevId of voiceSeenRef.current) {
+      if (!currentIds.has(prevId)) chatRemoveTurn(prevId);
+    }
+    voiceSeenRef.current = currentIds;
+  }, [voiceState.turns, sessionNonce, realtimeMode, chatUpsertTurn, chatRemoveTurn]);
+
   // When Queen Bee starts working a tool call she goes silent for several
   // seconds; cue a soft sound and a held filler line so the pause reads as
   // "working", not "stuck".
@@ -329,32 +373,37 @@ export function QueenBeeVoiceOverlay({
   }, []);
 
   React.useEffect(() => {
-    if (!open) return undefined;
+    if (!open && detailContent === null) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      // The details modal closes first; a second Escape ends the chat.
+      // The details modal closes first; a second Escape ends a live voice chat.
       if (detailContent !== null) setDetailContent(null);
-      else setOpen(false);
+      else if (open) setOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, detailContent]);
 
-  if (!open || typeof document === "undefined") return null;
+  if (typeof document === "undefined") return null;
+  // Always-mounted: the transcript shows for typed turns too, not just voice.
+  if (!open && chat.turns.length === 0) return null;
 
   return createPortal(
     <>
-      <QueenVoiceGlow active={open} />
+      {open ? <QueenVoiceGlow active={open} /> : null}
       <div
         className={styles.overlayShell}
+        // Lift the whole stack clear of the "Message the hive" pill (bottom:26,
+        // ~52px tall) so the chat history sits above it.
+        style={{ paddingBottom: 96 }}
         role="dialog"
         aria-label="Queen Bee voice chat"
       >
         <TranscriptTurns
-          turns={voiceState.turns}
+          turns={chat.turns}
           minimized={minimized}
           onToggleMinimize={() => setMinimized((current) => !current)}
-          thinking={voiceState.phase === "thinking"}
+          thinking={open && voiceState.phase === "thinking"}
           thinkingLabel={thinkingFiller}
           onShowDetail={setDetailContent}
         />
@@ -397,47 +446,49 @@ export function QueenBeeVoiceOverlay({
             }}
           />
         ) : null}
-        <div className={styles.controlBar}>
-          <span className={styles.statusBadge}>
-            <Crown size={14} aria-hidden="true" />
-            <span
-              className={`${styles.statusDot} ${statusDotClass(voiceState.phase)}`}
-            />
-            {statusLabel(voiceState.phase, muted, voiceState.speechDetected)}
-          </span>
-          {voiceState.phase === "error" && voiceState.error ? (
-            <p className={styles.errorText}>{voiceState.error}</p>
-          ) : null}
-          <button
-            type="button"
-            className={`${styles.controlButton} ${voicePickerOpen ? styles.controlButtonActive : ""}`}
-            onClick={() => setVoicePickerOpen((current) => !current)}
-            aria-label="Queen Bee voice settings"
-          >
-            <Settings2 size={14} aria-hidden="true" />
-            Voice
-          </button>
-          <button
-            type="button"
-            className={`${styles.controlButton} ${muted ? styles.controlButtonActive : ""}`}
-            onClick={() => setMuted((current) => !current)}
-          >
-            {muted ? (
-              <MicOff size={14} aria-hidden="true" />
-            ) : (
-              <Mic size={14} aria-hidden="true" />
-            )}
-            {muted ? "Unmute" : "Mute"}
-          </button>
-          <button
-            type="button"
-            className={`${styles.controlButton} ${styles.controlButtonEnd}`}
-            onClick={() => setOpen(false)}
-          >
-            <X size={14} aria-hidden="true" />
-            End
-          </button>
-        </div>
+        {open ? (
+          <div className={styles.controlBar}>
+            <span className={styles.statusBadge}>
+              <Crown size={14} aria-hidden="true" />
+              <span
+                className={`${styles.statusDot} ${statusDotClass(voiceState.phase)}`}
+              />
+              {statusLabel(voiceState.phase, muted, voiceState.speechDetected)}
+            </span>
+            {voiceState.phase === "error" && voiceState.error ? (
+              <p className={styles.errorText}>{voiceState.error}</p>
+            ) : null}
+            <button
+              type="button"
+              className={`${styles.controlButton} ${voicePickerOpen ? styles.controlButtonActive : ""}`}
+              onClick={() => setVoicePickerOpen((current) => !current)}
+              aria-label="Queen Bee voice settings"
+            >
+              <Settings2 size={14} aria-hidden="true" />
+              Voice
+            </button>
+            <button
+              type="button"
+              className={`${styles.controlButton} ${muted ? styles.controlButtonActive : ""}`}
+              onClick={() => setMuted((current) => !current)}
+            >
+              {muted ? (
+                <MicOff size={14} aria-hidden="true" />
+              ) : (
+                <Mic size={14} aria-hidden="true" />
+              )}
+              {muted ? "Unmute" : "Mute"}
+            </button>
+            <button
+              type="button"
+              className={`${styles.controlButton} ${styles.controlButtonEnd}`}
+              onClick={() => setOpen(false)}
+            >
+              <X size={14} aria-hidden="true" />
+              End
+            </button>
+          </div>
+        ) : null}
       </div>
     </>,
     document.body,

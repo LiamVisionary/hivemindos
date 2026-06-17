@@ -5,6 +5,7 @@ import type { ComponentType, Dispatch, ElementType, MutableRefObject, SetStateAc
 import { AgentCallModal, type AgentCallLiveKit, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent } from "@/components/fleet/agent-call-modal";
 import type { FleetViewProps } from "@/components/fleet/FleetView";
 import { FleetHiveView } from "@/components/fleet-hive";
+import { useFrTheme } from "@/components/fleet-hive/use-fr-theme";
 import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import type { AeonDeleteDepth, AeonDeleteProgress, AeonDeleteResult } from "@/components/fleet/roster";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
@@ -25,6 +26,8 @@ type FleetViewData = {
   ticker: NonNullable<FleetViewProps["ticker"]>;
   edges: NonNullable<FleetViewProps["edges"]>;
 };
+type FleetHiveViewMode = "hive" | "graph" | "map" | "list";
+type FleetChatTone = "hive" | "legacy";
 
 type TailnetCleanupBanner = {
   visible: boolean;
@@ -69,6 +72,8 @@ type AgentsPanelProps = {
   machineGroups: MachineGroup[];
   markNotificationRead: (id: string) => void;
   openMachineInitModal: () => void;
+  onChatOpenSpaceRightInsetChange?: (inset: number) => void;
+  onChatToneChange?: (tone: FleetChatTone) => void;
   onFixSyncIssue: NonNullable<FleetViewProps["onFixSyncIssue"]>;
   onRecentAgentArrivalSeen?: FleetViewProps["onRecentAgentArrivalSeen"];
   onToggleFleetAutoUpdatePaused?: () => void;
@@ -182,6 +187,8 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     machineGroups,
     markNotificationRead,
     openMachineInitModal,
+    onChatOpenSpaceRightInsetChange,
+    onChatToneChange,
     onFixSyncIssue,
     onRecentAgentArrivalSeen,
     onToggleFleetAutoUpdatePaused,
@@ -226,6 +233,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
   // Fleet layout: the redesigned "hive" is the default; "classic" falls back to
   // the legacy three-column FleetView. The choice is persisted across sessions.
   const [fleetLayout, setFleetLayout] = useState<"hive" | "classic">("hive");
+  const [fleetHiveViewMode, setFleetHiveViewMode] = useState<FleetHiveViewMode>("hive");
   useEffect(() => {
     let cancelled = false;
     void loadDashboardStateSnapshot().then((snapshot) => {
@@ -237,16 +245,22 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
   }, []);
   const chooseFleetLayout = useCallback((layout: "hive" | "classic") => {
     setFleetLayout(layout);
+    if (layout === "hive") setFleetHiveViewMode("hive");
     void saveDashboardStateValue(FLEET_LAYOUT_STORAGE_KEY, layout);
   }, []);
 
-  // "Message the hive": dispatch a task to the Queen orchestrator when present.
-  const handleSendHiveMessage = useCallback((text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    if (queenAgent) startAgentWorkChat(queenAgent.id, trimmed);
-    else if (displayAgents[0]) startAgentChat(displayAgents[0].id, { fresh: true });
-  }, [displayAgents, queenAgent, startAgentChat, startAgentWorkChat]);
+  // "Message the hive" now lives app-wide (PersistentHiveChat at the dashboard
+  // root) and routes straight to the Queen, so the fleet view no longer owns it.
+  useEffect(() => {
+    const rightInset = fleetLayout === "hive" && fleetHiveViewMode === "hive" ? 340 : 0;
+    onChatOpenSpaceRightInsetChange?.(rightInset);
+  }, [fleetHiveViewMode, fleetLayout, onChatOpenSpaceRightInsetChange]);
+  useEffect(() => () => onChatOpenSpaceRightInsetChange?.(0), [onChatOpenSpaceRightInsetChange]);
+  useEffect(() => {
+    const tone: FleetChatTone = fleetLayout === "hive" && fleetHiveViewMode === "graph" ? "legacy" : "hive";
+    onChatToneChange?.(tone);
+  }, [fleetHiveViewMode, fleetLayout, onChatToneChange]);
+  useEffect(() => () => onChatToneChange?.("hive"), [onChatToneChange]);
 
   const callAgentOnDashboard = useCallback(async (machine: FleetPanelMachine, fleetAgent: FleetPanelAgent): Promise<AgentPhoneCallResult> => {
     const profile = findCallProfile({
@@ -503,12 +517,9 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
           ) : null}
           <div className={`${fleetClass("fleetViewport")} fleetViewportShell`} style={{ position: "relative" }}>
             {fleetLayout === "hive" ? (
-              <FleetHiveView {...fleetProps} onSendMessage={handleSendHiveMessage} layoutToggle={layoutToggle} />
+              <FleetHiveView {...fleetProps} layoutToggle={layoutToggle} onViewModeChange={setFleetHiveViewMode} />
             ) : (
-              <>
-                <FleetView {...fleetProps} />
-                <div style={{ position: "absolute", top: 12, right: 18, zIndex: 50 }}>{layoutToggle}</div>
-              </>
+              <FleetView {...fleetProps} layoutToggle={layoutToggle} />
             )}
           </div>
           {agentCallSession ? (
@@ -551,6 +562,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
 }
 
 function FleetLayoutToggle({ layout, onChoose }: { layout: "hive" | "classic"; onChoose: (layout: "hive" | "classic") => void }) {
+  const isLight = useFrTheme() === "light";
   const options: Array<{ id: "hive" | "classic"; label: string; title: string }> = [
     { id: "hive", label: "Hive", title: "Redesigned hive layout" },
     { id: "classic", label: "Classic", title: "Legacy three-column layout" },
@@ -564,8 +576,8 @@ function FleetLayoutToggle({ layout, onChoose }: { layout: "hive" | "classic"; o
         gap: 2,
         padding: 2,
         borderRadius: 9999,
-        border: "1px solid rgba(148,163,184,0.28)",
-        background: "rgba(12,13,17,0.55)",
+        border: isLight ? "1px solid rgba(54,46,30,0.18)" : "1px solid rgba(148,163,184,0.28)",
+        background: isLight ? "rgba(251,248,241,0.72)" : "rgba(12,13,17,0.55)",
         backdropFilter: "blur(8px)",
         WebkitBackdropFilter: "blur(8px)",
       }}
@@ -589,8 +601,12 @@ function FleetLayoutToggle({ layout, onChoose }: { layout: "hive" | "classic"; o
               fontWeight: 600,
               letterSpacing: "0.04em",
               textTransform: "uppercase",
-              background: active ? "rgba(231,180,92,0.16)" : "transparent",
-              color: active ? "#e7b45c" : "rgba(148,163,184,0.9)",
+              background: active
+                ? (isLight ? "rgba(176,127,28,0.16)" : "rgba(231,180,92,0.16)")
+                : "transparent",
+              color: active
+                ? (isLight ? "#936811" : "#e7b45c")
+                : (isLight ? "#5e574b" : "rgba(148,163,184,0.9)"),
               transition: "background 140ms ease, color 140ms ease",
             }}
           >

@@ -160,3 +160,45 @@
 .statusNoteError {
   color: #ff6b5e;
 }
+
+:global(:root[data-theme="hive-light"]) .backdrop {
+  background: rgba(34, 29, 20, 0.34);
+  backdrop-filter: blur(14px) saturate(1.05);
+}
+
+:global(:root[data-theme="hive-light"]) .modal {
+  --term-bg: rgba(255, 252, 246, 0.98);
+  --term-fg: var(--foreground);
+  --term-prompt: var(--success, #406f53);
+  --term-cwd: var(--accent-strong);
+  --term-dim: var(--text-soft);
+  --term-line: var(--line);
+
+  border-color: var(--line);
+  box-shadow: 0 30px 80px rgba(82, 61, 22, 0.18);
+}
+
+:global(:root[data-theme="hive-light"]) .header,
+:global(:root[data-theme="hive-light"]) .statusNote {
+  border-color: var(--term-line);
+  background: var(--surface-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .headerButton {
+  border-color: var(--line);
+  background: var(--button-accent);
+  color: var(--accent-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .headerButton:hover {
+  border-color: var(--accent-strong);
+  background: var(--surface-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .stopButton,
+:global(:root[data-theme="hive-light"]) .stopButton:hover,
+:global(:root[data-theme="hive-light"]) .statusNoteError {
+  border-color: rgba(192, 82, 77, 0.34);
+  background: rgba(192, 82, 77, 0.12);
+  color: var(--danger, #a23a35);
+}

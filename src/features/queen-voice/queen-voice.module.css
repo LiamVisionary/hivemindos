@@ -119,6 +119,9 @@
 .transcriptPanel {
   pointer-events: auto;
   width: min(640px, calc(100vw - 96px));
+  /* hug content — never stretch to the flex parent's height (no empty space) */
+  height: fit-content;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -497,6 +500,59 @@
 .voicePickerEmpty {
   font-size: 12px;
   color: rgba(200, 208, 232, 0.62);
+}
+
+:global(:root[data-theme="hive-light"]) .transcriptPanel,
+:global(:root[data-theme="hive-light"]) .detailModal,
+:global(:root[data-theme="hive-light"]) .controlBar,
+:global(:root[data-theme="hive-light"]) .voicePicker {
+  border-color: rgba(54, 46, 30, 0.18);
+  background: rgba(251, 248, 241, 0.9);
+  color: #221d14;
+  box-shadow: 0 18px 48px rgba(82, 61, 22, 0.16);
+}
+
+:global(:root[data-theme="hive-light"]) .detailBackdrop {
+  background: rgba(34, 29, 20, 0.34);
+}
+
+:global(:root[data-theme="hive-light"]) .minimizeButton,
+:global(:root[data-theme="hive-light"]) .detailButton,
+:global(:root[data-theme="hive-light"]) .detailModalClose,
+:global(:root[data-theme="hive-light"]) .statusBadge,
+:global(:root[data-theme="hive-light"]) .controlButton,
+:global(:root[data-theme="hive-light"]) .voiceOption {
+  border-color: rgba(54, 46, 30, 0.18);
+  background: rgba(244, 239, 228, 0.84);
+  color: #221d14;
+}
+
+:global(:root[data-theme="hive-light"]) .minimizeButton:hover,
+:global(:root[data-theme="hive-light"]) .detailButton:hover,
+:global(:root[data-theme="hive-light"]) .detailModalClose:hover,
+:global(:root[data-theme="hive-light"]) .controlButton:hover,
+:global(:root[data-theme="hive-light"]) .voiceOption:hover,
+:global(:root[data-theme="hive-light"]) .voiceOptionActive {
+  border-color: rgba(176, 127, 28, 0.36);
+  background: rgba(176, 127, 28, 0.14);
+  color: #221d14;
+}
+
+:global(:root[data-theme="hive-light"]) .turnWho,
+:global(:root[data-theme="hive-light"]) .voicePickerTitle,
+:global(:root[data-theme="hive-light"]) .voicePickerEmpty {
+  color: #6f6657;
+}
+
+:global(:root[data-theme="hive-light"]) .turnText,
+:global(:root[data-theme="hive-light"]) .detailModalBody {
+  color: #221d14;
+}
+
+:global(:root[data-theme="hive-light"]) .errorText,
+:global(:root[data-theme="hive-light"]) .controlButtonEnd,
+:global(:root[data-theme="hive-light"]) .controlButtonActive {
+  color: #8e3328;
 }
 
 @keyframes queenVoicePulse {

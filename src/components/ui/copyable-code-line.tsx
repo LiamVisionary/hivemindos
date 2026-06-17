@@ -46,13 +46,13 @@ export function CopyableCodeLine({
   return (
     <div
       className={cn(
-        "grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.28)] p-2",
+        "grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--surface-soft)] p-2",
         className,
       )}
     >
       <code
         className={cn(
-          "min-w-0 rounded-[5px] bg-[rgba(15,23,42,0.46)] px-2 py-1.5 font-mono text-[11px] font-semibold leading-snug text-[var(--foreground)] [overflow-wrap:anywhere]",
+          "min-w-0 rounded-[5px] bg-[var(--field)] px-2 py-1.5 font-mono text-[11px] font-semibold leading-snug text-[var(--foreground)] [overflow-wrap:anywhere]",
           codeClassName,
         )}
       >

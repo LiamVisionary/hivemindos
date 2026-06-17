@@ -8,6 +8,6 @@
 // treasury + kill switch).
 import { ZeroHumanCompaniesView } from "./zero-human-companies/ZeroHumanCompaniesView";
 
-export function GovernancePanel() {
-  return <ZeroHumanCompaniesView />;
+export function GovernancePanel({ theme = "dark" }: { theme?: "dark" | "light" }) {
+  return <ZeroHumanCompaniesView theme={theme} />;
 }

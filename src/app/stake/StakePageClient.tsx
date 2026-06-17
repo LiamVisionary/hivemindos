@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Check, LockKeyhole, RefreshCcw, Sparkles, WalletCards } from "lucide-react";
 import type { AgentWalletTokenBalance } from "@/lib/types/agent-wallet";
-import { DEFAULT_BASE_HIVE_TOKEN_ADDRESS, HIVE_STAKING_TIERS } from "@/lib/services/hive-staking";
+import { DEFAULT_BASE_HIVE_TOKEN_ADDRESS, HIVE_STAKING_TIERS } from "@/lib/config/hive-staking";
 import { isBaseHiveTokenLike, isEvmAddress, shortenEvmAddress, stakeHiveWithBrowserWallet, type BrowserEthereumProvider } from "@/lib/services/hive-staking-client";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import styles from "./stake.module.css";
@@ -44,6 +45,7 @@ type StakeStatusRow = {
   activeStakedHive: number;
   pendingUnstakeHive: number;
   paused: boolean;
+  cooldownSeconds?: number;
 };
 
 type StakePageClientProps = {
@@ -57,6 +59,21 @@ type LoadWalletsOptions = {
 
 function walletKey(wallet: Pick<PersonalWallet, "network" | "address">) {
   return `${wallet.network}:${wallet.address.toLowerCase()}`;
+}
+
+function mergeWalletsByAccount(wallets: PersonalWallet[], seed: PersonalWallet | null) {
+  if (!seed) return wallets;
+  const index = wallets.findIndex((wallet) => walletKey(wallet) === walletKey(seed));
+  if (index < 0) return [seed, ...wallets];
+  const existing = wallets[index]!;
+  const seededHiveTokens = (seed.tokens ?? []).filter(isBaseHiveTokenLike);
+  const existingHasHive = (existing.tokens ?? []).some(isBaseHiveTokenLike);
+  const merged = {
+    ...seed,
+    ...existing,
+    tokens: existingHasHive ? existing.tokens : [...seededHiveTokens, ...(existing.tokens ?? [])],
+  };
+  return wallets.map((wallet, walletIndex) => (walletIndex === index ? merged : wallet));
 }
 
 function rowKey(row: HiveWalletRow) {
@@ -82,6 +99,55 @@ function formatStakeInputAmount(value: number) {
 
 function tierAmount(value: bigint) {
   return formatHive(Number(value));
+}
+
+function formatCooldown(seconds?: number) {
+  if (!Number.isFinite(seconds) || !seconds || seconds <= 0) return "Not loaded";
+  const days = seconds / 86_400;
+  if (Number.isInteger(days)) return `${days} day${days === 1 ? "" : "s"}`;
+  return `${(Math.round(days * 10) / 10).toLocaleString(undefined, { maximumFractionDigits: 1 })} days`;
+}
+
+function finiteQueryNumber(value: string | null) {
+  if (value == null || value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function personalWalletFromStakeParams(params: URLSearchParams): PersonalWallet | null {
+  const id = params.get("walletId")?.trim();
+  const address = params.get("address")?.trim();
+  const network = params.get("network")?.trim();
+  const balance = finiteQueryNumber(params.get("tokenBalance"));
+  if (!id || !address || network !== "eip155:8453" || !isEvmAddress(address) || balance == null) return null;
+  const tokenAddress = params.get("tokenAddress")?.trim() || DEFAULT_BASE_HIVE_TOKEN_ADDRESS;
+  const token = {
+    symbol: params.get("tokenSymbol")?.trim() || "HIVE",
+    name: params.get("tokenName")?.trim() || "HIVE",
+    balance,
+    network,
+    tokenAddress,
+    valueUsd: finiteQueryNumber(params.get("tokenValueUsd")),
+    priceUsd: finiteQueryNumber(params.get("tokenPriceUsd")),
+    priceChange24hPct: finiteQueryNumber(params.get("tokenPriceChange24hPct")),
+    iconUrl: params.get("tokenIconUrl")?.trim() || null,
+    isNative: false,
+  } satisfies AgentWalletTokenBalance;
+  if (!isBaseHiveTokenLike(token)) return null;
+  const custodyMode = params.get("custodyMode") === "local" ? "local" : "watch";
+  const importedFrom = params.get("importedFrom");
+  return {
+    id,
+    name: params.get("walletName")?.trim() || "My wallet Base",
+    address,
+    network,
+    custodyMode,
+    importedFrom: importedFrom === "generated" || importedFrom === "private-key" || importedFrom === "recovery-phrase" || importedFrom === "browser" ? importedFrom : "watch",
+    currentBalanceUsd: finiteQueryNumber(params.get("tokenValueUsd")) ?? 0,
+    nativeBalance: 0,
+    tokens: [token],
+    lastOnchainSyncAt: Date.now(),
+  };
 }
 
 async function fetchPersonalWallets() {
@@ -115,13 +181,17 @@ async function refreshWallet(wallet: PersonalWallet) {
 }
 
 export default function StakePageClient({ stakingContractAddress }: StakePageClientProps) {
-  const [wallets, setWallets] = useState<PersonalWallet[]>([]);
-  const [loading, setLoading] = useState(true);
+  const searchParams = useSearchParams();
+  const seededWallet = useMemo(() => personalWalletFromStakeParams(searchParams), [searchParams]);
+  const [wallets, setWallets] = useState<PersonalWallet[]>(() => seededWallet ? [seededWallet] : []);
+  const [loading, setLoading] = useState(() => !seededWallet);
+  const [refreshingBalances, setRefreshingBalances] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [draft, setDraft] = useState<StakeDraft | null>(null);
   const [stakeStatuses, setStakeStatuses] = useState<Record<string, StakeStatusRow>>({});
+  const [contractCooldownSeconds, setContractCooldownSeconds] = useState<number>();
   const nativeDesktopRuntime = useMemo(() => isTauriDesktopRuntime(), []);
 
   const hiveRows = useMemo<HiveWalletRow[]>(() => wallets
@@ -138,6 +208,8 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
   const totalHive = useMemo(() => hiveRows.reduce((total, row) => total + row.token.balance, 0), [hiveRows]);
   const totalStakedHive = useMemo(() => Object.values(stakeStatuses).reduce((total, row) => total + row.activeStakedHive, 0), [stakeStatuses]);
   const totalPendingUnstakeHive = useMemo(() => Object.values(stakeStatuses).reduce((total, row) => total + row.pendingUnstakeHive, 0), [stakeStatuses]);
+  const statusCooldownSeconds = useMemo(() => Object.values(stakeStatuses).find((row) => Number.isFinite(row.cooldownSeconds))?.cooldownSeconds, [stakeStatuses]);
+  const unstakeCooldownSeconds = contractCooldownSeconds ?? statusCooldownSeconds;
   const nextTier = useMemo(() => HIVE_STAKING_TIERS.find((tier) => Number(tier.thresholdHive) > totalStakedHive) ?? null, [totalStakedHive]);
 
   const loadStakeStatuses = useCallback(async (walletList: PersonalWallet[]) => {
@@ -153,26 +225,29 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ addresses }),
     }).catch(() => null);
-    const data = await response?.json().catch(() => null) as { ok?: boolean; statuses?: StakeStatusRow[] } | null;
+    const data = await response?.json().catch(() => null) as { ok?: boolean; cooldownSeconds?: number; statuses?: StakeStatusRow[] } | null;
     if (!response?.ok || !data?.ok || !Array.isArray(data.statuses)) return;
+    if (Number.isFinite(data.cooldownSeconds)) setContractCooldownSeconds(data.cooldownSeconds);
     setStakeStatuses(Object.fromEntries(data.statuses.map((row) => [row.address.toLowerCase(), row])));
   }, []);
 
   const loadWallets = useCallback(async (options: LoadWalletsOptions = {}) => {
-    const showInitialLoading = !options.refresh;
+    const showInitialLoading = !options.refresh && !seededWallet;
     if (showInitialLoading) setLoading(true);
     setError("");
     try {
       const loaded = options.walletList ?? await fetchPersonalWallets();
       const baseWallets = loaded.filter((wallet) => wallet.network === "eip155:8453" && isEvmAddress(wallet.address));
       if (!options.refresh) {
-        setWallets(loaded);
-        void loadStakeStatuses(loaded);
-        return loaded;
+        const nextWallets = mergeWalletsByAccount(loaded, seededWallet);
+        setWallets(nextWallets);
+        void loadStakeStatuses(nextWallets);
+        return nextWallets;
       }
+      setRefreshingBalances(true);
       const refreshed = await Promise.all(baseWallets.map((wallet) => refreshWallet(wallet).catch(() => wallet)));
       const byKey = new Map(refreshed.map((wallet) => [walletKey(wallet), wallet]));
-      const nextWallets = loaded.map((wallet) => byKey.get(walletKey(wallet)) ?? wallet);
+      const nextWallets = mergeWalletsByAccount(loaded.map((wallet) => byKey.get(walletKey(wallet)) ?? wallet), seededWallet);
       setWallets(nextWallets);
       void loadStakeStatuses(nextWallets);
       return nextWallets;
@@ -181,8 +256,9 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
       return [];
     } finally {
       if (showInitialLoading) setLoading(false);
+      if (options.refresh) setRefreshingBalances(false);
     }
-  }, [loadStakeStatuses]);
+  }, [loadStakeStatuses, seededWallet]);
 
   useEffect(() => {
     let cancelled = false;
@@ -378,6 +454,10 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
               <strong>{formatHive(totalPendingUnstakeHive)}</strong>
             </div>
             <div className={styles.summaryCard}>
+              <span>Unstake cooldown</span>
+              <strong>{formatCooldown(unstakeCooldownSeconds)}</strong>
+            </div>
+            <div className={styles.summaryCard}>
               <span>Wallets with HIVE</span>
               <strong>{hiveRows.length}</strong>
             </div>
@@ -499,14 +579,16 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
                         {activeDraft?.busy ? "Signing" : "Stake"}
                       </button>
                     </div>
-                    {!canStakeInThisRuntime ? <p className={styles.status} data-tone="error">Desktop staking needs a local imported/generated wallet. Browser extension wallets cannot sign inside Tauri.</p> : null}
+                    {!canStakeInThisRuntime ? <p className={styles.status} data-tone="error">This Base wallet is view-only on this desktop. Import its Base private key or recovery phrase in Wallets, or stake from an external wallet surface.</p> : null}
                     {activeDraft?.message ? <p className={styles.status} data-tone="ok">{activeDraft.message}</p> : null}
                     {activeDraft?.error ? <p className={styles.status} data-tone="error">{activeDraft.error}</p> : null}
                   </div>
                 </article>
               );
-            }) : (
-              <div className={styles.empty}>No Base HIVE balances found yet. Connect a wallet or refresh your Wallets view.</div>
+            }) : refreshingBalances ? (
+              <div className={styles.empty}>Checking Base HIVE balances...</div>
+            ) : (
+              <div className={styles.empty}>No Base HIVE balances found yet. Refresh your Wallets view or add a Base wallet.</div>
             )}
           </div>
         </section>

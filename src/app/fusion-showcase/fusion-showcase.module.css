@@ -1,11 +1,26 @@
 .page {
+  --fusion-paper: #f1ede3;
+  --fusion-paper-soft: #f8f4ec;
+  --fusion-panel: #fbf8f1;
+  --fusion-panel-soft: #f4efe4;
+  --fusion-line: #d8cdbb;
+  --fusion-fg: #221d14;
+  --fusion-strong: #19140c;
+  --fusion-muted: #6f6657;
+  --fusion-subtle: #8d806c;
+  --fusion-live: #5f8f5a;
+  --fusion-live-strong: #466f42;
+  --fusion-honey: #b07f1c;
+  --fusion-honey-strong: #936811;
+  --fusion-violet: #7f6bb2;
+  --fusion-blue: #4d769f;
   min-height: 100vh;
   padding: 42px 26px 56px;
-  color: #17202c;
+  color: var(--fusion-fg);
   background:
-    radial-gradient(circle at 18% 16%, rgba(0, 168, 157, 0.1), transparent 24rem),
-    radial-gradient(circle at 84% 76%, rgba(139, 92, 246, 0.11), transparent 24rem),
-    linear-gradient(180deg, #f3f7fb 0%, #e8f0f6 52%, #f6f2fb 100%);
+    radial-gradient(circle at 18% 16%, rgba(176, 127, 28, 0.12), transparent 24rem),
+    radial-gradient(circle at 84% 76%, rgba(95, 143, 90, 0.14), transparent 24rem),
+    linear-gradient(180deg, var(--fusion-paper) 0%, var(--fusion-paper-soft) 56%, #f6f0e3 100%);
 }
 
 .hero,
@@ -24,7 +39,7 @@
 
 .eyebrow {
   margin: 0;
-  color: #007f78;
+  color: var(--fusion-live-strong);
   font-size: 12px;
   line-height: 1.25;
   font-weight: 800;
@@ -35,7 +50,7 @@
 .hero h1 {
   max-width: 900px;
   margin: 0;
-  color: #101826;
+  color: var(--fusion-strong);
   font-size: 48px;
   line-height: 1.02;
   font-weight: 850;
@@ -45,7 +60,7 @@
 .lede {
   max-width: 790px;
   margin: 0;
-  color: #405264;
+  color: var(--fusion-muted);
   font-size: 17px;
   line-height: 1.55;
 }
@@ -56,12 +71,12 @@
   margin-bottom: 24px;
   padding: 22px;
   overflow: hidden;
-  border: 1px solid #cbd9e5;
+  border: 1px solid var(--fusion-line);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(241, 248, 250, 0.92)),
-    radial-gradient(circle at 14% 16%, rgba(0, 168, 157, 0.16), transparent 18rem);
-  box-shadow: 0 20px 50px rgba(34, 48, 70, 0.12);
+    linear-gradient(135deg, rgba(251, 248, 241, 0.96), rgba(244, 239, 228, 0.92)),
+    radial-gradient(circle at 14% 16%, rgba(95, 143, 90, 0.16), transparent 18rem);
+  box-shadow: 0 20px 50px rgba(82, 61, 22, 0.12);
 }
 
 .workflowCopy {
@@ -73,7 +88,7 @@
 .workflowCopy h2,
 .backupHeader h2 {
   margin: 0;
-  color: #101826;
+  color: var(--fusion-strong);
   font-size: 30px;
   line-height: 1.12;
   letter-spacing: 0;
@@ -81,7 +96,7 @@
 
 .workflowCopy p {
   margin: 0;
-  color: #405264;
+  color: var(--fusion-muted);
   font-size: 15px;
   line-height: 1.55;
 }
@@ -89,11 +104,11 @@
 .workflowCanvas {
   position: relative;
   overflow: hidden;
-  border: 1px solid #d1dee9;
+  border: 1px solid var(--fusion-line);
   border-radius: 8px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(236, 245, 248, 0.82)),
-    linear-gradient(90deg, rgba(0, 168, 157, 0.09), rgba(244, 182, 63, 0.08), rgba(139, 92, 246, 0.09));
+    linear-gradient(180deg, rgba(251, 248, 241, 0.9), rgba(244, 239, 228, 0.86)),
+    linear-gradient(90deg, rgba(95, 143, 90, 0.1), rgba(176, 127, 28, 0.1), rgba(127, 107, 178, 0.08));
 }
 
 .workflowTrack {
@@ -111,7 +126,7 @@
   left: 84px;
   height: 6px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #141820, #8b5cf6 32%, #d29319 52%, #172dd7 74%, #26a5e4);
+  background: linear-gradient(90deg, var(--fusion-fg), var(--fusion-violet) 32%, var(--fusion-honey) 54%, var(--fusion-live) 76%, var(--fusion-honey-strong));
   content: "";
 }
 
@@ -123,15 +138,15 @@
   gap: 9px;
   min-width: 0;
   padding: 12px 10px 14px;
-  border: 1px solid rgba(203, 217, 229, 0.88);
+  border: 1px solid color-mix(in srgb, var(--fusion-line) 88%, white);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.88);
+  background: color-mix(in srgb, var(--fusion-panel) 88%, white);
   text-align: center;
-  box-shadow: 0 12px 26px rgba(34, 48, 70, 0.09);
+  box-shadow: 0 12px 26px rgba(82, 61, 22, 0.09);
 }
 
 .nodeIndex {
-  color: #738497;
+  color: var(--fusion-subtle);
   font-size: 11px;
   line-height: 1.2;
   font-weight: 850;
@@ -146,10 +161,10 @@
   height: var(--logo-tile-size);
   border: 1px solid currentColor;
   border-radius: 8px;
-  color: #00a89d;
-  background: #ffffff;
+  color: var(--fusion-live);
+  background: var(--fusion-panel);
   box-shadow:
-    0 10px 24px rgba(34, 48, 70, 0.12),
+    0 10px 24px rgba(82, 61, 22, 0.12),
     0 0 0 8px color-mix(in srgb, currentColor 8%, transparent);
 }
 
@@ -166,20 +181,20 @@
 }
 
 .logoTile.violet {
-  color: #7c4dd8;
+  color: var(--fusion-violet);
 }
 
 .logoTile.gold {
-  color: #d29319;
-  background: #fffaf0;
+  color: var(--fusion-honey);
+  background: #fff7e0;
 }
 
 .logoTile.blue {
-  color: #172dd7;
+  color: var(--fusion-blue);
 }
 
 .workflowNode strong {
-  color: #17202c;
+  color: var(--fusion-fg);
   font-size: 16px;
   line-height: 1.2;
 }
@@ -187,7 +202,7 @@
 .workflowNode p {
   min-height: 52px;
   margin: 0;
-  color: #4a5d70;
+  color: var(--fusion-muted);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -196,11 +211,11 @@
   display: inline-grid;
   min-height: 24px;
   align-items: center;
-  border: 1px solid color-mix(in srgb, currentColor 24%, #d4dee8);
+  border: 1px solid color-mix(in srgb, currentColor 24%, var(--fusion-line));
   border-radius: 999px;
   padding: 3px 9px;
-  color: color-mix(in srgb, currentColor 78%, #17202c);
-  background: color-mix(in srgb, currentColor 9%, #ffffff);
+  color: color-mix(in srgb, currentColor 78%, var(--fusion-fg));
+  background: color-mix(in srgb, currentColor 9%, var(--fusion-panel));
   font-size: 10px;
   line-height: 1.2;
   font-style: normal;
@@ -219,17 +234,17 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  border: 1px solid #d1dee9;
+  border: 1px solid var(--fusion-line);
   border-radius: 8px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.82);
+  background: color-mix(in srgb, var(--fusion-panel) 86%, white);
 }
 
 .receiptChip svg {
   flex: 0 0 auto;
   width: 22px;
   height: 22px;
-  color: #007f78;
+  color: var(--fusion-live-strong);
   stroke-width: 2.35;
 }
 
@@ -240,13 +255,13 @@
 }
 
 .receiptChip strong {
-  color: #17202c;
+  color: var(--fusion-fg);
   font-size: 13px;
   line-height: 1.25;
 }
 
 .receiptChip small {
-  color: #526476;
+  color: var(--fusion-muted);
   font-size: 11px;
   line-height: 1.3;
 }
@@ -259,17 +274,17 @@
 }
 
 .skillCard {
-  --skill-accent: #00a89d;
+  --skill-accent: var(--fusion-live);
   display: grid;
   grid-template-rows: auto 1fr;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--skill-accent) 30%, #cbd7e3);
+  border: 1px solid color-mix(in srgb, var(--skill-accent) 30%, var(--fusion-line));
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.88);
+  background: color-mix(in srgb, var(--fusion-panel) 88%, white);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.95) inset,
-    0 20px 48px rgba(34, 48, 70, 0.12);
+    0 20px 48px rgba(82, 61, 22, 0.12);
 }
 
 .artFrame {
@@ -278,9 +293,9 @@
   aspect-ratio: 16 / 10;
   place-items: center;
   overflow: hidden;
-  border-bottom: 1px solid #d7e2ec;
+  border-bottom: 1px solid var(--fusion-line);
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--skill-accent) 12%, white), #ffffff 48%, #eef4f8);
+    linear-gradient(135deg, color-mix(in srgb, var(--skill-accent) 12%, var(--fusion-panel)), var(--fusion-panel) 48%, var(--fusion-panel-soft));
 }
 
 .skillArt {
@@ -312,7 +327,7 @@
   justify-items: center;
   gap: 7px;
   min-width: 0;
-  color: #46596d;
+  color: var(--fusion-muted);
   font-size: 11px;
   line-height: 1.2;
   font-weight: 850;
@@ -325,12 +340,12 @@
   justify-self: center;
   align-items: center;
   gap: 8px;
-  border: 1px solid #b9d8d4;
+  border: 1px solid color-mix(in srgb, var(--fusion-live) 42%, var(--fusion-line));
   border-radius: 999px;
   padding: 9px 14px;
-  color: #007f78;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 12px 28px rgba(34, 48, 70, 0.1);
+  color: var(--fusion-live-strong);
+  background: color-mix(in srgb, var(--fusion-panel) 88%, white);
+  box-shadow: 0 12px 28px rgba(82, 61, 22, 0.1);
 }
 
 .fusionPackage svg {
@@ -362,7 +377,7 @@
   left: 34px;
   height: 5px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #141820, #8b5cf6 32%, #d29319 52%, #172dd7 74%, #26a5e4);
+  background: linear-gradient(90deg, var(--fusion-fg), var(--fusion-violet) 32%, var(--fusion-honey) 54%, var(--fusion-live) 76%, var(--fusion-honey-strong));
   content: "";
 }
 
@@ -383,11 +398,11 @@
   grid-auto-flow: column;
   align-items: center;
   gap: 5px;
-  border: 1px solid #cddae6;
+  border: 1px solid var(--fusion-line);
   border-radius: 999px;
   padding: 6px 9px;
-  color: #405264;
-  background: rgba(255, 255, 255, 0.82);
+  color: var(--fusion-muted);
+  background: color-mix(in srgb, var(--fusion-panel) 86%, white);
   font-size: 10px;
   line-height: 1.2;
   font-weight: 850;
@@ -397,7 +412,7 @@
 .cardProofStrip svg {
   width: 14px;
   height: 14px;
-  color: #007f78;
+  color: var(--fusion-live-strong);
   stroke-width: 2.5;
 }
 
@@ -410,12 +425,12 @@
   grid-auto-flow: column;
   align-items: center;
   gap: 9px;
-  border: 1px solid #c7baf4;
+  border: 1px solid color-mix(in srgb, var(--fusion-violet) 34%, var(--fusion-line));
   border-radius: 999px;
   padding: 10px 16px;
-  color: #6f42c8;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 12px 28px rgba(34, 48, 70, 0.1);
+  color: var(--fusion-violet);
+  background: color-mix(in srgb, var(--fusion-panel) 90%, white);
+  box-shadow: 0 12px 28px rgba(82, 61, 22, 0.1);
 }
 
 .aeonBadge svg {
@@ -466,14 +481,14 @@
 .aeonArt::before {
   width: 230px;
   height: 230px;
-  border: 2px dashed rgba(0, 127, 120, 0.24);
+  border: 2px dashed rgba(95, 143, 90, 0.3);
 }
 
 .skillFusionArt::after,
 .aeonArt::after {
   width: 142px;
   height: 142px;
-  border: 1px solid rgba(124, 77, 216, 0.2);
+  border: 1px solid rgba(176, 127, 28, 0.24);
 }
 
 .visualCore,
@@ -483,7 +498,7 @@
 .orbitIcon {
   display: grid;
   place-items: center;
-  color: #007f78;
+  color: var(--fusion-live-strong);
 }
 
 .visualCore {
@@ -491,13 +506,13 @@
   z-index: 2;
   width: 94px;
   height: 94px;
-  border: 2px solid #00a89d;
+  border: 2px solid var(--fusion-live);
   border-radius: 28px;
   background:
-    linear-gradient(135deg, #ffffff, #eef9f8);
+    linear-gradient(135deg, var(--fusion-panel), #eef5e8);
   box-shadow:
-    0 10px 24px rgba(0, 127, 120, 0.14),
-    0 0 0 10px rgba(0, 168, 157, 0.08);
+    0 10px 24px rgba(95, 143, 90, 0.14),
+    0 0 0 10px rgba(95, 143, 90, 0.08);
 }
 
 .visualCore svg {
@@ -535,9 +550,9 @@
   height: 100%;
   border: 1px solid currentColor;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.94);
+  background: color-mix(in srgb, var(--fusion-panel) 92%, white);
   box-shadow:
-    0 10px 22px rgba(34, 48, 70, 0.11),
+    0 10px 22px rgba(82, 61, 22, 0.11),
     0 0 0 7px color-mix(in srgb, currentColor 9%, transparent);
 }
 
@@ -564,15 +579,15 @@
 }
 
 .teal {
-  color: #00a89d;
+  color: var(--fusion-live);
 }
 
 .gold {
-  color: #d29319;
+  color: var(--fusion-honey);
 }
 
 .violet {
-  color: #7c4dd8;
+  color: var(--fusion-violet);
 }
 
 .receiptRow {
@@ -586,17 +601,17 @@
   place-items: center;
   width: 58px;
   height: 42px;
-  border: 1px solid #bdc8d3;
+  border: 1px solid var(--fusion-line);
   border-radius: 8px;
   background:
-    linear-gradient(#f9fbfd, #edf2f7);
-  box-shadow: 0 7px 18px rgba(34, 48, 70, 0.08);
+    linear-gradient(var(--fusion-panel), var(--fusion-panel-soft));
+  box-shadow: 0 7px 18px rgba(82, 61, 22, 0.08);
 }
 
 .receiptRow svg {
   width: 20px;
   height: 20px;
-  color: #8a99a8;
+  color: var(--fusion-subtle);
   stroke-width: 2.1;
 }
 
@@ -614,7 +629,7 @@
   left: 48px;
   height: 8px;
   border-radius: 999px;
-  background: #00a89d;
+  background: var(--fusion-live);
   content: "";
 }
 
@@ -627,8 +642,8 @@
   justify-self: center;
   border: 1px solid currentColor;
   border-radius: 18px;
-  background: #ffffff;
-  box-shadow: 0 10px 22px rgba(34, 48, 70, 0.1);
+  background: var(--fusion-panel);
+  box-shadow: 0 10px 22px rgba(82, 61, 22, 0.1);
 }
 
 .pipelineNode svg,
@@ -641,7 +656,7 @@
 .outputCapsule {
   width: 78px;
   border-radius: 999px;
-  color: #d29319;
+  color: var(--fusion-honey);
 }
 
 .aeonArt .visualCore {
@@ -661,25 +676,25 @@
   gap: 8px;
   align-items: center;
   justify-content: space-between;
-  color: color-mix(in srgb, var(--skill-accent) 72%, #17202c);
+  color: color-mix(in srgb, var(--skill-accent) 72%, var(--fusion-fg));
   font-size: 12px;
   line-height: 1.35;
   font-weight: 800;
 }
 
 .cardMeta code {
-  border: 1px solid #cfdbe6;
+  border: 1px solid var(--fusion-line);
   border-radius: 6px;
   padding: 4px 7px;
-  color: #263445;
-  background: #f6f9fc;
+  color: var(--fusion-fg);
+  background: var(--fusion-panel-soft);
   font-size: 11px;
   line-height: 1.2;
 }
 
 .cardBody h2 {
   margin: 0;
-  color: #101826;
+  color: var(--fusion-strong);
   font-size: 24px;
   line-height: 1.1;
   letter-spacing: 0;
@@ -687,7 +702,7 @@
 
 .cardBody p {
   margin: 0;
-  color: #425467;
+  color: var(--fusion-muted);
   font-size: 14px;
   line-height: 1.55;
 }
@@ -697,10 +712,10 @@
   gap: 18px;
   margin-top: 24px;
   padding: 22px;
-  border: 1px solid #cbd9e5;
+  border: 1px solid var(--fusion-line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 18px 44px rgba(34, 48, 70, 0.1);
+  background: color-mix(in srgb, var(--fusion-panel) 86%, white);
+  box-shadow: 0 18px 44px rgba(82, 61, 22, 0.1);
 }
 
 .infographicCopy {
@@ -711,7 +726,7 @@
 .infographicCopy h2 {
   max-width: 880px;
   margin: 0;
-  color: #101826;
+  color: var(--fusion-strong);
   font-size: 26px;
   line-height: 1.18;
   letter-spacing: 0;
@@ -734,7 +749,7 @@
   left: 44px;
   height: 8px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #00a89d, #d29319 54%, #7c4dd8);
+  background: linear-gradient(90deg, var(--fusion-live), var(--fusion-honey) 54%, var(--fusion-violet));
   content: "";
 }
 
@@ -753,8 +768,8 @@
   height: 76px;
   border: 2px solid currentColor;
   border-radius: 24px;
-  background: #ffffff;
-  box-shadow: 0 10px 24px rgba(34, 48, 70, 0.11);
+  background: var(--fusion-panel);
+  box-shadow: 0 10px 24px rgba(82, 61, 22, 0.11);
 }
 
 .flowIcon svg {
@@ -765,7 +780,7 @@
 
 .flowStep em {
   display: block;
-  color: #6d7d8f;
+  color: var(--fusion-subtle);
   font-size: 11px;
   font-style: normal;
   font-weight: 850;
@@ -773,7 +788,7 @@
 
 .flowStep strong {
   display: block;
-  color: #17202c;
+  color: var(--fusion-fg);
   font-size: 15px;
   line-height: 1.25;
 }
@@ -781,7 +796,7 @@
 .flowStep p {
   margin: 3px auto 0;
   max-width: 126px;
-  color: #526476;
+  color: var(--fusion-muted);
   font-size: 11px;
   line-height: 1.35;
 }
@@ -805,11 +820,11 @@
   display: inline-flex;
   align-items: center;
   min-height: 42px;
-  border: 1px solid #cfdbe6;
+  border: 1px solid var(--fusion-line);
   border-radius: 8px;
   padding: 0 13px;
-  color: #405264;
-  background: rgba(255, 255, 255, 0.78);
+  color: var(--fusion-muted);
+  background: color-mix(in srgb, var(--fusion-panel) 84%, white);
   font-size: 13px;
   line-height: 1.25;
   font-weight: 850;
@@ -1031,10 +1046,10 @@
     align-items: center;
     gap: 12px;
     min-height: 68px;
-    border: 1px solid #d3dee8;
+    border: 1px solid var(--fusion-line);
     border-radius: 8px;
     padding: 10px;
-    background: #ffffff;
+    background: var(--fusion-panel);
     text-align: left;
   }
 

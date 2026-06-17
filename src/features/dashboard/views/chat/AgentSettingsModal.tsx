@@ -15,6 +15,7 @@ import { GuidedVeniceSetup } from "./GuidedVeniceSetup";
 import { LmStudioLoadProgress, LmStudioModelManager } from "./LmStudioModelManager";
 import { MissingSharedEnvKeySetup } from "./MissingSharedEnvKeySetup";
 import { ModelPillSelector } from "./ModelPillSelector";
+import { AgentSettingsPortrait } from "./AgentSettingsPortrait";
 import { ProviderDiscoverySkeleton, ToggleRow } from "./AgentSettingsSmallParts";
 import { WorkerTaskPreferencesEditor } from "./WorkerTaskPreferencesEditor";
 import { gateBankrModelsForCredits, selectBestRuntimeModel } from "./runtime-model-registry";
@@ -1840,7 +1841,7 @@ export function AgentSettingsModal(props: any) {
           <div style={{ display: "grid", gridTemplateColumns: "248px minmax(0, 1fr)", minHeight: 0 }}>
             <aside style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 18, minHeight: 0, padding: "22px 18px", borderRight: "1px solid var(--line)", background: "var(--panel-bg-soft)", overflow: "hidden" }}>
               <div style={{ display: "grid", justifyItems: "center", gap: 12, textAlign: "center" }}>
-                <AeonOrb size={92} state={isAutopilotSettings ? "duty" : "idle"} iconSrc={agentSettingsWorkerImage} />
+                <AgentSettingsPortrait tone={isAutopilotSettings ? "duty" : "idle"} iconSrc={agentSettingsWorkerImage} />
                 <div style={{ display: "grid", gap: 8, width: "100%" }}>
                   <BareTextInput
                     value={currentName}

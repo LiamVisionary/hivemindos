@@ -45,27 +45,27 @@
 
 /* Hive-light theme mirror — matches the Fleet view's light palette. */
 :global([data-theme="hive-light"]) .page {
-  --s-page-glow: rgba(13, 142, 126, 0.16);
-  --s-page-base: linear-gradient(180deg, #efe4c6 0%, #e4d4ac 100%);
+  --s-page-glow: rgba(95, 143, 90, 0.12);
+  --s-page-base: linear-gradient(180deg, #fbf8f1 0%, #f1ede3 100%);
 
-  --s-surface: linear-gradient(180deg, rgba(248, 240, 220, 0.86), rgba(238, 226, 196, 0.74));
-  --s-surface-inset: rgba(255, 250, 235, 0.55);
-  --s-border: rgba(92, 75, 45, 0.32);
-  --s-border-soft: rgba(92, 75, 45, 0.2);
-  --s-shadow: 0 18px 48px rgba(74, 56, 18, 0.18);
+  --s-surface: linear-gradient(180deg, rgba(251, 248, 241, 0.9), rgba(244, 239, 228, 0.78));
+  --s-surface-inset: rgba(255, 252, 246, 0.62);
+  --s-border: rgba(54, 46, 30, 0.16);
+  --s-border-soft: rgba(54, 46, 30, 0.1);
+  --s-shadow: 0 18px 48px rgba(80, 60, 20, 0.12);
 
-  --s-teal: rgba(13, 142, 126, 1);
-  --s-teal-strong: rgba(13, 90, 78, 1);
-  --s-teal-bg: rgba(13, 142, 126, 0.16);
-  --s-teal-border: rgba(13, 90, 78, 0.5);
-  --s-teal-glow: rgba(13, 142, 126, 0.26);
+  --s-teal: rgba(95, 143, 90, 1);
+  --s-teal-strong: rgba(79, 125, 75, 1);
+  --s-teal-bg: rgba(95, 143, 90, 0.14);
+  --s-teal-border: rgba(95, 143, 90, 0.34);
+  --s-teal-glow: rgba(95, 143, 90, 0.22);
 
-  --s-honey: rgba(140, 94, 10, 1);
-  --s-honey-bg: linear-gradient(180deg, rgba(184, 130, 22, 0.28), rgba(140, 94, 10, 0.1));
-  --s-honey-border: rgba(106, 69, 5, 0.6);
-  --s-honey-glow: rgba(184, 130, 22, 0.22);
+  --s-honey: rgba(147, 104, 17, 1);
+  --s-honey-bg: linear-gradient(180deg, rgba(176, 127, 28, 0.22), rgba(176, 127, 28, 0.08));
+  --s-honey-border: rgba(147, 104, 17, 0.48);
+  --s-honey-glow: rgba(176, 127, 28, 0.18);
 
-  --s-danger: rgba(180, 35, 66, 1);
+  --s-danger: rgba(192, 82, 77, 1);
 }
 
 .shell {

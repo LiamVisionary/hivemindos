@@ -17,6 +17,7 @@ export interface HiveAgent {
   runtime: string;
   state: AgentState;
   role: string;
+  iconSrc: string;
   /** display string, e.g. "0.42 ETH" or "—" */
   wallet: string;
   task: string;

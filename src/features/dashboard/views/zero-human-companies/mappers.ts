@@ -8,14 +8,16 @@ import type {
   Company,
   CompanyMember,
   CompanySpendRollup,
+  CompanyTokenCapital,
 } from "@/lib/types/company";
+import type { KanbanDeliverable, KanbanLoopReceipt, KanbanLoopSpec } from "@/lib/types/kanban";
 import type {
   Agent,
   AgentState,
   Approval,
   Colony,
+  CompanyEditForm,
   CompanyStatus,
-  CreateForm,
   GovEvent,
   Issue,
   IssueStatus,
@@ -54,10 +56,15 @@ export interface ApprovalRow {
 export interface KanbanTaskLite {
   id: string;
   title: string;
+  body?: string;
+  result?: string;
   status: string;
   assignee?: string | null;
   priority?: string;
   skills?: string[];
+  deliverables?: KanbanDeliverable[];
+  loop?: KanbanLoopSpec;
+  loopReceipts?: KanbanLoopReceipt[];
   createdAt?: number;
   updatedAt?: number;
   completedAt?: number;
@@ -341,6 +348,83 @@ function deriveBurn(company: Company, rollup: CompanySpendRollup, agents: Agent[
   return { today, cap: Math.round(cap), week, runway };
 }
 
+function taskHasDurableOutput(task: KanbanTaskLite): boolean {
+  return Boolean(
+    task.result?.trim() ||
+      task.body?.includes("Deliverable:") ||
+      task.body?.includes("Result:") ||
+      (task.deliverables?.length ?? 0) > 0,
+  );
+}
+
+function deriveTokenCapital(
+  company: Company,
+  rollup: CompanySpendRollup,
+  tasks: KanbanTaskLite[],
+  agents: Agent[],
+): CompanyTokenCapital {
+  const loops = tasks.map((task) => task.loop).filter(Boolean) as KanbanLoopSpec[];
+  const done = tasks.filter((task) => task.status === "done");
+  const now = Date.now();
+  const recentDone = done.filter((task) => task.completedAt && now - task.completedAt <= 14 * 24 * 60 * 60 * 1000);
+  const outputTasks = done.filter(taskHasDurableOutput);
+  const evalGates = loops.reduce((n, loop) => n + (loop.evalGates?.length ?? 0), 0);
+  const passedEvalGates = loops.reduce(
+    (n, loop) => n + (loop.evalGates?.filter((gate) => gate.status === "passed").length ?? 0),
+    0,
+  );
+  const experiments = loops.reduce((n, loop) => n + (loop.observation?.totalExperiments ?? loop.experiments?.length ?? 0), 0);
+  const committedExperiments = loops.reduce(
+    (n, loop) => n + (loop.observation?.committedExperiments ?? loop.experiments?.filter((item) => item.status === "committed").length ?? 0),
+    0,
+  );
+  const frontierCandidates = loops.reduce((n, loop) => n + (loop.observation?.frontier?.length ?? 0), 0);
+  const antiPatterns = loops.reduce((n, loop) => n + (loop.observation?.antiPatternCount ?? loop.antiPatterns?.length ?? 0), 0);
+  const workflowAssets = new Set(done.flatMap((task) => task.skills ?? []).filter((skill) => skill && skill !== "company-goal")).size + committedExperiments;
+  const learningAssets = outputTasks.length + committedExperiments + antiPatterns;
+  const distillationQueue = done.filter((task) => !task.loopReceipts?.some((receipt) => /distill|learn|memory/i.test(receipt.summary))).length;
+  const spendEfficiency = rollup.totalSpentUsd > 0 ? Math.round((learningAssets / rollup.totalSpentUsd) * 100) / 100 : null;
+  const runtimeCount = new Set(agents.map((agent) => agent.runtime).filter(Boolean)).size;
+  const hasEvo = agents.some((agent) => agent.runtime.toLowerCase() === "evo") || loops.some((loop) => loop.frontierStrategy?.kind === "pareto_per_task");
+  const modelIndependence = clamp((runtimeCount > 0 ? 35 : 0) + Math.min(runtimeCount, 3) * 15 + (hasEvo ? 15 : 0) + (evalGates > 0 ? 15 : 0));
+  const gateScore = evalGates > 0 ? Math.round((passedEvalGates / evalGates) * 100) : loops.length ? 35 : 0;
+  const score = clamp(
+    Math.round(
+      Math.min(35, learningAssets * 7) +
+        Math.min(20, workflowAssets * 4) +
+        Math.min(15, experiments * 2) +
+        Math.min(10, frontierCandidates * 2) +
+        Math.min(10, antiPatterns * 3) +
+        Math.min(10, Math.round(gateScore / 10)),
+    ),
+  );
+
+  const notes = [
+    loops.length ? `${loops.length} optimizer loop${loops.length === 1 ? "" : "s"} attached to company work.` : "Launch autonomy to attach private eval loops to new work.",
+    evalGates ? `${passedEvalGates}/${evalGates} eval gate${evalGates === 1 ? "" : "s"} passed or waiting for evidence.` : "No private eval gates have been recorded yet.",
+    distillationQueue ? `${distillationQueue} completed task${distillationQueue === 1 ? "" : "s"} ready for reviewed memory distillation.` : "Completed work is already reflected in receipts or no work is done yet.",
+  ];
+
+  if (company.autonomy) notes.push("Autonomy is on; idle crews keep receiving fresh work toward the apex goal.");
+
+  return {
+    score,
+    learningAssets,
+    workflowAssets,
+    evalGates,
+    passedEvalGates,
+    experiments,
+    committedExperiments,
+    frontierCandidates,
+    antiPatterns,
+    distillationQueue,
+    learningVelocity: recentDone.length,
+    spendEfficiency,
+    modelIndependence,
+    notes,
+  };
+}
+
 export interface BuildColonyInput {
   company: Company;
   rollup: CompanySpendRollup;
@@ -353,6 +437,7 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
   const safeName = (company.name || "").trim() || company.id || "Untitled company";
   const ticker = (company.ticker || safeName.replace(/[^a-z]/gi, "").slice(0, 4) || "ORG").toUpperCase();
   const agents = buildAgents(company, agentsById, rollup);
+  const memberMeta = new Map((company.members ?? []).map((m) => [m.agentId, m] as const));
 
   const byId = new Map<string, string>();
   const names = new Set<string>();
@@ -369,6 +454,7 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
   const alignment = company.alignment ?? (hasWork ? clamp(Math.round((doneCount / totalCount) * 100)) : 0);
   const status = deriveStatus(company, agents, approvals, alignment, hasWork);
   const burn = deriveBurn(company, rollup, agents);
+  const tokenCapital = deriveTokenCapital(company, rollup, liveTasks, agents);
 
   const unit = company.apexGoal?.unit;
   const apex = {
@@ -432,6 +518,7 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
     apex,
     workBlock,
     burn,
+    tokenCapital,
     revenue,
     velocity: deriveVelocity(liveTasks),
     approvals: approvals.map((a) => mapApproval(a, company.dailyBudgetUsd)),
@@ -449,10 +536,46 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
       name: safeName,
       ticker,
       sector: company.sector || "",
+      charter: company.charter || "",
+      blurb: company.blurb || "",
+      dailyBudgetUsd: company.dailyBudgetUsd,
+      monthlyBudgetUsd: company.monthlyBudgetUsd,
+      totalBudgetUsd: company.totalBudgetUsd,
+      status: company.status ?? "",
+      alignment: company.alignment,
       apexTitle: company.apexGoal?.title || "",
       apexMetric: company.apexGoal?.metric || "",
       apexTarget: company.apexGoal?.target || "",
+      apexCurrent: company.apexGoal?.current || "",
+      apexProgress: company.apexGoal?.progress,
       metricUnit: (company.apexGoal?.unit as MetricUnit) || "number",
-    } satisfies CreateForm,
+      frozen: company.frozen,
+      revenueKind: company.revenue?.kind ?? "",
+      revenueLabel: company.revenue?.label || "",
+      revenueValue: company.revenue?.value || "",
+      revenueTarget: company.revenue?.target || "",
+      revenueMau: company.revenue?.mau || "",
+      revenuePct: company.revenue?.pct ?? undefined,
+      revenueDelta: company.revenue?.delta || "",
+      revenueUp: company.revenue?.up ?? true,
+      revenueIsApex: company.revenue?.isApex ?? false,
+      members: agents
+        .filter((agent) => agent.id)
+        .map((agent) => {
+          const saved = agent.id ? memberMeta.get(agent.id) : undefined;
+          const state = saved?.state && (STATES as string[]).includes(saved.state) ? (saved.state as AgentState) : "";
+          return {
+            agentId: agent.id!,
+            name: agent.name,
+            role: agent.role,
+            companyCap: saved?.companyCap ?? agent._cap,
+            task: saved?.task || "",
+            state,
+            reportsTo: saved?.reportsTo ?? null,
+            runtime: agent.runtime,
+            model: agent.model,
+          };
+        }),
+    } satisfies CompanyEditForm,
   };
 }

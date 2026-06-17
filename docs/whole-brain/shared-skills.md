@@ -48,7 +48,7 @@ The HivemindOS Hive skills are included by default:
 | --- | --- |
 | `hive-assimilate` | Requires agents to search pinned sources, the shared brain, user projects, local/private indexes, and public GitHub before building software from scratch. |
 | `hive-pulse` | Gives agents a bundled last-30-days signal brief across social, developer, market, GitHub, and web sources using a pinned MIT licensed engine, a setup-installed `hive-pulse` command shim, and Hive safety rules. |
-| `hive-capability-search` | Finds available tools, skills, apps, agents, credentials by key name, and delivery channels for a task. |
+| `hive-capability-search` | Finds available tools, skills, apps, agents, credentials by key name, and delivery channels such as slash commands, API routes, MCP tools, CLIs, and dashboard surfaces for a task. |
 | `hive-skill-fusion` | Turns a capability request into a reusable shared-brain skill. |
 | `hive-workflow-fusion` | Composes multi-step hive workflows from skills, apps, agents, and tools. |
 | `hive-aeon-fusion` | Converts reusable hive workflows into AEON-ready agent duties when appropriate. |

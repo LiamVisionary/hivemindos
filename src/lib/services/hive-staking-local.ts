@@ -3,7 +3,7 @@ import "server-only";
 import { createWalletClient, http, parseUnits } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
-import { DEFAULT_BASE_HIVE_STAKING_CONTRACT_ADDRESS, DEFAULT_BASE_HIVE_TOKEN_ADDRESS } from "@/lib/services/hive-staking";
+import { DEFAULT_BASE_HIVE_STAKING_CONTRACT_ADDRESS, DEFAULT_BASE_HIVE_TOKEN_ADDRESS } from "@/lib/config/hive-staking";
 import { isEvmAddress } from "@/lib/services/hive-staking-client";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 

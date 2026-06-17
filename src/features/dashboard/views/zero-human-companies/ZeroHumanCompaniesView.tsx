@@ -7,10 +7,10 @@
 import "./theme.css";
 
 import React from "react";
-import type { Company, CompanyMember, CompanySpendRollup } from "@/lib/types/company";
+import type { Company, CompanyMember, CompanyRevenue, CompanySpendRollup } from "@/lib/types/company";
 import ZeroHumanCompanies from "./ZeroHumanCompanies";
 import { buildColony, toPoolAgents, type AgentLite, type ApprovalRow, type KanbanTaskLite } from "./mappers";
-import type { Agent, Colony, CreateForm, PoolAgent } from "./types";
+import type { Agent, Colony, CompanyEditForm, CreateForm, PoolAgent } from "./types";
 
 type CompanyEntry = { company: Company; rollup: CompanySpendRollup };
 
@@ -25,7 +25,7 @@ async function postCompanies(body: Record<string, unknown>): Promise<{ ok: boole
   return res.json().catch(() => ({ ok: false, error: "Bad response" }));
 }
 
-export function ZeroHumanCompaniesView() {
+export function ZeroHumanCompaniesView({ theme = "dark" }: { theme?: "dark" | "light" } = {}) {
   const [data, setData] = React.useState<CompanyEntry[]>([]);
   const [agents, setAgents] = React.useState<AgentLite[]>([]);
   const [approvals, setApprovals] = React.useState<ApprovalRow[]>([]);
@@ -39,13 +39,7 @@ export function ZeroHumanCompaniesView() {
   const refresh = React.useCallback(async () => {
     setRefreshing(true);
     try {
-      const [companiesRes, approvalsRes, agentsRes, kanbanRes] = await Promise.all([
-        fetch("/api/companies", { cache: "no-store" }),
-        fetch("/api/wallet/approvals?status=pending", { cache: "no-store" }),
-        fetch("/api/obsidian/agents", { cache: "no-store" }),
-        fetch("/api/kanban?include_boards=false", { cache: "no-store" }),
-      ]);
-
+      const companiesRes = await fetch("/api/companies", { cache: "no-store" });
       const companiesJson = await companiesRes.json().catch(() => ({}));
       if (companiesJson.ok) {
         setData(Array.isArray(companiesJson.companies) ? companiesJson.companies : []);
@@ -57,37 +51,55 @@ export function ZeroHumanCompaniesView() {
         setNotice(null);
         setError(companiesJson.error);
       }
+      setLoading(false);
 
-      const approvalsJson = await approvalsRes.json().catch(() => ({}));
-      if (approvalsJson.ok && Array.isArray(approvalsJson.approvals)) setApprovals(approvalsJson.approvals);
+      const [approvalsResult, agentsResult, kanbanResult] = await Promise.allSettled([
+        fetch("/api/wallet/approvals?status=pending", { cache: "no-store" }),
+        fetch("/api/obsidian/agents", { cache: "no-store" }),
+        fetch("/api/kanban?include_boards=false", { cache: "no-store" }),
+      ]);
 
-      const agentsJson = await agentsRes.json().catch(() => ({}));
-      if (agentsJson.ok && Array.isArray(agentsJson.agents)) {
-        setAgents(agentsJson.agents.map((a: Record<string, unknown>) => ({
-          id: String(a.id ?? a.agentId ?? ""),
-          name: typeof a.name === "string" && a.name ? a.name : String(a.id ?? a.agentId ?? "agent"),
-          runtime: typeof a.runtime === "string" ? a.runtime : undefined,
-          provider: typeof a.provider === "string" ? a.provider : undefined,
-          model: typeof a.model === "string" ? a.model : undefined,
-          beeRole: typeof a.beeRole === "string" ? a.beeRole : undefined,
-          workerClass: typeof a.workerClass === "string" ? a.workerClass : undefined,
-        })).filter((a: AgentLite) => a.id));
+      if (approvalsResult.status === "fulfilled") {
+        const approvalsJson = await approvalsResult.value.json().catch(() => ({}));
+        if (approvalsJson.ok && Array.isArray(approvalsJson.approvals)) setApprovals(approvalsJson.approvals);
       }
 
-      const kanbanJson = await kanbanRes.json().catch(() => ({}));
-      const boardTasks = kanbanJson?.board?.tasks;
-      if (Array.isArray(boardTasks)) {
-        setTasks(boardTasks.map((t: Record<string, unknown>) => ({
-          id: String(t.id ?? ""),
-          title: typeof t.title === "string" ? t.title : "",
-          status: typeof t.status === "string" ? t.status : "ideas",
-          assignee: typeof t.assignee === "string" ? t.assignee : null,
-          priority: typeof t.priority === "string" ? t.priority : undefined,
-          skills: Array.isArray(t.skills) ? (t.skills as string[]) : undefined,
-          createdAt: typeof t.createdAt === "number" ? t.createdAt : undefined,
-          updatedAt: typeof t.updatedAt === "number" ? t.updatedAt : undefined,
-          completedAt: typeof t.completedAt === "number" ? t.completedAt : undefined,
-        })));
+      if (agentsResult.status === "fulfilled") {
+        const agentsJson = await agentsResult.value.json().catch(() => ({}));
+        if (agentsJson.ok && Array.isArray(agentsJson.agents)) {
+          setAgents(agentsJson.agents.map((a: Record<string, unknown>) => ({
+            id: String(a.id ?? a.agentId ?? ""),
+            name: typeof a.name === "string" && a.name ? a.name : String(a.id ?? a.agentId ?? "agent"),
+            runtime: typeof a.runtime === "string" ? a.runtime : undefined,
+            provider: typeof a.provider === "string" ? a.provider : undefined,
+            model: typeof a.model === "string" ? a.model : undefined,
+            beeRole: typeof a.beeRole === "string" ? a.beeRole : undefined,
+            workerClass: typeof a.workerClass === "string" ? a.workerClass : undefined,
+          })).filter((a: AgentLite) => a.id));
+        }
+      }
+
+      if (kanbanResult.status === "fulfilled") {
+        const kanbanJson = await kanbanResult.value.json().catch(() => ({}));
+        const boardTasks = kanbanJson?.board?.tasks;
+        if (Array.isArray(boardTasks)) {
+          setTasks(boardTasks.map((t: Record<string, unknown>) => ({
+            id: String(t.id ?? ""),
+            title: typeof t.title === "string" ? t.title : "",
+            body: typeof t.body === "string" ? t.body : undefined,
+            result: typeof t.result === "string" ? t.result : undefined,
+            status: typeof t.status === "string" ? t.status : "ideas",
+            assignee: typeof t.assignee === "string" ? t.assignee : null,
+            priority: typeof t.priority === "string" ? t.priority : undefined,
+            skills: Array.isArray(t.skills) ? (t.skills as string[]) : undefined,
+            deliverables: Array.isArray(t.deliverables) ? (t.deliverables as KanbanTaskLite["deliverables"]) : undefined,
+            loop: t.loop && typeof t.loop === "object" ? (t.loop as KanbanTaskLite["loop"]) : undefined,
+            loopReceipts: Array.isArray(t.loopReceipts) ? (t.loopReceipts as KanbanTaskLite["loopReceipts"]) : undefined,
+            createdAt: typeof t.createdAt === "number" ? t.createdAt : undefined,
+            updatedAt: typeof t.updatedAt === "number" ? t.updatedAt : undefined,
+            completedAt: typeof t.completedAt === "number" ? t.completedAt : undefined,
+          })));
+        }
       }
     } catch {
       setNotice(null);
@@ -172,6 +184,30 @@ export function ZeroHumanCompaniesView() {
       }));
   }, []);
 
+  const membersFromEdit = React.useCallback((members: CompanyEditForm["members"] = []): CompanyMember[] => {
+    const ids = new Set(members.map((member) => member.agentId).filter(Boolean));
+    const hasQueen = members.some((member) => member.role === "Queen");
+    const queen = members.find((member) => member.role === "Queen") ?? members[0];
+    const queenId = queen?.agentId ?? null;
+    return members
+      .filter((member) => member.agentId)
+      .map((member) => {
+        const isQueen = member.role === "Queen" || (!hasQueen && member.agentId === queenId);
+        return {
+          agentId: member.agentId,
+          companyCap: member.companyCap && member.companyCap > 0 ? member.companyCap : undefined,
+          roleInCompany: isQueen ? "Queen" : member.role,
+          reportsTo: isQueen
+            ? null
+            : member.reportsTo && ids.has(member.reportsTo)
+              ? member.reportsTo
+              : queenId,
+          task: member.task?.trim() || undefined,
+          state: member.state || undefined,
+        };
+      });
+  }, []);
+
   const handleCreateCompany = React.useCallback(async (form: CreateForm, crew: Agent[]): Promise<string | null> => {
     const queen = crew.find((a) => a.role === "Queen") ?? crew[0];
     const queenId = queen?.id ?? null;
@@ -194,22 +230,27 @@ export function ZeroHumanCompaniesView() {
     return result.company?.id ?? null;
   }, [membersFromCrew, refresh]);
 
-  const handleEditCompany = React.useCallback(async (companyId: string, form: CreateForm): Promise<void> => {
-    // Identity + apex-goal edit only — crew, budget, and tracked progress are
-    // preserved (upsert merges; omitted fields keep their existing values).
+  const handleEditCompany = React.useCallback(async (companyId: string, form: CompanyEditForm): Promise<void> => {
     setBusyId(companyId);
     try {
-      const existing = data.find((e) => e.company.id === companyId)?.company;
-      // Always send apexGoal: when all three fields are blank the store normalizes
-      // it to undefined (clears the goal); otherwise we keep the tracked
-      // current/progress so editing the wording doesn't reset the metric.
       const apexGoal = {
         title: form.apexTitle || undefined,
         metric: form.apexMetric || undefined,
         target: form.apexTarget || undefined,
         unit: form.metricUnit,
-        current: existing?.apexGoal?.current,
-        progress: existing?.apexGoal?.progress,
+        current: form.apexCurrent || undefined,
+        progress: form.apexProgress,
+      };
+      const revenue: CompanyRevenue = {
+        kind: form.revenueKind || undefined,
+        label: form.revenueLabel || "",
+        value: form.revenueValue || "",
+        target: form.revenueTarget || null,
+        mau: form.revenueMau || undefined,
+        pct: form.revenuePct,
+        delta: form.revenueDelta || null,
+        up: form.revenueUp !== false,
+        isApex: form.revenueIsApex === true,
       };
       const result = await postCompanies({
         action: "upsert",
@@ -217,7 +258,17 @@ export function ZeroHumanCompaniesView() {
         name: form.name,
         ticker: form.ticker || undefined,
         sector: form.sector || undefined,
+        charter: form.charter ?? "",
+        blurb: form.blurb ?? "",
+        dailyBudgetUsd: form.dailyBudgetUsd && form.dailyBudgetUsd > 0 ? form.dailyBudgetUsd : 0,
+        monthlyBudgetUsd: form.monthlyBudgetUsd && form.monthlyBudgetUsd > 0 ? form.monthlyBudgetUsd : 0,
+        totalBudgetUsd: form.totalBudgetUsd && form.totalBudgetUsd > 0 ? form.totalBudgetUsd : 0,
+        frozen: form.frozen === true,
+        status: form.status ?? "",
+        alignment: form.alignment ?? "",
         apexGoal,
+        revenue,
+        members: membersFromEdit(form.members),
       });
       if (!result.ok) setError(result.error || "Could not save changes.");
       else setError(null);
@@ -225,7 +276,7 @@ export function ZeroHumanCompaniesView() {
     } finally {
       setBusyId(null);
     }
-  }, [data, refresh]);
+  }, [membersFromEdit, refresh]);
 
   const handleAddAgents = React.useCallback(async (companyId: string, crew: Agent[]): Promise<void> => {
     // Server-authoritative additive merge — no read-merge-write race. reportsTo is
@@ -337,6 +388,7 @@ export function ZeroHumanCompaniesView() {
       colonies={colonies}
       agentPool={agentPool}
       loading={loading || refreshing}
+      initialLoading={loading}
       error={error}
       notice={notice}
       busyId={busyId}
@@ -350,6 +402,7 @@ export function ZeroHumanCompaniesView() {
       onDelete={(companyId) => void handleDelete(companyId)}
       onDispatch={(companyId) => void handleDispatch(companyId)}
       onStopAutonomy={(companyId) => void handleStopAutonomy(companyId)}
+      theme={theme}
     />
   );
 }

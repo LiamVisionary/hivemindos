@@ -6,6 +6,21 @@ title: "Env, Files, Notifications, And Maintenance"
 
 These are the utility surfaces that keep the control room usable over time: shared env, constrained file access, notifications, memory telemetry, and repair checks.
 
+The maintenance surface now has a shared system cockpit spine:
+
+- `/api/system/health` reports dashboard auth, shared vault/index, shared env,
+  and project readiness with secret-free `ok`, `degraded`, `down`, and
+  `disabled` statuses.
+- `/api/system/smoke-checklist` turns health evidence into the first-run
+  operator checklist: auth, collector readiness, shared brain, shared env,
+  runtime chat, Work Board task, handoff path, and project readiness.
+- `/api/system/troubleshooting` exposes the self-host troubleshooting cookbook
+  for dashboard and agent-facing repair guidance.
+- `/api/system/model-fit` scores Fleet machine facts into local-model versus
+  hosted-provider recommendations.
+
+The companion runbook is [Troubleshooting Cookbook](../troubleshooting-cookbook.html).
+
 ## Env
 
 For the focused whole brain page, see [Shared Env](../whole-brain/shared-env.html). For cross-machine movement, see [Hivemind Sync](hivemind-sync.html).

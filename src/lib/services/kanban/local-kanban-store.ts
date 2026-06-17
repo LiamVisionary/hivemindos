@@ -16,6 +16,7 @@ import {
   recordLoopAntiPatterns,
   recordLoopExperiment,
 } from "@/lib/services/kanban/loop-optimizer";
+import { withMutationQueue } from "@/lib/services/kanban/mutation-queue";
 import {
   gitLawbProofForProject,
   readProjectRegistry,
@@ -142,6 +143,15 @@ export type KanbanStorageInfo = {
   file: string;
   fallbackReason?: string;
 };
+
+function withBoardMutation<T>(
+  slugInput: string | null | undefined,
+  options: KanbanStorageOptions,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const key = resolveKanbanStorage(slugInput, options).file;
+  return withMutationQueue(key, operation);
+}
 
 export function normalizeBoardSlug(input?: string | null) {
   const slug = (input || DEFAULT_BOARD).trim().toLowerCase();
@@ -556,6 +566,7 @@ export async function createTask(
   input: CreateTaskInput,
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const projectsById = await projectMapForKanban(options);
   const title = input.title?.trim();
@@ -627,6 +638,7 @@ export async function createTask(
   promoteReadyChildren(board, "dependency.auto-promote");
   await writeBoard(touch(board), options);
   return { board, task, created: true };
+  });
 }
 
 export async function patchTask(
@@ -635,6 +647,7 @@ export async function patchTask(
   patch: PatchTaskInput,
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const projectsById = await projectMapForKanban(options);
   const task = board.tasks.find((item) => item.id === taskId);
@@ -780,6 +793,7 @@ export async function patchTask(
   }
   await writeBoard(touch(board), options);
   return { board, task: changed };
+  });
 }
 
 export async function moveTask(
@@ -788,6 +802,7 @@ export async function moveTask(
   status: KanbanStatus,
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -855,6 +870,7 @@ export async function moveTask(
     promoteReadyChildren(board, "dependency.auto-promote");
   await writeBoard(touch(board), options);
   return { board, task: board.tasks.find((item) => item.id === taskId)! };
+  });
 }
 
 export async function claimTask(
@@ -863,12 +879,14 @@ export async function claimTask(
   input: ClaimTaskInput = {},
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   const result = await claimReadyTask(board, task, input, options);
   await writeBoard(touch(board), options);
   return result;
+  });
 }
 
 export async function claimNextTask(
@@ -876,12 +894,14 @@ export async function claimNextTask(
   input: ClaimNextTaskInput = {},
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = nextClaimCandidate(board, input);
   if (!task) return { board, task: null, run: null, claimed: false };
   const result = await claimReadyTask(board, task, input, options);
   await writeBoard(touch(board), options);
   return { ...result, claimed: true };
+  });
 }
 
 function nextClaimCandidate(
@@ -993,6 +1013,7 @@ export async function heartbeatTask(
   claimLock?: string,
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -1022,6 +1043,7 @@ export async function heartbeatTask(
   );
   await writeBoard(touch(board), options);
   return { board, task, run };
+  });
 }
 
 export async function completeTask(
@@ -1030,6 +1052,7 @@ export async function completeTask(
   input: FinishRunInput = {},
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -1111,6 +1134,7 @@ export async function completeTask(
   promoteReadyChildren(board, "dependency.auto-promote");
   await writeBoard(touch(board), options);
   return { board, task: changed };
+  });
 }
 
 export async function discoverTaskLoop(
@@ -1119,6 +1143,7 @@ export async function discoverTaskLoop(
   input: Record<string, unknown> = {},
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -1152,6 +1177,7 @@ export async function discoverTaskLoop(
   );
   await writeBoard(touch(board), options);
   return { board, task: changed, observation: loop.observation };
+  });
 }
 
 export async function recordTaskLoop(
@@ -1163,6 +1189,7 @@ export async function recordTaskLoop(
   } = {},
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -1204,6 +1231,7 @@ export async function recordTaskLoop(
   );
   await writeBoard(touch(board), options);
   return { board, task: changed, observation: loop.observation };
+  });
 }
 
 export async function failTask(
@@ -1212,6 +1240,7 @@ export async function failTask(
   input: FinishRunInput = {},
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -1259,6 +1288,7 @@ export async function failTask(
   );
   await writeBoard(touch(board), options);
   return { board, task: changed, run, retried, failureReason };
+  });
 }
 
 export async function blockTask(
@@ -1267,6 +1297,7 @@ export async function blockTask(
   reason: string,
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -1291,6 +1322,7 @@ export async function blockTask(
   );
   await writeBoard(touch(board), options);
   return { board, task: changed };
+  });
 }
 
 export async function unblockTask(
@@ -1298,6 +1330,7 @@ export async function unblockTask(
   taskId: string,
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -1321,6 +1354,7 @@ export async function unblockTask(
   );
   await writeBoard(touch(board), options);
   return { board, task: changed };
+  });
 }
 
 export async function promoteTask(
@@ -1329,6 +1363,7 @@ export async function promoteTask(
   input: { force?: boolean; reason?: string; dryRun?: boolean } = {},
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -1362,6 +1397,7 @@ export async function promoteTask(
   );
   await writeBoard(touch(board), options);
   return { board, task: changed, promoted: true };
+  });
 }
 
 export async function reclaimStaleTasks(
@@ -1369,6 +1405,7 @@ export async function reclaimStaleTasks(
   input: { staleMs?: number } = {},
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const staleMs = positiveNumber(input.staleMs) ?? DEFAULT_STALE_HEARTBEAT_MS;
   const now = Date.now();
@@ -1412,6 +1449,7 @@ export async function reclaimStaleTasks(
   });
   if (reclaimed.length) await writeBoard(touch(board), options);
   return { board, reclaimed };
+  });
 }
 
 export async function bulkPatchTasks(
@@ -1450,6 +1488,7 @@ export async function deleteTask(
   taskId: string,
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -1463,6 +1502,7 @@ export async function deleteTask(
   board.events.unshift(event("task.deleted", `Deleted ${task.title}`));
   await writeBoard(touch(board), options);
   return { board, task };
+  });
 }
 
 export async function addComment(
@@ -1472,6 +1512,7 @@ export async function addComment(
   author = "dashboard",
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
@@ -1493,6 +1534,7 @@ export async function addComment(
   );
   await writeBoard(touch(board), options);
   return { board, comment };
+  });
 }
 
 export async function addLink(
@@ -1501,6 +1543,7 @@ export async function addLink(
   childId: string,
   options: KanbanStorageOptions = {},
 ) {
+  return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const ids = new Set(board.tasks.map((task) => task.id));
   if (!ids.has(parentId) || !ids.has(childId))
@@ -1517,6 +1560,7 @@ export async function addLink(
     await writeBoard(touch(board), options);
   }
   return { board };
+  });
 }
 
 async function writeBoard(

@@ -224,7 +224,7 @@
 
 .pilotStatusPill {
   position: fixed;
-  bottom: 28px;
+  top: 28px;
   left: 50%;
   z-index: 96;
   display: flex;
@@ -268,7 +268,7 @@
 @keyframes beePilotPillIn {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(14px) scale(0.92);
+    transform: translateX(-50%) translateY(-14px) scale(0.92);
   }
   to {
     opacity: 1;

@@ -20,6 +20,12 @@ importers:
       '@ai-sdk/react':
         specifier: ^2.0.181
         version: 2.0.181(react@19.2.3)(zod@4.3.6)
+      '@json-render/core':
+        specifier: 0.19.0
+        version: 0.19.0(zod@4.3.6)
+      '@json-render/react':
+        specifier: 0.19.0
+        version: 0.19.0(react@19.2.3)(zod@4.3.6)
       '@livekit/agents':
         specifier: ^1.4.5
         version: 1.4.5(@livekit/rtc-node@0.13.29)(typescript@5.9.3)(zod@4.3.6)
@@ -1433,6 +1439,25 @@ packages:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  /@json-render/core@0.19.0(zod@4.3.6):
+    resolution: {integrity: sha512-vvcyZ+10EDZKbEyB1J2kXOGfDaiZR2LurZGSqi2r5STHyKr+Te85DWaBxTwRGgM7U1LtIvNx85BzzjElRKoAIg==}
+    peerDependencies:
+      zod: ^4.0.0
+    dependencies:
+      zod: 4.3.6
+    dev: false
+
+  /@json-render/react@0.19.0(react@19.2.3)(zod@4.3.6):
+    resolution: {integrity: sha512-kTW6b6cSNRrlEfCUf/69SLoLn+CufC968ruge9tnQlp9pDTGG/SK8pgM541FdgwMFA4zm3s5mpM3G8rdODKc/A==}
+    peerDependencies:
+      react: ^19.2.3
+    dependencies:
+      '@json-render/core': 0.19.0(zod@4.3.6)
+      react: 19.2.3
+    transitivePeerDependencies:
+      - zod
+    dev: false
 
   /@leichtgewicht/ip-codec@2.0.5:
     resolution: {integrity: sha512-Vo+PSpZG2/fmgmiNzYK9qWRh8h/CHrwD0mo1h1DzL4yzHNSfWYujGTYsWGreD000gcgmZ7K4Ys6Tx9TxtsKdDw==}

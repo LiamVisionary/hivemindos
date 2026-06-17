@@ -304,21 +304,32 @@
   pointer-events: auto;
 }
 
-.addressTooltip div {
+.walletMenuFolder {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 30px;
+  grid-template-columns: minmax(0, 1fr) 16px;
   gap: 8px;
   align-items: center;
   border-radius: 6px;
-  padding: 2px;
+  padding: 8px;
+  color: var(--muted);
+  outline: none;
   transition: background 140ms ease;
 }
 
-.addressTooltip div:hover {
+.walletMenuFolder:hover,
+.walletMenuFolder:focus-within {
   background: rgba(148, 163, 184, 0.08);
 }
 
-.addressTooltip span {
+.walletMenuFolder > svg {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+
+.addressTooltip span,
+.walletMenuAction span {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -327,6 +338,53 @@
 .addressTooltip small {
   color: var(--muted);
   font-size: 11px;
+}
+
+.walletMenuSubpanel {
+  display: none;
+  grid-column: 1 / -1;
+  gap: 6px;
+  min-width: 0;
+  border-left: 1px solid rgba(148, 163, 184, 0.14);
+  margin: 4px 0 0 6px;
+  padding-left: 8px;
+}
+
+.walletMenuFolder:hover .walletMenuSubpanel,
+.walletMenuFolder:focus-within .walletMenuSubpanel {
+  display: grid;
+}
+
+.walletMenuAddressRow,
+.walletMenuAction {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  gap: 8px;
+  align-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 4px;
+  color: var(--foreground);
+  text-align: left;
+}
+
+.walletMenuAddressRow:hover,
+.walletMenuAction:hover,
+.walletMenuAction:focus-visible {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.walletMenuAction {
+  grid-template-columns: 18px minmax(0, 1fr);
+  width: 100%;
+  cursor: pointer;
+}
+
+.walletMenuAction svg {
+  width: 14px;
+  height: 14px;
+  color: var(--accent-strong);
 }
 
 .addressCopyButton {
@@ -454,7 +512,29 @@
 }
 
 .personalTokenRowWithAction {
-  grid-template-columns: 48px minmax(0, 1fr) max-content max-content;
+  grid-template-areas:
+    "icon meta value"
+    "icon meta action";
+  grid-template-columns: 48px minmax(0, 1fr) max-content;
+  align-items: center;
+  border-radius: 36px;
+}
+
+.personalTokenRowWithAction .personalTokenIconFrame {
+  grid-area: icon;
+}
+
+.personalTokenRowWithAction .personalTokenMeta {
+  grid-area: meta;
+}
+
+.personalTokenRowWithAction .personalTokenValue {
+  grid-area: value;
+}
+
+.personalTokenRowWithAction .personalTokenStakeButton {
+  grid-area: action;
+  justify-self: end;
 }
 
 .personalTokenRow:hover {
@@ -602,6 +682,13 @@
   transform: translateY(-1px);
 }
 
+.personalTokenStakeButton:disabled {
+  cursor: not-allowed;
+  border-color: rgba(148, 163, 184, 0.20);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--muted);
+}
+
 .personalTokenStakeButton svg {
   width: 14px;
   height: 14px;
@@ -645,10 +732,123 @@
     grid-template-columns: 48px minmax(0, 1fr);
   }
 
+  .personalTokenRowWithAction {
+    grid-template-areas:
+      "icon meta"
+      "icon value"
+      "icon action";
+  }
+
   .personalTokenValue,
   .personalTokenStakeButton {
-    grid-column: 2;
     justify-self: start;
     text-align: left;
   }
+}
+
+:global(:root[data-theme="hive-light"]) .personalWallets {
+  border-bottom-color: var(--line);
+}
+
+:global(:root[data-theme="hive-light"]) .personalImportPanel,
+:global(:root[data-theme="hive-light"]) .personalWalletCard,
+:global(:root[data-theme="hive-light"]) .addressTooltip,
+:global(:root[data-theme="hive-light"]) .walletMenuSubpanel,
+:global(:root[data-theme="hive-light"]) .walletActionGrid button,
+:global(:root[data-theme="hive-light"]) .personalTokenRow {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 14px 34px rgba(82, 61, 22, 0.1);
+}
+
+:global(:root[data-theme="hive-light"]) .personalWalletCard:hover {
+  border-color: rgba(176, 127, 28, 0.36);
+  box-shadow: 0 18px 42px rgba(82, 61, 22, 0.16);
+}
+
+:global(:root[data-theme="hive-light"]) .personalImportGrid label,
+:global(:root[data-theme="hive-light"]) .personalImportSecret,
+:global(:root[data-theme="hive-light"]) .personalWalletTop span,
+:global(:root[data-theme="hive-light"]) .personalWalletBalance span,
+:global(:root[data-theme="hive-light"]) .personalTokenRow span,
+:global(:root[data-theme="hive-light"]) .recoveryPhraseHint,
+:global(:root[data-theme="hive-light"]) .personalImportFooter p,
+:global(:root[data-theme="hive-light"]) .addressTooltip small,
+:global(:root[data-theme="hive-light"]) .walletActionGrid span {
+  color: var(--text-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .personalImportGrid input,
+:global(:root[data-theme="hive-light"]) .personalImportGrid select,
+:global(:root[data-theme="hive-light"]) .personalImportSecret input,
+:global(:root[data-theme="hive-light"]) .personalImportSecret textarea {
+  border-color: var(--line);
+  background: var(--field);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .personalStakeRouteLink,
+:global(:root[data-theme="hive-light"]) .personalConnectorStatus,
+:global(:root[data-theme="hive-light"]) .personalTokenStakeButton,
+:global(:root[data-theme="hive-light"]) .personalWalletStatus[data-tone="ok"] {
+  border-color: rgba(95, 143, 90, 0.28);
+  background: rgba(95, 143, 90, 0.12);
+  color: #356b2f;
+}
+
+:global(:root[data-theme="hive-light"]) .personalStakeRouteLink:hover,
+:global(:root[data-theme="hive-light"]) .personalStakeRouteLink:focus-visible,
+:global(:root[data-theme="hive-light"]) .personalTokenStakeButton:hover:not(:disabled),
+:global(:root[data-theme="hive-light"]) .personalTokenStakeButton:focus-visible:not(:disabled),
+:global(:root[data-theme="hive-light"]) .walletActionGrid button:hover:not(:disabled),
+:global(:root[data-theme="hive-light"]) .walletActionGrid button:focus-visible:not(:disabled),
+:global(:root[data-theme="hive-light"]) .personalTokenRow:hover {
+  border-color: rgba(176, 127, 28, 0.38);
+  background: rgba(176, 127, 28, 0.12);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .personalWalletTop strong,
+:global(:root[data-theme="hive-light"]) .personalWalletBalance strong,
+:global(:root[data-theme="hive-light"]) .personalTokenRow strong,
+:global(:root[data-theme="hive-light"]) .addressTooltip span,
+:global(:root[data-theme="hive-light"]) .walletMenuAction span {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .addressListButton,
+:global(:root[data-theme="hive-light"]) .walletMenuFolder,
+:global(:root[data-theme="hive-light"]) .walletMenuAddressRow,
+:global(:root[data-theme="hive-light"]) .walletMenuAction,
+:global(:root[data-theme="hive-light"]) .addressCopyButton {
+  color: var(--text-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .addressMenu:hover .addressListButton,
+:global(:root[data-theme="hive-light"]) .addressListButton:focus-visible,
+:global(:root[data-theme="hive-light"]) .walletMenuFolder:hover,
+:global(:root[data-theme="hive-light"]) .walletMenuFolder:focus-within,
+:global(:root[data-theme="hive-light"]) .walletMenuAddressRow:hover,
+:global(:root[data-theme="hive-light"]) .walletMenuAction:hover,
+:global(:root[data-theme="hive-light"]) .walletMenuAction:focus-visible,
+:global(:root[data-theme="hive-light"]) .addressCopyButton:hover,
+:global(:root[data-theme="hive-light"]) .addressCopyButton:focus-visible {
+  background: rgba(176, 127, 28, 0.12);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .personalTokenChainBadge {
+  border-color: var(--surface);
+  background: var(--field);
+  box-shadow: 0 4px 12px rgba(82, 61, 22, 0.18);
+}
+
+:global(:root[data-theme="hive-light"]) .personalWalletStatus[data-tone="error"],
+:global(:root[data-theme="hive-light"]) .personalTokenRow span[data-tone="down"] {
+  color: #8e3328;
+}
+
+:global(:root[data-theme="hive-light"]) .personalWalletStatus[data-tone="error"] {
+  background: rgba(192, 82, 77, 0.1);
 }

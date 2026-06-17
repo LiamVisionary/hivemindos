@@ -1,12 +1,24 @@
 .aboutWindow {
+  --about-bg: #f1ede3;
+  --about-bg-soft: #f8f4ec;
+  --about-panel: #fbf8f1;
+  --about-line: #d8cdbb;
+  --about-fg: #221d14;
+  --about-muted: #6f6657;
+  --about-live: #5f8f5a;
+  --about-live-strong: #466f42;
+  --about-honey: #7c550b;
   min-height: 100vh;
   display: grid;
   align-content: start;
   justify-items: center;
   gap: 10px;
   padding: 42px 26px 24px;
-  color: #1f2328;
-  background: #f7f7f8;
+  color: var(--about-fg);
+  background:
+    radial-gradient(circle at 20% 14%, rgba(176, 127, 28, 0.11), transparent 22rem),
+    radial-gradient(circle at 84% 76%, rgba(95, 143, 90, 0.13), transparent 24rem),
+    linear-gradient(180deg, var(--about-bg) 0%, var(--about-bg-soft) 100%);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", sans-serif;
   text-align: center;
 }
@@ -16,7 +28,7 @@
   height: 104px;
   border-radius: 22px;
   object-fit: contain;
-  filter: drop-shadow(0 8px 16px rgba(20, 23, 28, 0.18));
+  filter: drop-shadow(0 10px 22px rgba(82, 61, 22, 0.2));
 }
 
 .aboutWindow h1 {
@@ -29,7 +41,7 @@
 
 .version {
   margin: 0;
-  color: #343840;
+  color: var(--about-muted);
   font-size: 14px;
   line-height: 1.35;
 }
@@ -40,10 +52,12 @@
   gap: 14px;
   margin-top: 16px;
   padding: 15px 16px;
-  border: 1px solid rgba(31, 35, 40, 0.12);
+  border: 1px solid var(--about-line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.74);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.86) inset;
+  background: color-mix(in srgb, var(--about-panel) 88%, white);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.76) inset,
+    0 18px 40px rgba(82, 61, 22, 0.1);
   text-align: left;
 }
 
@@ -56,7 +70,7 @@
 
 .updatePanel p {
   margin: 4px 0 0;
-  color: #626975;
+  color: var(--about-muted);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -82,18 +96,18 @@
 .linkButton {
   padding: 7px 4px;
   background: transparent;
-  color: #59718d;
+  color: var(--about-live-strong);
 }
 
 .linkButton:hover {
-  color: #1f5f9d;
+  color: var(--about-honey);
 }
 
 .updateButton {
   min-width: 98px;
   padding: 8px 13px;
-  background: #1677d2;
-  color: white;
+  background: var(--about-honey);
+  color: #fff9e8;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.28) inset;
 }
 
@@ -105,7 +119,7 @@
 .updateDetail {
   max-width: 420px;
   margin: 0;
-  color: #7a828e;
+  color: var(--about-muted);
   font-size: 11px;
   line-height: 1.35;
 }

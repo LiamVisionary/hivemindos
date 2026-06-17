@@ -8,6 +8,7 @@ import { AGENT_APP_CATALOG } from "@/features/dashboard/agent-capability-catalog
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { AgentReachSetupWizard } from "@/features/dashboard/views/AgentReachSetupWizard";
 import { AppPreferencesCard, matchAppPreference, type AppPreferenceRecord } from "@/features/dashboard/views/AppPreferencesCard";
+import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { getNativeFleetAppsCache } from "@/lib/native/fleet";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
@@ -243,18 +244,18 @@ function BrowserUseFullPermissionsModal({
     <div
       role="presentation"
       onClick={() => { if (!busy) onClose(); }}
-      className="fixed inset-0 z-[90] grid place-items-center bg-[rgba(2,6,23,0.76)] p-4 backdrop-blur-md"
+      className="fixed inset-0 z-[90] grid place-items-center bg-[rgba(34,29,20,0.34)] p-4 backdrop-blur-md"
     >
       <div
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="browser-use-full-permissions-title"
         onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-[520px] rounded-md border border-[rgba(251,191,36,0.34)] bg-[rgba(15,23,42,0.98)] p-5 text-[var(--foreground)] shadow-[0_28px_90px_rgba(0,0,0,0.5)]"
+        className="w-full max-w-[520px] rounded-md border border-[rgba(185,139,47,0.34)] bg-[var(--surface)] p-5 text-[var(--foreground)] shadow-[0_28px_70px_rgba(82,61,22,0.18)]"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="eyebrow text-[#fde68a]">Browser Use permissions</p>
+            <p className="eyebrow text-[var(--warning)]">Browser Use permissions</p>
             <h3 id="browser-use-full-permissions-title" className="m-0 text-xl font-black leading-tight">
               Enable full browser permissions?
             </h3>
@@ -270,8 +271,8 @@ function BrowserUseFullPermissionsModal({
           <span>Only enable this if you trust the agents and the sites they will operate on.</span>
         </div>
 
-        <div className="mt-4 rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(2,6,23,0.58)] p-3">
-          <div className="mb-2 font-mono text-[11px] font-black uppercase text-[#fde68a]">Slide to unlock full permissions</div>
+        <div className="mt-4 rounded-md border border-[var(--line)] bg-[var(--surface-soft)] p-3">
+          <div className="mb-2 font-mono text-[11px] font-black uppercase text-[var(--warning)]">Slide to unlock full permissions</div>
           <div
             ref={unlockTrackRef}
             role="slider"
@@ -368,16 +369,16 @@ function AppIcon({ app, large = false }: { app: HostedApp; large?: boolean }) {
 function MyAppsLoadingState() {
   return (
     <div
-      className="mt-6 grid min-h-[58vh] place-items-center overflow-hidden rounded-md border border-[rgba(94,234,212,0.14)] bg-[radial-gradient(circle_at_50%_30%,rgba(20,184,166,0.10),transparent_34%),rgba(8,12,19,0.42)] px-4 py-10"
+      className="mt-6 grid min-h-[58vh] place-items-center overflow-hidden rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 py-10"
       aria-live="polite"
       aria-busy="true"
     >
       <div className="grid w-full max-w-4xl justify-items-center gap-8">
         <div className="relative grid h-36 w-36 place-items-center">
-          <span className="absolute h-28 w-28 rounded-full border border-[rgba(94,234,212,0.24)] animate-ping" />
-          <span className="absolute h-20 w-20 rounded-full border border-[rgba(251,191,36,0.22)] animate-pulse" />
-          <span className="absolute h-px w-32 origin-center rotate-45 bg-gradient-to-r from-transparent via-[rgba(94,234,212,0.55)] to-transparent" />
-          <span className="grid h-16 w-16 place-items-center rounded-[22px] border border-[rgba(94,234,212,0.28)] bg-[rgba(10,14,21,0.82)] shadow-[0_20px_70px_rgba(20,184,166,0.18)]">
+          <span className="absolute h-28 w-28 animate-ping rounded-full border border-[var(--accent-strong)] opacity-25" />
+          <span className="absolute h-20 w-20 animate-pulse rounded-full border border-[rgba(185,139,47,0.28)]" />
+          <span className="absolute h-px w-32 origin-center rotate-45 bg-gradient-to-r from-transparent via-[var(--accent-strong)] to-transparent opacity-45" />
+          <span className="grid h-16 w-16 place-items-center rounded-[22px] border border-[var(--line)] bg-[var(--surface-soft)] shadow-[0_20px_50px_rgba(82,61,22,0.14)]">
             <LoaderCircle aria-hidden="true" className="h-7 w-7 animate-spin text-[var(--accent-strong)]" />
           </span>
         </div>
@@ -412,16 +413,30 @@ function MyAppsLoadingState() {
   );
 }
 
-function appLaunchUrl(app: HostedApp) {
-  if (!/z-image/i.test(app.name)) return app.openUrl;
+const LOCAL_HIVEMIND_LINK_URL = "http://127.0.0.1:8788";
+
+function localHivemindLinkAppProxyUrl(rawUrl: string) {
   try {
-    const url = new URL(app.openUrl);
+    const url = new URL(rawUrl);
+    const alreadyLocal = url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "::1";
+    if (alreadyLocal || !url.pathname.startsWith("/app-proxy/")) return rawUrl;
+    return `${LOCAL_HIVEMIND_LINK_URL}/peer/${encodeURIComponent(url.host)}${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return rawUrl;
+  }
+}
+
+function appLaunchUrl(app: HostedApp) {
+  const openUrl = isTauriDesktopRuntime() ? localHivemindLinkAppProxyUrl(app.openUrl) : app.openUrl;
+  if (!/z-image/i.test(app.name)) return openUrl;
+  try {
+    const url = new URL(openUrl);
     if (!url.searchParams.get("api")) {
       url.searchParams.set("api", url.toString().replace(/\/$/, ""));
     }
     return url.toString();
   } catch {
-    return app.openUrl;
+    return openUrl;
   }
 }
 
@@ -939,11 +954,11 @@ export function MyAppsPanel({ activeView, fleetClass, formatRelativeTime }: MyAp
             <div
               className={
                 liveAppExpanded
-                  ? "fixed inset-0 z-[80] overflow-hidden border border-[rgba(148,163,184,0.18)] bg-black"
-                  : "min-h-[520px] overflow-hidden rounded-md border border-[rgba(148,163,184,0.18)] bg-black/40"
+                  ? "fixed inset-0 z-[80] overflow-hidden border border-[var(--line)] bg-[var(--surface)]"
+                  : "min-h-[520px] overflow-hidden rounded-md border border-[var(--line)] bg-[var(--surface)]"
               }
             >
-              <div className="flex items-center justify-between gap-3 border-b border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.86)] px-3 py-2">
+              <div className="flex items-center justify-between gap-3 border-b border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
                 <span className="text-xs font-bold text-[var(--muted)]">Live app</span>
                 <Button
                   type="button"

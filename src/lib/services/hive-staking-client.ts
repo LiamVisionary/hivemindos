@@ -1,5 +1,4 @@
-import { encodeFunctionData, parseUnits } from "viem";
-import { DEFAULT_BASE_HIVE_TOKEN_ADDRESS } from "@/lib/services/hive-staking";
+import { DEFAULT_BASE_HIVE_TOKEN_ADDRESS } from "@/lib/config/hive-staking";
 
 export type BrowserEthereumProvider = {
   request: (input: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -82,6 +81,7 @@ export async function stakeHiveWithBrowserWallet(params: {
   }
 
   await switchBrowserWalletToBase(params.provider);
+  const { encodeFunctionData, parseUnits } = await import("viem");
   const amountRaw = parseUnits(params.amountText, params.decimals ?? 18);
 
   params.onStatus?.("Approve HIVE staking in your wallet...");

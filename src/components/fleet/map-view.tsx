@@ -50,9 +50,11 @@ const PIN_OFFSET: Record<string, [number, number]> = {
   atlas:     [-22, -10],
   honeycomb: [22,  14],
 };
+const PIN_COLLISION_DISTANCE = 66;
+const PIN_COLLISION_SPREAD = 52;
 
 export function MapView({
-  width = 720, height = 540,
+  width, height,
   machines, edges,
   selected, selectedAgentId,
   onSelectMachine, onAddAgent,
@@ -67,22 +69,17 @@ export function MapView({
   onOpenSelectionTooltip,
   onDismissSelectionTooltip,
 }: MapViewProps) {
-  const w = width, h = height;
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
   const dragRef = React.useRef<{ pointerId: number; x: number; y: number; panX: number; panY: number } | null>(null);
   const [viewport, setViewport] = React.useState({ width: 0, height: 0 });
   const [pan, setPan] = React.useState({ x: 0, y: 0 });
   const [dragging, setDragging] = React.useState(false);
+  const w = width ?? Math.max(720, viewport.width || 720);
+  const h = height ?? Math.max(540, viewport.height || 540);
 
   const projection = React.useMemo(() => createFleetProjection(machines, w, h), [h, machines, w]);
   const pos = React.useMemo(() => {
-    const o: Record<string, { x: number; y: number }> = {};
-    for (const m of machines) {
-      const p = projection.project(m.lon, m.lat);
-      const [dx, dy] = PIN_OFFSET[m.id] ?? [0, 0];
-      o[m.id] = { x: p.x + dx, y: p.y + dy };
-    }
-    return o;
+    return projectMachinePositions(machines, projection.project);
   }, [machines, projection]);
   const regionPaths = React.useMemo(() => {
     return COASTLINE_LINES
@@ -449,6 +446,50 @@ function createFleetProjection(machines: FleetMachine[], width: number, height: 
       };
     },
   };
+}
+
+function projectMachinePositions(
+  machines: FleetMachine[],
+  project: (lon: number, lat: number) => { x: number; y: number },
+) {
+  const base = machines.map((machine) => {
+    const point = project(machine.lon, machine.lat);
+    const [dx, dy] = PIN_OFFSET[machine.id] ?? [0, 0];
+    return {
+      machine,
+      x: point.x + dx,
+      y: point.y + dy,
+    };
+  });
+  const groups: Array<typeof base> = [];
+
+  for (const item of base) {
+    const group = groups.find((candidate) => (
+      candidate.some((other) => Math.hypot(other.x - item.x, other.y - item.y) < PIN_COLLISION_DISTANCE)
+    ));
+    if (group) group.push(item);
+    else groups.push([item]);
+  }
+
+  const output: Record<string, { x: number; y: number }> = {};
+  for (const group of groups) {
+    if (group.length === 1) {
+      const [item] = group;
+      output[item.machine.id] = { x: item.x, y: item.y };
+      continue;
+    }
+    const centerX = group.reduce((total, item) => total + item.x, 0) / group.length;
+    const centerY = group.reduce((total, item) => total + item.y, 0) / group.length;
+    group.forEach((item, index) => {
+      const angle = -Math.PI / 2 + (index / group.length) * Math.PI * 2;
+      output[item.machine.id] = {
+        x: centerX + Math.cos(angle) * PIN_COLLISION_SPREAD,
+        y: centerY + Math.sin(angle) * PIN_COLLISION_SPREAD,
+      };
+    });
+  }
+
+  return output;
 }
 
 function extractCoastlineLines(data: CoastlineFeatureCollection) {

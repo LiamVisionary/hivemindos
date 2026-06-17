@@ -6,6 +6,8 @@ import fleetStyles from "@/app/fleet.module.css";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 
 const fleetClass = createStyleClass(fleetStyles);
+const moreCardClass = "grid gap-3 rounded-md border border-[var(--line)] bg-[var(--surface)] p-4 text-left text-[var(--foreground)] transition hover:border-[var(--accent-strong)] hover:bg-[var(--surface-strong)]";
+const moreIconClass = "flex h-9 w-9 items-center justify-center rounded-md border border-[var(--comb-line)] bg-[var(--button-accent)] text-[var(--accent-strong)] [&_svg]:h-4 [&_svg]:w-4";
 
 type MorePanelTarget = "integrations" | "env" | "maintenance" | "sessions" | "tools" | "files" | "notifications" | "messaging" | "memory" | "my-apps" | "phone" | "aeon" | "fusion" | "governance";
 
@@ -168,9 +170,9 @@ export function MorePanel({
                 type="button"
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
-                className="grid gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4 text-left text-[var(--foreground)] transition hover:border-[rgba(94,234,212,0.35)] hover:bg-[rgba(20,184,166,0.08)]"
+                className={moreCardClass}
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-md border border-[rgba(94,234,212,0.24)] bg-[rgba(20,184,166,0.10)] text-[var(--accent-strong)] [&_svg]:h-4 [&_svg]:w-4">
+                <span className={moreIconClass}>
                   {item.icon}
                 </span>
                 <span className="grid gap-1">
@@ -190,9 +192,9 @@ export function MorePanel({
                 <Link
                   key={item.id}
                   href={item.href}
-                  className="grid gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4 text-left text-[var(--foreground)] transition hover:border-[rgba(94,234,212,0.35)] hover:bg-[rgba(20,184,166,0.08)]"
+                  className={moreCardClass}
                 >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-md border border-[rgba(94,234,212,0.24)] bg-[rgba(20,184,166,0.10)] text-[var(--accent-strong)] [&_svg]:h-4 [&_svg]:w-4">
+                  <span className={moreIconClass}>
                     {item.icon}
                   </span>
                   <span className="grid gap-1">
@@ -206,9 +208,9 @@ export function MorePanel({
                   type="button"
                   key={item.id}
                   onClick={() => onNavigate(item.id)}
-                  className="grid gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4 text-left text-[var(--foreground)] transition hover:border-[rgba(94,234,212,0.35)] hover:bg-[rgba(20,184,166,0.08)]"
+                  className={moreCardClass}
                 >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-md border border-[rgba(94,234,212,0.24)] bg-[rgba(20,184,166,0.10)] text-[var(--accent-strong)] [&_svg]:h-4 [&_svg]:w-4">
+                  <span className={moreIconClass}>
                     {item.icon}
                   </span>
                   <span className="grid gap-1">

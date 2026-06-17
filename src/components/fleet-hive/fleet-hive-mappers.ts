@@ -4,6 +4,7 @@
    fire callbacks with the real fleet objects. */
 
 import { isFleetMachineMobile, type FleetAgent, type FleetMachine } from "@/components/fleet/fleet-data";
+import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import type { HiveAgent, HiveMachine, HiveMachineKind } from "./fleet-hive-types";
 
 const KNOWN_KINDS: HiveMachineKind[] = ["Desktop", "Cloud Server", "Laptop", "Home Server", "Edge", "Mobile"];
@@ -28,6 +29,14 @@ function splitOsChip(os: string): { os: string; chip: string } {
   return { os: os.trim(), chip: "" };
 }
 
+function hiveAgentIconSrc(agent: FleetAgent): string {
+  if (agent.beeRole === "queen") return beeRoleIconPath("queen");
+  const customWorkerClass = agent.customWorkerClasses?.find((workerClass) => workerClass.id === agent.selectedCustomWorkerClassId)
+    ?? agent.customWorkerClass;
+  return customWorkerClass?.imageSrc?.trim()
+    || beeRoleIconPath("worker", agent.workerClass ?? "general");
+}
+
 export function mapFleetAgent(agent: FleetAgent): HiveAgent {
   return {
     id: agent.id,
@@ -35,6 +44,7 @@ export function mapFleetAgent(agent: FleetAgent): HiveAgent {
     runtime: agent.runtime,
     state: agent.state,
     role: agent.role,
+    iconSrc: hiveAgentIconSrc(agent),
     wallet: agent.wallet || "—",
     task: agent.task,
     since: agent.since,

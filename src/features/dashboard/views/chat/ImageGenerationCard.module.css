@@ -333,3 +333,66 @@
     margin-left: 0;
   }
 }
+
+:global(:root[data-theme="hive-light"]) .card {
+  border-color: var(--line);
+  background:
+    radial-gradient(circle at 18% 10%, rgba(212, 180, 111, 0.16), transparent 32%),
+    radial-gradient(circle at 86% 16%, rgba(64, 111, 83, 0.1), transparent 30%),
+    var(--surface);
+  box-shadow: 0 18px 46px rgba(82, 61, 22, 0.14);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .icon,
+:global(:root[data-theme="hive-light"]) .status,
+:global(:root[data-theme="hive-light"]) .frame,
+:global(:root[data-theme="hive-light"]) .frameButton,
+:global(:root[data-theme="hive-light"]) .skeleton,
+:global(:root[data-theme="hive-light"]) .mediaFrame,
+:global(:root[data-theme="hive-light"]) .actions a {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .title strong,
+:global(:root[data-theme="hive-light"]) .prompt strong {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .title small,
+:global(:root[data-theme="hive-light"]) .prompt span {
+  color: var(--text-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .icon,
+:global(:root[data-theme="hive-light"]) .actions a,
+:global(:root[data-theme="hive-light"]) .status {
+  border-color: var(--accent-strong);
+  background: var(--button-accent);
+  color: var(--accent-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .status.error,
+:global(:root[data-theme="hive-light"]) .errorText {
+  border-color: rgba(192, 82, 77, 0.34);
+  background: rgba(192, 82, 77, 0.12);
+  color: var(--danger, #a23a35);
+}
+
+:global(:root[data-theme="hive-light"]) .status.ready {
+  border-color: rgba(64, 111, 83, 0.32);
+  background: rgba(64, 111, 83, 0.12);
+  color: var(--success, #406f53);
+}
+
+:global(:root[data-theme="hive-light"]) .previewOverlay {
+  background: rgba(34, 29, 20, 0.34);
+}
+
+:global(:root[data-theme="hive-light"]) .previewClose {
+  border-color: var(--line);
+  background: var(--button-popover);
+  color: var(--button-popover-foreground);
+}
