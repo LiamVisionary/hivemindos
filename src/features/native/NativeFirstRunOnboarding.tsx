@@ -422,7 +422,7 @@ export function NativeFirstRunOnboarding() {
               </div>
               <details className="mt-5 rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.36)] p-3 text-xs text-[var(--muted)]">
                 <summary className="cursor-pointer text-sm font-medium text-[var(--foreground)]">Setup didn’t start? Run it yourself</summary>
-                <p className="mt-3 leading-5">Copy this command and paste it into the Terminal app:</p>
+                <p className="mt-3 leading-5">Copy this command and paste it into {isWindows ? "PowerShell" : "the Terminal app"}:</p>
                 <pre className="mt-2 overflow-auto whitespace-pre-wrap rounded-md bg-[rgba(2,6,23,0.50)] p-3">{commandPreview}</pre>
                 <Button type="button" variant="secondary" className="mt-3" onClick={() => void copySetupCommand()}>
                   <Copy aria-hidden="true" />

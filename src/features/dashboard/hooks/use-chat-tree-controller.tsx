@@ -827,8 +827,10 @@ export function useChatTreeController(props: any) {
     setSetupCommandCopied(false);
   }
 
-  async function copySetupCommand() {
-    await navigator.clipboard?.writeText(setupCollectorCommand()).catch(() => undefined);
+  async function copySetupCommand(os?: string) {
+    await navigator.clipboard
+      ?.writeText(setupCollectorCommand(os))
+      .catch(() => undefined);
     setSetupCommandCopied(true);
     window.setTimeout(() => setSetupCommandCopied(false), 2500);
   }

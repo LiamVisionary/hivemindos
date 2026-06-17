@@ -2,6 +2,8 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { openNativeDirectory } from "@/lib/native/filesystem";
+import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { NATIVE_SETUP_RERUN_EVENT } from "@/lib/native/setup";
 import { renderBeeSoulTemplate, type BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import { isMobileMachineOs } from "@/features/fleet/fleet-identity";
 import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
@@ -181,6 +183,20 @@ export function useAgentController(props: UseAgentControllerProps) {
   function openAgentCreationModal(machine: MachineGroup, runtime?: AgentRuntime, name = "") {
     const mobileMachine = isMobileMachineOs(machine.os);
     if (!mobileMachine && (machine.collector !== "ready" || !machine.collectorUrl)) {
+      // The self machine is already running this app, so the remote "Connect
+      // machine" wizard (git clone + setup on another computer) makes no sense
+      // for it. In the Tauri desktop, re-open the native first-run setup wizard
+      // instead — it has the real per-OS install path (incl. Windows setup.ps1)
+      // and is the same flow the "Re-run Setup..." desktop menu emits, so the
+      // persistently-mounted NativeFirstRunOnboarding is listening. Off-desktop
+      // (dev/browser) the native event has no listener, so fall back to the
+      // setup modal (now Windows/self-aware).
+      if (machine.self && isTauriDesktopRuntime()) {
+        void import("@tauri-apps/api/event")
+          .then(({ emit }) => emit(NATIVE_SETUP_RERUN_EVENT))
+          .catch(() => openSetupModal(machine));
+        return;
+      }
       openSetupModal(machine);
       return;
     }

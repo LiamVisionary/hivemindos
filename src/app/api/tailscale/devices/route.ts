@@ -185,7 +185,9 @@ function isMacDevice(device: ReturnType<typeof simplifyDevice>) {
 // Windows or Linux install never saw its own machine in the fleet — no self
 // cell, no add-agent cell, and any agents on it were invisible.
 function isDesktopDevice(device: ReturnType<typeof simplifyDevice>) {
-  return /^(windows|linux)$/i.test(device.os);
+  // process.platform reports "win32"; the native bridge reports "windows".
+  // Match both so a Windows device is never dropped (mirrors isDesktopMachineOs).
+  return /^(windows|win32|linux)$/i.test(device.os);
 }
 
 function hasNeverHandshake(value?: string) {

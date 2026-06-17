@@ -140,6 +140,10 @@ function assertRouteKeepsDesktops(relPath, label) {
     /device\.self\s*\|\|/.test(text),
     `${label}: dedupeDevices must keep the self device`,
   );
+  assert.ok(
+    /win32/.test(text),
+    `${label}: isDesktopDevice must match the win32 process.platform spelling`,
+  );
 }
 assertRouteKeepsDesktops(
   "../src/app/api/tailscale/devices/route.ts",
@@ -150,4 +154,38 @@ assertRouteKeepsDesktops(
   "fleet/discover route",
 );
 
+// --- v0.2.16 Windows desktop UX drift guards. A fresh Windows user was shown a
+// Unix-only `./setup.sh` setup command and "this Mac" copy on their own PC. ---
+const helpers = readFileSync(
+  new URL(
+    "../src/features/dashboard/dashboard-display-helpers.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
+assert.ok(
+  /setup\.ps1/.test(helpers),
+  "setupCollectorCommand / network-issue commands must offer the Windows setup.ps1 path",
+);
+assert.ok(
+  /isWindowsOs/.test(helpers),
+  "dashboard-display-helpers must branch commands on a Windows OS check",
+);
+assert.ok(
+  !/local agent bridge on this Mac/.test(helpers),
+  "the self agent-bridge detail (shown in the default Hive view) must not hardcode 'this Mac'",
+);
+
+const setupModal = readFileSync(
+  new URL("../src/features/dashboard/views/DashboardModals.tsx", import.meta.url),
+  "utf8",
+);
+assert.ok(
+  /setupMachine\.self/.test(setupModal),
+  "the Connect-machine wizard must special-case the self machine (no git-clone for the box already running the app)",
+);
+
 console.log("✓ fleet Windows/Linux + self visibility: all assertions passed");
+console.log(
+  "✓ Windows desktop UX (setup.ps1 command, self-aware wizard, default-view copy): all assertions passed",
+);

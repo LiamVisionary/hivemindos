@@ -896,7 +896,17 @@ Write-Host "  Reset lost token: pnpm dashboard-auth reset-token"
 Copy-DashboardTokenIfRequested
 Write-Host ""
 Write-Host "Collector:"
-Write-Host "  http://localhost:$CollectorPort"
+# Install + start the local agent telemetry collector as a per-user logon
+# Scheduled Task (the Windows analog of the launchd/systemd service set up by
+# install-telemetry-collector.sh). Without this the collector never runs, so a
+# Windows machine can never host agents or report "ready" in the Fleet. Best
+# effort: a failure here must not abort setup.
+try {
+  & (Join-Path $Root "scripts\install-telemetry-collector.ps1") -Port $CollectorPort -RepoRoot $Root
+} catch {
+  Warn "Collector install did not complete: $_"
+  Write-Host "  Re-run later: powershell -ExecutionPolicy Bypass -File scripts\install-telemetry-collector.ps1"
+}
 Write-Host ""
 Write-Host "Code Proof:"
 if (Test-Command gl) {

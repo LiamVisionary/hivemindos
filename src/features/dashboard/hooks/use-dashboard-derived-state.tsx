@@ -1040,10 +1040,15 @@ export function useDashboardDerivedState(props: any) {
 
     for (const agent of displayAgents) {
       const explicitKey = collectorKey(agent.telemetryUrl);
+      const localDataDir = agent.localDataDir ?? "";
+      const looksLikeLocalHomePath =
+        localDataDir.startsWith("~") ||
+        localDataDir.startsWith("$home") ||
+        localDataDir.startsWith("/Users/") ||
+        /^[a-zA-Z]:[\\/]/.test(localDataDir) || // Windows drive root (C:\Users\...)
+        localDataDir.startsWith("\\\\"); // Windows UNC path
       const localKey =
-        selfDevice &&
-        (agent.localDataDir?.startsWith("~") ||
-          agent.localDataDir?.startsWith("/Users/"))
+        selfDevice && looksLikeLocalHomePath
           ? collectorKey(selfDevice.collectorUrl)
           : "";
       const explicitGroup = explicitKey
