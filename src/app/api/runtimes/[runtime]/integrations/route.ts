@@ -17,7 +17,9 @@ async function proxyCollectorIntegration(runtime: AgentRuntime, collectorUrl: st
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(body.action === "hermes-update" ? 330_000 : 30_000),
+    // Runtime installs (npm/uv, plus a possible uv bootstrap; OpenHands pulls
+    // CPython + a large dep tree) can run many minutes; give them a 15-min budget.
+    signal: AbortSignal.timeout(body.action === "install-runtime" ? 900_000 : body.action === "hermes-update" ? 330_000 : 30_000),
     cache: "no-store",
   });
   const data = await response.json().catch(() => null) as Record<string, unknown> | null;

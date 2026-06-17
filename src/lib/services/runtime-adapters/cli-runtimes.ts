@@ -1,10 +1,12 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { homedir } from "@/lib/home-dir";
 import type { AgentProfile, KnownAgentRuntime } from "@/lib/types/agent-runtime";
 import type { RuntimeAdapter } from "./types";
 import { listCliTaskRuns, readCliTaskRunLog, startCliTaskRun } from "./cli-task-runs";
+import { runtimeInstallSpec } from "@/lib/services/runtime-install-catalog";
 
 const execFileAsync = promisify(execFile);
 
@@ -146,6 +148,88 @@ async function installCli(config: CliRuntimeConfig) {
   return { ok: true, message: `${config.label} install completed.`, output: `${output.stdout}${output.stderr}`.trim() };
 }
 
+// Drives the in-app "Set up runtime" installer on the local machine (the
+// desktop's bundled Next server runs on the user's box). The package names come
+// from the shared catalog so the UI preview and this command stay in lockstep.
+async function installRuntimeBinary(config: CliRuntimeConfig) {
+  const spec = runtimeInstallSpec(config.runtime);
+  if (!spec || !spec.inAppInstall) {
+    return { ok: false, error: `${config.label} can't be installed from here yet. Run the install command on the machine, then re-check.` };
+  }
+  const env = { ...process.env, PATH: cliRuntimePath() };
+  try {
+    if (spec.installKind === "npm" && spec.npmPackage) {
+      // npm ships as npm.cmd on Windows; execFile needs the exact name.
+      const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
+      const output = await execFileAsync(npmBin, ["install", "-g", spec.npmPackage], { timeout: 300_000, maxBuffer: 2_000_000, env });
+      return { ok: true, message: `${config.label} installed.`, output: `${output.stdout}${output.stderr}`.trim() };
+    }
+    if (spec.installKind === "uv" && spec.uvPackage) {
+      const uv = await execFileAsync("uv", ["--version"], { timeout: 5_000, maxBuffer: 100_000, env }).catch(() => null);
+      if (!uv) return { ok: false, error: `${config.label} needs the uv package manager. Install uv (astral.sh/uv) on the machine, then retry.` };
+      const args = ["tool", "install", spec.uvPackage, ...(spec.uvPythonPin ? ["--python", spec.uvPythonPin] : [])];
+      const output = await execFileAsync("uv", args, { timeout: 300_000, maxBuffer: 2_000_000, env });
+      return { ok: true, message: `${config.label} installed.`, output: `${output.stdout}${output.stderr}`.trim() };
+    }
+    return { ok: false, error: `${config.label} can't be installed automatically here yet. Run the install command on the machine, then re-check.` };
+  } catch (error: unknown) {
+    const maybe = error as { stdout?: string; stderr?: string; message?: string };
+    return { ok: false, error: (maybe.stderr || maybe.stdout || maybe.message || `${config.label} install failed.`).slice(0, 1200) };
+  }
+}
+
+// Persists a runtime credential into the shared hive env via hive-env-add,
+// piping KEY=value over stdin so a literal `$` in the value survives (matches
+// the Venice/UsePod/GitHub credential-save pattern). The value is never logged.
+// Windows hive-env-add is a Python script with no extension (not spawnable);
+// setup.ps1 installs a hive-env-add.cmd wrapper. Prefer that on Windows and run
+// it through the shell so spawn can execute it.
+function resolveHiveEnvAdd(): { command: string; shell: boolean } {
+  const isWin = process.platform === "win32";
+  const candidates = [
+    process.env.HIVE_ENV_ADD_BIN,
+    ...(isWin ? [join(homedir(), ".local", "bin", "hive-env-add.cmd")] : []),
+    join(homedir(), ".local", "bin", "hive-env-add"),
+    ...(isWin ? [join(process.cwd(), "scripts", "hive-env-add.cmd")] : []),
+    join(process.cwd(), "scripts", "hive-env-add"),
+  ].filter((path): path is string => Boolean(path));
+  const command = candidates.find((path) => existsSync(path)) ?? join(process.cwd(), "scripts", "hive-env-add");
+  return { command, shell: isWin && command.toLowerCase().endsWith(".cmd") };
+}
+
+async function saveRuntimeAuth(env: string, value: string) {
+  const key = (env || "").trim();
+  const secret = (value || "").trim();
+  if (!/^[A-Z][A-Z0-9_]*$/.test(key)) return { ok: false, error: "Invalid credential variable name." };
+  if (!secret) return { ok: false, error: "A credential value is required." };
+  if (/\s/.test(secret)) return { ok: false, error: "The credential must not contain spaces or line breaks." };
+  const envAdd = resolveHiveEnvAdd();
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(envAdd.command, [
+      "--import-stdin",
+      "--scope",
+      "agent",
+      "--runtime",
+      "generic",
+    ], { stdio: ["pipe", "pipe", "pipe"], shell: envAdd.shell });
+    let stderr = "";
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("Timed out while saving the credential to shared env."));
+    }, 30_000);
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", (error) => { clearTimeout(timeout); reject(error); });
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      if (code === 0) { resolve(); return; }
+      reject(new Error(stderr.trim() || `hive-env-add exited with status ${code ?? "unknown"} while saving the credential.`));
+    });
+    child.stdin.end(`${key}=${secret}\n`);
+  });
+  return { ok: true, message: `Saved ${key} to your shared hive env.` };
+}
+
 function createCliRuntimeAdapter(config: CliRuntimeConfig): RuntimeAdapter {
   return {
     runtime: config.runtime,
@@ -169,6 +253,8 @@ function createCliRuntimeAdapter(config: CliRuntimeConfig): RuntimeAdapter {
     getStatus: (profile) => cliStatus(config, profile),
     runIntegrationAction: async (profile, action, input) => {
       if (action === "install") return installCli(config);
+      if (action === "install-runtime") return installRuntimeBinary(config);
+      if (action === "runtime-auth") return saveRuntimeAuth(String(input.env || ""), String(input.value || ""));
       if (action !== "run-task") return { ok: false, error: `Unsupported ${config.label} action: ${action}` };
       if (!config.buildTaskArgs) return { ok: false, error: `${config.label} does not expose background task execution yet.` };
       return startCliTaskRun({
