@@ -38,6 +38,8 @@ Policies can auto import, auto update, track removals, and optionally allow prov
 
 Shared brain managed mirrors must not get imported again as brand new provider skills. That is how duplicate loops start.
 
+Provider inventories must classify runtime mirrors as already handled before import or reconcile. In particular, an Aeon provider skill under `~/.aeon/skills` or `/root/.aeon/skills` whose directory is already provider-prefixed, such as `aeon-*`, `aeon-aeon-*`, `claude-*`, or `hermes-*`, is a mirror artifact rather than a new shared-brain skill. The dashboard importer rejects these again even when an older remote collector sends them as importable.
+
 ## Auto-Installed Brain Skills
 
 Setup copies a small default pack from `packaged-skills/auto-install/` into the shared vault `Skills/` shelf.

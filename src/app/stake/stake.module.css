@@ -60,9 +60,9 @@
   --s-teal-border: rgba(95, 143, 90, 0.34);
   --s-teal-glow: rgba(95, 143, 90, 0.22);
 
-  --s-honey: rgba(147, 104, 17, 1);
-  --s-honey-bg: linear-gradient(180deg, rgba(176, 127, 28, 0.22), rgba(176, 127, 28, 0.08));
-  --s-honey-border: rgba(147, 104, 17, 0.48);
+  --s-honey: rgba(124, 85, 11, 1);
+  --s-honey-bg: linear-gradient(180deg, rgba(176, 127, 28, 0.20), rgba(124, 85, 11, 0.08));
+  --s-honey-border: rgba(124, 85, 11, 0.48);
   --s-honey-glow: rgba(176, 127, 28, 0.18);
 
   --s-danger: rgba(192, 82, 77, 1);

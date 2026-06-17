@@ -1,0 +1,16 @@
+{
+  "name": "zimage-mobile-tauri",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@8.6.12",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build --bundles app,dmg",
+    "build:app": "tauri build --bundles app",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.2"
+  }
+}

@@ -260,35 +260,59 @@ function Test-Python312Command($Command, [string[]]$Arguments = @()) {
   return $LASTEXITCODE -eq 0
 }
 
+function Install-PythonWindows {
+  # Best-effort, non-interactive Python 3.12 install. winget first (present on
+  # most Win10/11 desktops); the python.org silent installer is the fallback for
+  # winget-less boxes (e.g. Windows Server). Never throws.
+  if (Install-WingetPackage "Python 3.12" "Python.Python.3.12") {
+    Refresh-Path
+    return
+  }
+  $ver = "3.12.8"
+  $url = "https://www.python.org/ftp/python/$ver/python-$ver-amd64.exe"
+  $dest = Join-Path $env:TEMP "python-$ver-amd64.exe"
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Info "Downloading Python $ver from python.org"
+    Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $dest
+    Info "Installing Python $ver (silent, adds to PATH)"
+    Start-Process -FilePath $dest -ArgumentList @("/quiet", "InstallAllUsers=0", "PrependPath=1", "Include_pip=1", "Include_launcher=1") -Wait
+    Refresh-Path
+  } catch {
+    Warn "Automatic Python install failed: $($_.Exception.Message)"
+  }
+}
+
 function Ensure-HivePulsePython {
   if (Test-Python312Command "py" @("-3.12")) {
-    Ok "Hive Pulse Python found: py -3.12"
+    Ok "Python found: py -3.12"
     return
   }
   foreach ($candidate in @("python3.14", "python3.13", "python3.12", "python3", "python")) {
     if (Test-Python312Command $candidate) {
       $version = & $candidate --version 2>$null
-      Ok "Hive Pulse Python found: $version"
+      Ok "Python found: $version"
       return
     }
   }
-  if (Ask-YesNo "Python 3.12+ is missing. Install Python 3.12 with winget so hive-pulse works out of the box?" $true) {
-    Install-WingetPackage "Python 3.12" "Python.Python.3.12" | Out-Null
-    Refresh-Path
-  }
+  # Python backs hive-env-add (saving API keys / shared env writes) and
+  # hive-pulse, so install it. Best-effort and NON-BLOCKING: a failure here must
+  # never stop setup from reaching the agent-collector install further down
+  # (that regression is exactly what made fresh Windows hosts unreachable).
+  Info "Python 3.12+ is required for hive-env-add and hive-pulse; installing it now"
+  Install-PythonWindows
   if (Test-Python312Command "py" @("-3.12")) {
-    Ok "Hive Pulse Python ready: py -3.12"
+    Ok "Python ready: py -3.12"
     return
   }
   foreach ($candidate in @("python3.14", "python3.13", "python3.12", "python3", "python")) {
     if (Test-Python312Command $candidate) {
       $version = & $candidate --version 2>$null
-      Ok "Hive Pulse Python ready: $version"
+      Ok "Python ready: $version"
       return
     }
   }
-  Warn "Python 3.12+ is still missing; install it or set HIVE_PULSE_PYTHON before running hive-pulse."
-  $Missing.Add("Python 3.12+ for hive-pulse")
+  Warn "Python 3.12+ could not be installed automatically. Saving API keys (hive-env-add) and hive-pulse need it - install Python and re-run setup. Continuing so the agent collector still installs."
 }
 
 function Ensure-HiveEnvAdd {

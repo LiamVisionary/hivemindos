@@ -42,6 +42,15 @@
   --panel-bg-soft: rgba(8,12,19,0.55);
   --panel-grad: linear-gradient(180deg, rgba(16,20,29,0.78), rgba(6,8,13,0.60));
   --panel-card-grad: linear-gradient(180deg, rgba(22,28,42,0.72), rgba(16,21,31,0.62));
+  --fleet-hex-default-bg: linear-gradient(180deg, rgba(15,23,42,0.92), rgba(5,10,18,0.84));
+  --fleet-hex-default-border: rgba(148,163,184,0.38);
+  --fleet-hex-default-glow: rgba(45,212,191,0.05);
+  --fleet-hex-active-bg: linear-gradient(180deg, rgba(20,184,166,0.28), rgba(8,47,73,0.30));
+  --fleet-hex-active-glow: rgba(45,212,191,0.28);
+  --fleet-hex-honey-bg: linear-gradient(180deg, rgba(255,212,90,0.18), rgba(15,23,42,0.84));
+  --fleet-hex-honey-border: rgba(255,212,90,0.48);
+  --fleet-hex-honey-glow: rgba(255,212,90,0.20);
+  --fleet-hex-inset: inset 0 0 34px rgba(0,0,0,0.34);
 }
 
 :global([data-theme="hive-light"]) .root,
@@ -55,27 +64,36 @@
   --line-2: rgba(54,46,30,0.16);
   --fg: #221d14;
   --fg-2: #5e574b;
-  --fg-3: #867d6e;
-  --fg-4: #a59b89;
+  --fg-3: #5e574b;
+  --fg-4: #6f6657;
 
-  --cyan: #5f8f5a;
-  --cyan-2: #4f7d4b;
-  --cyan-3: #376739;
-  --honey: #b07f1c;
-  --honey-2: #936811;
-  --danger: #c0524d;
-  --danger-2: #963a37;
+  --cyan: #4f7d4b;
+  --cyan-2: #406f53;
+  --cyan-3: #356b2f;
+  --honey: #936811;
+  --honey-2: #7c550b;
+  --danger: #a23a35;
+  --danger-2: #8e3328;
 
-  --aeon: #4f7d4b;
-  --aeon-deep: #5f8f5a;
-  --aeon-soft: rgba(95,143,90,0.14);
-  --aeon-line: rgba(95,143,90,0.30);
-  --aeon-glow: rgba(95,143,90,0.24);
+  --aeon: #406f53;
+  --aeon-deep: #4f7d4b;
+  --aeon-soft: rgba(64,111,83,0.14);
+  --aeon-line: rgba(64,111,83,0.30);
+  --aeon-glow: rgba(64,111,83,0.24);
 
   --panel-bg: rgba(251,248,241,0.94);
   --panel-bg-soft: rgba(244,239,228,0.82);
   --panel-grad: linear-gradient(180deg, rgba(251,248,241,0.94), rgba(244,239,228,0.82));
   --panel-card-grad: linear-gradient(180deg, rgba(255,252,246,0.88), rgba(244,239,228,0.76));
+  --fleet-hex-default-bg: linear-gradient(180deg, rgba(255,252,246,0.94), rgba(232,223,207,0.82));
+  --fleet-hex-default-border: rgba(54,46,30,0.22);
+  --fleet-hex-default-glow: rgba(64,111,83,0.10);
+  --fleet-hex-active-bg: linear-gradient(180deg, rgba(105,145,96,0.18), rgba(255,252,246,0.84));
+  --fleet-hex-active-glow: rgba(64,111,83,0.16);
+  --fleet-hex-honey-bg: linear-gradient(180deg, rgba(212,180,111,0.32), rgba(251,248,241,0.88));
+  --fleet-hex-honey-border: rgba(124,85,11,0.48);
+  --fleet-hex-honey-glow: rgba(124,85,11,0.12);
+  --fleet-hex-inset: inset 0 0 28px rgba(124,85,11,0.10);
 }
 
 .monoCap {

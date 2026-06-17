@@ -60,6 +60,8 @@ src-tauri/binaries/
 /cmd/hivemind-linkd/hivemind-linkd
 # Root-level built linkd binary (Mach-O), not the cmd/ source dir.
 /hivemind-linkd
+# Foundry/Solidity compiler cache with machine-local absolute paths.
+/contracts/cache/
 # Rust build output for the gateway-host crate (sibling of the ignored target/).
 src-tauri/target-gwhost/
 # Jekyll/sass build cache for the docs site.

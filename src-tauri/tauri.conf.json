@@ -11,6 +11,7 @@
     "frontendDist": "static"
   },
   "app": {
+    "macOSPrivateApi": true,
     "withGlobalTauri": true,
     "windows": [
       {
@@ -20,6 +21,7 @@
         "height": 860,
         "minWidth": 960,
         "minHeight": 640,
+        "transparent": true,
         "backgroundColor": "#080a0f",
         "decorations": true,
         "titleBarStyle": "Overlay",

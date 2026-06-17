@@ -73,7 +73,7 @@
   --accent-strong: #7c550b;
   --success: #406f53;
   --warning: #8a641f;
-  --danger: #c0524d;
+  --danger: #a23a35;
   --surface: rgba(251, 248, 241, 0.9);
   --surface-strong: rgba(244, 239, 228, 0.94);
   --surface-soft: rgba(246, 242, 233, 0.82);
@@ -1226,6 +1226,37 @@ h1 {
   background-color: rgba(34, 29, 20, 0.34) !important;
 }
 
+:root[data-theme="hive-light"] :where(
+  [class*="bg-[rgba(2,6,23"],
+  [class*="bg-[rgba(3,7,18"],
+  [class*="bg-[rgba(5,8,13"],
+  [class*="bg-[rgba(5,8,14"],
+  [class*="bg-[rgba(8,12,19"],
+  [class*="bg-[rgba(9,13,20"],
+  [class*="bg-[rgba(10,14,21"],
+  [class*="bg-[rgba(12,15,21"],
+  [class*="bg-[rgba(12,16,24"],
+  [class*="bg-[rgba(12,17,25"],
+  [class*="bg-[rgba(13,18,27"],
+  [class*="bg-[rgba(13,20,31"],
+  [class*="bg-[rgba(15,21,31"],
+  [class*="bg-[rgba(15,23,42"],
+  [class*="bg-[rgba(16,20,29"],
+  [class*="bg-[rgba(16,22,33"],
+  [class*="bg-[rgba(17,24,39"],
+  [class*="bg-[linear-gradient"][class*="rgba(2,6,23"],
+  [class*="bg-[linear-gradient"][class*="rgba(5,8,13"],
+  [class*="bg-[linear-gradient"][class*="rgba(7,10,16"],
+  [class*="bg-[linear-gradient"][class*="rgba(10,14,21"],
+  [class*="bg-[linear-gradient"][class*="rgba(13,20,31"],
+  [class*="bg-[linear-gradient"][class*="rgba(15,23,42"],
+  [class*="bg-[linear-gradient"][class*="rgba(16,20,29"],
+  [class*="bg-[linear-gradient"][class*="rgba(20,28,40"]
+) {
+  background-color: var(--surface-soft) !important;
+  background-image: none !important;
+}
+
 :root[data-theme="hive-light"] .commandMain [class*="bg-slate-950"],
 :root[data-theme="hive-light"] .commandMain [class*="bg-slate-900"],
 :root[data-theme="hive-light"] .commandMain [class*="bg-zinc-950"],
@@ -1258,7 +1289,15 @@ h1 {
 :root[data-theme="hive-light"] .commandMain [class*="bg-[rgba(15,23,42"],
 :root[data-theme="hive-light"] .commandMain [class*="bg-[rgba(16,20,29"],
 :root[data-theme="hive-light"] .commandMain [class*="bg-[rgba(16,22,33"],
-:root[data-theme="hive-light"] .commandMain [class*="bg-[rgba(17,24,39"] {
+:root[data-theme="hive-light"] .commandMain [class*="bg-[rgba(17,24,39"],
+:root[data-theme="hive-light"] .commandMain [class*="bg-[linear-gradient"][class*="rgba(2,6,23"],
+:root[data-theme="hive-light"] .commandMain [class*="bg-[linear-gradient"][class*="rgba(5,8,13"],
+:root[data-theme="hive-light"] .commandMain [class*="bg-[linear-gradient"][class*="rgba(7,10,16"],
+:root[data-theme="hive-light"] .commandMain [class*="bg-[linear-gradient"][class*="rgba(10,14,21"],
+:root[data-theme="hive-light"] .commandMain [class*="bg-[linear-gradient"][class*="rgba(13,20,31"],
+:root[data-theme="hive-light"] .commandMain [class*="bg-[linear-gradient"][class*="rgba(15,23,42"],
+:root[data-theme="hive-light"] .commandMain [class*="bg-[linear-gradient"][class*="rgba(16,20,29"],
+:root[data-theme="hive-light"] .commandMain [class*="bg-[linear-gradient"][class*="rgba(20,28,40"] {
   background-color: var(--surface-soft) !important;
   background-image: none !important;
   color: var(--foreground);

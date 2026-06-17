@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Zimage Mobile",
+  "mainBinaryName": "ZimageMobile",
+  "version": "0.1.0",
+  "identifier": "com.liamvisionary.zimagemobile",
+  "build": {
+    "beforeDevCommand": "",
+    "devUrl": "https://liams-macbook-pro-1.tail629894.ts.net:8789/",
+    "beforeBuildCommand": "",
+    "frontendDist": "https://liams-macbook-pro-1.tail629894.ts.net:8789/"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Zimage Mobile",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 960,
+        "minHeight": 640,
+        "backgroundColor": "#070811",
+        "decorations": true,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "category": "GraphicsAndDesign",
+    "shortDescription": "Native shell for Z-Image Mobile.",
+    "longDescription": "A native macOS shell for Liam's private Z-Image Mobile app served through Tailscale.",
+    "homepage": "https://liams-macbook-pro-1.tail629894.ts.net:8789/",
+    "macOS": {
+      "bundleName": "Zimage Mobile"
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.png"
+    ]
+  }
+}

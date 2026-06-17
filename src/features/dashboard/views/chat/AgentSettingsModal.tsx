@@ -15,6 +15,8 @@ import { GuidedVeniceSetup } from "./GuidedVeniceSetup";
 import { LmStudioLoadProgress, LmStudioModelManager } from "./LmStudioModelManager";
 import { MissingSharedEnvKeySetup } from "./MissingSharedEnvKeySetup";
 import { ModelPillSelector } from "./ModelPillSelector";
+import { RuntimeInstallSetup } from "./RuntimeInstallSetup";
+import { runtimeHasInstallSetup } from "@/lib/services/runtime-install-catalog";
 import { AgentSettingsPortrait } from "./AgentSettingsPortrait";
 import { ProviderDiscoverySkeleton, ToggleRow } from "./AgentSettingsSmallParts";
 import { WorkerTaskPreferencesEditor } from "./WorkerTaskPreferencesEditor";
@@ -324,6 +326,7 @@ export function AgentSettingsModal(props: any) {
     providerIconPath,
     providerIconRenderMode,
     refreshRuntimeIntegrations,
+    refreshRuntimeAvailability,
     removeAgentPreferredSkill,
     roleModalAgent,
     runRuntimeIntegrationAction,
@@ -375,6 +378,9 @@ export function AgentSettingsModal(props: any) {
   const [soulSaveTitle, setSoulSaveTitle] = useState("");
   const [lmStudioEmptyDiscoveryGraceActive, setLmStudioEmptyDiscoveryGraceActive] = useState(false);
   const [showAllProviders, setShowAllProviders] = useState(false);
+  // When a not-configured runtime card is clicked, this holds that runtime and
+  // the dedicated install/auth view replaces the provider + model selectors.
+  const [runtimeInstallSetup, setRuntimeInstallSetup] = useState(null);
   const [envPresentKeys, setEnvPresentKeys] = useState(() => new Set());
   const [envHermesKeys, setEnvHermesKeys] = useState(() => new Set());
   const [envLoaded, setEnvLoaded] = useState(false);
@@ -830,8 +836,12 @@ export function AgentSettingsModal(props: any) {
   };
 
   const updateSettingsRuntime = (runtime: AgentRuntime) => {
-    if (runtime !== "aeon" && runtime !== HIVEMIND_OS_RUNTIME && (agentCreateMachine && targetMachineHasRuntimeInventory ? !targetMachineRuntimes.includes(runtime) : runtimeAvailability?.[runtime]?.installed === false)) return;
+    const notConfigured = runtime !== "aeon" && runtime !== HIVEMIND_OS_RUNTIME && (agentCreateMachine && targetMachineHasRuntimeInventory ? !targetMachineRuntimes.includes(runtime) : runtimeAvailability?.[runtime]?.installed === false);
+    // A not-configured runtime with no in-app setup path stays a dead-end; one
+    // that does have a setup flow still becomes active and opens that flow.
+    if (notConfigured && !runtimeHasInstallSetup(runtime)) return;
     setRuntimeModelSetupMode(null);
+    setRuntimeInstallSetup(notConfigured ? runtime : null);
     const sameRuntime = runtime === activeRuntime;
     const currentProvider = agentCreateMachine ? agentCreateDraft.provider : roleModalAgent?.provider;
     const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
@@ -1060,8 +1070,13 @@ export function AgentSettingsModal(props: any) {
     const runtimeFeature = runtimeSettingsFeature(runtime as AgentRuntime);
     const availableOnTargetMachine = targetMachineRuntimes.includes(runtime);
     const unavailable = agentCreateMachine && targetMachineHasRuntimeInventory ? !availableOnTargetMachine : runtimeAvailability?.[runtime]?.installed === false;
-    const disabled = unavailable && runtimeFeature.kind !== "autopilot" && runtime !== HIVEMIND_OS_RUNTIME;
-    const detail = runtimeFeature.kind === "autopilot" ? runtimeFeature.runtimeSegmentSubcopy || runtimeAvailability?.[runtime]?.detail || "Autopilot" : unavailable ? runtime === HIVEMIND_OS_RUNTIME ? "Configurable provider" : "Not configured" : availableOnTargetMachine ? "Available on machine" : "Configured";
+    // A not-configured runtime that has an in-app setup flow stays clickable
+    // (clicking opens RuntimeInstallSetup); only ones with no setup path remain
+    // disabled. Aeon (autopilot) and hivemind-os keep their existing behaviour.
+    const notConfigured = unavailable && runtimeFeature.kind !== "autopilot" && runtime !== HIVEMIND_OS_RUNTIME;
+    const setupAvailable = runtimeHasInstallSetup(runtime);
+    const disabled = notConfigured && !setupAvailable;
+    const detail = runtimeFeature.kind === "autopilot" ? runtimeFeature.runtimeSegmentSubcopy || runtimeAvailability?.[runtime]?.detail || "Autopilot" : unavailable ? runtime === HIVEMIND_OS_RUNTIME ? "Configurable provider" : setupAvailable ? "Tap to set up" : "Not configured" : availableOnTargetMachine ? "Available on machine" : "Configured";
     const iconPath = runtimeIconPath(runtime);
     return (
       <button
@@ -1090,6 +1105,7 @@ export function AgentSettingsModal(props: any) {
         <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           {iconMark({ label, iconPath, iconMode: runtimeIconRenderMode(runtime), fallback: runtimeIconFallback(runtime, label), size: 26 })}
           <strong style={{ color: selected ? "var(--cyan-3)" : "var(--fg)", fontSize: 13, lineHeight: 1.2, overflowWrap: "anywhere" }}>{label}</strong>
+          {notConfigured && setupAvailable ? <Pill tone="honey">Set up</Pill> : null}
         </span>
         <small style={{ color: "var(--fg-4)", fontSize: 10.5, lineHeight: 1.3, overflowWrap: "anywhere" }}>{detail}</small>
       </button>
@@ -1578,6 +1594,25 @@ export function AgentSettingsModal(props: any) {
           </div>
           {renderAeonConnection()}
         </div>
+      ) : runtimeInstallSetup === activeRuntime && runtimeHasInstallSetup(activeRuntime) ? (
+        <RuntimeInstallSetup
+          key={activeRuntime}
+          agent={agentSettingsIntegrationTarget}
+          busy={runtimeIntegrationBusy}
+          fleetClass={fleetClass}
+          runtime={activeRuntime}
+          installed={agentCreateMachine && targetMachineHasRuntimeInventory ? targetMachineRuntimes.includes(activeRuntime) : runtimeAvailability?.[activeRuntime]?.installed === true}
+          targetOs={agentCreateMachine?.os}
+          targetLabel={agentCreateMachine ? (agentCreateMachine.label || agentCreateMachine.name || "the selected machine") : "this machine"}
+          runRuntimeIntegrationAction={runRuntimeIntegrationAction}
+          refreshAvailability={refreshRuntimeAvailability}
+          onCancel={() => setRuntimeInstallSetup(null)}
+          onComplete={async () => {
+            refreshRuntimeAvailability?.();
+            await refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined);
+            setRuntimeInstallSetup(null);
+          }}
+        />
       ) : (
         <>
           {renderProviderModelPanel()}

@@ -18,7 +18,7 @@ interface JobsProps {
 const STATUS_TONE = {
   ok:     { c: "var(--hex-active-border)", bg: "rgba(45,212,191,0.12)", br: "rgba(94,234,212,0.32)", dot: "#2dd4bf" },
   warn:   { c: "var(--hex-honey-border)",  bg: "rgba(255,212,90,0.12)", br: "rgba(255,212,90,0.36)", dot: "var(--hex-honey-border)" },
-  failed: { c: "#fecdd3",                  bg: "rgba(251,113,133,0.10)",br: "rgba(251,113,133,0.42)",dot: "#fb7185" },
+  failed: { c: "#8e3328",                  bg: "rgba(162,58,53,0.10)",br: "rgba(162,58,53,0.36)",dot: "#a23a35" },
   stale:  { c: "var(--hex-honey-border)",  bg: "rgba(255,212,90,0.10)", br: "rgba(255,212,90,0.32)", dot: "var(--hex-honey-border)" },
   idle:   { c: "var(--muted)",             bg: "rgba(148,163,184,0.08)",br: "rgba(148,163,184,0.18)",dot: "var(--muted)" },
 } as const;

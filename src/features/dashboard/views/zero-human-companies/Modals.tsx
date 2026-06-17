@@ -344,14 +344,14 @@ function readForm(form: FormState): CreateForm {
 
 // ── create-company flow (2 steps) ─────────────────────────────────────────
 export function CreateCompanyModal({
-  agentPool, busy, theme, onClose, onCreate,
+  agentPool, initialCrew, busy, theme, onClose, onCreate,
 }: {
-  agentPool: PoolAgent[]; busy?: boolean; theme?: Theme;
+  agentPool: PoolAgent[]; initialCrew?: Agent[]; busy?: boolean; theme?: Theme;
   onClose: () => void; onCreate: (form: CreateForm, crew: Agent[]) => void;
 }) {
   const [step, setStep] = React.useState(0);
   const [form, setForm] = React.useState<FormState>({ name: "", ticker: "", sector: "", apexTitle: "", apexMetric: "", apexTarget: "", metricUnit: "number" });
-  const [crew, setCrew] = React.useState<Agent[]>([]);
+  const [crew, setCrew] = React.useState<Agent[]>(() => (initialCrew ?? []).map((member) => ({ ...member })));
   const canNext = form.name.trim().length > 0;
   const create = () => onCreate(readForm(form), crew.map((a) => ({ ...a })));
 

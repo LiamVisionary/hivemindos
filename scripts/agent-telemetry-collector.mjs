@@ -219,6 +219,19 @@ const skippedSkillDirs = new Set([
   ".cache",
   ".archive",
 ]);
+const skillSourceMetadataFile = ".hivemind-skill-source.json";
+const sharedBrainMirrorStatus = "shared-brain-mirror";
+const recursiveProviderMirrorStatus = "recursive-provider-mirror";
+const knownProviderSlugPrefixes = new Set([
+  "aeon",
+  "claude",
+  "codex",
+  "hermes",
+  "gemini",
+  "openclaw",
+  "shared",
+  "shared-brain",
+]);
 const maxSkillFiles = Number(
   process.env.AGENT_TELEMETRY_MAX_SKILL_FILES || 160,
 );
@@ -527,6 +540,67 @@ function skillSlug(value) {
       .replace(/^-+|-+$/g, "")
       .slice(0, 80) || "skill"
   );
+}
+
+function normalizedSkillPath(value) {
+  return String(value || "").replace(/\\/g, "/");
+}
+
+function skillDirSlugFromPath(value) {
+  const parts = normalizedSkillPath(value).split("/").filter(Boolean);
+  if (!parts.length) return "";
+  const last = String(parts[parts.length - 1] || "").toLowerCase();
+  return skillSlug(last === "skill.md" ? parts[parts.length - 2] : parts[parts.length - 1]);
+}
+
+function pathLooksInsideProviderSkillRoot(providerId, value) {
+  return normalizedSkillPath(value).includes(`/.${providerId}/skills/`);
+}
+
+function slugLooksProviderMirrored(providerId, slug) {
+  if (providerId !== "aeon") return false;
+  const normalized = skillSlug(slug);
+  if (normalized.startsWith(`${providerId}-`)) return true;
+  const firstSegment = normalized.split("-").find(Boolean);
+  return Boolean(firstSegment && knownProviderSlugPrefixes.has(firstSegment));
+}
+
+function providerPathLooksMirrored(providerId, path, slug) {
+  if (providerId !== "aeon") return false;
+  if (!pathLooksInsideProviderSkillRoot(providerId, path)) return false;
+  return (
+    slugLooksProviderMirrored(providerId, slug) ||
+    slugLooksProviderMirrored(providerId, skillDirSlugFromPath(path))
+  );
+}
+
+async function readSkillSourceMetadata(skillDir) {
+  const raw = await readFile(join(skillDir, skillSourceMetadataFile), "utf8").catch(
+    () => "",
+  );
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function providerMirrorLoopStatus(providerId, skillPath, metadata = null) {
+  const metadataProvider =
+    metadata && typeof metadata.provider === "string" ? metadata.provider : "";
+  const managedBy =
+    metadata && typeof metadata.managedBy === "string" ? metadata.managedBy : "";
+  if (metadataProvider === "shared-brain" || managedBy === "hivemindos")
+    return sharedBrainMirrorStatus;
+  const metadataSourcePath =
+    metadata && typeof metadata.sourcePath === "string" ? metadata.sourcePath : "";
+  const sourcePath = metadataSourcePath || skillPath;
+  if (providerPathLooksMirrored(providerId, sourcePath, skillDirSlugFromPath(skillPath)))
+    return recursiveProviderMirrorStatus;
+  if (providerPathLooksMirrored(providerId, skillPath, skillDirSlugFromPath(skillPath)))
+    return recursiveProviderMirrorStatus;
+  return "";
 }
 
 function titleFromSlug(slug) {
@@ -2116,15 +2190,21 @@ async function syncthingInstalled() {
 }
 
 async function resolveHiveEnvAdd() {
+  // On Windows hive-env-add is a Python script with no extension, so it can't be
+  // spawned directly; setup.ps1 installs a hive-env-add.cmd wrapper. Prefer the
+  // .cmd there (run via shell — see runHiveEnvImport) so env writes work.
+  const isWin = process.platform === "win32";
   const candidates = [
     process.env.HIVE_ENV_ADD_BIN,
+    ...(isWin ? [join(homedir(), ".local", "bin", "hive-env-add.cmd")] : []),
     join(homedir(), ".local", "bin", "hive-env-add"),
+    ...(isWin ? [join(appDir, "scripts", "hive-env-add.cmd")] : []),
     join(appDir, "scripts", "hive-env-add"),
   ].filter(Boolean);
   for (const path of candidates) {
     try {
       await access(path, constants.X_OK);
-      return { ready: true, command: path };
+      return { ready: true, command: path, shell: isWin && path.toLowerCase().endsWith(".cmd") };
     } catch {
       // try next
     }
@@ -2169,6 +2249,8 @@ function runHiveEnvImport({ entries, scope = "agent", runtime = "generic" }) {
       ],
       {
         stdio: ["pipe", "ignore", "pipe"],
+        // .cmd wrappers (Windows) must run through the shell to be spawnable.
+        shell: Boolean(envSync.shell),
       },
     );
     let errorText = "";
@@ -3786,6 +3868,114 @@ function collectorRunProcess(command, args, stdin, timeoutMs) {
   });
 }
 
+// Minimal mirror of src/lib/services/runtime-install-catalog.ts for the
+// standalone collector (which cannot import the TS catalog). Keep the package
+// names in sync with the catalog. Only runtimes with a real in-app installer
+// appear here; openclaw/hermes/aeon are handled by their own flows.
+const COLLECTOR_RUNTIME_INSTALL = {
+  "claude-code": { kind: "npm", pkg: "@anthropic-ai/claude-code" },
+  codex: { kind: "npm", pkg: "@openai/codex" },
+  opencode: { kind: "npm", pkg: "opencode-ai" },
+  openhands: { kind: "uv", pkg: "openhands", python: "3.12" },
+  aider: { kind: "uv", pkg: "aider-chat" },
+  evo: { kind: "uv", pkg: "evo-hq-cli" },
+};
+
+// Builds the OS-appropriate, server-side install invocation for a fixed runtime
+// id. The runtime id is validated against COLLECTOR_RUNTIME_INSTALL before this
+// runs and the package name is a hardcoded constant — there is no
+// caller-supplied command, so this is not a passthrough-exec surface.
+// Windows: deliver the script via -EncodedCommand (base64 UTF-16LE) rather than
+// piping to `powershell -Command -`. The stdin form silently no-ops multi-line
+// scripts (validated on a real Windows box: exit 0, nothing installed);
+// EncodedCommand runs the full script reliably.
+function powershellEncoded(script) {
+  return {
+    command: "powershell",
+    args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")],
+    stdin: "",
+  };
+}
+
+function buildRuntimeInstallInvocation(spec) {
+  const isWin = process.platform === "win32";
+  if (spec.kind === "npm") {
+    if (isWin) {
+      return powershellEncoded(`$ErrorActionPreference='Stop'\nnpm install -g ${spec.pkg}\n`);
+    }
+    return {
+      command: "bash",
+      args: ["-s"],
+      stdin: [
+        "set -e",
+        'export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"',
+        `npm install -g ${shellQuote(spec.pkg)}`,
+      ].join("\n"),
+    };
+  }
+  // uv tool — bootstrap uv first if it is missing.
+  const pyArgs = spec.python ? ` --python ${spec.python}` : "";
+  if (isWin) {
+    return powershellEncoded([
+      "$ErrorActionPreference='Stop'",
+      "if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {",
+      "  irm https://astral.sh/uv/install.ps1 | iex",
+      '  $env:Path = "$env:USERPROFILE\\.local\\bin;$env:Path"',
+      "}",
+      "$uvexe = Join-Path $env:USERPROFILE '.local\\bin\\uv.exe'",
+      "if (Test-Path $uvexe) { & $uvexe tool install " + spec.pkg + pyArgs + " } else { uv tool install " + spec.pkg + pyArgs + " }",
+    ].join("\n"));
+  }
+  return {
+    command: "bash",
+    args: ["-s"],
+    stdin: [
+      "set -e",
+      'export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"',
+      "if ! command -v uv >/dev/null 2>&1; then",
+      "  curl -LsSf https://astral.sh/uv/install.sh | sh",
+      '  export PATH="$HOME/.local/bin:$PATH"',
+      "fi",
+      `uv tool install ${shellQuote(spec.pkg)}${pyArgs}`,
+    ].join("\n"),
+  };
+}
+
+async function collectorInstallRuntime(runtimeName) {
+  const spec = COLLECTOR_RUNTIME_INSTALL[runtimeName];
+  if (!spec) return { ok: false, error: `${runtimeName} cannot be installed by this collector.` };
+  const { command, args, stdin } = buildRuntimeInstallInvocation(spec);
+  try {
+    // Heavy uv installs (e.g. OpenHands: CPython 3.12 + a large dep tree) can run
+    // well past several minutes on a cold cache, so allow up to 15 minutes.
+    const result = await collectorRunProcess(command, args, stdin, 900_000);
+    return {
+      ok: true,
+      message: `${runtimeName} installed.`,
+      output: `${result.stdout}${result.stderr}`.trim().slice(0, 1500),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: (error instanceof Error ? error.message : `${runtimeName} install failed.`).slice(0, 1500),
+    };
+  }
+}
+
+async function collectorSaveRuntimeAuth(env, value) {
+  const key = String(env || "").trim();
+  const secret = String(value || "").trim();
+  if (!/^[A-Z][A-Z0-9_]*$/.test(key)) return { ok: false, error: "Invalid credential variable name." };
+  if (!secret) return { ok: false, error: "A credential value is required." };
+  if (/\s/.test(secret)) return { ok: false, error: "The credential must not contain spaces or line breaks." };
+  try {
+    await runHiveEnvImport({ entries: { [key]: secret }, scope: "agent", runtime: "generic" });
+    return { ok: true, message: `Saved ${key} to the shared hive env.` };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Could not save the credential." };
+  }
+}
+
 function nangoSetupScript(baseUrl) {
   const normalized = normalizeNangoBaseUrl(baseUrl);
   const portValue = new URL(normalized).port || "3003";
@@ -4153,6 +4343,8 @@ async function skillSummaryForProvider(provider, skillPath, options = {}) {
   const stats = await stat(skillPath).catch(() => null);
   const slug = skillSlug(basename(dirname(skillPath)));
   const frontmatter = parseSkillFrontmatter(markdown);
+  const metadata = await readSkillSourceMetadata(dirname(skillPath));
+  const mirrorLoopStatus = providerMirrorLoopStatus(provider.id, skillPath, metadata);
   const summary = {
     id: `${provider.id}:${hostname()}:${skillPath}`,
     slug,
@@ -4167,8 +4359,9 @@ async function skillSummaryForProvider(provider, skillPath, options = {}) {
     relativePath: relative(resolve(expandHome(provider.home)), skillPath),
     checksum: skillChecksum(markdown),
     updatedAt: stats?.mtimeMs ?? 0,
-    imported: false,
+    imported: Boolean(mirrorLoopStatus),
   };
+  if (mirrorLoopStatus) summary.sourceStatus = mirrorLoopStatus;
   if (options.includeSourceFiles) {
     summary.sourceFiles = await collectSkillFiles(dirname(skillPath));
   }
@@ -5245,6 +5438,15 @@ async function installedRuntimes() {
         ),
       ).then((ok) => (ok ? "claude-code" : "")),
       detectAeonInstalled().then((ok) => (ok ? "aeon" : "")),
+      anyBinaryInstalled(
+        cliRuntimeCandidates(process.env.OPENHANDS_BIN, "openhands"),
+      ).then((ok) => (ok ? "openhands" : "")),
+      anyBinaryInstalled(
+        cliRuntimeCandidates(process.env.AIDER_BIN, "aider"),
+      ).then((ok) => (ok ? "aider" : "")),
+      anyBinaryInstalled(
+        cliRuntimeCandidates(process.env.EVO_BIN, "evo"),
+      ).then((ok) => (ok ? "evo" : "")),
     ]);
     const value = checks.filter(Boolean);
     installedRuntimesCache = { checkedAt: Date.now(), value };
@@ -6913,6 +7115,33 @@ const telemetryServer = createServer(async (request, response) => {
         jsonResponse(response, 200, {
           ok: true,
           status: await localOpenAiIntegrationStatus(body.agent || {}),
+        });
+        return;
+      }
+      if (COLLECTOR_RUNTIME_INSTALL[runtimeName]) {
+        if (body.action === "install-runtime") {
+          jsonResponse(response, 200, await collectorInstallRuntime(runtimeName));
+          return;
+        }
+        if (body.action === "runtime-auth") {
+          jsonResponse(
+            response,
+            200,
+            await collectorSaveRuntimeAuth(body.input?.env, body.input?.value),
+          );
+          return;
+        }
+        const installed = await installedRuntimes().catch(() => []);
+        jsonResponse(response, 200, {
+          ok: true,
+          status: {
+            ok: true,
+            runtime: runtimeName,
+            installed: installed.includes(runtimeName),
+            detail: installed.includes(runtimeName)
+              ? `${runtimeName} is installed on this machine.`
+              : `${runtimeName} is not installed on this machine.`,
+          },
         });
         return;
       }

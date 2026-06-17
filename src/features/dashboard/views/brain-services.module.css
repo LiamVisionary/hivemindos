@@ -386,20 +386,21 @@
 
 .brainServiceGrid {
   display: grid;
-  grid-template-columns: minmax(min(100%, 340px), 560px);
+  grid-template-columns: minmax(min(100%, 280px), 620px);
   justify-content: start;
   gap: 12px;
 }
 
 .brainServiceCard {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   align-content: start;
-  gap: 16px;
+  gap: 0;
   min-width: 0;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 8px;
   background: rgba(2, 6, 23, 0.42);
-  padding: 20px;
+  padding: 18px;
 }
 
 .brainServiceCard.installView {
@@ -444,31 +445,28 @@
   justify-content: space-between;
 }
 
-.brainServicePrimaryActions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-  align-items: stretch;
-}
+.brainServicePrimaryActions { border-top: 1px solid var(--brain-line, rgba(238, 232, 220, 0.08)); padding: 12px 0; }
 
 .brainServicePrimaryActions button {
-  min-height: 42px;
+  min-height: 31px;
 }
 
 .brainServicePrimaryButton {
-  border-color: rgba(45, 212, 191, 0.34) !important;
-  background: rgba(20, 184, 166, 0.2) !important;
-  color: var(--foreground) !important;
-  font-weight: 900 !important;
+  border-color: var(--brain-honey, #e7b45c) !important;
+  background: var(--brain-honey, #e7b45c) !important;
+  color: #1a1305 !important;
+  font-weight: 500 !important;
 }
 
-.brainServiceTopline span,
+.brainServiceModuleTitle,
 .brainServiceRecommendations strong {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
+  gap: 9px;
+  font-family: var(--f-display, "Space Grotesk", system-ui, sans-serif);
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: none;
   color: var(--foreground);
 }
 
@@ -479,16 +477,19 @@
 }
 
 .brainServiceCard h4 {
-  margin: 0;
+  margin: 14px 0 0;
   color: var(--foreground);
-  font-size: 22px;
+  font-family: var(--f-display, "Space Grotesk", system-ui, sans-serif);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   line-height: 1.2;
 }
 
 .brainServiceCard p {
-  margin: 0;
+  margin: 8px 0 14px;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 12.5px;
   line-height: 1.55;
 }
 
@@ -500,25 +501,27 @@
 }
 
 .brainModuleFeatureList {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+  border-top: 1px solid var(--brain-line, rgba(238, 232, 220, 0.08));
+  padding-top: 14px;
 }
 
 .brainModuleFeatureList span {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
   min-width: 0;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.54);
-  color: var(--foreground);
-  padding: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--brain-fg-2, #a7a39a);
+  padding: 0;
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
-.brainModuleFeatureList span::before {
-  content: none;
-}
+.brainModuleFeatureList span::before { content: ""; flex: 0 0 auto; width: 7px; height: 4px; margin-top: 5px; border-left: 1.5px solid var(--brain-honey, #e7b45c); border-bottom: 1.5px solid var(--brain-honey, #e7b45c); transform: rotate(-45deg); }
 
 .brainModuleInstallFailure {
   border: 1px solid rgba(248, 113, 113, 0.32);
@@ -540,13 +543,13 @@
 }
 
 .brainModuleInstallActions button {
-  min-height: 42px;
+  min-height: 31px;
   justify-content: center;
-  border-color: rgba(45, 212, 191, 0.34) !important;
-  color: var(--foreground) !important;
-  font-size: 13px !important;
-  font-weight: 900 !important;
-  line-height: 1.2 !important;
+  border-color: var(--brain-line-2, rgba(238, 232, 220, 0.14)) !important;
+  color: var(--brain-fg-2, #a7a39a) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
   letter-spacing: 0 !important;
 }
 
@@ -558,8 +561,9 @@
 
 .brainModuleInstallButton {
   flex: 1 1 220px;
-  border-color: rgba(45, 212, 191, 0.4) !important;
-  background: rgba(20, 184, 166, 0.22) !important;
+  border-color: var(--brain-honey, #e7b45c) !important;
+  background: var(--brain-honey, #e7b45c) !important;
+  color: #1a1305 !important;
 }
 
 .brainModuleInstallActions button:not(.brainModuleInstallButton) {
@@ -765,6 +769,9 @@
 .serviceBadgeLive,
 .serviceBadgeIdle,
 .brainServiceBadges span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.7);
@@ -843,33 +850,27 @@
 
 .brainServiceStats {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.brainServiceStats span {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 8px;
-  background: rgba(2, 6, 23, 0.45);
-  color: var(--muted);
-  padding: 10px;
-  font-size: 11px;
+.brainServiceStats > div { min-width: 0; }
+
+.brainServiceStatLabel {
+  color: var(--brain-fg-4, #5f5b53);
+  font-family: var(--f-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
-.brainServiceStats svg {
-  width: 15px;
-  height: 15px;
-  color: #99f6e4;
-}
-
-.brainServiceStats strong {
+.brainServiceStatValue {
   min-width: 0;
   color: var(--foreground);
-  font-size: 14px;
+  font-family: var(--f-display, "Space Grotesk", system-ui, sans-serif);
+  font-size: 15px;
   line-height: 1.2;
+  margin-top: 4px;
   overflow-wrap: anywhere;
 }
 
@@ -914,10 +915,8 @@
 }
 
 .brainServiceDisclosure {
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.34);
-  padding: 10px;
+  border-top: 1px solid var(--brain-line, rgba(238, 232, 220, 0.08));
+  padding: 0;
 }
 
 .brainServiceDisclosure summary {
@@ -925,68 +924,36 @@
   cursor: pointer;
   list-style: none;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
+  gap: 7px;
+  color: var(--brain-fg-3, #76726a);
+  font-size: 12px;
+  font-weight: 400;
+  padding: 11px 0;
+  user-select: none;
 }
 
 .brainServiceDisclosure summary::-webkit-details-marker {
   display: none;
 }
 
-.brainServiceDisclosure summary::after {
-  content: "+";
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 999px;
-  color: var(--foreground);
+.brainServiceDisclosure summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--brain-fg-4, #5f5b53);
+  border-bottom: 1.5px solid var(--brain-fg-4, #5f5b53);
+  margin-right: 2px;
+  transform: rotate(-45deg);
+  transition: transform 0.18s ease;
 }
 
-.brainServiceDisclosure[open] summary::after {
-  content: "−";
+.brainServiceDisclosure[open] summary::before {
+  transform: rotate(45deg);
 }
 
 .brainServiceDisclosure > .brainServiceActions,
 .brainServiceDisclosure > .brainServiceSettings {
   margin-top: 10px;
-}
-
-.brainServiceSettings {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.brainServiceSettings label {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.brainServiceSettings select,
-.brainServiceSettings input[type="number"] {
-  width: 100%;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 7px;
-  background: rgba(2, 6, 23, 0.58);
-  color: var(--foreground);
-  padding: 9px 10px;
-}
-
-.brainServiceSettings .brainServiceToggle {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .brainServiceResult,
@@ -1086,7 +1053,7 @@
   }
 
   .brainServiceStats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .brainServiceSettings {
@@ -1115,7 +1082,7 @@
   .brainServiceCard,
   .brainServiceOverviewCard,
   .brainServiceSettingsCard {
-    padding: 14px;
+    padding: 18px;
   }
 }
 
@@ -1136,4 +1103,392 @@
 :global(:root[data-theme="hive-light"]) .brainServiceSettings input[type="number"] {
   background: rgba(255, 255, 255, 0.74);
   color: var(--foreground);
+}
+
+/* Drop-in brain-service skin. The component still renders the existing live
+   install/query/settings controls; these rules only retune the vault UI. */
+.brainServicesPanel {
+  border-color: var(--brain-line, rgba(238, 232, 220, 0.08));
+  border-radius: 8px;
+  background: var(--brain-panel, #14161c);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset;
+  padding: 20px;
+}
+
+.brainServicesHero {
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.brainServicesHero h3 {
+  color: var(--brain-fg, #f3f0e9);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.brainServicesHero p {
+  max-width: 64ch;
+  color: var(--brain-fg-3, #76726a);
+  font-size: 13px;
+}
+
+.brainServiceSegmented {
+  gap: 3px;
+  width: fit-content;
+  max-width: 100%;
+  border-color: var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  background: color-mix(in srgb, var(--brain-panel, #14161c) 70%, transparent);
+  padding: 4px;
+}
+
+.brainServiceSegment {
+  min-height: 34px;
+  color: var(--brain-fg-3, #76726a);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 8px 13px;
+}
+
+.brainServiceSegment:hover,
+.brainServiceSegment:focus-visible {
+  background: transparent;
+  color: var(--brain-fg, #f3f0e9);
+}
+
+.brainServiceSegment.selected {
+  background: var(--brain-panel-hi, #1e222b);
+  color: var(--brain-fg, #f3f0e9);
+  box-shadow: inset 0 0 0 1px var(--brain-line-3, rgba(238, 232, 220, 0.22));
+}
+
+.brainServiceOverviewGrid {
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 16px;
+}
+
+.brainServiceSettingsDeck {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.brainServiceSettingsCard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+}
+
+.brainServiceOverviewCard,
+.brainServiceSettingsCard,
+.brainServiceCard {
+  border-color: var(--brain-line, rgba(238, 232, 220, 0.08));
+  border-radius: 8px;
+  background: var(--brain-panel, #14161c);
+  color: var(--brain-fg, #f3f0e9);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset;
+}
+
+.brainServiceOverviewCard.live,
+.brainServiceCard.active {
+  border-color: color-mix(in srgb, var(--brain-live, #6fcdba) 24%, var(--brain-line, rgba(238, 232, 220, 0.08)));
+}
+
+.brainServiceOverviewCard.idle,
+.brainServiceCard.trading {
+  border-color: color-mix(in srgb, var(--brain-honey, #e7b45c) 24%, var(--brain-line, rgba(238, 232, 220, 0.08)));
+}
+
+.brainServiceOverviewIcon,
+.brainServiceModuleTile {
+  border-color: var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 8px;
+  background: var(--brain-panel-2, #181b22);
+  color: var(--brain-honey, #e7b45c);
+}
+
+.brainServiceModuleTile { display: grid; flex: 0 0 auto; width: 32px; height: 32px; place-items: center; }
+.brainServiceLiveDot { display: inline-block; width: 6px; height: 6px; border-radius: 999px; background: var(--brain-live, #6fcdba); }
+
+.brainServiceTopline svg,
+.brainServiceRecommendations svg {
+  color: var(--brain-honey, #e7b45c);
+}
+
+.brainServiceOverviewCard small,
+.brainServiceSettingsCard small,
+.brainServiceTopline small {
+  color: var(--brain-fg-3, #76726a);
+  font-family: var(--f-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.brainServiceOverviewCard h4,
+.brainServiceSettingsCard h4,
+.brainServiceCard h4,
+.brainServiceTopline span,
+.brainServiceStats strong,
+.brainServiceResult strong,
+.brainServiceRepairHint strong,
+.brainServiceRecommendations strong {
+  color: var(--brain-fg, #f3f0e9);
+}
+
+.brainServiceSettingsCard h4 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.brainServiceOverviewCard p,
+.brainServiceSettingsCard p,
+.brainServiceCard p,
+.brainServiceOverviewBullets li,
+.brainServiceResult span,
+.brainServiceRepairHint span,
+.brainServiceRecommendations span {
+  color: var(--brain-fg-3, #76726a);
+}
+
+.brainServiceSettingsCard p {
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.brainServiceOverviewBullets li::before {
+  background: var(--brain-honey, #e7b45c);
+}
+
+.brainServiceEnableToggle,
+.brainServiceStats span,
+.brainModuleFeatureList span,
+.brainModuleInstalling,
+.brainServiceOverviewInstallProgress,
+.brainServiceResult,
+.brainServiceRepairHint,
+.brainServiceRecommendations,
+.brainServiceSettings select,
+.brainServiceSettings input[type="number"],
+.gbrainQueryBox textarea,
+.gbrainQueryBox pre,
+.tradingRuntimeCard {
+  border-color: var(--brain-line, rgba(238, 232, 220, 0.08));
+  border-radius: 8px;
+  background: var(--brain-panel-2, #181b22);
+  color: var(--brain-fg, #f3f0e9);
+}
+
+.brainServiceEnableToggle:has(input:checked),
+.tradingRuntimeCard.active {
+  border-color: var(--brain-honey-line, rgba(231, 180, 92, 0.32));
+  background: var(--brain-honey-soft, rgba(231, 180, 92, 0.13));
+}
+
+.brainServiceSettings { display: flex; flex-direction: column; gap: 10px; }
+.brainServiceSettings label { display: flex; flex-direction: column; gap: 6px; color: var(--brain-fg-3, #76726a); font-size: 11.5px; font-weight: 400; line-height: 1.35; }
+.brainServiceSettings select,
+.brainServiceSettings input[type="number"] { min-height: 38px; border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14)); border-radius: 9px; background-color: var(--brain-panel-2, #181b22); color: var(--brain-fg, #f3f0e9); font-family: var(--f-body, "Geist", Inter, system-ui, sans-serif); font-size: 12.5px; font-weight: 400; padding: 9px 12px; outline: none; }
+.brainServiceSettings select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.4'><path d='M6 9l6 6 6-6'/></svg>"); background-repeat: no-repeat; background-position: right 11px center; padding-right: 30px; cursor: pointer; }
+.brainServiceSettings select:focus,
+.brainServiceSettings input[type="number"]:focus { border-color: var(--brain-honey-line, rgba(231, 180, 92, 0.32)); box-shadow: 0 0 0 3px var(--brain-honey-soft, rgba(231, 180, 92, 0.13)); }
+.brainServiceSettings .brainServiceToggle { flex-direction: row; align-items: center; gap: 10px; color: var(--brain-fg-2, #a7a39a); font-size: 12px; }
+.brainServiceSettings input[type="checkbox"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+.brainServiceSwitch {
+  border-color: var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  background: var(--brain-panel-hi, #1e222b);
+}
+
+.brainServiceEnableToggle input:checked + .brainServiceSwitch {
+  border-color: var(--brain-honey, #e7b45c);
+  background: var(--brain-honey, #e7b45c);
+}
+
+.brainServiceEnableToggle input:checked + .brainServiceSwitch span {
+  background: #1a1305;
+}
+
+.brainServicesHeroActions button,
+.brainServiceActionButton,
+.brainServiceOverviewControls > button,
+.brainServiceOverviewCard > button,
+.brainServicePrimaryActions button,
+.brainModuleInstallActions button,
+.brainServiceResult button,
+.brainServiceRepairHint button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 31px;
+  border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brain-fg-2, #a7a39a);
+  font-family: var(--f-body, "Geist", Inter, system-ui, sans-serif);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 7px 12px;
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+.brainServicesHeroActions button:hover,
+.brainServiceActionButton:hover:not(:disabled),
+.brainServiceOverviewControls > button:hover,
+.brainServiceOverviewCard > button:hover,
+.brainServicePrimaryActions button:hover,
+.brainModuleInstallActions button:hover,
+.brainServiceResult button:hover,
+.brainServiceRepairHint button:hover {
+  border-color: var(--brain-line-3, rgba(238, 232, 220, 0.2));
+  background: transparent;
+  color: var(--brain-fg, #f3f0e9);
+}
+
+.brainServiceActionButton:disabled { cursor: default; opacity: 0.5; }
+
+.brainServiceOverviewControls {
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.brainServiceEnableToggle {
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--brain-fg-3, #76726a);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.35;
+  padding: 0;
+}
+
+.brainServiceEnableToggle:has(input:checked) { border-color: transparent; background: transparent; }
+
+.brainServiceEnableToggle > span:last-child { max-width: 30ch; white-space: normal; }
+
+.brainServiceSwitch {
+  position: relative;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 22px;
+  border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 999px;
+  background: var(--brain-panel-hi, #1e222b);
+  padding: 0;
+}
+
+.brainServiceSwitch span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--brain-fg-3, #76726a);
+  box-shadow: none;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.brainServiceEnableToggle input:checked + .brainServiceSwitch,
+.brainServiceSettings input:checked + .brainServiceSwitch {
+  border-color: var(--brain-honey, #e7b45c);
+  background: var(--brain-honey, #e7b45c);
+}
+
+.brainServiceEnableToggle input:checked + .brainServiceSwitch span,
+.brainServiceSettings input:checked + .brainServiceSwitch span {
+  background: #1a1305;
+  transform: translateX(16px);
+}
+
+.brainServiceOverviewControls > button {
+  flex: 0 0 auto;
+}
+
+.serviceBadgeLive {
+  border-color: color-mix(in srgb, var(--brain-live, #6fcdba) 35%, transparent);
+  background: var(--brain-live-soft, rgba(111, 205, 186, 0.14));
+  color: var(--brain-live, #6fcdba);
+}
+
+.serviceBadgeIdle {
+  border-color: var(--brain-honey-line, rgba(231, 180, 92, 0.32));
+  background: var(--brain-honey-soft, rgba(231, 180, 92, 0.13));
+  color: var(--brain-honey, #e7b45c);
+}
+
+.skillSecurityCard { min-height: 0; }
+.skillSecurityCard h4 { font-size: 16px; font-weight: 600; }
+.skillSecurityCard p { font-size: 12px; }
+.skillSecurityLlmText strong { font-size: 12.5px; }
+
+.skillSecurityPills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 7px; }
+
+.skillSecurityPill,
+.skillSecurityToggle {
+  min-height: 31px;
+  border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brain-fg-2, #a7a39a);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 7px 12px;
+}
+
+.skillSecurityPill.selected,
+.skillSecurityToggle.primaryAction {
+  border-color: var(--brain-honey, #e7b45c);
+  background: var(--brain-honey, #e7b45c);
+  color: #1a1305;
+}
+
+.skillSecurityStatus {
+  margin: 8px 0 0 !important;
+  color: var(--brain-fg-4, #5f5b53) !important;
+  font-size: 11.5px !important;
+  line-height: 1.4 !important;
+}
+
+.skillSecurityLlmRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--brain-line, rgba(238, 232, 220, 0.08));
+  padding-top: 12px;
+}
+
+.skillSecurityLlmText { min-width: 0; }
+
+.brainServiceDisclosure summary:hover {
+  color: var(--brain-fg, #f3f0e9);
+}
+
+.brainServiceBadges span,
+.tradingBrainPillars span {
+  border-color: var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  background: transparent;
+  color: var(--brain-fg-2, #a7a39a);
+}
+
+.brainModuleInstallFailure {
+  border-color: color-mix(in srgb, var(--brain-danger, #e58e85) 38%, transparent);
+  background: color-mix(in srgb, var(--brain-danger, #e58e85) 13%, transparent);
+  color: var(--brain-danger, #e58e85);
+}
+
+.brainModuleSuccess {
+  color: var(--brain-live, #6fcdba);
 }

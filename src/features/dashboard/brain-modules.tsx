@@ -82,8 +82,12 @@ export class BrainModule {
     return (
       <article key={brainModule.id} className={vaultClass("brainServiceCard", brainModule.variant, brainModule.active && "active", installState !== "installed" && "installView")}>
         <div className={vaultClass("brainServiceTopline")}>
-          <span>{brainModule.icon}{brainModule.name}</span>
+          <span className={vaultClass("brainServiceModuleTitle")}>
+            <span className={vaultClass("brainServiceModuleTile")}>{brainModule.icon}</span>
+            {brainModule.name}
+          </span>
           <small className={vaultClass(brainModule.statusTone === "live" ? "serviceBadgeLive" : "serviceBadgeIdle")}>
+            {brainModule.statusTone === "live" ? <span className={vaultClass("brainServiceLiveDot")} aria-hidden="true" /> : null}
             {brainModule.statusLabel}
           </small>
         </div>
@@ -142,12 +146,15 @@ export class BrainModule {
         ) : null}
 
         {showInstalledView && (brainModule.stats?.length || brainModule.badges?.length) ? (
-          <details className={vaultClass("brainServiceDisclosure")}>
+          <details className={vaultClass("brainServiceDisclosure")} open>
             <summary>Details</summary>
             {brainModule.stats?.length ? (
               <div className={vaultClass("brainServiceStats")}>
                 {brainModule.stats.map((stat) => (
-                  <span key={stat.key}>{stat.icon}<strong>{stat.value}</strong>{stat.label}</span>
+                  <div key={stat.key}>
+                    <div className={vaultClass("brainServiceStatLabel")}>{stat.label}</div>
+                    <div className={vaultClass("brainServiceStatValue")}>{stat.value}</div>
+                  </div>
                 ))}
               </div>
             ) : null}
