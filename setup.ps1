@@ -309,8 +309,11 @@ function Ensure-HivePulsePython {
       return
     }
   }
-  Warn "Python 3.12+ is still missing; install it or set HIVE_PULSE_PYTHON before running hive-pulse."
-  $Missing.Add("Python 3.12+ for hive-pulse")
+  # Python is OPTIONAL -- only hive-pulse (monitoring) needs it. Do NOT add it to
+  # $Missing: that list triggers an exit 1 further down (before dependency
+  # install, vault seeding, and the collector install), so a fresh Windows box
+  # without Python 3.12 would bail before the collector ever gets installed.
+  Warn "Python 3.12+ is missing; the optional hive-pulse monitor needs it. Install it or set HIVE_PULSE_PYTHON later -- setup will continue without it."
 }
 
 function Ensure-HiveEnvAdd {
