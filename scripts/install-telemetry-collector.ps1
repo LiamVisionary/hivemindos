@@ -112,7 +112,16 @@ $settings = New-ScheduledTaskSettingsSet `
   -StartWhenAvailable `
   -RestartCount 9999 -RestartInterval (New-TimeSpan -Minutes 1) `
   -ExecutionTimeLimit ([TimeSpan]::Zero)
-$principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+# Build the principal from the canonical, resolvable account name
+# ("MACHINE\User" or the domain form). Do NOT use "$env:USERDOMAIN\$env:USERNAME":
+# on a workgroup PC USERDOMAIN is "WORKGROUP" (and Microsoft-account logins are
+# similar), so that string fails to map to a SID and Register-ScheduledTask dies
+# with ERROR_NONE_MAPPED (0x80070534) -- which silently left Windows machines
+# with no collector. S4U (vs Interactive) lets the task start on demand and at
+# logon without requiring an interactive session, so the collector comes up
+# right after setup and survives logon. Verified on a real Windows box.
+$principalUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$principal = New-ScheduledTaskPrincipal -UserId $principalUser -LogonType S4U -RunLevel Limited
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
   -Settings $settings -Principal $principal -Description "Runs the HivemindOS agent telemetry collector (local agent bridge)." -Force | Out-Null
