@@ -9,12 +9,20 @@ import "./theme.css";
 import React from "react";
 import type { Company, CompanyMember, CompanyRevenue, CompanySpendRollup } from "@/lib/types/company";
 import ZeroHumanCompanies from "./ZeroHumanCompanies";
+import {
+  applyDemoEdit,
+  createDemoColony,
+  DEMO_AGENT_POOL,
+  DEMO_COLONIES,
+  DEMO_CREATE_SEED_CREW,
+} from "./zhc-demo-data";
 import { buildColony, toPoolAgents, type AgentLite, type ApprovalRow, type KanbanTaskLite } from "./mappers";
-import type { Agent, Colony, CompanyEditForm, CreateForm, PoolAgent } from "./types";
+import type { Agent, Colony, CompanyEditForm, CompanyMemberEdit, CreateForm, GovEvent, PoolAgent } from "./types";
 
 type CompanyEntry = { company: Company; rollup: CompanySpendRollup };
 
 const POLL_MS = 15_000;
+const USE_ZHC_DEMO_DATA = true;
 
 async function postCompanies(body: Record<string, unknown>): Promise<{ ok: boolean; company?: Company; error?: string }> {
   const res = await fetch("/api/companies", {
@@ -25,7 +33,141 @@ async function postCompanies(body: Record<string, unknown>): Promise<{ ok: boole
   return res.json().catch(() => ({ ok: false, error: "Bad response" }));
 }
 
-export function ZeroHumanCompaniesView({ theme = "dark" }: { theme?: "dark" | "light" } = {}) {
+function memberEditFromAgent(agent: Agent): CompanyMemberEdit {
+  return {
+    agentId: agent.id ?? agent.name,
+    name: agent.name,
+    role: agent.role,
+    companyCap: agent._cap,
+    task: agent.task,
+    state: agent.state,
+    reportsTo: agent.reportsTo,
+    runtime: agent.runtime,
+    model: agent.model,
+  };
+}
+
+function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "light" } = {}) {
+  const [colonies, setColonies] = React.useState<Colony[]>(DEMO_COLONIES);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const portfolioColonies = colonies;
+
+  const replaceColony = React.useCallback((companyId: string, updater: (colony: Colony) => Colony) => {
+    setColonies((current) => current.map((colony) => (colony.id === companyId ? updater(colony) : colony)));
+  }, []);
+
+  const handleCreateCompany = React.useCallback(async (form: CreateForm, crew: Agent[]): Promise<string | null> => {
+    const next = createDemoColony(form, crew);
+    setColonies((current) => [next, ...current]);
+    return next.id;
+  }, []);
+
+  const handleEditCompany = React.useCallback(async (companyId: string, form: CompanyEditForm): Promise<void> => {
+    replaceColony(companyId, (colony) => applyDemoEdit(colony, form));
+  }, [replaceColony]);
+
+  const handleAddAgents = React.useCallback(async (companyId: string, crew: Agent[]): Promise<void> => {
+    replaceColony(companyId, (colony) => {
+      const existingIds = new Set(colony.agents.map((agent) => agent.id).filter(Boolean));
+      const queen = colony.agents.find((agent) => agent.role === "Queen");
+      const additions = crew
+        .filter((agent) => agent.id && !existingIds.has(agent.id))
+        .map((agent) => ({
+          ...agent,
+          reportsTo: agent.role === "Queen" ? null : queen?.name ?? null,
+          state: agent.state === "ready" ? "working" as const : agent.state,
+        }));
+      if (additions.length === 0) return colony;
+      return applyDemoEdit(colony, {
+        ...colony.edit,
+        members: [...(colony.edit.members ?? []), ...additions.map(memberEditFromAgent)],
+      });
+    });
+  }, [replaceColony]);
+
+  const decideApproval = React.useCallback((companyId: string, approvalId: string, decision: "approved" | "denied") => {
+    setBusyId(approvalId);
+    replaceColony(companyId, (colony) => {
+      const approval = colony.approvals.find((item) => item.id === approvalId);
+      if (!approval) return colony;
+      const eventKind: GovEvent["kind"] = decision === "approved" ? "patch" : "alert";
+      return {
+        ...colony,
+        approvals: colony.approvals.filter((item) => item.id !== approvalId),
+        governance: [
+          {
+            kind: eventKind,
+            text: `${approval.agent}'s ${approval.kind} request was ${decision}: ${approval.title}.`,
+            agent: "human",
+            since: "now",
+          },
+          ...colony.governance,
+        ].slice(0, 5),
+      };
+    });
+    setBusyId(null);
+  }, [replaceColony]);
+
+  const handleFreeze = React.useCallback((companyId: string, frozen: boolean) => {
+    setBusyId(companyId);
+    replaceColony(companyId, (colony) => ({
+      ...colony,
+      frozen,
+      status: frozen ? "paused" : colony.status === "paused" ? "shipping" : colony.status,
+      agents: colony.agents.map((agent) => ({ ...agent, state: frozen ? "blocked" : agent.state })),
+      edit: { ...colony.edit, frozen, status: frozen ? "paused" : colony.edit.status },
+    }));
+    setBusyId(null);
+  }, [replaceColony]);
+
+  const handleDispatch = React.useCallback((companyId: string) => {
+    setBusyId(companyId);
+    replaceColony(companyId, (colony) => ({
+      ...colony,
+      autonomy: true,
+      lastDispatchedAt: Date.now(),
+      workBlock: { ...colony.workBlock, state: "active" },
+      governance: [
+        { kind: "reflect" as const, text: "Regent decomposed the apex goal and re-dispatched the active work block.", agent: "Regent", since: "now" },
+        ...colony.governance,
+      ].slice(0, 5),
+    }));
+    setBusyId(null);
+  }, [replaceColony]);
+
+  const handleStopAutonomy = React.useCallback((companyId: string) => {
+    setBusyId(companyId);
+    replaceColony(companyId, (colony) => ({ ...colony, autonomy: false }));
+    setBusyId(null);
+  }, [replaceColony]);
+
+  return (
+    <ZeroHumanCompanies
+      colonies={colonies}
+      portfolioColonies={portfolioColonies}
+      agentPool={DEMO_AGENT_POOL}
+      initialCreateCrew={DEMO_CREATE_SEED_CREW}
+      loading={false}
+      initialLoading={false}
+      error={null}
+      notice={null}
+      busyId={busyId}
+      onRefresh={() => setColonies(DEMO_COLONIES)}
+      onCreateCompany={handleCreateCompany}
+      onEditCompany={handleEditCompany}
+      onAddAgents={handleAddAgents}
+      onApprove={(companyId, approvalId) => decideApproval(companyId, approvalId, "approved")}
+      onReject={(companyId, approvalId) => decideApproval(companyId, approvalId, "denied")}
+      onFreeze={handleFreeze}
+      onDelete={(companyId) => setColonies((current) => current.filter((colony) => colony.id !== companyId))}
+      onDispatch={handleDispatch}
+      onStopAutonomy={handleStopAutonomy}
+      theme={theme}
+    />
+  );
+}
+
+function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "light" } = {}) {
   const [data, setData] = React.useState<CompanyEntry[]>([]);
   const [agents, setAgents] = React.useState<AgentLite[]>([]);
   const [approvals, setApprovals] = React.useState<ApprovalRow[]>([]);
@@ -405,4 +547,8 @@ export function ZeroHumanCompaniesView({ theme = "dark" }: { theme?: "dark" | "l
       theme={theme}
     />
   );
+}
+
+export function ZeroHumanCompaniesView({ theme = "dark" }: { theme?: "dark" | "light" } = {}) {
+  return USE_ZHC_DEMO_DATA ? <ZeroHumanCompaniesDemoView theme={theme} /> : <ZeroHumanCompaniesLiveView theme={theme} />;
 }

@@ -7,18 +7,18 @@
 import { BrainModule } from "@/features/dashboard/brain-modules";
 import { memo, useEffect, useRef, useState } from "react";
 import { BrainGraphExplorer } from "./BrainGraphExplorer";
+import { BrainConfigPanel } from "./BrainConfigPanel";
+import { BrainSkillsPanel } from "./BrainSkillsPanel";
 import { BrainServiceOverview, BrainServiceRunResult, BrainServiceSegmentedNav, BrainServiceSettingsDeck } from "./brain-services-ui";
 import { SkillSecurityCard } from "./SkillSecurityCard";
 import brainServiceStyles from "./brain-services.module.css";
-import { Btn } from "@/components/aeon/parts";
-import { AeonSkillBrowserSection, type UnifiedSkillBrowserItem } from "@/components/aeon/skill-browser-section";
 import { SectionModeHeader } from "./WorkSectionHeader";
 
 export const VaultPanel = memo(VaultPanelComponent);
 
 // Memoized (see export above) so unrelated background re-renders skip this panel.
 function VaultPanelComponent(props: any) {
-  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, KeyRound, LoaderCircle, MemoryCell, Network, PlugZap, RefreshCcw, Repeat2, Search, Sparkles, activeView, brainGraph, brainGraphEdgePath, brainGraphLoading, brainGraphStats, brainGraphStatus, brainNodePoints, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, openSkillBrowser, pairSyncthingVaultSync, qmdActionStatus, qmdBusy, qmdQuery, qmdQueryResult, qmdStatus, queryGbrainFromDashboard, queryQmdFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshQmdStatus, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runQmdAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setGbrainQuery, setQmdQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, splitBrainLabel, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus } = props;
+  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, KeyRound, LoaderCircle, Network, PlugZap, RefreshCcw, Repeat2, Search, Sparkles, activeView, brainGraph, brainGraphLoading, brainGraphStats, brainGraphStatus, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, openSkillBrowser, pairSyncthingVaultSync, qmdActionStatus, qmdBusy, qmdQuery, qmdQueryResult, qmdStatus, queryGbrainFromDashboard, queryQmdFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshQmdStatus, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runQmdAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setGbrainQuery, setQmdQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus } = props;
   const brainClass = (...classes) => classes.map((className) => brainServiceStyles[className] || vaultClass(className)).filter(Boolean).join(" ");
   const gbrainMetric = (keys: string[]) => {
     const stats = gbrainStatus?.stats ?? {};
@@ -37,6 +37,9 @@ function VaultPanelComponent(props: any) {
   const previousQmdBusyRef = useRef("");
   const previousSyntoBusyRef = useRef("");
   const previousTradingBrainBusyRef = useRef("");
+  const sharedSkillsRefreshKeyRef = useRef("");
+  const sharedSkillCountFallbackRef = useRef("");
+  const [sharedSkillCountFallback, setSharedSkillCountFallback] = useState(0);
   const tradingCounts = tradingBrainStatus?.counts ?? {};
   const tradingBrainConfiguredFiles = tradingBrainStatus?.files?.filter((file) => file.exists).length ?? 0;
   const tradingBrainTotalFiles = tradingBrainStatus?.files?.length ?? 0;
@@ -51,37 +54,57 @@ function VaultPanelComponent(props: any) {
     );
   };
   const sharedBrainSkills = brainSkills?.shared ?? [];
-  const sharedBrainBrowserItems: UnifiedSkillBrowserItem[] = sharedBrainSkills.map((skill) => {
-    const needsHermesUpdate = skillRequiresHermesUpdate(skill, hermesUpdateRequired);
-    const providerLabel = skill.providerLabel || "Shared brain";
-    return {
-      id: skill.id ?? skill.slug,
-      slug: skill.slug,
-      name: skill.name,
-      description: skill.description,
-      source: providerLabel,
-      sourceId: "shared-brain",
-      providerId: skill.providerId,
-      category: "Skill",
-      categoryId: "skill",
-      categoryColor: "var(--aeon)",
-      stateLabel: needsHermesUpdate ? "Needs Hermes" : "Shared Brain",
-      stateTone: needsHermesUpdate ? "honey" : "green",
-      stateIcon: needsHermesUpdate ? "refresh" : "check",
-      stateActive: !needsHermesUpdate,
-      sourceRef: skill.relativePath,
-      scheduleLabel: providerLabel,
-      requiresHermesUpdate: needsHermesUpdate,
-    };
-  });
+  const sharedSkillCount = Math.max(sharedBrainSkills.length, brainSkills?.totals?.shared ?? 0, sharedSkillCountFallback);
+  const sharedVaultPath = sharedVault.vaultPath?.trim() ?? "";
+  const canReadSharedVault = sharedVault.enabled || Boolean(sharedVaultPath);
   const providerSkillInventories = (brainSkills?.providers ?? BRAIN_SKILL_PROVIDER_FALLBACK).map((provider) => ({
     ...provider,
     skills: skillSearchQuery ? provider.skills.filter((skill) => skillMatchesBrowserSearch(skill, provider.label)) : provider.skills,
   }));
+  const providerSkillTotal = (brainSkills?.providers ?? []).reduce((total, provider) => total + provider.skills.length, 0);
   const filteredProviderSkillTotal = providerSkillInventories.reduce((total, provider) => total + provider.skills.length, 0);
   const providerSkillSummary = skillSearchQuery
     ? `${filteredProviderSkillTotal} matching provider skill${filteredProviderSkillTotal === 1 ? "" : "s"}`
     : `${brainSkills?.totals.importable ?? 0} skill${(brainSkills?.totals.importable ?? 0) === 1 ? "" : "s"} ready to mirror into Obsidian`;
+  const skillInventoryEmpty = !brainSkills
+    || (!sharedBrainSkills.length
+      && !providerSkillTotal
+      && !(brainSkills?.totals.shared ?? 0)
+      && !(brainSkills?.totals.importable ?? 0));
+  useEffect(() => {
+    if (activeView !== "vault" || brainSkillsLoading || !skillInventoryEmpty || !canReadSharedVault) return;
+    const refreshKey = `${sharedVaultPath || "default"}:${vaultPanelMode}:${brainSkillsStatus || "empty"}`;
+    if (sharedSkillsRefreshKeyRef.current === refreshKey) return;
+    sharedSkillsRefreshKeyRef.current = refreshKey;
+    const timer = window.setTimeout(() => {
+      void refreshBrainSkills();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeView, brainSkillsLoading, brainSkillsStatus, canReadSharedVault, refreshBrainSkills, sharedVaultPath, skillInventoryEmpty, vaultPanelMode]);
+  useEffect(() => {
+    if (sharedSkillCount || !sharedVaultPath) return;
+    const refreshKey = `${sharedVaultPath}:shared-count`;
+    if (sharedSkillCountFallbackRef.current === refreshKey) return;
+    sharedSkillCountFallbackRef.current = refreshKey;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 90_000);
+    const params = new URLSearchParams();
+    params.set("vaultPath", sharedVaultPath);
+    params.set("shared", "1");
+    params.set("count", "1");
+    fetch(`/api/obsidian/skills?${params.toString()}`, { cache: "no-store", signal: controller.signal })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        const count = data?.sharedTotal ?? data?.totals?.shared ?? data?.shared?.length ?? 0;
+        if (Number.isFinite(count) && count > 0) setSharedSkillCountFallback(count);
+      })
+      .catch(() => undefined)
+      .finally(() => window.clearTimeout(timeout));
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [sharedSkillCount, sharedVaultPath]);
   useEffect(() => {
     const previousBusy = previousGbrainBusyRef.current;
     previousGbrainBusyRef.current = gbrainBusy;
@@ -319,13 +342,14 @@ function VaultPanelComponent(props: any) {
                   checked={sharedVault.gbrain.enabled}
                   onChange={(event) => updateSharedVault({ gbrain: { ...sharedVault.gbrain, enabled: event.target.checked } })}
                 />
-                {sharedVault.gbrain.enabled ? "GBrain integration enabled" : "GBrain integration disabled"}
+                <span className={brainClass("brainServiceSwitch")} aria-hidden="true"><span /></span>
+                <span>{sharedVault.gbrain.enabled ? "GBrain integration enabled" : "GBrain integration disabled"}</span>
               </>
             ) : (
-              <Button type="button" size="sm" variant="secondary" disabled={Boolean(gbrainBusy) || !sharedVault.enabled} onClick={() => void runGbrainAction("install")}>
+              <button type="button" className={brainClass("brainServiceActionButton")} disabled={Boolean(gbrainBusy) || !sharedVault.enabled} onClick={() => void runGbrainAction("install")}>
                 {gbrainBusy === "install" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />}
                 Install GBrain
-              </Button>
+              </button>
             )}
           </label>
           <label>
@@ -459,13 +483,14 @@ function VaultPanelComponent(props: any) {
                   checked={sharedVault.qmd.enabled}
                   onChange={(event) => updateSharedVault({ qmd: { ...sharedVault.qmd, enabled: event.target.checked } })}
                 />
-                {sharedVault.qmd.enabled ? "QMD integration enabled" : "QMD integration disabled"}
+                <span className={brainClass("brainServiceSwitch")} aria-hidden="true"><span /></span>
+                <span>{sharedVault.qmd.enabled ? "QMD integration enabled" : "QMD integration disabled"}</span>
               </>
             ) : (
-              <Button type="button" size="sm" variant="secondary" disabled={Boolean(qmdBusy) || !sharedVault.enabled} onClick={() => void runQmdAction("install")}>
+              <button type="button" className={brainClass("brainServiceActionButton")} disabled={Boolean(qmdBusy) || !sharedVault.enabled} onClick={() => void runQmdAction("install")}>
                 {qmdBusy === "install" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Download aria-hidden="true" />}
                 Install QMD
-              </Button>
+              </button>
             )}
           </label>
           <label>
@@ -497,7 +522,8 @@ function VaultPanelComponent(props: any) {
               checked={sharedVault.qmd.autoEmbed}
               onChange={(event) => updateSharedVault({ qmd: { ...sharedVault.qmd, autoEmbed: event.target.checked } })}
             />
-            {sharedVault.qmd.autoEmbed ? "One-click setup refreshes vectors" : "One-click setup skips vector refresh"}
+            <span className={brainClass("brainServiceSwitch")} aria-hidden="true"><span /></span>
+            <span>{sharedVault.qmd.autoEmbed ? "One-click setup refreshes vectors" : "One-click setup skips vector refresh"}</span>
           </label>
         </div>
       ),
@@ -640,7 +666,8 @@ function VaultPanelComponent(props: any) {
               checked={sharedVault.synto.enabled}
               onChange={(event) => updateSharedVault({ synto: { ...sharedVault.synto, enabled: event.target.checked } })}
             />
-            {sharedVault.synto.enabled ? "Syntho integration enabled" : "Syntho integration disabled"}
+            <span className={brainClass("brainServiceSwitch")} aria-hidden="true"><span /></span>
+            <span>{sharedVault.synto.enabled ? "Syntho integration enabled" : "Syntho integration disabled"}</span>
           </label>
           <label>
             Source access
@@ -693,7 +720,8 @@ function VaultPanelComponent(props: any) {
               checked={sharedVault.synto.autoApprove}
               onChange={(event) => updateSharedVault({ synto: { ...sharedVault.synto, autoApprove: event.target.checked } })}
             />
-            Auto-approve pipeline drafts at or above the confidence threshold
+            <span className={brainClass("brainServiceSwitch")} aria-hidden="true"><span /></span>
+            <span>Auto-approve pipeline drafts at or above the confidence threshold</span>
           </label>
         </div>
       ),
@@ -960,217 +988,56 @@ function VaultPanelComponent(props: any) {
           onSelect={selectVaultPanel}
           title={vaultPanelCopy.title}
           subtitle={vaultPanelCopy.subtitle}
+          variant="brain"
           stats={[
             { value: brainGraphStats.notes, label: "notes", tone: "cyan" },
             { value: brainGraphStats.links, label: "links", tone: "honey" },
-            { value: sharedBrainSkills.length, label: "skills" },
+            { value: sharedSkillCount, label: "skills" },
             { value: brainSkillImportableCount, label: "ready" },
           ]}
         />
 
         <div className={vaultClass("vaultPanelBody", vaultPanelMode === "hive-vault" && "brainMapBody")}>
         {vaultPanelMode === "hive-vault" ? (
-        <BrainGraphExplorer {...{ Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, Download, FileText, GitBranch, Hexagon, LoaderCircle, Network, RefreshCcw, Sparkles, brainGraph, brainGraphEdgePath, brainGraphLoading, brainGraphStats, brainGraphStatus, brainNodePoints, brainPan, endBrainPan, formatBrainDate, inspectBrainNode, moveBrainPan, refreshBrainGraph, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserView, setSkillBrowserWrittenContent, setText, sharedVault, splitBrainLabel, startBrainPan, vaultClass }} />
+        <BrainGraphExplorer {...{ Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, Download, FileText, GitBranch, Hexagon, LoaderCircle, Network, RefreshCcw, Sparkles, brainGraph, brainGraphLoading, brainGraphStatus, brainPan, endBrainPan, formatBrainDate, inspectBrainNode, moveBrainPan, refreshBrainGraph, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserView, setSkillBrowserWrittenContent, setText, sharedVault, startBrainPan, vaultClass }} />
         ) : null}
 
-        {vaultPanelMode === "shared-skills" && brainSkillsLoading ? (
-        <section className={vaultClass("brainSkillsLoadingPanel")} aria-label="Loading shared brain skills" aria-busy="true">
-          <div className={vaultClass("skillLoadingBeacon")}>
-            <BrainGraphLoader
-              compact
-              inline
-              title="Scanning shared skills"
-              detail={brainSkillsStatus || "Reading shared brain skills and provider installs"}
-            />
-          </div>
-          <div className={vaultClass("skillLoadingCopy")}>
-            <p className="eyebrow">Shared skills</p>
-            <h3>Scanning the fleet skill shelf</h3>
-            <p>{brainSkillsStatus || "Reading shared brain skills and provider installs across reachable machines."}</p>
-          </div>
-          <div className={vaultClass("skillLoadingCards")} aria-hidden="true">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <div key={index} className={vaultClass("skillLoadingCard")} style={{ "--card-index": index }}>
-                <span />
-                <strong />
-                <i />
-                <i />
-                <small />
-              </div>
-            ))}
-          </div>
-          <div className={vaultClass("skillLoadingRail")} aria-hidden="true">
-            {BRAIN_SKILL_PROVIDER_FALLBACK.map((provider, index) => (
-              <span key={provider.id} style={{ "--provider-index": index }}>{provider.label}</span>
-            ))}
-          </div>
-        </section>
-        ) : vaultPanelMode === "shared-skills" ? (
-        <section className={vaultClass("brainSkillsPanel")} aria-label="Shared brain skills">
-          <div className={vaultClass("brainSkillsHeader")}>
-            <div>
-              <p className="eyebrow">Shared skills</p>
-              <h3>Operational recipes in the brain</h3>
-              <p>The shared brain is the main skills shelf. Provider installs are scanned below and can be mirrored into Obsidian.</p>
-            </div>
-            <div className={vaultClass("brainSkillsActions")}>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => void syncBrainSkillsToAeon()}
-                disabled={brainSkillAeonSyncing || !sharedVault.enabled || !(brainSkills?.shared.length ?? 0)}
-              >
-                {brainSkillAeonSyncing ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Repeat2 aria-hidden="true" />}
-                {brainSkillAeonSyncing ? "Syncing Aeon" : "Sync to Aeon"}
-              </Button>
-              <Button type="button" size="sm" variant="secondary" onClick={refreshBrainSkills} disabled={brainSkillsLoading || Boolean(brainSkillImportProvider)}>
-                {brainSkillsLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
-                {brainSkillsLoading ? "Scanning" : "Refresh skills"}
-              </Button>
-            </div>
-          </div>
-
-          {hermesUpdateRequired ? (
-            <p className={vaultClass("hermesUpdateNotice")}>Hermes update available: {hermesUpdateRequiredDetail}. Skills using the newest Hermes features are marked below.</p>
-          ) : null}
-
-          <AeonSkillBrowserSection
-            title={`${sharedBrainBrowserItems.length} available · ${brainSkills?.totals.importable ?? 0} importable`}
-            items={sharedBrainBrowserItems}
-            query={skillBrowserSearch}
-            onQueryChange={setSkillBrowserSearch}
-            searchPlaceholder="Search skills"
-            emptyTitle={skillSearchQuery ? "No matching shared skills" : "No shared skills yet"}
-            emptyDescription={skillSearchQuery ? "Try a different search, or browse skills to add another recipe to the brain." : "The vault Skills folder is empty. Import every discovered provider skill, or browse one skill at a time."}
-            sources={[
-              { id: "shared", label: "Shared Brain", predicate: (item) => item.sourceId === "shared-brain" },
-            ]}
-            controlledSourceId="shared"
-            action={(
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                {skillSearchQuery ? (
-                  <Btn type="button" size="sm" variant="secondary" onClick={() => setSkillBrowserSearch("")}>
-                    Clear
-                  </Btn>
-                ) : null}
-                <Btn type="button" size="sm" variant="secondary" icon="sparkles" onClick={openSkillBrowser}>
-                  Add skill
-                </Btn>
-              </div>
-            )}
+        {vaultPanelMode === "shared-skills" ? (
+          <BrainSkillsPanel
+            Button={Button}
+            Check={Check}
+            Download={Download}
+            LoaderCircle={LoaderCircle}
+            RefreshCcw={RefreshCcw}
+            Repeat2={Repeat2}
+            Search={Search}
+            Sparkles={Sparkles}
+            brainSkillAeonSyncing={brainSkillAeonSyncing}
+            brainSkillImportAllDescription={brainSkillImportAllDescription}
+            brainSkillImportAllLabel={brainSkillImportAllLabel}
+            brainSkillImportProvider={brainSkillImportProvider}
+            brainSkillImportSuccess={brainSkillImportSuccess}
+            brainSkillImportableCount={brainSkillImportableCount}
+            brainSkills={brainSkills}
+            brainSkillsLoading={brainSkillsLoading}
+            brainSkillsStatus={brainSkillsStatus}
+            hermesUpdateRequired={hermesUpdateRequired}
+            hermesUpdateRequiredDetail={hermesUpdateRequiredDetail}
+            importBrainSkills={importBrainSkills}
+            openSkillBrowser={openSkillBrowser}
+            providerSkillInventories={providerSkillInventories}
+            providerSkillSummary={providerSkillSummary}
+            refreshBrainSkills={refreshBrainSkills}
+            setSkillBrowserSearch={setSkillBrowserSearch}
+            sharedBrainSkills={sharedBrainSkills}
+            sharedVault={sharedVault}
+            skillBrowserSearch={skillBrowserSearch}
+            skillRequiresHermesUpdate={skillRequiresHermesUpdate}
+            syncBrainSkillsToAeon={syncBrainSkillsToAeon}
+            updateAllSkillAutoSync={updateAllSkillAutoSync}
+            updateSkillAutoSync={updateSkillAutoSync}
+            vaultClass={vaultClass}
           />
-
-          <div className={vaultClass("providerSkillsToolbar")}>
-            <div>
-              <strong>Provider installs</strong>
-              <span>{providerSkillSummary}</span>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className={vaultClass("providerImportAllButton")}
-              onClick={() => void importBrainSkills("all")}
-              disabled={Boolean(brainSkillImportProvider) || !brainSkillImportableCount}
-              title={brainSkillImportAllDescription}
-              aria-label={brainSkillImportAllDescription}
-            >
-              {brainSkillImportProvider === "all" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : brainSkillImportSuccess === "all" ? <Check aria-hidden="true" /> : <Download aria-hidden="true" />}
-              {brainSkillImportProvider === "all" ? "Importing missing skills" : brainSkillImportSuccess === "all" ? "Missing skills imported" : brainSkillImportAllLabel}
-            </Button>
-          </div>
-
-          <label className={vaultClass("providerAutoSyncMaster")}>
-            <input
-              type="checkbox"
-              checked={sharedVault.skillAutoSyncAll}
-              onChange={(event) => void updateAllSkillAutoSync(event.target.checked)}
-            />
-            <span>
-              <strong>Auto-import all provider skills</strong>
-              <small>Keep every provider mirrored across all machines; changed skills are archived before replacement and removals stay safe.</small>
-            </span>
-          </label>
-
-          <div className={vaultClass("providerSkillStrip")}>
-            {providerSkillInventories.map((provider) => {
-              const importable = provider.skills.filter((skill) => !skill.imported).length;
-              const imported = provider.skills.length - importable;
-              const updateRequiredCount = provider.skills.filter((skill) => skillRequiresHermesUpdate({ ...skill, providerId: provider.id, source: provider.label }, hermesUpdateRequired)).length;
-              const autoSyncPolicy = sharedVault.skillAutoSyncAll
-                ? { autoImport: true, autoUpdate: true, trackRemovals: true, allowDelete: false }
-                : sharedVault.skillAutoSync?.[provider.id] ?? { autoImport: false, autoUpdate: false, trackRemovals: false, allowDelete: false };
-              const providerStatus = !provider.installed
-                ? `No ${provider.home} install found`
-                : importable > 0 && imported > 0
-                  ? `${importable} ready · ${imported} shared`
-                  : importable > 0
-                    ? `${importable} ready to import`
-                    : imported > 0
-                      ? `${imported} in shared brain`
-                      : "No skills found";
-              const pending = brainSkillImportProvider === provider.id;
-              const success = brainSkillImportSuccess === provider.id;
-              return (
-                <article key={provider.id}>
-                  <div>
-                    <span>{provider.label}</span>
-                    <strong>{provider.skills.length}</strong>
-                    <small>{providerStatus}</small>
-                    {updateRequiredCount ? <small className={vaultClass("providerUpdateBadge")}>{updateRequiredCount} need Hermes update</small> : null}
-                    <div className={vaultClass("providerAutoSyncControls")}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={autoSyncPolicy.autoImport}
-                          disabled={sharedVault.skillAutoSyncAll}
-                          onChange={(event) => void updateSkillAutoSync(provider.id, {
-                            autoImport: event.target.checked,
-                            autoUpdate: event.target.checked ? autoSyncPolicy.autoUpdate : false,
-                            trackRemovals: event.target.checked ? autoSyncPolicy.trackRemovals : false,
-                            allowDelete: false,
-                          })}
-                        />
-                        <small>auto import</small>
-                      </label>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={autoSyncPolicy.autoUpdate}
-                          disabled={sharedVault.skillAutoSyncAll || !autoSyncPolicy.autoImport}
-                          onChange={(event) => void updateSkillAutoSync(provider.id, { autoUpdate: event.target.checked })}
-                        />
-                        <small>updates</small>
-                      </label>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={autoSyncPolicy.trackRemovals}
-                          disabled={sharedVault.skillAutoSyncAll || !autoSyncPolicy.autoImport}
-                          onChange={(event) => void updateSkillAutoSync(provider.id, { trackRemovals: event.target.checked, allowDelete: false })}
-                        />
-                        <small>safe removals</small>
-                      </label>
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className={vaultClass("providerSkillButton")}
-                    disabled={!importable || Boolean(brainSkillImportProvider)}
-                    onClick={() => void importBrainSkills(provider.id)}
-                  >
-                    {pending ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : success ? <Check aria-hidden="true" /> : <Download aria-hidden="true" />}
-                    {pending ? "Importing" : success ? "Synced" : importable ? "Import" : "Current"}
-                  </Button>
-                </article>
-              );
-            })}
-          </div>
-          <p className={vaultClass("brainStatus")}>{brainSkillsStatus || "Skills scan waits for the shared vault."}</p>
-        </section>
         ) : null}
 
         {vaultPanelMode === "brain-services" ? (
@@ -1227,290 +1094,22 @@ function VaultPanelComponent(props: any) {
         ) : null}
 
         {vaultPanelMode === "config" ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <MemoryCell
-            enabled={sharedVault.enabled}
-            vaultPath={sharedVault.vaultPath}
-            optedInAgentCount={displayAgents.filter((agent) => agent.useSharedVault !== false).length}
-            totalAgentCount={displayAgents.length}
-            primaryAction={(
-              <label className="inline-flex items-center gap-2 text-sm font-semibold">
-                <input
-                  type="checkbox"
-                  checked={sharedVault.enabled}
-                  onChange={(event) => updateSharedVault({ enabled: event.target.checked })}
-                />
-                {sharedVault.enabled ? "Shared brain on" : "Turn on shared brain"}
-              </label>
-            )}
-            details={(
-              <div className="flex flex-col gap-3">
-                <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-                  Vault folder
-                  <input
-                    value={sharedVault.vaultPath}
-                    onChange={(event) => updateSharedVault({ vaultPath: event.target.value })}
-                    className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                  />
-                  <small>Where shared notes live. Read-only until the vault is reachable.</small>
-                </label>
-                <div className="rounded-lg border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.45)] p-3">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-		                    <div>
-		                      <strong className="block text-xs text-[var(--foreground)]">Hivemind Sync provider</strong>
-		                      <small className="text-[var(--muted)]">Choose one owner for realtime brain-file syncing. Handoff transfers use .hivemindos-transfers in the vault. Manual repair uses rsync and writes explicit conflict copies.</small>
-		                    </div>
-		                    <span className="rounded-full border border-[rgba(20,184,166,0.3)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#99f6e4]">
-		                      {sharedVault.syncProvider === "syncthing" ? "Syncthing" : sharedVault.syncProvider === "manual" ? "Manual repair" : "External sync"}
-		                    </span>
-	                  </div>
-	                  <label className="mb-3 flex flex-col gap-1 text-xs text-[var(--muted)]">
-	                    Brain sync owner
-	                    <select
-	                      value={sharedVault.syncProvider}
-	                      onChange={(event) => {
-	                        const syncProvider = event.target.value as SharedVaultConfig["syncProvider"];
-	                        updateSharedVault({
-	                          syncProvider,
-	                          syncthingAutoPairEnabled: syncProvider === "syncthing"
-	                            ? sharedVault.syncthingAutoPairEnabled
-	                            : false,
-	                        });
-	                      }}
-	                      className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-	                    >
-	                      <option value="external">I already use Obsidian Sync, iCloud, Dropbox, Git, or another provider</option>
-	                      <option value="syncthing">Use HivemindOS Syncthing over Tailscale</option>
-	                      <option value="manual">Manual Tailscale SSH repair only</option>
-	                    </select>
-	                    <small>
-	                      {sharedVault.syncProvider === "external"
-	                        ? "HivemindOS will not auto-pair Syncthing for this vault."
-	                        : sharedVault.syncProvider === "syncthing"
-	                          ? "Syncthing owns realtime Hivemind Sync for brain files. Syncthing conflict files appear in the vault and Syncthing UI."
-	                          : "Realtime sync is handled elsewhere or off; rsync repair can create .conflict-host-timestamp copies."}
-	                    </small>
-	                  </label>
-	                  <div className="grid gap-3 sm:grid-cols-2">
-	                    <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-	                      Tailscale machine
-                      <input
-                        value={sharedVault.tailnetSyncHost}
-                        onChange={(event) => updateSharedVault({ tailnetSyncHost: event.target.value })}
-                        placeholder="user@machine or magicdns-name"
-                        className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-                      Remote vault folder override
-                      <input
-                        value={sharedVault.tailnetSyncPath}
-                        onChange={(event) => updateSharedVault({ tailnetSyncPath: event.target.value })}
-                        placeholder="Leave blank for agent bridge default"
-                        className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                      />
-	                    </label>
-	                  </div>
-	                  <div className="mt-3 flex flex-wrap items-center gap-2">
-	                    {sharedVault.syncProvider === "syncthing" ? (
-	                      <label className="flex items-center gap-2 text-xs font-semibold text-[var(--foreground)]">
-	                        <input
-	                          type="checkbox"
-	                          checked={sharedVault.syncthingAutoPairEnabled}
-	                          onChange={(event) => updateSharedVault({ syncthingAutoPairEnabled: event.target.checked })}
-	                        />
-	                        Auto-pair Syncthing with reachable Hivemind Sync agent bridges
-	                      </label>
-	                    ) : null}
-	                    <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
-	                      Repair direction
-                      <select
-                        value={sharedVault.tailnetSyncDirection}
-                        onChange={(event) => updateSharedVault({ tailnetSyncDirection: event.target.value as "bidirectional" | "push" | "pull" })}
-                        className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                      >
-                        <option value="bidirectional">Bidirectional with conflict copies</option>
-                        <option value="push">This Mac to Tailnet machine</option>
-	                        <option value="pull">Tailnet machine to This Mac</option>
-	                      </select>
-	                    </label>
-		                    {sharedVault.syncProvider === "syncthing" ? (
-		                      <Button type="button" size="sm" variant="secondary" disabled={Boolean(vaultSyncPending)} onClick={pairSyncthingVaultSync}>
-		                        {vaultSyncPending === "syncthing" ? "Pairing..." : "Pair realtime sync"}
-		                      </Button>
-		                    ) : null}
-		                    <Button type="button" size="sm" variant="secondary" disabled={Boolean(vaultSyncPending)} onClick={() => runVaultTailnetSync(true)}>
-		                      {vaultSyncPending === "dry-run" ? "Checking..." : "Dry run"}
-	                    </Button>
-                    <Button type="button" size="sm" variant="secondary" disabled={Boolean(vaultSyncPending)} onClick={() => runVaultTailnetSync(false)}>
-                      {vaultSyncPending === "sync" ? "Syncing..." : "Sync now"}
-                    </Button>
-                  </div>
-	                  {vaultSyncStatus ? (
-		                    <p className={`mt-3 text-xs ${vaultSyncStatus.ok ? "text-[#86efac]" : "text-[#fecdd3]"}`}>
-		                      {vaultSyncStatus.ok
-		                        ? vaultSyncStatus.message ?? `${vaultSyncStatus.dryRun ? "Dry run" : "Repair sync"} finished. ${vaultSyncStatus.direction === "bidirectional" ? "Merged with" : vaultSyncStatus.direction === "pull" ? "Pulled from" : "Pushed to"} ${sharedVault.tailnetSyncHost || "Tailnet machine"}.${vaultSyncStatus.conflicts?.length ? ` rsync conflict copies: ${vaultSyncStatus.conflicts.length}. Look for .conflict-host-timestamp files in the vault.` : ""}`
-		                        : vaultSyncStatus.error ?? vaultSyncStatus.stderr ?? "Hivemind Sync repair failed."}
-	                    </p>
-                  ) : null}
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-                    Inbox subfolder
-                    <input
-                      value={sharedVault.inboxFolder}
-                      onChange={(event) => updateSharedVault({ inboxFolder: event.target.value })}
-                      className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-                    Shared note path
-                    <input
-                      value={sharedVault.sharedNotePath}
-                      onChange={(event) => updateSharedVault({ sharedNotePath: event.target.value })}
-                      className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                    />
-                  </label>
-                </div>
-                <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-                  Kanban folder
-                  <input
-                    value={sharedVault.kanbanFolder ?? DEFAULT_SHARED_VAULT.kanbanFolder}
-                    onChange={(event) => updateSharedVault({ kanbanFolder: event.target.value })}
-                    className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                  />
-                  <small>The Work board stores `kanban.json` files here so synced machines and agents see the same queue.</small>
-                </label>
-                <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-                  Notifications folder
-                  <input
-                    value={sharedVault.notificationsFolder ?? DEFAULT_SHARED_VAULT.notificationsFolder}
-                    onChange={(event) => updateSharedVault({ notificationsFolder: event.target.value })}
-                    className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                  />
-                  <small>Agents write markdown notifications here. The dashboard keeps read receipts and settings beside them.</small>
-                </label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-                    Synthesis folder
-                    <input
-                      value={sharedVault.synthesisFolder ?? DEFAULT_SHARED_VAULT.synthesisFolder}
-                      onChange={(event) => updateSharedVault({ synthesisFolder: event.target.value })}
-                      className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-                    Brain services folder
-                    <input
-                      value={sharedVault.brainServicesFolder ?? DEFAULT_SHARED_VAULT.brainServicesFolder}
-                      onChange={(event) => updateSharedVault({ brainServicesFolder: event.target.value })}
-                      className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                    />
-                  </label>
-                </div>
-                <div className="rounded-lg border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.45)] p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <strong className="block text-xs text-[var(--foreground)]">Brain service controls</strong>
-                      <small className="text-[var(--muted)]">GBrain and Syntho runtime settings now live beside their service health and actions.</small>
-                    </div>
-                    <Button type="button" size="sm" variant="secondary" onClick={() => setVaultPanelMode("brain-services")}>
-                      Open Brain Services
-                    </Button>
-                  </div>
-                </div>
-                <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
-                  <input
-                    type="checkbox"
-                    checked={sharedVault.noteTaskImportEnabled}
-                    onChange={(event) => updateSharedVault({ noteTaskImportEnabled: event.target.checked })}
-                  />
-                  Auto-import markdown note tasks into Work Ideas
-                </label>
-                <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-                  Note task folders
-                  <textarea
-                    value={sharedVault.noteTaskImportFolders ?? DEFAULT_SHARED_VAULT.noteTaskImportFolders}
-                    onChange={(event) => updateSharedVault({ noteTaskImportFolders: event.target.value })}
-                    rows={3}
-                    className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                  />
-                  <small>Folder-backed notes from Obsidian, Tailnet sync, or another markdown provider can feed unchecked tasks and Next action sections into Ideas.</small>
-                </label>
-                <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-                  HivemindOS folder
-                  <input
-                    value={sharedVault.controlRoomPath}
-                    onChange={(event) => updateSharedVault({ controlRoomPath: event.target.value })}
-                    className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-                  Agent instructions
-                  <textarea
-                    value={sharedVault.instructions}
-                    onChange={(event) => updateSharedVault({ instructions: event.target.value })}
-                    className="min-h-[80px] rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-1 text-[var(--foreground)]"
-                  />
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" variant="secondary" onClick={checkVaultStatus}>
-                    Check vault path
-                  </Button>
-                  <Button type="button" size="sm" variant="secondary" onClick={checkControlRoomStatus}>
-                    Check HivemindOS
-                  </Button>
-                </div>
-              </div>
-            )}
+          <BrainConfigPanel
+            Button={Button}
+            DEFAULT_SHARED_VAULT={DEFAULT_SHARED_VAULT}
+            checkControlRoomStatus={checkControlRoomStatus}
+            checkVaultStatus={checkVaultStatus}
+            controlRoomStatus={controlRoomStatus}
+            displayAgents={displayAgents}
+            pairSyncthingVaultSync={pairSyncthingVaultSync}
+            runVaultTailnetSync={runVaultTailnetSync}
+            setVaultPanelMode={setVaultPanelMode}
+            sharedVault={sharedVault}
+            updateSharedVault={updateSharedVault}
+            vaultStatus={vaultStatus}
+            vaultSyncPending={vaultSyncPending}
+            vaultSyncStatus={vaultSyncStatus}
           />
-
-          {/* Vault status surfaces are translated into plain sentences instead of raw JSON. */}
-          <Cell
-            glyph="OK"
-            eyebrow="Vault checks"
-            title="Path verification"
-            subtitle="The app only validates paths — it never writes to your vault unless an agent explicitly does."
-            status={(() => {
-              if (!vaultStatus && !controlRoomStatus) return "unknown";
-              const vaultOk = Boolean((vaultStatus as { ok?: boolean } | null)?.ok);
-              const controlOk = Boolean((controlRoomStatus as { ok?: boolean } | null)?.ok);
-              if (vaultStatus && !vaultOk) return "blocked";
-              if (controlRoomStatus && !controlOk) return "blocked";
-              return "healthy";
-            })()}
-            tone={(() => {
-              if (!vaultStatus && !controlRoomStatus) return "muted";
-              const vaultOk = Boolean((vaultStatus as { ok?: boolean } | null)?.ok);
-              const controlOk = Boolean((controlRoomStatus as { ok?: boolean } | null)?.ok);
-              if ((vaultStatus && !vaultOk) || (controlRoomStatus && !controlOk)) return "danger";
-              return "success";
-            })()}
-          >
-            <ul className="m-0 grid gap-2 p-0 [list-style:none] text-xs">
-              <li className="rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] px-3 py-2">
-                <strong className="block text-[var(--foreground)]">Vault path</strong>
-                <span className="text-[var(--muted)]">
-                  {vaultStatus
-                    ? (vaultStatus as { ok?: boolean; reason?: string }).ok
-                      ? "Reachable. Notes can be read by opted-in agents."
-                      : `Cannot read this folder — ${(vaultStatus as { reason?: string }).reason ?? "check that it exists."}`
-                    : "Press Check vault path above to verify."}
-                </span>
-              </li>
-              <li className="rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] px-3 py-2">
-                <strong className="block text-[var(--foreground)]">HivemindOS</strong>
-                <span className="text-[var(--muted)]">
-                  {controlRoomStatus
-                    ? (controlRoomStatus as { ok?: boolean; reason?: string }).ok
-                      ? "Connected. Agents see the operating manual and registry."
-                      : `Not connected — ${(controlRoomStatus as { reason?: string }).reason ?? "verify the folder path."}`
-                    : "Press Check HivemindOS to verify."}
-                </span>
-              </li>
-            </ul>
-          </Cell>
-        </div>
         ) : null}
         </div>
       </section>

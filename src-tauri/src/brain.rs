@@ -2,6 +2,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 const DEFAULT_VAULT: &str = "~/Documents/Obsidian/hivemindos-vault";
@@ -10,6 +11,7 @@ const SKIPPED_DIRS: &[&str] = &[".git", "node_modules", ".next", "dist", "build"
 const GRAPH_SKIPPED_DIRS: &[&str] = &[".git", ".obsidian", ".trash", "node_modules"];
 const MAX_GRAPH_NOTES: usize = 260;
 const MAX_NOTE_BYTES: u64 = 524_288;
+const FAST_SKILL_SUMMARY_BYTES: u64 = 16 * 1024;
 const ACCESS_LOG_PATH: &str = "Operations/Brain Services/access-log.jsonl";
 const LEGACY_ACCESS_LOG_PATH: &str = "Projects/HivemindOS/Brain Access/access-log.jsonl";
 
@@ -81,6 +83,14 @@ fn sha256(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
     format!("{:x}", hasher.finalize())
+}
+
+fn read_text_head(path: &Path, max_bytes: u64) -> Option<String> {
+    let file = fs::File::open(path).ok()?;
+    let mut limited = file.take(max_bytes);
+    let mut text = String::new();
+    limited.read_to_string(&mut text).ok()?;
+    Some(text)
 }
 
 fn sanitize_slug(value: &str) -> String {
@@ -206,6 +216,40 @@ fn is_managed_shared_skill_mirror(skill_path: &Path) -> bool {
         || parsed.get("managedBy").and_then(serde_json::Value::as_str) == Some("hivemindos")
 }
 
+fn normalized_skill_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+fn path_looks_inside_provider_skill_root(provider: &str, path: &Path) -> bool {
+    normalized_skill_path(path).contains(&format!("/.{provider}/skills/"))
+}
+
+fn slug_looks_provider_mirrored(provider: &str, slug: &str) -> bool {
+    if provider != "aeon" {
+        return false;
+    }
+    let normalized = sanitize_slug(slug);
+    if normalized.starts_with(&format!("{provider}-")) {
+        return true;
+    }
+    let Some(first_segment) = normalized.split('-').find(|part| !part.is_empty()) else {
+        return false;
+    };
+    matches!(first_segment, "aeon" | "claude" | "codex" | "hermes" | "gemini" | "openclaw" | "shared")
+}
+
+fn is_recursive_provider_mirror(provider: &str, skill_path: &Path) -> bool {
+    if provider != "aeon" || !path_looks_inside_provider_skill_root(provider, skill_path) {
+        return false;
+    }
+    let slug = skill_path
+        .parent()
+        .and_then(|path| path.file_name())
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    slug_looks_provider_mirrored(provider, slug)
+}
+
 fn skill_summary(
     skill_path: &Path,
     provider: &str,
@@ -214,16 +258,16 @@ fn skill_summary(
     shared_by_checksum: &HashMap<String, BrainSkillSummary>,
     shared_by_slug: &HashMap<String, BrainSkillSummary>,
 ) -> Option<BrainSkillSummary> {
-    let markdown = fs::read_to_string(skill_path).ok()?;
+    let metadata = fs::metadata(skill_path).ok();
+    let markdown = read_text_head(skill_path, FAST_SKILL_SUMMARY_BYTES)?;
     let fields = frontmatter(&markdown);
     let slug = if provider == "shared" {
         namespaced_shared_slug(base_path, skill_path)
     } else {
         sanitize_slug(skill_path.parent()?.file_name()?.to_str()?)
     };
-    let checksum = sha256(&markdown);
+    let checksum = sha256(&format!("{}:{markdown}", metadata.as_ref().map(|item| item.len()).unwrap_or(0)));
     let existing = shared_by_checksum.get(&checksum).or_else(|| shared_by_slug.get(&slug));
-    let metadata = fs::metadata(skill_path).ok();
     Some(BrainSkillSummary {
         id: format!("{provider}:{}", skill_path.to_string_lossy()),
         slug: slug.clone(),
@@ -307,6 +351,7 @@ pub(crate) fn brain_skill_inventory(vault_path: Option<String>, shared_only: Opt
                 .iter()
                 .filter(|path| !path.starts_with(&skills_folder))
                 .filter(|path| !is_managed_shared_skill_mirror(path))
+                .filter(|path| !is_recursive_provider_mirror(id, path))
                 .filter_map(|path| skill_summary(path, id, label, &base_path, &shared_by_checksum, &shared_by_slug))
                 .collect::<Vec<_>>();
             skills.sort_by(|left, right| left.name.cmp(&right.name));

@@ -1,27 +1,41 @@
 {
-  "created_at": "2026-06-16T15:01:43.625520+00:00",
+  "created_at": "2026-06-17T07:03:37.978820+00:00",
   "custom_code_assessment": "balanced",
   "entries": [
     {
-      "source_repo": "local-project",
-      "source_path": "hivemind-os:src/features/dashboard/views/zero-human-companies/Cockpit.tsx",
-      "target_path": "src/features/dashboard/views/zero-human-companies/Cockpit.tsx",
-      "reuse_type": "adapted_code",
-      "note": "existing Treasury section and team agent row controls adapted for finance-only configure and readable spend bars"
+      "source_repo": "ami-ai-companion",
+      "source_path": "/Users/liam/Documents/code/projects/ami-ai-companion/src-tauri/tauri.conf.json",
+      "target_path": "apps/zimage-mobile-tauri/src-tauri/tauri.conf.json",
+      "reuse_type": "config_adapted",
+      "note": "Adapted the existing remote frontendDist/devUrl Tauri v2 wrapper pattern for the Z-Image Tailnet origin and desktop window defaults."
     },
     {
-      "source_repo": "local-project",
-      "source_path": "hivemind-os:src/features/dashboard/views/zero-human-companies/Modals.tsx",
-      "target_path": "src/features/dashboard/views/zero-human-companies/Modals.tsx",
+      "source_repo": "ami-ai-companion",
+      "source_path": "/Users/liam/Documents/code/projects/ami-ai-companion/src-tauri/src/lib.rs",
+      "target_path": "apps/zimage-mobile-tauri/src-tauri/src/lib.rs",
       "reuse_type": "adapted_code",
-      "note": "existing edit modal helpers and member payload save shape reused for TreasurySettingsModal"
+      "note": "Reused the minimal Tauri v2 builder structure for a remote-content wrapper."
     },
     {
-      "source_repo": "local-project",
-      "source_path": "hivemind-os:src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx",
-      "target_path": "src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx",
+      "source_repo": "ami-ai-companion",
+      "source_path": "/Users/liam/Documents/code/projects/ami-ai-companion/src-tauri/src/main.rs",
+      "target_path": "apps/zimage-mobile-tauri/src-tauri/src/main.rs",
       "reuse_type": "adapted_code",
-      "note": "existing discriminated modal state reused for treasury-specific route"
+      "note": "Reused the minimal mobile-entrypoint split for the native shell binary."
+    },
+    {
+      "source_repo": "ami-ai-companion",
+      "source_path": "/Users/liam/Documents/code/projects/ami-ai-companion/src-tauri/Cargo.toml",
+      "target_path": "apps/zimage-mobile-tauri/src-tauri/Cargo.toml",
+      "reuse_type": "config_adapted",
+      "note": "Adapted the small Rust crate/package dependency shape to this standalone wrapper."
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src-tauri/static/fusion/icons/z-image.png",
+      "target_path": "apps/zimage-mobile-tauri/src-tauri/icons/icon.png",
+      "reuse_type": "asset_copied",
+      "note": "Generated the Tauri icon set from the existing Z-Image app icon."
     }
   ]
 }

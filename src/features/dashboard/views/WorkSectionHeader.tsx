@@ -24,6 +24,7 @@ type SectionModeHeaderProps<TMode extends string> = {
   stats: SectionHeaderStat[];
   subtitle: ReactNode;
   title: ReactNode;
+  variant?: "brain";
 };
 
 type WorkSectionHeaderProps = {
@@ -50,10 +51,11 @@ export function SectionModeHeader<TMode extends string>({
   stats,
   subtitle,
   title,
+  variant,
 }: SectionModeHeaderProps<TMode>) {
   const hasModes = modes.length > 0;
   return (
-    <header className={`${styles.header} ${hasModes ? "" : styles.noModes}`} data-work-section-header="true">
+    <header className={`${styles.header} ${hasModes ? "" : styles.noModes} ${variant === "brain" ? styles.brainHeader : ""}`} data-work-section-header="true">
       <div className={styles.titleBlock}>
         <div className={styles.titleText}>{title}</div>
         <span>{subtitle}</span>

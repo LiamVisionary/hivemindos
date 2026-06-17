@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  countSharedBrainSkills,
   getBrainSkillInventory,
   getSharedBrainSkillsCached,
   invalidateSkillFileListCache,
@@ -27,6 +28,19 @@ export async function GET(request: NextRequest) {
     // shared list (e.g. the AEON ready check) skip the expensive per-provider
     // directory scan and remote-provider fetch that the full inventory performs.
     if (request.nextUrl.searchParams.get("shared") === "1") {
+      if (request.nextUrl.searchParams.get("count") === "1") {
+        const shared = await countSharedBrainSkills(vaultPath);
+        return NextResponse.json({
+          ok: true,
+          vaultPath: shared.vaultPath,
+          skillsFolder: shared.skillsFolder,
+          readmePath: shared.readmePath,
+          shared: [],
+          sharedTotal: shared.count,
+          providers: [],
+          totals: { shared: shared.count, providerSkills: 0, importable: 0 },
+        });
+      }
       const shared = await getSharedBrainSkillsCached(vaultPath, { summaryMode: "fast" });
       // Optional `offset`/`limit` page the (cached) shelf so thin clients —
       // the phone paints its first screen from ~20 skills — don't transfer

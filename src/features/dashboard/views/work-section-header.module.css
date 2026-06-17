@@ -167,6 +167,94 @@
   background: #fb7185;
 }
 
+.header.brainHeader {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "title stats"
+    "modes modes";
+  align-items: end;
+  gap: 16px 24px;
+  min-height: 0;
+}
+
+.brainHeader .titleBlock {
+  grid-area: title;
+  display: flex;
+  align-items: baseline;
+  gap: 11px;
+}
+
+.brainHeader .titleText {
+  color: var(--brain-fg, #f3f0e9);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.brainHeader .titleBlock span {
+  color: var(--brain-fg-3, #76726a);
+  font-family: var(--f-body, "Geist", Inter, system-ui, sans-serif);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.brainHeader .modeRail {
+  grid-area: modes;
+  justify-self: start;
+}
+
+.brainHeader .rightBlock {
+  grid-area: stats;
+  align-self: end;
+}
+
+.brainHeader .stats {
+  gap: 20px;
+}
+
+.brainHeader .stats span {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  text-align: left;
+}
+
+.brainHeader .stats span::before {
+  display: none;
+}
+
+.brainHeader .stats strong {
+  color: var(--brain-fg, #f3f0e9);
+  font-family: var(--f-display), "Space Grotesk", system-ui, sans-serif;
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.brainHeader .stats span {
+  color: var(--brain-fg-3, #76726a);
+  font-family: var(--f-body), "Geist", "Inter", system-ui, sans-serif;
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.brainHeader .stats .cyan strong {
+  color: var(--brain-live, #6fcdba);
+}
+
+.brainHeader .stats .honey strong {
+  color: var(--brain-honey, #e7b45c);
+}
+
+.brainHeader .stats .danger strong {
+  color: var(--brain-danger, #e58e85);
+}
+
 :global(:root[data-theme="hive-light"]) .header {
   border-bottom-color: rgba(79, 68, 52, 0.12);
 }
@@ -222,6 +310,14 @@
   .rightBlock {
     grid-column: auto;
     justify-items: start;
+  }
+
+  .header.brainHeader {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "title"
+      "stats"
+      "modes";
   }
 
   .actions {

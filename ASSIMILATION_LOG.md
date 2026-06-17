@@ -4073,3 +4073,653 @@
   - Decision: adapted_code
   - Reason: verified scoped loading sweep animation exists
   - Path: `src/features/dashboard/views/zero-human-companies/theme.css`
+
+## 2026-06-17T02:09:03+00:00 - verification-update
+
+- Request: Thoroughly harden HivemindOS light mode contrast across app routes
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Expanded local Playwright forced `data-theme="hive-light"` on `/`, `/?view=more`, `/?view=wallets`, `/?view=phone`, `/?view=my-apps`, `/stake`, `/about`, `/connect-phone`, `/fusion-showcase`, `/json-render-catalog`, `/aeon`, `/scheduler`, `/swarm`, `/integrations`, and `/e2e/agent-call`; final report had no low-contrast text. Focused ESLint passed for the changed AEON/Scheduler TSX files. `git diff --check` passed. `pnpm build` was attempted and failed with the existing 5 GB Next/Node heap OOM before any route-specific compile error.
+
+### Candidates
+- src/app/globals.css
+  - Decision: adapted_code
+  - Reason: strengthened the app-level light tokens and dark arbitrary Tailwind fallback selectors for legacy panels and portals
+  - Path: `src/app/globals.css`
+- src/app/stake/stake.module.css
+  - Decision: adapted_code
+  - Reason: darkened route-local honey accents that failed contrast in light mode
+  - Path: `src/app/stake/stake.module.css`
+- src/app/fusion-showcase/fusion-showcase.module.css
+  - Decision: adapted_code
+  - Reason: darkened standalone Fusion subtle/honey route tokens that failed contrast in light mode
+  - Path: `src/app/fusion-showcase/fusion-showcase.module.css`
+- src/components/aeon/AeonAutopilotPanel.tsx, src/components/aeon/aeon-tokens.module.css, src/components/aeon/fleet.tsx
+  - Decision: adapted_code
+  - Reason: reused AEON's local token pack, removed the default inline neon accent override, and moved fleet hex fills to light-aware variables
+  - Path: `src/components/aeon/AeonAutopilotPanel.tsx`, `src/components/aeon/aeon-tokens.module.css`, `src/components/aeon/fleet.tsx`
+- src/components/scheduler/scheduler-tokens.module.css, src/components/scheduler/jobs.tsx
+  - Decision: adapted_code
+  - Reason: reused Scheduler's local tokens and made status colors opaque/readable in light mode
+  - Path: `src/components/scheduler/scheduler-tokens.module.css`, `src/components/scheduler/jobs.tsx`
+## 2026-06-17T02:52:03.325087+00:00 - triage
+
+- Request: Temporarily show Zero Human Companies demo portfolio data
+- Source: shared-brain+workspace+local-index
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx
+  - Decision: selected
+  - Reason: container boundary already controls colonies, agent pool, loading, notices, and mutation handlers
+- src/features/dashboard/views/zero-human-companies/types.ts
+  - Decision: selected
+  - Reason: Colony and PoolAgent view models match the requested staged demo data
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx
+  - Decision: selected
+  - Reason: controlled presentational component can render fixture data without API changes
+- public GitHub
+  - Decision: rejected
+  - Reason: request is product-specific staging data; no external source required beyond current local UI contract
+## 2026-06-17T03:01:02.012208+00:00 - implementation
+
+- Request: Temporarily show Zero Human Companies demo portfolio data
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/zero-human-companies/zhc-demo-data.ts
+  - Decision: adapted_code
+  - Reason: new staged Colony and PoolAgent fixture follows existing view-model types; includes requested hero cockpit, 5-company portfolio, 14-agent pool, approvals, token capital, issues, governance, and create seed
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx
+  - Decision: adapted_code
+  - Reason: reused container boundary with a temporary fixture switch and local-only mutation handlers instead of live API fetches
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx
+  - Decision: adapted_code
+  - Reason: added optional initial cockpit and portfolio-subset props while preserving live defaults
+- src/features/dashboard/views/zero-human-companies/Modals.tsx
+  - Decision: adapted_code
+  - Reason: added optional initial create crew for Regent CEO seeding
+## 2026-06-17T03:06:55.047962+00:00 - verification
+
+- Request: Temporarily show Zero Human Companies demo portfolio data
+- Source: current-project+playwright
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused ESLint passed for ZeroHumanCompaniesView, ZeroHumanCompanies, Modals, and zhc-demo-data; filtered TypeScript had no diagnostics for touched Zero Human Companies files while full tsc remains blocked by existing promo-videos/code/HivemindOS-21 diagnostics; fixture sanity confirmed 8 hero agents, 5 portfolio companies, and 14 assignable pool agents; touched Zero Human Companies files remain under 1500 lines; focused git diff --check passed; local Playwright on 127.0.0.1:5022 with throwaway per-process dashboard auth rendered the Dropshipper cockpit and 5-company portfolio with no console errors and saved screenshots under artifacts/zero-human-companies-demo/.
+
+### Candidates
+- src/features/dashboard/views/zero-human-companies/zhc-demo-data.ts
+  - Decision: adapted_code
+  - Reason: verified staged data counts and requested visible strings
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx
+  - Decision: adapted_code
+  - Reason: verified fixture switch renders without live API-backed company data
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx
+  - Decision: adapted_code
+  - Reason: verified hero initial cockpit and portfolio-subset rollup
+- src/features/dashboard/views/zero-human-companies/Modals.tsx
+  - Decision: adapted_code
+  - Reason: verified optional create seed compiles and lint passes
+## 2026-06-17T03:20:40.542087+00:00 - implementation
+
+- Request: Make Zero Human Companies demo route open all companies view first
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused ESLint passed for the touched Zero Human Companies files; filtered TypeScript had no diagnostics for touched ZHC files while full tsc remains blocked by existing promo-videos diagnostics; static grep confirmed no initialOpenId remains and the demo overview receives the staged colonies list; focused git diff --check passed.
+
+### Candidates
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx
+  - Decision: adapted_code
+  - Reason: removed the demo initialOpenId and feeds the overview from the staged colonies list
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx
+  - Decision: adapted_code
+  - Reason: removed the now-unused initialOpenId prop/state hook so the view initializes to portfolio
+- CHANGELOG.md
+  - Decision: adapted_code
+  - Reason: updated the existing uncommitted walkthrough entry to describe overview-first behavior
+## 2026-06-17T04:00:58+00:00 - implementation-verification
+
+- Request: Replace Brain view UI with the pinned nextjs brain drop-in and add env search without losing functionality
+- Source: pinned-source+current-project+shared-brain
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused ESLint passed for `src/features/dashboard/views/UtilityPanels.tsx`; focused ESLint over the touched TSX/CSS module set exited successfully with expected CSS-module ignore warnings; full `pnpm typecheck` remains blocked by unrelated existing diagnostics under `promo-videos/`, `remotion/`, and generated `src-tauri/target/` resources; `pnpm check-sizes` remains blocked by existing oversized legacy files while all touched files remain under 1500 lines; in-app Browser smoke on `127.0.0.1:5022` confirmed the live graph layout/data and env search filtering `OPENAI` to matching metadata, while Brain Services browser smoke was blocked by Browser Use URL policy after a navigation timeout.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/brain.css`
+  - Decision: style_adapted
+  - Reason: used the drop-in honey-on-dark Brain visual language as scoped styling for the existing live HivemindOS Brain surfaces
+  - Path: `src/app/vault.module.css`, `src/features/dashboard/views/BrainGraphExplorer.module.css`, `src/features/dashboard/views/brain-services.module.css`, `src/features/dashboard/views/brain-env.module.css`
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/EnvPanel.tsx`
+  - Decision: adapted_code
+  - Reason: adapted the new env search affordance into the existing live Environment Variables panel, filtering keys/scopes/agent/runtime metadata without searching secret values
+  - Path: `src/features/dashboard/views/UtilityPanels.tsx`, `src/features/dashboard/views/brain-env.module.css`
+- `src/features/dashboard/views/VaultPanel.tsx`, `src/features/dashboard/views/BrainGraphExplorer.tsx`, `src/features/dashboard/views/brain-services-ui.tsx`, `src/features/dashboard/views/UtilityPanels.tsx`
+  - Decision: selected_backbone
+  - Reason: preserved the product's live graph refresh, note inspector actions, shared skill flows, Brain Services controls, config checks, and env sync/import/restore/edit behavior
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/brain-data.ts`
+  - Decision: rejected
+  - Reason: demo/static payload included fake values and would replace live app state; existing HivemindOS API-backed data remains authoritative
+- Public GitHub search
+  - Decision: rejected
+  - Reason: user supplied the authoritative pinned source and the local project already contained the live wiring that needed to be preserved
+## 2026-06-17T04:50:18+00:00 - structural-correction
+
+- Request: Copy the pinned Brain drop-in design exactly for the node graph, inspector, skills, env, and config surfaces while keeping live wiring
+- Source: pinned-source+current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused ESLint passed for `VaultPanel.tsx`, `BrainGraphExplorer.tsx`, `BrainEnvPanel.tsx`, `BrainSkillsPanel.tsx`, `BrainConfigPanel.tsx`, and `UtilityPanels.tsx`; focused `git diff --check` passed; static source checks confirmed the replaced Brain graph path no longer uses `brainNodePoints`, `brainGraphEdgePath`, or node `polygon` rendering and the replaced Brain panels no longer render `AeonSkillBrowserSection` or `MemoryCell`; all touched code/CSS files remain under 1500 lines. Browser smoke against the existing `127.0.0.1:5022` dev server was blocked by the expected dashboard lock in a fresh Playwright context, and a disposable second dev server could not start because Next detected the existing dev server for this repo.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/VaultPanel.tsx`
+  - Decision: structure_adapted
+  - Reason: replaced the old honeycomb graph/inspector with the drop-in circular node graph, all-link SVG, pill filters, recent-access fallback, and sticky note inspector while keeping live note actions
+  - Path: `src/features/dashboard/views/BrainGraphExplorer.tsx`, `src/features/dashboard/views/BrainGraphExplorer.module.css`, `src/app/vault.module.css`
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/SkillsPanel.tsx`
+  - Decision: structure_adapted
+  - Reason: replaced the old Aeon browser surface in the Brain tab with the drop-in shared-skill card grid, search, provider installs row, and provider cards while retaining live imports and auto-sync policies
+  - Path: `src/features/dashboard/views/BrainSkillsPanel.tsx`, `src/features/dashboard/views/BrainSkillsPanel.module.css`, `src/features/dashboard/views/VaultPanel.tsx`
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/EnvPanel.tsx`
+  - Decision: structure_adapted
+  - Reason: replaced the inline legacy env markup with a Brain-specific shared-env list, row controls, add/import affordances, search, and matching runtime/agent sections without exposing secret values
+  - Path: `src/features/dashboard/views/BrainEnvPanel.tsx`, `src/features/dashboard/views/UtilityPanels.tsx`, `src/features/dashboard/views/brain-env.module.css`
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/ConfigPanel.tsx`
+  - Decision: structure_adapted
+  - Reason: replaced the legacy MemoryCell/Tailwind config layout with the drop-in two-column brain wiring cards while preserving vault sync, folder, note-task, instructions, and verification handlers
+  - Path: `src/features/dashboard/views/BrainConfigPanel.tsx`, `src/features/dashboard/views/BrainConfigPanel.module.css`, `src/features/dashboard/views/VaultPanel.tsx`
+- Current HivemindOS live controllers and services
+  - Decision: selected_backbone
+  - Reason: retained API-backed graph data, Obsidian inspect/open logging, skill import/sync actions, env CRUD/import/backup/sync flows, vault config state, and Brain Services module actions rather than copying static demo state
+## 2026-06-17T05:50:47+00:00 - post-correction-verification
+
+- Request: Verify the corrected Brain drop-in replacement is live, rewired, and searchable
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Authenticated Playwright smoke on `http://127.0.0.1:5022` verified the Brain graph renders 97 circular SVG nodes, 11 SVG link lines, 0 polygons, selected-node inspector sections, and Ask/Attach/Task/Skill actions; Shared Skills renders 248 live shared skills and searching `karpathy` filters to 2; Env renders 82 shared variables and searching `HIVEMINDOS` filters to 5 without revealing values; Config renders vault path, vault folders, note-task import controls, and the Brain Services shortcut; Brain Services renders the overview cards for Syntho, GBrain, QMD, Trading Brain, and Synthesis. Focused ESLint passed for the rewritten Brain views, `pnpm exec eslint src/features/dashboard/hooks/use-miroshark-brain-controller.tsx --quiet` passed, `git diff --check` passed, and touched files are under 1500 lines. Repo-wide `pnpm typecheck`, `pnpm check-sizes`, and `DashboardApp.tsx --quiet` remain blocked by unrelated existing/generated diagnostics.
+
+### Candidates
+- `src/features/dashboard/hooks/use-miroshark-brain-controller.tsx`
+  - Decision: adapted_code
+  - Reason: normalized partial skill inventory responses and let shared skills paint before slow provider scans finish
+- `src/features/dashboard/views/BrainSkillsPanel.tsx`
+  - Decision: adapted_code
+  - Reason: added a read-only shared-skill fallback fetch so the drop-in catalog paints from the live shared shelf even while full provider scans are slow
+## 2026-06-17T06:22:44.292567+00:00 - public-search
+
+- Request: Tauri remote URL wrapper webview app
+- Source: public-github
+- Query: `Tauri remote URL wrapper webview app`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+
+## 2026-06-17T06:41:58+00:00 - corrective-assimilation
+
+- Request: Correct remaining Brain drop-in mismatches for the note inspector, header summary, Brain Services controls, and shared skill counts
+- Source: pinned-source+current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Live in-app reproduction before the fix on `127.0.0.1:5022/?view=vault&vaultPanel=brain-services` showed the broken `0 skills` state while provider-ready/importable skills were present and no `/api/obsidian/skills` request fired. After correction, the Brain Services header rendered `260 notes`, `11 links`, `248 skills`, and `19 ready`; the `ready` number drops because shared skills are now loaded and already-mirrored provider skills are no longer importable. The count-only endpoint returned `sharedTotal: 248`, matching a local deduped Skills shelf check. Focused ESLint passed for the touched Brain view files, skills endpoint/service, and controller; `git diff --check` passed, touched files remain under 1500 lines, and Brain CSS surfaces no longer contain negative `letter-spacing`. A later direct-load attempt for the Hive Vault panel in the controlled browser hit the desktop-runtime splash, so final note-inspector verification relies on the earlier computed-style smoke plus focused source/lint checks.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/BrainView.tsx`
+  - Decision: style_adapted
+  - Reason: used the drop-in stacked summary count treatment for the live Brain header instead of the old dot-bullet stat row
+  - Path: `src/features/dashboard/views/work-section-header.module.css`, `src/app/vault.module.css`
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/VaultPanel.tsx`
+  - Decision: style_adapted
+  - Reason: matched the drop-in note inspector structure, including unboxed preview/stats, disclosure link sections, and compact pill actions while preserving live handlers
+  - Path: `src/features/dashboard/views/BrainGraphExplorer.tsx`, `src/features/dashboard/views/BrainGraphExplorer.module.css`, `src/app/vault.module.css`
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/BrainServicesPanel.tsx`
+  - Decision: style_adapted
+  - Reason: matched the drop-in compact service toggle and button treatment over the existing live Brain Services actions
+  - Path: `src/features/dashboard/views/brain-services.module.css`
+- Current HivemindOS shared-skill loader
+  - Decision: adapted_code
+  - Reason: kept provider scans wired while preserving shared-only inventory, triggering skill refresh from any Brain panel with a configured vault path, and adding a deduped count-only fallback so the header cannot collapse to `0 skills` when importables are present
+  - Path: `src/features/dashboard/views/VaultPanel.tsx`, `src/features/dashboard/views/BrainSkillsPanel.tsx`, `src/features/dashboard/hooks/use-miroshark-brain-controller.tsx`, `src/app/api/obsidian/skills/route.ts`, `src/lib/services/obsidian/brain-skills.ts`
+## 2026-06-17T07:03:38.021471+00:00 - assimilation-manifest
+
+- Request: Create a Tauri app for the Zimage Mobile remote Tailnet app, make it desktop-sized, and diagnose LoRA discovery
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: ami-ai-companion:/Users/liam/Documents/code/projects/ami-ai-companion/src-tauri/tauri.conf.json => apps/zimage-mobile-tauri/src-tauri/tauri.conf.json, ami-ai-companion:/Users/liam/Documents/code/projects/ami-ai-companion/src-tauri/src/lib.rs => apps/zimage-mobile-tauri/src-tauri/src/lib.rs, ami-ai-companion:/Users/liam/Documents/code/projects/ami-ai-companion/src-tauri/src/main.rs => apps/zimage-mobile-tauri/src-tauri/src/main.rs, ami-ai-companion:/Users/liam/Documents/code/projects/ami-ai-companion/src-tauri/Cargo.toml => apps/zimage-mobile-tauri/src-tauri/Cargo.toml, hivemind-os:src-tauri/static/fusion/icons/z-image.png => apps/zimage-mobile-tauri/src-tauri/icons/icon.png
+- Verification: Wrote ASSIMILATION.json with 5 entries and custom_code_assessment=balanced.
+## 2026-06-17T07:04:00.530089+00:00 - verification-and-server-diagnosis
+
+- Request: Create and verify Zimage Mobile Tauri wrapper and diagnose LoRA discovery failure
+- Source: shared-brain+current-project+remote-tailnet-origin
+- Query: `Zimage Mobile ComfyUI loras object_info proxy`
+- Decision: assimilated
+- Reason: Built the wrapper from the local Tauri remote URL pattern and used shared Z-Image/ComfyUI proxy notes to identify the LoRA failure as missing ComfyUI Mobile same-origin proxy routes.
+- Selected backbone: local-project:ami-ai-companion/src-tauri remote URL wrapper
+- Assimilated: apps/zimage-mobile-tauri standalone Tauri shell; existing Z-Image icon derivatives; shared local-control-panel-webapps ComfyUI proxy expectations for diagnosis
+- Not assimilated: No public GitHub candidate was used; direct remote server patching was not attempted because SSH host-key verification failed and no MacBook handoff receiver was listed.
+- Verification: pnpm build:app and pnpm build completed; Computer Use showed Zimage Mobile native window at 1280x860; curl verified /api/loras and /api/library return JSON with LoRA data while /api/object_info, /api/queue, /api/prompt, /system_stats, and /view are missing or HTML fallback routes.
+
+### Candidates
+- local-project:ami-ai-companion/src-tauri
+  - Decision: selected-donor
+  - Reason: Existing Tauri v2 remote URL wrapper config and minimal Rust entrypoints matched the native-shell requirement
+  - Path: `/Users/liam/Documents/code/projects/ami-ai-companion/src-tauri`
+- current-project:src-tauri/static/fusion/icons/z-image.png
+  - Decision: asset_copied
+  - Reason: Existing Z-Image icon supplied the app icon source
+  - Path: `src-tauri/static/fusion/icons/z-image.png`
+- shared-brain:local-control-panel-webapps
+  - Decision: selected-donor
+  - Reason: Z-Image and ComfyUI Mobile notes documented the same-origin API/WebSocket proxy expectations
+  - Path: `/Users/liam/Documents/Obsidian/hivemindos-vault/Skills/local-control-panel-webapps/references`
+
+## 2026-06-17T07:27:49+00:00 - corrective-assimilation
+
+- Request: Explain and fix the remaining old-style Skill security card in Brain Services
+- Source: pinned-source+current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: In-app browser computed-style check on `127.0.0.1:5022/?view=vault&vaultPanel=brain-services` found the exact Skill security article with a 16px/600 heading, 31px-high 999px engine pills, a 31px-high 999px LLM toggle, and 11.5px status text. Focused ESLint passed for `SkillSecurityCard.tsx`; `git diff --check` passed; `brain-services.module.css` is exactly 1500 lines and remains within the project limit.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/BrainServicesPanel.tsx`
+  - Decision: style_adapted
+  - Reason: matched the drop-in Skill security card structure, compact pill controls, small status text, and LLM row while preserving live HivemindOS `/api/skills/security` behavior
+  - Path: `src/features/dashboard/views/SkillSecurityCard.tsx`, `src/features/dashboard/views/brain-services.module.css`
+
+## 2026-06-17T07:32:25+00:00 - corrective-assimilation
+
+- Request: Fix the remaining old-style Shared Env actions in the Brain Env panel
+- Source: pinned-source+current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: In-app browser computed-style checks on `127.0.0.1:5022/?view=vault&vaultPanel=env` found the read-only Shared Env action row and the edit-mode Add key / Import .env / Done row using local Brain classes with 31px height, 999px radius, 12px text, no box shadow, and honey primary actions. Source sweep confirmed no remaining shared `<Button>` usage inside `BrainEnvPanel.tsx`. Focused ESLint passed for `BrainEnvPanel.tsx`; `git diff --check` passed; touched Brain Env files remain under 1500 lines.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/EnvPanel.tsx`
+  - Decision: style_adapted
+  - Reason: matched the drop-in compact Brain button treatment for Shared Env actions while preserving live HivemindOS sync, backup, refresh, edit, add, import, guided setup, runtime promote/manage, and done actions
+  - Path: `src/features/dashboard/views/BrainEnvPanel.tsx`, `src/features/dashboard/views/brain-env.module.css`
+
+## 2026-06-17T07:43:07+00:00 - corrective-assimilation
+
+- Request: Fix the old-style Brain Services Settings tab
+- Source: pinned-source+current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused ESLint passed for `VaultPanel.tsx`; `git diff --check` passed; `brain-services.module.css` is 1499 lines and remains under the project limit. Static source check confirmed all three settings chunks no longer render shared `<Button>` components, now include five Brain switch rows, and keep two local install action buttons. In-app browser hydrated Brain Services on `127.0.0.1:5022/?view=vault&vaultPanel=brain-services`, but Browser automation blocked the follow-up Settings-tab style measurement by URL policy after the initial hydration check.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/BrainServicesPanel.tsx`
+  - Decision: style_adapted
+  - Reason: matched the drop-in SettingsDeck card, label, select, input, toggle, and compact action treatment while preserving live HivemindOS GBrain, QMD, and Syntho settings behavior
+  - Path: `src/features/dashboard/views/VaultPanel.tsx`, `src/features/dashboard/views/brain-services.module.css`
+
+## 2026-06-17T07:55:34+00:00 - chat-ui-assimilation
+
+- Request: Replace HivemindOS chat UI with the pinned `nextjs-chat-drop-in` exactly and wire in all json-render styling
+- Source: shared-brain+pinned-source+current-project
+- Selected backbone: local-pinned-source:/Users/liam/Downloads/nextjs-chat-drop-in
+- Verification: Focused ESLint passed for the touched chat and json-render files. Filtered `pnpm typecheck --pretty false` reported no diagnostics for `src/components/json-render`, `src/features/dashboard/views/chat/exchange`, or `src/features/dashboard/views/ChatPanel.tsx`; the full repo typecheck remains blocked by unrelated existing generated/promo diagnostics. Authenticated browser smoke on `127.0.0.1:5022` rendered desktop chat at 1440x900 with a 286px nav rail, 738px thread, 344px details shelf, 16 nav rows, one composer, and no console errors; mobile chat rendered the thread/composer and post-fix composer geometry showed no overlap between chips and hint. `/json-render-catalog` rendered through the same guarded registry with no console errors. `node scripts/check-file-sizes.mjs` still fails on pre-existing oversized files outside this change, while all touched chat/json-render files are under 1500 lines.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-chat-drop-in/components/chat/ChatView.tsx`, `ConversationNav.tsx`, `Composer.tsx`, `Message.tsx`, `ContextPanel.tsx`, `primitives.tsx`, `chat.css`
+  - Decision: adapted_code
+  - Reason: pinned drop-in matched the requested Exchange chat visual system; adapted to live HivemindOS agents, machines, chat history, runtime/model controls, attachments, voice, slash commands, process telemetry, queue actions, Kanban generation, and modals.
+  - Path: `src/features/dashboard/views/chat/exchange/`, `src/features/dashboard/views/ChatPanel.tsx`
+- `/Users/liam/Downloads/nextjs-chat-drop-in/components/chat/jsonui/render.tsx`, `Layout.tsx`, `Controls.tsx`, `registry.tsx`, `index.ts`, and shared `chat.css` tokens
+  - Decision: copied_and_adapted_code
+  - Reason: the drop-in json-render styling was requested wholesale; copied the renderer primitives, then added compatibility guards for HivemindOS legacy component names and safe button/link/copy handling.
+  - Path: `src/components/json-render/fr/`, `src/components/json-render/JsonRenderSurface.tsx`
+- HivemindOS existing chat controller state and actions
+  - Decision: selected_backbone
+  - Reason: current project state remains authoritative for real agents, chat tree, runtime status, message persistence, generated media, directory browsing, voice, model selection, and guarded json-render extraction.
+  - Path: `src/features/dashboard/DashboardApp.tsx`, `src/features/dashboard/hooks/`, `src/features/chat/`
+- Shared Brain recall query `HivemindOS chat UI architecture JSON renderer styling current implementation notes`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned no stronger project-specific guidance than the repository and pinned drop-in source.
+  - Path: `hive-brain answer --scope full-vault`
+- Public GitHub search
+  - Decision: not_used
+  - Reason: the user supplied an exact local pinned donor and asked for that implementation literally; no broader public-source candidate was needed.
+  - Path: N/A
+
+## 2026-06-17T08:13:03+00:00 - chat-composer-followup
+
+- Request: Collapse the right chat panel by default and replace the Exchange chat input with the previous HivemindOS chat input
+- Source: shared-brain+current-project+tracked-history
+- Selected backbone: current-project:hivemind-os
+- Verification: Focused ESLint passed for `ChatExchangePanel.tsx`, `ChatPanel.tsx`, and `JsonRenderSurface.tsx`. Filtered `pnpm typecheck --pretty false` reported no diagnostics for touched chat/json-render files. In-app browser smoke on `127.0.0.1:5023/?view=chat` confirmed `data-shelf-open="false"` on load, the details shelf collapsed to its border, one `[data-bee-composer]` textarea, one legacy `chatComposerField`, one Hive `hiveComposerField`, and zero donor `.fr-chat-composer-meta` elements, with no Next error overlay.
+
+### Candidates
+- `git show HEAD:src/features/dashboard/views/ChatPanel.tsx`
+  - Decision: adapted_code
+  - Reason: supplied the previous live chat composer mount, including `ComposerField`, `submitOnEnter`, slash commands, voice, attachment, working-directory, agent-mode, and model-picker wiring.
+  - Path: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- `src/features/chat/chat-composer.tsx`
+  - Decision: selected_backbone
+  - Reason: this shared component is the previous HivemindOS chat input implementation and already owns the old input behaviors and controls.
+  - Path: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- `src/features/dashboard/views/chat/HiveChatView.module.css`
+  - Decision: style_adapted
+  - Reason: reuses the previous `hiveComposerDock` and `hiveComposerField` treatment around the shared composer inside the Exchange shell.
+  - Path: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- `/Users/liam/Downloads/nextjs-chat-drop-in/components/chat/Composer.tsx`
+  - Decision: replaced
+  - Reason: the user explicitly asked to restore the previous HivemindOS chat input instead of the donor Exchange composer.
+  - Path: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- Shared Brain recall query `HivemindOS previous chat input composer implementation replace Exchange composer right panel collapsed default`
+  - Decision: no_relevant_reuse
+  - Reason: recall did not return stronger composer guidance than the current repository and tracked previous implementation.
+  - Path: `hive-brain answer --scope full-vault`
+
+## 2026-06-17T07:46:42+00:00 - corrective-assimilation
+
+- Request: Fix the old font styling on the Brain summary counts
+- Source: pinned-source+current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused ESLint passed for `WorkSectionHeader.tsx`; `git diff --check` passed; source assertion confirmed the Brain summary labels now explicitly use `var(--f-body)` at weight 400 and numbers use `-0.01em` tracking at 19px. Browser recheck was attempted against `127.0.0.1:5022/?view=vault&vaultPanel=brain-services`, but the in-app browser tab reported `ERR_CONNECTION_REFUSED`.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/primitives.tsx`
+  - Decision: style_adapted
+  - Reason: matched the drop-in `Summary` primitive's display-number and body-label font treatment for the live Brain header summary
+  - Path: `src/features/dashboard/views/work-section-header.module.css`
+
+## 2026-06-17T07:59:08+00:00 - corrective-assimilation
+
+- Request: Fix the old-style Syntho, QMD, and Synthesis Brain Services sections
+- Source: pinned-source+current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused ESLint passed for `brain-modules.tsx`, `VaultPanel.tsx`, and `BrainEnvPanel.tsx`; `git diff --check` passed; `brain-services.module.css` is 1494 lines and remains under the project limit. In-app browser computed-style verification on `127.0.0.1:5022/?view=vault&vaultPanel=brain-services` confirmed Syntho, QMD, and Synthesis render with 18px card padding, flex column/gap-0 cards, 32px module tiles, 14px/600 module labels, 16px/600 titles, 12.5px body copy, default-open divider disclosures, four-column stat grids, 9px stat labels, 15px stat values, and 31px honey primary actions where actions exist.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/BrainServicesPanel.tsx`
+  - Decision: style_adapted
+  - Reason: matched the drop-in `ModuleCard` anatomy, typography, divider disclosure, stat grid, feature rows, and compact action buttons while preserving live HivemindOS module actions and service state
+  - Path: `src/features/dashboard/brain-modules.tsx`, `src/features/dashboard/views/brain-services.module.css`
+
+## 2026-06-17T08:14:39+00:00 - corrective-assimilation
+
+- Request: Fix oversized/touching Brain map filter pills
+- Source: pinned-source+current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused ESLint passed for `BrainGraphExplorer.tsx`; `git diff --check` passed; static CSS assertions confirmed the filter row has a 14px bottom margin, compact 31px minimum pill height, 52px minimum pill width, 999px radius, no-wrap labels, and the later drop-in override keeps the bottom margin. In-app browser verification was attempted against `127.0.0.1:5022/?view=vault&vaultPanel=hive-vault`, but Browser automation was blocked by `ERR_BLOCKED_BY_CLIENT`.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/brain.css`
+  - Decision: style_adapted
+  - Reason: matched the pinned `fb-pills` compact Brain filter pill proportions while adding the needed live-layout margin below the filter row
+  - Path: `src/features/dashboard/views/BrainGraphExplorer.module.css`
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/VaultPanel.tsx`
+  - Decision: selected-donor
+  - Reason: confirmed the Hive Vault graph filters are intended to render as `fb-pills` directly above the graph canvas
+  - Path: `src/features/dashboard/views/BrainGraphExplorer.tsx`
+
+## 2026-06-17T08:22:09+00:00 - corrective-assimilation
+
+- Request: Fix the old-themed Brain graph corner refresh button and invisible icon
+- Source: pinned-source+current-project
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused ESLint passed for `BrainGraphExplorer.tsx`; `git diff --check` passed; static CSS assertions confirmed the refresh button is a 30px icon button with an 8px radius, Brain line/foreground tokens, no legacy gradient/glow/accent color, a visible hover foreground, and a 14px SVG using `currentColor`. Browser inspection was attempted, but Browser automation only exposed a blank attach tab rather than the live `5022` app tab.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/brain.css`
+  - Decision: style_adapted
+  - Reason: matched the pinned `fb-iconbtn` compact icon-button treatment for the live graph refresh control while preserving existing refresh wiring
+  - Path: `src/app/vault.module.css`
+
+## 2026-06-17T08:21:12+00:00 - chat-actions-followup
+
+- Request: Replace the Exchange chat Copy and Kanban buttons with the previous compact segmented control, recolored for the new chat palette
+- Source: shared-brain+current-project+tracked-history
+- Selected backbone: current-project:hivemind-os
+- Verification: Focused ESLint passed for `MessageThread.tsx`, `ChatExchangePanel.tsx`, and `ChatPanel.tsx`. Filtered `pnpm typecheck --pretty false` reported no diagnostics for touched chat/json-render files. In-app browser smoke on `127.0.0.1:5023/?view=chat` found 5 segmented action groups, 10 icon-only segmented buttons, zero direct text buttons in `.fr-chat-action-row`, a 30x28px first action button, Exchange panel/honey colors, and no Next error overlay. Screenshot saved at `artifacts/chat-actions-smoke/segmented-actions.png`.
+
+### Candidates
+- `git show HEAD:src/features/dashboard/views/ChatPanel.tsx`
+  - Decision: adapted_code
+  - Reason: supplied the previous compact `ButtonGroup` + icon-only Copy/Kanban action pattern, including copied tooltip and Kanban loading behavior.
+  - Path: `src/features/dashboard/views/chat/exchange/MessageThread.tsx`
+- `src/components/ui/button-group.tsx`, `src/components/ui/button.tsx`, `src/components/ui/tooltip.tsx`
+  - Decision: selected_backbone
+  - Reason: these are the existing shared UI primitives used by the previous control, so the Exchange thread can reuse the old interaction shape without adding a new component system.
+  - Path: `src/features/dashboard/views/chat/exchange/MessageThread.tsx`
+- `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+  - Decision: style_adapted
+  - Reason: recolored the compact segmented group with Exchange panel, line, and honey tokens while keeping the existing Kanban popover and prompt buttons on their current styles.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- Shared Brain recall query `HivemindOS previous compact segmented copy kanban chat message action buttons`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned no stronger UI guidance than the tracked previous ChatPanel implementation.
+  - Path: `hive-brain answer --scope full-vault`
+
+## 2026-06-17T08:29:14+00:00 - chat-sidebar-fit-followup
+
+- Request: Fix the Exchange chat history sidebar content clipping and make it fit like the previous sidebar
+- Source: shared-brain+current-project+tracked-history
+- Selected backbone: current-project:hivemind-os
+- Verification: Focused ESLint passed for `ConversationNav.tsx`, `ChatExchangePanel.tsx`, and `ChatPanel.tsx`. Filtered `pnpm typecheck --pretty false` reported no diagnostics for touched chat/json-render files. Authenticated desktop Playwright smoke at `1440x900` against `127.0.0.1:5023/?view=chat` confirmed the visible sidebar is `285px` wide with `285px` scroll width, `maxRowOverflow: 0`, `maxButtonOverflow: 0`, no overlay text, and screenshot saved at `artifacts/chat-sidebar-fit/sidebar-fit.png`.
+
+### Candidates
+- `git show HEAD:src/features/dashboard/views/ChatPanel.tsx`
+  - Decision: adapted_code
+  - Reason: supplied the previous HivemindOS chat rail anatomy, where nav rows and copy wrappers use `min-width: 0` and one-line title/subtitle previews inside the compact history surface.
+  - Path: `src/features/dashboard/views/chat/exchange/ConversationNav.tsx`
+- `src/features/dashboard/views/chat/HiveChatView.module.css`
+  - Decision: style_adapted
+  - Reason: provided the previous rail fit constraints for `.hiveRailBody`, `.hiveNavRow`, `.hiveNavCopy`, `.hiveNavNested`, and `.hiveNavLeafList`; these were translated to the Exchange nav classes and inline layout.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`, `src/features/dashboard/views/chat/exchange/ConversationNav.tsx`
+- `src/features/dashboard/views/chat/exchange/ConversationNav.tsx`
+  - Decision: selected_backbone
+  - Reason: current Exchange nav owns the live machine/folder/chat history data and only needed shrink-to-fit constraints, not a data or component rewrite.
+  - Path: `src/features/dashboard/views/chat/exchange/ConversationNav.tsx`
+- Shared Brain recall query `HivemindOS previous chat history sidebar fit clipping title preview Exchange chat rail`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned unrelated chat/memory and generic clipping notes, with no stronger sidebar implementation guidance than the tracked previous ChatPanel and local CSS.
+  - Path: `hive-brain answer --scope full-vault`
+
+## 2026-06-17T08:41:45+00:00 - json-metric-contrast-followup
+
+- Request: Improve poor contrast on the top and bottom text in fr json-render metric cards
+- Source: shared-brain+current-project+pinned-drop-in
+- Selected backbone: current-project:hivemind-os
+- Verification: Focused ESLint passed for `registry.tsx` and `JsonRenderSurface.tsx`. Filtered `pnpm typecheck --pretty false` reported no diagnostics for touched chat/json-render files. Static contrast calculation against fr dark tokens showed muted metric text moving from about `3.0:1` to about `5.7-5.8:1` on live/honey soft metric card backgrounds.
+
+### Candidates
+- `src/components/json-render/fr/registry.tsx`
+  - Decision: selected_backbone
+  - Reason: owns the live `Metric` renderer used by the screenshot cards, including the top `fr-eyebrow` label and bottom `detail` text.
+  - Path: `src/components/json-render/fr/registry.tsx`
+- `src/components/json-render/fr/fr-style.css`
+  - Decision: inspected
+  - Reason: confirmed `--fg-2` is the stronger readable muted token and `--fg-3` was the lower-contrast token used by default `fr-eyebrow`.
+  - Path: `src/components/json-render/fr/registry.tsx`
+- Shared Brain recall query `HivemindOS Exchange chat metric cards contrast top bottom labels`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned generic design-system notes and no stronger project-specific guidance than the active json-render component source.
+  - Path: `hive-brain answer --scope full-vault`
+
+## 2026-06-17T08:45:15+00:00 - chat-footer-row-followup
+
+- Request: Put the message timestamp and Copy/Kanban segmented actions on the same row
+- Source: shared-brain+current-project+tracked-history
+- Selected backbone: current-project:hivemind-os
+- Verification: Focused ESLint passed for `MessageThread.tsx`, `ChatExchangePanel.tsx`, and `ChatPanel.tsx`. Filtered `pnpm typecheck --pretty false` reported no diagnostics for touched chat/json-render files. In-app browser smoke against the existing `127.0.0.1:5022` dev server found 5 `.fr-chat-message-footer` rows, 5 rows with both timestamp and segmented actions, and all timestamp/action pairs sharing the same row. Screenshot saved at `artifacts/chat-footer-row/footer-row.png`.
+
+### Candidates
+- `src/features/dashboard/views/chat/exchange/MessageThread.tsx`
+  - Decision: selected_backbone
+  - Reason: owns both the timestamp placement and the existing compact `MessageActions` component, so the fix could be a local footer composition instead of changing action behavior.
+  - Path: `src/features/dashboard/views/chat/exchange/MessageThread.tsx`
+- `git show HEAD:src/features/dashboard/views/ChatPanel.tsx`
+  - Decision: inspected
+  - Reason: confirmed the previous user-turn path also rendered timestamp and actions separately, so the new Exchange polish is a direct layout improvement rather than restoring old code.
+  - Path: `src/features/dashboard/views/chat/exchange/MessageThread.tsx`
+- `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+  - Decision: style_adapted
+  - Reason: added a dedicated footer row and time class around the already-assimilated segmented action control.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- Shared Brain recall query `HivemindOS Exchange chat message footer timestamp copy kanban same row`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned unrelated browser/Hermes/Kanban notes and no stronger footer implementation guidance than the active local message thread.
+  - Path: `hive-brain answer --scope full-vault`
+
+## 2026-06-17T08:46:46+00:00 - brain-header-env-card-followup
+
+- Request: Fix remaining Brain font mismatch on the Hive Vault subtitle and round Shared Env key containers
+- Source: pinned-drop-in+current-project
+- Selected backbone: `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/brain.css`
+- Verification: Focused ESLint passed for `BrainEnvPanel.tsx` and `WorkSectionHeader.tsx`; `git diff --check` passed; static CSS assertions confirmed the Brain subtitle font-family overrides and `.envCard` border/radius rules. Authenticated in-app browser verification on `127.0.0.1:5022` confirmed `Obsidian memory graph` renders with `Geist, Inter, system-ui, sans-serif` at `12.5px`/`500`, and the Env runtime card renders as `brain-env_envCard` with a computed `14px` radius, `1px` Brain border, and hidden overflow. Standalone Playwright could not verify the authenticated surface because it hit the dashboard lock screen.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/brain.css`
+  - Decision: selected_backbone
+  - Reason: provides the Brain body font token and `fb-card` card radius/border source of truth used by the pinned design.
+  - Path: `src/features/dashboard/views/work-section-header.module.css`, `src/app/vault.module.css`, `src/features/dashboard/views/brain-env.module.css`
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/EnvPanel.tsx`
+  - Decision: style_adapted
+  - Reason: confirmed env status/list containers are rendered as `fb-card` surfaces with hidden overflow rather than square dashboard blocks.
+  - Path: `src/features/dashboard/views/brain-env.module.css`
+- `src/features/dashboard/views/BrainEnvPanel.tsx`
+  - Decision: selected_backbone
+  - Reason: owns the live Shared Env wiring and already applies the local `envCard` class to status, missing-key, list, runtime, and agent-overlay containers.
+  - Path: `src/features/dashboard/views/brain-env.module.css`
+
+## 2026-06-17T08:50:51+00:00 - brain-refresh-icon-containment
+
+- Request: Keep the Hive Vault graph refresh icon inside its button
+- Source: pinned-drop-in+current-project
+- Selected backbone: `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/brain.css`
+- Verification: Focused ESLint passed for `BrainGraphExplorer.tsx`; `git diff --check` passed; static CSS assertions confirmed graph SVG sizing now uses `.brainGraphCanvas > svg`, the broad `.brainGraphCanvas svg { min-height: 540px; }` rule is gone, and the refresh icon has a 14px display/min-size guard. In-app browser verification was attempted on `127.0.0.1:5022`, but the controllable tab stayed on the `Starting HivemindOS` shell and never reached the graph during the check.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/brain.css`
+  - Decision: selected_backbone
+  - Reason: provides the compact `fb-iconbtn` 30px button and 14-15px icon treatment used by the pinned Brain design.
+  - Path: `src/app/vault.module.css`
+- `src/features/dashboard/views/BrainGraphExplorer.tsx`
+  - Decision: selected_backbone
+  - Reason: confirmed the refresh button lives inside `.brainGraphCanvas`, so broad canvas SVG rules affect both the graph SVG and Lucide refresh icon.
+  - Path: `src/app/vault.module.css`
+- `src/app/vault.module.css`
+  - Decision: adapted_code
+  - Reason: scoped graph-only SVG sizing to the direct graph SVG child and added an explicit icon size guard without changing refresh behavior.
+  - Path: `src/app/vault.module.css`
+## 2026-06-17T08:52:13+00:00 - chat-composer-width-followup
+
+- Request: Make the Exchange chat input the same width as the rest of the content
+- Source: shared-brain+current-project+tracked-history
+- Selected backbone: current-project:hivemind-os
+- Verification: Focused ESLint passed for `ChatExchangePanel.tsx`, `MessageThread.tsx`, `ChatPanel.tsx`, and `JsonRenderSurface.tsx`. Filtered `pnpm typecheck --pretty false` reported no diagnostics for touched chat/json-render files. Full repo typecheck still exits on unrelated existing generated/promo/resource diagnostics under `promo-videos/`, `remotion/`, and `src-tauri/target/`. In-app browser verification was attempted on `127.0.0.1:5022`, but both existing and fresh tabs stayed on the `Starting HivemindOS` loading shell after a Next CSS HMR error instead of reaching the authenticated chat UI.
+
+### Candidates
+- `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+  - Decision: selected_backbone
+  - Reason: owns both the Exchange message thread rail and the restored legacy composer mount, so the width alignment belongs at this shell boundary.
+  - Path: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+  - Decision: style_adapted
+  - Reason: added one Exchange content-width token and scoped composer fill rules so the previous `ComposerField` fills the same rail without changing other chat views.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- `src/features/dashboard/views/chat/HiveChatView.module.css`
+  - Decision: inspected
+  - Reason: confirmed the restored composer styling is reused intentionally, while the width mismatch should be solved by the Exchange rail wrapper rather than editing the legacy Hive composer globally.
+  - Path: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- Shared Brain recall query `HivemindOS Exchange chat composer width previous input content rail`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned unrelated voice, wallet, and generic shared-brain notes, with no stronger implementation guidance than the active local Exchange shell.
+  - Path: `hive-brain answer --scope full-vault`
+
+## 2026-06-17T09:06:33+00:00 - chat-composer-focus-ring-followup
+
+- Request: Explain and fix the large square focus outline shown when clicking the Exchange chat input
+- Source: shared-brain+current-project+tracked-history
+- Selected backbone: current-project:hivemind-os
+- Verification: Focused ESLint passed for `ChatExchangePanel.tsx`, `MessageThread.tsx`, and `ChatPanel.tsx`; `git diff --check` passed; static CSS assertions confirmed scoped Exchange rules remove textarea border/outline/box-shadow and apply the focus treatment to `[class*="chatComposerField"]:focus-within`.
+
+### Candidates
+- `src/features/chat/chat-composer.tsx`
+  - Decision: selected_backbone
+  - Reason: confirmed the restored composer focuses the native `<textarea>` inside the shared `chatComposerField`, so the visible defect is a styling boundary issue rather than component behavior.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- `src/app/chat.module.css`
+  - Decision: inspected
+  - Reason: confirmed the previous composer expected a transparent textarea and container-level `:focus-within` styling, with some textarea sizing rules historically scoped to the old chat shell.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+  - Decision: style_adapted
+  - Reason: added Exchange-only textarea focus resets and a honey-toned container focus treatment so the restored composer behaves visually like one rounded input surface in this new shell.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- Shared Brain recall query `HivemindOS Exchange chat composer textarea focus outline big square previous composer focus ring`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned unrelated voice, MCP, and Hermes notes, with no stronger implementation guidance than the active local composer CSS.
+  - Path: `hive-brain answer --scope full-vault`
+
+## 2026-06-17T09:08:18+00:00 - chat-send-button-glow-followup
+
+- Request: Remove the green glow behind the Exchange chat send button
+- Source: shared-brain+current-project+tracked-history
+- Selected backbone: current-project:hivemind-os
+- Verification: Focused ESLint passed for `ChatExchangePanel.tsx`, `MessageThread.tsx`, and `ChatPanel.tsx`; `git diff --check` passed; static CSS assertions confirmed Exchange-scoped `[data-bee-send]` and send-button states set `box-shadow: none`.
+
+### Candidates
+- `src/features/chat/chat-composer.tsx`
+  - Decision: selected_backbone
+  - Reason: confirmed the send button is rendered with `data-bee-send` and the shared `sendButton` class, so Exchange can target it without changing composer behavior.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- `src/app/chat.module.css`
+  - Decision: inspected
+  - Reason: identified the shared restored composer send button shadow that disabled sends inherit in the Exchange shell.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+  - Decision: style_adapted
+  - Reason: added an Exchange-only shadow/filter reset for the send button and its hover/focus/disabled states.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- Shared Brain recall query `HivemindOS Exchange chat composer send button green glow focus shadow`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned generic design-system notes and unrelated integrations, with no stronger implementation guidance than local composer CSS.
+  - Path: `hive-brain answer --scope full-vault`
+
+## 2026-06-17T09:10:55+00:00 - json-render-copy-feedback-followup
+
+- Request: Add visible feedback when clicking json-render copy buttons such as "Copy component list"
+- Source: shared-brain+current-project+tracked-history
+- Selected backbone: current-project:hivemind-os
+- Verification: Focused ESLint passed for `Controls.tsx`, `JsonRenderSurface.tsx`, `MessageThread.tsx`, and `ChatExchangePanel.tsx`; `git diff --check` passed; filtered `pnpm typecheck --pretty false` reported no diagnostics for touched json-render/chat files while the full repo typecheck still exits on unrelated existing generated/promo/resource diagnostics.
+
+### Candidates
+- `src/components/json-render/fr/Controls.tsx`
+  - Decision: selected_backbone
+  - Reason: owns the fr-styled json-render `Button` action that handles `copyText`, so feedback belongs at this shared json-render action boundary.
+  - Path: `src/components/json-render/fr/Controls.tsx`
+- `src/features/dashboard/views/chat/exchange/MessageThread.tsx`
+  - Decision: inspected
+  - Reason: provided the already-accepted local pattern of temporary copied state with a checkmark and `Copied!` label for chat message copy actions.
+  - Path: `src/components/json-render/fr/Controls.tsx`
+- `src/components/ui/copyable-code-line.tsx`
+  - Decision: inspected
+  - Reason: confirmed the app's compact copy affordance uses a 1.5-second copied state and checkmark feedback.
+  - Path: `src/components/json-render/fr/Controls.tsx`
+- Shared Brain recall query `HivemindOS json-render copy button feedback Copied checkmark action button`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned generic design-system notes and unrelated integrations, with no stronger implementation guidance than local json-render and copy controls.
+  - Path: `hive-brain answer --scope full-vault`
+
+## 2026-06-17T09:15:23+00:00 - exchange-new-chat-feedback-followup
+
+- Request: Add hover UI and click feedback to the Exchange sidebar New Chat button
+- Source: shared-brain+current-project+tracked-history
+- Selected backbone: current-project:hivemind-os
+- Verification: Focused ESLint passed for `ChatExchangePanel.tsx`; no whitespace issues were reported for the changed Exchange files; filtered `pnpm typecheck --pretty false` reported no diagnostics for `ChatExchangePanel.tsx` while the full repo typecheck still exits on unrelated existing diagnostics.
+
+### Candidates
+
+- `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+  - Decision: selected_backbone
+  - Reason: owns the sidebar New Chat target selection and click action, so the temporary pressed/click-confirmation state belongs at this boundary.
+  - Path: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+  - Decision: style_adapted
+  - Reason: already contains Exchange button affordances for navigation and compact segmented controls; added the matching hover, active, focus-visible, disabled, and pressed states for the New Chat pill.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- `src/features/dashboard/views/chat/exchange/MessageThread.tsx`
+  - Decision: inspected
+  - Reason: confirmed the accepted local pattern of temporary feedback state with a checkmark after a compact action succeeds.
+  - Path: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- Shared Brain recall query `HivemindOS Exchange New chat button hover click feedback sidebar`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned generic design-system/template notes and no stronger implementation guidance than local Exchange button patterns.
+  - Path: `hive-brain answer --scope full-vault`

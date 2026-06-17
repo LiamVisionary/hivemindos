@@ -12,6 +12,7 @@
 import { Fragment, useEffect, useState } from "react";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { applyAppNavLiquidGlass } from "@/lib/native/liquid-glass";
 import { useNativeUpdate } from "@/lib/native/use-native-update";
 import { MoonIcon, SunIcon } from "./primitives";
 import "./fleet-hive.css";
@@ -189,6 +190,10 @@ export function AppNavShelf({
     root.classList.add("macDesktopChrome");
     return () => root.classList.remove("macDesktopChrome");
   }, []);
+
+  useEffect(() => {
+    void applyAppNavLiquidGlass(theme);
+  }, [theme]);
 
   return (
     <div className="fr-root" data-fr-theme={theme}>

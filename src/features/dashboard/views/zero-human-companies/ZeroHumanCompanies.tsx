@@ -90,7 +90,11 @@ function Masthead({
 
 export interface ZeroHumanCompaniesProps {
   colonies: Colony[];
+  /** Optional subset used only for the portfolio masthead/cards. */
+  portfolioColonies?: Colony[];
   agentPool: PoolAgent[];
+  /** Optional founding crew already staged when opening the create-company flow. */
+  initialCreateCrew?: Agent[];
   loading: boolean;
   initialLoading?: boolean;
   error?: string | null;
@@ -119,7 +123,7 @@ export interface ZeroHumanCompaniesProps {
 }
 
 export default function ZeroHumanCompanies({
-  colonies, agentPool, loading, initialLoading = loading, error, notice, busyId, onRefresh,
+  colonies, portfolioColonies, agentPool, initialCreateCrew, loading, initialLoading = loading, error, notice, busyId, onRefresh,
   onCreateCompany, onEditCompany, onAddAgents, onApprove, onReject, onFreeze, onDelete, onDispatch, onStopAutonomy,
   theme = "dark", cardStyle = "detailed", density = "comfortable", showBudget = true,
 }: ZeroHumanCompaniesProps) {
@@ -135,6 +139,7 @@ export default function ZeroHumanCompanies({
   const [submitting, setSubmitting] = React.useState(false);
   const closeModal = React.useCallback(() => setModal(null), []);
 
+  const visiblePortfolioColonies = portfolioColonies ?? colonies;
   const colony = openId ? colonies.find((c) => c.id === openId) ?? null : null;
   const view: "portfolio" | "cockpit" = colony ? "cockpit" : "portfolio";
 
@@ -194,7 +199,7 @@ export default function ZeroHumanCompanies({
       </svg>
 
       <div style={{ position: "relative", zIndex: 1 }}>
-        <Masthead view={view} companies={colonies} loading={loading} initialLoading={initialLoading} onRefresh={onRefresh} />
+        <Masthead view={view} companies={visiblePortfolioColonies} loading={loading} initialLoading={initialLoading} onRefresh={onRefresh} />
         {error ? (
           <div style={{ margin: "12px 36px 0", padding: "8px 12px", borderRadius: 8, border: "1px solid color-mix(in srgb, var(--danger) 35%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger-2)", fontFamily: "var(--f-mono)", fontSize: 11 }}>
             {error}
@@ -208,7 +213,7 @@ export default function ZeroHumanCompanies({
 
         {view === "portfolio" || !colony || !cockpitHandlers ? (
           <Portfolio
-            colonies={colonies}
+            colonies={visiblePortfolioColonies}
             density={density}
             showBudget={showBudget}
             cardStyle={cardStyle}
@@ -236,7 +241,7 @@ export default function ZeroHumanCompanies({
       </div>
 
       {modal && modal.type === "create" && (
-        <CreateCompanyModal agentPool={agentPool} busy={submitting} theme={theme} onClose={closeModal} onCreate={handleCreate} />
+        <CreateCompanyModal agentPool={agentPool} initialCrew={initialCreateCrew} busy={submitting} theme={theme} onClose={closeModal} onCreate={handleCreate} />
       )}
       {modal && modal.type === "edit" && (() => {
         const target = colonies.find((c) => c.id === modal.id);

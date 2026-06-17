@@ -17,6 +17,7 @@
     "core:default",
     "core:window:allow-start-dragging",
     "dialog:allow-open",
+    "liquid-glass:default",
     "opener:default",
     "process:allow-restart",
     "updater:default",

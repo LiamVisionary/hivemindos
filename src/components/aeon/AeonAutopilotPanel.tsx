@@ -40,8 +40,10 @@ const DETAIL_TABS: { id: AeonDetailView; label: string; detail: string; icon: Ic
   { id: "settings", label: "Settings", detail: "Repo, keys, memory", icon: "key" },
 ];
 
-function accentStyle(hex: string): React.CSSProperties {
+function accentStyle(hex?: string): React.CSSProperties {
+  if (!hex) return {};
   const h = hex.replace("#", "");
+  if (!/^[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(h)) return {};
   const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
   const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   return {
@@ -1132,7 +1134,7 @@ export interface AeonAutopilotPanelProps {
 
 export function AeonAutopilotPanel({
   agents, agentProfiles, sharedVault, machineGroups, skills = AEON_SKILLS, deliverables = AEON_DELIVERABLES, machines = AEON_MACHINES,
-  initialMode = "fleet", accent = "#5eead4", motion = true,
+  initialMode = "fleet", accent, motion = true,
   onToggleSkill, onRunSkill, onSendDeliverable, onCreateWorkspace, onWorkspaceCreated, chooseDirectoryForMachine,
 }: AeonAutopilotPanelProps = {}) {
   const [mode, setMode] = React.useState<"fleet" | "detail">(initialMode);

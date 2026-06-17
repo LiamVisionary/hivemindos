@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import brainServiceStyles from "./brain-services.module.css";
 
@@ -82,7 +81,7 @@ export function SkillSecurityCard() {
   const engineLabel = ENGINES.find((opt) => opt.id === settings?.engine)?.label ?? "Regex";
 
   return (
-    <article className={brainClass("brainServiceOverviewCard", live ? "live" : "idle")}>
+    <article className={brainClass("brainServiceOverviewCard", live ? "live" : "idle", "skillSecurityCard")}>
       <div className={brainClass("brainServiceOverviewTopline")}>
         <span className={brainClass("brainServiceOverviewIcon")}><ShieldCheck aria-hidden="true" /></span>
         <small className={brainClass(live ? "serviceBadgeLive" : "serviceBadgeIdle")}>{engineLabel}</small>
@@ -95,47 +94,45 @@ export function SkillSecurityCard() {
 
       {error ? <p style={{ fontSize: 12, color: "var(--rose-2,#fb7185)" }}>{error}</p> : null}
 
-      <div style={{ display: "grid", gap: 6 }}>
-        <small style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)" }}>Detection engine</small>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      <div>
+        <small>Detection engine</small>
+        <div className={brainClass("skillSecurityPills")}>
           {ENGINES.map((opt) => (
-            <Button
+            <button
               key={opt.id}
               type="button"
-              size="sm"
-              variant={settings?.engine === opt.id ? "default" : "outline"}
+              className={brainClass("skillSecurityPill", settings?.engine === opt.id && "selected")}
               disabled={busy}
               onClick={() => void update({ engine: opt.id })}
             >
               {opt.label}
-            </Button>
+            </button>
           ))}
         </div>
-        <small style={{ fontSize: 12, color: "var(--muted)" }}>
+        <p className={brainClass("skillSecurityStatus")}>
           {scannerAvailable
             ? "SkillSpector CLI detected on this machine."
             : "SkillSpector CLI not found — Auto falls back to regex. Install: github.com/NVIDIA/SkillSpector (Python 3.12+)."}
-        </small>
+        </p>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, borderTop: "1px solid rgba(148,163,184,0.14)", paddingTop: 10 }}>
-        <div>
-          <strong style={{ fontSize: 13 }}>LLM-powered security pass</strong>
-          <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>Adds a model-judged pass to cut false positives and flag malicious intent. Slower and billed.</p>
+      <div className={brainClass("skillSecurityLlmRow")}>
+        <div className={brainClass("skillSecurityLlmText")}>
+          <strong>LLM-powered security pass</strong>
+          <p>Adds a model-judged pass to cut false positives and flag malicious intent. Slower and billed.</p>
         </div>
-        <Button
+        <button
           type="button"
-          size="sm"
-          variant={settings?.llm ? "default" : "outline"}
+          className={brainClass("skillSecurityToggle", settings?.llm && "primaryAction")}
           disabled={busy || !settings}
           onClick={() => void update({ llm: !settings?.llm })}
         >
           {settings?.llm ? "On" : "Off"}
-        </Button>
+        </button>
       </div>
 
       {settings?.llm ? (
-        <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
+        <p className={brainClass("skillSecurityStatus")}>
           {llmRouting && "unavailable" in llmRouting ? (
             <span style={{ color: "var(--rose-2,#fb7185)" }}>LLM pass cannot route yet: {llmRouting.unavailable}</span>
           ) : llmRouting ? (

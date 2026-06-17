@@ -219,6 +219,19 @@ const skippedSkillDirs = new Set([
   ".cache",
   ".archive",
 ]);
+const skillSourceMetadataFile = ".hivemind-skill-source.json";
+const sharedBrainMirrorStatus = "shared-brain-mirror";
+const recursiveProviderMirrorStatus = "recursive-provider-mirror";
+const knownProviderSlugPrefixes = new Set([
+  "aeon",
+  "claude",
+  "codex",
+  "hermes",
+  "gemini",
+  "openclaw",
+  "shared",
+  "shared-brain",
+]);
 const maxSkillFiles = Number(
   process.env.AGENT_TELEMETRY_MAX_SKILL_FILES || 160,
 );
@@ -527,6 +540,67 @@ function skillSlug(value) {
       .replace(/^-+|-+$/g, "")
       .slice(0, 80) || "skill"
   );
+}
+
+function normalizedSkillPath(value) {
+  return String(value || "").replace(/\\/g, "/");
+}
+
+function skillDirSlugFromPath(value) {
+  const parts = normalizedSkillPath(value).split("/").filter(Boolean);
+  if (!parts.length) return "";
+  const last = String(parts[parts.length - 1] || "").toLowerCase();
+  return skillSlug(last === "skill.md" ? parts[parts.length - 2] : parts[parts.length - 1]);
+}
+
+function pathLooksInsideProviderSkillRoot(providerId, value) {
+  return normalizedSkillPath(value).includes(`/.${providerId}/skills/`);
+}
+
+function slugLooksProviderMirrored(providerId, slug) {
+  if (providerId !== "aeon") return false;
+  const normalized = skillSlug(slug);
+  if (normalized.startsWith(`${providerId}-`)) return true;
+  const firstSegment = normalized.split("-").find(Boolean);
+  return Boolean(firstSegment && knownProviderSlugPrefixes.has(firstSegment));
+}
+
+function providerPathLooksMirrored(providerId, path, slug) {
+  if (providerId !== "aeon") return false;
+  if (!pathLooksInsideProviderSkillRoot(providerId, path)) return false;
+  return (
+    slugLooksProviderMirrored(providerId, slug) ||
+    slugLooksProviderMirrored(providerId, skillDirSlugFromPath(path))
+  );
+}
+
+async function readSkillSourceMetadata(skillDir) {
+  const raw = await readFile(join(skillDir, skillSourceMetadataFile), "utf8").catch(
+    () => "",
+  );
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function providerMirrorLoopStatus(providerId, skillPath, metadata = null) {
+  const metadataProvider =
+    metadata && typeof metadata.provider === "string" ? metadata.provider : "";
+  const managedBy =
+    metadata && typeof metadata.managedBy === "string" ? metadata.managedBy : "";
+  if (metadataProvider === "shared-brain" || managedBy === "hivemindos")
+    return sharedBrainMirrorStatus;
+  const metadataSourcePath =
+    metadata && typeof metadata.sourcePath === "string" ? metadata.sourcePath : "";
+  const sourcePath = metadataSourcePath || skillPath;
+  if (providerPathLooksMirrored(providerId, sourcePath, skillDirSlugFromPath(skillPath)))
+    return recursiveProviderMirrorStatus;
+  if (providerPathLooksMirrored(providerId, skillPath, skillDirSlugFromPath(skillPath)))
+    return recursiveProviderMirrorStatus;
+  return "";
 }
 
 function titleFromSlug(slug) {
@@ -4269,6 +4343,8 @@ async function skillSummaryForProvider(provider, skillPath, options = {}) {
   const stats = await stat(skillPath).catch(() => null);
   const slug = skillSlug(basename(dirname(skillPath)));
   const frontmatter = parseSkillFrontmatter(markdown);
+  const metadata = await readSkillSourceMetadata(dirname(skillPath));
+  const mirrorLoopStatus = providerMirrorLoopStatus(provider.id, skillPath, metadata);
   const summary = {
     id: `${provider.id}:${hostname()}:${skillPath}`,
     slug,
@@ -4283,8 +4359,9 @@ async function skillSummaryForProvider(provider, skillPath, options = {}) {
     relativePath: relative(resolve(expandHome(provider.home)), skillPath),
     checksum: skillChecksum(markdown),
     updatedAt: stats?.mtimeMs ?? 0,
-    imported: false,
+    imported: Boolean(mirrorLoopStatus),
   };
+  if (mirrorLoopStatus) summary.sourceStatus = mirrorLoopStatus;
   if (options.includeSourceFiles) {
     summary.sourceFiles = await collectSkillFiles(dirname(skillPath));
   }

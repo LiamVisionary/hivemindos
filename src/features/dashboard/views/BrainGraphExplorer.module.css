@@ -44,19 +44,23 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin: 0 0 14px;
   min-width: 0;
 }
 
 .filters button {
-  min-height: 34px;
+  min-height: 31px;
+  min-width: 52px;
   border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 7px;
+  border-radius: 999px;
   background: rgba(8, 12, 19, 0.64);
   color: var(--muted);
   cursor: pointer;
   font-size: 11px;
   font-weight: 900;
-  padding: 7px 9px;
+  line-height: 1;
+  padding: 6px 12px;
+  white-space: nowrap;
 }
 
 .filters button:hover,
@@ -75,34 +79,79 @@
   text-transform: uppercase;
 }
 
-.nodeContext polygon {
+.fade {
+  animation: brainFadeUp 0.3s ease both;
+}
+
+@keyframes brainFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nodeContext circle {
   stroke: #22c55e;
   stroke-width: 3.2;
   filter: drop-shadow(0 0 8px rgba(34, 197, 94, 0.28));
 }
 
-.nodeRecent polygon {
+.nodeRecent circle {
   fill: rgba(20, 184, 166, 0.18);
 }
 
-.nodeAgentTouched polygon {
+.nodeAgentTouched circle {
   stroke: rgba(56, 189, 248, 0.86);
 }
 
-.nodeStaleHub polygon {
+.nodeStaleHub circle {
   fill: rgba(251, 191, 36, 0.08);
   stroke: rgba(251, 191, 36, 0.62);
 }
 
-.preview {
+.nodeDimmed {
+  opacity: 0.34;
+  transition: opacity 0.25s ease;
+}
+
+.inspectorBody {
+  display: grid;
+  gap: 0;
+  padding-top: 14px;
+}
+
+.inspectorBody h3 {
   margin: 0;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 7px;
-  background: rgba(3, 7, 18, 0.36);
-  color: #dbeafe;
-  font-size: 12px;
-  line-height: 1.45;
-  padding: 10px;
+  color: var(--brain-fg, #f3f0e9);
+  font-family: var(--f-display, "Space Grotesk", system-ui, sans-serif);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.nodePath {
+  margin: 4px 0 0 !important;
+  color: var(--brain-fg-3, #76726a) !important;
+  font-family: var(--f-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px !important;
+  overflow-wrap: anywhere;
+}
+
+.preview {
+  margin: 12px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--brain-fg-2, #a7a39a);
+  font-size: 12.5px;
+  line-height: 1.55;
+  padding: 0;
 }
 
 .previewMarkdown {
@@ -165,14 +214,87 @@
   line-height: 1.35;
 }
 
+.inspectorStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0 0;
+}
+
+.inspectorStats div {
+  min-width: 0;
+}
+
+.inspectorStats dt {
+  margin: 0;
+  color: var(--brain-fg-4, #545049);
+  font-family: var(--f-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.inspectorStats dd {
+  margin: 4px 0 0;
+  color: var(--brain-fg, #f3f0e9);
+  font-family: var(--f-display, "Space Grotesk", system-ui, sans-serif);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
 .actionGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  margin-top: 16px;
 }
 
-.actionGrid button {
+.brainActionButton {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  gap: 7px;
+  min-height: 31px;
+  border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brain-fg-2, #a7a39a);
+  cursor: pointer;
+  font-family: var(--f-body, "Geist", Inter, system-ui, sans-serif);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 7px 12px;
+  white-space: nowrap;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, filter 0.16s ease;
+}
+
+.brainActionButton svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+.brainActionButton:hover,
+.brainActionButton:focus-visible {
+  border-color: var(--brain-line-3, rgba(238, 232, 220, 0.2));
+  color: var(--brain-fg, #f3f0e9);
+}
+
+.primaryAction {
+  border-color: transparent;
+  background: var(--brain-honey, #e7b45c);
+  color: #1a1305;
+}
+
+.primaryAction:hover,
+.primaryAction:focus-visible {
+  color: #1a1305;
+  filter: brightness(1.06);
 }
 
 .contextTray {
@@ -205,39 +327,73 @@
 
 .linkLists {
   display: grid;
-  gap: 9px;
+  gap: 0;
+  margin-top: 16px;
 }
 
-.linkLists section {
-  display: grid;
+.disclosure {
+  border-top: 1px solid var(--brain-line, rgba(238, 232, 220, 0.08));
+}
+
+.disclosure summary {
+  display: flex;
+  align-items: center;
   gap: 7px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 7px;
-  background: rgba(3, 7, 18, 0.3);
-  padding: 9px;
+  padding: 11px 0;
+  color: var(--brain-fg-3, #76726a);
+  cursor: pointer;
+  font-size: 12px;
+  list-style: none;
+  user-select: none;
+}
+
+.disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosure summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-right: 2px;
+  border-right: 1.5px solid var(--brain-fg-4, #545049);
+  border-bottom: 1.5px solid var(--brain-fg-4, #545049);
+  transform: rotate(-45deg);
+  transition: transform 0.18s ease;
+}
+
+.disclosure[open] summary::before {
+  transform: rotate(45deg);
+}
+
+.disclosure summary:hover,
+.disclosure summary:focus-visible {
+  color: var(--brain-fg, #f3f0e9);
+}
+
+.disclosureBody {
+  display: grid;
+  gap: 0;
+  padding-bottom: 14px;
 }
 
 .linkLists button {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 7px;
+  display: flex;
   align-items: center;
-  min-height: 30px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 6px;
-  background: rgba(8, 12, 19, 0.58);
-  color: #e5eef9;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--brain-fg-2, #a7a39a);
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 800;
-  padding: 6px 8px;
+  font-size: 12.5px;
+  padding: 6px 0;
   text-align: left;
 }
 
 .linkLists button:hover,
 .linkLists button:focus-visible {
-  border-color: rgba(94, 234, 212, 0.34);
-  background: rgba(20, 184, 166, 0.1);
+  color: var(--brain-fg, #f3f0e9);
 }
 
 .linkLists svg {
@@ -248,8 +404,56 @@
 
 .linkLists p {
   margin: 0;
-  color: var(--muted);
-  font-size: 11px;
+  color: var(--brain-fg-4, #545049);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.recentAccess {
+  display: grid;
+  gap: 0;
+  padding-top: 14px;
+}
+
+.recentAccess article {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 0;
+}
+
+.recentAccess article > span {
+  width: 7px;
+  height: 7px;
+  margin-top: 5px;
+  border-radius: 999px;
+}
+
+.recentAccess strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--brain-fg, #f3f0e9);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.recentAccess small,
+.recentAccess time,
+.recentAccess p {
+  color: var(--brain-fg-4, #545049);
+  font-family: var(--f-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10.5px;
+}
+
+.recentAccess small {
+  display: block;
+  margin-top: 2px;
+}
+
+.recentAccess p {
+  margin: 12px 0 0;
+  line-height: 1.5;
 }
 
 @media (max-width: 880px) {
@@ -264,10 +468,7 @@
 
 :global(:root[data-theme="hive-light"]) .search,
 :global(:root[data-theme="hive-light"]) .filters button,
-:global(:root[data-theme="hive-light"]) .preview,
-:global(:root[data-theme="hive-light"]) .contextTray,
-:global(:root[data-theme="hive-light"]) .linkLists section,
-:global(:root[data-theme="hive-light"]) .linkLists button {
+:global(:root[data-theme="hive-light"]) .contextTray {
   border-color: var(--comb-line);
   background: var(--surface);
   color: var(--foreground);
@@ -292,4 +493,126 @@
 
 :global(:root[data-theme="hive-light"]) .previewHeading {
   color: var(--foreground);
+}
+
+/* Drop-in graph controls: live graph logic stays in BrainGraphExplorer.tsx. */
+.toolbar {
+  grid-template-columns: minmax(180px, 1fr) minmax(0, auto) auto;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.search {
+  border-color: var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 999px;
+  background: var(--brain-panel, #14161c);
+  padding: 0 12px;
+}
+
+.search svg {
+  color: var(--brain-fg-3, #76726a);
+}
+
+.search input {
+  color: var(--brain-fg, #f3f0e9);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.search input::placeholder {
+  color: var(--brain-fg-3, #76726a);
+}
+
+.filters {
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.filters button {
+  border-color: var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 999px;
+  background: var(--brain-panel, #14161c);
+  color: var(--brain-fg-3, #76726a);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: none;
+}
+
+.filters button:hover,
+.filters button:focus-visible,
+.filters button.isActive {
+  border-color: var(--brain-honey-line, rgba(231, 180, 92, 0.32));
+  background: var(--brain-honey-soft, rgba(231, 180, 92, 0.13));
+  color: var(--brain-honey, #e7b45c);
+}
+
+.visibleCount {
+  color: var(--brain-fg-3, #76726a);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.nodeContext circle {
+  stroke: var(--brain-live, #6fcdba);
+  filter: drop-shadow(0 0 8px rgba(111, 205, 186, 0.24));
+}
+
+.nodeRecent circle {
+  fill: color-mix(in srgb, var(--brain-live, #6fcdba) 16%, var(--brain-panel-2, #181b22));
+}
+
+.nodeAgentTouched circle {
+  stroke: var(--brain-live, #6fcdba);
+}
+
+.nodeStaleHub circle {
+  fill: color-mix(in srgb, var(--brain-honey, #e7b45c) 12%, var(--brain-panel-2, #181b22));
+  stroke: var(--brain-honey, #e7b45c);
+}
+
+.contextTray {
+  border-color: var(--brain-line, rgba(238, 232, 220, 0.08));
+  border-radius: 8px;
+  background: var(--brain-panel-2, #181b22);
+  color: var(--brain-fg-2, #a7a39a);
+}
+
+.previewHeading,
+.contextTray strong {
+  color: var(--brain-fg, #f3f0e9);
+}
+
+.contextTray {
+  border-color: color-mix(in srgb, var(--brain-live, #6fcdba) 32%, transparent);
+  background: var(--brain-live-soft, rgba(111, 205, 186, 0.14));
+}
+
+.contextTray span {
+  color: var(--brain-fg-3, #76726a);
+}
+
+.linkLists svg {
+  color: var(--brain-honey, #e7b45c);
+}
+
+:global(:root[data-theme="hive-light"]) .search,
+:global(:root[data-theme="hive-light"]) .filters button,
+:global(:root[data-theme="hive-light"]) .contextTray {
+  border-color: var(--brain-line);
+  background: var(--brain-panel);
+  color: var(--brain-fg);
+}
+
+:global(:root[data-theme="hive-light"]) .search input {
+  color: var(--brain-fg);
+}
+
+@media (max-width: 880px) {
+  .toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .visibleCount {
+    text-align: left;
+  }
 }
