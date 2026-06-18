@@ -3,7 +3,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { openNativeDirectory } from "@/lib/native/filesystem";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
-import { NATIVE_SETUP_RERUN_EVENT } from "@/lib/native/setup";
+import { NATIVE_SETUP_RERUN_EVENT, readNativeSetupStatus } from "@/lib/native/setup";
 import { renderBeeSoulTemplate, type BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import { isMobileMachineOs } from "@/features/fleet/fleet-identity";
 import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
@@ -180,7 +180,7 @@ export function useAgentController(props: UseAgentControllerProps) {
       .catch(() => undefined);
   }
 
-  function openAgentCreationModal(machine: MachineGroup, runtime?: AgentRuntime, name = "") {
+  async function openAgentCreationModal(machine: MachineGroup, runtime?: AgentRuntime, name = "") {
     const mobileMachine = isMobileMachineOs(machine.os);
     if (!mobileMachine && (machine.collector !== "ready" || !machine.collectorUrl)) {
       // The self machine is already running this app, so the remote "Connect
@@ -192,13 +192,37 @@ export function useAgentController(props: UseAgentControllerProps) {
       // (dev/browser) the native event has no listener, so fall back to the
       // setup modal (now Windows/self-aware).
       if (machine.self && isTauriDesktopRuntime()) {
-        void import("@tauri-apps/api/event")
-          .then(({ emit }) => emit(NATIVE_SETUP_RERUN_EVENT))
-          .catch(() => openSetupModal(machine));
+        // The Fleet's collector status comes from an HTTP probe of the local
+        // bridge (server-side, in the bundled dashboard server). On Windows
+        // that can read "not ready" while the bridge is actually running —
+        // stale (probed before the bridge came up), or because the HTTP probe
+        // path differs from a raw TCP connect. Before bouncing back to setup,
+        // consult the SAME native local-bridge check onboarding uses to decide
+        // setup finished (a direct TCP connect to the collector port via
+        // native_setup_status). If the bridge is up, the Fleet status is just
+        // stale: fall through to the real add-agent flow. Only re-open setup
+        // when the bridge is genuinely down.
+        const bridgeUp = machine.collectorUrl
+          ? await readNativeSetupStatus()
+              .then((status) =>
+                Boolean(
+                  status?.checks?.find((check) => check.id === "collector")
+                    ?.installed,
+                ),
+              )
+              .catch(() => false)
+          : false;
+        if (!bridgeUp) {
+          void import("@tauri-apps/api/event")
+            .then(({ emit }) => emit(NATIVE_SETUP_RERUN_EVENT))
+            .catch(() => openSetupModal(machine));
+          return;
+        }
+        // Bridge is up — fall through and open the real add-agent modal.
+      } else {
+        openSetupModal(machine);
         return;
       }
-      openSetupModal(machine);
-      return;
     }
     // Adding an agent (not editing): prefer the runtime the user reached for
     // most recently, falling back to the selected agent's runtime, then Hermes.
