@@ -2,7 +2,6 @@ import "server-only";
 
 import { randomBytes, createCipheriv, createDecipheriv, createHash, createSecretKey } from "crypto";
 import { promises as fs } from "fs";
-import os from "os";
 import path from "path";
 import type { AgentWalletVaultInfo } from "@/lib/types/agent-wallet";
 import { homedir } from "@/lib/home-dir";
@@ -25,6 +24,8 @@ const keyPath = path.join(vaultDir, "wallet-vault.key");
 export const LOCAL_WALLET_VAULT_DIR = vaultDir;
 export const LOCAL_WALLET_VAULT_PATH = vaultPath;
 export const LOCAL_WALLET_VAULT_KEY_PATH = keyPath;
+
+let vaultWriteQueue = Promise.resolve();
 
 function publicInfo(record: VaultRecord): AgentWalletVaultInfo {
   return {
@@ -54,8 +55,7 @@ async function readVault(): Promise<VaultFile> {
   await fs.mkdir(vaultDir, { recursive: true, mode: 0o700 });
   try {
     const raw = await fs.readFile(vaultPath, "utf8");
-    const parsed = JSON.parse(raw) as VaultFile;
-    return parsed?.version === 1 && parsed.records ? parsed : { version: 1, records: {} };
+    return parseVaultText(raw);
   } catch {
     return { version: 1, records: {} };
   }
@@ -63,7 +63,78 @@ async function readVault(): Promise<VaultFile> {
 
 async function writeVault(vault: VaultFile) {
   await fs.mkdir(vaultDir, { recursive: true, mode: 0o700 });
-  await fs.writeFile(vaultPath, JSON.stringify(vault, null, 2), { mode: 0o600 });
+  const tempPath = path.join(vaultDir, `wallet-vault.${process.pid}.${Date.now()}.${randomBytes(4).toString("hex")}.tmp`);
+  await fs.writeFile(tempPath, JSON.stringify(vault, null, 2), { mode: 0o600 });
+  await fs.rename(tempPath, vaultPath);
+}
+
+function parseVaultText(raw: string): VaultFile {
+  try {
+    return normalizeVaultFile(JSON.parse(raw));
+  } catch {
+    const chunks = splitJsonObjects(raw);
+    if (!chunks.length) return { version: 1, records: {} };
+    return chunks
+      .map((chunk) => {
+        try {
+          return normalizeVaultFile(JSON.parse(chunk));
+        } catch {
+          return { version: 1, records: {} } satisfies VaultFile;
+        }
+      })
+      .reduce<VaultFile>((merged, vault) => ({
+        version: 1,
+        records: { ...merged.records, ...vault.records },
+      }), { version: 1, records: {} });
+  }
+}
+
+function normalizeVaultFile(value: unknown): VaultFile {
+  if (!value || typeof value !== "object") return { version: 1, records: {} };
+  const candidate = value as Partial<VaultFile>;
+  if (candidate.version !== 1 || !candidate.records || typeof candidate.records !== "object") {
+    return { version: 1, records: {} };
+  }
+  return { version: 1, records: candidate.records };
+}
+
+function splitJsonObjects(raw: string) {
+  const chunks: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < raw.length; index += 1) {
+    const character = raw[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === "\"") inString = false;
+      continue;
+    }
+    if (character === "\"") {
+      inString = true;
+      continue;
+    }
+    if (character === "{") {
+      if (depth === 0) start = index;
+      depth += 1;
+      continue;
+    }
+    if (character !== "}") continue;
+    depth -= 1;
+    if (depth === 0 && start >= 0) {
+      chunks.push(raw.slice(start, index + 1));
+      start = -1;
+    }
+  }
+  return chunks;
+}
+
+function withVaultWriteLock<T>(operation: () => Promise<T>): Promise<T> {
+  const next = vaultWriteQueue.then(operation, operation);
+  vaultWriteQueue = next.then(() => undefined, () => undefined);
+  return next;
 }
 
 export async function storeWalletSecret(params: {
@@ -72,27 +143,29 @@ export async function storeWalletSecret(params: {
   network: string;
   secret: string;
 }): Promise<AgentWalletVaultInfo> {
-  const key = await ensureVaultKey();
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", createSecretKey(key as unknown as Uint8Array), iv as unknown as Uint8Array);
-  const encrypted = (Buffer as any).concat([cipher.update(params.secret, "utf8"), cipher.final()]) as Buffer;
-  const tag = cipher.getAuthTag();
-  const info: AgentWalletVaultInfo = {
-    agentId: params.agentId,
-    address: params.address,
-    network: params.network,
-    custodyMode: "local",
-    createdAt: new Date().toISOString(),
-  };
-  const vault = await readVault();
-  vault.records[params.agentId] = {
-    ...info,
-    iv: iv.toString("base64url"),
-    tag: tag.toString("base64url"),
-    encryptedSecret: encrypted.toString("base64url"),
-  };
-  await writeVault(vault);
-  return info;
+  return withVaultWriteLock(async () => {
+    const key = await ensureVaultKey();
+    const iv = randomBytes(12);
+    const cipher = createCipheriv("aes-256-gcm", createSecretKey(key as unknown as Uint8Array), iv as unknown as Uint8Array);
+    const encrypted = (Buffer as any).concat([cipher.update(params.secret, "utf8"), cipher.final()]) as Buffer;
+    const tag = cipher.getAuthTag();
+    const info: AgentWalletVaultInfo = {
+      agentId: params.agentId,
+      address: params.address,
+      network: params.network,
+      custodyMode: "local",
+      createdAt: new Date().toISOString(),
+    };
+    const vault = await readVault();
+    vault.records[params.agentId] = {
+      ...info,
+      iv: iv.toString("base64url"),
+      tag: tag.toString("base64url"),
+      encryptedSecret: encrypted.toString("base64url"),
+    };
+    await writeVault(vault);
+    return info;
+  });
 }
 
 export async function getWalletInfo(agentId: string): Promise<AgentWalletVaultInfo | null> {

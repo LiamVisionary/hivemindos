@@ -1,0 +1,48 @@
+{
+  "created_at": "2026-06-18T10:29:43.960934+00:00",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "dograh-hq/dograh",
+      "source_path": "docs/core-concepts/calls-and-runs.mdx",
+      "target_path": "src/lib/services/phone/voice-runs.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted Dograh's call/run distinction into local persisted voice runs with status, provider, events, gathered context, summary, and QA."
+    },
+    {
+      "source_repo": "dograh-hq/dograh",
+      "source_path": "docs/core-concepts/context-and-variables.mdx",
+      "target_path": "src/lib/services/phone/voice-runs.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted initial_context/gathered_context ideas into sanitized initialContext and gatheredContext extraction."
+    },
+    {
+      "source_repo": "dograh-hq/dograh",
+      "source_path": "api/services/pipecat/realtime_feedback_events.py",
+      "target_path": "src/lib/services/phone/voice-run-route-actions.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted realtime feedback event categories into HivemindOS voice-run event posting and validation actions."
+    },
+    {
+      "source_repo": "dograh-hq/dograh",
+      "source_path": "api/services/telephony/registry.py",
+      "target_path": "src/lib/services/phone/voice-provider-capabilities.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted provider capability registry shape into HivemindOS voice provider capability metadata and search evidence."
+    },
+    {
+      "source_repo": "dograh-hq/dograh",
+      "source_path": "sdk/typescript/src/typed/start-call.ts",
+      "target_path": "src/lib/services/phone/voice-recipes.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted typed call recipe concepts into HivemindOS voice recipes and provider preferences."
+    },
+    {
+      "source_repo": "dograh-hq/dograh",
+      "source_path": "sdk/typescript/src/typed/qa.ts",
+      "target_path": "src/lib/services/phone/voice-runs.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted post-call QA rubric concept into heuristic voice-run QA checks."
+    }
+  ]
+}

@@ -24,6 +24,19 @@
   --comb-line: rgba(242, 183, 5, 0.22);
   --live: #2dd4bf;
   --live-soft: rgba(45, 212, 191, 0.14);
+  --bg: #090b10;
+  --bg-0: #080a0f;
+  --bg-1: #0d121b;
+  --bg-2: #111418;
+  --bg-3: #151b26;
+  --bg-4: #1f2937;
+  --fg: #f4f7fb;
+  --fg-2: #c6d1df;
+  --fg-3: #8e9bb1;
+  --fg-4: #5a6478;
+  --cyan: #2dd4bf;
+  --cyan-2: #5eead4;
+  --cyan-3: #99f6e4;
   --radius: 0.625rem;
   --button-background: #090b10;
   --button-primary: #5eead4;
@@ -219,16 +232,19 @@ a {
   }
 }
 
-/* macOS overlay title bar: a thin draggable strip across the top of the content
-   area so the frameless window can be moved without grabbing the narrow rail.
-   Sits above content but below modals; kept short to avoid trapping clicks. */
-.macDesktopChrome .commandShell::after {
-  content: "";
+.desktopWindowDragStrip {
+  display: none;
+}
+
+/* macOS overlay title bar: a real Tauri drag region across the top of the app.
+   It must be an element, not a pseudo-element, so Tauri receives the drag target. */
+.macDesktopChrome .desktopWindowDragStrip {
+  display: block;
   position: fixed;
   top: 0;
-  left: var(--shelf-w, 72px);
+  left: 0;
   right: 0;
-  height: 14px;
+  height: 18px;
   z-index: 70;
   -webkit-app-region: drag;
 }
@@ -306,9 +322,9 @@ a {
 }
 
 .dashboardAppNotification {
-  position: absolute;
+  position: fixed;
   left: 50%;
-  top: 50%;
+  top: calc(16px + env(safe-area-inset-top, 0px));
   z-index: 80;
   display: flex;
   max-width: min(380px, calc(100vw - 32px));
@@ -326,8 +342,9 @@ a {
     0 0 34px rgba(45, 212, 191, 0.22);
   color: var(--foreground);
   pointer-events: none;
-  transform: translate(-50%, -50%);
-  animation: dashboard-app-notification 3s cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
+  transform: translate(-50%, 0);
+  transform-origin: top center;
+  animation: dashboard-app-notification 6s cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
 }
 
 .dashboardAppNotificationIcon {
@@ -381,22 +398,22 @@ a {
 @keyframes dashboard-app-notification {
   0% {
     opacity: 0;
-    transform: translate(-50%, calc(-50% - 14px)) scale(0.86);
+    transform: translate(-50%, -12px) scale(0.98);
     filter: blur(6px);
   }
   12% {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1.04);
+    transform: translate(-50%, 0) scale(1.02);
     filter: blur(0);
   }
   20%, 78% {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: translate(-50%, 0) scale(1);
     filter: blur(0);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, calc(-50% - 10px)) scale(0.9);
+    transform: translate(-50%, -10px) scale(0.98);
     filter: blur(5px);
   }
 }
@@ -1388,7 +1405,6 @@ h1 {
   }
 
   .dashboardAppNotification {
-    top: 50%;
     max-width: calc(100vw - 20px);
   }
 

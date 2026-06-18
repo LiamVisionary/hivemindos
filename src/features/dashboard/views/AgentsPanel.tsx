@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useState } from "react";
 import type { ComponentType, Dispatch, ElementType, MutableRefObject, SetStateAction } from "react";
-import { AgentCallModal, type AgentCallLiveKit, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent } from "@/components/fleet/agent-call-modal";
+import { AgentCallModal, type AgentCallLiveKit, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent, type AgentCallVoiceRun } from "@/components/fleet/agent-call-modal";
 import type { FleetViewProps } from "@/components/fleet/FleetView";
 import { FleetHiveView } from "@/components/fleet-hive";
 import { useFrTheme } from "@/components/fleet-hive/use-fr-theme";
@@ -117,6 +117,7 @@ type AgentPhoneCallResult = {
       runtimeAgent?: AgentCallRuntimeAgent;
       room?: string;
       voiceReady?: boolean;
+      voiceRun?: AgentCallVoiceRun;
     };
   };
 };
@@ -224,6 +225,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     realtime?: AgentCallRealtime;
     localTts?: AgentCallLocalTts;
     runtimeAgent?: AgentCallRuntimeAgent;
+    voiceRun?: AgentCallVoiceRun;
   } | null>(null);
 
   // The single logical Queen Bee — drives the central hive cell in the graph.
@@ -327,6 +329,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
           phase: "ringing",
           realtime: call.realtime,
           runtimeAgent: call.runtimeAgent,
+          voiceRun: call.voiceRun,
         } : current);
         return;
       }
@@ -336,12 +339,13 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
           phase: "ringing",
           localTts: call.localTts,
           runtimeAgent: call.runtimeAgent,
+          voiceRun: call.voiceRun,
         } : current);
         return;
       }
       if (livekit) {
         const notice = result.error ? "Dashboard audio joined the agent room, but setup reported a warning." : undefined;
-        setAgentCallSession((current) => current?.agent.id === fleetAgent.id ? { ...current, livekit, notice, phase: "ringing" } : current);
+        setAgentCallSession((current) => current?.agent.id === fleetAgent.id ? { ...current, livekit, notice, phase: "ringing", runtimeAgent: call?.runtimeAgent, voiceRun: call?.voiceRun } : current);
       } else {
         throw new Error("HivemindOS did not return dashboard call credentials.");
       }
@@ -533,6 +537,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
               realtime={agentCallSession.realtime}
               localTts={agentCallSession.localTts}
               runtimeAgent={agentCallSession.runtimeAgent}
+              voiceRun={agentCallSession.voiceRun}
               onVoiceConnected={() => {
                 setAgentCallSession((current) => (
                   current?.agent.id === agentCallSession.agent.id && (current.phase === "ringing" || current.phase === "answered")

@@ -1896,7 +1896,7 @@ if [[ ! -f "$shared_vault_path/$brain_services_folder/README.md" ]]; then
   cat > "$shared_vault_path/$brain_services_folder/README.md" <<'EOF'
 # Brain Services
 
-Status notes for HivemindOS brain services. Shared Brain Memory uses a generated full-vault lexical index by default at \`Operations/Brain Services/Full Vault Search Index.jsonl\`; QMD, GBrain, and Syntho can be connected from the dashboard without storing provider secrets in the vault.
+Status notes for HivemindOS brain services. Shared Brain Memory uses a generated full-vault lexical index by default at \`Operations/Brain Services/Full Vault Search Index.jsonl\`; QMD, GBrain, Neo4j, and Syntho can be connected from the dashboard without storing provider secrets in the vault.
 EOF
 fi
 
@@ -1918,6 +1918,28 @@ mcpMode: stdio
 Optional HivemindOS retrieval, graph, MCP, and dream-cycle service. Install or connect it from the dashboard when ready.
 
 No provider secrets are stored in this note.
+EOF
+fi
+
+if [[ ! -f "$shared_vault_path/$brain_services_folder/Neo4j.md" ]]; then
+  cat > "$shared_vault_path/$brain_services_folder/Neo4j.md" <<'EOF'
+---
+type: brain-service
+service: neo4j
+enabled: false
+installMode: optional
+uriEnvKey: NEO4J_URI
+usernameEnvKey: NEO4J_USERNAME
+passwordEnvKey: NEO4J_PASSWORD
+databaseEnvKey: NEO4J_DATABASE
+queryLimit: 100
+---
+
+# Neo4j Brain Service
+
+Optional derived graph service for Shared Brain Memory. Obsidian Agent Memory remains canonical; Neo4j receives MERGE-only nodes and relationships marked `source: "hivemindos-derived"`.
+
+No plaintext Neo4j URI, username, password, or private connection string is stored in this note. Store connection values in shared hive env by key name only.
 EOF
 fi
 

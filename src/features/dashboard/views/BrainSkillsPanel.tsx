@@ -131,13 +131,14 @@ export function BrainSkillsPanel(props: any) {
             type="button"
             size="sm"
             variant="secondary"
+            className={skillsClass("actionButton")}
             onClick={() => void syncBrainSkillsToAeon()}
             disabled={brainSkillAeonSyncing || !sharedVault.enabled || !(effectiveBrainSkills?.shared?.length ?? 0)}
           >
             {brainSkillAeonSyncing ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Repeat2 aria-hidden="true" />}
             {brainSkillAeonSyncing ? "Syncing Aeon" : "Sync to Aeon"}
           </Button>
-          <Button type="button" size="sm" variant="secondary" onClick={refreshBrainSkills} disabled={brainSkillsLoading || Boolean(brainSkillImportProvider)}>
+          <Button type="button" size="sm" variant="secondary" className={skillsClass("actionButton")} onClick={refreshBrainSkills} disabled={brainSkillsLoading || Boolean(brainSkillImportProvider)}>
             {brainSkillsLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
             {brainSkillsLoading ? "Scanning" : "Refresh skills"}
           </Button>
@@ -174,7 +175,7 @@ export function BrainSkillsPanel(props: any) {
                 aria-label="Search skills"
               />
             </label>
-            <Button type="button" size="sm" variant="secondary" onClick={openSkillBrowser}>
+            <Button type="button" size="sm" variant="secondary" className={skillsClass("actionButton", "actionButtonSmall")} onClick={openSkillBrowser}>
               <Sparkles aria-hidden="true" />
               Add skill
             </Button>

@@ -336,12 +336,17 @@ export function useStatusChatInputController(props: any) {
     const target = ElementCtor && event.target instanceof ElementCtor
       ? event.target.closest("[data-brain-node-id]") as HTMLElement | null
       : null;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const viewBox = event.currentTarget.viewBox.baseVal;
     brainDragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       panX: brainPan.x,
       panY: brainPan.y,
+      scale: brainPan.scale ?? 1,
+      unitX: rect.width ? viewBox.width / rect.width : 1,
+      unitY: rect.height ? viewBox.height / rect.height : 1,
       moved: false,
       nodeId: target?.dataset.brainNodeId ?? "",
     };
@@ -357,7 +362,11 @@ export function useStatusChatInputController(props: any) {
     if (!drag.moved && Math.hypot(dx, dy) < 4) return;
     drag.moved = true;
     brainDragMovedRef.current = true;
-    setBrainPan({ x: drag.panX - dx, y: drag.panY - dy });
+    setBrainPan({
+      x: drag.panX + dx * (drag.unitX ?? 1),
+      y: drag.panY + dy * (drag.unitY ?? 1),
+      scale: drag.scale ?? brainPan.scale ?? 1,
+    });
   }
 
   function endBrainPan(event: PointerEvent<SVGSVGElement>) {

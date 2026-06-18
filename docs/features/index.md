@@ -16,7 +16,7 @@ The feature surface follows the work an operator actually does: connect machines
 <div class="signalGrid">
   <section class="signalCard"><strong>Connect</strong><span>Fleet, collectors, Tailnet/Link, apps, and runtime discovery.</span></section>
   <section class="signalCard"><strong>Operate</strong><span>Agents, chat, Work board, Code Proof, Scheduler, Swarm, and deliverables.</span></section>
-  <section class="signalCard"><strong>Remember</strong><span>Obsidian vault, shared skills, GBrain, Syntho, Synthesis, and notifications.</span></section>
+  <section class="signalCard"><strong>Remember</strong><span>Obsidian vault, shared skills, QMD, Neo4j, GBrain, Syntho, Synthesis, and notifications.</span></section>
   <section class="signalCard"><strong>Pay</strong><span>Wallets, crypto rail routing, Base/Solana, USDC, UsePod prepaid, Honey, HIVE, and x402.</span></section>
   <section class="signalCard"><strong>Integrate</strong><span>GitLawb, MiroShark, Nango, GitHub OAuth, My Apps, phone, and work history.</span></section>
   <section class="signalCard"><strong>Maintain</strong><span>Hivemind Sync, runtime files, native helpers, memory telemetry, and repair checks.</span></section>
@@ -89,12 +89,12 @@ That gives the Work board a better answer than “an agent changed something.”
 
 ## Shared Brain
 
-The shared brain is a normal Obsidian vault, not a proprietary database. HivemindOS writes durable state into that vault when available: Kanban records, notifications, scheduled runs, wallet records, shared skills, service notes, and reviewed outputs. GBrain indexes and retrieves. Syntho compiles reviewed Synthesis output. Trading Brain stays optional.
+The shared brain is a normal Obsidian vault, not a proprietary database. HivemindOS writes durable state into that vault when available: Kanban records, notifications, scheduled runs, wallet records, shared skills, service notes, and reviewed outputs. Agent Memory now supports entity-linked recall, temporal history, action memories, and soft retrieval telemetry. QMD, GBrain, Neo4j, Syntho, and Trading Brain stay optional service layers around the vault.
 
 <div class="docGrid">
   <section class="docCard">
     <h3>Brain, Vault, And Skills</h3>
-    <p>Obsidian vault routing, compiled wiki search, graph access, shared skills, GBrain, Syntho, Trading Brain, Synthesis, OKF export, and sync ownership.</p>
+    <p>Obsidian vault routing, entity-linked memory, temporal recall, compiled wiki search, graph access, shared skills, QMD, Neo4j, GBrain, Syntho, Trading Brain, Synthesis, OKF export, and sync ownership.</p>
     <a href="brain-vault-and-skills.html">Open brain docs</a>
   </section>
   <section class="docCard">

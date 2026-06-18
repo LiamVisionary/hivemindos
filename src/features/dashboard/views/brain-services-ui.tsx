@@ -179,11 +179,13 @@ export function BrainServiceOverview({
 export function BrainServiceSettingsDeck({
   brainClass,
   gbrainSettings,
+  neo4jSettings,
   qmdSettings,
   syntoSettings,
 }: {
   brainClass: ClassFn;
   gbrainSettings?: ReactNode;
+  neo4jSettings?: ReactNode;
   qmdSettings?: ReactNode;
   syntoSettings?: ReactNode;
 }) {
@@ -204,6 +206,14 @@ export function BrainServiceSettingsDeck({
           <p>Keyword, vector, hybrid search mode, vector refresh policy, and MCP exposure.</p>
         </div>
         {qmdSettings}
+      </article>
+      <article className={brainClass("brainServiceSettingsCard")}>
+        <div>
+          <small>Neo4j</small>
+          <h4>Derived graph settings</h4>
+          <p>Env-key names, read-only query limits, and optional database override.</p>
+        </div>
+        {neo4jSettings}
       </article>
       <article className={brainClass("brainServiceSettingsCard")}>
         <div>

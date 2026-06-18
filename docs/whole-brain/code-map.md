@@ -52,10 +52,17 @@ Basically: do not change the docs from memory if the code is sitting right here.
 - `src/lib/services/queen-bee/router.ts`
 - `src/lib/services/projects/project-registry.ts`
 - `src/lib/services/obsidian/agent-memory.ts`
+- `src/lib/services/obsidian/agent-memory/core.ts`
+- `src/lib/services/obsidian/agent-memory/entities.ts`
+- `src/lib/services/obsidian/agent-memory/scoring.ts`
+- `src/lib/services/obsidian/agent-memory/usage.ts`
+- `src/lib/services/search/bm25-lite.ts`
 - `src/lib/services/obsidian/okf.ts`
 - `src/lib/services/obsidian/compiled-knowledge.ts`
 - `src/lib/services/brain/shared-contribution-contract.ts`
+- `src/lib/services/brain/neo4j.ts`
 - `src/lib/services/brain/gbrain.ts`
+- `src/lib/services/brain/qmd.ts`
 - `src/lib/services/brain/synto.ts`
 - `src/lib/services/brain/trading-brain.ts`
 - `src/app/api/context-index/route.ts`
@@ -63,6 +70,7 @@ Basically: do not change the docs from memory if the code is sitting right here.
 - `src/app/api/brain/memory/route.ts`
 - `src/app/api/brain/okf/route.ts`
 - `src/app/api/brain/knowledge/route.ts`
+- `src/app/api/brain/neo4j/**`
 - `scripts/hive-brain`
 - `scripts/hive-brain-hook`
 - `scripts/hivemind-mcp`

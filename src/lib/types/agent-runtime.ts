@@ -470,6 +470,7 @@ export interface SharedVaultConfig {
   >;
   gbrain: GBrainConfig;
   qmd: QmdConfig;
+  neo4j: Neo4jBrainConfig;
   synto: SyntoConfig;
   controlRoomPath: string;
   instructions: string;
@@ -516,6 +517,19 @@ export interface QmdConfig {
   autoEmbed: boolean;
   maxDocsPerBatch: number;
   maxBatchMb: number;
+}
+
+export type Neo4jBrainInstallMode = "optional" | "existing" | "managed";
+
+export interface Neo4jBrainConfig {
+  enabled: boolean;
+  installMode: Neo4jBrainInstallMode;
+  uriEnvKey: string;
+  usernameEnvKey: string;
+  passwordEnvKey: string;
+  databaseEnvKey: string;
+  database: string;
+  queryLimit: number;
 }
 
 export type SyntoInstallMode = "optional" | "uv-tool" | "pip-user" | "existing";
@@ -598,6 +612,16 @@ export const DEFAULT_SHARED_VAULT: SharedVaultConfig = {
     maxDocsPerBatch: 200,
     maxBatchMb: 32,
   },
+  neo4j: {
+    enabled: false,
+    installMode: "optional",
+    uriEnvKey: "NEO4J_URI",
+    usernameEnvKey: "NEO4J_USERNAME",
+    passwordEnvKey: "NEO4J_PASSWORD",
+    databaseEnvKey: "NEO4J_DATABASE",
+    database: "",
+    queryLimit: 100,
+  },
   synto: {
     enabled: false,
     installMode: "optional",
@@ -612,7 +636,7 @@ export const DEFAULT_SHARED_VAULT: SharedVaultConfig = {
   controlRoomPath:
     process.env.NEXT_PUBLIC_HERMES_CONTROL_ROOM_PATH ?? "~/agent-control-room",
   instructions:
-    'Use this vault as the shared memory and handoff space for all local agents. Read AGENTS.md and Operations/AI-Ready Vault Contract.md before durable edits. Use /api/brain/memory for shared-brain recall and durable shared memories: default recall is tiered through typed Agent Memory first and the generated full-vault lexical index when broader vault context is needed, scope: "agent-memory" narrows to strict typed/proven memory, scope: "full-vault" forces broad vault recall, recall before relying on prior context, remember durable facts/decisions/preferences/goals/instructions with agent/runtime/machine/Tailnet provenance, evolve reviewed replacements instead of overwriting stale memories, and use proof: "auto" unless the user asks for explicit proof. Treat QMD as the optional local markdown search brain service, GBrain as the optional retrieval/graph brain service, Syntho as the optional compiled-wiki/MCP service for Synthesis, and Operations as machine-readable HivemindOS state.',
+    'Use this vault as the shared memory and handoff space for all local agents. Read AGENTS.md and Operations/AI-Ready Vault Contract.md before durable edits. Use /api/brain/memory for shared-brain recall and durable shared memories: default recall is tiered through typed Agent Memory first and the generated full-vault lexical index when broader vault context is needed, scope: "agent-memory" narrows to strict typed/proven memory, scope: "full-vault" forces broad vault recall, recall before relying on prior context, remember durable facts/decisions/preferences/goals/instructions/actions with agent/runtime/machine/Tailnet provenance, evolve reviewed replacements instead of overwriting stale memories, and use proof: "auto" unless the user asks for explicit proof. Treat QMD as the optional local markdown search brain service, GBrain as the optional retrieval/graph brain service, Neo4j as an optional derived graph brain service, Syntho as the optional compiled-wiki/MCP service for Synthesis, and Operations as machine-readable HivemindOS state.',
 };
 
 export const KNOWN_AGENT_RUNTIMES: KnownAgentRuntime[] = [

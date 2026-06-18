@@ -104,6 +104,17 @@
   overflow: hidden;
 }
 
+.brainGraphPanel[data-hivemindos-route-loading="true"] {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.brainGraphPanel[data-hivemindos-route-loading="true"] .brainGraphCanvas {
+  background: transparent;
+}
+
 .brainGraphStats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -332,6 +332,12 @@ if (Ask-YesNo "Remove optional GBrain service note from the Obsidian vault?" $fa
   Ok "Removed $gbrainServiceNote"
 }
 
+if (Ask-YesNo "Remove optional Neo4j Brain Service note from the Obsidian vault?" $false) {
+  $neo4jServiceNote = Join-Path $vaultPath (Join-Path $brainServicesFolder "Neo4j.md")
+  Remove-Item $neo4jServiceNote -Force -ErrorAction SilentlyContinue
+  Ok "Removed $neo4jServiceNote"
+}
+
 if (Ask-YesNo "Remove optional Syntho service note from the Obsidian vault?" $false) {
   $syntoServiceNote = Join-Path $vaultPath (Join-Path $brainServicesFolder "Syntho.md")
   $legacySyntoServiceNote = Join-Path $vaultPath (Join-Path $brainServicesFolder "Synto.md")

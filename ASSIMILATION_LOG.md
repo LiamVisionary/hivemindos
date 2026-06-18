@@ -4820,3 +4820,943 @@
   - Decision: inspected
   - Reason: Previous guidance said native glass should be availability-gated and have a fallback; this follow-up adds the explicit runtime/off gate.
   - Path: `Skills/macos-app-design/references/liquid-glass.md`
+
+## 2026-06-17T10:06:04+00:00 - exchange-details-shelf-fit-followup
+
+- Request: Fix right details panel content clipping
+- Source: shared-brain+current-project+tracked-history
+- Selected backbone: current-project:hivemind-os
+- Verification: Focused ESLint passed for `ContextPanel.tsx` and `ChatExchangePanel.tsx`; code-only whitespace checks passed for `ContextPanel.tsx` and `chat-exchange.css`; filtered `pnpm typecheck --pretty false` reported no diagnostics for touched Exchange files while the full repo typecheck still exits on unrelated existing diagnostics; static source assertions confirmed border-box shelf sizing, context `min-width: 0`, wrapping values, and responsive quick-action columns.
+
+### Candidates
+
+- `src/features/dashboard/views/chat/exchange/ContextPanel.tsx`
+  - Decision: selected_backbone
+  - Reason: owns the right shelf task, telemetry, stdout, and quick-action cards whose long values were forcing horizontal overflow.
+  - Path: `src/features/dashboard/views/chat/exchange/ContextPanel.tsx`
+- `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+  - Decision: style_adapted
+  - Reason: owns the Exchange shelf layout; added border-box sizing, `min-width: 0` containment, wrapping value rules, and action button fit constraints.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- `src/features/dashboard/views/chat/exchange/ConversationNav.tsx`
+  - Decision: inspected
+  - Reason: previous left sidebar fit fix used the same local principle: constrain nested rows/cards and let compact text wrap or contain itself instead of widening the rail.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- Shared Brain recall query `HivemindOS Exchange right details panel clipped content branch quick actions shelf fit`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned generic/local-control UI notes and no stronger implementation guidance than the active Exchange shelf code.
+  - Path: `hive-brain answer --scope full-vault`
+## 2026-06-17T10:15:35.029288+00:00 - public-search
+
+- Request: Next.js Link URLSearchParams large query string data image route lag
+- Source: public-github
+- Query: `Next.js Link URLSearchParams large query string data image route lag`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-06-17T10:16:18.564117+00:00 - stake-link-url-payload-fix
+
+- Request: Diagnose and fix Stake HIVE button lag before route transition
+- Source: shared-brain+current-project+local-index+public-github
+- Query: `HivemindOS Stake Hive button lag staking route status delay; Next.js Link URLSearchParams large query string data image route lag`
+- Decision: assimilated
+- Reason: The Wallets-to-Stake helper was already the local route seed boundary; it serialized token.iconUrl into /stake even though the stake page does not render icons, so large token metadata could make the destination URL enormous before Next routing visibly started.
+- Selected backbone: current-project:hivemind-os Wallets-to-Stake route seed helper
+- Assimilated: src/features/dashboard/views/personal-stake-link.ts route seed helper + src/app/stake/StakePageClient.tsx seed parser + scripts/test-hive-staking.mjs staking regression test => compact /stake URLs without token icon payloads
+- Not assimilated: Public GitHub search returned 0 high-fit candidates; the local current-project route helper/parser/test paths were the exact owning source. No staking transaction, RPC, wallet signing, or dashboard routing behavior was copied from external code.
+- Verification: pnpm test:hive-staking passed with 19 assertions; focused ESLint passed for StakePageClient, personal-stake-link, and test-hive-staking; focused git diff --check passed; direct probe with 500 KB icon metadata produced a 323-character URL with no tokenIconUrl or data:image payload.
+- Note: Shared brain recall surfaced prior HivemindOS feature-development context but no reviewed memory for this exact tokenIconUrl stall. Local index search produced no candidate output. Existing OPTIMIZATIONS.md stake entries showed prior route/RPC fixes, making this a source-link payload bug rather than the on-chain route path.
+
+### Candidates
+- src/features/dashboard/views/personal-stake-link.ts
+  - Decision: adapted_code
+  - Reason: owns the Wallets HIVE token-row /stake query construction; removed unused tokenIconUrl payload
+  - Path: `src/features/dashboard/views/personal-stake-link.ts`
+- src/app/stake/StakePageClient.tsx
+  - Decision: adapted_code
+  - Reason: owns seeded wallet parsing; stopped accepting the unused tokenIconUrl query field
+  - Path: `src/app/stake/StakePageClient.tsx`
+- scripts/test-hive-staking.mjs
+  - Decision: test_adapted
+  - Reason: existing focused HIVE staking regression harness now guards compact route links with oversized icon metadata
+  - Path: `scripts/test-hive-staking.mjs`
+- OPTIMIZATIONS.md
+  - Decision: selected-donor
+  - Reason: prior stake route latency entries identified already-fixed route/RPC causes and framed this as a distinct URL payload bottleneck
+  - Path: `OPTIMIZATIONS.md`
+- hive-brain answer --scope full-vault
+  - Decision: inspected
+  - Reason: returned generic HivemindOS feature context but no exact tokenIconUrl lag memory
+  - Path: `N/A`
+- public GitHub search
+  - Decision: rejected
+  - Reason: 0 high-fit candidates for this internal route-seed bug
+  - Path: `N/A`
+## 2026-06-17T10:29:53.689378+00:00 - stake-dev-warm-route-fix
+
+- Request: Fix Stake HIVE More-card route still delaying 13 seconds
+- Source: shared-brain+current-project+local-index
+- Query: `HivemindOS Stake HIVE still 13 second delay route click dev server proxy stake page`
+- Decision: assimilated
+- Reason: The delay matches the Tauri dev recovery script's 12s route-loader reload. Existing dev warm-keeper warmed heavy API routes only with OPTIONS; /stake is a page route, OPTIONS /stake returns 400, and HEAD /stake returns 200, so the page was not kept hot.
+- Selected backbone: current-project:hivemind-os dev warm-keeper
+- Assimilated: scripts/dev-server.mjs warmRoutes and warmRoutesOnce => scripts/dev-server.mjs::adapted_code::add /stake to default warm routes and use HEAD for page routes; scripts/test-dev-warm-routes.mjs::test_adapted::static guard for /stake default and page/API method split
+- Not assimilated: Local/private index returned no useful donor for this internal dev proxy/warm-keeper behavior; public GitHub was already checked for the larger route-lag query and returned no high-fit candidates.
+- Verification: pnpm test:dev-warm-routes passed; node --check scripts/dev-server.mjs and scripts/test-dev-warm-routes.mjs passed; focused ESLint passed for both scripts; live backend probe confirmed OPTIONS /stake returns 400 and HEAD /stake returns 200; pnpm test:hive-staking still passed with 19 assertions.
+- Note: This change requires restarting the dev wrapper to affect the currently running Tauri dev process because scripts/dev-server.mjs is the parent process, not hot-reloaded app code.
+
+### Candidates
+- scripts/tauri-next-dev.mjs
+  - Decision: inspected
+  - Reason: dev recovery reloads after route loader is visible for 12s and route-ready checks only probe /
+  - Path: `scripts/tauri-next-dev.mjs`
+- scripts/dev-server.mjs
+  - Decision: adapted_code
+  - Reason: existing warm-keeper owns periodic route warming; extended defaults and method selection
+  - Path: `scripts/dev-server.mjs`
+- scripts/test-dev-warm-routes.mjs
+  - Decision: test_adapted
+  - Reason: new focused regression guard for /stake warm default and HEAD-vs-OPTIONS behavior
+  - Path: `scripts/test-dev-warm-routes.mjs`
+- OPTIMIZATIONS.md
+  - Decision: selected-donor
+  - Reason: prior dev warm-keeper and stake-route entries framed this as a route warmth/recovery timeout issue
+  - Path: `OPTIMIZATIONS.md`
+- local/private assimilation index
+  - Decision: rejected
+  - Reason: only unrelated ai-companion-website summary matched weakly
+  - Path: `N/A`
+## 2026-06-17T12:03:19.649047+00:00 - triage
+
+- Request: Replace HivemindOS Wallet view with new UI and remove old residuals
+- Source: current-worktree
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: selected
+  - Reason: current in-progress wallet replacement carries personal wallet, agent wallet, Bankr rewards, and vault backup wiring
+- src/components/wallet/AgentWalletCard.tsx
+  - Decision: selected-donor
+  - Reason: Phantom-style agent wallet card already contains live payment rail setup, send, receive, limits, x402, UsePod, Veil, MoneyClaw wiring
+- src/app/wallets.module.css
+  - Decision: selected-donor
+  - Reason: contains both live replacement shell styles and unused legacy wallet view residuals to prune
+
+## 2026-06-17T12:08:45+00:00 - stake-auto-confirm-refresh
+
+- Request: Make Stake HIVE refresh itself after confirmation instead of telling Liam to refresh.
+- Source: shared-brain+current-project
+- Query: `HivemindOS Stake HIVE after stake sent refresh after confirms auto refresh polling stake status`
+- Decision: assimilated
+- Reason: The Stake page already had the exact status reader (`loadStakeStatuses`) and wallet refresh path (`loadWallets`/`refreshAll`) needed to confirm a stake. The old implementation fired one fixed 5s refresh and displayed copy that made confirmation Liam's job.
+- Selected backbone: current-project:hivemind-os StakePageClient
+- Assimilated: `src/app/stake/StakePageClient.tsx` stake submission paths + stake status reader => auto-poll active staked HIVE until the selected wallet's staked amount increases, then refresh balances and show confirmed copy.
+- Not assimilated: No new chain watcher, transaction receipt route, or third-party polling library was added; the current `/api/hive/stake/status` contract read path is the existing owning surface.
+- Verification: `pnpm test:hive-staking` passed with 25 assertions; focused ESLint passed for `src/app/stake/StakePageClient.tsx` and `scripts/test-hive-staking.mjs`; focused `git diff --check` passed; `HEAD /stake` returned 200 on `127.0.0.1:5022`; in-app Browser reload rendered the stake page with no overlay and no old copy.
+
+### Candidates
+- `src/app/stake/StakePageClient.tsx`
+  - Decision: adapted_code
+  - Reason: owns local/browser staking submission, stake status loading, balance refresh, and the stale confirmation copy.
+- `src/app/api/hive/stake/status/route.ts`
+  - Decision: selected-donor
+  - Reason: existing contract-state read endpoint can prove confirmation by observing active staked HIVE increase.
+- `scripts/test-hive-staking.mjs`
+  - Decision: test_adapted
+  - Reason: existing focused HIVE staking regression harness stayed green while the UI behavior changed.
+- `hive-brain answer --scope full-vault`
+  - Decision: inspected
+  - Reason: returned generic/local-control refresh notes but no stronger reusable staking-specific workflow than local code.
+## 2026-06-17T12:17:49.953463+00:00 - implementation
+
+- Request: Replace HivemindOS Wallet view with new UI and remove old residuals
+- Source: current-worktree
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/app/wallets.module.css
+  - Decision: adapted_code
+  - Reason: removed old wallet surface selectors while retaining rail-first wallet shell, compact agent rail, loading, and Bankr rail styles
+- src/components/wallet/AgentWalletCard.tsx=>src/components/wallet/MoneyClawKeyModal.tsx
+  - Decision: adapted_code
+  - Reason: extracted MoneyClaw key modal while preserving save wiring
+- src/features/dashboard/lazy-components.tsx
+  - Decision: adapted_code
+  - Reason: reused wallet tile skeleton as dynamic compact-card fallback
+## 2026-06-17T12:31:51.678853+00:00 - implementation
+
+- Request: Replace HivemindOS Wallet view with supplied nextjs-wallets-drop-in UI
+- Source: /Users/liam/Downloads/nextjs-wallets-drop-in
+- Selected backbone: pinned-source:nextjs-wallets-drop-in
+
+### Candidates
+- /Users/liam/Downloads/nextjs-wallets-drop-in/components/wallets/WalletsView.jsx=>src/components/wallets-drop-in/WalletsView.tsx
+  - Decision: adapted_code
+  - Reason: copied Treasury tabbed Wallets UI, converted to TSX vendored component, kept under file-size cap
+- /Users/liam/Downloads/nextjs-wallets-drop-in/components/wallets/wallet-data.js=>src/components/wallets-drop-in/wallet-data.ts
+  - Decision: adapted_code
+  - Reason: copied data/helpers and added runtime data bridge for dashboard agents and wallets
+- /Users/liam/Downloads/nextjs-wallets-drop-in/components/wallets/wallets.css=>src/components/wallets-drop-in/wallets.css
+  - Decision: adapted_code
+  - Reason: copied scoped Treasury styles and fixed static shelf width/icon paths
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: adapted_code
+  - Reason: replaced old wallet panel with full-screen drop-in wrapper
+## 2026-06-17T12:38:22.961736+00:00 - implementation
+
+- Request: Preserve HivemindOS agent wallet sorting in the Treasury drop-in
+- Source: current-worktree
+- Selected backbone: pinned-source:nextjs-wallets-drop-in
+
+### Candidates
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: adapted_code
+  - Reason: added runtime bridge tiering so funded wallets sort before configured empty wallets and unconfigured wallets
+- src/components/wallets-drop-in/wallet-data.ts
+  - Decision: adapted_code
+  - Reason: sorted frWallets output by bridge sortTier before name/id tie-breakers
+## 2026-06-17T12:56:56.930283+00:00 - implementation
+
+- Request: Fix HivemindOS swarm simulation overview headline rendering behind market and social cards
+- Source: current-project+shared-brain+live-browser
+- Selected backbone: local-project:hivemind-os
+- Note: Used existing Swarm component structure; no public donor needed for a local layout regression.
+
+### Candidates
+- src/components/swarm/SwarmView.tsx
+  - Decision: adapted_code
+  - Reason: owns Swarm overview card shell and feed grid layout
+- src/components/swarm/feeds.tsx
+  - Decision: adapted_code
+  - Reason: owns market/social panel internal responsive grids
+- Shared Brain recall
+  - Decision: reference-only
+  - Reason: no current layout-specific decision found
+## 2026-06-17T21:47:32.445571+00:00 - triage
+
+- Request: Fix HivemindOS Brain view and Skills loading failure when Tauri dev backend dies
+- Source: shared-brain+current-project
+- Query: `Tauri dev backend dies native brain skills dynamic import`
+- Selected backbone: current-project:hivemind-os Tauri dev proxy and native bridge
+
+### Candidates
+- scripts/tauri-next-dev.mjs
+  - Decision: selected
+  - Reason: owns Tauri dev proxy lifecycle and currently exits when scripts/dev-server.mjs exits
+  - Path: `scripts/tauri-next-dev.mjs`
+- scripts/dev-server.mjs
+  - Decision: selected-donor
+  - Reason: existing respawn/warm-keeper semantics for Next memory kills inform proxy-level respawn
+  - Path: `scripts/dev-server.mjs`
+- src/lib/native/brain-graph.ts
+  - Decision: selected
+  - Reason: Brain graph native fallback currently lazy-loads @tauri-apps/api/core and returns null on chunk/import failure
+  - Path: `src/lib/native/brain-graph.ts`
+- src/lib/native/brain-skills.ts
+  - Decision: selected
+  - Reason: Skills native fallback has the same lazy import failure mode
+  - Path: `src/lib/native/brain-skills.ts`
+- OPTIMIZATIONS.md
+  - Decision: selected-donor
+  - Reason: documents prior dev proxy, warm-keeper, and stale dev-server risks
+  - Path: `OPTIMIZATIONS.md`
+
+## 2026-06-17T21:51:34+00:00 - env-copy-confirmation
+
+- Request: Show a checkmark after pressing copy in the Env section
+- Source: pinned-drop-in+current-project
+- Selected backbone: `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/EnvPanel.tsx`
+- Verification: Focused ESLint passed for `BrainEnvPanel.tsx` and `env-components.tsx`; `git diff --check` passed; static source assertions confirmed both env row implementations swap `Copy` to `Check`, update copied aria/title text, and apply the Brain ok icon class. Focused TypeScript probe reported no diagnostics for the touched env files, though the full repo typecheck still exits with unrelated existing diagnostics. `HEAD http://127.0.0.1:5022/?view=vault&vaultPanel=env` returned `200 OK`; in-app browser interaction testing was blocked because the controlled browser tab landed on the dashboard lock screen.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/EnvPanel.tsx`
+  - Decision: selected_backbone
+  - Reason: the pinned EnvPanel already tracks `copied`, swaps the icon to `check`, and clears it after a short timer.
+  - Path: `src/features/dashboard/views/BrainEnvPanel.tsx`, `src/features/env/env-components.tsx`
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/brain.css`
+  - Decision: style_adapted
+  - Reason: provides the `fb-iconbtn.ok` live/ok treatment used for successful copy feedback.
+  - Path: `src/features/dashboard/views/brain-env.module.css`
+- `src/features/dashboard/views/BrainEnvPanel.tsx`
+  - Decision: adapted_code
+  - Reason: owns the live Shared Env and runtime env row copy buttons.
+  - Path: `src/features/dashboard/views/BrainEnvPanel.tsx`
+- `src/features/env/env-components.tsx`
+  - Decision: adapted_code
+  - Reason: owns the agent-specific env overlay rows used inside the Env section.
+  - Path: `src/features/env/env-components.tsx`
+## 2026-06-17T21:52:31.279297+00:00 - implementation
+
+- Request: Fix HivemindOS Brain view and Skills loading failure when Tauri dev backend dies
+- Source: current-project
+- Selected backbone: current-project:hivemind-os Tauri dev proxy and native bridge
+- Note: Verification passed: pnpm test:tauri-dev-resilience; pnpm test:dashboard-state-snapshot; node --check scripts/tauri-next-dev.mjs scripts/test-tauri-dev-resilience.mjs; focused ESLint; filtered TypeScript; focused git diff --check.
+
+### Candidates
+- scripts/tauri-next-dev.mjs
+  - Decision: adapted_code
+  - Reason: kept proxy alive and respawned scripts/dev-server.mjs after unexpected child exits instead of closing proxy
+  - Path: `scripts/tauri-next-dev.mjs`
+- src/lib/native/invoke.ts
+  - Decision: adapted_code
+  - Reason: shared statically bundled Tauri invoke bridge for critical desktop native reads
+  - Path: `src/lib/native/invoke.ts`
+- src/lib/native/brain-graph.ts
+  - Decision: adapted_code
+  - Reason: Brain graph now uses static native invoke bridge before HTTP fallback
+  - Path: `src/lib/native/brain-graph.ts`
+- src/lib/native/brain-skills.ts
+  - Decision: adapted_code
+  - Reason: Brain skills now use static native invoke bridge before HTTP fallback
+  - Path: `src/lib/native/brain-skills.ts`
+- src/lib/services/dashboard-state-client.ts
+  - Decision: adapted_code
+  - Reason: dashboard-state hydration imports the native bridge on the initial dashboard path
+  - Path: `src/lib/services/dashboard-state-client.ts`
+- scripts/test-tauri-dev-resilience.mjs
+  - Decision: test_adapted
+  - Reason: regression guard for proxy respawn and no late Tauri core chunks in critical native reads
+  - Path: `scripts/test-tauri-dev-resilience.mjs`
+## 2026-06-17T21:52:31.279648+00:00 - local-index-search
+
+- Request: Fix HivemindOS Brain view and Skills loading failure when Tauri dev backend dies
+- Source: local-private-index
+- Query: `Tauri Next dev proxy backend restart native invoke dynamic import chunk unavailable`
+- Selected backbone: current-project:hivemind-os Tauri dev proxy and native bridge
+
+### Candidates
+- react-native-google-signin/google-signin-next
+  - Decision: rejected
+  - Reason: local index match was React Native auth, not Tauri/Next dev proxy lifecycle
+  - Path: `/Users/liam/Documents/github-assimilator-vault/Repos/react-native-google-signin-google-signin-next.md`
+- nativelaunch/expolaunch-template
+  - Decision: rejected
+  - Reason: local index match was Expo app template, not relevant to HivemindOS desktop dev backend resilience
+  - Path: `/Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-expolaunch-template.md`
+- nativelaunch/nativelaunch-monorepo-template
+  - Decision: rejected
+  - Reason: local index match was Expo monorepo template, not relevant to Tauri native bridge chunk loading
+  - Path: `/Users/liam/Documents/github-assimilator-vault/Repos/nativelaunch-nativelaunch-monorepo-template.md`
+## 2026-06-17T21:58:54+00:00 - shared-skills-action-buttons
+
+- Request: Match Sync to Aeon, Refresh skills, and Add skill buttons to the new Brain UI
+- Source: pinned-drop-in+current-project
+- Selected backbone: `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/SkillsPanel.tsx`
+- Note: Adapted the drop-in `BBtn`/`.fb-btn` sizing and ghost-pill treatment onto the live Shared Skills panel while preserving the existing sync, refresh, add-skill, disabled, and loading handlers.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/SkillsPanel.tsx`
+  - Decision: selected_backbone
+  - Reason: defines the target compact action pills for Sync to Aeon, Refresh skills, and Add skill.
+  - Path: `src/features/dashboard/views/BrainSkillsPanel.tsx`
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/brain.css`
+  - Decision: style_adapted
+  - Reason: provides the `.fb-btn` and `.fb-btn.sm` button geometry, font size, spacing, and ghost hover treatment.
+  - Path: `src/features/dashboard/views/BrainSkillsPanel.module.css`
+- `src/features/dashboard/views/BrainSkillsPanel.tsx`
+  - Decision: adapted_code
+  - Reason: owns the live Shared Skills sync, refresh, search, and Add skill controls.
+  - Path: `src/features/dashboard/views/BrainSkillsPanel.tsx`
+- `src/features/dashboard/views/BrainSkillsPanel.module.css`
+  - Decision: adapted_code
+  - Reason: owns the component-local Brain Skills styling and can override the generic dashboard Button utilities without affecting other panels.
+  - Path: `src/features/dashboard/views/BrainSkillsPanel.module.css`
+## 2026-06-17T22:02:26+00:00 - shared-env-card-spacing
+
+- Request: Fix touching Shared Env status and AEON missing-key rows
+- Source: pinned-drop-in+current-project
+- Selected backbone: `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/EnvPanel.tsx`
+- Note: Adapted the drop-in Env alert-card stacking margin so the live status and missing-key cards keep a visible gap while preserving their current content and actions.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/EnvPanel.tsx`
+  - Decision: selected_backbone
+  - Reason: shows Env alert cards stacked before the variable list with explicit `marginBottom` spacing.
+  - Path: `src/features/dashboard/views/BrainEnvPanel.tsx`
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/brain.css`
+  - Decision: style_adapted
+  - Reason: provides the `fb-card` base card treatment used by stacked Env alert rows.
+  - Path: `src/features/dashboard/views/brain-env.module.css`
+- `src/features/dashboard/views/BrainEnvPanel.tsx`
+  - Decision: adapted_code
+  - Reason: owns the live Shared Env loaded-status and AEON missing-key rows.
+  - Path: `src/features/dashboard/views/BrainEnvPanel.tsx`
+- `src/features/dashboard/views/brain-env.module.css`
+  - Decision: adapted_code
+  - Reason: owns the live Shared Env card spacing and notice styling.
+  - Path: `src/features/dashboard/views/brain-env.module.css`
+
+## 2026-06-17T22:08:35+00:00 - exchange-header-agent-picker
+
+- Request: Re-add clicking the agent section of the chat header to open the agent selection tooltip
+- Source: tracked-history+current-project+shared-brain
+- Selected backbone: `abc5a2a2:src/features/dashboard/views/ChatPanel.tsx`
+- Verification: Focused ESLint passed for `ChatExchangePanel.tsx`; focused `git diff --check` passed for the Exchange header files; static source assertions confirmed the clickable header trigger, search dialog, filtered agent rows, and `startAgentChat(agent.id, { fresh: true, chatLeafKey })` selection path. Filtered `pnpm typecheck --pretty false` reported no diagnostics for touched Exchange files while the full repo typecheck still exits on unrelated existing diagnostics.
+
+### Candidates
+- `abc5a2a2:src/features/dashboard/views/ChatPanel.tsx`
+  - Decision: adapted_code
+  - Reason: contains the pre-Exchange header picker behavior: open state, outside-click close, focused search, machine/agent row filtering, Escape behavior, and `startAgentChat` selection path.
+  - Path: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- `src/features/dashboard/views/chat/chat-panel-helpers.ts`
+  - Decision: adapted_code
+  - Reason: reuses existing `agentMenuMachineLabel`, `agentMenuRuntimeIdentity`, `agentMenuStatusLabel`, and `normalizeSearchText` helpers instead of reimplementing agent row logic.
+  - Path: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+  - Decision: style_adapted
+  - Reason: owns the Exchange palette and header styling; added the new `fr-chat-agent-*` trigger/menu/search/list styles.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- Shared Brain recall query `HivemindOS Exchange chat header agent picker tooltip click agent selection`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned unrelated Hermes, Chrome, TTS, and document header notes with no stronger project convention than tracked chat history.
+  - Path: `hive-brain answer --scope full-vault`
+
+## 2026-06-17T22:31:59+00:00 - exchange-agent-search-focus-ring
+
+- Request: Move the agent selector search focus outline from the raw input square to the whole rounded search container
+- Source: current-project+shared-brain
+- Selected backbone: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- Verification: Focused ESLint passed for `ChatExchangePanel.tsx`; focused `git diff --check` passed for the Exchange CSS; static selector assertions confirmed `.fr-chat-agent-menu-search:focus-within` owns the outline while the nested input suppresses the global `.fr-root :focus-visible` outline.
+
+### Candidates
+- `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+  - Decision: adapted_code
+  - Reason: owns the agent selector search container and adjacent Exchange focus treatments, so the focus ring could be moved without touching shared JSON-render styling.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- `src/components/json-render/fr/fr-style.css`
+  - Decision: inspected
+  - Reason: its broad `.fr-root :focus-visible` rule explained why the nested input drew a square outline.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- Shared Brain recall query `HivemindOS Exchange chat agent selector search focus ring input outline container`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned unrelated research, Hermes, skills, and design-system notes; no stronger reusable project source than the current Exchange/global FR CSS.
+  - Path: `hive-brain answer --scope full-vault`
+## 2026-06-17T22:31:17+00:00 - brain-graph-wheel-zoom
+
+- Request: Allow zooming in and unzooming the Brain graph via scrolling
+- Source: pinned-drop-in+current-project
+- Selected backbone: `src/features/dashboard/views/BrainGraphExplorer.tsx`
+- Note: The supplied drop-in graph is a static SVG viewBox. The live app already owned graph pan through SVG coordinate state, so the concrete reuse was the current project's BrainGraphExplorer renderer plus its shared pointer-pan controller. The follow-up correction keeps the SVG viewport fixed and scales node/edge coordinates in graph space so labels and strokes are not uniformly blown up like CSS zoom.
+
+### Candidates
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/VaultPanel.tsx`
+  - Decision: inspected
+  - Reason: confirms the target Brain graph is SVG/viewBox based, but does not include zoom behavior.
+  - Path: `src/features/dashboard/views/BrainGraphExplorer.tsx`
+- `src/features/dashboard/views/BrainGraphExplorer.tsx`
+  - Decision: adapted_code
+  - Reason: owns the live graph canvas, wheel handler, fixed SVG viewBox, and graph dimensions; wheel now changes cursor-centered graph-space scale instead of raw panning or camera zoom.
+  - Path: `src/features/dashboard/views/BrainGraphExplorer.tsx`
+- `src/features/dashboard/hooks/use-status-chat-input-controller.tsx`
+  - Decision: adapted_code
+  - Reason: owns drag panning for the graph; pan math now uses the current fixed SVG viewBox-to-screen ratio and preserves zoom scale.
+  - Path: `src/features/dashboard/hooks/use-status-chat-input-controller.tsx`
+- `src/features/dashboard/DashboardApp.tsx`
+  - Decision: adapted_code
+  - Reason: owns persisted Brain graph pan state and drag ref shape; added `scale` plus drag unit metadata.
+  - Path: `src/features/dashboard/DashboardApp.tsx`
+## 2026-06-18T00:24:09+00:00 - brain-graph-wheel-scroll-containment
+
+- Request: Do not allow page scrolling while hovering over the Brain graph
+- Source: current-project+pinned-drop-in
+- Selected backbone: `src/features/dashboard/views/BrainGraphExplorer.tsx`
+- Note: The existing graph wheel handler was on React `onWheel`, which can still feel leaky with trackpad/page scroll contexts. The live Brain graph canvas now owns a native non-passive wheel listener so the event is cancelled at the canvas before graph-space zoom is applied.
+
+### Candidates
+- `src/features/dashboard/views/BrainGraphExplorer.tsx`
+  - Decision: adapted_code
+  - Reason: owns the live Brain graph canvas, wheel zoom handler, and graph-space zoom state; moved wheel handling to a ref-backed non-passive DOM listener.
+  - Path: `src/features/dashboard/views/BrainGraphExplorer.tsx`
+- `/Users/liam/Downloads/nextjs-brain-drop-in/components/brain/VaultPanel.tsx`
+  - Decision: inspected
+  - Reason: confirms the drop-in graph surface is a bounded canvas area, but it does not provide wheel containment behavior.
+  - Path: `src/features/dashboard/views/BrainGraphExplorer.tsx`
+
+## 2026-06-17T22:40:17+00:00 - exchange-process-events-after-reply
+
+- Request: Explain and fix why the Process panel disappeared after the agent replied
+- Source: current-project+shared-brain
+- Selected backbone: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- Verification: Focused ESLint passed for `ChatExchangePanel.tsx`; focused `git diff --check` passed; static source assertions confirmed sticky process events fall back to the current turn when their previous target key is no longer rendered.
+
+### Candidates
+- `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+  - Decision: adapted_code
+  - Reason: owns the Exchange sticky process-event state and the render target key passed into `MessageThread`; added a current-turn fallback when a finalized runtime transcript swaps away the old temporary render key.
+  - Path: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- `src/features/dashboard/views/chat/exchange/MessageThread.tsx`
+  - Decision: inspected
+  - Reason: renders process panels by matching `processEventsTargetKey` against per-message keys, which explained why a stale target key would make valid sticky events invisible.
+  - Path: `src/features/dashboard/views/chat/exchange/MessageThread.tsx`
+- `src/features/dashboard/hooks/use-status-chat-input-controller.tsx`
+  - Decision: inspected
+  - Reason: direct chat send keeps active process events in a transient stream cache and clears the stream state in `finishChatStream`, so Exchange needs a stable visible fallback after completion.
+  - Path: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- `src/features/dashboard/DashboardApp.tsx`
+  - Decision: inspected
+  - Reason: runtime session polling can replace the local pending transcript with finalized session messages, changing render keys while the visible user/assistant turn stays the same.
+  - Path: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- Shared Brain recall query `HivemindOS chat process events disappear after assistant response local turn preserve process events`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned generic local-control and Hermes notes; no stronger reusable source than current Exchange chat process code.
+  - Path: `hive-brain answer --scope full-vault`
+## 2026-06-17T22:52:00.939860+00:00 - implementation
+
+- Request: Allow Veil private transfer auto-send behind a wallet policy
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/utils/agent-wallet.ts
+  - Decision: selected
+  - Reason: reused wallet config default and prompt pattern from existing Veil x402 policy
+- src/lib/services/obsidian/wallet-ledger.ts
+  - Decision: selected
+  - Reason: reused wallet frontmatter persistence pattern
+- src/app/api/wallet/veil/transfer/route.ts
+  - Decision: selected
+  - Reason: reused existing confirmation and spend-governance route gate
+## 2026-06-17T23:34:07.240710+00:00 - public-search
+
+- Request: Tauri v2 data-tauri-drag-region custom titlebar React
+- Source: public-github
+- Query: `Tauri v2 data-tauri-drag-region custom titlebar React`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+
+## 2026-06-17T23:37:01+00:00 - desktop-top-drag-strip-real-element
+
+- Request: Allow dragging the app from the top edge
+- Source: shared-brain+current-project+local-index+public-github
+- Query: `HivemindOS app top drag region titlebar window drag implementation preferences`
+- Decision: assimilated
+- Reason: The existing header drag fix already established the Tauri contract: native dragging needs a real `data-tauri-drag-region` element plus the already-present `core:window:allow-start-dragging` permission. The top edge had been represented as a CSS pseudo-element, which cannot carry the Tauri drag attribute, so it was replaced with a real hidden frame-level drag strip.
+- Selected backbone: current-project:hivemind-os Tauri desktop chrome
+- Assimilated: `src/features/dashboard/views/DashboardHeader.tsx` drag-region attribute pattern + `src-tauri/capabilities/default.json` existing drag permission + `src/app/globals.css` macDesktopChrome chrome rules => `src/app/DashboardNativeFrame.tsx` frame-level top drag strip and `src/app/globals.css` real-element styling.
+- Not assimilated: Public GitHub search returned 0 candidates. The CSS-only `.commandShell::after` top strip was rejected because Tauri cannot receive a drag-region attribute from a pseudo-element. No window config, route behavior, or dashboard navigation behavior was changed.
+- Verification: `pnpm exec eslint src/app/DashboardNativeFrame.tsx --max-warnings=0` passed; `git diff --check -- src/app/DashboardNativeFrame.tsx src/app/globals.css` passed; static assertions confirmed the real `desktopWindowDragStrip` renders from the native frame, declares `data-tauri-drag-region="deep"`, is hidden by default, is enabled only under `.macDesktopChrome`, spans the full top edge, and the old `.commandShell::after` pseudo-element drag strip is gone. `pnpm exec eslint src/features/dashboard/DashboardApp.tsx --quiet` remains blocked by a pre-existing `react-hooks/set-state-in-effect` diagnostic at line 1492, so verification avoided that oversized legacy file.
+
+### Candidates
+- `src/features/dashboard/views/DashboardHeader.tsx`
+  - Decision: selected-donor
+  - Reason: Existing committed header fix already uses the Tauri `data-tauri-drag-region="deep"` contract for native dragging.
+  - Path: `src/app/DashboardNativeFrame.tsx`
+- `src-tauri/capabilities/default.json`
+  - Decision: inspected
+  - Reason: Confirms `core:window:allow-start-dragging` is already available to the main desktop window.
+  - Path: `src-tauri/capabilities/default.json`
+- `src/app/globals.css`
+  - Decision: style_adapted
+  - Reason: Owns `.macDesktopChrome` chrome behavior; replaced the pseudo-element strip with real-element styling.
+  - Path: `src/app/globals.css`
+- `public-github-search`
+  - Decision: rejected
+  - Reason: Returned 0 candidates for this local Tauri shell issue.
+  - Path: `N/A`
+## 2026-06-18T03:04:15.024964+00:00 - implementation
+
+- Request: Group Base and Solana personal wallets derived from the same recovery phrase into one funding card with hover addresses
+- Source: current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/components/wallets-drop-in/WalletsView.tsx
+  - Decision: selected
+  - Reason: reused existing AddrRow multi-address hover popover
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: selected
+  - Reason: reused personal-wallet data bridge as grouping point
+- src/app/api/wallet/personal/route.ts
+  - Decision: selected
+  - Reason: reused recovery phrase chain-suffix id convention
+## 2026-06-18T03:19:17.090650+00:00 - polymarket-swarm-overflow
+
+- Request: Fix Polymarket swarm route market question overflow
+- Source: current-project+shared-brain
+- Query: `HivemindOS swarm route Polymarket simulation result board UI overflow market question scenario brief`
+- Selected backbone: current-project:hivemind-os Swarm PolymarketView
+- Note: No public GitHub search needed because this was a pinned current-project layout regression with an owning component.
+
+### Candidates
+- src/components/swarm/output-views.tsx
+  - Decision: adapted_code
+  - Reason: PolymarketView owns the market question and scenario brief layout; added bounded card copy scroll region.
+- hive-brain answer --scope full-vault
+  - Decision: inspected
+  - Reason: returned Polymarket skill/automation notes but no stronger layout source than local Swarm UI.
+## 2026-06-18T03:20:11.031415+00:00 - polymarket-swarm-overflow-verification
+
+- Request: Fix Polymarket swarm route market question overflow
+- Source: current-project
+- Selected backbone: current-project:hivemind-os Swarm PolymarketView
+- Verification: pnpm exec eslint src/components/swarm/output-views.tsx --max-warnings=0 passed; git diff --check -- src/components/swarm/output-views.tsx CHANGELOG.md ASSIMILATION_LOG.md ASSIMILATION_LOG.jsonl passed; static source assertions confirmed bounded Polymarket copy with internal scroll and wrapping; browser smoke on 127.0.0.1:5021 reached dashboard lock screen, so live Swarm DOM inspection was blocked without dashboard token.
+
+### Candidates
+- src/components/swarm/output-views.tsx
+  - Decision: adapted_code
+  - Reason: verified bounded Polymarket market question and scenario brief layout.
+
+## 2026-06-18T03:25:53+00:00 - wallet-real-tabs
+
+- Request: Replace fake Activity, Usage, and Honey wallet tab data with real data.
+- Source: current-project
+- Selected backbone: local-project:hivemind-os wallet ledgers and runtime usage analytics
+- Decision: assimilated
+- Reason: Existing wallet spend, Honey, and runtime usage services already owned the real data; the drop-in tab arrays were the stale demo layer.
+- Assimilated: `src/lib/services/wallet/spend-ledger.ts` spend records + `/api/honey-ledger` Honey ledger + `runtimeUsage` analytics => `src/features/dashboard/views/WalletPanel.tsx` runtime data bridge and `src/components/wallets-drop-in/wallet-data.ts` runtime array replacement.
+- Not assimilated: No demo wallet-tab rows, mock activity events, static Honey events, or synthetic usage series were kept for the live wallet view.
+- Verification: `pnpm test:wallet-real-tabs`, focused ESLint, and focused `git diff --check` passed; full typecheck and repo-wide file-size check remain blocked by unrelated existing diagnostics/oversized files; in-app browser reached the dashboard lock screen, blocking live wallet DOM inspection without the dashboard token.
+
+### Candidates
+- `src/lib/services/wallet/spend-ledger.ts`
+  - Decision: selected
+  - Reason: Existing unified payment ledger for x402, sends, Veil transfers, and trades.
+- `src/app/api/honey-ledger/route.ts`
+  - Decision: selected
+  - Reason: Existing Honey ledger API with real events and balances.
+- `src/lib/services/runtime-usage-analytics.ts`
+  - Decision: selected
+  - Reason: Existing Hermes/OpenClaw usage analytics source for tokens and cost estimates.
+- `src/components/wallets-drop-in/wallet-data.ts`
+  - Decision: adapted_code
+  - Reason: Replaced static Activity/Usage/Honey arrays through runtime hydrator splices.
+## 2026-06-18T03:28:07.936322+00:00 - safety
+
+- Request: Replace HivemindOS Apps & Services with nextjs-apps-drop-in UI and wire installation flow
+- Source: workspace
+- Selected backbone: local:/Users/liam/Downloads/nextjs-apps-drop-in
+
+### Candidates
+- src/app/api/fleet/shell
+  - Decision: rejected
+  - Reason: generic remote shell exists but remote service mutation needs explicit design and safety review under AGENTS.md; install flow will use existing installable-services API instead
+## 2026-06-18T03:28:07.936723+00:00 - triage
+
+- Request: Replace HivemindOS Apps & Services with nextjs-apps-drop-in UI and wire installation flow
+- Source: pinned-local
+- Selected backbone: local:/Users/liam/Downloads/nextjs-apps-drop-in
+
+### Candidates
+- nextjs-apps-drop-in/components/apps
+  - Decision: selected
+  - Reason: drop-in Foundry UI, modal and install console source files
+  - Path: `AppsView.jsx, AppsInstall.jsx, apps-ui.jsx, apps-data.js, apps.css`
+- hivemind-os/src/features/dashboard/views/MyAppsPanel.tsx
+  - Decision: selected-donor
+  - Reason: existing fleet apps discovery and installable service action wiring
+- hivemind-os/src/lib/services/installable-services.ts
+  - Decision: selected-donor
+  - Reason: existing safe local install/start/stop service backend
+## 2026-06-18T03:45:32.952883+00:00 - assimilation-manifest
+
+- Request: Replace the apps and services with /Users/liam/Downloads/nextjs-apps-drop-in, wire in all logic, and implement the new app installation modal/flow.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-nextjs-apps-drop-in:/Users/liam/Downloads/nextjs-apps-drop-in/components/apps/AppsView.jsx => src/components/apps/AppsView.tsx, local-nextjs-apps-drop-in:/Users/liam/Downloads/nextjs-apps-drop-in/components/apps/AppsInstall.jsx => src/components/apps/AppsInstall.tsx, local-nextjs-apps-drop-in:/Users/liam/Downloads/nextjs-apps-drop-in/components/apps/apps-ui.jsx => src/components/apps/apps-ui.tsx, local-nextjs-apps-drop-in:/Users/liam/Downloads/nextjs-apps-drop-in/components/apps/apps.css => src/components/apps/apps.css, hivemind-os:src/features/dashboard/views/MyAppsPanel.tsx => src/features/dashboard/views/MyAppsPanel.tsx
+- Verification: Wrote ASSIMILATION.json with 5 entries and custom_code_assessment=balanced.
+## 2026-06-18T03:49:46+00:00 - wallet-rail-status
+
+- Request: Audit wallet drop-in for anything else not wired correctly after Activity/Usage/Honey real-data pass.
+- Source: current-project
+- Selected backbone: local-project:hivemind-os wallet env/runtime provider status
+
+### Candidates
+- `src/features/dashboard/views/WalletPanel.tsx`
+  - Decision: adapted_code
+  - Reason: Existing wallet runtime bridge had display agents, wallet configs, MoneyClaw status, and shared env available after prop pass-through.
+- `src/components/wallets-drop-in/wallet-data.ts`
+  - Decision: adapted_code
+  - Reason: Replaced remaining demo-ready rail and UsePod defaults with empty/unknown defaults hydrated by runtime data.
+- `src/features/dashboard/DashboardApp.tsx`
+  - Decision: adapted_code
+  - Reason: Passed shared env state into the wallet bridge so rail cards can show credential presence by key name only.
+- Verification: `pnpm test:wallet-real-tabs` passed with real-data, rail-status, and handler-coverage assertions; `pnpm test:personal-wallet-grouping`, `pnpm test:veil-auto-send`, focused ESLint, focused `git diff --check`, assimilation JSONL validation, and app-shell GET/HEAD smoke for `http://127.0.0.1:5021/?view=wallet` passed. Repo-wide typecheck/file-size checks remain blocked by unrelated existing promo/generated/env diagnostics and oversized legacy/generated files.
+## 2026-06-18T08:05:07.939368+00:00 - stake-route-ui-transplant
+
+- Request: Replace the Staking route UI with /Users/liam/Downloads/src
+- Source: pinned-local+current-project+shared-brain
+- Query: `HivemindOS staking route UI replacement context preferences decisions`
+- Decision: assimilated
+- Reason: The downloaded stake route supplied the requested Reserve UI, while the current project contained newer live staking fixes that needed to remain intact. The implementation copied the donor stylesheet and adapted the donor JSX layout into the local client without replacing confirmation polling or wallet merge behavior.
+- Selected backbone: local:/Users/liam/Downloads/src/app/stake plus current-project:hivemind-os staking route
+- Assimilated: /Users/liam/Downloads/src/app/stake/stake.module.css => src/app/stake/stake.module.css::copied_code::Reserve staking route visual treatment; /Users/liam/Downloads/src/app/stake/StakePageClient.tsx => src/app/stake/StakePageClient.tsx::adapted_code::top stats, icon benefits, progress panel, and tier card layout
+- Not assimilated: The donor client's simpler wallet merge and post-stake refresh flow were rejected because current src/app/stake/stake-wallets.ts and StakePageClient.tsx already contain newer reimport/local signer reconciliation and automatic Base confirmation polling fixes. Public GitHub search was not needed because the user supplied an exact local donor and no source gap remained.
+- Verification: Preliminary checks passed: pnpm exec eslint src/app/stake/StakePageClient.tsx --max-warnings=0; node scripts/test-hive-staking.mjs; git diff --check -- src/app/stake/StakePageClient.tsx src/app/stake/stake.module.css.
+
+### Candidates
+- /Users/liam/Downloads/src/app/stake/StakePageClient.tsx
+  - Decision: adapted_code
+  - Reason: Donor Reserve layout for top stats, hero progress, benefits, tier cards, wallet intro copy
+  - Path: `src/app/stake/StakePageClient.tsx`
+- /Users/liam/Downloads/src/app/stake/stake.module.css
+  - Decision: copied_code
+  - Reason: Complete donor Reserve stylesheet for the staking route
+  - Path: `src/app/stake/stake.module.css`
+- src/app/stake/StakePageClient.tsx
+  - Decision: selected-donor
+  - Reason: Current live staking behavior with confirmation polling and desktop/browser staking paths preserved
+  - Path: `src/app/stake/StakePageClient.tsx`
+- src/app/stake/stake-wallets.ts
+  - Decision: selected-donor
+  - Reason: Current account merge helper preserves local signer rows while keeping HIVE balances
+  - Path: `src/app/stake/stake-wallets.ts`
+- hive-brain answer --scope full-vault
+  - Decision: inspected
+  - Reason: Returned no staking-specific reusable memory beyond project rules and general context
+  - Path: `N/A`
+## 2026-06-18T08:05:29.453473+00:00 - assimilation-manifest
+
+- Request: Replace the Staking route UI with /Users/liam/Downloads/src
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-src:/Users/liam/Downloads/src/app/stake/stake.module.css => src/app/stake/stake.module.css, local-src:/Users/liam/Downloads/src/app/stake/StakePageClient.tsx => src/app/stake/StakePageClient.tsx, hivemind-os:src/app/stake/StakePageClient.tsx => src/app/stake/StakePageClient.tsx, hivemind-os:src/app/stake/stake-wallets.ts => src/app/stake/StakePageClient.tsx
+- Verification: Wrote ASSIMILATION.stake-route-ui.json with 4 entries and custom_code_assessment=balanced.
+## 2026-06-18T08:08:58.508008+00:00 - stake-route-ui-verification
+
+- Request: Replace the Staking route UI with /Users/liam/Downloads/src
+- Source: current-project
+- Decision: verified
+- Selected backbone: local:/Users/liam/Downloads/src/app/stake plus current-project:hivemind-os staking route
+- Verification: Final checks passed: pnpm exec eslint src/app/stake/StakePageClient.tsx --max-warnings=0; node scripts/test-hive-staking.mjs with 25 assertions; verify_assimilation_manifest.py ASSIMILATION.stake-route-ui.json with 4 concrete reuse entries; git diff --check for stake route, changelog, assimilation logs, and stake manifest; curl -I http://127.0.0.1:5025/stake returned 200 OK; system Chrome rendered the new stake heading, top stats, active-stake panel, tier ladder, and wallet section with no Next overlay. Browser console only showed expected unauthenticated wallet API 401.
+
+### Candidates
+- src/app/stake/StakePageClient.tsx
+  - Decision: verified
+  - Reason: Stake route client linted and retained HIVE staking regression behavior
+  - Path: `src/app/stake/StakePageClient.tsx`
+- src/app/stake/stake.module.css
+  - Decision: verified
+  - Reason: Donor Reserve stylesheet active on rendered route
+  - Path: `src/app/stake/stake.module.css`
+- ASSIMILATION.stake-route-ui.json
+  - Decision: verified
+  - Reason: 4 concrete reuse entries validated
+  - Path: `ASSIMILATION.stake-route-ui.json`
+## 2026-06-18T08:17:33.676389+00:00 - brain-nav-icon
+
+- Request: Change the brain nav button icon with an actual brain icon
+- Source: current-project
+- Selected backbone: local-project:hivemind-os dashboard navigation
+
+### Candidates
+- src/features/dashboard/dashboard-light-helpers.tsx
+  - Decision: adapted_code
+  - Reason: owns DashboardHeader route icon rendering via viewIcon(); swapped vault route from BrainCircuit to Brain
+  - Path: `src/features/dashboard/dashboard-light-helpers.tsx`
+- lucide-react
+  - Decision: selected-donor
+  - Reason: installed icon library already exports the actual Brain icon used by project nav buttons
+  - Path: `package.json`
+- hive-brain answer --scope full-vault
+  - Decision: inspected
+  - Reason: no specific brain nav icon decision found; current repo remained authoritative
+  - Path: `N/A`
+- public GitHub
+  - Decision: rejected
+  - Reason: not needed because this is a pinned current-project icon swap with an installed icon donor and no source gap
+## 2026-06-18T08:18:31.446075+00:00 - brain-nav-icon-verification
+
+- Request: Change the brain nav button icon with an actual brain icon
+- Source: current-project
+- Selected backbone: local-project:hivemind-os dashboard navigation
+
+### Candidates
+- src/features/dashboard/dashboard-light-helpers.tsx
+  - Decision: verified
+  - Reason: Lucide Brain import and vault route icon render are present; focused error-only lint and diff checks passed
+  - Path: `src/features/dashboard/dashboard-light-helpers.tsx`
+- strict eslint --max-warnings=0
+  - Decision: inspected
+  - Reason: blocked only by pre-existing unused-import warnings for beeRoleLabel and WorkView, unrelated to icon swap
+- public GitHub
+  - Decision: rejected
+  - Reason: not needed because the installed lucide-react Brain export satisfied the request
+## 2026-06-18T08:29:04.666222+00:00 - assimilation-manifest
+
+- Request: Replace the Staking route UI with /Users/liam/Downloads/src
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-src:/Users/liam/Downloads/src/app/stake/StakePageClient.tsx => src/app/stake/StakePageClient.tsx, local-src:/Users/liam/Downloads/src/app/stake/stake.module.css => src/app/stake/stake.module.css, local-src:/Users/liam/Downloads/src/app/stake/page.tsx => src/app/stake/page.tsx
+- Verification: Wrote ASSIMILATION.stake-route-ui.json with 3 entries and custom_code_assessment=mostly_assimilated.
+## 2026-06-18T08:29:49.554573+00:00 - stake-route-verbatim-correction
+
+- Request: Replace the Staking route UI with /Users/liam/Downloads/src
+- Source: pinned-local
+- Decision: copied_code
+- Reason: Corrected the previous adapted implementation: the user wanted the supplied route copied verbatim, so all files under src/app/stake now byte-match /Users/liam/Downloads/src/app/stake.
+- Selected backbone: local:/Users/liam/Downloads/src/app/stake
+- Assimilated: /Users/liam/Downloads/src/app/stake/StakePageClient.tsx => src/app/stake/StakePageClient.tsx::copied_code::byte-for-byte supplied route client; /Users/liam/Downloads/src/app/stake/stake.module.css => src/app/stake/stake.module.css::copied_code::byte-for-byte supplied stylesheet; /Users/liam/Downloads/src/app/stake/page.tsx => src/app/stake/page.tsx::copied_code::byte-for-byte supplied page wrapper
+- Not assimilated: The previous behavior-preserving adaptation was removed from StakePageClient.tsx so the visible route and client behavior match the supplied source exactly.
+- Verification: cmp confirmed StakePageClient.tsx, stake.module.css, and page.tsx match /Users/liam/Downloads/src/app/stake; pnpm exec eslint src/app/stake/StakePageClient.tsx --max-warnings=0 passed; node scripts/test-hive-staking.mjs passed with 25 assertions; filtered TypeScript output reported no staking-path diagnostics; ASSIMILATION.stake-route-ui.json verified with 3 concrete copied-code entries.
+
+### Candidates
+- /Users/liam/Downloads/src/app/stake/StakePageClient.tsx
+  - Decision: copied_code
+  - Reason: verbatim supplied client
+  - Path: `src/app/stake/StakePageClient.tsx`
+- /Users/liam/Downloads/src/app/stake/stake.module.css
+  - Decision: copied_code
+  - Reason: verbatim supplied CSS
+  - Path: `src/app/stake/stake.module.css`
+- /Users/liam/Downloads/src/app/stake/page.tsx
+  - Decision: copied_code
+  - Reason: verbatim supplied page wrapper
+  - Path: `src/app/stake/page.tsx`
+## 2026-06-18T08:43:38.864385+00:00 - public-search
+
+- Request: agent memory entity linking BM25 temporal recall Neo4j TypeScript
+- Source: public-github
+- Query: `agent memory entity linking BM25 temporal recall Neo4j TypeScript`
+- Decision: retrieved
+- Reason: Retrieved 1 public candidates from GitHub search.
+
+### Candidates
+- ReallyArtificial/engram (3 stars, TypeScript, MIT License)
+  - URL: https://github.com/ReallyArtificial/engram
+  - Description: Agent memory system with retain-recall-reflect loop. Hybrid search, entity resolution, observation synthesis. TypeScript library + MCP server.
+## 2026-06-18T09:05:44.911520+00:00 - stake-route-verbatim-recopy
+
+- Request: Replace the HivemindOS staking route UI with the Claude Design project at /Users/liam/Downloads/src
+- Source: pinned-local
+- Decision: copied_code
+- Reason: User clarified /Users/liam/Downloads/src is the Claude Design source project; recopied its three app/stake files directly into the HivemindOS stake route and verified byte-identical hashes.
+- Selected backbone: local:/Users/liam/Downloads/src/app/stake
+- Assimilated: /Users/liam/Downloads/src/app/stake/StakePageClient.tsx => src/app/stake/StakePageClient.tsx::copied_code::byte-identical Claude Design client; /Users/liam/Downloads/src/app/stake/stake.module.css => src/app/stake/stake.module.css::copied_code::byte-identical Claude Design stylesheet; /Users/liam/Downloads/src/app/stake/page.tsx => src/app/stake/page.tsx::copied_code::byte-identical Claude Design page wrapper
+- Not assimilated: No screenshot-derived styling edits or approximations were made in this pass.
+- Verification: shasum -a 256 confirmed the three app stake files match /Users/liam/Downloads/src/app/stake; curl -i http://127.0.0.1:5021/stake returned 200 and server HTML imports src/app/stake/StakePageClient.tsx; focused ESLint passed for src/app/stake/StakePageClient.tsx and src/app/stake/page.tsx.
+
+### Candidates
+- /Users/liam/Downloads/src/app/stake/StakePageClient.tsx
+  - Decision: copied_code
+  - Reason: verbatim Claude Design client
+  - Path: `src/app/stake/StakePageClient.tsx`
+- /Users/liam/Downloads/src/app/stake/stake.module.css
+  - Decision: copied_code
+  - Reason: verbatim Claude Design CSS
+  - Path: `src/app/stake/stake.module.css`
+- /Users/liam/Downloads/src/app/stake/page.tsx
+  - Decision: copied_code
+  - Reason: verbatim Claude Design page wrapper
+  - Path: `src/app/stake/page.tsx`
+## 2026-06-18T09:19:55.000000+00:00 - hivemind-memory-upgrade-v1
+
+- Request: Implement Hivemind Memory Upgrade V1 with entity-linked memory, temporal recall, typed-memory hybrid ranking, action memories, retrieval telemetry, and optional Neo4j Brain Service.
+- Source: local-project + public-reference
+- Decision: adapted_code
+- Reason: Kept Obsidian Agent Memory as canonical while adapting the useful memory-system concepts locally: mem0's entity/scoring/action/temporal memory ideas, HivemindOS' existing full-vault BM25-lite retrieval, and the existing QMD/GBrain Brain Service dashboard/service-note patterns.
+- Selected backbone: local-project:hivemind-os Shared Brain Memory and Brain Services
+- Assimilated: `src/lib/services/obsidian/agent-memory.ts` => facade over split Agent Memory modules; `src/lib/services/obsidian/agent-memory/entities.ts` => deterministic local entity/alias extraction and vault-local entity index; `src/lib/services/obsidian/agent-memory/scoring.ts` => typed BM25/entity/temporal/usage ranking; `src/lib/services/obsidian/agent-memory/usage.ts` => append-only retrieval/final-answer telemetry; `src/lib/services/brain/neo4j.ts` => optional derived graph service following local QMD/GBrain env-key/status/service-note patterns.
+- Not assimilated: Did not import mem0 code, introduce hosted memory, add typed-memory embeddings, make Neo4j canonical, store Neo4j plaintext secrets, or copy public project code. `ReallyArtificial/engram` was inspected as an adjacent public TypeScript memory project but not reused.
+- Verification: Added focused contract tests `scripts/test-agent-memory-upgrade.mjs` and `scripts/test-neo4j-brain-service.mjs`; full verification is recorded in the changelog/test output for this change.
+
+### Candidates
+- mem0ai/mem0
+  - Decision: concept_reference
+  - Reason: Used as provenance for entity-linked memory, multi-signal scoring, action/agent-generated facts, ADD-only temporal history, and retrieval-time reasoning concepts; no code copied.
+  - URL: https://github.com/mem0ai/mem0
+- src/lib/services/obsidian/full-vault-search-index.ts
+  - Decision: adapted_code
+  - Reason: Reused the local BM25-lite direction by extracting shared BM25 helpers and applying the same deterministic lexical scoring idea to typed Agent Memory.
+  - Path: `src/lib/services/search/bm25-lite.ts`
+- src/lib/services/brain/qmd.ts
+  - Decision: adapted_pattern
+  - Reason: Reused the optional Brain Service shape: env/key status, managed service note, dashboard cockpit action flow, and generated artifacts outside canonical memory.
+  - Path: `src/lib/services/brain/neo4j.ts`
+- src/lib/services/brain/gbrain.ts
+  - Decision: adapted_pattern
+  - Reason: Reused the connect/status/query service boundary and aggregate Brain Services status pattern for the optional Neo4j service.
+  - Path: `src/app/api/brain/services/status/route.ts`
+- ReallyArtificial/engram
+  - Decision: rejected
+  - Reason: Adjacent public TypeScript memory project, but HivemindOS already had the local Agent Memory/BM25/QMD/GBrain surfaces needed for this implementation.
+  - URL: https://github.com/ReallyArtificial/engram
+## 2026-06-18T10:11:54.378750+00:00 - triage
+
+- Request: Implement Dograh-inspired HivemindOS voice agent calling improvements 1-8
+- Source: pinned-github
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- dograh-hq/dograh
+  - Decision: selected-donor
+  - Reason: pinned user source; reusable run model, context objects, voice tool scoping, QA, provider matrix, MCP/SDK surfaces
+  - Path: `README.md, docs/core-concepts/*.mdx, api/services/workflow/*.py, api/services/pipecat/realtime_feedback_events.py, api/services/telephony/registry.py`
+- local-project:hivemind-os
+  - Decision: selected-backbone
+  - Reason: existing BYOK/LiveKit/local-TTS agent call stack and Queen Bee voice stack
+  - Path: `src/lib/services/phone, src/components/fleet/agent-call-modal.tsx, src/features/queen-voice`
+## 2026-06-18T10:12:06.964436+00:00 - shared-brain
+
+- Request: Implement Dograh-inspired HivemindOS voice agent calling improvements 1-8
+- Source: full-vault
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Projects/Agent Calls - BYOK vs HivemindOS Cloud.md
+  - Decision: selected
+  - Reason: confirms BYOK default and LiveKit premium boundary
+- Projects/Native AI Agent Calls for Coding App.md
+  - Decision: selected
+  - Reason: confirms native ringing/mobile push is transport layer, not required for local BYOK
+- Skills/proactive-voice-agents/SKILL.md
+  - Decision: selected-donor
+  - Reason: transport and observability checklist for proactive calls
+## 2026-06-18T10:20:11.244341+00:00 - assimilation-manifest
+
+- Request: Replace the HivemindOS Kanban UI with the supplied KanbanPanel.tsx and kanban-board.module.css files and keep the board logic wired
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-kanban-downloads:/Users/liam/Downloads/KanbanPanel.tsx => src/features/dashboard/views/KanbanPanel.tsx, local-kanban-downloads:/Users/liam/Downloads/kanban-board.module.css => src/app/kanban-board.module.css
+- Verification: Wrote ASSIMILATION.kanban-ui.json with 2 entries and custom_code_assessment=mostly_assimilated.
+## 2026-06-18T10:20:53.086590+00:00 - assimilation-manifest
+
+- Request: Replace the HivemindOS Kanban UI with the supplied KanbanPanel.tsx and kanban-board.module.css files and keep the board logic wired
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-kanban-downloads:/Users/liam/Downloads/KanbanPanel.tsx => src/features/dashboard/views/KanbanPanel.tsx, local-kanban-downloads:/Users/liam/Downloads/kanban-board.module.css => src/app/kanban-board.module.css, hivemind-os:src/features/dashboard/DashboardApp.tsx => src/features/dashboard/views/KanbanPanel.tsx
+- Verification: Wrote ASSIMILATION.kanban-ui.json with 3 entries and custom_code_assessment=mostly_assimilated.
+## 2026-06-18T10:28:24.666157+00:00 - assimilation-manifest
+
+- Request: Replace the HivemindOS staking route UI with the corrected Claude Design project at /Users/liam/Downloads/src 3
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-src-3:/Users/liam/Downloads/src 3/app/stake/StakePageClient.tsx => src/app/stake/StakePageClient.tsx, local-src-3:/Users/liam/Downloads/src 3/app/stake/stake.module.css => src/app/stake/stake.module.css, local-src-3:/Users/liam/Downloads/src 3/app/stake/page.tsx => src/app/stake/page.tsx
+- Verification: Wrote ASSIMILATION.stake-route-ui.json with 3 entries and custom_code_assessment=mostly_assimilated.
+## 2026-06-18T10:29:25.913038+00:00 - stake-src3-verification
+
+- Request: Replace the HivemindOS staking route UI with the corrected Claude Design project at /Users/liam/Downloads/src 3
+- Source: pinned-local
+- Decision: verified
+- Reason: Corrected Claude Design export contains the missing warm-neutral gradient and honey pill button system; installed app route files byte-match it.
+- Selected backbone: local:/Users/liam/Downloads/src 3/app/stake
+- Assimilated: /Users/liam/Downloads/src 3/app/stake/StakePageClient.tsx => src/app/stake/StakePageClient.tsx::copied_code::corrected client; /Users/liam/Downloads/src 3/app/stake/stake.module.css => src/app/stake/stake.module.css::copied_code::corrected stylesheet; /Users/liam/Downloads/src 3/app/stake/page.tsx => src/app/stake/page.tsx::copied_code::page wrapper
+- Not assimilated: Earlier /Users/liam/Downloads/src and /Users/liam/Downloads/src 2 exports were superseded because their CSS kept teal primary buttons and stronger teal/honey glow styling.
+- Verification: shasum confirmed all three app route files match /Users/liam/Downloads/src 3/app/stake; focused ESLint passed; node scripts/test-hive-staking.mjs passed with 25 assertions; filtered TypeScript output had no staking-path diagnostics; Chromium on 127.0.0.1:5026/stake confirmed honey Refresh button rgb(231, 180, 92), dark text, 99px radius, transparent Connect outline pill, and warm-neutral hero gradient.
+
+### Candidates
+- /Users/liam/Downloads/src 3/app/stake/StakePageClient.tsx
+  - Decision: copied_code
+  - Reason: corrected Claude Design route client
+  - Path: `src/app/stake/StakePageClient.tsx`
+- /Users/liam/Downloads/src 3/app/stake/stake.module.css
+  - Decision: copied_code
+  - Reason: corrected Claude Design route stylesheet
+  - Path: `src/app/stake/stake.module.css`
+- /Users/liam/Downloads/src 3/app/stake/page.tsx
+  - Decision: copied_code
+  - Reason: corrected Claude Design page wrapper
+  - Path: `src/app/stake/page.tsx`
+## 2026-06-18T10:29:44.004515+00:00 - assimilation-manifest
+
+- Request: Implement Dograh-inspired HivemindOS voice agent calling improvements 1-8
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: dograh-hq/dograh:docs/core-concepts/calls-and-runs.mdx => src/lib/services/phone/voice-runs.ts, dograh-hq/dograh:docs/core-concepts/context-and-variables.mdx => src/lib/services/phone/voice-runs.ts, dograh-hq/dograh:api/services/pipecat/realtime_feedback_events.py => src/lib/services/phone/voice-run-route-actions.ts, dograh-hq/dograh:api/services/telephony/registry.py => src/lib/services/phone/voice-provider-capabilities.ts, dograh-hq/dograh:sdk/typescript/src/typed/start-call.ts => src/lib/services/phone/voice-recipes.ts, dograh-hq/dograh:sdk/typescript/src/typed/qa.ts => src/lib/services/phone/voice-runs.ts
+- Verification: Wrote ASSIMILATION.voice-runs.json with 6 entries and custom_code_assessment=balanced.
+## 2026-06-18T10:50:22.913649+00:00 - assimilation-manifest
+
+- Request: Replace the HivemindOS Kanban UI with the supplied KanbanPanel.tsx and kanban-board.module.css files and keep the board logic wired
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-kanban-downloads:/Users/liam/Downloads/KanbanPanel.tsx => src/features/dashboard/views/KanbanPanel.tsx, local-kanban-downloads:/Users/liam/Downloads/kanban-board.module.css => src/app/kanban-board.module.css, hivemind-os:src/features/dashboard/DashboardApp.tsx => src/features/dashboard/views/KanbanPanel.tsx, hivemind-os:HEAD:src/features/dashboard/views/KanbanPanel.tsx => src/features/dashboard/views/KanbanPanel.tsx
+- Verification: Wrote ASSIMILATION.kanban-ui.json with 4 entries and custom_code_assessment=mostly_assimilated.

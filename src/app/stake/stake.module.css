@@ -1,71 +1,64 @@
 /* src/app/stake/stake.module.css
-   HIVE staking view. Palette and typography are matched to the Fleet view
-   (see src/components/fleet/fleet-tokens.module.css): teal accents for
-   actions, honey accents for HIVE values, glassy translucent surfaces, and a
-   Space Grotesk display / mono-cap type system. Tokens are scoped to .page so
-   they don't leak, and a [data-theme="hive-light"] block mirrors the Fleet
-   view's light theme. */
+   HIVE staking view — "The Reserve". Palette + type matched to the Fleet view
+   (src/components/fleet/fleet-tokens.module.css): teal for actions, honey for
+   HIVE values, glassy translucent surfaces, Space Grotesk display + mono caps.
+   Tokens are scoped to .page and mirrored under [data-theme="hive-light"]. */
 
 .page {
-  /* Type tokens mirrored from the Fleet view. */
   --s-display: "Space Grotesk", "Inter", system-ui, sans-serif;
   --s-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
 
-  /* Surface + accent tokens — dark mode defaults. */
-  --s-page-glow: rgba(45, 212, 191, 0.14);
-  --s-page-base: linear-gradient(180deg, #0b1118 0%, #070a10 100%);
+  /* warm-neutral dark — matched 1:1 to the Fleet/Reserve palette */
+  --s-bg: #0c0d11;
+  --s-surface: #14161c;
+  --s-surface-inset: #181b22;
+  --s-border: rgba(238, 232, 220, 0.07);
+  --s-border-soft: rgba(238, 232, 220, 0.13);
+  --s-shadow: 0 22px 60px rgba(0, 0, 0, 0.40);
 
-  --s-surface: linear-gradient(180deg, rgba(22, 28, 42, 0.62), rgba(16, 21, 31, 0.52));
-  --s-surface-inset: rgba(8, 12, 19, 0.40);
-  --s-border: rgba(148, 163, 184, 0.16);
-  --s-border-soft: rgba(148, 163, 184, 0.12);
-  --s-shadow: 0 22px 60px rgba(0, 0, 0, 0.34);
+  /* teal/live = actions + reached state */
+  --s-teal: #6fcdba;
+  --s-teal-strong: #8bd9c9;
+  --s-teal-bg: rgba(111, 205, 186, 0.14);
+  --s-teal-border: rgba(111, 205, 186, 0.34);
+  --s-teal-glow: rgba(111, 205, 186, 0.22);
 
-  --s-teal: rgba(45, 212, 191, 1);
-  --s-teal-strong: rgba(94, 234, 212, 1);
-  --s-teal-bg: rgba(45, 212, 191, 0.12);
-  --s-teal-border: rgba(94, 234, 212, 0.42);
-  --s-teal-glow: rgba(45, 212, 191, 0.40);
+  /* honey = HIVE values + progress */
+  --s-honey: #e7b45c;
+  --s-honey-2: #f0c879;
+  --s-honey-bg: linear-gradient(180deg, rgba(231, 180, 92, 0.16), rgba(231, 180, 92, 0.04));
+  --s-honey-border: rgba(231, 180, 92, 0.32);
+  --s-honey-glow: rgba(231, 180, 92, 0.18);
 
-  --s-honey: rgba(255, 212, 90, 1);
-  --s-honey-bg: linear-gradient(180deg, rgba(255, 212, 90, 0.20), rgba(242, 183, 5, 0.06));
-  --s-honey-border: rgba(255, 212, 90, 0.58);
-  --s-honey-glow: rgba(255, 212, 90, 0.30);
-
-  --s-danger: rgba(251, 113, 133, 1);
+  --s-danger: #c0524d;
 
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, var(--s-page-glow), transparent 34rem),
-    radial-gradient(circle at 82% -10%, var(--s-honey-glow), transparent 30rem),
-    var(--s-page-base);
+  background: radial-gradient(120% 80% at 85% -12%, rgba(231, 180, 92, 0.05), transparent 60%), var(--s-bg);
   color: var(--foreground);
   font-family: var(--s-display);
 }
 
-/* Hive-light theme mirror — matches the Fleet view's light palette. */
 :global([data-theme="hive-light"]) .page {
-  --s-page-glow: rgba(95, 143, 90, 0.12);
-  --s-page-base: linear-gradient(180deg, #fbf8f1 0%, #f1ede3 100%);
-
-  --s-surface: linear-gradient(180deg, rgba(251, 248, 241, 0.9), rgba(244, 239, 228, 0.78));
-  --s-surface-inset: rgba(255, 252, 246, 0.62);
-  --s-border: rgba(54, 46, 30, 0.16);
-  --s-border-soft: rgba(54, 46, 30, 0.1);
+  --s-bg: #f1ede3;
+  --s-surface: #fbf8f1;
+  --s-surface-inset: #f4efe4;
+  --s-border: rgba(54, 46, 30, 0.10);
+  --s-border-soft: rgba(54, 46, 30, 0.16);
   --s-shadow: 0 18px 48px rgba(80, 60, 20, 0.12);
 
-  --s-teal: rgba(95, 143, 90, 1);
-  --s-teal-strong: rgba(79, 125, 75, 1);
-  --s-teal-bg: rgba(95, 143, 90, 0.14);
-  --s-teal-border: rgba(95, 143, 90, 0.34);
-  --s-teal-glow: rgba(95, 143, 90, 0.22);
+  --s-teal: #1d8e7c;
+  --s-teal-strong: #157a6a;
+  --s-teal-bg: rgba(29, 142, 124, 0.12);
+  --s-teal-border: rgba(29, 142, 124, 0.30);
+  --s-teal-glow: rgba(29, 142, 124, 0.18);
 
-  --s-honey: rgba(124, 85, 11, 1);
-  --s-honey-bg: linear-gradient(180deg, rgba(176, 127, 28, 0.20), rgba(124, 85, 11, 0.08));
-  --s-honey-border: rgba(124, 85, 11, 0.48);
-  --s-honey-glow: rgba(176, 127, 28, 0.18);
+  --s-honey: #b07f1c;
+  --s-honey-2: #936811;
+  --s-honey-bg: linear-gradient(180deg, rgba(176, 127, 28, 0.16), rgba(176, 127, 28, 0.05));
+  --s-honey-border: rgba(176, 127, 28, 0.34);
+  --s-honey-glow: rgba(176, 127, 28, 0.14);
 
-  --s-danger: rgba(192, 82, 77, 1);
+  --s-danger: #c0524d;
 }
 
 .shell {
@@ -97,6 +90,32 @@
   padding: 12px 16px;
 }
 
+.topStats {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  font-family: var(--s-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.topStats b {
+  font-family: var(--s-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--foreground);
+}
+
+.topStats span:first-child b {
+  color: var(--s-honey);
+}
+
+/* Buttons — 1:1 with the fr-/Reserve fb-btn: pill, body font, weight 500,
+   sm sizing. Primary = solid honey fill + dark text; ghost = transparent. */
 .topBar a,
 .ghostButton,
 .primaryButton,
@@ -104,100 +123,102 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  border-radius: 10px;
-  font-family: var(--s-display);
-  font-weight: 700;
+  gap: 7px;
+  border-radius: 99px;
+  border: 1px solid transparent;
+  padding: 7px 12px;
+  font-family: var(--f-body, "Geist", "Inter", system-ui, sans-serif);
+  font-size: 12px;
+  font-weight: 500;
   line-height: 1;
   text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
-  transition: background 160ms ease, border-color 160ms ease, color 160ms ease,
-    transform 160ms ease, box-shadow 160ms ease;
+  transition: filter 160ms ease, border-color 160ms ease, color 160ms ease, background 160ms ease;
 }
 
 .topBar a svg,
 .ghostButton svg,
 .primaryButton svg,
 .smallButton svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 
-.topBar a,
-.ghostButton,
-.smallButton {
-  border: 1px solid var(--s-border);
-  background: var(--s-surface-inset);
-  color: var(--foreground);
-}
-
+/* ghost = transparent, muted text, subtle border (fb-btn.ghost) */
 .topBar a,
 .ghostButton {
-  min-height: 38px;
-  padding: 0 14px;
-  font-size: 13px;
-}
-
-.primaryButton {
-  min-height: 42px;
-  border: 1px solid var(--s-teal-border);
-  background: var(--s-teal-bg);
-  color: var(--s-teal-strong);
-  padding: 0 16px;
-  font-size: 13px;
-}
-
-.smallButton {
-  height: 36px;
-  padding: 0 12px;
-  font-size: 12px;
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--s-border-soft);
 }
 
 .topBar a:hover,
-.ghostButton:hover:not(:disabled),
-.smallButton:hover:not(:disabled) {
-  border-color: var(--s-teal-border);
-  background: var(--s-teal-bg);
+.ghostButton:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
   color: var(--foreground);
-  transform: translateY(-1px);
+}
+
+/* primary = solid honey fill, dark text (fb-btn.primary) */
+.primaryButton {
+  background: var(--s-honey);
+  color: #1a1305;
+  border-color: transparent;
 }
 
 .primaryButton:hover:not(:disabled) {
-  border-color: var(--s-teal-strong);
-  background: var(--s-teal-bg);
-  color: var(--s-teal-strong);
-  transform: translateY(-1px);
-  box-shadow: 0 0 22px var(--s-teal-glow);
+  filter: brightness(1.06);
+}
+
+/* Max = mono-uppercase ghost pill (st-maxbtn) */
+.smallButton {
+  background: transparent;
+  border-color: var(--s-border-soft);
+  color: var(--muted);
+  padding: 8px 11px;
+  font-family: var(--s-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.smallButton:hover:not(:disabled) {
+  color: var(--s-honey);
+  border-color: var(--s-honey-border);
 }
 
 .ghostButton:disabled,
 .primaryButton:disabled,
 .smallButton:disabled {
-  cursor: not-allowed;
+  cursor: default;
   opacity: 0.5;
+  filter: none;
 }
 
 /* ── Hero ─────────────────────────────────────────────────────────────── */
 .hero {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
   gap: 26px;
   padding: 30px;
   overflow: hidden;
+  /* warm honey → panel diagonal, matched to the Reserve mock */
+  background: linear-gradient(150deg, color-mix(in srgb, var(--s-honey) 7%, var(--s-surface)), var(--s-surface) 62%);
 }
 
 .hero::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 78% 14%, var(--s-honey-glow), transparent 60%);
-  opacity: 0.7;
+  background: radial-gradient(circle at 82% 6%, var(--s-honey-glow), transparent 58%);
+  opacity: 0.45;
   pointer-events: none;
 }
 
 .heroCopy,
-.summary {
+.progressPanel {
   position: relative;
   z-index: 1;
 }
@@ -213,12 +234,16 @@
   align-items: center;
   gap: 7px;
   margin: 0;
-  color: var(--s-honey);
+  color: color-mix(in srgb, var(--foreground) 36%, transparent);
   font-family: var(--s-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.eyebrowHoney {
+  color: var(--s-honey);
 }
 
 .eyebrow svg {
@@ -228,94 +253,199 @@
 
 .hero h1 {
   margin: 0;
-  max-width: 720px;
+  max-width: 22ch;
   font-family: var(--s-display);
-  font-size: clamp(30px, 4.4vw, 54px);
-  font-weight: 700;
-  line-height: 1.02;
-  letter-spacing: -0.01em;
+  font-size: clamp(27px, 3.4vw, 40px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
 }
 
-.hero p,
+.lede,
 .panelIntro,
 .muted {
   margin: 0;
   color: var(--muted);
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.6;
+  max-width: 48ch;
 }
 
+/* benefit rows with icon tiles */
 .benefits {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 6px;
+  gap: 9px;
+  margin-top: 8px;
 }
 
-.benefits span {
+.benefit {
   display: flex;
   align-items: center;
-  gap: 9px;
-  border: 1px solid var(--s-border-soft);
-  border-radius: 11px;
-  background: var(--s-surface-inset);
-  padding: 11px 12px;
+  gap: 11px;
   color: var(--foreground);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
-  line-height: 1.3;
+  letter-spacing: -0.005em;
 }
 
-.benefits span::before {
-  content: "";
+.benefitIcon {
+  display: grid;
+  place-items: center;
   flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--s-honey);
-  box-shadow: 0 0 10px var(--s-honey-glow);
-}
-
-/* ── Hero summary stat cards ──────────────────────────────────────────── */
-.summary {
-  display: grid;
-  gap: 12px;
-  align-content: start;
-}
-
-.summaryCard {
-  display: grid;
-  gap: 6px;
-  border: 1px solid var(--s-border);
-  border-radius: 14px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--s-border-soft);
+  border-radius: 9px;
   background: var(--s-surface-inset);
-  padding: 16px;
+  color: var(--s-honey);
 }
 
-.summaryCardFeature {
-  border-color: var(--s-honey-border);
-  background: var(--s-honey-bg);
+.benefitIcon svg {
+  width: 15px;
+  height: 15px;
 }
 
-.summaryCard span {
+/* ── Hero progress panel ──────────────────────────────────────────────── */
+.progressPanel {
+  display: grid;
+  align-content: start;
+  border: 1px solid var(--s-border);
+  border-radius: 16px;
+  background: var(--s-surface-inset);
+  padding: 20px;
+}
+
+.progLabel {
   color: var(--muted);
   font-family: var(--s-mono);
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
-.summaryCard strong {
+.progBig {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 6px;
   font-family: var(--s-display);
-  font-size: 30px;
-  font-weight: 700;
+  font-size: 32px;
+  font-weight: 600;
   line-height: 1;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  color: var(--s-honey);
 }
 
-.summaryCardFeature strong {
+.progBig small {
+  font-family: var(--s-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.progBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-family: var(--s-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid var(--s-border);
+  color: var(--muted);
+}
+
+.pillReached {
+  border-color: var(--s-teal-border);
+  background: var(--s-teal-bg);
+  color: var(--s-teal-strong);
+}
+
+.pillNext {
+  border-color: var(--s-honey-border);
+  background: color-mix(in srgb, var(--s-honey) 12%, transparent);
   color: var(--s-honey);
+}
+
+.bar {
+  position: relative;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--s-surface-inset);
+  border: 1px solid var(--s-border-soft);
+  overflow: hidden;
+  margin-top: 15px;
+}
+
+.bar > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--s-honey), var(--s-honey-2));
+  box-shadow: 0 0 12px var(--s-honey-glow);
+  transition: width 700ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.progFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  font-family: var(--s-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.progFoot b {
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.miniGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin-top: 16px;
+  border: 1px solid var(--s-border-soft);
+  border-radius: 12px;
+  background: var(--s-border-soft);
+  overflow: hidden;
+}
+
+.miniGrid > div {
+  background: var(--s-surface-inset);
+  padding: 11px 13px;
+}
+
+.miniGrid span {
+  display: block;
+  color: var(--muted);
+  font-family: var(--s-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.miniGrid strong {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--s-display);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 /* ── Panels ───────────────────────────────────────────────────────────── */
@@ -334,10 +464,10 @@
 }
 
 .panelHeader h2 {
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   font-family: var(--s-display);
   font-size: 19px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
@@ -350,37 +480,48 @@
 /* ── Tier ladder ──────────────────────────────────────────────────────── */
 .tierGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(186px, 1fr));
   gap: 12px;
 }
 
 .tierCard {
   position: relative;
   display: grid;
-  gap: 8px;
+  gap: 9px;
   border: 1px solid var(--s-border);
   border-radius: 14px;
   background: var(--s-surface-inset);
-  padding: 14px;
+  padding: 15px;
   transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
 .tierCard:hover {
   transform: translateY(-2px);
-  border-color: var(--s-teal-border);
+  border-color: var(--s-border);
+  box-shadow: var(--s-shadow);
 }
 
 /* Tier the wallet's current active stake already clears. */
 .tierCardReached {
-  border-color: var(--s-honey-border);
-  background: var(--s-honey-bg);
-  box-shadow: 0 0 18px var(--s-honey-glow);
+  border-color: var(--s-teal-border);
+  background: linear-gradient(180deg, var(--s-teal-bg), var(--s-surface-inset) 64%);
 }
 
 /* The next tier to aim for. */
 .tierCardNext {
-  border-color: var(--s-teal-border);
-  box-shadow: 0 0 16px var(--s-teal-glow);
+  border-color: var(--s-honey-border);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--s-honey) 10%, transparent), var(--s-surface-inset) 64%);
+  box-shadow: 0 0 16px var(--s-honey-glow);
+}
+
+.ladn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  font-family: var(--s-mono);
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.7;
 }
 
 .tierTop {
@@ -390,10 +531,31 @@
   gap: 8px;
 }
 
-.tierCard strong {
+.tierName {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.tierMark {
+  width: 17px;
+  height: 17px;
+  color: var(--muted);
+}
+
+.tierCardReached .tierMark {
+  color: var(--s-teal-strong);
+}
+
+.tierCardNext .tierMark {
+  color: var(--s-honey);
+}
+
+.tierName strong {
   font-family: var(--s-display);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .tierBadge {
@@ -404,40 +566,46 @@
   padding: 3px 8px;
   font-family: var(--s-mono);
   font-size: 8.5px;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
 .tierBadgeReached {
-  border: 1px solid var(--s-honey-border);
-  background: rgba(255, 212, 90, 0.14);
-  color: var(--s-honey);
-}
-
-.tierBadgeNext {
   border: 1px solid var(--s-teal-border);
   background: var(--s-teal-bg);
   color: var(--s-teal-strong);
 }
 
-.tierThreshold {
-  font-family: var(--s-mono);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--s-teal-strong);
+.tierBadgeNext {
+  border: 1px solid var(--s-honey-border);
+  background: color-mix(in srgb, var(--s-honey) 14%, transparent);
+  color: var(--s-honey);
 }
 
-.tierCardReached .tierThreshold {
-  color: var(--s-honey);
+.tierThreshold {
+  font-family: var(--s-display);
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--foreground);
+}
+
+.tierUnit {
+  margin-left: 5px;
+  font-family: var(--s-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .tierCard p {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 /* ── Wallet rows ──────────────────────────────────────────────────────── */
@@ -448,8 +616,8 @@
 
 .walletRow {
   display: grid;
-  grid-template-columns: minmax(210px, 1fr) minmax(140px, 0.7fr) minmax(230px, 1.1fr);
-  gap: 14px;
+  grid-template-columns: minmax(210px, 1fr) minmax(150px, 0.7fr) minmax(250px, 1.2fr);
+  gap: 16px;
   align-items: center;
   border: 1px solid var(--s-border);
   border-radius: 14px;
@@ -474,7 +642,7 @@
 .walletMain strong {
   font-family: var(--s-display);
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .walletMain span {
@@ -502,7 +670,7 @@
 .walletBalance strong {
   font-family: var(--s-display);
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--s-honey);
   line-height: 1;
 }
@@ -522,15 +690,15 @@
 .stakeForm input {
   width: 100%;
   min-width: 0;
-  height: 38px;
-  border: 1px solid var(--s-border);
-  border-radius: 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--s-border-soft);
+  border-radius: 9px;
   background: var(--s-surface-inset);
   color: var(--foreground);
-  padding: 0 12px;
+  padding: 9px 12px;
   font-family: var(--s-mono);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 500;
   outline: none;
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
@@ -541,8 +709,8 @@
 }
 
 .stakeForm input:focus {
-  border-color: var(--s-teal-border);
-  box-shadow: 0 0 0 3px var(--s-teal-bg);
+  border-color: var(--s-honey-border);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--s-honey) 13%, transparent);
 }
 
 /* ── Status messages ──────────────────────────────────────────────────── */
@@ -554,7 +722,7 @@
 }
 
 .status[data-tone="ok"] {
-  color: var(--s-teal-strong);
+  color: var(--s-teal);
 }
 
 .status[data-tone="error"] {
@@ -571,17 +739,79 @@
   font-size: 13px;
 }
 
+/* ── Preview ribbon + rich empty state ────────────────────────────────── */
+.demoRibbon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: start;
+  border: 1px solid var(--s-honey-border);
+  background: var(--s-honey-bg);
+  color: var(--s-honey);
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-family: var(--s-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.demoRibbon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.emptyState {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+  border: 1px dashed var(--s-border);
+  border-radius: 16px;
+  padding: 34px 22px;
+}
+
+.emptyIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--s-border);
+  background: var(--s-surface-inset);
+  color: var(--s-teal-strong);
+}
+
+.emptyIcon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.emptyState strong {
+  font-family: var(--s-display);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.emptyState p {
+  margin: 0;
+  max-width: 42ch;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.emptyState .actions {
+  margin-top: 6px;
+}
+
 @media (max-width: 860px) {
   .hero,
   .walletRow {
     grid-template-columns: 1fr;
   }
 
-  .benefits {
-    grid-template-columns: 1fr;
-  }
-
   .stakeForm {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr max-content max-content;
   }
 }

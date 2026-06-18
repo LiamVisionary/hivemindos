@@ -2,7 +2,6 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 
 const HERMES_DB: &str = "~/.hermes/state.db";
 const OPENCLAW_AGENTS: &str = "~/.openclaw/agents";
@@ -139,7 +138,9 @@ fn read_hermes_rows(limit: usize) -> Vec<Value> {
          where (coalesce(input_tokens, 0) + coalesce(output_tokens, 0) + coalesce(cache_read_tokens, 0) + coalesce(cache_write_tokens, 0) + coalesce(reasoning_tokens, 0)) > 0 \
          order by started_at desc limit {limit};"
     );
-    let Ok(output) = Command::new("sqlite3").arg("-json").arg(expand_home(HERMES_DB)).arg(sql).output() else {
+    // hidden_command: token-usage views poll this; a plain `sqlite3` spawn
+    // flashes a console window on Windows each refresh. See crate::hidden_command.
+    let Ok(output) = crate::hidden_command("sqlite3").arg("-json").arg(expand_home(HERMES_DB)).arg(sql).output() else {
         return Vec::new();
     };
     if !output.status.success() {

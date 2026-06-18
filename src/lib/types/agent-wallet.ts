@@ -31,6 +31,8 @@ export interface AgentWalletConfig {
   clawCardEnvName: string;
   moneyClawEnvName: string;
   x402BaseUrl: string;
+  /** When true, Veil private sends may execute under asset caps without typing CONFIRM. */
+  veilAutoSendEnabled?: boolean;
   veilAutoPrivateX402?: boolean;
   /** Stock-buying rail selection. Absent = buy-stock disabled for this agent. */
   tradingVenue?: AgentTradingVenue;

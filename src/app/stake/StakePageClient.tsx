@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Check, LockKeyhole, RefreshCcw, Sparkles, WalletCards } from "lucide-react";
+import { ArrowLeft, ArrowUpFromLine, Check, Hexagon, RefreshCcw, Share2, Shield, Sparkles, WalletCards } from "lucide-react";
 import type { AgentWalletTokenBalance } from "@/lib/types/agent-wallet";
 import { DEFAULT_BASE_HIVE_TOKEN_ADDRESS, HIVE_STAKING_TIERS } from "@/lib/config/hive-staking";
 import { isBaseHiveTokenLike, isEvmAddress, shortenEvmAddress, stakeHiveWithBrowserWallet, type BrowserEthereumProvider } from "@/lib/services/hive-staking-client";
@@ -50,12 +50,69 @@ type StakeStatusRow = {
 
 type StakePageClientProps = {
   stakingContractAddress: string;
+  /* Opt-in preview. When true (or NEXT_PUBLIC_STAKE_DEMO="1"), the page renders
+     representative seeded wallets + stake status instead of hitting the live
+     APIs, so you can see the fully-populated layout. Leave unset in prod. */
+  demoMode?: boolean;
+};
+
+// ── Demo seed (opt-in) ────────────────────────────────────────────────────
+// A Builder-tier wallet set: ~62M HIVE staked, next target Curator (100M).
+const STAKE_DEMO_PRICE_USD = 0.0012;
+const STAKE_DEMO_COOLDOWN_SECONDS = 14 * 86_400;
+
+function demoWallet(id: string, name: string, address: string, custodyMode: "local" | "watch", balance: number): PersonalWallet {
+  const token = {
+    symbol: "HIVE",
+    name: "HIVE",
+    balance,
+    network: "eip155:8453",
+    tokenAddress: DEFAULT_BASE_HIVE_TOKEN_ADDRESS,
+    valueUsd: balance * STAKE_DEMO_PRICE_USD,
+    priceUsd: STAKE_DEMO_PRICE_USD,
+    priceChange24hPct: 4.2,
+    iconUrl: null,
+    isNative: false,
+  } satisfies AgentWalletTokenBalance;
+  return {
+    id,
+    name,
+    address,
+    network: "eip155:8453",
+    custodyMode,
+    importedFrom: custodyMode === "local" ? "recovery-phrase" : "watch",
+    currentBalanceUsd: balance * STAKE_DEMO_PRICE_USD,
+    nativeBalance: 0,
+    tokens: [token],
+    lastOnchainSyncAt: Date.now(),
+  };
+}
+
+const STAKE_DEMO_WALLETS: PersonalWallet[] = [
+  demoWallet("demo-treasury", "Treasury · Base", "0x7a3fbe9c21d4e58a0b6c1f2d3e4a5b6c7d8e9f01", "local", 18_400_000),
+  demoWallet("demo-ops", "Ops hot wallet", "0x2c9d10ab34ef5678129055cd34ef56781290abcd", "local", 5_250_000),
+  demoWallet("demo-vault", "Cold vault", "0x5e1a77b3c9d04e2f8a16b5c4d3e2f1a09b8c7d6e", "watch", 41_000_000),
+];
+
+const STAKE_DEMO_STATUSES: Record<string, StakeStatusRow> = {
+  "0x7a3fbe9c21d4e58a0b6c1f2d3e4a5b6c7d8e9f01": { address: "0x7a3fbe9c21d4e58a0b6c1f2d3e4a5b6c7d8e9f01", activeStakedHive: 48_000_000, pendingUnstakeHive: 0, paused: false, cooldownSeconds: STAKE_DEMO_COOLDOWN_SECONDS },
+  "0x2c9d10ab34ef5678129055cd34ef56781290abcd": { address: "0x2c9d10ab34ef5678129055cd34ef56781290abcd", activeStakedHive: 4_000_000, pendingUnstakeHive: 0, paused: false, cooldownSeconds: STAKE_DEMO_COOLDOWN_SECONDS },
+  "0x5e1a77b3c9d04e2f8a16b5c4d3e2f1a09b8c7d6e": { address: "0x5e1a77b3c9d04e2f8a16b5c4d3e2f1a09b8c7d6e", activeStakedHive: 10_000_000, pendingUnstakeHive: 2_000_000, paused: false, cooldownSeconds: STAKE_DEMO_COOLDOWN_SECONDS },
 };
 
 type LoadWalletsOptions = {
   refresh?: boolean;
   walletList?: PersonalWallet[];
 };
+
+// Why-stake benefits, paired with Fleet-style icon tiles. Glyphs match the
+// fr-/Reserve mock: sparkle, network, promote (arrow-up), shield.
+const STAKE_BENEFITS = [
+  { Icon: Sparkles, text: "Early zero-human company workflow drops" },
+  { Icon: Share2, text: "Governance signaling and roadmap weight" },
+  { Icon: ArrowUpFromLine, text: "Bounty boosting and curator eligibility" },
+  { Icon: Shield, text: "Marketplace trust, badges, and Honey multipliers" },
+];
 
 function walletKey(wallet: Pick<PersonalWallet, "network" | "address">) {
   return `${wallet.network}:${wallet.address.toLowerCase()}`;
@@ -180,17 +237,18 @@ async function refreshWallet(wallet: PersonalWallet) {
   };
 }
 
-export default function StakePageClient({ stakingContractAddress }: StakePageClientProps) {
+export default function StakePageClient({ stakingContractAddress, demoMode = false }: StakePageClientProps) {
+  const demoActive = demoMode || (typeof process !== "undefined" && process.env.NEXT_PUBLIC_STAKE_DEMO === "1");
   const searchParams = useSearchParams();
-  const seededWallet = useMemo(() => personalWalletFromStakeParams(searchParams), [searchParams]);
-  const [wallets, setWallets] = useState<PersonalWallet[]>(() => seededWallet ? [seededWallet] : []);
-  const [loading, setLoading] = useState(() => !seededWallet);
+  const seededWallet = useMemo(() => demoActive ? null : personalWalletFromStakeParams(searchParams), [searchParams, demoActive]);
+  const [wallets, setWallets] = useState<PersonalWallet[]>(() => demoActive ? STAKE_DEMO_WALLETS : seededWallet ? [seededWallet] : []);
+  const [loading, setLoading] = useState(() => demoActive ? false : !seededWallet);
   const [refreshingBalances, setRefreshingBalances] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [draft, setDraft] = useState<StakeDraft | null>(null);
-  const [stakeStatuses, setStakeStatuses] = useState<Record<string, StakeStatusRow>>({});
+  const [stakeStatuses, setStakeStatuses] = useState<Record<string, StakeStatusRow>>(() => demoActive ? STAKE_DEMO_STATUSES : {});
   const [contractCooldownSeconds, setContractCooldownSeconds] = useState<number>();
   const nativeDesktopRuntime = useMemo(() => isTauriDesktopRuntime(), []);
 
@@ -211,6 +269,25 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
   const statusCooldownSeconds = useMemo(() => Object.values(stakeStatuses).find((row) => Number.isFinite(row.cooldownSeconds))?.cooldownSeconds, [stakeStatuses]);
   const unstakeCooldownSeconds = contractCooldownSeconds ?? statusCooldownSeconds;
   const nextTier = useMemo(() => HIVE_STAKING_TIERS.find((tier) => Number(tier.thresholdHive) > totalStakedHive) ?? null, [totalStakedHive]);
+
+  // The highest tier the active stake already clears, plus progress to the next.
+  const currentTier = useMemo(() => {
+    const reached = HIVE_STAKING_TIERS.filter((tier) => totalStakedHive >= Number(tier.thresholdHive));
+    return reached.length ? reached[reached.length - 1] : null;
+  }, [totalStakedHive]);
+  const tierProgress = useMemo(() => {
+    const prev = currentTier ? Number(currentTier.thresholdHive) : 0;
+    const span = nextTier ? Number(nextTier.thresholdHive) - prev : 1;
+    return nextTier ? Math.min(1, Math.max(0, (totalStakedHive - prev) / span)) : 1;
+  }, [currentTier, nextTier, totalStakedHive]);
+  const toNextHive = nextTier ? Number(nextTier.thresholdHive) - totalStakedHive : 0;
+  const hivePriceUsd = useMemo(() => {
+    const priced = hiveRows.find((row) => Number.isFinite(row.token.priceUsd as number) && (row.token.priceUsd as number) > 0);
+    return priced ? Number(priced.token.priceUsd) : null;
+  }, [hiveRows]);
+  const stakedUsd = hivePriceUsd != null && totalStakedHive > 0
+    ? `$${Math.round(totalStakedHive * hivePriceUsd).toLocaleString()}`
+    : null;
 
   const loadStakeStatuses = useCallback(async (walletList: PersonalWallet[]) => {
     const addresses = walletList
@@ -261,6 +338,7 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
   }, [loadStakeStatuses, seededWallet]);
 
   useEffect(() => {
+    if (demoActive) return;
     let cancelled = false;
     void loadWallets().then((loaded) => {
       if (cancelled || !loaded.length) return;
@@ -269,7 +347,7 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
     return () => {
       cancelled = true;
     };
-  }, [loadWallets]);
+  }, [loadWallets, demoActive]);
 
   async function connectBrowserWallet() {
     const provider = (window as WalletWindow).ethereum;
@@ -320,6 +398,10 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
   }
 
   async function refreshAll() {
+    if (demoActive) {
+      setStatus("Preview data — connect a wallet to load live balances.");
+      return;
+    }
     setBusy(true);
     setStatus("Refreshing HIVE balances...");
     await loadWallets({ refresh: true });
@@ -341,6 +423,18 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
     }
     if (amount > row.token.balance) {
       setDraft((current) => current?.rowKey === key ? { ...current, error: "Amount is higher than this wallet's HIVE balance.", message: "" } : current);
+      return;
+    }
+    if (demoActive) {
+      setDraft((current) => current?.rowKey === key ? { ...current, busy: true, error: "", message: "Signing demo stake transaction..." } : current);
+      window.setTimeout(() => {
+        const addr = row.wallet.address.toLowerCase();
+        setStakeStatuses((prev) => {
+          const existing = prev[addr] ?? { address: row.wallet.address, activeStakedHive: 0, pendingUnstakeHive: 0, paused: false, cooldownSeconds: STAKE_DEMO_COOLDOWN_SECONDS };
+          return { ...prev, [addr]: { ...existing, activeStakedHive: existing.activeStakedHive + amount } };
+        });
+        setDraft((current) => current?.rowKey === key ? { ...current, busy: false, error: "", message: "Demo stake confirmed — preview only, no on-chain transaction." } : current);
+      }, 800);
       return;
     }
     if (row.wallet.custodyMode === "local") {
@@ -423,47 +517,58 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
   return (
     <main className={styles.page}>
       <div className={styles.shell}>
+        {demoActive ? (
+          <div className={styles.demoRibbon}><Sparkles size={13} aria-hidden="true" /> Preview data — representative balances, not your live wallet.</div>
+        ) : null}
         <nav className={styles.topBar} aria-label="Stake navigation">
           <Link href="/?view=wallet"><ArrowLeft aria-hidden="true" /> Wallets</Link>
+          <div className={styles.topStats}>
+            <span><b>{formatHive(totalStakedHive)}</b> staked</span>
+            <span><b>{formatHive(totalHive)}</b> detected</span>
+            <span><b>{currentTier ? currentTier.label : "—"}</b> tier</span>
+          </div>
           <Link href="/docs/monetization/hive-staking-and-community-tiers.html">Tier docs</Link>
         </nav>
 
         <section className={styles.hero}>
           <div className={styles.heroCopy}>
-            <p className={styles.eyebrow}><Sparkles aria-hidden="true" /> HIVE staking</p>
+            <p className={`${styles.eyebrow} ${styles.eyebrowHoney}`}><Hexagon aria-hidden="true" /> HIVE staking</p>
             <h1>Stake HIVE to unlock community status, alpha rooms, and curation rights.</h1>
-            <p>Staking is not a payment. Your HIVE stays yours while it is locked in the Base staking contract, and benefits pause when you unstake.</p>
+            <p className={styles.lede}>Staking is not a payment. Your HIVE stays yours while it is locked in the Base staking contract — benefits simply pause when you unstake.</p>
             <div className={styles.benefits}>
-              <span>Early zero-human company workflow drops</span>
-              <span>Governance signaling and roadmap weight</span>
-              <span>Bounty boosting and curator eligibility</span>
-              <span>Marketplace trust, badges, and Honey multipliers</span>
+              {STAKE_BENEFITS.map(({ Icon, text }) => (
+                <span key={text} className={styles.benefit}>
+                  <i className={styles.benefitIcon}><Icon aria-hidden="true" /></i>
+                  {text}
+                </span>
+              ))}
             </div>
           </div>
-          <aside className={styles.summary} aria-label="HIVE staking summary">
-            <div className={`${styles.summaryCard} ${styles.summaryCardFeature}`}>
-              <span>Detected HIVE</span>
-              <strong>{formatHive(totalHive)}</strong>
+
+          <aside className={styles.progressPanel} aria-label="HIVE staking summary">
+            <span className={styles.progLabel}>Active stake</span>
+            <span className={styles.progBig}>
+              {formatHive(totalStakedHive)}
+              {stakedUsd ? <small>{stakedUsd}</small> : null}
+            </span>
+            <div className={styles.progBadges}>
+              <span className={`${styles.pill} ${styles.pillReached}`}>
+                {currentTier ? <><Check size={11} aria-hidden="true" /> {currentTier.label}</> : "No tier yet"}
+              </span>
+              <span className={`${styles.pill} ${styles.pillNext}`}>
+                {nextTier ? `Next · ${nextTier.label}` : "Top tier"}
+              </span>
             </div>
-            <div className={styles.summaryCard}>
-              <span>Active stake</span>
-              <strong>{formatHive(totalStakedHive)}</strong>
+            <div className={styles.bar}><i style={{ width: `${(tierProgress * 100).toFixed(1)}%` }} /></div>
+            <div className={styles.progFoot}>
+              <span><b>{formatHive(totalStakedHive)}</b> staked</span>
+              <span>{nextTier ? <><b>{formatHive(toNextHive)}</b> to {nextTier.label}</> : "Highest tier reached"}</span>
             </div>
-            <div className={styles.summaryCard}>
-              <span>Pending unstake</span>
-              <strong>{formatHive(totalPendingUnstakeHive)}</strong>
-            </div>
-            <div className={styles.summaryCard}>
-              <span>Unstake cooldown</span>
-              <strong>{formatCooldown(unstakeCooldownSeconds)}</strong>
-            </div>
-            <div className={styles.summaryCard}>
-              <span>Wallets with HIVE</span>
-              <strong>{hiveRows.length}</strong>
-            </div>
-            <div className={styles.summaryCard}>
-              <span>Next tier by active stake</span>
-              <strong>{nextTier ? nextTier.label : "Visionary+"}</strong>
+            <div className={styles.miniGrid}>
+              <div><span>Detected</span><strong>{formatHive(totalHive)}</strong></div>
+              <div><span>Unstaking</span><strong>{formatHive(totalPendingUnstakeHive)}</strong></div>
+              <div><span>Cooldown</span><strong>{formatCooldown(unstakeCooldownSeconds)}</strong></div>
+              <div><span>Wallets</span><strong>{hiveRows.length} with HIVE</strong></div>
             </div>
           </aside>
         </section>
@@ -476,7 +581,7 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
             </div>
           </div>
           <div className={styles.tierGrid}>
-            {HIVE_STAKING_TIERS.map((tier) => {
+            {HIVE_STAKING_TIERS.map((tier, index) => {
               const reached = totalStakedHive >= Number(tier.thresholdHive);
               const isNext = nextTier?.id === tier.id;
               const cardClass = [
@@ -486,8 +591,12 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
               ].filter(Boolean).join(" ");
               return (
                 <article key={tier.id} className={cardClass}>
+                  <span className={styles.ladn}>{String(index + 1).padStart(2, "0")}</span>
                   <div className={styles.tierTop}>
-                    <strong>{tier.label}</strong>
+                    <span className={styles.tierName}>
+                      <Hexagon className={styles.tierMark} aria-hidden="true" />
+                      <strong>{tier.label}</strong>
+                    </span>
                     {reached ? (
                       <span className={`${styles.tierBadge} ${styles.tierBadgeReached}`}>
                         <Check aria-hidden="true" size={11} /> Reached
@@ -496,7 +605,10 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
                       <span className={`${styles.tierBadge} ${styles.tierBadgeNext}`}>Next</span>
                     ) : null}
                   </div>
-                  <span className={styles.tierThreshold}>{tierAmount(tier.thresholdHive)}</span>
+                  <span className={styles.tierThreshold}>
+                    {tierAmount(tier.thresholdHive).replace(" HIVE", "")}
+                    <small className={styles.tierUnit}>HIVE</small>
+                  </span>
                   <p>{tier.role}</p>
                 </article>
               );
@@ -509,7 +621,7 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
             <div>
               <p className={styles.eyebrow}>Connected wallets</p>
               <h2>Stake available HIVE</h2>
-              <p className={styles.panelIntro}>Balances are pulled from the same personal Base wallets shown in the Wallets view.</p>
+              <p className={styles.panelIntro}>Balances are pulled from the same personal Base wallets shown in the Wallets view. Staking locks HIVE in the Base contract — it never leaves your custody.</p>
             </div>
             <div className={styles.actions}>
               {!nativeDesktopRuntime ? (
@@ -575,8 +687,8 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
                         onClick={() => void stakeRow(row)}
                         disabled={activeDraft?.busy || !stakingContractAddress || !canStakeInThisRuntime}
                       >
-                        <LockKeyhole aria-hidden="true" />
-                        {activeDraft?.busy ? "Signing" : "Stake"}
+                        <Shield aria-hidden="true" />
+                        {activeDraft?.busy ? "Signing…" : "Stake"}
                       </button>
                     </div>
                     {!canStakeInThisRuntime ? <p className={styles.status} data-tone="error">This Base wallet is view-only on this desktop. Import its Base private key or recovery phrase in Wallets, or stake from an external wallet surface.</p> : null}
@@ -588,7 +700,23 @@ export default function StakePageClient({ stakingContractAddress }: StakePageCli
             }) : refreshingBalances ? (
               <div className={styles.empty}>Checking Base HIVE balances...</div>
             ) : (
-              <div className={styles.empty}>No Base HIVE balances found yet. Refresh your Wallets view or add a Base wallet.</div>
+              <div className={styles.emptyState}>
+                <span className={styles.emptyIcon}><WalletCards aria-hidden="true" /></span>
+                <strong>No Base HIVE detected yet</strong>
+                <p>Connect a Base wallet or refresh your balances to start staking. The tier targets above show what each stake level unlocks.</p>
+                <div className={styles.actions}>
+                  {!nativeDesktopRuntime ? (
+                    <button type="button" className={styles.primaryButton} onClick={() => void connectBrowserWallet()} disabled={busy}>
+                      <WalletCards aria-hidden="true" /> Connect wallet
+                    </button>
+                  ) : (
+                    <Link className={styles.primaryButton} href="/?view=wallet"><WalletCards aria-hidden="true" /> Add local wallet</Link>
+                  )}
+                  <button type="button" className={styles.ghostButton} onClick={() => void refreshAll()} disabled={busy}>
+                    <RefreshCcw aria-hidden="true" /> Refresh
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </section>

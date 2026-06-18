@@ -60,7 +60,7 @@ description: Local-first agent fleet control room documentation.
   </section>
   <section class="docCard">
     <h3>Whole Brain</h3>
-    <p>Understand the shared Obsidian vault, canonical folder map, compiled wiki search, brain services, OKF export, shared skills, sync health, and architecture sync rules.</p>
+    <p>Understand the shared Obsidian vault, canonical folder map, entity-linked memory, temporal recall, compiled wiki search, brain services, OKF export, shared skills, sync health, and architecture sync rules.</p>
     <a href="whole-brain/">Open whole brain</a>
   </section>
   <section class="docCard">
@@ -112,7 +112,7 @@ The codebase now spans more than the original Fleet, Work, Brain, Chat, and Wall
 - My Apps: hivenet app and API-service discovery with icon proxying, health checks, service-kind signatures, OpenAPI/Hivemind route catalogs, route copy actions, and safe open links.
 - AEON: repository/workspace management, local clone/link flows, GitHub-backed duplicates, scheduler handoff, brain access, and deliverable discovery/download/transfer.
 - Swarm: chat-launched `/swarm [number]` agent-team passes, `/swarm-goal` Queen Bee build orchestration, `/swarm-sim` MiroShark simulation launches, MiroShark template-driven simulations, scenario helpers, archive loading, X/polymarket/reddit-style outputs, run intelligence, publish actions, and analysis-agent selection.
-- Brain Services: Obsidian graph, shared skills, GBrain, Syntho, trading brain install/status, service notes, Synthesis folder configuration, source access policy controls, vault doctor, and whole brain architecture docs.
+- Brain Services: Obsidian graph, shared skills, Agent Memory entity/usage indexes, QMD, Neo4j, GBrain, Syntho, trading brain install/status, service notes, Synthesis folder configuration, source access policy controls, vault doctor, and whole brain architecture docs.
 - Wallets, Tokens, and Usage: per-agent wallets, Base/Solana token rails, MoneyClaw key validation, UsePod prepaid status, x402 smoke tests, encrypted wallet-vault backup/restore, Honey observation, and Bankr HIVE claims.
 - GitLawb Code Proof: lightweight CLI/DID setup, project registry, task proof badges, Fleet Code Node status, and lazy local repo node hosting.
 - Work History and Maintenance: dynamic changelog history, note-to-Kanban intake, bulk task triage, process/heap memory telemetry, and conservative local repair actions.

@@ -1,6 +1,6 @@
 ---
 title: Whole Brain Services
-description: QMD, GBrain, Syntho, Brain Graph, context index, and optional service layers.
+description: Shared Brain Memory, Neo4j, QMD, GBrain, Syntho, Brain Graph, context index, and optional service layers.
 ---
 
 # Brain Services
@@ -68,6 +68,22 @@ Operations/Brain Services/Agent Memory Index.jsonl
 
 The index is a materialized retrieval view for typed Agent Memory inside the private vault. It includes memory content so typed recall can avoid reopening every Agent Memory markdown note on the hot path. Markdown notes remain the durable human-readable source, and typed recall falls back to markdown when the index is absent or older sparse entries cannot be used.
 
+Entity-linked recall has a small append-only index at:
+
+```text
+Operations/Brain Services/Agent Memory Entity Index.jsonl
+```
+
+Each row links one typed Agent Memory record to a deterministic entity or alias extracted from wikilinks, tags, quoted phrases, acronyms, proper-name sequences, project/runtime/agent/machine fields, and known HivemindOS service names. The entity index is a local retrieval aid, not a second source of truth.
+
+Soft retrieval telemetry is appended at:
+
+```text
+Operations/Brain Services/Agent Memory Retrievals.jsonl
+```
+
+This log records memory ids, timestamps, retrieved/final-answer usage, and optional usage context. It gently reorders crowded result sets; it does not hide memories that have never been retrieved.
+
 Full-vault recall has its own generated lexical index at:
 
 ```text
@@ -125,10 +141,12 @@ All content searches over the vault and conversations use ripgrep (`rg`) first, 
 The API supports:
 
 - `remember`: save a typed memory note.
+- `remember-action`: save a durable assistant/agent-confirmed action memory, such as a Queen Bee receipt or handoff completion.
 - `evolve`: save a new active memory while marking older Agent Memory notes as `superseded`.
-- `recall`: retrieve relevant shared-brain memories and vault notes by query, type, tags, project, and optional `scope`.
+- `recall`: retrieve relevant shared-brain memories and vault notes by query, type, tags, project, optional `scope`, optional `temporalMode`, optional `asOf`, and optional usage tracking.
 - `answer`: return a grounded memory context pack from the matching memories and vault notes.
 - `rebuild-index`: scan existing markdown memory notes, append rich searchable entries to the private typed-memory index, and refresh the generated full-vault lexical index unless `includeFullVault: false` is passed.
+- `record-usage`: append retrieved or final-answer usage telemetry for memory ids.
 - `proof: true`: attach a GitLawb memory receipt for this write.
 - `proof: "auto"`: attach receipts for durable memory types and high-confidence facts.
 
@@ -141,7 +159,9 @@ hive-brain remember --type preference --title "Short title" --content "Durable m
 hive-brain evolve --memory-id mem-... --content "Updated durable memory body"
 ```
 
-Memory evolution keeps agent memory from becoming a pile of contradictory notes. A normal `remember` call is the fast System 1 capture path. When a later reviewed fact, preference, instruction, or decision replaces an older one, callers use `action: "evolve"` with `memoryId` or `supersedes`. HivemindOS writes a new active note with `cognitiveStage: "system2"`, records `supersedes`, `supersededBy`, `evolutionRootId`, `evolutionType`, and optional `evolutionReason`, then appends replacement rows to `Agent Memory Index.jsonl`. Recall and answer return the latest active chain head while including prior versions as `evolutionChain` evidence.
+Memory evolution keeps agent memory from becoming a pile of contradictory notes. A normal `remember` call is the fast System 1 capture path. When a later reviewed fact, preference, instruction, or decision replaces an older one, callers use `action: "evolve"` with `memoryId` or `supersedes`. HivemindOS writes a new active note with `cognitiveStage: "system2"`, records `supersedes`, `supersededBy`, `evolutionRootId`, `evolutionType`, and optional `evolutionReason`, then appends replacement rows to `Agent Memory Index.jsonl` and entity rows to `Agent Memory Entity Index.jsonl`. Current recall returns active chain heads by default and includes prior versions as `evolutionChain` evidence when relevant. Temporal recall auto-detects prompts such as "before," "used to," "as of," explicit dates, and relative time phrases; those queries may include superseded history or as-of chain heads as evidence.
+
+Typed Agent Memory ranking fuses exact/title/tag/content matches, BM25-lite lexical scoring, entity/alias matches, confidence, temporal fit, recency, status, optional full-vault lexical score, and soft usage telemetry into `scoreDetails`. Embeddings are intentionally deferred in this local v1 path.
 
 The prompt hook is intentionally small and local:
 
@@ -155,6 +175,7 @@ It runs `hive-brain answer` for the submitted prompt, emits Claude's `additional
 Memory records carry provenance fields for the writer and machine:
 
 - Agent fields: `agentName`, `agentId`, `runtime`, `sessionId`.
+- Memory shape fields: `entities`, `aliases`, `actorRole`, and `memoryOrigin`.
 - Machine fields: `machineName`, `machineId`, `collectorUrl`.
 - Tailnet fields: `tailnetId`, `tailnetName`, and `tailnetDnsName`. Raw Tailnet IPs should not be stored in shared memory notes.
 
@@ -313,6 +334,35 @@ Primary sources:
 
 - `src/lib/services/brain/qmd.ts`
 - `/api/brain/qmd/*`
+
+## Neo4j
+
+Neo4j is an optional derived graph service for the shared brain. Obsidian Agent Memory remains canonical. HivemindOS can connect to an existing Neo4j database using env-key names, sync derived nodes with `MERGE`, and run read-only Cypher queries from Brain Services.
+
+Secrets are never stored in dashboard state, notes, docs, or logs. The config stores only key names:
+
+```text
+NEO4J_URI
+NEO4J_USERNAME
+NEO4J_PASSWORD
+NEO4J_DATABASE
+```
+
+The derived graph can include `Memory`, `Entity`, `Tag`, `Project`, `Agent`, `Machine`, `Runtime`, and `CompiledKnowledgePage` nodes. Relationships include `MENTIONS`, `SUPERSEDES`, `IN_PROJECT`, `BY_AGENT`, `ON_MACHINE`, `BY_RUNTIME`, `HAS_TAG`, and `LINKS_TO`. Sync is idempotent and MERGE-only; it must not delete user-created Neo4j data. Any future cleanup should touch only nodes marked `source: "hivemindos-derived"` and only when explicitly requested.
+
+Service note:
+
+```text
+Operations/Brain Services/Neo4j.md
+```
+
+Primary sources:
+
+- `src/lib/services/brain/neo4j.ts`
+- `/api/brain/neo4j/status`
+- `/api/brain/neo4j/connect`
+- `/api/brain/neo4j/sync`
+- `/api/brain/neo4j/query`
 
 ## Syntho
 

@@ -101,6 +101,9 @@ for (const [path, tokens] of [
     "searchFullVaultSearchIndex",
   ]],
   ["src/lib/services/obsidian/agent-memory.ts", [
+    "agent-memory/core",
+  ]],
+  ["src/lib/services/obsidian/agent-memory/core.ts", [
     "searchFullVaultSearchIndex",
     "record.searchScore = hit.score",
     "record.searchCollection = hit.collection",

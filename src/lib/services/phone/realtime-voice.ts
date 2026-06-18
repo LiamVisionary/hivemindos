@@ -2,6 +2,13 @@ import { readFileSync } from "fs";
 import { homedir } from "@/lib/home-dir";
 import { join } from "path";
 import type { RuntimeAgentVoiceBridge } from "@/lib/services/phone/call-gateway";
+import { voiceProviderCapabilitiesPayload } from "@/lib/services/phone/voice-provider-capabilities";
+import { listVoiceRecipes } from "@/lib/services/phone/voice-recipes";
+import {
+  ASK_COMPUTER_AGENT_TOOL as DEFAULT_ASK_COMPUTER_AGENT_TOOL,
+  describeVoiceToolBundles,
+  toolsForVoiceToolBundle,
+} from "@/lib/services/phone/voice-tool-bundles";
 
 export type RealtimeVoiceProvider = "openai-realtime" | "grok-voice" | "gemini-live";
 
@@ -81,22 +88,7 @@ const LANGUAGE_LOCK =
 const TOOL_PROGRESS_INSTRUCTION =
   " When you need to call a tool, briefly tell Liam what you are checking before the tool call, then speak the result when it returns.";
 
-export const ASK_COMPUTER_AGENT_TOOL: RealtimeToolSchema = {
-  type: "function",
-  name: "ask_computer_agent",
-  description:
-    "Delegate the user's request to the selected HivemindOS computer agent through the paired desktop gateway. Use this whenever the user asks that computer agent to inspect, change, run, schedule, or answer from its runtime context.",
-  parameters: {
-    type: "object",
-    properties: {
-      message: {
-        type: "string",
-        description: "The exact request to send to the selected computer-side agent runtime.",
-      },
-    },
-    required: ["message"],
-  },
-};
+export const ASK_COMPUTER_AGENT_TOOL: RealtimeToolSchema = DEFAULT_ASK_COMPUTER_AGENT_TOOL;
 
 function parseEnvValue(raw: string) {
   const value = raw.trim();
@@ -218,6 +210,7 @@ function openingLineForBriefing(briefing: string) {
 export function buildByokAgentCallInstructions(args: {
   briefing: string;
   runtimeAgent?: RuntimeAgentVoiceBridge;
+  toolBundleId?: string;
 }) {
   const openingLine = openingLineForBriefing(args.briefing);
   const runtimeAgent = args.runtimeAgent;
@@ -240,6 +233,7 @@ export async function createByokAgentCall(args: {
   briefing: string;
   voice: ResolvedVoice | null;
   runtimeAgent?: RuntimeAgentVoiceBridge;
+  toolBundleId?: string;
 }): Promise<ByokAgentCallResult> {
   if (!args.voice?.apiKey) {
     return { ok: false, reason: "openai_realtime_not_configured", missing: ["OPENAI_REALTIME_KEY or OPENAI_API_KEY"] };
@@ -247,7 +241,9 @@ export async function createByokAgentCall(args: {
   const instructions = buildByokAgentCallInstructions({
     briefing: args.briefing,
     runtimeAgent: args.runtimeAgent,
+    toolBundleId: args.toolBundleId,
   });
+  const tools = toolsForVoiceToolBundle(args.toolBundleId);
   let response: Response;
   try {
     response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
@@ -273,7 +269,7 @@ export async function createByokAgentCall(args: {
           },
           output: { voice: args.voice.voice || "alloy" },
         },
-        tools: [ASK_COMPUTER_AGENT_TOOL],
+        tools,
         tool_choice: "auto",
       },
     }),
@@ -310,7 +306,7 @@ export async function createByokAgentCall(args: {
     model: process.env.OPENAI_REALTIME_MODEL || OPENAI_REALTIME_CALLS_MODEL,
     voice: args.voice.voice || "alloy",
     instructions,
-    tools: [ASK_COMPUTER_AGENT_TOOL],
+    tools,
   };
 }
 
@@ -405,6 +401,9 @@ export function voiceConfigPayload(managed: ManagedVoiceConfig = readManagedVoic
       }],
       managedBy: "hivemindos-tauri-dev",
       defaultCallMode: "byok",
+      providerCapabilities: voiceProviderCapabilitiesPayload(managed),
+      toolBundles: describeVoiceToolBundles(),
+      recipes: listVoiceRecipes(),
       callModes: [
         {
           id: "byok",

@@ -1,11 +1,15 @@
 import "server-only";
 
 import { createWalletClient, http, parseUnits } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { validateMnemonic } from "@scure/bip39";
+import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
+import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import { DEFAULT_BASE_HIVE_STAKING_CONTRACT_ADDRESS, DEFAULT_BASE_HIVE_TOKEN_ADDRESS } from "@/lib/config/hive-staking";
 import { isEvmAddress } from "@/lib/services/hive-staking-client";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
+
+const EVM_RECOVERY_PATH = "m/44'/60'/0'/0/0";
 
 const HIVE_ERC20_APPROVE_ABI = [{
   type: "function",
@@ -57,8 +61,7 @@ export async function stakeHiveFromLocalWallet(input: {
   const amount = Number(input.amountHive);
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Stake amount must be greater than zero.");
 
-  const privateKey = normalizeEvmPrivateKey(input.secret);
-  const account = privateKeyToAccount(privateKey);
+  const account = evmAccountFromLocalSecret(input.secret);
   if (account.address.toLowerCase() !== input.fromAddress.toLowerCase()) {
     throw new Error("Stored wallet key does not match the selected staking wallet.");
   }
@@ -88,11 +91,24 @@ export async function stakeHiveFromLocalWallet(input: {
   return { approveHash, stakeHash };
 }
 
-function normalizeEvmPrivateKey(secret: string): `0x${string}` {
+export function evmAccountFromLocalSecret(secret: string) {
+  const privateKey = maybeNormalizeEvmPrivateKey(secret);
+  if (privateKey) return privateKeyToAccount(privateKey);
+  return mnemonicToAccount(normalizeRecoveryPhrase(secret), { path: EVM_RECOVERY_PATH });
+}
+
+function maybeNormalizeEvmPrivateKey(secret: string): `0x${string}` | null {
   const compact = secret.trim();
   const prefixed = compact.startsWith("0x") ? compact : `0x${compact}`;
-  if (!/^0x[a-fA-F0-9]{64}$/.test(prefixed)) throw new Error("EVM private keys must be 32-byte hex.");
-  return prefixed as `0x${string}`;
+  return /^0x[a-fA-F0-9]{64}$/.test(prefixed) ? prefixed as `0x${string}` : null;
+}
+
+function normalizeRecoveryPhrase(secret: string) {
+  const mnemonic = secret.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!validateMnemonic(mnemonic, englishWordlist)) {
+    throw new Error("Stored Base signer must be an EVM private key or recovery phrase.");
+  }
+  return mnemonic;
 }
 
 function validateAddress(value: string, label: string): `0x${string}` {

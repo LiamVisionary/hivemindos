@@ -442,10 +442,14 @@ export function PolymarketView({ run, market }: { run: SwarmRun; market: SwarmMa
         background: "linear-gradient(180deg, rgba(94,234,212,0.08), var(--panel-bg))",
         padding: 16,
       }}>
-        <div className="grid" style={{ gridTemplateColumns: "minmax(0, 1fr) 220px", gap: 14, alignItems: "stretch" }}>
+        <div className="grid" style={{
+          gridTemplateColumns: "minmax(0, 1fr) minmax(180px, 220px)",
+          gap: 14, alignItems: "stretch",
+        }}>
           <div style={{
             minWidth: 0, padding: 14, borderRadius: 8,
             border: "1px solid rgba(148,163,184,0.14)", background: "rgba(2,6,23,0.26)",
+            display: "flex", flexDirection: "column", maxHeight: 360, overflow: "hidden",
           }}>
             <div className="uppercase" style={{
               fontFamily: "var(--f-mono)", fontSize: 10, letterSpacing: 0.12,
@@ -453,27 +457,33 @@ export function PolymarketView({ run, market }: { run: SwarmRun; market: SwarmMa
             }}>
               Polymarket simulation · {run.state}
             </div>
-            <div className="uppercase" style={{
-              marginTop: 14, fontFamily: "var(--f-mono)", fontSize: 10,
-              color: "var(--muted)", letterSpacing: 0.1,
-            }}>
-              market question
+            <div style={{ minHeight: 0, overflow: "auto", paddingRight: 6 }}>
+              <div className="uppercase" style={{
+                marginTop: 14, fontFamily: "var(--f-mono)", fontSize: 10,
+                color: "var(--muted)", letterSpacing: 0.1,
+              }}>
+                market question
+              </div>
+              <h2 style={{
+                margin: "5px 0 12px", fontFamily: "var(--f-display)", fontSize: 21,
+                lineHeight: 1.24, letterSpacing: 0, fontWeight: 750,
+                overflowWrap: "anywhere", wordBreak: "break-word",
+              }}>
+                {marketQuestion}
+              </h2>
+              <div className="uppercase" style={{
+                fontFamily: "var(--f-mono)", fontSize: 10,
+                color: "var(--muted)", letterSpacing: 0.1,
+              }}>
+                scenario brief
+              </div>
+              <p style={{
+                margin: "5px 0 0", color: "var(--muted)", fontSize: 13, lineHeight: 1.55,
+                overflowWrap: "anywhere", wordBreak: "break-word",
+              }}>
+                {scenario}
+              </p>
             </div>
-            <h2 style={{
-              margin: "5px 0 12px", fontFamily: "var(--f-display)", fontSize: 21,
-              lineHeight: 1.24, letterSpacing: 0, fontWeight: 750,
-            }}>
-              {marketQuestion}
-            </h2>
-            <div className="uppercase" style={{
-              fontFamily: "var(--f-mono)", fontSize: 10,
-              color: "var(--muted)", letterSpacing: 0.1,
-            }}>
-              scenario brief
-            </div>
-            <p style={{ margin: "5px 0 0", color: "var(--muted)", fontSize: 13, lineHeight: 1.55 }}>
-              {scenario}
-            </p>
           </div>
           <div className="grid" style={{
             gap: 8, padding: 14, borderRadius: 8,

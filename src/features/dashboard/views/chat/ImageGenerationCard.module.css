@@ -211,10 +211,11 @@
 .skeleton::before {
   content: "";
   position: absolute;
-  inset: 0 -70%;
-  background: linear-gradient(100deg, transparent 35%, rgba(94, 234, 212, 0.15) 50%, transparent 65%);
-  transform: translateX(-42%);
-  animation: shimmer 1.7s linear infinite;
+  inset: 0 auto 0 -36%;
+  width: 36%;
+  background: linear-gradient(100deg, transparent 20%, rgba(94, 234, 212, 0.11) 48%, rgba(251, 191, 36, 0.07) 58%, transparent 82%);
+  transform: translateX(0);
+  animation: shimmer 1.9s ease-in-out infinite;
   will-change: transform;
 }
 
@@ -311,8 +312,8 @@
 }
 
 @keyframes shimmer {
-  0% { transform: translateX(-42%); }
-  100% { transform: translateX(42%); }
+  0% { transform: translateX(0); }
+  100% { transform: translateX(380%); }
 }
 
 @keyframes pixelReveal {
@@ -364,6 +365,12 @@
 :global(:root[data-theme="hive-light"]) .title small,
 :global(:root[data-theme="hive-light"]) .prompt span {
   color: var(--text-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::before {
+    animation: none;
+  }
 }
 
 :global(:root[data-theme="hive-light"]) .icon,

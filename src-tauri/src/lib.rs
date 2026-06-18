@@ -39,6 +39,27 @@ use std::process::Stdio;
 
 #[cfg(all(not(debug_assertions), target_os = "windows"))]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+/// Build a `Command` for a background/probe spawn that must NOT pop a console
+/// window on Windows. On Windows a plain `Command` flashes a black console
+/// window every time it runs; for one-off opens that's a blink, but for
+/// repeated probes it's a strobe. The native_setup_status command alone fires
+/// ~12 `where` probes per call, polled every 4s while setup finishes, which
+/// looked like "black screens popping up constantly" on a real Windows box.
+/// Routes every background/polled spawn through CREATE_NO_WINDOW. No-op off
+/// Windows. Do NOT use this for spawns that are *meant* to open a window (the
+/// setup terminal, "open in Terminal", reveal-in-Explorer).
+pub(crate) fn hidden_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    #[allow(unused_mut)]
+    let mut command = Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    command
+}
+
 // The embedded Next dashboard binds IPv4 loopback only (127.0.0.1 — NOT
 // "localhost", which resolves to IPv6 ::1 and breaks the IPv4 forwarder dial).
 // A paired phone reaches it over the tailnet via spawn_tailnet_forwarder, which

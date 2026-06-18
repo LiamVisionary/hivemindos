@@ -16,6 +16,7 @@ import {
   isLocalTtsProviderId,
   resolveLocalTtsCallConfig,
 } from "@/lib/services/phone/local-tts";
+import { appendVoiceRunEvent, completeVoiceRun, createVoiceRun } from "@/lib/services/phone/voice-runs";
 
 const GATEWAY_PORTS = [5000, 5001, 5002];
 
@@ -87,6 +88,7 @@ export type RuntimeAgentVoiceBridge = {
   hubUrl: string;
   agent: AgentCallIdentity;
   machine?: AgentCallMachine;
+  voiceRunId?: string;
 };
 
 export type AgentCallMode = "byok" | "cloud";
@@ -382,14 +384,28 @@ export async function buildAgentCallPayload(input: AgentCallInput): Promise<Gate
   };
 }
 
-export function buildRuntimeAgentVoiceBridge(input: AgentCallInput, hubUrl: string): RuntimeAgentVoiceBridge | undefined {
+export function buildRuntimeAgentVoiceBridge(input: AgentCallInput, hubUrl: string, voiceRunId?: string): RuntimeAgentVoiceBridge | undefined {
   const cleanHubUrl = clean(hubUrl).replace(/\/+$/, "");
   if (!cleanHubUrl) return undefined;
   return {
     hubUrl: cleanHubUrl,
     agent: input.agent,
     machine: input.machine,
+    ...(voiceRunId ? { voiceRunId } : {}),
   };
+}
+
+function voiceRunCallPayload(run: Awaited<ReturnType<typeof createVoiceRun>>) {
+  return {
+    id: run.id,
+    status: run.status,
+    recipeId: run.recipeId,
+    toolBundleId: run.toolBundleId,
+  };
+}
+
+async function failVoiceRun(id: string | undefined, reason: string) {
+  await completeVoiceRun(id, "failed", reason).catch(() => undefined);
 }
 
 async function gatewayJson(path: string, init?: RequestInit): Promise<GatewayCallResult> {
@@ -441,13 +457,36 @@ async function startInternalAgentCall(
   const payload = await buildAgentCallPayload(input);
   const managed = readManagedVoiceConfig();
   const voiceProviders = voiceProvidersFromManagedConfig(managed);
+  const resolvedVoice = resolveVoice(payload.voiceProviderId, voiceProviders, managed);
+  const voiceRun = await createVoiceRun({
+    title: payload.title || clean(input.agent.name) || "Cloud agent call",
+    mode: "cloud",
+    recipeId: "cloud-multi-agent-room",
+    toolBundleId: "agent-call-default",
+    agent: input.agent,
+    machine: input.machine,
+    provider: {
+      id: "livekit-cloud-room",
+      label: "HivemindOS Cloud Agent Calls",
+      model: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime",
+      voice: resolvedVoice?.voice,
+      transport: "managed-room",
+    },
+    initialContext: {
+      briefing: payload.briefing || "",
+      callMode: "cloud",
+      tokenField: options.tokenField,
+    },
+  });
+  const runtimeAgent = options.hubUrl ? buildRuntimeAgentVoiceBridge(input, options.hubUrl, voiceRun.id) : undefined;
   const call = await createInAppCall({
     briefing: payload.briefing || "",
-    voice: resolveVoice(payload.voiceProviderId, voiceProviders, managed),
-    callId: `${options.idPrefix}_${Date.now()}`,
-    runtimeAgent: options.hubUrl ? buildRuntimeAgentVoiceBridge(input, options.hubUrl) : undefined,
+    voice: resolvedVoice,
+    callId: voiceRun.id,
+    runtimeAgent,
   }, managed);
   if (!call.ok) {
+    await failVoiceRun(voiceRun.id, call.reason);
     return {
       ok: false,
       error: call.reason === "livekit_disabled"
@@ -458,6 +497,12 @@ async function startInternalAgentCall(
       result: call,
     };
   }
+  await appendVoiceRunEvent(voiceRun.id, {
+    type: "call.connected",
+    speaker: "system",
+    text: `Cloud voice room created: ${call.room}.`,
+    payload: { room: call.room },
+  }).catch(() => undefined);
   const token = options.tokenField === "dashboardToken" ? call.dashboardToken : call.token;
   return {
     ok: true,
@@ -471,6 +516,8 @@ async function startInternalAgentCall(
         livekitUrl: call.livekitUrl,
         room: call.room,
         [options.tokenField]: token,
+        runtimeAgent,
+        voiceRun: voiceRunCallPayload(voiceRun),
       },
       voice: call.voice,
     },
@@ -485,7 +532,6 @@ async function startAgentByokCall(input: AgentCallInput, hubUrl: string, idPrefi
   const payload = await buildAgentCallPayload(input);
   const managed = readManagedVoiceConfig();
   const voiceProviders = voiceProvidersFromManagedConfig(managed);
-  const runtimeAgent = buildRuntimeAgentVoiceBridge(input, hubUrl);
   if (payload.voiceRuntime === LOCAL_TTS_RUNTIME || isLocalTtsProviderId(payload.voiceProviderId)) {
     const localTts = await resolveLocalTtsCallConfig({
       origin: hubUrl,
@@ -502,6 +548,27 @@ async function startAgentByokCall(input: AgentCallInput, hubUrl: string, idPrefi
         result: { ok: false, reason: "local_tts_not_validated", missing: [] },
       };
     }
+    const voiceRun = await createVoiceRun({
+      title: payload.title || clean(input.agent.name) || "Local TTS agent call",
+      mode: "local-tts",
+      recipeId: "agent-runtime-bridge",
+      toolBundleId: "agent-call-default",
+      agent: input.agent,
+      machine: input.machine,
+      provider: {
+        id: "local-tts",
+        label: localTts.appName || "Local TTS Runtime Bridge",
+        model: localTts.model,
+        voice: localTts.voice,
+        transport: "server-tts",
+      },
+      initialContext: {
+        briefing: payload.briefing || "",
+        callMode: "local-tts",
+        openingLine: localTts.openingLine,
+      },
+    });
+    const runtimeAgent = buildRuntimeAgentVoiceBridge(input, hubUrl, voiceRun.id);
     return {
       ok: true,
       gateway: "hivemindos",
@@ -514,16 +581,40 @@ async function startAgentByokCall(input: AgentCallInput, hubUrl: string, idPrefi
           voiceReady: true,
           localTts,
           runtimeAgent,
+          voiceRun: voiceRunCallPayload(voiceRun),
         },
       },
     };
   }
+  const resolvedVoice = resolveVoice(payload.voiceProviderId, voiceProviders, managed);
+  const voiceRun = await createVoiceRun({
+    title: payload.title || clean(input.agent.name) || "BYOK agent call",
+    mode: "byok",
+    recipeId: "agent-runtime-bridge",
+    toolBundleId: "agent-call-default",
+    agent: input.agent,
+    machine: input.machine,
+    provider: {
+      id: "openai-realtime",
+      label: "OpenAI Realtime BYOK",
+      model: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime",
+      voice: resolvedVoice?.voice,
+      transport: "direct-webrtc",
+    },
+    initialContext: {
+      briefing: payload.briefing || "",
+      callMode: "byok",
+    },
+  });
+  const runtimeAgent = buildRuntimeAgentVoiceBridge(input, hubUrl, voiceRun.id);
   const call = await createByokAgentCall({
     briefing: payload.briefing || "",
-    voice: resolveVoice(payload.voiceProviderId, voiceProviders, managed),
+    voice: resolvedVoice,
     runtimeAgent,
+    toolBundleId: voiceRun.toolBundleId,
   });
   if (!call.ok) {
+    await failVoiceRun(voiceRun.id, call.reason);
     return {
       ok: false,
       gateway: "hivemindos",
@@ -553,6 +644,7 @@ async function startAgentByokCall(input: AgentCallInput, hubUrl: string, idPrefi
           tools: call.tools,
         },
         runtimeAgent,
+        voiceRun: voiceRunCallPayload(voiceRun),
       },
     },
   };

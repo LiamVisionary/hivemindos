@@ -18,9 +18,9 @@ const panelStyle: React.CSSProperties = {
 function PanelHeader({ title, right }: { title: string; right?: React.ReactNode }) {
   return (
     <header className="flex justify-between items-center"
-      style={{ gap: 8, padding: "10px 12px", borderBottom: "1px solid rgba(148,163,184,0.16)" }}>
-      <span className={styles.monoCap} style={{ color: "var(--muted)" }}>{title}</span>
-      <span className={styles.monoCap}>{right}</span>
+      style={{ gap: 8, padding: "10px 12px", borderBottom: "1px solid rgba(148,163,184,0.16)", flexWrap: "wrap" }}>
+      <span className={styles.monoCap} style={{ color: "var(--muted)", minWidth: 0 }}>{title}</span>
+      <span className={styles.monoCap} style={{ minWidth: 0 }}>{right}</span>
     </header>
   );
 }
@@ -49,7 +49,7 @@ export function MarketPanel({ data }: { data: SwarmMarket }) {
     <section style={panelStyle}>
       <PanelHeader title="Market · live"
         right={<span style={{ color: "var(--hex-active-border)" }}>{data.symbol}</span>} />
-      <div className="grid" style={{ gridTemplateColumns: "1fr 1.05fr", gap: 12, padding: "10px 12px 12px" }}>
+      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))", gap: 12, padding: "10px 12px 12px" }}>
         <div className="grid" style={{ gap: 8 }}>
           <div style={{ padding: "10px 12px", borderRadius: 7,
             border: "1px solid rgba(148,163,184,0.16)", background: "var(--code-bg)" }}>
@@ -121,7 +121,7 @@ export function SocialPanel({ posts }: { posts: SwarmSocialPost[] }) {
           }}>
             <BeeIcon role="worker" size={18} dim={p.faction === "OPS"} />
             <div className="min-w-0">
-              <div className="flex items-baseline" style={{ gap: 8, marginBottom: 2 }}>
+              <div className="flex items-baseline" style={{ gap: 8, marginBottom: 2, flexWrap: "wrap" }}>
                 <span style={{
                   fontFamily: "var(--f-display)", fontSize: 11, fontWeight: 700,
                   color: FACTION_COLOR[p.faction],

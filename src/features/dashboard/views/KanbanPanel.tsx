@@ -2,20 +2,28 @@
 // @ts-nocheck
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import type { WorkHistoryPayload } from "@/lib/types/work-history";
 import { WorkSectionHeader } from "./WorkSectionHeader";
-import { WorkHistoryView } from "./WorkHistoryView";
 
 const EMPTY_WORK_HISTORY: WorkHistoryPayload = { projects: [], entries: [] };
 const WORK_HISTORY_PAGE_SIZE = 10;
+const codeProofPillStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  minHeight: 22,
+  border: "1px solid rgba(111,205,186,0.28)",
+  borderRadius: 7,
+  background: "rgba(111,205,186,0.10)",
+  color: "#9fe0d3",
+  padding: "3px 7px",
+  fontSize: 10.5,
+  fontWeight: 800,
+};
 
-export const KanbanPanel = memo(KanbanPanelComponent);
-
-// Memoized (see export above) so unrelated background re-renders skip this panel.
-function KanbanPanelComponent(props: any) {
+export function KanbanPanel(props: any) {
   const { AttachmentListMenuContent, AttachmentMenuContent, CellMenu, ChatMarkdown, Check, ChevronDown, ChevronRight, ComposerField, DEFAULT_SHARED_VAULT, ExternalLink, Eye, FolderOpen, Image, KANBAN_COLUMNS, KANBAN_STEER_TARGETS, MessageAttachments, MessageSquare, Paperclip, Plus, RotateCcw, Search, Settings2, activeView, addKanbanComment, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, attachQuickAddDirectory, attachQuickAddRecentDirectory, bulkPatchKanbanTasks, chatClass, commentDraft, createKanbanBoard, createKanbanTask, displayAgents, editAndInterruptKanbanTask, expandedKanbanCards, formatDurationShort, formatMessageTimestamp, formatRelativeTime, handleKanbanCardFileChange, handleKanbanCardImageChange, handleKanbanSteerFileChange, handleKanbanSteerImageChange, handleQuickAddFileChange, handleQuickAddImageChange, importNoteIntake, initialWorkHistory, isKanbanStaleWorkingTask, isKanbanTerminalMessage, kanbanAssigneeFilter, kanbanAssigneeOptions, kanbanBoard, kanbanBoardScrollRef, kanbanBoardScrollState, kanbanBoardSlug, kanbanBoards, kanbanBulkAssignee, kanbanBulkPending, kanbanCardAttachmentListOpen, kanbanCardAttachmentMenuOpen, kanbanCardDeliverableMenuOpen, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanCardMachineMenuOpen, kanbanCardMessage, kanbanCardRecentsExpanded, kanbanClass, kanbanEditDraft, kanbanEditPendingTaskId, kanbanError, kanbanEventLabel, kanbanIncludeArchived, kanbanInitialLoading, kanbanLoading, kanbanMachineTargets, kanbanPickupPreviewByTask, kanbanSearch, kanbanStaleAge, kanbanSteerAttachmentError, kanbanSteerAttachmentMenuOpen, kanbanSteerAttachmentMenuRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerFileInputRef, kanbanSteerImageInputRef, kanbanSteerTargetMenuOpen, kanbanSteerTargetMenuRef, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanStorage, kanbanTaskBee, kanbanTaskMenuItems, kanbanTaskModal, kanbanTenantFilter, kanbanTenants, kanbanViewColumns, markKanbanTaskReviewed, moveKanbanTask, newBoardDraft, noteIntakePending, noteIntakePreview, noteIntakeStatus, openKanbanCardFilePicker, openKanbanTaskModal, patchKanbanTask, quickAddAttachmentError, quickAddAttachmentMenuOpen, quickAddAttachmentMenuRef, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddFileInputRef, quickAddImageInputRef, quickAddMachineMenuOpen, quickAddMachineMenuRef, quickAddMachineTarget, quickAddMachineTargets, quickAddStatus, recentDirectories, recentDirectoriesExpanded, recording, removeKanbanCardAttachment, removeKanbanCardDirectory, removeKanbanSteerAttachment, removeKanbanSteerDirectory, removeQuickAddAttachment, removeQuickAddDirectory, scanNoteIntake, selectedKanbanAgent, selectedKanbanAgentMessages, selectedKanbanBulkIds, selectedKanbanComments, selectedKanbanEvents, selectedKanbanTask, selectedKanbanTaskId, selectedKanbanTaskIds, setActiveView, setCommentDraft, setExpandedKanbanCards, setKanbanAssigneeFilter, setKanbanBoardSlug, setKanbanBulkAssignee, setKanbanCardAttachmentListOpen, setKanbanCardAttachmentMenuOpen, setKanbanCardDeliverableMenuOpen, setKanbanCardMachineMenuOpen, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanIncludeArchived, setKanbanLoading, setKanbanSearch, setKanbanSteerAttachmentMenuOpen, setKanbanSteerDraft, setKanbanSteerTargetMenuOpen, setKanbanSteerTargetStatus, setKanbanTaskModal, setKanbanTenantFilter, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddStatus, setRecentDirectoriesExpanded, setSelectedKanbanTaskId, setSelectedKanbanTaskIds, sharedVault, startAudioRecording, steerSelectedKanbanTask, stopAudioRecording, updateKanbanTaskMachine, updateSharedVault, voiceBands, voiceTarget, voiceTranscript, workBoardStats } = props;
   const [workHistory, setWorkHistory] = useState<WorkHistoryPayload>(initialWorkHistory ?? EMPTY_WORK_HISTORY);
   const [workHistoryLoading, setWorkHistoryLoading] = useState(false);
@@ -130,47 +138,16 @@ function KanbanPanelComponent(props: any) {
   };
   const proofLabelForTask = (task: any) => {
     const summary = proofSummaryForTask(task);
-    if (summary.status === "verified") return "verified";
-    if (summary.status === "linked") return "linked";
-    if (summary.status === "ready") return "ready";
-    if (summary.status === "unavailable") return summary.projectLabel ? "unavailable" : "";
-    return summary.projectLabel ? "linked" : "";
-  };
-  const formatLoopScore = (score: any) => typeof score === "number"
-    ? score.toFixed(Math.abs(score) >= 10 ? 0 : 2).replace(/\.00$/, "")
-    : "";
-  const loopSummaryForTask = (task: any) => {
-    const loop = task.loop;
-    if (!loop) return null;
-    const observation = loop.observation;
-    const pendingRequiredGateCount = observation?.pendingRequiredGateCount ?? (Array.isArray(loop.evalGates)
-      ? loop.evalGates.filter((gate: any) => gate?.required && gate?.status !== "passed").length
-      : 0);
-    return {
-      antiPatternCount: observation?.antiPatternCount ?? loop.antiPatterns?.length ?? 0,
-      bestScore: formatLoopScore(observation?.bestScore),
-      experimentCount: observation?.totalExperiments ?? loop.experiments?.length ?? 0,
-      frontierCount: observation?.frontier?.length ?? 0,
-      label: loop.mode === "optimizer" ? "Optimizer loop" : `${loop.mode === "open" ? "Open" : "Closed"} loop`,
-      pendingRequiredGateCount,
-    };
+    if (summary.status === "verified") return "Code proof verified";
+    if (summary.status === "linked") return "Code proof linked";
+    if (summary.status === "ready") return "Code proof ready";
+    if (summary.status === "unavailable") return summary.projectLabel ? "Code proof unavailable" : "";
+    return summary.projectLabel ? "Code proof linked" : "";
   };
 
   useEffect(() => {
     workHistoryEntryCountRef.current = workHistory.entries.length;
   }, [workHistory.entries.length]);
-
-  // Escape closes the open Kanban task modal. Ignore the Escape that cancels an
-  // IME composition so it doesn't close the modal mid-word.
-  useEffect(() => {
-    if (!kanbanTaskModal) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.isComposing || event.keyCode === 229) return;
-      setKanbanTaskModal("");
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [kanbanTaskModal, setKanbanTaskModal]);
 
   useEffect(() => {
     if (activeView !== "kanban") return;
@@ -200,12 +177,8 @@ function KanbanPanelComponent(props: any) {
     else setWorkHistoryLoading(true);
     setWorkHistoryError("");
     return fetch(`/api/work-history?${params.toString()}`, { signal: options.signal })
-      // Parse defensively: a non-JSON response (e.g. an SPA/HTML fallback when no
-      // /api server is present, or a server error page) otherwise throws a raw
-      // engine parse error ("The string did not match the expected pattern") that
-      // surfaces as a scary red banner. Fall back to a clean message instead.
-      .then((response) => response.json().catch(() => null))
-      .then((data: WorkHistoryPayload | null) => {
+      .then((response) => response.json())
+      .then((data: WorkHistoryPayload) => {
         if (!data?.ok) throw new Error(data?.error || "Could not load work history.");
         setWorkHistory((current) => append
           ? {
@@ -357,7 +330,7 @@ function KanbanPanelComponent(props: any) {
                       value={sharedVault.noteTaskImportFolders || DEFAULT_SHARED_VAULT.noteTaskImportFolders}
                       onChange={(event) => updateSharedVault({ noteTaskImportFolders: event.target.value })}
                       rows={3}
-                      placeholder="Projects&#10;Intake&#10;Memory"
+                      placeholder="Projects&#10;Inbox"
                     />
                   </label>
                   <div className={kanbanClass("kanbanNoteActions")}>
@@ -453,7 +426,6 @@ function KanbanPanelComponent(props: any) {
                     <button
                       type="button"
                       className={kanbanClass("kanbanAddColumnTask")}
-                      data-bee={`kanban-add-${column.id}`}
                       onClick={() => setQuickAddStatus((current) => current === column.id ? "" : column.id)}
                       aria-label={`Add task to ${column.title}`}
                       title={`Add task to ${column.title}`}
@@ -475,7 +447,7 @@ function KanbanPanelComponent(props: any) {
                         </article>
                       ))
                     ) : quickAddStatus === column.id ? (
-                      <form className={kanbanClass("kanbanInlineAdd")} data-bee={`kanban-quick-add-${column.id}`} onSubmit={(event) => createKanbanTask(event, column.id, selectedCodeProjectId || undefined)}>
+                      <form className={kanbanClass("kanbanInlineAdd")} onSubmit={(event) => createKanbanTask(event, column.id, selectedCodeProjectId || undefined)}>
                         <div className={kanbanClass("kanbanInlineAddMeta")} ref={quickAddMachineMenuRef}>
                           <div className={kanbanClass("kanbanMachinePicker")}>
                             <button
@@ -570,8 +542,9 @@ function KanbanPanelComponent(props: any) {
                       const taskAttachmentCount = (task.attachments?.length ?? 0) + (task.linkedDirectories?.length ?? 0);
                       const deliverables = task.status === "done" ? (task.deliverables ?? []) : [];
                       const undoInProgress = Boolean(task.undoRequestedAt && (task.status === "ready" || task.status === "working"));
+                      const taskProject = task.projectId ? codeProjectById.get(task.projectId) : null;
+                      const proofSummary = proofSummaryForTask(task);
                       const proofLabel = proofLabelForTask(task);
-                      const loopSummary = loopSummaryForTask(task);
                       return (
                         <article className={kanbanClass("kanbanCardShell")} key={task.id}>
                           <div
@@ -615,30 +588,24 @@ function KanbanPanelComponent(props: any) {
                                   className={kanbanClass("kanbanPickupPreview")}
                                   title={`${pickupPreview.assignee} is claiming this task`}
                                 >
-                                  <Image src={pickupPreview.icon || "/icons/worker-bee-general-v5.png"} alt="" width={26} height={26} aria-hidden="true" unoptimized />
+                                  <Image src={pickupPreview.icon || "/icons/worker-bee-general-v2.png"} alt="" width={26} height={26} aria-hidden="true" unoptimized />
                                   <small>{pickupPreview.label}</small>
                                 </span>
                               ) : null}
                             </div>
                             <strong className={kanbanClass("kanbanCardTitle")}>{task.title}</strong>
                             {proofLabel ? (
-                              <div className={kanbanClass("codeProofRow")}>
-                                <span className={kanbanClass("codeProofStatusPill", proofLabel)}>
-                                  <span>{proofLabel === "verified" ? "Code proof verified" : `code proof ${proofLabel}`}</span>
-                                </span>
-                              </div>
-                            ) : null}
-                            {loopSummary ? (
-                              <div
-                                className={kanbanClass("codeProofRow")}
-                                title={`${loopSummary.experimentCount} experiments, ${loopSummary.frontierCount} frontier candidates, ${loopSummary.antiPatternCount} avoided patterns, ${loopSummary.pendingRequiredGateCount} pending gates`}
-                              >
-                                <span className={kanbanClass("priorityPill", loopSummary.pendingRequiredGateCount ? "urgent" : "normal")}>{loopSummary.label}</span>
-                                {loopSummary.bestScore ? <span className={kanbanClass("priorityPill", "normal")}>best {loopSummary.bestScore}</span> : null}
-                                <span className={kanbanClass("priorityPill", "normal")}>{loopSummary.experimentCount} exp</span>
-                                {loopSummary.frontierCount ? <span className={kanbanClass("priorityPill", "normal")}>{loopSummary.frontierCount} frontier</span> : null}
-                                {loopSummary.antiPatternCount ? <span className={kanbanClass("priorityPill", "stale")}>{loopSummary.antiPatternCount} avoid</span> : null}
-                                {loopSummary.pendingRequiredGateCount ? <span className={kanbanClass("priorityPill", "urgent")}>{loopSummary.pendingRequiredGateCount} gates</span> : null}
+                              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                                {taskProject ? (
+                                  <span style={codeProofPillStyle} title={taskProject.gitlawbRepo?.repoName || taskProject.name}>
+                                    {taskProject.name}
+                                  </span>
+                                ) : proofSummary.projectLabel || proofSummary.repo || proofSummary.title ? (
+                                  <span style={codeProofPillStyle} title={proofSummary.repo || proofSummary.title || proofSummary.projectLabel}>
+                                    {proofSummary.projectLabel || proofSummary.repo || proofSummary.title}
+                                  </span>
+                                ) : null}
+                                <span style={codeProofPillStyle}>{proofLabel}</span>
                               </div>
                             ) : null}
                             <div className={kanbanClass("kanbanCardMeta")}>
@@ -777,7 +744,7 @@ function KanbanPanelComponent(props: any) {
                               <time dateTime={new Date(task.updatedAt).toISOString()}>{formatRelativeTime(task.updatedAt)}</time>
                               {workingWithAgent ? (
                                 <span className={kanbanClass("kanbanWorkingBee", "compact")} title={`${task.assignee} is working`}>
-                                  <Image src={bee.icon || "/icons/worker-bee-general-v5.png"} alt="" width={18} height={18} aria-hidden="true" unoptimized />
+                                  <Image src={bee.icon || "/icons/worker-bee-general-v2.png"} alt="" width={18} height={18} aria-hidden="true" unoptimized />
                                 </span>
                               ) : null}
                               {staleWorking ? <span className={kanbanClass("priorityPill", "stale")}>quiet {formatDurationShort(kanbanStaleAge(task))}</span> : null}
@@ -953,26 +920,107 @@ function KanbanPanelComponent(props: any) {
       {activeView === "history" ? (
       <section className={kanbanClass("workBoardPanel", "tabPanel", "workHistoryPanel")}>
         <div className={kanbanClass("workBoardShell", "workHistoryShell")}>
-          <WorkHistoryView
-            workHistory={workHistory}
+          <WorkSectionHeader
             activeView={activeView}
-            onSelectMode={selectWorkMode}
-            project={workHistoryProject}
-            onProjectChange={setWorkHistoryProject}
-            query={workHistoryQuery}
-            onQueryChange={setWorkHistoryQuery}
-            loading={workHistoryShowingLoading}
-            loadingMore={workHistoryLoadingMore}
-            error={workHistoryError}
-            openCount={workHistoryOpenCount}
-            onLoadMore={() => void loadWorkHistory({ append: true })}
-            renderSummary={(text) => (
-              <ChatMarkdown
-                text={text}
-                headingClassName={kanbanClass("kanbanCardMarkdownHeading")}
-              />
-            )}
+            onSelect={selectWorkMode}
+            title="History"
+            subtitle="Dynamic changelog"
+            stats={[
+              { value: workHistory.entries.length, label: "shown", tone: "cyan" },
+              { value: workHistory.projects.length, label: "projects", tone: "honey" },
+              { value: workHistoryOpenCount, label: "open", tone: "danger" },
+              { value: workHistory.totalEntries ?? workHistory.entries.length, label: "total" },
+            ]}
           />
+
+          <section className={kanbanClass("workBoardControls", "workHistoryControls")} aria-label="History filters">
+            <label>
+              <span>project</span>
+              <select value={workHistoryProject} onChange={(event) => setWorkHistoryProject(event.target.value)}>
+                <option value="">all projects</option>
+                {workHistory.projects.map((project) => (
+                  <option value={project.id} key={project.id}>{project.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className={kanbanClass("workBoardSearch")}>
+              <span>search</span>
+              <div>
+                <Search aria-hidden="true" />
+                <input value={workHistoryQuery} onChange={(event) => setWorkHistoryQuery(event.target.value)} placeholder="title, summary, status..." />
+              </div>
+            </label>
+            <span
+              className={kanbanClass("kanbanSyncPill", workHistoryShowingLoading ? "loading" : "synced")}
+              title={workHistory.generatedAt ? `Refreshed ${new Date(workHistory.generatedAt).toLocaleString()}` : undefined}
+            >
+              <span className={kanbanClass("liveDot")} aria-hidden="true" />
+              {workHistoryShowingLoading ? "scanning" : "changelog feed"}
+            </span>
+          </section>
+
+          {workHistoryError ? <p className={kanbanClass("kanbanError")}>{workHistoryError}</p> : null}
+
+          <section className={kanbanClass("workHistoryList")} aria-label="Project changelog history">
+            {workHistoryShowingLoading && !workHistory.entries.length ? (
+              <>
+                <article className={kanbanClass("workHistoryLoadingNotice")} aria-live="polite">
+                  <strong>Scanning project changelogs</strong>
+                  <p>Looking across local projects and the shared brain vault.</p>
+                </article>
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <article className={kanbanClass("workHistoryItem", "loading")} key={`history-loading-${index}`} aria-hidden="true">
+                    <span />
+                    <strong />
+                    <p />
+                  </article>
+                ))}
+              </>
+            ) : workHistory.entries.length ? (
+              <>
+              {workHistory.entries.map((entry) => (
+                <article className={kanbanClass("workHistoryItem")} key={entry.id}>
+                  <div>
+                    <span className={kanbanClass("workHistoryMeta")}>
+                      {entry.timestamp ? <time dateTime={new Date(entry.sortTime).toISOString()}>{entry.timestamp}</time> : null}
+                      <span>{entry.projectName}</span>
+                      {entry.status ? <span>{entry.status}</span> : null}
+                      <span>{entry.source}</span>
+                    </span>
+                    <strong>{entry.title}</strong>
+                    {entry.areas ? <small className={kanbanClass("workHistoryAreas")}>{entry.areas}</small> : null}
+                    {entry.summary ? (
+                      <ChatMarkdown
+                        text={entry.summary}
+                        className={kanbanClass("workHistoryMarkdown")}
+                        headingClassName={kanbanClass("kanbanCardMarkdownHeading")}
+                      />
+                    ) : null}
+                  </div>
+                  <div className={kanbanClass("workHistoryActions")}>
+                    {entry.commitSummary ? <span className={kanbanClass("kanbanReviewBadge", "reviewed")}>{entry.commitSummary}</span> : null}
+                    {entry.verification ? <span className={kanbanClass("kanbanReviewBadge")}>verified</span> : null}
+                  </div>
+                </article>
+              ))}
+              {workHistory.hasMore ? (
+                <button
+                  type="button"
+                  className={kanbanClass("workHistoryLoadMore")}
+                  disabled={workHistoryLoadingMore}
+                  onClick={() => void loadWorkHistory({ append: true })}
+                >
+                  {workHistoryLoadingMore ? "Loading more..." : `Load 10 more (${workHistory.entries.length}/${workHistory.totalEntries ?? workHistory.entries.length})`}
+                </button>
+              ) : null}
+              </>
+            ) : (
+              <div className={kanbanClass("workHistoryEmpty")}>
+                <strong>No changelog entries found</strong>
+                <p>No matching project updates are available yet.</p>
+              </div>
+            )}
+          </section>
         </div>
       </section>
       ) : null}

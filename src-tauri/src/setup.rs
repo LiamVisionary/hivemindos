@@ -109,10 +109,13 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 fn command_exists(name: &str) -> bool {
+    // hidden_command: native_setup_status calls this ~12x per poll (every 4s
+    // while setup finishes); a plain `where` spawn flashes a console window
+    // each time on Windows. See crate::hidden_command.
     let status = if cfg!(target_os = "windows") {
-        Command::new("where").arg(name).output().map(|output| output.status)
+        crate::hidden_command("where").arg(name).output().map(|output| output.status)
     } else {
-        Command::new("sh")
+        crate::hidden_command("sh")
             .args(["-lc", &format!("command -v {name} >/dev/null 2>&1")])
             .status()
     };

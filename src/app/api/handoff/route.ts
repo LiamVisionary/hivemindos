@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { chooseBeeAssignment, inferWorkerClass } from "@/lib/services/orchestration/bee-roles";
 import type { AgentProfile, BeeWorkerClass } from "@/lib/types/agent-runtime";
 import { canonicalLocalCollectorUrl } from "@/lib/services/local-collector-url";
+import { rememberActionAgentMemory } from "@/lib/services/obsidian/agent-memory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -166,7 +167,7 @@ export async function POST(request: NextRequest) {
       })
       : null;
 
-    return NextResponse.json({
+    const responsePayload = {
       ok: true,
       dryRun: normalized.dryRun,
       action: normalized.action,
@@ -185,10 +186,56 @@ export async function POST(request: NextRequest) {
       warnings: [
         ...(normalized.files.length > 0 && !resolution.machine.capabilities?.fileTransfers ? [`${machineName(resolution.machine)} has not advertised fileTransfers; Syncthing may still deliver the vault payload, but collector inbox checks may be unavailable.`] : []),
       ],
-    });
+    };
+    if (!normalized.dryRun) {
+      await recordHandoffActionMemory({
+        action: normalized.action,
+        machineName: machineName(resolution.machine),
+        selectedAgent: selectedAgent?.agent,
+        workerClass,
+        transfer,
+        remoteTask,
+        task: normalized.task,
+        note: normalized.note,
+      });
+    }
+    return NextResponse.json(responsePayload);
   } catch (error) {
     return handoffError(error instanceof Error ? error.message : "Handoff failed.", 500);
   }
+}
+
+async function recordHandoffActionMemory(input: {
+  action: HandoffAction;
+  machineName: string;
+  selectedAgent?: AgentProfile;
+  workerClass: BeeWorkerClass;
+  transfer: TransferManifest | null;
+  remoteTask: { ok: boolean; host: string; preview: string } | null;
+  task: string;
+  note: string;
+}) {
+  const subject = input.task || input.note || "HivemindOS handoff";
+  await rememberActionAgentMemory({
+    title: `Handoff ${input.action} to ${input.machineName}`,
+    content: [
+      `HivemindOS completed a ${input.action} handoff to ${input.machineName}.`,
+      input.selectedAgent ? `Selected agent: ${input.selectedAgent.name || input.selectedAgent.id || input.selectedAgent.agentId} (${input.selectedAgent.runtime || "runtime unknown"}).` : "",
+      `Worker class: ${input.workerClass}.`,
+      input.transfer?.id ? `Transfer: ${input.transfer.id}.` : "",
+      input.remoteTask?.host ? `Remote task accepted by ${input.remoteTask.host}.` : "",
+      `Subject: ${subject.replace(/\s+/g, " ").slice(0, 220)}.`,
+    ].filter(Boolean).join("\n"),
+    source: "Handoff receipt",
+    agentName: "HivemindOS Handoff",
+    agentId: "hivemindos-handoff",
+    runtime: "hivemindos",
+    project: "HivemindOS",
+    tags: ["handoff", "receipt"],
+    entities: ["Handoff", "HivemindOS", input.machineName],
+    actorRole: "agent",
+    memoryOrigin: "system-receipt",
+  }).catch(() => undefined);
 }
 
 function normalizeBody(body: HandoffBody) {

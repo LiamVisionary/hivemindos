@@ -211,8 +211,13 @@
   display: flex;
   gap: 11px;
   align-items: center;
+  margin: 0 0 12px;
   border-color: var(--brain-honey-line, rgba(231, 180, 92, 0.32)) !important;
   background: var(--brain-honey-soft) !important;
+}
+
+.envStatusCard {
+  margin: 0 0 12px;
 }
 
 .envListHeader {
@@ -316,6 +321,12 @@
   border-color: var(--brain-honey-line, rgba(231, 180, 92, 0.32));
   background: var(--brain-honey-soft);
   color: var(--brain-honey);
+}
+
+.envIconOk {
+  border-color: color-mix(in srgb, var(--brain-live) 35%, transparent);
+  background: var(--brain-live-soft, rgba(111, 205, 186, 0.14));
+  color: var(--brain-live);
 }
 
 .envIconDanger:hover,

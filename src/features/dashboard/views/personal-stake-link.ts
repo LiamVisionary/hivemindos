@@ -46,6 +46,5 @@ export function stakeHrefForPersonalToken(wallet: StakeWalletLinkInput, token: S
   if (token.valueUsd != null) params.set("tokenValueUsd", String(token.valueUsd));
   if (token.priceUsd != null) params.set("tokenPriceUsd", String(token.priceUsd));
   if (token.priceChange24hPct != null) params.set("tokenPriceChange24hPct", String(token.priceChange24hPct));
-  if (token.iconUrl) params.set("tokenIconUrl", token.iconUrl);
   return `/stake?${params.toString()}`;
 }

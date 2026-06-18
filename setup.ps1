@@ -213,8 +213,17 @@ function Ensure-Syncthing([bool]$TailnetSyncEnabled) {
   }
   if (Test-Command syncthing) {
     Ok "Syncthing found: $(syncthing --version 2>$null | Select-Object -First 1)"
-    $ping = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8384/rest/system/ping" -TimeoutSec 2 -ErrorAction SilentlyContinue
-    if ($ping.StatusCode -eq 200) {
+    # PowerShell 7's Invoke-WebRequest treats a connection/timeout failure as a
+    # TERMINATING error that -ErrorAction SilentlyContinue does not suppress, so
+    # a not-yet-running Syncthing printed an alarming red HttpClient.Timeout
+    # error mid-setup. try/catch swallows it: no response just means "not up".
+    $ping = $null
+    try {
+      $ping = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8384/rest/system/ping" -TimeoutSec 2 -ErrorAction Stop
+    } catch {
+      $ping = $null
+    }
+    if ($ping -and $ping.StatusCode -eq 200) {
       Ok "Syncthing is running on 127.0.0.1:8384"
       return
     }
@@ -778,7 +787,7 @@ function Write-HivemindManagedBlock {
   $lines.Add("")
   $lines.Add("Use ``hive-brain answer `"<query>`"`` before relying on prior preferences, decisions, instructions, goals, commitments, artifacts, lessons, credential status, or project context. The CLI tries the running HivemindOS ``/api/brain/memory`` route first, then falls back to local vault/index search, so raw/non-managed agents can recall shared memory without being app-routed. Setup also installs ``hive-brain-hook`` as a Claude Code ``UserPromptSubmit`` hook when Claude is targeted, so raw Claude prompts receive relevant shared-brain context automatically. Default recall/answer is tiered: check typed Agent Memory first, return it when the distilled hit is strong, and otherwise augment with relevant markdown from the full shared vault through the generated full-vault lexical index. Pass ``--scope agent-memory`` for typed/proven memory only, or ``--scope full-vault`` to force broad vault recall. Load the ``hive-brain-memory`` skill when recalling, writing, correcting, or evolving typed Shared Brain Memory. For durable writes, use ``hive-brain remember --type <type> --title <title> --content <content>`` or POST ``/api/brain/memory``; use ``hive-brain evolve --memory-id <id> --content <content>`` or POST action ``evolve`` when reviewed context replaces an older memory; remember only durable reviewed facts, decisions, preferences, goals, instructions, commitments, artifacts, errors, learnings, or reusable context.")
   $lines.Add("")
-  $lines.Add("Memory writes live under ``Memory/Distillations/Agent Memory/``; the private typed-memory search index lives at ``Operations/Brain Services/Agent Memory Index.jsonl``; the generated full-vault lexical index lives at ``Operations/Brain Services/Full Vault Search Index.jsonl``; optional GitLawb receipts live at ``Operations/Brain Services/Agent Memory Proofs.jsonl`` and store hashes/provenance instead of memory bodies. Evolution records use ``supersedes``, ``supersededBy``, ``evolutionRootId``, ``cognitiveStage``, ``sourceType``, and related chain metadata; treat the latest active chain item as current truth and superseded entries as history/evidence. Include available ``agentName``, ``agentId``, ``runtime``, ``machineName``, ``machineId``, ``tailnetId``, ``tailnetName``, ``tailnetDnsName``, ``collectorUrl``, ``sessionId``, and ``project`` fields when writing. Use ``proof: `"auto`"`` unless explicit proof is requested. Do not store raw Tailnet IPs or secrets in shared memory. ``Operations/Secure/`` reference/status notes are searchable during full-vault recall so agents can know which credential names exist or are set, but plaintext secret values must stay out of notes and responses.")
+  $lines.Add("Memory writes live under ``Memory/Distillations/Agent Memory/``; the private typed-memory search index lives at ``Operations/Brain Services/Agent Memory Index.jsonl``; entity links live at ``Operations/Brain Services/Agent Memory Entity Index.jsonl``; retrieval telemetry lives at ``Operations/Brain Services/Agent Memory Retrievals.jsonl``; the generated full-vault lexical index lives at ``Operations/Brain Services/Full Vault Search Index.jsonl``; optional GitLawb receipts live at ``Operations/Brain Services/Agent Memory Proofs.jsonl`` and store hashes/provenance instead of memory bodies. Use ``remember-action`` for durable assistant/agent-confirmed actions and ``record-usage`` for retrieval/final-answer telemetry. Evolution records use ``supersedes``, ``supersededBy``, ``evolutionRootId``, ``cognitiveStage``, ``sourceType``, and related chain metadata; treat the latest active chain item as current truth and superseded entries as history/evidence. Include available ``agentName``, ``agentId``, ``runtime``, ``machineName``, ``machineId``, ``tailnetId``, ``tailnetName``, ``tailnetDnsName``, ``collectorUrl``, ``sessionId``, and ``project`` fields when writing. Use ``proof: `"auto`"`` unless explicit proof is requested. Do not store raw Tailnet IPs or secrets in shared memory. ``Operations/Secure/`` reference/status notes are searchable during full-vault recall so agents can know which credential names exist or are set, but plaintext secret values must stay out of notes and responses.")
   $lines.Add("")
   $lines.Add("## Compiled Brain Wiki")
   $lines.Add("")
@@ -848,11 +857,14 @@ if (-not (Test-Path (Join-Path $vaultPath "$synthesisFolder/README.md"))) {
   Set-Content -Path (Join-Path $vaultPath "$synthesisFolder/README.md") -Value "# Synthesis`n`nSyntho-powered reviewed knowledge layer for raw inputs, drafts, wiki articles, source trails, queries, synthesis notes, and agent packs."
 }
 if (-not (Test-Path (Join-Path $vaultPath "$brainServicesFolder/README.md"))) {
-  Set-Content -Path (Join-Path $vaultPath "$brainServicesFolder/README.md") -Value "# Brain Services`n`nStatus notes for HivemindOS brain services. Shared Brain Memory uses a generated full-vault lexical index by default at ``Operations/Brain Services/Full Vault Search Index.jsonl``; QMD, GBrain, and Syntho can be connected from the dashboard without storing provider secrets in the vault."
+  Set-Content -Path (Join-Path $vaultPath "$brainServicesFolder/README.md") -Value "# Brain Services`n`nStatus notes for HivemindOS brain services. Shared Brain Memory uses a generated full-vault lexical index by default at ``Operations/Brain Services/Full Vault Search Index.jsonl``; QMD, GBrain, Neo4j, and Syntho can be connected from the dashboard without storing provider secrets in the vault."
 }
 Set-EnvLocal "NEXT_PUBLIC_HIVE_GBRAIN_SURFACE_ENABLED" "true"
 if (-not (Test-Path (Join-Path $vaultPath "$brainServicesFolder/GBrain.md"))) {
   Set-Content -Path (Join-Path $vaultPath "$brainServicesFolder/GBrain.md") -Value "---`ntype: brain-service`nservice: gbrain`nenabled: false`ninstallMode: optional`nsearchMode: balanced`nproviderPolicy: balanced-cloud`nmcpMode: stdio`n---`n`n# GBrain`n`nOptional HivemindOS retrieval, graph, MCP, and dream-cycle service. Install or connect it from the dashboard when ready.`n`nNo provider secrets are stored in this note."
+}
+if (-not (Test-Path (Join-Path $vaultPath "$brainServicesFolder/Neo4j.md"))) {
+  Set-Content -Path (Join-Path $vaultPath "$brainServicesFolder/Neo4j.md") -Value "---`ntype: brain-service`nservice: neo4j`nenabled: false`ninstallMode: optional`nuriEnvKey: NEO4J_URI`nusernameEnvKey: NEO4J_USERNAME`npasswordEnvKey: NEO4J_PASSWORD`ndatabaseEnvKey: NEO4J_DATABASE`nqueryLimit: 100`n---`n`n# Neo4j Brain Service`n`nOptional derived graph service for Shared Brain Memory. Obsidian Agent Memory remains canonical; Neo4j receives MERGE-only nodes and relationships marked ``source: `"hivemindos-derived`"``.`n`nNo plaintext Neo4j URI, username, password, or private connection string is stored in this note. Store connection values in shared hive env by key name only."
 }
 if (-not (Test-Path (Join-Path $vaultPath "$brainServicesFolder/Syntho.md"))) {
   Set-Content -Path (Join-Path $vaultPath "$brainServicesFolder/Syntho.md") -Value "---`ntype: brain-service`nservice: synto`nenabled: false`ninstallMode: optional`nmcpMode: stdio`nsourceAccessMode: deny`ncompareHeavyModel: llama3.1:8b`nautoApprove: false`nminConfidence: 0.8`n---`n`n# Syntho`n`nOptional HivemindOS compiled-wiki, pack, and MCP service for the Synthesis layer. Install or connect it from the dashboard when ready. Raw-source MCP tools default to denied until source licenses are configured.`n`nNo provider secrets are stored in this note."

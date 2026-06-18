@@ -2,6 +2,7 @@ import type { AgentProfile, AgentRuntime, RuntimeCapabilities, SharedVaultConfig
 import type { AgentNotification, AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import type { KanbanBoard, KanbanLinkedDirectory, KanbanMachineTarget, KanbanTask, KanbanTaskAttachment } from "@/lib/types/kanban";
 import type { GBrainStatus } from "@/lib/services/brain/gbrain";
+import type { Neo4jBrainStatus } from "@/lib/services/brain/neo4j";
 import type { QmdStatus } from "@/lib/services/brain/qmd";
 import type { SyntoStatus } from "@/lib/services/brain/synto";
 import type { TradingBrainStatus } from "@/lib/services/brain/trading-brain";
@@ -264,6 +265,7 @@ export type StoredSharedVaultConfig = Partial<SharedVaultConfig> & {
 
 export type DashboardGBrainStatus = GBrainStatus;
 export type DashboardQmdStatus = QmdStatus;
+export type DashboardNeo4jBrainStatus = Neo4jBrainStatus;
 export type DashboardSyntoStatus = SyntoStatus;
 export type DashboardTradingBrainStatus = TradingBrainStatus;
 

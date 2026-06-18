@@ -549,6 +549,26 @@ HivemindOS uses a generated lexical search index as the default broad shared-bra
 Use \`hive-brain recall "<query>" --scope full-vault\` or the memory API normally; the index is built lazily when missing. Use the memory API \`rebuild-index\` action after large imports or manual vault migrations.`;
 }
 
+function neo4jBrainServiceNote() {
+  return `---
+type: brain-service
+service: neo4j
+enabled: false
+installMode: optional
+uriEnvKey: NEO4J_URI
+usernameEnvKey: NEO4J_USERNAME
+passwordEnvKey: NEO4J_PASSWORD
+databaseEnvKey: NEO4J_DATABASE
+queryLimit: 100
+---
+
+# Neo4j Brain Service
+
+Optional derived graph service for Shared Brain Memory. Obsidian Agent Memory remains canonical; Neo4j receives MERGE-only nodes and relationships marked \`source: "hivemindos-derived"\`.
+
+No plaintext Neo4j URI, username, password, or private connection string is stored in this note. Store connection values in shared hive env by key name only.`;
+}
+
 function agentMemoryBase() {
   return `filters:
   and:
@@ -1285,6 +1305,9 @@ await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Obsidian Plug
 await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Obsidian CLI.md"), obsidianCliNote(obsidianCliPath));
 await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Obsidian Native Brain Pack.md"), obsidianNativeBrainPackNote());
 await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Full Vault Search Index.md"), fullVaultSearchIndexNote(folders));
+await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Neo4j.md"), neo4jBrainServiceNote());
+await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Agent Memory Entity Index.jsonl"), "");
+await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Agent Memory Retrievals.jsonl"), "");
 await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Agent Memory.base"), agentMemoryBase());
 await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Project Brain.base"), projectBrainBase());
 await writeIfMissing(join(vaultPath, folders.brainServicesFolder, "Secure References.base"), secureReferencesBase(folders));

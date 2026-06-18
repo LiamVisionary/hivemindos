@@ -1,4 +1,6 @@
 .brainLoader {
+  --brain-loader-rail-sheen: rgba(94, 234, 212, 0.34);
+  --brain-loader-rail-tail: rgba(212, 180, 111, 0.16);
   position: absolute;
   inset: 0;
   z-index: 2;
@@ -97,13 +99,16 @@
   background: rgba(148, 163, 184, 0.13);
 }
 
+.brainLoader.compact .brainLoadingRail {
+  display: none;
+}
+
 .brainLoadingRail span {
   position: absolute;
-  inset: 0 auto 0 0;
-  width: 42%;
+  inset: 0 15%;
   border-radius: inherit;
-  background: linear-gradient(90deg, transparent, rgba(94, 234, 212, 0.92), rgba(148, 163, 184, 0.72), transparent);
-  animation: brainRail 1.15s ease-in-out infinite;
+  background: linear-gradient(90deg, transparent, var(--brain-loader-rail-sheen), var(--brain-loader-rail-tail), transparent);
+  opacity: 0.72;
 }
 
 @keyframes brainCombPulse {
@@ -116,16 +121,9 @@
   }
 }
 
-@keyframes brainRail {
-  0% {
-    transform: translateX(-110%);
-  }
-  100% {
-    transform: translateX(280%);
-  }
-}
-
 :global(:root[data-theme="hive-light"]) .brainLoader {
+  --brain-loader-rail-sheen: rgba(176, 127, 28, 0.22);
+  --brain-loader-rail-tail: rgba(95, 143, 90, 0.14);
   background: rgba(248, 244, 232, 0.78);
   box-shadow: inset 0 0 140px rgba(92, 75, 45, 0.08);
 }
@@ -139,4 +137,10 @@
   --brain-loader-cell-fill: rgba(238, 230, 208, 0.96);
   --brain-loader-cell-pulse: rgba(94, 234, 212, 0.18);
   --brain-loader-edge: rgba(111, 86, 37, 0.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brainLoaderCells polygon {
+    animation: none;
+  }
 }

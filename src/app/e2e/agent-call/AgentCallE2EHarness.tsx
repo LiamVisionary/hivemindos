@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AgentCallModal, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent } from "@/components/fleet/agent-call-modal";
+import { AgentCallModal, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent, type AgentCallVoiceRun } from "@/components/fleet/agent-call-modal";
 import type { FleetAgent, FleetMachine } from "@/components/fleet/fleet-data";
 
 type AgentPhoneCallResult = {
@@ -13,6 +13,7 @@ type AgentPhoneCallResult = {
       localTts?: AgentCallLocalTts;
       realtime?: AgentCallRealtime;
       runtimeAgent?: AgentCallRuntimeAgent;
+      voiceRun?: AgentCallVoiceRun;
     };
   };
 };
@@ -191,6 +192,7 @@ export default function AgentCallE2EHarness() {
     localTts?: AgentCallLocalTts;
     realtime?: AgentCallRealtime;
     runtimeAgent?: AgentCallRuntimeAgent;
+    voiceRun?: AgentCallVoiceRun;
   } | null>(null);
 
   React.useEffect(() => {
@@ -234,7 +236,7 @@ export default function AgentCallE2EHarness() {
       if (!response.ok || data?.ok === false) throw new Error(data?.error || `Call setup returned HTTP ${response.status}.`);
       const call = data?.result?.call;
       if (call?.mode !== "byok" || !call.realtime?.clientSecret) throw new Error("Harness did not receive BYOK Realtime credentials.");
-      setSession({ agent: currentTarget.agent, machine: currentTarget.machine, phase: "ringing", realtime: call.realtime, runtimeAgent: call.runtimeAgent });
+      setSession({ agent: currentTarget.agent, machine: currentTarget.machine, phase: "ringing", realtime: call.realtime, runtimeAgent: call.runtimeAgent, voiceRun: call.voiceRun });
     } catch (error) {
       setSession({ agent: currentTarget.agent, machine: currentTarget.machine, phase: "failed", error: error instanceof Error ? error.message : "Could not start harness call." });
     }
@@ -267,7 +269,7 @@ export default function AgentCallE2EHarness() {
       if (!response.ok || data?.ok === false) throw new Error(data?.error || `Call setup returned HTTP ${response.status}.`);
       const call = data?.result?.call;
       if (call?.mode !== "local-tts" || !call.localTts?.appId) throw new Error("Harness did not receive Local TTS call config.");
-      setSession({ agent: currentTarget.agent, machine: currentTarget.machine, phase: "ringing", localTts: call.localTts, runtimeAgent: call.runtimeAgent });
+      setSession({ agent: currentTarget.agent, machine: currentTarget.machine, phase: "ringing", localTts: call.localTts, runtimeAgent: call.runtimeAgent, voiceRun: call.voiceRun });
     } catch (error) {
       setSession({ agent: currentTarget.agent, machine: currentTarget.machine, phase: "failed", error: error instanceof Error ? error.message : "Could not start harness Local TTS call." });
     }
@@ -307,6 +309,7 @@ export default function AgentCallE2EHarness() {
           localTts={session.localTts}
           realtime={session.realtime}
           runtimeAgent={session.runtimeAgent}
+          voiceRun={session.voiceRun}
           onVoiceConnected={() => {
             setSession((current) => current && (current.phase === "ringing" || current.phase === "answered")
               ? { ...current, phase: "talking" }

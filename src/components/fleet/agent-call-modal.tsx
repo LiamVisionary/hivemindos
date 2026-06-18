@@ -27,8 +27,11 @@ import {
   useCallTimer,
   useTranscriptLog,
 } from "./agent-call-visuals";
+import { completeVoiceRun, recordAgentCaption, recordCallConnected, recordRuntimeFailure, recordToolCompleted, recordToolStarted, recordUserTranscript, type AgentCallVoiceRun } from "./agent-call-run-events";
 import type { FleetAgent, FleetMachine } from "./fleet-data";
 import styles from "./agent-call.module.css";
+
+export type { AgentCallVoiceRun } from "./agent-call-run-events";
 
 export type AgentCallPhase = "ringing" | "answered" | "talking" | "failed";
 
@@ -42,6 +45,7 @@ type AgentCallModalProps = {
   realtime?: AgentCallRealtime;
   localTts?: AgentCallLocalTts;
   runtimeAgent?: AgentCallRuntimeAgent;
+  voiceRun?: AgentCallVoiceRun;
   accent?: "cyan" | "honey";
   waveStyle?: AgentCallWaveStyle;
   onClose: () => void;
@@ -95,6 +99,7 @@ export type AgentCallRuntimeAgent = {
   hubUrl?: string;
   agent?: Record<string, unknown>;
   machine?: { id?: string; name?: string };
+  voiceRunId?: string;
 };
 
 type DashboardVoiceStatus = "idle" | "connecting" | "connected" | "blocked" | "failed";
@@ -115,7 +120,7 @@ function idleBands(phase: AgentCallPhase) {
   });
 }
 
-function useDashboardLiveKit(connection: AgentCallLiveKit | undefined, active: boolean, muted: boolean) {
+function useDashboardLiveKit(connection: AgentCallLiveKit | undefined, active: boolean, muted: boolean, voiceRunId?: string) {
   const [status, setStatus] = React.useState<DashboardVoiceStatus>("idle");
   const [error, setError] = React.useState("");
   const [agentCaption, setAgentCaption] = React.useState("");
@@ -134,6 +139,7 @@ function useDashboardLiveKit(connection: AgentCallLiveKit | undefined, active: b
 
     const serverUrl = connection.serverUrl;
     const token = connection.token;
+    const roomName = connection.room;
     let cancelled = false;
     const room = new Room({ adaptiveStream: true, dynacast: true });
     roomRef.current = room;
@@ -203,10 +209,12 @@ function useDashboardLiveKit(connection: AgentCallLiveKit | undefined, active: b
       if (isAgentParticipant(participant)) {
         suppressUserTranscriptUntilRef.current = Date.now() + 2_500;
         setAgentCaption(text);
+        void recordAgentCaption(voiceRunId, text, { participant: participant?.identity });
         return;
       }
       if (participant?.identity === room.localParticipant.identity && Date.now() > suppressUserTranscriptUntilRef.current) {
         setUserTranscript(text);
+        void recordUserTranscript(voiceRunId, text, { participant: participant.identity });
       }
     };
 
@@ -229,6 +237,7 @@ function useDashboardLiveKit(connection: AgentCallLiveKit | undefined, active: b
         if (cancelled) return;
         setStatus("connected");
         refreshParticipantCount();
+        void recordCallConnected(voiceRunId, "Dashboard joined the LiveKit voice room.", { room: roomName });
         room.remoteParticipants.forEach(attachParticipantAudio);
         try {
           const publication: LocalTrackPublication | undefined = await room.localParticipant.setMicrophoneEnabled(true, ECHO_CANCELLED_AUDIO);
@@ -262,7 +271,7 @@ function useDashboardLiveKit(connection: AgentCallLiveKit | undefined, active: b
       room.disconnect();
       attachedElements.forEach(removeAttachedElement);
     };
-  }, [active, connection?.serverUrl, connection?.token]);
+  }, [active, connection?.room, connection?.serverUrl, connection?.token, voiceRunId]);
 
   React.useEffect(() => {
     const room = roomRef.current;
@@ -363,6 +372,7 @@ async function askComputerAgent(target: AgentCallRuntimeAgent | undefined, messa
       machine: target?.machine,
       message,
       runtimeSessionId: realtimeSessionIdFor(target),
+      voiceRunId: target?.voiceRunId,
     }),
     signal: AbortSignal.timeout(120_000),
   });
@@ -371,7 +381,7 @@ async function askComputerAgent(target: AgentCallRuntimeAgent | undefined, messa
   return data?.text?.trim() || "The computer agent completed the request without a spoken response.";
 }
 
-function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtimeAgent: AgentCallRuntimeAgent | undefined, active: boolean, muted: boolean) {
+function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtimeAgent: AgentCallRuntimeAgent | undefined, active: boolean, muted: boolean, voiceRunId?: string) {
   const [status, setStatus] = React.useState<DashboardVoiceStatus>("idle");
   const [error, setError] = React.useState("");
   const [agentCaption, setAgentCaption] = React.useState("");
@@ -400,6 +410,7 @@ function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtime
     let cancelled = false;
     let responseStarted = false;
     let captionResponseOpen = false;
+    let responseCaption = "";
     let startFallback = 0;
     let connectTimeout = 0;
     let localStream: MediaStream | null = null;
@@ -455,6 +466,11 @@ function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtime
       if (peer.connectionState === "connected") {
         if (connectTimeout) window.clearTimeout(connectTimeout);
         setStatus("connected");
+        void recordCallConnected(voiceRunId, "Dashboard Realtime voice connected.", {
+          provider: connection.provider,
+          model: connection.model,
+          voice: connection.voice,
+        });
       }
       else if (peer.connectionState === "failed") fail("The Realtime call connection failed.");
       else if (peer.connectionState === "disconnected") setStatus("idle");
@@ -487,11 +503,13 @@ function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtime
       if (record.type === "error") {
         const detail = record.error && typeof record.error === "object" ? record.error as Record<string, unknown> : {};
         fail(String(detail.message || detail.code || "Realtime session error."));
+        void recordRuntimeFailure(voiceRunId, "Realtime session error.", String(detail.message || detail.code || "Realtime session error."));
         return;
       }
       if (record.type === "session.created" || record.type === "session.updated") startResponse();
       if (record.type === "response.created") {
         captionResponseOpen = true;
+        responseCaption = "";
         setAgentCaption("");
       }
       if (record.type === "response.output_audio.delta" || record.type === "response.audio.delta") {
@@ -502,9 +520,15 @@ function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtime
         captionResponseOpen = false;
         setAgentSpeaking(false);
         setAgentWorkStage("idle");
+        const finalCaption = responseCaption.trim();
+        if (finalCaption) {
+          void recordAgentCaption(voiceRunId, finalCaption);
+        }
+        responseCaption = "";
       }
       if (typeof record.delta === "string" && (record.type === "response.audio_transcript.delta" || record.type === "response.output_audio_transcript.delta")) {
         setAgentWorkStage("idle");
+        responseCaption = `${responseCaption}${record.delta}`.slice(-2_000);
         if (!captionResponseOpen) {
           captionResponseOpen = true;
           setAgentCaption(record.delta.slice(-500));
@@ -512,7 +536,10 @@ function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtime
           setAgentCaption((current) => `${current}${record.delta}`.slice(-500));
         }
       }
-      if (record.type === "conversation.item.input_audio_transcription.completed" && typeof record.transcript === "string") setUserTranscript(record.transcript);
+      if (record.type === "conversation.item.input_audio_transcription.completed" && typeof record.transcript === "string") {
+        setUserTranscript(record.transcript);
+        void recordUserTranscript(voiceRunId, record.transcript);
+      }
       const call = parseRealtimeFunctionCall(payload);
       if (call) {
         if (handledFunctionCalls.has(call.callId)) return;
@@ -521,10 +548,12 @@ function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtime
         setAgentSpeaking(false);
         setAgentWorkStage("tool");
         playCallToolChime();
+        void recordToolStarted(voiceRunId, { callId: call.callId, name: call.name, args: call.args });
         const output = call.name === "ask_computer_agent" && message
           ? await askComputerAgent(runtimeAgent, message)
           : `Unknown or incomplete tool call: ${call.name}`;
         setAgentWorkStage("answer");
+        void recordToolCompleted(voiceRunId, { callId: call.callId, name: call.name, output });
         send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: call.callId, output } });
         send({ type: "response.create", response: { output_modalities: ["audio"] } });
       }
@@ -590,7 +619,7 @@ function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtime
       audio.load();
       audio.remove();
     };
-  }, [active, connection?.clientSecret, connection?.instructions, connection?.tools, runtimeAgent]);
+  }, [active, connection?.clientSecret, connection?.instructions, connection?.model, connection?.provider, connection?.tools, connection?.voice, runtimeAgent, voiceRunId]);
 
   React.useEffect(() => {
     const track = localMicrophoneTrackRef.current;
@@ -616,7 +645,7 @@ function useDashboardRealtime(connection: AgentCallRealtime | undefined, runtime
   };
 }
 
-function useDashboardLocalTts(connection: AgentCallLocalTts | undefined, runtimeAgent: AgentCallRuntimeAgent | undefined, active: boolean, muted: boolean) {
+function useDashboardLocalTts(connection: AgentCallLocalTts | undefined, runtimeAgent: AgentCallRuntimeAgent | undefined, active: boolean, muted: boolean, voiceRunId?: string) {
   const [status, setStatus] = React.useState<DashboardVoiceStatus>("idle");
   const [error, setError] = React.useState("");
   const [agentCaption, setAgentCaption] = React.useState("");
@@ -860,6 +889,7 @@ function useDashboardLocalTts(connection: AgentCallLocalTts | undefined, runtime
           throw new Error(message || `Local TTS returned HTTP ${response.status}.`);
         }
         await playPcmStream(response, { label: "opening", startedAt }, speechAbort.signal);
+        void recordAgentCaption(voiceRunId, input);
       } finally {
         speechControllers.delete(speechAbort);
         if (!cancelled) setAgentSpeaking(false);
@@ -898,6 +928,7 @@ function useDashboardLocalTts(connection: AgentCallLocalTts | undefined, runtime
             agent: runtimeAgent?.agent ?? {},
             machine: runtimeAgent?.machine ?? {},
             runtimeSessionId: realtimeSessionIdFor(runtimeAgent),
+            voiceRunId,
             message: input,
           }),
           signal: speechAbort.signal,
@@ -1063,6 +1094,11 @@ function useDashboardLocalTts(connection: AgentCallLocalTts | undefined, runtime
         if (cancelled) return;
         setStatus("connected");
         setRemoteAudioActive(true);
+        void recordCallConnected(voiceRunId, "Dashboard Local TTS voice connected.", {
+          appId: localTtsConfig.appId,
+          model: localTtsConfig.model,
+          voice: localTtsConfig.voice,
+        });
         const sttReady = prepareRealtimeSttSession().catch(() => null);
         await prewarmLocalTts();
         await speak(`${localTtsConfig.openingLine || "Hello Liam, this is your HivemindOS coding agent."} I'm ready to help.`);
@@ -1091,7 +1127,7 @@ function useDashboardLocalTts(connection: AgentCallLocalTts | undefined, runtime
       setAgentWorkStage("idle");
       void audioContext?.close().catch(() => undefined);
     };
-  }, [active, connection, runtimeAgent]);
+  }, [active, connection, runtimeAgent, voiceRunId]);
 
   React.useEffect(() => {
     const track = localMicrophoneTrackRef.current;
@@ -1254,6 +1290,7 @@ export function AgentCallModal({
   realtime,
   localTts,
   runtimeAgent,
+  voiceRun,
   accent = "cyan",
   waveStyle = "bars",
   onClose,
@@ -1264,9 +1301,10 @@ export function AgentCallModal({
 }: AgentCallModalProps) {
   const [muted, setMuted] = React.useState(false);
   const [held, setHeld] = React.useState(false);
-  const realtimeVoice = useDashboardRealtime(realtime, runtimeAgent, phase !== "failed", muted || held);
-  const localTtsVoice = useDashboardLocalTts(localTts, runtimeAgent, phase !== "failed", muted || held);
-  const livekitVoice = useDashboardLiveKit(livekit, phase !== "failed" && !realtime && !localTts, muted || held);
+  const voiceRunId = runtimeAgent?.voiceRunId || voiceRun?.id;
+  const realtimeVoice = useDashboardRealtime(realtime, runtimeAgent, phase !== "failed", muted || held, voiceRunId);
+  const localTtsVoice = useDashboardLocalTts(localTts, runtimeAgent, phase !== "failed", muted || held, voiceRunId);
+  const livekitVoice = useDashboardLiveKit(livekit, phase !== "failed" && !realtime && !localTts, muted || held, voiceRunId);
   const dashboardVoice = localTts ? localTtsVoice : realtime ? realtimeVoice : livekitVoice;
   const hasVoiceConnection = Boolean(livekit || realtime || localTts);
   const voiceFailed = hasVoiceConnection && (dashboardVoice.status === "failed" || dashboardVoice.status === "blocked");
@@ -1321,6 +1359,13 @@ export function AgentCallModal({
   const wallet = agent.wallet && agent.wallet !== "—" ? agent.wallet : "None";
   const visibleTurns = turns.slice(-3);
   const liveWho = isAgentSpeaking ? "agent" : isListening ? "you" : null;
+  const finishCall = React.useCallback((reason: string, status: "ended" | "failed" = displayError ? "failed" : "ended") => {
+    void completeVoiceRun(voiceRunId, status, reason);
+  }, [displayError, voiceRunId]);
+  const handleClose = React.useCallback(() => {
+    finishCall(displayError ? `Call closed after failure: ${displayError}` : "Call closed from dashboard.", displayError ? "failed" : "ended");
+    onClose();
+  }, [displayError, finishCall, onClose]);
 
   React.useEffect(() => {
     const voiceReady = realtime
@@ -1372,7 +1417,7 @@ export function AgentCallModal({
   return createPortal(
     <div className={styles.backdrop} role="presentation">
       <section className={styles.card} data-accent={accent} data-danger={visualPhase === "failed" ? "1" : "0"} role="dialog" aria-modal="true" aria-labelledby="agent-call-title">
-        <CloseIconButton onClick={onClose} aria-label="Close call" className={styles.close} />
+        <CloseIconButton onClick={handleClose} aria-label="Close call" className={styles.close} />
         <span className={styles.secure}>
           <Lock size={12} aria-hidden="true" /> Encrypted voice
           <span style={{ opacity: 0.5 }}>|</span>
@@ -1425,16 +1470,25 @@ export function AgentCallModal({
           {visualPhase === "failed" ? (
             <>
               <AgentCallControlButton icon={<Phone size={19} aria-hidden="true" />} label="Redial" onClick={() => onRedial?.(agent, machine)} />
-              <AgentCallControlButton icon={<PhoneOff size={22} aria-hidden="true" />} label="Dismiss" big danger onClick={onClose} />
-              <AgentCallControlButton icon={<MessageSquare size={19} aria-hidden="true" />} label="Open chat" onClick={() => onTransferToChat?.(agent, machine)} />
+              <AgentCallControlButton icon={<PhoneOff size={22} aria-hidden="true" />} label="Dismiss" big danger onClick={handleClose} />
+              <AgentCallControlButton icon={<MessageSquare size={19} aria-hidden="true" />} label="Open chat" onClick={() => {
+                finishCall("Call transferred to chat.", displayError ? "failed" : "ended");
+                onTransferToChat?.(agent, machine);
+              }} />
             </>
           ) : (
             <>
               <AgentCallControlButton icon={muted ? <MicOff size={19} aria-hidden="true" /> : <Mic size={19} aria-hidden="true" />} label={muted ? "Unmute" : "Mute"} on={muted} onClick={() => setMuted((current) => !current)} />
               <AgentCallControlButton icon={<Pause size={19} aria-hidden="true" />} label="Hold" on={held} onClick={() => setHeld((current) => !current)} />
-              <AgentCallControlButton icon={<PhoneOff size={22} aria-hidden="true" />} label="End call" big danger onClick={onClose} />
-              <AgentCallControlButton icon={<MessageSquare size={19} aria-hidden="true" />} label="To chat" onClick={() => onTransferToChat?.(agent, machine)} />
-              <AgentCallControlButton icon={<UserPlus size={19} aria-hidden="true" />} label="Add agent" onClick={() => onAddAgent?.(agent, machine)} />
+              <AgentCallControlButton icon={<PhoneOff size={22} aria-hidden="true" />} label="End call" big danger onClick={handleClose} />
+              <AgentCallControlButton icon={<MessageSquare size={19} aria-hidden="true" />} label="To chat" onClick={() => {
+                finishCall("Call transferred to chat.");
+                onTransferToChat?.(agent, machine);
+              }} />
+              <AgentCallControlButton icon={<UserPlus size={19} aria-hidden="true" />} label="Add agent" onClick={() => {
+                finishCall("Call moved to add-agent flow.");
+                onAddAgent?.(agent, machine);
+              }} />
             </>
           )}
         </div>

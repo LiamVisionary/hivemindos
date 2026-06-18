@@ -2,8 +2,9 @@
 // @ts-nocheck
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Copy, Eye, EyeOff, Trash2 } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, Trash2 } from "lucide-react";
 import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
 import envStyles from "./brain-env.module.css";
 
@@ -22,9 +23,22 @@ function BrainEnvRow({
   scope,
   value,
 }: any) {
-  const copyValue = () => {
-    navigator.clipboard?.writeText(value).catch(() => undefined);
+  const [copied, setCopied] = useState(false);
+  const copyResetTimer = useRef(null);
+  const copyValue = async () => {
+    if (!navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      if (copyResetTimer.current) window.clearTimeout(copyResetTimer.current);
+      copyResetTimer.current = window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      setCopied(false);
+    }
   };
+  useEffect(() => () => {
+    if (copyResetTimer.current) window.clearTimeout(copyResetTimer.current);
+  }, []);
   return (
     <div className={envClass("envRow")}>
       <div className={envClass("envRowTop")}>
@@ -36,8 +50,8 @@ function BrainEnvRow({
           <button type="button" className={envClass("envIcon", revealed && "envIconOn")} aria-label={`${revealed ? "Hide" : "Reveal"} ${name}`} title={revealed ? "Hide value" : "Reveal value"} onClick={() => onToggleReveal(revealKey)}>
             {revealed ? <EyeOff aria-hidden="true" size={15} /> : <Eye aria-hidden="true" size={15} />}
           </button>
-          <button type="button" className={envClass("envIcon")} aria-label={`Copy ${name}`} title="Copy value" onClick={copyValue}>
-            <Copy aria-hidden="true" size={15} />
+          <button type="button" className={envClass("envIcon", copied && "envIconOk")} aria-label={copied ? `Copied ${name}` : `Copy ${name}`} title={copied ? "Copied" : "Copy value"} onClick={copyValue}>
+            {copied ? <Check aria-hidden="true" size={15} /> : <Copy aria-hidden="true" size={15} />}
           </button>
           {editable ? (
             <button type="button" className={envClass("envIcon", "envIconDanger")} aria-label={`Remove ${name}`} title="Remove" onClick={onRemove}>
@@ -274,7 +288,7 @@ export function BrainEnvPanel(props: any) {
         </div>
       </div>
 
-      {hiveEnvStatus ? <p className={`${envClass("envCard")} px-3 py-2 text-xs text-[var(--brain-fg)]`}>{hiveEnvStatus}</p> : null}
+      {hiveEnvStatus ? <p className={`${envClass("envCard", "envStatusCard")} px-3 py-2 text-xs text-[var(--brain-fg)]`}>{hiveEnvStatus}</p> : null}
 
       {aeonAgent && visibleMissingAeonSecrets.length ? (
         <div className={`${envClass("envCard", "envNotice")} mb-3 p-4`}>

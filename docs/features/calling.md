@@ -16,6 +16,7 @@ The default is still local-first and bring-your-own-key. The paid cloud path exi
 | Call mode                    | Included | Paid | Best for                                                                                                                                  |
 | ---------------------------- | -------: | ---: | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | BYOK Agent Calls             |      Yes |   No | One person talking to one selected HivemindOS agent from the desktop dashboard or paired mobile app using the user's OpenAI Realtime key. |
+| Local TTS Agent Calls        |      Yes |   No | One selected agent speaks through a validated local or Tailnet TTS runtime while HivemindOS still routes work through the same agent runtime. |
 | HivemindOS Cloud Agent Calls | Optional |  Yes | Managed LiveKit/SFU rooms, mobile-friendly rooms, group calls, and multi-agent voice sessions.                                            |
 
 The default mode is **BYOK Agent Calls**. That is the “download the app, add your key, talk to your agent” path.
@@ -36,6 +37,8 @@ Free BYOK features:
 - Fall back to speaker-only mode when microphone capture is unavailable, so the agent can still talk instead of silently failing.
 - Show live call state in the dashboard call modal.
 - Keep agent captions scoped to the latest spoken response instead of gluing every reply together.
+- Persist a voice run timeline with call state, user transcripts, agent captions, tool calls, runtime-turn results, post-call extraction, and QA.
+- Expose provider capability, recipe, and tool-bundle metadata so agents can choose a call implementation from intent instead of hard-coded provider names.
 
 Paid HivemindOS Cloud features:
 
@@ -64,6 +67,40 @@ That matters because the agent still has its normal context:
 - which vault context can be safely summarized
 
 The voice layer is the mouth and ears. The HivemindOS agent is still the worker.
+
+## Voice Runs
+
+Every dashboard, mobile, Local TTS, and LiveKit-backed agent call creates a voice run under the local HivemindOS store. A run is the reviewable call record: initial context, selected agent and machine, provider, recipe id, tool bundle id, timeline events, gathered context, summary, and QA.
+
+The timeline records:
+
+- call creation, connection, and end events
+- user transcripts
+- agent captions
+- tool-call starts and completions
+- runtime-turn starts, completions, and failures
+- post-call extraction and QA completion
+
+This makes calling debuggable in the same way normal agent runs are debuggable. A voice call can now answer “what happened?”, “which tool failed?”, “what did the user ask last?”, and “does this need follow-up?” without relying on browser-only state.
+
+Voice runs intentionally redact obvious secrets and raw IP-like values before writing to disk.
+
+## Recipes And Tools
+
+Calling now has explicit voice recipes and tool bundles. The default recipe is `agent-runtime-bridge`, which gives the voice layer one side-effecting tool: `ask_computer_agent`. That tool delegates the spoken request to the selected computer-side agent runtime.
+
+The same registry also describes future coordinator-style voice sessions, such as a Queen Bee control-plane recipe with task creation, preference capture, dashboard driving, and agent delegation. Recipes are data, not scattered branches, so new call modes can be discovered and validated before a UI exposes them.
+
+## Provider Capabilities
+
+Voice configuration exposes capability records for the available implementations:
+
+- `openai-realtime`: direct BYOK WebRTC call with tool calls and transcripts.
+- `local-tts`: local or Tailnet TTS bridge with realtime STT and runtime delegation.
+- `livekit-cloud-room`: managed room transport for multi-party and multi-agent calls.
+- `native-callkit`: mobile/native call presentation capability for device-hosted flows.
+
+Each capability record includes transport type, transcript/recording/multi-party support, required credential key names, side-effect gates, status, and fallback provider ids. Agent-facing capability search should use this evidence first, then choose the configured provider that satisfies the user's intent.
 
 ## How Mobile Fits In
 
@@ -101,6 +138,7 @@ Cloud calls still use the same computer-agent bridge. When a user asks the agent
 | ------------------------------------------------------------- | ---------------: | -----------------------------------------------: |
 | Direct dashboard agent calls                                  |              Yes |                                              Yes |
 | Paired mobile app can call agents                             |              Yes |                                              Yes |
+| Local or Tailnet TTS voice bridge                             |              Yes |                                               No |
 | Uses the user's OpenAI Realtime key                           |              Yes |                                         Optional |
 | Short-lived Realtime client secrets                           |              Yes | Yes, when OpenAI Realtime powers the agent voice |
 | Routes spoken requests to the selected computer agent         |              Yes |                                              Yes |
@@ -111,6 +149,7 @@ Cloud calls still use the same computer-agent bridge. When a user asks the agent
 | SFU audio routing                                             |               No |                                              Yes |
 | Multi-human rooms                                             |               No |                                              Yes |
 | Multi-agent rooms                                             |               No |                                              Yes |
+| Voice run timeline, extraction, and QA                         |              Yes |                                              Yes |
 | Hosted reliability and room management                        |               No |                                              Yes |
 | Premium paid service                                          |               No |                                              Yes |
 
@@ -135,12 +174,31 @@ LIVEKIT_API_SECRET
 
 In local dev, `pnpm tauri:dev` starts the HivemindOS voice worker only when both opt-in flags and the LiveKit credentials are present. Otherwise the worker skips itself with a single notice line, no LiveKit connection is made, and the normal BYOK and Local TTS paths still work.
 
+## Inspection API
+
+The phone API exposes these local inspection and control actions:
+
+- `GET /api/phone?action=voice-capabilities`
+- `GET /api/phone?action=voice-recipes`
+- `GET /api/phone?action=voice-runs`
+- `GET /api/phone?action=voice-run&id=<run-id>`
+- `POST /api/phone` with `action: "voice-run-event"`
+- `POST /api/phone` with `action: "voice-run-complete"`
+- `POST /api/phone` with `action: "voice-run-qa"`
+- `POST /api/phone` with `action: "voice-recipe-validate"`
+
 ## Main Code Paths
 
 - `src/app/api/phone/route.ts`
 - `src/lib/services/phone/call-gateway.ts`
 - `src/lib/services/phone/realtime-voice.ts`
+- `src/lib/services/phone/voice-provider-capabilities.ts`
+- `src/lib/services/phone/voice-recipes.ts`
+- `src/lib/services/phone/voice-run-route-actions.ts`
+- `src/lib/services/phone/voice-runs.ts`
+- `src/lib/services/phone/voice-tool-bundles.ts`
 - `src/components/fleet/agent-call-modal.tsx`
+- `src/components/fleet/agent-call-run-events.ts`
 - `src/features/dashboard/views/AgentsPanel.tsx`
 - `src/features/dashboard/views/PhonePanel.tsx`
 - `src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx`

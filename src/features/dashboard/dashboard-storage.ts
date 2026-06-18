@@ -288,6 +288,7 @@ export function parseStoredVault(snapshot: DashboardStateSnapshot = {}): SharedV
       brainServicesFolder: migratedBrainServicesFolder || DEFAULT_SHARED_VAULT.brainServicesFolder,
       gbrain: { ...DEFAULT_SHARED_VAULT.gbrain, ...(storedVault.gbrain ?? {}) },
       qmd: { ...DEFAULT_SHARED_VAULT.qmd, ...(storedVault.qmd ?? {}) },
+      neo4j: { ...DEFAULT_SHARED_VAULT.neo4j, ...(storedVault.neo4j ?? {}) },
       synto: { ...DEFAULT_SHARED_VAULT.synto, ...(storedVault.synto ?? {}) },
     };
   } catch {

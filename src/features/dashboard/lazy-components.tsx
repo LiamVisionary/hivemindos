@@ -2,9 +2,13 @@
 
 import dynamic from "next/dynamic";
 import { FleetViewLoadingShell } from "@/components/fleet/fleet-loading";
+import { AgentWalletTileLoading } from "@/features/dashboard/views/WalletPanelLoading";
 
 export const AgentWalletCard = dynamic(() => import("@/components/wallet/AgentWalletCard").then((mod) => mod.AgentWalletCard), { ssr: false });
-export const AgentWalletCardCompact = dynamic(() => import("@/components/wallet/AgentWalletCardCompact").then((mod) => mod.AgentWalletCardCompact), { ssr: false });
+export const AgentWalletCardCompact = dynamic(() => import("@/components/wallet/AgentWalletCardCompact").then((mod) => mod.AgentWalletCardCompact), {
+  ssr: false,
+  loading: AgentWalletCardCompactLoadingFallback,
+});
 export const AgentCell = dynamic(() => import("@/components/cells/AgentCell").then((mod) => mod.AgentCell), { ssr: false });
 export const AgentTaskList = dynamic(() => import("@/components/cells/AgentTaskList").then((mod) => mod.AgentTaskList), { ssr: false });
 export const FleetView = dynamic(() => import("@/components/fleet").then((mod) => mod.FleetView), {
@@ -20,4 +24,8 @@ export const TaskModal = dynamic(() => import("@/components/task-modal").then((m
 
 function FleetViewLoadingFallback() {
   return <FleetViewLoadingShell mastheadMode="mobile" />;
+}
+
+function AgentWalletCardCompactLoadingFallback() {
+  return <AgentWalletTileLoading index={0} />;
 }

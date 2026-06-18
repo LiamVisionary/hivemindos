@@ -473,6 +473,11 @@ if ask "Remove optional GBrain service note from the Obsidian vault?" "no"; then
   ok "Removed $vault_path/$brain_services_folder/GBrain.md"
 fi
 
+if ask "Remove optional Neo4j Brain Service note from the Obsidian vault?" "no"; then
+  rm -f "$vault_path/$brain_services_folder/Neo4j.md"
+  ok "Removed $vault_path/$brain_services_folder/Neo4j.md"
+fi
+
 if ask "Remove optional Syntho service note from the Obsidian vault?" "no"; then
   rm -f "$vault_path/$brain_services_folder/Syntho.md" "$vault_path/$brain_services_folder/Synto.md"
   ok "Removed $vault_path/$brain_services_folder/Syntho.md and any legacy Synto.md"

@@ -326,18 +326,19 @@ function CenterStage({
     />
   );
   const wrap = (title: string, tone: string, children: React.ReactNode, badge?: React.ReactNode, minHeight = 600) => (
-    <div className="relative grid"
+    <div className="relative"
       style={{
+        display: "flex", flexDirection: "column",
         borderRadius: 14, border: "1px solid rgba(148,163,184,0.16)",
         background: `radial-gradient(ellipse at center, ${tone}, transparent 60%), var(--panel-bg)`,
-        padding: "88px 18px 22px", minHeight,
-        alignItems: "start", justifyItems: "center",
+        padding: 18, minHeight: minHeight > 0 ? minHeight : undefined,
+        alignItems: "stretch", gap: 18, minWidth: 0,
       }}>
-      <div className="absolute grid" style={{
-        top: 14, left: 16, right: 16, gap: 14,
-        gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "start",
+      <div className="flex" style={{
+        width: "100%", gap: 14, minWidth: 0,
+        alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap",
       }}>
-        <div className="grid" style={{ minWidth: 0, gap: 6 }}>
+        <div className="grid" style={{ minWidth: 0, flex: "1 1 240px", gap: 6 }}>
           <div className="flex items-center" style={{ gap: 10, minWidth: 0 }}>
             <span className={`${styles.dot} ${styles.dotLive}`} style={{ color: "var(--accent)", flex: "0 0 auto" }} />
             <span className={styles.monoCap} style={{ color: "var(--hex-active-border)", lineHeight: 1.4 }}>{title}</span>
@@ -347,9 +348,11 @@ function CenterStage({
             overflowWrap: "anywhere", wordBreak: "break-word",
           }}>{run.title}</span>
         </div>
-        <div className="flex items-center justify-end" style={{ gap: 6, minWidth: "max-content" }}>{badge}</div>
+        <div className="flex items-center justify-end" style={{ gap: 6, minWidth: 0, flexWrap: "wrap" }}>{badge}</div>
       </div>
-      {children}
+      <div className="grid" style={{ width: "100%", minWidth: 0, justifyItems: "center" }}>
+        {children}
+      </div>
     </div>
   );
 
@@ -409,7 +412,7 @@ function CenterStage({
             publishBadge,
             0,
           )}
-          <div className="grid" style={{ gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr)", gap: 16 }}>
+          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", gap: 16 }}>
             <MarketPanel data={market} />
             <SocialPanel posts={socialPosts} />
           </div>
@@ -681,13 +684,13 @@ function SimulationOverview({
           {summary.length > 260 ? `${summary.slice(0, 260).trim()}...` : summary}
         </p>
       </div>
-      <div className="grid" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, marginTop: 2 }}>
+      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))", gap: 12, marginTop: 2 }}>
         <BigStat n={agents.length || run.agents} label="agents" tone="cyan" />
         <BigStat n={socialPosts.length || run.posts} label="posts" />
         <BigStat n={market.ticks.length} label="price ticks" tone="honey" />
         <BigStat n={run.integrationItems?.length ?? 0} label="outputs" />
       </div>
-      <div className="grid" style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 12 }}>
+      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: 12 }}>
         <section style={{
           padding: 14, borderRadius: 10, border: "1px solid rgba(148,163,184,0.16)",
           background: "var(--panel-bg-soft)",

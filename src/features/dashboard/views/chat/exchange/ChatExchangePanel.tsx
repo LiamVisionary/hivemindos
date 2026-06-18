@@ -13,10 +13,14 @@ import { createStyleClass } from "@/features/dashboard/style-classes";
 import {
   MODEL_SWITCHABLE_RUNTIMES,
   agentInitials,
+  agentMenuMachineLabel,
+  agentMenuRuntimeIdentity,
+  agentMenuStatusLabel,
   isChatScrollNearBottom,
   isFixtureChatMachine,
   messageKey,
   messageText,
+  normalizeSearchText,
   processText,
   selectedAgentIcon,
   shortModelLabel,
@@ -128,6 +132,7 @@ export function ChatExchangePanel(props: any) {
     sendMessage,
     sendPromptMessage,
     sendQueuedChatMessageNow,
+    startAgentChat,
     setAttachmentMenuOpen,
     setExpandedChatFolders,
     setRecentDirectoriesExpanded,
@@ -153,12 +158,16 @@ export function ChatExchangePanel(props: any) {
   const [openKanbanTaskMenuKey, setOpenKanbanTaskMenuKey] = useState("");
   const [copiedMessageKey, setCopiedMessageKey] = useState("");
   const [agentMode, setAgentMode] = useState<"plan" | "act">("act");
+  const [agentMenuOpen, setAgentMenuOpen] = useState(false);
+  const [agentMenuSearchQuery, setAgentMenuSearchQuery] = useState("");
   const [statusChecking, setStatusChecking] = useState(false);
   const [newChatPressed, setNewChatPressed] = useState(false);
   const [stickyChatProcess, setStickyChatProcess] = useState<any[]>([]);
   const [stickyChatProcessTargetKey, setStickyChatProcessTargetKey] = useState("");
   const scrollNodeRef = useRef<HTMLDivElement | null>(null);
   const threadNodeRef = useRef<HTMLDivElement | null>(null);
+  const agentMenuRef = useRef<HTMLDivElement | null>(null);
+  const agentMenuSearchInputRef = useRef<HTMLInputElement | null>(null);
   const stickyChatProcessSignatureRef = useRef("");
   const previousChatScrollKeyRef = useRef("");
   const chatScrollFrameRef = useRef<number | null>(null);
@@ -192,6 +201,13 @@ export function ChatExchangePanel(props: any) {
     }
     return [];
   })();
+  const processTargetKeys = useMemo(() => new Set(renderMessages.flatMap((message: any, index: number) => {
+    const key = messageKey(message, index);
+    return [
+      `${chatProcessScopeKey}\u001fuser\u001f${key}`,
+      `${chatProcessScopeKey}\u001fassistant\u001f${key}`,
+    ];
+  })), [chatProcessScopeKey, renderMessages]);
   const currentProcessEvents = mergeProcessEvents(activeTurnMessageProcessEvents, liveProcessEvents);
   const currentProcessSignature = currentProcessEvents
     .map((event: any) => [event?.at, event?.label, event?.detail, event?.status, event?.runId].join("\u001f"))
@@ -255,6 +271,20 @@ export function ChatExchangePanel(props: any) {
     window.addEventListener("pointerdown", closeOnOutsidePointer);
     return () => window.removeEventListener("pointerdown", closeOnOutsidePointer);
   }, [attachmentMenuOpen, attachmentMenuRef, setAttachmentMenuOpen]);
+
+  useEffect(() => {
+    if (!agentMenuOpen) return undefined;
+    window.requestAnimationFrame(() => agentMenuSearchInputRef.current?.focus());
+    function closeOnOutsidePointer(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (agentMenuRef.current?.contains(target)) return;
+      setAgentMenuOpen(false);
+      setAgentMenuSearchQuery("");
+    }
+    window.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => window.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [agentMenuOpen]);
 
   const selectedRuntimeModelSelection = selectedAgent ? runtimeModelSelectionsByRuntime?.[selectedAgent.runtime] : undefined;
   const chatModelProviders = selectedRuntimeModelSelection?.providers ?? [];
@@ -391,7 +421,11 @@ export function ChatExchangePanel(props: any) {
   const displayThreadLabel = friendlyThreadLabel(activeThreadLabel, selectedChatDirectory);
   const hasQueued = queuedChatMessages.length > 0;
   const processEventsForDisplay = currentProcessEvents.length ? currentProcessEvents : stickyChatProcess;
-  const processEventsTargetKey = currentProcessEvents.length ? activeTurnProcessTargetKey : stickyChatProcessTargetKey;
+  const processEventsTargetKey = currentProcessEvents.length
+    ? activeTurnProcessTargetKey
+    : processTargetKeys.has(stickyChatProcessTargetKey)
+      ? stickyChatProcessTargetKey
+      : activeTurnProcessTargetKey;
   const activeChatTaskRunning = busy || processEventsAreActive(processEventsForDisplay);
   const runningChatStorageKeys = useMemo(() => new Set(Object.keys(chatStreamingByKey ?? {})), [chatStreamingByKey]);
   const runningChatIdentityKeys = useMemo(() => new Set(Object.values(chatStreamingByKey ?? {})
@@ -432,6 +466,34 @@ export function ChatExchangePanel(props: any) {
       ? { label: defaultChatMachine.name, onStartChat: defaultChatMachine.onStartChat }
       : null;
   })();
+  const agentMenuMachines = machinesWithChats
+    .map((machine: any) => ({
+      machine,
+      agents: asChatRows(machineGroups.find((group: any) => group.key === machine.key)?.agents).filter((agent: any) => agent?.id),
+    }))
+    .filter((item: any) => item.agents.length > 0);
+  const normalizedAgentMenuSearchQuery = normalizeSearchText(agentMenuSearchQuery);
+  const agentMenuRows = agentMenuMachines.flatMap(({ machine, agents }: any) => agents
+    .map((agent: any) => {
+      const machineMenuLabel = agentMenuMachineLabel(machine, agent);
+      const statusLabel = agentMenuStatusLabel(machine, agent);
+      const runtimeIdentity = agentMenuRuntimeIdentity(agent, runtimeModelSelectionsByRuntime);
+      return { agent, machine, machineMenuLabel, statusLabel, runtimeIdentity };
+    })
+    .filter(({ agent, machine, machineMenuLabel, statusLabel }: any) => {
+      if (!normalizedAgentMenuSearchQuery) return true;
+      const searchable = normalizeSearchText([
+        agent?.name,
+        agent?.runtime,
+        agent?.provider,
+        agent?.model,
+        agent?.workerClass,
+        machine?.name,
+        machineMenuLabel,
+        statusLabel,
+      ].filter(Boolean).join(" "));
+      return normalizedAgentMenuSearchQuery.split(" ").every((token) => searchable.includes(token));
+    }));
 
   function handleStartNewChat() {
     if (!newChatTarget) return;
@@ -566,26 +628,103 @@ export function ChatExchangePanel(props: any) {
           </aside>
 
           <main className="fr-chat-main" aria-label="Current chat">
-            <header style={{ display: "flex", alignItems: "center", gap: 14, borderBottom: "1px solid var(--line)", padding: "16px 24px" }}>
-              <span style={{ display: "grid", placeItems: "center", width: 40, height: 40, flexShrink: 0, border: "1px solid var(--line-2)", borderRadius: "var(--radius-sm)", background: "var(--panel)", overflow: "hidden" }}>
-                {iconSrc ? (
-                  <span style={{ width: "100%", height: "100%", backgroundImage: `url(${iconSrc})`, backgroundPosition: "center", backgroundSize: "cover" }} aria-hidden="true" />
-                ) : selectedAgent ? (
-                  <span style={{ color: "var(--honey)", fontFamily: "var(--f-display)", fontWeight: 700 }}>{agentInitials(selectedAgent)}</span>
-                ) : (
-                  <HiveMark size={20} stroke="var(--honey)" />
-                )}
-              </span>
-              <div style={{ minWidth: 0, flex: "1 1 auto", paddingRight: shelfOpen ? 8 : 96, transition: "padding-right 340ms cubic-bezier(.2,.8,.2,1)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ overflow: "hidden", color: "var(--fg)", fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{conv.name}</span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: state.text, flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 10.5 }}>
-                    <Dot state={stateKey} size={5} /> {state.label}
+            <header className="fr-chat-header">
+              <div className="fr-chat-agent-picker" ref={agentMenuRef} style={{ paddingRight: shelfOpen ? 8 : 96 }}>
+                <button
+                  type="button"
+                  className="fr-chat-agent-trigger"
+                  title="Choose the machine and agent for this chat"
+                  aria-haspopup="dialog"
+                  aria-expanded={agentMenuOpen}
+                  onClick={() => {
+                    if (agentMenuOpen) setAgentMenuSearchQuery("");
+                    setAgentMenuOpen((current) => !current);
+                  }}
+                >
+                  <span className="fr-chat-agent-avatar">
+                    {iconSrc ? (
+                      <span className="fr-chat-agent-avatar-image" style={{ backgroundImage: `url(${iconSrc})` }} aria-hidden="true" />
+                    ) : selectedAgent ? (
+                      <span>{agentInitials(selectedAgent)}</span>
+                    ) : (
+                      <HiveMark size={20} stroke="var(--honey)" />
+                    )}
                   </span>
-                </div>
-                <div title={headerSubline} style={{ overflow: "hidden", color: "var(--fg-4)", fontFamily: "var(--f-mono)", fontSize: 11, marginTop: 3, textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  <span style={{ color: "var(--fg-3)" }}>{headerSubline}</span>
-                </div>
+                  <span className="fr-chat-agent-copy">
+                    <span className="fr-chat-agent-title-row">
+                      <span className="fr-chat-agent-title">{conv.name}</span>
+                      <span className="fr-chat-agent-state" style={{ color: state.text }}>
+                        <Dot state={stateKey} size={5} /> {state.label}
+                      </span>
+                    </span>
+                    <span className="fr-chat-agent-subline" title={headerSubline}>{headerSubline}</span>
+                  </span>
+                  {ChevronDown ? <ChevronDown aria-hidden="true" className="fr-chat-agent-chevron" data-open={agentMenuOpen ? "true" : undefined} /> : null}
+                </button>
+                {agentMenuOpen ? (
+                  <div className="fr-chat-agent-menu" role="dialog" aria-label="Choose chat agent">
+                    <label className="fr-chat-agent-menu-search">
+                      {Search ? <Search aria-hidden="true" /> : null}
+                      <input
+                        ref={agentMenuSearchInputRef}
+                        type="search"
+                        value={agentMenuSearchQuery}
+                        onChange={(event) => setAgentMenuSearchQuery(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Escape") return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          if (agentMenuSearchQuery) setAgentMenuSearchQuery("");
+                          else {
+                            setAgentMenuOpen(false);
+                            setAgentMenuSearchQuery("");
+                          }
+                        }}
+                        placeholder="Search agents"
+                        aria-label="Search agents by name, machine, runtime, or model"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </label>
+                    <div className="fr-chat-agent-menu-list" role="menu" aria-label="Agents">
+                      {agentMenuRows.length ? agentMenuRows.map(({ machine, agent, machineMenuLabel, statusLabel, runtimeIdentity }: any) => {
+                        const agentIconSrc = selectedAgentIcon(agent, beeRoleIconPath);
+                        return (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            key={`${machine.key}-${agent.id}`}
+                            className={agent.id === selectedAgent?.id ? "active" : undefined}
+                            onClick={() => {
+                              startAgentChat?.(agent.id, { fresh: true, chatLeafKey: `machine-${machine.key}-${agent.id}` });
+                              setAgentMenuOpen(false);
+                              setAgentMenuSearchQuery("");
+                            }}
+                          >
+                            <span
+                              className={`fr-chat-agent-menu-icon${agentIconSrc ? " has-image" : ""}`}
+                              style={agentIconSrc ? { backgroundImage: `url(${agentIconSrc})` } : undefined}
+                              aria-hidden="true"
+                            >
+                              {agentIconSrc ? null : <b>{agentInitials(agent)}</b>}
+                            </span>
+                            <span>
+                              <strong>{agent.name}</strong>
+                              <small>
+                                {runtimeIdentity.provider && runtimeIdentity.model
+                                  ? `${runtimeIdentity.runtime} / ${runtimeIdentity.provider}/${runtimeIdentity.model}`
+                                  : runtimeIdentity.runtime}
+                                {" / "}
+                                {machineMenuLabel}
+                                {statusLabel && statusLabel !== agent.name ? ` / ${statusLabel.replace(`${agent.name} / `, "")}` : ""}
+                              </small>
+                            </span>
+                          </button>
+                        );
+                      }) : <p className="fr-chat-empty-text">{normalizedAgentMenuSearchQuery ? "No agents match that search" : "No chat agents found"}</p>}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </header>
 

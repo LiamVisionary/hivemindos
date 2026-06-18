@@ -4,6 +4,7 @@ import { createHash } from "crypto";
 import { constants } from "fs";
 import { access, mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "path";
+import { bm25TermCounts, bm25Tokens, scoreBm25Terms } from "@/lib/services/search/bm25-lite";
 
 export const FULL_VAULT_SEARCH_INDEX_PATH = "Operations/Brain Services/Full Vault Search Index.jsonl";
 
@@ -11,12 +12,12 @@ const MAX_INDEXED_MARKDOWN_FILES = 50_000;
 const MAX_INDEXED_MARKDOWN_BYTES = 256 * 1024;
 const MAX_INDEX_TERMS_PER_NOTE = 900;
 const MAX_SEARCH_RESULTS = 500;
-const BM25_K1 = 1.2;
-const BM25_B = 0.75;
 const VAULT_EXCLUDE_PARTS = new Set([".git", ".obsidian", ".trash", ".hivemindos-transfers", "node_modules"]);
 const VAULT_EXCLUDE_PREFIXES = [
   "Operations/Runtime Mirrors/",
   "Operations/Brain Services/Agent Memory Index.jsonl",
+  "Operations/Brain Services/Agent Memory Entity Index.jsonl",
+  "Operations/Brain Services/Agent Memory Retrievals.jsonl",
   "Operations/Brain Services/Agent Memory Proofs.jsonl",
   FULL_VAULT_SEARCH_INDEX_PATH,
   "Operations/Vault Migrations/",
@@ -146,18 +147,11 @@ function compact(value: string, max = 280) {
 }
 
 function textTokens(value: string) {
-  return value
-    .toLowerCase()
-    .split(/[^a-z0-9_-]+/)
-    .filter((term) => term.length >= 3 && !STOP_WORDS.has(term));
+  return bm25Tokens(value).filter((term) => !STOP_WORDS.has(term));
 }
 
 function termCounts(tokens: string[]) {
-  const counts = new Map<string, number>();
-  for (const token of tokens) counts.set(token, (counts.get(token) ?? 0) + 1);
-  return Object.fromEntries([...counts.entries()]
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .slice(0, MAX_INDEX_TERMS_PER_NOTE));
+  return bm25TermCounts(tokens, MAX_INDEX_TERMS_PER_NOTE);
 }
 
 function normalizeFilterValue(value: string) {
@@ -346,10 +340,14 @@ function bm25Score(record: FullVaultSearchIndexRecord, parsed: ParsedSearchQuery
   for (const term of parsed.terms) {
     const frequency = record.terms[term] ?? 0;
     if (!frequency) continue;
-    const df = docFreq.get(term) ?? 1;
-    const idf = Math.log(1 + (documentCount - df + 0.5) / (df + 0.5));
-    const denominator = frequency + BM25_K1 * (1 - BM25_B + BM25_B * (record.documentLength / Math.max(1, averageLength)));
-    score += idf * ((frequency * (BM25_K1 + 1)) / denominator);
+    score += scoreBm25Terms({
+      terms: [term],
+      documentTerms: record.terms,
+      documentLength: record.documentLength,
+      documentCount,
+      docFreq,
+      averageLength,
+    });
     if (lowerTitle.includes(term)) score += 3;
     if (lowerHeadings.includes(term)) score += 1.5;
     if (lowerPath.includes(term)) score += 1;

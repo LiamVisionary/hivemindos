@@ -153,8 +153,8 @@ async function waitForPortFree(checkPort, host, timeoutMs = 20_000) {
 // Warm-keeper: Next dev (webpack) compiles routes on demand and disposes
 // inactive entries, so the first chat message after an idle stretch or a
 // restart used to stall ~15s behind a recompile of the agent-runtime route.
-// OPTIONS requests load (compile) a route module without running any
-// exported handler, so pinging the heavy routes keeps them permanently warm.
+// API routes use OPTIONS to load (compile) the module without running an
+// exported handler. Page routes use HEAD because Next pages reject OPTIONS.
 const warmHost = hostname === "0.0.0.0" ? "127.0.0.1" : hostname;
 const warmRoutesRaw = process.env.HIVEMINDOS_DEV_WARM_ROUTES;
 const warmRoutes = warmRoutesRaw === "0"
@@ -165,6 +165,7 @@ const warmRoutes = warmRoutesRaw === "0"
     .filter(Boolean);
 if (!warmRoutes.length && warmRoutesRaw !== "0") {
   warmRoutes.push(
+    "/stake",
     "/api/chat/agent-runtime",
     "/api/chat/image-generation",
     "/api/queen-bee/voice",
@@ -184,10 +185,11 @@ async function warmRoutesOnce() {
   try {
     for (const route of warmRoutes) {
       try {
-        await fetch(`http://${warmHost}:${port}${route}`, {
-          method: "OPTIONS",
+        const response = await fetch(`http://${warmHost}:${port}${route}`, {
+          method: route.startsWith("/api/") ? "OPTIONS" : "HEAD",
           signal: AbortSignal.timeout(90_000),
         });
+        if (!response.ok) allOk = false;
       } catch {
         allOk = false;
       }

@@ -9,6 +9,8 @@ export async function buildSharedBrainMemoryContext(sharedVault: SharedVaultConf
       vaultPath: sharedVault.vaultPath,
       query,
       limit: 5,
+      trackUsage: true,
+      usageContext: "managed-chat-preflight",
     });
     if (!result.hits.length) return "";
     return [

@@ -5,7 +5,6 @@ use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::PathBuf;
-use std::process::Command;
 use std::time::Duration;
 
 const APPS_CACHE_FILE: &str = "~/.hivemindos/fleet-apps-cache.json";
@@ -348,7 +347,10 @@ fn status_from_cli() -> Result<Value, String> {
     }
     let mut last_error = "tailscale unavailable".to_string();
     for command in TAILSCALE_CLI_CANDIDATES {
-        let output = Command::new(command).args(["status", "--json"]).output();
+        // hidden_command: fleet status is polled; a plain `tailscale status`
+        // spawn flashes a console window on Windows each poll when the local
+        // API path is unavailable. See crate::hidden_command.
+        let output = crate::hidden_command(command).args(["status", "--json"]).output();
         let Ok(output) = output else {
             last_error = format!("{command} unavailable");
             continue;

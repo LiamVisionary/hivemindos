@@ -7,10 +7,11 @@ import {
   VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM,
   type VeilCashTransferAsset,
 } from "@/lib/config/veil-cash";
+import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { veilEnvValue } from "@/lib/services/wallet/veil-cli";
 import { executeVeilPrivateTransfer, veilPrivateTransferErrorMessage } from "@/lib/services/wallet/veil-private-transfer";
 import { requireAuth } from "@/lib/utils/server-auth";
-import { evaluateSpend, resolveSpendGovernance } from "@/lib/services/wallet/spend-governance";
+import { evaluateSpend, loadGovernanceWallet, resolveSpendGovernance } from "@/lib/services/wallet/spend-governance";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 
 export const runtime = "nodejs";
@@ -34,6 +35,8 @@ type VeilTransferBody = {
   maxPaymentUsd?: number | string;
   maxAssetAmount?: number | string;
   confirmation?: string;
+  /** Client hint only. The route trusts persisted wallet policy for auto-send. */
+  autoSendEnabled?: boolean;
   autoShield?: boolean;
   duplicateGuardEnabled?: boolean;
   duplicateGuardSeconds?: number | string;
@@ -46,7 +49,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json().catch(() => ({})) as VeilTransferBody;
-    const validation = validateTransferBody(body);
+    const persisted = body.agentId?.trim() ? await loadGovernanceWallet(body.agentId.trim()).catch(() => null) : null;
+    const validation = validateTransferBody(body, { autoSendAllowed: canAutoSendVeilTransfer(persisted?.wallet) });
     if (validation) return validation;
 
     const asset = normalizeAsset(body.asset);
@@ -59,7 +63,7 @@ export async function POST(request: NextRequest) {
     // Governance: company kill switch, cumulative budgets, and approval escalation.
     // USDC is 1:1 USD; ETH uses the caller-supplied USD value when available.
     const usdValue = asset === "USDC" ? Number(amount) : Number(body.amountUsd ?? 0);
-    const governance = body.agentId ? await resolveSpendGovernance(body.agentId.trim()) : null;
+    const governance = persisted ? { wallet: persisted.wallet, agentName: persisted.agentName } : body.agentId ? await resolveSpendGovernance(body.agentId.trim()) : null;
     let grantId: string | undefined;
     let companyId: string | undefined;
     if (governance) {
@@ -118,13 +122,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function validateTransferBody(body: VeilTransferBody) {
+function validateTransferBody(body: VeilTransferBody, options: { autoSendAllowed?: boolean } = {}) {
   if (body.enabled !== true) return sendError("Wallet spending is off for this agent. Enable Spend on before executing private transfers.", 403);
   if (body.provider !== "veil") return sendError("Set this agent's payment provider to Veil Cash before private transfers.");
   if (body.network !== VEIL_CASH_NETWORK) return sendError("Veil Cash transfers are only supported on Base mainnet.");
   const asset = normalizeAsset(body.asset);
   if (!asset || !VEIL_CASH_TRANSFER_ASSETS.includes(asset)) return sendError("Veil private transfers currently support ETH or USDC.");
-  if (!isTransferConfirmed(body.confirmation)) return sendError(`Type ${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL} to confirm this private transfer.`);
+  if (!options.autoSendAllowed && !isTransferConfirmed(body.confirmation)) return sendError(`Type ${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL} to confirm this private transfer, or enable Veil auto-send for this wallet.`);
 
   const recipient = body.recipientAddress?.trim();
   if (!recipient || !EVM_ADDRESS.test(recipient)) return sendError("Recipient must be a valid 0x Ethereum address.");
@@ -144,6 +148,15 @@ function validateTransferBody(body: VeilTransferBody) {
     return sendError(`Veil public-recipient USDC withdrawals currently require at least ${VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM} USDC.`);
   }
   return null;
+}
+
+function canAutoSendVeilTransfer(wallet?: AgentWalletConfig) {
+  return Boolean(
+    wallet?.veilAutoSendEnabled === true
+    && wallet.enabled === true
+    && wallet.provider === "veil"
+    && wallet.network === VEIL_CASH_NETWORK
+  );
 }
 
 function normalizeAmount(value: number | string | undefined, asset: VeilCashTransferAsset): string {

@@ -1,0 +1,27 @@
+{
+  "created_at": "2026-06-18T10:28:24.492148+00:00",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "local-src-3",
+      "source_path": "/Users/liam/Downloads/src 3/app/stake/StakePageClient.tsx",
+      "target_path": "src/app/stake/StakePageClient.tsx",
+      "reuse_type": "copied_code",
+      "note": "corrected Claude Design stake route client with honey buttons, shield Stake icon, demo empty state, and warm-neutral palette wiring"
+    },
+    {
+      "source_repo": "local-src-3",
+      "source_path": "/Users/liam/Downloads/src 3/app/stake/stake.module.css",
+      "target_path": "src/app/stake/stake.module.css",
+      "reuse_type": "copied_code",
+      "note": "corrected Claude Design stylesheet with flat warm-neutral backgrounds, honey primary buttons, ghost pills, and MAX pill styling"
+    },
+    {
+      "source_repo": "local-src-3",
+      "source_path": "/Users/liam/Downloads/src 3/app/stake/page.tsx",
+      "target_path": "src/app/stake/page.tsx",
+      "reuse_type": "copied_code",
+      "note": "Claude Design page wrapper"
+    }
+  ]
+}

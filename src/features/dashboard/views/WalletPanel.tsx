@@ -1,1500 +1,908 @@
 "use client";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentType, CSSProperties, Dispatch, ElementType, SetStateAction } from "react";
-import Image from "next/image";
-import Link from "next/link";
-import { Copy, Download as DownloadIcon, KeyRound, LockKeyhole, Plus, RefreshCcw as RefreshIcon, Send, Shuffle, WalletCards, X } from "lucide-react";
-import type { AgentWalletCardProps } from "@/components/wallet/AgentWalletCard";
-import type { AgentWalletCardCompactProps } from "@/components/wallet/AgentWalletCardCompact";
-import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
-import type { AgentPaymentProvider, AgentSurvivalSnapshot, AgentWalletConfig, AgentWalletTokenBalance, HoneyAgentReward } from "@/lib/types/agent-wallet";
+import { WalletsView } from "@/components/wallets-drop-in/WalletsView";
+import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
+import { switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
 import { resolveAgentWallet } from "@/lib/utils/agent-wallet";
-import { isBaseHiveTokenLike, switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
-import { createStyleClass } from "@/features/dashboard/style-classes";
-import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
-import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
-import type { DashboardView, RuntimeUsageAnalytics, WalletActionState, WalletMoneyClawStatus, WalletVaultBackupStatus } from "@/features/dashboard/dashboard-types";
-import { exportAgentWalletSecret, exportPersonalWalletGroupSecret } from "./wallet-secret-export-actions";
-import { AgentWalletsChecking, PersonalWalletsChecking, WalletUsageLoading } from "./WalletPanelLoading";
-import { PersonalWalletMenu } from "./PersonalWalletMenu";
-import { appendFreshImportedWallets, planImportedWalletMerge } from "./personal-wallet-import-merge";
-import { stakeHrefForPersonalToken, walletCustodySummary } from "./personal-stake-link";
-import personalStyles from "./PersonalWallets.module.css";
 
-type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
-type WalletStats = {
-  enabled: number;
-  balance: number;
-  critical: number;
-};
-type HoneyStats = {
-  totalHoney: number;
-  availableHoney: number;
-  legacyHive: number;
-  hiveQuote: number;
-  rewardPoolHive: number;
-  rewardPoolRemainingHive: number;
-  rewardPoolSharePercent: number;
-  hivePerMillionTokens: number;
-};
-type PaymentProviderCopy = Record<AgentPaymentProvider, {
-  label: string;
-  summary: string;
-  setup: string;
-}>;
-type IconComponent = ElementType<{
-  "aria-hidden"?: boolean | "true" | "false";
-  className?: string;
-  height?: number;
-  width?: number;
-}>;
-type EthereumProvider = {
-  request: (input: { method: string; params?: unknown[] }) => Promise<unknown>;
-};
-type WalletWindow = Window & {
-  ethereum?: EthereumProvider;
-};
-type PersonalWallet = {
-  id: string;
-  name: string;
-  address: string;
-  network: string;
-  custodyMode: "local" | "watch";
-  importedFrom: "generated" | "private-key" | "recovery-phrase" | "browser" | "watch";
-  currentBalanceUsd: number;
-  nativeBalance: number;
-  tokens: AgentWalletTokenBalance[];
-  portfolioVersion?: number;
-  lastOnchainSyncAt: number;
-  createdAt: number;
-  updatedAt: number;
-};
-type PersonalWalletVaultInfo = {
-  agentId: string;
-  id?: string;
-  name?: string;
-  address: string;
-  network: string;
-  custodyMode?: "local" | "watch";
-  importedFrom?: PersonalWallet["importedFrom"];
-  currentBalanceUsd?: number;
-  nativeBalance?: number;
-  tokens?: AgentWalletTokenBalance[];
-  portfolioVersion?: number;
-  lastOnchainSyncAt?: number;
-  createdAt?: string | number;
-  updatedAt?: number;
-};
-type PersonalPortfolioToken = AgentWalletTokenBalance & {
-  walletId: string;
-  walletName: string;
-};
-type PersonalWalletGroup = {
-  id: string;
-  name: string;
-  wallets: PersonalWallet[];
-  tokens: PersonalPortfolioToken[];
-  totalValueUsd: number;
-  nativeSummary: string;
-  primaryWallet: PersonalWallet;
-};
-type AgentWalletRow = {
-  agent: AgentProfile;
-  hasWallet: boolean;
-  wallet: AgentWalletConfig;
-};
+const RAIL_ENABLED_KEY_PREFIX = "hivemindos.walletRail.enabled.";
+const USEPOD_ROUTING_MODE_KEY = "hivemindos.walletRail.usepod.routingMode";
+const VEIL_TRANSFER_NETWORK = "eip155:8453";
 const BANKR_RECIPIENT_STORAGE_KEY = "hivemindos.bankrRecipientAddress";
-const PERSONAL_WALLET_PORTFOLIO_VERSION = 7;
-const RECOVERY_PHRASE_WORD_COUNT = 12;
-const RECOVERY_PHRASE_WALLET_ID_SUFFIX = /:(?:eip155-\d+|solana-[a-z0-9-]+)$/i;
-const personalClass = createStyleClass(personalStyles);
-function emptyRecoveryPhraseWords() {
-  return Array.from({ length: RECOVERY_PHRASE_WORD_COUNT }, () => "");
-}
 
-function normalizeRecoveryPhraseWord(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, "");
-}
-
-function parseRecoveryPhraseWords(value: string) {
-  return value
-    .trim()
-    .split(/\s+/)
-    .map(normalizeRecoveryPhraseWord)
-    .filter(Boolean)
-    .slice(0, RECOVERY_PHRASE_WORD_COUNT);
-}
-
-function isRecoveryPhraseWalletId(id: string) {
-  return id.startsWith("user:") && RECOVERY_PHRASE_WALLET_ID_SUFFIX.test(id);
-}
-
-function normalizePersonalWalletImportSource(
-  id: string,
-  importedFrom?: PersonalWallet["importedFrom"],
-): PersonalWallet["importedFrom"] {
-  return importedFrom === "recovery-phrase" || isRecoveryPhraseWalletId(id)
-    ? "recovery-phrase"
-    : importedFrom || "watch";
-}
-
-function personalAccountGroupId(wallet: PersonalWallet) {
-  return normalizePersonalWalletImportSource(wallet.id, wallet.importedFrom) === "recovery-phrase"
-    ? wallet.id.replace(RECOVERY_PHRASE_WALLET_ID_SUFFIX, "")
-    : wallet.id;
-}
-
-function personalAccountName(wallet: PersonalWallet) {
-  if (normalizePersonalWalletImportSource(wallet.id, wallet.importedFrom) !== "recovery-phrase") return wallet.name;
-  if (wallet.name === wallet.id) return wallet.id.replace(RECOVERY_PHRASE_WALLET_ID_SUFFIX, "");
-  return wallet.name.replace(/\s+(?:Base|Solana)$/i, "");
-}
-
-function shouldRefreshPersonalWalletSnapshot(wallet: PersonalWallet) {
-  return wallet.lastOnchainSyncAt <= 0 || (wallet.portfolioVersion ?? 0) < PERSONAL_WALLET_PORTFOLIO_VERSION;
-}
-
-type WalletPanelProps = {
-  AGENT_PAYMENT_PROVIDER_COPY: PaymentProviderCopy;
-  AgentWalletCard: ComponentType<AgentWalletCardProps>;
-  AgentWalletCardCompact: ComponentType<AgentWalletCardCompactProps>;
-  Button: ElementType;
-  ChevronLeft: IconComponent;
-  Download: IconComponent;
-  HandCoins: IconComponent;
-  LoaderCircle: IconComponent;
-  RUNTIME_LABELS: Record<string, string>;
-  RefreshCcw: IconComponent;
-  activeView: DashboardView;
-  copyPaymentPrompt: (wallet: AgentWalletConfig) => void | Promise<void>;
-  createDefaultAgentWallet: (agentId: string) => AgentWalletConfig;
-  createLocalWallet: (agentId: string, network: string) => void | Promise<void>;
-  displayAgents: AgentProfile[];
-  claimAllHoneyToBankrHive: (recipientAddress?: string) => Promise<{ ok: boolean; error?: string; txHash?: string; amount?: number; recipientAddress?: string }>;
-  enableHoneyLedger: () => void;
-  exportWalletSecrets: (input: { agentIds: string[]; label: string; filename?: string }) => Promise<{ ok?: boolean; error?: string; exportedCount?: number; label?: string }>;
-  formatHiveAmount: (amount: number) => string;
-  formatRelativeTime: (timestamp: number) => string;
-  getSurvivalSnapshot: (wallet: AgentWalletConfig) => AgentSurvivalSnapshot;
-  honeyLedgerEnabled: boolean;
-  honeyStats: HoneyStats;
-  hydrated: boolean;
-  initializeCoreWalletRails: (agentId: string) => Promise<void>;
-  moneyClawStatusByEnvName: Record<string, WalletMoneyClawStatus | null | undefined>;
-  refreshRuntimeUsage: () => void | Promise<void>;
-  refreshRuntimeIntegrations: (agent?: AgentProfile | null) => void | Promise<void>;
-  refreshWalletBalance: (agentId: string) => void | Promise<void>;
-  renderAgentKey: (agent: AgentProfile, index: number) => string;
-  resetWalletBurnClock: (agentId: string) => void;
-  returnAllHiveToHoney: () => void | Promise<void>;
-  runWalletVaultBackupAction: (action: "refresh" | "restore") => void | Promise<void>;
-  runtimeUsage: RuntimeUsageAnalytics | null | undefined;
-  runtimeUsageLoading: boolean;
-  saveMoneyClawKey: (agentId: string, apiKey: string, options: { shareWithAllAgents: boolean }) => Promise<{ ok: boolean; error?: string }>;
-  selectedAgent: AgentProfile | null;
-  selectedHoneyReward: HoneyAgentReward | null;
-  selectedWallet: AgentWalletConfig | null;
-  selectedWalletSnapshot: AgentSurvivalSnapshot | null;
-  sharedVault: SharedVaultConfig;
-  sendWalletUsdc: (agentId: string) => void | Promise<void>;
-  setSelectedAgentId: Dispatch<SetStateAction<string>>;
-  setWalletExpanded: Dispatch<SetStateAction<boolean>>;
-  setWalletPanelMode: Dispatch<SetStateAction<"wallets" | "usage">>;
-  testX402Fetch: (agentId: string) => void | Promise<void>;
-  updateAgentProfile: (agentId: string, patch: Partial<AgentProfile>) => void;
-  updateWallet: (agentId: string, patch: Partial<AgentWalletConfig>) => void;
-  updateWalletAction: (agentId: string, patch: WalletActionState) => void;
-  vaultClass: ClassNameBuilder;
-  walletActionsByAgent: Record<string, WalletActionState | undefined>;
-  walletClass: ClassNameBuilder;
-  walletExpanded: boolean;
-  walletPanelMode: "wallets" | "usage";
-  walletStats: WalletStats;
-  walletVaultBackupBusy: boolean;
-  walletVaultBackupMessage: string;
-  walletVaultBackupStatus: WalletVaultBackupStatus | null | undefined;
-  walletsByAgent: Record<string, AgentWalletConfig | undefined>;
+type DropInTokenPrice = { price: number; name?: string; color?: string; chg?: number };
+type WalletActivityRecord = {
+  id: string;
+  agentId: string;
+  kind: string;
+  asset: string;
+  amountUsd: number;
+  assetAmount?: number;
+  target?: string;
+  status: string;
+  createdAt: string;
+  createdAtMs: number;
+};
+type HoneyLedgerRuntime = {
+  honeyPerThousandTokens?: number;
+  tokenPerHoney?: number;
+  agentTokenUsage?: Record<string, number>;
+  agentHoneyExchanged?: Record<string, number>;
+  agentHiveBalances?: Record<string, number>;
+  balances?: Array<{ agentId: string; tokensUsed: number; lifetimeHoney: number; availableHoney: number; hiveBalance: number }>;
+  events?: Array<{ id: string; agentId: string; agentName?: string; kind: string; source: string; tokensUsed: number; honeyDelta: number; hiveDelta: number; createdAt: string }>;
 };
 
-function createPersonalWalletId() {
-  return `user:${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const ESTIMATED_RUNTIME_TOKEN_USD = 0.000002;
+
+function compactAge(input: unknown): string {
+  const time = typeof input === "number" ? input : Date.parse(String(input || ""));
+  if (!Number.isFinite(time)) return "now";
+  const seconds = Math.max(0, Math.floor((Date.now() - time) / 1000));
+  if (seconds < 60) return `${Math.max(1, seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
 }
 
-function networkLabel(network: string) {
-  switch (network) {
-    case "eip155:8453": return "Base";
-    case "eip155:84532": return "Base Sepolia";
-    case "solana:mainnet": return "Solana";
-    case "solana:devnet": return "Solana devnet";
-    default: return network;
+function roundUsd(value: number): number {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function estimateRuntimeCostUsd(tokens: number): number {
+  return Math.round(Math.max(0, Number(tokens) || 0) * ESTIMATED_RUNTIME_TOKEN_USD * 10_000) / 10_000;
+}
+
+function normalizeSourceLabel(value: string): string {
+  return value.split(/[-_]/g).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ") || "Runtime";
+}
+
+function buildAgentLookup(agents: any[]) {
+  return new Map(agents.map((agent) => [String(agent.id), agent]));
+}
+
+function activityTypeForKind(kind: string): string {
+  if (kind === "trade") return "trade";
+  if (kind === "send" || kind === "veil-transfer") return "send";
+  return "x402";
+}
+
+function activityLabelForKind(kind: string): string {
+  if (kind === "x402-private") return "Private x402";
+  if (kind === "veil-transfer") return "Veil private transfer";
+  if (kind === "send") return "Wallet transfer";
+  if (kind === "trade") return "Trade";
+  return "x402 payment";
+}
+
+function buildActivityLedger(records: WalletActivityRecord[] | null, agents: any[]) {
+  const agentById = buildAgentLookup(agents);
+  return (Array.isArray(records) ? records : []).map((record) => {
+    const agent = agentById.get(record.agentId);
+    const asset = String(record.asset || "USDC").toUpperCase();
+    const amountUsd = Number(record.amountUsd) || 0;
+    const assetAmount = Number(record.assetAmount) || 0;
+    const target = record.target ? ` · ${record.target}` : "";
+    const assetNote = amountUsd > 0 || !assetAmount ? "" : ` · ${assetAmount} ${asset}`;
+    return {
+      id: record.id,
+      agent: agent?.name || record.agentId,
+      type: activityTypeForKind(record.kind),
+      what: `${activityLabelForKind(record.kind)}${target}${assetNote}`,
+      amt: record.status === "failed" ? 0 : -roundUsd(amountUsd),
+      token: "USDC",
+      at: compactAge(record.createdAtMs || record.createdAt),
+      state: record.status === "failed" ? "failed" : "ok",
+    };
+  });
+}
+
+function todayStartMs(): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today.getTime();
+}
+
+function dayLabel(date: Date): string {
+  const today = new Date();
+  return date.toDateString() === today.toDateString()
+    ? "Today"
+    : date.toLocaleDateString(undefined, { weekday: "short" });
+}
+
+function runtimeUsagePointRows(runtimeUsage: any, honeyLedger: HoneyLedgerRuntime | null) {
+  const rows = Array.isArray(runtimeUsage?.rows) ? runtimeUsage.rows : [];
+  if (rows.length) {
+    return rows.map((row: any) => ({
+      agentId: String(row.agentId || row.runtime || "runtime"),
+      model: String(row.model || row.runtime || "runtime"),
+      runtime: String(row.runtime || "runtime"),
+      source: String(row.source || "runtime"),
+      tokens: Math.max(0, Math.round(Number(row.totalTokens) || 0)),
+      updatedAt: row.updatedAt,
+    })).filter((row: any) => row.tokens > 0);
   }
+  return (honeyLedger?.events ?? []).filter((event) => Number(event.tokensUsed) > 0).map((event) => ({
+    agentId: String(event.agentId || "honey-ledger"),
+    model: normalizeSourceLabel(String(event.source || "honey-ledger")),
+    runtime: "honey",
+    source: String(event.source || "honey-ledger"),
+    tokens: Math.max(0, Math.round(Number(event.tokensUsed) || 0)),
+    updatedAt: event.createdAt,
+  }));
 }
 
-function nativeSymbol(network: string) {
-  return network.startsWith("solana:") ? "SOL" : "ETH";
+function buildUsageRows(runtimeUsage: any, honeyLedger: HoneyLedgerRuntime | null, agents: any[]) {
+  const agentById = buildAgentLookup(agents);
+  const todayMs = todayStartMs();
+  const grouped = new Map<string, any>();
+  for (const row of runtimeUsagePointRows(runtimeUsage, honeyLedger)) {
+    const key = `${row.agentId}:${row.model}`;
+    const current = grouped.get(key) ?? { id: key, agentId: row.agentId, model: row.model, runtime: row.runtime, source: row.source, tokens: 0, today: 0 };
+    current.tokens += row.tokens;
+    if (Date.parse(String(row.updatedAt || "")) >= todayMs) current.today += estimateRuntimeCostUsd(row.tokens);
+    grouped.set(key, current);
+  }
+  return [...grouped.values()].map((row) => {
+    const agent = agentById.get(row.agentId);
+    return {
+      id: row.id,
+      agentId: row.agentId,
+      name: agent?.name || row.agentId,
+      runtime: agent?.runtime || normalizeSourceLabel(row.runtime),
+      machine: agent?.machineName || agent?.machineKey || normalizeSourceLabel(row.source),
+      state: agent ? "ready" : "scheduled",
+      model: row.model,
+      tokens: row.tokens,
+      today: roundUsd(row.today),
+      enabled: true,
+    };
+  }).sort((left, right) => right.tokens - left.tokens);
 }
 
-function formatMoney(value: number) {
-  return `$${Math.max(0, value || 0).toFixed(2)}`;
+function buildUsageSeries(runtimeUsage: any, honeyLedger: HoneyLedgerRuntime | null) {
+  const points = runtimeUsagePointRows(runtimeUsage, honeyLedger);
+  if (!points.length) return [];
+  const buckets = new Map<string, { spend: number; tokens: number }>();
+  for (const point of points) {
+    const parsed = Date.parse(String(point.updatedAt || ""));
+    if (!Number.isFinite(parsed)) continue;
+    const date = new Date(parsed);
+    date.setHours(0, 0, 0, 0);
+    const key = date.toISOString().slice(0, 10);
+    const current = buckets.get(key) ?? { spend: 0, tokens: 0 };
+    current.spend += estimateRuntimeCostUsd(point.tokens);
+    current.tokens += point.tokens;
+    buckets.set(key, current);
+  }
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (6 - index));
+    const current = buckets.get(date.toISOString().slice(0, 10)) ?? { spend: 0, tokens: 0 };
+    return { day: dayLabel(date), spend: roundUsd(current.spend), tokens: Math.round(current.tokens / 100_000) / 10 };
+  });
 }
 
-function formatToken(value: number) {
-  return value.toLocaleString(undefined, { maximumFractionDigits: value >= 1 ? 4 : 8 });
+function calculateHoneyForTokens(tokens: number, honeyPerThousandTokens: number): number {
+  return Math.round(Math.max(0, tokens) / 1_000 * Math.max(0, honeyPerThousandTokens || 0) * 1_000_000) / 1_000_000;
 }
 
-function isLikelySpamPortfolioToken(token: Pick<AgentWalletTokenBalance, "symbol" | "name">) {
-  const text = `${token.symbol ?? ""} ${token.name ?? ""}`.toLowerCase();
-  if (!text.trim()) return false;
-  return [
-    /\bvisit\s+to\s+claim\b/,
-    /\bclaim\s+(?:on|at|now|your)\b/,
-    /\bairdrop\b/,
-    /\bt\.me\/\S+/,
-    /\btelegram\b/,
-    /\bdiscord\.gg\b/,
-    /\bbit\.ly\b/,
-    /\bswap-[a-z0-9.-]+/,
-    /\b(?:https?:\/\/|www\.)\S+/,
-    /\.(?:com|org|net|xyz|io|app|top|site|click|lol|vip)\b/,
-    /✅/,
-  ].some((pattern) => pattern.test(text));
+function buildHoneyByAgentRows(ledger: HoneyLedgerRuntime | null, agents: any[]) {
+  const agentById = buildAgentLookup(agents);
+  const balances = Array.isArray(ledger?.balances) ? ledger!.balances : [];
+  const rows = balances.length ? balances.map((balance) => ({
+    id: String(balance.agentId),
+    tokensUsed: Math.max(0, Math.round(Number(balance.tokensUsed) || 0)),
+    honeyEarned: Math.max(0, Number(balance.lifetimeHoney) || 0),
+    honey: Math.max(0, Number(balance.availableHoney) || 0),
+  })) : Object.entries(ledger?.agentTokenUsage ?? {}).map(([agentId, tokens]) => {
+    const tokensUsed = Math.max(0, Math.round(Number(tokens) || 0));
+    const honeyEarned = calculateHoneyForTokens(tokensUsed, Number(ledger?.honeyPerThousandTokens) || 0);
+    const exchanged = Math.min(honeyEarned, Math.max(0, Number(ledger?.agentHoneyExchanged?.[agentId]) || 0));
+    return { id: agentId, tokensUsed, honeyEarned, honey: Math.max(0, honeyEarned - exchanged) };
+  });
+  return rows.filter((row) => row.tokensUsed > 0 || row.honeyEarned > 0 || row.honey > 0).map((row) => {
+    const agent = agentById.get(row.id);
+    return { id: row.id, name: agent?.name || row.id, runtime: agent?.runtime || "Agent", honey: Math.round(row.honey * 1_000_000) / 1_000_000, billed: row.tokensUsed, state: agent ? "ready" : "scheduled" };
+  }).sort((left, right) => right.honey - left.honey);
 }
 
-function hashTokenSeed(seed: string) {
-  let hash = 0;
-  for (const character of seed) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0;
-  return Math.abs(hash);
+function honeyEventNote(event: NonNullable<HoneyLedgerRuntime["events"]>[number]): string {
+  if (event.kind === "usage") return `${normalizeSourceLabel(event.source)} · ${Math.round(Number(event.tokensUsed) || 0).toLocaleString()} tokens`;
+  if (event.kind === "exchange") return Number(event.hiveDelta) > 0 ? "Converted Honey to HIVE" : "Returned HIVE to Honey";
+  if (event.kind === "managed-credit") return `${normalizeSourceLabel(event.source)} credit`;
+  if (event.kind === "managed-spend") return `${normalizeSourceLabel(event.source)} spend`;
+  return normalizeSourceLabel(event.kind);
 }
 
-type TokenIconStyle = CSSProperties & {
-  "--token-accent-a"?: string;
-  "--token-accent-b"?: string;
-  "--token-accent-c"?: string;
-};
+function buildHoneyLedgerRows(ledger: HoneyLedgerRuntime | null, agents: any[]) {
+  const agentById = buildAgentLookup(agents);
+  return (ledger?.events ?? []).map((event) => {
+    const honeyDelta = Number(event.honeyDelta) || 0;
+    return {
+      id: event.id,
+      agent: event.agentName || agentById.get(event.agentId)?.name || event.agentId,
+      kind: honeyDelta >= 0 ? "earn" : Number(event.hiveDelta) > 0 ? "convert" : "redeem",
+      note: honeyEventNote(event),
+      amt: Math.round(honeyDelta * 1_000_000) / 1_000_000,
+      at: compactAge(event.createdAt),
+    };
+  });
+}
 
-function tokenIconFallbackStyle(token: Pick<AgentWalletTokenBalance, "symbol" | "name" | "network" | "tokenAddress">): TokenIconStyle {
-  const hash = hashTokenSeed(`${token.network}:${token.tokenAddress ?? ""}:${token.symbol}:${token.name}`);
-  const hue = hash % 360;
+function buildHoneySummary(ledger: HoneyLedgerRuntime | null, byAgent: any[], honeyStats: any) {
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1_000;
+  const events = ledger?.events ?? [];
+  const earned = events.filter((event) => Date.parse(event.createdAt) >= weekAgo && Number(event.honeyDelta) > 0).reduce((sum, event) => sum + Number(event.honeyDelta || 0), 0);
+  const out = events.filter((event) => Number(event.honeyDelta) < 0).reduce((sum, event) => sum + Number(event.honeyDelta || 0), 0);
+  const fallbackRedeemed = Math.max(0, Number(honeyStats?.totalHoney || 0) - Number(honeyStats?.availableHoney || 0));
   return {
-    "--token-accent-a": `hsl(${hue} 78% 62%)`,
-    "--token-accent-b": `hsl(${(hue + 42) % 360} 72% 52%)`,
-    "--token-accent-c": `hsl(${(hue + 196) % 360} 70% 58%)`,
+    balance: Math.round((byAgent.length ? byAgent.reduce((sum, row) => sum + Number(row.honey || 0), 0) : Number(honeyStats?.availableHoney) || 0) * 1_000_000) / 1_000_000,
+    earned: Math.round((ledger ? earned : Number(honeyStats?.totalHoney) || 0) * 1_000_000) / 1_000_000,
+    redeemed: Math.round((ledger ? Math.abs(out) : fallbackRedeemed) * 1_000_000) / 1_000_000,
+    billed: byAgent.reduce((sum, row) => sum + Number(row.billed || 0), 0),
+    holders: byAgent.filter((row) => Number(row.honey) > 0).length,
   };
 }
 
-function tokenIconLabel(symbol: string) {
-  const compact = symbol.replace(/[^a-z0-9]/gi, "");
-  return (compact || "?").slice(0, 2).toUpperCase();
+async function fetchWalletActivityRecords(): Promise<WalletActivityRecord[]> {
+  const response = await fetch("/api/wallet/activity?limit=100", { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
+  const data = await response?.json().catch(() => null) as { ok?: boolean; records?: WalletActivityRecord[] } | null;
+  return response?.ok && data?.ok && Array.isArray(data.records) ? data.records : [];
 }
 
-function chainBadgeSrc(network: string) {
-  if (network.startsWith("solana:")) return "/icons/wallet/chains/solana.svg";
-  if (network.startsWith("eip155:")) return "/icons/wallet/chains/base.svg";
+async function fetchHoneyLedger(): Promise<HoneyLedgerRuntime | null> {
+  const response = await fetch("/api/honey-ledger", { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
+  const data = await response?.json().catch(() => null) as { ok?: boolean; ledger?: HoneyLedgerRuntime } | null;
+  return response?.ok && data?.ok && data.ledger ? data.ledger : null;
+}
+
+function walletViewForShelf(id: string): string {
+  if (id === "agents") return "agents";
+  if (id === "maintenance") return "diagnostics";
+  return id;
+}
+
+function walletProviderForDropIn(wallet: any): "bankr" | "cards" | "crypto" | "manual" | "usepod" | "veil" | "venice" | "x402" {
+  const provider = String(wallet?.provider || "").toLowerCase();
+  if (provider === "bankr") return "bankr";
+  if (provider === "usepod") return "usepod";
+  if (provider === "veil") return "veil";
+  if (provider === "venice") return "venice";
+  if (provider === "x402") return "x402";
+  if (provider === "moneyclaw" || provider === "cards" || provider === "clawcard") return "cards";
+  if (provider === "manual") return "manual";
+  return "crypto";
+}
+
+function walletNetworkForDropIn(wallet: any): "base" | "base-sepolia" | "solana" {
+  const network = String(wallet?.network ?? "").toLowerCase();
+  if (network.includes("solana")) return "solana";
+  if (network.includes("sepolia")) return "base-sepolia";
+  return "base";
+}
+
+function walletBalanceUsd(wallet: any): number {
+  return Number(wallet?.currentBalanceUsd ?? wallet?.balanceUsd ?? wallet?.spendableBalanceUsd ?? wallet?.tokenBalance ?? 0) || 0;
+}
+
+function chainToNetwork(chain: string): string {
+  const normalized = chain.toLowerCase();
+  if (normalized.includes("solana")) return "solana:mainnet";
+  if (normalized.includes("sepolia")) return "eip155:84532";
+  return "eip155:8453";
+}
+
+function personalWalletNetworkLabel(network: string): string {
+  if (network.includes("solana")) return "Solana mainnet";
+  if (network.includes("84532")) return "Base Sepolia";
+  if (network.includes("eip155")) return "Base mainnet";
+  return network || "Base mainnet";
+}
+
+function nativeSymbolForWallet(network: string): string {
+  return network.includes("solana") ? "SOL" : "ETH";
+}
+
+function tokenSymbol(token: any): string {
+  return String(token?.symbol || "").trim().toUpperCase();
+}
+
+function tokenPriceUsd(token: any): number {
+  const balance = Number(token?.balance ?? 0) || 0;
+  const explicit = Number(token?.priceUsd);
+  if (Number.isFinite(explicit) && explicit >= 0) return explicit;
+  const value = Number(token?.valueUsd);
+  if (balance > 0 && Number.isFinite(value) && value >= 0) return value / balance;
+  return NaN;
+}
+
+function addTokenPriceHint(prices: Record<string, DropInTokenPrice>, token: any) {
+  const symbol = tokenSymbol(token);
+  const price = tokenPriceUsd(token);
+  if (!symbol || !Number.isFinite(price) || price < 0) return;
+  prices[symbol] = {
+    price,
+    name: String(token?.name || symbol),
+    chg: Number(token?.priceChange24hPct) || 0,
+  };
+}
+
+function addWalletTokenPriceHints(prices: Record<string, DropInTokenPrice>, wallet: any) {
+  const tokens = Array.isArray(wallet?.tokens) ? wallet.tokens : [];
+  tokens.forEach((token: any) => addTokenPriceHint(prices, token));
+  if (tokens.length) return;
+  const nativeBalance = Number(wallet?.nativeBalance ?? 0) || 0;
+  const currentBalanceUsd = Number(wallet?.currentBalanceUsd ?? wallet?.balanceUsd ?? 0) || 0;
+  if (nativeBalance <= 0 || currentBalanceUsd <= 0) return;
+  const symbol = nativeSymbolForWallet(String(wallet?.network || ""));
+  prices[symbol] = {
+    price: currentBalanceUsd / nativeBalance,
+    name: symbol === "SOL" ? "Solana" : "Ether",
+  };
+}
+
+function walletTokenRows(wallet: any, fallbackSymbol: string, fallbackUsd: number, prices: Record<string, DropInTokenPrice>): Array<[string, number]> {
+  const tokens = Array.isArray(wallet?.tokens) ? wallet.tokens : [];
+  const rows = tokens
+    .map((token: any): [string, number] => {
+      addTokenPriceHint(prices, token);
+      return [tokenSymbol(token), Number(token?.balance ?? 0) || 0];
+    })
+    .filter((row: [string, number]) => Boolean(row[0]) && row[1] > 0);
+  if (rows.length) return rows;
+  return fallbackUsd > 0 ? [[fallbackSymbol === "USD" ? "USD" : "USDC", fallbackUsd]] : [];
+}
+
+function parseUsePodTokenFromInput(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed);
+    return url.searchParams.get("token") || url.searchParams.get("api_key") || url.searchParams.get("key") || "";
+  } catch {
+    return trimmed;
+  }
+}
+
+function personalWalletHoldings(wallet: any): Array<[string, number]> {
+  const tokens = Array.isArray(wallet?.tokens) ? wallet.tokens : [];
+  const rows = tokens
+    .map((token: any): [string, number] => [String(token?.symbol || "").toUpperCase(), Number(token?.balance ?? 0) || 0])
+    .filter((row: [string, number]) => Boolean(row[0]) && row[1] > 0);
+  if (rows.length) return rows;
+  if (Number(wallet?.nativeBalance) > 0) return [[nativeSymbolForWallet(String(wallet?.network || "")), Number(wallet.nativeBalance)]];
+  if (Number(wallet?.currentBalanceUsd) > 0) return [["USDC", Number(wallet.currentBalanceUsd)]];
+  return [];
+}
+
+const RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX = /:(?:eip155-\d+|solana-[a-z0-9-]+)$/i;
+
+function isRecoveryPhrasePersonalWallet(wallet: any): boolean {
+  const id = String(wallet?.id || wallet?.agentId || "");
+  return wallet?.importedFrom === "recovery-phrase" || RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX.test(id);
+}
+
+function personalWalletGroupKey(wallet: any, index: number): string {
+  const id = String(wallet?.id || wallet?.agentId || "");
+  if (isRecoveryPhrasePersonalWallet(wallet)) return id.replace(RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX, "") || id;
+  return id || `${String(wallet?.network || "wallet")}:${String(wallet?.address || index)}`;
+}
+
+function personalWalletChainRank(wallet: any): number {
+  const network = String(wallet?.network || "").toLowerCase();
+  if (network.includes("eip155")) return 0;
+  if (network.includes("solana")) return 1;
+  return 2;
+}
+
+function combinePersonalWalletHoldings(wallets: any[]): Array<[string, number]> {
+  const totals = new Map<string, number>();
+  wallets.flatMap(personalWalletHoldings).forEach(([symbol, amount]) => {
+    totals.set(symbol, (totals.get(symbol) ?? 0) + amount);
+  });
+  return [...totals.entries()].filter(([, amount]) => amount > 0);
+}
+
+function recoveryPhraseWalletName(wallet: any, count: number): string {
+  const fallback = `My ${personalWalletNetworkLabel(String(wallet?.network || ""))} wallet`;
+  const name = String(wallet?.name || fallback).trim();
+  return count > 1 && isRecoveryPhrasePersonalWallet(wallet)
+    ? name.replace(/\s+(?:Base|Solana)$/i, "") || "My wallet"
+    : name;
+}
+
+function buildDropInPersonalWallets(wallets: any[] | null) {
+  if (!Array.isArray(wallets)) return [];
+  const groups = new Map<string, any[]>();
+  wallets.forEach((wallet, index) => {
+    const key = personalWalletGroupKey(wallet, index);
+    groups.set(key, [...(groups.get(key) ?? []), wallet]);
+  });
+  return [...groups.entries()].map(([groupId, group], index) => {
+    const sorted = [...group].sort((a, b) => personalWalletChainRank(a) - personalWalletChainRank(b));
+    const primary = sorted[0] ?? {};
+    const addressRows = sorted
+      .map((wallet) => [personalWalletNetworkLabel(String(wallet.network || "")), wallet.address || ""] as [string, string])
+      .filter(([, address], rowIndex, rows) => address && rows.findIndex(([chain, existing]) => chain === rows[rowIndex][0] && existing === address) === rowIndex);
+    const spendWallet = sorted.find((wallet) => wallet.custodyMode === "local" && String(wallet.network || "").includes("eip155")) ?? sorted.find((wallet) => wallet.custodyMode === "local") ?? primary;
+    return {
+      id: groupId || primary.id || primary.agentId || `user-wallet-${index}`,
+      spendId: spendWallet.id || spendWallet.agentId || groupId,
+      name: recoveryPhraseWalletName(primary, sorted.length),
+      icon: sorted.some((wallet) => wallet.custodyMode === "local") ? "shield" : "eye",
+      kind: sorted.some((wallet) => wallet.custodyMode === "local") ? "Local wallet" : "Watch wallet",
+      canSpend: sorted.some((wallet) => wallet.custodyMode === "local"),
+      network: addressRows.length > 1 ? `${addressRows.length} chains` : personalWalletNetworkLabel(String(primary.network || "")),
+      token: nativeSymbolForWallet(String(primary.network || "")),
+      addr: primary.address || addressRows[0]?.[1] || "",
+      primary: index === 0,
+      gas: Number(primary.nativeBalance ?? 0) || 0,
+      source: primary.importedFrom || primary.custodyMode || "wallet ledger",
+      holdings: combinePersonalWalletHoldings(sorted),
+      addresses: addressRows.length ? addressRows : [[personalWalletNetworkLabel(String(primary.network || "")), primary.address || ""]],
+    };
+  });
+}
+
+function hasUsePodSetupEvidence(agent: any): boolean {
+  return Boolean(
+    agent?.usePod?.depositAddress?.trim()
+      || agent?.usePod?.depositCode?.trim()
+      || agent?.usePod?.dashboardUrl?.trim()
+      || agent?.usePod?.lastTestStatus === "ready",
+  );
+}
+
+function hasConfiguredWallet(agent: any, wallet: any, address: string): boolean {
+  return Boolean(
+    address.trim()
+      || wallet?.walletAddress?.trim?.()
+      || wallet?.vaultAddress?.trim?.()
+      || wallet?.address?.trim?.()
+      || hasUsePodSetupEvidence(agent),
+  );
+}
+
+function agentWalletSortTier(agent: any, wallet: any, balanceUsd: number, address: string): number {
+  if (balanceUsd > 0) return 0;
+  if (hasConfiguredWallet(agent, wallet, address)) return 1;
+  return 2;
+}
+
+function compareRuntimeAgentWalletRows(left: any, right: any): number {
+  return left.sortTier - right.sortTier
+    || left.name.localeCompare(right.name, undefined, { sensitivity: "base" })
+    || left.id.localeCompare(right.id, undefined, { sensitivity: "base" });
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function firstStringValue(...values: unknown[]): string {
+  for (const value of values) {
+    const text = stringValue(value);
+    if (text) return text;
+  }
   return "";
 }
 
-function PersonalTokenIcon({ token }: { token: PersonalPortfolioToken }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const iconUrl = imageFailed ? "" : token.iconUrl?.trim();
-  const badgeSrc = chainBadgeSrc(token.network);
-  if (iconUrl) {
-    return (
-      <span className={personalClass("personalTokenIconFrame")}>
-        <span className={personalClass("personalTokenIcon")}>
-          <Image src={iconUrl} alt="" width={44} height={44} unoptimized onError={() => setImageFailed(true)} />
-        </span>
-        {badgeSrc ? <Image className={personalClass("personalTokenChainBadge")} src={badgeSrc} alt="" width={16} height={16} /> : null}
-      </span>
-    );
-  }
-  return (
-    <span className={personalClass("personalTokenIconFrame")}>
-      <span
-        aria-hidden="true"
-        className={personalClass("personalTokenIcon", "personalTokenIconFallback")}
-        style={tokenIconFallbackStyle(token)}
-      >
-        <span>{tokenIconLabel(token.symbol)}</span>
-      </span>
-      {badgeSrc ? <Image className={personalClass("personalTokenChainBadge")} src={badgeSrc} alt="" width={16} height={16} /> : null}
-    </span>
-  );
+function hasHiveEnvKey(props: any, key: string): boolean {
+  const envName = key.trim();
+  if (!envName) return false;
+  const env = props?.hiveEnv;
+  const sources = [env?.source, env?.sharedSource, ...(Array.isArray(env?.runtimeSources) ? env.runtimeSources : [])].filter(Boolean);
+  return sources.some((source: any) => {
+    const values = source?.values;
+    return values && Object.prototype.hasOwnProperty.call(values, envName) && String(values[envName] ?? "").trim().length > 0;
+  });
 }
 
-function shortenAddress(address: string) {
-  if (address.length <= 14) return address;
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+function shortPublicRef(value: unknown): string {
+  const text = stringValue(value);
+  return text.length > 18 ? `${text.slice(0, 8)}...${text.slice(-6)}` : text;
 }
 
-function hasCreatedAgentWallet(agent: AgentProfile, wallet: AgentWalletConfig) {
-  return Boolean(
-    wallet.walletAddress.trim()
-      || wallet.vaultAddress?.trim()
-      || agent.usePod?.depositAddress?.trim()
-      || agent.usePod?.depositCode?.trim()
-      || agent.usePod?.dashboardUrl?.trim()
-      || agent.usePod?.lastTestStatus === "ready",
-  );
+function normalizedRailStatus(value: string, credentialPresent: boolean): string {
+  const status = value.toLowerCase();
+  if (status === "ok" || status === "healthy" || status === "operational") return "ready";
+  if (status === "ready" || status === "configured" || status === "needs-funding" || status === "error") return status;
+  return credentialPresent ? "configured" : "missing";
 }
 
-function compareAgentWalletRows(left: AgentWalletRow, right: AgentWalletRow) {
-  if (left.hasWallet !== right.hasWallet) return left.hasWallet ? -1 : 1;
-  return left.agent.name.localeCompare(right.agent.name, undefined, { sensitivity: "base" })
-    || left.agent.id.localeCompare(right.agent.id, undefined, { sensitivity: "base" });
+function collectUsePodAgentConfigs(props: any, agents: any[]) {
+  const walletsByAgent = props?.walletsByAgent ?? {};
+  return agents
+    .filter((agent) => agent?.usePod || walletProviderForDropIn(resolveAgentWallet(agent, walletsByAgent[agent.id] ?? agent.wallet)) === "usepod")
+    .map((agent) => agent?.usePod ?? {});
 }
 
-function personalWalletKey(wallet: Pick<PersonalWallet, "network" | "address">) {
-  return `${wallet.network}:${wallet.address.toLowerCase()}`;
-}
-
-function timestampFromVaultDate(value: string | undefined) {
-  const timestamp = value ? Date.parse(value) : 0;
-  return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : Date.now();
-}
-
-function personalWalletFromVaultInfo(wallet: PersonalWalletVaultInfo): PersonalWallet | null {
-  if (!wallet.agentId || !wallet.address || !wallet.network) return null;
-  const createdAt = typeof wallet.createdAt === "number" ? wallet.createdAt : timestampFromVaultDate(wallet.createdAt);
+function buildUsePodRuntimeData(props: any, agents: any[]) {
+  const configs = collectUsePodAgentConfigs(props, agents);
+  const tokenEnv = firstStringValue(...configs.map((config) => config.tokenEnvName), "USEPOD_TOKEN");
+  const tokenPresent = configs.some((config) => config.lastTokenPresent === true) || hasHiveEnvKey(props, tokenEnv);
+  const modelCounts = configs.map((config) => Number(config.lastModelCount)).filter((value) => Number.isFinite(value) && value > 0);
+  const models = modelCounts.length ? Math.max(...modelCounts) : 0;
+  const rawStatus = firstStringValue(...configs.map((config) => config.lastTestStatus));
+  const status = normalizedRailStatus(rawStatus, tokenPresent);
+  const fundingRef = firstStringValue(...configs.map((config) => config.depositCode), ...configs.map((config) => config.depositAddress));
   return {
-    id: wallet.id || wallet.agentId,
-    name: wallet.name || `My ${networkLabel(wallet.network)} wallet`,
-    address: wallet.address,
-    network: wallet.network,
-    custodyMode: wallet.custodyMode === "watch" ? "watch" : "local",
-    importedFrom: normalizePersonalWalletImportSource(wallet.id || wallet.agentId, wallet.importedFrom || "private-key"),
-    currentBalanceUsd: Number(wallet.currentBalanceUsd) || 0,
-    nativeBalance: Number(wallet.nativeBalance) || 0,
-    tokens: Array.isArray(wallet.tokens) ? wallet.tokens : [],
-    portfolioVersion: Number(wallet.portfolioVersion) || 0,
-    lastOnchainSyncAt: Number(wallet.lastOnchainSyncAt) || 0,
-    createdAt,
-    updatedAt: Number(wallet.updatedAt) || createdAt,
+    status,
+    credentialPresent: tokenPresent,
+    message: firstStringValue(...configs.map((config) => config.lastStatusMessage)),
+    models,
+    route: firstStringValue(...configs.map((config) => config.lastRoute), tokenPresent ? "Not checked" : "No token"),
+    tokenEnv,
+    tokenFp: tokenPresent ? "Present" : "Missing",
+    tokenSource: firstStringValue(...configs.map((config) => config.lastTokenSource), tokenPresent ? "HivemindOS env" : "Shared env"),
+    fundingRef: fundingRef ? shortPublicRef(fundingRef) : "Not available",
   };
 }
 
-export const WalletPanel = memo(WalletPanelComponent);
+function railEnabled(id: string, fallback: boolean, railEnabledOverrides: Record<string, boolean>): boolean {
+  return Object.prototype.hasOwnProperty.call(railEnabledOverrides, id) ? Boolean(railEnabledOverrides[id]) : fallback;
+}
 
-// Memoized (see export above) so unrelated background re-renders skip this panel.
-function WalletPanelComponent(props: WalletPanelProps) {
-  const { AGENT_PAYMENT_PROVIDER_COPY, AgentWalletCard, AgentWalletCardCompact, Button, ChevronLeft, Download, HandCoins, LoaderCircle, RUNTIME_LABELS, RefreshCcw, activeView, claimAllHoneyToBankrHive, copyPaymentPrompt, createLocalWallet, displayAgents, enableHoneyLedger, exportWalletSecrets, formatHiveAmount, formatRelativeTime, getSurvivalSnapshot, honeyLedgerEnabled, honeyStats, hydrated, initializeCoreWalletRails, moneyClawStatusByEnvName, refreshRuntimeIntegrations, refreshRuntimeUsage, refreshWalletBalance, renderAgentKey, resetWalletBurnClock, returnAllHiveToHoney, runWalletVaultBackupAction, runtimeUsage, runtimeUsageLoading, saveMoneyClawKey, selectedAgent, selectedHoneyReward, selectedWallet, selectedWalletSnapshot, sharedVault, sendWalletUsdc, setSelectedAgentId, setWalletExpanded, setWalletPanelMode, testX402Fetch, updateAgentProfile, updateWallet, updateWalletAction, vaultClass, walletActionsByAgent, walletClass, walletExpanded, walletPanelMode, walletStats, walletVaultBackupBusy, walletVaultBackupMessage, walletVaultBackupStatus, walletsByAgent } = props;
-  const refreshedUsePodAgentIds = useRef<Set<string>>(new Set());
-  const [bankrClaimBusy, setBankrClaimBusy] = useState(false);
-  const [bankrConnectBusy, setBankrConnectBusy] = useState(false);
-  const [bankrClaimStatus, setBankrClaimStatus] = useState("");
-  const [bankrRecipientAddress, setBankrRecipientAddress] = useState("");
-  const [personalWallets, setPersonalWallets] = useState<PersonalWallet[]>([]);
-  const [personalWalletsChecking, setPersonalWalletsChecking] = useState(true);
-  const [personalWalletActions, setPersonalWalletActions] = useState<Record<string, WalletActionState>>({});
-  const [personalImportOpen, setPersonalImportOpen] = useState(false);
-  const [personalImportDraft, setPersonalImportDraft] = useState({
-    name: "My Base wallet",
-    network: "eip155:8453",
-    importKind: "private-key" as "private-key" | "recovery-phrase" | "watch",
-    secret: "",
-    address: "",
-  });
-  const [personalRecoveryWords, setPersonalRecoveryWords] = useState(() => emptyRecoveryPhraseWords());
-  const [personalImportStatus, setPersonalImportStatus] = useState("");
-  const [copiedAddressKey, setCopiedAddressKey] = useState("");
-  const personalReimportAgentIdRef = useRef("");
-  const autoRefreshPersonalWalletsRef = useRef(new Set<string>());
-  const nativeDesktopRuntime = useMemo(() => isTauriDesktopRuntime(), []);
-  const bankrRecipientReady = /^0x[a-fA-F0-9]{40}$/.test(bankrRecipientAddress.trim());
-  const showPersonalWalletsChecking = personalWalletsChecking && activeView === "wallet" && walletPanelMode === "wallets";
-  const effectiveSelectedWallet = selectedAgent && selectedWallet ? resolveAgentWallet(selectedAgent, selectedWallet) : selectedWallet;
-  const effectiveSelectedWalletSnapshot = effectiveSelectedWallet ? getSurvivalSnapshot(effectiveSelectedWallet) : selectedWalletSnapshot;
-  const agentWalletRows = useMemo<AgentWalletRow[]>(() => (
-    displayAgents
-      .map((agent) => {
-        const wallet = resolveAgentWallet(agent, walletsByAgent[agent.id]);
-        return {
-          agent,
-          hasWallet: hasCreatedAgentWallet(agent, wallet),
-          wallet,
-        };
-      })
-      .sort(compareAgentWalletRows)
-  ), [displayAgents, walletsByAgent]);
-  const personalWalletGroups = useMemo<PersonalWalletGroup[]>(() => {
-    const groups = new Map<string, PersonalWallet[]>();
-    for (const wallet of personalWallets) {
-      const groupId = personalAccountGroupId(wallet);
-      groups.set(groupId, [...(groups.get(groupId) ?? []), wallet]);
-    }
-    return [...groups.entries()].map(([id, wallets]) => {
-      const tokens = wallets
-        .flatMap((wallet) => wallet.tokens.map((token) => ({ ...token, walletId: wallet.id, walletName: wallet.name })))
-        .filter((token) => !isLikelySpamPortfolioToken(token))
-        .sort((left, right) => {
-          const valueDelta = (right.valueUsd ?? -1) - (left.valueUsd ?? -1);
-          if (valueDelta !== 0) return valueDelta;
-          if (left.isNative !== right.isNative) return left.isNative ? -1 : 1;
-          return `${left.network}:${left.symbol}`.localeCompare(`${right.network}:${right.symbol}`);
-        });
-      const totalValueUsd = Math.round(wallets.reduce((total, wallet) => total + wallet.currentBalanceUsd, 0) * 100) / 100;
-      const nativeSummary = wallets
-        .filter((wallet) => wallet.nativeBalance > 0)
-        .map((wallet) => `${formatToken(wallet.nativeBalance)} ${nativeSymbol(wallet.network)}`)
-        .join(" · ");
-      return {
-        id,
-        name: personalAccountName(wallets[0]!),
-        wallets,
-        tokens,
-        totalValueUsd,
-        nativeSummary,
-        primaryWallet: wallets[0]!,
-      };
-    });
-  }, [personalWallets]);
+function buildRailRuntimeOverrides(props: any, agents: any[], railEnabledOverrides: Record<string, boolean>) {
+  const usePod = buildUsePodRuntimeData(props, agents);
+  const usePodReady = usePod.credentialPresent && (usePod.status === "ready" || usePod.status === "configured");
+  const usePodHealth = !usePod.credentialPresent ? "Missing USEPOD_TOKEN" : usePod.status === "needs-funding" ? "Needs funding" : usePod.status === "error" ? (usePod.message || "UsePod check failed") : usePod.models > 0 ? `Configured · ${usePod.models} models` : "Configured";
+  const usePodModelCap = usePod.models > 0 ? `${usePod.models} models` : "Models not checked";
+  const walletsByAgent = props?.walletsByAgent ?? {};
+  const moneyClawEnv = firstStringValue(...agents.map((agent) => resolveAgentWallet(agent, walletsByAgent[agent.id] ?? agent.wallet)?.moneyClawEnvName), "MONEYCLAW_API_KEY");
+  const moneyStatus = props?.moneyClawStatusByEnvName?.[moneyClawEnv];
+  const moneyError = firstStringValue(...Object.values(moneyStatus?.errors ?? {}));
+  const moneyCred = Boolean(moneyStatus?.configured || hasHiveEnvKey(props, moneyClawEnv));
+  const moneyReady = moneyCred && !moneyError;
+  const veilCred = hasHiveEnvKey(props, "VEIL_KEY");
+  const veniceEnv = firstStringValue(...agents.map((agent) => agent?.venice?.apiKeyEnvName), "VENICE_API_KEY");
+  const veniceCred = hasHiveEnvKey(props, veniceEnv) || agents.some((agent) => agent?.venice?.lastKeyPresent === true || agent?.venice?.walletVaultId || agent?.venice?.walletAddress);
+  const bankrCred = hasHiveEnvKey(props, "BANKR_API_KEY");
+  return {
+    moneyclaw: { enabled: railEnabled("moneyclaw", moneyReady, railEnabledOverrides), setup: moneyReady ? "ready" : "needs", env: moneyClawEnv, cred: moneyCred, health: moneyError || (moneyCred ? "Configured" : `Missing ${moneyClawEnv}`) },
+    x402: { enabled: railEnabled("x402", true, railEnabledOverrides), setup: "ready", cred: true, health: "Operational" },
+    veil: { enabled: railEnabled("veil", veilCred, railEnabledOverrides), setup: veilCred ? "ready" : "needs", cred: veilCred, health: veilCred ? "Configured" : "Missing VEIL_KEY" },
+    usepod: { enabled: railEnabled("usepod", usePodReady, railEnabledOverrides), setup: usePodReady ? "ready" : "needs", cred: usePod.credentialPresent, caps: [usePodModelCap, "Provider x402", "Price ceilings"], health: usePodHealth },
+    venice: { enabled: railEnabled("venice", veniceCred, railEnabledOverrides), setup: veniceCred ? "ready" : "needs", env: veniceEnv, cred: veniceCred, health: veniceCred ? "Configured" : `Missing ${veniceEnv}` },
+    bankr: { enabled: railEnabled("bankr", bankrCred, railEnabledOverrides), setup: bankrCred ? "ready" : "needs", cred: bankrCred, health: bankrCred ? "Configured" : "Missing BANKR_API_KEY" },
+  };
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    void loadDashboardStateSnapshot().then((snapshot) => {
-      if (!cancelled) setBankrRecipientAddress(dashboardStateValue(snapshot, BANKR_RECIPIENT_STORAGE_KEY) ?? "");
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railEnabledOverrides: Record<string, boolean>, usePodRoutingMode: string, walletActivity: WalletActivityRecord[] | null, honeyLedger: HoneyLedgerRuntime | null) {
+  const agents = Array.isArray(props?.displayAgents) ? props.displayAgents : [];
+  const walletsByAgent = props?.walletsByAgent ?? {};
+  const machineGroups = new Map<string, any[]>();
+  const walletMeta: Record<string, any> = {};
+  const balances: Record<string, Array<[string, number]>> = {};
+  const rewards: Record<string, { gas: number; used: number }> = {};
+  const tokenPrices: Record<string, DropInTokenPrice> = {};
+  const usageRows = buildUsageRows(props?.runtimeUsage, honeyLedger, agents);
+  const usageTokensByAgent = new Map<string, number>();
+  usageRows.forEach((row) => usageTokensByAgent.set(row.agentId, (usageTokensByAgent.get(row.agentId) ?? 0) + Number(row.tokens || 0)));
+  const honeyByAgent = buildHoneyByAgentRows(honeyLedger, agents);
+  const honeyByAgentMap = new Map(honeyByAgent.map((row) => [row.id, Number(row.honey) || 0]));
 
-  useEffect(() => {
-    if (activeView !== "wallet" || walletPanelMode !== "wallets") return;
-    let cancelled = false;
-    void Promise.resolve().then(() => { if (!cancelled) setPersonalWalletsChecking(true); });
-    async function loadPersonalWalletVault() {
-      const params = sharedVault.vaultPath.trim() ? `?vaultPath=${encodeURIComponent(sharedVault.vaultPath.trim())}` : "";
-      const response = await fetch(`/api/wallet/personal${params}`, { headers: { accept: "application/json" } }).catch(() => null);
-      const data = await response?.json().catch(() => null) as {
-        ok?: boolean;
-        wallets?: PersonalWalletVaultInfo[];
-      } | null;
-      if (cancelled) return;
-      if (!response?.ok || !data?.ok || !Array.isArray(data.wallets)) return;
-      const vaultWallets = data.wallets
-        .map(personalWalletFromVaultInfo)
-        .filter((wallet): wallet is PersonalWallet => Boolean(wallet));
-      if (!vaultWallets.length) return;
-      setPersonalWallets((current) => {
-        const existing = new Set(current.map(personalWalletKey));
-        const fresh = vaultWallets.filter((wallet) => !existing.has(personalWalletKey(wallet)));
-        return fresh.length ? [...fresh, ...current] : current;
-      });
-    }
-    void loadPersonalWalletVault().finally(() => {
-      if (cancelled) return;
-      setPersonalWalletsChecking(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeView, sharedVault.vaultPath, walletPanelMode]);
-  const persistPersonalWalletRecords = useCallback((wallets: PersonalWallet[]) => {
-    const vaultPath = sharedVault.vaultPath.trim() || undefined;
-    void fetch("/api/wallet/personal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ vaultPath, wallets }),
-    }).catch(() => null);
-  }, [sharedVault.vaultPath]);
-
-  async function refreshUsePodWallet(agent: AgentProfile) {
-    const nextUsePod = {
-      ...(agent.usePod ?? {}),
-      lastTestStatus: "checking",
-      lastStatusMessage: "Checking UsePod balance.",
-    };
-    updateAgentProfile(agent.id, { usePod: nextUsePod });
-    await refreshRuntimeIntegrations({ ...agent, provider: "usepod", usePod: nextUsePod });
+  if (Array.isArray(personalWallets)) {
+    personalWallets.forEach((wallet) => addWalletTokenPriceHints(tokenPrices, wallet));
   }
 
+  agents
+    .map((agent: any) => {
+      const wallet = resolveAgentWallet(agent, walletsByAgent[agent.id] ?? agent.wallet);
+      const balanceUsd = walletBalanceUsd(wallet);
+      const address = String(wallet?.walletAddress || wallet?.vaultAddress || (wallet as any)?.address || "");
+      return {
+        agent,
+        wallet,
+        balanceUsd,
+        address,
+        sortTier: agentWalletSortTier(agent, wallet, balanceUsd, address),
+        name: agent.name || agent.id,
+        id: agent.id,
+      };
+    })
+    .sort(compareRuntimeAgentWalletRows)
+    .forEach(({ agent, wallet, balanceUsd, address, sortTier }: any) => {
+      const machine = agent.machineName || agent.machineKey || "This Mac";
+      const provider = walletProviderForDropIn(wallet);
+      const symbol = String(wallet?.tokenSymbol || "USDC").toUpperCase();
+      const balanceRows = walletTokenRows(wallet, symbol, balanceUsd, tokenPrices);
+      const burn = Number(wallet?.dailyComputeBurnUsd ?? wallet?.dailySpendUsd ?? wallet?.burnUsdPerDay ?? wallet?.dailyBudgetUsd ?? 0) || 0;
+      const maxPay = Number(wallet?.maxPaymentUsd ?? wallet?.spendLimitUsd ?? wallet?.maxPayUsd ?? Math.max(10, burn * 2)) || 10;
+      const enabled = wallet?.enabled !== false && !wallet?.disabled;
+      const configured = hasConfiguredWallet(agent, wallet, address);
+
+      const row = {
+        id: agent.id,
+        name: agent.name || agent.id,
+        runtime: props?.RUNTIME_LABELS?.[agent.runtime] || agent.runtime || "Agent",
+        state: wallet?.setupRequired || !configured ? "setup" : enabled ? "ready" : "scheduled",
+        role: agent.role || agent.workerClass || "Agent",
+        wallet: balanceUsd ? `$${Math.round(balanceUsd).toLocaleString()}` : "—",
+        task: agent.currentTask || agent.task || "Ready for wallet work",
+        since: agent.lastSeenLabel || "now",
+      };
+      machineGroups.set(machine, [...(machineGroups.get(machine) ?? []), row]);
+      walletMeta[agent.id] = {
+        enabled,
+        autoUse: Boolean(wallet?.autoPayEnabled ?? wallet?.autoUse ?? wallet?.allowAutoUse),
+        provider,
+        rawProvider: provider,
+        network: walletNetworkForDropIn(wallet),
+        burn,
+        maxPay,
+        askOver: Number(wallet?.approvalRequiredOverUsd ?? wallet?.approvalThresholdUsd ?? wallet?.askOverUsd ?? Math.max(5, maxPay / 2)) || 5,
+        dailyBudget: Number(wallet?.dailyBudgetUsd ?? 0) || 0,
+        monthlyBudget: Number(wallet?.monthlyBudgetUsd ?? 0) || 0,
+        addr: address,
+        honey: honeyByAgentMap.get(agent.id) ?? (Number(wallet?.honey ?? 0) || 0),
+        setup: wallet?.setupRequired || !configured,
+        sortTier,
+        trading: Boolean(wallet?.trading || wallet?.bankrEnabled),
+        duplicateGuard: wallet?.duplicatePaymentGuardEnabled !== false,
+        veilAutoSend: wallet?.veilAutoSendEnabled === true,
+        assetSpendCaps: wallet?.assetSpendCaps ?? {},
+        notes: wallet?.notes || "",
+      };
+      balances[agent.id] = balanceRows;
+      rewards[agent.id] = { gas: Number(wallet?.nativeBalance ?? wallet?.gasBalance ?? 0) || 0, used: usageTokensByAgent.get(agent.id) ?? (Number(wallet?.tokensUsed ?? 0) || 0) };
+    });
+
+  return {
+    machines: [...machineGroups.entries()].map(([machine, machineAgents], index) => ({
+      id: machine.toLowerCase().replace(/[^a-z0-9]+/g, "-") || `machine-${index}`,
+      name: machine,
+      kind: "Agent host",
+      role: "Runtime",
+      os: "",
+      chip: "",
+      place: machine,
+      city: "",
+      version: "",
+      versionState: "current",
+      agents: machineAgents,
+    })),
+    myWallets: buildDropInPersonalWallets(personalWallets),
+    walletMeta,
+    balances,
+    rewards,
+    tokenPrices,
+    activityLedger: buildActivityLedger(walletActivity, agents),
+    usageRows,
+    usageSeries: buildUsageSeries(props?.runtimeUsage, honeyLedger),
+    honeyLedger: buildHoneyLedgerRows(honeyLedger, agents),
+    honeyByAgent,
+    honeySummary: buildHoneySummary(honeyLedger, honeyByAgent, props?.honeyStats),
+    honeyLedgerEnabled: Boolean(props?.honeyLedgerEnabled),
+    railOverrides: buildRailRuntimeOverrides(props, agents, railEnabledOverrides),
+    usePod: buildUsePodRuntimeData(props, agents),
+    usePodRoutingMode,
+  };
+}
+
+function WalletPanelComponent(props: any) {
+  const [personalWallets, setPersonalWallets] = useState<any[] | null>(null);
+  const [walletActivity, setWalletActivity] = useState<WalletActivityRecord[]>([]);
+  const [honeyLedger, setHoneyLedger] = useState<HoneyLedgerRuntime | null>(null);
+  const [railEnabledOverrides, setRailEnabledOverrides] = useState<Record<string, boolean>>({});
+  const [usePodRoutingMode, setUsePodRoutingMode] = useState("");
+  const [bankrRecipientAddress, setBankrRecipientAddress] = useState("");
+  const refreshedUsePodAgentIds = useRef<Set<string>>(new Set());
+  const vaultPath = props?.sharedVault?.enabled ? String(props.sharedVault.vaultPath || "").trim() : "";
+  const activeView = props.activeView, displayAgents = props.displayAgents, refreshRuntimeIntegrations = props.refreshRuntimeIntegrations, refreshRuntimeUsage = props.refreshRuntimeUsage, selectedAgent = props.selectedAgent;
+  const fetchPersonalWallets = useCallback(async () => {
+    const query = vaultPath ? `?vaultPath=${encodeURIComponent(vaultPath)}` : "";
+    const response = await fetch(`/api/wallet/personal${query}`, { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
+    const data = await response?.json().catch(() => null) as { ok?: boolean; wallets?: any[] } | null;
+    return response?.ok && data?.ok && Array.isArray(data.wallets) ? data.wallets : [];
+  }, [vaultPath]);
+  const loadPersonalWallets = useCallback(async () => setPersonalWallets(await fetchPersonalWallets()), [fetchPersonalWallets]);
+  const loadWalletActivity = useCallback(async () => setWalletActivity(await fetchWalletActivityRecords()), []);
+  const loadHoneyLedger = useCallback(async () => setHoneyLedger(await fetchHoneyLedger()), []);
   useEffect(() => {
-    if (activeView !== "wallet" || walletPanelMode !== "wallets") return;
-    for (const agent of displayAgents) {
+    let ignore = false;
+    void fetchPersonalWallets().then((wallets) => { if (!ignore) setPersonalWallets(wallets); });
+    return () => { ignore = true; };
+  }, [fetchPersonalWallets]);
+  useEffect(() => {
+    if (activeView !== "wallet") return;
+    let ignore = false;
+    void fetchWalletActivityRecords().then((records) => { if (!ignore) setWalletActivity(records); });
+    void fetchHoneyLedger().then((ledger) => { if (!ignore) setHoneyLedger(ledger); });
+    void refreshRuntimeUsage?.();
+    return () => { ignore = true; };
+  }, [activeView, refreshRuntimeUsage]);
+  useEffect(() => {
+    let ignore = false;
+    void loadDashboardStateSnapshot().then((snapshot) => {
+      if (ignore) return;
+      const next: Record<string, boolean> = {};
+      for (const [key, value] of Object.entries(snapshot)) {
+        if (key.startsWith(RAIL_ENABLED_KEY_PREFIX)) next[key.slice(RAIL_ENABLED_KEY_PREFIX.length)] = value !== "0";
+      }
+      setRailEnabledOverrides(next);
+      setUsePodRoutingMode(snapshot[USEPOD_ROUTING_MODE_KEY] || "");
+      setBankrRecipientAddress(snapshot[BANKR_RECIPIENT_STORAGE_KEY] || "");
+    }).catch(() => undefined);
+    return () => { ignore = true; };
+  }, []);
+  useEffect(() => {
+    if (activeView !== "wallet") return;
+    for (const agent of displayAgents ?? []) {
       if (agent.provider !== "usepod" || refreshedUsePodAgentIds.current.has(agent.id)) continue;
       refreshedUsePodAgentIds.current.add(agent.id);
-      void refreshRuntimeIntegrations(agent);
+      void refreshRuntimeIntegrations?.(agent);
     }
-  }, [activeView, displayAgents, refreshRuntimeIntegrations, walletPanelMode]);
-
-  async function connectBaseWallet() {
-    const provider = (window as WalletWindow).ethereum;
-    if (!provider) {
-      setBankrClaimStatus("No browser wallet found. Paste your Bankr receiving address instead.");
+  }, [activeView, displayAgents, refreshRuntimeIntegrations]);
+  const refreshUsePodTargets = useCallback(async (agentId?: string) => {
+    const agents = Array.isArray(displayAgents) ? displayAgents : [];
+    const target = agentId ? agents.find((agent: any) => agent.id === agentId) : selectedAgent?.provider === "usepod" ? selectedAgent : null;
+    const targets = target ? [target] : agents.filter((agent: any) => agent.provider === "usepod");
+    if (!targets.length) {
+      await refreshRuntimeIntegrations?.(selectedAgent);
       return;
     }
-
-    setBankrConnectBusy(true);
-    setBankrClaimStatus("");
-    try {
+    await Promise.all(targets.map((agent: any) => refreshRuntimeIntegrations?.(agent)));
+  }, [displayAgents, refreshRuntimeIntegrations, selectedAgent]);
+  const runtimeData = useMemo(() => buildDropInRuntimeData(props, personalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger), [props, personalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger]);
+  const walletActions = useMemo(() => ({
+    bankrRewards: { honeyStats: props.honeyStats, honeyLedgerEnabled: props.honeyLedgerEnabled },
+    bankrRecipientAddress,
+    walletVaultBackup: { status: props.walletVaultBackupStatus, busy: props.walletVaultBackupBusy, message: props.walletVaultBackupMessage },
+    formatHiveAmount: props.formatHiveAmount,
+    onConnectBankrWallet: async () => {
+      const provider = (window as any).ethereum;
+      if (!provider) throw new Error("No browser wallet found. Paste your Bankr receiving address instead.");
       const accounts = await provider.request({ method: "eth_requestAccounts" }) as string[];
       const address = accounts.find((account) => /^0x[a-fA-F0-9]{40}$/.test(account));
-      if (!address) {
-        setBankrClaimStatus("Wallet connected, but no EVM address was returned.");
-        return;
-      }
-
+      if (!address) throw new Error("Wallet connected, but no EVM address was returned.");
       await switchBrowserWalletToBase(provider);
-
       setBankrRecipientAddress(address);
-      void saveDashboardStateValue(BANKR_RECIPIENT_STORAGE_KEY, address);
-      setBankrClaimStatus("Base wallet connected. Ready to claim Bankr HIVE.");
-    } catch (error) {
-      setBankrClaimStatus(error instanceof Error ? error.message : "Could not connect wallet.");
-    } finally {
-      setBankrConnectBusy(false);
-    }
-  }
-
-  async function claimBankrHive() {
-    const recipientAddress = bankrRecipientAddress.trim();
-    if (!bankrRecipientReady) {
-      setBankrClaimStatus("Enter a valid Bankr EVM receiving address first.");
-      return;
-    }
-    setBankrClaimBusy(true);
-    setBankrClaimStatus("Sending Bankr HIVE transaction...");
-    void saveDashboardStateValue(BANKR_RECIPIENT_STORAGE_KEY, recipientAddress);
-    const result = await claimAllHoneyToBankrHive(recipientAddress);
-    setBankrClaimBusy(false);
-    if (!result.ok) {
-      setBankrClaimStatus(result.error ?? "Bankr HIVE claim failed.");
-      return;
-    }
-    const hash = result.txHash ? ` Tx ${result.txHash.slice(0, 10)}...${result.txHash.slice(-6)}.` : "";
-    setBankrClaimStatus(`Sent ${formatHiveAmount(result.amount ?? 0)} HIVE to Bankr.${hash}`);
-  }
-
-  const updatePersonalWallet = useCallback((walletId: string, patch: Partial<PersonalWallet>) => {
-    setPersonalWallets((current) => current.map((wallet) => wallet.id === walletId ? { ...wallet, ...patch, updatedAt: Date.now() } : wallet));
+      await saveDashboardStateValue(BANKR_RECIPIENT_STORAGE_KEY, address);
+      return address;
+    },
+    onClaimBankrHive: async (recipientAddress: string) => {
+      const address = recipientAddress.trim();
+      if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return { ok: false, error: "Enter a valid Bankr EVM receiving address first." };
+      setBankrRecipientAddress(address);
+      await saveDashboardStateValue(BANKR_RECIPIENT_STORAGE_KEY, address);
+      const result = await props.claimAllHoneyToBankrHive?.(address);
+      await loadHoneyLedger();
+      return result;
+    },
+    onReturnAllHiveToHoney: async () => {
+      const result = await props.returnAllHiveToHoney?.();
+      await loadHoneyLedger();
+      return result;
+    },
+    onRunWalletVaultBackupAction: (action: "refresh" | "restore") => props.runWalletVaultBackupAction?.(action),
+    onToggleAgentSpend: (agentId: string, enabled: boolean) => props.updateWallet?.(agentId, { enabled }),
+    onUpdateAgentWallet: (agentId: string, patch: any) => props.updateWallet?.(agentId, patch),
+    onCreateAgentWallet: (agentId: string, network: string) => props.createLocalWallet?.(agentId, chainToNetwork(network)),
+    onRefreshAgentWallet: (agentId: string) => props.refreshWalletBalance?.(agentId),
+    onResetAgentRunway: (agentId: string) => props.resetWalletBurnClock?.(agentId),
+    onCopyAgentPrompt: (agentId: string) => props.walletsByAgent?.[agentId] ? props.copyPaymentPrompt?.(props.walletsByAgent[agentId]) : undefined,
+    onExportAgentWallet: (agentId: string) => props.exportWalletSecrets?.({ agentIds: [agentId], label: props.displayAgents?.find((agent: any) => agent.id === agentId)?.name || agentId }),
+    onSendAgentPayment: async (input: any) => {
+      const wallet = props.walletsByAgent?.[input.agentId] || {};
+      const recipientWallet = input.recipientAgentId ? props.walletsByAgent?.[input.recipientAgentId] : null;
+      const recipient = input.toAddress || recipientWallet?.walletAddress || recipientWallet?.vaultAddress || recipientWallet?.address || "";
+      const provider = walletProviderForDropIn(wallet);
+      const asset = String(input.asset || "USDC").toUpperCase();
+      const amount = Number(input.amount);
+      const amountUsd = Number(input.amountUsd);
+      const directEnabled = wallet.enabled !== false && !wallet.disabled, autoPayEnabled = Boolean(wallet.autoPayEnabled ?? wallet.autoUse ?? wallet.allowAutoUse);
+      const veilAutoSendEnabled = wallet.veilAutoSendEnabled === true;
+      if (!recipient) throw new Error("Recipient address is required.");
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be greater than zero.");
+      if (provider !== "veil" && asset !== "USDC") throw new Error("This rail sends USDC only.");
+      props.updateWalletAction?.(input.agentId, { busy: true, error: "", message: provider === "veil" ? "Submitting Veil private transfer..." : "Sending USDC..." });
+      const endpoint = provider === "veil" ? "/api/wallet/veil/transfer" : "/api/wallet/send";
+      const maxAssetAmount = Number(wallet.assetSpendCaps?.[asset] ?? (asset === "ETH" ? 0.01 : wallet.maxPaymentUsd) ?? amount);
+      const body = endpoint === "/api/wallet/veil/transfer"
+        ? { agentId: input.agentId, enabled: directEnabled, provider: "veil", network: VEIL_TRANSFER_NETWORK, asset, recipientAddress: recipient, amount: input.amount, amountUsd: asset === "USDC" ? amount : Number.isFinite(amountUsd) && amountUsd > 0 ? amountUsd : undefined, maxPaymentUsd: wallet.maxPaymentUsd, maxAssetAmount, confirmation: input.confirmation, autoSendEnabled: veilAutoSendEnabled, autoShield: true, duplicateGuardEnabled: wallet.duplicatePaymentGuardEnabled !== false, duplicateGuardSeconds: wallet.duplicatePaymentGuardSeconds }
+        : { agentId: input.agentId, toAddress: recipient, amountUsd: amount, maxPaymentUsd: wallet.maxPaymentUsd, autoPayEnabled, confirmation: input.confirmation };
+      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+      const data = await response?.json().catch(() => null) as { ok?: boolean; signature?: string; transfer?: { transactionHash?: string }; shield?: { transactionHash?: string }; status?: string; error?: string } | null;
+      if (!response?.ok || !data?.ok) {
+        props.updateWalletAction?.(input.agentId, { busy: false, error: data?.error ?? "Payment failed.", message: "" });
+        throw new Error(data?.error || "Payment failed.");
+      }
+      const tx = data.signature || data.transfer?.transactionHash || data.shield?.transactionHash || "";
+      props.updateWalletAction?.(input.agentId, { busy: false, error: "", message: tx ? `Sent. Transaction: ${tx}` : data.status === "shielding" ? "Shielding started. HivemindOS will finish the private send after Veil accepts the deposit." : "Sent.", confirmation: "" });
+      await Promise.all([props.refreshWalletBalance?.(input.agentId), loadWalletActivity()]);
+      return data;
+    },
+    onSaveRailConfig: async (input: any) => {
+      const firstAgentId = props.displayAgents?.[0]?.id || Object.keys(props.walletsByAgent || {})[0] || "";
+      if (input.rail?.id) {
+        setRailEnabledOverrides((current) => ({ ...current, [input.rail.id]: Boolean(input.enabled) }));
+        await saveDashboardStateValue(`${RAIL_ENABLED_KEY_PREFIX}${input.rail.id}`, input.enabled ? "1" : "0");
+      }
+      if (input.rail?.id === "moneyclaw" && input.key?.trim() && firstAgentId) {
+        const result = await props.saveMoneyClawKey?.(firstAgentId, input.key, { shareWithAllAgents: Boolean(input.share) });
+        return { ...(result ?? { ok: true }), rail: { ...input.rail, enabled: Boolean(input.enabled), cred: true, setup: input.enabled ? "ready" : input.rail?.setup } };
+      }
+      if (input.key?.trim() && input.rail?.env && input.rail.env !== "—") {
+        const response = await fetch("/api/env", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourceId: "shared", key: input.rail.env, value: input.key.trim(), promoteToShared: true }) }).catch(() => null);
+        const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+        if (!response?.ok || !data?.ok) return { ok: false, error: data?.error || `Could not save ${input.rail.env}.` };
+      }
+      await refreshUsePodTargets();
+      return { ok: true, rail: { ...input.rail, enabled: Boolean(input.enabled), cred: input.key?.trim() ? true : input.rail?.cred, setup: input.enabled && (input.key?.trim() || input.rail?.cred || input.rail?.env === "—") ? "ready" : input.rail?.setup } };
+    },
+    onRefreshUsePod: (agentId?: string) => refreshUsePodTargets(agentId),
+    onSetUsePodRoutingMode: (mode: string) => { setUsePodRoutingMode(mode); return saveDashboardStateValue(USEPOD_ROUTING_MODE_KEY, mode); },
+    onSaveUsePodRepair: async (value: string) => {
+      const token = parseUsePodTokenFromInput(value);
+      if (token.length < 12) throw new Error("Paste a UsePod API token, or a dashboard URL with a token parameter.");
+      const response = await fetch("/api/env", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourceId: "shared", key: "USEPOD_TOKEN", value: token, promoteToShared: true }) }).catch(() => null);
+      const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+      if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not save USEPOD_TOKEN.");
+      await refreshUsePodTargets();
+      return { ok: true };
+    },
+    onFundAgent: async (input: any) => {
+      if (String(input.asset || "").toUpperCase() !== "USDC") throw new Error("Agent funding is wired for USDC transfers only.");
+      if (input.source?.canSpend === false) throw new Error("This personal wallet is watch-only. Reimport it locally before funding agents.");
+      const wallet = props.walletsByAgent?.[input.agentId] || {};
+      const toAddress = wallet.walletAddress || wallet.vaultAddress || wallet.address || "";
+      if (!toAddress) throw new Error("That agent does not have a deposit address yet.");
+      const response = await fetch("/api/wallet/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: input.source?.spendId || input.source?.id, toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined }) }).catch(() => null);
+      const data = await response?.json().catch(() => null) as { ok?: boolean; signature?: string; error?: string } | null;
+      if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not fund agent.");
+      await Promise.all([loadPersonalWallets(), props.refreshWalletBalance?.(input.agentId), loadWalletActivity()]);
+      return data;
+    },
+    onSendPersonalWallet: async (input: any) => {
+      if (String(input.asset || "").toUpperCase() !== "USDC") throw new Error("Personal wallet send is wired for USDC transfers only.");
+      if (input.source?.canSpend === false) throw new Error("This personal wallet is watch-only. Reimport it locally before sending.");
+      const response = await fetch("/api/wallet/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: input.source?.spendId || input.source?.id, toAddress: input.toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined }) }).catch(() => null);
+      const data = await response?.json().catch(() => null) as { ok?: boolean; signature?: string; error?: string } | null;
+      if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not send USDC.");
+      await Promise.all([loadPersonalWallets(), loadWalletActivity()]);
+      return data;
+    },
+    onImportWallet: async (input: any) => {
+      const secret = String(input.secret || "").trim();
+      const response = await fetch("/api/wallet/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: input.wallet?.id || `user:${globalThis.crypto?.randomUUID?.() || Date.now()}`, network: chainToNetwork(input.chain || "Base"), name: input.name, secret, importKind: secret.split(/\s+/).length >= 12 ? "recovery-phrase" : "private-key", vaultPath: vaultPath || undefined }) }).catch(() => null);
+      const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+      if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not import wallet.");
+      await loadPersonalWallets();
+      return data;
+    },
+    onOpenRailDocs: (rail: any) => { const base = String(rail?.baseUrl || "").replace(/^—$/, ""); if (base) window.open(base.startsWith("http") ? base : `https://${base}`, "_blank", "noopener,noreferrer"); },
+    onToggleHoneyLedger: async (enabled: boolean) => {
+      const result = enabled ? await props.enableHoneyLedger?.() : await props.setHoneyLedgerEnabled?.(false);
+      await loadHoneyLedger();
+      return result;
+    },
+    onMessageHive: (text: string) => {
+      try { window.sessionStorage.setItem("hivemindos.walletDraftMessage", text); } catch {}
+      window.dispatchEvent(new CustomEvent("hivemindos:wallet-message", { detail: { text } }));
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.set("view", "chat");
+      window.location.assign(nextUrl.toString());
+    },
+  }), [bankrRecipientAddress, loadHoneyLedger, loadPersonalWallets, loadWalletActivity, props, refreshUsePodTargets, vaultPath]);
+  const navigateFromDropInShelf = useCallback((id: string) => {
+    if (typeof window === "undefined") return;
+    const nextView = walletViewForShelf(id);
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set("view", nextView);
+    window.location.assign(nextUrl.toString());
   }, []);
 
-  const updatePersonalAction = useCallback((walletId: string, patch: Partial<WalletActionState>) => {
-    setPersonalWalletActions((current) => ({
-      ...current,
-      [walletId]: { ...(current[walletId] ?? {}), ...patch },
-    }));
-  }, []);
-
-  function copyPersonalAddress(wallet: Pick<PersonalWallet, "id" | "address">) {
-    const key = `${wallet.id}:${wallet.address}`;
-    void navigator.clipboard?.writeText(wallet.address);
-    setCopiedAddressKey(key);
-    window.setTimeout(() => {
-      setCopiedAddressKey((current) => current === key ? "" : current);
-    }, 1800);
-  }
-
-  function reimportPersonalWalletGroup(group: PersonalWalletGroup) {
-    const wallet = group.wallets.find((row) => row.network === "eip155:8453") ?? group.primaryWallet;
-    const recoveryGroup = group.wallets.length > 1 || normalizePersonalWalletImportSource(wallet.id, wallet.importedFrom) === "recovery-phrase";
-    setPersonalImportDraft({ name: group.name, network: wallet.network, importKind: recoveryGroup ? "recovery-phrase" : "private-key", secret: "", address: "" });
-    personalReimportAgentIdRef.current = recoveryGroup ? group.id : wallet.id;
-    setPersonalRecoveryWords(emptyRecoveryPhraseWords());
-    setPersonalImportStatus(recoveryGroup ? "Reimport the recovery phrase to restore local signer access for this account." : "Reimport the private key to restore local signer access for this wallet.");
-    setPersonalImportOpen(true);
-  }
-
-  function updatePersonalImportKind(importKind: "private-key" | "recovery-phrase" | "watch") {
-    setPersonalImportDraft((current) => ({ ...current, importKind, secret: "" }));
-    if (importKind !== "recovery-phrase") {
-      setPersonalRecoveryWords(emptyRecoveryPhraseWords());
-    }
-  }
-
-  function updateRecoveryPhraseWords(startIndex: number, incomingWords: string[]) {
-    setPersonalRecoveryWords((current) => {
-      const next = [...current];
-      incomingWords.slice(0, RECOVERY_PHRASE_WORD_COUNT - startIndex).forEach((word, offset) => {
-        next[startIndex + offset] = normalizeRecoveryPhraseWord(word);
-      });
-      return next;
-    });
-  }
-
-  function handleRecoveryPhraseInput(index: number, value: string) {
-    const words = parseRecoveryPhraseWords(value);
-    updateRecoveryPhraseWords(index, words.length > 1 ? words : [value]);
-  }
-
-  async function createPersonalWallet() {
-    const walletId = createPersonalWalletId();
-    const network = personalImportDraft.network;
-    setPersonalImportStatus("Creating encrypted local wallet...");
-    const response = await fetch("/api/wallet/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        agentId: walletId,
-        network,
-        name: personalImportDraft.name.trim() || "My wallet",
-        vaultPath: sharedVault.vaultPath.trim() || undefined,
-      }),
-    }).catch(() => null);
-    const data = await response?.json().catch(() => null) as {
-      ok?: boolean;
-      wallet?: { address: string; network: string };
-      error?: string;
-    } | null;
-    if (!response?.ok || !data?.ok || !data.wallet) {
-      setPersonalImportStatus(data?.error ?? "Could not create wallet.");
-      return;
-    }
-    const now = Date.now();
-    setPersonalWallets((current) => [{
-      id: walletId,
-      name: personalImportDraft.name.trim() || "My wallet",
-      address: data.wallet!.address,
-      network: data.wallet!.network,
-      custodyMode: "local",
-      importedFrom: "generated",
-      currentBalanceUsd: 0,
-      nativeBalance: 0,
-      tokens: [],
-      portfolioVersion: 0,
-      lastOnchainSyncAt: 0,
-      createdAt: now,
-      updatedAt: now,
-    }, ...current]);
-    setPersonalImportOpen(false);
-    setPersonalImportStatus("Wallet created.");
-  }
-
-  async function importPersonalWallet() {
-    const walletId = personalReimportAgentIdRef.current || createPersonalWalletId();
-    const name = personalImportDraft.name.trim() || "My wallet";
-    const network = personalImportDraft.network;
-    if (personalImportDraft.importKind === "watch") {
-      const address = personalImportDraft.address.trim();
-      if (!address) {
-        setPersonalImportStatus("Paste a public address first.");
-        return;
-      }
-      const now = Number(new Date());
-      const row: PersonalWallet = {
-        id: walletId,
-        name,
-        address,
-        network,
-        custodyMode: "watch",
-        importedFrom: "watch",
-        currentBalanceUsd: 0,
-        nativeBalance: 0,
-        tokens: [],
-        portfolioVersion: 0,
-        lastOnchainSyncAt: 0,
-        createdAt: now,
-        updatedAt: now,
-      };
-      setPersonalWallets((current) => [row, ...current]);
-      persistPersonalWalletRecords([row]);
-      personalReimportAgentIdRef.current = "";
-      setPersonalImportOpen(false);
-      setPersonalImportStatus("View-only wallet added.");
-      return;
-    }
-
-    const importSecret = personalImportDraft.importKind === "recovery-phrase"
-      ? personalRecoveryWords.map((word) => word.trim()).filter(Boolean).join(" ")
-      : personalImportDraft.secret;
-    if (personalImportDraft.importKind === "recovery-phrase" && parseRecoveryPhraseWords(importSecret).length !== RECOVERY_PHRASE_WORD_COUNT) {
-      setPersonalImportStatus("Enter all 12 recovery phrase words first.");
-      return;
-    }
-
-    setPersonalImportStatus("Importing into encrypted wallet vault...");
-    const response = await fetch("/api/wallet/import", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        agentId: walletId,
-        network,
-        name,
-        secret: importSecret,
-        importKind: personalImportDraft.importKind,
-        vaultPath: sharedVault.vaultPath.trim() || undefined,
-      }),
-    }).catch(() => null);
-    const data = await response?.json().catch(() => null) as {
-      ok?: boolean;
-      wallet?: { agentId?: string; address: string; network: string; label?: string };
-      wallets?: Array<{ agentId?: string; address: string; network: string; label?: string }>;
-      importKind?: "private-key" | "recovery-phrase";
-      error?: string;
-    } | null;
-    const importedWallets = data?.wallets?.length ? data.wallets : data?.wallet ? [data.wallet] : [];
-    if (!response?.ok || !data?.ok || !importedWallets.length) {
-      setPersonalImportStatus(data?.error ?? "Could not import wallet.");
-      return;
-    }
-    const now = Number(new Date());
-    const importedRows = importedWallets.map((wallet): PersonalWallet => ({
-      id: wallet.agentId || walletId,
-      name: importedWallets.length > 1 ? `${name} ${wallet.label || networkLabel(wallet.network)}` : name,
-      address: wallet.address,
-      network: wallet.network,
-      custodyMode: "local",
-      importedFrom: data.importKind || personalImportDraft.importKind,
-      currentBalanceUsd: 0,
-      nativeBalance: 0,
-      tokens: [],
-      portfolioVersion: 0,
-      lastOnchainSyncAt: 0,
-      createdAt: now,
-      updatedAt: now,
-    }));
-    const { freshRows, upgradedRows, wallets: upgradedWallets } = planImportedWalletMerge(personalWallets, importedRows, now);
-    if (!freshRows.length) {
-      if (!upgradedRows.length) {
-        setPersonalImportStatus(importedRows.length > 1 ? "Those recovery phrase accounts are already in My wallets." : "That wallet is already in My wallets.");
-        return;
-      }
-      setPersonalWallets(upgradedWallets);
-      upgradedRows.forEach((wallet) => void refreshPersonalWalletBalance(wallet));
-      personalReimportAgentIdRef.current = "";
-      setPersonalRecoveryWords(emptyRecoveryPhraseWords());
-      setPersonalImportOpen(false);
-      setPersonalImportStatus(importedRows.length > 1 ? "Signer access restored for the matching wallet rows." : "Signer access restored for this wallet.");
-      return;
-    }
-    setPersonalWallets((current) => appendFreshImportedWallets(current, freshRows));
-    freshRows.forEach((wallet) => void refreshPersonalWalletBalance(wallet));
-    setPersonalImportDraft((current) => ({ ...current, secret: "", address: "" }));
-    personalReimportAgentIdRef.current = "";
-    setPersonalRecoveryWords(emptyRecoveryPhraseWords());
-    setPersonalImportOpen(false);
-    setPersonalImportStatus(freshRows.length > 1 ? `Imported ${freshRows.length} recovery phrase accounts. Refreshing token lists...` : "Wallet imported. Refreshing token list...");
-  }
-
-  async function connectBrowserWalletToPersonalList() {
-    const provider = (window as WalletWindow).ethereum;
-    if (!provider) {
-      setPersonalImportStatus("No browser wallet extension was found. Use Add manually to paste a public address, import a key, or generate a wallet.");
-      return;
-    }
-    setPersonalImportStatus("Connecting browser wallet...");
-    try {
-      const accounts = await provider.request({ method: "eth_requestAccounts" }) as string[];
-      const address = accounts.find((account) => /^0x[a-fA-F0-9]{40}$/.test(account));
-      if (!address) {
-        setPersonalImportStatus("Wallet connected, but no EVM address was returned.");
-        return;
-      }
-      const now = Date.now();
-      setPersonalWallets((current) => [{
-        id: createPersonalWalletId(),
-        name: "Browser wallet",
-        address,
-        network: "eip155:8453",
-        custodyMode: "watch",
-        importedFrom: "browser",
-        currentBalanceUsd: 0,
-        nativeBalance: 0,
-        tokens: [],
-        portfolioVersion: 0,
-        lastOnchainSyncAt: 0,
-        createdAt: now,
-        updatedAt: now,
-      }, ...current]);
-      setPersonalImportStatus("Browser wallet added as view-only.");
-      personalReimportAgentIdRef.current = "";
-      setPersonalImportOpen(false);
-    } catch (error) {
-      setPersonalImportStatus(error instanceof Error ? error.message : "Could not connect browser wallet.");
-    }
-  }
-
-  const refreshPersonalWalletBalance = useCallback(async (wallet: PersonalWallet) => {
-    updatePersonalAction(wallet.id, { busy: true, error: "", message: "Refreshing portfolio..." });
-    const response = await fetch("/api/wallet/balance", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address: wallet.address, network: wallet.network }),
-    }).catch(() => null);
-    const data = await response?.json().catch(() => null) as {
-      ok?: boolean;
-      balance?: { tokenBalance: number; nativeBalance: number; totalValueUsd?: number | null; fetchedAt: number; tokens?: AgentWalletTokenBalance[] };
-      error?: string;
-    } | null;
-    if (!response?.ok || !data?.ok || !data.balance) {
-      updatePersonalAction(wallet.id, { busy: false, error: data?.error ?? "Could not refresh this wallet.", message: "" });
-      return;
-    }
-    const updatedWallet = {
-      ...wallet,
-      currentBalanceUsd: Number(data.balance.totalValueUsd ?? data.balance.tokenBalance) || 0,
-      nativeBalance: Number(data.balance.nativeBalance) || 0,
-      tokens: data.balance.tokens ?? [],
-      portfolioVersion: PERSONAL_WALLET_PORTFOLIO_VERSION,
-      lastOnchainSyncAt: data.balance.fetchedAt,
-      updatedAt: Date.now(),
-    };
-    updatePersonalWallet(wallet.id, updatedWallet);
-    persistPersonalWalletRecords([updatedWallet]);
-  const tokenCount = data.balance.tokens?.length ?? 0;
-  updatePersonalAction(wallet.id, { busy: false, error: "", message: tokenCount > 2 ? `Portfolio refreshed: ${tokenCount} tokens.` : "Portfolio refreshed." });
-  }, [persistPersonalWalletRecords, updatePersonalAction, updatePersonalWallet]);
-
-  useEffect(() => {
-    if (activeView !== "wallet" || walletPanelMode !== "wallets") return;
-    personalWallets
-      .filter((wallet) => shouldRefreshPersonalWalletSnapshot(wallet) && !autoRefreshPersonalWalletsRef.current.has(wallet.id))
-      .slice(0, 4)
-      .forEach((wallet) => {
-        autoRefreshPersonalWalletsRef.current.add(wallet.id);
-        void refreshPersonalWalletBalance(wallet);
-      });
-  }, [activeView, personalWallets, refreshPersonalWalletBalance, walletPanelMode]);
-
-  return (<>
-      {activeView === "wallet" ? (
-      <section className={walletClass("walletPanel", "tabPanel")}>
-        <div className={walletClass("walletHeader")}>
-          <div>
-            <p className="eyebrow">Spending safety</p>
-            <h2>Wallets</h2>
-            <p>
-              Manage payment rails by default, with runtime usage one click away when you need the bill of materials.
-            </p>
-          </div>
-          <div className={walletClass("walletTotals")} aria-label="Wallet summary">
-            <span>
-              Can spend
-              <strong>{walletStats.enabled}</strong>
-            </span>
-            <span>
-              Available
-              <strong>${walletStats.balance.toFixed(2)}</strong>
-            </span>
-            <span>
-              Need funding
-              <strong>{walletStats.critical}</strong>
-            </span>
-          </div>
-        </div>
-
-        <div className={walletClass("walletSegmented")} role="tablist" aria-label="Wallet panel mode">
-          {[
-            ["wallets", "Wallets"],
-            ["usage", "Usage"],
-          ].map(([mode, label]) => (
-            <button
-              key={mode}
-              type="button"
-              role="tab"
-              aria-selected={walletPanelMode === mode}
-              className={walletClass("walletSegment", walletPanelMode === mode && "walletSegmentActive")}
-              onClick={() => setWalletPanelMode(mode as "wallets" | "usage")}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {walletPanelMode === "usage" ? (
-          runtimeUsageLoading ? (
-            <WalletUsageLoading />
-          ) : (
-            <section className={walletClass("usagePanel")}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="eyebrow">Runtime analytics</p>
-                  <h3 className="m-0 text-base font-bold">Token usage</h3>
-                </div>
-                <Button type="button" size="sm" variant="secondary" onClick={() => void refreshRuntimeUsage()} disabled={runtimeUsageLoading}>
-                  {runtimeUsageLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
-                  Refresh
-                </Button>
-              </div>
-              {runtimeUsage?.error ? <p className="m-0 text-xs text-[#fecdd3]">{runtimeUsage.error}</p> : null}
-              <div className="grid gap-3 md:grid-cols-4">
-                {[
-                  ["Sessions", runtimeUsage?.totals?.sessions?.toLocaleString() ?? "0"],
-                  ["Tokens", runtimeUsage?.totals?.tokens?.toLocaleString() ?? "0"],
-                  ["Output", runtimeUsage?.totals?.outputTokens?.toLocaleString() ?? "0"],
-                  ["Est. cost", `$${(runtimeUsage?.totals?.estimatedCostUsd ?? 0).toFixed(4)}`],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-md border border-[rgba(148,163,184,0.12)] bg-[rgba(15,23,42,0.55)] p-3">
-                    <span className="block font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">{label}</span>
-                    <strong className="mt-1 block text-xl">{value}</strong>
-                  </div>
-                ))}
-              </div>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div>
-                  <strong className="text-sm">Models</strong>
-                  <div className="mt-2 grid gap-2">
-                    {(runtimeUsage?.models ?? []).slice(0, 6).map((model) => (
-                      <div key={model.model} className="flex items-center justify-between gap-3 rounded-md border border-[rgba(148,163,184,0.10)] px-3 py-2 text-xs">
-                        <span className="min-w-0 break-words">{model.model}</span>
-                        <b>{model.tokens.toLocaleString()}</b>
-                      </div>
-                    ))}
-                    {runtimeUsage?.models?.length ? null : <p className="m-0 text-xs text-[var(--muted)]">No token rows found yet.</p>}
-                  </div>
-                </div>
-                <div>
-                  <strong className="text-sm">Recent sessions</strong>
-                  <div className="mt-2 grid gap-2">
-                    {(runtimeUsage?.rows ?? []).slice(0, 6).map((row) => (
-                      <div key={`${row.runtime}-${row.sessionId}`} className="grid gap-1 rounded-md border border-[rgba(148,163,184,0.10)] px-3 py-2 text-xs">
-                        <span className="font-semibold">{RUNTIME_LABELS[row.runtime]} · {row.model}</span>
-                        <span className="text-[var(--muted)]">{row.totalTokens.toLocaleString()} tokens · {formatRelativeTime(Date.parse(row.updatedAt))}</span>
-                      </div>
-                    ))}
-                    {runtimeUsage?.rows?.length ? null : <p className="m-0 text-xs text-[var(--muted)]">Hermes/OpenClaw usage appears here when local counters are readable.</p>}
-                  </div>
-                </div>
-              </div>
-            </section>
-          )
-        ) : null}
-
-        {walletPanelMode === "wallets" ? (
-        <div className={walletClass("walletWorkspace")}>
-          {walletExpanded && selectedAgent && effectiveSelectedWallet && effectiveSelectedWalletSnapshot ? (
-            (() => {
-              const walletAction = walletActionsByAgent[selectedAgent.id] ?? {};
-              const moneyClawEnvName = effectiveSelectedWallet.moneyClawEnvName?.trim() || "MONEYCLAW_API_KEY";
-              return (
-            <div className={walletClass("walletDetail")}>
-              <button
-                type="button"
-                className={walletClass("walletBackBtn")}
-                onClick={() => setWalletExpanded(false)}
-              >
-                <ChevronLeft aria-hidden="true" width={16} height={16} />
-                All wallets
-              </button>
-              <AgentWalletCard
-                agentName={selectedAgent.name}
-                machineName={selectedAgent.machineName}
-                agentUsePod={selectedAgent.usePod}
-                wallet={effectiveSelectedWallet}
-                survival={effectiveSelectedWalletSnapshot}
-                honeyReward={selectedHoneyReward}
-                honeyLedgerEnabled={honeyLedgerEnabled}
-                providerCopy={AGENT_PAYMENT_PROVIDER_COPY[effectiveSelectedWallet.provider]}
-                providerOptions={Object.entries(AGENT_PAYMENT_PROVIDER_COPY) as Array<[AgentPaymentProvider, typeof AGENT_PAYMENT_PROVIDER_COPY[AgentPaymentProvider]]>}
-                moneyClawStatus={moneyClawStatusByEnvName[moneyClawEnvName] ?? null}
-                walletAction={walletAction}
-                onUpdateWallet={(patch) => updateWallet(selectedAgent.id, patch)}
-                onUpdateAction={(patch) => updateWalletAction(selectedAgent.id, patch)}
-                onSaveMoneyClawKey={(apiKey, options) => saveMoneyClawKey(selectedAgent.id, apiKey, options)}
-                onUpdateUsePod={async (patch) => {
-                  const nextUsePod = { ...(selectedAgent.usePod ?? {}), ...patch };
-                  updateAgentProfile(selectedAgent.id, { usePod: nextUsePod });
-                  await refreshRuntimeIntegrations({ ...selectedAgent, usePod: nextUsePod, provider: "usepod" });
-                }}
-                onResetRunway={() => resetWalletBurnClock(selectedAgent.id)}
-                onCopyPaymentPrompt={() => copyPaymentPrompt(effectiveSelectedWallet)}
-                onCreateLocalWallet={() => createLocalWallet(selectedAgent.id, effectiveSelectedWallet.network)}
-	                onRefreshBalance={() => { void (effectiveSelectedWallet.provider === "usepod" ? refreshUsePodWallet(selectedAgent) : refreshWalletBalance(selectedAgent.id)); }}
-	                onSendUsdc={() => sendWalletUsdc(selectedAgent.id)}
-	                onCallX402={() => testX402Fetch(selectedAgent.id)}
-	                onExportSecret={() => void exportAgentWalletSecret(selectedAgent, exportWalletSecrets, updateWalletAction)}
-	              />
-            </div>
-              );
-            })()
-          ) : (
-            <div className={personalClass("walletListStack")}>
-              <section className={personalClass("personalWallets")} aria-label="My wallets">
-                <div className={personalClass("personalWalletsHeader")}>
-                  <div>
-                    <p className="eyebrow">User connector</p>
-                    <h3>My wallets</h3>
-                    <p>Personal wallets stay above agent wallets and can quick-send to any saved user or agent address.</p>
-                  </div>
-                  <div className={personalClass("personalWalletActions")}>
-                    <Link href="/stake" className={personalClass("personalStakeRouteLink")}><LockKeyhole aria-hidden="true" /> Stake HIVE</Link>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        personalReimportAgentIdRef.current = "";
-                        setPersonalImportStatus("");
-                        setPersonalImportOpen((open) => !open);
-                      }}
-                    >
-                      {personalImportOpen ? <X aria-hidden="true" /> : <Plus aria-hidden="true" />}
-                      {personalImportOpen ? "Close" : "Add manually"}
-                    </Button>
-                    {!nativeDesktopRuntime ? (
-                      <Button type="button" size="sm" variant="secondary" onClick={() => void connectBrowserWalletToPersonalList()}>
-                        <WalletCards aria-hidden="true" />
-                        Connect browser
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-                {personalImportStatus ? <p className={personalClass("personalConnectorStatus")}>{personalImportStatus}</p> : null}
-
-                {personalImportOpen ? (
-                  <div className={personalClass("personalImportPanel")}>
-                    <div className={personalClass("personalImportGrid")}>
-                      <label>
-                        <span>Name</span>
-                        <input
-                          value={personalImportDraft.name}
-                          onChange={(event) => setPersonalImportDraft((current) => ({ ...current, name: event.target.value }))}
-                          placeholder="Treasury wallet"
-                        />
-                      </label>
-                      {personalImportDraft.importKind !== "recovery-phrase" ? (
-                        <label>
-                          <span>Network</span>
-                          <select
-                            value={personalImportDraft.network}
-                            onChange={(event) => setPersonalImportDraft((current) => ({ ...current, network: event.target.value }))}
-                          >
-                            <option value="eip155:8453">Base mainnet</option>
-                            <option value="eip155:84532">Base Sepolia</option>
-                            <option value="solana:mainnet">Solana mainnet</option>
-                            <option value="solana:devnet">Solana devnet</option>
-                          </select>
-                        </label>
-                      ) : null}
-                      <label>
-                        <span>Import</span>
-                        <select
-                          value={personalImportDraft.importKind}
-                          onChange={(event) => updatePersonalImportKind(event.target.value as "private-key" | "recovery-phrase" | "watch")}
-                        >
-                          <option value="private-key">Private key (send enabled)</option>
-                          <option value="recovery-phrase">Recovery phrase (send enabled)</option>
-                          <option value="watch">Public address (view-only)</option>
-                        </select>
-                      </label>
-                    </div>
-                    {personalImportDraft.importKind === "watch" ? (
-                      <label className={personalClass("personalImportSecret")}>
-                        <span>Address</span>
-                        <input
-                          value={personalImportDraft.address}
-                          onChange={(event) => setPersonalImportDraft((current) => ({ ...current, address: event.target.value }))}
-                          placeholder={personalImportDraft.network.startsWith("solana:") ? "Solana address" : "0x..."}
-                        />
-                      </label>
-                    ) : personalImportDraft.importKind === "recovery-phrase" ? (
-                      <div className={personalClass("personalImportSecret")}>
-                        <span>Recovery phrase</span>
-                        <div className={personalClass("recoveryPhraseGrid")} role="group" aria-label="Recovery phrase words">
-                          {personalRecoveryWords.map((word, index) => (
-                            <label key={index} className={personalClass("recoveryWordField")}>
-                              <span aria-hidden="true" className={personalClass("recoveryWordIndex")}>{index + 1}.</span>
-                              <input
-                                aria-label={`Recovery phrase word ${index + 1}`}
-                                value={word}
-                                onChange={(event) => handleRecoveryPhraseInput(index, event.target.value)}
-                                onPaste={(event) => {
-                                  const words = parseRecoveryPhraseWords(event.clipboardData.getData("text"));
-                                  if (words.length > 1) {
-                                    event.preventDefault();
-                                    updateRecoveryPhraseWords(index, words);
-                                  }
-                                }}
-                                autoCapitalize="none"
-                                autoComplete="off"
-                                autoCorrect="off"
-                                spellCheck={false}
-                              />
-                            </label>
-                          ))}
-                        </div>
-                        <p className={personalClass("recoveryPhraseHint")}>Imports the Base and Solana mainnet accounts derived from this phrase.</p>
-                      </div>
-                    ) : (
-                      <label className={personalClass("personalImportSecret")}>
-                        <span>Private key</span>
-                        <textarea
-                          value={personalImportDraft.secret}
-                          onChange={(event) => setPersonalImportDraft((current) => ({ ...current, secret: event.target.value }))}
-                          placeholder="Encrypted locally after import"
-                          spellCheck={false}
-                        />
-                      </label>
-                    )}
-                    <div className={personalClass("personalImportFooter")}>
-                      <Button type="button" size="sm" onClick={() => void importPersonalWallet()}>
-                        <KeyRound aria-hidden="true" />
-                        {personalImportDraft.importKind === "watch" ? "Add view-only wallet" : "Import wallet"}
-                      </Button>
-                      <Button type="button" size="sm" variant="secondary" onClick={() => void createPersonalWallet()}>
-                        <Plus aria-hidden="true" />
-                        Generate new
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {personalWalletGroups.length ? (
-                  <div className={personalClass("personalWalletGrid")} role="list" aria-label="User wallets">
-                    {personalWalletGroups.map((group) => {
-                      const action = personalWalletActions[group.primaryWallet.id] ?? {};
-                      const tokenRows = group.tokens.length ? group.tokens : group.wallets.flatMap((wallet): PersonalPortfolioToken[] => [
-                        {
-                          walletId: wallet.id,
-                          walletName: wallet.name,
-                          symbol: nativeSymbol(wallet.network),
-                          name: nativeSymbol(wallet.network),
-                          balance: wallet.nativeBalance,
-                          network: wallet.network,
-                          priceUsd: null,
-                          valueUsd: null,
-                          priceChange24hPct: null,
-                          isNative: true,
-                        },
-                      ]);
-                      return (
-                        <article key={group.id} className={personalClass("personalWalletCard", "accountWalletCard")} role="listitem">
-                          <header className={personalClass("personalWalletTop")}>
-                            <div>
-                              <strong>{group.name}</strong>
-                              <span>{walletCustodySummary(group.wallets)}</span>
-                            </div>
-                            <PersonalWalletMenu
-                              Button={Button}
-                              copiedAddressKey={copiedAddressKey}
-                              label={group.name}
-                              networkLabel={networkLabel}
-                              onCopyAddress={copyPersonalAddress}
-                              onReimport={() => reimportPersonalWalletGroup(group)}
-                              shortenAddress={shortenAddress}
-                              wallets={group.wallets}
-                            />
-                          </header>
-                          <div className={personalClass("personalWalletBalance")}>
-                            <strong>{formatMoney(group.totalValueUsd)}</strong>
-                            {group.nativeSummary ? <span>{group.nativeSummary}</span> : null}
-                          </div>
-                          <div className={personalClass("walletActionGrid")}>
-                            <button type="button" onClick={() => updatePersonalAction(group.primaryWallet.id, { message: "Send flow is being tightened for multi-chain accounts." })}>
-                              <Send aria-hidden="true" />
-                              <span>Send</span>
-                            </button>
-                            <button type="button" disabled>
-                              <Shuffle aria-hidden="true" />
-                              <span>Swap</span>
-                            </button>
-                            <button type="button" onClick={() => copyPersonalAddress(group.primaryWallet)}>
-                              <Copy aria-hidden="true" />
-                              <span>Receive</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void exportPersonalWalletGroupSecret(group, exportWalletSecrets, updatePersonalAction)}
-                              disabled={action.busy || !group.wallets.some((wallet) => wallet.custodyMode === "local")}
-                            >
-                              <DownloadIcon aria-hidden="true" />
-                              <span>Export</span>
-                            </button>
-	                            <button type="button" onClick={() => void Promise.all(group.wallets.map((wallet) => refreshPersonalWalletBalance(wallet)))} disabled={action.busy}>
-	                              <RefreshIcon aria-hidden="true" />
-	                              <span>Refresh</span>
-                            </button>
-                          </div>
-                          <div className={personalClass("personalTokenList")} aria-label={`${group.name} tokens`}>
-                            {tokenRows.map((token) => {
-                              const tokenWallet = group.wallets.find((wallet) => wallet.id === token.walletId);
-                              const canStakeHive = isBaseHiveTokenLike(token);
-                              return (
-                                <div key={`${token.network}-${token.isNative ? "native" : token.tokenAddress || token.symbol}`} className={personalClass("personalTokenRowWrap")}>
-                                  <div className={personalClass("personalTokenRow", canStakeHive && "personalTokenRowWithAction")}>
-                                    <PersonalTokenIcon token={token} />
-                                    <div className={personalClass("personalTokenMeta")}>
-                                      <strong>{token.symbol}</strong>
-                                      <span>{networkLabel(token.network)} · {formatToken(token.balance)} {token.name}</span>
-                                    </div>
-                                    <div className={personalClass("personalTokenValue")}>
-                                      <strong>{token.valueUsd == null ? "No quote" : formatMoney(token.valueUsd)}</strong>
-                                      <span data-tone={(token.priceChange24hPct ?? 0) >= 0 ? "up" : "down"}>
-                                        {token.priceChange24hPct == null ? "24h --" : `${token.priceChange24hPct >= 0 ? "+" : ""}${token.priceChange24hPct.toFixed(2)}%`}
-                                      </span>
-                                    </div>
-                                    {canStakeHive && tokenWallet ? (
-                                      tokenWallet.custodyMode === "local" || !nativeDesktopRuntime ? (
-                                        <Link href={stakeHrefForPersonalToken(tokenWallet, token)} className={personalClass("personalTokenStakeButton")}><LockKeyhole aria-hidden="true" /><span>Stake</span></Link>
-                                      ) : (
-                                        <button type="button" className={personalClass("personalTokenStakeButton")} disabled title="Import this Base wallet locally before staking in the desktop app."><LockKeyhole aria-hidden="true" /><span>View-only</span></button>
-                                      )
-                                    ) : null}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          {action.message ? <p className={personalClass("personalWalletStatus")} data-tone="ok">{action.message}</p> : null}
-                          {action.error ? <p className={personalClass("personalWalletStatus")} data-tone="error">{action.error}</p> : null}
-                        </article>
-                      );
-                    })}
-                  </div>
-                ) : showPersonalWalletsChecking ? (
-                  <PersonalWalletsChecking />
-                ) : (
-                  <div className={walletClass("walletEmpty")}>
-                    <strong>No user wallets yet</strong>
-                    <p>Add a personal wallet to see it before the agent wallets and use quick-send targets.</p>
-                  </div>
-                )}
-              </section>
-
-              <section className={personalClass("agentWalletsSection")} aria-label="Agent wallets">
-                <div className={personalClass("agentWalletsHeader")}>
-                  <div>
-                    <p className="eyebrow">Agent wallets</p>
-                    <h3>Agent spend rails</h3>
-                  </div>
-                </div>
-                {displayAgents.length > 0 ? (
-                  <div className={walletClass("walletGridList")} role="list" aria-label="Agent wallets">
-                    {agentWalletRows.map(({ agent, wallet }, agentIndex) => {
-                      const snapshot = getSurvivalSnapshot(wallet);
-                      return (
-                        <div role="listitem" data-bee={`wallet-agent-${agent.id}`} key={renderAgentKey(agent, agentIndex)}>
-                          <AgentWalletCardCompact
-                            agentName={agent.name}
-                            agentUsePod={agent.usePod}
-                            wallet={wallet}
-                            survival={snapshot}
-                            onOpen={() => {
-                              setSelectedAgentId(agent.id);
-                              setWalletExpanded(true);
-                            }}
-                            onInitialize={async () => {
-                              setSelectedAgentId(agent.id);
-                              await initializeCoreWalletRails(agent.id);
-                            }}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : !hydrated ? (
-                  <AgentWalletsChecking />
-                ) : (
-                  <div className={walletClass("walletEmpty")}>
-                    <strong>No agents yet</strong>
-                    <p>Connect an agent first, then configure its spending limits and survival rails.</p>
-                  </div>
-                )}
-              </section>
-            </div>
-          )}
-
-          <aside className={walletClass("hiveRail", !honeyLedgerEnabled && "hiveRailDormant")} aria-label="Bankr rewards">
-            <header className={walletClass("hiveRailHeader")}>
-              <div>
-                <p className="eyebrow">Bankr rewards</p>
-                <h3>{honeyLedgerEnabled ? "Honey rewards" : "Honey rewards off"}</h3>
-              </div>
-              <Image
-                className={walletClass("hiveRailPot")}
-                src="/icons/generated/honey-pot.png"
-                alt=""
-                width={96}
-                height={96}
-                aria-hidden="true"
-                priority
-                unoptimized
-              />
-            </header>
-
-            {honeyLedgerEnabled ? (
-              <>
-                <dl className={walletClass("hiveRailStats")}>
-                  <div>
-                    <dt>Total Honey</dt>
-                    <dd>{formatHiveAmount(honeyStats.totalHoney)}</dd>
-                  </div>
-                  <div>
-                    <dt>Ready to claim</dt>
-                    <dd>{formatHiveAmount(honeyStats.availableHoney)}</dd>
-                  </div>
-                  <div>
-                    <dt>Legacy HIVE</dt>
-                    <dd>{formatHiveAmount(honeyStats.legacyHive)}</dd>
-                  </div>
-                </dl>
-
-                <div className={walletClass("hiveRailRecipient")}>
-                  <div className={walletClass("hiveRailRecipientHeader")}>
-                    <label htmlFor="bankr-hive-recipient">Bankr receiving address</label>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => void connectBaseWallet()}
-                      disabled={bankrConnectBusy || bankrClaimBusy}
-                    >
-                      <HandCoins aria-hidden="true" />
-                      {bankrConnectBusy ? "Connecting..." : "Connect Base wallet"}
-                    </Button>
-                  </div>
-                  <input
-                    id="bankr-hive-recipient"
-                    type="text"
-                    inputMode="text"
-                    spellCheck={false}
-                    value={bankrRecipientAddress}
-                    onChange={(event) => {
-                      setBankrRecipientAddress(event.target.value);
-                      setBankrClaimStatus("");
-                    }}
-                    placeholder="0x..."
-                    aria-invalid={bankrRecipientAddress.trim().length > 0 && !bankrRecipientReady}
-                  />
-                </div>
-
-                <Button
-                  type="button"
-                  size="sm"
-                  className={walletClass("hiveRailConvert")}
-                  disabled={bankrClaimBusy || honeyStats.availableHoney <= 0 || !bankrRecipientReady}
-                  onClick={() => void claimBankrHive()}
-                  aria-label={`Claim ${formatHiveAmount(honeyStats.hiveQuote)} HIVE to your Bankr wallet`}
-                >
-                  <Image
-                    className={walletClass("hiveRailConvertIcon")}
-                    src="/icons/generated/honey-hive-icon.png"
-                    alt=""
-                    width={30}
-                    height={30}
-                    aria-hidden="true"
-                    priority
-                    unoptimized
-                  />
-                  <span>
-                    <span>{bankrClaimBusy ? "Claiming Bankr HIVE..." : "Claim Bankr HIVE"}</span>
-                    <span>{formatHiveAmount(honeyStats.availableHoney)} Honey → {formatHiveAmount(honeyStats.hiveQuote)} HIVE on Base</span>
-                  </span>
-                </Button>
-
-                {bankrClaimStatus ? <p className={walletClass("hiveRailClaimStatus")}>{bankrClaimStatus}</p> : null}
-
-                {honeyStats.legacyHive > 0 ? (
-                  <div className={walletClass("hiveRailLegacy")}>
-                    <p>
-                      This is not Bankr HIVE. It is an old ledger-only conversion. Move it back to Honey.
-                    </p>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={returnAllHiveToHoney}
-                      aria-label={`Move ${formatHiveAmount(honeyStats.legacyHive)} legacy HIVE back to Honey`}
-                    >
-                      <RefreshCcw aria-hidden="true" />
-                      Move back to Honey
-                    </Button>
-                  </div>
-                ) : null}
-
-                <details className={walletClass("hiveRailDetails")}>
-                  <summary>Reward pool</summary>
-                  <dl>
-                    <div>
-                      <dt>Pool size</dt>
-                      <dd>
-                        {formatHiveAmount(honeyStats.rewardPoolHive)} HIVE
-                        <small>{formatHiveAmount(honeyStats.rewardPoolRemainingHive)} available to award</small>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Pool source</dt>
-                      <dd>
-                        {honeyStats.rewardPoolSharePercent.toFixed(4)}%
-                        <small>of HIVE volume</small>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Rate</dt>
-                      <dd>
-                        {formatHiveAmount(honeyStats.hivePerMillionTokens)}
-                        <small>HIVE per 1M tokens</small>
-                      </dd>
-                    </div>
-                  </dl>
-                </details>
-              </>
-            ) : (
-              <>
-                <p className={walletClass("hiveRailBlurb")}>
-                  Watch supported local runtimes for real token usage, earn Honey, then claim Bankr HIVE once payout settlement is wired.
-                </p>
-                <Button type="button" size="sm" onClick={enableHoneyLedger}>
-                  <HandCoins aria-hidden="true" />
-                  Enable Honey ledger
-                </Button>
-                <details className={walletClass("hiveRailDetails")}>
-                  <summary>What gets sent?</summary>
-                  <p>
-                    Agent id, workspace id, token count, model label, source, event id, and timestamp.
-                    Prompts, responses, files, wallet keys, and machine details are not sent.
-                    Hermes CLI usage is read from Hermes' own token counters while the dashboard is running.
-                  </p>
-                </details>
-              </>
-            )}
-
-            <details className={walletClass("hiveRailDetails")}>
-              <summary>Encrypted wallet vault</summary>
-              <dl>
-                <div>
-                  <dt>Local vault</dt>
-                  <dd>
-                    {walletVaultBackupStatus?.vaultExists ? `${walletVaultBackupStatus.recordCount} record${walletVaultBackupStatus.recordCount === 1 ? "" : "s"}` : "Not created"}
-                    <small>{walletVaultBackupStatus?.envKeyConfigured ? "env key" : walletVaultBackupStatus?.keyExists ? "file key" : "no key"}</small>
-                  </dd>
-                </div>
-                <div>
-                  <dt>Shared vault</dt>
-                  <dd>
-                    {walletVaultBackupStatus?.backupExists ? "Ready" : "Missing"}
-                    <small>{walletVaultBackupStatus?.updatedAt ? formatRelativeTime(Date.parse(walletVaultBackupStatus.updatedAt)) : "not refreshed"}</small>
-                  </dd>
-                </div>
-                <div>
-                  <dt>GPG</dt>
-                  <dd>
-                    {walletVaultBackupStatus?.gpgAvailable ? "Available" : "Missing"}
-                    <small>{walletVaultBackupStatus?.recipientConfigured ? "recipient ready" : "recipient missing"}</small>
-                  </dd>
-                </div>
-              </dl>
-              <div className={walletClass("walletVaultActions")}>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={Boolean(walletVaultBackupBusy) || !walletVaultBackupStatus?.vaultExists || !walletVaultBackupStatus?.gpgAvailable || !walletVaultBackupStatus?.recipientConfigured}
-                  onClick={() => runWalletVaultBackupAction("refresh")}
-                >
-                  <RefreshCcw aria-hidden="true" />
-                  Sync
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={Boolean(walletVaultBackupBusy) || !walletVaultBackupStatus?.backupExists || !walletVaultBackupStatus?.gpgAvailable}
-                  onClick={() => runWalletVaultBackupAction("restore")}
-                >
-                  <Download aria-hidden="true" />
-                  Restore
-                </Button>
-              </div>
-              {walletVaultBackupMessage ? <p>{walletVaultBackupMessage}</p> : null}
-            </details>
-
-          </aside>
-        </div>
-        ) : null}
-      </section>
-      ) : null}
-
-  </>);
+  return (
+    <section aria-label="Wallets" style={{ position: "fixed", inset: 0, zIndex: 90, background: "#0c0d11" }}>
+      <WalletsView runtimeData={runtimeData} actions={walletActions} onNavigate={navigateFromDropInShelf} />
+    </section>
+  );
 }
+
+export const WalletPanel = memo(WalletPanelComponent);

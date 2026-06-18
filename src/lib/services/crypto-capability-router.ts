@@ -169,7 +169,7 @@ export async function getCryptoCapabilityMap(input: CryptoCapabilityRouterInput 
     sideEffects: [
       "Any send, trade, token launch, Polymarket bet, Hyperliquid position, NFT mutation, automation, paid API call, card payment, private transfer, or LLM credit funding is a spend or state-changing action.",
       "The router only selects and prepares; execution stays with the existing provider endpoint or skill approval gate.",
-      "Private transfers and private x402 require explicit reviewed confirmation.",
+      "Private x402 requires explicit reviewed confirmation; Veil private transfers require reviewed confirmation unless that wallet's Veil auto-send policy is on and the prepared send stays under the wallet cap.",
     ],
     gaps: providers.flatMap((provider) => provider.missing.map((missing) => `${provider.label}: ${missing}`)),
   };
@@ -201,7 +201,8 @@ export async function prepareCryptoAction(input: CryptoCapabilityRouterInput & {
 
   const endpoint = selected.endpoints.find((item) => item.intent === intent) ?? selected.endpoints[0];
   const requestBody = requestBodyForIntent(selected.provider, intent, input);
-  const requiresApproval = selected.requiresApproval || bankrIntentRequiresApproval(intent, selected.provider);
+  const autoSendPrivateTransfer = intent === "private-transfer" && canAutoSendVeilTransfer(input.wallet);
+  const requiresApproval = (selected.requiresApproval && !autoSendPrivateTransfer) || bankrIntentRequiresApproval(intent, selected.provider);
   return {
     intent,
     provider: selected.provider,
@@ -210,7 +211,7 @@ export async function prepareCryptoAction(input: CryptoCapabilityRouterInput & {
     endpoint: endpoint ? { method: endpoint.method, route: endpoint.route, skill: endpoint.skill } : undefined,
     requestBody,
     requiresApproval,
-    confirmation: confirmationForIntent(intent, selected.provider),
+    confirmation: confirmationForIntent(intent, selected.provider, input.wallet),
     missing: selected.missing,
     guidance: guidanceForIntent(intent, selected),
   };
@@ -378,9 +379,10 @@ async function veilCapability(input: CryptoCapabilityRouterInput): Promise<Crypt
       ...(mcpPath ? ["Veil MCP CLI is installed."] : []),
       ...(walletInfo ? [`Encrypted local wallet exists for ${input.agentId}.`] : []),
       ...(input.wallet?.network === VEIL_CASH_NETWORK ? [`Wallet policy is on ${VEIL_CASH_NETWORK}.`] : []),
+      ...(canAutoSendVeilTransfer(input.wallet) ? ["Veil auto-send private transfer policy is on for this wallet."] : []),
     ],
     endpoints: [
-      { intent: "private-transfer", method: "POST", route: "/api/wallet/veil/transfer", note: `Requires ${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL} confirmation after user review.` },
+      { intent: "private-transfer", method: "POST", route: "/api/wallet/veil/transfer", note: canAutoSendVeilTransfer(input.wallet) ? "May execute without CONFIRM after reviewed draft when the wallet cap allows it." : `Requires ${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL} confirmation after user review.` },
       { intent: "private-paid-api", method: "POST", route: "/api/wallet/veil/x402", note: "Private x402 using Veil withdrawal into a fresh payer EOA." },
       { intent: "paid-api", method: "POST", route: "/api/wallet/veil/x402", note: "Selected when Auto Always Private or explicit private wording chooses Veil." },
       { intent: "status", method: "POST", route: "/api/wallet/veil/setup", note: "Setup/status surface for Veil CLI and keys." },
@@ -435,7 +437,7 @@ function requestBodyForIntent(
       headers: input.headers,
       body: input.body,
       policy: input.wallet,
-      confirmation: confirmationForIntent(intent, provider),
+      confirmation: confirmationForIntent(intent, provider, input.wallet),
     };
   }
   if (intent === "private-transfer") {
@@ -448,7 +450,7 @@ function requestBodyForIntent(
       recipientAddress: input.recipientAddress,
       amount: input.amount ?? input.amountUsd,
       maxAssetAmount: input.asset ? input.wallet?.assetSpendCaps?.[input.asset] : input.wallet?.maxPaymentUsd,
-      confirmation: confirmationForIntent(intent, provider),
+      confirmation: confirmationForIntent(intent, provider, input.wallet),
       autoShield: true,
     };
   }
@@ -459,7 +461,7 @@ function requestBodyForIntent(
       amountUsd: input.amountUsd,
       maxPaymentUsd: input.wallet?.maxPaymentUsd,
       autoPayEnabled: input.wallet?.autoPayEnabled,
-      confirmation: confirmationForIntent(intent, provider),
+      confirmation: confirmationForIntent(intent, provider, input.wallet),
     };
   }
   if (provider === "bankr" && intent !== "fund-llm-credits") {
@@ -468,7 +470,7 @@ function requestBodyForIntent(
       intent,
       prompt: input.prompt,
       action: intent === "portfolio" ? "execute" : "prepare",
-      confirmation: confirmationForIntent(intent, provider),
+      confirmation: confirmationForIntent(intent, provider, input.wallet),
     };
   }
   return {
@@ -486,13 +488,22 @@ function guidanceForIntent(intent: CryptoCapabilityIntent, selected: CryptoProvi
   return `Use ${selected.label} for ${intent}.`;
 }
 
-function confirmationForIntent(intent: CryptoCapabilityIntent, provider: CryptoCapabilityProvider) {
-  if (intent === "private-transfer") return VEIL_CASH_TRANSFER_CONFIRMATION_LABEL;
+function confirmationForIntent(intent: CryptoCapabilityIntent, provider: CryptoCapabilityProvider, wallet?: Partial<AgentWalletConfig>) {
+  if (intent === "private-transfer") return canAutoSendVeilTransfer(wallet) ? undefined : VEIL_CASH_TRANSFER_CONFIRMATION_LABEL;
   if (intent === "private-paid-api" || (intent === "paid-api" && provider === "veil")) return "VEIL_X402";
   if (intent === "send") return "SEND_USDC";
   if (provider === "bankr" && ["trade", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job"].includes(intent)) return BANKR_ACTION_CONFIRMATION;
   if (intent === "fund-llm-credits") return "FUND_BANKR_LLM_CREDITS";
   return undefined;
+}
+
+function canAutoSendVeilTransfer(wallet?: Partial<AgentWalletConfig>) {
+  return Boolean(
+    wallet?.veilAutoSendEnabled === true
+    && wallet.enabled === true
+    && wallet.provider === "veil"
+    && wallet.network === VEIL_CASH_NETWORK
+  );
 }
 
 function bankrIntentRequiresApproval(intent: CryptoCapabilityIntent, provider: CryptoCapabilityProvider) {

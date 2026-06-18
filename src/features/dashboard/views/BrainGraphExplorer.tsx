@@ -2,7 +2,7 @@
 // @ts-nocheck
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
 import styles from "./BrainGraphExplorer.module.css";
 
@@ -10,6 +10,8 @@ const graphClass = (...classes) => classes.map((className) => styles[className])
 
 const GRAPH_W = 700;
 const GRAPH_H = 540;
+const GRAPH_MIN_SCALE = 0.55;
+const GRAPH_MAX_SCALE = 3;
 const NODE_ANCHORS = [
   { x: 50, y: 50 },
   { x: 30, y: 27 },
@@ -152,6 +154,7 @@ export function BrainGraphExplorer(props: any) {
   const [brainGraphFilter, setBrainGraphFilter] = useState("all");
   const [brainGraphQuery, setBrainGraphQuery] = useState("");
   const [brainContextNodeIds, setBrainContextNodeIds] = useState<string[]>([]);
+  const brainGraphCanvasRef = useRef<HTMLDivElement | null>(null);
   const graphNow = Date.parse(brainGraph?.generatedAt ?? "") || 0;
   const brainFilterModes = [
     { id: "all", label: "All" },
@@ -230,6 +233,11 @@ export function BrainGraphExplorer(props: any) {
     return brainGraph.nodes.filter((node) => matchesFilter(node) && matchesQuery(node)).slice(0, 96);
   }, [brainGraph, brainGraphFilter, brainGraphQuery, graphNow, neighborsById, selectedBrainNode]);
   const brainLayout = useMemo(() => buildNodeCloudLayout(visibleBrainNodes, graphNow), [graphNow, visibleBrainNodes]);
+  const brainGraphScale = clamp(brainPan?.scale ?? 1, GRAPH_MIN_SCALE, GRAPH_MAX_SCALE);
+  const brainViewportPoint = (point) => ({
+    x: (brainPan?.x ?? 0) + point.x * brainGraphScale,
+    y: (brainPan?.y ?? 0) + point.y * brainGraphScale,
+  });
   const visibleIds = useMemo(() => new Set(visibleBrainNodes.map((node) => node.id)), [visibleBrainNodes]);
   const selectedBrainTargetIds = useMemo(() => {
     if (!brainGraph || !selectedBrainNode) return new Set<string>();
@@ -293,13 +301,35 @@ export function BrainGraphExplorer(props: any) {
     setBrainGraphQuery(data.note?.title ?? node.label);
     void refreshBrainGraph(true);
   };
-  const panBrainGraphWithWheel = (event) => {
+  const panBrainGraphWithWheel = useCallback((event) => {
     event.preventDefault();
-    setBrainPan((current) => ({
-      x: current.x + event.deltaX,
-      y: current.y + event.deltaY,
-    }));
-  };
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const pointerX = clamp((event.clientX - rect.left) / rect.width, 0, 1) * GRAPH_W;
+    const pointerY = clamp((event.clientY - rect.top) / rect.height, 0, 1) * GRAPH_H;
+    const deltaMultiplier = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 120 : 1;
+    const normalizedDeltaY = event.deltaY * deltaMultiplier;
+    const zoomFactor = Math.exp(-normalizedDeltaY * 0.0012);
+    setBrainPan((current) => {
+      const currentScale = clamp(current.scale ?? 1, GRAPH_MIN_SCALE, GRAPH_MAX_SCALE);
+      const nextScale = clamp(currentScale * zoomFactor, GRAPH_MIN_SCALE, GRAPH_MAX_SCALE);
+      if (Math.abs(nextScale - currentScale) < 0.001) return current;
+      const focalX = (pointerX - (current.x ?? 0)) / currentScale;
+      const focalY = (pointerY - (current.y ?? 0)) / currentScale;
+      return {
+        x: pointerX - focalX * nextScale,
+        y: pointerY - focalY * nextScale,
+        scale: nextScale,
+      };
+    });
+  }, [setBrainPan]);
+  useEffect(() => {
+    const canvas = brainGraphCanvasRef.current;
+    if (!canvas) return undefined;
+    canvas.addEventListener("wheel", panBrainGraphWithWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", panBrainGraphWithWheel);
+  }, [panBrainGraphWithWheel]);
   const recentEvents = brainGraph?.recentAccesses.slice(0, 7) ?? [];
 
   return (
@@ -331,7 +361,7 @@ export function BrainGraphExplorer(props: any) {
       </div>
       <div className={vaultClass("brainWorkspace")}>
         <section className={vaultClass("brainGraphPanel")} aria-label="Shared brain graph">
-          <div className={vaultClass("brainGraphCanvas")} onWheel={panBrainGraphWithWheel}>
+          <div ref={brainGraphCanvasRef} className={vaultClass("brainGraphCanvas")}>
             <button
               type="button"
               className={vaultClass("brainGraphRefreshButton")}
@@ -345,7 +375,7 @@ export function BrainGraphExplorer(props: any) {
             {visibleBrainNodes.length ? (
               <>
                 <svg
-                  viewBox={`${brainPan.x} ${brainPan.y} ${GRAPH_W} ${GRAPH_H}`}
+                  viewBox={`0 0 ${GRAPH_W} ${GRAPH_H}`}
                   role="img"
                   aria-label="Obsidian memory graph"
                   onPointerDown={startBrainPan}
@@ -369,21 +399,24 @@ export function BrainGraphExplorer(props: any) {
                       const source = brainLayout.positions.get(link.source);
                       const target = brainLayout.positions.get(link.target);
                       if (!source || !target) return null;
+                      const sourcePoint = brainViewportPoint(source);
+                      const targetPoint = brainViewportPoint(target);
                       const lit = selectedBrainNode && (link.source === selectedBrainNode.id || link.target === selectedBrainNode.id);
                       return (
                         <line
                           key={`${link.source}-${link.target}-${index}`}
-                          x1={source.x}
-                          y1={source.y}
-                          x2={target.x}
-                          y2={target.y}
+                          x1={sourcePoint.x}
+                          y1={sourcePoint.y}
+                          x2={targetPoint.x}
+                          y2={targetPoint.y}
                           className={vaultClass(lit ? "brainEdgeActive" : "brainEdge")}
                         />
                       );
                     })}
                   {visibleBrainNodes.map((node) => {
-                    const position = brainLayout.positions.get(node.id);
-                    if (!position) return null;
+                    const layoutPosition = brainLayout.positions.get(node.id);
+                    if (!layoutPosition) return null;
+                    const position = brainViewportPoint(layoutPosition);
                     const selected = selectedBrainNode?.id === node.id;
                     const target = !selected && selectedBrainTargetIds.has(node.id);
                     const unresolved = node.id.startsWith("unresolved:");

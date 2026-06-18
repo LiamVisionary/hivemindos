@@ -1,4 +1,5 @@
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { invokeNative } from "@/lib/native/invoke";
 
 export type DashboardStateSnapshot = Record<string, string>;
 
@@ -9,19 +10,12 @@ let cachedSnapshot: DashboardStateSnapshot | null = null;
 const saveRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const saveRetryAttempts = new Map<string, number>();
 
-// The packaged desktop app ships a static UI with no Next server, so `/api/*`
-// doesn't exist there — dashboard state goes through native Tauri commands
-// (src-tauri/src/dashboard_state.rs) instead of HTTP. The web app and a paired
-// phone (no Tauri runtime) keep using the HTTP route.
-async function nativeInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<T>(command, args);
-}
-
 async function postDashboardState(body: { values?: DashboardStateSnapshot; remove?: string[] }) {
+  // Desktop reads/writes use native Tauri state so packaged builds and dev
+  // backend restarts do not depend on `/api/dashboard/state`.
   if (isTauriDesktopRuntime()) {
     try {
-      const result = await nativeInvoke<{ ok?: boolean }>("dashboard_state_write", {
+      const result = await invokeNative<{ ok?: boolean }>("dashboard_state_write", {
         values: body.values ?? {},
         remove: body.remove ?? [],
       });
@@ -114,7 +108,7 @@ export async function loadDashboardStateSnapshot(
   // install), and native writes merge per-key, so an empty boot can't clobber.
   if (isTauriDesktopRuntime()) {
     try {
-      const result = await nativeInvoke<{ values?: DashboardStateSnapshot }>("dashboard_state_read");
+      const result = await invokeNative<{ values?: DashboardStateSnapshot }>("dashboard_state_read");
       cachedSnapshot = result?.values && typeof result.values === "object" ? result.values : {};
       return cachedSnapshot;
     } catch (error) {

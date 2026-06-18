@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { createPortal } from "react-dom";
 import {
   ArrowUpRight,
   Bot,
-  Check,
   Copy,
   CreditCard,
   Fuel,
@@ -58,6 +56,7 @@ import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS, assetSpendCapFor, getDisplayWa
 import type { MoneyClawSaveOptions, MoneyClawStatus, ProviderCopy, WalletActionState } from "./wallet-card-types";
 import { VeilAdvancedSetup, type VeilSetupAction } from "./VeilAdvancedSetup";
 import { PaymentMethodSelector } from "./PaymentMethodSelector";
+import { MoneyClawKeyModal } from "./MoneyClawKeyModal";
 import styles from "./AgentWalletCard.module.css";
 
 type RailState = "ready" | "setup" | "blocked";
@@ -224,17 +223,12 @@ export function AgentWalletCard({
 }: AgentWalletCardProps) {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [moneyClawModalOpen, setMoneyClawModalOpen] = useState(false);
-  const [moneyClawKeyDraft, setMoneyClawKeyDraft] = useState("");
-  const [shareMoneyClawKey, setShareMoneyClawKey] = useState(false);
-  const [moneyClawSaveState, setMoneyClawSaveState] = useState<"idle" | "checking" | "saved">("idle");
-  const [moneyClawSaveError, setMoneyClawSaveError] = useState("");
   const [usePodTokenDraft, setUsePodTokenDraft] = useState("");
   const [usePodRepairStatus, setUsePodRepairStatus] = useState("");
   const [usePodAdvancedSection, setUsePodAdvancedSection] = useState<UsePodAdvancedSection>("status");
   const [veilSetupStatus, setVeilSetupStatus] = useState<VeilSetupStatus | null>(null);
   const [veilSetupAction, setVeilSetupAction] = useState<VeilSetupAction>(null);
   const [veilSetupMessage, setVeilSetupMessage] = useState("");
-  const portalTarget = typeof document === "undefined" ? null : document.body;
 
   const tier = wallet.enabled ? survival.tier : "off";
   const safeBalance = getDisplayWalletBalanceUsd(wallet);
@@ -366,24 +360,6 @@ export function AgentWalletCard({
     setVeilSetupStatus(data?.status ?? null);
     setVeilSetupMessage(response?.ok && data?.ok ? data?.message ?? "Veil setup complete." : veilSetupErrorMessage(response, data, "Could not set up Veil."));
     setVeilSetupAction(null);
-  };
-
-  const saveMoneyClawKey = async () => {
-    const key = moneyClawKeyDraft.trim();
-    setMoneyClawSaveError("");
-    setMoneyClawSaveState("checking");
-    const result = await onSaveMoneyClawKey(key, { shareWithAllAgents: shareMoneyClawKey });
-    if (!result.ok) {
-      setMoneyClawSaveState("idle");
-      setMoneyClawSaveError(result.error || "MoneyClaw key could not be saved.");
-      return;
-    }
-    setMoneyClawSaveState("saved");
-    window.setTimeout(() => {
-      setMoneyClawModalOpen(false);
-      setMoneyClawKeyDraft("");
-      setMoneyClawSaveState("idle");
-    }, 900);
   };
 
   const runwayChip: { tone: "ok" | "warn" | "danger" | "muted"; text: string } = isOff
@@ -1505,74 +1481,13 @@ export function AgentWalletCard({
         </div>
       </details>
 
-      {moneyClawModalOpen && portalTarget ? createPortal((
-        <div className={styles.modalBackdrop} role="presentation" onMouseDown={() => setMoneyClawModalOpen(false)}>
-          <section
-            className={styles.moneyClawModal}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="moneyclaw-key-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className={styles.modalHeader}>
-              <div>
-                <p className={styles.modalEyebrow}>Cards rail</p>
-                <h3 id="moneyclaw-key-title">MoneyClaw API key</h3>
-              </div>
-              <CloseIconButton aria-label="Close MoneyClaw setup" onClick={() => setMoneyClawModalOpen(false)} />
-            </div>
-
-            <label className={styles.modalField} htmlFor="moneyclaw-key">
-              <span>{wallet.moneyClawEnvName}</span>
-              <input
-                id="moneyclaw-key"
-                {...secretInputProps}
-                value={moneyClawKeyDraft}
-                onChange={(event) => {
-                  setMoneyClawKeyDraft(event.target.value);
-                  setMoneyClawSaveError("");
-                  if (moneyClawSaveState === "saved") setMoneyClawSaveState("idle");
-                }}
-                placeholder="mcl_..."
-                className={maskedSecretValueClass}
-              />
-            </label>
-
-            <label className={styles.modalToggle}>
-              <input
-                type="checkbox"
-                checked={shareMoneyClawKey}
-                onChange={(event) => setShareMoneyClawKey(event.target.checked)}
-              />
-              <span>
-                <strong>{shareMoneyClawKey ? "Use for all agents" : "Use only for this agent"}</strong>
-                <small>{shareMoneyClawKey
-                  ? "Agents will share one MoneyClaw account, wallet, inbox, and balance."
-                  : "Use this when each agent has its own MoneyClaw account, wallet, inbox, and balance."}</small>
-              </span>
-            </label>
-
-            <button
-              type="button"
-              className={styles.modalSaveButton}
-              disabled={moneyClawSaveState === "checking" || !moneyClawKeyDraft.trim()}
-              onClick={() => void saveMoneyClawKey()}
-            >
-              {moneyClawSaveState === "saved" ? <Check aria-hidden="true" /> : null}
-              {moneyClawSaveState === "checking" ? "Checking..." : moneyClawSaveState === "saved" ? "Saved!" : "Check"}
-            </button>
-
-            {moneyClawSaveError ? <p className={styles.modalError}>{moneyClawSaveError}</p> : null}
-
-            <div className={styles.terminalAlternative}>
-              <strong>Alternatively, run this in Terminal</strong>
-              <code>{shareMoneyClawKey
-                ? `scripts/hive-env-add ${wallet.moneyClawEnvName}`
-                : "Per-agent MoneyClaw keys should be saved here so they stay attached to this agent's env overlay."}</code>
-            </div>
-          </section>
-        </div>
-      ), portalTarget) : null}
+      {moneyClawModalOpen ? (
+        <MoneyClawKeyModal
+          envName={wallet.moneyClawEnvName}
+          onClose={() => setMoneyClawModalOpen(false)}
+          onSave={onSaveMoneyClawKey}
+        />
+      ) : null}
     </article>
   );
 }

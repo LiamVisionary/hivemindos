@@ -18,7 +18,7 @@ export const VaultPanel = memo(VaultPanelComponent);
 
 // Memoized (see export above) so unrelated background re-renders skip this panel.
 function VaultPanelComponent(props: any) {
-  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, KeyRound, LoaderCircle, Network, PlugZap, RefreshCcw, Repeat2, Search, Sparkles, activeView, brainGraph, brainGraphLoading, brainGraphStats, brainGraphStatus, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, openSkillBrowser, pairSyncthingVaultSync, qmdActionStatus, qmdBusy, qmdQuery, qmdQueryResult, qmdStatus, queryGbrainFromDashboard, queryQmdFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshQmdStatus, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runQmdAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setGbrainQuery, setQmdQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus } = props;
+  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, KeyRound, LoaderCircle, Network, PlugZap, RefreshCcw, Repeat2, Search, Sparkles, activeView, brainGraph, brainGraphLoading, brainGraphStats, brainGraphStatus, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, neo4jActionStatus, neo4jBusy, neo4jQuery, neo4jQueryResult, neo4jStatus, openSkillBrowser, pairSyncthingVaultSync, qmdActionStatus, qmdBusy, qmdQuery, qmdQueryResult, qmdStatus, queryGbrainFromDashboard, queryNeo4jFromDashboard, queryQmdFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshNeo4jStatus, refreshQmdStatus, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runNeo4jAction, runQmdAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setGbrainQuery, setNeo4jQuery, setQmdQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus } = props;
   const brainClass = (...classes) => classes.map((className) => brainServiceStyles[className] || vaultClass(className)).filter(Boolean).join(" ");
   const gbrainMetric = (keys: string[]) => {
     const stats = gbrainStatus?.stats ?? {};
@@ -35,6 +35,7 @@ function VaultPanelComponent(props: any) {
   const [brainServiceSection, setBrainServiceSection] = useState("overview");
   const previousGbrainBusyRef = useRef("");
   const previousQmdBusyRef = useRef("");
+  const previousNeo4jBusyRef = useRef("");
   const previousSyntoBusyRef = useRef("");
   const previousTradingBrainBusyRef = useRef("");
   const sharedSkillsRefreshKeyRef = useRef("");
@@ -128,6 +129,17 @@ function VaultPanelComponent(props: any) {
     }
   }, [qmdBusy, qmdStatus?.installed]);
   useEffect(() => {
+    const previousBusy = previousNeo4jBusyRef.current;
+    previousNeo4jBusyRef.current = neo4jBusy;
+    if ((previousBusy === "connect" || previousBusy === "sync") && !neo4jBusy && neo4jStatus?.connected) {
+      setBrainModuleSuccess((current) => ({ ...current, neo4j: true }));
+      const timer = window.setTimeout(() => {
+        setBrainModuleSuccess((current) => ({ ...current, neo4j: false }));
+      }, 2000);
+      return () => window.clearTimeout(timer);
+    }
+  }, [neo4jBusy, neo4jStatus?.connected]);
+  useEffect(() => {
     const previousBusy = previousSyntoBusyRef.current;
     previousSyntoBusyRef.current = syntoBusy;
     if ((previousBusy === "install" || previousBusy === "connect") && !syntoBusy && syntoStatus?.installed) {
@@ -163,8 +175,18 @@ function VaultPanelComponent(props: any) {
   const qmdStatusNote = qmdStatus?.error?.includes("ENOENT") || qmdStatus?.error?.includes("not found")
     ? "QMD CLI is not available on this machine yet."
     : qmdStatus?.error ?? "";
+  const neo4jStatusNote = neo4jStatus?.error ?? "";
+  const neo4jKeys = neo4jStatus?.keyStatus ?? {};
+  const neo4jRequiredKeysReady = [
+    sharedVault.neo4j?.uriEnvKey,
+    sharedVault.neo4j?.usernameEnvKey,
+    sharedVault.neo4j?.passwordEnvKey,
+  ].every((key) => key && neo4jKeys[key]?.present);
   const qmdFailedInstallMessage = !qmdStatus?.installed && !qmdBusy && qmdActionStatus && !qmdActionStatus.includes("ready to install")
     ? qmdActionStatus
+    : "";
+  const neo4jFailedConnectMessage = !neo4jStatus?.connected && !neo4jBusy && neo4jActionStatus && !neo4jActionStatus.includes("ready to connect")
+    ? neo4jActionStatus
     : "";
   const qmdInstallFailureLabel = qmdFailedInstallMessage.includes("npm is required")
     ? "QMD install needs Node/npm first. Install Node/npm, then press Install QMD again."
@@ -201,6 +223,15 @@ function VaultPanelComponent(props: any) {
         : qmdInstallFailureLabel
           ? "failed"
           : "install";
+  const neo4jInstallState = brainModuleSuccess.neo4j
+    ? "success"
+    : neo4jBusy === "connect" || neo4jBusy === "sync"
+      ? "installing"
+      : neo4jStatus?.connected
+        ? "installed"
+        : neo4jFailedConnectMessage
+          ? "failed"
+          : "install";
   const syntoInstallState = brainModuleSuccess.synto
     ? "success"
     : syntoBusy === "install" || syntoBusy === "connect"
@@ -222,6 +253,7 @@ function VaultPanelComponent(props: any) {
   const brainServiceFooterStatus = [
     tradingBrainStatus?.installed || tradingBrainBusy === "install" ? tradingBrainActionStatus : "",
     syntoStatus?.installed || syntoBusy === "install" || syntoBusy === "connect" ? syntoActionStatus : "",
+    neo4jStatus?.connected || neo4jBusy ? neo4jActionStatus : "",
     qmdStatus?.installed || qmdBusy === "install" || qmdBusy === "connect" || qmdBusy === "index" || qmdBusy === "embed" ? qmdActionStatus : "",
     gbrainStatus?.installed || gbrainBusy === "install" || gbrainBusy === "connect" ? gbrainActionStatus : "",
   ].find(Boolean) || "";
@@ -229,15 +261,18 @@ function VaultPanelComponent(props: any) {
   const syntoNeedsModelSetup = /ollama|model/i.test(syntoOutputHints) && /missing|not running|not found|failed|error/i.test(syntoOutputHints);
   const gbrainSetupSteps = ["Check Bun runtime", "Install GBrain CLI", "Initialize local brain", "Import shared vault", "Refresh stale embeddings", "Extract graph links", "Scaffold retrieval skills"];
   const qmdSetupSteps = ["Check npm runtime", "Install QMD CLI", "Add shared vault collection", "Build SQLite/BM25 index", "Refresh local vectors"];
+  const neo4jSetupSteps = ["Check Neo4j env keys", "Verify driver connectivity", "Create graph constraints", "MERGE Agent Memory", "Link entities and compiled pages"];
   const syntoSetupSteps = ["Install Syntho CLI", "Initialize Synthesis", "Run doctor checks", "Prepare MCP surface"];
   const tradingBrainSetupSteps = ["Create vault folders", "Write trading templates", "Seed runtime guidance", "Verify scaffold"];
   const syntoModuleEnabled = Boolean(syntoStatus?.installed && sharedVault.synto.enabled);
   const gbrainModuleEnabled = Boolean(gbrainStatus?.installed && sharedVault.gbrain.enabled);
   const qmdModuleEnabled = Boolean(qmdStatus?.installed && sharedVault.qmd.enabled);
+  const neo4jModuleEnabled = Boolean(neo4jStatus?.connected && sharedVault.neo4j.enabled);
   const tradingBrainModuleEnabled = Boolean(tradingBrainStatus?.installed && sharedVault.tradingBrainEnabled);
   const syntoModuleAvailable = Boolean(syntoStatus?.installed || syntoBusy === "install" || syntoBusy === "connect" || brainModuleSuccess.synto);
   const gbrainModuleAvailable = Boolean(gbrainStatus?.installed || gbrainBusy === "install" || gbrainBusy === "connect" || brainModuleSuccess.gbrain);
   const qmdModuleAvailable = Boolean(qmdStatus?.installed || qmdBusy === "install" || qmdBusy === "connect" || brainModuleSuccess.qmd);
+  const neo4jModuleAvailable = Boolean(neo4jStatus?.connected || neo4jBusy === "connect" || neo4jBusy === "sync" || brainModuleSuccess.neo4j);
   const tradingBrainModuleAvailable = Boolean(tradingBrainStatus?.installed || tradingBrainBusy === "install" || brainModuleSuccess["trading-brain"]);
   const brainModules = [
     new BrainModule({
@@ -525,6 +560,139 @@ function VaultPanelComponent(props: any) {
             <span className={brainClass("brainServiceSwitch")} aria-hidden="true"><span /></span>
             <span>{sharedVault.qmd.autoEmbed ? "One-click setup refreshes vectors" : "One-click setup skips vector refresh"}</span>
           </label>
+        </div>
+      ),
+    }),
+    new BrainModule({
+      id: "neo4j",
+      name: "Neo4j",
+      icon: <Network aria-hidden="true" />,
+      statusLabel: neo4jInstallState === "installed" ? "Connected" : neo4jInstallState === "installing" ? "Working" : "Optional",
+      statusTone: neo4jStatus?.connected ? "live" : "idle",
+      active: neo4jStatus?.connected,
+      title: "Derived graph over memory and entities",
+      description: "Connect an existing Neo4j database when you want graph traversal over Agent Memory, entities, projects, agents, machines, runtimes, tags, and compiled knowledge pages. Obsidian stays canonical.",
+      install: {
+        state: neo4jInstallState,
+        buttonLabel: "Connect Neo4j",
+        disabled: Boolean(neo4jBusy) || !sharedVault.enabled || !neo4jRequiredKeysReady,
+        failureLabel: neo4jFailedConnectMessage,
+        icon: neo4jBusy === "connect" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <PlugZap aria-hidden="true" />,
+        installingLabel: neo4jBusy === "sync" ? "Syncing derived graph" : "Connecting Neo4j",
+        onInstall: () => void runNeo4jAction("connect"),
+        setupSteps: neo4jSetupSteps,
+        successLabel: "Connected!",
+        features: [
+          <>Entity-linked graph over typed Agent Memory</>,
+          <>MERGE-only sync that never deletes user-created Neo4j data</>,
+          <>Read-only Cypher query surface for graph inspection</>,
+          <>Secrets stay in env keys, not dashboard state or notes</>,
+        ],
+      },
+      stats: [
+        { key: "memories", label: "Memories", value: qmdMetric(neo4jStatus?.counts?.Memory), icon: <BrainCircuit aria-hidden="true" /> },
+        { key: "entities", label: "Entities", value: qmdMetric(neo4jStatus?.counts?.Entity), icon: <Network aria-hidden="true" /> },
+        { key: "compiled", label: "Compiled", value: qmdMetric(neo4jStatus?.counts?.CompiledKnowledgePage), icon: <FileText aria-hidden="true" /> },
+        { key: "database", label: "Database", value: neo4jStatus?.database || "default", icon: <PlugZap aria-hidden="true" /> },
+      ],
+      badges: [
+        ...(neo4jStatusNote ? [neo4jStatusNote] : []),
+        <>URI {neo4jKeys[sharedVault.neo4j?.uriEnvKey]?.present ? "ready" : "missing"}</>,
+        <>User {neo4jKeys[sharedVault.neo4j?.usernameEnvKey]?.present ? "ready" : "missing"}</>,
+        <>Password {neo4jKeys[sharedVault.neo4j?.passwordEnvKey]?.present ? "ready" : "missing"}</>,
+        sharedVault.neo4j?.enabled ? "Enabled" : "Disabled",
+      ],
+      primaryAction: {
+        key: "sync",
+        label: "Sync graph",
+        disabled: Boolean(neo4jBusy) || !neo4jStatus?.connected,
+        icon: neo4jBusy === "sync" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />,
+        onClick: () => void runNeo4jAction("sync"),
+      },
+      actions: [
+        {
+          key: "connect",
+          label: "Check connection",
+          disabled: Boolean(neo4jBusy) || !sharedVault.enabled || !neo4jRequiredKeysReady,
+          icon: neo4jBusy === "connect" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <PlugZap aria-hidden="true" />,
+          onClick: () => void runNeo4jAction("connect"),
+        },
+        {
+          key: "refresh",
+          label: "Refresh status",
+          disabled: Boolean(neo4jBusy),
+          icon: neo4jBusy === "status" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />,
+          onClick: () => void refreshNeo4jStatus(),
+        },
+      ],
+      quickActions: [
+        {
+          key: "query",
+          label: "Run read-only query",
+          disabled: Boolean(neo4jBusy) || !neo4jStatus?.connected || !neo4jQuery.trim(),
+          icon: neo4jBusy === "query" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Search aria-hidden="true" />,
+          onClick: () => void queryNeo4jFromDashboard(),
+        },
+      ],
+      body: (
+        <div className={brainClass("gbrainQueryBox")}>
+          <label>
+            <span>Read-only Cypher</span>
+            <textarea
+              value={neo4jQuery}
+              onChange={(event) => setNeo4jQuery(event.target.value)}
+              rows={3}
+              placeholder="MATCH (m:Memory)-[:MENTIONS]->(e:Entity) RETURN m.title, e.name LIMIT 25"
+            />
+          </label>
+        </div>
+      ),
+      result: neo4jQueryResult || neo4jActionStatus ? <BrainServiceRunResult label="Neo4j result" output={neo4jQueryResult} status={neo4jActionStatus} /> : null,
+      settings: (
+        <div className={brainClass("brainServiceSettings")}>
+          <label className={brainClass("brainServiceToggle")}>
+            <input
+              type="checkbox"
+              checked={sharedVault.neo4j.enabled}
+              onChange={(event) => updateSharedVault({ neo4j: { ...sharedVault.neo4j, enabled: event.target.checked } })}
+            />
+            <span className={brainClass("brainServiceSwitch")} aria-hidden="true"><span /></span>
+            <span>{sharedVault.neo4j.enabled ? "Neo4j graph enabled" : "Neo4j graph disabled"}</span>
+          </label>
+          <label>
+            Result limit
+            <input
+              type="number"
+              min="1"
+              max="1000"
+              step="1"
+              value={sharedVault.neo4j.queryLimit}
+              onChange={(event) => updateSharedVault({ neo4j: { ...sharedVault.neo4j, queryLimit: Number(event.target.value) } })}
+            />
+          </label>
+          <details>
+            <summary>Advanced connection env keys</summary>
+            <label>
+              URI env key
+              <input value={sharedVault.neo4j.uriEnvKey} onChange={(event) => updateSharedVault({ neo4j: { ...sharedVault.neo4j, uriEnvKey: event.target.value } })} />
+            </label>
+            <label>
+              Username env key
+              <input value={sharedVault.neo4j.usernameEnvKey} onChange={(event) => updateSharedVault({ neo4j: { ...sharedVault.neo4j, usernameEnvKey: event.target.value } })} />
+            </label>
+            <label>
+              Password env key
+              <input value={sharedVault.neo4j.passwordEnvKey} onChange={(event) => updateSharedVault({ neo4j: { ...sharedVault.neo4j, passwordEnvKey: event.target.value } })} />
+            </label>
+            <label>
+              Database env key
+              <input value={sharedVault.neo4j.databaseEnvKey} onChange={(event) => updateSharedVault({ neo4j: { ...sharedVault.neo4j, databaseEnvKey: event.target.value } })} />
+            </label>
+            <label>
+              Database override
+              <input value={sharedVault.neo4j.database} onChange={(event) => updateSharedVault({ neo4j: { ...sharedVault.neo4j, database: event.target.value } })} />
+            </label>
+          </details>
         </div>
       ),
     }),
@@ -840,7 +1008,7 @@ function VaultPanelComponent(props: any) {
     }),
   ];
   const brainModuleById = new Map(brainModules.map((module) => [module.definition.id, module]));
-  const brainServiceSections = [{ id: "overview", label: "Overview", icon: <Activity aria-hidden="true" /> }, ...(syntoModuleAvailable ? [{ id: "synto", label: "Syntho", icon: <FileText aria-hidden="true" /> }] : []), ...(gbrainModuleAvailable ? [{ id: "gbrain", label: "GBrain", icon: <BrainCircuit aria-hidden="true" /> }] : []), ...(qmdModuleAvailable ? [{ id: "qmd", label: "QMD", icon: <Search aria-hidden="true" /> }] : []), ...(tradingBrainModuleAvailable ? [{ id: "trading-brain", label: "Trading", icon: <Activity aria-hidden="true" /> }] : []), { id: "synthesis", label: "Synthesis", icon: <Sparkles aria-hidden="true" /> }, { id: "settings", label: "Settings", icon: <KeyRound aria-hidden="true" /> }];
+  const brainServiceSections = [{ id: "overview", label: "Overview", icon: <Activity aria-hidden="true" /> }, ...(syntoModuleAvailable ? [{ id: "synto", label: "Syntho", icon: <FileText aria-hidden="true" /> }] : []), ...(gbrainModuleAvailable ? [{ id: "gbrain", label: "GBrain", icon: <BrainCircuit aria-hidden="true" /> }] : []), ...(qmdModuleAvailable ? [{ id: "qmd", label: "QMD", icon: <Search aria-hidden="true" /> }] : []), ...(neo4jModuleAvailable ? [{ id: "neo4j", label: "Neo4j", icon: <Network aria-hidden="true" /> }] : []), ...(tradingBrainModuleAvailable ? [{ id: "trading-brain", label: "Trading", icon: <Activity aria-hidden="true" /> }] : []), { id: "synthesis", label: "Synthesis", icon: <Sparkles aria-hidden="true" /> }, { id: "settings", label: "Settings", icon: <KeyRound aria-hidden="true" /> }];
   useEffect(() => { if (!brainServiceSections.some((section) => section.id === brainServiceSection)) setBrainServiceSection("overview"); }, [brainServiceSection, brainServiceSections]);
   const brainServiceOverviewCards = [
     {
@@ -917,6 +1085,32 @@ function VaultPanelComponent(props: any) {
         progressLabel: qmdBusy === "connect" ? "Connecting QMD runtime" : "Installing and indexing QMD",
         setupSteps: qmdSetupSteps,
         state: qmdInstallState,
+      },
+    },
+    {
+      id: "neo4j",
+      bullets: ["Derived from Obsidian Agent Memory", "Links memories to entities, tags, projects, agents, machines, and runtimes", "Read-only query surface rejects write Cypher"],
+      eyebrow: "Graph brain",
+      title: "Neo4j",
+      detail: neo4jStatus?.connected
+        ? `${qmdMetric(neo4jStatus.counts?.Memory)} memories and ${qmdMetric(neo4jStatus.counts?.Entity)} entities in the derived graph`
+        : "Optional derived Neo4j graph. Store connection details in env keys, not dashboard state.",
+      status: neo4jStatus?.connected ? "Connected" : "Optional",
+      tone: neo4jStatus?.connected ? "live" : "idle",
+      icon: <Network aria-hidden="true" />,
+      enabled: neo4jModuleEnabled,
+      canToggle: Boolean(neo4jStatus?.connected),
+      toggleLabel: neo4jModuleEnabled ? "Neo4j enabled" : "Enable Neo4j",
+      onToggle: (enabled) => updateSharedVault({ neo4j: { ...sharedVault.neo4j, enabled } }),
+      action: neo4jStatus?.connected ? "Open Neo4j" : "Connect Neo4j",
+      installAction: {
+        disabled: Boolean(neo4jBusy) || !sharedVault.enabled || !neo4jRequiredKeysReady,
+        icon: neo4jBusy === "connect" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <PlugZap aria-hidden="true" />,
+        label: "Connect Neo4j",
+        onClick: () => void runNeo4jAction("connect"),
+        progressLabel: neo4jBusy === "sync" ? "Syncing derived graph" : "Connecting Neo4j",
+        setupSteps: neo4jSetupSteps,
+        state: neo4jInstallState,
       },
     },
     {
@@ -1049,9 +1243,9 @@ function VaultPanelComponent(props: any) {
               <p>Keep the shared brain calm: review status at a glance, then open Syntho, GBrain, Trading Brain, or Synthesis only when you need that workflow.</p>
             </div>
             <div className={brainClass("brainServicesHeroActions")}>
-              <Button type="button" size="sm" variant="secondary" onClick={() => { void refreshGbrainStatus(); void refreshQmdStatus(); void refreshSyntoStatus(); void refreshTradingBrainStatus(); }} disabled={Boolean(gbrainBusy) || Boolean(qmdBusy) || Boolean(syntoBusy) || Boolean(tradingBrainBusy)}>
-                {gbrainBusy === "status" || qmdBusy === "status" || syntoBusy === "status" || tradingBrainBusy === "status" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
-                {gbrainBusy === "status" || qmdBusy === "status" || syntoBusy === "status" || tradingBrainBusy === "status" ? "Checking" : "Refresh"}
+              <Button type="button" size="sm" variant="secondary" onClick={() => { void refreshGbrainStatus(); void refreshQmdStatus(); void refreshNeo4jStatus(); void refreshSyntoStatus(); void refreshTradingBrainStatus(); }} disabled={Boolean(gbrainBusy) || Boolean(qmdBusy) || Boolean(neo4jBusy) || Boolean(syntoBusy) || Boolean(tradingBrainBusy)}>
+                {gbrainBusy === "status" || qmdBusy === "status" || neo4jBusy === "status" || syntoBusy === "status" || tradingBrainBusy === "status" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
+                {gbrainBusy === "status" || qmdBusy === "status" || neo4jBusy === "status" || syntoBusy === "status" || tradingBrainBusy === "status" ? "Checking" : "Refresh"}
               </Button>
             </div>
           </div>
@@ -1072,7 +1266,7 @@ function VaultPanelComponent(props: any) {
                 </div>
               </>
             ) : brainServiceSection === "settings" ? (
-              <BrainServiceSettingsDeck brainClass={brainClass} gbrainSettings={brainModuleById.get("gbrain")?.definition.settings} qmdSettings={brainModuleById.get("qmd")?.definition.settings} syntoSettings={brainModuleById.get("synto")?.definition.settings} />
+              <BrainServiceSettingsDeck brainClass={brainClass} gbrainSettings={brainModuleById.get("gbrain")?.definition.settings} qmdSettings={brainModuleById.get("qmd")?.definition.settings} neo4jSettings={brainModuleById.get("neo4j")?.definition.settings} syntoSettings={brainModuleById.get("synto")?.definition.settings} />
             ) : selectedBrainModule ? (
               <div className={brainClass("brainServiceGrid")}>
                 {selectedBrainModule.render({ Button, vaultClass: brainClass })}

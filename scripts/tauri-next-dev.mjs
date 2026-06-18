@@ -482,9 +482,16 @@ proxyServer.on("upgrade", (request, socket, head) => {
 rmSync(tauriNextDir, { force: true, recursive: true });
 writeDevServerInfo();
 
-const child = spawn(process.execPath, ["scripts/dev-server.mjs"], {
-  stdio: "inherit",
-  env: {
+const DEV_SERVER_RESPAWN_WINDOW_MS = 2 * 60_000;
+const DEV_SERVER_RESPAWN_BASE_DELAY_MS = 1_000;
+const DEV_SERVER_RESPAWN_MAX_DELAY_MS = 30_000;
+let child = null;
+let stopping = false;
+let devServerRespawnTimer = null;
+let devServerExitTimestamps = [];
+
+function devServerEnv() {
+  return {
     ...process.env,
     PORT: String(nextPort),
     HIVEMINDOS_DASHBOARD_PORT: String(proxyPort),
@@ -492,8 +499,50 @@ const child = spawn(process.execPath, ["scripts/dev-server.mjs"], {
     HIVEMINDOS_DASHBOARD_HOST: upstreamHost,
     HIVEMINDOS_TAURI_DEV: "1",
     HIVEMINDOS_TAURI_NEXT_DIST_DIR: tauriNextDistDir,
-  },
-});
+  };
+}
+
+function spawnDevServer() {
+  if (stopping) return;
+  child = spawn(process.execPath, ["scripts/dev-server.mjs"], {
+    stdio: "inherit",
+    env: devServerEnv(),
+  });
+  child.on("exit", handleDevServerExit);
+  child.on("error", handleDevServerError);
+}
+
+function scheduleDevServerRespawn(reason) {
+  if (stopping || devServerRespawnTimer) return;
+  const now = Date.now();
+  devServerExitTimestamps = [...devServerExitTimestamps, now]
+    .filter((at) => now - at < DEV_SERVER_RESPAWN_WINDOW_MS);
+  const delay = Math.min(
+    DEV_SERVER_RESPAWN_MAX_DELAY_MS,
+    DEV_SERVER_RESPAWN_BASE_DELAY_MS * (2 ** Math.max(0, devServerExitTimestamps.length - 1)),
+  );
+  console.warn(
+    `HivemindOS Tauri dev server ${reason}; keeping proxy ${browserHost}:${proxyPort} alive and restarting backend in ${Math.round(delay / 1000)}s.`,
+  );
+  devServerRespawnTimer = setTimeout(() => {
+    devServerRespawnTimer = null;
+    spawnDevServer();
+  }, delay);
+  devServerRespawnTimer.unref?.();
+}
+
+function handleDevServerExit(code, signal) {
+  child = null;
+  if (stopping) return;
+  scheduleDevServerRespawn(signal ? `exited from ${signal}` : `exited with status ${code ?? 0}`);
+}
+
+function handleDevServerError(error) {
+  child = null;
+  if (stopping) return;
+  console.warn("HivemindOS Tauri dev server could not start.", error);
+  scheduleDevServerRespawn("failed to start");
+}
 
 const voiceWorkerEnabled = process.env.HIVEMINDOS_VOICE_WORKER !== "0";
 const voiceWorker = voiceWorkerEnabled
@@ -516,7 +565,12 @@ const voiceWorker = voiceWorkerEnabled
   : null;
 
 function stopChildren(signal = "SIGTERM") {
-  child.kill(signal);
+  stopping = true;
+  if (devServerRespawnTimer) {
+    clearTimeout(devServerRespawnTimer);
+    devServerRespawnTimer = null;
+  }
+  if (child && !child.killed) child.kill(signal);
   if (voiceWorker && !voiceWorker.killed) voiceWorker.kill(signal);
 }
 
@@ -541,20 +595,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
   });
 }
 
-child.on("exit", (code) => {
-  proxyServer.close();
-  if (voiceWorker && !voiceWorker.killed) voiceWorker.kill("SIGTERM");
-  restoreGeneratedTypeReferences();
-  process.exit(code ?? 0);
-});
-
-child.on("error", (error) => {
-  proxyServer.close();
-  if (voiceWorker && !voiceWorker.killed) voiceWorker.kill("SIGTERM");
-  restoreGeneratedTypeReferences();
-  console.error(error);
-  process.exit(1);
-});
+spawnDevServer();
 
 voiceWorker?.on("exit", (code) => {
   if (code && code !== 0) {

@@ -12,7 +12,7 @@ For the separated GitHub Pages guide, start with [Whole Brain](../whole-brain/).
 
 <figure class="imagePlate">
   <img src="../assets/img/diagrams/brain-services-vault.jpg" alt="Generated brain services and shared vault infographic showing ENV vault path, Obsidian Vault, Skills, GBrain, Syntho, Trading Brain, and Synthesis Folder.">
-  <figcaption>The vault path anchors the shared brain. GBrain indexes it. Syntho compiles reviewed Synthesis output. Trading Brain stays optional.</figcaption>
+  <figcaption>The vault path anchors the shared brain. QMD, GBrain, Neo4j, Syntho, and Trading Brain stay optional service layers around it.</figcaption>
 </figure>
 
 ## Vault
@@ -42,13 +42,16 @@ Seeded structure:
 - `Templates/HivemindOS/` contains durable templates for daily briefings, weekly reviews, meetings, research sources, decisions, projects, book notes, distillations, and AI outputs.
 - `Operations/Brain Services/Obsidian CLI.md` records detected CLI status when setup runs.
 - `Operations/Brain Services/Obsidian Plugin Pack.md` lists optional manual Obsidian plugins for templates, tasks, Dataview, retrieval, calendar, Kanban, and Git.
+- `Operations/Brain Services/Agent Memory Entity Index.jsonl` stores deterministic entity and alias links for typed memory.
+- `Operations/Brain Services/Agent Memory Retrievals.jsonl` stores soft retrieval/final-answer telemetry for typed memory ranking.
+- `Operations/Brain Services/Neo4j.md` tracks the optional derived Neo4j Brain Service while keeping connection values in env keys only.
 - `Operations/Brain Services/Queen Bee/` stores the Queen Bee control plane: identity, routing/safety policy, current state, intent dedupe, leases, node annotations, and completion receipts. Tasks still live in the Work Board; durable memory still lives in Shared Brain Memory.
 - `Operations/Brain Services/Obsidian Native Brain Pack.md` tracks the optional Bases/Tasks/Dataview/Templater/Calendar/Kanban/Git plugin setup and generated `.base`/canvas files.
 - `Operations/Brain Services/Agent Memory.base`, `Project Brain.base`, `Secure References.base`, and `Whole Brain.canvas` give humans native Obsidian views over typed memory, project context, safe credential references, and the recall topology.
 - `Operations/Automations/Foundation Workflows/` contains disabled workflow schedules for context synthesis, intake processing, meeting processing, research ingestion, vault health checks, decision review, argument building, book notes, feedback capture, project updates, weekly synthesis, connection finding, and distillation.
 - `Operations/Code Projects/projects.json` stores Hivemind project records and optional GitLawb repo links. This is private coordination metadata. GitLawb proof records should not contain private keys, secrets, Tailnet IPs, or exact private vault paths.
 
-## Brain Graph, QMD, GBrain, Syntho, And Trading Brain
+## Brain Graph, QMD, GBrain, Neo4j, Syntho, And Trading Brain
 
 How it works:
 
@@ -56,15 +59,16 @@ How it works:
 - Brain graph generation is in `src/lib/services/obsidian/brain-graph.ts`.
 - QMD actions are in `src/lib/services/brain/qmd.ts`.
 - GBrain actions are in `src/lib/services/brain/gbrain.ts`.
+- Neo4j actions are in `src/lib/services/brain/neo4j.ts`.
 - Syntho actions are in `src/lib/services/brain/synto.ts`. The internal API slug and installed CLI command remain `synto`.
 - Trading-brain install/status lives in `src/lib/services/brain/trading-brain.ts`.
-- API routes live under `/api/context-index`, `/api/brain/qmd/*`, `/api/brain/gbrain/*`, `/api/brain/synto/*`, `/api/brain/trading-brain/*`, and `/api/obsidian/graph`.
+- API routes live under `/api/context-index`, `/api/brain/qmd/*`, `/api/brain/gbrain/*`, `/api/brain/neo4j/*`, `/api/brain/synto/*`, `/api/brain/trading-brain/*`, and `/api/obsidian/graph`.
 
 What the brain services can do:
 
 - Build a lightweight context index over shared/runtime skills, tool-call surfaces, API routes, connected Tailnet apps, app endpoint catalogs, runtime capability definitions, docs, and workspace files.
 - Retrieve the most relevant index records for a task before loading full files or schemas, including connected-app capability aliases such as image generation, simulation, graph, exports, monitoring, settings, and API docs.
-- Save typed shared-brain memories through `/api/brain/memory` or the installed `hive-brain` CLI using `remember`, `evolve`, `recall`, `answer`, and `rebuild-index` actions. Raw/non-managed agents can run `hive-brain answer "<query>"`; it discovers the running API and falls back to local vault/index search. Setup also installs `hive-brain-hook` for Claude Code and registers it as a `UserPromptSubmit` hook so raw Claude prompts receive relevant shared-brain context before answering. Default `recall`/`answer` is tiered: check typed Agent Memory first, return it when the distilled hit is strong, and otherwise augment with relevant markdown from the full shared vault. `scope: "agent-memory"` or `--scope agent-memory` narrows recall to the typed/proven memory layer, while `scope: "full-vault"` or `--scope full-vault` forces broad vault recall. Memory writes live under `Memory/Distillations/Agent Memory/`, the private append-only typed-memory index lives at `Operations/Brain Services/Agent Memory Index.jsonl`, the generated full-vault lexical index lives at `Operations/Brain Services/Full Vault Search Index.jsonl`, optional hash-only GitLawb memory receipts live at `Operations/Brain Services/Agent Memory Proofs.jsonl`, and provenance fields can identify the writing agent, runtime, machine id, Tailnet id/name, Tailnet DNS name, and collector URL.
+- Save typed shared-brain memories through `/api/brain/memory` or the installed `hive-brain` CLI using `remember`, `remember-action`, `evolve`, `recall`, `answer`, `record-usage`, and `rebuild-index` actions. Raw/non-managed agents can run `hive-brain answer "<query>"`; it discovers the running API and falls back to local vault/index search. Setup also installs `hive-brain-hook` for Claude Code and registers it as a `UserPromptSubmit` hook so raw Claude prompts receive relevant shared-brain context before answering. Default `recall`/`answer` is tiered: check typed Agent Memory first, return it when the distilled hit is strong, and otherwise augment with relevant markdown from the full shared vault. `scope: "agent-memory"` or `--scope agent-memory` narrows recall to the typed/proven memory layer, while `scope: "full-vault"` or `--scope full-vault` forces broad vault recall. Memory writes live under `Memory/Distillations/Agent Memory/`, the private append-only typed-memory index lives at `Operations/Brain Services/Agent Memory Index.jsonl`, entity/alias rows live at `Operations/Brain Services/Agent Memory Entity Index.jsonl`, soft retrieval telemetry lives at `Operations/Brain Services/Agent Memory Retrievals.jsonl`, the generated full-vault lexical index lives at `Operations/Brain Services/Full Vault Search Index.jsonl`, optional hash-only GitLawb memory receipts live at `Operations/Brain Services/Agent Memory Proofs.jsonl`, and provenance fields can identify the writing agent, runtime, machine id, Tailnet id/name, Tailnet DNS name, collector URL, actor role, memory origin, entities, and aliases.
 - Export Agent Memory and conversation mirrors as an Open Knowledge Format v0.1 exchange bundle through `/api/brain/okf`. The native vault stays unchanged; the generated bundle defaults to `Operations/Brain Services/OKF Export/` and includes OKF concept files, `index.md`, `log.md`, and validation results.
 - Compile durable source material and research findings into an entity/concept/summary wiki through `/api/brain/knowledge`. The generated pages live under `Synthesis/Compiled Knowledge/<domain>/`, use Obsidian wikilinks and YAML frontmatter, keep raw inputs beside the compiled wiki, and update `index.md` plus `log.md` through one atomic write service. Agents can search that compiled wiki with the `search` action or `brain_search_knowledge` MCP tool before falling back to broad full-vault recall for synthesized entity, concept, and summary knowledge.
 - Query the compiled wiki as a graph through `/api/brain/knowledge` or `hivemind-mcp`: graph overview, node fetch, backlinks, health scan, safe health fix, and shared-brain contract lookup are exposed as structured tools for external agents.
@@ -79,6 +83,9 @@ What the brain services can do:
 - Install or connect GBrain.
 - Import the vault into GBrain.
 - Embed, dream, and query through configured GBrain commands.
+- Connect an existing Neo4j graph as an optional derived Brain Service using env-key names only.
+- Sync Agent Memory and compiled knowledge pages into Neo4j with MERGE-only nodes and relationships marked `source: "hivemindos-derived"`.
+- Run read-only Cypher from the Brain Services cockpit while rejecting write clauses.
 - Install or connect Syntho.
 - Initialize the `Synthesis` folder as a Syntho vault.
 - Run Syntho pipeline, maintain, compare, eval, doctor, query, and pack export commands.
@@ -95,10 +102,15 @@ What makes it different:
 
 - Shared across agents: Claude, Codex, Hermes, Gemini, Aeon, OpenClaw, and any shell-capable runtime can write and recall from the same brain through the API or `hive-brain`.
 - Typed by intent: instructions, facts, decisions, goals, commitments, preferences, relationships, context, events, learnings, observations, artifacts, and errors each keep their own route through memory.
+- Action-aware: durable assistant and agent actions can be stored as first-class `action` memories when a handoff, Queen Bee task, setup action, or receipt matters later.
+- Entity-linked: deterministic entity and alias extraction boosts queries like "Queen Bee" or "GitLawb" without moving canonical memory out of Obsidian.
 - Evolution-aware: agents can use `action: "evolve"` or `hive-brain evolve` to replace stale durable memories without deleting them. The latest active note is recalled as current truth, while previous versions stay attached as an `evolutionChain` with `supersedes`, `supersededBy`, `evolutionType`, and `cognitiveStage` metadata.
+- Temporal-aware: current recall prefers active chain heads, while "before," "used to," "as of," dated, or relative-time queries can include superseded history and as-of evidence.
 - Provenance-aware: memories can carry `agentName`, `agentId`, `runtime`, `machineName`, `machineId`, `tailnetId`, `tailnetName`, `tailnetDnsName`, `collectorUrl`, `sessionId`, and `project`, so the team can tell exactly which agent on which machine wrote a note without storing raw Tailnet IPs.
 - Proof-ready: optional GitLawb receipts hash the memory record, chain proof hashes, and store sanitized provenance without copying the memory body into the proof log.
 - Local-first and private: the durable notes, search index, and receipts live in the user's vault. Retrieval is network-free unless the user separately enables a sync or brain service.
+- Softly self-tuning: retrieval/final-answer telemetry can nudge useful memories upward in crowded result sets without hiding low-usage or new memories.
+- Graph-optional: Neo4j can mirror derived nodes and relationships for graph queries, but Obsidian remains the canonical editable memory store.
 - Full-vault aware when needed: tiered recall can augment from the user's `Memory`, `Projects`, `Synthesis`, `Ideas`, `Operations`, `Skills`, templates, shared context, and `Operations/Secure` reference/status notes without moving plaintext secrets into notes.
 - Raw-agent ready: setup installs runtime instruction blocks plus `hive-brain`; Claude Code also gets a `hive-brain-hook` `UserPromptSubmit` hook so raw Claude prompts can recall full-vault context without being routed through the app.
 - Import-friendly: `rebuild-index` scans existing markdown memories once and appends rich searchable entries, so first cold indexing is a one-time catch-up pass. New writes update the index incrementally.

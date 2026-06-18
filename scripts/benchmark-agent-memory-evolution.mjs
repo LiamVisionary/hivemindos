@@ -94,6 +94,9 @@ const median = sorted[Math.floor(sorted.length / 2)];
 
 for (const [path, tokens] of [
   ["src/lib/services/obsidian/agent-memory.ts", [
+    "agent-memory/core",
+  ]],
+  ["src/lib/services/obsidian/agent-memory/core.ts", [
     "evolveAgentMemory",
     "supersedes",
     "supersededBy",
@@ -101,7 +104,7 @@ for (const [path, tokens] of [
     "cognitiveStage",
     "traceEvolutionChain",
   ]],
-  ["src/app/api/brain/memory/route.ts", ["action?: \"remember\" | \"evolve\""]],
+  ["src/app/api/brain/memory/route.ts", ["\"remember-action\"", "\"record-usage\"", "\"evolve\""]],
   ["scripts/hive-brain", ["hive-brain evolve", "formatEvolutionChain"]],
   ["src/lib/services/context-index.ts", ["action: 'evolve'"]],
 ]) {

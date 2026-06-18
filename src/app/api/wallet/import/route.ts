@@ -24,12 +24,15 @@ export async function POST(request: NextRequest) {
     if (!agentId) return NextResponse.json({ ok: false, error: "agentId is required" }, { status: 400 });
     if (body.importKind === "recovery-phrase") {
       const importedWallets = importRecoveryPhraseWallets(body.secret || "");
-      const wallets = await Promise.all(importedWallets.map((wallet) => storeWalletSecret({
-        agentId: `${agentId}:${wallet.network.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "")}`,
-        address: wallet.address,
-        network: wallet.network,
-        secret: wallet.secret,
-      })));
+      const wallets: Awaited<ReturnType<typeof storeWalletSecret>>[] = [];
+      for (const wallet of importedWallets) {
+        wallets.push(await storeWalletSecret({
+          agentId: `${agentId}:${wallet.network.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "")}`,
+          address: wallet.address,
+          network: wallet.network,
+          secret: wallet.secret,
+        }));
+      }
       if (agentId.startsWith("user:")) {
         const now = Date.now();
         await Promise.all(wallets.map((wallet, index) => writeWalletRecord({

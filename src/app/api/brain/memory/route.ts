@@ -3,11 +3,14 @@ import {
   answerFromAgentMemory,
   evolveAgentMemory,
   recallAgentMemory,
+  recordAgentMemoryUsage,
   rememberAgentMemory,
+  rememberActionAgentMemory,
   rebuildAgentMemoryIndex,
   type EvolveAgentMemoryInput,
   type RecallAgentMemoryInput,
   type RebuildAgentMemoryIndexInput,
+  type RecordAgentMemoryUsageInput,
   type RememberAgentMemoryInput,
 } from "@/lib/services/obsidian/agent-memory";
 
@@ -25,6 +28,10 @@ function recallInputFromSearchParams(request: NextRequest): RecallAgentMemoryInp
     limit: params.get("limit") ? Number(params.get("limit")) : undefined,
     includeArchived: params.get("includeArchived") === "1",
     scope: params.get("scope") ?? undefined,
+    temporalMode: (params.get("temporalMode") as RecallAgentMemoryInput["temporalMode"] | null) ?? undefined,
+    asOf: params.get("asOf") ?? undefined,
+    trackUsage: params.get("trackUsage") === "1",
+    usageContext: params.get("usageContext") ?? undefined,
   };
 }
 
@@ -46,12 +53,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => ({})) as (RememberAgentMemoryInput & EvolveAgentMemoryInput & RecallAgentMemoryInput & RebuildAgentMemoryIndexInput & {
-      action?: "remember" | "evolve" | "recall" | "answer" | "rebuild-index";
+    const body = await request.json().catch(() => ({})) as (RememberAgentMemoryInput & EvolveAgentMemoryInput & RecallAgentMemoryInput & RebuildAgentMemoryIndexInput & RecordAgentMemoryUsageInput & {
+      action?: "remember" | "remember-action" | "evolve" | "recall" | "answer" | "rebuild-index" | "record-usage";
     });
     const action = body.action ?? "recall";
     if (action === "remember") {
       const result = await rememberAgentMemory(body);
+      return NextResponse.json({ ok: true, action, ...result });
+    }
+    if (action === "remember-action") {
+      const result = await rememberActionAgentMemory(body);
       return NextResponse.json({ ok: true, action, ...result });
     }
     if (action === "evolve") {
@@ -68,6 +79,10 @@ export async function POST(request: NextRequest) {
     }
     if (action === "rebuild-index") {
       const result = await rebuildAgentMemoryIndex(body);
+      return NextResponse.json({ ok: true, action, ...result });
+    }
+    if (action === "record-usage") {
+      const result = await recordAgentMemoryUsage(body);
       return NextResponse.json({ ok: true, action, ...result });
     }
     return NextResponse.json({ ok: false, error: "Unsupported memory action." }, { status: 400 });
