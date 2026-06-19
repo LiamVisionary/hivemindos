@@ -332,6 +332,8 @@ export function useStatusChatInputController(props: any) {
 
   function startBrainPan(event: PointerEvent<SVGSVGElement>) {
     if (event.button !== 0) return;
+    event.preventDefault();
+    globalThis.getSelection?.()?.removeAllRanges();
     const ElementCtor = globalThis.Element;
     const target = ElementCtor && event.target instanceof ElementCtor
       ? event.target.closest("[data-brain-node-id]") as HTMLElement | null

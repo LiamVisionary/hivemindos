@@ -1,5 +1,6 @@
 import { agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
 import { BEE_WORKER_HANDOFF_GUIDANCE, beeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { researchMethodPrompt } from "@/lib/config/research-methods";
 import { VEIL_CASH_TRANSFER_CONFIRMATION_LABEL, VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM } from "@/lib/config/veil-cash";
 import { HIVEMIND_OS_RUNTIME, type AgentProfile, type WorkerTaskPreference } from "@/lib/types/agent-runtime";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
@@ -69,7 +70,7 @@ export function buildHivemindBasePrompt(delivery: HivemindPromptDelivery): strin
     "Before relying on prior preferences, decisions, durable project context, instructions, commitments, lessons, credential status, or known artifacts, recall Shared Brain Memory when available. Write memory only for durable reviewed facts. Do not store transient task progress, raw secrets, private Tailnet IPs, stale PR/commit trivia, or temporary TODOs.",
     "",
     "# Skills",
-    "Before complex work, check relevant bundled or shared skills. If a skill clearly applies, use it. If you discover a reusable workflow, missing setup rule, recurring mistake, or durable technique, update or propose a shared skill rather than relying on memory alone.",
+    "Before complex work, check relevant shared skills first, then runtime-local or bundled skills as supplemental context. If a skill clearly applies, use it. If you discover a reusable workflow, missing setup rule, recurring mistake, or durable technique, update or propose a shared skill rather than relying on memory alone.",
     "",
     "# Project And Code Context",
     "Follow injected project context such as AGENTS.md, .hermes.md, HERMES.md, CLAUDE.md, .cursorrules, shared vault instructions, and repo docs. Read before editing, prefer existing patterns, keep changes scoped, and avoid destructive git or filesystem operations unless explicitly requested.",
@@ -119,6 +120,7 @@ export function buildAgentProfileContext(profile: AgentProfile): string {
     profile.soulPrompt?.trim() ? `Agent soul (identity, voice, boundaries):\n${profile.soulPrompt.trim()}` : "",
     profile.skillProfilePrompt?.trim() ? `- Suited for: ${profile.skillProfilePrompt.trim()}` : "",
     profile.preferredSkillSlugs?.length ? `- Preferred skills: ${profile.preferredSkillSlugs.join(", ")}` : "",
+    profile.workerClass === "research" ? researchMethodPrompt(profile.researchMethod) : "",
     preset && !usingCustomClass ? `- Quality bar: ${preset.qualityBar}` : "",
     ...workerTaskPreferenceLines(profile.taskPreferences),
     profile.workerClass ? `- Specialization and handoff: ${BEE_WORKER_HANDOFF_GUIDANCE}` : "",

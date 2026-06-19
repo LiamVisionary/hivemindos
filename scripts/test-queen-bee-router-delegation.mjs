@@ -85,4 +85,44 @@ const urlBackedMachine = {
   assert.equal(delegate.status, "pending");
 }
 
+// Built-in "security" class is now first-class (was previously collapsed to "general").
+{
+  const workerClass = inferQueenBeeWorkerClass({
+    title: "Security review",
+    body: "Threat model the auth flow and scan dependencies for known vulnerabilities.",
+  });
+  assert.equal(workerClass, "security");
+
+  const securityMachine = {
+    ...urlBackedMachine,
+    agents: [
+      ...urlBackedMachine.agents,
+      { id: "sec-1", name: "Sentinel", runtime: "hermes", beeRole: "worker", workerClass: "security", runtimeCapabilities: { chat: true } },
+    ],
+  };
+  const delegate = chooseQueenBeeDelegate({
+    title: "Security review",
+    body: "Threat model the auth flow and scan dependencies for known vulnerabilities.",
+  }, [securityMachine]);
+  assert.equal(delegate.status, "delegated");
+  assert.equal(delegate.agent?.name, "Sentinel");
+}
+
+// Custom, user-defined worker classes win when the request names the specialty.
+{
+  const legalMachine = {
+    ...urlBackedMachine,
+    agents: [
+      ...urlBackedMachine.agents,
+      { id: "legal-1", name: "Counsel", runtime: "hermes", beeRole: "worker", workerClass: "legal", runtimeCapabilities: { chat: true } },
+    ],
+  };
+  const delegate = chooseQueenBeeDelegate({
+    title: "Contract review",
+    body: "Review this vendor MSA for legal risk and flag indemnification gaps.",
+  }, [legalMachine]);
+  assert.equal(delegate.status, "delegated");
+  assert.equal(delegate.agent?.name, "Counsel");
+}
+
 console.log("Queen Bee router delegation tests passed.");

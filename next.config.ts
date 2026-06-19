@@ -54,7 +54,7 @@ const nextConfig: NextConfig = {
   // the heap cap on CI runners (avoids the 8 GB OOM). Next 15.2+.
   experimental:
     isTauriBuild || isTauriStaticBuild
-      ? { webpackMemoryOptimizations: true }
+      ? { webpackBuildWorker: true, webpackMemoryOptimizations: true }
       : undefined,
   // Pin file tracing to the repo so Next never infers a wider root and walks
   // directories it cannot read (Windows profile junctions EPERM on scandir).
@@ -70,6 +70,18 @@ const nextConfig: NextConfig = {
   },
   distDir: isTauriDev ? tauriDevDistDir : isTauriStaticBuild ? ".next-tauri-static-build" : isTauriBuild ? ".next-tauri-build" : ".next",
   output: isTauriStaticBuild ? "export" : isTauriBuild ? "standalone" : undefined,
+  serverExternalPackages: isTauriBuild
+    ? [
+        "@noble/curves",
+        "@noble/hashes",
+        "@scure/bip39",
+        "@solana/kit",
+        "@solana/spl-token",
+        "@solana/web3.js",
+        "bs58",
+        "viem",
+      ]
+    : undefined,
   // Tauri packaging builds (static export + embedded server) don't gate on
   // type errors — those are enforced in dev and the standalone `build`/
   // `lint` scripts + CI. The embedded build additionally compiles paths the
@@ -95,13 +107,21 @@ const nextConfig: NextConfig = {
           "./.git/**/*",
           "./.next/**/*",
           "./.next-tauri/**/*",
+          "./.next-tauri-build/**/*",
+          "./.next-tauri-static-build/**/*",
           "./artifacts/**/*",
           "./bin/**/*",
+          "./coverage/**/*",
           "./docs/**/*",
           "./emoji-atlas-visual-asset/**/*",
           "./emoji-site/**/*",
+          "./out/**/*",
+          "./promo-videos/**/*",
+          "./release-assets/**/*",
           "./skills/**/*",
           "./src-tauri/**/*",
+          "./tmp/**/*",
+          "./vendor/**/*",
           "./workers/**/*",
           "./*.md",
           "./*.log",

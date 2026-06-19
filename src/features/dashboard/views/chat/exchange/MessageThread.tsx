@@ -225,6 +225,73 @@ function ProcessPanel({ iconProps, active, events }: { iconProps: Record<string,
   return <AgentProcessPanel {...iconProps} active={active} events={events} />;
 }
 
+const RESEARCH_BRIEF_TABS = [
+  { id: "perspectives", label: "Perspectives", pattern: /^perspectives?\b|^multi[- ]?perspective/i },
+  { id: "contradictions", label: "Contradictions", pattern: /^contradictions?\b|^contradiction map\b/i },
+  { id: "synthesis", label: "Synthesis", pattern: /^synthesis\b|^briefing\b|^research briefing\b/i },
+  { id: "peer-review", label: "Peer Review", pattern: /^peer review\b|^self[- ]?review\b|^confidence\b/i },
+  { id: "sources", label: "Sources", pattern: /^sources?\b|^citations?\b|^references?\b/i },
+];
+
+function researchTabForHeading(heading: string) {
+  const normalized = heading.trim().replace(/^[#\s]+/, "").replace(/[:\s]+$/g, "");
+  return RESEARCH_BRIEF_TABS.find((tab) => tab.pattern.test(normalized));
+}
+
+function parseResearchBriefTabs(text: string) {
+  const lines = text.split(/\r?\n/);
+  const sections: Array<{ id: string; label: string; content: string }> = [];
+  let active: { id: string; label: string; lines: string[] } | null = null;
+  const intro: string[] = [];
+  for (const line of lines) {
+    const heading = line.match(/^#{1,3}\s+(.+?)\s*$/);
+    const tab = heading ? researchTabForHeading(heading[1]) : null;
+    if (tab) {
+      if (active) sections.push({ id: active.id, label: active.label, content: active.lines.join("\n").trim() });
+      active = { id: tab.id, label: tab.label, lines: [] };
+      continue;
+    }
+    if (active) active.lines.push(line);
+    else intro.push(line);
+  }
+  if (active) sections.push({ id: active.id, label: active.label, content: active.lines.join("\n").trim() });
+  if (sections.length < 2) return null;
+  const introText = intro.join("\n").trim();
+  return introText ? [{ id: "overview", label: "Overview", content: introText }, ...sections] : sections;
+}
+
+function ResearchBriefTabs({ text, ChatMarkdown }: { text: string; ChatMarkdown?: any }) {
+  const sections = parseResearchBriefTabs(text);
+  const [activeTab, setActiveTab] = useState(sections?.[0]?.id ?? "");
+  if (!sections?.length) return ChatMarkdown ? <ChatMarkdown text={text} className="fr-chat-markdown" /> : <>{renderInline(text)}</>;
+  const active = sections.find((section) => section.id === activeTab) ?? sections[0];
+  return (
+    <div className="fr-research-brief" aria-label="Research brief">
+      <div className="fr-research-tabs" role="tablist" aria-label="Research brief sections">
+        {sections.map((section) => {
+          const selected = section.id === active.id;
+          return (
+            <button
+              type="button"
+              key={section.id}
+              role="tab"
+              aria-selected={selected}
+              className="fr-research-tab"
+              data-active={selected}
+              onClick={() => setActiveTab(section.id)}
+            >
+              {section.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="fr-research-panel" role="tabpanel">
+        {ChatMarkdown ? <ChatMarkdown text={active.content || "_No detail returned._"} className="fr-chat-markdown" /> : renderInline(active.content || "No detail returned.")}
+      </div>
+    </div>
+  );
+}
+
 export function MessageThread({
   AgentResponseLoader,
   ChatMarkdown,
@@ -409,7 +476,11 @@ export function MessageThread({
                     </div>
                   ) : null}
                   {applicationGenerationCard || generatedImagePathCard || mirosharkCard?.hideRawContent ? null : ChatMarkdown
-                    ? (assistantDisplayTextWithoutJsonRender ? <ChatMarkdown text={markdownText(assistantDisplayTextWithoutJsonRender)} className="fr-chat-markdown" /> : null)
+                    ? (assistantDisplayTextWithoutJsonRender
+                      ? selectedAgent?.workerClass === "research"
+                        ? <ResearchBriefTabs text={markdownText(assistantDisplayTextWithoutJsonRender)} ChatMarkdown={ChatMarkdown} />
+                        : <ChatMarkdown text={markdownText(assistantDisplayTextWithoutJsonRender)} className="fr-chat-markdown" />
+                      : null)
                     : renderInline(assistantDisplayTextWithoutJsonRender)}
                   {promptUi?.options?.length ? (
                     <InteractivePromptControls disabled={false} options={promptUi.options} sendPromptMessage={sendPromptMessage} Send={Send} />

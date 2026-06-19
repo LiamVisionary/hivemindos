@@ -21,7 +21,7 @@ All routes below are served by the Next.js app under `src/app/api`.
 | `/api/brain/trading-brain/*` | Trading brain status and install |
 | `/api/chat/*` | Agent chat, runtime chat stream, session reads, chat folder persistence |
 | `/api/control-room/status` | Control-room path and setup status checks |
-| `/api/crypto/capabilities` | Unified crypto rail readiness, selection, and safe action preparation for Bankr, x402, Veil Cash, MoneyClaw, and UsePod |
+| `/api/crypto/*` | Unified crypto rail readiness, clear-signing reviews, local agent identity records, and offline crypto risk checks |
 | `/api/env` | Shared and runtime-specific env listing/import/update through hive-env helpers |
 | `/api/fleet/*` | Fleet discovery, snapshots, updates, app/service discovery, app icons, machine init, and Hetzner setup helpers |
 | `/api/gitlawb/*` | GitLawb Code Proof CLI, DID, node health, and lazy setup status |
@@ -58,11 +58,20 @@ All routes below are served by the Next.js app under `src/app/api`.
 
 - `status`: read readiness and missing setup by provider.
 - `select`: choose a rail for an intent without side effects.
-- `prepare`: return a provider endpoint and request draft for the existing spend-gated execution route.
+- `prepare`: return a provider endpoint, request draft, clear-signing review, and crosschain plan when relevant for the existing spend-gated execution route.
 
-The router covers Bankr, x402, Veil Cash, MoneyClaw, and UsePod. It reports credential readiness by key name/status only and does not return raw env values or wallet secrets. It does not execute spending directly; sends, trades, paid API calls, private transfers, card payments, and LLM credit funding still execute through the existing provider route or skill after the relevant spend gate or confirmation.
+The router covers Bankr, x402, Veil Cash, MoneyClaw, and UsePod. It reports credential readiness by key name/status only and does not return raw env values or wallet secrets. It does not execute spending directly; sends, trades, crosschain intents, paid API calls, private transfers, card payments, and LLM credit funding still execute through the existing provider route or skill after the relevant spend gate or confirmation.
 
-`scripts/hivemind-mcp` exposes the same control-plane route to external agents through `crypto_capabilities`, `select_crypto_rail`, and `prepare_crypto_action`. Those MCP tools require a running authenticated HivemindOS dashboard API. They can be used outside dashboard chat, but they are not an offline wallet daemon.
+Related crypto routes:
+
+| Route | Purpose |
+|---|---|
+| `/api/crypto/capabilities` | Readiness, provider selection, and prepared action drafts |
+| `/api/crypto/clear-signing` | Normalize a crypto action draft into a clear-signing review with risks, side effects, confirmation text, and fingerprint |
+| `/api/crypto/agent-identity` | Local agent identity/listing records with wallet, ENS/ERC-8004 metadata, endpoints, capabilities, proofs, and status |
+| `/api/crypto/risk-monitor` | Offline risk scoring over wallet policy, identity, env-key presence, endpoints, repo controls, DNS controls, and multisig posture |
+
+`scripts/hivemind-mcp` exposes the same control-plane routes to external agents through `crypto_capabilities`, `select_crypto_rail`, `prepare_crypto_action`, `review_crypto_action`, `agent_crypto_identity`, and `crypto_risk_monitor`. Those MCP tools require a running authenticated HivemindOS dashboard API. They can be used outside dashboard chat, but they are not an offline wallet daemon.
 
 ## Fleet App And API Service Discovery
 
@@ -196,6 +205,7 @@ Important files and folders:
 | `~/.hivemindos/runtime-runs` | Runtime run cache/output metadata |
 | `~/.hivemindos/skill-auto-sync.json` | Skill auto-sync provider configuration |
 | `~/.hivemindos/telemetry/memory-samples.jsonl` | Memory telemetry samples used to detect growth trends |
+| `~/.hivemindos/agent-identities.json` | Local crypto agent identity/listing registry for ENS/ERC-8004-style metadata |
 | `~/.hivemindos/wallet-vault.json` | Local encrypted wallet secret store for user and agent wallets |
 | `~/.hivemindos/wallet-vault.key` | Local wallet-vault key material when `HIVEMINDOS_WALLET_VAULT_KEY` is not configured |
 | `~/.hivemindos/e2e-file-share` | Temporary real-fleet encrypted file-share test artifacts |

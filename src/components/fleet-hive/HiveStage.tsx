@@ -64,7 +64,10 @@ function HiveCell({
             position: "absolute", inset: 0, clipPath: FR_HEX_CLIP,
             background: tone.fill, border: "0",
             boxShadow: `inset 0 0 0 1.4px ${tone.border}, inset 0 ${size * 0.5}px ${size * 0.6}px -${size * 0.4}px rgba(255,255,255,0.06)`,
-            backdropFilter: "blur(7px)", WebkitBackdropFilter: "blur(7px)",
+            // NB: no backdrop-filter here. The fill is fully opaque, so a blur shows
+            // nothing through it — but Chromium/WebView2 paints backdrop-filter to the
+            // element's RECTANGLE, ignoring clip-path, which drew a visible box around
+            // each hex on Windows. WebKit clipped it, so Mac never showed the artifact.
           }}
         />
         <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} aria-hidden>
@@ -339,7 +342,9 @@ export function HiveStage({
             the worker/machine cells. */}
         <div className="fr-queen-lift">
           <div style={{ position: "absolute", inset: -30, borderRadius: "50%", background: "radial-gradient(circle, var(--honey-soft), transparent 66%)", animation: "fr-cell-breathe 4s ease-in-out infinite", pointerEvents: "none" }} />
-          <div style={{ position: "absolute", inset: 0, clipPath: FR_HEX_CLIP, background: "color-mix(in srgb, var(--honey) 16%, var(--panel))", backdropFilter: "blur(7px)", WebkitBackdropFilter: "blur(7px)" }} />
+          {/* opaque fill — no backdrop-filter (it was clipped to the hex on WebKit
+              but drew a rectangular box around it on Chromium/WebView2; see HiveCell). */}
+          <div style={{ position: "absolute", inset: 0, clipPath: FR_HEX_CLIP, background: "color-mix(in srgb, var(--honey) 16%, var(--panel))" }} />
           <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} aria-hidden>
             <polygon points="50,2 92,25 92,75 50,98 8,75 8,25" fill="none" stroke={sel.type === "queen" ? "var(--honey)" : "var(--honey-line)"} strokeWidth={sel.type === "queen" ? 2.2 : 1.6} strokeLinejoin="round" />
           </svg>

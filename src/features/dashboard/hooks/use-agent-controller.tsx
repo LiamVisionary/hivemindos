@@ -5,6 +5,7 @@ import { openNativeDirectory } from "@/lib/native/filesystem";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { NATIVE_SETUP_RERUN_EVENT, readNativeSetupStatus } from "@/lib/native/setup";
 import { renderBeeSoulTemplate, type BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { DEFAULT_RESEARCH_METHOD } from "@/lib/config/research-methods";
 import { isMobileMachineOs } from "@/features/fleet/fleet-identity";
 import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import { mruRuntime, rememberMruRuntime } from "@/features/dashboard/agent-mru-runtime";
@@ -267,6 +268,7 @@ export function useAgentController(props: UseAgentControllerProps) {
       soulPrompt: renderBeeSoulTemplate(defaultWorkerPreset.soulTemplate, defaultName),
       skillProfilePrompt: defaultWorkerPreset.taskProfile,
       preferredSkillSlugs: defaultWorkerPreset.skillSlugs,
+      researchMethod: defaultWorkerClass === "research" ? DEFAULT_RESEARCH_METHOD : undefined,
       useSharedVault: true,
       aeonLocalPath: autopilotDefaults ? baseAgent.aeonLocalPath || autopilotDefaults.localPathFallback : undefined,
       aeonRepo: autopilotDefaults ? baseAgent.aeonRepo || "" : undefined,
@@ -477,6 +479,7 @@ export function useAgentController(props: UseAgentControllerProps) {
       soulPrompt: agentCreateDraft.soulPrompt,
       skillProfilePrompt: agentCreateDraft.skillProfilePrompt,
       preferredSkillSlugs: agentCreateDraft.preferredSkillSlugs,
+      researchMethod: agentCreateDraft.researchMethod,
     });
     setAgents((current) => [...current.filter((agent) => agent.id !== next.id), next]);
     setDiscoveredMachines((current) => current.map((discovered) => (
@@ -536,6 +539,7 @@ export function useAgentController(props: UseAgentControllerProps) {
       skillProfilePrompt: agentCreateDraft.skillProfilePrompt,
       preferredSkillSlugs: agentCreateDraft.preferredSkillSlugs,
       taskPreferences: agentCreateDraft.taskPreferences,
+      researchMethod: agentCreateDraft.researchMethod,
       useSharedVault: agentCreateDraft.useSharedVault,
     };
     setRuntimeIntegrationBusy("create-agent");

@@ -92,6 +92,36 @@ permanent product lockouts. Paid product features should still have non-crypto
 paths such as card, fiat subscriptions, managed HONEY credits, or fiat-backed
 plans.
 
+## Telegram member tags
+
+When the bot is an admin with Telegram's member-tag permission, it keeps one
+visible tag per regular member in group/supergroup chats it has seen. Tags are
+presentation only; access checks must still read the staking contract or bot
+ledger directly.
+
+Resolution order:
+
+- Stable default: highest HIVE staking tier from the member's linked wallets,
+  rendered as `Hive Builder`, `Hive Curator`, `Hive Visionary`, etc.
+- Recent leaderboard overlay: top Honey collectors receive `Honey #1` through
+  the configured top limit.
+- Recent bounty overlay: top bounty earners receive `Bounty #1` through the
+  configured top limit.
+- If a staking tier and leaderboard rank both apply, the tag is compacted to
+  forms such as `Builder H#1` or `Curator B#1` to stay under Telegram's
+  16-character limit.
+
+Defaults: member tags are enabled, top 5 users are tagged, leaderboard windows
+use the last 7 days, and the sync loop runs every 30 minutes. Optional shared
+env knobs:
+
+- `TELEGRAM_TIP_BOT_MEMBER_TAGS=false` disables tag sync.
+- `TELEGRAM_TIP_BOT_MEMBER_TAG_CHAT_IDS=-100...` adds explicit target chats.
+- `TELEGRAM_TIP_BOT_MEMBER_TAG_TOP_LIMIT=5` changes the leaderboard cutoff.
+- `TELEGRAM_TIP_BOT_MEMBER_TAG_WINDOW_DAYS=7` changes the recent-rank window.
+- `TELEGRAM_TIP_BOT_MEMBER_TAG_SYNC_INTERVAL_MINUTES=30` changes cadence.
+- `TELEGRAM_TIP_BOT_MEMBER_TAG_MAX_ACTIONS_PER_CYCLE=100` caps API writes.
+
 `/leaderboard`, `/bounties`, and `/bountystats` render Claw-light themed PNG
 cards first so Telegram can show the warm cream/terracotta palette exactly. If
 image rendering or upload fails, the bot falls back to Telegram Bot API 10.1

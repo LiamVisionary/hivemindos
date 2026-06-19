@@ -4,6 +4,7 @@
 
 import { type ChangeEvent, type Dispatch, type SetStateAction, useMemo } from "react";
 import { renderBeeSoulTemplate, type BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { DEFAULT_RESEARCH_METHOD } from "@/lib/config/research-methods";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
 import { PROVIDER_CATALOG } from "@/lib/config/provider-catalog";
 import { HIVEMIND_OS_RUNTIME, runtimeSettingsFeature, type AgentProfile, type AgentRuntime, type BeeWorkerClass, type CustomWorkerClassProfile } from "@/lib/types/agent-runtime";
@@ -232,6 +233,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
       customWorkerClass: undefined,
       selectedCustomWorkerClassId: undefined,
       preferredSkillSlugs: preset.skillSlugs,
+      researchMethod: workerClass === "research" ? DEFAULT_RESEARCH_METHOD : undefined,
     };
     if (agentCreateMachine) {
       setAgentCreateDraft((current) => {
@@ -275,6 +277,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
       selectedCustomWorkerClassId: customWorkerClass.id,
       skillProfilePrompt: customWorkerClass.skillProfilePrompt,
       preferredSkillSlugs: customWorkerClass.preferredSkillSlugs,
+      researchMethod: undefined,
     };
     if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
@@ -313,6 +316,32 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
   };
   const applyCustomWorkerClass = () => {
     const customWorkerClass = customWorkerProfileFromDraft(customWorkerDraft);
+    const nextCustomWorkerClasses = [
+      ...agentSettingsCustomWorkers.filter((workerClass) => workerClass.id !== customWorkerClass.id),
+      customWorkerClass,
+    ];
+    const patch = {
+      workerClass: "general" as BeeWorkerClass,
+      customWorkerClass,
+      customWorkerClasses: nextCustomWorkerClasses,
+      selectedCustomWorkerClassId: customWorkerClass.id,
+      skillProfilePrompt: customWorkerClass.skillProfilePrompt,
+      preferredSkillSlugs: customWorkerClass.preferredSkillSlugs,
+    };
+    if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
+    else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
+    setAgentWorkerClassView("presets");
+  };
+  // Install an optional packaged agent (from the Browse Agents catalog) as a selectable custom
+  // worker class. Mirrors applyCustomWorkerClass but sources the profile from the catalog entry.
+  const installPackagedAgent = (agent: { slug: string; label: string; summary: string; soulPrompt?: string }) => {
+    const customWorkerClass: CustomWorkerClassProfile = {
+      id: agent.slug,
+      label: agent.label,
+      soulPrompt: agent.soulPrompt,
+      skillProfilePrompt: agent.summary,
+      preferredSkillSlugs: [],
+    };
     const nextCustomWorkerClasses = [
       ...agentSettingsCustomWorkers.filter((workerClass) => workerClass.id !== customWorkerClass.id),
       customWorkerClass,
@@ -378,5 +407,5 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
     && hivemindLinkStatus?.ok === true
     && hivemindLinkConnectedUntil > Date.now();
 
-  return { agentSettingsSelectedCustomWorkerId, agentSettingsCustomWorker, agentSettingsWorkerLabel, agentSettingsWorkerImage, agentSettingsSoulPrompt, agentSettingsSkillProfile, agentSettingsPreferredSkills, agentSettingsRuntime, agentSettingsProvider, agentSettingsModel, runtimeModelSelection, runtimeModelSelectionFresh, runtimeModelProviders, selectedRuntimeProvider, selectedRuntimeModels, selectedRuntimeModelId, selectedRuntimeModel, updateAgentRuntimeModel, agentSettingsIntegrationTarget, addHermesModelFromDraft, selectAgentWorkerClass, selectCustomWorkerClass, updateAgentSoulPrompt, updateAgentSkillProfile, addAgentPreferredSkill, removeAgentPreferredSkill, openCustomWorkerClassCreator, applyCustomWorkerClass, toggleCustomWorkerSkill, uploadCustomWorkerImage, filteredCustomWorkerSkills, selectedHetznerServerType, showHivemindLinkConnectedBanner };
+  return { agentSettingsSelectedCustomWorkerId, agentSettingsCustomWorker, agentSettingsWorkerLabel, agentSettingsWorkerImage, agentSettingsSoulPrompt, agentSettingsSkillProfile, agentSettingsPreferredSkills, agentSettingsRuntime, agentSettingsProvider, agentSettingsModel, runtimeModelSelection, runtimeModelSelectionFresh, runtimeModelProviders, selectedRuntimeProvider, selectedRuntimeModels, selectedRuntimeModelId, selectedRuntimeModel, updateAgentRuntimeModel, agentSettingsIntegrationTarget, addHermesModelFromDraft, selectAgentWorkerClass, selectCustomWorkerClass, updateAgentSoulPrompt, updateAgentSkillProfile, addAgentPreferredSkill, removeAgentPreferredSkill, openCustomWorkerClassCreator, applyCustomWorkerClass, installPackagedAgent, toggleCustomWorkerSkill, uploadCustomWorkerImage, filteredCustomWorkerSkills, selectedHetznerServerType, showHivemindLinkConnectedBanner };
 }

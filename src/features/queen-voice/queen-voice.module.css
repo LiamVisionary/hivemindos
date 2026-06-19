@@ -428,6 +428,12 @@
   border-color: rgba(255, 103, 120, 0.5);
 }
 
+.controlButtonWakeActive {
+  background: rgba(126, 240, 178, 0.16);
+  border-color: rgba(126, 240, 178, 0.48);
+  color: #c6ffd8;
+}
+
 .controlButtonEnd {
   background: rgba(255, 103, 120, 0.2);
   border-color: rgba(255, 103, 120, 0.55);
@@ -553,6 +559,12 @@
 :global(:root[data-theme="hive-light"]) .controlButtonEnd,
 :global(:root[data-theme="hive-light"]) .controlButtonActive {
   color: #8e3328;
+}
+
+:global(:root[data-theme="hive-light"]) .controlButtonWakeActive {
+  border-color: rgba(54, 133, 78, 0.34);
+  background: rgba(54, 133, 78, 0.12);
+  color: #215c35;
 }
 
 @keyframes queenVoicePulse {

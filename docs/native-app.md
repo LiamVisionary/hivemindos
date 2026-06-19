@@ -31,7 +31,7 @@ which defaults to `http://localhost:5020`.
 
 ## Phase 2
 
-Build the packaged native app:
+Build the local production native app bundle:
 
 ```bash
 pnpm tauri:build
@@ -41,31 +41,31 @@ Phase 2 keeps the browser and native app on the same Next.js codebase. The brows
 
 ## Phase 3
 
-Packaged native builds use a static Tauri UI plus native/sidecar backend bridges:
+Packaged native app builds use the embedded Next server by default:
 
 ```bash
-pnpm tauri:prepare
+pnpm tauri:build
 ```
 
-The prepare step exports the shared dashboard React app into `src-tauri/static`, prunes bulky browser-only icon/source assets, keeps Lottie animation assets, and does not bundle the standalone Next server or a Node.js runtime. In release builds, the Rust shell loads the static webview directly and reports `phase-3-static` from `desktop_status`.
+Release builds enable `HIVEMINDOS_TAURI_EMBEDDED_NEXT`. The prepare step builds a standalone Next.js server into `src-tauri/resources/hivemindos-next`, stages a Node.js runtime in `src-tauri/resources/hivemindos-node`, and keeps `src-tauri/static` as the fast loading shell. At launch, the Rust shell starts the bundled server on an ephemeral `127.0.0.1` port, then navigates the native window to the full dashboard so `/api/*` routes are available in the packaged app.
 
-This is the supported full packaged desktop mode. Feature code that needs local files, fleet state, shared-brain data, schedules, runtime files, setup actions, AEON workspace data, deliverables, or usage telemetry must go through a Tauri native command or a bundled sidecar service instead of assuming a relative `/api/...` Next route exists inside the packaged app. A feature is desktop-release-ready only when its local backend dependency has native bridge coverage or a sidecar route; that native bridge coverage gate keeps the static app full-capability without making release CI compile the entire Next API server graph.
+This is the supported full packaged desktop mode. It keeps the browser and desktop on the same Next.js route graph, including Fleet discovery and other server-backed dashboard features.
+
+Local `pnpm tauri:build` produces the embedded production `.app` bundle and intentionally skips local DMG creation, updater signing, and release-channel update prompts, because DMG packaging depends on the host `hdiutil` disk-image device stack and updater artifacts require the release signing key. GitHub releases use `pnpm tauri:build:release` after downloading the shared embedded standalone artifact, so published releases still produce DMG/updater assets and remain eligible for signed GitHub update checks.
 
 Opening the packaged app does not auto-run `setup.sh` or `install.sh`. The first-run setup wizard checks local capabilities from native code, asks the user how to install the hive, detects agent runtimes, lets skills and memory imports be selected independently, then opens an explicit Terminal command only after the user approves it. That terminal setup path runs `setup.sh --interactive ...`, so it can prompt for GitLawb Code Proof CLI and DID preparation. It does not silently start a full GitLawb node or install Docker/Postgres.
 
-For debugging only, the old embedded Next server package can still be generated:
+For debugging or constrained builds, a static fallback can still be generated:
 
 ```bash
-HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 pnpm tauri:prepare
+pnpm tauri:build:static
 ```
 
-That fallback builds a standalone Next.js server into `src-tauri/resources/hivemindos-next` and copies the active local Node.js runtime into `src-tauri/resources/hivemindos-node`. In release builds the Rust shell detects those resources, starts the bundled server on an ephemeral `127.0.0.1` port, then navigates the native window to it.
-
-Release builds must not enable `HIVEMINDOS_TAURI_EMBEDDED_NEXT`. The standalone fallback makes `next build --webpack` trace every App Router API route and its transitive server dependencies; on standard GitHub runners this path exhausts the Node/V8 heap or times out during output-file tracing. Use `pnpm test:tauri-release-mode` to guard that the cross-platform release workflow stays on static UI plus native/sidecar backend bridges.
+The static fallback exports the shared dashboard React app into `src-tauri/static`, prunes bulky browser-only icon/source assets, keeps Lottie animation assets, and does not bundle the standalone Next server or a Node.js runtime. The static fallback still needs native bridge coverage for any feature that depends on local files, fleet state, shared-brain data, schedules, runtime files, setup actions, AEON workspace data, deliverables, usage telemetry, or any other backend behavior that would otherwise come from a relative `/api/...` Next route.
 
 The generated `src-tauri/resources` contents are ignored by git and rebuilt for each package. Keep new feature code shared by putting platform differences behind small adapters instead of forking browser and desktop views.
 
-The static and embedded builds are bounded by `TAURI_NEXT_BUILD_TIMEOUT_SECONDS` and default to 1800 seconds. Static export hides `src/app/api` only during the export so API routes remain available for the browser app and embedded fallback.
+Static builds are bounded by `TAURI_NEXT_BUILD_TIMEOUT_SECONDS` and default to 1800 seconds. Embedded builds default to a 12288 MB V8 heap, a 14000 MB RSS memory budget, and a 3600 second timeout because the production route graph includes the full App Router API surface. Static export hides `src/app/api` only during the export so API routes remain available for the browser app and embedded release mode.
 
 ## Native Bridge
 
@@ -77,6 +77,7 @@ The desktop shell exposes a narrow command surface for operations that should be
 | `list_local_directories` | `listNativeLocalDirectories` | Browse local directories without routing through the collector |
 | `create_local_folder` | `createNativeLocalFolder` | Create a local child folder after validating and cleaning the requested name |
 | `display_local_path` | `displayNativeLocalPath` | Normalize local paths for display |
+| `fleet_discover` | `getNativeFleetDiscovery` | Discover Tailnet machines and collector-backed agents for the static fallback |
 | `native_setup_status` | `readNativeSetupStatus` | Detect setup prerequisites and local agent runtimes for the first-run wizard |
 | `native_setup_run` | `runNativeSetup` | Open a user-approved Terminal command that runs `setup.sh` with selected wizard options |
 
@@ -90,7 +91,7 @@ Current consumers include AEON workspace clone/link flows, chat folder creation,
 
 - Port `5020` remains reserved for the managed browser dashboard.
 - Phase 1 development uses `5021`.
-- Phase 3 packaged builds load static UI directly.
-- Embedded fallback packaged builds use an ephemeral localhost port.
+- Phase 3 packaged builds use an ephemeral localhost port for the embedded dashboard server.
+- Static fallback packaged builds load static UI directly and must keep native bridge parity for backend-backed features.
 - Generated resources are rebuilt, ignored, and scrubbed of local `.env*` files.
 - Native filesystem helpers are intentionally directory scoped and local. Remote browsing stays behind collector APIs.

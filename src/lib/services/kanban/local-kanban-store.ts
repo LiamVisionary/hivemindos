@@ -73,6 +73,8 @@ type CreateTaskInput = {
   idempotencyKey?: string;
   maxRuntimeMs?: number;
   maxAttempts?: number;
+  /** Origin tag, e.g. "flow:<runId>:<nodeId>" so completion can advance an agent flow. */
+  source?: string;
 };
 
 type PatchTaskInput = Partial<
@@ -602,6 +604,7 @@ export async function createTask(
     status: hasUnfinishedParents ? "ideas" : requestedStatus,
     priority: input.priority ?? "normal",
     workspace: input.workspace ?? "scratch",
+    source: cleanOptional(input.source),
     skills: input.skills ?? [],
     attachments: Array.isArray(input.attachments) ? input.attachments : [],
     linkedDirectories: Array.isArray(input.linkedDirectories)

@@ -18,6 +18,9 @@ async function loadState(): Promise<TipBotState> {
     const parsed = JSON.parse(raw) as TipBotState;
     if (parsed?.version !== 1) return emptyTipBotState();
     parsed.bounties ??= {};
+    parsed.memberTags ??= { chatIds: [], lastSynced: {} };
+    parsed.memberTags.chatIds ??= [];
+    parsed.memberTags.lastSynced ??= {};
     return parsed;
   } catch {
     return emptyTipBotState();

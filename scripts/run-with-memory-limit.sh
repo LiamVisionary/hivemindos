@@ -53,6 +53,12 @@ if ! [[ "$timeout_seconds" =~ ^[0-9]+$ ]]; then
 fi
 
 limit_kb=$((limit_mb * 1024))
+memory_monitor_available=1
+
+if ! ps -axo pid=,ppid= >/dev/null 2>&1; then
+  memory_monitor_available=0
+  echo "Memory monitor unavailable: ps is blocked in this shell; continuing with timeout guard only." >&2
+fi
 
 child_pids() {
   local parent="$1"
@@ -87,6 +93,12 @@ tree_rss_kb() {
 kill_tree() {
   local root="$1"
   local pids
+  if (( memory_monitor_available == 0 )); then
+    kill "$root" >/dev/null 2>&1 || true
+    sleep 2
+    kill -9 "$root" >/dev/null 2>&1 || true
+    return 0
+  fi
   pids="$(process_tree "$root" | sort -rn | tr '\n' ' ')"
   [[ -n "$pids" ]] || return 0
   kill $pids >/dev/null 2>&1 || true
@@ -99,12 +111,14 @@ root_pid="$!"
 started_at="$(date +%s)"
 
 while kill -0 "$root_pid" >/dev/null 2>&1; do
-  rss_kb="$(tree_rss_kb "$root_pid")"
-  if (( rss_kb > limit_kb )); then
-    printf "Memory limit exceeded: %d MB > %d MB. Killing process tree rooted at %s.\n" "$((rss_kb / 1024))" "$limit_mb" "$root_pid" >&2
-    kill_tree "$root_pid"
-    wait "$root_pid" >/dev/null 2>&1 || true
-    exit 137
+  if (( memory_monitor_available == 1 )); then
+    rss_kb="$(tree_rss_kb "$root_pid")"
+    if (( rss_kb > limit_kb )); then
+      printf "Memory limit exceeded: %d MB > %d MB. Killing process tree rooted at %s.\n" "$((rss_kb / 1024))" "$limit_mb" "$root_pid" >&2
+      kill_tree "$root_pid"
+      wait "$root_pid" >/dev/null 2>&1 || true
+      exit 137
+    fi
   fi
 
   if (( timeout_seconds > 0 )); then

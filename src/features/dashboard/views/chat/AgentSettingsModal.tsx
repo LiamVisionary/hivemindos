@@ -4,8 +4,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BrainCircuit, Check, ChevronDown, ChevronRight, ChevronUp, Cpu, FolderOpen, KanbanSquare, KeyRound, MessageSquare, Minus, Pencil, Phone, PlugZap, Plus, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Upload, X } from "lucide-react";
+import { BrainCircuit, Check, ChevronDown, ChevronRight, ChevronUp, Cpu, FolderOpen, KanbanSquare, KeyRound, Mail, MessageSquare, Minus, Pencil, Phone, PlugZap, Plus, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Upload, X } from "lucide-react";
 import { AgentCallsSettingsPanel } from "./AgentCallsSettingsPanel";
+import { AgentBrowserModal } from "./AgentBrowserModal";
 import { AdaptiveProviderSettings } from "./AdaptiveProviderSettings";
 import { BankrLowCreditSetup } from "./BankrLowCreditSetup";
 import { BankrSetupStatus } from "./BankrSetupStatus";
@@ -15,6 +16,7 @@ import { GuidedVeniceSetup } from "./GuidedVeniceSetup";
 import { LmStudioLoadProgress, LmStudioModelManager } from "./LmStudioModelManager";
 import { MissingSharedEnvKeySetup } from "./MissingSharedEnvKeySetup";
 import { ModelPillSelector } from "./ModelPillSelector";
+import { ResearchMethodSettingsPanel } from "./ResearchMethodSettingsPanel";
 import { RuntimeInstallSetup } from "./RuntimeInstallSetup";
 import { runtimeHasInstallSetup } from "@/lib/services/runtime-install-catalog";
 import { AgentSettingsPortrait } from "./AgentSettingsPortrait";
@@ -24,6 +26,7 @@ import { gateBankrModelsForCredits, selectBestRuntimeModel } from "./runtime-mod
 import { AeonOrb, Btn, Eyebrow, Pill, aeonStyles as styles } from "@/components/aeon/parts";
 import { WorkspaceModal } from "@/components/aeon";
 import { renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
+import { normalizeResearchMethod } from "@/lib/config/research-methods";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
 import { providerCatalogEntry } from "@/lib/config/provider-catalog";
 import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeProfileFeature, runtimeSettingsFeature, type AgentRuntime } from "@/lib/types/agent-runtime";
@@ -291,6 +294,7 @@ export function AgentSettingsModal(props: any) {
     agentRuntimeFolderStatus,
     agentSettingsCustomWorker,
     agentSettingsCustomWorkers,
+    installPackagedAgent,
     agentSettingsIntegrationTarget,
     agentSettingsPanel,
     agentSettingsPreferredSkills,
@@ -321,6 +325,7 @@ export function AgentSettingsModal(props: any) {
     hermesUpdateRequired,
     machineGroups,
     onAeonWorkspaceCreated,
+    onQueenClapWakeEnabledChange,
     openAgentSkillBrowser,
     openCustomWorkerClassCreator,
     providerIconPath,
@@ -328,6 +333,7 @@ export function AgentSettingsModal(props: any) {
     refreshRuntimeIntegrations,
     refreshRuntimeAvailability,
     removeAgentPreferredSkill,
+    queenClapWakeEnabled,
     roleModalAgent,
     runRuntimeIntegrationAction,
     runtimeAvailability,
@@ -371,6 +377,7 @@ export function AgentSettingsModal(props: any) {
     workerCapabilityBadges,
   } = props;
 
+  const [agentBrowserOpen, setAgentBrowserOpen] = useState(false);
   const [aeonOauthConnecting, setAeonOauthConnecting] = useState(false);
   const [aeonWorkspaceOpen, setAeonWorkspaceOpen] = useState(false);
   const [savedAgentSouls, setSavedAgentSouls] = useState([]);
@@ -380,7 +387,6 @@ export function AgentSettingsModal(props: any) {
   const [showAllProviders, setShowAllProviders] = useState(false);
   // When a not-configured runtime card is clicked, this holds that runtime and
   // the dedicated install/auth view replaces the provider + model selectors.
-  const [runtimeInstallSetup, setRuntimeInstallSetup] = useState(null);
   const [envPresentKeys, setEnvPresentKeys] = useState(() => new Set());
   const [envHermesKeys, setEnvHermesKeys] = useState(() => new Set());
   const [envLoaded, setEnvLoaded] = useState(false);
@@ -390,6 +396,9 @@ export function AgentSettingsModal(props: any) {
   const soulFileInputRef = useRef<HTMLInputElement | null>(null);
   const portalTarget = typeof document === "undefined" ? null : document.body;
   const modalOpen = Boolean(portalTarget && (roleModalAgent || agentCreateMachine));
+  const [agentMailboxOverview, setAgentMailboxOverview] = useState(null);
+  const [agentMailboxBusy, setAgentMailboxBusy] = useState(false);
+  const [agentMailboxError, setAgentMailboxError] = useState("");
 
   const activeRuntime = (agentSettingsRuntime || "hermes") as AgentRuntime;
   const runtimeSettings = runtimeSettingsFeature(activeRuntime);
@@ -423,6 +432,16 @@ export function AgentSettingsModal(props: any) {
   const defaultSubclassSoul = renderBeeSoulTemplate(agentSettingsWorkerPreset.soulTemplate, currentName || displayName);
   const adaptiveOpenRouterSelected = openRouterSelected && selectedRuntimeModelId === "adaptive";
   const agentTaskPreferences = (agentCreateMachine ? agentCreateDraft.taskPreferences : roleModalAgent?.taskPreferences) ?? [];
+  const researchSubclassSelected = agentSettingsWorkerClass === "research" && !agentSettingsCustomWorker;
+  const selectedResearchMethod = normalizeResearchMethod(agentCreateMachine ? agentCreateDraft.researchMethod : roleModalAgent?.researchMethod);
+  const updateResearchMethod = (researchMethod) => {
+    const next = normalizeResearchMethod(researchMethod);
+    if (agentCreateMachine) {
+      setAgentCreateDraft((current) => ({ ...current, researchMethod: next }));
+    } else if (roleModalAgent) {
+      updateAgentProfile(roleModalAgent.id, { researchMethod: next });
+    }
+  };
   const updateAgentTaskPreferences = (next) => {
     if (agentCreateMachine) {
       setAgentCreateDraft((current) => ({ ...current, taskPreferences: next }));
@@ -448,6 +467,48 @@ export function AgentSettingsModal(props: any) {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [modalOpen, refreshSavedAgentSouls]);
+  const refreshAgentMailboxStatus = useCallback(async () => {
+    if (!roleModalAgent?.id) {
+      setAgentMailboxOverview(null);
+      setAgentMailboxError("");
+      return;
+    }
+    try {
+      const response = await fetch(`/api/agents/mailbox?agentId=${encodeURIComponent(roleModalAgent.id)}`, { cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) throw new Error(data.error || "Could not load agent mailbox status.");
+      setAgentMailboxOverview(data);
+      setAgentMailboxError("");
+    } catch (error) {
+      setAgentMailboxError(error instanceof Error ? error.message : "Could not load agent mailbox status.");
+    }
+  }, [roleModalAgent]);
+  useEffect(() => {
+    if (!modalOpen || !roleModalAgent?.id) return;
+    const timer = window.setTimeout(() => {
+      void refreshAgentMailboxStatus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [modalOpen, refreshAgentMailboxStatus, roleModalAgent?.id]);
+  const createMailboxForCurrentAgent = useCallback(async () => {
+    if (!roleModalAgent?.id) return;
+    setAgentMailboxBusy(true);
+    setAgentMailboxError("");
+    try {
+      const response = await fetch("/api/agents/mailbox", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create", agentId: roleModalAgent.id, agentName: roleModalAgent.name }),
+      });
+      const data = await response.json().catch(() => ({}));
+      setAgentMailboxOverview(data.ok ? { ok: true, mailboxes: data.mailbox ? [data.mailbox] : [], providerStatus: data.providerStatus } : { ok: false, mailboxes: [], providerStatus: data.providerStatus });
+      if (!response.ok || data.ok === false) throw new Error(data.error || data.providerStatus?.detail || "Could not create this agent mailbox.");
+    } catch (error) {
+      setAgentMailboxError(error instanceof Error ? error.message : "Could not create this agent mailbox.");
+    } finally {
+      setAgentMailboxBusy(false);
+    }
+  }, [roleModalAgent]);
   useEffect(() => {
     if (!modalOpen) return;
     let cancelled = false;
@@ -640,6 +701,17 @@ export function AgentSettingsModal(props: any) {
   const showWorkerClassSection = !isAutopilotSettings && !(usePodSelected && !usePodSetupComplete) && !(veniceSelected && !veniceSetupComplete) && !isQueenSettings;
   const agentStatus = agentCreateMachine ? "New profile" : roleModalAgent?.telemetryUrl ? "Connected" : "Local profile";
   const targetMachineRuntimes = agentCreateMachine?.capabilities?.runtimes ?? [], targetMachineHasRuntimeInventory = targetMachineRuntimes.length > 0;
+  // A real runtime (not Aeon/HivemindOS) is "not configured" when it isn't in
+  // the target machine's runtime inventory, or availability detection explicitly
+  // reports it uninstalled. Shared by the runtime cards, the click handler, and
+  // the setup-view gate so the three can't drift apart.
+  const runtimeNotConfigured = (runtime: string) =>
+    runtime !== "aeon" && runtime !== HIVEMIND_OS_RUNTIME && (agentCreateMachine && targetMachineHasRuntimeInventory ? !targetMachineRuntimes.includes(runtime) : runtimeAvailability?.[runtime]?.installed === false);
+  // The active runtime should run the user through setup (replacing the
+  // provider/model view) whenever it's unconfigured AND we have an install flow
+  // for it. Derived from real state so it shows on open — not only after a card
+  // click, which was the bug: the default-selected runtime never tripped it.
+  const activeRuntimeNeedsSetup = runtimeNotConfigured(activeRuntime) && runtimeHasInstallSetup(activeRuntime);
   const workerSubtitle = (agentSettingsCustomWorker?.label || agentSettingsWorkerPreset?.label || agentSettingsWorkerLabel || "")
     .replace(/\s+bee$/i, "")
     .trim();
@@ -836,12 +908,12 @@ export function AgentSettingsModal(props: any) {
   };
 
   const updateSettingsRuntime = (runtime: AgentRuntime) => {
-    const notConfigured = runtime !== "aeon" && runtime !== HIVEMIND_OS_RUNTIME && (agentCreateMachine && targetMachineHasRuntimeInventory ? !targetMachineRuntimes.includes(runtime) : runtimeAvailability?.[runtime]?.installed === false);
+    const notConfigured = runtimeNotConfigured(runtime);
     // A not-configured runtime with no in-app setup path stays a dead-end; one
-    // that does have a setup flow still becomes active and opens that flow.
+    // that does have a setup flow still becomes active — the setup view itself is
+    // shown by the activeRuntimeNeedsSetup gate, derived from this same state.
     if (notConfigured && !runtimeHasInstallSetup(runtime)) return;
     setRuntimeModelSetupMode(null);
-    setRuntimeInstallSetup(notConfigured ? runtime : null);
     const sameRuntime = runtime === activeRuntime;
     const currentProvider = agentCreateMachine ? agentCreateDraft.provider : roleModalAgent?.provider;
     const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
@@ -1102,10 +1174,10 @@ export function AgentSettingsModal(props: any) {
           background: selected ? "var(--aeon-soft)" : "var(--panel-bg-soft)",
         }}
       >
-        <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+        <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 8px", minWidth: 0 }}>
           {iconMark({ label, iconPath, iconMode: runtimeIconRenderMode(runtime), fallback: runtimeIconFallback(runtime, label), size: 26 })}
-          <strong style={{ color: selected ? "var(--cyan-3)" : "var(--fg)", fontSize: 13, lineHeight: 1.2, overflowWrap: "anywhere" }}>{label}</strong>
-          {notConfigured && setupAvailable ? <Pill tone="honey">Set up</Pill> : null}
+          <strong style={{ color: selected ? "var(--cyan-3)" : "var(--fg)", fontSize: 13, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{label}</strong>
+          {notConfigured && setupAvailable ? <Pill tone="honey" style={{ flexShrink: 0 }}>Set up</Pill> : null}
         </span>
         <small style={{ color: "var(--fg-4)", fontSize: 10.5, lineHeight: 1.3, overflowWrap: "anywhere" }}>{detail}</small>
       </button>
@@ -1508,7 +1580,17 @@ export function AgentSettingsModal(props: any) {
             <Plus size={16} aria-hidden="true" />
             <span style={{ fontSize: 10.5, lineHeight: 1.15, fontWeight: 700 }}>Custom</span>
           </button>
+          <button className={styles.interactive} type="button" onClick={() => setAgentBrowserOpen(true)} style={{ display: "grid", justifyItems: "center", alignContent: "center", gap: 5, minHeight: 74, padding: "8px 6px", borderRadius: 10, border: "1px dashed var(--aeon-line)", background: "transparent", color: "var(--cyan-3)", cursor: "pointer" }}>
+            <Search size={16} aria-hidden="true" />
+            <span style={{ fontSize: 10.5, lineHeight: 1.15, fontWeight: 700 }}>Browse</span>
+          </button>
         </div>
+        <AgentBrowserModal
+          open={agentBrowserOpen}
+          onClose={() => setAgentBrowserOpen(false)}
+          onInstall={installPackagedAgent}
+          installedIds={agentSettingsCustomWorkers.map((workerClass) => workerClass.id)}
+        />
         <div style={{ display: "grid", gap: 12, marginTop: 10, padding: 15, borderRadius: 12, border: "1px solid var(--aeon-line)", background: "rgba(20,184,166,0.05)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1543,6 +1625,9 @@ export function AgentSettingsModal(props: any) {
             </div>
           </Field>
           <Field label="Suited for"><TextArea value={agentSettingsSkillProfile} onChange={(event) => updateAgentSkillProfile(event.target.value)} /></Field>
+          {researchSubclassSelected ? (
+            <ResearchMethodSettingsPanel value={selectedResearchMethod} onChange={updateResearchMethod} />
+          ) : null}
           <div>
             <GroupLabel>Seeded shared-brain skills</GroupLabel>
             <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
@@ -1594,7 +1679,7 @@ export function AgentSettingsModal(props: any) {
           </div>
           {renderAeonConnection()}
         </div>
-      ) : runtimeInstallSetup === activeRuntime && runtimeHasInstallSetup(activeRuntime) ? (
+      ) : activeRuntimeNeedsSetup ? (
         <RuntimeInstallSetup
           key={activeRuntime}
           agent={agentSettingsIntegrationTarget}
@@ -1606,11 +1691,10 @@ export function AgentSettingsModal(props: any) {
           targetLabel={agentCreateMachine ? (agentCreateMachine.label || agentCreateMachine.name || "the selected machine") : "this machine"}
           runRuntimeIntegrationAction={runRuntimeIntegrationAction}
           refreshAvailability={refreshRuntimeAvailability}
-          onCancel={() => setRuntimeInstallSetup(null)}
+          onCancel={closeAgentSettingsModal}
           onComplete={async () => {
             refreshRuntimeAvailability?.();
             await refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined);
-            setRuntimeInstallSetup(null);
           }}
         />
       ) : (
@@ -1741,6 +1825,12 @@ export function AgentSettingsModal(props: any) {
       ["codexRuntime", "Codex runtime", "Delegate coding to Codex paths.", Cpu],
       ["kanbanDecompose", "Kanban decomposition", "Break triage goals into child work.", KanbanSquare],
     ];
+    const mailbox = agentMailboxOverview?.mailboxes?.[0];
+    const mailboxProvider = agentMailboxOverview?.providerStatus;
+    const mailboxReady = mailbox?.status === "ready";
+    const mailboxTone = mailboxReady ? "green" : mailboxProvider?.ready ? "honey" : "muted";
+    const mailboxStatus = mailboxReady ? "Ready" : mailboxProvider?.ready ? "Ready to create" : "Provider needed";
+    const mailboxBlockers = Array.isArray(mailboxProvider?.blockers) ? mailboxProvider.blockers.slice(0, 3) : [];
     return (
       <div style={{ display: "grid", gap: 16 }}>
         <PanelHead
@@ -1749,6 +1839,27 @@ export function AgentSettingsModal(props: any) {
           sub="Adapter-neutral capabilities. Each one appears only when this runtime actually exposes it."
           action={<Btn size="sm" variant="secondary" disabled={runtimeIntegrationBusy === "status"} onClick={() => void refreshRuntimeIntegrations(roleModalAgent)}>{runtimeIntegrationBusy === "status" ? "Refreshing..." : "Refresh"}</Btn>}
         />
+        <article style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: 13, alignItems: "center", padding: 15, borderRadius: 12, border: "1px solid var(--line)", background: "var(--panel-bg-soft)" }}>
+          <span style={{ display: "grid", placeItems: "center", width: 40, height: 40, borderRadius: 10, color: mailboxReady ? "var(--cyan-2)" : "var(--fg-4)", background: mailboxReady ? "var(--aeon-soft)" : "rgba(2,6,23,0.35)", border: "1px solid var(--line)" }}><Mail size={19} aria-hidden="true" /></span>
+          <div style={{ minWidth: 0, display: "grid", gap: 5 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+              <strong style={{ color: "var(--fg)", fontSize: 13.5 }}>Agent mailbox</strong>
+              <Pill tone={mailboxTone}>{mailboxStatus}</Pill>
+            </div>
+            <p style={{ margin: 0, color: mailboxReady ? "var(--fg)" : "var(--fg-3)", fontSize: 12.5, lineHeight: 1.5, overflowWrap: "anywhere" }}>
+              {mailboxReady ? mailbox.address : mailboxProvider?.detail || "Create a persistent mailbox for this agent."}
+            </p>
+            {mailboxBlockers.length ? (
+              <div style={{ display: "grid", gap: 4 }}>
+                {mailboxBlockers.map((blocker) => <p key={blocker} style={{ margin: 0, color: "var(--fg-4)", fontSize: 11.5, lineHeight: 1.45 }}>{blocker}</p>)}
+              </div>
+            ) : null}
+            {agentMailboxError ? <p style={{ margin: 0, color: "var(--danger)", fontSize: 11.5, lineHeight: 1.45 }}>{agentMailboxError}</p> : null}
+          </div>
+          <Btn variant={mailboxReady ? "secondary" : "primary"} disabled={agentMailboxBusy || mailboxReady} onClick={() => void createMailboxForCurrentAgent()}>
+            {agentMailboxBusy ? "Creating..." : mailboxReady ? "Created" : "Create mailbox"}
+          </Btn>
+        </article>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 9 }}>
           {tools.map(([key, label, detail, ToolIcon]) => {
             const item = runtimeIntegrationStatus?.integrations?.[key];
@@ -1812,7 +1923,7 @@ export function AgentSettingsModal(props: any) {
         : activePanel === "tools"
           ? renderTools()
           : activePanel === "calls"
-            ? <AgentCallsSettingsPanel {...{ Button, LoaderCircle: LoaderCircleIcon, PlugZap: PlugZapIcon, RefreshCcw: RefreshCcwIcon, Send: SendIcon, agentCreateDraft, agentCreateMachine, fleetClass, roleModalAgent, setAgentCreateDraft, updateAgentProfile }} />
+            ? <AgentCallsSettingsPanel {...{ Button, LoaderCircle: LoaderCircleIcon, PlugZap: PlugZapIcon, RefreshCcw: RefreshCcwIcon, Send: SendIcon, agentCreateDraft, agentCreateMachine, fleetClass, onQueenClapWakeEnabledChange, queenClapWakeEnabled, roleModalAgent, setAgentCreateDraft, updateAgentProfile }} />
             : renderSecurity();
   const primaryActionBusy = runtimeIntegrationBusy === "create-agent" || runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading;
   const primaryActionLabel = (runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading) && lmStudioSelectedModelNeedsLoad
@@ -1960,7 +2071,7 @@ export function AgentSettingsModal(props: any) {
               <Btn
                 variant="primary"
                 sheen
-                disabled={primaryActionBusy || usePodCreateBlocked || veniceCreateBlocked}
+                disabled={primaryActionBusy || usePodCreateBlocked || veniceCreateBlocked || (agentCreateMachine && activeRuntimeNeedsSetup)}
                 onClick={() => void runPrimarySettingsAction()}
               >
                 {primaryActionLabel}

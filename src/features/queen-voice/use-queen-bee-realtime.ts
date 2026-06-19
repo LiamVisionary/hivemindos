@@ -205,6 +205,7 @@ export function useQueenBeeRealtime(
   muted: boolean,
   onFailed?: () => void,
   onDriveDashboard?: (command: string) => Promise<string>,
+  openingLine = "",
 ) {
   const [phase, setPhase] = React.useState<QueenVoicePhase>("starting");
   const [error, setError] = React.useState("");
@@ -303,8 +304,16 @@ export function useQueenBeeRealtime(
         channel.send(JSON.stringify(payload));
       }
     };
+    const createQueenResponse = (instructions?: string) => {
+      send(
+        instructions
+          ? { type: "response.create", response: { instructions } }
+          : { type: "response.create" },
+      );
+    };
 
     let sessionInfo: RealtimeSessionInfo = {};
+    const openingText = openingLine.trim();
 
     const ensureUserTurn = () => {
       if (!liveUserTurnId) liveUserTurnId = addTurn("you", "...", true);
@@ -420,6 +429,11 @@ export function useQueenBeeRealtime(
             : {}),
         },
       });
+      if (openingText) {
+        createQueenResponse(
+          `Say exactly this brief opening line, then wait for Liam: ${JSON.stringify(openingText)}`,
+        );
+      }
     });
 
     channel.addEventListener("message", async (event) => {
@@ -500,7 +514,7 @@ export function useQueenBeeRealtime(
         liveUserText = "";
         // With create_response:false the server no longer auto-replies, so the
         // client is now the sole trigger for the Queen's spoken answer.
-        send({ type: "response.create" });
+        createQueenResponse();
       }
       if (
         payload.type === "response.output_audio.delta" ||
@@ -567,7 +581,7 @@ export function useQueenBeeRealtime(
             output,
           },
         });
-        send({ type: "response.create" });
+        createQueenResponse();
       }
     });
 
@@ -704,7 +718,7 @@ export function useQueenBeeRealtime(
       audio.srcObject = null;
       audio.remove();
     };
-  }, [active]);
+  }, [active, openingLine]);
 
   return { phase, error, turns, speechDetected, failed };
 }

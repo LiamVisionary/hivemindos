@@ -11,7 +11,7 @@ export function buildVaultContext(sharedVault: SharedVaultConfig | null): string
   const lines = [
     "Shared Obsidian vault context:",
     `- Vault path: ${sharedVault.vaultPath}`,
-    "- Skills: read Skills/README.md, then Skills/<slug>/SKILL.md before using a shared skill.",
+    "- Skills: treat Skills/ as the primary shared skill shelf. Read Skills/README.md, then Skills/<slug>/SKILL.md before using a shared skill. Runtime-local skills are supplemental overlays.",
     "- Retrieval: use already-injected capability-search results first. Tool-capable runtimes may call /api/context-index for skills, tool schemas, API routes, connected apps, docs, runtime capabilities, and workspace files before loading full files.",
     "- Memory: use already-injected memory first. Tool-capable runtimes may call /api/brain/memory or hive-brain for recall/answer/remember. Recall before relying on durable preferences, decisions, instructions, goals, commitments, artifacts, lessons, or project context. Remember only reviewed durable facts and never store secrets.",
     "- Compiled wiki: for synthesized entity/concept/summary knowledge under Synthesis/Compiled Knowledge/<domain>/, load Skills/hive-brain-compiled-wiki/SKILL.md and prefer /api/brain/knowledge action search or the brain_search_knowledge MCP tool before broad full-vault recall.",

@@ -70,15 +70,6 @@ const packagedFingerprintFile = join(
   ".hivemindos-embedded-fingerprint.json",
 );
 const nodeBinaryName = process.platform === "win32" ? "node.exe" : "node";
-const buildMemoryMb = process.env.TAURI_NEXT_BUILD_MEMORY_MB || "12000";
-// V8 old-space heap for the EMBEDDED build's `next build`. The embedded build
-// compiles all ~155 API routes (the static build hides them), which exceeds
-// Node's ~4 GB default heap and OOMs. 8 GB is comfortable on a dev Mac; lower
-// it (e.g. on a small CI runner) via TAURI_NEXT_BUILD_HEAP_MB. Keep it well
-// under buildMemoryMb so the RSS watchdog above doesn't kill the build.
-const buildHeapMb = process.env.TAURI_NEXT_BUILD_HEAP_MB || "8192";
-const buildTimeoutSeconds =
-  process.env.TAURI_NEXT_BUILD_TIMEOUT_SECONDS || "1800";
 const embeddedNextMode = process.env.HIVEMINDOS_TAURI_EMBEDDED_NEXT === "1";
 const forceEmbeddedNextBuild =
   process.env.HIVEMINDOS_TAURI_FORCE_NEXT_BUILD === "1";
@@ -94,10 +85,73 @@ const standaloneOnly =
 // flag is the explicit cross-job handoff.
 const usePrebuiltStandalone =
   process.env.HIVEMINDOS_TAURI_PREBUILT_STANDALONE === "1";
+const embeddedBuildHeapFloorMb = 12288;
+const embeddedBuildMemoryReserveMb = 1024;
+const buildMemoryMb = String(
+  parsePositiveIntegerEnv(
+    "TAURI_NEXT_BUILD_MEMORY_MB",
+    process.env.TAURI_NEXT_BUILD_MEMORY_MB ||
+      (embeddedNextMode ? "14000" : "12000"),
+  ),
+);
+// V8 old-space heap for the EMBEDDED build's `next build`. The embedded build
+// compiles all API routes (the static build hides them), which exceeds Node's
+// default heap and the old 10 GB local override. Keep it below buildMemoryMb so
+// the RSS watchdog has room for non-heap process memory.
+const buildHeapMb = String(
+  resolveBuildHeapMb(
+    parsePositiveIntegerEnv(
+      "TAURI_NEXT_BUILD_HEAP_MB",
+      process.env.TAURI_NEXT_BUILD_HEAP_MB ||
+        (embeddedNextMode ? String(embeddedBuildHeapFloorMb) : "8192"),
+    ),
+    Number(buildMemoryMb),
+  ),
+);
+const buildTimeoutSeconds =
+  process.env.TAURI_NEXT_BUILD_TIMEOUT_SECONDS ||
+  (embeddedNextMode ? "3600" : "1800");
 const optimizePngAssets = process.env.HIVEMINDOS_TAURI_OPTIMIZE_PNGS === "1";
 const originalNextEnv = existsSync(nextEnvPath)
   ? readFileSync(nextEnvPath, "utf8")
   : null;
+
+function parsePositiveIntegerEnv(name, value) {
+  if (!/^[0-9]+$/.test(value) || Number(value) <= 0) {
+    throw new Error(`${name} must be a positive integer, got ${value}.`);
+  }
+  return Number(value);
+}
+
+function resolveBuildHeapMb(requestedHeapMb, memoryLimitMb) {
+  if (!embeddedNextMode) {
+    return requestedHeapMb;
+  }
+
+  const maxHeapMb = memoryLimitMb - embeddedBuildMemoryReserveMb;
+  if (maxHeapMb < embeddedBuildHeapFloorMb) {
+    throw new Error(
+      `Embedded Tauri production builds need at least ${embeddedBuildHeapFloorMb} MB of V8 heap plus ${embeddedBuildMemoryReserveMb} MB RSS reserve. ` +
+        `Set TAURI_NEXT_BUILD_MEMORY_MB to ${embeddedBuildHeapFloorMb + embeddedBuildMemoryReserveMb} or higher.`,
+    );
+  }
+
+  if (requestedHeapMb < embeddedBuildHeapFloorMb) {
+    console.warn(
+      `TAURI_NEXT_BUILD_HEAP_MB=${requestedHeapMb} is below the embedded production floor; using ${embeddedBuildHeapFloorMb} MB.`,
+    );
+    return embeddedBuildHeapFloorMb;
+  }
+
+  if (requestedHeapMb > maxHeapMb) {
+    throw new Error(
+      `TAURI_NEXT_BUILD_HEAP_MB=${requestedHeapMb} leaves less than ${embeddedBuildMemoryReserveMb} MB RSS reserve under TAURI_NEXT_BUILD_MEMORY_MB=${memoryLimitMb}. ` +
+        `Increase TAURI_NEXT_BUILD_MEMORY_MB or lower TAURI_NEXT_BUILD_HEAP_MB.`,
+    );
+  }
+
+  return requestedHeapMb;
+}
 
 const embeddedFingerprintInputs = [
   "components.json",

@@ -12,8 +12,24 @@ import {
 } from "./commands";
 import { ensureTreasuryWallet, getHiveTokenMeta, getSafeDepositBlockNumber, scanHiveDeposits, sendHiveFromTreasury } from "./hive-chain";
 import { applyDepositCredit, claimNextWithdrawal, expireBounties, expireClaims, resolveWithdrawal } from "./ledger";
+import {
+  DEFAULT_MEMBER_TAG_TOP_LIMIT,
+  DEFAULT_MEMBER_TAG_WINDOW_DAYS,
+  knownMemberTagChatIds,
+  memberTagSinceIso,
+  planMemberTagSync,
+  recordMemberTagSync,
+  type MemberTagSyncResult,
+  type MemberTagTier,
+} from "./member-tags";
 import { mutateTipBotState, newLedgerEntryId, readTipBotState } from "./store";
 import { TelegramBotApi } from "./telegram-api";
+import {
+  createHiveStakingPublicClient,
+  getHiveStakeAccountStatus,
+  hiveTierForStakedRaw,
+  isHiveEvmAddress,
+} from "@/lib/services/hive-staking";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 
 const POLL_TIMEOUT_SEC = 25;
@@ -21,6 +37,8 @@ const DEPOSIT_SCAN_INTERVAL_MS = 15_000;
 const DEFAULT_DEPOSIT_CONFIRMATIONS = 15; // ~30s on Base's 2s blocks
 const WITHDRAWAL_INTERVAL_MS = 15_000;
 const CLAIM_SWEEP_INTERVAL_MS = 10 * 60_000;
+const MEMBER_TAG_SYNC_INTERVAL_MS = 30 * 60_000;
+const MEMBER_TAG_MAX_ACTIONS_PER_CYCLE = 100;
 const MAX_WITHDRAWAL_ATTEMPTS = 3;
 
 export type TipBotRunnerStatus = {
@@ -71,6 +89,33 @@ async function envRawAmount(suffix: string, decimals: number): Promise<bigint | 
   return parseTokenAmount(value, decimals);
 }
 
+function parseEnabled(value: string, fallback: boolean): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (["0", "false", "off", "no", "disabled"].includes(normalized)) return false;
+  if (["1", "true", "on", "yes", "enabled"].includes(normalized)) return true;
+  return fallback;
+}
+
+function parsePositiveInteger(value: string, fallback: number, max = Number.MAX_SAFE_INTEGER): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
+  return Math.min(parsed, max);
+}
+
+function parsePositiveNumber(value: string, fallback: number, max = Number.MAX_SAFE_INTEGER): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.min(parsed, max);
+}
+
+function parseStringList(value: string): string[] {
+  return value
+    .split(/[,\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 async function buildConfig(api: TelegramBotApi, botUsername: string): Promise<TipBotConfig> {
   const tokenMeta = await getHiveTokenMeta();
   const wantsBankr = (await tipBotEnv("WITHDRAWAL_PROVIDER")).toLowerCase() === "bankr";
@@ -87,6 +132,7 @@ async function buildConfig(api: TelegramBotApi, botUsername: string): Promise<Ti
   );
   const claimTtlHours = Number(await tipBotEnv("CLAIM_TTL_HOURS"));
   const confirmations = Number(await tipBotEnv("CONFIRMATIONS"));
+  const tagSyncMinutes = parsePositiveNumber(await tipBotEnv("MEMBER_TAG_SYNC_INTERVAL_MINUTES"), MEMBER_TAG_SYNC_INTERVAL_MS / 60_000, 24 * 60);
   return {
     botUsername,
     adminIds,
@@ -97,6 +143,18 @@ async function buildConfig(api: TelegramBotApi, botUsername: string): Promise<Ti
     withdrawalProvider,
     treasuryAddress,
     token: { address: tokenMeta.address, symbol: tokenMeta.symbol, decimals: tokenMeta.decimals },
+    memberTags: {
+      enabled: parseEnabled(await tipBotEnv("MEMBER_TAGS"), true),
+      chatIds: parseStringList(await tipBotEnv("MEMBER_TAG_CHAT_IDS")),
+      topLimit: parsePositiveInteger(await tipBotEnv("MEMBER_TAG_TOP_LIMIT"), DEFAULT_MEMBER_TAG_TOP_LIMIT, 50),
+      windowDays: parsePositiveNumber(await tipBotEnv("MEMBER_TAG_WINDOW_DAYS"), DEFAULT_MEMBER_TAG_WINDOW_DAYS, 365),
+      syncIntervalMs: tagSyncMinutes * 60_000,
+      maxActionsPerCycle: parsePositiveInteger(
+        await tipBotEnv("MEMBER_TAG_MAX_ACTIONS_PER_CYCLE"),
+        MEMBER_TAG_MAX_ACTIONS_PER_CYCLE,
+        500,
+      ),
+    },
   };
 }
 
@@ -253,6 +311,89 @@ async function claimSweepLoop(runner: TipBotRunner, runtime: TipBotRuntime) {
   }
 }
 
+async function memberTagLoop(runner: TipBotRunner, runtime: TipBotRuntime) {
+  while (!runner.stopRequested) {
+    try {
+      const result = await syncMemberTags(runtime);
+      if (result.errors.length) {
+        runner.lastError = `Telegram member tag sync skipped ${result.errors.length} update${result.errors.length === 1 ? "" : "s"}.`;
+      }
+    } catch (error) {
+      runner.lastError = error instanceof Error ? error.message : String(error);
+    }
+    await sleepUnlessStopped(runner, runtime.config.memberTags.syncIntervalMs);
+  }
+}
+
+async function syncMemberTags(runtime: TipBotRuntime): Promise<{ applied: number; errors: string[] }> {
+  const settings = runtime.config.memberTags;
+  if (!settings.enabled) return { applied: 0, errors: [] };
+
+  const state = await readTipBotState();
+  const chatIds = knownMemberTagChatIds(state, settings.chatIds);
+  if (!chatIds.length) return { applied: 0, errors: [] };
+
+  const tiersByUserId = await readMemberTagTiers(state, runtime.config.token.decimals);
+  const sinceIso = memberTagSinceIso(settings.windowDays);
+  const actions = planMemberTagSync(state, {
+    chatIds,
+    topLimit: settings.topLimit,
+    sinceIso,
+    tiersByUserId,
+  }).slice(0, settings.maxActionsPerCycle);
+  if (!actions.length) return { applied: 0, errors: [] };
+
+  const applied: MemberTagSyncResult[] = [];
+  const errors: string[] = [];
+  for (const action of actions) {
+    try {
+      const member = await runtime.api.getChatMember({ chatId: action.chatId, userId: action.userId });
+      if (member.status !== "member" && member.status !== "restricted") {
+        applied.push({ chatId: action.chatId, userId: action.userId, tag: action.tag });
+        continue;
+      }
+      if ((member.tag ?? "") !== action.tag) {
+        await runtime.api.setChatMemberTag({ chatId: action.chatId, userId: action.userId, tag: action.tag });
+      }
+      applied.push({ chatId: action.chatId, userId: action.userId, tag: action.tag });
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  if (applied.length) {
+    const now = new Date().toISOString();
+    await mutateTipBotState((draft) => {
+      recordMemberTagSync(draft, applied, now);
+    });
+  }
+  return { applied: applied.length, errors };
+}
+
+async function readMemberTagTiers(state: Awaited<ReturnType<typeof readTipBotState>>, decimals: number): Promise<Map<string, MemberTagTier>> {
+  const tiers = new Map<string, MemberTagTier>();
+  const users = Object.values(state.users).filter((user) => user.linkedWallets.length);
+  if (!users.length) return tiers;
+
+  const client = createHiveStakingPublicClient();
+  for (const user of users) {
+    let activeStakedRaw = 0n;
+    for (const wallet of user.linkedWallets) {
+      if (!isHiveEvmAddress(wallet)) continue;
+      try {
+        const status = await getHiveStakeAccountStatus({ account: wallet, client, decimals });
+        activeStakedRaw += status.activeStakedRaw;
+      } catch {
+        // Public RPC reads can fail transiently; a missed cycle should not
+        // affect balances, withdrawals, or future tag sync attempts.
+      }
+    }
+    const tier = hiveTierForStakedRaw(activeStakedRaw, decimals);
+    if (tier) tiers.set(user.id, { id: tier.id, label: tier.label });
+  }
+  return tiers;
+}
+
 export async function startTelegramTipBot(): Promise<TipBotRunnerStatus> {
   const existing = globalState.__hivemindTelegramTipBotRunner;
   if (existing?.status === "running") return getTelegramTipBotStatus();
@@ -306,6 +447,7 @@ export async function startTelegramTipBot(): Promise<TipBotRunnerStatus> {
     depositLoop(runner, runtime),
     withdrawalLoop(runner, runtime),
     claimSweepLoop(runner, runtime),
+    memberTagLoop(runner, runtime),
   ]).then(() => {
     runner.status = "stopped";
   });

@@ -1,10 +1,13 @@
 import "server-only";
 
-import type { Company } from "@/lib/types/company";
+import type { Company, CompanyProcess } from "@/lib/types/company";
 import { decomposePrdToTaskDrafts, type QueenBeePrdTaskDraft } from "@/lib/services/queen-bee/prd-decomposition";
 import { submitQueenBeeMessage, type QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import { llmDecomposeApexGoal } from "@/lib/services/companies-goal-planner";
 import type { KanbanEvalGate, KanbanLoopSpec } from "@/lib/types/kanban";
+import type { FlowSpec } from "@/lib/types/agent-flow";
+import { flowFromSequence, getFlowTemplate } from "@/lib/services/queen-bee/flow-templates";
+import { startFlowRun } from "@/lib/services/queen-bee/flow-runner";
 
 /**
  * Company orchestration bridge: turn a company's apex goal into a per-role work
@@ -119,10 +122,77 @@ export type CompanyDispatchResult = {
   delegatedCount: number;
   pickupCount: number;
   dispatchableMembers: number;
-  /** "llm" when the LLM brain authored the plan, "heuristic" when it fell back. */
-  planner: "llm" | "heuristic";
+  /** "llm"/"heuristic" for hierarchical fan-out; "flow" for sequential/graph processes. */
+  planner: "llm" | "heuristic" | "flow";
   tasks: CompanyDispatchTask[];
+  /** Set when the company ran as a flow (process: "sequential" | "graph"). */
+  flowRunId?: string;
+  process?: CompanyProcess;
 };
+
+// Build a sequential FlowSpec from decomposed PRD drafts: each draft becomes a step whose success
+// hands off to the next, so the crew runs in order with each step consuming the prior output.
+export function planCompanyFlowSpec(company: Company, drafts: QueenBeePrdTaskDraft[]): FlowSpec {
+  const goal = company.apexGoal?.title?.trim() || company.name;
+  const steps = drafts.map((draft, i) => ({
+    id: `step-${i + 1}`,
+    title: draft.title,
+    workerClass: draft.skills?.[0],
+    skills: draft.skills,
+    prompt: i === 0 ? draft.body : `${draft.body}\n\nPrior step output:\n{{last}}`,
+  }));
+  return flowFromSequence(steps, {
+    id: `company-${company.id}`,
+    name: `${company.name} — ${goal}`,
+    description: `Sequential crew flow for ${company.name}.`,
+  });
+}
+
+// Run a company as a flow (process: "sequential" or "graph"). Sequential decomposes the apex goal
+// into an ordered chain; graph runs the company's saved FlowSpec. Returns a dispatch result whose
+// flowRunId is the handle to advance/inspect the run.
+export async function dispatchCompanyFlow(
+  company: Company,
+  fleetSnapshot: QueenBeeFleetMachine[],
+  opts: { maxTasks?: number; origin?: string; vaultPath?: string } = {},
+): Promise<CompanyDispatchResult> {
+  const goal = company.apexGoal?.title?.trim();
+  if (!goal) throw new Error("Set an apex goal before launching work.");
+  if (!company.agentIds?.length) throw new Error("Staff the company with at least one agent first.");
+
+  const scoped = scopeFleetToMembers(fleetSnapshot, company.agentIds);
+  const dispatchableMembers = countDispatchableMembers(scoped);
+
+  let spec: FlowSpec | null;
+  if (company.process === "graph") {
+    spec = company.flowTemplateId ? await getFlowTemplate(company.flowTemplateId, { vaultPath: opts.vaultPath }) : null;
+    if (!spec) throw new Error("Select a flow template for a graph-process company.");
+  } else {
+    const maxTasks = Math.max(1, Math.min(opts.maxTasks ?? 6, 8));
+    const { prd, title } = buildApexBrief(company);
+    const drafts = decomposePrdToTaskDrafts(prd, { title, maxTasks }).drafts;
+    spec = planCompanyFlowSpec(company, drafts);
+  }
+
+  const run = await startFlowRun(spec, {
+    vaultPath: opts.vaultPath,
+    fleetSnapshot: scoped,
+    priority: "high",
+    state: { topic: goal, goal },
+  });
+
+  return {
+    goal,
+    taskCount: spec.nodes.filter((n) => n.kind === "task").length,
+    delegatedCount: 0,
+    pickupCount: 0,
+    dispatchableMembers,
+    planner: "flow",
+    flowRunId: run.runId,
+    process: company.process,
+    tasks: [],
+  };
+}
 
 function companyEvalGate(id: string, title: string, verifier: string, createdAt: number): KanbanEvalGate {
   return {
@@ -225,6 +295,11 @@ export async function dispatchCompanyGoal(
   const goal = company.apexGoal?.title?.trim();
   if (!goal) throw new Error("Set an apex goal before launching work.");
   if (!company.agentIds?.length) throw new Error("Staff the company with at least one agent first.");
+
+  // Sequential/graph processes run as an agent flow; hierarchical (default) fans tasks out below.
+  if (company.process === "sequential" || company.process === "graph") {
+    return dispatchCompanyFlow(company, fleetSnapshot, opts);
+  }
 
   const scoped = scopeFleetToMembers(fleetSnapshot, company.agentIds);
   const dispatchableMembers = countDispatchableMembers(scoped);

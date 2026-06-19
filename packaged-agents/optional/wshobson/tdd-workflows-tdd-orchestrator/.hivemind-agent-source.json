@@ -1,0 +1,19 @@
+{
+  "upstreamName": "tdd-orchestrator",
+  "slug": "tdd-workflows-tdd-orchestrator",
+  "label": "Tdd Orchestrator",
+  "domain": "tdd-workflows",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/tdd-workflows/agents/tdd-orchestrator.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent tdd-workflows-tdd-orchestrator",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/tdd-workflows-tdd-orchestrator",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Master TDD orchestrator specializing in red-green-refactor discipline, multi-agent workflow coordination, and comprehensive test-driven development practices. Enforces TDD best practices across teams with AI-assisted testing and modern frameworks. Use PROACTIVELY for TDD implementation and governance."
+}

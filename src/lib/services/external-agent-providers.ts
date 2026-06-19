@@ -4,6 +4,7 @@ export type ExternalAgentProviderId =
   | "browser-use"
   | "awesome-mcp-servers"
   | "cloudflare-agentic-inbox"
+  | "mcp-email-server"
   | "openhands"
   | "aider"
   | "n8n"
@@ -58,6 +59,18 @@ export const EXTERNAL_AGENT_PROVIDERS: ExternalAgentProvider[] = [
     credentialKeys: ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
     sideEffectGate: "Use /api/cloudflare/agentic-inbox to scaffold/deploy; requires an onboarded domain and explicit deployment because email routing can receive real personal mail.",
     fallback: "Use local messaging channels or a webhook inbox until a Cloudflare email domain is ready.",
+  },
+  {
+    id: "mcp-email-server",
+    name: "MCP Email Server",
+    sourceUrl: "https://github.com/ai-zerolab/mcp-email-server",
+    licenseNote: "MIT; deploy as a local MCP stdio bridge against a mailbox the user controls.",
+    summary: "Local MCP server that exposes IMAP inbox reading/searching and optional SMTP sending to agents through standard mailbox protocols.",
+    capabilities: ["email", "mcp", "imap", "smtp", "agent-inbox", "self-hosted-mail"],
+    installSurface: "installable-service",
+    credentialKeys: ["MCP_EMAIL_SERVER_EMAIL_ADDRESS", "MCP_EMAIL_SERVER_PASSWORD", "MCP_EMAIL_SERVER_IMAP_HOST", "MCP_EMAIL_SERVER_SMTP_HOST"],
+    sideEffectGate: "Use the MCP Email Server installable service to install the bridge, then configure MCP clients with explicit mailbox env keys. Omit SMTP host for read-only IMAP mode.",
+    fallback: "Use Cloudflare Agentic Inbox for a Cloudflare-hosted mailbox path, or local messaging channels when no IMAP mailbox is available.",
   },
   {
     id: "openhands",

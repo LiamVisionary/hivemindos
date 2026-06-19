@@ -51,7 +51,7 @@ Grouped optional directories can appear as installable packs in the Skill Browse
   </section>
   <section class="docCard">
     <h3>Third-Party Skills</h3>
-    <p>Curated external and optional skills, including the Obsidian Native Brain Pack and optional UI skill packs.</p>
+    <p>Curated external and optional skills, including the Obsidian Native Brain Pack and optional UI, media, and automation skill packs.</p>
     <a href="third-party-skills.html">Open third-party skills</a>
   </section>
 </div>

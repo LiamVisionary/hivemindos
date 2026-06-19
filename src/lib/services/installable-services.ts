@@ -7,10 +7,11 @@ import { promisify } from "node:util";
 import { homedir } from "@/lib/home-dir";
 import { readBrowserUsePermissions } from "@/lib/services/browser-use-permissions";
 import { deployAgenticInbox, readAgenticInboxStatus, scaffoldAgenticInbox } from "@/lib/services/cloudflare/agentic-inbox-setup";
+import { hiveEnvPresence } from "@/lib/services/shared-hive-env";
 
 const execFileAsync = promisify(execFile);
 
-export type InstallableServiceId = "n8n" | "browser-use" | "agentic-inbox" | "openhands" | "aider" | "agent-reach";
+export type InstallableServiceId = "n8n" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach";
 export type InstallableServiceAction =
   | "status"
   | "install"
@@ -29,7 +30,7 @@ export type InstallableServiceActionInput = {
   maxReplies?: number;
 };
 
-export const INSTALLABLE_SERVICE_IDS: InstallableServiceId[] = ["n8n", "browser-use", "agentic-inbox", "openhands", "aider", "agent-reach"];
+export const INSTALLABLE_SERVICE_IDS: InstallableServiceId[] = ["n8n", "browser-use", "agentic-inbox", "mcp-email-server", "openhands", "aider", "agent-reach"];
 
 export type InstallableServiceStatus = {
   id: InstallableServiceId;
@@ -142,10 +143,31 @@ const BROWSER_USE_SECURITY_NOTES = [
   "Full permissions can unlock Browser Use cloud tasks, real-profile/CDP launch options, uploads, and JavaScript eval after a slide-to-unlock warning.",
 ];
 
+const MCP_EMAIL_SERVER_SECURITY_NOTES = [
+  "Mailbox credentials give agents direct access to private email. Use a dedicated agent mailbox or app password whenever possible.",
+  "HivemindOS only installs the local stdio MCP bridge; it does not read mailbox credentials, probe inboxes, or keep the bridge running in the background.",
+  "Omitting MCP_EMAIL_SERVER_SMTP_HOST keeps the bridge in read-only IMAP mode, so outbound email tools stay hidden.",
+  "Enable attachment downloads only for trusted workflows; email attachments can contain sensitive or unsafe files.",
+];
+
 const N8N_CONTAINER = "hivemindos-n8n";
 const N8N_VOLUME = "hivemindos_n8n_data";
 const N8N_IMAGE = "docker.n8n.io/n8nio/n8n";
 const N8N_OPEN_URL = "http://127.0.0.1:5678";
+const MCP_EMAIL_SERVER_SOURCE_URL = "https://github.com/ai-zerolab/mcp-email-server";
+const MCP_EMAIL_SERVER_REQUIRED_ENV_KEYS = [
+  "MCP_EMAIL_SERVER_EMAIL_ADDRESS",
+  "MCP_EMAIL_SERVER_PASSWORD",
+  "MCP_EMAIL_SERVER_IMAP_HOST",
+] as const;
+const MCP_EMAIL_SERVER_OPTIONAL_ENV_KEYS = [
+  "MCP_EMAIL_SERVER_ACCOUNT_NAME",
+  "MCP_EMAIL_SERVER_FULL_NAME",
+  "MCP_EMAIL_SERVER_USER_NAME",
+  "MCP_EMAIL_SERVER_IMAP_PORT",
+  "MCP_EMAIL_SERVER_SMTP_HOST",
+  "MCP_EMAIL_SERVER_SMTP_PORT",
+] as const;
 const AGENT_REACH_COMMIT = "cf13a38432b59256bb83e3fa2c2510cf607ab5c4";
 const AGENT_REACH_PACKAGE_SHA256 = "b96da4b09b0960cfccbfa2d07bf2af343abcb92998c193ffdeb58c41f40bfb2c";
 const AGENT_REACH_PACKAGE_URL = `https://github.com/LiamVisionary/Agent-Reach/archive/${AGENT_REACH_COMMIT}.zip#sha256=${AGENT_REACH_PACKAGE_SHA256}`;
@@ -432,6 +454,27 @@ function agenticInboxStatus(partial: Partial<InstallableServiceStatus> = {}): In
   };
 }
 
+function mcpEmailServerStatus(partial: Partial<InstallableServiceStatus> = {}): InstallableServiceStatus {
+  return {
+    id: "mcp-email-server",
+    name: "MCP Email Server",
+    installed: false,
+    running: false,
+    detail: "MCP Email Server is not installed.",
+    installMethod: "uv-tool",
+    requirements: ["uv", "IMAP mailbox env keys", "Optional SMTP env keys for sending"],
+    sourceUrl: MCP_EMAIL_SERVER_SOURCE_URL,
+    provenance: {
+      packageName: "mcp-email-server",
+      packageManager: "uv tool",
+      installCommand: "uv tool install mcp-email-server",
+      updatePolicy: "Latest compatible PyPI release at install time; configure a pinned uvx version for stricter provenance.",
+    },
+    securityNotes: MCP_EMAIL_SERVER_SECURITY_NOTES,
+    ...partial,
+  };
+}
+
 function cliToolStatus(id: Extract<InstallableServiceId, "openhands" | "aider">, partial: Partial<InstallableServiceStatus> = {}): InstallableServiceStatus {
   return {
     id,
@@ -561,10 +604,15 @@ async function installPipxForHivemindOS() {
 }
 
 async function uvToolInstalled(id: Extract<InstallableServiceId, "openhands" | "aider">) {
+  return uvToolPackageInstalled(
+    id === "openhands" ? "openhands" : "aider-chat",
+    id === "openhands" ? "openhands" : "aider",
+  );
+}
+
+async function uvToolPackageInstalled(packageName: string, binaryName: string) {
   const result = await run("uv", ["tool", "list"], 10_000);
   if (!result.ok) return false;
-  const packageName = id === "openhands" ? "openhands" : "aider-chat";
-  const binaryName = id === "openhands" ? "openhands" : "aider";
   const output = `${result.stdout}\n${result.stderr}`;
   return output.split(/\r?\n/).some((line) => line.startsWith(`${packageName} v`) || line.trim() === `- ${binaryName}`);
 }
@@ -625,6 +673,19 @@ function agentReachCommand() {
   return "agent-reach";
 }
 
+function mcpEmailServerCommand() {
+  const explicit = process.env.MCP_EMAIL_SERVER_BIN?.trim();
+  if (explicit) return explicit;
+  for (const candidate of [
+    join(homedir(), ".local", "bin", "mcp-email-server"),
+    "/opt/homebrew/bin/mcp-email-server",
+    "/usr/local/bin/mcp-email-server",
+  ]) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return "mcp-email-server";
+}
+
 function twitterCliCommand() {
   const explicit = process.env.TWITTER_CLI_BIN?.trim();
   if (explicit) return explicit;
@@ -640,6 +701,10 @@ function twitterCliCommand() {
 
 async function cliToolInstalled(id: Extract<InstallableServiceId, "openhands" | "aider">) {
   return (await uvToolInstalled(id)) || (await run(cliToolCommand(id), ["--version"], 12_000)).ok;
+}
+
+async function mcpEmailServerInstalled() {
+  return (await uvToolPackageInstalled("mcp-email-server", "mcp-email-server")) || (await run(mcpEmailServerCommand(), ["--help"], 12_000)).ok;
 }
 
 async function agentReachVersion() {
@@ -1011,9 +1076,65 @@ async function readAgentReachInstallableServiceStatus(
   });
 }
 
+async function readMcpEmailServerInstallableServiceStatus(): Promise<InstallableServiceStatus> {
+  const [installed, uvReady, envKeys] = await Promise.all([
+    mcpEmailServerInstalled(),
+    uvAvailable(),
+    hiveEnvPresence([...MCP_EMAIL_SERVER_REQUIRED_ENV_KEYS, ...MCP_EMAIL_SERVER_OPTIONAL_ENV_KEYS]),
+  ]);
+  const version = installed ? await uvToolVersion("mcp-email-server") : undefined;
+  const keyStatus = Object.fromEntries(envKeys.map((item) => [item.key, item]));
+  const missingRequired = MCP_EMAIL_SERVER_REQUIRED_ENV_KEYS.filter((key) => !keyStatus[key]?.present);
+  const smtpConfigured = Boolean(keyStatus.MCP_EMAIL_SERVER_SMTP_HOST?.present);
+  const requiredDetail = missingRequired.length
+    ? `Missing required mailbox keys: ${missingRequired.join(", ")}. Add them with hive-env-add or pass them through your MCP client env.`
+    : "Required IMAP env keys are present by name only; values are not read or shown.";
+  const smtpDetail = smtpConfigured
+    ? "SMTP host is present, so send/reply tools can be exposed by the MCP server."
+    : "SMTP host is not set; mcp-email-server runs in read-only IMAP mode and hides outbound email tools.";
+  const detail = installed
+    ? missingRequired.length
+      ? `MCP Email Server${version ? ` ${version}` : ""} is installed. ${requiredDetail}`
+      : `MCP Email Server${version ? ` ${version}` : ""} is installed and ready for stdio MCP use. ${smtpDetail}`
+    : uvReady
+      ? "MCP Email Server is ready to install with uv."
+      : "uv is required before HivemindOS can install MCP Email Server.";
+
+  return mcpEmailServerStatus({
+    installed,
+    version,
+    detail,
+    preflight: [
+      {
+        key: "uv",
+        ok: uvReady,
+        detail: uvReady ? "uv is available for installing the PyPI MCP bridge." : "Install uv before installing mcp-email-server.",
+      },
+      {
+        key: "bridge",
+        ok: installed,
+        detail: installed ? "mcp-email-server is installed as a local stdio MCP bridge." : "Install the bridge before adding it to agent MCP clients.",
+      },
+      {
+        key: "imap-env",
+        ok: missingRequired.length === 0,
+        detail: requiredDetail,
+      },
+      {
+        key: "smtp-mode",
+        ok: true,
+        detail: smtpDetail,
+      },
+    ],
+  });
+}
+
 export async function readInstallableServiceStatus(id: InstallableServiceId): Promise<InstallableServiceStatus> {
   if (id === "agent-reach") {
     return readAgentReachInstallableServiceStatus();
+  }
+  if (id === "mcp-email-server") {
+    return readMcpEmailServerInstallableServiceStatus();
   }
   if (id === "openhands" || id === "aider") {
     const installed = await cliToolInstalled(id);
@@ -1194,6 +1315,16 @@ export async function runInstallableServiceAction(
       return readInstallableServiceStatus(id);
     }
     if (action === "stop") throw new Error("Agentic Inbox is deployed on Cloudflare; use Wrangler or the Cloudflare dashboard to disable the Worker.");
+  }
+  if (id === "mcp-email-server") {
+    if (action === "status") return readInstallableServiceStatus(id);
+    if (action === "install") {
+      if (!(await uvAvailable())) throw new Error("uv is required to install MCP Email Server from HivemindOS.");
+      const install = await run("uv", ["tool", "install", "mcp-email-server"], 300_000);
+      if (!install.ok) throw new Error(install.stderr || install.stdout || "MCP Email Server install failed.");
+      return readInstallableServiceStatus(id);
+    }
+    throw new Error("MCP Email Server is a local stdio MCP bridge. Install it here, then configure an MCP client with mcp-email-server stdio after setting mailbox env keys.");
   }
   if (id !== "n8n") throw new Error("Unknown installable service.");
   if (action === "status") return readInstallableServiceStatus(id);

@@ -4,6 +4,7 @@
 
 import { useEffect } from "react";
 import { getNativeAppVersion } from "@/lib/native/desktop-status";
+import { getNativeFleetDiscovery } from "@/lib/native/fleet";
 import { readNativeKanban } from "@/lib/native/kanban";
 
 export function useFleetNotificationsController(props: any) {
@@ -187,11 +188,12 @@ export function useFleetNotificationsController(props: any) {
   }
 
   async function refreshDiscoveryNow() {
-    const response = await fetch(
+    const nativeData = await getNativeFleetDiscovery();
+    const response = nativeData?.machines ? null : await fetch(
       "/api/fleet/discover?includeSnapshots=0&fresh=1",
       { cache: "no-store" },
     ).catch(() => null);
-    const data = (await response?.json().catch(() => null)) as {
+    const data = (nativeData?.machines ? nativeData : await response?.json().catch(() => null)) as {
       machines?: DiscoveredMachine[];
     } | null;
     if (!data?.machines) return;

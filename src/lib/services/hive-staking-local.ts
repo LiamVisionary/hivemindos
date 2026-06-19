@@ -4,10 +4,10 @@ import { createWalletClient, http, parseUnits } from "viem";
 import { validateMnemonic } from "@scure/bip39";
 import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
-import { base } from "viem/chains";
 import { DEFAULT_BASE_HIVE_STAKING_CONTRACT_ADDRESS, DEFAULT_BASE_HIVE_TOKEN_ADDRESS } from "@/lib/config/hive-staking";
 import { isEvmAddress } from "@/lib/services/hive-staking-client";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
+import { base } from "@/lib/services/wallet/base-chain";
 
 const EVM_RECOVERY_PATH = "m/44'/60'/0'/0/0";
 

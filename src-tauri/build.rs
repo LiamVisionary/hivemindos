@@ -22,6 +22,7 @@ fn main() {
         .unwrap_or_else(|| PathBuf::from("."));
     println!("cargo:rerun-if-changed={}", repo_root.join(".git/HEAD").display());
     println!("cargo:rerun-if-changed={}", repo_root.join(".git/index").display());
+    println!("cargo:rerun-if-env-changed=HIVEMINDOS_TAURI_SOURCE_BUILD");
 
     let commit = git(&repo_root, &["rev-parse", "HEAD"]);
     let branch = git(&repo_root, &["rev-parse", "--abbrev-ref", "HEAD"]);
@@ -30,6 +31,17 @@ fn main() {
     set_env("HIVEMINDOS_GIT_COMMIT", &commit);
     set_env("HIVEMINDOS_GIT_BRANCH", &branch);
     set_env("HIVEMINDOS_GIT_DIRTY", if dirty { "true" } else { "false" });
+    set_env(
+        "HIVEMINDOS_TAURI_SOURCE_BUILD",
+        if std::env::var("HIVEMINDOS_TAURI_SOURCE_BUILD")
+            .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+        {
+            "true"
+        } else {
+            "false"
+        },
+    );
 
     // Declare the app's own #[tauri::command]s so Tauri generates `allow-<cmd>`
     // ACL permissions for them. The EMBEDDED build loads the UI from the local
@@ -67,6 +79,7 @@ fn main() {
                 "brain_graph",
                 "hive_env_read",
                 "fleet_apps_cache",
+                "fleet_discover",
                 "tailscale_devices",
                 "kanban_read",
                 "memory_telemetry",
@@ -79,6 +92,7 @@ fn main() {
                 "native_setup_status",
                 "scheduler_shared_schedules",
                 "obsidian_agents",
+                "obsidian_personal_wallets",
                 "dashboard_state_read",
                 "dashboard_state_write",
                 "download_aeon_deliverable",

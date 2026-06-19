@@ -1,0 +1,19 @@
+{
+  "upstreamName": "architect-review",
+  "slug": "comprehensive-review-architect-review",
+  "label": "Architect Review",
+  "domain": "comprehensive-review",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/comprehensive-review/agents/architect-review.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent comprehensive-review-architect-review",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/comprehensive-review-architect-review",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Master software architect specializing in modern architecture patterns, clean architecture, microservices, event-driven systems, and DDD. Reviews system designs and code changes for architectural integrity, scalability, and maintainability. Use PROACTIVELY for architectural decisions."
+}

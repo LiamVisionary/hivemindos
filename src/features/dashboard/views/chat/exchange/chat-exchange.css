@@ -16,8 +16,11 @@
 .fr-chat-layout {
   display: grid;
   min-height: 0;
+  height: 100%;
+  max-height: 100%;
   flex: 1 1 auto;
   grid-template-columns: 286px minmax(0, 1fr) 0;
+  overflow: hidden;
   transition: grid-template-columns 340ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -30,10 +33,30 @@
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: auto auto 1fr auto;
+  height: 100%;
+  max-height: 100%;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   overflow: hidden;
   border-right: 1px solid var(--line);
   background: var(--bg-soft);
+}
+
+.fr-chat-sidebar-history {
+  min-height: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 11px 18px;
+  scrollbar-width: thin;
+}
+
+.fr-chat-sidebar-nav {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  align-content: start;
+  gap: 2px;
 }
 
 .fr-chat-main {
@@ -182,6 +205,59 @@
 
 .fr-chat-agent-chevron[data-open="true"] {
   transform: rotate(180deg);
+}
+
+.fr-research-brief {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent-strong) 24%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  padding: 10px;
+}
+
+.fr-research-tabs {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fr-research-tab {
+  min-width: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-soft) 72%, transparent);
+  color: var(--fg-3);
+  cursor: pointer;
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  padding: 6px 8px;
+  text-align: center;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.fr-research-tab:hover,
+.fr-research-tab:focus-visible,
+.fr-research-tab[data-active="true"] {
+  border-color: color-mix(in srgb, var(--accent-strong) 42%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent-strong);
+}
+
+.fr-research-tab:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-strong) 32%, transparent);
+  outline-offset: 2px;
+}
+
+.fr-research-panel {
+  min-width: 0;
 }
 
 .fr-chat-agent-menu {

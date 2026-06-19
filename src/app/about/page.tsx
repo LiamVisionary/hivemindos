@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { getNativeAppVersion, isPackagedDesktopRuntime } from "@/lib/native/desktop-status";
+import { getNativeAppVersion, isPackagedDesktopRuntime, isReleaseUpdaterDesktopRuntime } from "@/lib/native/desktop-status";
 import { installNativeUpdate, updaterErrorText } from "@/lib/native/updater";
 import type { AppVersion } from "@/features/dashboard/dashboard-types";
 import styles from "./about.module.css";
@@ -72,14 +72,17 @@ export default function AboutPage() {
     setUpdateResult(null);
     setMessage("Checking for updates...");
     try {
-      const isPackaged = await isPackagedDesktopRuntime(signal);
+      const [isPackaged, isReleaseUpdaterEligible] = await Promise.all([
+        isPackagedDesktopRuntime(signal),
+        isReleaseUpdaterDesktopRuntime(signal),
+      ]);
       if (signal?.aborted) return;
       setPackaged(isPackaged);
       const nextVersion = await fetchAppVersion(signal);
       if (signal?.aborted) return;
       setVersion(nextVersion);
 
-      if (isPackaged) {
+      if (isReleaseUpdaterEligible) {
         const { check } = await import("@tauri-apps/plugin-updater");
         const update = await check();
         if (signal?.aborted) return;
@@ -91,6 +94,12 @@ export default function AboutPage() {
           setCheckState("current");
           setMessage("HivemindOS is up to date.");
         }
+        return;
+      }
+
+      if (isPackaged) {
+        setCheckState("current");
+        setMessage("Local source build; release updater is disabled for this bundle.");
         return;
       }
 

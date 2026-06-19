@@ -29,6 +29,7 @@ import {
   type TipBotUser,
 } from "./ledger";
 import { parseCommand, resolveTipRecipient, type ParsedCommand } from "./parse";
+import { rememberMemberTagChat } from "./member-tags";
 import {
   mutateTipBotState,
   newBountyBoostId,
@@ -52,6 +53,14 @@ export type TipBotConfig = {
   withdrawalProvider: "treasury" | "bankr";
   treasuryAddress: string;
   token: { address: string; symbol: string; decimals: number };
+  memberTags: {
+    enabled: boolean;
+    chatIds: string[];
+    topLimit: number;
+    windowDays: number;
+    syncIntervalMs: number;
+    maxActionsPerCycle: number;
+  };
 };
 
 export type TipBotRuntime = {
@@ -116,6 +125,7 @@ async function registerSeenUsers(state: TipBotState, message: TgMessage) {
   const seen = [message.from, message.reply_to_message?.from].filter(
     (user): user is TgUser => Boolean(user && !user.is_bot),
   );
+  const chatId = message.chat.type === "group" || message.chat.type === "supergroup" ? String(message.chat.id) : "";
   const stale = seen.some((user) => {
     const existing = state.users[String(user.id)];
     return (
@@ -124,9 +134,11 @@ async function registerSeenUsers(state: TipBotState, message: TgMessage) {
       (user.first_name && existing.firstName !== user.first_name)
     );
   });
-  if (!stale) return;
+  const staleChat = Boolean(chatId && !(state.memberTags?.chatIds ?? []).includes(chatId));
+  if (!stale && !staleChat) return;
   const createdAt = new Date().toISOString();
   await mutateTipBotState((draft) => {
+    if (chatId) rememberMemberTagChat(draft, chatId);
     for (const user of seen) {
       ensureUser(draft, { id: user.id, username: user.username, firstName: user.first_name, createdAt });
     }

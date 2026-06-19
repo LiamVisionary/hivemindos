@@ -1,5 +1,17 @@
 import type { KanbanTask } from "../../types/kanban";
 
+// Advance an agent flow when one of its task nodes completes/fails. Dynamic, guarded import keeps
+// the flow layer off the autonomous worker's static graph and never breaks task pickup.
+async function advanceFlowIfTagged(task: KanbanTask, outcome: "passed" | "failed", output: string, vaultPath?: string | null) {
+  if (!task.source || !task.source.startsWith("flow:")) return;
+  try {
+    const { maybeAdvanceFlowForTask } = await import("./flow-runner");
+    await maybeAdvanceFlowForTask({ source: task.source, outcome, output, vaultPath });
+  } catch {
+    // Flow advancement is best-effort; never let it break autonomous pickup.
+  }
+}
+
 type KanbanStorageOptions = {
   vaultPath?: string | null;
   kanbanFolder?: string | null;
@@ -142,6 +154,7 @@ export async function runQueenBeeAutonomousPickup(
         markerSeen: input.marker ? text.includes(input.marker) : undefined,
       },
     }, storageOptions);
+    await advanceFlowIfTagged(input.task, "passed", text, input.vaultPath);
     return { ok: true, status: "completed", taskId: input.task.id, claimLock, collectorUrl, agentName };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Queen Bee autonomous pickup failed.";
@@ -150,6 +163,7 @@ export async function runQueenBeeAutonomousPickup(
     } catch {
       // Preserve the original failure if the board was already moved by another worker.
     }
+    await advanceFlowIfTagged(input.task, "failed", message, input.vaultPath);
     return { ok: false, status: "blocked", taskId: input.task.id, claimLock, collectorUrl, agentName, error: message };
   }
 }

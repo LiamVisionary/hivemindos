@@ -87,6 +87,8 @@ type AgentCallsSettingsPanelProps = {
   agentCreateDraft: AgentCreateDraft;
   agentCreateMachine: MachineGroup | null;
   fleetClass: (...classNames: string[]) => string;
+  onQueenClapWakeEnabledChange?: (enabled: boolean) => void;
+  queenClapWakeEnabled?: boolean;
   roleModalAgent?: AgentProfile | null;
   setAgentCreateDraft: Dispatch<SetStateAction<AgentCreateDraft>>;
   updateAgentProfile: (agentId: string, patch: Partial<AgentProfile>) => void;
@@ -162,6 +164,8 @@ export function AgentCallsSettingsPanel(props: AgentCallsSettingsPanelProps) {
     agentCreateDraft,
     agentCreateMachine,
     fleetClass,
+    onQueenClapWakeEnabledChange,
+    queenClapWakeEnabled,
     roleModalAgent,
     setAgentCreateDraft,
     updateAgentProfile,
@@ -177,6 +181,7 @@ export function AgentCallsSettingsPanel(props: AgentCallsSettingsPanelProps) {
   const [callTestTone, setCallTestTone] = useState<"ok" | "error" | "muted">("muted");
 
   const agentCallSettings = buildAgentCallPreferences(agentCreateMachine ? agentCreateDraft.calls : roleModalAgent?.calls);
+  const isQueenSettings = !agentCreateMachine && roleModalAgent?.beeRole === "queen";
   const voiceRuntimeOptions = ["openai-realtime", "local-tts", agentCallSettings.voiceRuntime, ...voiceOptions.map((provider) => provider.provider)]
     .filter((provider, index, list) => provider && list.indexOf(provider) === index);
   const selectedVoiceOptions = voiceOptions.filter((provider) => provider.provider === agentCallSettings.voiceRuntime);
@@ -358,6 +363,20 @@ export function AgentCallsSettingsPanel(props: AgentCallsSettingsPanelProps) {
           Refresh
         </Button>
       </div>
+
+      {isQueenSettings && onQueenClapWakeEnabledChange ? (
+        <label className={styles.agentCallToggleRow}>
+          <input
+            type="checkbox"
+            checked={Boolean(queenClapWakeEnabled)}
+            onChange={(event) => onQueenClapWakeEnabledChange(event.target.checked)}
+          />
+          <span>
+            <strong>Clap wake</strong>
+            <small>Open Queen Bee voice chat when two quick claps are detected locally.</small>
+          </span>
+        </label>
+      ) : null}
 
       <div className={styles.agentCallVoiceGrid}>
         <label className={fleetClass("agentSettingsField")}>

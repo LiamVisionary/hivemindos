@@ -1,0 +1,19 @@
+{
+  "upstreamName": "review-policy-author",
+  "slug": "review-policy-author",
+  "label": "Review Policy Author",
+  "domain": "review-agent-governance",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/review-agent-governance/agents/review-policy-author.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent review-policy-author",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/review-policy-author",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Cedar policy author specialized in gating AI agent review actions (PR comments, reviews, merges, CI edits) behind human approval. Use when writing, auditing, or extending a review-governance.cedar policy for review-bot governance."
+}

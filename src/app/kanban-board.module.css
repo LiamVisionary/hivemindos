@@ -3826,3 +3826,331 @@
 :global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanCardId {
   color: var(--kb-muted);
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   "THE COMB" SKIN — fr- work-board redesign applied 1:1 to the live board.
+   Appended override layer scoped to .workBoardPanel so it wins over the
+   legacy hardcoded board styling above without editing those rules.
+   Matches: HivemindOS Work - The Comb.html (fr-work-card.jsx / fr-tokens.css).
+   ══════════════════════════════════════════════════════════════════════ */
+.workBoardPanel {
+  --fc-bg-soft: #101116;
+  --fc-panel: #14161c;
+  --fc-panel-2: #181b22;
+  --fc-line: rgba(238, 232, 220, 0.07);
+  --fc-line-2: rgba(238, 232, 220, 0.13);
+  --fc-line-3: rgba(238, 232, 220, 0.20);
+  --fc-fg: #f3f0e9;
+  --fc-fg-2: #a7a39a;
+  --fc-fg-3: #76726a;
+  --fc-fg-4: #545049;
+  --fc-honey: #e7b45c;
+  --fc-honey-soft: rgba(231, 180, 92, 0.13);
+  --fc-honey-line: rgba(231, 180, 92, 0.32);
+  --fc-live: #6fcdba;
+  --fc-live-soft: rgba(111, 205, 186, 0.14);
+  --fc-danger: #e58e85;
+  --fc-danger-soft: rgba(229, 142, 133, 0.13);
+  --fc-radius: 14px;
+  --fc-radius-sm: 9px;
+  --fc-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 18px 50px -28px rgba(0, 0, 0, 0.7);
+  font-family: "Geist", "Inter", system-ui, sans-serif;
+  background: linear-gradient(180deg, #101116, #0c0d11) !important;
+  box-shadow: none !important;
+  border-color: var(--fc-line) !important;
+  border-radius: 12px !important;
+}
+.workBoardPanel .workBoardHeader { border-bottom-color: var(--fc-line) !important; }
+
+/* board + columns */
+.workBoardPanel .kanbanBoard {
+  grid-template-columns: repeat(auto-fit, minmax(252px, 1fr)) !important;
+  gap: 12px !important;
+}
+.workBoardPanel .kanbanColumn {
+  gap: 0 !important;
+  border: 1px solid var(--fc-line) !important;
+  border-radius: var(--fc-radius) !important;
+  background: color-mix(in srgb, var(--fc-panel) 55%, transparent) !important;
+  background-image: none !important;
+  padding: 14px 0 6px !important;
+}
+.workBoardPanel .kanbanColumn:hover {
+  border-color: var(--fc-line-2) !important;
+  background: color-mix(in srgb, var(--fc-panel) 64%, transparent) !important;
+  background-image: none !important;
+}
+.workBoardPanel .kanbanColumn[data-drop],
+.workBoardPanel .kanbanColumn.dragOver {
+  border-color: var(--fc-honey-line) !important;
+  background: var(--fc-honey-soft) !important;
+}
+
+/* column header — flat row, no boxed panel */
+.workBoardPanel .kanbanColumnHeader {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 14px !important;
+  gap: 6px 10px !important;
+  align-items: center !important;
+}
+.workBoardPanel .kanbanColumnHeader h3 {
+  font-family: "Space Grotesk", system-ui, sans-serif !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.2 !important;
+  color: var(--fc-fg) !important;
+}
+.workBoardPanel .kanbanColumnHeader p {
+  margin-top: 5px !important;
+  color: var(--fc-fg-3) !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+}
+.workBoardPanel .kanbanColumnDot {
+  width: 8px !important;
+  height: 8px !important;
+  margin-top: 0 !important;
+  box-shadow: none !important;
+}
+.workBoardPanel .kanbanColumnDot.ideas { background: #76726a !important; }
+.workBoardPanel .kanbanColumnDot.ready { background: #a7a39a !important; }
+.workBoardPanel .kanbanColumnDot.working { background: var(--fc-live) !important; }
+.workBoardPanel .kanbanColumnDot.needs-human { background: var(--fc-danger) !important; }
+.workBoardPanel .kanbanColumnDot.done { background: var(--fc-honey) !important; }
+.workBoardPanel .kanbanColumnDot.archived { background: #545049 !important; }
+.workBoardPanel .kanbanColumnCount {
+  min-width: auto !important;
+  height: auto !important;
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: 999px !important;
+  background: var(--fc-panel-2) !important;
+  color: var(--fc-fg-3) !important;
+  font-family: "JetBrains Mono", ui-monospace, monospace !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  padding: 1px 8px !important;
+}
+.workBoardPanel .kanbanAddColumnTask {
+  width: 26px !important;
+  height: 26px !important;
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: var(--fc-fg-3) !important;
+}
+.workBoardPanel .kanbanAddColumnTask:hover {
+  border-color: var(--fc-honey-line) !important;
+  background: var(--fc-honey-soft) !important;
+  color: var(--fc-honey) !important;
+}
+.workBoardPanel .kanbanCards { padding: 12px 12px 4px !important; gap: 10px !important; }
+
+/* cards — flat fr surface */
+.workBoardPanel .kanbanCard {
+  gap: 9px !important;
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: var(--fc-radius-sm) !important;
+  background: var(--fc-panel) !important;
+  box-shadow: none !important;
+  padding: 12px 13px 11px !important;
+}
+.workBoardPanel .kanbanCard:hover,
+.workBoardPanel .kanbanCard:focus-visible {
+  border-color: var(--fc-line-3) !important;
+  background: var(--fc-panel) !important;
+  box-shadow: var(--fc-shadow) !important;
+  transform: translateY(-1px) !important;
+}
+.workBoardPanel .kanbanCard.active {
+  border-color: var(--fc-honey-line) !important;
+  background: color-mix(in srgb, var(--fc-honey) 5%, var(--fc-panel)) !important;
+  box-shadow: 0 0 0 1px var(--fc-honey-line) !important;
+}
+.workBoardPanel .kanbanCard.working { box-shadow: none !important; }
+.workBoardPanel .kanbanCard.stale {
+  position: relative;
+  background: var(--fc-panel) !important;
+  box-shadow: none !important;
+}
+.workBoardPanel .kanbanCard.stale::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 11px;
+  bottom: 11px;
+  width: 2px;
+  border-radius: 99px;
+  background: var(--fc-danger);
+}
+
+/* card title + id */
+.workBoardPanel .kanbanCardTitle {
+  font-family: "Space Grotesk", system-ui, sans-serif !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  line-height: 1.32 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--fc-fg) !important;
+}
+.workBoardPanel .kanbanCardId {
+  color: var(--fc-fg-4) !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 10.5px !important;
+}
+
+/* priority pill */
+.workBoardPanel .priorityPill {
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--fc-fg-3) !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 9.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  padding: 3px 8px !important;
+}
+.workBoardPanel .priorityPill.high,
+.workBoardPanel .priorityPill.urgent,
+.workBoardPanel .priorityPill.needs-human,
+.workBoardPanel .priorityPill.stale {
+  border-color: color-mix(in srgb, var(--fc-danger) 42%, transparent) !important;
+  background: var(--fc-danger-soft) !important;
+  color: var(--fc-danger) !important;
+}
+.workBoardPanel .priorityPill.ready,
+.workBoardPanel .priorityPill.working,
+.workBoardPanel .priorityPill.normal {
+  border-color: color-mix(in srgb, var(--fc-live) 36%, transparent) !important;
+  background: var(--fc-live-soft) !important;
+  color: var(--fc-live) !important;
+}
+.workBoardPanel .priorityPill.done {
+  border-color: var(--fc-honey-line) !important;
+  background: var(--fc-honey-soft) !important;
+  color: var(--fc-honey) !important;
+}
+.workBoardPanel .priorityPill.ideas {
+  border-color: var(--fc-line-2) !important;
+  background: transparent !important;
+  color: var(--fc-fg-3) !important;
+}
+
+/* machine + attachment chips */
+.workBoardPanel .kanbanMachineLabel,
+.workBoardPanel .kanbanMachinePicker > button,
+.workBoardPanel .kanbanCardAttachmentButton,
+.workBoardPanel .kanbanCardMoveFabs button {
+  border: 1px solid var(--fc-line-2) !important;
+  background: transparent !important;
+  color: var(--fc-fg-3) !important;
+  border-radius: 7px !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 10.5px !important;
+}
+.workBoardPanel .kanbanMachineLabel:hover,
+.workBoardPanel .kanbanMachinePicker > button:hover,
+.workBoardPanel .kanbanCardAttachmentButton:hover {
+  border-color: var(--fc-line-3) !important;
+  color: var(--fc-fg) !important;
+}
+
+/* message body + terminal */
+.workBoardPanel .kanbanMessageRow { border-top: 1px solid var(--fc-line) !important; }
+.workBoardPanel .kanbanCardMarkdown {
+  color: var(--fc-fg-2) !important;
+  font-size: 12px !important;
+  line-height: 1.55 !important;
+}
+.workBoardPanel .kanbanCardTerminal {
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: var(--fc-radius-sm) !important;
+  background: var(--fc-bg-soft) !important;
+}
+.workBoardPanel .kanbanCardTerminal code { color: var(--fc-live) !important; }
+
+/* controls / filters bar */
+.workBoardPanel .workBoardControls select,
+.workBoardPanel .workBoardControls input,
+.workBoardPanel .workBoardOptions > summary,
+.workBoardPanel .workBoardToggle {
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: var(--fc-radius-sm) !important;
+  background: var(--fc-panel-2) !important;
+  color: var(--fc-fg) !important;
+  font-family: "Geist", "Inter", system-ui, sans-serif !important;
+  font-size: 12.5px !important;
+}
+.workBoardPanel .workBoardControls select:hover,
+.workBoardPanel .workBoardControls input:hover,
+.workBoardPanel .workBoardOptions > summary:hover,
+.workBoardPanel .workBoardToggle:hover {
+  border-color: var(--fc-line-3) !important;
+  background: var(--fc-panel-2) !important;
+}
+.workBoardPanel .workBoardControls select:focus,
+.workBoardPanel .workBoardControls input:focus,
+.workBoardPanel .workBoardToggle:focus-within {
+  border-color: var(--fc-honey-line) !important;
+  box-shadow: 0 0 0 3px var(--fc-honey-soft) !important;
+}
+.workBoardPanel .workBoardControls label > span,
+.workBoardPanel .monoCap {
+  color: var(--fc-fg-3) !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 10px !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+}
+
+/* sync pill */
+.workBoardPanel .kanbanSyncPill {
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--fc-fg-3) !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 10.5px !important;
+}
+.workBoardPanel .kanbanSyncPill.synced {
+  border-color: color-mix(in srgb, var(--fc-live) 30%, transparent) !important;
+  color: var(--fc-live) !important;
+}
+.workBoardPanel .kanbanSyncPill.local {
+  border-color: var(--fc-honey-line) !important;
+  color: var(--fc-honey) !important;
+}
+
+/* bulk bar */
+.workBoardPanel .kanbanBulkBar {
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: var(--fc-radius-sm) !important;
+  background: var(--fc-panel-2) !important;
+}
+
+/* light theme — re-point the Comb tokens to warm paper */
+:global(:root[data-theme="hive-light"]) .workBoardPanel {
+  --fc-bg-soft: #f6f2e9;
+  --fc-panel: #fbf8f1;
+  --fc-panel-2: #f4efe4;
+  --fc-line: rgba(54, 46, 30, 0.10);
+  --fc-line-2: rgba(54, 46, 30, 0.16);
+  --fc-line-3: rgba(54, 46, 30, 0.26);
+  --fc-fg: #221d14;
+  --fc-fg-2: #5e574b;
+  --fc-fg-3: #867d6e;
+  --fc-fg-4: #a59b89;
+  --fc-honey: #b07f1c;
+  --fc-honey-soft: rgba(176, 127, 28, 0.12);
+  --fc-honey-line: rgba(176, 127, 28, 0.34);
+  --fc-live: #1d8e7c;
+  --fc-live-soft: rgba(29, 142, 124, 0.12);
+  --fc-danger: #c0524d;
+  --fc-danger-soft: rgba(192, 82, 77, 0.12);
+  background: linear-gradient(180deg, #fbf8f1, #f1ede3) !important;
+}

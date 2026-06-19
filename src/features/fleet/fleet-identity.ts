@@ -287,11 +287,28 @@ export function agentSuppressionKeys(agent: AgentProfile) {
   ].filter(Boolean);
 }
 
+function isRemoteCollectorKey(key: string) {
+  if (!key) return false;
+  if (key.includes("/peer/")) return true;
+  const host = key.split("/")[0]?.replace(/:\d+$/, "").toLowerCase() ?? "";
+  return Boolean(
+    host &&
+      host !== "localhost" &&
+      host !== "127.0.0.1" &&
+      host !== "::1" &&
+      host !== "[::1]",
+  );
+}
+
 export function agentMatchesSuppression(
   agent: AgentProfile,
   suppressedKeys: ReadonlySet<string>,
 ) {
-  return agentSuppressionKeys(agent).some((key) => suppressedKeys.has(key));
+  const workspaceKey = `workspace:${agentWorkspaceKey(agent)}`;
+  if (suppressedKeys.has(workspaceKey)) return true;
+  const idKey = agent.id ? `id:${agent.id}` : "";
+  if (!idKey || !suppressedKeys.has(idKey)) return false;
+  return !isRemoteCollectorKey(collectorKey(agent.telemetryUrl));
 }
 
 /**

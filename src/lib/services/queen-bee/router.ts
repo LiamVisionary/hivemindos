@@ -1,4 +1,4 @@
-export type QueenBeeWorkerClass = "general" | "planner" | "code" | "vision" | "writer" | "research" | "artist" | "ops" | "qa";
+export type QueenBeeWorkerClass = "general" | "planner" | "code" | "vision" | "writer" | "research" | "artist" | "ops" | "qa" | "security";
 
 type QueenBeeAgent = {
   id?: string;
@@ -111,7 +111,7 @@ type ScoredCandidate = {
   reasons: string[];
 };
 
-const WORKER_CLASSES = new Set<QueenBeeWorkerClass>(["general", "planner", "code", "vision", "writer", "research", "artist", "ops", "qa"]);
+const WORKER_CLASSES = new Set<QueenBeeWorkerClass>(["general", "planner", "code", "vision", "writer", "research", "artist", "ops", "qa", "security"]);
 
 const CLASS_KEYWORDS: Array<{ workerClass: QueenBeeWorkerClass; priority: number; keywords: Array<{ pattern: RegExp; weight: number }> }> = [
   { workerClass: "planner", priority: 80, keywords: [/plan/i, /decompos/i, /architect/i, /strategy/i, /roadmap/i, /coordinate/i, /orchestrat/i].map((pattern) => ({ pattern, weight: 1 })) },
@@ -122,6 +122,7 @@ const CLASS_KEYWORDS: Array<{ workerClass: QueenBeeWorkerClass; priority: number
   { workerClass: "vision", priority: 70, keywords: [{ pattern: /screenshot|screen|visual qa/i, weight: 6 }, { pattern: /inspect|ui|ux|contrast/i, weight: 4 }, { pattern: /\bimage\b|visual/i, weight: 1 }] },
   { workerClass: "ops", priority: 45, keywords: [/deploy/i, /server/i, /cron/i, /websocket/i, /mcp/i, /fleet/i, /tailscale/i, /collector/i, /docker/i, /render/i].map((pattern) => ({ pattern, weight: 1 })) },
   { workerClass: "qa", priority: 85, keywords: [{ pattern: /\bqa\b|quality assurance/i, weight: 4 }, { pattern: /verify|verification|review|playwright|lint|typecheck|screenshot test|rigorous/i, weight: 2 }] },
+  { workerClass: "security", priority: 82, keywords: [{ pattern: /security|vulnerab|exploit|owasp|threat model|pentest|penetration test|injection|\bxss\b|\bcsrf\b|secrets? (?:rotation|scan|leak)|hardening/i, weight: 4 }, { pattern: /\bauth\b|authn|authz|credential|sandbox escape|audit (?:the )?(?:code|deps|permissions)/i, weight: 2 }] },
 ];
 
 const RUNTIME_PRIORITY = ["hermes", "openclaw", "opencode", "codex", "claude-code", "hivemind-os", "aeon"];
@@ -204,10 +205,16 @@ function outcomeScore(agent: QueenBeeAgent, options: QueenBeeRouterOptions, reas
 function scoreCandidate(agent: QueenBeeAgent, machine: QueenBeeMachine, workerClass: QueenBeeWorkerClass, task: QueenBeeTaskIntent, options: QueenBeeRouterOptions = {}): ScoredCandidate {
   const reasons: string[] = [];
   let score = 10;
+  const rawAgentClass = String(agent.workerClass || "").toLowerCase().trim();
   const agentClass = normalizeWorkerClass(agent.workerClass) ?? "general";
+  const isCustomClass = Boolean(rawAgentClass) && !WORKER_CLASSES.has(rawAgentClass as QueenBeeWorkerClass);
   if (agentClass === workerClass) {
     score += 100;
     reasons.push(`exact ${workerClass} worker class`);
+  } else if (isCustomClass && taskMentionsClass(task, rawAgentClass)) {
+    // Custom, user-defined worker classes are first-class when the request names the specialty.
+    score += 100;
+    reasons.push(`custom "${rawAgentClass}" specialty matched the request`);
   } else if (agentClass === "general") {
     score += 35;
     reasons.push("general fallback worker");
@@ -417,6 +424,16 @@ function isCollectorUsable(collector?: string) {
 function normalizeWorkerClass(value?: string | null): QueenBeeWorkerClass | null {
   const normalized = String(value || "").toLowerCase().trim();
   return WORKER_CLASSES.has(normalized as QueenBeeWorkerClass) ? normalized as QueenBeeWorkerClass : null;
+}
+
+// True when the request names a custom (non-built-in) worker-class token, so a user-defined
+// specialist (e.g. workerClass "legal") can win tasks even though task inference only emits
+// built-in classes. Full semantic inference for custom classes comes with the packaged-agents registry.
+function taskMentionsClass(task: QueenBeeTaskIntent, classToken: string): boolean {
+  if (classToken.length < 3) return false;
+  const text = [task.title, task.body, ...(task.skills ?? [])].join(" ").toLowerCase();
+  const variants = new Set([classToken, classToken.replace(/[-_]+/g, " "), ...classToken.split(/[-_]+/)]);
+  return [...variants].some((variant) => variant.length >= 3 && text.includes(variant));
 }
 
 function uniqueTokens(value: string) {

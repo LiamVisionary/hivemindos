@@ -8,6 +8,8 @@ const dataSource = readFileSync(join(root, "src/components/wallets-drop-in/walle
 const viewSource = readFileSync(join(root, "src/components/wallets-drop-in/WalletsView.tsx"), "utf8");
 const rewardActionsSource = readFileSync(join(root, "src/components/wallets-drop-in/WalletRewardsActions.tsx"), "utf8");
 const panelSource = readFileSync(join(root, "src/features/dashboard/views/WalletPanel.tsx"), "utf8");
+const nativePersonalWalletsSource = readFileSync(join(root, "src/lib/native/personal-wallets.ts"), "utf8");
+const nativeObsidianSource = readFileSync(join(root, "src-tauri/src/obsidian.rs"), "utf8");
 const activityRouteSource = readFileSync(join(root, "src/app/api/wallet/activity/route.ts"), "utf8");
 const dashboardSource = readFileSync(join(root, "src/features/dashboard/DashboardApp.tsx"), "utf8");
 
@@ -37,10 +39,18 @@ assert.doesNotMatch(viewSource, /Status<\/span><strong style=\{\{ color: "var\(-
 
 assert.match(panelSource, /fetch\("\/api\/wallet\/activity\?limit=100"/);
 assert.match(panelSource, /fetch\("\/api\/honey-ledger"/);
+assert.match(panelSource, /import \{ readNativePersonalWallets \} from "@\/lib\/native\/personal-wallets"/);
+assert.match(panelSource, /readNativePersonalWallets\(\{ vaultPath \}\)[\s\S]*fetch\(`\/api\/wallet\/personal/);
 assert.match(panelSource, /buildActivityLedger\(walletActivity, agents\)/);
 assert.match(panelSource, /buildUsageRows\(props\?\.runtimeUsage, honeyLedger, agents\)/);
 assert.match(panelSource, /buildHoneyLedgerRows\(honeyLedger, agents\)/);
-assert.match(panelSource, /refreshRuntimeUsage\?\.\(\)/);
+assert.match(panelSource, /const refreshRuntimeUsageRef = useRef\(refreshRuntimeUsage\)/);
+assert.match(panelSource, /refreshRuntimeUsageRef\.current = refreshRuntimeUsage/);
+assert.match(panelSource, /refreshRuntimeUsageRef\.current\?\.\(\)/);
+assert.doesNotMatch(panelSource, /void refreshRuntimeUsage\?\.\(\)/);
+assert.doesNotMatch(panelSource, /\}, \[activeView, refreshRuntimeUsage\]\);/);
+assert.match(panelSource, /const runtimeDataSource = useMemo/);
+assert.doesNotMatch(panelSource, /buildDropInRuntimeData\(props, personalWallets/);
 assert.match(panelSource, /loadWalletActivity\(\)/);
 assert.match(panelSource, /loadHoneyLedger\(\)/);
 assert.match(panelSource, /function hasHiveEnvKey/);
@@ -51,6 +61,17 @@ assert.match(panelSource, /usePod: buildUsePodRuntimeData\(props, agents\)/);
 assert.match(panelSource, /credentialPresent/);
 
 assert.match(dashboardSource, /honeyStats, hiveEnv, hydrated/);
+assert.match(viewSource, /const appliedRuntimeDataRef = React\.useRef\(null\)/);
+assert.match(viewSource, /appliedRuntimeDataRef\.current !== runtimeData/);
+assert.match(viewSource, /appliedRuntimeDataRef\.current = runtimeData/);
+
+assert.match(nativePersonalWalletsSource, /isTauriDesktopRuntime\(\)/);
+assert.match(nativePersonalWalletsSource, /invoke<NativePersonalWalletsPayload>\("obsidian_personal_wallets"/);
+assert.doesNotMatch(nativePersonalWalletsSource, /nativePrivateFilesystemAccessGranted/);
+assert.doesNotMatch(nativePersonalWalletsSource, /allowPrivateFilesystem/);
+assert.match(nativeObsidianSource, /pub fn obsidian_personal_wallets\(vault_path: Option<String>\)/);
+assert.match(nativeObsidianSource, /fn split_json_objects/);
+assert.doesNotMatch(nativeObsidianSource, /allow_private_filesystem/);
 
 const actionRefs = new Set([...`${viewSource}\n${rewardActionsSource}`.matchAll(/actions\?\.([a-zA-Z0-9_]+)/g)].map((match) => match[1]));
 const walletActionsBody = panelSource.match(/const walletActions = useMemo\(\(\) => \(\{([\s\S]*?)\n\s*\}\), \[/)?.[1] ?? "";

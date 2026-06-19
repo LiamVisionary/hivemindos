@@ -1478,7 +1478,11 @@ function FleetWallets({ theme, onToggleTheme, onNavigate, actions }) {
   );
 }
 export function WalletsView({ runtimeData, theme, onToggleTheme, onNavigate, actions }: any = {}) {
-  if (runtimeData) D.frApplyRuntimeWalletData(runtimeData);
+  const appliedRuntimeDataRef = React.useRef(null);
+  if (runtimeData && appliedRuntimeDataRef.current !== runtimeData) {
+    D.frApplyRuntimeWalletData(runtimeData);
+    appliedRuntimeDataRef.current = runtimeData;
+  }
   const [selfTheme, setSelfTheme] = React.useState(theme || "dark");
   const active = theme || selfTheme;
   React.useEffect(() => {

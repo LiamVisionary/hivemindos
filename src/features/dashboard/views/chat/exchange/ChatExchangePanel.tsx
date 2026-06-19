@@ -610,7 +610,7 @@ export function ChatExchangePanel(props: any) {
                 <span>{newChatPressed ? "Starting..." : "New chat"}</span>
               </button>
             </div>
-            <div style={{ minHeight: 0, overflow: "hidden" }}>
+            <div className="fr-chat-sidebar-history">
               <ConversationNav
                 generalChats={generalChats}
                 machines={machinesWithChats}

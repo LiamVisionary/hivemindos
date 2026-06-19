@@ -722,6 +722,89 @@ function Seed-BundledSharedSkills {
   if ($seeded -gt 0) { Ok "Seeded $seeded bundled/auto-install HivemindOS shared skill(s)" } else { Ok "Bundled and auto-install HivemindOS shared skills already present" }
 }
 
+function Get-AgentSkillRoots {
+  param([string]$Agent)
+  $homeDir = [Environment]::GetFolderPath("UserProfile")
+  switch ($Agent) {
+    "codex" { @("$homeDir\.codex\skills") }
+    "claude" { @("$homeDir\.claude\skills") }
+    "hermes" { @("$homeDir\.hermes\skills") }
+    "gemini" { @("$homeDir\.gemini\skills") }
+    "openclaw" {
+      $roots = New-Object System.Collections.Generic.List[string]
+      $roots.Add("$homeDir\.openclaw\skills")
+      Get-ChildItem "$homeDir\.openclaw" -Directory -Filter "workspace-*" -ErrorAction SilentlyContinue |
+        ForEach-Object { $roots.Add((Join-Path $_.FullName "skills")) }
+      $roots
+    }
+    "aeon" {
+      $roots = New-Object System.Collections.Generic.List[string]
+      $roots.Add("$homeDir\.aeon\skills")
+      if ($env:AEON_LOCAL_PATH) { $roots.Add((Join-Path $env:AEON_LOCAL_PATH "skills")) }
+      $roots
+    }
+    default { @() }
+  }
+}
+
+function Test-HivemindManagedSkillDir {
+  param([string]$Path)
+  $metadataPath = Join-Path $Path ".hivemind-skill-source.json"
+  if (-not (Test-Path $metadataPath)) { return $false }
+  try {
+    $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+  } catch {
+    return $false
+  }
+  $provider = [string]($metadata.provider)
+  $providerLabel = [string]($metadata.providerLabel)
+  return $metadata.managedBy -eq "hivemindos" `
+    -or @("shared-brain", "bundled", "packaged-auto-install") -contains $provider `
+    -or $providerLabel.StartsWith("HivemindOS")
+}
+
+function Sync-SharedSkillsToRuntime {
+  param(
+    [string]$Agent,
+    [string]$VaultPath
+  )
+  $skillsFolder = Join-Path $VaultPath "Skills"
+  $synced = 0
+  $skipped = 0
+  foreach ($root in Get-AgentSkillRoots -Agent $Agent) {
+    if (-not $root) { continue }
+    New-Item -ItemType Directory -Force -Path $root | Out-Null
+    foreach ($skillDir in @(Get-ChildItem -Path $skillsFolder -Directory -ErrorAction SilentlyContinue | Sort-Object Name)) {
+      $skillMd = Join-Path $skillDir.FullName "SKILL.md"
+      if (-not (Test-Path $skillMd)) { continue }
+      $destination = Join-Path $root $skillDir.Name
+      if ((Test-Path $destination) -and -not (Test-HivemindManagedSkillDir -Path $destination)) {
+        $skipped += 1
+        continue
+      }
+      if (Test-Path $destination) { Remove-Item $destination -Recurse -Force }
+      New-Item -ItemType Directory -Force -Path $destination | Out-Null
+      Copy-Item -Path (Join-Path $skillDir.FullName "*") -Destination $destination -Recurse -Force
+      $metadata = @{
+        managedBy = "hivemindos"
+        provider = "shared-brain"
+        providerLabel = "Shared brain"
+        sourcePath = $skillMd
+        targetRuntime = $Agent
+        projection = "primary-overlay"
+        syncedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+      } | ConvertTo-Json -Depth 4
+      Set-Content -Path (Join-Path $destination ".hivemind-skill-source.json") -Value $metadata
+      $synced += 1
+    }
+  }
+  if ($skipped -gt 0) {
+    Warn "Synced $synced shared skill projection(s) to $Agent; skipped $skipped unmanaged local skill collision(s)"
+  } else {
+    Ok "Synced $synced shared skill projection(s) to $Agent"
+  }
+}
+
 function Get-AgentInstructionFiles {
   $homeDir = [Environment]::GetFolderPath("UserProfile")
   @(
@@ -781,7 +864,7 @@ function Write-HivemindManagedBlock {
   $lines.Add("- Skills index: ``$(Join-Path $skillsFolder "README.md")``")
   $lines.Add("- Skill files: ``$skillsFolder\<slug>\SKILL.md``")
   $lines.Add("")
-  $lines.Add("Before using a shared skill, read ``$(Join-Path $skillsFolder "README.md")`` for the index, then read the relevant ``SKILL.md``. The bundled baseline skill is ``karpathy-guidelines``.")
+  $lines.Add("Treat this shared shelf as the primary skill source. Runtime-local skill folders are supplemental overlays: preserve unmanaged local skills, but prefer the shared shelf when both define a relevant capability. Before using a shared skill, read ``$(Join-Path $skillsFolder "README.md")`` for the index, then read the relevant ``SKILL.md``.")
   $lines.Add("")
   $lines.Add("## Shared Brain Memory")
   $lines.Add("")
@@ -846,6 +929,9 @@ function Install-ClaudeBrainHook {
 }
 
 Seed-BundledSharedSkills -VaultPath $vaultPath
+@("codex", "claude", "hermes", "gemini", "openclaw", "aeon") | ForEach-Object {
+  Sync-SharedSkillsToRuntime -Agent $_ -VaultPath $vaultPath
+}
 Write-HivemindManagedBlock -Path (Join-Path $vaultPath "AGENTS.md") -VaultPath $vaultPath
 Get-AgentInstructionFiles | ForEach-Object { Write-HivemindManagedBlock -Path $_ -VaultPath $vaultPath }
 Install-ClaudeBrainHook

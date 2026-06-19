@@ -89,7 +89,7 @@ This vault is the shared brain for HivemindOS agents. It should stay useful to h
 | Memory | Durable daily briefings, weekly reviews, decisions, meetings, book notes, imported sources, and distillations. |
 | Projects | Project overviews, status deltas, plans, decisions, and reusable project context. |
 | Operations | Machine-readable HivemindOS state: automations, work board, notifications, runtime mirrors, secure backups, access logs, and brain-service status. |
-| Skills | Reusable agent procedures. Read \`Skills/README.md\` first, then the relevant \`Skills/<slug>/SKILL.md\`. |
+| Skills | Primary reusable agent procedures. Read \`Skills/README.md\` first, then the relevant \`Skills/<slug>/SKILL.md\`; runtime-local skills are supplemental overlays. |
 | Archive | Preserved inactive or processed material. |
 
 ## Note Contract
@@ -106,6 +106,7 @@ This vault is the shared brain for HivemindOS agents. It should stay useful to h
 
 - Read \`AGENTS.md\`, \`Shared Context.md\`, and this contract before durable edits.
 - Use \`hive-brain answer "<query>"\` or \`/api/brain/memory\` for shared-brain recall and durable shared memories. Raw/non-managed agents should prefer \`hive-brain\` because it discovers the running API and falls back to local vault/index search. Claude Code may also receive shared-brain context automatically through the setup-installed \`hive-brain-hook\` \`UserPromptSubmit\` hook. Load the \`hive-brain-memory\` skill when recalling, writing, correcting, or evolving typed Shared Brain Memory.
+- Treat \`Skills/\` as the primary shared skill shelf. HivemindOS may project shared skills into runtime-local skill folders as managed cache entries, while unmanaged runtime-local skills remain supplemental and are preserved on slug collision.
 - Default recall/answer is tiered: check typed Agent Memory first, return it when the distilled hit is strong, and otherwise augment with relevant markdown from the full shared vault.
 - Full-vault recall uses the generated lexical search index at \`${folders.brainServicesFolder}/Full Vault Search Index.jsonl\` first, then ripgrep/plain grep/full walk only when the index is unavailable or empty.
 - Use \`--scope agent-memory\` or \`scope: "agent-memory"\` for typed/proven memory only; use \`--scope full-vault\` or \`scope: "full-vault"\` to force broad vault recall.

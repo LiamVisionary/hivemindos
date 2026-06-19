@@ -205,6 +205,11 @@ export type AdaptiveOpenRouterUseCase =
   | "research"
   | "tool-use";
 
+export type ResearchMethod =
+  | "quick-source-check"
+  | "storm-brief"
+  | "full-research-swarm";
+
 export interface AdaptiveOpenRouterConfig {
   useCase?: AdaptiveOpenRouterUseCase;
   fallbackModel?: string;
@@ -434,6 +439,7 @@ export interface AgentProfile {
   skillProfilePrompt?: string;
   preferredSkillSlugs?: string[];
   taskPreferences?: WorkerTaskPreference[];
+  researchMethod?: ResearchMethod;
   agentEnv?: Record<string, string>;
   gitlawb?: AgentGitLawbStatus;
   memoryForkedFromAgentId?: string;

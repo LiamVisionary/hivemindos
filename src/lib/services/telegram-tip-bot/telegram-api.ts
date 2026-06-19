@@ -39,6 +39,12 @@ export type TgUpdate = {
 
 export type TgInlineKeyboardButton = { text: string; url: string };
 
+export type TgChatMember = {
+  status: "creator" | "administrator" | "member" | "restricted" | "left" | "kicked";
+  user: TgUser;
+  tag?: string;
+};
+
 export class TelegramApiError extends Error {
   constructor(
     method: string,
@@ -195,6 +201,14 @@ export class TelegramBotApi {
 
   setMyCommands(commands: Array<{ command: string; description: string }>): Promise<boolean> {
     return this.call<boolean>("setMyCommands", { commands });
+  }
+
+  getChatMember(params: { chatId: number | string; userId: number | string }): Promise<TgChatMember> {
+    return this.call<TgChatMember>("getChatMember", { chat_id: params.chatId, user_id: params.userId });
+  }
+
+  setChatMemberTag(params: { chatId: number | string; userId: number | string; tag: string }): Promise<boolean> {
+    return this.call<boolean>("setChatMemberTag", { chat_id: params.chatId, user_id: params.userId, tag: params.tag });
   }
 }
 

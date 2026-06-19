@@ -1,0 +1,19 @@
+{
+  "upstreamName": "eval-judge",
+  "slug": "eval-judge",
+  "label": "Eval Judge",
+  "domain": "plugin-eval",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/plugin-eval/agents/eval-judge.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent eval-judge",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/eval-judge",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "LLM judge for plugin quality assessment. Scores skills on triggering accuracy, orchestration fitness, output quality, and scope calibration using anchored rubrics."
+}

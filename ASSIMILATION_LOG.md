@@ -5760,3 +5760,675 @@
 - Decision: assimilated
 - Assimilated: local-kanban-downloads:/Users/liam/Downloads/KanbanPanel.tsx => src/features/dashboard/views/KanbanPanel.tsx, local-kanban-downloads:/Users/liam/Downloads/kanban-board.module.css => src/app/kanban-board.module.css, hivemind-os:src/features/dashboard/DashboardApp.tsx => src/features/dashboard/views/KanbanPanel.tsx, hivemind-os:HEAD:src/features/dashboard/views/KanbanPanel.tsx => src/features/dashboard/views/KanbanPanel.tsx
 - Verification: Wrote ASSIMILATION.kanban-ui.json with 4 entries and custom_code_assessment=mostly_assimilated.
+## 2026-06-18T17:10:25.883534+00:00 - wallet-lag-loop-fix
+
+- Request: Fix HivemindOS wallets view lag caused by recursive runtime usage refresh
+- Source: current-project
+- Selected backbone: local-project:hivemind-os wallet drop-in bridge
+- Note: Public GitHub search was not needed because this was an in-repo regression with exact current-project owners and no missing donor source.
+
+### Candidates
+- hive-brain answer full-vault
+  - Decision: inspected
+  - Reason: no wallet-specific prior memory found
+  - Path: `N/A`
+- src/features/dashboard/views/WalletPanel.tsx
+  - Decision: adapted_code
+  - Reason: existing wallet bridge owned refresh effects and drop-in runtime data derivation
+  - Path: `src/features/dashboard/views/WalletPanel.tsx`
+- src/components/wallets-drop-in/WalletsView.tsx
+  - Decision: adapted_code
+  - Reason: existing drop-in runtime hydration path guarded by payload identity
+  - Path: `src/components/wallets-drop-in/WalletsView.tsx`
+- scripts/test-wallet-real-tabs.mjs
+  - Decision: test_adapted
+  - Reason: existing wallet wiring regression script extended to catch unstable refresh dependencies
+  - Path: `scripts/test-wallet-real-tabs.mjs`
+## 2026-06-19T01:43:23.001474+00:00 - wallet-production-native-bridge
+
+- Request: Fix My wallets not loading in HivemindOS production desktop build
+- Source: current-project
+- Selected backbone: local-project:hivemind-os static Tauri native bridge patterns
+- Note: Managed HivemindOS vault reads for My wallets are not private-filesystem-consent gated; broad bootstrap/private filesystem reads remain consent-first. Public GitHub search not needed because the production/dev mismatch was fully explained by in-repo static Tauri bridge docs and code.
+
+### Candidates
+- docs/native-app.md
+  - Decision: selected
+  - Reason: documents production static UI plus native bridge requirement
+  - Path: `docs/native-app.md`
+- src-tauri/src/obsidian.rs
+  - Decision: adapted_code
+  - Reason: existing native Obsidian reader extended from agents to personal wallets
+  - Path: `src-tauri/src/obsidian.rs`
+- src/lib/native/obsidian.ts
+  - Decision: selected-donor
+  - Reason: existing Tauri invoke adapter pattern for packaged static desktop
+  - Path: `src/lib/native/personal-wallets.ts`
+- src/app/api/wallet/personal/route.ts
+  - Decision: adapted_code
+  - Reason: mirrored personal wallet merge shape without decrypting secrets
+  - Path: `src-tauri/src/obsidian.rs`
+- scripts/check-tauri-command-acl.mjs
+  - Decision: test_adapted
+  - Reason: ACL lockstep guard covers new command registration
+  - Path: `scripts/check-tauri-command-acl.mjs`
+## 2026-06-19T02:52:34.732019+00:00 - local-search
+
+- Request: Add opt-in double clap local audio activation for HivemindOS Queen Bee voice chat overlay
+- Source: local-index
+- Query: `Add opt-in double clap local audio activation for HivemindOS Queen Bee voice chat overlay`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/chatterbox
+  - URL: https://github.com/LiamVisionary/chatterbox
+  - Description: LiamVisionary/chatterbox SoTA open-source TTS Voice/TTS
+## 2026-06-19T02:52:39.463366+00:00 - public-search
+
+- Request: Add opt-in double clap local audio activation for HivemindOS Queen Bee voice chat overlay
+- Source: public-github
+- Query: `Add opt-in double clap local audio activation for HivemindOS Queen Bee voice chat overlay`
+- Decision: retrieved
+- Reason: Retrieved 12 public candidates from GitHub search.
+
+### Candidates
+- PatWie/digitalmusicstand (38 stars, JavaScript, GNU General Public License v3.0)
+  - URL: https://github.com/PatWie/digitalmusicstand
+  - Description: web based music sheet viewer (go, pdfjs) as a single binary
+- calvinhsia/SheetMusicViewer (11 stars, C#, MIT License)
+  - URL: https://github.com/calvinhsia/SheetMusicViewer
+  - Description: Sheet Music Viewer for musicians
+- rlabbe/MusicReader (3 stars, C++, GNU Affero General Public License v3.0)
+  - URL: https://github.com/rlabbe/MusicReader
+  - Description: Sheet Music PDF Viewer
+- misprit7/noteation (3 stars, TypeScript)
+  - URL: https://github.com/misprit7/noteation
+  - Description: A sheet music viewer controlled by eye tracking and computer vision
+- joelkingsley/sheet-flow (3 stars, TypeScript)
+  - URL: https://github.com/joelkingsley/sheet-flow
+  - Description: A cross-platform sheet music viewer built with React Native and Expo. Display and interact with MusicXML files using OpenSheetMusicDisplay (OSMD) in a native mobile app and web interface.
+- felixhaedicke/SheetMusicViewer (2 stars, C++, GNU Affero General Public License v3.0)
+  - URL: https://github.com/felixhaedicke/SheetMusicViewer
+  - Description: Simple sheet music PDF viewer implemented in Qt (and thus for Linux, Embedded Linux, Android, Windows, probably Mac...)
+- tgcarpenter/Sheet-Music-Reader (2 stars, Python)
+  - URL: https://github.com/tgcarpenter/Sheet-Music-Reader
+  - Description: Sheet Music viewer and marker for working musicians
+- ManojKumarPatnaik/Major-project-list (236 stars, MIT License)
+  - URL: https://github.com/ManojKumarPatnaik/Major-project-list
+  - Description: A list of practical projects that anyone can solve in any programming language (See solutions). These projects are divided into multiple categories, and each category has its own folder. To get started, simply fork this repo. CONTRIBUTING S
+- kunaal438/music-app (6 stars, PHP)
+  - URL: https://github.com/kunaal438/music-app
+  - Description: This is a sample music app made with PHP for just practice.
+- plivesey/JazzPracticeApp (6 stars, Swift)
+  - URL: https://github.com/plivesey/JazzPracticeApp
+  - Description: Auto generates jazz music to practice with
+- cueaz/score-viewer (5 stars, TypeScript, Mozilla Public License 2.0)
+  - URL: https://github.com/cueaz/score-viewer
+  - Description: View sheet music with simple MIDI input visualization
+- TecReaGroup/musheet (1 stars, Dart, MIT License)
+  - URL: https://github.com/TecReaGroup/musheet
+  - Description: A Flutter-based digital sheet music management application designed for musicians and bands. It focuses on PDF score viewing with annotations, setlist management, and team collaboration with an offline-first architecture.
+## 2026-06-19T02:52:39.530074+00:00 - prebuild-gate
+
+- Request: Add opt-in double clap local audio activation for HivemindOS Queen Bee voice chat overlay
+- Source: public-github
+- Query: `Add opt-in double clap local audio activation for HivemindOS Queen Bee voice chat overlay`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-06-19T02:52:50.852051+00:00 - public-search
+
+- Request: web audio clap detection javascript double clap microphone
+- Source: public-github
+- Query: `web audio clap detection javascript double clap microphone`
+- Decision: retrieved
+- Reason: Retrieved 11 public candidates from GitHub search.
+
+### Candidates
+- PatWie/digitalmusicstand (38 stars, JavaScript, GNU General Public License v3.0)
+  - URL: https://github.com/PatWie/digitalmusicstand
+  - Description: web based music sheet viewer (go, pdfjs) as a single binary
+- calvinhsia/SheetMusicViewer (11 stars, C#, MIT License)
+  - URL: https://github.com/calvinhsia/SheetMusicViewer
+  - Description: Sheet Music Viewer for musicians
+- rlabbe/MusicReader (3 stars, C++, GNU Affero General Public License v3.0)
+  - URL: https://github.com/rlabbe/MusicReader
+  - Description: Sheet Music PDF Viewer
+- misprit7/noteation (3 stars, TypeScript)
+  - URL: https://github.com/misprit7/noteation
+  - Description: A sheet music viewer controlled by eye tracking and computer vision
+- joelkingsley/sheet-flow (3 stars, TypeScript)
+  - URL: https://github.com/joelkingsley/sheet-flow
+  - Description: A cross-platform sheet music viewer built with React Native and Expo. Display and interact with MusicXML files using OpenSheetMusicDisplay (OSMD) in a native mobile app and web interface.
+- ManojKumarPatnaik/Major-project-list (236 stars, MIT License)
+  - URL: https://github.com/ManojKumarPatnaik/Major-project-list
+  - Description: A list of practical projects that anyone can solve in any programming language (See solutions). These projects are divided into multiple categories, and each category has its own folder. To get started, simply fork this repo. CONTRIBUTING S
+- cueaz/score-viewer (5 stars, TypeScript, Mozilla Public License 2.0)
+  - URL: https://github.com/cueaz/score-viewer
+  - Description: View sheet music with simple MIDI input visualization
+- TecReaGroup/musheet (1 stars, Dart, MIT License)
+  - URL: https://github.com/TecReaGroup/musheet
+  - Description: A Flutter-based digital sheet music management application designed for musicians and bands. It focuses on PDF score viewing with annotations, setlist management, and team collaboration with an offline-first architecture.
+- cowballwong/worship-music (0 stars, JavaScript)
+  - URL: https://github.com/cowballwong/worship-music
+  - Description: Personal worship music sheet library — Drive-backed PDF viewer with playlist + edit annotations
+- JaredLincenberg/ComputerVisionMusicReader (0 stars, Python)
+  - URL: https://github.com/JaredLincenberg/ComputerVisionMusicReader
+  - Description: School Project to take PDFs of sheet Music and add annotation and convert them into music.
+- youwenshao/etude (0 stars, Python)
+  - URL: https://github.com/youwenshao/etude
+  - Description: A research-grade pipeline that converts scanned sheet music (PDF) into accurate piano fingering annotations using symbolic intermediate representations and pretrained ML models.
+## 2026-06-19T02:52:51.792290+00:00 - public-search
+
+- Request: clap detector Web Audio API JavaScript
+- Source: public-github
+- Query: `clap detector Web Audio API JavaScript`
+- Decision: retrieved
+- Reason: Retrieved 8 public candidates from GitHub search.
+
+### Candidates
+- DARSHANJR/clap-to-change-the-page-colour-and-shows-the-student-details (0 stars, HTML, Creative Commons Zero v1.0 Universal)
+  - URL: https://github.com/DARSHANJR/clap-to-change-the-page-colour-and-shows-the-student-details
+  - Description: This is a fun Web Audio Clap Detector project! It uses JavaScript's Web Audio API and the microphone to detect a clap (volume threshold check) and trigger actions: clap.html: Changes the page's background color on each clap. clap1.html: Loa
+- PatWie/digitalmusicstand (38 stars, JavaScript, GNU General Public License v3.0)
+  - URL: https://github.com/PatWie/digitalmusicstand
+  - Description: web based music sheet viewer (go, pdfjs) as a single binary
+- calvinhsia/SheetMusicViewer (11 stars, C#, MIT License)
+  - URL: https://github.com/calvinhsia/SheetMusicViewer
+  - Description: Sheet Music Viewer for musicians
+- rlabbe/MusicReader (3 stars, C++, GNU Affero General Public License v3.0)
+  - URL: https://github.com/rlabbe/MusicReader
+  - Description: Sheet Music PDF Viewer
+- misprit7/noteation (3 stars, TypeScript)
+  - URL: https://github.com/misprit7/noteation
+  - Description: A sheet music viewer controlled by eye tracking and computer vision
+- joelkingsley/sheet-flow (3 stars, TypeScript)
+  - URL: https://github.com/joelkingsley/sheet-flow
+  - Description: A cross-platform sheet music viewer built with React Native and Expo. Display and interact with MusicXML files using OpenSheetMusicDisplay (OSMD) in a native mobile app and web interface.
+- ManojKumarPatnaik/Major-project-list (236 stars, MIT License)
+  - URL: https://github.com/ManojKumarPatnaik/Major-project-list
+  - Description: A list of practical projects that anyone can solve in any programming language (See solutions). These projects are divided into multiple categories, and each category has its own folder. To get started, simply fork this repo. CONTRIBUTING S
+- cueaz/score-viewer (5 stars, TypeScript, Mozilla Public License 2.0)
+  - URL: https://github.com/cueaz/score-viewer
+  - Description: View sheet music with simple MIDI input visualization
+## 2026-06-19T02:57:59.251001+00:00 - assimilation-manifest
+
+- Request: Add opt-in double clap local audio activation for HivemindOS Queen Bee voice chat overlay
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: DARSHANJR/clap-to-change-the-page-colour-and-shows-the-student-details:clap.html => src/features/queen-voice/clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/QueenBeeVoiceOverlay.tsx => src/features/queen-voice/QueenBeeVoiceOverlay.tsx, local-project:hivemind-os:scripts/test-queen-echo-detection.mjs => scripts/test-queen-clap-activation.mjs
+- Verification: Wrote ASSIMILATION.queen-clap-wake.json with 3 entries and custom_code_assessment=balanced.
+## 2026-06-19T02:58:08.583472+00:00 - final-triage
+
+- Request: Add opt-in double clap local audio activation for HivemindOS Queen Bee voice chat overlay
+- Source: current-project+public-github
+- Decision: assimilated
+- Reason: Existing Queen Bee voice overlay/event path was the safe backbone; the public clap donor only supplied the Web Audio RMS threshold primitive.
+- Selected backbone: local-project:hivemind-os Queen Bee voice overlay
+- Assimilated: DARSHANJR/clap-to-change-the-page-colour-and-shows-the-student-details:clap.html => src/features/queen-voice/clap-activation.ts::adapted_code::RMS/threshold clap primitive; local-project:hivemind-os Queen voice overlay/event/dashboard-state patterns => QueenBeeVoiceOverlay/use-queen-clap-activation::adapted_code
+- Not assimilated: Broad prebuild public candidates were sheet-music/music-practice repositories and were rejected as unrelated; LiamVisionary/chatterbox was TTS-only and not used.
+- Verification: pnpm test:queen-clap passed; focused ESLint passed; pnpm test:queen-echo passed; filtered TypeScript reported no touched-path diagnostics; git diff --check passed; ASSIMILATION_LOG.jsonl parsed successfully.
+
+### Candidates
+- DARSHANJR/clap-to-change-the-page-colour-and-shows-the-student-details
+  - Decision: selected-donor
+  - Reason: CC0 Web Audio clap example with getUserMedia, AnalyserNode, RMS threshold
+  - Path: `clap.html`
+- local-project:hivemind-os:src/features/queen-voice/QueenBeeVoiceOverlay.tsx
+  - Decision: selected-backbone
+  - Reason: owns existing Queen voice overlay and toggle path
+- LiamVisionary/chatterbox
+  - Decision: rejected
+  - Reason: TTS-only local/private hit, no clap activation source
+- PatWie/digitalmusicstand
+  - Decision: rejected
+  - Reason: sheet-music viewer false positive from broad prebuild search
+## 2026-06-19T02:58:43.547540+00:00 - assimilation-manifest
+
+- Request: Add opt-in double clap local audio activation for HivemindOS Queen Bee voice chat overlay
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: DARSHANJR/clap-to-change-the-page-colour-and-shows-the-student-details:clap.html => src/features/queen-voice/clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/QueenBeeVoiceOverlay.tsx => src/features/queen-voice/QueenBeeVoiceOverlay.tsx, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/use-queen-clap-activation.ts, local-project:hivemind-os:scripts/test-queen-echo-detection.mjs => scripts/test-queen-clap-activation.mjs
+- Verification: Wrote ASSIMILATION.queen-clap-wake.json with 4 entries and custom_code_assessment=balanced.
+## 2026-06-19T03:33:43.216062+00:00 - assimilation-manifest
+
+- Request: Add double-clap Queen Bee voice chat activation and expose it in Queen Bee Calls settings
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: DARSHANJR/clap-to-change-the-page-colour-and-shows-the-student-details:clap.html => src/features/queen-voice/clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/QueenBeeVoiceOverlay.tsx => src/features/queen-voice/QueenBeeVoiceOverlay.tsx, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/use-queen-clap-activation.ts, local-project:hivemind-os:scripts/test-queen-echo-detection.mjs => scripts/test-queen-clap-activation.mjs, local-project:hivemind-os:src/features/dashboard/DashboardApp.tsx => src/features/dashboard/DashboardApp.tsx, local-project:hivemind-os:src/features/dashboard/views/chat/AgentSettingsModal.tsx => src/features/dashboard/views/chat/AgentSettingsModal.tsx, local-project:hivemind-os:src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx => src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx
+- Verification: Wrote ASSIMILATION.queen-clap-wake.json with 7 entries and custom_code_assessment=balanced.
+## 2026-06-19T03:33:55.191976+00:00 - triage
+
+- Request: Add the double-clap Queen Bee voice chat toggle to AgentSettingsModal Calls
+- Source: local-project
+- Decision: adapted_code
+- Reason: No new algorithm or external UI donor was needed; this extends the existing clap detector by reusing DashboardApp state persistence and the existing Agent Calls checkbox-row settings pattern.
+- Selected backbone: local-project:hivemind-os
+- Assimilated: DashboardApp persisted clap wake state; AgentSettingsModal Calls prop threading; AgentCallsSettingsPanel Queen Bee-only toggle
+- Verification: Pending focused queen-clap/settings regression checks.
+## 2026-06-19T03:44:05.111094+00:00 - public-search
+
+- Request: OpenAI Realtime API response.create assistant greeting WebRTC data channel
+- Source: public-github
+- Query: `OpenAI Realtime API response.create assistant greeting WebRTC data channel`
+- Decision: retrieved
+- Reason: Retrieved 2 public candidates from GitHub search.
+
+### Candidates
+- weshaan/SUSI-Web-Audio-API (0 stars)
+  - URL: https://github.com/weshaan/SUSI-Web-Audio-API
+  - Description: Implement an AudioWorklet within the eventyay-video player to extract raw PCM audio chunks directly from the active WebRTC stream.
+- smartManual/stream-audio-player (1 stars, TypeScript, MIT License)
+  - URL: https://github.com/smartManual/stream-audio-player
+  - Description: 音频流式播放库，支持 PCM/MP3/WAV 格式的实时解码与播放。适用于 Web 音频应用开发
+## 2026-06-19T03:44:24.749404+00:00 - triage
+
+- Request: Have Queen Bee start the voice conversation
+- Source: public-github
+- Decision: rejected
+- Reason: Public search returned generic Web Audio stream-player repositories, not extractable Realtime assistant-initiated conversation code for this app.
+
+### Candidates
+- weshaan/SUSI-Web-Audio-API
+  - Decision: rejected
+  - Reason: generic WebRTC/Web Audio PCM extraction, no relevant OpenAI Realtime conversation-start code
+- smartManual/stream-audio-player
+  - Decision: rejected
+  - Reason: generic stream playback library, not tied to Queen Bee voice session or Realtime response.create
+## 2026-06-19T03:44:24.749613+00:00 - triage
+
+- Request: Have Queen Bee start the voice conversation
+- Source: local-project
+- Decision: selected
+- Reason: Existing Queen Bee realtime and fallback hooks already contain response.create, addTurn, history, and playSpokenReply primitives needed for an assistant-initiated opening.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/queen-voice/use-queen-bee-realtime.ts
+  - Decision: selected
+  - Reason: adapt response.create and transcript-turn handling for one assistant opening
+- src/features/queen-voice/use-queen-bee-voice.ts
+  - Decision: selected
+  - Reason: adapt playSpokenReply/addTurn/history path for fallback opening
+- scripts/test-queen-clap-activation.mjs
+  - Decision: selected
+  - Reason: extend cross-file source guards for opening behavior
+## 2026-06-19T03:46:08.269151+00:00 - assimilation-manifest
+
+- Request: Add double-clap Queen Bee voice chat activation, expose it in Queen Bee Calls settings, and have Queen Bee start the voice conversation
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: DARSHANJR/clap-to-change-the-page-colour-and-shows-the-student-details:clap.html => src/features/queen-voice/clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/QueenBeeVoiceOverlay.tsx => src/features/queen-voice/QueenBeeVoiceOverlay.tsx, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/use-queen-clap-activation.ts, local-project:hivemind-os:scripts/test-queen-echo-detection.mjs => scripts/test-queen-clap-activation.mjs, local-project:hivemind-os:src/features/dashboard/DashboardApp.tsx => src/features/dashboard/DashboardApp.tsx, local-project:hivemind-os:src/features/dashboard/views/chat/AgentSettingsModal.tsx => src/features/dashboard/views/chat/AgentSettingsModal.tsx, local-project:hivemind-os:src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx => src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-realtime.ts => src/features/queen-voice/use-queen-bee-realtime.ts, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/use-queen-bee-voice.ts
+- Verification: Wrote ASSIMILATION.queen-clap-wake.json with 9 entries and custom_code_assessment=balanced.
+## 2026-06-19T03:56:18.332186+00:00 - assimilation-manifest
+
+- Request: Add double-clap Queen Bee voice chat activation, expose it in Queen Bee Calls settings, have Queen Bee start the voice conversation, and make real claps register reliably
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: DARSHANJR/clap-to-change-the-page-colour-and-shows-the-student-details:clap.html => src/features/queen-voice/clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/QueenBeeVoiceOverlay.tsx => src/features/queen-voice/QueenBeeVoiceOverlay.tsx, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/use-queen-clap-activation.ts, local-project:hivemind-os:scripts/test-queen-echo-detection.mjs => scripts/test-queen-clap-activation.mjs, local-project:hivemind-os:src/features/dashboard/DashboardApp.tsx => src/features/dashboard/DashboardApp.tsx, local-project:hivemind-os:src/features/dashboard/views/chat/AgentSettingsModal.tsx => src/features/dashboard/views/chat/AgentSettingsModal.tsx, local-project:hivemind-os:src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx => src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-realtime.ts => src/features/queen-voice/use-queen-bee-realtime.ts, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/use-queen-bee-voice.ts
+- Verification: Wrote ASSIMILATION.queen-clap-wake.json with 10 entries and custom_code_assessment=balanced.
+## 2026-06-19T03:58:47.215795+00:00 - debug
+
+- Request: Fix Queen Bee clap wake not registering real double claps
+- Source: local-project
+- Decision: adapted_code
+- Reason: Real fast double-claps can keep the detector disarmed because the clap tail does not return to an absolute quiet threshold before the second clap. Adapted the local VAD-style relative drop concept so clap wake re-arms after a clear partial decay while sustained loud frames still do not double-count.
+- Assimilated: src/features/queen-voice/clap-activation.ts relative rearm state; scripts/test-queen-clap-activation.mjs partial clap-tail regression
+- Verification: Pending focused clap regression and lint.
+## 2026-06-19T03:59:16.108507+00:00 - assimilation-manifest
+
+- Request: Add double-clap Queen Bee voice chat activation, expose it in Queen Bee Calls settings, have Queen Bee start the voice conversation, and make real fast claps register reliably
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: DARSHANJR/clap-to-change-the-page-colour-and-shows-the-student-details:clap.html => src/features/queen-voice/clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/QueenBeeVoiceOverlay.tsx => src/features/queen-voice/QueenBeeVoiceOverlay.tsx, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/use-queen-clap-activation.ts, local-project:hivemind-os:scripts/test-queen-echo-detection.mjs => scripts/test-queen-clap-activation.mjs, local-project:hivemind-os:src/features/dashboard/DashboardApp.tsx => src/features/dashboard/DashboardApp.tsx, local-project:hivemind-os:src/features/dashboard/views/chat/AgentSettingsModal.tsx => src/features/dashboard/views/chat/AgentSettingsModal.tsx, local-project:hivemind-os:src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx => src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-realtime.ts => src/features/queen-voice/use-queen-bee-realtime.ts, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/use-queen-bee-voice.ts
+- Verification: Wrote ASSIMILATION.queen-clap-wake.json with 10 entries and custom_code_assessment=balanced.
+## 2026-06-19T04:08:45.584892+00:00 - implementation
+
+- Request: Make HivemindOS shared skill shelf the primary skill source while preserving runtime-local skills
+- Source: local-project
+- Decision: adapted_code
+- Reason: Adapted the existing shared skill seeding, Aeon managed mirror metadata, provider mirror loop guards, and uninstall mirror surfaces into a non-destructive primary runtime projection for Codex and other local runtimes.
+- Selected backbone: local-project:hivemind-os
+- Assimilated: scripts/seed-shared-skills.sh shared skill seed/import/instruction patterns; src/lib/services/obsidian/brain-skills.ts shared-brain mirror metadata conventions; uninstall.sh/uninstall.ps1 managed block removal pattern; docs/whole-brain/shared-skills.md canonical shelf contract
+- Verification: Pending focused projection and static contract checks.
+## 2026-06-19T04:12:10.879009+00:00 - verification
+
+- Request: Make HivemindOS shared skill shelf the primary skill source while preserving runtime-local skills
+- Source: local-project
+- Decision: verified
+- Selected backbone: local-project:hivemind-os
+- Assimilated: scripts/test-shared-skill-runtime-projection.mjs focused runtime projection regression; shell/PowerShell parser checks; shared-skill static contract checks; ESLint for touched chat prompt context
+- Verification: Projection regression, shell syntax, PowerShell parser, focused ESLint, diff whitespace, line-count, and JSONL checks passed. Repo-wide vault structure contract remains blocked by the pre-existing unrelated KanbanPanel assertion before this change's shared-skill assertions.
+
+## 2026-06-19T04:54:11+00:00 - exchange-sidebar-history-scroll
+
+- Request: Fix the left chat history panel not being scrollable
+- Source: current-project+shared-brain
+- Selected backbone: `src/features/dashboard/views/chat/exchange/ConversationNav.tsx`
+- Verification: Focused ESLint passed for `ChatExchangePanel.tsx` and `ConversationNav.tsx`; focused `git diff --check` passed; static source assertions confirmed the sidebar history row uses `minmax(0, 1fr)`, the history wrapper owns `overflow-y: auto` with contained overscroll, the nav root no longer owns a nested scroll container, and the layout/sidebar ancestors are explicitly height-bounded. A temporary dev server on `127.0.0.1:5023` returned HTTP 200; live DOM Playwright smoke could not run because the bundled Chromium executable is missing and the system Chrome launch aborted in this sandbox.
+
+### Candidates
+- `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+  - Decision: style_adapted
+  - Reason: owns the sidebar grid and scroll viewport; changed the history row from `1fr` to `minmax(0, 1fr)`, bounded the layout/sidebar heights, and made `.fr-chat-sidebar-history` the vertical scroll owner.
+  - Path: `src/features/dashboard/views/chat/exchange/chat-exchange.css`
+- `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+  - Decision: adapted_code
+  - Reason: owns the left sidebar wrapper around `ConversationNav`; applied the explicit sidebar history viewport class.
+  - Path: `src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx`
+- `src/features/dashboard/views/chat/exchange/ConversationNav.tsx`
+  - Decision: adapted_code
+  - Reason: owns the conversation tree markup; removed nested scroll ownership so the bounded sidebar history wrapper can scroll the natural-height tree.
+  - Path: `src/features/dashboard/views/chat/exchange/ConversationNav.tsx`
+- Shared Brain recall query `HivemindOS Exchange left history panel sidebar not scrollable ConversationNav overflow hidden`
+  - Decision: no_relevant_reuse
+  - Reason: recall returned generic local-control panel notes and no stronger reusable source than the active Exchange sidebar implementation.
+  - Path: `hive-brain answer --scope full-vault`
+## 2026-06-19T05:08:15.023057+00:00 - public-search
+
+- Request: ERC-8004 agent identity clear signing crypto risk monitor x402 TypeScript
+- Source: public-github
+- Query: `ERC-8004 agent identity clear signing crypto risk monitor x402 TypeScript`
+- Decision: retrieved
+- Reason: Retrieved 10 public candidates from GitHub search.
+
+### Candidates
+- gitbankio/x402 (1 stars, TypeScript, Other)
+  - URL: https://github.com/gitbankio/x402
+  - Description: Standalone TypeScript client for paying x402 v2 APIs from a smart contract vault. No API key. No account. EIP-3009 signed USDC on Base.
+- OviatoHQ/x402-facilitator-hono (5 stars, TypeScript, Other)
+  - URL: https://github.com/OviatoHQ/x402-facilitator-hono
+  - Description: A mountable Hono sub-app for self-hosting an x402 payment facilitator. Wraps official Coinbase x402 packages. Deploy to Cloudflare Workers, Node, Bun or Deno.
+- iglesiasbrandon/dox402 (4 stars, TypeScript)
+  - URL: https://github.com/iglesiasbrandon/dox402
+  - Description: Pay-per-use AI inference utilizing Cloudflare workers, Durable Objects, Workers AI, and x402 payment protocol.
+- ardriveapp/x402-turbo-upload (1 stars, TypeScript)
+  - URL: https://github.com/ardriveapp/x402-turbo-upload
+  - Description: A minimal TypeScript example of uploading data items to Turbo via x402 fetch
+- Stable402/x402-worker-middleware (1 stars, TypeScript)
+  - URL: https://github.com/Stable402/x402-worker-middleware
+  - Description: x402 payment middleware for Cloudflare Workers — POC 1 of the Stable402 reference implementation series
+- arbuthnot-eth/x402-claude-plugin (1 stars, MIT License)
+  - URL: https://github.com/arbuthnot-eth/x402-claude-plugin
+  - Description: Claude Code plugin for the x402 open payment standard — paywalled endpoints, paying agents, and paid MCP tools with Cloudflare Workers
+- notifuturo/vouch (1 stars, TypeScript, MIT License)
+  - URL: https://github.com/notifuturo/vouch
+  - Description: Vouch — a per-call payment trust & reputation API for AI agents, monetized over x402 (USDC). Live on Cloudflare Workers.
+- cryptomotifs/cipher-x402-client (0 stars, TypeScript, MIT License)
+  - URL: https://github.com/cryptomotifs/cipher-x402-client
+  - Description: Tiny TypeScript client for the x402 HTTP payment protocol v2 (Linux Foundation). Zero deps, native fetch, ESM + CJS.
+- ckorhonen/x402-dev (0 stars, TypeScript, MIT License)
+  - URL: https://github.com/ckorhonen/x402-dev
+  - Description: x402.dev Payment Rails SDK - TypeScript/React/Cloudflare Workers
+- yan253319066/XPayLabs-x402-seller (1 stars, TypeScript, MIT License)
+  - URL: https://github.com/yan253319066/XPayLabs-x402-seller
+  - Description: Seller test server for the x402 protocol — Express middleware demo for testing x402 USDC micropayments. XPay seller endpoint.
+## 2026-06-19T05:17:08.775215+00:00 - crypto-gap-implementation
+
+- Request: Fill HivemindOS crypto gaps after Ethereum ecosystem inventory
+- Source: current-project+public-github-search+shared-skills
+- Query: `ERC-8004 agent identity clear signing crypto risk monitor x402 TypeScript`
+- Decision: assimilated
+- Reason: Public GitHub search returned mostly one-off x402 clients/facilitators, while HivemindOS already had the safer wallet router, spend governance, Bankr actions, x402 executor, Veil privacy rail, MCP bridge, and docs spine. The implementation extends that local backbone with small typed services instead of copying external payment clients.
+- Selected backbone: current-project:hivemind-os crypto capability router and wallet rails
+- Assimilated: src/lib/services/crypto-capability-router.ts route selection and prepare pattern; src/lib/services/wallet/x402-agent-fetch.ts clear payment policy concepts; src/lib/services/wallet/spend-governance.ts risk/gate concepts; scripts/hivemind-mcp existing crypto tool bridge; docs/features/wallets-honey-and-x402.md wallet docs spine
+- Not assimilated: Public x402 examples gitbankio/x402, OviatoHQ/x402-facilitator-hono, and similar repos were not copied because HivemindOS already uses official @x402 packages and needed local control-plane gaps: clear-signing reviews, identity registry, crosschain intent slots, and risk scoring.
+- Verification: Pending focused crypto regression and static checks.
+
+### Candidates
+- gitbankio/x402
+  - Decision: rejected
+  - Reason: Standalone x402 client overlaps existing @x402 package usage and does not cover HivemindOS identity/risk/router gaps
+  - Path: `https://github.com/gitbankio/x402`
+- OviatoHQ/x402-facilitator-hono
+  - Decision: rejected
+  - Reason: Facilitator middleware is seller-side infrastructure, not the local agent control-plane gap
+  - Path: `https://github.com/OviatoHQ/x402-facilitator-hono`
+- src/lib/services/crypto-capability-router.ts
+  - Decision: adapted_code
+  - Reason: Existing unified provider selection and prepare surface became the backbone for crosschain intents and clear-signing review payloads
+  - Path: `src/lib/services/crypto-capability-router.ts`
+- scripts/hivemind-mcp
+  - Decision: adapted_code
+  - Reason: Existing external-agent bridge now exposes review, identity, and risk tools alongside crypto selection
+  - Path: `scripts/hivemind-mcp`
+## 2026-06-19T05:19:17.014798+00:00 - crypto-gap-verification
+
+- Request: Fill HivemindOS crypto gaps after Ethereum ecosystem inventory
+- Source: current-project+focused-tests
+- Decision: verified
+- Reason: Focused service tests, lint, syntax, whitespace, line-count, package JSON, and assimilation-log validation passed for the crypto gap implementation.
+- Selected backbone: current-project:hivemind-os crypto capability router and wallet rails
+- Assimilated: Focused regression covered clear-signing reviews, identity registry CRUD, crosschain intent planning, crypto router integration, risk scoring, MCP discovery, and docs.
+- Verification: pnpm test:crypto-gaps passed; focused ESLint passed for touched TS/MJS files; node --check passed for scripts/hivemind-mcp and scripts/test-crypto-gap-capabilities.mjs; focused git diff --check passed; touched code files are under 1500 lines; ASSIMILATION_LOG.jsonl and package.json parsed. Full tsc and check-file-sizes remain blocked only by pre-existing unrelated generated/promo/Tauri/env and oversized legacy/generated files.
+
+### Candidates
+- scripts/test-crypto-gap-capabilities.mjs
+  - Decision: verified
+  - Reason: Exercises clear-signing, identity registry, crosschain plan, risk monitor, router, MCP regex, and docs
+  - Path: `scripts/test-crypto-gap-capabilities.mjs`
+- pnpm exec tsc --noEmit --pretty false
+  - Decision: blocked_unrelated
+  - Reason: No touched crypto diagnostics appeared; command still fails on existing promo/generated/Tauri/env paths
+  - Path: `N/A`
+- node scripts/check-file-sizes.mjs
+  - Decision: blocked_unrelated
+  - Reason: Touched code files are under 1500 lines; repo-wide check still fails on pre-existing oversized legacy/generated files
+  - Path: `N/A`
+## 2026-06-19T08:32:53.279931+00:00 - debug
+
+- Request: Fix Queen Bee clap wake random triggers while still missing actual claps
+- Source: local-project
+- Decision: adapted_code
+- Reason: Time-domain loud spikes were not enough: room thumps and other transient noises could satisfy RMS/peak while real claps still varied. Added frequency-domain high-band ratio measurement from the same Web Audio analyser so only broadband/high-frequency clap-like pulses count.
+- Assimilated: src/features/queen-voice/clap-activation.ts frequency metrics; src/features/queen-voice/use-queen-clap-activation.ts getByteFrequencyData wiring; scripts/test-queen-clap-activation.mjs low-thump rejection regression
+- Verification: Pending focused clap regression and lint.
+## 2026-06-19T08:33:26.777037+00:00 - assimilation-manifest
+
+- Request: Add double-clap Queen Bee voice chat activation, expose it in Queen Bee Calls settings, have Queen Bee start the voice conversation, and make real fast claps register without random thump triggers
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: DARSHANJR/clap-to-change-the-page-colour-and-shows-the-student-details:clap.html => src/features/queen-voice/clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/use-queen-clap-activation.ts => src/features/queen-voice/clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/QueenBeeVoiceOverlay.tsx => src/features/queen-voice/QueenBeeVoiceOverlay.tsx, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/use-queen-clap-activation.ts, local-project:hivemind-os:scripts/test-queen-echo-detection.mjs => scripts/test-queen-clap-activation.mjs, local-project:hivemind-os:src/features/dashboard/DashboardApp.tsx => src/features/dashboard/DashboardApp.tsx, local-project:hivemind-os:src/features/dashboard/views/chat/AgentSettingsModal.tsx => src/features/dashboard/views/chat/AgentSettingsModal.tsx, local-project:hivemind-os:src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx => src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-realtime.ts => src/features/queen-voice/use-queen-bee-realtime.ts, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/use-queen-bee-voice.ts
+- Verification: Wrote ASSIMILATION.queen-clap-wake.json with 11 entries and custom_code_assessment=balanced.
+## 2026-06-19T08:36:10+00:00 - brain-graph-drag-selection-guard
+
+- Request: Stop text selection while dragging the Brain graph
+- Source: current-project
+- Selected backbone: `src/features/dashboard/hooks/use-status-chat-input-controller.tsx`
+- Note: The live Brain graph already owns drag start through `startBrainPan` and canvas styling through `vault.module.css`; the fix adapts those exact local surfaces instead of introducing a new gesture layer.
+
+### Candidates
+- `src/features/dashboard/hooks/use-status-chat-input-controller.tsx`
+  - Decision: adapted_code
+  - Reason: owns Brain graph pointer drag start; now prevents the browser selection default and clears accidental selections before pointer capture.
+  - Path: `src/features/dashboard/hooks/use-status-chat-input-controller.tsx`
+- `src/app/vault.module.css`
+  - Decision: style_adapted
+  - Reason: owns `.brainGraphCanvas`; expanded the no-select guard from the SVG element to the whole graph canvas subtree and disabled WebKit user dragging.
+  - Path: `src/app/vault.module.css`
+## 2026-06-19T10:45:07.634320+00:00 - public-search
+
+- Request: javascript web audio clap detector
+- Source: public-github
+- Query: `javascript web audio clap detector`
+- Decision: retrieved
+- Reason: Retrieved 29 public candidates from GitHub search.
+
+### Candidates
+- DARSHANJR/clap-to-change-the-page-colour-and-shows-the-student-details (0 stars, HTML, Creative Commons Zero v1.0 Universal)
+  - URL: https://github.com/DARSHANJR/clap-to-change-the-page-colour-and-shows-the-student-details
+  - Description: This is a fun Web Audio Clap Detector project! It uses JavaScript's Web Audio API and the microphone to detect a clap (volume threshold check) and trigger actions: clap.html: Changes the page's background color on each clap. clap1.html: Loa
+- PatWie/digitalmusicstand (38 stars, JavaScript, GNU General Public License v3.0)
+  - URL: https://github.com/PatWie/digitalmusicstand
+  - Description: web based music sheet viewer (go, pdfjs) as a single binary
+- calvinhsia/SheetMusicViewer (11 stars, C#, MIT License)
+  - URL: https://github.com/calvinhsia/SheetMusicViewer
+  - Description: Sheet Music Viewer for musicians
+- rlabbe/MusicReader (3 stars, C++, GNU Affero General Public License v3.0)
+  - URL: https://github.com/rlabbe/MusicReader
+  - Description: Sheet Music PDF Viewer
+- misprit7/noteation (3 stars, TypeScript)
+  - URL: https://github.com/misprit7/noteation
+  - Description: A sheet music viewer controlled by eye tracking and computer vision
+- joelkingsley/sheet-flow (3 stars, TypeScript)
+  - URL: https://github.com/joelkingsley/sheet-flow
+  - Description: A cross-platform sheet music viewer built with React Native and Expo. Display and interact with MusicXML files using OpenSheetMusicDisplay (OSMD) in a native mobile app and web interface.
+- felixhaedicke/SheetMusicViewer (2 stars, C++, GNU Affero General Public License v3.0)
+  - URL: https://github.com/felixhaedicke/SheetMusicViewer
+  - Description: Simple sheet music PDF viewer implemented in Qt (and thus for Linux, Embedded Linux, Android, Windows, probably Mac...)
+- tgcarpenter/Sheet-Music-Reader (2 stars, Python)
+  - URL: https://github.com/tgcarpenter/Sheet-Music-Reader
+  - Description: Sheet Music viewer and marker for working musicians
+- xiangyuecn/Recorder (5612 stars, JavaScript, MIT License)
+  - URL: https://github.com/xiangyuecn/Recorder
+  - Description: html5 js 录音 mp3 wav ogg webm amr g711a g711u 格式，支持pc和Android、iOS部分Web浏览器、Hybrid App（提供Android iOS App源码）、微信，提供ASR语音识别转文字 H5版语音通话聊天示例 DTMF编码解码
+- stefanrmmr/streamlit-audio-recorder (487 stars, TypeScript, MIT License)
+  - URL: https://github.com/stefanrmmr/streamlit-audio-recorder
+  - Description: Record Audio from the User's Microphone in Apps that are Deployed to the Web. (via Browser Media-API, REACT-based, Streamlit Custom Component)
+- ManojKumarPatnaik/Major-project-list (236 stars, MIT License)
+  - URL: https://github.com/ManojKumarPatnaik/Major-project-list
+  - Description: A list of practical projects that anyone can solve in any programming language (See solutions). These projects are divided into multiple categories, and each category has its own folder. To get started, simply fork this repo. CONTRIBUTING S
+- dmooney65/recorder-app (9 stars, JavaScript)
+  - URL: https://github.com/dmooney65/recorder-app
+  - Description: A Node/Express server and Web app for recording audio from line-in or mic with remote control
+- Datakult0r/Streamlit-Audio-Recorder (7 stars, TypeScript, MIT License)
+  - URL: https://github.com/Datakult0r/Streamlit-Audio-Recorder
+  - Description: About Record Audio from the User's Microphone in Apps that are Deployed to the Web. (via Browser Media-API, REACT-based, Streamlit Custom Component)
+- kunaal438/music-app (6 stars, PHP)
+  - URL: https://github.com/kunaal438/music-app
+  - Description: This is a sample music app made with PHP for just practice.
+- plivesey/JazzPracticeApp (6 stars, Swift)
+  - URL: https://github.com/plivesey/JazzPracticeApp
+  - Description: Auto generates jazz music to practice with
+- sunnyzanchi/tape-recorder (6 stars, Vue)
+  - URL: https://github.com/sunnyzanchi/tape-recorder
+  - Description: Web app for recording audio
+- cueaz/score-viewer (5 stars, TypeScript, Mozilla Public License 2.0)
+  - URL: https://github.com/cueaz/score-viewer
+  - Description: View sheet music with simple MIDI input visualization
+- mjsorribas/ionic-recorder (2 stars, TypeScript, GNU General Public License v2.0)
+  - URL: https://github.com/mjsorribas/ionic-recorder
+  - Description: Sound recording mobile / browser hybrid app, based on the Ionic framework and the Web Audio Interface
+- TecReaGroup/musheet (1 stars, Dart, MIT License)
+  - URL: https://github.com/TecReaGroup/musheet
+  - Description: A Flutter-based digital sheet music management application designed for musicians and bands. It focuses on PDF score viewing with annotations, setlist management, and team collaboration with an offline-first architecture.
+- prakashstha/WebPhoneAudioRecorder (1 stars, JavaScript)
+  - URL: https://github.com/prakashstha/WebPhoneAudioRecorder
+  - Description: It consists of two apps one for web browser and another for android phone. Both app records audio on their respective device.
+- matheushrt/audio-recorder-pwa (1 stars, JavaScript)
+  - URL: https://github.com/matheushrt/audio-recorder-pwa
+  - Description: A Progressive Web App to record audio - Client side for: Remind Yourself project.
+- mishraankit07/Camera-Recorder (1 stars, JavaScript)
+  - URL: https://github.com/mishraankit07/Camera-Recorder
+  - Description: A web app that can be used to record audio and video.
+- cowballwong/worship-music (0 stars, JavaScript)
+  - URL: https://github.com/cowballwong/worship-music
+  - Description: Personal worship music sheet library — Drive-backed PDF viewer with playlist + edit annotations
+- JaredLincenberg/ComputerVisionMusicReader (0 stars, Python)
+  - URL: https://github.com/JaredLincenberg/ComputerVisionMusicReader
+  - Description: School Project to take PDFs of sheet Music and add annotation and convert them into music.
+- youwenshao/etude (0 stars, Python)
+  - URL: https://github.com/youwenshao/etude
+  - Description: A research-grade pipeline that converts scanned sheet music (PDF) into accurate piano fingering annotations using symbolic intermediate representations and pretrained ML models.
+- patzly/tack-android (464 stars, Java)
+  - URL: https://github.com/patzly/tack-android
+  - Description: Beautiful metronome for Android with a powerful Wear OS experience
+- thetwom/toc2 (196 stars, Kotlin, GNU General Public License v3.0)
+  - URL: https://github.com/thetwom/toc2
+  - Description: Metronome app
+- Vaibhav2002/MusicX (168 stars, Kotlin, MIT License)
+  - URL: https://github.com/Vaibhav2002/MusicX
+  - Description: MusicX is a music player 🎵 android app built using Kotlin and Jetpack Compose. It follows M.A.D. practices and hence is a good learning resource for beginners
+- fennifith/Metronome-Android (123 stars, Java, Apache License 2.0)
+  - URL: https://github.com/fennifith/Metronome-Android
+  - Description: A lightweight, well designed metronome app for Android.
+## 2026-06-19T10:51:21.077504+00:00 - assimilation-manifest
+
+- Request: Stabilize Queen Bee double-clap wake by searching proven GitHub clap/onset detectors
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: audiojs/beat-detection:util.js => src/features/queen-voice/clap-activation.ts, audiojs/beat-detection:onset/index.js => src/features/queen-voice/clap-activation.ts, TzurSoffer/clapDetection:src/clapDetector/clapDetector.py => src/features/queen-voice/clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/use-queen-clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/use-queen-clap-activation.ts => src/features/queen-voice/clap-activation.ts, local-project:hivemind-os:src/features/queen-voice/QueenBeeVoiceOverlay.tsx => src/features/queen-voice/QueenBeeVoiceOverlay.tsx, local-project:hivemind-os:scripts/test-queen-echo-detection.mjs => scripts/test-queen-clap-activation.mjs, local-project:hivemind-os:src/features/dashboard/DashboardApp.tsx => src/features/dashboard/DashboardApp.tsx, local-project:hivemind-os:src/features/dashboard/views/chat/AgentSettingsModal.tsx => src/features/dashboard/views/chat/AgentSettingsModal.tsx, local-project:hivemind-os:src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx => src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-realtime.ts => src/features/queen-voice/use-queen-bee-realtime.ts, local-project:hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts => src/features/queen-voice/use-queen-bee-voice.ts
+- Verification: Wrote ASSIMILATION.queen-clap-wake.json with 13 entries and custom_code_assessment=balanced.
+## 2026-06-19T10:51:31.973689+00:00 - triage
+
+- Request: Stabilize Queen Bee double-clap wake by searching proven GitHub clap/onset detectors
+- Source: public-github-web
+- Query: `github javascript web audio clap detector microphone double clap; github clap detection onset detection web audio javascript`
+- Decision: selected-donors
+- Selected backbone: local-project:hivemind-os Queen Bee voice overlay
+- Verification: Audited selected paths inertly; audiojs audit had only a dynamic-eval false-positive around function text, Tzur and pector path audits passed, tom-s audit noted child_process as expected.
+
+### Candidates
+- audiojs/beat-detection
+  - Decision: selected-donor
+  - Reason: MIT spectralFlux and peak-pick onset detection utilities are browser-compatible and safe to adapt
+  - Path: `util.js,onset/index.js`
+- TzurSoffer/clapDetection
+  - Decision: selected-donor
+  - Reason: MIT clap detector uses bandpass focus, dynamic thresholding, peak detection, debounce, and double-clap examples
+  - Path: `src/clapDetector/clapDetector.py`
+- JorenSix/pector
+  - Decision: rejected
+  - Reason: excellent double-clap/percussive-onset prior art, but GPL-3.0 and C/WASM implementation make direct code reuse unsuitable here
+  - Path: `src/pector_stream_processor.c`
+- tom-s/clap-detector
+  - Decision: rejected
+  - Reason: MIT JS pattern listener is useful context, but runtime shells out to sox/child_process and is not browser/Tauri webview-safe
+  - Path: `src/index.js`
+- DARSHANJR/clap-to-change-the-page-colour-and-shows-the-student-details
+  - Decision: rejected
+  - Reason: toy RMS threshold was already insufficient for false positives and missed real claps
+  - Path: `clap.html`
+## 2026-06-19T10:51:32.250651+00:00 - implementation
+
+- Request: Stabilize Queen Bee double-clap wake by searching proven GitHub clap/onset detectors
+- Source: local-project
+- Decision: adapted_code
+- Assimilated: audiojs/beat-detection spectral flux positive magnitude differences + TzurSoffer/clapDetection band-focused/dynamic threshold ideas => src/features/queen-voice/clap-activation.ts; local ScriptProcessor microphone lifecycle => src/features/queen-voice/use-queen-clap-activation.ts
+- Verification: pnpm test:queen-clap passed; pnpm test:queen-echo passed; focused ESLint passed; focused git diff --check passed; filtered TypeScript reported no diagnostics for touched Queen/dashboard paths, with unrelated repo-wide errors in promo-videos/generated resources/env.
+## 2026-06-19T11:27:55.315801+00:00 - triage
+
+- Request: Replace HivemindOS Kanban UI with supplied KanbanPanel-2.tsx and kanban-board.module-2.css
+- Source: local-pinned-files
+- Selected backbone: local-kanban-downloads:/Users/liam/Downloads
+
+### Candidates
+- /Users/liam/Downloads/KanbanPanel-2.tsx
+  - Decision: selected
+  - Reason: authoritative supplied replacement Kanban panel UI
+- /Users/liam/Downloads/kanban-board.module-2.css
+  - Decision: selected
+  - Reason: authoritative supplied replacement Kanban stylesheet
+- src/features/dashboard/views/KanbanPanel.tsx proof helpers
+  - Decision: selected-donor
+  - Reason: existing live workflow requires verified GitLawb proof ranking guard
+- FlowBuilderModal local addition
+  - Decision: rejected
+  - Reason: not present in supplied KanbanPanel-2.tsx and removed to keep the Work board matching the requested UI drop
+## 2026-06-19T11:28:05.175184+00:00 - assimilation-manifest
+
+- Request: Replace HivemindOS Kanban UI with supplied KanbanPanel-2.tsx and kanban-board.module-2.css
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-kanban-downloads:/Users/liam/Downloads/KanbanPanel-2.tsx => src/features/dashboard/views/KanbanPanel.tsx, local-kanban-downloads:/Users/liam/Downloads/kanban-board.module-2.css => src/app/kanban-board.module.css, local-project/hivemind-os:src/features/dashboard/views/KanbanPanel.tsx => src/features/dashboard/views/KanbanPanel.tsx, local-project/hivemind-os:src/features/dashboard/DashboardApp.tsx => src/features/dashboard/views/KanbanPanel.tsx
+- Verification: Wrote ASSIMILATION.kanban-ui.json with 4 entries and custom_code_assessment=mostly_assimilated.
+## 2026-06-19T11:28:49.052140+00:00 - verification
+
+- Request: Replace HivemindOS Kanban UI with supplied KanbanPanel-2.tsx and kanban-board.module-2.css
+- Source: local-project
+- Selected backbone: local-kanban-downloads:/Users/liam/Downloads
+- Note: Sandboxed Node fetch to local dev server failed with connect EPERM, so pnpm test:kanban was rerun with unsandboxed loopback access and passed.
+
+### Candidates
+- src/app/kanban-board.module.css
+  - Decision: verified
+  - Reason: sha256 matches /Users/liam/Downloads/kanban-board.module-2.css exactly
+- src/features/dashboard/views/KanbanPanel.tsx
+  - Decision: verified
+  - Reason: ESLint passed and Kanban workflow passed with restored GitLawb proof ranking helpers
+- DashboardApp Kanban props
+  - Decision: verified
+  - Reason: 180 destructured props supplied, no missing props
+- http://127.0.0.1:5026/?view=kanban
+  - Decision: verified
+  - Reason: returned 200 OK from fresh dev server

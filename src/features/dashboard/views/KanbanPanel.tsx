@@ -13,14 +13,18 @@ const WORK_HISTORY_PAGE_SIZE = 10;
 const codeProofPillStyle = {
   display: "inline-flex",
   alignItems: "center",
+  gap: 6,
   minHeight: 22,
-  border: "1px solid rgba(111,205,186,0.28)",
-  borderRadius: 7,
-  background: "rgba(111,205,186,0.10)",
-  color: "#9fe0d3",
-  padding: "3px 7px",
-  fontSize: 10.5,
-  fontWeight: 800,
+  border: "1px solid rgba(111,205,186,0.34)",
+  borderRadius: 999,
+  background: "rgba(111,205,186,0.14)",
+  color: "#6fcdba",
+  padding: "3px 9px",
+  fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+  fontSize: 9.5,
+  fontWeight: 600,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase" as const,
 };
 
 export function KanbanPanel(props: any) {
@@ -140,9 +144,10 @@ export function KanbanPanel(props: any) {
     const summary = proofSummaryForTask(task);
     if (summary.status === "verified") return "Code proof verified";
     if (summary.status === "linked") return "Code proof linked";
+    if (summary.proof) return "Code proof linked";
+    if (!task.projectId) return "";
     if (summary.status === "ready") return "Code proof ready";
-    if (summary.status === "unavailable") return summary.projectLabel ? "Code proof unavailable" : "";
-    return summary.projectLabel ? "Code proof linked" : "";
+    return "Code proof unavailable";
   };
 
   useEffect(() => {

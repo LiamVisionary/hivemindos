@@ -1,0 +1,20 @@
+{
+  "upstreamName": "n8n-self-hosting-guide",
+  "upstreamSlug": "n8n-self-hosting-guide",
+  "hiveSlug": "n8n-self-hosting-guide",
+  "sourceLabel": "forma-norden",
+  "sourceUrl": "https://github.com/forma-norden/n8n-gtm-workflow-pack/blob/main/.agents/skills/n8n-self-hosting-guide.md",
+  "repository": "https://github.com/forma-norden/n8n-gtm-workflow-pack",
+  "installCommand": "npx skills add https://github.com/forma-norden/n8n-gtm-workflow-pack --skill n8n-self-hosting-guide",
+  "importedAt": "2026-06-19T03:07:29.307Z",
+  "refreshedAt": "2026-06-19T03:07:29.307Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/n8n/forma-norden/n8n-self-hosting-guide",
+  "packageGroup": "n8n",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "14b8cf6881a01cde96aee98281ff400b6ca72c1d",
+  "normalized": "frontmatter-synthesized-by-importer",
+  "description": "Use this skill to deploy and manage a self-hosted n8n instance for production GTM automation. Use for: self-host n8n, Docker, PostgreSQL, queue mode, scaling, backups."
+}

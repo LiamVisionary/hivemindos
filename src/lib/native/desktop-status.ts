@@ -5,6 +5,8 @@ type NativeDesktopStatus = AppVersion & {
   runtime?: string;
   phase?: string;
   packaged?: boolean;
+  sourceBuild?: boolean;
+  releaseChannel?: string;
   devUrl?: string | null;
   nativeHost?: string;
   nativePort?: number | null;
@@ -35,6 +37,17 @@ export async function isPackagedDesktopRuntime(signal?: AbortSignal): Promise<bo
     const { invoke } = await import("@tauri-apps/api/core");
     const status = await invoke<NativeDesktopStatus>("desktop_status");
     return status?.packaged === true;
+  } catch {
+    return false;
+  }
+}
+
+export async function isReleaseUpdaterDesktopRuntime(signal?: AbortSignal): Promise<boolean> {
+  if (!isTauriDesktopRuntime() || signal?.aborted) return false;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const status = await invoke<NativeDesktopStatus>("desktop_status");
+    return status?.packaged === true && status.sourceBuild !== true && status.releaseChannel !== "source";
   } catch {
     return false;
   }

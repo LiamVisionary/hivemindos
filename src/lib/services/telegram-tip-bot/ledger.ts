@@ -143,6 +143,11 @@ export type TipBotState = {
   withdrawals: TipBotWithdrawal[];
   claims: Record<string, TipBotClaim>;
   bounties: Record<string, TipBotBounty>;
+  memberTags?: {
+    chatIds: string[];
+    lastSynced: Record<string, Record<string, string>>;
+    lastSyncAt?: string;
+  };
   updatedAt: string;
 };
 
@@ -158,6 +163,7 @@ export function emptyTipBotState(): TipBotState {
     withdrawals: [],
     claims: {},
     bounties: {},
+    memberTags: { chatIds: [], lastSynced: {} },
     updatedAt: new Date(0).toISOString(),
   };
 }

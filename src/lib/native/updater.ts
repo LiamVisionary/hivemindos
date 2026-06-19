@@ -1,5 +1,5 @@
 import type { Update } from "@tauri-apps/plugin-updater";
-import { isPackagedDesktopRuntime } from "./desktop-status";
+import { isReleaseUpdaterDesktopRuntime } from "./desktop-status";
 
 export type UpdateProgress =
   | { phase: "downloading"; percent: number | null }
@@ -12,7 +12,7 @@ export type UpdateProgress =
  * and when already up to date.
  */
 export async function checkForNativeUpdate(signal?: AbortSignal): Promise<Update | null> {
-  if (!(await isPackagedDesktopRuntime(signal))) return null;
+  if (!(await isReleaseUpdaterDesktopRuntime(signal))) return null;
   const { check } = await import("@tauri-apps/plugin-updater");
   return check();
 }

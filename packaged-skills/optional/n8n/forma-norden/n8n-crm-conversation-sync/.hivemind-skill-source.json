@@ -1,0 +1,20 @@
+{
+  "upstreamName": "n8n-crm-conversation-sync",
+  "upstreamSlug": "n8n-crm-conversation-sync",
+  "hiveSlug": "n8n-crm-conversation-sync",
+  "sourceLabel": "forma-norden",
+  "sourceUrl": "https://github.com/forma-norden/n8n-gtm-workflow-pack/blob/main/.agents/skills/n8n-crm-conversation-sync.md",
+  "repository": "https://github.com/forma-norden/n8n-gtm-workflow-pack",
+  "installCommand": "npx skills add https://github.com/forma-norden/n8n-gtm-workflow-pack --skill n8n-crm-conversation-sync",
+  "importedAt": "2026-06-19T03:07:29.307Z",
+  "refreshedAt": "2026-06-19T03:07:29.307Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/n8n/forma-norden/n8n-crm-conversation-sync",
+  "packageGroup": "n8n",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "14b8cf6881a01cde96aee98281ff400b6ca72c1d",
+  "normalized": "frontmatter-synthesized-by-importer",
+  "description": "Synchronize conversation outcomes from calls and email replies into CRM records with deterministic follow-up task creation. Use for: CRM sync, HubSpot, Salesforce, log activity, follow-up tasks."
+}

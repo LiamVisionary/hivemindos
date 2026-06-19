@@ -72,6 +72,14 @@ export interface CompanyMember {
   state?: string;
 }
 
+/**
+ * How the crew runs the apex goal:
+ * - "hierarchical" (default): Queen decomposes + fans tasks out to members in parallel.
+ * - "sequential": members run in order, each consuming the prior step's output (CrewAI sequential).
+ * - "graph": run a named agent flow (FlowSpec) with conditional edges + HITL checkpoints.
+ */
+export type CompanyProcess = "hierarchical" | "sequential" | "graph";
+
 export interface Company {
   id: string;
   name: string;
@@ -116,6 +124,10 @@ export interface Company {
    * company is frozen. Set on "Launch", cleared on "Stop".
    */
   autonomy?: boolean;
+  /** How the crew executes the apex goal. Defaults to "hierarchical" (parallel fan-out). */
+  process?: CompanyProcess;
+  /** For process: "graph" — the saved FlowSpec id to run. */
+  flowTemplateId?: string;
 }
 
 export interface CompanySpendRollup {

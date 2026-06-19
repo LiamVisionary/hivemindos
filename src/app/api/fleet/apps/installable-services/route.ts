@@ -17,6 +17,7 @@ function serviceId(value: unknown): InstallableServiceId {
   if (value === "n8n") return value;
   if (value === "browser-use") return value;
   if (value === "agentic-inbox") return value;
+  if (value === "mcp-email-server") return value;
   if (value === "openhands") return value;
   if (value === "aider") return value;
   if (value === "agent-reach") return value;

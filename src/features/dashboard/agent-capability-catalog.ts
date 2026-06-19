@@ -15,7 +15,7 @@ export type AgentAppCatalogItem = {
   sourceUrl: string;
   badges: string[];
   handles: string[];
-  installableServiceId?: "n8n" | "browser-use" | "agentic-inbox" | "openhands" | "aider" | "agent-reach";
+  installableServiceId?: "n8n" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach";
 };
 
 export const BUILT_IN_AGENT_TOOLS: BuiltInAgentTool[] = [
@@ -78,6 +78,7 @@ export const AGENT_APP_CATALOG: AgentAppCatalogItem[] = [
   { id: "aider", name: "Aider", category: "AI-native", description: "Terminal pair programmer with repo maps and git-aware code edits.", sourceUrl: "https://github.com/Aider-AI/aider", badges: ["Installable", "Repo map", "Terminal"], handles: ["Pair code", "Patch repo"], installableServiceId: "aider" },
   { id: "n8n", name: "n8n", category: "Production scale", description: "Self-hosted workflow automation service with webhooks, schedules, AI nodes, and hundreds of integrations.", sourceUrl: "https://github.com/n8n-io/n8n", badges: ["Installable", "Workflows"], handles: ["Webhook", "Run workflow", "Schedule"], installableServiceId: "n8n" },
   { id: "agentic-inbox", name: "Agentic Inbox", category: "Specialist", description: "Cloudflare email-agent setup for inbox triage, draft replies, and Work Board task intake.", sourceUrl: "https://github.com/cloudflare/agentic-inbox", badges: ["Installable", "Cloudflare", "Email"], handles: ["Draft reply", "Route email"], installableServiceId: "agentic-inbox" },
+  { id: "mcp-email-server", name: "MCP Email Server", category: "Specialist", description: "Local MCP bridge for IMAP/SMTP inbox access from self-hosted or provider mailboxes.", sourceUrl: "https://github.com/ai-zerolab/mcp-email-server", badges: ["Installable", "MCP", "Email"], handles: ["Read inbox", "Search mail", "Send email"], installableServiceId: "mcp-email-server" },
   { id: "stagehand", name: "Stagehand", category: "AI-native", description: "TypeScript browser automation that maps intent to Playwright actions.", sourceUrl: "https://github.com/browserbase/stagehand", badges: ["TypeScript", "Playwright"], handles: ["Act", "Extract", "Observe"] },
   { id: "skyvern", name: "Skyvern", category: "AI-native", description: "Vision-led browser automation for form-heavy workflows.", sourceUrl: "https://github.com/Skyvern-AI/skyvern", badges: ["Vision", "Forms"], handles: ["Run task", "Inspect screen"] },
   { id: "scrapegraph-ai", name: "ScrapeGraph AI", category: "AI-native", description: "Prompt-driven scraping that returns structured results.", sourceUrl: "https://github.com/ScrapeGraphAI/Scrapegraph-ai", badges: ["Prompted", "Structured"], handles: ["Ask page", "Extract graph"] },

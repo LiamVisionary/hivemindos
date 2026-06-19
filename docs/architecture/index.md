@@ -94,6 +94,7 @@ The app uses Next.js route handlers under `src/app/api`. That is the dashboard's
 - `/api/phone`: phone gateway pairing/status, scheduled phone rings, dashboard agent-call starts, and phone image generation.
 - OpenClaw runtime support is kept inside the generic runtime and chat layers rather than standalone product routes.
 - `/api/miroshark/*`: companion status, install/start, swarm templates/runs, analysis.
+- `/api/crypto/*`: crypto rail readiness, action preparation, clear-signing reviews, local agent identity records, and offline risk checks.
 - `/api/wallet/*`: local wallet creation, balances, sends, MoneyClaw, backups, x402 calls.
 - `/api/brain/*`: GBrain, Syntho, and trading-brain status/install/query actions.
 - `/api/env`, `/api/runtime-files`, `/api/maintenance`, `/api/memory-telemetry`, `/api/telemetry/events`, `/api/work-history`: local utility surfaces.

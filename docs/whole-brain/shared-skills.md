@@ -5,7 +5,7 @@ description: Shared skill shelf, runtime provider mirrors, and auto-sync policy.
 
 # Shared Skills
 
-The shared skill shelf is the reusable procedure layer for agents.
+The shared skill shelf is the primary reusable procedure layer for agents.
 
 It lives in the shared vault. Not in one runtime home. That matters because the whole point is that every agent can learn from the same shelf.
 
@@ -14,7 +14,18 @@ Skills/README.md
 Skills/<slug>/SKILL.md
 ```
 
-Agents should read `Skills/README.md` first, then the relevant `SKILL.md`.
+Agents should treat the shared shelf as the first skill source. Runtime-local skill folders are supplemental overlays for runtime-specific or personal skills. Agents should read `Skills/README.md` first, then the relevant `SKILL.md`.
+
+## Runtime Projection
+
+Setup projects the shared shelf into supported runtime skill roots as HivemindOS-managed cache folders. This lets runtimes that only scan their own skill directory, such as Codex, still see shared-brain skills like `agent-reach` as native skills.
+
+Projection is non-destructive:
+
+- HivemindOS may replace a runtime skill folder only when it carries `.hivemind-skill-source.json` with `managedBy: "hivemindos"` or shared/bundled HivemindOS provenance.
+- Unmanaged runtime-local skill folders are preserved and skipped on slug collision.
+- On collision, the shared shelf remains the logical primary source for HivemindOS routing, while the existing runtime-local folder remains available as a supplemental local skill.
+- Uninstall removes only HivemindOS-managed projection folders unless the user separately removes a runtime's own skills.
 
 ## Provider Inventory
 

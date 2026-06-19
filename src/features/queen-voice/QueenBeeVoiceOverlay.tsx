@@ -3,6 +3,7 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import {
+  AudioLines,
   Check,
   ChevronDown,
   ChevronUp,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { listenForQueenVoiceToggle } from "@/lib/native/queen-voice-events";
 import { QueenVoiceGlow } from "./QueenVoiceGlow";
+import { useQueenClapActivation } from "./use-queen-clap-activation";
 import { useQueenBeeRealtime } from "./use-queen-bee-realtime";
 import {
   useQueenBeeVoice,
@@ -24,6 +26,8 @@ import { useQueenChat, type QueenChatTurn } from "./queen-chat-store";
 import styles from "./queen-voice.module.css";
 
 const QUEEN_VOICE_ACTIVATION_SOUND_SRC = "/audio/sfx/scifi-ping.wav";
+const QUEEN_VOICE_OPENING_LINE =
+  "Hey Liam, I'm here. What should we work on first?";
 
 // Spoken while a tool call runs (the 10-15s dead-air pause), so the user knows
 // Queen Bee is working rather than stuck. One is picked per pause and held.
@@ -71,6 +75,14 @@ function statusDotClass(phase: QueenVoicePhase) {
   if (phase === "speaking") return styles.statusDotSpeaking;
   if (phase === "error") return styles.statusDotError;
   return "";
+}
+
+function clapWakeTitle(status: string, error: string) {
+  if (status === "listening") return "Clap wake is listening";
+  if (status === "paused") return "Clap wake resumes after this chat";
+  if (status === "starting") return "Clap wake is starting";
+  if (status === "error") return error || "Clap wake is unavailable";
+  return "Enable clap wake";
 }
 
 function TranscriptTurns({
@@ -244,8 +256,12 @@ function VoicePicker({ onVoiceChanged }: { onVoiceChanged: () => void }) {
  * established. Toggled from the menu bar tray icon or Cmd+Shift+V.
  */
 export function QueenBeeVoiceOverlay({
+  clapWakeEnabled = false,
+  onClapWakeEnabledChange,
   onDriveDashboard,
 }: {
+  clapWakeEnabled?: boolean;
+  onClapWakeEnabledChange?: (enabled: boolean) => void;
   onDriveDashboard?: (
     command: string,
     opts?: { onModalOpen?: () => void },
@@ -263,6 +279,40 @@ export function QueenBeeVoiceOverlay({
     sessionNonceRef.current = sessionNonce;
   }, [sessionNonce]);
   const realtimeMode = realtimeFailedNonce !== sessionNonce;
+
+  const resetVoiceSessionUi = React.useCallback(() => {
+    setMuted(false);
+    setVoicePickerOpen(false);
+    setMinimized(false);
+    setSessionNonce((current) => current + 1);
+  }, []);
+
+  const openQueenVoiceChat = React.useCallback(() => {
+    setOpen((current) => {
+      if (!current) playQueenVoiceActivationSound();
+      return true;
+    });
+    resetVoiceSessionUi();
+  }, [resetVoiceSessionUi]);
+
+  const toggleQueenVoiceChat = React.useCallback(() => {
+    setOpen((current) => {
+      const next = !current;
+      if (next) playQueenVoiceActivationSound();
+      return next;
+    });
+    resetVoiceSessionUi();
+  }, [resetVoiceSessionUi]);
+
+  const toggleClapWake = React.useCallback(() => {
+    onClapWakeEnabledChange?.(!clapWakeEnabled);
+  }, [clapWakeEnabled, onClapWakeEnabledChange]);
+
+  const clapActivation = useQueenClapActivation({
+    enabled: clapWakeEnabled,
+    paused: open,
+    onActivation: openQueenVoiceChat,
+  });
 
   const handleRealtimeFailed = React.useCallback(() => {
     // Remember which session failed so this nonce falls back to the pipeline.
@@ -283,8 +333,13 @@ export function QueenBeeVoiceOverlay({
     muted,
     handleRealtimeFailed,
     onDriveDashboard ? driveDashboard : undefined,
+    QUEEN_VOICE_OPENING_LINE,
   );
-  const pipeline = useQueenBeeVoice(open && !realtimeMode, muted);
+  const pipeline = useQueenBeeVoice(
+    open && !realtimeMode,
+    muted,
+    QUEEN_VOICE_OPENING_LINE,
+  );
   const voiceState = realtimeMode ? realtime : pipeline;
 
   // The shared Queen conversation (typed + voice live here together).
@@ -353,15 +408,7 @@ export function QueenBeeVoiceOverlay({
       const now = Date.now();
       if (now - lastToggleAt < 300) return;
       lastToggleAt = now;
-      setOpen((current) => {
-        const next = !current;
-        if (next) playQueenVoiceActivationSound();
-        return next;
-      });
-      setMuted(false);
-      setVoicePickerOpen(false);
-      setMinimized(false);
-      setSessionNonce((current) => current + 1);
+      toggleQueenVoiceChat();
     }).then((cleanup) => {
       if (disposed) cleanup();
       else unlisten = cleanup;
@@ -370,7 +417,7 @@ export function QueenBeeVoiceOverlay({
       disposed = true;
       unlisten?.();
     };
-  }, []);
+  }, [toggleQueenVoiceChat]);
 
   React.useEffect(() => {
     if (!open && detailContent === null) return undefined;
@@ -466,6 +513,17 @@ export function QueenBeeVoiceOverlay({
             >
               <Settings2 size={14} aria-hidden="true" />
               Voice
+            </button>
+            <button
+              type="button"
+              className={`${styles.controlButton} ${clapWakeEnabled ? styles.controlButtonWakeActive : ""}`}
+              onClick={toggleClapWake}
+              aria-label={clapWakeEnabled ? "Disable clap wake" : "Enable clap wake"}
+              aria-pressed={clapWakeEnabled}
+              title={clapWakeTitle(clapActivation.status, clapActivation.error)}
+            >
+              <AudioLines size={14} aria-hidden="true" />
+              Clap
             </button>
             <button
               type="button"

@@ -1,0 +1,19 @@
+{
+  "upstreamName": "kubernetes-architect",
+  "slug": "kubernetes-operations-kubernetes-architect",
+  "label": "Kubernetes Architect",
+  "domain": "kubernetes-operations",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/kubernetes-operations/agents/kubernetes-architect.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent kubernetes-operations-kubernetes-architect",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/kubernetes-operations-kubernetes-architect",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Expert Kubernetes architect specializing in cloud-native infrastructure, advanced GitOps workflows (ArgoCD/Flux), and enterprise container orchestration. Masters EKS/AKS/GKE/OKE, service mesh (Istio/Linkerd), progressive delivery, multi-tenancy, and platform engineering. Handles security, observability, cost optimization, and developer experience. Use PROACTIVELY for K8s architecture, GitOps implementation, or cloud-native platform design."
+}

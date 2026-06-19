@@ -119,18 +119,34 @@ function AgentInstructionFiles {
     ForEach-Object { Join-Path $_.FullName "AGENTS.md" }
 }
 
-function AgentSkillDirs {
+function AgentSkillRoots {
   $homeDir = [Environment]::GetFolderPath("UserProfile")
   @(
-    "$homeDir\.codex\skills\karpathy-guidelines",
-    "$homeDir\.claude\skills\karpathy-guidelines",
-    "$homeDir\.hermes\skills\karpathy-guidelines",
-    "$homeDir\.gemini\skills\karpathy-guidelines",
-    "$homeDir\.openclaw\skills\karpathy-guidelines",
-    "$homeDir\.aeon\skills\karpathy-guidelines"
+    "$homeDir\.codex\skills",
+    "$homeDir\.claude\skills",
+    "$homeDir\.hermes\skills",
+    "$homeDir\.gemini\skills",
+    "$homeDir\.openclaw\skills",
+    "$homeDir\.aeon\skills"
   )
   Get-ChildItem "$homeDir\.openclaw" -Directory -Filter "workspace-*" -ErrorAction SilentlyContinue |
-    ForEach-Object { Join-Path $_.FullName "skills\karpathy-guidelines" }
+    ForEach-Object { Join-Path $_.FullName "skills" }
+}
+
+function Test-HivemindManagedSkillDir {
+  param([string]$Path)
+  $metadataPath = Join-Path $Path ".hivemind-skill-source.json"
+  if (-not (Test-Path $metadataPath)) { return $false }
+  try {
+    $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+  } catch {
+    return $false
+  }
+  $provider = [string]($metadata.provider)
+  $providerLabel = [string]($metadata.providerLabel)
+  return $metadata.managedBy -eq "hivemindos" `
+    -or @("shared-brain", "bundled", "packaged-auto-install") -contains $provider `
+    -or $providerLabel.StartsWith("HivemindOS")
 }
 
 function Uninstall-WingetPackage($Name, $Id) {
@@ -263,13 +279,15 @@ if (Ask-YesNo "Remove HivemindOS shared-skill instructions from agent files?" $t
   Remove-ClaudeBrainHook
 }
 
-if (Ask-YesNo "Remove copied karpathy-guidelines skill from local agent skill folders?" $false) {
-  AgentSkillDirs | ForEach-Object {
-    if (Test-Path (Join-Path $_ "SKILL.md")) {
-      $content = Get-Content (Join-Path $_ "SKILL.md") -Raw
-      if ($content -match "name:\s*karpathy-guidelines") {
-        Remove-Item $_ -Recurse -Force
-        Ok "Removed $_"
+if (Ask-YesNo "Remove HivemindOS-managed shared skill projections from local agent skill folders?" $false) {
+  AgentSkillRoots | ForEach-Object {
+    $root = $_
+    if (Test-Path $root) {
+      Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        if (Test-HivemindManagedSkillDir -Path $_.FullName) {
+          Remove-Item $_.FullName -Recurse -Force
+          Ok "Removed $($_.FullName)"
+        }
       }
     }
   }

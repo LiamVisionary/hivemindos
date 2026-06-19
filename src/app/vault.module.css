@@ -213,6 +213,14 @@
     linear-gradient(90deg, rgba(94, 234, 212, 0.045) 1px, transparent 1px),
     #060a10;
   background-size: 28px 28px, 28px 28px, auto;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.brainGraphCanvas * {
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .brainGraphCanvas > svg {

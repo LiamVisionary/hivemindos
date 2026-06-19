@@ -22,6 +22,9 @@ For the ecosystem-level plan behind Honey, HIVE, premium services, treasury rese
 - Local wallet vault: `~/.hivemindos/wallet-vault.json`, encrypted by `~/.hivemindos/wallet-vault.key` or `HIVEMINDOS_WALLET_VAULT_KEY`.
 - Wallet records can be mirrored into the shared vault through `src/lib/services/obsidian/wallet-ledger.ts`.
 - Crypto rail readiness and routing are exposed through `/api/crypto/capabilities`.
+- Clear-signing reviews are exposed through `/api/crypto/clear-signing`.
+- Local agent identity/listing records are exposed through `/api/crypto/agent-identity`.
+- Crypto control reviews are exposed through `/api/crypto/risk-monitor`.
 - Base and Solana wallet creation and balance reads are exposed through `/api/wallet/create`, `/api/wallet/balance`, and `/api/wallet/send`.
 - Local Honey ledger/cache is in `src/lib/services/wallet/honey-ledger.ts`.
 - Wallet-vault backup and restore logic is in `src/lib/services/wallet/wallet-vault-backup.ts`.
@@ -41,6 +44,10 @@ For the ecosystem-level plan behind Honey, HIVE, premium services, treasury rese
 - Execute x402 paid requests through policy-aware helpers.
 - Buy stocks from a prompt through Alpaca (a real brokerage, paper by default) or on-chain tokenized xStocks (a USDC to xStock swap via Jupiter).
 - Select and prepare the best available crypto rail for agent intents such as paid API calls, private transfers, Bankr trading, and LLM credit funding.
+- Prepare crosschain swap, bridge, and payment intents through the same router, with Bankr as the active provider path and direct LI.FI/Open Intents adapters reserved as explicit future provider slots.
+- Generate clear-signing reviews that show the action kind, endpoint, recipient, network, amount, cap, confirmation phrase, and blocking risks before execution.
+- Register local agent identity records with wallet, ENS/ERC-8004 metadata, service endpoint, x402 endpoint, capabilities, and proofs.
+- Run offline crypto risk checks over wallet policy, agent identity, required env-key presence, endpoint exposure, repo controls, DNS controls, and multisig posture.
 - Observe runtime usage and submit privacy-safe Honey metadata.
 - Hold spend-only managed HONEY credits for no-BYOK managed agents.
 - Exchange Honey for ledger HIVE, return legacy ledger HIVE back to Honey, or claim Bankr HIVE to a Base receiving address when the Bankr treasury rail is configured.
@@ -78,6 +85,15 @@ Supported intents:
 - `paid-api`
 - `private-paid-api`
 - `trade`
+- `crosschain-swap`
+- `bridge`
+- `crosschain-payment`
+- `token-launch`
+- `polymarket`
+- `hyperliquid`
+- `automation`
+- `nft`
+- `agent-job`
 - `card-payment`
 - `fund-llm-credits`
 
@@ -85,15 +101,41 @@ The router has three modes:
 
 - `status`: return a capability map and provider readiness.
 - `select`: choose a provider for an intent without side effects.
-- `prepare`: return the existing provider endpoint, draft request body, missing readiness, approval requirement, and confirmation label.
+- `prepare`: return the existing provider endpoint, draft request body, missing readiness, approval requirement, confirmation label, clear-signing review, and crosschain plan when relevant.
 
 It does not execute spending. Execution remains with the existing gated routes such as `/api/wallet/x402`, `/api/wallet/veil/x402`, `/api/wallet/veil/transfer`, `/api/wallet/send`, `/api/wallet/moneyclaw`, `/api/usepod/status`, `/api/usepod/deposit-transaction`, and `/api/bankr/llm-credits`, or with the Bankr skill/CLI for trades.
+
+Crosschain support is intent-first:
+
+- `crosschain-swap`, `bridge`, and `crosschain-payment` prepare Bankr action drafts today.
+- The crosschain plan returned by `prepare` keeps LI.FI and Open Intents as named provider slots, marked planned until direct adapters and approval gates are added.
+- xStocks remain on the existing buy-stock rail because they require the verified Solana token allowlist rather than a generic bridge quote.
+
+Clear signing is a review layer, not a signer:
+
+- `/api/crypto/clear-signing` accepts an x402, send, private-transfer, Bankr action, crosschain intent, identity claim, or raw transaction draft.
+- The response includes normalized counterparty, amount, network, cap, risks, side effects, confirmation text, and a fingerprint.
+- Blocking risks such as invalid recipient format, cap mismatch, or x402 network mismatch should stop execution before any provider route is called.
+
+Agent identity is local-first:
+
+- `/api/crypto/agent-identity` stores local records under the HivemindOS home store with agent id, display name, handle, wallet address, ENS name, ERC-8004 entity id, service endpoint, x402 endpoint, capabilities, proofs, status, and fingerprint.
+- These records make ENS/ERC-8004-style discovery a first-class HivemindOS concept before any onchain marketplace adapter is configured.
+- Draft records may be useful internally, but published records should have at least one identity anchor and a service or x402 endpoint.
+
+Risk monitoring is an offline control review:
+
+- `/api/crypto/risk-monitor` evaluates supplied metadata for wallet caps, Veil auto-send caps, identity anchors, required env-key presence by key name only, public endpoint HTTPS, Tailnet exposure posture, repo controls, DNS controls, and multisig controls.
+- It returns a score, severity, findings, and recommended actions. It does not scan secrets, print env values, or mutate infrastructure.
 
 For external agents, setup also installs the `hivemind-mcp` stdio server. Its crypto tools proxy this same dashboard API:
 
 - `crypto_capabilities`
 - `select_crypto_rail`
 - `prepare_crypto_action`
+- `review_crypto_action`
+- `agent_crypto_identity`
+- `crypto_risk_monitor`
 
 The dashboard app must be running for these API and MCP tools to work. An agent can use them from Codex, Claude, Hermes, or another runtime without the user actively chatting in the dashboard, but the local HivemindOS API still needs to be reachable and authenticated. If HivemindOS is not running, this router is not a standalone wallet daemon; agents should only use provider-specific CLIs or skills that are independently available.
 
@@ -195,8 +237,12 @@ Claiming:
 - `src/lib/services/trading/buy-stock.ts`
 - `src/lib/config/xstocks-tokens.ts`
 - `src/lib/services/crypto-capability-router.ts`
+- `src/lib/services/crypto/**`
 - `src/lib/services/shared-hive-env.ts`
 - `src/app/api/crypto/capabilities/route.ts`
+- `src/app/api/crypto/clear-signing/route.ts`
+- `src/app/api/crypto/agent-identity/route.ts`
+- `src/app/api/crypto/risk-monitor/route.ts`
 - `src/lib/services/obsidian/wallet-ledger.ts`
 - `src/app/api/wallet/vault-backup/route.ts`
 - `src/app/api/wallet/moneyclaw/route.ts`

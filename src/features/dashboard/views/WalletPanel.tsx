@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WalletsView } from "@/components/wallets-drop-in/WalletsView";
+import { readNativePersonalWallets } from "@/lib/native/personal-wallets";
 import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import { switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
 import { resolveAgentWallet } from "@/lib/utils/agent-wallet";
@@ -695,7 +696,13 @@ function WalletPanelComponent(props: any) {
   const refreshedUsePodAgentIds = useRef<Set<string>>(new Set());
   const vaultPath = props?.sharedVault?.enabled ? String(props.sharedVault.vaultPath || "").trim() : "";
   const activeView = props.activeView, displayAgents = props.displayAgents, refreshRuntimeIntegrations = props.refreshRuntimeIntegrations, refreshRuntimeUsage = props.refreshRuntimeUsage, selectedAgent = props.selectedAgent;
+  const refreshRuntimeUsageRef = useRef(refreshRuntimeUsage);
+  useEffect(() => {
+    refreshRuntimeUsageRef.current = refreshRuntimeUsage;
+  }, [refreshRuntimeUsage]);
   const fetchPersonalWallets = useCallback(async () => {
+    const native = await readNativePersonalWallets({ vaultPath });
+    if (native?.ok && Array.isArray(native.wallets)) return native.wallets;
     const query = vaultPath ? `?vaultPath=${encodeURIComponent(vaultPath)}` : "";
     const response = await fetch(`/api/wallet/personal${query}`, { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
     const data = await response?.json().catch(() => null) as { ok?: boolean; wallets?: any[] } | null;
@@ -714,9 +721,9 @@ function WalletPanelComponent(props: any) {
     let ignore = false;
     void fetchWalletActivityRecords().then((records) => { if (!ignore) setWalletActivity(records); });
     void fetchHoneyLedger().then((ledger) => { if (!ignore) setHoneyLedger(ledger); });
-    void refreshRuntimeUsage?.();
+    void refreshRuntimeUsageRef.current?.();
     return () => { ignore = true; };
-  }, [activeView, refreshRuntimeUsage]);
+  }, [activeView]);
   useEffect(() => {
     let ignore = false;
     void loadDashboardStateSnapshot().then((snapshot) => {
@@ -749,7 +756,17 @@ function WalletPanelComponent(props: any) {
     }
     await Promise.all(targets.map((agent: any) => refreshRuntimeIntegrations?.(agent)));
   }, [displayAgents, refreshRuntimeIntegrations, selectedAgent]);
-  const runtimeData = useMemo(() => buildDropInRuntimeData(props, personalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger), [props, personalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger]);
+  const runtimeDataSource = useMemo(() => ({
+    RUNTIME_LABELS: props.RUNTIME_LABELS,
+    displayAgents,
+    hiveEnv: props.hiveEnv,
+    honeyLedgerEnabled: props.honeyLedgerEnabled,
+    honeyStats: props.honeyStats,
+    moneyClawStatusByEnvName: props.moneyClawStatusByEnvName,
+    runtimeUsage: props.runtimeUsage,
+    walletsByAgent: props.walletsByAgent,
+  }), [displayAgents, props.RUNTIME_LABELS, props.hiveEnv, props.honeyLedgerEnabled, props.honeyStats, props.moneyClawStatusByEnvName, props.runtimeUsage, props.walletsByAgent]);
+  const runtimeData = useMemo(() => buildDropInRuntimeData(runtimeDataSource, personalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger), [runtimeDataSource, personalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger]);
   const walletActions = useMemo(() => ({
     bankrRewards: { honeyStats: props.honeyStats, honeyLedgerEnabled: props.honeyLedgerEnabled },
     bankrRecipientAddress,

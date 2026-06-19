@@ -582,6 +582,7 @@ fn desktop_status(state: tauri::State<NativeServerState>) -> serde_json::Value {
     let commit = optional_build_value(env!("HIVEMINDOS_GIT_COMMIT"));
     let branch = optional_build_value(env!("HIVEMINDOS_GIT_BRANCH"));
     let latest_commit = commit;
+    let source_build = env!("HIVEMINDOS_TAURI_SOURCE_BUILD") == "true";
     let app_dir = std::env::current_dir()
         .ok()
         .map(|path| path.display().to_string());
@@ -600,6 +601,8 @@ fn desktop_status(state: tauri::State<NativeServerState>) -> serde_json::Value {
         "updateCommand": "Install the latest HivemindOS desktop build.",
         "runtime": "tauri",
         "packaged": !cfg!(debug_assertions),
+        "sourceBuild": source_build,
+        "releaseChannel": if source_build { "source" } else { "release" },
         "phase": if cfg!(debug_assertions) {
             "phase-1-dev"
         } else if port.is_some() {
@@ -1509,6 +1512,7 @@ pub fn run() {
             brain::brain_graph,
             env::hive_env_read,
             fleet::fleet_apps_cache,
+            fleet::fleet_discover,
             fleet::tailscale_devices,
             kanban::kanban_read,
             memory::memory_telemetry,
@@ -1521,6 +1525,7 @@ pub fn run() {
             setup::native_setup_status,
             scheduler::scheduler_shared_schedules,
             obsidian::obsidian_agents,
+            obsidian::obsidian_personal_wallets,
             dashboard_state::dashboard_state_read,
             dashboard_state::dashboard_state_write,
             deliverables::download_aeon_deliverable,

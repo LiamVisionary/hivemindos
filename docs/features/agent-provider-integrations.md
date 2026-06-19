@@ -13,7 +13,9 @@ The provider catalog makes external options retrievable by agents through `/api/
 
 - Browser Use for browser automation tasks such as navigation, forms, extraction, and screenshots.
 - Awesome MCP Servers as a curated MCP discovery lane for tools such as GitHub, Slack, Linear, Stripe, Postgres, and Notion.
-- Cloudflare Agentic Inbox as a scaffoldable and deployable email-agent Worker.
+- Agent Mailboxes as the product-facing one-click mailbox flow for persistent agent email addresses.
+- Cloudflare Agentic Inbox as one provider backend for routable email-agent Workers.
+- MCP Email Server as an advanced local stdio bridge for existing IMAP and optional SMTP mailboxes.
 - OpenHands and Aider as optional coding runtime adapters.
 - n8n as an installable workflow automation service.
 - Queen Bee PRD decomposition for turning product requirements into linked Work Board tasks.
@@ -45,6 +47,16 @@ The Browser Use provider card has a Full permissions toggle. Enabling it require
 
 The Apps & Services view includes n8n as an installable provider. The install action starts n8n through Docker, binds it to `127.0.0.1:5678`, sets localhost-safe HTTP settings, and keeps workflow execution outside the HivemindOS process. Once n8n is running, the existing connected-app discovery can surface its UI and API handles.
 
+## Agent Mailboxes
+
+Agent Settings exposes a mailbox action for existing agents. The intended user flow is: select an agent, press **Create mailbox**, and receive a persistent address for that agent. The app stores mailbox ownership under HivemindOS state and does not ask the user for per-agent IMAP, SMTP, password, or host settings in the primary flow.
+
+`GET /api/agents/mailbox?agentId=<agent>` returns existing mailbox records plus provider readiness. `POST /api/agents/mailbox` with `action: "create"`, `agentId`, and `agentName` attempts live provisioning. A mailbox is marked ready only when the selected provider can both receive mail for the address and send live internet email from the same domain. If no provider is live-ready, the API returns a blocked provider report with concrete setup blockers instead of creating a fake mailbox.
+
+Cloudflare Agentic Inbox is one backend for this contract. It requires a Cloudflare DNS domain with Email Routing and Email Sending ready, and an Agentic Inbox Worker target for routing rules. The app may create the per-agent routing rule automatically once the provider is ready; the user should not configure IMAP or SMTP for each agent.
+
+MCP Email Server remains useful for advanced bring-your-own-mailbox deployments and regression tests. It is not the default mailbox creation UX.
+
 ## Agentic Inbox Setup
 
 `GET /api/cloudflare/agentic-inbox` returns the Cloudflare inbox blueprint plus setup status. `POST /api/cloudflare/agentic-inbox` supports:
@@ -53,6 +65,18 @@ The Apps & Services view includes n8n as an installable provider. The install ac
 - `action: "deploy"` or `"start"` to install dependencies and run `wrangler deploy`.
 
 The scaffold includes Email Routing handling, a SQLite-backed Durable Object inbox store, R2 attachment binding, Workers AI binding, an Email Sending binding, health/catalog routes, draft creation, and explicit approval before replies are sent. Generated package scripts use `npx wrangler`, so `npm run check` can validate the Worker dry-run before a local dependency install. Deployments still require Cloudflare account auth, an onboarded sending domain, and Email Routing configured to deliver the mailbox to the Worker before it receives real mail.
+
+## MCP Email Server
+
+The Apps & Services view includes MCP Email Server as an installable local bridge for agent-readable mailboxes. HivemindOS installs the PyPI package with `uv tool install mcp-email-server` and reports setup readiness through `/api/fleet/apps/installable-services`.
+
+The bridge is intended to be spawned by an MCP client over stdio, for example with `mcp-email-server stdio` after installation or `uvx mcp-email-server@latest stdio` when the operator prefers a per-run package launch. HivemindOS does not keep the email bridge running in the background and does not read mailbox credentials during status checks.
+
+For advanced deployments, configure mailbox access through environment variables in the MCP client or shared env. The required read keys are `MCP_EMAIL_SERVER_EMAIL_ADDRESS`, `MCP_EMAIL_SERVER_PASSWORD`, and `MCP_EMAIL_SERVER_IMAP_HOST`. `MCP_EMAIL_SERVER_SMTP_HOST` and related SMTP keys are optional; when SMTP is omitted, the MCP server runs in read-only IMAP mode and hides outbound email tools.
+
+Regression coverage is available with `pnpm test:mcp-email`. The default suite launches throwaway local SMTP and IMAP fixtures plus real `mcp-email-server stdio` processes to verify agent-to-agent delivery across distinct email addresses, reply threading, message search and date filters, read state, mailbox listing, moving, deleting, draft saving, Sent copies, HTML parsing, CC/BCC delivery privacy, attachment download, MCP process restart persistence, and read-only IMAP behavior when SMTP is not configured.
+
+Production-provider coverage is available with `pnpm test:mcp-email:real`. It is opt-in and skips unless `MCP_EMAIL_REAL_E2E=1` is set. Configure two live test accounts with `MCP_EMAIL_REAL_ALPHA_EMAIL_ADDRESS`, `MCP_EMAIL_REAL_ALPHA_PASSWORD`, `MCP_EMAIL_REAL_ALPHA_IMAP_HOST`, `MCP_EMAIL_REAL_ALPHA_SMTP_HOST`, and the matching `MCP_EMAIL_REAL_BETA_*` keys. Optional per-account keys include `ACCOUNT_NAME`, `FULL_NAME`, `USER_NAME`, `IMAP_PORT`, `IMAP_SSL`, `IMAP_START_SSL`, `IMAP_VERIFY_SSL`, `SMTP_PORT`, `SMTP_SSL`, `SMTP_START_SSL`, and `SMTP_VERIFY_SSL`. The real-provider suite sends unique test messages between the two accounts, verifies live delivery, reads, replies, attachments, HTML, mailbox listing, read-only mode, and deletes the test messages unless `MCP_EMAIL_REAL_KEEP_MESSAGES=1` is set.
 
 ## PRD Decomposition
 

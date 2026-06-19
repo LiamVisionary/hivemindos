@@ -1,0 +1,1733 @@
+{
+  "version": 1,
+  "agents": {
+    "accessibility-expert": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/ui-design/agents/accessibility-expert.md",
+      "packagedPath": "packaged-agents/optional/wshobson/accessibility-expert/AGENT.md",
+      "computedHash": "2e4179689bd54e50038b1444e4e95582e5488987597421be16bbe7eca33a6a39"
+    },
+    "agent-orchestration-context-manager": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/agent-orchestration/agents/context-manager.md",
+      "packagedPath": "packaged-agents/optional/wshobson/agent-orchestration-context-manager/AGENT.md",
+      "computedHash": "8f4ad7ced92b661fdb75ddf644ef310a8a72059c45a1db8a43ac0662dfe0cb33"
+    },
+    "ai-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/llm-application-dev/agents/ai-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/ai-engineer/AGENT.md",
+      "computedHash": "3f193309c2ccb75a15d1d359b2dd8a049f156c3501c9844ad025234901d8baf5"
+    },
+    "api-scaffolding-backend-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/api-scaffolding/agents/backend-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/api-scaffolding-backend-architect/AGENT.md",
+      "computedHash": "a93f0eeca24bcfb222fe6a002633c1faeaf99ec7b4b00b6d47f4866314bfbd8a"
+    },
+    "api-scaffolding-django-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/api-scaffolding/agents/django-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/api-scaffolding-django-pro/AGENT.md",
+      "computedHash": "1f3970cfb6d305db9459af34164c68e5ec0010afdb6c44e70ea19578917a2b38"
+    },
+    "api-scaffolding-fastapi-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/api-scaffolding/agents/fastapi-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/api-scaffolding-fastapi-pro/AGENT.md",
+      "computedHash": "c30896a5dfd0c31f8e18d532ded819be145fa8dfef16d3703c1cb0e15ef403ec"
+    },
+    "api-scaffolding-graphql-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/api-scaffolding/agents/graphql-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/api-scaffolding-graphql-architect/AGENT.md",
+      "computedHash": "c8c4e566003e55333729651eaae39503bc987631e7655cf1f8884d625eaa542d"
+    },
+    "api-testing-observability-api-documenter": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/api-testing-observability/agents/api-documenter.md",
+      "packagedPath": "packaged-agents/optional/wshobson/api-testing-observability-api-documenter/AGENT.md",
+      "computedHash": "6fd6f5083a254701eee390147653ad8a5664f6b3a8d33d7b844f84a7d3ac096d"
+    },
+    "application-performance-frontend-developer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/application-performance/agents/frontend-developer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/application-performance-frontend-developer/AGENT.md",
+      "computedHash": "dcfc1096b49f0e226680131d439e833e342db4c6e07ff0ecb0d23e8c0fc7c875"
+    },
+    "application-performance-observability-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/application-performance/agents/observability-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/application-performance-observability-engineer/AGENT.md",
+      "computedHash": "b71d715e6b83c21a6661d8217c0a06501edb1d0bec7b99430af77981289a8096"
+    },
+    "application-performance-performance-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/application-performance/agents/performance-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/application-performance-performance-engineer/AGENT.md",
+      "computedHash": "6d36c2cd3b79046ab9acb3a5e07634b85c2700516385f10b5c320debc46d3db5"
+    },
+    "architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/ship-mate/agents/architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/architect/AGENT.md",
+      "computedHash": "12b15d3264067978e71f20d6c45a63d783d8aaeee992581c0ed549cf1a9f80ff"
+    },
+    "arm-cortex-expert": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/arm-cortex-microcontrollers/agents/arm-cortex-expert.md",
+      "packagedPath": "packaged-agents/optional/wshobson/arm-cortex-expert/AGENT.md",
+      "computedHash": "06697954cf0a02926efad51dc36cac6e45fcb608156e732ad0481ed04b35ff87"
+    },
+    "backend-api-security-backend-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/backend-api-security/agents/backend-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/backend-api-security-backend-architect/AGENT.md",
+      "computedHash": "ea202e56b47a120b7b7bef02c7d2a07425586d6348c9b4653f8fd46ee95a3708"
+    },
+    "backend-api-security-backend-security-coder": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/backend-api-security/agents/backend-security-coder.md",
+      "packagedPath": "packaged-agents/optional/wshobson/backend-api-security-backend-security-coder/AGENT.md",
+      "computedHash": "30a025fb8758396b887ea565a1e9ae8cab86814cfd2deeb71192e31be332d584"
+    },
+    "backend-development-backend-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/backend-development/agents/backend-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/backend-development-backend-architect/AGENT.md",
+      "computedHash": "27b0d58d683616ce4d5a6f4cf470b0d0767b04a199434fcbdc7d2a1e97ad8a8c"
+    },
+    "backend-development-graphql-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/backend-development/agents/graphql-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/backend-development-graphql-architect/AGENT.md",
+      "computedHash": "206184be84b60f45fa2c1bc6e13c7da61984e12726c048f75dc159bee6b1f542"
+    },
+    "backend-development-performance-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/backend-development/agents/performance-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/backend-development-performance-engineer/AGENT.md",
+      "computedHash": "cdc50f9185d8068f0fad18928a947b1c89383786b6b13c976f67042045b9fa76"
+    },
+    "backend-development-security-auditor": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/backend-development/agents/security-auditor.md",
+      "packagedPath": "packaged-agents/optional/wshobson/backend-development-security-auditor/AGENT.md",
+      "computedHash": "1f1d3bb1edd4717d115a81fe61ff008f0f5e4784703f56cdd50fbbab7a1fa793"
+    },
+    "backend-development-tdd-orchestrator": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/backend-development/agents/tdd-orchestrator.md",
+      "packagedPath": "packaged-agents/optional/wshobson/backend-development-tdd-orchestrator/AGENT.md",
+      "computedHash": "d8609ccf555af7519d82de465fdc39e493e41ff395402897332be5271c912a32"
+    },
+    "backend-development-test-automator": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/backend-development/agents/test-automator.md",
+      "packagedPath": "packaged-agents/optional/wshobson/backend-development-test-automator/AGENT.md",
+      "computedHash": "7ad5c55c6970a8f0968aef701f888385233383895afa48e42d0cde1fe738fb14"
+    },
+    "bash-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/shell-scripting/agents/bash-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/bash-pro/AGENT.md",
+      "computedHash": "7afb8f42ac759f40b2c9115f803e586e7c8c0ac7869a2b1a3e1829db9f0e3faa"
+    },
+    "blockchain-developer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/blockchain-web3/agents/blockchain-developer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/blockchain-developer/AGENT.md",
+      "computedHash": "e7165601aa97f0cd3a71442cf5878a190843899a7aa11e5173fe1f1d8f0e9004"
+    },
+    "business-analyst": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/business-analytics/agents/business-analyst.md",
+      "packagedPath": "packaged-agents/optional/wshobson/business-analyst/AGENT.md",
+      "computedHash": "505e4457bb2574736b68742ed0103450d886b2342b44641fd5a10f70d1387ca3"
+    },
+    "c-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/systems-programming/agents/c-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/c-pro/AGENT.md",
+      "computedHash": "42022fed812de4878d646e741ceddcf5fe0ad22c31dedec3506f56b7086dfc18"
+    },
+    "c4-code": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/c4-architecture/agents/c4-code.md",
+      "packagedPath": "packaged-agents/optional/wshobson/c4-code/AGENT.md",
+      "computedHash": "b8c610bf2dde9a40a2dc10f8dfc6ab491985e197cf5e02442392182e56ffc878"
+    },
+    "c4-component": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/c4-architecture/agents/c4-component.md",
+      "packagedPath": "packaged-agents/optional/wshobson/c4-component/AGENT.md",
+      "computedHash": "9dbd76fff3b2d67a7c0a07aca3eebeea2f5803705076efe051a9b4490a11cdd9"
+    },
+    "c4-container": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/c4-architecture/agents/c4-container.md",
+      "packagedPath": "packaged-agents/optional/wshobson/c4-container/AGENT.md",
+      "computedHash": "83c785ffacae7fec7897c78df1c4bbe382944d433b5999567930f5cfb070a524"
+    },
+    "c4-context": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/c4-architecture/agents/c4-context.md",
+      "packagedPath": "packaged-agents/optional/wshobson/c4-context/AGENT.md",
+      "computedHash": "928c07a3a2da01219bc833517dd48edf03a9b542f802a6d66be781e69954507e"
+    },
+    "cicd-automation-cloud-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/cicd-automation/agents/cloud-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/cicd-automation-cloud-architect/AGENT.md",
+      "computedHash": "f4fe3659e627ccfdc385e7ebe3b9641d42c7021bb2f32633817dd2155fda2ba5"
+    },
+    "cicd-automation-deployment-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/cicd-automation/agents/deployment-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/cicd-automation-deployment-engineer/AGENT.md",
+      "computedHash": "03661ad736a5452e376903d327d8426672835f5cc73fd9942c7d56e808970101"
+    },
+    "cicd-automation-devops-troubleshooter": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/cicd-automation/agents/devops-troubleshooter.md",
+      "packagedPath": "packaged-agents/optional/wshobson/cicd-automation-devops-troubleshooter/AGENT.md",
+      "computedHash": "317728588a2dd6c467bb46ba4556d467fa37e02d78d4a91bd4ec1627a0b9e3c3"
+    },
+    "cicd-automation-kubernetes-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/cicd-automation/agents/kubernetes-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/cicd-automation-kubernetes-architect/AGENT.md",
+      "computedHash": "91d34504f1a9a4e025b09ea811dee17794518a7f03aa087f71acf49bce8bee0c"
+    },
+    "cicd-automation-terraform-specialist": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/cicd-automation/agents/terraform-specialist.md",
+      "packagedPath": "packaged-agents/optional/wshobson/cicd-automation-terraform-specialist/AGENT.md",
+      "computedHash": "d85ffb704b819c49f587be18fbc9a09efb205193373c3451404c4f7056780c4c"
+    },
+    "cloud-infrastructure-cloud-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/cloud-infrastructure/agents/cloud-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/cloud-infrastructure-cloud-architect/AGENT.md",
+      "computedHash": "801fb4c83b79f9480a870d81e1ba14645570d38a648e88a93e24f7ec61a52b1b"
+    },
+    "cloud-infrastructure-deployment-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/cloud-infrastructure/agents/deployment-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/cloud-infrastructure-deployment-engineer/AGENT.md",
+      "computedHash": "7522901a36d80509e4a073d3b6b64bb2f713187e7baa66507a81aafaf0263498"
+    },
+    "cloud-infrastructure-kubernetes-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/cloud-infrastructure/agents/kubernetes-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/cloud-infrastructure-kubernetes-architect/AGENT.md",
+      "computedHash": "2d1767974b42129872b39fcab11d461a40c8cce0b104020baaadc8539672f90b"
+    },
+    "cloud-infrastructure-network-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/cloud-infrastructure/agents/network-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/cloud-infrastructure-network-engineer/AGENT.md",
+      "computedHash": "5fa4589cf11d325b78ac198dbdc51945b073c7345c1af73381cca865cbe3682f"
+    },
+    "cloud-infrastructure-terraform-specialist": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/cloud-infrastructure/agents/terraform-specialist.md",
+      "packagedPath": "packaged-agents/optional/wshobson/cloud-infrastructure-terraform-specialist/AGENT.md",
+      "computedHash": "8fd4b5d33b36081ea6d081efd2cef775e19347e5af5e83f6e7d592f0236bf6b8"
+    },
+    "code-documentation-code-reviewer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/code-documentation/agents/code-reviewer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/code-documentation-code-reviewer/AGENT.md",
+      "computedHash": "1ad7617c30aa5270d447264464eb080151f79f611b1508084cc1ebd7d4eb4b34"
+    },
+    "code-documentation-docs-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/code-documentation/agents/docs-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/code-documentation-docs-architect/AGENT.md",
+      "computedHash": "4deac196788456a092b5e764363441699566d064f3b1ca2e464b2e3d800fc973"
+    },
+    "code-documentation-tutorial-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/code-documentation/agents/tutorial-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/code-documentation-tutorial-engineer/AGENT.md",
+      "computedHash": "d278f2993ae8ab0610a5efb63dfd4c3758c98150139b7b0da6be867dd440721d"
+    },
+    "code-refactoring-code-reviewer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/code-refactoring/agents/code-reviewer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/code-refactoring-code-reviewer/AGENT.md",
+      "computedHash": "373a85e8f824f0266a7c2109243f3cefc3a4dd267bfdfa6264427d1615d71630"
+    },
+    "code-refactoring-legacy-modernizer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/code-refactoring/agents/legacy-modernizer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/code-refactoring-legacy-modernizer/AGENT.md",
+      "computedHash": "5ce1116c3a72d00413a0f02d991e97f5a18d501cb7ec5582bf51c7c00281f16a"
+    },
+    "codebase-cleanup-code-reviewer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/codebase-cleanup/agents/code-reviewer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/codebase-cleanup-code-reviewer/AGENT.md",
+      "computedHash": "a0fe72e2ebe097e0b4873ce98c5c521f77daf0f11d149b5ae4dc86184f882556"
+    },
+    "codebase-cleanup-test-automator": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/codebase-cleanup/agents/test-automator.md",
+      "packagedPath": "packaged-agents/optional/wshobson/codebase-cleanup-test-automator/AGENT.md",
+      "computedHash": "3ed2f77223ab3d4e89fa79d6db4e2a91e144125a04be30ff18afd287c0f2612a"
+    },
+    "comprehensive-review-architect-review": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/comprehensive-review/agents/architect-review.md",
+      "packagedPath": "packaged-agents/optional/wshobson/comprehensive-review-architect-review/AGENT.md",
+      "computedHash": "92e4baee51e47ad4c280c399a30eb1e888d3ff067bb714711acf1318813f5cb9"
+    },
+    "comprehensive-review-code-reviewer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/comprehensive-review/agents/code-reviewer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/comprehensive-review-code-reviewer/AGENT.md",
+      "computedHash": "db41107aa6bae36d879c33f33ef69ff9b5f95190fa465fa088ede056e5be1613"
+    },
+    "comprehensive-review-security-auditor": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/comprehensive-review/agents/security-auditor.md",
+      "packagedPath": "packaged-agents/optional/wshobson/comprehensive-review-security-auditor/AGENT.md",
+      "computedHash": "1a1b1639d3cc47e14f23caac21c6c5fd8ea4b11c80f8b8334e9d413a32a534f9"
+    },
+    "conductor-validator": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/conductor/agents/conductor-validator.md",
+      "packagedPath": "packaged-agents/optional/wshobson/conductor-validator/AGENT.md",
+      "computedHash": "a423136d4946a686862380b87daa89b1765543c09c565e903b0a0d6d912df1bf"
+    },
+    "content-marketer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/content-marketing/agents/content-marketer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/content-marketer/AGENT.md",
+      "computedHash": "bcc4a55c79e1a32bc0fe1d246330e741e940ecf44618c100f17151d7932d1743"
+    },
+    "context-management-context-manager": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/context-management/agents/context-manager.md",
+      "packagedPath": "packaged-agents/optional/wshobson/context-management-context-manager/AGENT.md",
+      "computedHash": "2bf06dd44852349ab8fce8b6fe94a51f23eccdc2f75e428a50c832ab6752b295"
+    },
+    "cpp-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/systems-programming/agents/cpp-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/cpp-pro/AGENT.md",
+      "computedHash": "82a506b2c991815b13266835845a6b7261f0176defa3a49c68e4f852ef3c6b61"
+    },
+    "csharp-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/jvm-languages/agents/csharp-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/csharp-pro/AGENT.md",
+      "computedHash": "528daa2143e89deaee53b4ba98d2d847a0cda9821632657ffacc38cd49aadaa7"
+    },
+    "customer-support": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/customer-sales-automation/agents/customer-support.md",
+      "packagedPath": "packaged-agents/optional/wshobson/customer-support/AGENT.md",
+      "computedHash": "fcc62948fe5ad072881acae6802e7cae9130b43e19cb5d6d304a6e7481878799"
+    },
+    "data-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/data-engineering/agents/data-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/data-engineer/AGENT.md",
+      "computedHash": "13249d7c8e1e1e3353a386af0524b1aa04e157a2819a8472ab1f2884a69690fc"
+    },
+    "data-engineering-backend-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/data-engineering/agents/backend-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/data-engineering-backend-architect/AGENT.md",
+      "computedHash": "11e651e8f221dcf5445401bb72402393fb0cdf19964a2b252fab8eff64867ec5"
+    },
+    "data-scientist": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/machine-learning-ops/agents/data-scientist.md",
+      "packagedPath": "packaged-agents/optional/wshobson/data-scientist/AGENT.md",
+      "computedHash": "e0bedf11b132ac72768a70c3a627c35bb45889489bade657201a0fcd248d1b91"
+    },
+    "data-validation-suite-backend-security-coder": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/data-validation-suite/agents/backend-security-coder.md",
+      "packagedPath": "packaged-agents/optional/wshobson/data-validation-suite-backend-security-coder/AGENT.md",
+      "computedHash": "325b7805430c5e51e82846ae7fec578f8135040afae92ae306f2f7880559dc07"
+    },
+    "database-admin": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/database-migrations/agents/database-admin.md",
+      "packagedPath": "packaged-agents/optional/wshobson/database-admin/AGENT.md",
+      "computedHash": "13cce51ea88da219a936c20606a3f519c6e6b24a834e51277b6777169fe8f26a"
+    },
+    "database-cloud-optimization-backend-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/database-cloud-optimization/agents/backend-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/database-cloud-optimization-backend-architect/AGENT.md",
+      "computedHash": "ce8832a8a346813f2ab72bc31b3e2e65e84a204c393cebd9cf8841024c5bdc9c"
+    },
+    "database-cloud-optimization-cloud-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/database-cloud-optimization/agents/cloud-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/database-cloud-optimization-cloud-architect/AGENT.md",
+      "computedHash": "3de5781a3f9ac48418f9b3b53b2640640b07adf60f3442614fa0f8b072e756ab"
+    },
+    "database-cloud-optimization-database-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/database-cloud-optimization/agents/database-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/database-cloud-optimization-database-architect/AGENT.md",
+      "computedHash": "d908efe6090e9517c7eb277b410ef86281efdc79e53f0d20bfc5486c578a1fc0"
+    },
+    "database-cloud-optimization-database-optimizer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/database-cloud-optimization/agents/database-optimizer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/database-cloud-optimization-database-optimizer/AGENT.md",
+      "computedHash": "deef20eee2ab6715943e9d3019218e2c9afed7a5c2381417486026a48c18c421"
+    },
+    "database-design-database-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/database-design/agents/database-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/database-design-database-architect/AGENT.md",
+      "computedHash": "1872ade8693e40be8f3649782dc81d8ec2ab27ffd20f38a919b7e8b26779b687"
+    },
+    "database-migrations-database-optimizer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/database-migrations/agents/database-optimizer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/database-migrations-database-optimizer/AGENT.md",
+      "computedHash": "b573ecdd855307d47ca19b794c6aec2569dfd0c15f10e481bd58ac7f1be60f29"
+    },
+    "debugging-toolkit-debugger": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/debugging-toolkit/agents/debugger.md",
+      "packagedPath": "packaged-agents/optional/wshobson/debugging-toolkit-debugger/AGENT.md",
+      "computedHash": "5ef42daebe4b92622e029ce269819523511a5886a8ca0c9fcb5a0cbd8a7b22bd"
+    },
+    "debugging-toolkit-dx-optimizer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/debugging-toolkit/agents/dx-optimizer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/debugging-toolkit-dx-optimizer/AGENT.md",
+      "computedHash": "c014afe3733219b6de3cc1e7b4bce47bd241130cc21f1ffd4feae5181485442e"
+    },
+    "dependency-management-legacy-modernizer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/dependency-management/agents/legacy-modernizer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/dependency-management-legacy-modernizer/AGENT.md",
+      "computedHash": "1828cbbb1deee306c71789be4dc0dba44e7f0d3581ca9e7a1e0e4f7188fac2a9"
+    },
+    "deployment-strategies-deployment-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/deployment-strategies/agents/deployment-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/deployment-strategies-deployment-engineer/AGENT.md",
+      "computedHash": "78c8090347114efcecaccd6f43822e89f6b42db1334537a249d9ab65ebf5f182"
+    },
+    "deployment-strategies-terraform-specialist": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/deployment-strategies/agents/terraform-specialist.md",
+      "packagedPath": "packaged-agents/optional/wshobson/deployment-strategies-terraform-specialist/AGENT.md",
+      "computedHash": "d09372b6da3cc106bf01d512e815d80ecbf405688e58384d669a5bd37f720f04"
+    },
+    "deployment-validation-cloud-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/deployment-validation/agents/cloud-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/deployment-validation-cloud-architect/AGENT.md",
+      "computedHash": "33299be4094af60d4c265adfa0576cb4428150e0cddf0158312628bf4ba41eb1"
+    },
+    "design-system-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/ui-design/agents/design-system-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/design-system-architect/AGENT.md",
+      "computedHash": "d0476c0cc086577d76ce665cae24a761fc1365364acfe6734e7605333c582d0f"
+    },
+    "distributed-debugging-devops-troubleshooter": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/distributed-debugging/agents/devops-troubleshooter.md",
+      "packagedPath": "packaged-agents/optional/wshobson/distributed-debugging-devops-troubleshooter/AGENT.md",
+      "computedHash": "94c4d2ec8cce8f85532f6e11006f4da95c9c499a7c9426393eed3397f3d0089a"
+    },
+    "distributed-debugging-error-detective": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/distributed-debugging/agents/error-detective.md",
+      "packagedPath": "packaged-agents/optional/wshobson/distributed-debugging-error-detective/AGENT.md",
+      "computedHash": "58803e01bb86e1242586b015d1416870badadd2b0c098ac8410d8efaa497ad1e"
+    },
+    "documentation-generation-api-documenter": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/documentation-generation/agents/api-documenter.md",
+      "packagedPath": "packaged-agents/optional/wshobson/documentation-generation-api-documenter/AGENT.md",
+      "computedHash": "4deb6de2a8cb77237668af8d06e7d0b2f02d2fe93845103159f68c0bf02679ca"
+    },
+    "documentation-generation-docs-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/documentation-generation/agents/docs-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/documentation-generation-docs-architect/AGENT.md",
+      "computedHash": "c0f53f3d74382c28f01d11f9c7004fdc5809673ba819ca6b2ac1e04b2a96d4c1"
+    },
+    "documentation-generation-tutorial-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/documentation-generation/agents/tutorial-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/documentation-generation-tutorial-engineer/AGENT.md",
+      "computedHash": "da2fa4e0709c37f377df857f8ab2cdb10dec54a34346f9630c11500a3de05907"
+    },
+    "dotnet-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/dotnet-contribution/agents/dotnet-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/dotnet-architect/AGENT.md",
+      "computedHash": "eb80464b20607e2f9d3bf9dd818a2e58f2fcac4f86f713a1c41b992a1d306e84"
+    },
+    "elixir-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/functional-programming/agents/elixir-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/elixir-pro/AGENT.md",
+      "computedHash": "d54788df24c39319bda8338538624ab505f91f8e9f67f97f4a00b1c72a4a4aa3"
+    },
+    "error-debugging-debugger": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/error-debugging/agents/debugger.md",
+      "packagedPath": "packaged-agents/optional/wshobson/error-debugging-debugger/AGENT.md",
+      "computedHash": "312d0c11eb5f83ab7ac30596838c68e6b33b37a87496a2794f882a676a961cb0"
+    },
+    "error-debugging-error-detective": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/error-debugging/agents/error-detective.md",
+      "packagedPath": "packaged-agents/optional/wshobson/error-debugging-error-detective/AGENT.md",
+      "computedHash": "b8ebe80edf4e315fdc93e237fd21e96760dff1264705cf2f5ea9b8b63c613faa"
+    },
+    "error-diagnostics-debugger": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/error-diagnostics/agents/debugger.md",
+      "packagedPath": "packaged-agents/optional/wshobson/error-diagnostics-debugger/AGENT.md",
+      "computedHash": "5645099d67f122ad05f1b4da131b54ed4876c0180d3cf6b3794209de8b338fb9"
+    },
+    "error-diagnostics-error-detective": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/error-diagnostics/agents/error-detective.md",
+      "packagedPath": "packaged-agents/optional/wshobson/error-diagnostics-error-detective/AGENT.md",
+      "computedHash": "165178f9037ced55e61b4c60cdd9bb31127ed378f852fec42074f2d8abba3f05"
+    },
+    "eval-judge": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/plugin-eval/agents/eval-judge.md",
+      "packagedPath": "packaged-agents/optional/wshobson/eval-judge/AGENT.md",
+      "computedHash": "98b9291ce83b136bfcc32e445c16fae00eee1a90838b15775efe4c2a640f5b90"
+    },
+    "eval-orchestrator": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/plugin-eval/agents/eval-orchestrator.md",
+      "packagedPath": "packaged-agents/optional/wshobson/eval-orchestrator/AGENT.md",
+      "computedHash": "8b9d57feb522999f63a00a0d7b9f56d27afb72de936ec1cd2e0f352f08b43056"
+    },
+    "event-sourcing-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/backend-development/agents/event-sourcing-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/event-sourcing-architect/AGENT.md",
+      "computedHash": "713725a1388f4db1060344050960958941c9fc9e82d8d486385c80f307c6b482"
+    },
+    "firmware-analyst": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/reverse-engineering/agents/firmware-analyst.md",
+      "packagedPath": "packaged-agents/optional/wshobson/firmware-analyst/AGENT.md",
+      "computedHash": "1c98f595e37d7361a29222195baa7744c65ab20e13d48c778a26f64e818f52bd"
+    },
+    "flutter-expert": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/multi-platform-apps/agents/flutter-expert.md",
+      "packagedPath": "packaged-agents/optional/wshobson/flutter-expert/AGENT.md",
+      "computedHash": "779d39979df33f0f50495b55cb01251c4365fbc57fdfc4df48592e6cdfd99cb6"
+    },
+    "framework-migration-architect-review": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/framework-migration/agents/architect-review.md",
+      "packagedPath": "packaged-agents/optional/wshobson/framework-migration-architect-review/AGENT.md",
+      "computedHash": "1a729e9241cdf6b52c0db03537979976d98142c33ef1e572aa031101b9dc5ff3"
+    },
+    "framework-migration-legacy-modernizer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/framework-migration/agents/legacy-modernizer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/framework-migration-legacy-modernizer/AGENT.md",
+      "computedHash": "3d80068df176bf051aff09d9c361aac3188f13f537b3c1a99e8bf8c5e0ab9158"
+    },
+    "frontend-mobile-development-frontend-developer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/frontend-mobile-development/agents/frontend-developer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/frontend-mobile-development-frontend-developer/AGENT.md",
+      "computedHash": "8495019d357b3ccb1c3bad781762fed03c7eea9d53c5bf6bd9e83b82e7a7d7a3"
+    },
+    "frontend-mobile-development-mobile-developer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/frontend-mobile-development/agents/mobile-developer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/frontend-mobile-development-mobile-developer/AGENT.md",
+      "computedHash": "c80685dac22a69301914c116d9f0054720100a847027cedcfed93993fb323a7f"
+    },
+    "frontend-mobile-security-frontend-developer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/frontend-mobile-security/agents/frontend-developer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/frontend-mobile-security-frontend-developer/AGENT.md",
+      "computedHash": "3f37b7a6ca163427691291a34a0c3a5a97e177e39735646316c3afa4a0044258"
+    },
+    "frontend-security-coder": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/frontend-mobile-security/agents/frontend-security-coder.md",
+      "packagedPath": "packaged-agents/optional/wshobson/frontend-security-coder/AGENT.md",
+      "computedHash": "1d6093b2d6a172305758c76da2ae12f6dbe3c02e0d310804c69e04821a34670c"
+    },
+    "full-stack-orchestration-deployment-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/full-stack-orchestration/agents/deployment-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/full-stack-orchestration-deployment-engineer/AGENT.md",
+      "computedHash": "836188304b9ba86e4581724886db2d1cf072de955d4bce5a7025191116e3c9b9"
+    },
+    "full-stack-orchestration-performance-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/full-stack-orchestration/agents/performance-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/full-stack-orchestration-performance-engineer/AGENT.md",
+      "computedHash": "ab261bfbb79a6b4cd014d80d9c56350f8ffddf24d7f2f318321f9aba3a8e3147"
+    },
+    "full-stack-orchestration-security-auditor": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/full-stack-orchestration/agents/security-auditor.md",
+      "packagedPath": "packaged-agents/optional/wshobson/full-stack-orchestration-security-auditor/AGENT.md",
+      "computedHash": "6db74e7f143831defd4577ba210db55c5a047beded721fc10bd8899c12991b1f"
+    },
+    "full-stack-orchestration-test-automator": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/full-stack-orchestration/agents/test-automator.md",
+      "packagedPath": "packaged-agents/optional/wshobson/full-stack-orchestration-test-automator/AGENT.md",
+      "computedHash": "ddafeea4bbed129dcaa98e6972c02850269f9a099f823711a43c7b0e63b306ed"
+    },
+    "gallery-researcher": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/meigen-ai-design/agents/gallery-researcher.md",
+      "packagedPath": "packaged-agents/optional/wshobson/gallery-researcher/AGENT.md",
+      "computedHash": "7e10c88ab95774e700c61bf224b485bc298f2aa8d47c989cf7681fcdf16088ae"
+    },
+    "git-pr-workflows-code-reviewer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/git-pr-workflows/agents/code-reviewer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/git-pr-workflows-code-reviewer/AGENT.md",
+      "computedHash": "7d1c82a553f467ed758df55010199cdbe426e93431dedb3ec860d1f199b09ce5"
+    },
+    "golang-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/systems-programming/agents/golang-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/golang-pro/AGENT.md",
+      "computedHash": "7887fb87e21b4f79b0aa01598a84b12793b4ea52416a5ffa7fa894e4ab88dc7a"
+    },
+    "haskell-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/functional-programming/agents/haskell-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/haskell-pro/AGENT.md",
+      "computedHash": "8ab601c113de4ebc2790387104c5bd916e4e8d817b1e0e230acef55f20a31444"
+    },
+    "hr-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/hr-legal-compliance/agents/hr-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/hr-pro/AGENT.md",
+      "computedHash": "83c9bc017c46c0d500ba1d5a24594da6e58ee2aee86b41ada8d741d083a3d050"
+    },
+    "hybrid-cloud-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/cloud-infrastructure/agents/hybrid-cloud-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/hybrid-cloud-architect/AGENT.md",
+      "computedHash": "d23d54e4e81f2a1e869c29b93a2beb43cd7452b7378e76a783fd4d85c826055b"
+    },
+    "image-generator": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/meigen-ai-design/agents/image-generator.md",
+      "packagedPath": "packaged-agents/optional/wshobson/image-generator/AGENT.md",
+      "computedHash": "52c9c9a7bb3c01e6e6ae3017b8ff7cc1edd3b2ac7161ed37881d7993733dcfab"
+    },
+    "implement": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/ship-mate/agents/implement.md",
+      "packagedPath": "packaged-agents/optional/wshobson/implement/AGENT.md",
+      "computedHash": "f75b25e0a7738686e204ac20dedb685fdbe9b2f9c479ad250ea1bf52e82d4143"
+    },
+    "incident-responder": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/incident-response/agents/incident-responder.md",
+      "packagedPath": "packaged-agents/optional/wshobson/incident-responder/AGENT.md",
+      "computedHash": "096bee0032af06594f3c73ecead743c33e80ebc22e3a3aac08837cb86e3ca673"
+    },
+    "incident-response-code-reviewer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/incident-response/agents/code-reviewer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/incident-response-code-reviewer/AGENT.md",
+      "computedHash": "9b833e3355f4ca140600a488d27c3ad880804d8b5e20550f1adc35e6f29cc9b5"
+    },
+    "incident-response-debugger": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/incident-response/agents/debugger.md",
+      "packagedPath": "packaged-agents/optional/wshobson/incident-response-debugger/AGENT.md",
+      "computedHash": "5ad34cc7b8534f3abaa83d02541176b278dc4f80bad6c7f7e399b6d321d33776"
+    },
+    "incident-response-devops-troubleshooter": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/incident-response/agents/devops-troubleshooter.md",
+      "packagedPath": "packaged-agents/optional/wshobson/incident-response-devops-troubleshooter/AGENT.md",
+      "computedHash": "a3de69a742872cfa319a60f6acdf7b174ac8e0137a6a5bac4487144e94f871b0"
+    },
+    "incident-response-error-detective": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/incident-response/agents/error-detective.md",
+      "packagedPath": "packaged-agents/optional/wshobson/incident-response-error-detective/AGENT.md",
+      "computedHash": "d95f3d584a614ddc3b0593b82fe0c88faf46181ba3ca66e7ecab1f2a41093aa2"
+    },
+    "incident-response-test-automator": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/incident-response/agents/test-automator.md",
+      "packagedPath": "packaged-agents/optional/wshobson/incident-response-test-automator/AGENT.md",
+      "computedHash": "fa87b5ffb6078d43e39c6fb28c3cca9432a0d97bc047150caa145d645e08956f"
+    },
+    "ios-developer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/multi-platform-apps/agents/ios-developer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/ios-developer/AGENT.md",
+      "computedHash": "c5e44f2f4c5e1c60915a818e998fad4e7f594f66d79aa5d5e4ec6707b0b6e856"
+    },
+    "java-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/jvm-languages/agents/java-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/java-pro/AGENT.md",
+      "computedHash": "5fdba66b961272602abbe728bfcfb927a2bf4c15fb66088540eb5204edb96135"
+    },
+    "javascript-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/javascript-typescript/agents/javascript-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/javascript-pro/AGENT.md",
+      "computedHash": "4ead3553d0a1d6d636d33c0d4e87e7bd0f2a0cae55aca083129a4beffd543bae"
+    },
+    "julia-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/julia-development/agents/julia-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/julia-pro/AGENT.md",
+      "computedHash": "478c347b7e1df3266fb3c88828431a6c05c6cc0ca5d79c16f0ee9585e398e66b"
+    },
+    "kubernetes-operations-kubernetes-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/kubernetes-operations/agents/kubernetes-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/kubernetes-operations-kubernetes-architect/AGENT.md",
+      "computedHash": "9bbaa7b8c32cf9cc1130e33c9e3e6617a7c987f18f6be79f92b3094d7104d28a"
+    },
+    "legal-advisor": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/hr-legal-compliance/agents/legal-advisor.md",
+      "packagedPath": "packaged-agents/optional/wshobson/legal-advisor/AGENT.md",
+      "computedHash": "922674bdeeb764a74bed1cdd2c2185f4d188ea61ad0b6a7063ee4faa607718ef"
+    },
+    "malware-analyst": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/reverse-engineering/agents/malware-analyst.md",
+      "packagedPath": "packaged-agents/optional/wshobson/malware-analyst/AGENT.md",
+      "computedHash": "76f6a4ac053ccc0d17327756c4c866d0a8e29911e831ddb3cb49d5d822414ceb"
+    },
+    "mermaid-expert": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/documentation-generation/agents/mermaid-expert.md",
+      "packagedPath": "packaged-agents/optional/wshobson/mermaid-expert/AGENT.md",
+      "computedHash": "640fd82d51d4f71736286302dbea1d484a350b0c8b40436dc91785d33953f98c"
+    },
+    "minecraft-bukkit-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/game-development/agents/minecraft-bukkit-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/minecraft-bukkit-pro/AGENT.md",
+      "computedHash": "8ea348b73ccaee5e2fb467d380fc7a449fc5dddef3944cc635fcf5ad38283200"
+    },
+    "ml-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/machine-learning-ops/agents/ml-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/ml-engineer/AGENT.md",
+      "computedHash": "cbe065dfe6646f15195c708b00acdefa6bd67e7054ab23f901bb4a1f18cf3ddf"
+    },
+    "mlops-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/machine-learning-ops/agents/mlops-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/mlops-engineer/AGENT.md",
+      "computedHash": "cbc0b29a68cfb888710f1d1f7b13529bc9bbc67998b6ecd58c6b4280bc0c90be"
+    },
+    "mobile-security-coder": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/frontend-mobile-security/agents/mobile-security-coder.md",
+      "packagedPath": "packaged-agents/optional/wshobson/mobile-security-coder/AGENT.md",
+      "computedHash": "7d8bfc99d86625cb8bc0c002e00be9a6c4b51c6fdf8095215580397db9e49425"
+    },
+    "monorepo-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/developer-essentials/agents/monorepo-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/monorepo-architect/AGENT.md",
+      "computedHash": "79113ed277d8fe56162bdb62fd2f7b54da806e03849869732062fcabaf8f5ba1"
+    },
+    "multi-platform-apps-backend-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/multi-platform-apps/agents/backend-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/multi-platform-apps-backend-architect/AGENT.md",
+      "computedHash": "8ed6e5414c4eb5a8baae31252746d886deb2d11409c80a330f3b3fd8d192bb76"
+    },
+    "multi-platform-apps-frontend-developer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/multi-platform-apps/agents/frontend-developer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/multi-platform-apps-frontend-developer/AGENT.md",
+      "computedHash": "28f74beeff4a4a432122a29dbc1a461c4cfa16608e87cb0a559c4b9dfb92b402"
+    },
+    "multi-platform-apps-mobile-developer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/multi-platform-apps/agents/mobile-developer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/multi-platform-apps-mobile-developer/AGENT.md",
+      "computedHash": "39a4b32f11aa1d1b3ed6597887702320def557b81b6305d4ef8b95c6dbe96461"
+    },
+    "observability-monitoring-database-optimizer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/observability-monitoring/agents/database-optimizer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/observability-monitoring-database-optimizer/AGENT.md",
+      "computedHash": "1fb04ca5e3e07a8c48d25cf8dd6f916e1265d82003109f809351d96db38c408b"
+    },
+    "observability-monitoring-network-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/observability-monitoring/agents/network-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/observability-monitoring-network-engineer/AGENT.md",
+      "computedHash": "f9777621e1c361d1805dbff665ee25596a53e25531049c961d61baa7872a856f"
+    },
+    "observability-monitoring-observability-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/observability-monitoring/agents/observability-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/observability-monitoring-observability-engineer/AGENT.md",
+      "computedHash": "a8aa2d6a04364d2c9022420dca7b9079337510763ddee57542f0f2970362d65d"
+    },
+    "observability-monitoring-performance-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/observability-monitoring/agents/performance-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/observability-monitoring-performance-engineer/AGENT.md",
+      "computedHash": "d037de6820e0cd9b079ed802fefea3603bea059e10e0197db4bd7a2829df8b6c"
+    },
+    "orchestrate": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/ship-mate/agents/orchestrate.md",
+      "packagedPath": "packaged-agents/optional/wshobson/orchestrate/AGENT.md",
+      "computedHash": "24364ffdc0beaab604395f6d803a29f192755ec7fee803d22a16d712682a65d6"
+    },
+    "payment-integration": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/payment-processing/agents/payment-integration.md",
+      "packagedPath": "packaged-agents/optional/wshobson/payment-integration/AGENT.md",
+      "computedHash": "75c9995891e113118a3689ad9cd1a4d1f0d65ca7c24adf9f89cd04e5c9e665bf"
+    },
+    "performance-testing-review-performance-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/performance-testing-review/agents/performance-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/performance-testing-review-performance-engineer/AGENT.md",
+      "computedHash": "26361a9ac96b6ff103db1264bf3617d076716a85e740231e5c79c9a38644b105"
+    },
+    "performance-testing-review-test-automator": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/performance-testing-review/agents/test-automator.md",
+      "packagedPath": "packaged-agents/optional/wshobson/performance-testing-review-test-automator/AGENT.md",
+      "computedHash": "648a980f2d97ef883af69078a78b4222a01076db0e0ba39a504c6dee773f1927"
+    },
+    "php-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/web-scripting/agents/php-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/php-pro/AGENT.md",
+      "computedHash": "50de8a1510dab9cff2147be7eeffc4cc35dedea435210940a5f8d69c340d83fb"
+    },
+    "playwright": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/ship-mate/agents/playwright.md",
+      "packagedPath": "packaged-agents/optional/wshobson/playwright/AGENT.md",
+      "computedHash": "2c35007fda00529ac018050be7007a5431cba21b37c2128baf51f6e95cc69fdd"
+    },
+    "policy-enforcer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/protect-mcp/agents/policy-enforcer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/policy-enforcer/AGENT.md",
+      "computedHash": "1c450d29a818a206d450ba0d8df71b0e74a2c7bcb186a6bb71387c568ef4017d"
+    },
+    "posix-shell-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/shell-scripting/agents/posix-shell-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/posix-shell-pro/AGENT.md",
+      "computedHash": "5965c3a345379aad7672e9b0c33e50a32f0e30380e81d440ca22e8eedd9784ec"
+    },
+    "prompt-crafter": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/meigen-ai-design/agents/prompt-crafter.md",
+      "packagedPath": "packaged-agents/optional/wshobson/prompt-crafter/AGENT.md",
+      "computedHash": "a3b143744f3878f6f052ed132c0ffb5fa6fb8ff3c23a1d6146a78978c3b086f2"
+    },
+    "prompt-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/llm-application-dev/agents/prompt-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/prompt-engineer/AGENT.md",
+      "computedHash": "b66feef09c0dd0784643a1b04310f15b721d447cbc2c63ce3890dabeb987cf8f"
+    },
+    "python-development-django-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/python-development/agents/django-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/python-development-django-pro/AGENT.md",
+      "computedHash": "c90b087bee248a6780471bd30a15169eddb581a518063402eebbd6e3785419c1"
+    },
+    "python-development-fastapi-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/python-development/agents/fastapi-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/python-development-fastapi-pro/AGENT.md",
+      "computedHash": "f2f2fd05ab9552662f801709c1046eb7f2055126d72167d7591061e76fabe391"
+    },
+    "python-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/python-development/agents/python-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/python-pro/AGENT.md",
+      "computedHash": "7bb689a93edd8ed9dbf2a4e0364e5135783123d8a69ecce0c38e470883ccac02"
+    },
+    "qa": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/ship-mate/agents/qa.md",
+      "packagedPath": "packaged-agents/optional/wshobson/qa/AGENT.md",
+      "computedHash": "3454d4ea039252f07d0ebeb195e3dd3af2da3f013d2366047cda53060829197c"
+    },
+    "quant-analyst": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/quantitative-trading/agents/quant-analyst.md",
+      "packagedPath": "packaged-agents/optional/wshobson/quant-analyst/AGENT.md",
+      "computedHash": "fada75e9103c64fabdc7f39da19319e6cd2f4bdb51c9b8168512bebf9db72d24"
+    },
+    "receipt-verifier": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/protect-mcp/agents/receipt-verifier.md",
+      "packagedPath": "packaged-agents/optional/wshobson/receipt-verifier/AGENT.md",
+      "computedHash": "448af1927a57a659339eef5f2c67da52be3b8f15feb1b34349fcafea58160a18"
+    },
+    "reference-builder": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/documentation-generation/agents/reference-builder.md",
+      "packagedPath": "packaged-agents/optional/wshobson/reference-builder/AGENT.md",
+      "computedHash": "ca2cd2a6f619260fe5390710c05dd6b07cba37701467622f1a54adc86218fdc0"
+    },
+    "reverse-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/reverse-engineering/agents/reverse-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/reverse-engineer/AGENT.md",
+      "computedHash": "cd2daf2977956fef48e0317dacc152b0b665a84d9f7dee8297208a9fc1346029"
+    },
+    "review": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/ship-mate/agents/review.md",
+      "packagedPath": "packaged-agents/optional/wshobson/review/AGENT.md",
+      "computedHash": "26f5f887c6df71400ac715b30683827373d8fce5298d99a8be24d551c053ee31"
+    },
+    "review-policy-author": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/review-agent-governance/agents/review-policy-author.md",
+      "packagedPath": "packaged-agents/optional/wshobson/review-policy-author/AGENT.md",
+      "computedHash": "191a8344a37b3c5bf060b2fbe61422e3c1b5ead38706c8bb3838d52d2375a960"
+    },
+    "risk-manager": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/quantitative-trading/agents/risk-manager.md",
+      "packagedPath": "packaged-agents/optional/wshobson/risk-manager/AGENT.md",
+      "computedHash": "fd43f2cc182efb933d8af72e14709b424d60cef848584f63cf4a4bbde449cd3b"
+    },
+    "ruby-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/web-scripting/agents/ruby-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/ruby-pro/AGENT.md",
+      "computedHash": "03a623a2cc732a4923e74c75da9f667aff87d4fe09346bc0ba91ae4c0de5c33e"
+    },
+    "rust-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/systems-programming/agents/rust-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/rust-pro/AGENT.md",
+      "computedHash": "c97439b4eca6c12f6f9556565e230762ffb2e04db9d5e4678bc86e3510b0b2dd"
+    },
+    "sales-automator": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/customer-sales-automation/agents/sales-automator.md",
+      "packagedPath": "packaged-agents/optional/wshobson/sales-automator/AGENT.md",
+      "computedHash": "496abcea8e740e593d8f9c3c10323938bd9f95f334b504f91f9113c9874822ff"
+    },
+    "scala-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/jvm-languages/agents/scala-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/scala-pro/AGENT.md",
+      "computedHash": "8467f7260da17cacec19815a11ebc0b3562f554780fbfe2cace271ea4354918f"
+    },
+    "search-specialist": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/content-marketing/agents/search-specialist.md",
+      "packagedPath": "packaged-agents/optional/wshobson/search-specialist/AGENT.md",
+      "computedHash": "0d27a3956a4141c4003e833e7b082eda535fc9e1a0b4ccb974defec0367048f3"
+    },
+    "security-compliance-security-auditor": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/security-compliance/agents/security-auditor.md",
+      "packagedPath": "packaged-agents/optional/wshobson/security-compliance-security-auditor/AGENT.md",
+      "computedHash": "3277bff4f7cb7ebadd7b227ed34d2093736d0dc551ace99a516d0cfd5e5a8ef7"
+    },
+    "security-scanning-security-auditor": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/security-scanning/agents/security-auditor.md",
+      "packagedPath": "packaged-agents/optional/wshobson/security-scanning-security-auditor/AGENT.md",
+      "computedHash": "faed87757ad98daf512696b502f74d5376a175f0e0028b8f89cba79cecc24427"
+    },
+    "seo-authority-builder": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/seo-analysis-monitoring/agents/seo-authority-builder.md",
+      "packagedPath": "packaged-agents/optional/wshobson/seo-authority-builder/AGENT.md",
+      "computedHash": "7acd92aaa26483a8183d7b58097b7686d8bc4cc8521c5bd91f06ad723515e68f"
+    },
+    "seo-cannibalization-detector": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/seo-analysis-monitoring/agents/seo-cannibalization-detector.md",
+      "packagedPath": "packaged-agents/optional/wshobson/seo-cannibalization-detector/AGENT.md",
+      "computedHash": "c4a6ef84b97f7055bb53a552b47c8eee4dab7ca34aaec29ff25834222773e631"
+    },
+    "seo-content-auditor": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/seo-content-creation/agents/seo-content-auditor.md",
+      "packagedPath": "packaged-agents/optional/wshobson/seo-content-auditor/AGENT.md",
+      "computedHash": "2243d624abd5253ea27d4e8fa666d2e96e2790a4e39d6f2533d491cd038f84cc"
+    },
+    "seo-content-planner": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/seo-content-creation/agents/seo-content-planner.md",
+      "packagedPath": "packaged-agents/optional/wshobson/seo-content-planner/AGENT.md",
+      "computedHash": "faf0decfd14b175ed736d3d9127c9bd492961ba0da50cc0331f268e84f33ca82"
+    },
+    "seo-content-refresher": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/seo-analysis-monitoring/agents/seo-content-refresher.md",
+      "packagedPath": "packaged-agents/optional/wshobson/seo-content-refresher/AGENT.md",
+      "computedHash": "7256a93886f1aebf2f8b2ea0f1d1bcd90300cb3484fdaaaf20cc5c40cfbfe9c2"
+    },
+    "seo-content-writer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/seo-content-creation/agents/seo-content-writer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/seo-content-writer/AGENT.md",
+      "computedHash": "578aef2570fd70ecb874729c5daad217b7e9599fe9b3a990327d04663f3c6e6a"
+    },
+    "seo-keyword-strategist": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/seo-technical-optimization/agents/seo-keyword-strategist.md",
+      "packagedPath": "packaged-agents/optional/wshobson/seo-keyword-strategist/AGENT.md",
+      "computedHash": "b1c22388ebb5d342646827b643e213731cc856c1c006be2de13a9177dda7b3f2"
+    },
+    "seo-meta-optimizer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/seo-technical-optimization/agents/seo-meta-optimizer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/seo-meta-optimizer/AGENT.md",
+      "computedHash": "8529f07c3f4341b5fd731340b3beb141a2550cb6f9f4384ae155da6c72c252b8"
+    },
+    "seo-snippet-hunter": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/seo-technical-optimization/agents/seo-snippet-hunter.md",
+      "packagedPath": "packaged-agents/optional/wshobson/seo-snippet-hunter/AGENT.md",
+      "computedHash": "ad3eab4a901ada80f03c96fcaddfdfc8ba6085d7f661aecb44ee258691833574"
+    },
+    "seo-structure-architect": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/seo-technical-optimization/agents/seo-structure-architect.md",
+      "packagedPath": "packaged-agents/optional/wshobson/seo-structure-architect/AGENT.md",
+      "computedHash": "64363e1d1ebfb48fbf7c22451df81e531926aa819f7fa4a9acda0ba5f8905744"
+    },
+    "service-mesh-expert": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/cloud-infrastructure/agents/service-mesh-expert.md",
+      "packagedPath": "packaged-agents/optional/wshobson/service-mesh-expert/AGENT.md",
+      "computedHash": "9e5d20356ff5e42a1b4e72456dcafe391f7b373bd82ff95f06cdd663d88876bd"
+    },
+    "social-publishing-publisher": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/social-publishing/agents/social-publishing-publisher.md",
+      "packagedPath": "packaged-agents/optional/wshobson/social-publishing-publisher/AGENT.md",
+      "computedHash": "eb3b07a01e99986456a8f3e0e57d18d0b6c60a49ebcf4940748818f3d1777fab"
+    },
+    "sql-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/database-design/agents/sql-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/sql-pro/AGENT.md",
+      "computedHash": "f66e4d28eae63c99c1d5b4e91553eb5be4eacb351422d4051ebe727249975e83"
+    },
+    "startup-analyst": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/startup-business-analyst/agents/startup-analyst.md",
+      "packagedPath": "packaged-agents/optional/wshobson/startup-analyst/AGENT.md",
+      "computedHash": "3fd0137a69d99aa7526e9f382d847064e9cdf29e09b1e2d3049715f0a2dc2ea2"
+    },
+    "tdd-workflows-code-reviewer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/tdd-workflows/agents/code-reviewer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/tdd-workflows-code-reviewer/AGENT.md",
+      "computedHash": "fc3b2d2f810ffd29e4083edfb86e00f0aa65eb327d7f6b585a869ebbe2266963"
+    },
+    "tdd-workflows-tdd-orchestrator": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/tdd-workflows/agents/tdd-orchestrator.md",
+      "packagedPath": "packaged-agents/optional/wshobson/tdd-workflows-tdd-orchestrator/AGENT.md",
+      "computedHash": "2fc04d94e98dabe53ee8e7ebb327184a23994b1444c6ecc938716592198fe0cf"
+    },
+    "team-collaboration-dx-optimizer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/team-collaboration/agents/dx-optimizer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/team-collaboration-dx-optimizer/AGENT.md",
+      "computedHash": "5569d8f1d31f67c4b968a8c6ee79c8c6ed7f3ea3a961b24744297d9c81893e96"
+    },
+    "team-debugger": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/agent-teams/agents/team-debugger.md",
+      "packagedPath": "packaged-agents/optional/wshobson/team-debugger/AGENT.md",
+      "computedHash": "96bb6eb53318cd131c5f8752dbd835e7565a03eb19ebc6f8df845f7d33746a94"
+    },
+    "team-implementer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/agent-teams/agents/team-implementer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/team-implementer/AGENT.md",
+      "computedHash": "59ca9e6e8e1ce96e15dd6011289c5d80c9f59f79c7e5a16d204cd060da9418f3"
+    },
+    "team-lead": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/agent-teams/agents/team-lead.md",
+      "packagedPath": "packaged-agents/optional/wshobson/team-lead/AGENT.md",
+      "computedHash": "fe9d57dd997346f56aa70169a292e73b3421d2e7e8897a259bc575da1688c104"
+    },
+    "team-reviewer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/agent-teams/agents/team-reviewer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/team-reviewer/AGENT.md",
+      "computedHash": "1a4792983c0512c00170ce86c494b1978f1fd059bd53817aed256f5ca25d529d"
+    },
+    "temporal-python-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/backend-development/agents/temporal-python-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/temporal-python-pro/AGENT.md",
+      "computedHash": "f8b51443889ae0726f996fa9d8969ca42f55a54f45511f64bccd43dfcc466f8b"
+    },
+    "threat-modeling-expert": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/security-scanning/agents/threat-modeling-expert.md",
+      "packagedPath": "packaged-agents/optional/wshobson/threat-modeling-expert/AGENT.md",
+      "computedHash": "c9c63be5ced65df3307b92f922474caffb3256a7e7bbc1444291303d5c37c682"
+    },
+    "typescript-pro": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/javascript-typescript/agents/typescript-pro.md",
+      "packagedPath": "packaged-agents/optional/wshobson/typescript-pro/AGENT.md",
+      "computedHash": "4eda5ccb6913fab8209a8806f661440ec1c2886fb71e791d8768346032a0de2b"
+    },
+    "ui-designer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/ui-design/agents/ui-designer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/ui-designer/AGENT.md",
+      "computedHash": "3fb5d558c8856f11c86b0e858b887314ed504cd61eb636c9371ca37865a8ebd0"
+    },
+    "ui-ux-designer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/multi-platform-apps/agents/ui-ux-designer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/ui-ux-designer/AGENT.md",
+      "computedHash": "190bbebd6941d38321e0f11c6982473a6f8d541a94eac2801531af1079bb1460"
+    },
+    "ui-visual-validator": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/accessibility-compliance/agents/ui-visual-validator.md",
+      "packagedPath": "packaged-agents/optional/wshobson/ui-visual-validator/AGENT.md",
+      "computedHash": "6f00224daf5bc09f5405ea92f92fd1e924acd02e1b982e9bdab5036febdba819"
+    },
+    "unit-testing-debugger": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/unit-testing/agents/debugger.md",
+      "packagedPath": "packaged-agents/optional/wshobson/unit-testing-debugger/AGENT.md",
+      "computedHash": "c6f09e20678fd953235c0c7da5761da0014952afd878de0029d85d0bf94535a1"
+    },
+    "unit-testing-test-automator": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/unit-testing/agents/test-automator.md",
+      "packagedPath": "packaged-agents/optional/wshobson/unit-testing-test-automator/AGENT.md",
+      "computedHash": "cf27e3ee7a939f8be312caaefcd404c305be3bb56e3ab882ca88ed626601df4f"
+    },
+    "unity-developer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/game-development/agents/unity-developer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/unity-developer/AGENT.md",
+      "computedHash": "da739614620a575e299bc2faa54164a0b05046cc0792f59261a22739bc994b7d"
+    },
+    "vector-database-engineer": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "ref": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+      "license": "MIT",
+      "skillPath": "plugins/llm-application-dev/agents/vector-database-engineer.md",
+      "packagedPath": "packaged-agents/optional/wshobson/vector-database-engineer/AGENT.md",
+      "computedHash": "5e46f8c7ffc18f27719da72d99e1d02d12a42b95ce995a2a04031a87cd4e7337"
+    }
+  }
+}

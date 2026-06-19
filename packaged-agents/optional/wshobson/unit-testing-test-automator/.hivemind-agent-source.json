@@ -1,0 +1,19 @@
+{
+  "upstreamName": "test-automator",
+  "slug": "unit-testing-test-automator",
+  "label": "Test Automator",
+  "domain": "unit-testing",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/unit-testing/agents/test-automator.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent unit-testing-test-automator",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/unit-testing-test-automator",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Master AI-powered test automation with modern frameworks, self-healing tests, and comprehensive quality engineering. Build scalable testing strategies with advanced CI/CD integration. Use PROACTIVELY for testing automation or quality assurance."
+}

@@ -216,6 +216,7 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   const result = await createTask(null, {
     title,
     body: queenBeeTaskBody({ message, source, mode, fingerprint, delegation, loop: input.loop }),
+    source,
     assignee: selectedAgentName || "queen-bee",
     status: mode === "plan" ? "ideas" : "ready",
     priority: input.priority || "normal",

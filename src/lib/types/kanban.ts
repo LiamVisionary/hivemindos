@@ -236,6 +236,8 @@ export type KanbanTask = {
   status: KanbanStatus;
   priority: KanbanPriority;
   workspace: "scratch" | "worktree" | `dir:${string}`;
+  /** Origin tag, e.g. "flow:<runId>:<nodeId>", so completion can advance an agent flow. */
+  source?: string;
   skills: string[];
   attachments?: KanbanTaskAttachment[];
   linkedDirectories?: KanbanLinkedDirectory[];

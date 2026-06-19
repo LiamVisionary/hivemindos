@@ -43,8 +43,23 @@ const TOOLS = [
   },
   {
     name: "prepare_crypto_action",
-    description: "Prepare a spend-gated crypto/payment action draft and return the provider endpoint, request body, approval need, and missing readiness.",
+    description: "Prepare a spend-gated crypto/payment action draft and return the provider endpoint, request body, approval need, clear-signing review, and missing readiness.",
     inputSchema: cryptoSchema(["intent"]),
+  },
+  {
+    name: "review_crypto_action",
+    description: "Build a clear-signing review for a crypto/payment/action draft without signing or executing it.",
+    inputSchema: clearSigningSchema([]),
+  },
+  {
+    name: "agent_crypto_identity",
+    description: "List, fetch, register, update, or retire local agent identity/listing records for ENS/ERC-8004-style discovery.",
+    inputSchema: agentIdentitySchema([]),
+  },
+  {
+    name: "crypto_risk_monitor",
+    description: "Run a DARC-style offline crypto control review over wallet policy, identity, env-key presence, repo, DNS, multisig, and endpoint exposure.",
+    inputSchema: cryptoRiskSchema([]),
   },
   {
     name: "compile_brain_knowledge",
@@ -109,11 +124,11 @@ function cryptoSchema(required) {
     properties: {
       intent: {
         type: "string",
-        enum: ["status", "portfolio", "receive", "send", "private-transfer", "paid-api", "private-paid-api", "trade", "card-payment", "fund-llm-credits"],
+        enum: ["status", "portfolio", "receive", "send", "private-transfer", "paid-api", "private-paid-api", "trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job", "card-payment", "fund-llm-credits"],
         description: "Natural payment intent to route.",
       },
       agentId: { type: "string", description: "Agent wallet/profile id, when the action belongs to a specific agent." },
-      preferredProvider: { type: "string", enum: ["bankr", "moneyclaw", "x402", "usepod", "veil"], description: "Optional explicit provider preference." },
+      preferredProvider: { type: "string", enum: ["bankr", "moneyclaw", "x402", "usepod", "venice", "veil"], description: "Optional explicit provider preference." },
       wallet: { type: "object", description: "Current agent wallet policy from the dashboard, including provider, Spend, caps, network, and auto-use settings." },
       amountUsd: { type: "number", description: "USD-denominated amount or cap for the intended action." },
       asset: { type: "string", enum: ["USDC", "ETH"], description: "Asset for private transfers." },
@@ -123,6 +138,77 @@ function cryptoSchema(required) {
       body: { description: "JSON body for paid API/x402 requests." },
       recipientAddress: { type: "string", description: "Recipient wallet address for send/private-transfer intents." },
       amount: { description: "Asset amount for private transfer intents." },
+      fromChain: { type: "string", description: "Source chain/network for bridge or crosschain swap intents." },
+      toChain: { type: "string", description: "Destination chain/network for bridge or crosschain swap intents." },
+      fromAsset: { type: "string", description: "Source asset for crosschain intents." },
+      toAsset: { type: "string", description: "Destination asset for crosschain intents." },
+    },
+  };
+}
+
+function clearSigningSchema(required) {
+  return {
+    type: "object",
+    required,
+    properties: {
+      kind: { type: "string", enum: ["x402", "send", "private-transfer", "bankr-action", "crosschain-intent", "agent-identity", "raw-transaction"] },
+      intent: { type: "string" },
+      provider: { type: "string" },
+      agentId: { type: "string" },
+      network: { type: "string" },
+      asset: { type: "string" },
+      amount: {},
+      amountUsd: { type: "number" },
+      recipientAddress: { type: "string" },
+      toAddress: { type: "string" },
+      url: { type: "string" },
+      method: { type: "string" },
+      prompt: { type: "string" },
+      confirmation: { type: "string" },
+      policy: { type: "object" },
+      paymentRequirement: { type: "object" },
+      metadata: { type: "object" },
+    },
+  };
+}
+
+function agentIdentitySchema(required) {
+  return {
+    type: "object",
+    required,
+    properties: {
+      action: { type: "string", enum: ["list", "get", "upsert", "retire"], description: "Default is upsert." },
+      id: { type: "string" },
+      agentId: { type: "string" },
+      displayName: { type: "string" },
+      handle: { type: "string" },
+      walletAddress: { type: "string" },
+      network: { type: "string" },
+      chainId: { type: "string" },
+      ensName: { type: "string" },
+      erc8004EntityId: { type: "string" },
+      serviceEndpoint: { type: "string" },
+      x402Endpoint: { type: "string" },
+      capabilities: { type: "array", items: { type: "string" } },
+      proofs: { type: "array", items: { type: "object" } },
+      status: { type: "string", enum: ["draft", "verified", "retired"] },
+    },
+  };
+}
+
+function cryptoRiskSchema(required) {
+  return {
+    type: "object",
+    required,
+    properties: {
+      agentId: { type: "string" },
+      wallet: { type: "object" },
+      identity: { type: "object" },
+      env: { type: "object", description: "Optional { requiredKeys, optionalKeys } arrays. Values are never returned." },
+      repo: { type: "object" },
+      dns: { type: "array", items: { type: "object" } },
+      multisig: { type: "object" },
+      infrastructure: { type: "object" },
     },
   };
 }
@@ -324,6 +410,15 @@ async function callTool(name, args = {}) {
       ...cryptoArgs(args),
     });
   }
+  if (name === "review_crypto_action") {
+    return callDashboard("/api/crypto/clear-signing", "POST", clearSigningArgs(args));
+  }
+  if (name === "agent_crypto_identity") {
+    return callDashboard("/api/crypto/agent-identity", "POST", agentIdentityArgs(args));
+  }
+  if (name === "crypto_risk_monitor") {
+    return callDashboard("/api/crypto/risk-monitor", "POST", cryptoRiskArgs(args));
+  }
   if (name === "compile_brain_knowledge") {
     return callDashboard("/api/brain/knowledge", "POST", {
       action: "compile",
@@ -382,7 +477,31 @@ async function callTool(name, args = {}) {
 
 function cryptoArgs(args) {
   const output = {};
-  for (const key of ["intent", "agentId", "preferredProvider", "wallet", "amountUsd", "asset", "url", "method", "headers", "body", "recipientAddress", "amount"]) {
+  for (const key of ["intent", "agentId", "preferredProvider", "wallet", "amountUsd", "asset", "url", "method", "headers", "body", "recipientAddress", "amount", "fromChain", "toChain", "fromAsset", "toAsset"]) {
+    if (args[key] !== undefined) output[key] = args[key];
+  }
+  return output;
+}
+
+function clearSigningArgs(args) {
+  const output = {};
+  for (const key of ["kind", "intent", "provider", "agentId", "network", "asset", "amount", "amountUsd", "recipientAddress", "toAddress", "url", "method", "prompt", "confirmation", "policy", "paymentRequirement", "metadata"]) {
+    if (args[key] !== undefined) output[key] = args[key];
+  }
+  return output;
+}
+
+function agentIdentityArgs(args) {
+  const output = {};
+  for (const key of ["action", "id", "agentId", "displayName", "handle", "walletAddress", "network", "chainId", "ensName", "erc8004EntityId", "serviceEndpoint", "x402Endpoint", "capabilities", "proofs", "status"]) {
+    if (args[key] !== undefined) output[key] = args[key];
+  }
+  return output;
+}
+
+function cryptoRiskArgs(args) {
+  const output = {};
+  for (const key of ["agentId", "wallet", "identity", "env", "repo", "dns", "multisig", "infrastructure"]) {
     if (args[key] !== undefined) output[key] = args[key];
   }
   return output;

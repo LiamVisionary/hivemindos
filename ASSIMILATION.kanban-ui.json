@@ -1,34 +1,34 @@
 {
-  "created_at": "2026-06-18T10:50:22.869885+00:00",
+  "created_at": "2026-06-19T11:28:05.122583+00:00",
   "custom_code_assessment": "mostly_assimilated",
   "entries": [
     {
       "source_repo": "local-kanban-downloads",
-      "source_path": "/Users/liam/Downloads/KanbanPanel.tsx",
+      "source_path": "/Users/liam/Downloads/KanbanPanel-2.tsx",
       "target_path": "src/features/dashboard/views/KanbanPanel.tsx",
       "reuse_type": "adapted_code",
-      "note": "supplied Kanban panel UI preserved with project GitLawb proof ranking restored for live Kanban workflow compatibility"
+      "note": "second supplied Kanban panel UI installed with live GitLawb proof ranking helpers restored"
     },
     {
       "source_repo": "local-kanban-downloads",
-      "source_path": "/Users/liam/Downloads/kanban-board.module.css",
+      "source_path": "/Users/liam/Downloads/kanban-board.module-2.css",
       "target_path": "src/app/kanban-board.module.css",
       "reuse_type": "copied_code",
-      "note": "byte-identical supplied Kanban stylesheet and visual palette"
+      "note": "second supplied Kanban stylesheet copied byte-for-byte"
     },
     {
-      "source_repo": "hivemind-os",
+      "source_repo": "local-project/hivemind-os",
+      "source_path": "src/features/dashboard/views/KanbanPanel.tsx",
+      "target_path": "src/features/dashboard/views/KanbanPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "existing verified proof ranking helpers preserve Kanban workflow regression guard"
+    },
+    {
+      "source_repo": "local-project/hivemind-os",
       "source_path": "src/features/dashboard/DashboardApp.tsx",
       "target_path": "src/features/dashboard/views/KanbanPanel.tsx",
       "reuse_type": "adapted_code",
-      "note": "existing dashboard prop bridge reused unchanged so the copied panel receives live Kanban state, filters, board mutations, attachments, comments, deliverables, and agent chat handlers"
-    },
-    {
-      "source_repo": "hivemind-os",
-      "source_path": "HEAD:src/features/dashboard/views/KanbanPanel.tsx",
-      "target_path": "src/features/dashboard/views/KanbanPanel.tsx",
-      "reuse_type": "adapted_code",
-      "note": "restored proofStatusRank activeProofForTask projectProofForTask proofSummaryForTask logic required by Kanban workflow regression guard"
+      "note": "existing dashboard prop bridge and dynamic import reused unchanged"
     }
   ]
 }

@@ -1,0 +1,19 @@
+{
+  "upstreamName": "prompt-crafter",
+  "slug": "prompt-crafter",
+  "label": "Prompt Crafter",
+  "domain": "meigen-ai-design",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/meigen-ai-design/agents/prompt-crafter.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent prompt-crafter",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/prompt-crafter",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": ">-"
+}

@@ -1,0 +1,19 @@
+{
+  "upstreamName": "terraform-specialist",
+  "slug": "cloud-infrastructure-terraform-specialist",
+  "label": "Terraform Specialist",
+  "domain": "cloud-infrastructure",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/cloud-infrastructure/agents/terraform-specialist.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent cloud-infrastructure-terraform-specialist",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/cloud-infrastructure-terraform-specialist",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Expert Terraform/OpenTofu specialist mastering advanced IaC automation, state management, and enterprise infrastructure patterns. Handles complex module design, multi-cloud deployments, GitOps workflows, policy as code, and CI/CD integration. Covers migration strategies, security best practices, and modern IaC ecosystems. Use PROACTIVELY for advanced IaC, state management, or infrastructure automation."
+}

@@ -1,0 +1,19 @@
+{
+  "upstreamName": "Higgsfield Generate",
+  "upstreamSlug": "higgsfield-generate",
+  "hiveSlug": "higgsfield-generate",
+  "sourceUrl": "https://docs.higgsfield.ai/docs",
+  "repository": "https://docs.higgsfield.ai/docs",
+  "license": "MIT",
+  "importedAt": "2026-06-19T00:00:00.000Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional media skills",
+  "sourcePath": "packaged-skills/optional/media/higgsfield/higgsfield-generate",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Keeps Higgsfield Cloud API and standard consumer Higgsfield CLI/dashboard as separate execution surfaces.",
+    "Requires Cloud/API requests to use HIGGSFIELD_API_KEY_ID and HIGGSFIELD_API_KEY_SECRET through hive-env-run without printing secret values.",
+    "Requires one short Cloud API vs consumer CLI question when the user has not specified a surface.",
+    "Forbids procedural/local fallbacks when the user requests Higgsfield generation."
+  ]
+}

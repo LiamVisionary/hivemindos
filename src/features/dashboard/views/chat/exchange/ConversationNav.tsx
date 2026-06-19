@@ -215,7 +215,7 @@ export function ConversationNav({
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
 
   return (
-    <div className="fr-scroll" style={{ display: "grid", width: "100%", minWidth: 0, height: "100%", alignContent: "start", gap: 2, overflowX: "hidden", overflowY: "auto", padding: "12px 11px 18px" }}>
+    <div className="fr-chat-sidebar-nav">
       <GroupHeader icon={ICON.chat} label="General" count={generalChats.length} open={generalOpen} onToggle={() => setGeneralOpen((open) => !open)} />
       {generalOpen ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>

@@ -366,9 +366,10 @@ export function useSchedulerController(props: any) {
     setSchedules((current) => current.filter((schedule) => schedule.id !== id));
   }
 
-  async function importExistingSchedules() {
+  async function importExistingSchedules(options: { quiet?: boolean } = {}) {
+    const quiet = Boolean(options.quiet);
     setScheduleImporting(true);
-    setScheduleImportStatus("");
+    if (!quiet) setScheduleImportStatus("");
     const response = await fetch("/api/scheduler/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -377,12 +378,12 @@ export function useSchedulerController(props: any) {
     const data = await response?.json().catch(() => null) as { ok?: boolean; schedules?: ImportedRuntimeSchedule[]; errors?: string[] } | null;
     setScheduleImporting(false);
     if (!response?.ok || !data?.ok) {
-      setScheduleImportStatus("No runtime schedules could be imported yet.");
+      if (!quiet) setScheduleImportStatus("No runtime schedules could be imported yet.");
       return;
     }
     const jobs = data.schedules ?? [];
     if (!jobs.length) {
-      setScheduleImportStatus(data.errors?.[0] ?? "No existing runtime schedules found across connected agents.");
+      if (!quiet) setScheduleImportStatus(data.errors?.[0] ?? "No existing runtime schedules found across connected agents.");
       return;
     }
     const now = Number(new Date());
@@ -425,7 +426,7 @@ export function useSchedulerController(props: any) {
       void upsertSharedSchedules(importedSchedules);
       return importedSchedules;
     });
-    setScheduleImportStatus(`Imported ${jobs.length} runtime schedule${jobs.length === 1 ? "" : "s"}.`);
+    if (!quiet) setScheduleImportStatus(`Imported ${jobs.length} runtime schedule${jobs.length === 1 ? "" : "s"}.`);
   }
 
   function normalizeImportedScheduleEvery(job: ImportedRuntimeSchedule) {

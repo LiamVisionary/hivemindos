@@ -1,12 +1,12 @@
 import { createPublicClient, http } from "viem";
 import type { Address } from "viem";
-import { base } from "viem/chains";
 import {
   DEFAULT_BASE_HIVE_STAKING_CONTRACT_ADDRESS,
   HIVE_STAKING_TIERS,
   isHiveEvmAddress,
   type HiveStakingTier,
 } from "@/lib/config/hive-staking";
+import { base } from "@/lib/services/wallet/base-chain";
 
 export {
   DEFAULT_BASE_HIVE_STAKING_CONTRACT_ADDRESS,

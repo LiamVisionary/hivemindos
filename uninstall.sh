@@ -132,24 +132,31 @@ agent_instruction_files() {
   esac
 }
 
-agent_skill_dirs() {
+agent_skill_roots() {
   local agent="$1"
   case "$agent" in
-    codex) printf "%s\n" "$HOME/.codex/skills/karpathy-guidelines" ;;
-    claude) printf "%s\n" "$HOME/.claude/skills/karpathy-guidelines" ;;
-    hermes) printf "%s\n" "$HOME/.hermes/skills/karpathy-guidelines" ;;
-    gemini) printf "%s\n" "$HOME/.gemini/skills/karpathy-guidelines" ;;
+    codex) printf "%s\n" "$HOME/.codex/skills" ;;
+    claude) printf "%s\n" "$HOME/.claude/skills" ;;
+    hermes) printf "%s\n" "$HOME/.hermes/skills" ;;
+    gemini) printf "%s\n" "$HOME/.gemini/skills" ;;
     openclaw)
-      printf "%s\n" "$HOME/.openclaw/skills/karpathy-guidelines"
+      printf "%s\n" "$HOME/.openclaw/skills"
       for workspace in "$HOME"/.openclaw/workspace-*; do
-        [[ -d "$workspace/skills" ]] && printf "%s\n" "$workspace/skills/karpathy-guidelines"
+        [[ -d "$workspace/skills" ]] && printf "%s\n" "$workspace/skills"
       done
       ;;
     aeon)
-      printf "%s\n" "$HOME/.aeon/skills/karpathy-guidelines"
-      [[ -n "${AEON_LOCAL_PATH:-}" ]] && printf "%s\n" "$AEON_LOCAL_PATH/skills/karpathy-guidelines"
+      printf "%s\n" "$HOME/.aeon/skills"
+      [[ -n "${AEON_LOCAL_PATH:-}" ]] && printf "%s\n" "$AEON_LOCAL_PATH/skills"
       ;;
   esac
+}
+
+is_hivemind_managed_skill_dir() {
+  local dir="$1"
+  local metadata="$dir/.hivemind-skill-source.json"
+  [[ -f "$metadata" ]] || return 1
+  grep -Eq '"managedBy"[[:space:]]*:[[:space:]]*"hivemindos"|"provider"[[:space:]]*:[[:space:]]*"(shared-brain|bundled|packaged-auto-install)"|"providerLabel"[[:space:]]*:[[:space:]]*"HivemindOS' "$metadata"
 }
 
 vault_path="${NEXT_PUBLIC_OBSIDIAN_VAULT_PATH:-$HOME/Documents/Obsidian/hivemindos-vault}"
@@ -389,17 +396,18 @@ if ask "Remove HivemindOS shared-skill instructions from agent files?" "yes"; th
   remove_claude_brain_hook
 fi
 
-if ask "Remove copied karpathy-guidelines skill from local agent skill folders?" "no"; then
+if ask "Remove HivemindOS-managed shared skill projections from local agent skill folders?" "no"; then
   for agent in codex claude hermes gemini openclaw aeon; do
-    while IFS= read -r dir; do
-      [[ -d "$dir" ]] || continue
-      if [[ -f "$dir/SKILL.md" ]] && grep -q "name: karpathy-guidelines" "$dir/SKILL.md"; then
-        rm -rf "$dir"
-        ok "Removed $dir"
-      else
-        warn "Skipped unmanaged skill directory: $dir"
-      fi
-    done < <(agent_skill_dirs "$agent")
+    while IFS= read -r root; do
+      [[ -d "$root" ]] || continue
+      while IFS= read -r dir; do
+        [[ -d "$dir" ]] || continue
+        if is_hivemind_managed_skill_dir "$dir"; then
+          rm -rf "$dir"
+          ok "Removed $dir"
+        fi
+      done < <(find "$root" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
+    done < <(agent_skill_roots "$agent")
   done
 fi
 

@@ -1,0 +1,19 @@
+{
+  "upstreamName": "architect",
+  "slug": "architect",
+  "label": "Architect",
+  "domain": "ship-mate",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/ship-mate/agents/architect.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent architect",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/architect",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Architect agent. Reads orchestrator-output.md, AGENTS.md, and project-doc.md to produce a numbered step-by-step implementation plan. Pauses for human approval before implementation begins."
+}

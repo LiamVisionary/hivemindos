@@ -8,9 +8,9 @@ import { mnemonicToSeedSync, validateMnemonic } from "@scure/bip39";
 import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import bs58 from "bs58";
 import { createPublicClient, createWalletClient, fallback, formatEther, formatUnits, http, parseUnits, webSocket } from "viem";
-import { base, baseSepolia } from "viem/chains";
 import { generatePrivateKey, mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import type { AgentWalletBalance, AgentWalletTokenBalance } from "@/lib/types/agent-wallet";
+import { base, baseSepolia } from "@/lib/services/wallet/base-chain";
 
 export type SupportedWalletNetwork = "eip155:8453" | "eip155:84532" | "solana:mainnet" | "solana:devnet";
 

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-obsidian-personal-wallets"
+description = "Enables the obsidian_personal_wallets command without any pre-configured scope."
+commands.allow = ["obsidian_personal_wallets"]
+
+[[permission]]
+identifier = "deny-obsidian-personal-wallets"
+description = "Denies the obsidian_personal_wallets command without any pre-configured scope."
+commands.deny = ["obsidian_personal_wallets"]

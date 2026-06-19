@@ -1,0 +1,19 @@
+{
+  "upstreamName": "performance-engineer",
+  "slug": "backend-development-performance-engineer",
+  "label": "Performance Engineer",
+  "domain": "backend-development",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/backend-development/agents/performance-engineer.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent backend-development-performance-engineer",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/backend-development-performance-engineer",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Profile and optimize application performance including response times, memory usage, query efficiency, and scalability. Use for performance review during feature development."
+}

@@ -58,5 +58,15 @@ Grouped optional directories can also expose a whole-directory pack in the Skill
 Current optional catalog:
 
 - `design/`: 109 optional UI and design-engineering skills imported from the UI Skills directory, preserving upstream source namespaces as `design/<source>/<skill>/` and available as the `Design Optional Skills Directory` pack.
+- `media/higgsfield/higgsfield-generate`: optional Higgsfield media-generation skill for Cloud API and standard consumer Higgsfield CLI/dashboard workflows. It keeps API-key/env usage separate from dashboard login, and asks which surface to use when unspecified.
+- `n8n/`: 8 optional n8n GTM-automation skills imported from `forma-norden/n8n-gtm-workflow-pack` (MIT), grouped as `n8n/forma-norden/<skill>/` and available as the `N8N Optional Skills Directory` pack. The upstream pack ships flat fragment files without frontmatter, so the importer synthesizes `name`/`description` and records provenance.
+
+### Importing optional skills
+
+`scripts/import-packaged-skills.mjs` vendors external `SKILL.md` repos into this folder repeatably. It clones the upstream repo at a pinned commit, normalizes each skill into `<category>/<source>/<slug>/SKILL.md` (synthesizing frontmatter when the upstream file has none), writes `.hivemind-skill-source.json` provenance (license, repo, commit, source URL), and records a `sha256` of each vendored `SKILL.md` in `skills-lock.json`.
+
+- `node scripts/import-packaged-skills.mjs --list` — show configured sources.
+- `node scripts/import-packaged-skills.mjs n8n` — import a source (use `--dry-run` first for unvalidated sources).
+- `node scripts/import-packaged-skills.mjs --verify` — re-hash every vendored skill against `skills-lock.json` and fail on drift.
 
 Keep packaged skills self-contained, user-safe, and installable without relying on Liam's local agent runtime paths.

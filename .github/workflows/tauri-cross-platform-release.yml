@@ -58,7 +58,7 @@ jobs:
     name: Build embedded Next standalone (shared)
     needs: resolve
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - name: Checkout release source
         uses: actions/checkout@v4
@@ -101,9 +101,9 @@ jobs:
         env:
           HIVEMINDOS_TAURI_EMBEDDED_NEXT: "1"
           HIVEMINDOS_TAURI_STANDALONE_ONLY: "1"
-          TAURI_NEXT_BUILD_HEAP_MB: "11264"
-          TAURI_NEXT_BUILD_MEMORY_MB: "13000"
-          TAURI_NEXT_BUILD_TIMEOUT_SECONDS: "3000"
+          TAURI_NEXT_BUILD_HEAP_MB: "12288"
+          TAURI_NEXT_BUILD_MEMORY_MB: "14000"
+          TAURI_NEXT_BUILD_TIMEOUT_SECONDS: "3600"
         run: node scripts/tauri-build.mjs
 
       - name: Upload standalone artifact
@@ -298,10 +298,10 @@ jobs:
           # platform jobs (no next build here) but kept harmless.
           HIVEMINDOS_TAURI_EMBEDDED_NEXT: "1"
           HIVEMINDOS_TAURI_PREBUILT_STANDALONE: "1"
-          TAURI_NEXT_BUILD_HEAP_MB: "11264"
-          TAURI_NEXT_BUILD_MEMORY_MB: "13000"
+          TAURI_NEXT_BUILD_HEAP_MB: "12288"
+          TAURI_NEXT_BUILD_MEMORY_MB: "14000"
           TAURI_NEXT_BUILD_TIMEOUT_SECONDS: ${{ runner.os == 'macOS' && '3600' || '2700' }}
-        run: pnpm tauri:build
+        run: pnpm tauri:build:release
 
       - name: Collect bundle assets
         shell: bash

@@ -9,6 +9,14 @@ import { formatCompactTokenAmount, formatTokenAmount, parseTokenAmount } from ".
 import { parseCommand, resolveTipRecipient } from "../src/lib/services/telegram-tip-bot/parse.ts";
 import { CLAW_LIGHT_RICH_THEME, richAccent, richCode, richMuted, richTable } from "../src/lib/services/telegram-tip-bot/rich-formatting.ts";
 import {
+  bountyPayoutLeaderboard,
+  knownMemberTagChatIds,
+  memberTagSinceIso,
+  planMemberTagSync,
+  recordMemberTagSync,
+  resolveMemberTag,
+} from "../src/lib/services/telegram-tip-bot/member-tags.ts";
+import {
   applyBountyBoost,
   applyBountyCreate,
   applyBountyPayout,
@@ -343,6 +351,64 @@ test("bounty board sorts by pot and rich table escapes user-controlled cells", (
   assert.match(html, /<b>20 HIVE<\/b>/);
   assert.match(html, /&lt;script&gt;alpha&lt;\/script&gt;/);
   assert.doesNotMatch(html, /<script>/);
+});
+
+test("bounty payout leaderboard aggregates bounty winners per chat", () => {
+  const state = seededState();
+  ensureUser(state, { id: 3, username: "carol", firstName: "Carol", createdAt: T0 });
+  applyBountyCreate(state, { id: "b10", entryId: id(), creatorUserId: "1", title: "Alpha", rewardRaw: parseTokenAmount("10", 18).toString(), chatId: "-100", createdAt: T0 });
+  applyBountySubmission(state, { id: "b10", submissionId: "s10", userId: "3", text: "done", createdAt: T0 });
+  applyBountyPayout(state, { id: "b10", entryId: id(), winnerUserId: "3", acceptedSubmissionId: "s10", updatedAt: T1 });
+  applyBountyCreate(state, { id: "b11", entryId: id(), creatorUserId: "1", title: "Beta", rewardRaw: parseTokenAmount("5", 18).toString(), chatId: "-200", createdAt: T0 });
+  applyBountySubmission(state, { id: "b11", submissionId: "s11", userId: "2", text: "done", createdAt: T0 });
+  applyBountyPayout(state, { id: "b11", entryId: id(), winnerUserId: "2", acceptedSubmissionId: "s11", updatedAt: T1 });
+
+  assert.deepEqual(bountyPayoutLeaderboard(state, { chatId: "-100" }).map((row) => [row.userId, formatTokenAmount(row.totalRaw, 18)]), [["3", "10"]]);
+});
+
+test("member tag resolver prefers compact rank overlays over stable staking titles", () => {
+  assert.deepEqual(resolveMemberTag({ tier: { id: "builder", label: "Builder" }, honeyRank: 1 }), {
+    tag: "Builder H#1",
+    reason: "honey-rank+staking-tier",
+  });
+  assert.deepEqual(resolveMemberTag({ tier: { id: "curator", label: "Curator" }, honeyRank: 1, bountyRank: 1 }), {
+    tag: "Curator B#1",
+    reason: "bounty-rank+staking-tier",
+  });
+  assert.deepEqual(resolveMemberTag({ bountyRank: 5 }), { tag: "Bounty #5", reason: "bounty-rank" });
+  assert.deepEqual(resolveMemberTag({ tier: { id: "visionary", label: "Visionary" } }), {
+    tag: "Hive Visionary",
+    reason: "staking-tier",
+  });
+});
+
+test("member tag sync plans rank, tier, and clear-stale updates", () => {
+  const state = seededState();
+  ensureUser(state, { id: 3, username: "carol", firstName: "Carol", createdAt: T0 });
+  state.balances["2"] = parseTokenAmount("20", 18).toString();
+  state.memberTags.chatIds.push("-100");
+  state.memberTags.lastSynced["-100"] = { "4": "Honey #1" };
+
+  applyTip(state, { id: id(), fromUserId: "1", toUserId: "2", amountRaw: "3", chatId: "-100", createdAt: T1 });
+  applyBountyCreate(state, { id: "b12", entryId: id(), creatorUserId: "1", title: "Gamma", rewardRaw: parseTokenAmount("10", 18).toString(), chatId: "-100", createdAt: T0 });
+  applyBountySubmission(state, { id: "b12", submissionId: "s12", userId: "3", text: "done", createdAt: T0 });
+  applyBountyPayout(state, { id: "b12", entryId: id(), winnerUserId: "3", acceptedSubmissionId: "s12", updatedAt: T1 });
+
+  const tiers = new Map([["1", { id: "supporter", label: "Supporter" }]]);
+  const actions = planMemberTagSync(state, { chatIds: knownMemberTagChatIds(state), topLimit: 5, sinceIso: memberTagSinceIso(7, Date.parse(T1) + 1), tiersByUserId: tiers });
+  assert.deepEqual(
+    actions.map((action) => [action.userId, action.tag, action.reason]).sort(),
+    [
+      ["1", "Hive Supporter", "staking-tier"],
+      ["2", "Honey #1", "honey-rank"],
+      ["3", "Bounty #1", "bounty-rank"],
+      ["4", "", "clear-stale-tag"],
+    ],
+  );
+
+  recordMemberTagSync(state, actions.map(({ chatId, userId, tag }) => ({ chatId, userId, tag })), T1);
+  assert.equal(state.memberTags.lastSynced["-100"]["1"], "Hive Supporter");
+  assert.equal(state.memberTags.lastSynced["-100"]["4"], undefined);
 });
 
 test("rich table theme maps Claw light palette to supported Telegram tags", () => {

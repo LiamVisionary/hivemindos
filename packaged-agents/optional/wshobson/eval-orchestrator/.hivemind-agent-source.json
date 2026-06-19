@@ -1,0 +1,19 @@
+{
+  "upstreamName": "eval-orchestrator",
+  "slug": "eval-orchestrator",
+  "label": "Eval Orchestrator",
+  "domain": "plugin-eval",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/plugin-eval/agents/eval-orchestrator.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent eval-orchestrator",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/eval-orchestrator",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Orchestrates plugin quality evaluation. Use PROACTIVELY when evaluating, scoring, or certifying plugin quality."
+}

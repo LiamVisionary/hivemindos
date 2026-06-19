@@ -36,6 +36,10 @@ Current optional catalog:
 | --- | --- |
 | `design/` UI Skills pack | 109 optional UI and design-engineering skills from the UI Skills directory, grouped as `design/<source>/<skill>/` so duplicate upstream names remain distinct, and installable together through the `Design Optional Skills Directory` pack. |
 | `design/nextlevelbuilder/ui-ux-pro-max` | UI/UX implementation guidance, design stack data, templates, and helper scripts for richer frontend work. |
+| `media/higgsfield/higgsfield-generate` | Higgsfield media-generation skill for images, video, 3D, audio, Marketing Studio, and Virality Predictor. It supports both Higgsfield Cloud API via shared env keys and the standard consumer CLI/dashboard, asks which surface to use when unspecified, and forbids procedural fallback for Higgsfield requests. |
+| `n8n/` n8n GTM pack | 8 optional n8n GTM-automation skills from `forma-norden/n8n-gtm-workflow-pack` (MIT), grouped as `n8n/forma-norden/<skill>/` and installable together through the `N8N Optional Skills Directory` pack. Covers lead ingestion/enrichment, outreach orchestration, CRM sync, lead scoring/routing, workflow reliability guardrails, observability/cost control, Clay integration, and self-hosting. |
+
+Optional third-party skills are vendored by `scripts/import-packaged-skills.mjs`, which pins each skill to an upstream commit and `sha256` in `skills-lock.json`; run `node scripts/import-packaged-skills.mjs --verify` to detect drift.
 
 Optional skills must be self-contained and installable without relying on any single machine's local runtime paths.
 
