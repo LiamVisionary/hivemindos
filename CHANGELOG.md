@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-19 21:50:33 -0400 - Add Cloudflare Tip Bot Ledger Backend
+  - Status: Pushed
+  - Areas changed: Telegram tip bot store backend (`src/lib/services/telegram-tip-bot/store.ts`, `cloud-store.ts`), Cloudflare Worker/R2 ledger API (`workers/telegram-tip-ledger/`)
+  - Summary: HiveTipBot can now switch its custodial ledger from the local JSON file to a Cloudflare-backed remote state API. The Worker stores the latest full ledger plus timestamped backups in an R2 bucket, exposes authenticated remote state/summary/backup endpoints, and the bot store fails closed on cloud write errors while keeping a local mirror for operator inspection.
+  - Verification: R2 bucket `hivemindos-telegram-tip-ledger-backups` created; `hive-env-run -- npx wrangler deploy` deployed Worker `hivemindos-telegram-tip-ledger` at `https://hivemindos-telegram-tip-ledger.hivemindos.workers.dev`; Worker `ADMIN_TOKEN` and `READ_TOKEN` secrets are configured; `/health` returns OK; authenticated `/summary` correctly returns 404 until production state is initialized; authenticated `/backups` returns an empty list; `node --check scripts/telegram-tip-bot-daemon.mjs` passed; `node --test scripts/test-telegram-tip-bot.mjs` passed (33 tests); focused ESLint and `git diff --check` passed. Production cutover still needs the updated bot code deployed on the VPS and the existing VPS ledger migrated or first-write bootstrapped.
+  - Intended commit message: `Add Cloudflare tip bot ledger backend`
+
 - 2026-06-19 18:40:30 +0700 - Add Telegram Member Tags For HIVE Status And Leaderboards
   - Status: Pushed
   - Areas changed: Telegram tip bot member-tag resolver and sync loop (`src/lib/services/telegram-tip-bot/member-tags.ts`, `runner.ts`, `telegram-api.ts`, `commands.ts`, `store.ts`, `ledger.ts`), tip-bot docs/tests (`src/lib/services/telegram-tip-bot/README.md`, `scripts/test-telegram-tip-bot.mjs`)
