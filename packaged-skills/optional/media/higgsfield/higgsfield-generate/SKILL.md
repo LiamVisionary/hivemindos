@@ -82,6 +82,7 @@ Choose the execution surface before any auth, install, upload, or generation ste
    ```
 7. The official Python SDK is `higgsfield-client`. It accepts either `HF_KEY=<api_key>:<api_secret>` or `HF_API_KEY` plus `HF_API_SECRET`; map from the HivemindOS shared env at process launch rather than writing new secret files.
 8. Use the same model-selection guidance below, then translate prompt/media/model/duration/resolution/aspect choices into the Cloud API submit/poll/download lifecycle.
+9. For Seedance 2.0, Kling 3.0, or any model with known non-standard behavior, read `higgsfield-api-quirks` before building the payload. In particular, Seedance 2.0 audio must be sent as root-level `input_audio`, not as a `role: "audio"` item in `medias`, and aspect ratio must be the string `aspect_ratio`.
 
 Cloud model examples from the official docs:
 
@@ -200,7 +201,7 @@ For workflow jobs, use `higgsfield generate workflow <workflow_name> ... --wait`
 | `--start-image <path-or-id>` | first frame for image-to-video transitions | `grok_video_v15`, `kling3_0`, `kling3_0_turbo`, `kling2_6`, `veo3_1`, `seedance_2_0`, `marketing_studio_video` |
 | `--end-image <path-or-id>` | last frame for transitions | `kling3_0`, `seedance_2_0`, `marketing_studio_video` |
 | `--video <path-or-id>` | reference or analyzed video | `seedance_2_0`, `brain_activity` |
-| `--audio <path-or-id>` | reference audio (lipsync, soundtrack match) | `seedance_2_0` (use this, NOT `--generate-audio`) |
+| `--audio <path-or-id>` | reference audio (lipsync, soundtrack match) | Consumer CLI path for `seedance_2_0` only. For raw/API-style Seedance 2.0 payloads, do not send `role: "audio"` in `medias`; use root-level `input_audio` from `higgsfield-api-quirks`. |
 
 Each flag accepts either a local file path (auto-uploaded) or a UUID (upload id from `higgsfield upload create`, or a previous job id). Each model declares its own role set via `MEDIA_ROLES`. See `references/media-inputs.md` for the full table.
 

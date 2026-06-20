@@ -925,6 +925,14 @@ function copyRequiredRuntimePackages() {
     "caniuse-lite",
     "postcss",
     "styled-jsx",
+    // Solana wallet/trading routes are imported by shared chat/status modules
+    // at route-load time. Next's standalone trace stages @solana/web3.js, but
+    // pnpm's hoisted crypto deps can be absent after resource materialization.
+    "@noble/curves",
+    "@noble/hashes",
+    "@scure/base",
+    "@scure/bip32",
+    "@scure/bip39",
     // React runtime — required for SSR / RSC. materializeResourceSymlinks drops
     // these as dangling pnpm symlinks and the standalone trace does not re-add
     // them, so the embedded server crashed on boot with "Cannot find module

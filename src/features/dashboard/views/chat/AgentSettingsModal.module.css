@@ -618,6 +618,7 @@
 .root :global(.as-choice .t) {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 7px;
   min-width: 0;
   color: inherit;
@@ -625,6 +626,17 @@
   font-weight: 650;
   letter-spacing: 0;
   line-height: 1.2;
+}
+
+.root :global(.as-choice .t > span:not(.as-icon-mark):not(.fb-badge)) {
+  flex: 1 1 7ch;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.root :global(.as-choice .t > .fb-badge) {
+  margin-left: auto;
+  max-width: 100%;
 }
 
 .root :global(.as-choice[data-active] .t) {

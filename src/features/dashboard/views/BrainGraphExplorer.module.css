@@ -216,16 +216,16 @@
 
 .inspectorStats.inspectorStats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
-  column-gap: 14px;
-  row-gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(98px, 1fr));
+  column-gap: 16px;
+  row-gap: 14px;
   margin: 18px 0 0;
 }
 
 .inspectorStats.inspectorStats div {
   display: grid;
   align-content: start;
-  gap: 5px;
+  gap: 7px;
   min-width: 0;
   border-top: 1px solid var(--brain-line, rgba(238, 232, 220, 0.08));
   padding-top: 10px;
@@ -243,13 +243,52 @@
 }
 
 .inspectorStats.inspectorStats dd {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-height: 34px;
   margin: 0;
   color: var(--brain-fg, #f3f0e9);
   font-family: var(--f-display, "Space Grotesk", system-ui, sans-serif);
-  font-size: 16px;
-  font-weight: 650;
-  line-height: 1.18;
-  overflow-wrap: anywhere;
+  line-height: 1.12;
+  overflow-wrap: break-word;
+}
+
+.statValue,
+.statSubvalue {
+  display: block;
+  min-width: 0;
+}
+
+.statValue {
+  color: var(--brain-fg, #f3f0e9);
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.statSubvalue {
+  color: var(--brain-fg-3, #76726a);
+  font-family: var(--f-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10.5px;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.countStat .statValue {
+  font-size: 20px;
+  line-height: 0.95;
+}
+
+.dateStat .statValue {
+  color: var(--brain-fg-2, #a7a39a);
+  font-size: 14px;
+  line-height: 1.05;
+}
+
+.dateStat .statSubvalue {
+  color: var(--brain-fg, #f3f0e9);
 }
 
 .tagRow {

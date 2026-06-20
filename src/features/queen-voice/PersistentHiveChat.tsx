@@ -19,6 +19,7 @@ import {
 } from "@/features/dashboard/screen-context";
 import { createPortal } from "react-dom";
 import { useQueenChat } from "./queen-chat-store";
+import { HIVE_CHAT_DOCK_BOTTOM } from "./hive-chat-layout";
 
 export function PersistentHiveChat({
   hidden = false,
@@ -44,7 +45,7 @@ export function PersistentHiveChat({
         position: "fixed",
         left: 0,
         right: openSpaceRightInset,
-        bottom: 26,
+        bottom: HIVE_CHAT_DOCK_BOTTOM,
         zIndex: 50,
         display: "flex",
         justifyContent: "center",

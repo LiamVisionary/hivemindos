@@ -10,11 +10,22 @@ export function wait(ms: number): Promise<void> {
 export async function waitForElement(selector: string, timeoutMs = 5_000): Promise<HTMLElement | null> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const element = document.querySelector<HTMLElement>(selector);
+    const element = findRenderedElement(selector);
     if (element) return element;
     await wait(80);
   }
   return null;
+}
+
+function hasRenderedBox(element: HTMLElement): boolean {
+  const style = window.getComputedStyle(element);
+  if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") return false;
+  return Array.from(element.getClientRects()).some((rect) => rect.width > 0 && rect.height > 0);
+}
+
+export function findRenderedElement(selector: string): HTMLElement | null {
+  const elements = Array.from(document.querySelectorAll<HTMLElement>(selector));
+  return elements.find(hasRenderedBox) ?? null;
 }
 
 export async function scrollElementIntoView(element: HTMLElement): Promise<void> {

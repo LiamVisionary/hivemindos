@@ -173,6 +173,7 @@ function NavShelf({ active = "agents", onNavigate, theme, onToggleTheme }) {
   const go = (id) => { if (onNavigate) onNavigate(id); };
   const Item = (it) => (
     <button key={it.id} type="button" className="fr-nav" data-active={active === it.id ? "" : undefined}
+      data-bee-nav={it.id}
       onClick={() => go(it.id)} title={it.label}>
       <span className="fr-nav-ico"><FrNavIcon id={it.id} /></span>
       <span className="fr-nav-label">{it.label}</span>
@@ -584,7 +585,7 @@ function CompactCard({ w, enabled, onOpen }) {
   const railReady = frRailReady(w.railId);
   const tone = w.meta.setup ? "muted" : rw.tone === "danger" ? "danger" : !enabled ? "muted" : undefined;
   return (
-    <button type="button" className="fw-cc" data-tone={tone} onClick={onOpen}>
+    <button type="button" className="fw-cc" data-tone={tone} data-bee={`wallet-agent-${w.id}`} data-bee-wallet-action="open" onClick={onOpen}>
       <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
           <Dot state={w.state} />
@@ -703,7 +704,7 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
   const commitAsset = (asset) => (value) => { const n = Number(value); if (Number.isFinite(n) && n >= 0) actions?.onUpdateAgentWallet?.(w.id, { assetSpendCaps: { ...(w.meta.assetSpendCaps || {}), [asset]: n } }); };
   const send = async () => { setSendMsg("Sending…"); try { if (!actions?.onSendAgentPayment) throw new Error("Agent send is not available in this build."); const res = await actions.onSendAgentPayment({ agentId: w.id, asset: sendSym, amount: sendAmt, amountUsd: sendAmountUsd || undefined, toAddress: recipMode === "address" ? sendTo : "", recipientAgentId: recipMode === "agent" ? (recipAgent || (others[0] && others[0].id)) : "", confirmation: sendConfirm }); setSendMsg(res?.signature ? "Sent · " + res.signature : res?.transfer?.transactionHash ? "Sent · " + res.transfer.transactionHash : "Sent."); } catch (e) { setSendMsg(e instanceof Error ? e.message : "Send failed."); } };
   return (
-    <div className="fw-card" data-tone={cardTone}>
+    <div className="fw-card" data-tone={cardTone} data-bee={`wallet-agent-${w.id}`} data-bee-wallet-action="details">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
           {compact ? (
@@ -898,7 +899,7 @@ function WalletCard({ w, density, expanded, onToggle, onConfigure, actions }) {
   }
   if (w.meta.setup) {
     return (
-      <div className="fw-card" data-tone="muted">
+      <div className="fw-card" data-tone="muted" data-bee={`wallet-agent-${w.id}`} data-bee-wallet-action="setup">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
             {density === "compact" ? <button type="button" className="fw-x" onClick={onToggle} aria-label="Collapse" style={{ transform: "rotate(45deg)" }}><BIcon name="plus" size={14} sw={2} /></button> : <Dot state={w.state} />}
@@ -910,7 +911,7 @@ function WalletCard({ w, density, expanded, onToggle, onConfigure, actions }) {
           <Badge tone="honey">Setup</Badge>
         </div>
         <p style={{ fontSize: 12.5, color: "var(--fg-3)", lineHeight: 1.5, margin: "4px 0 8px" }}>No wallet yet. Initialise a rail to let this agent pay for what it needs.</p>
-        <button type="button" className="fb-btn primary" style={{ width: "100%" }} onClick={() => actions?.onCreateAgentWallet?.(w.id, w.meta.network || "base")}><BIcon name="plus" size={15} /> Create wallet</button>
+        <button type="button" className="fb-btn primary" style={{ width: "100%" }} data-bee={`wallet-create-${w.id}`} onClick={() => actions?.onCreateAgentWallet?.(w.id, w.meta.network || "base")}><BIcon name="plus" size={15} /> Create wallet</button>
       </div>
     );
   }

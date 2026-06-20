@@ -14,6 +14,7 @@ const workflow = readFileSync(workflowPath, "utf8");
 const tauriConfig = JSON.parse(readFileSync(tauriConfigPath, "utf8"));
 const nativeDocs = readFileSync(nativeDocsPath, "utf8");
 const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
+const tauriBuild = readFileSync("scripts/tauri-build.mjs", "utf8");
 
 if (!/^\s*HIVEMINDOS_TAURI_EMBEDDED_NEXT\s*:\s*"1"/m.test(workflow)) {
   fail(`${workflowPath} must enable the embedded Next server for release builds.`);
@@ -89,6 +90,12 @@ if (!nativeDocs.includes("Release builds enable `HIVEMINDOS_TAURI_EMBEDDED_NEXT`
 
 if (!nativeDocs.includes("static fallback still needs native bridge coverage")) {
   fail(`${nativeDocsPath} must describe the native bridge coverage requirement for the static fallback.`);
+}
+
+for (const packageName of ["@noble/curves", "@noble/hashes", "@scure/base", "@scure/bip32", "@scure/bip39"]) {
+  if (!tauriBuild.includes(`"${packageName}"`)) {
+    fail(`scripts/tauri-build.mjs must stage ${packageName} for Solana-backed API routes in the embedded Next runtime.`);
+  }
 }
 
 if (!process.exitCode) {

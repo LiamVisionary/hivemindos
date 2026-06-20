@@ -5,7 +5,7 @@ import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { createDefaultAgentWallet, hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
-import { fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
+import { fetchPersonalWalletBalance, fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import styles from "./trade.module.css";
 import { fetchBankrWallet, type BankrWalletInfo } from "./trade-api";
 import { CryptoTradeView } from "./CryptoTradeView";
@@ -65,11 +65,32 @@ export function TradePanel(props: TradePanelProps) {
   const [actingId, setActingId] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [personalWallets, setPersonalWallets] = useState<Array<Record<string, unknown>>>([]);
+  const [personalBalancesLoading, setPersonalBalancesLoading] = useState(true);
   const [bankr, setBankr] = useState<BankrWalletInfo | null>(null);
 
   useEffect(() => {
     let ignore = false;
-    void fetchPersonalWalletRecords(vaultPath).then((list) => { if (!ignore) setPersonalWallets(list); });
+    setPersonalBalancesLoading(true);
+    void (async () => {
+      const list = await fetchPersonalWalletRecords(vaultPath);
+      if (ignore) return;
+      setPersonalWallets(list);
+      // Stored ledger balances can be stale/zero until the Wallets view has
+      // refreshed and persisted them, so refresh live here too — otherwise the
+      // picker shows $0 until the user happens to open the Wallets tab first.
+      const refreshed = await Promise.all(list.map(async (record) => {
+        const address = String(record.address || "").trim();
+        const network = String(record.network || "").trim();
+        if (!address || !network) return record;
+        const balance = await fetchPersonalWalletBalance(address, network);
+        return balance
+          ? { ...record, currentBalanceUsd: balance.currentBalanceUsd, nativeBalance: balance.nativeBalance, tokens: balance.tokens, lastOnchainSyncAt: balance.lastOnchainSyncAt }
+          : record;
+      }));
+      if (ignore) return;
+      setPersonalWallets(refreshed);
+      setPersonalBalancesLoading(false);
+    })();
     return () => { ignore = true; };
   }, [vaultPath]);
 
@@ -82,7 +103,12 @@ export function TradePanel(props: TradePanelProps) {
   // Unified pickable list: the user's own wallets first, then the Bankr trading
   // wallet (when the API key is set), then configured agents.
   const pickables = useMemo<PickableWallet[]>(() => {
-    const user = personalWallets.map(personalPickable).filter((p): p is PickableWallet => Boolean(p));
+    const user = personalWallets
+      .map(personalPickable)
+      .filter((p): p is PickableWallet => Boolean(p))
+      // While balances are still refreshing, mark them pending so the picker
+      // shows a loading state instead of a misleading stale $0.
+      .map((p) => ({ ...p, pending: personalBalancesLoading }));
     const bankrPickable: PickableWallet | null = bankr?.configured ? {
       id: "bankr",
       name: "Bankr trading wallet",
@@ -100,7 +126,7 @@ export function TradePanel(props: TradePanelProps) {
       .map((agent): PickableWallet => ({ id: agent.id, name: agent.name || agent.id, kind: "agent", wallet: walletFor(agent, props.walletsByAgent), usePod: agent.usePod as AgentProfile["usePod"] }))
       .filter((p) => hasConfiguredAgentWallet({ usePod: p.usePod } as Parameters<typeof hasConfiguredAgentWallet>[0], p.wallet) && !(p.wallet as { setupRequired?: boolean }).setupRequired);
     return [...user, ...(bankrPickable ? [bankrPickable] : []), ...agentPickables];
-  }, [personalWallets, bankr, agents, props.walletsByAgent]);
+  }, [personalWallets, personalBalancesLoading, bankr, agents, props.walletsByAgent]);
 
   // Default to the selected agent if it's pickable, else the first pickable
   // (which is a user wallet when any exist).

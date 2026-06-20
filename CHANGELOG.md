@@ -5,11 +5,74 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-21 00:25 +07 - Contain Expanded Work History Rows
+  - Status: Uncommitted
+  - Areas changed: Work History row styling (`src/app/kanban-board.module.css`) and changelog
+  - Summary: Expanding a Work History row no longer lets hidden changelog details and code-path pills ghost across the rest of the view; closed rows now hide their detail bodies explicitly, and long markdown/code tokens wrap inside the row.
+  - Verification: `git diff --check -- src/app/kanban-board.module.css` passed; `pnpm exec eslint src/features/dashboard/views/KanbanPanel.tsx --max-warnings=0` passed; Playwright CSS layout harness confirmed closed detail bodies compute to `display: none`, expanded rows push following rows down, and horizontal overflow stays at 0. Full authenticated app smoke was blocked because the already-running dev servers were locked with different dashboard tokens.
+  - Intended commit message: `Contain expanded work history rows`
+
+- 2026-06-21 00:16 +07 - Refine Shared Brain Inspector Values
+  - Status: Uncommitted
+  - Areas changed: Shared brain graph inspector values (`src/features/dashboard/views/BrainGraphExplorer.tsx`, `src/features/dashboard/views/BrainGraphExplorer.module.css`) and changelog
+  - Summary: The Shared Brain note inspector now presents counts and dates with a calmer value treatment. Date stats split the day and time into intentional primary/secondary lines so AM/PM no longer falls awkwardly onto its own oversized line.
+  - Verification: `pnpm exec eslint src/features/dashboard/views/BrainGraphExplorer.tsx --max-warnings=0` passed; filtered `pnpm exec tsc --noEmit --pretty false --skipLibCheck` output returned no diagnostics for `src/features/dashboard/views/BrainGraphExplorer*`; Playwright visual smoke was attempted against local dashboard dev instances but could not reach the unlocked graph view because the available sessions were auth-gated.
+  - Intended commit message: `Refine shared brain inspector values`
+
+- 2026-06-21 00:12 +07 - Align Queen Chat History FAB Across Routes
+  - Status: Uncommitted
+  - Areas changed: Queen chat dock/overlay layout (`src/features/queen-voice/`), dashboard route wiring (`src/features/dashboard/DashboardApp.tsx`), and changelog
+  - Summary: The Queen chat history control now uses the same route-aware open-space inset as the app-wide "Message the hive" pill, so the minimized history button stays visually paired with the composer when switching between Fleet and other dashboard routes.
+  - Verification: `pnpm exec eslint src/features/queen-voice/PersistentHiveChat.tsx src/features/queen-voice/QueenBeeVoiceOverlay.tsx src/features/queen-voice/hive-chat-layout.ts --max-warnings=0` passed; filtered `pnpm exec tsc --noEmit --pretty false --skipLibCheck` output returned no diagnostics for the changed Queen/Dashboard files; focused `git diff --check` passed; Playwright geometry smoke on an isolated local dev server confirmed Fleet chat/FAB center delta `0.01px` with the 340px inset and Kanban delta `0px` with no inset. Focused `DashboardApp.tsx` ESLint remains blocked by pre-existing unused-symbol warnings and a React Compiler manual memoization error unrelated to this change.
+  - Intended commit message: `Align Queen chat history FAB across routes`
+
+- 2026-06-21 00:11 +07 - Keep Runtime Setup Badges Inside Cards
+  - Status: Uncommitted
+  - Areas changed: Agent Settings runtime/provider tile styling (`src/features/dashboard/views/chat/AgentSettingsModal.module.css`) and changelog
+  - Summary: Runtime setup badges now stay inside their cards by letting the tile title row wrap and by giving long runtime/provider names a shrinkable label area instead of pushing the Set up badge past the card edge.
+  - Verification: `pnpm exec eslint src/features/dashboard/views/chat/AgentSettingsModal.tsx --max-warnings=0` passed; focused `git diff --check` passed for the touched CSS/changelog; `wc -l` confirmed the touched modal files stay under 1500 lines; focused Playwright layout smoke kept the OpenHands setup badge inside card widths from 300px down to 140px with no horizontal overflow.
+  - Intended commit message: `Keep runtime setup badges inside cards`
+
+- 2026-06-21 00:09:57 +0700 - Restyle Kanban Quick Add Composer
+  - Status: Uncommitted
+  - Areas changed: Kanban board styling (`src/app/kanban-board.module.css`) and changelog
+  - Summary: The inline new-task composer now matches the redesigned Kanban board skin, using the flat Comb panel colors, lane-aware focus accents, honey submit action, wrapped attachment labels, and themed machine/attachment controls instead of the older chat-composer glow.
+  - Verification: `git diff --check -- src/app/kanban-board.module.css CHANGELOG.md` passed; `pnpm exec eslint src/features/dashboard/views/KanbanPanel.tsx --max-warnings=0` passed; filtered `pnpm exec tsc --noEmit --pretty false --skipLibCheck` output returned no diagnostics for the Kanban panel/style paths; `pnpm build` was attempted but the full Next production compile hit the script's Node heap limit before completion.
+  - Intended commit message: `Restyle Kanban quick add composer`
+
+- 2026-06-21 00:09 +07 - Restore Bee Pilot Click Targets For Redesigned Dashboard
+  - Status: Uncommitted
+  - Areas changed: Bee Pilot DOM targeting and executor (`src/features/dashboard/bee-pilot/`), redesigned Fleet/Hive targets (`src/components/fleet-hive/`), Agent Settings runtime/provider tiles, Wallets drop-in agent cards, Kanban quick-add controls, and changelog
+  - Summary: Queen Bee command automation now finds visible fixed-position dashboard controls and restored click targets across the redesigned Hive, Wallets, Agent Settings, and Work Board views, so the honey bee animation flies to real targets instead of appearing and stalling after recent UI updates.
+  - Verification: `pnpm exec eslint` passed for the touched Bee Pilot, Fleet/Hive, Wallets, Kanban, and Agent Settings files; focused `git diff --check` passed; filtered `pnpm exec tsc --noEmit --pretty false --skipLibCheck` output returned no diagnostics for the touched files; authenticated Playwright smoke verified the bee moves from the command popup to the redesigned Wallets nav target, opens Wallets, moves for the Hive create-agent path, opens the agent setup modal with runtime/provider bee targets present, and exposes Kanban quick-add targets after opening the inline composer.
+  - Intended commit message: `Restore Bee Pilot targets for redesigned dashboard`
+
+- 2026-06-21 00:05:55 +0700 - Stage Solana Crypto Packages In Desktop Runtime
+  - Status: Uncommitted
+  - Areas changed: Embedded Tauri Next packaging (`scripts/tauri-build.mjs`), release-mode regression check (`scripts/test-tauri-release-mode.mjs`), and changelog
+  - Summary: Production desktop builds now include the Solana crypto packages needed by wallet/trading imports that are shared with chat and agent status routes, preventing packaged chat sends from failing with a generic "Internal Server Error" before the route can stream a useful response.
+  - Verification: `node --check scripts/tauri-build.mjs` passed; `node --check scripts/test-tauri-release-mode.mjs` passed; `node scripts/test-tauri-release-mode.mjs` passed; verified pnpm can resolve the staged package directories plus the `@noble/curves/ed25519.js` and `@noble/hashes/sha512.js` subpath files; focused `git diff --check` passed for the touched files.
+  - Intended commit message: `Stage Solana crypto packages for desktop runtime`
+
+- 2026-06-21 00:02 +07 - Add Integrations Top Gutter
+  - Status: Uncommitted
+  - Areas changed: Integrations drop-in layout CSS (`src/features/integrations/integrations-redesign.css`) and changelog
+  - Summary: The embedded Integrations view now starts below the top edge with the same kind of breathing room as the other dashboard pages, instead of pinning the tab strip to the window chrome.
+  - Verification: Focused `git diff --check` passed for the touched CSS/changelog; `wc -l` confirmed the stylesheet remains under 1500 lines; authenticated Playwright top-offset smoke measured the desktop tab strip at 42px from the top and confirmed the 390px mobile layout keeps its smaller top gutter without horizontal overflow.
+  - Intended commit message: `Add integrations top gutter`
+
+- 2026-06-20 23:03:07 +0700 - Add Higgsfield API Quirks Skill
+  - Status: Uncommitted
+  - Areas changed: Optional packaged Higgsfield quirks skill (`packaged-skills/optional/media/higgsfield/higgsfield-api-quirks/SKILL.md`), shared Obsidian skill shelf (`Skills/higgsfield-api-quirks/` and `Skills/README.md`), local Codex skill mirror, packaged skill docs, whole-brain shared-skill docs, and changelog
+  - Summary: Agents now have a reusable Higgsfield API quirks skill that captures model-specific payload constraints the generic API docs do not spell out, including Seedance 2.0's root-level `input_audio`, required string `aspect_ratio`, reference-slot limit, and Kling 3.0 matchcut caveats.
+  - Verification: Confirmed the repo optional skill and shared/local skill mirrors exist and match byte-for-byte via `cmp`; added the shared skill index entry; updated packaged-skill and whole-brain docs; focused `git diff --check` passed for the touched repo skill/docs/changelog files.
+  - Intended commit message: `Add Higgsfield API quirks skill`
+
 - 2026-06-20 20:12:37 +0700 - Document Higgsfield Cloud API Platform Routing
   - Status: Uncommitted
   - Areas changed: Optional Higgsfield generation skill (`packaged-skills/optional/media/higgsfield/higgsfield-generate/SKILL.md`), shared/local skill mirrors, and changelog
-  - Summary: The Higgsfield generation skill now records the official Cloud API routing contract from the docs: discover pages through `docs.higgsfield.ai/docs/llms.txt`, submit to `https://platform.higgsfield.ai/{model_id}`, authenticate with `Authorization: Key <api_key>:<api_secret>`, poll/cancel through `/requests/<request_id>`, and use `hf_webhook` for callbacks. The skill also warns that Python `urllib` may be blocked by Cloudflare before auth and that the consumer `higgsfield` CLI/free workspace is not evidence about Cloud API credits.
-  - Verification: Fetched the official docs index and listed markdown pages; no-cost curl sanity check against the documented platform status endpoint with the shared Higgsfield env reached the platform auth/path layer and returned `404 {"detail":"Not found"}` for a fake request id; shared and local skill mirrors match the packaged skill via `cmp`; focused `git diff --check` passed for the touched repo files.
+  - Summary: The Higgsfield generation skill now records the official Cloud API routing contract from the docs: discover pages through `docs.higgsfield.ai/docs/llms.txt`, submit to `https://platform.higgsfield.ai/{model_id}`, authenticate with `Authorization: Key <api_key>:<api_secret>`, poll/cancel through `/requests/<request_id>`, and use `hf_webhook` for callbacks. The skill also warns that Python `urllib` may be blocked by Cloudflare before auth, that the consumer `higgsfield` CLI/free workspace is not evidence about Cloud API credits, and that Seedance 2.0/Kling 3.0 requests should consult `higgsfield-api-quirks` before building non-standard payloads.
+  - Verification: Fetched the official docs index and listed markdown pages; no-cost curl sanity check against the documented platform status endpoint with the shared Higgsfield env reached the platform auth/path layer and returned `404 {"detail":"Not found"}` for a fake request id; shared and local skill mirrors match the packaged skill via `cmp`; focused `git diff --check` passed for the touched repo files. Follow-up mirror checks confirmed the shared/local/packaged Higgsfield generation skill and `references/media-inputs.md` now all include the Seedance 2.0 root-level `input_audio` warning and pass focused `git diff --check`.
   - Intended commit message: `Document Higgsfield Cloud API routing`
 
 - 2026-06-20 19:50 +07 - Restore Integrations Page Gutters

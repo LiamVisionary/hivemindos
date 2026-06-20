@@ -188,7 +188,7 @@
 
 /* ============================ Nango wizard (ni-*) ============================ */
 .ni-wrap { max-width: 1100px; margin: 0 auto; padding: 26px 36px 150px; display: grid; gap: 18px; }
-.ni-embedded .ni-wrap { width: 100%; max-width: none; margin: 0 auto; padding: 4px clamp(32px, 3.5vw, 68px) 132px; }
+.ni-embedded .ni-wrap { width: 100%; max-width: none; margin: 0 auto; padding: clamp(30px, 3vh, 44px) clamp(32px, 3.5vw, 68px) 132px; }
 
 .ni-top { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 18px; align-items: center; }
 .ni-top h1 { font-family: var(--f-display); font-weight: 600; font-size: clamp(26px, 3vw, 40px); line-height: 1.02; letter-spacing: -0.02em; margin: 4px 0 0; }
@@ -378,7 +378,7 @@
   .fb-seg::-webkit-scrollbar { display: none; }
   .fb-seg button { padding-inline: 14px; }
 
-  .ni-embedded .ni-wrap { padding: 4px clamp(14px, 4vw, 24px) 132px; gap: 16px; }
+  .ni-embedded .ni-wrap { padding: 14px clamp(14px, 4vw, 24px) 132px; gap: 16px; }
   .ni-top { grid-template-columns: 1fr; align-items: start; gap: 12px; }
   .ni-top h1 { font-size: 34px; line-height: 1.04; }
   .ni-top p { max-width: none; }
