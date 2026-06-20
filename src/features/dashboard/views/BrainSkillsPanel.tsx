@@ -45,6 +45,7 @@ export function BrainSkillsPanel(props: any) {
   } = props;
   const autoRefreshRef = useRef(false);
   const localSharedLoadingRef = useRef(false);
+  const [catalogView, setCatalogView] = useState("available");
   const [localSharedInventory, setLocalSharedInventory] = useState<any | null>(null);
   const [localSharedLoading, setLocalSharedLoading] = useState(false);
   const skillSearchQuery = (skillBrowserSearch ?? "").trim().toLowerCase();
@@ -107,16 +108,29 @@ export function BrainSkillsPanel(props: any) {
       .toLowerCase()
       .includes(skillSearchQuery);
   });
+  const importableSkills = (providerSkillInventories ?? []).flatMap((provider) => (
+    (provider.skills ?? [])
+      .filter((skill) => !skill.imported)
+      .map((skill) => ({
+        ...skill,
+        providerId: provider.id,
+        providerLabel: skill.providerLabel || provider.label,
+        providerHome: provider.home,
+      }))
+  ));
   const importableTotal = effectiveBrainSkills?.totals.importable ?? 0;
+  const importableDisplayTotal = skillSearchQuery
+    ? importableSkills.length
+    : Math.max(importableSkills.length, importableTotal);
   const availableTotal = skillSearchQuery
     ? sharedFiltered.length
     : Math.max(sharedFiltered.length, effectiveBrainSkills?.totals.shared ?? 0);
   const sharedInventoryPending = canReadSharedSkills
     && !hasSharedSkillInventory
     && (brainSkillsLoading || localSharedLoading || !brainSkills);
-  const catalogMeta = sharedInventoryPending && !skillSearchQuery
-    ? `Scanning available skills${importableTotal ? ` - ${importableTotal} importable` : ""}`
-    : `${availableTotal} available - ${importableTotal} importable`;
+  const gridPending = catalogView === "available"
+    ? (brainSkillsLoading || sharedInventoryPending) && !sharedFiltered.length
+    : brainSkillsLoading && !importableSkills.length;
 
   return (
     <section className={skillsClass("fade")} aria-label="Shared brain skills">
@@ -160,9 +174,28 @@ export function BrainSkillsPanel(props: any) {
         <div className={skillsClass("catalogTop")}>
           <div className={skillsClass("catalogTitle")}>
             <span className={skillsClass("tile")}><Sparkles aria-hidden="true" /></span>
-            <div>
+            <div className={skillsClass("catalogTitleBody")}>
               <p className={skillsClass("eyebrow")}>Skills</p>
-              <div className={skillsClass("catalogMeta")}>{catalogMeta}</div>
+              <div className={skillsClass("catalogSegment")} role="group" aria-label="Skill grid content">
+                <button
+                  type="button"
+                  className={skillsClass("catalogSegmentButton", catalogView === "available" && "catalogSegmentButtonActive")}
+                  aria-pressed={catalogView === "available"}
+                  onClick={() => setCatalogView("available")}
+                >
+                  <span>{sharedInventoryPending && !skillSearchQuery ? "Scanning" : availableTotal}</span>
+                  available
+                </button>
+                <button
+                  type="button"
+                  className={skillsClass("catalogSegmentButton", catalogView === "importable" && "catalogSegmentButtonActive")}
+                  aria-pressed={catalogView === "importable"}
+                  onClick={() => setCatalogView("importable")}
+                >
+                  <span>{importableDisplayTotal}</span>
+                  importable
+                </button>
+              </div>
             </div>
           </div>
           <div className={skillsClass("actions")}>
@@ -182,7 +215,7 @@ export function BrainSkillsPanel(props: any) {
           </div>
         </div>
         <div className={skillsClass("skillGrid")}>
-          {(brainSkillsLoading || sharedInventoryPending) && !sharedFiltered.length ? Array.from({ length: 6 }).map((_, index) => (
+          {gridPending ? Array.from({ length: 6 }).map((_, index) => (
             <article key={`loading-${index}`} className={skillsClass("skillCard", "skillSkeleton")} aria-hidden="true">
               <div className={skillsClass("skillTop")}>
                 <span className={skillsClass("tile")} />
@@ -194,7 +227,7 @@ export function BrainSkillsPanel(props: any) {
               <div className={skillsClass("skeletonLine", "skeletonShort")} />
             </article>
           )) : null}
-          {sharedFiltered.map((skill) => {
+          {catalogView === "available" ? sharedFiltered.map((skill) => {
             const needsHermesUpdate = skillRequiresHermesUpdate(skill, hermesUpdateRequired);
             return (
               <article key={skill.id ?? skill.slug} className={skillsClass("skillCard")}>
@@ -215,8 +248,42 @@ export function BrainSkillsPanel(props: any) {
                 </Button>
               </article>
             );
-          })}
-          {!sharedFiltered.length && !brainSkillsLoading && !sharedInventoryPending ? <p className={skillsClass("empty")}>{skillSearchQuery ? "No matching shared skills." : "No shared skills yet."}</p> : null}
+          }) : null}
+          {catalogView === "importable" ? importableSkills.map((skill) => {
+            const needsHermesUpdate = skillRequiresHermesUpdate({ ...skill, providerId: skill.providerId, source: skill.providerLabel }, hermesUpdateRequired);
+            const pending = brainSkillImportProvider === skill.providerId || brainSkillImportProvider === "all";
+            const success = brainSkillImportSuccess === skill.providerId || brainSkillImportSuccess === "all";
+            const providerLabel = skill.providerLabel || "Provider";
+            return (
+              <article key={`${skill.providerId}:${skill.id ?? skill.slug}`} className={skillsClass("skillCard")}>
+                <div className={skillsClass("skillTop")}>
+                  <span className={skillsClass("tile")}><Sparkles aria-hidden="true" /></span>
+                  <span className={skillsClass("badge", needsHermesUpdate && "badgeHoney")}>
+                    {needsHermesUpdate ? "Needs Hermes" : <><Download aria-hidden="true" />Importable</>}
+                  </span>
+                </div>
+                <div>
+                  <div className={skillsClass("skillName")}>{skill.name}</div>
+                  <div className={skillsClass("skillSlug")}>{skill.slug}</div>
+                </div>
+                <p>{skill.description || "No description yet."}</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={Boolean(brainSkillImportProvider) || !sharedVault.enabled}
+                  title={`Import missing ${providerLabel} skills`}
+                  aria-label={`Import missing ${providerLabel} skills`}
+                  onClick={() => void importBrainSkills(skill.providerId)}
+                >
+                  {pending ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : success ? <Check aria-hidden="true" /> : <Download aria-hidden="true" />}
+                  {pending ? "Importing" : success ? "Synced" : "Import provider"}
+                </Button>
+              </article>
+            );
+          }) : null}
+          {catalogView === "available" && !sharedFiltered.length && !brainSkillsLoading && !sharedInventoryPending ? <p className={skillsClass("empty")}>{skillSearchQuery ? "No matching shared skills." : "No shared skills yet."}</p> : null}
+          {catalogView === "importable" && !importableSkills.length && !brainSkillsLoading ? <p className={skillsClass("empty")}>{skillSearchQuery ? "No matching importable skills." : "No importable skills right now."}</p> : null}
         </div>
       </div>
 

@@ -195,6 +195,63 @@ fn bool_field(record: &Map<String, Value>, key: &str) -> bool {
     record.get(key).and_then(Value::as_bool).unwrap_or(false)
 }
 
+fn json_number(value: f64) -> Option<Value> {
+    serde_json::Number::from_f64(value).map(Value::Number)
+}
+
+fn wallet_tokens_field(record: &Map<String, Value>, key: &str) -> Value {
+    let Some(raw) = record.get(key).and_then(Value::as_str).map(str::trim) else {
+        return Value::Array(Vec::new());
+    };
+    if raw.is_empty() {
+        return Value::Array(Vec::new());
+    }
+    let Ok(Value::Array(tokens)) = serde_json::from_str::<Value>(raw) else {
+        return Value::Array(Vec::new());
+    };
+    let clean = tokens
+        .into_iter()
+        .filter_map(|token| {
+            let object = token.as_object()?;
+            let symbol = object.get("symbol")?.as_str()?.trim();
+            let network = object.get("network")?.as_str()?.trim();
+            let balance = object.get("balance")?.as_f64()?;
+            if symbol.is_empty() || network.is_empty() || !balance.is_finite() || balance <= 0.0 {
+                return None;
+            }
+            let mut out = Map::new();
+            out.insert("symbol".to_string(), Value::String(symbol.to_string()));
+            out.insert("network".to_string(), Value::String(network.to_string()));
+            out.insert("balance".to_string(), json_number(balance)?);
+            for key in ["name", "address", "logoUrl"] {
+                if let Some(value) = object
+                    .get(key)
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
+                    out.insert(key.to_string(), Value::String(value.to_string()));
+                }
+            }
+            for key in ["priceUsd", "valueUsd"] {
+                if let Some(value) = object
+                    .get(key)
+                    .and_then(Value::as_f64)
+                    .filter(|value| value.is_finite() && *value >= 0.0)
+                    .and_then(json_number)
+                {
+                    out.insert(key.to_string(), value);
+                }
+            }
+            if let Some(value) = object.get("isNative").and_then(Value::as_bool) {
+                out.insert("isNative".to_string(), Value::Bool(value));
+            }
+            Some(Value::Object(out))
+        })
+        .collect::<Vec<_>>();
+    Value::Array(clean)
+}
+
 fn is_recovery_phrase_wallet_id(id: &str) -> bool {
     id.starts_with("user:")
         && (id.contains(":eip155-")
@@ -415,7 +472,7 @@ fn wallet_from_ledger_file(path: &Path) -> Option<Value> {
         "currentBalanceUsd": number_field(&fm, "currentBalanceUsd")
             .max(number_field(&fm, "onchainBalanceUsd")),
         "nativeBalance": number_field(&fm, "nativeBalance"),
-        "tokens": [],
+        "tokens": wallet_tokens_field(&fm, "tokens"),
         "portfolioVersion": 0,
         "lastOnchainSyncAt": number_field(&fm, "lastOnchainSyncAt"),
         "createdAt": if updated_at_ms > 0.0 { updated_at_ms } else { 0.0 },

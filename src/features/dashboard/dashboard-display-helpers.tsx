@@ -200,7 +200,7 @@ export function machineNetworkIssue(
     };
   }
   if (machine.collector === "unknown") return undefined;
-  if (!machine.online) {
+  if (!machine.online && machine.collector !== "ready") {
     return {
       label: "Tailscale disconnected. Fix?",
       title: "Machine is offline in Tailscale",
@@ -446,6 +446,40 @@ export function discoveredMachineIdentity(machine: DiscoveredMachine) {
   });
 }
 
+function discoveredMachineTransportIdentity(machine: DiscoveredMachine) {
+  return machineIdentityFromParts({
+    self: machine.device.self,
+    name: machine.device.name,
+    dnsName: machine.device.dnsName,
+    collectorUrl: machine.device.collectorUrl,
+    ip: machine.device.ip,
+  });
+}
+
+function isDeviceOnlyDiscovery(machine: DiscoveredMachine) {
+  return (
+    machine.collector === "unknown" &&
+    machine.agents.length === 0 &&
+    machine.snapshots.length === 0 &&
+    !machine.machineId &&
+    !machine.version &&
+    !machine.capabilities &&
+    !machine.envSync &&
+    !machine.system
+  );
+}
+
+function mergeTransportDevice(
+  previous: DiscoveredMachine["device"],
+  incoming: DiscoveredMachine["device"],
+): DiscoveredMachine["device"] {
+  return {
+    ...previous,
+    ...incoming,
+    collectorUrl: previous.collectorUrl || incoming.collectorUrl,
+  };
+}
+
 export function discoveredMachineScore(machine: DiscoveredMachine) {
   return (
     (machine.device.self ? 10_000 : 0) +
@@ -515,8 +549,25 @@ export function mergeDiscoveredMachines(
   const currentByKey = new Map(
     current.map((machine) => [discoveredMachineIdentity(machine), machine]),
   );
+  const currentByTransportIdentity = new Map<string, DiscoveredMachine>();
+  for (const machine of current) {
+    const key = discoveredMachineTransportIdentity(machine);
+    if (!key) continue;
+    const previous = currentByTransportIdentity.get(key);
+    if (
+      !previous ||
+      discoveredMachineScore(machine) > discoveredMachineScore(previous)
+    ) {
+      currentByTransportIdentity.set(key, machine);
+    }
+  }
   const incomingKeys = new Set(
     incoming.map((machine) => discoveredMachineIdentity(machine)),
+  );
+  const incomingTransportIdentities = new Set(
+    incoming
+      .map((machine) => discoveredMachineTransportIdentity(machine))
+      .filter(Boolean),
   );
   const incomingHasTailnetSelf = incoming.some(
     (machine) =>
@@ -532,7 +583,12 @@ export function mergeDiscoveredMachines(
 
   const merged = incoming.map((machine) => {
     const key = discoveredMachineIdentity(machine);
-    const previous = currentByKey.get(key);
+    const transportKey = discoveredMachineTransportIdentity(machine);
+    const previousByKey = currentByKey.get(key);
+    const previousByTransport = transportKey
+      ? currentByTransportIdentity.get(transportKey)
+      : undefined;
+    const previous = previousByKey ?? previousByTransport;
     const hasFreshAgentData =
       machine.collector === "ready" && machine.agents.length > 0;
     const mergedSnapshots = mergeMachineSnapshots(
@@ -554,9 +610,20 @@ export function mergeDiscoveredMachines(
       return { ...machine, lastSeenAt: previous.lastSeenAt };
     }
 
+    if (!previousByKey && previousByTransport && isDeviceOnlyDiscovery(machine)) {
+      return {
+        ...previous,
+        device: mergeTransportDevice(previous.device, machine.device),
+        lastSeenAt: previous.lastSeenAt,
+      };
+    }
+
     return {
       ...machine,
-      collector: previous.collector === "ready" ? "ready" : machine.collector,
+      collector:
+        previousByKey && previous.collector === "ready"
+          ? "ready"
+          : machine.collector,
       agents: previous.agents,
       snapshots: previous.snapshots,
       lastSeenAt: previous.lastSeenAt,
@@ -565,6 +632,12 @@ export function mergeDiscoveredMachines(
 
   const preserved = current
     .filter((machine) => !incomingKeys.has(discoveredMachineIdentity(machine)))
+    .filter(
+      (machine) =>
+        !incomingTransportIdentities.has(
+          discoveredMachineTransportIdentity(machine),
+        ),
+    )
     .filter(shouldPreserveMissingDiscoveredMachine)
     .filter(
       (machine) =>

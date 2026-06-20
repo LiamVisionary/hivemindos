@@ -70,10 +70,12 @@
   --honey-soft: rgba(176, 127, 28, 0.12);
   --honey-line: rgba(176, 127, 28, 0.34);
 
-  /* warm sage (ref success #6b8f5e) rather than the dark-theme cool teal —
-     reads as a calm "live/working" signal against the warm cream + honey. */
-  --live: #5f8f5a;
-  --live-soft: rgba(95, 143, 90, 0.14);
+  /* muted warm olive (not the dark-theme cool teal) for the "live/working"
+     signal — the agent cell border is color-mix(--live 70%), so a saturated
+     green reads as a vivid outline that fights the cream/honey. A desaturated
+     olive sits with the warm palette while staying distinct from honey. */
+  --live: #88926e;
+  --live-soft: rgba(136, 146, 110, 0.12);
 
   --danger: #c0524d;
   --danger-soft: rgba(192, 82, 77, 0.12);
@@ -389,13 +391,19 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-shelf::before {
     linear-gradient(90deg, rgba(255, 255, 255, 0.10), transparent 22%, rgba(255, 255, 255, 0.035) 64%, transparent);
   opacity: 0.72;
 }
-.fr-shelf:hover, .fr-shelf:focus-within { width: 238px; box-shadow: 34px 0 70px -34px rgba(0, 0, 0, 0.55); background: color-mix(in srgb, var(--panel) 97%, transparent); }
+.fr-shelf:hover,
+.fr-shelf[data-keyboard-focus="true"]:focus-within {
+  width: 238px;
+  box-shadow: 34px 0 70px -34px rgba(0, 0, 0, 0.55);
+  background: color-mix(in srgb, var(--panel) 97%, transparent);
+}
 html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-shelf > * { position: relative; z-index: 1; }
-.fr-shelf:hover, .fr-shelf:focus-within {
+.fr-shelf:hover,
+.fr-shelf[data-keyboard-focus="true"]:focus-within {
   width: 238px;
 }
 html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-shelf:hover,
-html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-shelf:focus-within {
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-shelf[data-keyboard-focus="true"]:focus-within {
   box-shadow: 34px 0 70px -34px rgba(0, 0, 0, 0.55), inset -1px 0 rgba(255, 255, 255, 0.05);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--panel-hi) 38%, transparent), transparent 54%),
@@ -404,7 +412,8 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-shelf:focus-with
 .fr-brand { display: flex; align-items: center; gap: 13px; height: 48px; padding: 0 6px; margin-bottom: 10px; cursor: pointer; background: transparent; border: 0; width: 100%; }
 .fr-brand img { width: 36px; height: 36px; border-radius: 10px; flex: 0 0 auto; box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.5); }
 .fr-brand-name { font-family: var(--f-display); font-weight: 700; font-size: 16.5px; letter-spacing: -0.015em; color: var(--fg); opacity: 0; transform: translateX(-4px); transition: opacity .22s, transform .28s; }
-.fr-shelf:hover .fr-brand-name, .fr-shelf:focus-within .fr-brand-name { opacity: 1; transform: none; }
+.fr-shelf:hover .fr-brand-name,
+.fr-shelf[data-keyboard-focus="true"]:focus-within .fr-brand-name { opacity: 1; transform: none; }
 .fr-nav { position: relative; display: flex; align-items: center; gap: 15px; height: 44px; padding: 0 12px; border-radius: 12px; cursor: pointer; border: 0; background: transparent; color: var(--fg-2); width: 100%; text-align: left; transition: background .18s, color .18s, border-color .18s, box-shadow .18s; }
 .fr-nav:hover { background: var(--panel-2); color: var(--fg); }
 .fr-nav[data-active] { background: var(--honey-soft); color: var(--honey); }
@@ -414,7 +423,8 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-nav[data-active]
 .fr-nav[data-active]::before { content: ""; position: absolute; left: -12px; top: 50%; transform: translateY(-50%); width: 3px; height: 18px; border-radius: 0 3px 3px 0; background: var(--honey); }
 .fr-nav-ico { flex: 0 0 22px; width: 22px; height: 22px; display: grid; place-items: center; }
 .fr-nav-label { font-size: 13.5px; font-weight: 500; opacity: 0; transform: translateX(-4px); transition: opacity .2s, transform .26s; }
-.fr-shelf:hover .fr-nav-label, .fr-shelf:focus-within .fr-nav-label { opacity: 1; transform: none; }
+.fr-shelf:hover .fr-nav-label,
+.fr-shelf[data-keyboard-focus="true"]:focus-within .fr-nav-label { opacity: 1; transform: none; }
 .fr-nav-div { flex: 0 0 auto; height: 1px; background: var(--line); margin: 9px 8px; }
 .fr-shelf-foot { margin-top: auto; }
 /* unread badge on a nav item — visible whether the rail is collapsed or open */
@@ -431,7 +441,8 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-nav[data-active]
   padding: 8px 12px 2px; white-space: nowrap;
   opacity: 0; transform: translateX(-4px); transition: opacity .2s, transform .26s;
 }
-.fr-shelf:hover .fr-shelf-version, .fr-shelf:focus-within .fr-shelf-version { opacity: 1; transform: none; }
+.fr-shelf:hover .fr-shelf-version,
+.fr-shelf[data-keyboard-focus="true"]:focus-within .fr-shelf-version { opacity: 1; transform: none; }
 
 /* App-shell variant: the shelf is the global left nav, fixed to the viewport.
    Used when the shelf replaces the old top header (see AppNavShelf). */
@@ -444,7 +455,7 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .fr
   box-shadow: inset -1px 0 rgba(255, 255, 255, 0.08), 24px 0 80px -56px rgba(0, 0, 0, 0.82);
 }
 html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .fr-shelf.fr-shelf-app:hover,
-html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .fr-shelf.fr-shelf-app:focus-within {
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .fr-shelf.fr-shelf-app[data-keyboard-focus="true"]:focus-within {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--panel-hi) 34%, transparent), transparent 58%),
     color-mix(in srgb, var(--panel) 58%, transparent);
@@ -474,9 +485,9 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .co
   background-clip: content-box;
   background-size: 72px 41.569px, auto, auto, auto;
 }
-/* Narrow screens: slim the collapsed rail so it eats less width. Tapping any
-   icon focuses it, so :focus-within still expands the rail to reveal labels on
-   touch (no hover needed); the icon also navigates on the same tap. */
+/* Narrow screens: slim the collapsed rail so it eats less width. Keyboard Tab
+   navigation sets data-keyboard-focus, while passive restored focus does not
+   leave the rail open on startup. */
 @media (max-width: 720px) {
   .fr-shelf.fr-shelf-app { width: 56px; padding: 12px 8px; }
 }
@@ -543,6 +554,11 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .co
 .fr-act-primary:hover { filter: brightness(1.05); background: var(--honey); color: #1a1305; }
 .fr-act-danger { color: var(--danger); border-color: var(--danger-soft); }
 .fr-act-danger:hover { background: var(--danger-soft); color: var(--danger); }
+.fr-act svg,
+.fr-chip svg,
+.fr-chip img {
+  flex: 0 0 auto;
+}
 
 /* Queen overview actions: compact, content-sized pills (the default .fr-act is
    flex:1/full-width, which gets too big once there are three of them). */
@@ -554,5 +570,17 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .co
   background: transparent; transition: background .16s, color .16s, border-color .16s;
 }
 .fr-chip:hover { background: var(--panel-2); color: var(--fg); }
+.fr-chip:disabled { cursor: default; opacity: .68; }
+.fr-chip:disabled:hover { background: transparent; color: var(--fg-3); }
 .fr-chip-honey { color: var(--honey); border-color: var(--honey-line); }
 .fr-chip-honey:hover { background: var(--honey-soft); color: var(--honey); }
+.fr-chip-usepod {
+  color: var(--accent-strong);
+  border-color: rgba(94, 234, 212, .38);
+  background: rgba(45, 212, 191, .12);
+}
+.fr-chip-usepod:hover {
+  color: var(--accent-strong);
+  border-color: rgba(94, 234, 212, .68);
+  background: rgba(45, 212, 191, .18);
+}

@@ -1134,7 +1134,7 @@
 
 .workBoardControls {
   display: grid;
-  grid-template-columns: minmax(140px, 0.8fr) minmax(150px, 0.9fr) minmax(280px, 1.5fr) minmax(150px, 0.9fr) auto auto;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(150px, 0.9fr) minmax(260px, 1.4fr) minmax(150px, 0.9fr) auto auto auto;
   gap: 8px;
   align-items: end;
   border: 1px solid rgba(238, 232, 220, 0.075);
@@ -1161,6 +1161,7 @@
 
 .workBoardControls select,
 .workBoardControls input,
+.workBoardActionButton,
 .workBoardOptions > summary {
   min-height: 36px;
   border: 1px solid rgba(238, 232, 220, 0.095);
@@ -1204,6 +1205,7 @@
 
 .workBoardControls select:hover,
 .workBoardControls input:hover,
+.workBoardActionButton:hover,
 .workBoardOptions > summary:hover,
 .workBoardToggle:hover {
   border-color: rgba(238, 232, 220, 0.18);
@@ -1212,6 +1214,7 @@
 
 .workBoardControls select:focus,
 .workBoardControls input:focus,
+.workBoardActionButton:focus-visible,
 .workBoardOptions > summary:focus-visible,
 .workBoardToggle:focus-within {
   border-color: rgba(104, 214, 202, 0.34);
@@ -1260,6 +1263,25 @@
   height: 16px;
   margin: 0;
   accent-color: var(--kb-cyan-2);
+}
+
+.workBoardActionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  padding: 0 12px;
+}
+
+.workBoardActionButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.workBoardActionButton:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .workBoardOptions > summary {
@@ -2230,79 +2252,189 @@
 .workHistoryList {
   display: grid;
   grid-row: 4;
-  gap: 12px;
+  gap: 14px;
   min-height: 0;
   overflow: auto;
-  padding: 2px 2px 12px;
+  padding: 4px 4px 16px;
 }
 
 .workHistoryItem {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: stretch;
-  border: 1px solid rgba(111, 205, 186, 0.13);
+  min-height: 148px;
+  border: 1px solid rgba(238, 232, 220, 0.08);
   border-radius: 6px;
-  background: linear-gradient(180deg, rgba(20, 22, 28, 0.86), rgba(16, 17, 22, 0.8));
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
-  padding: 14px;
+  background: rgba(16, 17, 22, 0.4);
+  box-shadow: none;
+  overflow: visible;
 }
 
 .workHistoryControls {
   grid-template-columns: 220px minmax(260px, 420px) minmax(0, 1fr);
 }
 
-.workHistoryItem > div:first-child {
-  display: grid;
-  gap: 8px;
+.workHistoryDetails {
   min-width: 0;
-  color: inherit;
-  text-align: left;
 }
 
-.workHistoryItem strong {
+.workHistorySummaryLine {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  cursor: pointer;
+  list-style: none;
+  min-height: 148px;
+  padding: 20px 20px 22px;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.workHistorySummaryLine::-webkit-details-marker {
+  display: none;
+}
+
+.workHistorySummaryLine:hover,
+.workHistorySummaryLine:focus-visible {
+  background: rgba(111, 205, 186, 0.045);
+  outline: 0;
+}
+
+.workHistoryChevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border: 1px solid rgba(238, 232, 220, 0.1);
+  border-radius: 999px;
+  color: var(--kb-muted);
+  transition: transform 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.workHistoryChevron svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+
+.workHistoryDetails[open] .workHistoryChevron {
+  border-color: rgba(111, 205, 186, 0.28);
+  color: var(--fc-live, var(--kb-cyan-2));
+  transform: rotate(90deg);
+}
+
+.workHistoryRowMain {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workHistoryRowMain > strong {
   color: var(--kb-fg);
-  font-size: 17px;
-  font-weight: 900;
+  font-size: 14.5px;
+  font-weight: 650;
   letter-spacing: 0;
-  line-height: 1.2;
+  line-height: 1.34;
 }
 
 .workHistoryAreas {
   color: var(--kb-muted);
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.35;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.7;
 }
 
 .workHistoryMeta {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 0 5px;
+  color: var(--kb-muted);
 }
 
 .workHistoryMeta span,
 .workHistoryMeta time {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
-  border: 1px solid rgba(238, 232, 220, 0.16);
-  border-radius: 999px;
-  background: rgba(16, 17, 22, 0.64);
+  min-height: 0;
+  border: 0;
+  background: transparent;
   color: var(--kb-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  padding: 0 8px;
+  font-size: 9.75px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 0;
   text-transform: uppercase;
 }
 
-.workHistoryMarkdown {
-  max-width: 980px;
+.workHistoryMeta > * + *::before {
+  content: "/";
+  margin-right: 5px;
+  color: rgba(238, 232, 220, 0.24);
+}
+
+.workHistoryRowState {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.workHistoryRowState span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  border: 1px solid rgba(238, 232, 220, 0.1);
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.18);
   color: var(--kb-muted);
-  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  padding: 0 7px;
+  text-transform: uppercase;
+}
+
+.workHistoryRowState span[data-kind="verified"] {
+  border-color: rgba(111, 205, 186, 0.22);
+  color: var(--fc-live, var(--kb-cyan-2));
+}
+
+.workHistoryRowState span[data-kind="commit"] {
+  border-color: rgba(231, 180, 92, 0.24);
+  color: var(--fc-honey, var(--kb-gold));
+}
+
+.workHistoryDetailsBody {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid rgba(238, 232, 220, 0.07);
+  padding: 14px 20px 20px 54px;
+}
+
+.workHistoryMarkdown {
+  max-width: 920px;
+  color: var(--kb-muted);
+  font-size: 12.25px;
+  line-height: 1.5;
+}
+
+.workHistoryAreas code,
+.workHistoryMarkdown code {
+  border: 1px solid rgba(111, 205, 186, 0.12);
+  border-radius: 4px;
+  background: rgba(111, 205, 186, 0.055);
+  color: var(--fc-live, var(--kb-cyan-2));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
   line-height: 1.45;
+  padding: 2px 6px;
+}
+
+.workHistoryMarkdown strong {
+  color: var(--kb-fg);
+  font-weight: 750;
 }
 
 .workHistoryMarkdown p,
@@ -2317,34 +2449,29 @@
   margin-top: 8px;
 }
 
-.workHistoryActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-content: start;
-  justify-content: end;
-}
-
-.workHistoryActions > button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 30px;
-  border: 1px solid rgba(238, 232, 220, 0.18);
-  border-radius: 6px;
-  background: rgba(16, 17, 22, 0.62);
+.workHistoryDetailFacts {
+  display: grid;
+  gap: 6px;
+  max-width: 980px;
   color: var(--kb-muted);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 900;
-  padding: 0 10px;
+  font-size: 11.5px;
+  line-height: 1.45;
 }
 
-.workHistoryActions > button:hover,
-.workHistoryActions > button:focus-visible {
-  border-color: rgba(111, 205, 186, 0.38);
-  color: var(--kb-cyan-2);
-  outline: 0;
+.workHistoryDetailFacts > span {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.workHistoryDetailFacts b {
+  color: var(--kb-fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .workHistoryLoadMore {
@@ -2470,12 +2597,17 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .workHistoryItem {
-    grid-template-columns: 1fr;
+  .workHistorySummaryLine {
+    grid-template-columns: 20px minmax(0, 1fr);
   }
 
-  .workHistoryActions {
+  .workHistoryRowState {
+    grid-column: 2;
     justify-content: start;
+  }
+
+  .workHistoryDetailsBody {
+    padding-left: 54px;
   }
 
   .workBoardStats span,
@@ -3769,6 +3901,7 @@
 
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardControls select,
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardControls input,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardActionButton,
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardOptions > summary,
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardToggle {
   border-color: rgba(79, 68, 52, 0.14);
@@ -4077,6 +4210,7 @@
 /* controls / filters bar */
 .workBoardPanel .workBoardControls select,
 .workBoardPanel .workBoardControls input,
+.workBoardPanel .workBoardActionButton,
 .workBoardPanel .workBoardOptions > summary,
 .workBoardPanel .workBoardToggle {
   border: 1px solid var(--fc-line-2) !important;
@@ -4088,6 +4222,7 @@
 }
 .workBoardPanel .workBoardControls select:hover,
 .workBoardPanel .workBoardControls input:hover,
+.workBoardPanel .workBoardActionButton:hover,
 .workBoardPanel .workBoardOptions > summary:hover,
 .workBoardPanel .workBoardToggle:hover {
   border-color: var(--fc-line-3) !important;
@@ -4095,6 +4230,7 @@
 }
 .workBoardPanel .workBoardControls select:focus,
 .workBoardPanel .workBoardControls input:focus,
+.workBoardPanel .workBoardActionButton:focus-visible,
 .workBoardPanel .workBoardToggle:focus-within {
   border-color: var(--fc-honey-line) !important;
   box-shadow: 0 0 0 3px var(--fc-honey-soft) !important;
@@ -4153,4 +4289,50 @@
   --fc-danger: #c0524d;
   --fc-danger-soft: rgba(192, 82, 77, 0.12);
   background: linear-gradient(180deg, #fbf8f1, #f1ede3) !important;
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryItem {
+  border-color: var(--fc-line-2);
+  background: color-mix(in srgb, var(--fc-panel) 88%, transparent);
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryMeta span,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryMeta time {
+  color: var(--fc-fg-3);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistorySummaryLine:hover,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistorySummaryLine:focus-visible {
+  background: rgba(29, 142, 124, 0.06);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryChevron,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryRowState span {
+  border-color: var(--fc-line-2);
+  background: var(--fc-panel-2);
+  color: var(--fc-fg-3);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryDetailsBody {
+  border-top-color: var(--fc-line);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryAreas code,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryMarkdown code {
+  border-color: color-mix(in srgb, var(--fc-live) 22%, transparent);
+  background: rgba(29, 142, 124, 0.08);
+  color: var(--fc-live);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryRowState span[data-kind="verified"] {
+  border-color: color-mix(in srgb, var(--fc-live) 26%, transparent);
+  background: var(--fc-live-soft);
+  color: var(--fc-live);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryRowState span[data-kind="commit"] {
+  border-color: var(--fc-honey-line);
+  background: var(--fc-honey-soft);
+  color: var(--fc-honey);
 }

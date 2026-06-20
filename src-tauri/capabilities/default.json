@@ -16,6 +16,7 @@
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
+    "dialog:allow-confirm",
     "dialog:allow-open",
     "liquid-glass:default",
     "opener:default",

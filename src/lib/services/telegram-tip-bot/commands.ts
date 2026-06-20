@@ -65,6 +65,7 @@ export type TipBotConfig = {
 
 export type TipBotRuntime = {
   api: TelegramBotApi;
+  memberTagApi?: TelegramBotApi;
   config: TipBotConfig;
 };
 

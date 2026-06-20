@@ -76,7 +76,10 @@ export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
   const runtime = normalizeAgentRuntime(agent.runtime);
   const workerClass = agent.workerClass ?? "general";
   const workerPreset = beeWorkerPreset(workerClass);
-  const inferredQueen = agent.beeRole === "queen" || /queen|orchestrat|lead|main/i.test(agent.name) || runtime === "openclaw";
+  const beeRole = runtime === "openclaw" && agent.beeRole === "queen"
+    ? "worker"
+    : agent.beeRole;
+  const inferredQueen = beeRole === "queen" || (runtime !== "openclaw" && /queen|orchestrat|lead|main/i.test(agent.name));
   const customWorkerClasses = agent.customWorkerClasses?.length
     ? agent.customWorkerClasses
     : agent.customWorkerClass
@@ -100,7 +103,7 @@ export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
     telemetryUrl: normalizeAgentTelemetryUrl(agent.telemetryUrl),
     aeonBranch: runtime === "aeon" ? agent.aeonBranch ?? "main" : agent.aeonBranch,
     aeonMode: runtime === "aeon" ? agent.aeonMode ?? "github" : agent.aeonMode,
-    beeRole: agent.beeRole ?? (inferredQueen ? "queen" : "worker"),
+    beeRole: beeRole ?? (inferredQueen ? "queen" : "worker"),
     workerClass,
     customWorkerClasses,
     selectedCustomWorkerClassId,

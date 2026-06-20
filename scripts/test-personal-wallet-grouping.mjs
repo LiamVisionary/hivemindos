@@ -15,7 +15,7 @@ if (helperEnd < 0) throw new Error("Could not locate WalletPanel helper boundary
 const helperSource = source
   .slice(0, helperEnd)
   .replace(/^import[\s\S]*?;\n/gm, "")
-  + "\nglobalThis.__walletHelpers = { buildDropInPersonalWallets };";
+  + "\nglobalThis.__walletHelpers = { buildDropInPersonalWallets, mergePersonalWalletSources };";
 
 const compiled = ts.transpileModule(helperSource, {
   compilerOptions: {
@@ -30,7 +30,7 @@ const context = { console, URL, globalThis: {} };
 context.globalThis = context;
 vm.runInNewContext(compiled, context, { filename: sourcePath });
 
-const { buildDropInPersonalWallets } = context.__walletHelpers;
+const { buildDropInPersonalWallets, mergePersonalWalletSources } = context.__walletHelpers;
 
 const wallets = [
   {
@@ -86,9 +86,25 @@ const separate = cards.find((wallet) => wallet.id === "user:private-key-wallet")
 assert.ok(separate, "Unrelated personal wallets should remain separate cards.");
 assert.equal(separate.addresses.length, 1);
 
+const staleSignerRows = [
+  { id: "user:rich:eip155-8453", agentId: "user:rich:eip155-8453", name: "My wallet Base", address: "0xC42e000000000000000000000000000000007bE9", network: "eip155:8453", custodyMode: "local", importedFrom: "recovery-phrase", currentBalanceUsd: 0, nativeBalance: 0, tokens: [] },
+  { id: "user:rich:solana-mainnet", agentId: "user:rich:solana-mainnet", name: "My wallet Solana", address: "936oBc111111111111111111111111111111111ZSFu", network: "solana:mainnet", custodyMode: "local", importedFrom: "recovery-phrase", currentBalanceUsd: 0, nativeBalance: 0, tokens: [] },
+];
+const mergedCards = buildDropInPersonalWallets(mergePersonalWalletSources(staleSignerRows, {
+  "user:rich:eip155-8453": { walletAddress: "0xC42e000000000000000000000000000000007bE9", network: "eip155:8453", tokenSymbol: "ETH", currentBalanceUsd: 2226.59, onchainBalanceUsd: 2226.59, nativeBalance: 0.1979414256200372, custodyMode: "local", updatedAt: 1781699042563, lastOnchainSyncAt: 1781699042562 },
+  "user:rich:solana-mainnet": { walletAddress: "936oBc111111111111111111111111111111111ZSFu", network: "solana:mainnet", tokenSymbol: "SOL", currentBalanceUsd: 68.28, onchainBalanceUsd: 68.28, nativeBalance: 0.445883515, custodyMode: "local", updatedAt: 1781699040785, lastOnchainSyncAt: 1781699040781 },
+}));
+const mergedRich = mergedCards.find((wallet) => wallet.id === "user:rich");
+assert.ok(mergedRich, "Dashboard wallet state should enrich stale signer-only personal rows.");
+assert.equal(JSON.stringify(mergedRich.holdings), JSON.stringify([["ETH", 0.1979414256200372], ["SOL", 0.445883515]]));
+
 const walletViewSource = readFileSync(join(root, "src/components/wallets-drop-in/WalletsView.tsx"), "utf8");
 assert.match(walletViewSource, /setTimeout\(\(\) => setOpen\(true\), 200\)/);
 assert.match(walletViewSource, /title=\{multi \? "Hover for all chain addresses" : undefined\}/);
 assert.match(walletViewSource, /w\.addresses\.map\(\(\[chain, addr\]\)/);
+assert.match(walletViewSource, /primaryHolding = sendHoldings\[0\] \|\| top\[0\]/);
+assert.match(walletViewSource, /frFmtAmount\(primaryHolding\.sym, primaryHolding\.amount\)/);
+assert.match(walletViewSource, /maxHeight: top\.length > 5 \? 245/);
+assert.match(walletViewSource, /overflowY: top\.length > 5 \? "auto"/);
 
 console.log("Personal wallet grouping tests passed.");

@@ -142,6 +142,34 @@ function hasUsePodWalletEvidence(config?: UsePodAgentConfig, balance = getUsePod
   );
 }
 
+/** UsePod setup evidence, matching the Wallets screen's configured check. */
+export function hasUsePodSetupEvidence(config?: UsePodAgentConfig): boolean {
+  return Boolean(
+    config?.depositAddress?.trim()
+      || config?.depositCode?.trim()
+      || config?.dashboardUrl?.trim()
+      || config?.lastTestStatus === "ready",
+  );
+}
+
+/**
+ * Whether an agent's wallet is configured enough to act on — the same check the
+ * Wallets screen uses to decide a card is set up (an on-chain/vault address or
+ * UsePod setup evidence). Does not consider `setupRequired`, which callers that
+ * need it layer on separately.
+ */
+export function hasConfiguredAgentWallet(
+  agent: Pick<AgentProfile, "usePod">,
+  wallet?: (Partial<Pick<AgentWalletConfig, "walletAddress" | "vaultAddress">> & { address?: string }) | null,
+): boolean {
+  return Boolean(
+    wallet?.walletAddress?.trim?.()
+      || wallet?.vaultAddress?.trim?.()
+      || wallet?.address?.trim?.()
+      || hasUsePodSetupEvidence(agent?.usePod),
+  );
+}
+
 export function getVeniceBalanceUsd(config?: VeniceAgentConfig): number | null {
   return parseWalletBalanceUsd(config?.lastBalanceUsd);
 }

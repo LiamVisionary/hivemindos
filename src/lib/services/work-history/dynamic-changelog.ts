@@ -18,6 +18,7 @@ const TZ_OFFSETS: Record<string, string> = {
   WIB: "+07:00",
   UTC: "Z",
 };
+const CHANGELOG_HEADING_TIMESTAMP_PATTERN = /^(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}(?::\d{2})?(?:\s+(?:[A-Z]{2,5}|[+-]\d{2}(?::?\d{2})?))?(?:\s+[+-]\d{4})?)?)\s+-\s+/;
 
 type ChangelogCandidate = {
   file: string;
@@ -89,10 +90,31 @@ async function readWorkHistoryIndex(vaultPath?: string): Promise<WorkHistoryInde
 
   const index = {
     projects: [...projects.values()].sort((a, b) => a.name.localeCompare(b.name)),
-    entries,
+    entries: dedupeWorkHistoryEntries(entries),
   };
   historyIndexCache.set(cacheKey, { cachedAt: Date.now(), index });
   return index;
+}
+
+function dedupeWorkHistoryEntries(entries: WorkHistoryEntry[]) {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    const key = [
+      entry.projectId,
+      compactDedupeKey(entry.timestamp),
+      compactDedupeKey(entry.title),
+      compactDedupeKey(entry.status),
+      compactDedupeKey(entry.commitSummary),
+      compactDedupeKey(entry.summary),
+    ].join("\u0000");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function compactDedupeKey(value?: string) {
+  return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function clampLimit(limit?: number) {
@@ -206,10 +228,10 @@ function parseChangelog(raw: string, project: WorkHistoryProject): WorkHistoryEn
       title: cleanCompactText(title) ?? title,
       timestamp,
       status: cleanCompactText(fields.status),
-      areas: cleanCompactText(fields.areas),
+      areas: cleanAreasText(fields.areas),
       summary,
-      verification: fields.verification,
-      commitSummary: cleanCompactText(fields.commitSummary),
+      verification: cleanDetailText(fields.verification),
+      commitSummary: cleanCommitSummaryText(fields.commitSummary),
       body,
       sortTime,
     };
@@ -217,29 +239,68 @@ function parseChangelog(raw: string, project: WorkHistoryProject): WorkHistoryEn
 }
 
 function extractTimestamp(heading: string) {
-  return heading.match(/(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}(?:\s+[A-Z]{2,5})?)?)/)?.[1];
+  return heading.match(CHANGELOG_HEADING_TIMESTAMP_PATTERN)?.[1]
+    ?? heading.match(/(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}(?::\d{2})?(?:\s+(?:[A-Z]{2,5}|[+-]\d{2}(?::?\d{2})?))?(?:\s+[+-]\d{4})?)?)/)?.[1];
 }
 
 function extractTitle(heading: string) {
-  return heading.replace(/^\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}(?:\s+[A-Z]{2,5})?)?\s+-\s+/, "").trim();
+  return heading.replace(CHANGELOG_HEADING_TIMESTAMP_PATTERN, "").trim();
 }
 
+const CHANGELOG_FIELD_GROUPS = {
+  status: ["Status"],
+  areas: ["Areas changed", "Files or areas changed", "Files changed"],
+  summary: ["Summary"],
+  verification: ["Verification", "Verification performed", "Checks", "Tests"],
+  commitSummary: [
+    "Intended commit message",
+    "Intended commit-message",
+    "Intended commit-message summary",
+    "Commit message",
+    "Commit-message summary",
+    "Commit summary",
+  ],
+} as const;
+
+const CHANGELOG_FIELD_NAMES = Object.values(CHANGELOG_FIELD_GROUPS).flat();
+const CHANGELOG_FIELD_START_PATTERN = new RegExp(`^\\s*-\\s+(?:${CHANGELOG_FIELD_NAMES.map(escapeRegExp).join("|")}):\\s*`, "i");
+
 function extractBulletFields(body: string) {
-  const field = (names: string[]) => {
-    for (const name of names) {
-      const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const match = body.match(new RegExp(`^-\\s+${escapedName}:\\s+(.+)$`, "im"));
-      if (match?.[1]) return match[1].trim();
-    }
-    return undefined;
-  };
+  const field = (names: readonly string[]) => extractFieldValue(body, names);
   return {
-    status: field(["Status"]),
-    areas: field(["Areas changed", "Files or areas changed", "Files changed"]),
-    summary: field(["Summary"]),
-    verification: field(["Verification"]),
-    commitSummary: field(["Intended commit message", "Commit message"]),
+    status: field(CHANGELOG_FIELD_GROUPS.status),
+    areas: field(CHANGELOG_FIELD_GROUPS.areas),
+    summary: field(CHANGELOG_FIELD_GROUPS.summary),
+    verification: field(CHANGELOG_FIELD_GROUPS.verification),
+    commitSummary: field(CHANGELOG_FIELD_GROUPS.commitSummary),
   };
+}
+
+function extractFieldValue(body: string, names: readonly string[]) {
+  const fieldStartPattern = new RegExp(`^\\s*-\\s+(?:${names.map(escapeRegExp).join("|")}):\\s*(.*)$`, "im");
+  const match = fieldStartPattern.exec(body);
+  if (!match) return undefined;
+  const lines = [match[1] ?? ""];
+  const rest = body.slice((match.index ?? 0) + match[0].length);
+  for (const line of rest.split("\n")) {
+    if (CHANGELOG_FIELD_START_PATTERN.test(line)) break;
+    lines.push(line);
+  }
+  return normalizeFieldMarkdown(lines.join("\n"));
+}
+
+function normalizeFieldMarkdown(value: string) {
+  const normalized = value
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/^\s{2}/, ""))
+    .join("\n")
+    .trim();
+  return normalized || undefined;
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function firstParagraph(body: string) {
@@ -256,9 +317,40 @@ function cleanCompactText(value?: string) {
     .replace(/\[([^\]]+)]\([^)]+\)/g, "$1");
 }
 
+function cleanAreasText(value?: string) {
+  const compact = cleanCompactText(value);
+  if (!compact) return compact;
+  return compact
+    .split("\n")
+    .map((line) => line.trim().replace(/^[-*]\s+/, ""))
+    .filter(Boolean)
+    .join(", ");
+}
+
+function cleanCommitSummaryText(value?: string) {
+  return cleanCompactText(value)
+    ?.split(/\n+/)
+    .map((line) => line.trim().replace(/^[-*]\s+/, ""))
+    .find(Boolean);
+}
+
+function cleanDetailText(value?: string) {
+  const compact = cleanCompactText(value);
+  if (!compact) return compact;
+  return compact
+    .split("\n")
+    .map((line) => line.trim().replace(/^[-*]\s+/, ""))
+    .filter(Boolean)
+    .join("; ");
+}
+
 function parseChangelogTime(timestamp?: string) {
   if (!timestamp) return undefined;
-  const normalized = timestamp.replace(/\s+([A-Z]{2,5})$/, (_, zone) => TZ_OFFSETS[zone] ? ` ${TZ_OFFSETS[zone]}` : "");
+  const normalized = timestamp
+    .replace(/\s+[A-Z]{2,5}\s+([+-]\d{4})$/, " $1")
+    .replace(/\s+[+-]\d{2}\s+([+-]\d{4})$/, " $1")
+    .replace(/\s+([A-Z]{2,5})$/, (_, zone) => TZ_OFFSETS[zone] ? ` ${TZ_OFFSETS[zone]}` : "")
+    .replace(/\s+([+-]\d{2})$/, " $1:00");
   const parsed = Date.parse(normalized);
   return Number.isFinite(parsed) ? parsed : undefined;
 }

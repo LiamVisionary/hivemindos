@@ -6432,3 +6432,60 @@
 - http://127.0.0.1:5026/?view=kanban
   - Decision: verified
   - Reason: returned 200 OK from fresh dev server
+## 2026-06-19T12:50:18.683625+00:00 - app-rail-brain-icon-correction
+
+- Request: Brain nav button still shows shield in the app rail
+- Source: screenshot+current-project
+- Selected backbone: local-project:hivemind-os AppNavShelf
+- Note: Verification: pnpm exec eslint src/components/fleet-hive/AppNavShelf.tsx --max-warnings=0 passed; static source check confirmed AppNavShelf vault case renders Brain and the old shield SVG path is gone.
+
+### Candidates
+- src/components/fleet-hive/AppNavShelf.tsx
+  - Decision: adapted_code
+  - Reason: owns the far-left app rail shown in the screenshot; vault case changed from shield SVG to Lucide Brain
+  - Path: `src/components/fleet-hive/AppNavShelf.tsx`
+- lucide-react Brain
+  - Decision: selected-donor
+  - Reason: installed project icon export provides the actual Brain icon requested
+  - Path: `package.json`
+- src/features/dashboard/dashboard-light-helpers.tsx
+  - Decision: inspected
+  - Reason: previous top/mobile dashboard helper already uses Brain and was not the shield shown in the screenshot
+  - Path: `src/features/dashboard/dashboard-light-helpers.tsx`
+- public GitHub
+  - Decision: rejected
+  - Reason: not needed because the screenshot mapped to an exact pinned local component and installed icon source
+- shared-brain search
+  - Decision: not-used
+  - Reason: not needed for this correction because the current repo and screenshot provided the exact owning source
+## 2026-06-19T12:51:19.566189+00:00 - brain-icon-duplicate-rail-verification
+
+- Request: Brain nav button still shows shield in the app rail
+- Source: current-project
+- Selected backbone: local-project:hivemind-os nav icon helpers
+- Note: Verification: pnpm exec eslint src/components/fleet-hive/AppNavShelf.tsx src/components/wallets-drop-in/WalletsView.tsx --max-warnings=0 passed; static source check confirmed all vault nav cases now use brain icons.
+
+### Candidates
+- src/components/fleet-hive/AppNavShelf.tsx
+  - Decision: verified
+  - Reason: far-left app rail vault case renders Lucide Brain instead of shield SVG
+  - Path: `src/components/fleet-hive/AppNavShelf.tsx`
+- src/components/wallets-drop-in/WalletsView.tsx
+  - Decision: adapted_code
+  - Reason: duplicate drop-in nav rail vault case now reuses existing BIcon brain helper instead of shield SVG
+  - Path: `src/components/wallets-drop-in/WalletsView.tsx`
+- src/features/dashboard/dashboard-light-helpers.tsx
+  - Decision: verified
+  - Reason: top/mobile dashboard helper already renders Lucide Brain
+  - Path: `src/features/dashboard/dashboard-light-helpers.tsx`
+- public GitHub
+  - Decision: rejected
+  - Reason: local duplicated nav helpers and installed icon helpers fully covered the correction
+## 2026-06-19T15:10:06.802804+00:00 - debugging
+
+- Request: Fix Queen Bee clap wake still triggering randomly after spectral onset gate
+- Source: local-project
+- Decision: tightened_detector
+- Reason: Root cause hypothesis: the previous detector accepted any two broadband high-frequency onsets in the window, so speech plosives, clicks, or startup analyser transients could still satisfy it. The fix adds clap-shape metrics, startup settling, tighter timing, and comparable second-clap checks.
+- Assimilated: src/features/queen-voice/clap-activation.ts crest factor/transient sharpness/comparable-pair gates; src/features/queen-voice/use-queen-clap-activation.ts startup settle guard; scripts/test-queen-clap-activation.mjs false-positive regressions
+- Verification: pnpm test:queen-clap passed 18 checks; pnpm test:queen-echo passed; focused ESLint passed.

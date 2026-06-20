@@ -12,16 +12,23 @@
 
 import { ChatPill } from "@/components/fleet-hive/ChatPill";
 import { useFrTheme } from "@/components/fleet-hive/use-fr-theme";
+import {
+  mergeDashboardScreenContext,
+  readOpenDialogContextFromDom,
+  type DashboardScreenContext,
+} from "@/features/dashboard/screen-context";
 import { createPortal } from "react-dom";
 import { useQueenChat } from "./queen-chat-store";
 
 export function PersistentHiveChat({
   hidden = false,
   openSpaceRightInset = 0,
+  screenContext,
   tone = "hive",
 }: {
   hidden?: boolean;
   openSpaceRightInset?: number;
+  screenContext?: DashboardScreenContext;
   tone?: "hive" | "legacy";
 }) {
   const queenChat = useQueenChat();
@@ -58,7 +65,10 @@ export function PersistentHiveChat({
           pointerEvents: "auto",
         }}
         onSend={(text) => {
-          void queenChat.sendText(text);
+          const liveScreenContext = mergeDashboardScreenContext(screenContext, {
+            openModals: readOpenDialogContextFromDom(),
+          });
+          void queenChat.sendText(text, { screenContext: liveScreenContext });
         }}
       />
     </div>,

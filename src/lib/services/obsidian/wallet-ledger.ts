@@ -3,7 +3,7 @@ import { hostname } from "os";
 import { join } from "path";
 
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
-import type { AgentAssetSpendCaps, AgentSpendCapAsset, AgentWalletConfig } from "@/lib/types/agent-wallet";
+import type { AgentAssetSpendCaps, AgentSpendCapAsset, AgentWalletConfig, AgentWalletTokenBalance } from "@/lib/types/agent-wallet";
 import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
 
 const WALLET_FOLDER = "Projects/HivemindOS/Wallets";
@@ -89,6 +89,40 @@ function parseAssetSpendCaps(value: string | number | boolean | undefined): Agen
   }
 }
 
+function parseWalletTokens(value: string | number | boolean | undefined): AgentWalletTokenBalance[] {
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((token): AgentWalletTokenBalance[] => {
+      if (!token || typeof token !== "object" || Array.isArray(token)) return [];
+      const record = token as Record<string, unknown>;
+      const symbol = typeof record.symbol === "string" ? record.symbol.trim() : "";
+      const name = typeof record.name === "string" ? record.name.trim() : symbol;
+      const network = typeof record.network === "string" ? record.network.trim() : "";
+      const balance = Number(record.balance);
+      if (!symbol || !network || !Number.isFinite(balance) || balance <= 0) return [];
+      const priceUsd = Number(record.priceUsd);
+      const valueUsd = Number(record.valueUsd);
+      const priceChange24hPct = Number(record.priceChange24hPct);
+      return [{
+        symbol,
+        name,
+        balance,
+        network,
+        priceUsd: Number.isFinite(priceUsd) ? priceUsd : null,
+        valueUsd: Number.isFinite(valueUsd) ? valueUsd : null,
+        priceChange24hPct: Number.isFinite(priceChange24hPct) ? priceChange24hPct : null,
+        isNative: record.isNative === true,
+        tokenAddress: typeof record.tokenAddress === "string" ? record.tokenAddress : undefined,
+        iconUrl: typeof record.iconUrl === "string" ? record.iconUrl : null,
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
+
 /* ─── Record (de)serialisation ──────────────────────────────────── */
 
 function networkLabel(network: string): string {
@@ -147,6 +181,7 @@ function renderRecordMarkdown(record: WalletLedgerRecord): string {
     ["vaultAddress", record.wallet.vaultAddress],
     ["onchainBalanceUsd", record.wallet.onchainBalanceUsd],
     ["nativeBalance", record.wallet.nativeBalance],
+    ["tokens", record.wallet.tokens],
     ["lastOnchainSyncAt", record.wallet.lastOnchainSyncAt],
   ];
 
@@ -202,6 +237,7 @@ function parseRecordMarkdown(filename: string, content: string): WalletLedgerRec
     vaultAddress: typeof fm.vaultAddress === "string" ? fm.vaultAddress : "",
     onchainBalanceUsd: typeof fm.onchainBalanceUsd === "number" ? fm.onchainBalanceUsd : 0,
     nativeBalance: typeof fm.nativeBalance === "number" ? fm.nativeBalance : 0,
+    tokens: parseWalletTokens(fm.tokens),
     lastOnchainSyncAt: typeof fm.lastOnchainSyncAt === "number" ? fm.lastOnchainSyncAt : 0,
   };
   return {

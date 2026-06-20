@@ -190,7 +190,7 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
   }, [activeView, hydrated, pauseBackgroundRefresh]);
 
   useEffect(() => {
-    const envVisibleOrNearby = activeView === "env" || activeView === "vault";
+    const envVisibleOrNearby = activeView === "env" || activeView === "vault" || activeView === "wallet";
     if (!hydrated || pauseBackgroundRefresh || !envVisibleOrNearby || hiveEnv || hiveEnvLoading) return;
     const timer = window.setTimeout(() => {
       void refreshHiveEnv();
@@ -416,7 +416,8 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
         vaultPath: sharedVault.enabled ? sharedVault.vaultPath.trim() : undefined,
         kanbanFolder: sharedVault.enabled ? sharedVault.kanbanFolder?.trim() : undefined,
       });
-      if (nativeData?.ok && nativeData.board) {
+      const nativeBoardTaskCount = nativeData?.board?.tasks?.length ?? 0;
+      if (nativeData?.ok && nativeData.board && nativeBoardTaskCount > 0) {
         if (!cancelled) {
           setKanbanError("");
           setKanbanBoard(nativeData.board);
@@ -441,6 +442,19 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
         const data = await response?.json().catch(() => null) as KanbanResponse | null;
         if (cancelled) return;
         if (!data?.ok || !data.board) {
+          if (nativeData?.ok && nativeData.board) {
+            setKanbanError("");
+            setKanbanBoard(nativeData.board);
+            if (nativeData.boards) setKanbanBoards(nativeData.boards);
+            setKanbanTenants(nativeData.tenants ?? []);
+            setKanbanAssignees(nativeData.assignees ?? []);
+            setKanbanStorage(nativeData.storage ?? null);
+            setSelectedKanbanTaskId((current) => (
+              current && nativeData.board?.tasks.some((task) => task.id === current) ? current : nativeData.board?.tasks[0]?.id ?? ""
+            ));
+            setKanbanLoading(false);
+            return;
+          }
           setKanbanError(data?.error ?? "Kanban board is unavailable.");
           setKanbanLoading(false);
           return;

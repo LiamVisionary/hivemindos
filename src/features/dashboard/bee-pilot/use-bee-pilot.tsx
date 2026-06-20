@@ -9,6 +9,7 @@ import type { MachineGroup } from "@/features/dashboard/dashboard-types";
 import { isMobileMachineOs } from "@/features/fleet/fleet-identity";
 import type { DashboardRouteTarget } from "@/features/dashboard/dashboard-navigation";
 import { dashboardRouteForView, isDashboardView } from "@/features/dashboard/dashboard-navigation";
+import type { DashboardScreenContext } from "@/features/dashboard/screen-context";
 import {
   localBeePilotPlan,
   planOpensModal,
@@ -18,7 +19,7 @@ import {
   type BeePilotStep,
 } from "@/features/dashboard/bee-pilot/bee-pilot-actions";
 
-export type RunVoiceCommandOptions = { onModalOpen?: () => void };
+export type RunVoiceCommandOptions = { onModalOpen?: () => void; screenContext?: DashboardScreenContext };
 import { BeeFlightController } from "@/features/dashboard/bee-pilot/bee-flight";
 import { beeClick, beeType, scrollElementIntoView, wait, waitForElement } from "@/features/dashboard/bee-pilot/dom-actions";
 
@@ -38,6 +39,7 @@ export type BeePilotDeps = {
   setSchedulerDraftOpen: (open: boolean) => void;
   openSkillBrowser: () => void;
   setChatText: (text: string) => void;
+  screenContext?: DashboardScreenContext;
 };
 
 export type BeePilotPhase = "idle" | "thinking" | "flying" | "done" | "error";
@@ -403,13 +405,17 @@ export function useBeePilot(deps: BeePilotDeps) {
     }
   }, [bee, navigateWithBee]);
 
-  const resolvePlan = useCallback(async (command: string): Promise<BeePilotPlan> => {
+  const resolvePlan = useCallback(async (
+    command: string,
+    screenContextOverride?: DashboardScreenContext,
+  ): Promise<BeePilotPlan> => {
     const current = depsRef.current;
     const context = {
       agentNames: current.agents.map((agent) => agent.name ?? "").filter(Boolean),
       machineNames: current.machineGroups.map((machine) => machine.name).filter(Boolean),
       kanbanColumns: [...KANBAN_STATUSES],
       activeView: current.activeView,
+      screenContext: screenContextOverride ?? current.screenContext,
     };
     const local = localBeePilotPlan(command, context);
     if (local) return local;
@@ -519,7 +525,7 @@ export function useBeePilot(deps: BeePilotDeps) {
     setStatus("");
     let plan: BeePilotPlan;
     try {
-      plan = await resolvePlan(trimmed);
+      plan = await resolvePlan(trimmed, opts?.screenContext);
     } catch (error) {
       const message = error instanceof Error ? error.message : "I couldn't read that on-screen command.";
       if (runIdRef.current === runId) {

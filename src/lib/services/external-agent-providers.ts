@@ -7,6 +7,8 @@ export type ExternalAgentProviderId =
   | "mcp-email-server"
   | "openhands"
   | "aider"
+  | "palmier-pro"
+  | "rentahuman"
   | "n8n"
   | "queen-bee-prd-decomposition";
 
@@ -95,6 +97,30 @@ export const EXTERNAL_AGENT_PROVIDERS: ExternalAgentProvider[] = [
     credentialKeys: ["AIDER_BIN"],
     sideEffectGate: "Use the Aider runtime action run-task; HivemindOS passes no-auto-commits/no-dirty-commits for repo safety.",
     fallback: "Use Codex, Claude Code, OpenCode, or Hermes.",
+  },
+  {
+    id: "palmier-pro",
+    name: "Palmier Pro",
+    sourceUrl: "https://github.com/palmier-io/palmier-pro",
+    licenseNote: "GPL-3.0 editor and MCP server; upstream generative AI processing is closed/subscription-backed.",
+    summary: "Installable macOS AI video editor that exposes a local MCP server for timeline editing, project-aware media operations, and generative video workflows while the app is open.",
+    capabilities: ["video-editing", "timeline", "mcp", "generative-media", "macos-app"],
+    installSurface: "installable-service",
+    credentialKeys: [],
+    sideEffectGate: "Install/open through Apps & Services, then connect MCP clients to the loopback endpoint only after confirming which Palmier project and media should be edited.",
+    fallback: "Use HivemindOS video assembly scripts, local media tools, or manual editor workflows when Palmier Pro is unavailable.",
+  },
+  {
+    id: "rentahuman",
+    name: "RentAHuman",
+    sourceUrl: "https://rentahuman.ai/docs",
+    licenseNote: "Hosted provider API; use only through the user's RentAHuman account and API key.",
+    summary: "Human-in-the-loop marketplace for hiring people to complete real-world tasks through REST or MCP: profile search, conversations, bounties, service bookings, escrow, wallet, and transfer flows.",
+    capabilities: ["human-work", "bounties", "real-world-tasks", "escrow", "services", "mcp", "rest-api"],
+    installSurface: "mcp-catalog",
+    credentialKeys: ["RENTAHUMAN_API_KEY", "RENTAHUMAN_API_URL"],
+    sideEffectGate: "Use /api/rentahuman for REST calls or the curated MCP entry. Search and browse are read-only; conversations, bounties, bookings, escrow, and transfers require an API key plus explicit confirmation before execution.",
+    fallback: "Create a Work Board task for manual human follow-up or use existing messaging/payment rails when RentAHuman is unavailable.",
   },
   {
     id: "n8n",

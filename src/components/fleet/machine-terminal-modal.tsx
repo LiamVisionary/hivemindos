@@ -178,6 +178,10 @@ export function MachineTerminalModal({ machine, onClose }: MachineTerminalModalP
     historyIdxRef.current = h.length;
     draftRef.current = "";
     setCommand("");
+    if (trimmed === "clear") {
+      setLines([]);
+      return;
+    }
     void shellAction("command", { command: trimmed });
   }, [command, shellAction]);
 

@@ -52,36 +52,74 @@
       }
       @keyframes fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-      /* Honeycomb pulse */
-      .hex {
-        width: 84px;
-        height: 96px;
+      .beeShell {
+        width: 108px;
+        height: 108px;
         position: relative;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(255, 178, 62, 0.24);
+        border-radius: 28px;
+        background: rgba(10, 11, 15, 0.62);
+        box-shadow:
+          0 24px 70px rgba(0, 0, 0, 0.32),
+          0 0 34px rgba(255, 178, 62, 0.11),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      }
+
+      .beeShell::before,
+      .beeShell::after {
+        position: absolute;
+        inset: -10px;
+        border: 1px solid rgba(255, 178, 62, 0.16);
+        border-radius: 34px;
+        content: "";
+        animation: shell-pulse 1.8s ease-out infinite;
+      }
+
+      .beeShell::after {
+        animation-delay: 0.6s;
+      }
+
+      .beeCanvas {
+        position: relative;
+        z-index: 1;
+        display: block;
+        width: 84px;
+        height: 84px;
+        opacity: 0;
         filter: drop-shadow(0 6px 24px var(--honey-dim));
+        transition: opacity 180ms ease;
       }
-      .hex svg { width: 100%; height: 100%; display: block; }
-      .hex .ring {
-        fill: none;
-        stroke: var(--honey);
-        stroke-width: 4;
-        stroke-linejoin: round;
-        opacity: 0.9;
+
+      .beeFallback {
+        position: absolute;
+        width: 44px;
+        height: 50px;
+        color: var(--honey);
+        opacity: 0.78;
+        filter: drop-shadow(0 6px 24px var(--honey-dim));
         transform-origin: center;
-        animation: breathe 1.8s ease-in-out infinite;
+        animation: fallback-breathe 1.8s ease-in-out infinite;
+        transition: opacity 180ms ease;
       }
-      .hex .core {
-        fill: var(--honey);
-        opacity: 0.16;
-        transform-origin: center;
-        animation: core-pulse 1.8s ease-in-out infinite;
+
+      .beeReady .beeCanvas {
+        opacity: 1;
       }
-      @keyframes breathe {
-        0%, 100% { transform: scale(0.92); opacity: 0.55; }
-        50%      { transform: scale(1.0);  opacity: 1; }
+
+      .beeReady .beeFallback {
+        opacity: 0;
       }
-      @keyframes core-pulse {
-        0%, 100% { opacity: 0.10; }
-        50%      { opacity: 0.28; }
+
+      @keyframes shell-pulse {
+        0%   { opacity: 0.52; transform: scale(0.9); }
+        100% { opacity: 0; transform: scale(1.18); }
+      }
+
+      @keyframes fallback-breathe {
+        0%, 100% { transform: scale(0.94); opacity: 0.38; }
+        50%      { transform: scale(1.0);  opacity: 0.86; }
       }
 
       .wordmark {
@@ -144,14 +182,29 @@
         0%   { transform: translateX(-110%); }
         100% { transform: translateX(360%); }
       }
+
+      @media (prefers-reduced-motion: reduce) {
+        .beeShell::before,
+        .beeShell::after,
+        .beeFallback,
+        .track::after {
+          animation: none;
+        }
+      }
     </style>
   </head>
   <body>
     <div class="stage">
-      <div class="hex" aria-hidden="true">
-        <svg viewBox="0 0 86 98">
-          <polygon class="core" points="43,4 81,26 81,72 43,94 5,72 5,26" />
-          <polygon class="ring" points="43,4 81,26 81,72 43,94 5,72 5,26" />
+      <div class="beeShell" data-hivemindos-bee-shell aria-hidden="true">
+        <canvas class="beeCanvas" data-hivemindos-bee-lottie width="84" height="84"></canvas>
+        <svg class="beeFallback" viewBox="0 0 86 98" aria-hidden="true">
+          <polygon
+            points="43,4 81,26 81,72 43,94 5,72 5,26"
+            fill="rgba(255, 178, 62, 0.18)"
+            stroke="currentColor"
+            stroke-width="5"
+            stroke-linejoin="round"
+          />
         </svg>
       </div>
       <div class="wordmark">Hivemind<span class="os">OS</span></div>
@@ -159,6 +212,8 @@
       <div class="status" id="status">Waking the hive…</div>
       <div class="stats" id="stats"></div>
     </div>
+
+    <script type="module" src="/loading/bee-lottie-loader.js"></script>
 
     <!-- Shown by JS (native_boot_status poll) only if the embedded server fails to boot. -->
     <div

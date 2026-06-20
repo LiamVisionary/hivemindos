@@ -330,23 +330,35 @@ export function useFleetNotificationsController(props: any) {
     );
   }
 
-  async function refreshKanbanOnce() {
+  async function refreshKanbanOnce(overrides: any = {}) {
+    const includeArchived =
+      typeof overrides.includeArchived === "boolean"
+        ? overrides.includeArchived
+        : kanbanIncludeArchived;
+    const tenantFilter =
+      typeof overrides.tenant === "string" ? overrides.tenant : kanbanTenantFilter;
+    const assigneeFilter =
+      typeof overrides.assignee === "string"
+        ? overrides.assignee
+        : kanbanAssigneeFilter;
+    const queryFilter =
+      typeof overrides.query === "string" ? overrides.query : kanbanSearch;
     const params = new URLSearchParams({
       board: kanbanBoardSlug,
-      include_archived: String(kanbanIncludeArchived),
+      include_archived: String(includeArchived),
       include_boards: "false",
     });
     addKanbanStorageParams(params);
-    if (kanbanTenantFilter) params.set("tenant", kanbanTenantFilter);
-    if (kanbanAssigneeFilter) params.set("assignee", kanbanAssigneeFilter);
-    if (kanbanSearch) params.set("q", kanbanSearch);
+    if (tenantFilter) params.set("tenant", tenantFilter);
+    if (assigneeFilter) params.set("assignee", assigneeFilter);
+    if (queryFilter) params.set("q", queryFilter);
     const nativeData = await readNativeKanban({
       board: kanbanBoardSlug,
-      includeArchived: kanbanIncludeArchived,
+      includeArchived,
       includeBoards: false,
-      tenant: kanbanTenantFilter || undefined,
-      assignee: kanbanAssigneeFilter || undefined,
-      query: kanbanSearch || undefined,
+      tenant: tenantFilter || undefined,
+      assignee: assigneeFilter || undefined,
+      query: queryFilter || undefined,
       vaultPath: sharedVault.enabled
         ? sharedVault.vaultPath?.trim()
         : undefined,
@@ -354,17 +366,23 @@ export function useFleetNotificationsController(props: any) {
         ? sharedVault.kanbanFolder?.trim() || DEFAULT_SHARED_VAULT.kanbanFolder
         : undefined,
     });
-    const response =
-      nativeData?.ok && nativeData.board
-        ? null
-        : await fetch(`/api/kanban?${params.toString()}`, {
-            cache: "no-store",
-          });
+    const nativeBoardTaskCount = nativeData?.board?.tasks?.length ?? 0;
+    const shouldFetchWebBoard = !(nativeData?.ok && nativeData.board && nativeBoardTaskCount > 0);
+    const response = shouldFetchWebBoard
+      ? await fetch(`/api/kanban?${params.toString()}`, {
+          cache: "no-store",
+        }).catch(() => null)
+      : null;
+    const webData = response?.ok
+      ? ((await response.json().catch(() => null)) as KanbanResponse | null)
+      : null;
     const data =
-      nativeData?.ok && nativeData.board
-        ? nativeData
-        : ((await response.json().catch(() => null)) as KanbanResponse | null);
-    if ((!nativeData?.ok && !response.ok) || !data?.ok || !data.board)
+      webData?.ok && webData.board
+        ? webData
+        : nativeData?.ok && nativeData.board
+          ? nativeData
+          : webData;
+    if (!data?.ok || !data.board)
       throw new Error(data?.error ?? "Kanban refresh failed.");
     setKanbanError("");
     setKanbanBoard(data.board);
@@ -372,6 +390,11 @@ export function useFleetNotificationsController(props: any) {
     setKanbanTenants(data.tenants ?? []);
     setKanbanAssignees(data.assignees ?? []);
     setKanbanStorage(data.storage ?? null);
+    setSelectedKanbanTaskId((current) =>
+      current && data.board.tasks.some((task: any) => task.id === current)
+        ? current
+        : data.board.tasks[0]?.id ?? "",
+    );
   }
 
   function kanbanStorageBody() {

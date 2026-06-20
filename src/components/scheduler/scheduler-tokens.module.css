@@ -1,4 +1,5 @@
 .root {
+  container-type: inline-size;
   --f-display: "Space Grotesk", "Inter", system-ui, sans-serif;
   --f-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
   --hex-default-bg: linear-gradient(180deg, rgba(22,28,42,0.62), rgba(16,21,31,0.52));
@@ -40,6 +41,16 @@
 .monoCap {
   font-family: var(--f-mono); font-size: 10px; font-weight: 500;
   letter-spacing: 0.14em; text-transform: uppercase;
+}
+.schedulerBody {
+  display: grid;
+  grid-template-columns:
+    clamp(240px, 21cqi, 300px)
+    minmax(600px, 1fr)
+    clamp(220px, 22cqi, 360px);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 .schedulerInlineControls {
   display: flex;
@@ -229,5 +240,19 @@
 
   .schedulerToolbarSlot {
     justify-content: flex-end;
+  }
+}
+
+@container (max-width: 1120px) {
+  .schedulerBody {
+    grid-template-columns: 220px minmax(560px, 1fr) 220px;
+  }
+}
+
+@container (max-width: 980px) {
+  .schedulerBody {
+    grid-template-columns: 210px minmax(520px, 1fr) 210px;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 }

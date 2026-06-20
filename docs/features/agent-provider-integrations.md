@@ -17,6 +17,8 @@ The provider catalog makes external options retrievable by agents through `/api/
 - Cloudflare Agentic Inbox as one provider backend for routable email-agent Workers.
 - MCP Email Server as an advanced local stdio bridge for existing IMAP and optional SMTP mailboxes.
 - OpenHands and Aider as optional coding runtime adapters.
+- Palmier Pro as an installable macOS video editor with a local MCP endpoint for timeline and media workflows.
+- RentAHuman as a REST and MCP provider for real-world human work through profile search, conversations, bounties, service bookings, escrow, and transfers.
 - n8n as an installable workflow automation service.
 - Queen Bee PRD decomposition for turning product requirements into linked Work Board tasks.
 
@@ -43,9 +45,25 @@ The Browser Use provider card has a Full permissions toggle. Enabling it require
 
 `GET /api/mcp/catalog` returns a curated MCP server list with capability tags, credential key names, side-effect classes, install hints, and safety notes. Agents should verify credentials and side effects before installing or calling a server.
 
+## RentAHuman REST API
+
+`/api/rentahuman` is the HivemindOS REST facade for RentAHuman. It reads `RENTAHUMAN_API_KEY` and optional `RENTAHUMAN_API_URL` from shared env at runtime and reports only whether those keys are present. The default upstream base URL is `https://rentahuman.ai/api`.
+
+`GET /api/rentahuman?action=status` returns credential presence and the supported action matrix. Read-only discovery actions such as `search-humans`, `get-human`, `list-bounties`, `get-bounty`, `browse-services`, and `get-service-availability` can be called through GET or POST. Authenticated read actions such as listing conversations, rentals, transfers, escrow state, and bounty applications require `RENTAHUMAN_API_KEY`.
+
+Actions that can message people, create bounties, book services, open escrow, release payments, or send transfers are prepare-first. A POST without confirmation returns the prepared request and the confirmation string. To execute, repeat the POST with `confirmation: "RENTAHUMAN_ACTION"` after the user has reviewed the human-facing task, payment amount, deadline, evidence requirements, and destination.
+
+The curated MCP catalog also includes RentAHuman. Use `npx -y rentahuman-mcp` for runtimes that prefer MCP stdio, or the local `/api/rentahuman` route when HivemindOS should enforce shared-env loading and confirmation gates.
+
 ## n8n Service
 
 The Apps & Services view includes n8n as an installable provider. The install action starts n8n through Docker, binds it to `127.0.0.1:5678`, sets localhost-safe HTTP settings, and keeps workflow execution outside the HivemindOS process. Once n8n is running, the existing connected-app discovery can surface its UI and API handles.
+
+## Palmier Pro Service
+
+The Apps & Services view includes Palmier Pro as an installable macOS video editor for agent-assisted timeline work. HivemindOS installs the reviewed GitHub release DMG by downloading the pinned asset, verifying its SHA-256 digest, mounting it read-only, and copying the app bundle into Applications. It does not run a shell installer.
+
+Palmier Pro requires macOS 26 Tahoe on Apple Silicon. When the app is open, it exposes a local MCP endpoint at `http://127.0.0.1:19789/mcp`. Agents should connect to that loopback endpoint only after the user has opened the intended Palmier project and confirmed that timeline or media mutations are in scope.
 
 ## Agent Mailboxes
 

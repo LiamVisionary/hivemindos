@@ -137,7 +137,7 @@ function Modal({
   if (typeof document === "undefined") return null;
   return createPortal(
     <div className="zhc-root" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 2147483000, display: "grid", placeItems: "center", padding: 24, background: "rgba(2,4,8,0.62)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", animation: "zhcFade 160ms ease" }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(" + width + "px, 96vw)", maxHeight: "90vh", display: "flex", flexDirection: "column", borderRadius: 16, border: "1px solid var(--line-2)", background: "var(--bg-1)", boxShadow: "0 30px 80px rgba(0,0,0,0.6)", overflow: "hidden", animation: "zhcRise 200ms cubic-bezier(.2,.7,.3,1)" }}>
+      <div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} style={{ width: "min(" + width + "px, 96vw)", maxHeight: "90vh", display: "flex", flexDirection: "column", borderRadius: 16, border: "1px solid var(--line-2)", background: "var(--bg-1)", boxShadow: "0 30px 80px rgba(0,0,0,0.6)", overflow: "hidden", animation: "zhcRise 200ms cubic-bezier(.2,.7,.3,1)" }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "18px 20px", borderBottom: "1px solid var(--line)" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, letterSpacing: -0.3 }}>{title}</div>

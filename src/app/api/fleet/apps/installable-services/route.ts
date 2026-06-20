@@ -21,6 +21,7 @@ function serviceId(value: unknown): InstallableServiceId {
   if (value === "openhands") return value;
   if (value === "aider") return value;
   if (value === "agent-reach") return value;
+  if (value === "palmier-pro") return value;
   throw new Error("Unknown installable service.");
 }
 

@@ -276,6 +276,18 @@ Routes:
 | `POST /v1/chat/completions` | OpenAI-compatible chat completion proxy |
 | `GET /v1/models` | Model list |
 
+### Paid Agent Gateway
+
+Location: `workers/paid-agent-gateway`
+
+Routes:
+
+| Route | Purpose |
+|---|---|
+| `GET /health` | Worker health and configured paid-agent readiness |
+| `GET /api/paid-agents/<slug>/chat/completions` | Non-secret x402 paid-agent metadata |
+| `POST /api/paid-agents/<slug>/chat/completions` | x402-protected OpenAI-compatible chat completion proxy |
+
 ## Environment Variables
 
 Common local variables:

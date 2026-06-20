@@ -106,7 +106,7 @@ export function Composer({ job, templates, runState, onRunNow, onEdit }: Compose
   return (
     <aside className="flex flex-col overflow-auto"
       style={{
-        gap: 14, height: "100%", minHeight: 0, padding: "20px 18px",
+        gap: 14, height: "100%", minHeight: 0, minWidth: 0, padding: "20px 18px",
         overflowX: "hidden", overflowY: "auto", overscrollBehavior: "contain",
         WebkitOverflowScrolling: "touch",
         borderLeft: "1px solid rgba(148,163,184,0.16)",

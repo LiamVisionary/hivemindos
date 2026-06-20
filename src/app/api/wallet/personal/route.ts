@@ -18,6 +18,7 @@ type PersonalWalletRecord = {
   importedFrom?: "generated" | "private-key" | "recovery-phrase" | "browser" | "watch";
   currentBalanceUsd?: number;
   nativeBalance?: number;
+  tokens?: AgentWalletTokenBalance[];
   lastOnchainSyncAt?: number;
   createdAt?: number;
   updatedAt?: number;
@@ -66,7 +67,7 @@ function personalWalletFromAgentWallet(agentId: string, agentName: string, walle
     importedFrom: personalWalletImportSource(agentId, custodyMode),
     currentBalanceUsd: wallet.currentBalanceUsd || wallet.onchainBalanceUsd || 0,
     nativeBalance: wallet.nativeBalance || 0,
-    tokens: [],
+    tokens: Array.isArray(wallet.tokens) ? wallet.tokens : [],
     portfolioVersion: 0,
     lastOnchainSyncAt: wallet.lastOnchainSyncAt || 0,
     createdAt: wallet.updatedAt || 0,
@@ -129,6 +130,7 @@ function agentWalletFromPersonalRecord(record: PersonalWalletRecord): AgentWalle
     custodyMode: record.custodyMode === "watch" ? "watch" : "local",
     onchainBalanceUsd: Number(record.currentBalanceUsd) || 0,
     nativeBalance: Number(record.nativeBalance) || 0,
+    tokens: Array.isArray(record.tokens) ? record.tokens : [],
     lastOnchainSyncAt: Number(record.lastOnchainSyncAt) || 0,
     updatedAt: Number(record.updatedAt) || now,
   };

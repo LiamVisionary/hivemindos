@@ -9,10 +9,13 @@ import { register } from "node:module";
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 const {
+  QUEEN_CLAP_CREST_FACTOR_THRESHOLD,
   QUEEN_CLAP_DOUBLE_WINDOW_MS,
   QUEEN_CLAP_HIGH_FREQUENCY_RATIO_THRESHOLD,
   QUEEN_CLAP_HIGH_FREQUENCY_FLUX_THRESHOLD,
+  QUEEN_CLAP_LISTENING_SETTLE_MS,
   QUEEN_CLAP_SPECTRAL_FLUX_THRESHOLD,
+  QUEEN_CLAP_TRANSIENT_SHARPNESS_THRESHOLD,
   initialQueenClapDetectorState,
   measureFrequencyClapFrame,
   measureFloatTimeDomainClapFrame,
@@ -38,13 +41,7 @@ function loudFrame() {
 }
 
 function pulse(state, nowMs) {
-  return nextQueenClapDetectorState(state, {
-    ...measureTimeDomainClapFrame(loudFrame()),
-    highFrequencyRatio: 0.34,
-    spectralFlux: 0.24,
-    highFrequencyFlux: 0.16,
-    nowMs,
-  });
+  return metrics(state, nowMs, 0.092, 0.72);
 }
 
 function quiet(state, nowMs) {
@@ -62,10 +59,14 @@ function metrics(
   highFrequencyRatio = 0.34,
   spectralFlux = 0.24,
   highFrequencyFlux = 0.16,
+  crestFactor = 7.8,
+  transientSharpness = 1.45,
 ) {
   return nextQueenClapDetectorState(state, {
     rms,
     peak,
+    crestFactor,
+    transientSharpness,
     highFrequencyRatio,
     spectralFlux,
     highFrequencyFlux,
@@ -83,10 +84,11 @@ function frequencyFrame(kind) {
 }
 
 check("time-domain metrics match quiet and sharp frames", () => {
-  assert.deepEqual(measureTimeDomainClapFrame(quietFrame()), {
-    rms: 0,
-    peak: 0,
-  });
+  const quietMeasured = measureTimeDomainClapFrame(quietFrame());
+  assert.equal(quietMeasured.rms, 0);
+  assert.equal(quietMeasured.peak, 0);
+  assert.equal(quietMeasured.crestFactor, 0);
+  assert.equal(quietMeasured.transientSharpness, 0);
   const measured = measureTimeDomainClapFrame(loudFrame());
   assert.ok(measured.rms > 0.95, `expected loud RMS, got ${measured.rms}`);
   assert.ok(measured.peak > 0.99, `expected loud peak, got ${measured.peak}`);
@@ -95,6 +97,21 @@ check("time-domain metrics match quiet and sharp frames", () => {
   );
   assert.ok(floatMeasured.rms > 0.53, `expected float RMS, got ${floatMeasured.rms}`);
   assert.ok(Math.abs(floatMeasured.peak - 0.8) < 0.000001);
+  const clapLike = new Float32Array(64);
+  clapLike[8] = 0.9;
+  clapLike[9] = -0.7;
+  clapLike[10] = 0.4;
+  clapLike[11] = -0.2;
+  const clapLikeMeasured = measureFloatTimeDomainClapFrame(clapLike);
+  assert.ok(
+    clapLikeMeasured.crestFactor > QUEEN_CLAP_CREST_FACTOR_THRESHOLD,
+    `expected clap-like crest factor, got ${clapLikeMeasured.crestFactor}`,
+  );
+  assert.ok(
+    clapLikeMeasured.transientSharpness >
+      QUEEN_CLAP_TRANSIENT_SHARPNESS_THRESHOLD,
+    `expected clap-like sharpness, got ${clapLikeMeasured.transientSharpness}`,
+  );
 });
 
 check("frequency metrics separate clap-like onsets from low thumps", () => {
@@ -159,6 +176,40 @@ check("low-frequency thumps do not activate clap wake", () => {
   let state = metrics(initialQueenClapDetectorState, 1_000, 0.16, 0.82, 0.04, 0.22, 0.006).state;
   state = metrics(state, 1_120, 0.055, 0.18, 0.03, 0.01, 0.002).state;
   const result = metrics(state, 1_270, 0.15, 0.8, 0.04, 0.2, 0.005);
+  assert.equal(result.activated, false);
+});
+
+check("speech-like plosive onsets do not activate clap wake", () => {
+  let state = metrics(
+    initialQueenClapDetectorState,
+    1_000,
+    0.14,
+    0.6,
+    0.32,
+    0.22,
+    0.14,
+    3.2,
+    0.74,
+  ).state;
+  state = metrics(state, 1_120, 0.035, 0.12, 0.18, 0.01, 0.004, 2.4, 0.52).state;
+  const result = metrics(
+    state,
+    1_290,
+    0.13,
+    0.58,
+    0.31,
+    0.21,
+    0.13,
+    3.1,
+    0.78,
+  );
+  assert.equal(result.activated, false);
+});
+
+check("mismatched click pairs do not activate clap wake", () => {
+  let state = metrics(initialQueenClapDetectorState, 1_000, 0.1, 0.95).state;
+  state = quiet(state, 1_120);
+  const result = metrics(state, 1_280, 0.068, 0.42, 0.34, 0.18, 0.12);
   assert.equal(result.activated, false);
 });
 
@@ -236,6 +287,9 @@ check("clap hook stays local and tears down the microphone stream", () => {
   assert.match(hook, /getUserMedia/);
   assert.match(hook, /createScriptProcessor/);
   assert.match(hook, /onaudioprocess/);
+  assert.ok(QUEEN_CLAP_LISTENING_SETTLE_MS >= 500);
+  assert.match(hook, /QUEEN_CLAP_LISTENING_SETTLE_MS/);
+  assert.match(hook, /nowMs < detectorReadyAt/);
   assert.match(hook, /track\.stop\(\)/);
   assert.doesNotMatch(hook, /fetch\(/);
 });

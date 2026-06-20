@@ -367,7 +367,7 @@ function dedupeAeonAgents(list: AeonAgent[]) {
 function Modal({ title, eyebrow, subtitle, onClose, children, wide }: { title: string; eyebrow?: string; subtitle?: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, display: "grid", placeItems: "center", padding: 18, background: "rgba(2,6,12,0.7)", backdropFilter: "blur(4px)" }}>
-      <div onClick={(e) => e.stopPropagation()} className={`${styles.scroll} ${styles.rise}`} style={{ width: "100%", maxWidth: wide ? 720 : 560, maxHeight: "calc(100vh - 36px)", overflow: "auto",
+      <div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} className={`${styles.scroll} ${styles.rise}`} style={{ width: "100%", maxWidth: wide ? 720 : 560, maxHeight: "calc(100vh - 36px)", overflow: "auto",
         background: "var(--bg-1)", border: "1px solid var(--aeon-line)", borderRadius: "var(--r-lg)", padding: 22, boxShadow: "0 30px 90px rgba(0,0,0,0.5)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 16 }}>
           <div>

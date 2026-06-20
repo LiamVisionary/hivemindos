@@ -214,36 +214,74 @@
   line-height: 1.35;
 }
 
-.inspectorStats {
+.inspectorStats.inspectorStats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 16px 0 0;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  column-gap: 14px;
+  row-gap: 12px;
+  margin: 18px 0 0;
 }
 
-.inspectorStats div {
+.inspectorStats.inspectorStats div {
+  display: grid;
+  align-content: start;
+  gap: 5px;
   min-width: 0;
+  border-top: 1px solid var(--brain-line, rgba(238, 232, 220, 0.08));
+  padding-top: 10px;
 }
 
-.inspectorStats dt {
+.inspectorStats.inspectorStats dt {
   margin: 0;
-  color: var(--brain-fg-4, #545049);
+  color: var(--brain-fg-3, #76726a);
   font-family: var(--f-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
+  font-weight: 700;
+  letter-spacing: 0.16em;
   line-height: 1.2;
   text-transform: uppercase;
 }
 
-.inspectorStats dd {
-  margin: 4px 0 0;
+.inspectorStats.inspectorStats dd {
+  margin: 0;
   color: var(--brain-fg, #f3f0e9);
   font-family: var(--f-display, "Space Grotesk", system-ui, sans-serif);
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 1.25;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.18;
   overflow-wrap: anywhere;
+}
+
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 14px;
+  border-top: 1px solid var(--brain-line, rgba(238, 232, 220, 0.08));
+  padding-top: 12px;
+}
+
+.tagRow strong {
+  margin-right: 2px;
+  color: var(--brain-fg-3, #76726a);
+  font-family: var(--f-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.tagRow span {
+  border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brain-panel-hi, #1e222b) 58%, transparent);
+  color: var(--brain-fg-2, #a7a39a);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 4px 9px;
 }
 
 .actionGrid {

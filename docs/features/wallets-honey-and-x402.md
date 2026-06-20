@@ -71,6 +71,55 @@ The no-API-key flow is:
 
 The official ledger rejects browser-spoofed credits. `/managed-billing/events` in `workers/honey-ledger` requires either a HONEY billing HMAC signature or the operator admin token, dedupes idempotency keys, and refuses debits when the managed HONEY balance is insufficient.
 
+## Paid Agent x402 Gateway
+
+HivemindOS can expose a curated agent as an OpenAI-compatible paid endpoint. For official monetized agents, this endpoint should run on HivemindOS-controlled hosted infrastructure, not inside the downloaded desktop app.
+
+- Downloaded apps should call `GET /api/official-paid-agents/<slug>/chat/completions` for official hosted-agent readiness and `POST /api/official-paid-agents/<slug>/chat/completions` for paid calls. This local route is only a buyer/proxy path to HivemindOS-hosted infrastructure.
+- Self-hosted sellers can expose `GET /api/paid-agents/<slug>/chat/completions` for non-secret readiness, price, runtime, provider, model, and supported runtime/provider matrices.
+- Self-hosted sellers can expose `POST /api/paid-agents/<slug>/chat/completions` as an OpenAI-style chat completion body that requires x402 payment before it calls the internal `/api/chat/agent-runtime` route.
+- Successful calls settle x402 after the agent response is produced, return a `PAYMENT-RESPONSE` header, and append a local paid-agent receipt for operator accounting.
+- Stream requests are accepted, but the gateway settles first and then returns a single completed Server-Sent Events response. This keeps settlement atomic for paid calls.
+
+Official downloaded-app setup is intentionally light. Configure only the hosted base URL:
+
+- `HIVEMINDOS_OFFICIAL_PAID_AGENT_BASE_URL=<https-hivemindos-hosted-base-url>`
+
+The packaged default is the official Cloudflare Worker at `https://hivemindos-paid-agent-gateway.hivemindos.workers.dev`, so most downloaded apps do not need local configuration. The env variable is an override for staging, enterprise, or self-hosted official-compatible deployments.
+
+The official client route requires a public HTTPS base URL by default and forwards only safe request metadata plus x402 payment/idempotency headers. It does not contain the official `payTo`, facilitator credentials, model provider keys, or HONEY/HIVE entitlement logic.
+
+The fastest official hosting path is the Cloudflare Worker in `workers/paid-agent-gateway`. It exposes the same hosted seller route (`/api/paid-agents/<slug>/chat/completions`), verifies and settles x402 at the edge, writes D1 receipt metadata, and forwards paid OpenAI-compatible chat bodies to a trusted upstream runtime URL. The downloaded app should point `HIVEMINDOS_OFFICIAL_PAID_AGENT_BASE_URL` at that Worker URL.
+
+Production setup is fail-closed. For a hosted or self-hosted seller gateway, configure:
+
+- `HIVEMINDOS_PAID_AGENT_GATEWAY_ENABLED=true`
+- `HIVEMINDOS_PAID_AGENT_SELLER_MODE=self-hosted`
+- `HIVEMINDOS_PAID_AGENT_PAY_TO=<recipient-address>`
+- `HIVEMINDOS_PAID_AGENT_FACILITATOR_URL=<x402-facilitator-url>`
+- `HIVEMINDOS_PAID_AGENT_PRICE_USD=<price-per-call>`
+- `HIVEMINDOS_PAID_AGENT_PROFILE_JSON=<json>` or `HIVEMINDOS_PAID_AGENT_PROFILE_PATH=<path-to-exported-profile>`
+
+For multiple products, use `HIVEMINDOS_PAID_AGENT_CATALOG_JSON` or `HIVEMINDOS_PAID_AGENT_CATALOG_PATH` with entries containing `slug`, `description`, `priceUsd`, `payTo`, `facilitatorUrl`, and a curated `agent` profile. The route never exposes provider tokens or wallet secrets.
+
+Do not package an official `payTo` address into the downloadable app as the source of truth. A local app install is controlled by the user: they can edit env, config, app bundles, and local routes. If official revenue or feature access depends on the payment, the app must call a hosted HivemindOS resource server, or a HivemindOS backend must verify the x402 settlement against the expected official `payTo`, network, amount, and resource before granting server-side value. Local `self-hosted` seller mode is for operators who intentionally want to sell their own agent endpoint and receive payment to their own address.
+
+If a user changes `HIVEMINDOS_OFFICIAL_PAID_AGENT_BASE_URL`, they are changing which hosted service their app talks to; that must not grant official HivemindOS cloud entitlement by itself. Official entitlements, quotas, receipts, HONEY credits, HIVE funding credits, and enterprise usage state must be issued by HivemindOS-controlled backend services after verified settlement.
+
+Optional accounting:
+
+- `HIVEMINDOS_PAID_AGENT_REWARD_HONEY_ENABLED=true` lets the trusted runtime submit reward-Honey usage observations for the agent's response.
+- `HIVEMINDOS_PAID_AGENT_MIRROR_MANAGED_HONEY=true` mirrors each settled x402 call into managed HONEY as an equal credit/debit pair for operator reporting.
+- HIVE can fund Bankr LLM credits or managed HONEY through the managed-agent billing rail; x402 remains the external per-call charge.
+
+Runtime policy:
+
+- Recommended public runtime: `hivemind-os`, because it can route to local OpenAI-compatible models, Bankr LLM, Venice, UsePod, OpenRouter, and Hive Fusion while keeping provider keys server-side.
+- Allowed with curated profiles: `hermes` and `openclaw`, when the profile has a safe gateway and no unintended wallet/workspace tools.
+- Internal by default: `codex`, `claude-code`, `opencode`, `openhands`, `aider`, `aeon`, and `evo`. Use these as managed HONEY jobs with explicit workspace/task scope rather than public per-call chat.
+
+Shared vault access and agent wallet tools are off unless the paid-agent profile explicitly includes them. Do not place secrets, private wallet material, or local workspace paths in public paid-agent config.
+
 ## Crypto Capability Router
 
 Agents should start with `/api/crypto/capabilities` when they need a money rail but do not need to force a provider. The router reports readiness for Bankr, x402, Veil Cash, MoneyClaw, and UsePod, then maps a natural intent to the best configured rail.
@@ -158,26 +207,35 @@ Token-facing surfaces:
 - Honey is tracked as usage-earned accounting. HIVE can be a ledger-only legacy balance or an actual Bankr transfer when the claim path is configured.
 - x402 uses token/payment policy around requests instead of giving runtimes unrestricted wallet access.
 
-## Stock Buying (Alpaca And xStocks)
+## Trade Tab
 
-Agents can buy stocks from a prompt through one unified buy-stock rail with two venues:
+The Trade tab is a dedicated action surface for buying, selling, and swapping. It is segmented into **Crypto** and **Stocks** and acts on a selected agent's governed wallet. It complements the Wallets tab, which stays focused on accounts, rails, balances, and governance.
+
+- **Crypto** is capability-first: it reads `/api/crypto/capabilities` to show every supported action (swap/trade, perps, prediction markets, bridge, token launch, NFT, send, receive, private transfer, paid API, fund LLM credits) with live readiness, lets the user prepare an action to see the clear-signing review, and executes through the same hardened provider endpoints (`/api/bankr/actions`, `/api/wallet/send`, `/api/wallet/x402`, `/api/wallet/veil/*`, and others). The capability router picks the configured provider, so users express intent rather than naming a rail.
+- **Stocks** buys and sells through the unified trade rail below.
+
+The tab lives under `src/features/dashboard/views/trade/` and is reachable from the left navigation shelf.
+
+## Stock Trading (Alpaca And xStocks)
+
+Agents and the Trade tab can buy and sell stocks through one unified trade rail with two venues:
 
 - `alpaca`: a real, regulated US brokerage. Market orders go through the Alpaca Trading API. It defaults to paper (simulated) trading, and live trading is reachable only when the wallet sets `alpacaPaper` to false. Alpaca keys load from the shared hive env by name (`ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY`) and are never stored in project files.
-- `xstocks`: on-chain tokenized equities issued by Backed Finance. The rail swaps USDC into the verified xStock SPL token through Jupiter, signed by the agent's existing local Solana wallet. It requires a Solana mainnet wallet plus a little SOL for fees and token-2022 account rent.
+- `xstocks`: on-chain tokenized equities issued by Backed Finance. A buy swaps USDC into the verified xStock SPL token through Jupiter; a sell sizes the position from the current USDC price and swaps the xStock back into USDC (both legs ExactIn, which routes reliably for thin tokenized-equity pools where exact-out often has no route). Both are signed by the agent's existing local Solana wallet and require a Solana mainnet wallet plus a little SOL for fees and token-2022 account rent.
 
 How it works:
 
-- The rail lives in `src/lib/services/trading/buy-stock.ts`.
+- The rail lives in `src/lib/services/trading/buy-stock.ts` (`executeStockTrade`/`discoverStockTradeQuote`, with `executeBuyStock` kept as a buy-side wrapper).
 - The verified mint allowlist lives in `src/lib/config/xstocks-tokens.ts`. xStock tickers resolve only through this allowlist, never live symbol search, because Solana carries many scam copycats reusing each `AAPLx`-style symbol. Every mint is Jupiter-verified and uses the official `Xs` vanity address prefix.
-- Intent flows through the chat runtime as a draft, confirm, execute card, the same pattern as x402. A natural request such as `buy $25 of AAPL on xstocks` produces a Buy stock ready card, and the user replies `confirm` to execute.
-- Every trade requires explicit confirmation, honors a per-trade USD cap (`maxTradeUsd`, falling back to the per-payment cap), and passes through the shared spend-governance chokepoint and ledger, so company kill switches, rolling daily and monthly budgets, and approval escalation all apply.
+- Two entry points: the chat runtime handles natural requests such as `buy $25 of AAPL on xstocks` as a draft, confirm, execute card; the Trade tab calls `POST /api/trading` (`action: 'quote' | 'execute'`, `side: 'buy' | 'sell'`). The route resolves the acting agent's wallet server-side and never trusts a client-supplied policy. `GET /api/trading` reports venue readiness and trade-ready agents.
+- A buy requires `CONFIRM_BUY`, a sell requires `CONFIRM_SELL`. Every trade honors a per-trade USD cap (`maxTradeUsd`, falling back to the per-payment cap). A buy passes the full spend-governance chokepoint (company kill switch, rolling daily/monthly budgets, approval escalation); a sell is an inflow, so only the company kill switch binds and it never debits rolling budgets.
 - Venue and mode are configured per agent in the Wallets tab: venue (Off, Alpaca, or xStocks), Alpaca paper vs live, and max per trade.
 
 Safety:
 
 - Alpaca defaults to paper. Live is opt-in per wallet.
-- xStock buys resolve only verified mints and require a Solana mainnet wallet.
-- `trade` spends are recorded in the spend ledger like every other rail.
+- xStock trades resolve only verified mints and require a Solana mainnet wallet.
+- `trade` activity is recorded in the spend ledger like every other rail.
 
 Tests:
 
@@ -244,6 +302,9 @@ Claiming:
 - `src/app/api/crypto/agent-identity/route.ts`
 - `src/app/api/crypto/risk-monitor/route.ts`
 - `src/lib/services/obsidian/wallet-ledger.ts`
+- `src/app/api/trading/route.ts`
+- `src/lib/services/trading/buy-stock.ts`
+- `src/features/dashboard/views/trade/**`
 - `src/app/api/wallet/vault-backup/route.ts`
 - `src/app/api/wallet/moneyclaw/route.ts`
 - `src/app/api/wallet/**`

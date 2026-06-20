@@ -397,7 +397,7 @@ export type SkillBrowserSkill = {
   audience?: string;
 };
 
-export type SkillBrowserView = "catalog" | "installed" | "packs" | "audit" | "write";
+export type SkillBrowserView = "catalog" | "installed" | "packs" | "audit" | "write" | "fusion";
 
 export type HermesUpdateSkillLike = {
   slug: string;
@@ -560,6 +560,12 @@ export type MachineGroup = {
   };
   system?: MachineSystemStats;
   lastSeenAt?: number;
+  bridgeRepair?: {
+    status: "queued" | "running" | "succeeded" | "failed";
+    checkedAt: number;
+    message: string;
+    nextAttemptAt?: number;
+  };
 };
 
 export type MachineDirectoryEntry = {
@@ -621,6 +627,7 @@ export type DiscoveredMachine = {
   envSync?: MachineGroup["envSync"];
   system?: MachineSystemStats;
   lastSeenAt?: number;
+  bridgeRepair?: MachineGroup["bridgeRepair"];
 };
 
 export type AppVersion = {
@@ -808,6 +815,10 @@ export type BrainSkillSummary = {
   checksum: string;
   imported: boolean;
   importedAs?: string;
+  sourceStatus?: string;
+  auditStatus?: "trusted" | "review" | "restricted" | "blocked";
+  capabilities?: string[];
+  envKeys?: string[];
 };
 
 export type BrainSkillProviderInventory = {
@@ -989,7 +1000,7 @@ export type MiroSharkSurfaceView = "x" | "reddit" | "polymarket" | "timeline";
 
 export type MiroSharkWorkspaceMode = "new" | "run";
 
-export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "phone" | "aeon" | "fusion" | "governance";
+export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "phone" | "aeon" | "fusion" | "governance";
 
 export type WorkView = Extract<DashboardView, "kanban" | "scheduler" | "swarm" | "history">;
 

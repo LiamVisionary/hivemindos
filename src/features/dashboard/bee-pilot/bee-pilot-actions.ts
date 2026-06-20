@@ -1,4 +1,5 @@
 import { DASHBOARD_ROUTE_CATALOG, isDashboardView } from "@/features/dashboard/dashboard-navigation";
+import type { DashboardScreenContext } from "@/features/dashboard/screen-context";
 
 /**
  * Shared Bee Pilot action catalog. Imported by both the client executor and
@@ -38,6 +39,7 @@ export type BeePilotContext = {
   machineNames: string[];
   kanbanColumns: string[];
   activeView?: string;
+  screenContext?: DashboardScreenContext;
 };
 
 type BeePilotActionSpec = {

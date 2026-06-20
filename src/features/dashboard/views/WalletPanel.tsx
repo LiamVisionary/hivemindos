@@ -5,12 +5,13 @@ import { WalletsView } from "@/components/wallets-drop-in/WalletsView";
 import { readNativePersonalWallets } from "@/lib/native/personal-wallets";
 import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import { switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
-import { resolveAgentWallet } from "@/lib/utils/agent-wallet";
+import { hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
 
 const RAIL_ENABLED_KEY_PREFIX = "hivemindos.walletRail.enabled.";
 const USEPOD_ROUTING_MODE_KEY = "hivemindos.walletRail.usepod.routingMode";
 const VEIL_TRANSFER_NETWORK = "eip155:8453";
 const BANKR_RECIPIENT_STORAGE_KEY = "hivemindos.bankrRecipientAddress";
+const PERSONAL_WALLET_TOKEN_REFRESH_MS = 15 * 60_000;
 
 type DropInTokenPrice = { price: number; name?: string; color?: string; chg?: number };
 type WalletActivityRecord = {
@@ -381,6 +382,87 @@ function personalWalletHoldings(wallet: any): Array<[string, number]> {
   return [];
 }
 
+function personalWalletFromDashboardState(agentId: string, wallet: any): any | null {
+  if (!agentId.startsWith("user:")) return null;
+  const address = String(wallet?.walletAddress || wallet?.vaultAddress || wallet?.address || "").trim();
+  const network = String(wallet?.network || "").trim();
+  if (!address || !network) return null;
+  const custodyMode = wallet?.custodyMode === "watch" ? "watch" : "local";
+  return {
+    agentId,
+    id: agentId,
+    name: recoveryPhraseWalletName({ id: agentId, agentId, name: wallet?.name, network }, 1),
+    address,
+    network,
+    custodyMode,
+    importedFrom: isRecoveryPhrasePersonalWallet({ id: agentId, agentId }) ? "recovery-phrase" : custodyMode === "local" ? "private-key" : "watch",
+    currentBalanceUsd: Number(wallet?.currentBalanceUsd ?? wallet?.onchainBalanceUsd ?? 0) || 0,
+    nativeBalance: Number(wallet?.nativeBalance ?? 0) || 0,
+    tokens: Array.isArray(wallet?.tokens) ? wallet.tokens : [],
+    portfolioVersion: 0,
+    lastOnchainSyncAt: Number(wallet?.lastOnchainSyncAt ?? 0) || 0,
+    createdAt: Number(wallet?.updatedAt ?? 0) || 0,
+    updatedAt: Number(wallet?.updatedAt ?? 0) || 0,
+  };
+}
+
+function personalWalletAccountKey(wallet: any): string {
+  const network = String(wallet?.network || "").trim();
+  const address = String(wallet?.address || "").trim().toLowerCase();
+  return network && address ? `${network}:${address}` : "";
+}
+
+function mergePersonalWalletRecord(base: any, next: any): any {
+  if (!base) return next;
+  const baseUpdated = Number(base.updatedAt ?? base.lastOnchainSyncAt ?? 0) || 0;
+  const nextUpdated = Number(next.updatedAt ?? next.lastOnchainSyncAt ?? 0) || 0;
+  const preferNextBalance = nextUpdated >= baseUpdated || Number(base.currentBalanceUsd ?? 0) <= 0;
+  return {
+    ...base,
+    ...next,
+    id: base.id || next.id,
+    agentId: base.agentId || next.agentId,
+    name: next.name || base.name,
+    custodyMode: base.custodyMode === "local" || next.custodyMode === "local" ? "local" : "watch",
+    importedFrom: base.importedFrom !== "watch" ? base.importedFrom : next.importedFrom,
+    currentBalanceUsd: preferNextBalance && Number(next.currentBalanceUsd ?? 0) > 0 ? Number(next.currentBalanceUsd) : Number(base.currentBalanceUsd ?? 0) || Number(next.currentBalanceUsd ?? 0) || 0,
+    nativeBalance: preferNextBalance && Number(next.nativeBalance ?? 0) > 0 ? Number(next.nativeBalance) : Number(base.nativeBalance ?? 0) || Number(next.nativeBalance ?? 0) || 0,
+    tokens: Array.isArray(next.tokens) && next.tokens.length ? next.tokens : Array.isArray(base.tokens) ? base.tokens : [],
+    lastOnchainSyncAt: Math.max(Number(base.lastOnchainSyncAt ?? 0) || 0, Number(next.lastOnchainSyncAt ?? 0) || 0),
+    updatedAt: Math.max(baseUpdated, nextUpdated),
+  };
+}
+
+function mergePersonalWalletSources(wallets: any[] | null, walletsByAgent: Record<string, any> | undefined) {
+  const merged = new Map<string, any>();
+  const add = (wallet: any) => {
+    const key = personalWalletAccountKey(wallet);
+    if (!key) return;
+    merged.set(key, mergePersonalWalletRecord(merged.get(key), wallet));
+  };
+  (Array.isArray(wallets) ? wallets : []).forEach(add);
+  Object.entries(walletsByAgent ?? {})
+    .map(([agentId, wallet]) => personalWalletFromDashboardState(agentId, wallet))
+    .filter(Boolean)
+    .forEach(add);
+  return [...merged.values()];
+}
+
+function mergePersonalWalletList(wallets: any[]) {
+  const merged = new Map<string, any>();
+  wallets.forEach((wallet) => {
+    const key = personalWalletAccountKey(wallet);
+    if (key) merged.set(key, mergePersonalWalletRecord(merged.get(key), wallet));
+  });
+  return [...merged.values()];
+}
+
+function personalWalletNeedsTokenRefresh(wallet: any) {
+  const tokens = Array.isArray(wallet?.tokens) ? wallet.tokens : [];
+  const lastSync = Number(wallet?.lastOnchainSyncAt ?? 0) || 0;
+  return !tokens.length || Date.now() - lastSync > PERSONAL_WALLET_TOKEN_REFRESH_MS;
+}
+
 const RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX = /:(?:eip155-\d+|solana-[a-z0-9-]+)$/i;
 
 function isRecoveryPhrasePersonalWallet(wallet: any): boolean {
@@ -450,28 +532,11 @@ function buildDropInPersonalWallets(wallets: any[] | null) {
   });
 }
 
-function hasUsePodSetupEvidence(agent: any): boolean {
-  return Boolean(
-    agent?.usePod?.depositAddress?.trim()
-      || agent?.usePod?.depositCode?.trim()
-      || agent?.usePod?.dashboardUrl?.trim()
-      || agent?.usePod?.lastTestStatus === "ready",
-  );
-}
-
-function hasConfiguredWallet(agent: any, wallet: any, address: string): boolean {
-  return Boolean(
-    address.trim()
-      || wallet?.walletAddress?.trim?.()
-      || wallet?.vaultAddress?.trim?.()
-      || wallet?.address?.trim?.()
-      || hasUsePodSetupEvidence(agent),
-  );
-}
-
-function agentWalletSortTier(agent: any, wallet: any, balanceUsd: number, address: string): number {
+// Configured-wallet detection is shared with the Trade tab's wallet picker via
+// hasConfiguredAgentWallet so both screens agree on what "set up" means.
+function agentWalletSortTier(agent: any, wallet: any, balanceUsd: number): number {
   if (balanceUsd > 0) return 0;
-  if (hasConfiguredWallet(agent, wallet, address)) return 1;
+  if (hasConfiguredAgentWallet(agent, wallet)) return 1;
   return 2;
 }
 
@@ -602,7 +667,7 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
         wallet,
         balanceUsd,
         address,
-        sortTier: agentWalletSortTier(agent, wallet, balanceUsd, address),
+        sortTier: agentWalletSortTier(agent, wallet, balanceUsd),
         name: agent.name || agent.id,
         id: agent.id,
       };
@@ -616,7 +681,7 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
       const burn = Number(wallet?.dailyComputeBurnUsd ?? wallet?.dailySpendUsd ?? wallet?.burnUsdPerDay ?? wallet?.dailyBudgetUsd ?? 0) || 0;
       const maxPay = Number(wallet?.maxPaymentUsd ?? wallet?.spendLimitUsd ?? wallet?.maxPayUsd ?? Math.max(10, burn * 2)) || 10;
       const enabled = wallet?.enabled !== false && !wallet?.disabled;
-      const configured = hasConfiguredWallet(agent, wallet, address);
+      const configured = hasConfiguredAgentWallet(agent, wallet);
 
       const row = {
         id: agent.id,
@@ -694,6 +759,7 @@ function WalletPanelComponent(props: any) {
   const [usePodRoutingMode, setUsePodRoutingMode] = useState("");
   const [bankrRecipientAddress, setBankrRecipientAddress] = useState("");
   const refreshedUsePodAgentIds = useRef<Set<string>>(new Set());
+  const refreshedPersonalWalletKeys = useRef<Set<string>>(new Set());
   const vaultPath = props?.sharedVault?.enabled ? String(props.sharedVault.vaultPath || "").trim() : "";
   const activeView = props.activeView, displayAgents = props.displayAgents, refreshRuntimeIntegrations = props.refreshRuntimeIntegrations, refreshRuntimeUsage = props.refreshRuntimeUsage, selectedAgent = props.selectedAgent;
   const refreshRuntimeUsageRef = useRef(refreshRuntimeUsage);
@@ -708,6 +774,36 @@ function WalletPanelComponent(props: any) {
     const data = await response?.json().catch(() => null) as { ok?: boolean; wallets?: any[] } | null;
     return response?.ok && data?.ok && Array.isArray(data.wallets) ? data.wallets : [];
   }, [vaultPath]);
+  const refreshPersonalWalletBalances = useCallback(async (targets: any[]) => {
+    const refreshed = (await Promise.all(targets.map(async (wallet) => {
+      const address = String(wallet?.address || "").trim();
+      const network = String(wallet?.network || "").trim();
+      if (!address || !network) return null;
+      const response = await fetch("/api/wallet/balance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address, network }),
+      }).catch(() => null);
+      const data = await response?.json().catch(() => null) as { ok?: boolean; balance?: { tokenBalance: number; nativeBalance: number; totalValueUsd?: number | null; tokens?: any[]; fetchedAt: number } } | null;
+      if (!response?.ok || !data?.ok || !data.balance) return null;
+      const totalValueUsd = Number(data.balance.totalValueUsd);
+      return {
+        ...wallet,
+        currentBalanceUsd: Number.isFinite(totalValueUsd) && totalValueUsd >= 0 ? totalValueUsd : Number(data.balance.tokenBalance) || 0,
+        nativeBalance: Number(data.balance.nativeBalance) || 0,
+        tokens: Array.isArray(data.balance.tokens) ? data.balance.tokens : [],
+        lastOnchainSyncAt: Number(data.balance.fetchedAt) || Date.now(),
+        updatedAt: Date.now(),
+      };
+    }))).filter(Boolean);
+    if (!refreshed.length) return;
+    setPersonalWallets((current) => mergePersonalWalletList([...(Array.isArray(current) ? current : []), ...refreshed]));
+    await fetch("/api/wallet/personal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vaultPath: vaultPath || undefined, wallets: refreshed }),
+    }).catch(() => null);
+  }, [vaultPath]);
   const loadPersonalWallets = useCallback(async () => setPersonalWallets(await fetchPersonalWallets()), [fetchPersonalWallets]);
   const loadWalletActivity = useCallback(async () => setWalletActivity(await fetchWalletActivityRecords()), []);
   const loadHoneyLedger = useCallback(async () => setHoneyLedger(await fetchHoneyLedger()), []);
@@ -716,6 +812,18 @@ function WalletPanelComponent(props: any) {
     void fetchPersonalWallets().then((wallets) => { if (!ignore) setPersonalWallets(wallets); });
     return () => { ignore = true; };
   }, [fetchPersonalWallets]);
+  useEffect(() => {
+    if (activeView !== "wallet" || !Array.isArray(personalWallets) || !personalWallets.length) return;
+    const targets = mergePersonalWalletSources(personalWallets, props.walletsByAgent)
+      .filter(personalWalletNeedsTokenRefresh)
+      .filter((wallet) => {
+        const key = personalWalletAccountKey(wallet);
+        if (!key || refreshedPersonalWalletKeys.current.has(key)) return false;
+        refreshedPersonalWalletKeys.current.add(key);
+        return true;
+      });
+    if (targets.length) void refreshPersonalWalletBalances(targets);
+  }, [activeView, personalWallets, props.walletsByAgent, refreshPersonalWalletBalances]);
   useEffect(() => {
     if (activeView !== "wallet") return;
     let ignore = false;
@@ -766,7 +874,8 @@ function WalletPanelComponent(props: any) {
     runtimeUsage: props.runtimeUsage,
     walletsByAgent: props.walletsByAgent,
   }), [displayAgents, props.RUNTIME_LABELS, props.hiveEnv, props.honeyLedgerEnabled, props.honeyStats, props.moneyClawStatusByEnvName, props.runtimeUsage, props.walletsByAgent]);
-  const runtimeData = useMemo(() => buildDropInRuntimeData(runtimeDataSource, personalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger), [runtimeDataSource, personalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger]);
+  const mergedPersonalWallets = useMemo(() => mergePersonalWalletSources(personalWallets, props.walletsByAgent), [personalWallets, props.walletsByAgent]);
+  const runtimeData = useMemo(() => buildDropInRuntimeData(runtimeDataSource, mergedPersonalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger), [runtimeDataSource, mergedPersonalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger]);
   const walletActions = useMemo(() => ({
     bankrRewards: { honeyStats: props.honeyStats, honeyLedgerEnabled: props.honeyLedgerEnabled },
     bankrRecipientAddress,

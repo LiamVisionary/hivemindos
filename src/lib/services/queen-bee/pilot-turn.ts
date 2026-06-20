@@ -4,6 +4,7 @@ import {
   type BeePilotContext,
   type BeePilotPlan,
 } from "@/features/dashboard/bee-pilot/bee-pilot-actions";
+import { formatDashboardScreenContextForPrompt } from "@/features/dashboard/screen-context";
 import {
   readRuntimeResponseText,
   voiceOptimizedAgent,
@@ -18,6 +19,7 @@ const OPENAI_TURN_TIMEOUT_MS = 20_000;
 const OPENAI_PILOT_FALLBACK_MODEL = "gpt-4o-mini";
 
 function pilotSystemPrompt(context: BeePilotContext): string {
+  const screenContext = formatDashboardScreenContextForPrompt(context.screenContext);
   return [
     "You are Queen Bee, the UI pilot of HivemindOS. Convert the user's command into dashboard UI actions.",
     'Reply with STRICT JSON only, no markdown fences, matching: {"reply": string, "steps": [{"action": string, "params": object}]}.',
@@ -28,6 +30,7 @@ function pilotSystemPrompt(context: BeePilotContext): string {
     `Known machines: ${context.machineNames.join(", ") || "(none yet)"}.`,
     `Kanban columns: ${context.kanbanColumns.join(", ")}.`,
     context.activeView ? `The user is currently on the "${context.activeView}" view.` : "",
+    screenContext ? `Current dashboard context:\n${screenContext}` : "",
     "Match agent/machine params to the known names above (use the exact known spelling).",
     "Use queen-task ONLY for real work requests (research, build, write, fix, automate) - not for opening or operating UI.",
     "If the command cannot be mapped to any action, return steps: [] with a short helpful reply.",

@@ -844,8 +844,12 @@ export function useStatusChatInputController(props: any) {
     const replaceActiveAssistantMessage = (items: ChatMessage[], message: ChatMessage) => {
       const next = [...items];
       const assistantIndex = findActiveAssistantIndex(next);
-      if (assistantIndex >= 0) next[assistantIndex] = withActiveProcessEvents(message);
-      else next.push(withActiveProcessEvents(message));
+      if (assistantIndex >= 0) {
+        const assistant = next[assistantIndex];
+        next[assistantIndex] = withActiveProcessEvents({ ...message, createdAt: message.createdAt ?? assistant.createdAt });
+      } else {
+        next.push(withActiveProcessEvents({ ...message, createdAt: message.createdAt ?? Date.now() }));
+      }
       return next;
     };
     const appendActiveAssistantText = (items: ChatMessage[], fullText: string) => {
@@ -955,8 +959,8 @@ export function useStatusChatInputController(props: any) {
       updatedAt: Date.now(),
       workingDirectory,
     });
-    const outgoingUserMessage: ChatMessage = { role: "user", content: outgoingLabel, attachments: outgoingAttachments, surface: "chat" };
-    const pendingAssistantMessage: ChatMessage = withActiveProcessEvents({ role: "assistant", content: "", surface: "chat" });
+    const outgoingUserMessage: ChatMessage = { role: "user", content: outgoingLabel, attachments: outgoingAttachments, surface: "chat", createdAt: requestStartedAt };
+    const pendingAssistantMessage: ChatMessage = withActiveProcessEvents({ role: "assistant", content: "", surface: "chat", createdAt: requestStartedAt + 1 });
     appendMessage(selectedAgent.id, outgoingUserMessage, selectedStorageKey);
     appendMessage(selectedAgent.id, pendingAssistantMessage, selectedStorageKey);
     appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [outgoingUserMessage, pendingAssistantMessage]);
@@ -1026,7 +1030,7 @@ export function useStatusChatInputController(props: any) {
         return { ...current, messages: replaceActiveAssistantMessage(current.messages, message) };
       });
     };
-    const renderAssistantText = (content: string) => {
+    const renderAssistantText = (content: string, createdAt?: number) => {
       const nextText = compactRepeatedAssistantText(content).trim();
       if (!nextText) return;
       if (sawAssistantContent && nextText === streamedAssistantText.trim()) return;
@@ -1034,7 +1038,7 @@ export function useStatusChatInputController(props: any) {
       streamedAssistantText = nextText;
       sawAssistantContent = true;
       markChatStreamChunk(selectedStorageKey);
-      replacePendingAssistant({ role: "assistant", content: nextText, surface: "chat" });
+      replacePendingAssistant({ role: "assistant", content: nextText, surface: "chat", createdAt });
       updateTask(taskId, { lastMessage: nextText });
     };
     const abortController = new AbortController();
@@ -1102,7 +1106,7 @@ export function useStatusChatInputController(props: any) {
         if (String(sessionMessage?.role ?? "").toLowerCase() === "assistant") {
           const assistantText = String(sessionMessage?.content ?? "");
           recoveredAssistantText += assistantText;
-          renderAssistantText(assistantText);
+          renderAssistantText(assistantText, sessionMessageCreatedMs(sessionMessage) || undefined);
         }
       }
     };

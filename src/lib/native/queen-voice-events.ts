@@ -1,4 +1,5 @@
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
 
 export const QUEEN_VOICE_TOGGLE_EVENT = "hivemindos:queen-bee-voice";
 export const QUEEN_SETTINGS_OPEN_EVENT = "hivemindos:queen-bee-settings";
@@ -31,14 +32,11 @@ export async function listenForQueenVoiceToggle(onToggle: () => void) {
       console.info("[queen-voice] tauri toggle event received");
       onToggle();
     });
+    const safeUnlistenTauri = createSafeTauriUnlisten(unlistenTauri);
     console.info("[queen-voice] tauri + DOM listeners registered");
     return () => {
       window.removeEventListener(QUEEN_VOICE_TOGGLE_EVENT, handleDomEvent);
-      try {
-        unlistenTauri();
-      } catch {
-        // The webview may already be tearing down.
-      }
+      safeUnlistenTauri();
     };
   } catch (listenError) {
     console.error("[queen-voice] tauri listen failed; DOM fallback only", listenError);
@@ -61,13 +59,10 @@ export async function listenForQueenSettingsOpen(onOpen: () => void) {
   try {
     const { listen } = await import("@tauri-apps/api/event");
     const unlistenTauri = await listen(QUEEN_SETTINGS_OPEN_EVENT, () => onOpen());
+    const safeUnlistenTauri = createSafeTauriUnlisten(unlistenTauri);
     return () => {
       window.removeEventListener(QUEEN_SETTINGS_OPEN_EVENT, handleDomEvent);
-      try {
-        unlistenTauri();
-      } catch {
-        // The webview may already be tearing down.
-      }
+      safeUnlistenTauri();
     };
   } catch (listenError) {
     console.error("[queen-settings] tauri listen failed; DOM fallback only", listenError);

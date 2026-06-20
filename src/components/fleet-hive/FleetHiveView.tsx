@@ -367,6 +367,14 @@ export function FleetHiveView({
     onRemove?.(m.source, a.source);
   }, [onRemove]);
 
+  // Clicking an already-selected hive petal opens that agent's settings — the
+  // same handler the panel's Settings chip uses, resolved back to fleet types.
+  const openAgentSettings = React.useCallback((machineId: string, agentId: string) => {
+    const m = displayMachines.find((x) => x.id === machineId);
+    const a = m?.agents.find((x) => x.id === agentId);
+    if (m && a) onEditSettings?.(m.source, a.source);
+  }, [displayMachines, onEditSettings]);
+
   const handlers: HivePanelHandlers = {
     onAddAgent: onAddAgent ? (m) => onAddAgent(m.source) : undefined,
     onAddMachine,
@@ -458,6 +466,7 @@ export function FleetHiveView({
                       machines={displayMachines}
                       sel={effectiveSel}
                       onSelect={setSel}
+                      onOpenAgentSettings={onEditSettings ? openAgentSettings : undefined}
                       onAddAgent={handlers.onAddAgent}
                       onAddMachine={onAddMachine}
                       onOpenQueenSettings={onOpenQueenSettings}

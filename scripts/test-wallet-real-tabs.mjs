@@ -8,10 +8,12 @@ const dataSource = readFileSync(join(root, "src/components/wallets-drop-in/walle
 const viewSource = readFileSync(join(root, "src/components/wallets-drop-in/WalletsView.tsx"), "utf8");
 const rewardActionsSource = readFileSync(join(root, "src/components/wallets-drop-in/WalletRewardsActions.tsx"), "utf8");
 const panelSource = readFileSync(join(root, "src/features/dashboard/views/WalletPanel.tsx"), "utf8");
+const walletControllerSource = readFileSync(join(root, "src/features/dashboard/hooks/use-wallet-files-controller.tsx"), "utf8");
 const nativePersonalWalletsSource = readFileSync(join(root, "src/lib/native/personal-wallets.ts"), "utf8");
 const nativeObsidianSource = readFileSync(join(root, "src-tauri/src/obsidian.rs"), "utf8");
 const activityRouteSource = readFileSync(join(root, "src/app/api/wallet/activity/route.ts"), "utf8");
 const dashboardSource = readFileSync(join(root, "src/features/dashboard/DashboardApp.tsx"), "utf8");
+const walletLedgerSource = readFileSync(join(root, "src/lib/services/obsidian/wallet-ledger.ts"), "utf8");
 
 assert.match(dataSource, /export const FR_USAGE_SERIES = \[\];/);
 assert.match(dataSource, /export const FR_HONEY_LEDGER = \[\];/);
@@ -25,6 +27,7 @@ assert.match(dataSource, /FR_USAGE_SERIES\.splice\(0, FR_USAGE_SERIES\.length, \
 assert.match(dataSource, /FR_USAGE_ROWS\.splice\(0, FR_USAGE_ROWS\.length, \.\.\.\(Array\.isArray\(data\.usageRows\)/);
 assert.match(dataSource, /FR_HONEY_LEDGER\.splice\(0, FR_HONEY_LEDGER\.length, \.\.\.\(Array\.isArray\(data\.honeyLedger\)/);
 assert.match(dataSource, /FR_HONEY_BY_AGENT\.splice\(0, FR_HONEY_BY_AGENT\.length, \.\.\.\(Array\.isArray\(data\.honeyByAgent\)/);
+assert.match(dataSource, /if \(amt < 1\) return amt\.toLocaleString\(undefined, \{ maximumFractionDigits: 6 \}\)/);
 assert.match(dataSource, /Object\.assign\(rail, override\)/);
 assert.match(dataSource, /Object\.assign\(FR_USEPOD, data\.usePod\)/);
 assert.doesNotMatch(dataSource, /Hermes-α|MiroShark-sim|Main Treasury|upk_7f|pod-8Fq2|Healthy · 142|142 models/);
@@ -36,6 +39,7 @@ assert.match(viewSource, /Math\.max\(1, \.\.\.FR_USAGE_SERIES\.map/);
 assert.match(viewSource, /Math\.max\(1, \.\.\.byAgent\.map/);
 assert.match(viewSource, /const statusLabel = String\(u\.status \|\| "unknown"\)/);
 assert.doesNotMatch(viewSource, /Status<\/span><strong style=\{\{ color: "var\(--live\)" \}\}>Ready/);
+assert.match(viewSource, /alignItems: "flex-start", gap: 22/);
 
 assert.match(panelSource, /fetch\("\/api\/wallet\/activity\?limit=100"/);
 assert.match(panelSource, /fetch\("\/api\/honey-ledger"/);
@@ -51,6 +55,13 @@ assert.doesNotMatch(panelSource, /void refreshRuntimeUsage\?\.\(\)/);
 assert.doesNotMatch(panelSource, /\}, \[activeView, refreshRuntimeUsage\]\);/);
 assert.match(panelSource, /const runtimeDataSource = useMemo/);
 assert.doesNotMatch(panelSource, /buildDropInRuntimeData\(props, personalWallets/);
+assert.match(panelSource, /mergePersonalWalletSources\(personalWallets, props\.walletsByAgent\)/);
+assert.match(panelSource, /refreshPersonalWalletBalances/);
+assert.match(panelSource, /PERSONAL_WALLET_TOKEN_REFRESH_MS/);
+assert.match(walletControllerSource, /totalValueUsd/);
+assert.match(walletControllerSource, /Balance refreshed: \$\$\{currentBalanceUsd\.toFixed\(2\)\} total/);
+assert.match(walletLedgerSource, /\["tokens", record\.wallet\.tokens\]/);
+assert.match(walletLedgerSource, /tokens: parseWalletTokens\(fm\.tokens\)/);
 assert.match(panelSource, /loadWalletActivity\(\)/);
 assert.match(panelSource, /loadHoneyLedger\(\)/);
 assert.match(panelSource, /function hasHiveEnvKey/);
@@ -71,6 +82,8 @@ assert.doesNotMatch(nativePersonalWalletsSource, /nativePrivateFilesystemAccessG
 assert.doesNotMatch(nativePersonalWalletsSource, /allowPrivateFilesystem/);
 assert.match(nativeObsidianSource, /pub fn obsidian_personal_wallets\(vault_path: Option<String>\)/);
 assert.match(nativeObsidianSource, /fn split_json_objects/);
+assert.match(nativeObsidianSource, /fn wallet_tokens_field/);
+assert.match(nativeObsidianSource, /"tokens": wallet_tokens_field\(&fm, "tokens"\)/);
 assert.doesNotMatch(nativeObsidianSource, /allow_private_filesystem/);
 
 const actionRefs = new Set([...`${viewSource}\n${rewardActionsSource}`.matchAll(/actions\?\.([a-zA-Z0-9_]+)/g)].map((match) => match[1]));

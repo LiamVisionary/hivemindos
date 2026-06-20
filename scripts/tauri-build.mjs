@@ -27,6 +27,28 @@ const appApiDir = join(projectRoot, "src", "app", "api");
 const staticHiddenApiDir = join(projectRoot, ".next-tauri", "hidden-app-api");
 const resourcesDir = join(projectRoot, "src-tauri", "resources");
 const staticResourceDir = join(projectRoot, "src-tauri", "static");
+const startupLoadingAssetDirName = "loading";
+const startupBeeLottieSource = join(
+  projectRoot,
+  "public",
+  "animations",
+  "Honey bee.lottie",
+);
+const startupBeeLoaderSource = join(
+  projectRoot,
+  "src-tauri",
+  "loading",
+  "bee-lottie-loader.js",
+);
+const dotLottieWebDistDir = join(
+  projectRoot,
+  "node_modules",
+  "@lottiefiles",
+  "dotlottie-web",
+  "dist",
+);
+const dotLottieRuntimeSource = join(dotLottieWebDistDir, "index.js");
+const dotLottieWasmSource = join(dotLottieWebDistDir, "dotlottie-player.wasm");
 // The same entitlements the Tauri bundler signs the app with. The bundled node
 // sidecar JIT-compiles, so it must be signed WITH these (allow-jit /
 // allow-unsigned-executable-memory) under the hardened runtime or macOS kills it
@@ -917,6 +939,24 @@ function copyRequiredRuntimePackages() {
   }
 }
 
+function copyStartupBeeLottieAssets(destinationRoot) {
+  const loadingAssetDir = join(destinationRoot, startupLoadingAssetDirName);
+  mkdirSync(loadingAssetDir, { recursive: true });
+  copyFileSync(
+    startupBeeLoaderSource,
+    join(loadingAssetDir, "bee-lottie-loader.js"),
+  );
+  copyFileSync(
+    startupBeeLottieSource,
+    join(loadingAssetDir, "Honey bee.lottie"),
+  );
+  copyFileSync(dotLottieRuntimeSource, join(loadingAssetDir, "dotlottie.js"));
+  copyFileSync(
+    dotLottieWasmSource,
+    join(loadingAssetDir, "dotlottie-player.wasm"),
+  );
+}
+
 function writeEmbeddedStaticStub() {
   mkdirSync(staticResourceDir, { recursive: true });
   // In embedded mode the real UI is served by the bundled Node server, which
@@ -928,6 +968,7 @@ function writeEmbeddedStaticStub() {
   const loadingShellDir = join(projectRoot, "src-tauri", "loading-shell");
   if (existsSync(join(loadingShellDir, "index.html"))) {
     cpSync(loadingShellDir, staticResourceDir, { recursive: true });
+    copyStartupBeeLottieAssets(staticResourceDir);
   } else {
     // Fallback: never ship a window with no index.html (blank/404 on boot).
     writeFileSync(

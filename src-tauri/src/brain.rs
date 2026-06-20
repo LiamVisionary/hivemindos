@@ -33,6 +33,12 @@ struct BrainSkillSummary {
     imported: bool,
     #[serde(rename = "importedAs")]
     imported_as: Option<String>,
+    #[serde(rename = "auditStatus", skip_serializing_if = "Option::is_none")]
+    audit_status: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    capabilities: Vec<String>,
+    #[serde(rename = "envKeys", skip_serializing_if = "Vec::is_empty")]
+    env_keys: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -196,10 +202,22 @@ fn find_skill_files(root: &Path, max_depth: usize) -> Vec<PathBuf> {
     found
 }
 
-fn source_provider_label(skill_dir: &Path) -> Option<String> {
+fn source_metadata(skill_dir: &Path) -> Option<serde_json::Value> {
     let raw = fs::read_to_string(skill_dir.join(SOURCE_METADATA_FILE)).ok()?;
-    let parsed = serde_json::from_str::<serde_json::Value>(&raw).ok()?;
-    parsed.get("providerLabel").and_then(serde_json::Value::as_str).map(str::to_string)
+    serde_json::from_str::<serde_json::Value>(&raw).ok()
+}
+
+fn source_metadata_array(metadata: Option<&serde_json::Value>, key: &str) -> Vec<String> {
+    metadata
+        .and_then(|item| item.get(key))
+        .and_then(serde_json::Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn is_managed_shared_skill_mirror(skill_path: &Path) -> bool {
@@ -268,6 +286,11 @@ fn skill_summary(
     };
     let checksum = sha256(&format!("{}:{markdown}", metadata.as_ref().map(|item| item.len()).unwrap_or(0)));
     let existing = shared_by_checksum.get(&checksum).or_else(|| shared_by_slug.get(&slug));
+    let source_metadata = if provider == "shared" {
+        skill_path.parent().and_then(source_metadata)
+    } else {
+        None
+    };
     Some(BrainSkillSummary {
         id: format!("{provider}:{}", skill_path.to_string_lossy()),
         slug: slug.clone(),
@@ -275,7 +298,12 @@ fn skill_summary(
         description: fields.get("description").cloned().unwrap_or_else(|| first_paragraph(&markdown)),
         provider: provider.to_string(),
         provider_label: if provider == "shared" {
-            skill_path.parent().and_then(source_provider_label).unwrap_or_else(|| provider_label.to_string())
+            source_metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("providerLabel"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(|| provider_label.to_string())
         } else {
             provider_label.to_string()
         },
@@ -293,6 +321,13 @@ fn skill_summary(
             .unwrap_or(0),
         imported: provider == "shared" || existing.is_some(),
         imported_as: existing.map(|item| item.slug.clone()),
+        audit_status: source_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get("auditStatus"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+        capabilities: source_metadata_array(source_metadata.as_ref(), "capabilities"),
+        env_keys: source_metadata_array(source_metadata.as_ref(), "envKeys"),
     })
 }
 

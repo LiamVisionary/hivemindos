@@ -732,7 +732,6 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
       scheduler: DEFAULT_RUNTIME_SCHEDULER_FEATURE,
       profile: {
         ...DEFAULT_RUNTIME_PROFILE_FEATURE,
-        firstAgentBeeRole: "queen",
       },
       integration: DEFAULT_RUNTIME_INTEGRATION_FEATURE,
     },

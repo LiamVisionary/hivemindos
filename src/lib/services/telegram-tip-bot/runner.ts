@@ -44,6 +44,7 @@ const MAX_WITHDRAWAL_ATTEMPTS = 3;
 export type TipBotRunnerStatus = {
   status: "running" | "stopped";
   botUsername?: string;
+  memberTagBotUsername?: string;
   treasuryAddress?: string;
   withdrawalProvider?: "treasury" | "bankr";
   startedAt?: string;
@@ -156,6 +157,17 @@ async function buildConfig(api: TelegramBotApi, botUsername: string): Promise<Ti
       ),
     },
   };
+}
+
+async function buildMemberTagApi(primaryToken: string): Promise<{ api?: TelegramBotApi; username?: string }> {
+  const tagToken =
+    (await tipBotEnv("MEMBER_TAG_TOKEN")) ||
+    (await hiveEnvValue("HIVEMINDOS_TELEGRAM_MEMBER_TAG_BOT_TOKEN")) ||
+    (await hiveEnvValue("SWARM_SOVEREIGN_TELEGRAM_BOT_TOKEN"));
+  if (!tagToken || tagToken === primaryToken) return {};
+  const api = new TelegramBotApi(tagToken);
+  const me = await api.getMe().catch(() => null);
+  return me?.username ? { api, username: me.username } : {};
 }
 
 async function updatesLoop(runner: TipBotRunner, runtime: TipBotRuntime) {
@@ -317,6 +329,7 @@ async function memberTagLoop(runner: TipBotRunner, runtime: TipBotRuntime) {
       const result = await syncMemberTags(runtime);
       if (result.errors.length) {
         runner.lastError = `Telegram member tag sync skipped ${result.errors.length} update${result.errors.length === 1 ? "" : "s"}.`;
+        console.warn(`[tip-bot] member tag sync skipped ${result.errors.length} update${result.errors.length === 1 ? "" : "s"}: ${result.errors.slice(0, 3).join(" | ")}`);
       }
     } catch (error) {
       runner.lastError = error instanceof Error ? error.message : String(error);
@@ -353,7 +366,7 @@ async function syncMemberTags(runtime: TipBotRuntime): Promise<{ applied: number
         continue;
       }
       if ((member.tag ?? "") !== action.tag) {
-        await runtime.api.setChatMemberTag({ chatId: action.chatId, userId: action.userId, tag: action.tag });
+        await setMemberTag(runtime, action);
       }
       applied.push({ chatId: action.chatId, userId: action.userId, tag: action.tag });
     } catch (error) {
@@ -368,6 +381,19 @@ async function syncMemberTags(runtime: TipBotRuntime): Promise<{ applied: number
     });
   }
   return { applied: applied.length, errors };
+}
+
+async function setMemberTag(runtime: TipBotRuntime, action: { chatId: string; userId: string; tag: string }) {
+  try {
+    await runtime.api.setChatMemberTag({ chatId: action.chatId, userId: action.userId, tag: action.tag });
+  } catch (error) {
+    if (!runtime.memberTagApi || !isChatAdminRequired(error)) throw error;
+    await runtime.memberTagApi.setChatMemberTag({ chatId: action.chatId, userId: action.userId, tag: action.tag });
+  }
+}
+
+function isChatAdminRequired(error: unknown): boolean {
+  return error instanceof Error && /CHAT_ADMIN_REQUIRED/i.test(error.message);
 }
 
 async function readMemberTagTiers(state: Awaited<ReturnType<typeof readTipBotState>>, decimals: number): Promise<Map<string, MemberTagTier>> {
@@ -405,8 +431,9 @@ export async function startTelegramTipBot(): Promise<TipBotRunnerStatus> {
   const api = new TelegramBotApi(token);
   const me = await api.getMe();
   if (!me.username) throw new Error("Bot has no username — check the token.");
+  const memberTagApi = await buildMemberTagApi(token);
   const config = await buildConfig(api, me.username);
-  const runtime: TipBotRuntime = { api, config };
+  const runtime: TipBotRuntime = { api, memberTagApi: memberTagApi.api, config };
 
   await mutateTipBotState((draft) => {
     draft.settings.botUsername = config.botUsername;
@@ -436,6 +463,7 @@ export async function startTelegramTipBot(): Promise<TipBotRunnerStatus> {
   const runner: TipBotRunner = {
     status: "running",
     botUsername: config.botUsername,
+    memberTagBotUsername: memberTagApi.username,
     treasuryAddress: config.treasuryAddress,
     withdrawalProvider: config.withdrawalProvider,
     startedAt: new Date().toISOString(),
@@ -470,6 +498,7 @@ export function getTelegramTipBotStatus(): TipBotRunnerStatus {
   return {
     status: runner.status,
     botUsername: runner.botUsername,
+    memberTagBotUsername: runner.memberTagBotUsername,
     treasuryAddress: runner.treasuryAddress,
     withdrawalProvider: runner.withdrawalProvider,
     startedAt: runner.startedAt,

@@ -7,6 +7,10 @@
    the same Cmd+B dashboard actions AND returns the Queen's spoken/text reply. */
 
 import * as React from "react";
+import {
+  formatDashboardScreenContextForPrompt,
+  type DashboardScreenContext,
+} from "@/features/dashboard/screen-context";
 
 export type QueenChatTurn = {
   id: string;
@@ -23,7 +27,7 @@ export type QueenChatTurn = {
 
 type RunQueenCommand = (
   command: string,
-  opts?: { onModalOpen?: () => void },
+  opts?: { onModalOpen?: () => void; screenContext?: DashboardScreenContext },
 ) => Promise<string>;
 
 type QueenChatContextValue = {
@@ -36,7 +40,7 @@ type QueenChatContextValue = {
   removeTurn: (id: string) => void;
   clear: () => void;
   /** Typed entry point: append the user turn, run the Queen, fill the reply. */
-  sendText: (text: string) => Promise<void>;
+  sendText: (text: string, opts?: { screenContext?: DashboardScreenContext }) => Promise<void>;
 };
 
 const QueenChatContext = React.createContext<QueenChatContextValue | null>(null);
@@ -98,7 +102,11 @@ export function QueenChatProvider({
 
   // Execute one tool the Queen decided to call. drive_dashboard runs the
   // client-side Bee Pilot planner; the rest hit the existing voice-route actions.
-  const executeQueenTool = React.useCallback(async (name: string, args: Record<string, unknown>) => {
+  const executeQueenTool = React.useCallback(async (
+    name: string,
+    args: Record<string, unknown>,
+    screenContext?: DashboardScreenContext,
+  ) => {
     const post = async (payload: Record<string, unknown>) => {
       const res = await fetch("/api/queen-bee/voice", {
         method: "POST",
@@ -112,14 +120,21 @@ export function QueenChatProvider({
         const run = runRef.current;
         const command = String(args.command ?? "").trim();
         if (!run || !command) return "The dashboard isn't available to drive right now.";
-        return (await run(command))?.trim() || "Done.";
+        return (await run(command, { screenContext }))?.trim() || "Done.";
       }
       if (name === "ask_hivemind_agent") {
-        const data = await post({ action: "agent-turn", message: String(args.message ?? "") });
+        const data = await post({
+          action: "agent-turn",
+          message: withScreenContext(String(args.message ?? ""), screenContext),
+        });
         return String(data?.text || data?.detail || "Done.");
       }
       if (name === "create_hive_task") {
-        const data = await post({ action: "submit-task", title: args.title, message: args.message });
+        const data = await post({
+          action: "submit-task",
+          title: args.title,
+          message: withScreenContext(String(args.message ?? ""), screenContext),
+        });
         return String(data?.summary || (data?.created ? `Created task "${String(data?.taskTitle ?? "")}".` : "Added it to the work board."));
       }
       if (name === "remember_preference") {
@@ -135,7 +150,11 @@ export function QueenChatProvider({
   // One agentic turn: the SAME brain as voice. The Queen chats, or calls tools;
   // we run the tools client-side and loop until she gives a final reply. Falls
   // back to the heuristic Bee Pilot planner when no tool-capable model exists.
-  const runQueenTurn = React.useCallback(async (trimmed: string, queenId: string) => {
+  const runQueenTurn = React.useCallback(async (
+    trimmed: string,
+    queenId: string,
+    screenContext?: DashboardScreenContext,
+  ) => {
     const messages = messagesRef.current;
     if (messages.length > 24) messages.splice(0, messages.length - 24);
     messages.push({ role: "user", content: trimmed });
@@ -146,7 +165,7 @@ export function QueenChatProvider({
         updateTurn(queenId, { text: "The Queen isn't reachable right now.", live: false, pending: false });
         return;
       }
-      const reply = (await run(trimmed))?.trim() || "Done.";
+      const reply = (await run(trimmed, { screenContext }))?.trim() || "Done.";
       updateTurn(queenId, { text: reply, live: false, pending: false });
       messages.push({ role: "assistant", content: reply });
     };
@@ -156,7 +175,7 @@ export function QueenChatProvider({
         const res = await fetch("/api/queen-bee/voice", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "chat-turn", messages }),
+          body: JSON.stringify({ action: "chat-turn", messages, screenContext }),
         });
         const data = (await res.json().catch(() => null)) as {
           ok?: boolean;
@@ -176,7 +195,7 @@ export function QueenChatProvider({
           for (const tc of toolCalls) {
             let parsed: Record<string, unknown> = {};
             try { parsed = JSON.parse(tc.arguments || "{}"); } catch { parsed = {}; }
-            const result = await executeQueenTool(tc.name, parsed);
+            const result = await executeQueenTool(tc.name, parsed, screenContext);
             messages.push({ role: "tool", tool_call_id: tc.id, content: result });
           }
           continue; // loop back so she can read the tool results
@@ -196,7 +215,7 @@ export function QueenChatProvider({
   }, [updateTurn, executeQueenTool]);
 
   const sendText = React.useCallback(
-    async (text: string) => {
+    async (text: string, opts?: { screenContext?: DashboardScreenContext }) => {
       const trimmed = text.trim();
       if (!trimmed) return;
       appendTurn({ who: "you", text: trimmed, source: "text" });
@@ -204,7 +223,7 @@ export function QueenChatProvider({
       // Chain so overlapping sends don't interleave the OpenAI message log.
       const task = sendChainRef.current
         .catch(() => {})
-        .then(() => runQueenTurn(trimmed, queenId));
+        .then(() => runQueenTurn(trimmed, queenId, opts?.screenContext));
       sendChainRef.current = task;
       return task;
     },
@@ -223,4 +242,11 @@ export function useQueenChat(): QueenChatContextValue {
   const ctx = React.useContext(QueenChatContext);
   if (!ctx) throw new Error("useQueenChat must be used within a QueenChatProvider");
   return ctx;
+}
+
+function withScreenContext(message: string, screenContext?: DashboardScreenContext) {
+  const context = formatDashboardScreenContextForPrompt(screenContext);
+  const trimmed = message.trim();
+  if (!context) return trimmed;
+  return `${context}\n\nUser request: ${trimmed}`;
 }

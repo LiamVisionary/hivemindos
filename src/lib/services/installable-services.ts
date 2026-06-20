@@ -7,11 +7,12 @@ import { promisify } from "node:util";
 import { homedir } from "@/lib/home-dir";
 import { readBrowserUsePermissions } from "@/lib/services/browser-use-permissions";
 import { deployAgenticInbox, readAgenticInboxStatus, scaffoldAgenticInbox } from "@/lib/services/cloudflare/agentic-inbox-setup";
+import { installPalmierProFromDmg, openPalmierProApp, quitPalmierProApp, readPalmierProInstallableServiceStatus } from "@/lib/services/palmier-pro-installable";
 import { hiveEnvPresence } from "@/lib/services/shared-hive-env";
 
 const execFileAsync = promisify(execFile);
 
-export type InstallableServiceId = "n8n" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach";
+export type InstallableServiceId = "n8n" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro";
 export type InstallableServiceAction =
   | "status"
   | "install"
@@ -30,7 +31,7 @@ export type InstallableServiceActionInput = {
   maxReplies?: number;
 };
 
-export const INSTALLABLE_SERVICE_IDS: InstallableServiceId[] = ["n8n", "browser-use", "agentic-inbox", "mcp-email-server", "openhands", "aider", "agent-reach"];
+export const INSTALLABLE_SERVICE_IDS: InstallableServiceId[] = ["n8n", "browser-use", "agentic-inbox", "mcp-email-server", "openhands", "aider", "agent-reach", "palmier-pro"];
 
 export type InstallableServiceStatus = {
   id: InstallableServiceId;
@@ -40,7 +41,7 @@ export type InstallableServiceStatus = {
   version?: string;
   openUrl?: string;
   detail: string;
-  installMethod: "docker" | "uv" | "uv-tool" | "pipx" | "cloudflare-worker";
+  installMethod: "docker" | "uv" | "uv-tool" | "pipx" | "cloudflare-worker" | "dmg";
   requirements: string[];
   sourceUrl: string;
   provenance?: {
@@ -1130,6 +1131,9 @@ async function readMcpEmailServerInstallableServiceStatus(): Promise<Installable
 }
 
 export async function readInstallableServiceStatus(id: InstallableServiceId): Promise<InstallableServiceStatus> {
+  if (id === "palmier-pro") {
+    return readPalmierProInstallableServiceStatus();
+  }
   if (id === "agent-reach") {
     return readAgentReachInstallableServiceStatus();
   }
@@ -1210,6 +1214,22 @@ export async function runInstallableServiceAction(
   action: InstallableServiceAction,
   input?: InstallableServiceActionInput,
 ): Promise<InstallableServiceStatus | InstallableServiceActionResult> {
+  if (id === "palmier-pro") {
+    if (action === "status") return readInstallableServiceStatus(id);
+    if (action === "install") {
+      await installPalmierProFromDmg();
+      return readInstallableServiceStatus(id);
+    }
+    if (action === "start") {
+      await openPalmierProApp();
+      return readInstallableServiceStatus(id);
+    }
+    if (action === "stop") {
+      await quitPalmierProApp();
+      return readInstallableServiceStatus(id);
+    }
+    throw new Error("Palmier Pro supports install, open, quit, and status actions from HivemindOS.");
+  }
   if (
     (
       action === "install-pipx" ||

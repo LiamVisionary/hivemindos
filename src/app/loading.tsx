@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { AppLoadingBee } from "@/app/AppLoadingBee";
 
 export default function Loading() {
   return (
@@ -42,7 +42,7 @@ export default function Loading() {
               "0 24px 70px rgba(0, 0, 0, 0.24), 0 0 28px rgba(45, 212, 191, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.06)",
           }}
         >
-          <Image src="/icon-192.png" alt="" width={72} height={72} priority unoptimized style={{ objectFit: "contain" }} />
+          <AppLoadingBee />
         </div>
         <strong style={{ fontSize: "1.32rem", fontWeight: 800, lineHeight: 1.1 }}>
           Starting HivemindOS

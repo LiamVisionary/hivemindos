@@ -9,6 +9,7 @@ import { stripJsonRenderPayload } from "@/components/json-render/JsonRenderSurfa
 import { createNativeLocalFolder } from "@/lib/native/filesystem";
 import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 import { chatTelemetryMessages, chatTelemetrySession } from "@/lib/services/telemetry/chat-dev-telemetry";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 
 function isAutomationHydratedTranscript(messages: Array<{ content?: string }> = []) {
   const transcript = messages.slice(0, 8).map((message) => message.content ?? "").join("\n");
@@ -462,64 +463,66 @@ export function useChatTreeController(props: any) {
       name: machine.name,
       collectorUrl: machine.collectorUrl,
     }, (directory) => {
-      const path = directory.path?.trim();
-      if (!path) {
-        setStatus("The directory picker did not return a usable path.");
-        setStatusAgentId(selectedAgent.id);
-        return;
-      }
+      void (async () => {
+        const path = directory.path?.trim();
+        if (!path) {
+          setStatus("The directory picker did not return a usable path.");
+          setStatusAgentId(selectedAgent.id);
+          return;
+        }
 
-      const label = directory.name || workspaceLabelFromPath(path);
-      const linkedDirectory = { ...directory, name: label, path };
-      const existingFolder = chatCustomFolders.some((folder) => folder.machineKey === machine.key && folder.path === path)
-        || machine.version?.appDir === path;
-      const hasProjectChat = Boolean(selectedChatDirectoryPath && selectedChatLeafKey);
-      const sourceStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
-      const sourceMessages = messagesByAgent[sourceStorageKey] ?? [];
-      const hasMessages = sourceMessages.some((message) => isManualAgentChatMessage(message) && message.content.trim());
-      const nextLeafKey = `folder-${machine.key}-${chatDedupeKey(path)}-${selectedAgent.id}`;
-      const targetStorageKey = chatMessageStorageKey(selectedAgent.id, nextLeafKey);
-      const shouldMove = hasProjectChat && hasMessages && sourceStorageKey !== targetStorageKey
-        ? window.confirm(existingFolder
-          ? `Move this chat to ${label}?`
-          : `Create ${label} in chat history and move this chat there?`)
-        : false;
+        const label = directory.name || workspaceLabelFromPath(path);
+        const linkedDirectory = { ...directory, name: label, path };
+        const existingFolder = chatCustomFolders.some((folder) => folder.machineKey === machine.key && folder.path === path)
+          || machine.version?.appDir === path;
+        const hasProjectChat = Boolean(selectedChatDirectoryPath && selectedChatLeafKey);
+        const sourceStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
+        const sourceMessages = messagesByAgent[sourceStorageKey] ?? [];
+        const hasMessages = sourceMessages.some((message) => isManualAgentChatMessage(message) && message.content.trim());
+        const nextLeafKey = `folder-${machine.key}-${chatDedupeKey(path)}-${selectedAgent.id}`;
+        const targetStorageKey = chatMessageStorageKey(selectedAgent.id, nextLeafKey);
+        const shouldMove = hasProjectChat && hasMessages && sourceStorageKey !== targetStorageKey
+          ? await confirmUserAction(existingFolder
+            ? `Move this chat to ${label}?`
+            : `Create ${label} in chat history and move this chat there?`)
+          : false;
 
-      if (!existingFolder || shouldMove) {
-        const nextFolder: ChatCustomFolder = {
-          id: `${machine.key}-${Date.now()}`,
-          machineKey: machine.key,
-          label,
-          path,
-          agentId: selectedAgent.id,
-          createdAt: Date.now(),
-        };
-        setChatCustomFolders((current) => [
-          nextFolder,
-          ...current.filter((folder) => !(folder.machineKey === nextFolder.machineKey && folder.path === nextFolder.path)),
-        ]);
-      }
+        if (!existingFolder || shouldMove) {
+          const nextFolder: ChatCustomFolder = {
+            id: `${machine.key}-${Date.now()}`,
+            machineKey: machine.key,
+            label,
+            path,
+            agentId: selectedAgent.id,
+            createdAt: Date.now(),
+          };
+          setChatCustomFolders((current) => [
+            nextFolder,
+            ...current.filter((folder) => !(folder.machineKey === nextFolder.machineKey && folder.path === nextFolder.path)),
+          ]);
+        }
 
-      setSelectedChatDirectoryPath(path);
-      if (shouldMove) {
-        setSelectedChatLeafKey(nextLeafKey);
-        setChatMessageWindow(null);
-        setMessagesByAgent((current) => {
-          const movedMessages = current[sourceStorageKey] ?? [];
-          if (!movedMessages.length) return current;
-          const next = { ...current };
-          next[targetStorageKey] = movedMessages;
-          if (sourceStorageKey !== targetStorageKey) delete next[sourceStorageKey];
-          return next;
+        setSelectedChatDirectoryPath(path);
+        if (shouldMove) {
+          setSelectedChatLeafKey(nextLeafKey);
+          setChatMessageWindow(null);
+          setMessagesByAgent((current) => {
+            const movedMessages = current[sourceStorageKey] ?? [];
+            if (!movedMessages.length) return current;
+            const next = { ...current };
+            next[targetStorageKey] = movedMessages;
+            if (sourceStorageKey !== targetStorageKey) delete next[sourceStorageKey];
+            return next;
+          });
+          setSelectedChatPreview(sourceMessages.length ? { agentId: selectedAgent.id, leafKey: nextLeafKey, messages: sourceMessages } : null);
+        }
+
+        void recordRecentDirectory?.(linkedDirectory, {
+          machineName: linkedDirectory.machineName ?? machine.name,
+          machineKey: linkedDirectory.machineKey ?? machine.key,
+          source: "chat",
         });
-        setSelectedChatPreview(sourceMessages.length ? { agentId: selectedAgent.id, leafKey: nextLeafKey, messages: sourceMessages } : null);
-      }
-
-      void recordRecentDirectory?.(linkedDirectory, {
-        machineName: linkedDirectory.machineName ?? machine.name,
-        machineKey: linkedDirectory.machineKey ?? machine.key,
-        source: "chat",
-      });
+      })();
     });
   }
 

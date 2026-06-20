@@ -17,18 +17,21 @@ import {
 import type { AgentTradingVenue, AgentWalletConfig } from "@/lib/types/agent-wallet";
 
 /**
- * Unified "buy a stock from a prompt" rail. Two venues behind one tool:
+ * Unified "trade a stock from a prompt" rail. Two venues, both directions:
  *
  *   - "alpaca"  — a real, regulated US brokerage. Places a market order via the
  *                 Alpaca Trading API. Defaults to PAPER trading; live trading is
  *                 reachable only when the wallet sets alpacaPaper:false.
  *   - "xstocks" — on-chain tokenized equities (Backed Finance xStocks). Buys by
- *                 swapping USDC -> the verified xStock SPL mint via Jupiter,
+ *                 swapping USDC -> the verified xStock SPL mint via Jupiter; sells
+ *                 by swapping the mint -> USDC (ExactOut for the requested USDC),
  *                 signing with the agent's existing local Solana wallet.
  *
- * Both venues require an explicit CONFIRM_BUY token (same shape as x402's
- * PAY_X402) and flow through the shared spend-governance chokepoint + ledger, so
- * company kill switches, rolling budgets, and approval escalation all apply.
+ * A buy requires CONFIRM_BUY, a sell CONFIRM_SELL (same shape as x402's PAY_X402).
+ * Both flow through the shared spend-governance chokepoint + ledger. A buy spends
+ * USDC, so the company kill switch, rolling budgets, and approval escalation all
+ * apply; a sell is an inflow, so only the kill switch binds and it never debits
+ * rolling budgets (see executeStockTrade).
  */
 
 const DEFAULT_ALPACA_KEY_ENV = "ALPACA_API_KEY_ID";
@@ -37,6 +40,14 @@ const JUPITER_BASE = process.env.JUPITER_API_BASE || "https://lite-api.jup.ag";
 const DEFAULT_SLIPPAGE_BPS = 100; // 1.0% — tokenized-equity pools are thinner than majors.
 
 export const BUY_STOCK_CONFIRMATION = "CONFIRM_BUY";
+export const SELL_STOCK_CONFIRMATION = "CONFIRM_SELL";
+
+/** Trade direction. A "sell" reduces an existing position back into USDC. */
+export type StockTradeSide = "buy" | "sell";
+
+export function stockTradeConfirmation(side: StockTradeSide): string {
+  return side === "sell" ? SELL_STOCK_CONFIRMATION : BUY_STOCK_CONFIRMATION;
+}
 
 export type BuyStockPolicy = Pick<
   AgentWalletConfig,
@@ -53,13 +64,15 @@ export type BuyStockPolicy = Pick<
 export type BuyStockInput = {
   agentId: string;
   policy: BuyStockPolicy;
+  /** Buy (default) turns USDC into a position; sell turns a position into USDC. */
+  side?: StockTradeSide;
   /** "AAPL" or "AAPLx" — resolved to the underlying (alpaca) or a verified mint (xstocks). */
   ticker: string;
-  /** USD to spend. Used as the order notional (alpaca) or swap-in amount (xstocks). */
+  /** USD value of the trade: the order notional (alpaca) or the USDC in/out leg (xstocks). */
   notionalUsd: number;
   /** Optional whole-share count for alpaca (overrides notional when present). */
   qty?: number;
-  /** Must equal CONFIRM_BUY to execute. */
+  /** Must equal CONFIRM_BUY for a buy, or CONFIRM_SELL for a sell, to execute. */
   confirmation?: string;
   /** Granted approval id supplied when retrying an escalated trade. */
   approvalToken?: string;
@@ -73,6 +86,7 @@ export type BuyStockInput = {
 
 export type BuyStockResult = {
   ok: boolean;
+  side: StockTradeSide;
   venue: AgentTradingVenue;
   ticker: string;
   notionalUsd: number;
@@ -142,6 +156,7 @@ function assertAmount(input: BuyStockInput, policy: BuyStockPolicy): number {
 // ---- Alpaca (real brokerage) ------------------------------------------------
 
 async function executeAlpaca(input: BuyStockInput): Promise<BuyStockResult> {
+  const side = input.side ?? "buy";
   const underlying = alpacaSymbol(input.ticker);
   const keyName = input.policy.alpacaKeyEnvName?.trim() || DEFAULT_ALPACA_KEY_ENV;
   const secretName = input.policy.alpacaSecretEnvName?.trim() || DEFAULT_ALPACA_SECRET_ENV;
@@ -152,8 +167,8 @@ async function executeAlpaca(input: BuyStockInput): Promise<BuyStockResult> {
   const paper = input.policy.alpacaPaper !== false;
   const base = paper ? "https://paper-api.alpaca.markets" : "https://api.alpaca.markets";
   const order = input.qty && input.qty > 0
-    ? { symbol: underlying, qty: String(input.qty), side: "buy", type: "market", time_in_force: "day" }
-    : { symbol: underlying, notional: input.notionalUsd.toFixed(2), side: "buy", type: "market", time_in_force: "day" };
+    ? { symbol: underlying, qty: String(input.qty), side, type: "market", time_in_force: "day" }
+    : { symbol: underlying, notional: input.notionalUsd.toFixed(2), side, type: "market", time_in_force: "day" };
 
   const response = await fetch(`${base}/v2/orders`, {
     method: "POST",
@@ -174,6 +189,7 @@ async function executeAlpaca(input: BuyStockInput): Promise<BuyStockResult> {
   const filled = Number(json.filled_qty || 0);
   return {
     ok: true,
+    side,
     venue: "alpaca",
     ticker: underlying,
     notionalUsd: input.notionalUsd,
@@ -182,7 +198,7 @@ async function executeAlpaca(input: BuyStockInput): Promise<BuyStockResult> {
     paper,
     acquired: Number.isFinite(filled) ? filled : undefined,
     status: json.status || "accepted",
-    detail: `${paper ? "Paper" : "LIVE"} market buy of ${underlying} submitted (order ${json.id}, status ${json.status || "accepted"}).`,
+    detail: `${paper ? "Paper" : "LIVE"} market ${side} of ${underlying} submitted (order ${json.id}, status ${json.status || "accepted"}).`,
   };
 }
 
@@ -195,10 +211,18 @@ type JupiterQuote = {
   [k: string]: unknown;
 };
 
-async function fetchJupiterQuote(mint: string, notionalUsd: number, slippageBps: number): Promise<JupiterQuote> {
-  const amountAtomic = Math.round(notionalUsd * 1_000_000); // USDC has 6 decimals.
-  if (amountAtomic <= 0) throw new Error("Swap amount rounds to zero USDC.");
-  const url = `${JUPITER_BASE}/swap/v1/quote?inputMint=${SOLANA_USDC_MINT}&outputMint=${mint}&amount=${amountAtomic}&slippageBps=${slippageBps}`;
+/**
+ * Quote a Jupiter swap (always ExactIn — tokenized-equity pools route ExactIn far
+ * more reliably than ExactOut). `amountAtomic` is in the input mint's atomic units.
+ */
+async function fetchJupiterQuote(
+  inputMint: string,
+  outputMint: string,
+  amountAtomic: number,
+  slippageBps: number,
+): Promise<JupiterQuote> {
+  if (amountAtomic <= 0) throw new Error("Swap amount rounds to zero.");
+  const url = `${JUPITER_BASE}/swap/v1/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amountAtomic}&slippageBps=${slippageBps}&swapMode=ExactIn`;
   const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
   if (!response.ok) throw new Error(`Jupiter quote failed (HTTP ${response.status}).`);
   const quote = (await response.json()) as JupiterQuote;
@@ -206,7 +230,23 @@ async function fetchJupiterQuote(mint: string, notionalUsd: number, slippageBps:
   return quote;
 }
 
+/**
+ * Quote the directly-executable swap for an xStock trade. A buy is USDC->mint for
+ * the requested USD. A sell sizes the position from the current USDC->mint price,
+ * then quotes mint->USDC for that many tokens — both legs ExactIn — so the sell
+ * routes through the same liquid pools as the buy. `usdcAtomic` is the requested
+ * USD in 6-decimal USDC units, so the caller always works in USD.
+ */
+async function quoteXStocksLeg(mint: string, side: StockTradeSide, usdcAtomic: number, slippageBps: number): Promise<JupiterQuote> {
+  if (side === "buy") return fetchJupiterQuote(SOLANA_USDC_MINT, mint, usdcAtomic, slippageBps);
+  const price = await fetchJupiterQuote(SOLANA_USDC_MINT, mint, usdcAtomic, slippageBps);
+  const mintAtomic = Math.floor(Number(price.outAmount) || 0);
+  if (mintAtomic <= 0) throw new Error("Could not size the sell from the current xStock price.");
+  return fetchJupiterQuote(mint, SOLANA_USDC_MINT, mintAtomic, slippageBps);
+}
+
 async function executeXStocksSwap(input: BuyStockInput): Promise<BuyStockResult> {
+  const side = input.side ?? "buy";
   const token = resolveXStock(input.ticker);
   if (!token) {
     throw new Error(`"${input.ticker}" is not a verified xStock. Supported: ${supportedXStockTickers().join(", ")}.`);
@@ -215,7 +255,8 @@ async function executeXStocksSwap(input: BuyStockInput): Promise<BuyStockResult>
   if (!input.secret) throw new Error("No local Solana wallet secret is available for the swap.");
 
   const slippageBps = input.slippageBps && input.slippageBps > 0 ? input.slippageBps : DEFAULT_SLIPPAGE_BPS;
-  const quote = await fetchJupiterQuote(token.mint, input.notionalUsd, slippageBps);
+  const amountAtomic = Math.round(input.notionalUsd * 1_000_000); // USDC has 6 decimals.
+  const quote = await quoteXStocksLeg(token.mint, side, amountAtomic, slippageBps);
 
   const keypair = Keypair.fromSecretKey(base58.decode(input.secret));
   const swapResponse = await fetch(`${JUPITER_BASE}/swap/v1/swap`, {
@@ -245,8 +286,11 @@ async function executeXStocksSwap(input: BuyStockInput): Promise<BuyStockResult>
   await connection.confirmTransaction({ signature, ...latest }, "confirmed");
 
   const priceImpactPct = quote.priceImpactPct != null ? Number(quote.priceImpactPct) : undefined;
+  // For a sell the swap's outAmount is the realized USDC (6 decimals).
+  const realizedUsd = side === "sell" ? (Number(quote.outAmount) || 0) / 1_000_000 : input.notionalUsd;
   return {
     ok: true,
+    side,
     venue: "xstocks",
     ticker: token.symbol,
     notionalUsd: input.notionalUsd,
@@ -254,33 +298,40 @@ async function executeXStocksSwap(input: BuyStockInput): Promise<BuyStockResult>
     paper: false,
     priceImpactPct,
     status: "confirmed",
-    detail: `Swapped ~$${input.notionalUsd.toFixed(2)} USDC into ${token.symbol} (${token.name}). Tx ${signature}.`,
+    detail: side === "sell"
+      ? `Swapped ${token.symbol} (${token.name}) into ~$${realizedUsd.toFixed(2)} USDC. Tx ${signature}.`
+      : `Swapped ~$${input.notionalUsd.toFixed(2)} USDC into ${token.symbol} (${token.name}). Tx ${signature}.`,
   };
 }
 
 // ---- Public API -------------------------------------------------------------
 
-export async function executeBuyStock(input: BuyStockInput): Promise<BuyStockResult> {
+export async function executeStockTrade(input: BuyStockInput): Promise<BuyStockResult> {
+  const side = input.side ?? "buy";
   const venue = assertVenue(input.policy);
   const notionalUsd = assertAmount(input, input.policy);
-  if (input.confirmation !== BUY_STOCK_CONFIRMATION) {
-    throw new Error(`Stock buys need confirmation. Type ${BUY_STOCK_CONFIRMATION} to approve up to $${maxTradeUsd(input.policy).toFixed(2)}.`);
+  const expected = stockTradeConfirmation(side);
+  if (input.confirmation !== expected) {
+    throw new Error(`Stock ${side}s need confirmation. Type ${expected} to approve up to $${maxTradeUsd(input.policy).toFixed(2)}.`);
   }
 
-  // Governance pre-flight: company kill switch, rolling budgets, approval
-  // escalation. resolveSpendGovernance also covers company members without their
-  // own wallet config so the company kill switch/budgets bind for them too.
+  // Governance pre-flight. The company kill switch binds for BOTH directions, so
+  // resolveSpendGovernance also covers company members without their own wallet
+  // config. A buy spends USDC -> run the full budget/approval evaluation. A sell
+  // is an inflow, so we evaluate with amountUsd 0: that still hard-blocks on a
+  // frozen company kill switch but never trips a rolling budget or escalation.
   const governance = await resolveSpendGovernance(input.agentId);
   let approvalGrantId: string | undefined;
   let companyId: string | undefined;
-  if (governance && (await shouldEvaluateSpend(governance.wallet, maxTradeUsd(input.policy)))) {
+  const spendForGovernance = side === "sell" ? 0 : notionalUsd;
+  if (governance && (side === "sell" || (await shouldEvaluateSpend(governance.wallet, maxTradeUsd(input.policy))))) {
     const decision = await evaluateSpend({
       wallet: governance.wallet,
       agentName: governance.agentName,
       kind: "trade",
       asset: "USDC",
-      amountUsd: notionalUsd,
-      target: `${venue}:${input.ticker}`,
+      amountUsd: spendForGovernance,
+      target: `${venue}:${input.ticker} ${side}`,
       approvalToken: input.approvalToken,
     });
     if (decision.decision !== "allow") throw new Error(decision.reason);
@@ -295,8 +346,12 @@ export async function executeBuyStock(input: BuyStockInput): Promise<BuyStockRes
     companyId,
     kind: "trade",
     asset: "USDC",
-    amountUsd: notionalUsd,
-    target: shortTarget(`${venue}:${result.ticker}`),
+    // A sell credits USDC; record its USD value as assetAmount (not amountUsd) so
+    // it shows in activity without counting against the rolling spend budgets,
+    // which sum amountUsd across every kind.
+    amountUsd: spendForGovernance,
+    assetAmount: side === "sell" ? notionalUsd : undefined,
+    target: shortTarget(`${venue}:${result.ticker} ${side}`),
     status: "executed",
     approvalId: approvalGrantId,
   }).catch(() => {});
@@ -304,12 +359,19 @@ export async function executeBuyStock(input: BuyStockInput): Promise<BuyStockRes
   return result;
 }
 
+/** Buy-side wrapper kept stable for the chat-runtime tool. */
+export async function executeBuyStock(input: BuyStockInput): Promise<BuyStockResult> {
+  return executeStockTrade({ ...input, side: "buy" });
+}
+
 /**
  * Tolerant pre-flight used to build the confirmation card. For xstocks it pulls
- * a live Jupiter quote (estimated tokens + price impact); for alpaca it just
- * echoes the notional (a live quote would burn an API call before confirmation).
+ * a live Jupiter quote (price impact, and for sells the USDC ExactOut leg); for
+ * alpaca it echoes the notional (a live quote would burn an API call before
+ * confirmation).
  */
-export async function discoverBuyStockQuote(input: Pick<BuyStockInput, "policy" | "ticker" | "notionalUsd" | "slippageBps">): Promise<BuyStockQuote> {
+export async function discoverStockTradeQuote(input: Pick<BuyStockInput, "side" | "policy" | "ticker" | "notionalUsd" | "slippageBps">): Promise<BuyStockQuote> {
+  const side = input.side ?? "buy";
   const venue = assertVenue(input.policy);
   const notionalUsd = assertAmount({ ...input, agentId: "", ticker: input.ticker, notionalUsd: input.notionalUsd }, input.policy);
   if (venue === "alpaca") {
@@ -318,22 +380,42 @@ export async function discoverBuyStockQuote(input: Pick<BuyStockInput, "policy" 
       venue,
       ticker: underlying,
       notionalUsd,
-      detail: `Market buy of ${underlying} for ~$${notionalUsd.toFixed(2)} via Alpaca ${input.policy.alpacaPaper === false ? "LIVE" : "paper"}.`,
+      detail: `Market ${side} of ${underlying} for ~$${notionalUsd.toFixed(2)} via Alpaca ${input.policy.alpacaPaper === false ? "LIVE" : "paper"}.`,
     };
   }
   const token = resolveXStock(input.ticker);
   if (!token) throw new Error(`"${input.ticker}" is not a verified xStock. Supported: ${supportedXStockTickers().join(", ")}.`);
   const slippageBps = input.slippageBps && input.slippageBps > 0 ? input.slippageBps : DEFAULT_SLIPPAGE_BPS;
-  const quote = await fetchJupiterQuote(token.mint, notionalUsd, slippageBps);
+  const quote = await quoteXStocksLeg(token.mint, side, Math.round(notionalUsd * 1_000_000), slippageBps);
   const priceImpactPct = quote.priceImpactPct != null ? Number(quote.priceImpactPct) : undefined;
+  const impactNote = priceImpactPct != null ? ` (price impact ${(priceImpactPct * 100).toFixed(2)}%)` : "";
   return {
     venue,
     ticker: token.symbol,
     notionalUsd,
     priceImpactPct,
-    detail: `Swap ~$${notionalUsd.toFixed(2)} USDC -> ${token.symbol} via Jupiter${
-      priceImpactPct != null ? ` (price impact ${(priceImpactPct * 100).toFixed(2)}%)` : ""
-    }.`,
+    detail: side === "sell"
+      ? `Swap ${token.symbol} -> ~$${notionalUsd.toFixed(2)} USDC via Jupiter${impactNote}.`
+      : `Swap ~$${notionalUsd.toFixed(2)} USDC -> ${token.symbol} via Jupiter${impactNote}.`,
+  };
+}
+
+/** Buy-side wrapper kept stable for the chat-runtime tool. */
+export async function discoverBuyStockQuote(input: Pick<BuyStockInput, "policy" | "ticker" | "notionalUsd" | "slippageBps">): Promise<BuyStockQuote> {
+  return discoverStockTradeQuote({ ...input, side: "buy" });
+}
+
+/** Narrow a persisted wallet config to the trade policy fields. */
+export function toBuyStockPolicy(wallet: AgentWalletConfig): BuyStockPolicy {
+  return {
+    enabled: wallet.enabled,
+    network: wallet.network,
+    tradingVenue: wallet.tradingVenue,
+    alpacaKeyEnvName: wallet.alpacaKeyEnvName,
+    alpacaSecretEnvName: wallet.alpacaSecretEnvName,
+    alpacaPaper: wallet.alpacaPaper,
+    maxTradeUsd: wallet.maxTradeUsd,
+    maxPaymentUsd: wallet.maxPaymentUsd,
   };
 }
 

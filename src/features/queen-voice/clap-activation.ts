@@ -2,8 +2,9 @@ export const QUEEN_CLAP_WAKE_STORAGE_KEY = "hivemindos.queenVoice.clapWake";
 
 export const QUEEN_CLAP_ANALYSER_FFT_SIZE = 1024;
 export const QUEEN_CLAP_PROCESSOR_BUFFER_SIZE = 1024;
-export const QUEEN_CLAP_DOUBLE_WINDOW_MS = 650;
-export const QUEEN_CLAP_MIN_SPACING_MS = 120;
+export const QUEEN_CLAP_LISTENING_SETTLE_MS = 850;
+export const QUEEN_CLAP_DOUBLE_WINDOW_MS = 560;
+export const QUEEN_CLAP_MIN_SPACING_MS = 170;
 export const QUEEN_CLAP_PULSE_COOLDOWN_MS = 150;
 export const QUEEN_CLAP_ACTIVATION_COOLDOWN_MS = 1_500;
 export const QUEEN_CLAP_RMS_THRESHOLD = 0.045;
@@ -23,11 +24,17 @@ export const QUEEN_CLAP_INITIAL_FLUX_FLOOR = 0.01;
 export const QUEEN_CLAP_FLUX_FLOOR_BLEND = 0.06;
 export const QUEEN_CLAP_FLUX_FLOOR_MULTIPLIER = 2.8;
 export const QUEEN_CLAP_FLUX_NOISE_MARGIN = 0.035;
+export const QUEEN_CLAP_CREST_FACTOR_THRESHOLD = 4.2;
+export const QUEEN_CLAP_TRANSIENT_SHARPNESS_THRESHOLD = 1.05;
+export const QUEEN_CLAP_SECOND_PEAK_RATIO = 0.45;
+export const QUEEN_CLAP_SECOND_FLUX_RATIO = 0.4;
 
 export type QueenClapMetrics = {
   rms: number;
   peak: number;
   nowMs: number;
+  crestFactor?: number;
+  transientSharpness?: number;
   highFrequencyRatio?: number;
   spectralFlux?: number;
   highFrequencyFlux?: number;
@@ -35,6 +42,8 @@ export type QueenClapMetrics = {
 
 export type QueenClapDetectorState = {
   firstClapAt: number;
+  firstClapPeak: number;
+  firstClapFlux: number;
   lastPulseAt: number;
   lastPulseRms: number;
   lastActivationAt: number;
@@ -46,6 +55,8 @@ export type QueenClapDetectorState = {
 
 export const initialQueenClapDetectorState: QueenClapDetectorState = {
   firstClapAt: 0,
+  firstClapPeak: 0,
+  firstClapFlux: 0,
   lastPulseAt: 0,
   lastPulseRms: 0,
   lastActivationAt: 0,
@@ -56,34 +67,60 @@ export const initialQueenClapDetectorState: QueenClapDetectorState = {
 };
 
 export function measureFloatTimeDomainClapFrame(data: Float32Array) {
-  if (!data.length) return { rms: 0, peak: 0 };
+  if (!data.length) {
+    return { rms: 0, peak: 0, crestFactor: 0, transientSharpness: 0 };
+  }
   let sum = 0;
   let peak = 0;
+  let absoluteSum = 0;
+  let diffSum = 0;
+  let previous = 0;
   for (const sample of data) {
     const value = Math.max(-1, Math.min(1, sample));
     const absolute = Math.abs(value);
     sum += value * value;
+    absoluteSum += absolute;
     if (absolute > peak) peak = absolute;
+    diffSum += Math.abs(value - previous);
+    previous = value;
   }
+  const rms = Math.sqrt(sum / data.length);
+  const averageAbsolute = absoluteSum / data.length;
+  const averageDiff = diffSum / data.length;
   return {
-    rms: Math.sqrt(sum / data.length),
+    rms,
     peak,
+    crestFactor: rms > 0 ? peak / rms : 0,
+    transientSharpness: averageAbsolute > 0 ? averageDiff / averageAbsolute : 0,
   };
 }
 
 export function measureTimeDomainClapFrame(data: Uint8Array) {
-  if (!data.length) return { rms: 0, peak: 0 };
+  if (!data.length) {
+    return { rms: 0, peak: 0, crestFactor: 0, transientSharpness: 0 };
+  }
   let sum = 0;
   let peak = 0;
+  let absoluteSum = 0;
+  let diffSum = 0;
+  let previous = 0;
   for (const sample of data) {
     const value = (sample - 128) / 128;
     const absolute = Math.abs(value);
     sum += value * value;
+    absoluteSum += absolute;
     if (absolute > peak) peak = absolute;
+    diffSum += Math.abs(value - previous);
+    previous = value;
   }
+  const rms = Math.sqrt(sum / data.length);
+  const averageAbsolute = absoluteSum / data.length;
+  const averageDiff = diffSum / data.length;
   return {
-    rms: Math.sqrt(sum / data.length),
+    rms,
     peak,
+    crestFactor: rms > 0 ? peak / rms : 0,
+    transientSharpness: averageAbsolute > 0 ? averageDiff / averageAbsolute : 0,
   };
 }
 
@@ -146,6 +183,10 @@ export function nextQueenClapDetectorState(
   const onsetLike =
     spectralFlux >= fluxThreshold &&
     highFrequencyFlux >= QUEEN_CLAP_HIGH_FREQUENCY_FLUX_THRESHOLD;
+  const clapShaped =
+    (metrics.crestFactor ?? 0) >= QUEEN_CLAP_CREST_FACTOR_THRESHOLD &&
+    (metrics.transientSharpness ?? 0) >=
+      QUEEN_CLAP_TRANSIENT_SHARPNESS_THRESHOLD;
   const shouldSampleNoise = metrics.peak < QUEEN_CLAP_PEAK_THRESHOLD * 0.75;
   const noiseFloor = shouldSampleNoise
     ? state.noiseFloor * (1 - QUEEN_CLAP_NOISE_FLOOR_BLEND) +
@@ -184,13 +225,14 @@ export function nextQueenClapDetectorState(
     next.firstClapAt > 0 &&
     metrics.nowMs - next.firstClapAt > QUEEN_CLAP_DOUBLE_WINDOW_MS
   ) {
-    next = { ...next, firstClapAt: 0 };
+    next = { ...next, firstClapAt: 0, firstClapPeak: 0, firstClapFlux: 0 };
   }
 
   const loud =
     metrics.rms >= rmsThreshold &&
     metrics.peak >= QUEEN_CLAP_PEAK_THRESHOLD &&
     onsetLike &&
+    clapShaped &&
     (metrics.highFrequencyRatio ?? 1) >=
       QUEEN_CLAP_HIGH_FREQUENCY_RATIO_THRESHOLD;
   if (!loud || !next.armed) return { state: next, activated: false };
@@ -212,14 +254,24 @@ export function nextQueenClapDetectorState(
 
   if (next.firstClapAt > 0) {
     const spacing = metrics.nowMs - next.firstClapAt;
+    const comparablePeak =
+      next.firstClapPeak <= 0 ||
+      metrics.peak >= next.firstClapPeak * QUEEN_CLAP_SECOND_PEAK_RATIO;
+    const comparableFlux =
+      next.firstClapFlux <= 0 ||
+      spectralFlux >= next.firstClapFlux * QUEEN_CLAP_SECOND_FLUX_RATIO;
     if (
       spacing >= QUEEN_CLAP_MIN_SPACING_MS &&
-      spacing <= QUEEN_CLAP_DOUBLE_WINDOW_MS
+      spacing <= QUEEN_CLAP_DOUBLE_WINDOW_MS &&
+      comparablePeak &&
+      comparableFlux
     ) {
       return {
         state: {
           ...next,
           firstClapAt: 0,
+          firstClapPeak: 0,
+          firstClapFlux: 0,
           lastPulseAt: metrics.nowMs,
           lastPulseRms: metrics.rms,
           lastActivationAt: metrics.nowMs,
@@ -235,6 +287,8 @@ export function nextQueenClapDetectorState(
     state: {
       ...next,
       firstClapAt: metrics.nowMs,
+      firstClapPeak: metrics.peak,
+      firstClapFlux: spectralFlux,
       lastPulseAt: metrics.nowMs,
       lastPulseRms: metrics.rms,
       armed: false,

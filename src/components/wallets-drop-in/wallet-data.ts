@@ -14,8 +14,10 @@ let FR_RUNTIME_APPLIED = false;
 export const FR_BALANCES = {};
 export function frFmtAmount(sym, amt) {
   const m = FR_CCY[sym];
+  if (!Number.isFinite(amt) || amt <= 0) return "0";
   if (sym === "ETH") return amt.toFixed(2);
   if (m && m.fiat) return "$" + Math.round(amt).toLocaleString();
+  if (amt < 1) return amt.toLocaleString(undefined, { maximumFractionDigits: 6 });
   if (amt >= 10000) return Math.round(amt / 1000) + "k";
   if (amt >= 1000 && sym !== "USDC") return (amt / 1000).toFixed(1) + "k";
   return Math.round(amt).toLocaleString();

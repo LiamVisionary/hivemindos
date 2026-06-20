@@ -490,21 +490,24 @@ export function useWalletFilesController(props: any) {
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as {
       ok?: boolean;
-      balance?: { tokenBalance: number; nativeBalance: number; fetchedAt: number };
+      balance?: { tokenBalance: number; nativeBalance: number; totalValueUsd?: number | null; tokens?: Array<Record<string, unknown>>; fetchedAt: number };
       error?: string;
     } | null;
     if (!response?.ok || !data?.ok || !data.balance) {
       updateWalletAction(agentId, { busy: false, error: data?.error ?? "Could not fetch balance.", message: "" });
       return;
     }
+    const totalValueUsd = Number(data.balance.totalValueUsd);
+    const currentBalanceUsd = normalizeMoney(Number.isFinite(totalValueUsd) && totalValueUsd >= 0 ? totalValueUsd : data.balance.tokenBalance);
     updateWallet(agentId, {
-      currentBalanceUsd: normalizeMoney(data.balance.tokenBalance),
-      onchainBalanceUsd: normalizeMoney(data.balance.tokenBalance),
+      currentBalanceUsd,
+      onchainBalanceUsd: currentBalanceUsd,
       nativeBalance: data.balance.nativeBalance,
+      tokens: Array.isArray(data.balance.tokens) ? data.balance.tokens : [],
       lastOnchainSyncAt: data.balance.fetchedAt,
       survivalStartedAt: Date.now(),
     });
-    updateWalletAction(agentId, { busy: false, error: "", message: `Balance refreshed: ${data.balance.tokenBalance.toFixed(6)} USDC.` });
+    updateWalletAction(agentId, { busy: false, error: "", message: `Balance refreshed: $${currentBalanceUsd.toFixed(2)} total · ${data.balance.tokenBalance.toFixed(6)} USDC.` });
   }
 
   async function sendWalletUsdc(agentId: string) {

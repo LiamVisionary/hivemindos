@@ -1945,6 +1945,11 @@ export function useDashboardDerivedState(props: any) {
             : `${walletStats.enabled} ready`,
       },
       {
+        id: "trade" as const,
+        label: "Trade",
+        detail: "Crypto & stocks",
+      },
+      {
         id: "vault" as const,
         label: "Brain",
         detail:
@@ -2051,6 +2056,7 @@ export function useDashboardDerivedState(props: any) {
       swarm: { label: "Work", title: "What the hive is simulating" },
       history: { label: "Work", title: "What the hive finished recently" },
       wallet: { label: "Wallets", title: "How the agents spend" },
+      trade: { label: "Trade", title: "Buy, sell, and swap crypto & stocks" },
       vault: { label: "Brain Graph", title: "What the hive remembers" },
       integrations: { label: "Integrations", title: "What APIs connect" },
       maintenance: {

@@ -12,6 +12,7 @@ const GRAPH_W = 700;
 const GRAPH_H = 540;
 const GRAPH_MIN_SCALE = 0.55;
 const GRAPH_MAX_SCALE = 3;
+const BRAIN_ASK_PROMPT = "Help me reason about what matters, what is stale, and what action should come next.";
 const NODE_ANCHORS = [
   { x: 50, y: 50 },
   { x: 30, y: 27 },
@@ -48,16 +49,16 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-function nodeScore(node: any, graphNow: number) {
+function nodeLayoutScore(node: any, graphNow: number) {
   const degree = (node.incoming ?? 0) + (node.outgoing ?? 0);
-  const touched = Date.parse(node.lastAccessedAt ?? node.modifiedAt ?? "");
+  const touched = Date.parse(node.modifiedAt ?? "");
   const recentBoost = Number.isFinite(touched) && touched > graphNow - 14 * 24 * 60 * 60 * 1000 ? 10 : 0;
-  return (node.accessCount ?? 0) * 2.4 + degree * 1.2 + recentBoost;
+  return degree * 1.2 + recentBoost;
 }
 
 function buildNodeCloudLayout(nodes: any[], graphNow: number) {
   const ranked = [...nodes].sort((a, b) => (
-    nodeScore(b, graphNow) - nodeScore(a, graphNow)
+    nodeLayoutScore(b, graphNow) - nodeLayoutScore(a, graphNow)
     || String(a.id).localeCompare(String(b.id))
   ));
   const positions = new Map<string, { x: number; y: number }>();
@@ -75,9 +76,9 @@ function buildNodeCloudLayout(nodes: any[], graphNow: number) {
     const localIndex = index - NODE_ANCHORS.length;
     const ring = Math.sqrt((localIndex + 1) / (overflowTotal + 1));
     const angle = localIndex * 2.399963 + hashUnit(node.id, 13) * 0.85;
-    const accessPull = Math.min(0.24, (node.accessCount ?? 0) / 90);
-    const spreadX = 42 - accessPull * 24 + hashUnit(node.id, 29) * 8;
-    const spreadY = 36 - accessPull * 20 + hashUnit(node.id, 43) * 8;
+    const degreePull = Math.min(0.24, ((node.incoming ?? 0) + (node.outgoing ?? 0)) / 90);
+    const spreadX = 42 - degreePull * 24 + hashUnit(node.id, 29) * 8;
+    const spreadY = 36 - degreePull * 20 + hashUnit(node.id, 43) * 8;
     const xPct = clamp(50 + Math.cos(angle) * spreadX * ring + (hashUnit(node.id, 61) - 0.5) * 7, 8, 92);
     const yPct = clamp(52 + Math.sin(angle) * spreadY * ring + (hashUnit(node.id, 79) - 0.5) * 7, 8, 92);
     positions.set(node.id, {
@@ -112,6 +113,56 @@ function actionTone(action: string) {
   return "var(--brain-fg-3, #76726a)";
 }
 
+function trimTrailingSlash(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
+function brainNodeAttachment(node: any, vaultPath?: string) {
+  const relativePath = String(node.id ?? "").replace(/^\/+/, "");
+  const vaultRoot = trimTrailingSlash(String(vaultPath ?? ""));
+  const referencePath = vaultRoot ? `${vaultRoot}/${relativePath}` : relativePath;
+  const modifiedAt = Date.parse(node.modifiedAt ?? "");
+  return {
+    id: `brain-note-${relativePath}-${crypto.randomUUID()}`,
+    kind: "file",
+    name: relativePath.split("/").pop() || `${node.label || "Shared Brain note"}.md`,
+    mimeType: "text/markdown",
+    size: Number(node.byteSize) || 0,
+    dataUrl: "",
+    referencePath,
+    referenceOnly: true,
+    lastModified: Number.isFinite(modifiedAt) ? modifiedAt : undefined,
+  };
+}
+
+function uniqueBrainAttachments(attachments: any[]) {
+  const seen = new Set<string>();
+  return attachments.filter((attachment) => {
+    const key = attachment.referencePath || attachment.name;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function formatInspectorDate(value?: string, fallbackFormat?: (date?: string) => string) {
+  if (!value) return "never";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallbackFormat?.(value) ?? value;
+  const parts = new Intl.DateTimeFormat([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).formatToParts(date);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+  const dateLabel = [part("month"), part("day")].filter(Boolean).join(" ");
+  const timeLabel = [part("hour") && part("minute") ? `${part("hour")}:${part("minute")}` : "", part("dayPeriod")]
+    .filter(Boolean)
+    .join(" ");
+  return [dateLabel, timeLabel].filter(Boolean).join(" · ") || fallbackFormat?.(value) || value;
+}
+
 export function BrainGraphExplorer(props: any) {
   const {
     Bot,
@@ -141,6 +192,8 @@ export function BrainGraphExplorer(props: any) {
     selectedBrainNode,
     setActiveView,
     setBrainPan,
+    setChatAttachments,
+    setChatDirectories,
     setQuickAddDrafts,
     setQuickAddStatus,
     setSkillBrowserOpen,
@@ -148,6 +201,7 @@ export function BrainGraphExplorer(props: any) {
     setSkillBrowserWrittenContent,
     setText,
     sharedVault,
+    startAgentChat,
     startBrainPan,
     vaultClass,
   } = props;
@@ -230,7 +284,12 @@ export function BrainGraphExplorer(props: any) {
         .toLowerCase()
         .includes(query);
     };
-    return brainGraph.nodes.filter((node) => matchesFilter(node) && matchesQuery(node)).slice(0, 96);
+    const filteredNodes = brainGraph.nodes.filter((node) => matchesFilter(node) && matchesQuery(node));
+    const shouldKeepSelectedVisible = brainGraphFilter === "stale" && selectedBrainNode && matchesQuery(selectedBrainNode);
+    if (shouldKeepSelectedVisible && !filteredNodes.some((node) => node.id === selectedBrainNode.id)) {
+      return [selectedBrainNode, ...filteredNodes].slice(0, 96);
+    }
+    return filteredNodes.slice(0, 96);
   }, [brainGraph, brainGraphFilter, brainGraphQuery, graphNow, neighborsById, selectedBrainNode]);
   const brainLayout = useMemo(() => buildNodeCloudLayout(visibleBrainNodes, graphNow), [graphNow, visibleBrainNodes]);
   const brainGraphScale = clamp(brainPan?.scale ?? 1, GRAPH_MIN_SCALE, GRAPH_MAX_SCALE);
@@ -248,17 +307,17 @@ export function BrainGraphExplorer(props: any) {
     }
     return targetIds;
   }, [brainGraph, brainLayout.positions, selectedBrainNode]);
-  const noteContextLine = (node) => `- ${node.id}${node.preview ? `: ${node.preview}` : ""}`;
-  const brainContextPrompt = (nodes) => [
-    "Use these Shared Brain notes as context:",
-    ...nodes.map(noteContextLine),
-    "",
-    "Help me reason about what matters, what is stale, and what action should come next.",
-  ].join("\n");
   const seedBrainChat = (nodes) => {
     const usableNodes = nodes.filter((node) => !node.id.startsWith("unresolved:"));
     if (!usableNodes.length) return;
-    setText(brainContextPrompt(usableNodes));
+    const attachments = uniqueBrainAttachments(usableNodes.map((node) => brainNodeAttachment(node, sharedVault?.vaultPath)));
+    setChatAttachments(attachments);
+    setChatDirectories?.([]);
+    setText(BRAIN_ASK_PROMPT);
+    if (selectedAgent?.id && startAgentChat) {
+      startAgentChat(selectedAgent.id, { fresh: true });
+      return;
+    }
     setActiveView("chat");
   };
   const toggleBrainContextNode = (node) => {
@@ -441,9 +500,11 @@ export function BrainGraphExplorer(props: any) {
                           staleHub && "nodeStaleHub",
                           dim && "nodeDimmed",
                         )}`}
-                        onClick={() => void inspectBrainNode(node)}
                         onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") void inspectBrainNode(node);
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            void inspectBrainNode(node);
+                          }
                         }}
                       >
                         <circle
@@ -503,12 +564,13 @@ export function BrainGraphExplorer(props: any) {
                 <div><dt>Incoming</dt><dd>{selectedBrainNode.incoming}</dd></div>
                 <div><dt>Outgoing</dt><dd>{selectedBrainNode.outgoing}</dd></div>
                 <div><dt>Accesses</dt><dd>{selectedBrainNode.accessCount}</dd></div>
-                <div><dt>Last seen</dt><dd>{formatBrainDate(selectedBrainNode.lastAccessedAt)}</dd></div>
-                <div><dt>Modified</dt><dd>{formatBrainDate(selectedBrainNode.modifiedAt)}</dd></div>
+                <div><dt>Last seen</dt><dd>{formatInspectorDate(selectedBrainNode.lastAccessedAt, formatBrainDate)}</dd></div>
+                <div><dt>Modified</dt><dd>{formatInspectorDate(selectedBrainNode.modifiedAt, formatBrainDate)}</dd></div>
                 <div><dt>Lines</dt><dd>{selectedBrainNode.lineCount ?? "-"}</dd></div>
               </dl>
               {selectedBrainNode.tags.length ? (
-                <div className={vaultClass("brainTags")}>
+                <div className={graphClass("tagRow")}>
+                  <strong>Tags</strong>
                   {selectedBrainNode.tags.map((tag) => <span key={tag}>#{tag}</span>)}
                 </div>
               ) : null}

@@ -190,4 +190,4 @@ This documentation reflects a code audit of the repository on 2026-06-01 WITA. T
 - Fleet/app discovery: `src/app/api/fleet/**`, `src/features/dashboard/views/MyAppsPanel.tsx`, `src/components/fleet/**`
 - Scheduler, Swarm, AEON, Phone, and Integrations views: `src/features/dashboard/views/**`, `src/components/scheduler/**`, `src/components/swarm/**`
 - Collector and setup scripts: `scripts/agent-telemetry-collector.mjs`, `setup.sh`, `uninstall.sh`
-- Workers: `workers/honey-ledger`, `workers/compute-gateway`
+- Workers: `workers/honey-ledger`, `workers/compute-gateway`, `workers/paid-agent-gateway`

@@ -6,10 +6,47 @@
 
 import { fleetAgentCanChat, type FleetAgentChat } from "@/components/fleet/fleet-data";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
+import Image from "next/image";
+import {
+  AlertTriangle,
+  ChevronLeft,
+  Copy,
+  GitBranch,
+  MessageSquare,
+  Pencil,
+  PhoneCall,
+  Plus,
+  RefreshCcw,
+  Settings,
+  SquareTerminal,
+  Trash2,
+  Wallet,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 import { AgentHoldings } from "./AgentHoldings";
 import type { HiveAgent, HiveMachine, HiveSelection } from "./fleet-hive-types";
 import { frFleetSummary, frMachineState, frStateMeta } from "./fleet-hive-types";
 import { Dot, HiveMark, Meter, Summary } from "./primitives";
+
+const USEPOD_RUNTIME_ICON_PATH = "/icons/runtimes/usepod.webp";
+
+function ActionIcon({ icon: Icon, size = 13 }: { icon: LucideIcon; size?: number }) {
+  return <Icon size={size} strokeWidth={2} aria-hidden="true" />;
+}
+
+function UsePodActionIcon() {
+  return (
+    <Image
+      src={USEPOD_RUNTIME_ICON_PATH}
+      alt=""
+      aria-hidden="true"
+      width={15}
+      height={15}
+      unoptimized
+    />
+  );
+}
 
 export interface HivePanelHandlers {
   onAddAgent?: (m: HiveMachine) => void;
@@ -115,18 +152,21 @@ export function HivePanel({
           <div className="fr-queen-actions" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 20 }}>
             {handlers.onCallQueen ? (
               <button type="button" className="fr-act fr-act-primary" onClick={() => handlers.onCallQueen?.()}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+                <ActionIcon icon={PhoneCall} size={14} />
                 Call
               </button>
             ) : null}
             {handlers.onOpenQueenSettings ? (
               <button type="button" className="fr-act" onClick={() => handlers.onOpenQueenSettings?.()}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
+                <ActionIcon icon={Settings} size={14} />
                 Queen settings
               </button>
             ) : null}
             {handlers.onAddMachine ? (
-              <button type="button" className="fr-act" onClick={() => handlers.onAddMachine?.()}>Onboard machine</button>
+              <button type="button" className="fr-act" onClick={() => handlers.onAddMachine?.()}>
+                <ActionIcon icon={Plus} size={14} />
+                Onboard machine
+              </button>
             ) : null}
           </div>
         ) : null}
@@ -184,14 +224,59 @@ export function HivePanel({
 
           {/* machine action chips */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
-            {handlers.onAddAgent ? <button type="button" className="fr-chip fr-chip-honey" onClick={() => handlers.onAddAgent?.(m)}>+ Add agent</button> : null}
-            {update?.canUpdate && handlers.onUpdateMachine ? <button type="button" className="fr-chip" disabled={update.busy} onClick={() => handlers.onUpdateMachine?.(m)}>{update.label}</button> : null}
-            {sync && handlers.onFixSyncIssue ? <button type="button" className="fr-chip" onClick={() => handlers.onFixSyncIssue?.(m)} title={sync.title}>Fix sync</button> : null}
-            {network?.fixAction && handlers.onFixNetworkIssue ? <button type="button" className="fr-chip" onClick={() => handlers.onFixNetworkIssue?.(m)} title={network.title}>{network.fixLabel ?? "Fix network"}</button> : null}
-            {handlers.onOpenShell ? <button type="button" className="fr-chip" onClick={() => handlers.onOpenShell?.(m)}>Shell</button> : null}
-            {handlers.onOpenUsePodHost ? <button type="button" className="fr-chip" onClick={() => handlers.onOpenUsePodHost?.(m)}>Host app</button> : null}
-            {handlers.onRenameMachine ? <button type="button" className="fr-chip" onClick={() => handlers.onRenameMachine?.(m)}>Rename</button> : null}
-            {handlers.onOpenCodeProof ? <button type="button" className="fr-chip" onClick={() => handlers.onOpenCodeProof?.(m)}>Code proof</button> : null}
+            {handlers.onAddAgent ? (
+              <button type="button" className="fr-chip fr-chip-honey" onClick={() => handlers.onAddAgent?.(m)}>
+                <ActionIcon icon={Plus} />
+                Add agent
+              </button>
+            ) : null}
+            {update?.canUpdate && handlers.onUpdateMachine ? (
+              <button type="button" className="fr-chip" disabled={update.busy} onClick={() => handlers.onUpdateMachine?.(m)}>
+                <ActionIcon icon={RefreshCcw} />
+                {update.label}
+              </button>
+            ) : null}
+            {sync && handlers.onFixSyncIssue ? (
+              <button type="button" className="fr-chip" onClick={() => handlers.onFixSyncIssue?.(m)} title={sync.title}>
+                <ActionIcon icon={AlertTriangle} />
+                Fix sync
+              </button>
+            ) : null}
+            {network?.fixAction && handlers.onFixNetworkIssue ? (
+              <button type="button" className="fr-chip" onClick={() => handlers.onFixNetworkIssue?.(m)} title={network.title}>
+                <ActionIcon icon={Wrench} />
+                {network.fixLabel ?? "Fix network"}
+              </button>
+            ) : null}
+            {handlers.onOpenShell ? (
+              <button type="button" className="fr-chip" onClick={() => handlers.onOpenShell?.(m)}>
+                <ActionIcon icon={SquareTerminal} />
+                Shell
+              </button>
+            ) : null}
+            {handlers.onOpenUsePodHost ? (
+              <button
+                type="button"
+                className="fr-chip fr-chip-usepod"
+                onClick={() => handlers.onOpenUsePodHost?.(m)}
+                aria-label={`Rent ${m.name} compute through UsePod`}
+              >
+                <UsePodActionIcon />
+                Rent compute
+              </button>
+            ) : null}
+            {handlers.onRenameMachine ? (
+              <button type="button" className="fr-chip" onClick={() => handlers.onRenameMachine?.(m)}>
+                <ActionIcon icon={Pencil} />
+                Rename
+              </button>
+            ) : null}
+            {handlers.onOpenCodeProof ? (
+              <button type="button" className="fr-chip" onClick={() => handlers.onOpenCodeProof?.(m)}>
+                <ActionIcon icon={GitBranch} />
+                Code proof
+              </button>
+            ) : null}
           </div>
 
           {network || networkFixStatus ? (
@@ -223,7 +308,12 @@ export function HivePanel({
               <div style={{ padding: "20px 0", borderTop: "1px solid var(--line)", fontSize: 12.5, color: "var(--fg-3)" }}>
                 Not yet onboarded.
                 {handlers.onAddAgent ? (
-                  <div style={{ marginTop: 12 }}><button type="button" className="fr-chip fr-chip-honey" onClick={() => handlers.onAddAgent?.(m)}>Onboard agent →</button></div>
+                  <div style={{ marginTop: 12 }}>
+                    <button type="button" className="fr-chip fr-chip-honey" onClick={() => handlers.onAddAgent?.(m)}>
+                      <ActionIcon icon={Plus} />
+                      Onboard agent
+                    </button>
+                  </div>
                 ) : null}
               </div>
             )}
@@ -252,7 +342,7 @@ export function HivePanel({
             onClick={() => onSelect({ type: "machine", id: m.id })}
             style={{ display: "flex", alignItems: "center", gap: 7, background: "transparent", border: 0, padding: 0, cursor: "pointer", color: "var(--fg-3)", fontSize: 11.5 }}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+            <ActionIcon icon={ChevronLeft} />
             <span className="fr-eyebrow">{m.name}</span>
           </button>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14 }}>
@@ -269,18 +359,53 @@ export function HivePanel({
 
           {(handlers.onCallAgent || (canChat && handlers.onOpenChat)) ? (
             <div style={{ display: "flex", gap: 8, marginTop: 22 }}>
-              {handlers.onCallAgent ? <button type="button" className="fr-act fr-act-primary" onClick={() => handlers.onCallAgent?.(m, a)}>Call agent</button> : null}
-              {canChat && handlers.onOpenChat ? <button type="button" className="fr-act" onClick={() => handlers.onOpenChat?.(m, a)}>Open chat</button> : null}
+              {handlers.onCallAgent ? (
+                <button type="button" className="fr-act fr-act-primary" onClick={() => handlers.onCallAgent?.(m, a)}>
+                  <ActionIcon icon={PhoneCall} />
+                  Call agent
+                </button>
+              ) : null}
+              {canChat && handlers.onOpenChat ? (
+                <button type="button" className="fr-act" onClick={() => handlers.onOpenChat?.(m, a)}>
+                  <ActionIcon icon={MessageSquare} />
+                  Open chat
+                </button>
+              ) : null}
             </div>
           ) : null}
 
           {/* secondary agent actions */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-            {canChat && handlers.onOpenTaskChat ? <button type="button" className="fr-chip" onClick={() => handlers.onOpenTaskChat?.(m, a)}>Task chat</button> : null}
-            {handlers.onOpenWallet ? <button type="button" className="fr-chip" onClick={() => handlers.onOpenWallet?.(m, a)}>Wallet</button> : null}
-            {handlers.onEditSettings ? <button type="button" className="fr-chip" onClick={() => handlers.onEditSettings?.(m, a)}>Settings</button> : null}
-            {handlers.onDuplicate ? <button type="button" className="fr-chip" onClick={() => handlers.onDuplicate?.(m, a)}>Duplicate</button> : null}
-            {handlers.onRemove ? <button type="button" className="fr-chip fr-act-danger" onClick={() => handlers.onRemove?.(m, a)}>Remove</button> : null}
+            {canChat && handlers.onOpenTaskChat ? (
+              <button type="button" className="fr-chip" onClick={() => handlers.onOpenTaskChat?.(m, a)}>
+                <ActionIcon icon={MessageSquare} />
+                Task chat
+              </button>
+            ) : null}
+            {handlers.onOpenWallet ? (
+              <button type="button" className="fr-chip" onClick={() => handlers.onOpenWallet?.(m, a)}>
+                <ActionIcon icon={Wallet} />
+                Wallet
+              </button>
+            ) : null}
+            {handlers.onEditSettings ? (
+              <button type="button" className="fr-chip" onClick={() => handlers.onEditSettings?.(m, a)}>
+                <ActionIcon icon={Settings} />
+                Settings
+              </button>
+            ) : null}
+            {handlers.onDuplicate ? (
+              <button type="button" className="fr-chip" onClick={() => handlers.onDuplicate?.(m, a)}>
+                <ActionIcon icon={Copy} />
+                Duplicate
+              </button>
+            ) : null}
+            {handlers.onRemove ? (
+              <button type="button" className="fr-chip fr-act-danger" onClick={() => handlers.onRemove?.(m, a)}>
+                <ActionIcon icon={Trash2} />
+                Remove
+              </button>
+            ) : null}
           </div>
 
           <AgentHoldings

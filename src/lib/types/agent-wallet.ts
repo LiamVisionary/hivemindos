@@ -51,6 +51,7 @@ export interface AgentWalletConfig {
   vaultAddress?: string;
   onchainBalanceUsd?: number;
   nativeBalance?: number;
+  tokens?: AgentWalletTokenBalance[];
   lastOnchainSyncAt?: number;
 }
 

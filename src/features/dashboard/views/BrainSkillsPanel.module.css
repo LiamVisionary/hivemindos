@@ -161,8 +161,14 @@
 
 .catalogTitle {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+}
+
+.catalogTitleBody {
+  display: grid;
+  gap: 6px;
 }
 
 .tile {
@@ -181,6 +187,61 @@
   color: var(--brain-fg, #f3f0e9);
   font-size: 13px;
   font-weight: 500;
+}
+
+.catalogSegment {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brain-panel-2, #181b22) 86%, transparent);
+  padding: 3px;
+}
+
+.catalogSegmentButton {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brain-fg-3, #76726a);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.2;
+  padding: 5px 10px;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.catalogSegmentButton span {
+  color: var(--brain-fg, #f3f0e9);
+  font-weight: 650;
+}
+
+.catalogSegmentButton:hover,
+.catalogSegmentButton:focus-visible {
+  color: var(--brain-fg, #f3f0e9);
+  outline: none;
+}
+
+.catalogSegmentButtonActive {
+  border-color: var(--brain-honey-line, rgba(231, 180, 92, 0.32));
+  background: var(--brain-honey-soft, rgba(231, 180, 92, 0.13));
+  color: var(--brain-fg, #f3f0e9);
+}
+
+.catalogSegmentButtonActive span {
+  color: var(--brain-honey, #e7b45c);
 }
 
 .searchWrap {

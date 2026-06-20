@@ -138,7 +138,7 @@ function FrNavIcon({ id }) {
   const p = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round" };
   switch (id) {
     case "kanban": return (<svg {...p}><rect x="3" y="4" width="5" height="16" rx="1.2" /><rect x="9.5" y="4" width="5" height="10" rx="1.2" /><rect x="16" y="4" width="5" height="13" rx="1.2" /></svg>);
-    case "vault": return (<svg {...p}><path d="M12 3l7 4v5c0 4.2-2.9 7.4-7 9-4.1-1.6-7-4.8-7-9V7z" /><circle cx="12" cy="11" r="2" /><path d="M12 13v3" /></svg>);
+    case "vault": return <BIcon name="brain" size={20} sw={1.7} />;
     case "chat": return (<svg {...p}><path d="M21 11.5a8 8 0 0 1-11.6 7.1L4 20l1.4-5.4A8 8 0 1 1 21 11.5z" /></svg>);
     case "wallet": return (<svg {...p}><rect x="3" y="6" width="18" height="13" rx="2.2" /><path d="M3 9.5h18" /><circle cx="16.5" cy="13.5" r="1.1" fill="currentColor" stroke="none" /></svg>);
     case "scheduler": return (<svg {...p}><rect x="3.5" y="4.5" width="17" height="16" rx="2.2" /><path d="M3.5 9h17M8 3v3M16 3v3" /><path d="M12 12v2.5l1.6 1" /></svg>);
@@ -955,7 +955,7 @@ function MyWalletCard({ w, actions }) {
   const [copied, setCopied] = React.useState(false);
   const [sendSymState, setSendSym] = React.useState("");
   const [sendAmt, setSendAmt] = React.useState(""); const [sendTo, setSendTo] = React.useState(""); const [sendConfirm, setSendConfirm] = React.useState(""); const [sendMsg, setSendMsg] = React.useState("");
-  const sendHoldings = top.filter((b) => b.sym === "USDC");
+  const sendHoldings = top.filter((b) => b.sym === "USDC"), primaryHolding = sendHoldings[0] || top[0] || { sym: "USDC", amount: 0 };
   const prim = sendHoldings[0] || { sym: "USDC", amount: 0 };
   const sendSym = sendSymState || prim.sym;
   const sendBal = sendHoldings.find((b) => b.sym === sendSym);
@@ -977,13 +977,13 @@ function MyWalletCard({ w, actions }) {
       </div>
       <div>
         <div className="bal">{frFmtUsdFull(total)}</div>
-        <div className="balsub">{frFmtAmount(prim.sym, prim.amount)} {prim.sym}{top.length > 1 ? ` · +${top.length - 1} more` : ""}</div>
+        <div className="balsub">{frFmtAmount(primaryHolding.sym, primaryHolding.amount)} {primaryHolding.sym}{top.length > 1 ? ` · +${top.length - 1} more` : ""}</div>
       </div>
       {expanded ? (
         <>
           <AllocBar holdings={top} total={total} />
           <div>
-            {top.map((b) => <TokenRow key={b.sym} b={b} />)}
+            <div style={{ maxHeight: top.length > 5 ? 245 : undefined, overflowY: top.length > 5 ? "auto" : undefined, paddingRight: top.length > 5 ? 4 : 0 }}>{top.map((b) => <TokenRow key={b.sym} b={b} />)}</div>
             {w.gas ? (
               <div className="fw-trow">
                 <span className="fw-rtile" style={{ background: "var(--panel-hi)", border: "1px solid var(--line-2)", color: "var(--fg-3)" }}>
@@ -1435,7 +1435,7 @@ function WalletModeHeader({ panel, onPanel }) {
           <span style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 18, letterSpacing: "-0.01em" }}>{copy.title}</span>
           <span style={{ fontSize: 12.5, color: "var(--fg-3)", whiteSpace: "nowrap" }}>{copy.subtitle}</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 22 }}>
           <WStat value={frFmtUsd(s.total)} label="treasury" sub={chg.text + " 24h"} />
           <WStat value={s.wallets} label="wallets" />
           <WStat value={s.on} label="spending" live tone="var(--live)" />

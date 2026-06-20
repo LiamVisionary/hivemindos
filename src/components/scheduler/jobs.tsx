@@ -103,7 +103,7 @@ export function Jobs({ jobs, selectedId, onSelect, onToggle, onNewJob, controls 
   return (
     <aside className="flex flex-col overflow-hidden"
       style={{
-        gap: 14, height: "100%", minHeight: 0, padding: "20px 18px",
+        gap: 14, height: "100%", minHeight: 0, minWidth: 0, padding: "20px 18px",
         borderRight: "1px solid rgba(148,163,184,0.16)",
         background: "var(--panel-bg-soft)",
       }}>

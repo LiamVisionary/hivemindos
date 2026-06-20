@@ -133,23 +133,24 @@ function AgentEdgeName({ name, selected }: { name: string; selected: boolean }) 
   const color = selected ? "var(--honey-2)" : "var(--fg)";
   const len = segs.reduce((n, s) => n + s.length, 0);
   const fs = len > 14 ? 8.4 : len > 10 ? 9.2 : 10;
-  // Each lower hex edge is ~42 units long; squeeze any segment that would
-  // otherwise overrun its edge so the label never spills out of the cell.
+  // Each lower hex edge is ~42 units long. Rather than squeezing a long segment
+  // with lengthAdjust (which smears the glyphs into an illegible blur — very
+  // visible on long auto-generated names like the e2e agents), truncate it to
+  // what actually fits and add an ellipsis. The full name stays on hover (the
+  // cell's title attribute).
   const EDGE_FIT_W = 42;
-  const fit = (s: string) =>
-    s.length * fs * 0.56 > EDGE_FIT_W
-      ? { textLength: EDGE_FIT_W, lengthAdjust: "spacingAndGlyphs" as const }
-      : {};
-  const left = segs[0];
-  const right = segs.length > 1 ? segs[1] : null;
+  const maxChars = Math.max(2, Math.floor(EDGE_FIT_W / (fs * 0.56)));
+  const clamp = (s: string) => (s.length > maxChars ? s.slice(0, maxChars - 1).trimEnd() + "…" : s);
+  const left = clamp(segs[0]);
+  const right = segs.length > 1 ? clamp(segs[1]) : null;
   return (
     <svg viewBox="0 0 100 100" aria-hidden style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}>
       <g fill={color} stroke="var(--bg)" strokeWidth="2.6" strokeLinejoin="round" paintOrder="stroke" style={{ fontFamily: "var(--f-body)", fontWeight: 700 }}>
         {/* a lone word hugs the bottom-left edge, just like the first segment of
             a two-part name; a second segment hugs the bottom-right edge. */}
-        <text x="47" y="91" fontSize={fs} textAnchor="end" dominantBaseline="middle" transform="rotate(30 47 91)" {...fit(left)}>{left}</text>
+        <text x="47" y="91" fontSize={fs} textAnchor="end" dominantBaseline="middle" transform="rotate(30 47 91)">{left}</text>
         {right ? (
-          <text x="53" y="91" fontSize={fs} textAnchor="start" dominantBaseline="middle" transform="rotate(-30 53 91)" {...fit(right)}>{right}</text>
+          <text x="53" y="91" fontSize={fs} textAnchor="start" dominantBaseline="middle" transform="rotate(-30 53 91)">{right}</text>
         ) : null}
       </g>
     </svg>
@@ -208,6 +209,7 @@ export function HiveStage({
   machines,
   sel,
   onSelect,
+  onOpenAgentSettings,
   onAddAgent,
   onAddMachine,
   onOpenQueenSettings,
@@ -218,6 +220,7 @@ export function HiveStage({
   machines: HiveMachine[];
   sel: HiveSelection;
   onSelect: (s: HiveSelection) => void;
+  onOpenAgentSettings?: (machineId: string, agentId: string) => void;
   onAddAgent?: (m: HiveMachine) => void;
   onAddMachine?: () => void;
   onOpenQueenSettings?: () => void;
@@ -257,8 +260,19 @@ export function HiveStage({
               x={pos.x} y={pos.y} size={AGENT_SIZE} tone={tone}
               selected={selected} dim={dim} pulse={agent.state === "working"}
               bounce={newAgentId === agent.id}
-              onClick={() => onSelect({ type: "agent", id: agent.id, machineId: m.id })}
-              title={`${agent.name} · ${frStateMeta(agent.state).label}`}
+              // First click selects the petal; clicking it again while already
+              // selected opens its settings (so a double-click on an unselected
+              // agent lands straight in its AgentSettingsModal).
+              onClick={() =>
+                selected && onOpenAgentSettings
+                  ? onOpenAgentSettings(m.id, agent.id)
+                  : onSelect({ type: "agent", id: agent.id, machineId: m.id })
+              }
+              title={
+                onOpenAgentSettings
+                  ? `${agent.name} · ${frStateMeta(agent.state).label} (click again to open settings)`
+                  : `${agent.name} · ${frStateMeta(agent.state).label}`
+              }
               z={selected ? 7 : 3}
             >
               <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>

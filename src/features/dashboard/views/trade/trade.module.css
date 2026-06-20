@@ -1,0 +1,323 @@
+/* Trade tab styling. The root wraps content in the global `.fr-root` class (see
+   fleet-hive.css) so the hive design tokens (--honey, --panel-hi, --line-2, …)
+   resolve and the panel matches the nav shelf and Wallets island in both themes. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: var(--fg-1, #e9e4d8);
+  font: inherit;
+}
+
+.headerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--fg-1, #e9e4d8);
+}
+
+.subtitle {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--fg-3, #867d6e);
+}
+
+.actingRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-3, #867d6e);
+}
+
+.select,
+.input {
+  appearance: none;
+  background: var(--panel-hi, #1e222b);
+  border: 1px solid var(--line-2, #2b3038);
+  color: var(--fg-1, #e9e4d8);
+  border-radius: 9px;
+  padding: 8px 10px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: var(--honey, #e7b45c);
+}
+
+/* Segmented control — mirrors the data-active button idiom used elsewhere. */
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  gap: 3px;
+  border-radius: 11px;
+  background: var(--panel-hi, #1e222b);
+  border: 1px solid var(--line-2, #2b3038);
+  width: fit-content;
+}
+
+.segmented button {
+  border: 0;
+  background: transparent;
+  color: var(--fg-3, #867d6e);
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.segmented button[data-active] {
+  background: var(--honey, #e7b45c);
+  color: #1a1206;
+}
+
+.card {
+  background: var(--panel, #14171d);
+  border: 1px solid var(--line-2, #2b3038);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.1fr);
+  align-items: start;
+}
+
+@media (max-width: 880px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+/* Each intent group is its own wrapper so the top spacing lands between groups
+   (a :first-child rule on the title alone misfires — every title is the first
+   child of its own group div). */
+.intentGroup { margin-top: 22px; }
+.intentGroup:first-child { margin-top: 0; }
+
+.groupTitle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-3, #867d6e);
+  margin: 0 0 10px;
+}
+
+.intentGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.intentTile {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 11px;
+  border-radius: 11px;
+  border: 1px solid var(--line-2, #2b3038);
+  background: var(--panel-hi, #1e222b);
+  color: var(--fg-1, #e9e4d8);
+  cursor: pointer;
+}
+
+.intentTile[data-active] {
+  border-color: var(--honey, #e7b45c);
+  box-shadow: inset 0 0 0 1px var(--honey, #e7b45c);
+}
+
+.intentTile:disabled { cursor: not-allowed; opacity: 0.55; }
+
+.intentName { font-size: 13px; font-weight: 600; }
+.intentDesc { font-size: 11px; color: var(--fg-3, #867d6e); line-height: 1.35; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  width: fit-content;
+}
+
+.badgeReady { background: rgba(111, 224, 176, 0.16); color: #6fe0b0; }
+.badgeSetup { background: rgba(231, 180, 92, 0.16); color: var(--honey, #e7b45c); }
+.badgeOff { background: rgba(255, 255, 255, 0.07); color: var(--fg-3, #867d6e); }
+
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.fieldRow { display: flex; gap: 10px; flex-wrap: wrap; }
+.fieldRow > .field { flex: 1 1 140px; margin-bottom: 0; }
+
+.textarea {
+  background: var(--panel-hi, #1e222b);
+  border: 1px solid var(--line-2, #2b3038);
+  color: var(--fg-1, #e9e4d8);
+  border-radius: 10px;
+  padding: 10px;
+  font: inherit;
+  font-size: 13px;
+  min-height: 76px;
+  resize: vertical;
+}
+
+.btn {
+  border: 1px solid var(--line-2, #2b3038);
+  background: var(--panel-hi, #1e222b);
+  color: var(--fg-1, #e9e4d8);
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btnPrimary {
+  background: var(--honey, #e7b45c);
+  border-color: var(--honey, #e7b45c);
+  color: #1a1206;
+}
+
+.btnDanger {
+  background: rgba(229, 115, 115, 0.16);
+  border-color: rgba(229, 115, 115, 0.5);
+  color: #ef9a9a;
+}
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
+.reviewLine { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 5px 0; border-bottom: 1px dashed var(--line-2, #2b3038); }
+.reviewLine:last-child { border-bottom: 0; }
+.reviewKey { color: var(--fg-3, #867d6e); }
+.reviewVal { color: var(--fg-1, #e9e4d8); text-align: right; word-break: break-word; }
+
+.risk { font-size: 12px; color: var(--honey, #e7b45c); display: flex; gap: 6px; padding: 3px 0; }
+
+.note { font-size: 12px; color: var(--fg-3, #867d6e); line-height: 1.45; }
+.error { font-size: 12.5px; color: #ef9a9a; line-height: 1.45; }
+.success { font-size: 12.5px; color: #6fe0b0; line-height: 1.45; }
+
+.empty { padding: 28px 16px; text-align: center; color: var(--fg-3, #867d6e); font-size: 13px; }
+
+.pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--panel-hi, #1e222b);
+  border: 1px solid var(--line-2, #2b3038);
+  color: var(--fg-3, #867d6e);
+}
+
+.warnCard {
+  border: 1px solid rgba(231, 180, 92, 0.4);
+  background: rgba(231, 180, 92, 0.08);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--honey, #e7b45c);
+  line-height: 1.45;
+}
+
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; }
+
+/* Acting-wallet button in the header (opens the selection modal). */
+.actingButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel-hi, #1e222b);
+  border: 1px solid var(--line-2, #2b3038);
+  border-radius: 11px;
+  padding: 7px 12px;
+  color: var(--fg-1, #e9e4d8);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  max-width: 280px;
+}
+.actingButton:hover { border-color: var(--honey, #e7b45c); }
+.actingButton:disabled { opacity: 0.6; cursor: not-allowed; }
+.actingName { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.actingChange { font-size: 11px; color: var(--honey, #e7b45c); white-space: nowrap; }
+
+/* Wallet selection modal. */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+}
+.modal {
+  width: 100%;
+  max-width: 760px;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel, #14171d);
+  border: 1px solid var(--line-2, #2b3038);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+.modalHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line-2, #2b3038);
+}
+.modalBody { padding: 16px 18px; overflow-y: auto; }
+.modalCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.modalFoot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line-2, #2b3038);
+}
+.iconBtn {
+  background: transparent;
+  border: 0;
+  color: var(--fg-3, #867d6e);
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+  padding: 0 6px;
+}
+.iconBtn:hover { color: var(--fg-1, #e9e4d8); }

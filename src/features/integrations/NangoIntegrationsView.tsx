@@ -434,6 +434,12 @@ function AutomaticView({
   onFinish: () => void;
 }) {
   const complete = setupResult?.ok === true;
+  const failureLog = complete
+    ? ""
+    : [message, setupResult?.stderr, setupResult?.stdout]
+        .map((part) => part?.trim())
+        .filter(Boolean)
+        .join("\n\n");
   return (
     <section className={styles.stage}>
       <StepHeader kicker="Step 3" title="Start automatic setup" detail={`Nango will be prepared on ${selected?.name ?? "the selected machine"}.`} />
@@ -448,7 +454,10 @@ function AutomaticView({
           <span>{setupMethodLabel(setupResult.method)} finished on {setupResult.target}.</span>
         </div>
       ) : null}
-      {message ? <p className={complete ? styles.noteGood : styles.note}>{message}</p> : null}
+      {failureLog ? (
+        <pre className={styles.setupLog} tabIndex={0} role="alert" aria-label="Nango setup output">{failureLog}</pre>
+      ) : null}
+      {complete && message ? <p className={styles.noteGood}>{message}</p> : null}
       <FooterActions onBack={onBack}>
         <Button onClick={onFinish} disabled={!complete}>Finish</Button>
       </FooterActions>

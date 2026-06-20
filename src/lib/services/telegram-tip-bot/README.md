@@ -117,6 +117,11 @@ env knobs:
 
 - `TELEGRAM_TIP_BOT_MEMBER_TAGS=false` disables tag sync.
 - `TELEGRAM_TIP_BOT_MEMBER_TAG_CHAT_IDS=-100...` adds explicit target chats.
+- `TELEGRAM_TIP_BOT_MEMBER_TAG_TOKEN` can point tag writes at a separate
+  admin bot token. If unset, the runner can fall back to
+  `HIVEMINDOS_TELEGRAM_MEMBER_TAG_BOT_TOKEN` or
+  `SWARM_SOVEREIGN_TELEGRAM_BOT_TOKEN` when the primary tip bot lacks tag
+  rights in a chat.
 - `TELEGRAM_TIP_BOT_MEMBER_TAG_TOP_LIMIT=5` changes the leaderboard cutoff.
 - `TELEGRAM_TIP_BOT_MEMBER_TAG_WINDOW_DAYS=7` changes the recent-rank window.
 - `TELEGRAM_TIP_BOT_MEMBER_TAG_SYNC_INTERVAL_MINUTES=30` changes cadence.

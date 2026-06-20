@@ -24,6 +24,27 @@
 - Keep collectors private to Tailscale unless the user explicitly asks for another exposure model.
 - Prefer read-only fleet inspection by default. Remote mutation/update endpoints need explicit design and safety review.
 
+## Open Source And Commercial Boundary
+
+- HivemindOS is an open-source local-first product, and the repo should remain useful for self-hosters and users running with their own keys, machines, wallets, and vaults.
+- The project also includes, or is expected to include, proprietary HivemindOS-managed cloud, hosted agents, managed HONEY credits, enterprise features, marketplaces, paid runtimes, x402 services, HIVE/Bankr-funded services, and other commercial offerings.
+- Do not assume "open source" means every monetized or managed-service trust decision can live in the downloadable app. The desktop app, browser UI, local API routes, local env, local vault, bundled config, packaged `payTo` addresses, local feature flags, and local storage are user-controlled surfaces. Users can inspect, modify, rebuild, patch, or bypass them.
+- Official revenue, entitlement, quota, managed credit, marketplace fee, enterprise policy, hosted-agent access, and cloud-resource decisions must be enforced by HivemindOS-controlled infrastructure or by verifiable third-party settlement systems. Local state may cache or display those decisions, but it must not be the authority for official commercial value.
+- Self-hosted commercial flows are allowed, but they must be explicit and separate from official HivemindOS-managed flows. A self-hosted operator may configure their own `payTo`, facilitator, provider keys, quotas, and terms; that must not be presented as official HivemindOS revenue or entitlement.
+
+## Tamper-Resistant Commercial Architecture
+
+When building features involving payments, billing, managed cloud, enterprise access, paid agents, hosted models, managed HONEY, HIVE, x402, Bankr, Stripe, marketplace listings, license gates, or quotas:
+
+- Treat the client as hostile for commercial trust. Never grant official paid access, credits, discounts, withdrawals, provider capacity, or enterprise privileges solely because local app state, local config, local env, URL params, or a client-supplied JSON body says so.
+- Keep authoritative checks server-side: payment settlement, webhook verification, entitlement lookup, tenant membership, RBAC, quota accounting, provider-key access, credit balances, pricing, platform fees, and payout routing.
+- Verify money rails against expected server-owned facts: recipient/`payTo`, network, token, amount, resource URL, product SKU, tenant, idempotency key, expiry, and replay window. For x402, the hosted resource server or backend verifier must confirm settlement for the expected payment requirements before granting official value.
+- Use signed receipts or server-issued session tokens for paid access. Include idempotency, replay protection, expiry, resource binding, and audit logs for all paid or entitlement-changing operations.
+- Do not ship official secrets, provider keys, treasury keys, signing secrets, private wallet material, hidden entitlements, or authoritative pricing rules in the downloadable app. Use shared env only for local/self-hosted operation; official managed services must use backend-held secrets.
+- Design graceful open-source behavior: without managed-service credentials or a valid hosted entitlement, the local app should continue to work for local/BYOK/self-hosted features and clearly show that managed cloud or enterprise functionality is unavailable.
+- Add tests or static guards for the trust boundary. Useful checks include attempts to override local `payTo`, local credit balances, entitlement flags, tenant IDs, or billing amounts and proving the server rejects or ignores those client-controlled values.
+- Document whether a feature is local/BYOK, self-hosted, or HivemindOS-managed. Public docs should avoid implying that a local-only implementation is tamper-proof for official monetization.
+
 ## Docs Scope
 
 - `docs/` is public product documentation for HivemindOS users. Never write personal or this-installation content there: no "on this machine" state, no named fleet machines or hostnames, no local workspace/run details, no personal names, paths, or session history.

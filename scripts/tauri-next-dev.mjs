@@ -30,6 +30,26 @@ const loadingHtmlPath = fileURLToPath(
 const loadingIconPath = fileURLToPath(
   new URL("../src-tauri/loading/icon-192.png", import.meta.url),
 );
+const loadingBeeLottiePath = fileURLToPath(
+  new URL("../public/animations/Honey bee.lottie", import.meta.url),
+);
+const dotLottieRuntimePath = fileURLToPath(
+  new URL(
+    "../node_modules/@lottiefiles/dotlottie-web/dist/index.js",
+    import.meta.url,
+  ),
+);
+const dotLottieWasmPath = fileURLToPath(
+  new URL(
+    "../node_modules/@lottiefiles/dotlottie-web/dist/dotlottie-player.wasm",
+    import.meta.url,
+  ),
+);
+const loadingAssetPaths = new Map([
+  ["Honey bee.lottie", loadingBeeLottiePath],
+  ["dotlottie.js", dotLottieRuntimePath],
+  ["dotlottie-player.wasm", dotLottieWasmPath],
+]);
 const upstreamHost = "localhost";
 const proxyBindHost = process.env.HIVEMINDOS_TAURI_PROXY_BIND_HOST || "0.0.0.0";
 const browserHost = "localhost";
@@ -162,8 +182,11 @@ function writeDevServerInfo() {
 
 function contentType(path) {
   if (path.endsWith(".html")) return "text/html; charset=utf-8";
+  if (path.endsWith(".js")) return "text/javascript; charset=utf-8";
+  if (path.endsWith(".wasm")) return "application/wasm";
   if (path.endsWith(".png")) return "image/png";
   if (path.endsWith(".ico")) return "image/x-icon";
+  if (path.endsWith(".lottie")) return "application/octet-stream";
   return "application/octet-stream";
 }
 
@@ -445,8 +468,23 @@ const proxyServer = createServer((request, response) => {
   }
 
   if (request.url && request.url.startsWith("/loading/")) {
-    const fileName = request.url.slice("/loading/".length).split("?")[0];
-    if (!fileName.includes("/") && extname(fileName)) {
+    const rawFileName = request.url.slice("/loading/".length).split("?")[0];
+    let fileName = rawFileName;
+    try {
+      fileName = decodeURIComponent(rawFileName);
+    } catch {
+      fileName = rawFileName;
+    }
+    const mappedAssetPath = loadingAssetPaths.get(fileName);
+    if (mappedAssetPath) {
+      sendFile(response, mappedAssetPath);
+      return;
+    }
+    if (
+      !fileName.includes("/") &&
+      !fileName.includes("\\") &&
+      extname(fileName)
+    ) {
       sendFile(
         response,
         fileURLToPath(new URL(fileName, `file://${loadingDir}`)),

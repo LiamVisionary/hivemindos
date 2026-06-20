@@ -520,6 +520,24 @@
   color: #c9fbd6;
 }
 
+.setupLog {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  border: 1px solid rgba(246, 205, 103, 0.28);
+  background: #0a0d07;
+  color: #fde9aa;
+  padding: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  font-size: 12.5px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
 .badge,
 .pill {
   display: inline-flex;
@@ -718,6 +736,12 @@
   border-color: rgba(176, 127, 28, 0.28);
   background: rgba(176, 127, 28, 0.10);
   color: #936811;
+}
+
+:global(:root[data-theme="hive-light"]) .setupLog {
+  border-color: rgba(192, 82, 77, 0.28);
+  background: rgba(255, 252, 246, 0.92);
+  color: #7a2f2c;
 }
 
 :global(:root[data-theme="hive-light"]) .noteGood,

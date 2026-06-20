@@ -41,7 +41,7 @@
   padding: 0;
 }
 
-.brainLoader > div:not(.brainLoaderComb, .brainLoadingRail) {
+.brainLoaderCopy {
   display: grid;
   gap: 3px;
 }
@@ -57,37 +57,16 @@
   font-size: 11px;
 }
 
-.brainLoaderComb {
-  --brain-loader-cell-fill: rgba(13, 22, 31, 0.94);
-  --brain-loader-cell-pulse: rgba(94, 234, 212, 0.18);
-  --brain-loader-edge: rgba(94, 234, 212, 0.54);
+.brainLoaderBee {
   display: block;
-  width: 86px;
   min-height: 0;
-  height: 66px;
   overflow: visible;
   cursor: default;
+  pointer-events: none;
   touch-action: auto;
-  filter: drop-shadow(0 0 18px rgba(45, 212, 191, 0.16));
-  user-select: auto;
-}
-
-.brainLoader.compact .brainLoaderComb {
-  width: 58px;
-  height: 45px;
-}
-
-.brainLoaderCells polygon {
-  fill: var(--brain-loader-cell-fill);
-  will-change: fill;
-  animation: brainCombPulse 1.45s ease-in-out infinite;
-}
-
-.brainLoaderEdges line {
-  stroke: var(--brain-loader-edge);
-  stroke-width: 1.4;
-  stroke-linecap: square;
-  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 18px rgba(45, 212, 191, 0.16))
+    drop-shadow(0 8px 18px rgba(242, 183, 5, 0.14));
+  user-select: none;
 }
 
 .brainLoadingRail {
@@ -107,18 +86,14 @@
   position: absolute;
   inset: 0 15%;
   border-radius: inherit;
-  background: linear-gradient(90deg, transparent, var(--brain-loader-rail-sheen), var(--brain-loader-rail-tail), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--brain-loader-rail-sheen),
+    var(--brain-loader-rail-tail),
+    transparent
+  );
   opacity: 0.72;
-}
-
-@keyframes brainCombPulse {
-  0%,
-  100% {
-    fill: var(--brain-loader-cell-fill);
-  }
-  45% {
-    fill: var(--brain-loader-cell-pulse);
-  }
 }
 
 :global(:root[data-theme="hive-light"]) .brainLoader {
@@ -133,14 +108,7 @@
   box-shadow: none;
 }
 
-:global(:root[data-theme="hive-light"]) .brainLoaderComb {
-  --brain-loader-cell-fill: rgba(238, 230, 208, 0.96);
-  --brain-loader-cell-pulse: rgba(94, 234, 212, 0.18);
-  --brain-loader-edge: rgba(111, 86, 37, 0.4);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .brainLoaderCells polygon {
-    animation: none;
-  }
+:global(:root[data-theme="hive-light"]) .brainLoaderBee {
+  filter: drop-shadow(0 0 18px rgba(13, 142, 126, 0.12))
+    drop-shadow(0 8px 18px rgba(176, 127, 28, 0.16));
 }

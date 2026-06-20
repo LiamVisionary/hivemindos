@@ -9,7 +9,8 @@
    `fr-shelf-app` modifier (fixed positioning + macOS drag region). onNavigate
    receives a DashboardView id; wire it to the dashboard view switch. */
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { Brain } from "lucide-react";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { applyAppNavLiquidGlass } from "@/lib/native/liquid-glass";
@@ -39,11 +40,13 @@ function FrNavIcon({ id }: { id: string }) {
     case "kanban":
       return (<svg {...p}><rect x="3" y="4" width="5" height="16" rx="1.2" /><rect x="9.5" y="4" width="5" height="10" rx="1.2" /><rect x="16" y="4" width="5" height="13" rx="1.2" /></svg>);
     case "vault":
-      return (<svg {...p}><path d="M12 3l7 4v5c0 4.2-2.9 7.4-7 9-4.1-1.6-7-4.8-7-9V7z" /><circle cx="12" cy="11" r="2" /><path d="M12 13v3" /></svg>);
+      return <Brain aria-hidden="true" width={20} height={20} strokeWidth={1.7} />;
     case "chat":
       return (<svg {...p}><path d="M21 11.5a8 8 0 0 1-11.6 7.1L4 20l1.4-5.4A8 8 0 1 1 21 11.5z" /></svg>);
     case "wallet":
       return (<svg {...p}><rect x="3" y="6" width="18" height="13" rx="2.2" /><path d="M3 9.5h18" /><circle cx="16.5" cy="13.5" r="1.1" fill="currentColor" stroke="none" /></svg>);
+    case "trade":
+      return (<svg {...p}><path d="M8 4v3M8 16v4" /><rect x="6" y="7" width="4" height="9" rx="1" /><path d="M16 4v4M16 17v3" /><rect x="14" y="8" width="4" height="9" rx="1" /></svg>);
     case "scheduler":
       return (<svg {...p}><rect x="3.5" y="4.5" width="17" height="16" rx="2.2" /><path d="M3.5 9h17M8 3v3M16 3v3" /><path d="M12 12v2.5l1.6 1" /></svg>);
     case "swarm":
@@ -69,6 +72,7 @@ const GROUPS: NavItem[][] = [
     { id: "vault", label: "Brain" },
     { id: "chat", label: "Chat" },
     { id: "wallet", label: "Wallets" },
+    { id: "trade", label: "Trade" },
   ],
   [
     { id: "scheduler", label: "Schedules" },
@@ -91,6 +95,7 @@ function resolveActive(view: DashboardView): string {
     case "vault": return "vault";
     case "chat": return "chat";
     case "wallet": return "wallet";
+    case "trade": return "trade";
     case "scheduler": return "scheduler";
     case "swarm": return "swarm";
     case "aeon": return "aeon";
@@ -149,6 +154,8 @@ export function AppNavShelf({
   notificationUnread?: number;
 }) {
   const active = resolveActive(activeView);
+  const keyboardNavigationRef = useRef(false);
+  const [shelfKeyboardFocus, setShelfKeyboardFocus] = useState(false);
 
   // Build version readout (relocated from the old header), with the same
   // /api/app/version fallback fetch so it works when appVersion isn't passed.
@@ -195,9 +202,39 @@ export function AppNavShelf({
     void applyAppNavLiquidGlass(theme);
   }, [theme]);
 
+  useEffect(() => {
+    const markKeyboardNavigation = (event: KeyboardEvent) => {
+      if (event.key === "Tab") keyboardNavigationRef.current = true;
+    };
+    const clearKeyboardNavigation = () => {
+      keyboardNavigationRef.current = false;
+      setShelfKeyboardFocus(false);
+    };
+
+    window.addEventListener("keydown", markKeyboardNavigation, true);
+    window.addEventListener("pointerdown", clearKeyboardNavigation, true);
+    return () => {
+      window.removeEventListener("keydown", markKeyboardNavigation, true);
+      window.removeEventListener("pointerdown", clearKeyboardNavigation, true);
+    };
+  }, []);
+
   return (
     <div className="fr-root" data-fr-theme={theme}>
-      <nav className="fr-shelf fr-shelf-app" aria-label="Primary">
+      <nav
+        className="fr-shelf fr-shelf-app"
+        aria-label="Primary"
+        data-keyboard-focus={shelfKeyboardFocus ? "true" : undefined}
+        onFocusCapture={() => {
+          if (keyboardNavigationRef.current) setShelfKeyboardFocus(true);
+        }}
+        onBlurCapture={(event) => {
+          const nextTarget = event.relatedTarget;
+          if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+            setShelfKeyboardFocus(false);
+          }
+        }}
+      >
         <button
           type="button"
           className="fr-brand"

@@ -30,6 +30,10 @@ import {
   queenChatTools,
   queenRealtimeTools,
 } from "@/lib/services/queen-bee/queen-brain";
+import {
+  coerceDashboardScreenContext,
+  formatDashboardScreenContextForPrompt,
+} from "@/features/dashboard/screen-context";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -236,7 +240,17 @@ async function runQueenChatTurn(body: Record<string, unknown>) {
   }
   const incoming = Array.isArray(body.messages) ? body.messages : [];
   const preamble = await queenVoicePreferencePreamble();
-  const system = preamble ? `${QUEEN_INSTRUCTIONS} ${preamble}` : QUEEN_INSTRUCTIONS;
+  const screenContext = formatDashboardScreenContextForPrompt(
+    coerceDashboardScreenContext(body.screenContext),
+  );
+  const screenContextPrompt = screenContext
+    ? [
+        "The user typed this from the global bottom-of-screen hive input.",
+        "Use the current dashboard context below to resolve references like this screen, this view, this section, current modal, selected task, selected agent, or selected wallet. Do not mention this context unless it helps answer or act.",
+        screenContext,
+      ].join("\n")
+    : "";
+  const system = [QUEEN_INSTRUCTIONS, preamble, screenContextPrompt].filter(Boolean).join(" ");
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",

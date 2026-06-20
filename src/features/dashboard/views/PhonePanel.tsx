@@ -19,6 +19,7 @@ import { CloseIconButton } from "@/components/ui/close-icon-button";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { readNativePhonePrompts } from "@/lib/native/phone";
 import type { SharedVaultConfig } from "@/lib/types/agent-runtime";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
 
@@ -197,7 +198,7 @@ export function PhonePanel({ activeView, fleetClass, formatRelativeTime, sharedV
   }, [refresh]);
 
   const removePrompt = useCallback(async (prompt: CallPrompt) => {
-    if (typeof window !== "undefined" && !window.confirm(`Delete the call prompt "${prompt.title}"?`)) return;
+    if (!(await confirmUserAction(`Delete the call prompt "${prompt.title}"?`))) return;
     setBusyId(prompt.id);
     try {
       const response = await fetch("/api/phone", {

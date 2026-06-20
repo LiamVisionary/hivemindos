@@ -3,6 +3,7 @@
 import * as React from "react";
 import {
   QUEEN_CLAP_ANALYSER_FFT_SIZE,
+  QUEEN_CLAP_LISTENING_SETTLE_MS,
   QUEEN_CLAP_PROCESSOR_BUFFER_SIZE,
   initialQueenClapDetectorState,
   measureFrequencyClapFrame,
@@ -77,6 +78,7 @@ export function useQueenClapActivation({
     let silentGain: GainNode | null = null;
     let detectorState = initialQueenClapDetectorState;
     let previousFrequencyData: Uint8Array | null = null;
+    let detectorReadyAt = 0;
 
     const cleanup = () => {
       if (processor) processor.onaudioprocess = null;
@@ -135,6 +137,7 @@ export function useQueenClapActivation({
         silentGain.connect(audioContext.destination);
 
         const frequencyData = new Uint8Array(analyser.frequencyBinCount);
+        detectorReadyAt = performance.now() + QUEEN_CLAP_LISTENING_SETTLE_MS;
         setStatus("listening");
 
         processor.onaudioprocess = (event) => {
@@ -154,9 +157,11 @@ export function useQueenClapActivation({
             previousFrequencyData = new Uint8Array(frequencyData.length);
           }
           previousFrequencyData.set(frequencyData);
+          const nowMs = performance.now();
+          if (nowMs < detectorReadyAt) return;
           const result = nextQueenClapDetectorState(detectorState, {
             ...measured,
-            nowMs: performance.now(),
+            nowMs,
           });
           detectorState = result.state;
           if (result.activated) onActivationRef.current();

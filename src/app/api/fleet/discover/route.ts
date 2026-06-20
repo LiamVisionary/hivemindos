@@ -116,6 +116,13 @@ type CollectorSystemStats = {
   uptimeSec?: number;
 };
 
+type BridgeRepairStatus = {
+  status: "queued" | "running" | "succeeded" | "failed";
+  checkedAt: number;
+  message: string;
+  nextAttemptAt?: number;
+};
+
 const FOREGROUND_COLLECTOR_FETCH_TIMEOUT_MS = 2_500;
 const BACKGROUND_COLLECTOR_FETCH_TIMEOUT_MS = 8_000;
 const SNAPSHOT_FETCH_TIMEOUT_MS = 4_000;
@@ -124,10 +131,15 @@ const DISCOVERY_REQUEST_TIMEOUT_MS = 20_000;
 const DISCOVERY_CACHE_VERSION = "v4";
 const TAILSCALE_STATUS_TIMEOUT_MS = 6_000;
 const TAILSCALE_LOCAL_API_TIMEOUT_MS = 2_000;
+const BRIDGE_AUTO_REPAIR_FAILURE_COOLDOWN_MS = 10 * 60_000;
+const BRIDGE_AUTO_REPAIR_SUCCESS_COOLDOWN_MS = 60_000;
+const BRIDGE_AUTO_REPAIR_TIMEOUT_MS = 45_000;
+const LAST_READY_MACHINE_MS = 5 * 60_000;
 const TAILSCALE_CLI_CANDIDATES = [
   "/usr/local/bin/tailscale",
   "/opt/homebrew/bin/tailscale",
   "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+  "tailscale",
 ];
 
 type DiscoveredMachine = {
@@ -139,6 +151,7 @@ type DiscoveredMachine = {
   capabilities?: CollectorCapabilities;
   envSync?: CollectorEnvSync;
   system?: CollectorSystemStats;
+  bridgeRepair?: BridgeRepairStatus;
   agents: AgentProfile[];
   snapshots: unknown[];
 };
@@ -163,6 +176,12 @@ const discoveryInFlight = new Map<string, Promise<FleetDiscoverPayload>>();
 const discoveryBackgroundInFlight = new Map<
   string,
   Promise<FleetDiscoverPayload>
+>();
+const bridgeRepairByKey = new Map<string, BridgeRepairStatus>();
+const bridgeRepairInFlight = new Set<string>();
+const lastReadyMachineByKey = new Map<
+  string,
+  { checkedAt: number; machine: DiscoveredMachine }
 >();
 
 function localCollectorUrl() {
@@ -653,9 +672,17 @@ function shellQuote(value: string) {
 }
 
 function remoteHostCandidates(device: Device) {
+  const dnsName = device.dnsName?.replace(/\.$/, "");
+  const dnsShortName = dnsName ? dnsLabel(dnsName) : "";
+  const systemShortName = dnsShortName.startsWith("hivemindos-")
+    ? dnsShortName.replace(/^hivemindos-/, "")
+    : "";
+  const dnsSuffix = dnsName?.split(".").slice(1).join(".") ?? "";
   return [
-    dnsLabel(device.dnsName),
-    device.dnsName?.replace(/\.$/, ""),
+    systemShortName,
+    systemShortName && dnsSuffix ? `${systemShortName}.${dnsSuffix}` : "",
+    dnsShortName,
+    dnsName,
     device.ip,
   ].filter(
     (value, index, values): value is string =>
@@ -742,6 +769,22 @@ async function probeCollector(
   };
 }
 
+async function probeCollectorCandidates(
+  device: Device,
+  options: DiscoveryProbeOptions,
+) {
+  const probeResults = await Promise.all(
+    collectorUrlCandidates(device).map((collectorUrl) =>
+      probeCollector(device, collectorUrl, options).catch(() => null),
+    ),
+  );
+  return (
+    probeResults.find((result): result is CollectorProbeResult =>
+      Boolean(result),
+    ) ?? null
+  );
+}
+
 function isHivemindCollectorHealth(payload: {
   version?: CollectorVersion;
   capabilities?: CollectorCapabilities;
@@ -754,6 +797,209 @@ function isHivemindCollectorHealth(payload: {
     payload.capabilities?.hostedApps === true ||
     payload.capabilities?.runtimeAgentCreation === true,
   );
+}
+
+function bridgeRepairKey(device: Device) {
+  return (
+    exactMachineIdentity(device) ||
+    normalizeDnsName(device.dnsName) ||
+    normalizeName(device.name) ||
+    device.ip
+  );
+}
+
+function bridgeRepairStatus(device: Device) {
+  const key = bridgeRepairKey(device);
+  return key ? bridgeRepairByKey.get(key) : undefined;
+}
+
+function recentReadyMachineForDevice(device: Device) {
+  const key = deviceIdentityKey(device);
+  const hit = key ? lastReadyMachineByKey.get(key) : undefined;
+  if (!hit) return undefined;
+  if (Date.now() - hit.checkedAt <= LAST_READY_MACHINE_MS) return hit.machine;
+  lastReadyMachineByKey.delete(key);
+  return undefined;
+}
+
+function hasRecentReadyMachine(device: Device) {
+  return Boolean(recentReadyMachineForDevice(device));
+}
+
+function isBridgeAutoRepairCandidate(device: Device) {
+  return (
+    !device.self &&
+    device.online &&
+    !isMobileDevice(device) &&
+    isMacDevice(device)
+  );
+}
+
+function bridgeRepairStatusMessage(status: BridgeRepairStatus["status"]) {
+  switch (status) {
+    case "queued":
+      return "Automatic agent bridge repair is queued.";
+    case "running":
+      return "Automatic agent bridge repair is running.";
+    case "succeeded":
+      return "Automatic agent bridge repair restored the collector.";
+    case "failed":
+      return "Automatic agent bridge repair could not restore the collector yet.";
+  }
+}
+
+function setBridgeRepairStatus(
+  key: string,
+  status: BridgeRepairStatus["status"],
+  extra: Partial<BridgeRepairStatus> = {},
+) {
+  const next: BridgeRepairStatus = {
+    status,
+    checkedAt: Date.now(),
+    message: extra.message ?? bridgeRepairStatusMessage(status),
+    nextAttemptAt: extra.nextAttemptAt,
+  };
+  bridgeRepairByKey.set(key, next);
+  return next;
+}
+
+function bridgeRepairScript() {
+  return [
+    "set -eu",
+    '[ -f "$HOME/.hivemindos/collector.env" ] && . "$HOME/.hivemindos/collector.env" || true',
+    'PORT="${AGENT_TELEMETRY_PORT:-8787}"',
+    'LINK_LABEL="${HIVE_LINK_LABEL:-com.hivemindos.linkd.agent}"',
+    'LINK_CONTROL="${HIVE_LINK_CONTROL:-127.0.0.1:8788}"',
+    'if [ "$(uname -s)" = "Darwin" ]; then',
+    '  launchctl kickstart -k "gui/$(id -u)/com.agent-control-room.telemetry" >/dev/null 2>&1 || true',
+    '  launchctl kickstart -k "gui/$(id -u)/$LINK_LABEL" >/dev/null 2>&1 || launchctl kickstart -k "gui/$(id -u)/com.hivemindos.linkd" >/dev/null 2>&1 || true',
+    "elif command -v systemctl >/dev/null 2>&1; then",
+    "  systemctl --user restart agent-telemetry.service >/dev/null 2>&1 || true",
+    "  systemctl --user restart hivemindos-linkd.service >/dev/null 2>&1 || true",
+    "fi",
+    "sleep 2",
+    'if curl -fsS --max-time 5 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then',
+    "  exit 0",
+    "fi",
+    'for d in "$HOME/Documents/code/projects/hivemind-os" "$HOME/Documents/code/projects/hivemindos" "$HOME/hivemind-os" "$HOME/hivemindos" "$HOME/openclaw-next" "/root/omni-agent-hivemind" "/root/hivemindos" "/opt/hivemindos"; do',
+    '  if [ -f "$d/scripts/install-telemetry-collector.sh" ]; then',
+    '    cd "$d"',
+    "    HIVE_LINK_ENABLED=true ./scripts/install-telemetry-collector.sh >/tmp/hivemindos-bridge-auto-repair.log 2>&1 || { tail -80 /tmp/hivemindos-bridge-auto-repair.log >&2 || true; exit 1; }",
+    "    break",
+    "  fi",
+    "done",
+    'curl -fsS --max-time 5 "http://127.0.0.1:$PORT/health" >/dev/null',
+    'curl -fsS --max-time 5 "http://$LINK_CONTROL/status" >/dev/null 2>&1 || true',
+  ].join("\n");
+}
+
+function sanitizeRepairError(error: unknown) {
+  return (error instanceof Error ? error.message : String(error))
+    .replace(
+      /\b100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])(?:\.\d{1,3}){2}\b/g,
+      "<tailnet-ip>",
+    )
+    .slice(0, 500);
+}
+
+function tailscaleSshTargets(device: Device) {
+  const hosts = remoteHostCandidates(device);
+  const targets: string[] = [];
+  for (const host of hosts) {
+    targets.push(host);
+    if (!isMacDevice(device)) {
+      targets.push(`root@${host}`, `ubuntu@${host}`);
+    }
+  }
+  return targets.filter(
+    (value, index, values) => values.indexOf(value) === index,
+  );
+}
+
+async function execTailscaleSsh(target: string, script: string) {
+  const errors: string[] = [];
+  for (const command of TAILSCALE_CLI_CANDIDATES) {
+    try {
+      await execFileAsync(command, ["ssh", target, "sh", "-lc", script], {
+        timeout: BRIDGE_AUTO_REPAIR_TIMEOUT_MS,
+        maxBuffer: 1_500_000,
+      });
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
+        throw error;
+      }
+      errors.push(sanitizeRepairError(error));
+    }
+  }
+  throw new Error(errors.at(-1) ?? "Tailscale SSH repair failed.");
+}
+
+async function runBridgeAutoRepair(
+  device: Device,
+  options: DiscoveryProbeOptions,
+) {
+  const script = bridgeRepairScript();
+  const errors: string[] = [];
+  for (const target of tailscaleSshTargets(device)) {
+    try {
+      await execTailscaleSsh(target, script);
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      const probe = await probeCollectorCandidates(device, {
+        ...options,
+        collectorTimeoutMs: Math.max(options.collectorTimeoutMs, 8_000),
+      });
+      if (probe) return;
+      throw new Error(
+        "The remote service restarted, but this dashboard still cannot reach its collector.",
+      );
+    } catch (error) {
+      errors.push(sanitizeRepairError(error));
+    }
+  }
+  throw new Error(errors.at(-1) ?? "Automatic bridge repair failed.");
+}
+
+function scheduleBridgeAutoRepair(
+  device: Device,
+  options: DiscoveryProbeOptions,
+) {
+  const key = bridgeRepairKey(device);
+  if (!key || !isBridgeAutoRepairCandidate(device)) {
+    return bridgeRepairStatus(device);
+  }
+  if (hasRecentReadyMachine(device)) return bridgeRepairStatus(device);
+  const now = Date.now();
+  const current = bridgeRepairByKey.get(key);
+  if (bridgeRepairInFlight.has(key)) return current;
+  if (current?.nextAttemptAt && current.nextAttemptAt > now) return current;
+
+  const queued = setBridgeRepairStatus(key, "queued", {
+    nextAttemptAt: now + BRIDGE_AUTO_REPAIR_FAILURE_COOLDOWN_MS,
+  });
+  bridgeRepairInFlight.add(key);
+  void (async () => {
+    setBridgeRepairStatus(key, "running", {
+      nextAttemptAt: Date.now() + BRIDGE_AUTO_REPAIR_FAILURE_COOLDOWN_MS,
+    });
+    try {
+      await runBridgeAutoRepair(device, options);
+      setBridgeRepairStatus(key, "succeeded", {
+        nextAttemptAt: Date.now() + BRIDGE_AUTO_REPAIR_SUCCESS_COOLDOWN_MS,
+      });
+    } catch (error) {
+      console.warn("[fleet] automatic bridge repair failed", {
+        machine: device.name,
+        detail: sanitizeRepairError(error),
+      });
+      setBridgeRepairStatus(key, "failed", {
+        nextAttemptAt: Date.now() + BRIDGE_AUTO_REPAIR_FAILURE_COOLDOWN_MS,
+      });
+    } finally {
+      bridgeRepairInFlight.delete(key);
+    }
+  })();
+  return queued;
 }
 
 async function probeCollectorViaTailscale(
@@ -804,9 +1050,9 @@ async function probeCollectorViaTailscale(
  * fields stay collector-owned: a stored profile may be stale about where the
  * agent currently lives.
  */
-async function overlayStoredAgentProfiles<MachineLike extends { agents: AgentProfile[] }>(
-  machines: MachineLike[],
-): Promise<MachineLike[]> {
+async function overlayStoredAgentProfiles<
+  MachineLike extends { agents: AgentProfile[] },
+>(machines: MachineLike[]): Promise<MachineLike[]> {
   const stored = await readStoredAgentProfiles().catch(() => []);
   if (stored.length === 0) return machines;
   const storedById = new Map(stored.map((profile) => [profile.id, profile]));
@@ -869,17 +1115,7 @@ async function readDiscovery(
               collectorTimeoutMs: Math.max(options.collectorTimeoutMs, 4_000),
             }
           : options;
-        const probeResults = await Promise.all(
-          collectorUrlCandidates(device).map((collectorUrl) =>
-            probeCollector(device, collectorUrl, probeOptions).catch(
-              () => null,
-            ),
-          ),
-        );
-        probe =
-          probeResults.find((result): result is CollectorProbeResult =>
-            Boolean(result),
-          ) ?? null;
+        probe = await probeCollectorCandidates(device, probeOptions);
         if (
           !probe &&
           options.allowSshFallback &&
@@ -894,11 +1130,13 @@ async function readDiscovery(
         probe = null;
       }
       if (!probe) {
+        const bridgeRepair = scheduleBridgeAutoRepair(device, options);
         return {
           device,
           collector: device.online ? "not-installed" : "offline",
           agents: [],
           snapshots: [],
+          bridgeRepair,
         };
       }
 
@@ -1021,6 +1259,7 @@ function refreshDiscovery(
       DISCOVERY_REQUEST_TIMEOUT_MS,
     )
       .then((payload) => {
+        rememberReadyMachines(payload);
         const stablePayload = stabilizeDiscoveryPayload(
           payload,
           previousPayload,
@@ -1046,6 +1285,16 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
     }, timeoutMs);
     promise.then(resolve, reject).finally(() => clearTimeout(timer));
   });
+}
+
+function rememberReadyMachines(payload: FleetDiscoverPayload) {
+  const checkedAt = Date.now();
+  for (const machine of payload.machines) {
+    if (machine.collector !== "ready" || machine.agents.length === 0) continue;
+    for (const key of machineBaseCandidates(machine)) {
+      lastReadyMachineByKey.set(key, { checkedAt, machine });
+    }
+  }
 }
 
 function refreshDiscoveryInBackground(
@@ -1199,13 +1448,21 @@ function stabilizeDiscoveryPayload(
   payload: FleetDiscoverPayload,
   previous?: FleetDiscoverPayload,
 ) {
-  if (!previous) return payload;
-
   const previousReadyByKey = new Map<string, DiscoveredMachine>();
-  for (const machine of previous.machines) {
-    if (machine.collector !== "ready" || machine.agents.length === 0) continue;
-    for (const key of machineBaseCandidates(machine))
-      previousReadyByKey.set(key, machine);
+  if (previous) {
+    for (const machine of previous.machines) {
+      if (machine.collector !== "ready" || machine.agents.length === 0)
+        continue;
+      for (const key of machineBaseCandidates(machine))
+        previousReadyByKey.set(key, machine);
+    }
+  }
+  for (const [key, hit] of lastReadyMachineByKey) {
+    if (Date.now() - hit.checkedAt > LAST_READY_MACHINE_MS) {
+      lastReadyMachineByKey.delete(key);
+      continue;
+    }
+    if (!previousReadyByKey.has(key)) previousReadyByKey.set(key, hit.machine);
   }
 
   if (previousReadyByKey.size === 0) return payload;

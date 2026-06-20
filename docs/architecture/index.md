@@ -35,7 +35,7 @@ HivemindOS is built around five constraints:
 | Native bridge    | `src/lib/native/**`, `src-tauri/src/lib.rs`                                                        | Tauri-only desktop status, local directory listing/creation/display, and native folder picker fallbacks                                                                           |
 | Collector        | `scripts/agent-telemetry-collector.mjs`                                                            | Small Node HTTP service on each machine for health, snapshots, runtime chat/session bridges, Hivemind Sync env movement, skills, directories, Syncthing, transfers, and E2E hooks |
 | Setup scripts    | `setup.sh`, `setup.ps1`, `uninstall.sh`, `uninstall.ps1`, `scripts/install-telemetry-collector.sh` | Installation, collector/Link service registration, helper CLI installation, uninstall mirror                                                                                      |
-| Workers          | `workers/honey-ledger`, `workers/compute-gateway`                                                  | Optional Cloudflare D1-backed Honey ledger and trusted OpenAI-compatible compute gateway                                                                                          |
+| Workers          | `workers/honey-ledger`, `workers/compute-gateway`, `workers/paid-agent-gateway`                     | Optional Cloudflare D1-backed Honey ledger, trusted OpenAI-compatible compute gateway, and official x402 paid-agent gateway                                                       |
 
 ## Runtime Process Model
 

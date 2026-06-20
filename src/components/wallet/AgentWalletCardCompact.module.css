@@ -66,6 +66,18 @@
   transform: translateY(-1px) scale(0.99);
 }
 
+/* Selected state for picker/selectable mode (wallet selection modal). */
+.card[data-selected="true"] {
+  border-color: rgba(94, 234, 212, 0.7);
+  box-shadow:
+    0 0 0 2px rgba(45, 212, 191, 0.55),
+    0 14px 32px rgba(0, 0, 0, 0.4);
+}
+
+.card[data-selected="true"]::before {
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.16), rgba(45, 212, 191, 0.0) 60%);
+}
+
 .card[data-tier="critical"],
 .card[data-tier="dead"] {
   background:

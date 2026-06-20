@@ -10,6 +10,7 @@ import { AppPreferencesCard, matchAppPreference, type AppPreferenceRecord } from
 import { useFrTheme } from "@/components/fleet-hive/use-fr-theme";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { getNativeFleetAppsCache } from "@/lib/native/fleet";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
 
@@ -64,14 +65,14 @@ type FleetAppsPayload = {
 };
 
 type InstallableServiceStatus = {
-  id: "n8n" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach";
+  id: "n8n" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro";
   name: string;
   installed: boolean;
   running: boolean;
   version?: string;
   openUrl?: string;
   detail: string;
-  installMethod: "docker" | "uv" | "uv-tool" | "pipx" | "cloudflare-worker";
+  installMethod: "docker" | "uv" | "uv-tool" | "pipx" | "cloudflare-worker" | "dmg";
   requirements: string[];
   sourceUrl: string;
   provenance?: {
@@ -182,6 +183,7 @@ function installableServiceLabel(id: string, action: InstallableServiceAction, s
   if (isInstallOnlyCliService(service) && service?.installed) return "Installed";
   if (id === "agentic-inbox") return action === "install" ? "Setup" : action === "start" ? "Deploy" : "Disable";
   if (id === "browser-use") return action === "install" ? "Install" : action === "start" ? "Open" : "Close";
+  if (id === "palmier-pro") return action === "install" ? "Install" : action === "start" ? "Open" : "Quit";
   return action === "install" ? "Install" : action === "start" ? "Start" : "Stop";
 }
 
@@ -201,16 +203,16 @@ function installableServiceBlocked(service: InstallableServiceStatus | undefined
   return false;
 }
 
-function confirmSensitiveInstallableServiceAction(action: InstallableServiceAction) {
+async function confirmSensitiveInstallableServiceAction(action: InstallableServiceAction) {
   if (action === "check-agent-reach-x-auth") {
-    return window.confirm([
+    return confirmUserAction([
       "Agent Reach will run twitter-cli's X auth check now.",
       "It first looks for TWITTER_AUTH_TOKEN and TWITTER_CT0. If those are absent, macOS may show a Keychain prompt so twitter-cli can use local browser cookies for X/Twitter.",
       "Continue only if you want Agent Reach to use this authenticated X session.",
     ].join("\n\n"));
   }
   if (action === "reset-agent-reach-x") {
-    return window.confirm([
+    return confirmUserAction([
       "Reset the optional Agent Reach X setup?",
       "This uninstalls the HivemindOS-managed twitter-cli backend. It does not delete Chrome cookies, revoke macOS Keychain decisions, or remove shared env keys.",
     ].join("\n\n"));
@@ -655,7 +657,7 @@ export function MyAppsPanel({ activeView, formatRelativeTime }: MyAppsPanelProps
   ): Promise<FoundryServiceActionResult | null> => {
     const id = app.installableServiceId;
     if (!id) return { ok: false, error: "This catalog item does not have an automated installer yet." };
-    if (!confirmSensitiveInstallableServiceAction(action)) return { ok: false, error: "Cancelled." };
+    if (!(await confirmSensitiveInstallableServiceAction(action))) return { ok: false, error: "Cancelled." };
     setBusyServiceAction(`${id}:${action}`);
     setStatusTone("info");
     setStatus(`${installableServiceLabel(id, action)} ${app.name}...`);
