@@ -1,0 +1,19 @@
+/* Selection-only styling for the wallet picker tile. The card body reuses the
+   global `.fw-cc` look from wallets.css; this just adds the selected ring and
+   the corner check so the wallets.css source of truth stays untouched. */
+.card[data-selected="true"] {
+  box-shadow: 0 0 0 2px var(--honey);
+  border-color: color-mix(in srgb, var(--honey) 40%, var(--line));
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 99px;
+  background: var(--honey);
+  color: var(--panel);
+}

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { listenForQueenVoiceToggle } from "@/lib/native/queen-voice-events";
 import { QueenVoiceGlow } from "./QueenVoiceGlow";
+import { HIVE_CHAT_TRANSCRIPT_BOTTOM_OFFSET } from "./hive-chat-layout";
 import { useQueenClapActivation } from "./use-queen-clap-activation";
 import { useQueenBeeRealtime } from "./use-queen-bee-realtime";
 import {
@@ -259,6 +260,7 @@ export function QueenBeeVoiceOverlay({
   clapWakeEnabled = false,
   onClapWakeEnabledChange,
   onDriveDashboard,
+  openSpaceRightInset = 0,
 }: {
   clapWakeEnabled?: boolean;
   onClapWakeEnabledChange?: (enabled: boolean) => void;
@@ -266,6 +268,7 @@ export function QueenBeeVoiceOverlay({
     command: string,
     opts?: { onModalOpen?: () => void },
   ) => Promise<string>;
+  openSpaceRightInset?: number;
 } = {}) {
   const [open, setOpen] = React.useState(false);
   const [muted, setMuted] = React.useState(false);
@@ -440,9 +443,12 @@ export function QueenBeeVoiceOverlay({
       {open ? <QueenVoiceGlow active={open} /> : null}
       <div
         className={styles.overlayShell}
-        // Lift the whole stack clear of the "Message the hive" pill (bottom:26,
-        // ~52px tall) so the chat history sits above it.
-        style={{ paddingBottom: 96 }}
+        // The transcript stack shares the same open-space inset as the app-wide
+        // chat dock so its minimized FAB stays aligned across route layouts.
+        style={{
+          paddingBottom: HIVE_CHAT_TRANSCRIPT_BOTTOM_OFFSET,
+          right: openSpaceRightInset,
+        }}
         role="dialog"
         aria-label="Queen Bee voice chat"
       >

@@ -4629,6 +4629,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   const fullWidthRouteShellStyle = (activeView === "chat" || activeView === "agents" || activeView === "scheduler")
     ? { width: "100%", maxWidth: "none", margin: 0, overflow: "hidden" }
     : undefined;
+  const queenChatOpenSpaceRightInset = activeView === "agents" ? fleetChatOpenSpaceRightInset : 0;
 
   return (
     <QueenChatProvider runQueenCommand={beePilot.runVoiceCommand}>
@@ -4715,6 +4716,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         clapWakeEnabled={queenClapWakeEnabled}
         onClapWakeEnabledChange={updateQueenClapWakeEnabled}
         onDriveDashboard={beePilot.runVoiceCommand}
+        openSpaceRightInset={queenChatOpenSpaceRightInset}
       />
       <GuidedDashboardTour
         selectView={setActiveView}
@@ -4734,7 +4736,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
           dedicated chat view, which has its own composer. */}
       <PersistentHiveChat
         hidden={activeView === "chat"}
-        openSpaceRightInset={activeView === "agents" ? fleetChatOpenSpaceRightInset : 0}
+        openSpaceRightInset={queenChatOpenSpaceRightInset}
         screenContext={hiveScreenContext}
         tone={activeView === "agents" ? fleetChatTone : "hive"}
       />

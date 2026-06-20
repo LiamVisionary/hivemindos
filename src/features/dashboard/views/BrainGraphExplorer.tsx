@@ -145,10 +145,10 @@ function uniqueBrainAttachments(attachments: any[]) {
   });
 }
 
-function formatInspectorDate(value?: string, fallbackFormat?: (date?: string) => string) {
-  if (!value) return "never";
+function formatInspectorDateParts(value?: string, fallbackFormat?: (date?: string) => string) {
+  if (!value) return { primary: "Never" };
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return fallbackFormat?.(value) ?? value;
+  if (Number.isNaN(date.getTime())) return { primary: fallbackFormat?.(value) ?? value };
   const parts = new Intl.DateTimeFormat([], {
     month: "short",
     day: "numeric",
@@ -156,11 +156,28 @@ function formatInspectorDate(value?: string, fallbackFormat?: (date?: string) =>
     minute: "2-digit",
   }).formatToParts(date);
   const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
-  const dateLabel = [part("month"), part("day")].filter(Boolean).join(" ");
-  const timeLabel = [part("hour") && part("minute") ? `${part("hour")}:${part("minute")}` : "", part("dayPeriod")]
+  const primary = [part("month"), part("day")].filter(Boolean).join(" ");
+  const secondary = [part("hour") && part("minute") ? `${part("hour")}:${part("minute")}` : "", part("dayPeriod")]
     .filter(Boolean)
     .join(" ");
-  return [dateLabel, timeLabel].filter(Boolean).join(" · ") || fallbackFormat?.(value) || value;
+  return { primary: primary || fallbackFormat?.(value) || value, secondary };
+}
+
+function InspectorStat({ label, value, secondary, kind = "count" }: any) {
+  return (
+    <div className={graphClass(kind === "date" ? "dateStat" : "countStat")}>
+      <dt>{label}</dt>
+      <dd>
+        <span className={graphClass("statValue")}>{value}</span>
+        {secondary ? <span className={graphClass("statSubvalue")}>{secondary}</span> : null}
+      </dd>
+    </div>
+  );
+}
+
+function InspectorDateStat({ label, value, fallbackFormat }: any) {
+  const date = formatInspectorDateParts(value, fallbackFormat);
+  return <InspectorStat label={label} value={date.primary} secondary={date.secondary} kind="date" />;
 }
 
 export function BrainGraphExplorer(props: any) {
@@ -561,12 +578,12 @@ export function BrainGraphExplorer(props: any) {
                 />
               ) : null}
               <dl className={graphClass("inspectorStats")}>
-                <div><dt>Incoming</dt><dd>{selectedBrainNode.incoming}</dd></div>
-                <div><dt>Outgoing</dt><dd>{selectedBrainNode.outgoing}</dd></div>
-                <div><dt>Accesses</dt><dd>{selectedBrainNode.accessCount}</dd></div>
-                <div><dt>Last seen</dt><dd>{formatInspectorDate(selectedBrainNode.lastAccessedAt, formatBrainDate)}</dd></div>
-                <div><dt>Modified</dt><dd>{formatInspectorDate(selectedBrainNode.modifiedAt, formatBrainDate)}</dd></div>
-                <div><dt>Lines</dt><dd>{selectedBrainNode.lineCount ?? "-"}</dd></div>
+                <InspectorStat label="Incoming" value={selectedBrainNode.incoming} />
+                <InspectorStat label="Outgoing" value={selectedBrainNode.outgoing} />
+                <InspectorStat label="Accesses" value={selectedBrainNode.accessCount} />
+                <InspectorDateStat label="Last seen" value={selectedBrainNode.lastAccessedAt} fallbackFormat={formatBrainDate} />
+                <InspectorDateStat label="Modified" value={selectedBrainNode.modifiedAt} fallbackFormat={formatBrainDate} />
+                <InspectorStat label="Lines" value={selectedBrainNode.lineCount ?? "-"} />
               </dl>
               {selectedBrainNode.tags.length ? (
                 <div className={graphClass("tagRow")}>

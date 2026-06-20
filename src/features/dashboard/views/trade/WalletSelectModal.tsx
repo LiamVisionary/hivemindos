@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent-wallet";
-import { AgentWalletCardCompact } from "@/components/wallet/AgentWalletCardCompact";
+import { WalletPickerCard } from "@/components/wallets-drop-in/WalletPickerCard";
 import styles from "./trade.module.css";
 
 export type PickableWallet = {
@@ -14,6 +14,8 @@ export type PickableWallet = {
   usePod?: AgentProfile["usePod"];
   /** Custody-based status chip for user wallets (rail status for agents is computed). */
   statusOverride?: { tone: "ok" | "warn" | "danger" | "off" | "muted"; text: string };
+  /** Balance is still being fetched — show a loading state instead of a stale $0. */
+  pending?: boolean;
 };
 
 type WalletSelectModalProps = {
@@ -25,10 +27,11 @@ type WalletSelectModalProps = {
 };
 
 /**
- * Wallet picker that reuses the Wallets-screen compact card (AgentWalletCardCompact)
- * in selectable mode. Shows the user's own wallets first, then configured agent
- * wallets. Mounted only while open (parent conditionally renders it), so the
- * selection seeds from the current acting wallet on mount.
+ * Wallet picker that renders the Wallets-route card look via WalletPickerCard
+ * (the `.fw-cc` visual language, driven by props — no shared runtime globals).
+ * Shows the user's own wallets first, then the Bankr trading wallet, then
+ * configured agent wallets. Mounted only while open (parent conditionally
+ * renders it), so the selection seeds from the current acting wallet on mount.
  */
 export function WalletSelectModal({ pickables, getSurvivalSnapshot, currentId, onConfirm, onClose }: WalletSelectModalProps) {
   const [selectedId, setSelectedId] = useState(() => (pickables.some((p) => p.id === currentId) ? currentId : ""));
@@ -49,14 +52,13 @@ export function WalletSelectModal({ pickables, getSurvivalSnapshot, currentId, o
         <div className={styles.groupTitle}>{title}</div>
         <div className={styles.modalCards}>
           {list.map((p) => (
-            <AgentWalletCardCompact
+            <WalletPickerCard
               key={p.id}
-              agentName={p.name}
+              name={p.name}
               agentUsePod={p.usePod}
               wallet={p.wallet}
               survival={getSurvivalSnapshot(p.wallet)}
               statusOverride={p.statusOverride}
-              selectable
               selected={selectedId === p.id}
               onSelect={() => setSelectedId(p.id)}
             />

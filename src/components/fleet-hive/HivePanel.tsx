@@ -226,7 +226,7 @@ export function HivePanel({
           {/* machine action chips */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
             {handlers.onAddAgent ? (
-              <button type="button" className="fr-chip fr-chip-honey" onClick={() => handlers.onAddAgent?.(m)}>
+              <button type="button" className="fr-chip fr-chip-honey" data-bee={`fleet-hive-add-${m.name}`} onClick={() => handlers.onAddAgent?.(m)}>
                 <ActionIcon icon={Plus} />
                 Add agent
               </button>
@@ -310,7 +310,7 @@ export function HivePanel({
                 Not yet onboarded.
                 {handlers.onAddAgent ? (
                   <div style={{ marginTop: 12 }}>
-                    <button type="button" className="fr-chip fr-chip-honey" onClick={() => handlers.onAddAgent?.(m)}>
+                    <button type="button" className="fr-chip fr-chip-honey" data-bee={`fleet-hive-add-${m.name}`} onClick={() => handlers.onAddAgent?.(m)}>
                       <ActionIcon icon={Plus} />
                       Onboard agent
                     </button>

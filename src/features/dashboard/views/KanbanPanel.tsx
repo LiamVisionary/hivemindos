@@ -527,6 +527,7 @@ export function KanbanPanel(props: any) {
                     <button
                       type="button"
                       className={kanbanClass("kanbanAddColumnTask")}
+                      data-bee={`kanban-add-${column.id}`}
                       onClick={() => setQuickAddStatus((current) => current === column.id ? "" : column.id)}
                       aria-label={`Add task to ${column.title}`}
                       title={`Add task to ${column.title}`}
@@ -548,7 +549,11 @@ export function KanbanPanel(props: any) {
                         </article>
                       ))
                     ) : quickAddStatus === column.id ? (
-                      <form className={kanbanClass("kanbanInlineAdd")} onSubmit={(event) => createKanbanTask(event, column.id, selectedCodeProjectId || undefined)}>
+                      <form
+                        className={kanbanClass("kanbanInlineAdd")}
+                        data-bee={`kanban-quick-add-${column.id}`}
+                        onSubmit={(event) => createKanbanTask(event, column.id, selectedCodeProjectId || undefined)}
+                      >
                         <div className={kanbanClass("kanbanInlineAddMeta")} ref={quickAddMachineMenuRef}>
                           <div className={kanbanClass("kanbanMachinePicker")}>
                             <button
@@ -990,6 +995,7 @@ export function KanbanPanel(props: any) {
                         <button
                           type="button"
                           className={kanbanClass("kanbanEmpty", "kanbanEmptyAction")}
+                          data-bee={`kanban-add-${column.id}`}
                           onClick={() => setQuickAddStatus(column.id)}
                         >
                           <Plus aria-hidden="true" />

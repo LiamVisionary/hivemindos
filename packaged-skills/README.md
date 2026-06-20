@@ -58,6 +58,7 @@ Grouped optional directories can also expose a whole-directory pack in the Skill
 Current optional catalog:
 
 - `design/`: 109 optional UI and design-engineering skills imported from the UI Skills directory, preserving upstream source namespaces as `design/<source>/<skill>/` and available as the `Design Optional Skills Directory` pack.
+- `media/higgsfield/higgsfield-api-quirks`: optional Higgsfield API workaround skill for undocumented model-specific payload requirements, including Seedance 2.0 audio, aspect-ratio, and reference-slot constraints.
 - `media/higgsfield/higgsfield-generate`: optional Higgsfield media-generation skill for Cloud API and standard consumer Higgsfield CLI/dashboard workflows. It keeps API-key/env usage separate from dashboard login, and asks which surface to use when unspecified.
 - `media/hivemindos/instagram-reel-growth-workflow`: optional HivemindOS media-growth skill for studying a public Instagram account, finding current short-form niche angles, writing retention-optimized Reel scripts, engineering stronger hooks, and structuring a human-approved daily AI video loop.
 - `media/hivemindos/video-shot-transcript`: optional HivemindOS media-analysis skill for local video shot/angle dissection with transcript or visible-caption alignment, using FFmpeg/Tesseract locally and requiring explicit approval before external transcription.

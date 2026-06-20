@@ -85,6 +85,7 @@ function ViewModeToggle({ mode, onChoose }: { mode: FleetViewMode; onChoose: (m:
             key={m}
             type="button"
             aria-pressed={active}
+            data-bee={`fleet-view-${m}`}
             onClick={() => onChoose(m)}
             style={{
               cursor: "pointer", border: 0, borderRadius: 9999, padding: "4px 12px",

@@ -21,7 +21,7 @@ import {
 
 export type RunVoiceCommandOptions = { onModalOpen?: () => void; screenContext?: DashboardScreenContext };
 import { BeeFlightController } from "@/features/dashboard/bee-pilot/bee-flight";
-import { beeClick, beeType, scrollElementIntoView, wait, waitForElement } from "@/features/dashboard/bee-pilot/dom-actions";
+import { beeClick, beeType, findRenderedElement, scrollElementIntoView, wait, waitForElement } from "@/features/dashboard/bee-pilot/dom-actions";
 
 export type BeePilotDeps = {
   activeView: string;
@@ -46,6 +46,10 @@ export type BeePilotPhase = "idle" | "thinking" | "flying" | "done" | "error";
 
 function normalizeName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function dataBeeSelector(value: string): string {
+  return `[data-bee="${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"]`;
 }
 
 function findAgent(agents: AgentProfile[], query: string | undefined): AgentProfile | null {
@@ -157,8 +161,8 @@ export function useBeePilot(deps: BeePilotDeps) {
       await wait(150);
       return;
     }
-    const tab = document.querySelector<HTMLElement>(`[data-bee-nav="${target.view}"]`);
-    if (tab && tab.offsetParent !== null) {
+    const tab = findRenderedElement(`[data-bee-nav="${target.view}"]`);
+    if (tab) {
       await beeClick(bee, tab);
     } else {
       await flyToScreenCenter(bee);
@@ -195,8 +199,7 @@ export function useBeePilot(deps: BeePilotDeps) {
           await beeClick(bee, hiveToggle);
           await wait(350);
         }
-        const escapedName = machine.name.replace(/["\\]/g, "\\$&");
-        const addButton = await waitForElement(`[data-bee="fleet-hive-add-${escapedName}"]`, 4_000);
+        const addButton = await waitForElement(dataBeeSelector(`fleet-hive-add-${machine.name}`), 4_000);
         const wantsName = Boolean(params.name);
         if (addButton && !wantsName) {
           // The real fleet add-cell opens the modal itself, so the click lands
@@ -219,7 +222,7 @@ export function useBeePilot(deps: BeePilotDeps) {
         // Pick the runtime tile when asked and it isn't already selected.
         const runtimeId = resolveRuntimeId(params.runtime);
         if (runtimeId) {
-          const tile = await waitForElement(`[data-bee="agent-runtime-${runtimeId}"]`, 5_000);
+          const tile = await waitForElement(dataBeeSelector(`agent-runtime-${runtimeId}`), 5_000);
           if (tile && tile.getAttribute("aria-pressed") !== "true") {
             setStatus(`Selecting the ${runtimeId} runtime...`);
             await beeClick(bee, tile);
@@ -229,7 +232,7 @@ export function useBeePilot(deps: BeePilotDeps) {
         // Pick the provider tile when asked (waits for the provider panel/models).
         const providerSlug = resolveProviderSlug(params.provider);
         if (providerSlug) {
-          const tile = await waitForElement(`[data-bee="agent-provider-${providerSlug}"]`, 6_000);
+          const tile = await waitForElement(dataBeeSelector(`agent-provider-${providerSlug}`), 6_000);
           if (!tile) {
             return `Opened the agent setup, but ${providerSlug} isn't an available provider on ${machine.name}.`;
           }
@@ -299,18 +302,23 @@ export function useBeePilot(deps: BeePilotDeps) {
         setStatus(agent ? `Opening wallets for ${agent.name}...` : "Opening your wallets...");
         await navigateWithBee({ view: "wallet" });
         if (!agent) return null;
-        const card = await waitForElement(`[data-bee="wallet-agent-${agent.id}"] button`, 6_000);
+        const walletCardSelector = dataBeeSelector(`wallet-agent-${agent.id}`);
+        const card = await waitForElement(`${walletCardSelector}[data-bee-wallet-action="open"], ${walletCardSelector}`, 6_000);
         if (!card) return `${agent.name} has no wallet card on the wallets screen yet.`;
         setStatus(`Opening ${agent.name}'s wallet card...`);
-        await beeClick(bee, card);
+        if (card.getAttribute("data-bee-wallet-action") === "open") {
+          await beeClick(bee, card);
+        } else {
+          await scrollElementIntoView(card);
+          await bee.flyToElement(card);
+          if (step.action === "open-wallet") await bee.bounce();
+        }
         if (step.action === "open-wallet") {
           current.openWalletForAgent(agent.id);
           return null;
         }
         await wait(380);
-        const confirm = document.querySelector<HTMLElement>(
-          `[data-bee="wallet-agent-${agent.id}"] button[aria-label^="Create wallet for"]`,
-        );
+        const confirm = await waitForElement(dataBeeSelector(`wallet-create-${agent.id}`), 2_000);
         if (!confirm) return `${agent.name} already has a wallet, so I opened it instead.`;
         setStatus(`Confirming ${agent.name}'s new wallet...`);
         await beeClick(bee, confirm);

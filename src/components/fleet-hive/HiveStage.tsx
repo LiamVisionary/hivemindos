@@ -158,12 +158,13 @@ function AgentEdgeName({ name, selected }: { name: string; selected: boolean }) 
 }
 
 // ---- dashed "add" cell (per-machine "add agent", or the global "add machine") -
-function AddAgentCell({ x, y, size, dim, title, label, onClick }: { x: number; y: number; size: number; dim?: boolean; title?: string; label?: string; onClick?: () => void }) {
+function AddAgentCell({ x, y, size, dim, title, label, dataBee, onClick }: { x: number; y: number; size: number; dim?: boolean; title?: string; label?: string; dataBee?: string; onClick?: () => void }) {
   return (
     <div
       onClick={(e) => { e.stopPropagation(); onClick?.(); }}
       title={title}
       className="fr-addcell"
+      data-bee={dataBee}
       style={{
         position: "absolute", left: x, top: y, width: size, height: size,
         transform: "translate(-50%, -50%)", cursor: onClick ? "pointer" : "default", zIndex: 2,
@@ -297,6 +298,7 @@ export function HiveStage({
           <AddAgentCell
             key={"add-" + m.id} x={ap.x} y={ap.y} size={AGENT_SIZE} dim={dim}
             title={`Add agent to ${m.name}`}
+            dataBee={`fleet-hive-add-${m.name}`}
             onClick={onAddAgent ? () => onAddAgent(m) : () => onSelect({ type: "machine", id: m.id })}
           />
         );

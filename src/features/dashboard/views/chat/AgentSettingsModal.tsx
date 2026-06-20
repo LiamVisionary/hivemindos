@@ -834,6 +834,8 @@ export function AgentSettingsModal(props: any) {
         type="button"
         className="as-choice"
         data-active={selected || undefined}
+        data-bee={`agent-runtime-${runtime}`}
+        aria-pressed={selected}
         disabled={disabled}
         title={runtimeAvailability?.[runtime]?.detail}
         onClick={() => updateSettingsRuntime(runtime as AgentRuntime)}
@@ -865,7 +867,7 @@ export function AgentSettingsModal(props: any) {
           <div>
             <GroupLabel>Provider</GroupLabel>
             <div className="as-provider-grid">
-              <button type="button" className="as-choice" data-active={adaptiveProviderSelected || undefined} onClick={selectAdaptiveProvider}>
+              <button type="button" className="as-choice" data-active={adaptiveProviderSelected || undefined} data-bee="agent-provider-adaptive" aria-pressed={adaptiveProviderSelected} onClick={selectAdaptiveProvider}>
                 <span className="t">{iconMark({ label: "Adaptive", fallback: "AD" })}<span>Adaptive</span></span>
                 <span className="s">Best free route</span>
               </button>
@@ -901,7 +903,7 @@ export function AgentSettingsModal(props: any) {
                       ? selectBankrLlmProvider
                       : () => updateAgentRuntimeModel(bestProviderModel === "adaptive" ? "openrouter" : provider.slug, bestProviderModel);
                 return (
-                  <button key={provider.slug} type="button" className="as-choice" data-active={selected || undefined} onClick={selectProvider}>
+                  <button key={provider.slug} type="button" className="as-choice" data-active={selected || undefined} data-bee={`agent-provider-${provider.slug}`} aria-pressed={selected} onClick={selectProvider}>
                     <span className="t">
                       {iconMark({
                         label: provider.name,

@@ -34,7 +34,7 @@ Each model declares a closed set of accepted roles via `MEDIA_ROLES`. Pass the r
 | Model | Accepted roles | Notes |
 |---|---|---|
 | Most image models (`nano_banana_2`, `flux_2`, `seedream_v4_5`, `gpt_image_2`, …) | `image` | 1+ references, often up to 8. |
-| `seedance_2_0` | `image`, `start_image`, `end_image`, `video`, `audio` | Audio is via `medias` (role `audio`), NOT via `--generate-audio`. |
+| `seedance_2_0` | `image`, `start_image`, `end_image`, `video`, `audio` | Consumer CLI exposes `audio`, but raw/API-style Seedance 2.0 payloads must use root-level `input_audio`; do not put `role: "audio"` in `medias`. |
 | `brain_activity` | `video` | Virality Predictor analyzes one uploaded clip and returns a text score report plus an Open report link; no prompt required. Treat "analyze this video" / "score this ad" as this video-analysis flow even though the output is text. Raw `.glb` and `.bin` artifacts stay in JSON/debug output, not normal chat output. |
 | `grok_video_v15` | `start_image` | Required single start frame. CLI also accepts `--image` and maps it to `start_image`. |
 | `kling3_0` | `start_image`, `end_image` | Image-to-video with optional last-frame transition. |
@@ -77,7 +77,21 @@ higgsfield generate create multi_image_to_3d \
 
 ## Audio reference (Seedance)
 
-`seedance_2_0` is the one model that takes an audio reference for lipsync / soundtrack matching. Pass via `medias` with role `audio`:
+`seedance_2_0` is the one model that takes an audio reference for lipsync / soundtrack matching. For raw/API-style payloads, read `higgsfield-api-quirks` and pass the uploaded audio as root-level `input_audio`:
+
+```json
+{
+  "input_audio": {
+    "id": "<id>",
+    "type": "media_input",
+    "url": "<url>"
+  }
+}
+```
+
+The consumer CLI still exposes `--audio`, but do not hand-roll an API payload that puts audio into `medias` with role `audio`; that shape is known to trigger Seedance 2.0 HTTP 500 failures.
+
+Consumer CLI shape:
 
 ```bash
 higgsfield generate create seedance_2_0 \
@@ -88,7 +102,7 @@ higgsfield generate create seedance_2_0 \
   --wait
 ```
 
-**Do NOT pass `--generate-audio` to `seedance_2_0`** — the model schema doesn't declare it. Use the audio media role instead.
+**Do NOT pass `--generate-audio` to `seedance_2_0`** for voice reference/lipsync. Use the root-level `input_audio` API shape when submitting raw payloads, or the CLI media flag only when deliberately using the consumer CLI surface.
 
 Text-to-audio and text-to-music are different: these models create audio from text, so they use no media flags:
 
