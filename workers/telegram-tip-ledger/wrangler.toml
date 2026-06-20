@@ -1,0 +1,10 @@
+name = "hivemindos-telegram-tip-ledger"
+main = "src/index.ts"
+compatibility_date = "2026-06-19"
+
+[vars]
+CORS_ORIGIN = "*"
+
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "hivemindos-telegram-tip-ledger-backups"
