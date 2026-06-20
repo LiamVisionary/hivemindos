@@ -1,0 +1,235 @@
+name: Tauri macOS Build (Apple Silicon)
+
+# Mac-only test build of the embedded desktop app. Produces a downloadable
+# .dmg + updater .app.tar.gz artifact for macOS Apple Silicon and stops there.
+#
+# UNLIKE tauri-cross-platform-release.yml this workflow does NOT build the other
+# platforms, does NOT create a git tag, and does NOT publish a GitHub release or
+# move the auto-updater pointer. It only uploads build artifacts.
+#
+# It mirrors the release workflow's proven two-job shape: build the
+# architecture-independent Next standalone ONCE on ubuntu/Node 20 (the embedded
+# `next build`), then have the macOS job consume that prebuilt standalone via
+# HIVEMINDOS_TAURI_PREBUILT_STANDALONE=1. Node is pinned to 20 because the
+# embedded `next build` crashes webpack's WASM content-hasher on Node 24 but is
+# green on Node 20 (which is what CI has always used).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to stamp into the build (not published anywhere)
+        required: false
+        default: "0.2.20"
+  push:
+    branches:
+      - mac-build
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tauri-mac-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  standalone:
+    name: Build embedded Next standalone (shared)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.6.12
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Stamp build version
+        shell: bash
+        env:
+          BUILD_VERSION: ${{ github.event.inputs.version || '0.2.20' }}
+        run: node scripts/bump-app-version.mjs --set "$BUILD_VERSION"
+
+      - name: Cache embedded Next standalone
+        uses: actions/cache@v4
+        with:
+          path: .next-tauri-build
+          key: next-standalone-macbuild-v1-${{ hashFiles('components.json', 'next.config.ts', 'package.json', 'pnpm-lock.yaml', 'postcss.config.mjs', 'scripts/tauri-build.mjs', 'tsconfig.json', 'src/**', 'public/**') }}
+
+      - name: Build standalone (symlinks materialized for cross-OS portability)
+        env:
+          HIVEMINDOS_TAURI_EMBEDDED_NEXT: "1"
+          HIVEMINDOS_TAURI_STANDALONE_ONLY: "1"
+          TAURI_NEXT_BUILD_HEAP_MB: "12288"
+          TAURI_NEXT_BUILD_MEMORY_MB: "14000"
+          TAURI_NEXT_BUILD_TIMEOUT_SECONDS: "3600"
+        run: node scripts/tauri-build.mjs
+
+      - name: Upload standalone artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-standalone
+          # upload-artifact@v4 prunes dot-dirs by default; the standalone nests
+          # compiled output under .next-tauri-build/ and traced deps under
+          # node_modules/.pnpm/ — both dot-dirs — so include hidden files.
+          include-hidden-files: true
+          path: |
+            .next-tauri-build/standalone
+            .next-tauri-build/static
+          if-no-files-found: error
+          retention-days: 3
+
+  build-mac:
+    name: Build macOS Apple Silicon
+    needs: standalone
+    runs-on: macos-14-xlarge
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.6.12
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch Rust dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src-tauri
+          for attempt in 1 2 3 4; do
+            if cargo fetch --locked; then
+              exit 0
+            fi
+            sleep_seconds=$((attempt * 15))
+            echo "cargo fetch failed on attempt ${attempt}; retrying in ${sleep_seconds}s..." >&2
+            sleep "$sleep_seconds"
+          done
+          cargo fetch --locked
+
+      - name: Stamp build version
+        shell: bash
+        env:
+          BUILD_VERSION: ${{ github.event.inputs.version || '0.2.20' }}
+        run: node scripts/bump-app-version.mjs --set "$BUILD_VERSION"
+
+      - name: Import Apple signing certificate
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_CERTIFICATE:-}" ]; then
+            echo "APPLE_CERTIFICATE is not set; macOS build will continue unsigned."
+            exit 0
+          fi
+          if [ -z "${APPLE_CERTIFICATE_PASSWORD:-}" ]; then
+            echo "APPLE_CERTIFICATE_PASSWORD is required when APPLE_CERTIFICATE is set." >&2
+            exit 1
+          fi
+          certificate_path="$RUNNER_TEMP/hivemindos-signing-certificate.p12"
+          keychain_path="$RUNNER_TEMP/hivemindos-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$keychain_path"
+          security list-keychain -d user -s "$keychain_path"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain_path"
+
+      - name: Download prebuilt Next standalone
+        uses: actions/download-artifact@v4
+        with:
+          name: next-standalone
+          path: .next-tauri-build
+
+      - name: Verify Tauri command ACL surface is in lockstep
+        run: node scripts/check-tauri-command-acl.mjs
+
+      - name: Build Tauri app (Apple Silicon)
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          # Embedded mode, but CONSUME the standalone the previous job built and
+          # we just downloaded — so this job skips the ~45-min next build and only
+          # stages the node binary + compiles Rust + bundles + signs.
+          HIVEMINDOS_TAURI_EMBEDDED_NEXT: "1"
+          HIVEMINDOS_TAURI_PREBUILT_STANDALONE: "1"
+          TAURI_NEXT_BUILD_HEAP_MB: "12288"
+          TAURI_NEXT_BUILD_MEMORY_MB: "14000"
+          TAURI_NEXT_BUILD_TIMEOUT_SECONDS: "3600"
+        run: pnpm tauri:build:release
+
+      - name: Collect bundle assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          shopt -s nullglob
+          for item in \
+            src-tauri/target/release/bundle/dmg/*.dmg \
+            src-tauri/target/release/bundle/macos/*.app.tar.gz \
+            src-tauri/target/release/bundle/macos/*.app.tar.gz.sig; do
+            cp "$item" release-assets/
+          done
+          if [ -z "$(find release-assets -maxdepth 1 -type f -print -quit)" ]; then
+            echo "No bundle assets found." >&2
+            find src-tauri/target/release/bundle -maxdepth 4 -type f -print || true
+            exit 1
+          fi
+          find release-assets -maxdepth 1 -type f -print
+
+      - name: Upload macOS build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hivemindos-macos-apple-silicon
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 7
