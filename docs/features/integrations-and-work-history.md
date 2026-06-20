@@ -92,7 +92,7 @@ What My Apps can do:
 
 ## Phone
 
-Phone support connects the dashboard to the Claw Code Mobile / gateway voice path.
+Phone support connects the dashboard to the HivemindOS Mobile / gateway voice path.
 
 How it works:
 

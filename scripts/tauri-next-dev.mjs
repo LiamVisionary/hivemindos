@@ -353,6 +353,10 @@ function proxyTimeoutForRequest(clientRequest) {
     return 4 * 60_000;
   // Fleet updates run a remote update plus a verification poll (route maxDuration 360s).
   if (clientRequest.url?.startsWith("/api/fleet/update")) return 7 * 60_000;
+  // Nango self-host setup clones the repo and runs `docker compose up` on the host,
+  // then polls health (route maxDuration 360s, collector fetch 360s).
+  if (clientRequest.url?.startsWith("/api/integrations/nango/setup"))
+    return 7 * 60_000;
   if (clientRequest.url?.startsWith("/api/")) return 60_000;
   if (clientRequest.headers.accept?.includes("text/html")) return 15_000;
   return 2_500;

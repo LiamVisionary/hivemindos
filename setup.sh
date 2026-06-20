@@ -2017,11 +2017,11 @@ else
   fi
   info "→ Building and installing the collector and Hivemind Link… (this can take a minute)"
   HIVE_SETUP_NETWORK_MANAGED="true" HIVE_SETUP_TAILNET_SYNC_ENABLED="$tailnet_sync_enabled" HIVE_LINK_ENABLED="$hivemind_link_enabled" AGENT_TELEMETRY_PORT="$COLLECTOR_PORT" AGENT_TELEMETRY_HERMES_RESTART="${AGENT_TELEMETRY_HERMES_RESTART:-$hermes_restart_mode}" ./scripts/install-telemetry-collector.sh
-  # Install + supervise the Claw backend so the Claw Code Mobile app works on a
+  # Install + supervise the mobile backend so the HivemindOS Mobile app works on a
   # machine that only ran HivemindOS setup (its coding agent runs here, reached
   # by the app over the tailnet). Non-fatal: a failure just leaves the app's
   # remote-agent features unavailable until it's retried.
-  ./scripts/install-claw-backend.sh || warn "Claw backend install failed — the Claw Code Mobile app's remote-agent features will be unavailable until it succeeds"
+  ./scripts/install-claw-backend.sh || warn "HivemindOS Mobile backend install failed — the app's remote-agent features will be unavailable until it succeeds"
   if [[ -f "$HOME/.hivemindos/collector.env" ]]; then
     # shellcheck disable=SC1091
     source "$HOME/.hivemindos/collector.env" >/dev/null 2>&1 || true

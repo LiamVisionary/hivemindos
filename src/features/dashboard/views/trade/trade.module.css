@@ -2,10 +2,17 @@
    fleet-hive.css) so the hive design tokens (--honey, --panel-hi, --line-2, …)
    resolve and the panel matches the nav shelf and Wallets island in both themes. */
 
+/* .commandMain is height:100% + overflow:hidden and hugs the nav rail (margin:0),
+   so each view supplies its own inset and scrolls internally. Match that here:
+   inset from the rail + top, and own the vertical scroll. */
 .root {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 24px 32px 96px;
   color: var(--fg-1, #e9e4d8);
   font: inherit;
 }

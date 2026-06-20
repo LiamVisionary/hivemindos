@@ -6,14 +6,22 @@ import styles from "./trade.module.css";
 import { CRYPTO_INTENTS, CRYPTO_INTENT_GROUPS, type CryptoIntentDef } from "./trade-intents";
 import {
   BANKR_ACTION_CONFIRMATION_FALLBACK,
+  SWAP_CONFIRMATION,
+  SWAP_MAX_USD,
+  SWAP_TOKENS_BASE,
+  SWAP_TOKENS_SOLANA,
   type CryptoCapabilityMap,
   type CryptoPreparedAction,
   type CryptoProviderCapability,
+  type DexSwapQuote,
+  type DexSwapResult,
   executeBankrDraft,
   executePreparedRoute,
+  executeSwap,
   fetchCryptoCapabilities,
   fundBankrLlmCredits,
   prepareCryptoAction,
+  quoteSwap,
 } from "./trade-api";
 
 type IntentReadiness = { ready: boolean; configured: boolean; provider?: CryptoProviderCapability; missing: string[] };
@@ -37,11 +45,13 @@ export function CryptoTradeView({
   agentId,
   wallet,
   agentName,
+  walletKind,
   setActiveView,
 }: {
   agentId: string;
   wallet: Record<string, unknown> | null;
   agentName: string;
+  walletKind?: "user" | "agent" | "bankr";
   setActiveView?: (view: DashboardView) => void;
 }) {
   const [caps, setCaps] = useState<CryptoCapabilityMap | null>(null);
@@ -57,6 +67,7 @@ export function CryptoTradeView({
   const [token, setToken] = useState("USDC");
 
   const [prepared, setPrepared] = useState<CryptoPreparedAction | null>(null);
+  const [preparedKey, setPreparedKey] = useState("");
   const [busy, setBusy] = useState<"prepare" | "execute" | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -82,6 +93,36 @@ export function CryptoTradeView({
 
   const amountUsd = Number(amount) || 0;
 
+  // A prepared action only matches the exact inputs it was built from. If the user
+  // edits anything afterward, isPrepared flips false and the action reverts to the
+  // Review step — so the primary button is never silently disabled.
+  const inputKey = [selected.id, prompt, recipient, amount, asset, url, method, token].join("|");
+  const isPrepared = Boolean(prepared) && preparedKey === inputKey;
+  const inputValid = selected.input === "prompt" ? prompt.trim().length > 0
+    : selected.input === "recipient-amount" ? recipient.trim().length > 0 && amountUsd > 0
+    : selected.input === "url" ? url.trim().length > 0
+    : selected.input === "amount" ? amountUsd > 0
+    : true;
+
+  // Be honest about where the funds actually come from: Bankr executes on its own
+  // provisioned wallet (the one behind the API key), and MoneyClaw on the card
+  // account — neither uses the selected acting wallet. Only the direct wallet rails
+  // (x402 send / pay, Veil private) spend from the selected wallet itself.
+  const fundingProvider = prepared?.provider ?? selectedReadiness.provider?.provider;
+  const fundingNote = !fundingProvider ? ""
+    : fundingProvider === "bankr" ? "Executes on the workspace's Bankr-managed wallet (the wallet behind the Bankr API key) — not the selected wallet."
+    : fundingProvider === "moneyclaw" ? "Runs through the workspace MoneyClaw card account — not the selected wallet."
+    : selected.input === "address" ? ""
+    : `Funds come from the selected wallet — ${agentName}.`;
+
+  // The "trade" intent (swap) runs on the local DEX rail (0x) for a non-Bankr
+  // wallet; the other Bankr-only intents still require the Bankr wallet.
+  const useDexRail = selected.id === "trade" && Boolean(walletKind) && walletKind !== "bankr";
+  const bankrWalletMismatch = fundingProvider === "bankr" && walletKind !== "bankr" && !useDexRail;
+  const isSolanaWallet = String((wallet as { network?: string } | null)?.network || "").includes("solana");
+  const dexTokens = isSolanaWallet ? SWAP_TOKENS_SOLANA : SWAP_TOKENS_BASE;
+  const dexChainLabel = isSolanaWallet ? "Jupiter on Solana" : "0x on Base";
+
   const review = useCallback(async () => {
     resetAction();
     if (selected.input === "address" || selected.input === "info") return;
@@ -104,7 +145,8 @@ export function CryptoTradeView({
       return;
     }
     setPrepared(response.prepared);
-  }, [agentId, selected, wallet, amountUsd, asset, url, method, recipient, prompt, resetAction]);
+    setPreparedKey(inputKey);
+  }, [agentId, selected, wallet, amountUsd, asset, url, method, recipient, prompt, inputKey, resetAction]);
 
   const execute = useCallback(async () => {
     setError("");
@@ -187,9 +229,16 @@ export function CryptoTradeView({
       <div className={styles.card}>
         <h3 className={styles.title} style={{ fontSize: 15 }}>{selected.label}</h3>
         <p className={styles.subtitle}>
-          {selectedReadiness.provider ? `Routes via ${selectedReadiness.provider.label}` : "No configured provider for this action"}
+          {useDexRail
+            ? `Swap from ${agentName} via ${dexChainLabel} · $${SWAP_MAX_USD} cap`
+            : selectedReadiness.provider ? `Routes via ${selectedReadiness.provider.label}` : "No configured provider for this action"}
         </p>
+        {fundingNote && !useDexRail ? <p className={styles.note} style={{ marginTop: 4 }}>{fundingNote}</p> : null}
 
+        {useDexRail ? (
+          <DexSwapForm agentId={agentId} agentName={agentName} tokens={dexTokens} chainLabel={dexChainLabel} setActiveView={setActiveView} />
+        ) : (
+        <>
         <div style={{ marginTop: 12 }}>
           <IntentInputs
             selected={selected}
@@ -211,21 +260,48 @@ export function CryptoTradeView({
           </div>
         ) : null}
 
-        {selected.input !== "address" && selected.input !== "info" ? (
-          <div className={styles.actions} style={{ marginTop: 12 }}>
-            <button type="button" className={styles.btn} onClick={review} disabled={busy != null}>{busy === "prepare" ? "Reviewing…" : "Review"}</button>
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.btnPrimary}`}
-              onClick={execute}
-              disabled={busy != null || (selected.id !== "fund-llm-credits" && (!prepared || !prepared.ready))}
-            >
-              {busy === "execute" ? "Submitting…" : selected.mutating ? "Confirm & execute" : "Run"}
-            </button>
+        {bankrWalletMismatch ? (
+          <div className={styles.warnCard} style={{ marginTop: 12 }}>
+            {selected.label} runs on the Bankr trading wallet, not {agentName}. Use the wallet picker (Change, top right) and select &ldquo;Bankr trading wallet&rdquo; to run it.
           </div>
         ) : null}
 
-        {prepared?.review ? <PreparedReview prepared={prepared} /> : null}
+        {selected.input !== "address" && selected.input !== "info" && !bankrWalletMismatch ? (
+          <>
+            <div className={styles.actions} style={{ marginTop: 12 }}>
+              {!isPrepared ? (
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.btnPrimary}`}
+                  onClick={review}
+                  disabled={busy != null || !inputValid || !selectedReadiness.ready}
+                >
+                  {busy === "prepare" ? "Reviewing…" : "Review"}
+                </button>
+              ) : (
+                <>
+                  <button type="button" className={styles.btn} onClick={resetAction} disabled={busy != null}>Edit</button>
+                  <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} onClick={execute} disabled={busy != null}>
+                    {busy === "execute" ? "Submitting…" : selected.mutating ? "Confirm & execute" : "Run"}
+                  </button>
+                </>
+              )}
+            </div>
+            {!isPrepared && selectedReadiness.ready ? (
+              <p className={styles.note} style={{ marginTop: 8 }}>
+                {!inputValid
+                  ? (selected.input === "prompt" ? "Describe what you want to do above, then Review."
+                    : selected.input === "recipient-amount" ? "Enter a recipient and USD amount, then Review."
+                    : selected.input === "url" ? "Enter the API URL, then Review."
+                    : selected.input === "amount" ? "Enter a USD amount, then Review."
+                    : "Fill in the details, then Review.")
+                  : "Review builds a clear-signing preview, then Confirm & execute."}
+              </p>
+            ) : null}
+          </>
+        ) : null}
+
+        {isPrepared && prepared?.review ? <PreparedReview prepared={prepared} /> : null}
         {selected.input === "address" ? <ReceiveCard address={walletAddress(wallet)} agentName={agentName} /> : null}
         {selected.input === "info" ? (
           <div className={styles.note} style={{ marginTop: 10 }}>
@@ -243,7 +319,83 @@ export function CryptoTradeView({
             ) : null}
           </div>
         ) : null}
+        </>
+        )}
       </div>
+    </div>
+  );
+}
+
+function DexSwapForm({ agentId, agentName, tokens, chainLabel, setActiveView }: { agentId: string; agentName: string; tokens: string[]; chainLabel: string; setActiveView?: (view: DashboardView) => void }) {
+  const [sellToken, setSellToken] = useState(tokens[0] ?? "USDC");
+  const [buyToken, setBuyToken] = useState(tokens[1] ?? tokens[0] ?? "USDC");
+  const [amount, setAmount] = useState("");
+  const [quote, setQuote] = useState<DexSwapQuote | null>(null);
+  const [busy, setBusy] = useState<"quote" | "swap" | null>(null);
+  const [result, setResult] = useState<DexSwapResult | null>(null);
+  const [error, setError] = useState("");
+
+  const amt = Number(amount) || 0;
+  const canAct = amt > 0 && sellToken !== buyToken && !busy;
+
+  const getQuote = async () => {
+    if (!canAct) return;
+    setBusy("quote"); setError(""); setQuote(null); setResult(null);
+    const response = await quoteSwap({ agentId, sellToken, buyToken, amountHuman: amt });
+    setBusy(null);
+    if (!response.ok || !response.quote) { setError(response.error || "Could not price this swap."); return; }
+    setQuote(response.quote);
+  };
+
+  const submit = async () => {
+    if (!canAct) return;
+    setBusy("swap"); setError(""); setResult(null);
+    const response = await executeSwap({ agentId, sellToken, buyToken, amountHuman: amt, confirmation: SWAP_CONFIRMATION });
+    setBusy(null);
+    if (!response.ok || !response.result) { setError(response.error || "Swap failed."); return; }
+    setResult(response.result);
+    setQuote(null);
+  };
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div className={styles.fieldRow}>
+        <div className={styles.field}>
+          <label className={styles.label}>From</label>
+          <select className={styles.select} value={sellToken} onChange={(event) => { setSellToken(event.target.value); setQuote(null); }}>
+            {tokens.map((symbol) => <option key={symbol} value={symbol}>{symbol}</option>)}
+          </select>
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label}>To</label>
+          <select className={styles.select} value={buyToken} onChange={(event) => { setBuyToken(event.target.value); setQuote(null); }}>
+            {tokens.map((symbol) => <option key={symbol} value={symbol}>{symbol}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className={styles.field}>
+        <label className={styles.label}>Amount ({sellToken})</label>
+        <input className={styles.input} inputMode="decimal" value={amount} placeholder={`Up to $${SWAP_MAX_USD} worth`} onChange={(event) => { setAmount(event.target.value.replace(/[^0-9.]/g, "")); setQuote(null); }} />
+      </div>
+      <div className={styles.actions}>
+        <button type="button" className={styles.btn} onClick={getQuote} disabled={!canAct}>{busy === "quote" ? "Pricing…" : "Get quote"}</button>
+        <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} onClick={submit} disabled={!canAct}>{busy === "swap" ? "Swapping…" : "Confirm & swap"}</button>
+      </div>
+      <p className={styles.note} style={{ marginTop: 8 }}>Signs locally from {agentName} and routes through {chainLabel}. Hard-capped at ${SWAP_MAX_USD}.</p>
+      {quote ? (
+        <div className={styles.card} style={{ marginTop: 10, background: "transparent" }}>
+          <div className={styles.reviewLine}><span className={styles.reviewKey}>You pay</span><span className={styles.reviewVal}>{quote.sellAmount} {quote.sell} (~${quote.valueUsd.toFixed(2)})</span></div>
+          <div className={styles.reviewLine}><span className={styles.reviewKey}>You get ≈</span><span className={styles.reviewVal}>{quote.buyAmount.toPrecision(6)} {quote.buy}</span></div>
+        </div>
+      ) : null}
+      {error ? <p className={styles.error} style={{ marginTop: 10 }}>{error}</p> : null}
+      {result ? (
+        <div style={{ marginTop: 10 }}>
+          <p className={styles.success}>{result.detail}</p>
+          <p className={styles.note} style={{ marginTop: 4 }}>Tx: <span className={styles.mono}>{result.reference}</span></p>
+          {setActiveView ? <div className={styles.actions}><button type="button" className={styles.btn} onClick={() => setActiveView("wallet")}>View in Wallets · Activity</button></div> : null}
+        </div>
+      ) : null}
     </div>
   );
 }

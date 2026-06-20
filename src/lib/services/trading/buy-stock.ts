@@ -266,7 +266,8 @@ async function executeXStocksSwap(input: BuyStockInput): Promise<BuyStockResult>
       quoteResponse: quote,
       userPublicKey: keypair.publicKey.toBase58(),
       dynamicComputeUnitLimit: true,
-      dynamicSlippage: true,
+      // Use the quote's fixed slippageBps as the binding min-out — dynamic slippage
+      // recomputes a tighter bound that fails simulation (Jupiter 0x1771) on deep pairs.
       prioritizationFeeLamports: {
         priorityLevelWithMaxLamports: { maxLamports: 1_000_000, priorityLevel: "high" },
       },

@@ -177,16 +177,17 @@ export function HivePanel({
             <button
               key={a.id}
               type="button"
+              className="fr-working-row"
+              aria-label={`${a.name} on ${m.name}: ${a.task}`}
               onClick={() => onSelect({ type: "agent", id: a.id, machineId: m.id })}
-              style={{ display: "flex", gap: 11, padding: "11px 0", width: "100%", textAlign: "left", background: "transparent", border: 0, borderTop: "1px solid var(--line)", cursor: "pointer", color: "inherit" }}
             >
-              <span style={{ marginTop: 3 }}><Dot state="working" size={7} /></span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                  <span style={{ fontWeight: 500, fontSize: 13, whiteSpace: "nowrap" }}>{a.name}</span>
-                  <span style={{ fontSize: 10.5, color: "var(--fg-4)", fontFamily: "var(--f-mono)" }}>on {m.name}</span>
+              <span className="fr-working-dot"><Dot state="working" size={7} /></span>
+              <span className="fr-working-main">
+                <span className="fr-working-titleline">
+                  <span className="fr-working-agent-name" title={a.name}>{a.name}</span>
+                  <span className="fr-working-machine" title={m.name}>on {m.name}</span>
                 </span>
-                <span style={{ display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden", fontSize: 12, color: "var(--fg-3)", lineHeight: 1.45, marginTop: 3 }}>{a.task}</span>
+                <span className="fr-working-task" title={a.task}>{a.task}</span>
               </span>
             </button>
           )) : (

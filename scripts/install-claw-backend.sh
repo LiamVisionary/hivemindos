@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install + supervise the Claw backend — the gateway that the Claw Code Mobile
+# Install + supervise the HivemindOS Mobile backend gateway — the service that the mobile
 # iPhone app talks to so it can run a coding agent on THIS machine's repos
 # (file edit/glob/grep, git, terminal, preview). HivemindOS ships it as a
 # managed service so a user who installed only HivemindOS gets it automatically;
@@ -271,7 +271,7 @@ else
   mkdir -p "$(dirname "$SERVICE")"
   cat > "$SERVICE" <<SERVICE
 [Unit]
-Description=Claw Code backend (Claw Code Mobile gateway)
+Description=HivemindOS Mobile backend gateway
 After=agent-telemetry.service
 
 [Service]
@@ -316,5 +316,5 @@ SERVICE
   fi
 fi
 
-echo "[claw] Claw backend running (defaults :5000, auto-increments if taken; trusts the tailnet)."
-echo "[claw] The Claw Code Mobile app will auto-discover it on the fleet."
+echo "[claw] HivemindOS Mobile backend running (defaults :5000, auto-increments if taken; trusts the tailnet)."
+echo "[claw] The HivemindOS Mobile app will auto-discover it on the fleet."

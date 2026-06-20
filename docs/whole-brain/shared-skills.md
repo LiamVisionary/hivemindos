@@ -83,6 +83,8 @@ GitHub Pages packaged-skill docs live under [`docs/packaged-skills/`](../package
 
 Optional catalog skills are not auto-installed. The UI Skills design catalog lives under `packaged-skills/optional/design/<source>/<skill>/` and is copied into the shared brain only when the user chooses a skill from the catalog.
 
+Shared skills can also be authored directly into the vault for Liam-specific recurring workflows. `instagram-reel-growth-workflow` captures Liam's Instagram account-study to AI Reel production loop: public profile analysis, current niche research, retention scripting, hook engineering, and a daily human-approved output workflow. `video-shot-transcript` is another shared media-analysis skill: it teaches agents to break local videos into unique shot/angle segments, align each segment with transcript or visible captions, and keep local media private unless Liam explicitly approves an external transcription or vision upload.
+
 The native pack pairs with seeded vault views under `Operations/Brain Services/`:
 
 - `Agent Memory.base`

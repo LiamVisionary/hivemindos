@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WalletsView } from "@/components/wallets-drop-in/WalletsView";
-import { readNativePersonalWallets } from "@/lib/native/personal-wallets";
+import { fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import { switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
 import { hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
@@ -766,14 +766,7 @@ function WalletPanelComponent(props: any) {
   useEffect(() => {
     refreshRuntimeUsageRef.current = refreshRuntimeUsage;
   }, [refreshRuntimeUsage]);
-  const fetchPersonalWallets = useCallback(async () => {
-    const native = await readNativePersonalWallets({ vaultPath });
-    if (native?.ok && Array.isArray(native.wallets)) return native.wallets;
-    const query = vaultPath ? `?vaultPath=${encodeURIComponent(vaultPath)}` : "";
-    const response = await fetch(`/api/wallet/personal${query}`, { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
-    const data = await response?.json().catch(() => null) as { ok?: boolean; wallets?: any[] } | null;
-    return response?.ok && data?.ok && Array.isArray(data.wallets) ? data.wallets : [];
-  }, [vaultPath]);
+  const fetchPersonalWallets = useCallback(() => fetchPersonalWalletRecords(vaultPath), [vaultPath]);
   const refreshPersonalWalletBalances = useCallback(async (targets: any[]) => {
     const refreshed = (await Promise.all(targets.map(async (wallet) => {
       const address = String(wallet?.address || "").trim();

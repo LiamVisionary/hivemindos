@@ -52,13 +52,51 @@ Choose the execution surface before any auth, install, upload, or generation ste
    hive-env-check HIGGSFIELD_API_KEY_ID
    hive-env-check HIGGSFIELD_API_KEY_SECRET
    ```
-2. Run Cloud API calls through the shared env loader:
-   ```bash
-   hive-env-run -- <cloud-api-command>
+2. Discover docs from the official LLM index before exploring further:
+   ```text
+   https://docs.higgsfield.ai/docs/llms.txt
    ```
-3. Do not print, copy, log, or persist secret values. Redact token/key/secret fields before showing any JSON output.
-4. Prefer the official Higgsfield Cloud docs, OpenAPI/schema, or Cloud app-generated contract for endpoint discovery. If the endpoint/schema cannot be verified, ask the user for the Cloud API docs or endpoint instead of using the consumer CLI.
-5. Use the same model-selection guidance below, then translate prompt/media/model/duration/resolution/aspect choices into the Cloud API submit/poll/download lifecycle.
+3. Use the documented Cloud REST contract:
+   - Base URL: `https://platform.higgsfield.ai`
+   - Submit: `POST https://platform.higgsfield.ai/{model_id}`
+   - Status: `GET https://platform.higgsfield.ai/requests/{request_id}/status`
+   - Cancel queued request: `POST https://platform.higgsfield.ai/requests/{request_id}/cancel`
+   - Webhook: append `?hf_webhook=<https-url>` to the model submit URL.
+   - Auth header: `Authorization: Key <api_key>:<api_secret>`
+4. Run Cloud API calls through the shared env loader and keep credentials in env expansion, not logs:
+   ```bash
+   hive-env-run -- sh -c 'curl -sS \
+     -H "Authorization: Key ${HIGGSFIELD_API_KEY_ID}:${HIGGSFIELD_API_KEY_SECRET}" \
+     -H "Content-Type: application/json" \
+     -H "Accept: application/json" \
+     -d @payload.json \
+     https://platform.higgsfield.ai/<model_id>'
+   ```
+5. Do not print, copy, log, or persist secret values. Redact token/key/secret fields before showing any JSON output.
+6. Prefer `curl` for direct REST checks. Python `urllib` can be blocked by Cloudflare Error 1010 (`browser_signature_banned`) before auth is evaluated. A safe no-cost auth/path sanity check is a fake request-id status lookup; valid platform routing should return `404 {"detail":"Not found"}`, not `Missing token`, `Invalid token`, or consumer workspace credit errors:
+   ```bash
+   hive-env-run -- sh -c 'curl -sS \
+     -H "Accept: application/json" \
+     -H "Authorization: Key ${HIGGSFIELD_API_KEY_ID}:${HIGGSFIELD_API_KEY_SECRET}" \
+     https://platform.higgsfield.ai/requests/00000000-0000-0000-0000-000000000000/status'
+   ```
+7. The official Python SDK is `higgsfield-client`. It accepts either `HF_KEY=<api_key>:<api_secret>` or `HF_API_KEY` plus `HF_API_SECRET`; map from the HivemindOS shared env at process launch rather than writing new secret files.
+8. Use the same model-selection guidance below, then translate prompt/media/model/duration/resolution/aspect choices into the Cloud API submit/poll/download lifecycle.
+
+Cloud model examples from the official docs:
+
+- Text-to-image: `higgsfield-ai/soul/standard`, `reve/text-to-image`
+- Image-to-video: `higgsfield-ai/dop/standard`, `higgsfield-ai/dop/preview`, `bytedance/seedance/v1/pro/image-to-video`, `kling-video/v2.1/pro/image-to-video`
+
+Minimal Cloud payload examples:
+
+```json
+{"prompt":"A serene mountain landscape at sunset","aspect_ratio":"16:9","resolution":"720p"}
+```
+
+```json
+{"image_url":"https://example.com/portrait.jpg","prompt":"Subject turns head slightly and smiles at the camera","duration":5}
+```
 
 ### Consumer CLI bootstrap
 

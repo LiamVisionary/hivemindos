@@ -7,7 +7,7 @@ import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL, Transaction, sendAndC
 import { mnemonicToSeedSync, validateMnemonic } from "@scure/bip39";
 import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import bs58 from "bs58";
-import { createPublicClient, createWalletClient, fallback, formatEther, formatUnits, http, parseUnits, webSocket } from "viem";
+import { concat, createPublicClient, createWalletClient, fallback, formatEther, formatUnits, http, maxUint256, numberToHex, parseUnits, size, webSocket } from "viem";
 import { generatePrivateKey, mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import type { AgentWalletBalance, AgentWalletTokenBalance } from "@/lib/types/agent-wallet";
 import { base, baseSepolia } from "@/lib/services/wallet/base-chain";
@@ -116,6 +116,26 @@ const ERC20_ABI = [
     stateMutability: "view",
     inputs: [],
     outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
   },
 ] as const;
 
@@ -432,6 +452,79 @@ export async function sendUsdc(params: {
   transaction.add(createTransferInstruction(fromAta, toAta, payer.publicKey, BigInt(Math.round(params.amountUsd * 1_000_000))));
   const signature = await sendAndConfirmTransaction(connection, transaction, [payer], { commitment: "confirmed" });
   return { signature };
+}
+
+/** Read an ERC-20 token's decimals on-chain (for tokens outside the curated map). */
+export async function readErc20Decimals(networkInput: string, tokenAddress: string): Promise<number> {
+  const network = assertNetwork(networkInput);
+  if (!network.startsWith("eip155:")) throw new Error("ERC-20 decimals are EVM-only.");
+  const client = createPublicClient({ chain: evmChain(network), transport: http(evmRpc(network)) });
+  const decimals = await client.readContract({ address: tokenAddress as `0x${string}`, abi: ERC20_ABI, functionName: "decimals" });
+  return Number(decimals);
+}
+
+export type ZeroExSwapQuote = {
+  transaction: { to: string; data: string; value?: string; gas?: string };
+  permit2?: { eip712?: { types: unknown; domain: unknown; message: unknown; primaryType: string } } | null;
+  issues?: { allowance?: { spender: string; actual?: string } | null } | null;
+};
+
+/**
+ * Sign and submit a 0x v2 (Permit2) swap from a local EVM wallet. When 0x reports
+ * an allowance issue, sets a one-time MAX ERC-20 approval to the Permit2 contract
+ * (so future swaps of that token skip the approval tx entirely — Permit2 still
+ * gates every actual transfer on the per-swap signature below). Then signs the
+ * Permit2 EIP-712 message and appends [uint256 len][signature] to the swap
+ * calldata as 0x v2 requires. Returns the on-chain tx hash(es).
+ */
+export async function executeEvmZeroExSwap(params: {
+  network: string;
+  secret: string;
+  fromAddress: string;
+  sellToken: string;
+  quote: ZeroExSwapQuote;
+}): Promise<{ approvalHash?: string; swapHash: string }> {
+  const network = assertNetwork(params.network);
+  if (!network.startsWith("eip155:")) throw new Error("0x swaps require an EVM (Base) wallet.");
+  const account = evmAccountFromSecret(params.secret);
+  if (account.address.toLowerCase() !== params.fromAddress.toLowerCase()) throw new Error("Stored key does not match wallet address.");
+  const chain = evmChain(network);
+  const transport = http(evmRpc(network));
+  const wallet = createWalletClient({ account, chain, transport });
+  const publicClient = createPublicClient({ chain, transport });
+
+  // 1. One-time MAX ERC-20 approval to the Permit2 spender (only when 0x reports
+  //    the current allowance is insufficient). Permit2 still requires the signed
+  //    permit below for each transfer, so an unlimited approval here stays safe.
+  let approvalHash: string | undefined;
+  const allowanceIssue = params.quote.issues?.allowance;
+  if (allowanceIssue?.spender) {
+    approvalHash = await wallet.writeContract({
+      address: params.sellToken as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [allowanceIssue.spender as `0x${string}`, maxUint256],
+    });
+    await publicClient.waitForTransactionReceipt({ hash: approvalHash as `0x${string}` });
+  }
+
+  // 2. Sign the Permit2 message (when present) and append it to the calldata.
+  let data = params.quote.transaction.data as `0x${string}`;
+  const eip712 = params.quote.permit2?.eip712;
+  if (eip712) {
+    const signature = await wallet.signTypedData({ account, ...(eip712 as object) } as unknown as Parameters<typeof wallet.signTypedData>[0]);
+    data = concat([data, numberToHex(size(signature), { size: 32, signed: false }), signature]);
+  }
+
+  // 3. Submit the swap.
+  const swapHash = await wallet.sendTransaction({
+    to: params.quote.transaction.to as `0x${string}`,
+    data,
+    value: BigInt(params.quote.transaction.value || "0"),
+    ...(params.quote.transaction.gas ? { gas: BigInt(params.quote.transaction.gas) } : {}),
+  });
+  await publicClient.waitForTransactionReceipt({ hash: swapHash });
+  return { approvalHash, swapHash };
 }
 
 function evmAccountFromSecret(secret: string) {

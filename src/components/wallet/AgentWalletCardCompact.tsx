@@ -23,6 +23,9 @@ export type AgentWalletCardCompactProps = {
   selectable?: boolean;
   selected?: boolean;
   onSelect?: () => void;
+  /** Replace the computed provider status chip — used for user/personal wallets
+   *  whose status is custody-based (e.g. "Local wallet") rather than rail-based. */
+  statusOverride?: { tone: ChipTone; text: string };
 };
 
 type ChipTone = "ok" | "warn" | "danger" | "off" | "muted";
@@ -76,7 +79,7 @@ function formatMoney(value: number): string {
   return `$${Math.max(0, value).toFixed(2)}`;
 }
 
-export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, survival, onOpen, onInitialize, selectable, selected, onSelect }: AgentWalletCardCompactProps) {
+export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, survival, onOpen, onInitialize, selectable, selected, onSelect, statusOverride }: AgentWalletCardCompactProps) {
   const tier = wallet.enabled ? survival.tier : "off";
   const safeBalance = getDisplayWalletBalanceUsd(wallet);
   const status = statusFor(wallet, survival, agentUsePod);
@@ -177,7 +180,11 @@ export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, surviva
 
       <div className={styles.statusRow}>
         <span className={styles.statusChips}>
-          {showsSpendStatus ? (
+          {statusOverride ? (
+            <span className={styles.statusChip} data-tone={statusOverride.tone}>
+              {statusOverride.text}
+            </span>
+          ) : showsSpendStatus ? (
             <span className={styles.spendChip} data-on={wallet.enabled}>
               {spendLabel}
             </span>

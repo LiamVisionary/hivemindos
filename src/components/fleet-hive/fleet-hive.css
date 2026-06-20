@@ -307,6 +307,70 @@
   color: var(--fg-2);
 }
 
+/* Detail panel "Working now" rows: long runtime/chat names should stay inside
+   the fixed right panel instead of creating horizontal scroll. */
+.fr-working-row {
+  display: flex;
+  gap: 11px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  padding: 11px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.fr-working-dot {
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+.fr-working-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.fr-working-titleline {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: baseline;
+  gap: 8px;
+  overflow: hidden;
+}
+.fr-working-agent-name,
+.fr-working-machine {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fr-working-agent-name {
+  flex: 1 1 auto;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+}
+.fr-working-machine {
+  flex: 0 1 auto;
+  max-width: 44%;
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+}
+.fr-working-task {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 1.45;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
 /* focus ring */
 .fr-root :focus-visible { outline: 2px solid var(--honey-line); outline-offset: 2px; }
 
@@ -522,11 +586,17 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .co
 .fr-chat-field { flex: 1 1 auto; min-width: 0; opacity: 0; width: 0; pointer-events: none; display: flex; align-items: center; }
 .fr-chat:hover .fr-chat-field, .fr-chat:focus-within .fr-chat-field { opacity: 1; width: auto; pointer-events: auto; transition: opacity .3s .12s; }
 .fr-chat-input { flex: 1 1 auto; min-width: 0; appearance: none; -webkit-appearance: none; background: transparent; border: 0; border-radius: 0; box-shadow: none; outline: none; color: var(--fg); font-family: var(--f-body); font-size: 14px; }
-.fr-chat-input:focus, .fr-chat-input:focus-visible { border: 0; box-shadow: none; outline: none; }
+.fr-root .fr-chat-input:focus,
+.fr-root .fr-chat-input:focus-visible {
+  border: 0;
+  box-shadow: none;
+  outline: none;
+  outline-offset: 0;
+}
 .fr-chat-input::placeholder { color: var(--fg-3); }
 .fr-chat-send { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 99px; border: 0; cursor: pointer; display: grid; place-items: center; background: var(--honey); color: #1a1305; transition: transform .16s, filter .16s; }
 .fr-chat-send:hover { filter: brightness(1.06); transform: translateY(-1px); }
-.fr-chat-send:focus-visible { outline: none; }
+.fr-root .fr-chat-send:focus-visible { outline: none; outline-offset: 0; }
 
 /* legacy/blue variant — matches the orbital graph + map/list views (which are
    intentionally blue-monochrome) instead of the hive's honey palette */

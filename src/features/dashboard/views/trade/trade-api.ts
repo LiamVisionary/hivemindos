@@ -141,6 +141,31 @@ export async function fundBankrLlmCredits(amountUsd: number, token: string): Pro
   return postJson("/api/bankr/llm-credits", { amountUsd, token, confirmation: FUND_LLM_CREDITS_CONFIRMATION });
 }
 
+export type BankrWalletInfo = { configured: boolean; address?: string; balanceUsd?: number | null };
+
+export async function fetchBankrWallet(): Promise<BankrWalletInfo> {
+  const response = await fetch("/api/bankr/wallet", { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
+  const data = await asJson<BankrWalletInfo>(response);
+  return data.ok ? { configured: Boolean((data as BankrWalletInfo).configured), address: (data as BankrWalletInfo).address, balanceUsd: (data as BankrWalletInfo).balanceUsd } : { configured: false };
+}
+
+// ---- Local DEX swap rail (0x on Base) --------------------------------------
+export const SWAP_CONFIRMATION = "CONFIRM_SWAP";
+export const SWAP_MAX_USD = 10;
+export const SWAP_TOKENS_BASE = ["USDC", "ETH", "WETH", "USDT", "HIVE"];
+export const SWAP_TOKENS_SOLANA = ["USDC", "SOL", "USDT"];
+
+export type DexSwapQuote = { sell: string; buy: string; sellAmount: number; buyAmount: number; valueUsd: number; detail: string };
+export type DexSwapResult = { network: string; sell: string; buy: string; sellAmount: number; buyAmount: number; valueUsd: number; reference: string; approvalReference?: string; detail: string };
+
+export async function quoteSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; slippageBps?: number }): Promise<{ ok: boolean; error?: string; quote?: DexSwapQuote; confirmation?: string }> {
+  return postJson("/api/trading/swap", { action: "quote", ...params });
+}
+
+export async function executeSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; confirmation: string; slippageBps?: number }): Promise<{ ok: boolean; error?: string; result?: DexSwapResult }> {
+  return postJson("/api/trading/swap", { action: "execute", ...params });
+}
+
 export async function fetchTradingReadiness(): Promise<TradingReadiness | null> {
   const response = await fetch("/api/trading", { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
   const data = await asJson<TradingReadiness>(response);

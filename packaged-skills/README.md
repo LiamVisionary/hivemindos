@@ -59,6 +59,8 @@ Current optional catalog:
 
 - `design/`: 109 optional UI and design-engineering skills imported from the UI Skills directory, preserving upstream source namespaces as `design/<source>/<skill>/` and available as the `Design Optional Skills Directory` pack.
 - `media/higgsfield/higgsfield-generate`: optional Higgsfield media-generation skill for Cloud API and standard consumer Higgsfield CLI/dashboard workflows. It keeps API-key/env usage separate from dashboard login, and asks which surface to use when unspecified.
+- `media/hivemindos/instagram-reel-growth-workflow`: optional HivemindOS media-growth skill for studying a public Instagram account, finding current short-form niche angles, writing retention-optimized Reel scripts, engineering stronger hooks, and structuring a human-approved daily AI video loop.
+- `media/hivemindos/video-shot-transcript`: optional HivemindOS media-analysis skill for local video shot/angle dissection with transcript or visible-caption alignment, using FFmpeg/Tesseract locally and requiring explicit approval before external transcription.
 - `n8n/`: 8 optional n8n GTM-automation skills imported from `forma-norden/n8n-gtm-workflow-pack` (MIT), grouped as `n8n/forma-norden/<skill>/` and available as the `N8N Optional Skills Directory` pack. The upstream pack ships flat fragment files without frontmatter, so the importer synthesizes `name`/`description` and records provenance.
 
 ### Importing optional skills

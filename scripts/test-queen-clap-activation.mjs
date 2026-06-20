@@ -244,7 +244,7 @@ const hook = read("src/features/queen-voice/use-queen-clap-activation.ts");
 const realtimeHook = read("src/features/queen-voice/use-queen-bee-realtime.ts");
 const pipelineHook = read("src/features/queen-voice/use-queen-bee-voice.ts");
 const settingsModal = read("src/features/dashboard/views/chat/AgentSettingsModal.tsx");
-const callsPanel = read("src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx");
+const callsPanel = read("src/features/dashboard/views/chat/AgentSettingsCallsPanel.tsx");
 const pkg = read("package.json");
 
 check("dashboard owns and persists opt-in clap wake state", () => {
@@ -268,7 +268,7 @@ check("Queen Bee Calls settings expose the same Clap wake toggle", () => {
   assert.match(settingsModal, /onQueenClapWakeEnabledChange/);
   assert.match(callsPanel, /roleModalAgent\?\.beeRole === "queen"/);
   assert.match(callsPanel, /Clap wake/);
-  assert.match(callsPanel, /onQueenClapWakeEnabledChange\(event\.target\.checked\)/);
+  assert.match(callsPanel, /onQueenClapWakeEnabledChange\(!queenClapWakeEnabled\)/);
 });
 
 check("Queen Bee starts each voice session with one opening line", () => {
