@@ -884,7 +884,24 @@ function materializeResourceSymlinks(root) {
   }
 }
 
-function copyRequiredRuntimePackage(packageName) {
+function readRuntimePackageDependencies(packageDir) {
+  const packageJsonPath = join(packageDir, "package.json");
+  if (!existsSync(packageJsonPath)) {
+    return [];
+  }
+
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+  return Object.keys(packageJson.dependencies ?? {});
+}
+
+function packageNodeModulesDirForSource(packageDir, packageName) {
+  const segments = packageName.split("/");
+  return segments.length === 2 && segments[0].startsWith("@")
+    ? dirname(dirname(packageDir))
+    : dirname(packageDir);
+}
+
+function resolveRuntimePackageSource(packageName, sourceNodeModulesDirs = []) {
   // Resolve the package's REAL directory. pnpm puts DIRECT deps (react,
   // react-dom) behind a top-level symlink and hoists TRANSITIVE deps
   // (scheduler, @next/env, ...) under .pnpm/node_modules — check both, then
@@ -893,6 +910,7 @@ function copyRequiredRuntimePackage(packageName) {
   // stage react/react-dom: they don't live there.
   const segments = packageName.split("/");
   const candidates = [
+    ...sourceNodeModulesDirs.map((nodeModulesDir) => join(nodeModulesDir, ...segments)),
     join(projectRoot, "node_modules", ...segments),
     join(projectRoot, "node_modules", ".pnpm", "node_modules", ...segments),
   ];
@@ -902,22 +920,59 @@ function copyRequiredRuntimePackage(packageName) {
       `Unable to find required runtime package ${packageName} (looked in: ${candidates.join(", ")})`,
     );
   }
-  const source = realpathSync(found);
-  const target = join(
-    serverResourceDir,
-    "node_modules",
-    ...segments,
-  );
+  return realpathSync(found);
+}
 
-  if (existsSync(target)) {
+function copyRuntimePackageIntoNodeModules(packageName, targetNodeModulesDir, seen = new Set(), options = {}) {
+  const seenKey = `${targetNodeModulesDir}\0${packageName}`;
+  if (seen.has(seenKey)) {
+    return;
+  }
+  seen.add(seenKey);
+
+  const segments = packageName.split("/");
+  const source = resolveRuntimePackageSource(packageName, options.sourceNodeModulesDirs ?? []);
+  const target = join(targetNodeModulesDir, ...segments);
+
+  if (!existsSync(target)) {
+    mkdirSync(dirname(target), { recursive: true });
+    cpSync(source, target, { dereference: true, recursive: true });
+  }
+
+  if (options.sourceStack?.includes(source)) {
     return;
   }
 
-  mkdirSync(dirname(target), { recursive: true });
-  cpSync(source, target, { dereference: true, recursive: true });
+  const sourceNodeModulesDir = packageNodeModulesDirForSource(source, packageName);
+  const sourceStack = [...(options.sourceStack ?? []), source];
+  for (const dependencyName of readRuntimePackageDependencies(source)) {
+    copyRuntimePackageIntoNodeModules(dependencyName, targetNodeModulesDir, seen, {
+      sourceNodeModulesDirs: [sourceNodeModulesDir, ...(options.sourceNodeModulesDirs ?? [])],
+      sourceStack,
+    });
+  }
+}
+
+function copyRequiredRuntimePackage(packageName, seen = new Set()) {
+  copyRuntimePackageIntoNodeModules(packageName, join(serverResourceDir, "node_modules"), seen);
+}
+
+function copyPackageLocalRuntimeDependencyIsland(packageName, dependencyNames, seen = new Set()) {
+  const packageSource = resolveRuntimePackageSource(packageName);
+  const packageTarget = join(serverResourceDir, "node_modules", ...packageName.split("/"));
+  const sourceNodeModulesDir = packageNodeModulesDirForSource(packageSource, packageName);
+  const targetNodeModulesDir = join(packageTarget, "node_modules");
+
+  for (const dependencyName of dependencyNames) {
+    copyRuntimePackageIntoNodeModules(dependencyName, targetNodeModulesDir, seen, {
+      sourceNodeModulesDirs: [sourceNodeModulesDir],
+      sourceStack: [packageSource],
+    });
+  }
 }
 
 function copyRequiredRuntimePackages() {
+  const seen = new Set();
   for (const packageName of [
     "@next/env",
     "@swc/helpers",
@@ -925,9 +980,13 @@ function copyRequiredRuntimePackages() {
     "caniuse-lite",
     "postcss",
     "styled-jsx",
-    // Solana wallet/trading routes are imported by shared chat/status modules
-    // at route-load time. Next's standalone trace stages @solana/web3.js, but
-    // pnpm's hoisted crypto deps can be absent after resource materialization.
+    // Wallet/trading routes are imported by shared chat/status modules at
+    // route-load time. Stage the root packages and their dependency closure so
+    // production chat cannot crash before the route handler starts.
+    "@solana/kit",
+    "@solana/spl-token",
+    "@solana/web3.js",
+    "viem",
     "@noble/curves",
     "@noble/hashes",
     "@scure/base",
@@ -943,8 +1002,9 @@ function copyRequiredRuntimePackages() {
     "react-dom",
     "scheduler",
   ]) {
-    copyRequiredRuntimePackage(packageName);
+    copyRequiredRuntimePackage(packageName, seen);
   }
+  copyPackageLocalRuntimeDependencyIsland("@solana/spl-token-metadata", ["@solana/codecs"], seen);
 }
 
 function copyStartupBeeLottieAssets(destinationRoot) {

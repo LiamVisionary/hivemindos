@@ -17,3 +17,24 @@
   background: var(--honey);
   color: var(--panel);
 }
+
+/* Loading placeholder shown in place of the balance while it is still being
+   fetched, so a stale $0 never flashes before the real amount arrives. */
+.balanceSkeleton {
+  display: inline-block;
+  width: 88px;
+  height: 0.9em;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--line) 25%, var(--line-2) 37%, var(--line) 63%);
+  background-size: 400% 100%;
+  animation: walletPickerShimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes walletPickerShimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .balanceSkeleton { animation: none; }
+}

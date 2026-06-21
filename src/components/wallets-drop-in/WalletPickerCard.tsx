@@ -21,6 +21,8 @@ export type WalletPickerCardProps = {
   agentUsePod?: AgentProfile["usePod"];
   /** Custody-based chip for user/bankr wallets (rail status is computed otherwise). */
   statusOverride?: { tone: WalletPickerChipTone; text: string };
+  /** Balance is still being fetched — render a skeleton instead of a stale $0. */
+  pending?: boolean;
   selected?: boolean;
   onSelect?: () => void;
 };
@@ -94,11 +96,14 @@ function statusFor(
  * runtime state. Used by the Trade tab's wallet picker so it matches the cards
  * on the Wallets screen.
  */
-export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOverride, selected, onSelect }: WalletPickerCardProps) {
+export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOverride, pending, selected, onSelect }: WalletPickerCardProps) {
   const providerFeatures = agentPaymentProviderFeatures(wallet.provider);
   const usePodBalanceUnknown = providerFeatures.balanceSource === "usepod-runtime" && getUsePodBalanceUsd(agentUsePod) === null;
   const usePodReadyBalanceUnknown = usePodBalanceUnknown && agentUsePod?.lastTestStatus === "ready";
   const safeBalance = getDisplayWalletBalanceUsd(wallet);
+  // Only show the loading skeleton when the balance is still pending AND we have
+  // nothing real to show yet — a stored non-zero balance is shown immediately.
+  const showLoading = Boolean(pending) && !usePodBalanceUnknown && safeBalance <= 0;
   const balanceLabel = usePodReadyBalanceUnknown ? "Ready" : usePodBalanceUnknown ? "Pending" : frFmtUsdFull(Math.max(0, safeBalance));
   const status = statusOverride ?? statusFor(wallet, survival, agentUsePod);
   const showBar = !usePodBalanceUnknown && safeBalance > 0;
@@ -125,7 +130,9 @@ export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOv
       </span>
 
       <span style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10 }}>
-        <span className="fw-cc-bal">{balanceLabel}</span>
+        {showLoading
+          ? <span className={`fw-cc-bal ${styles.balanceSkeleton}`} aria-label="Loading balance" />
+          : <span className="fw-cc-bal">{balanceLabel}</span>}
         <span className="fw-chip" data-tone={status.tone === "ok" || status.tone === "warn" || status.tone === "danger" ? status.tone : undefined}>{status.text}</span>
       </span>
 
