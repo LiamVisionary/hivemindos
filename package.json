@@ -49,6 +49,7 @@
     "test:context-index:swarm-goal": "node scripts/test-context-index-swarm-goal.mjs",
     "test:native-first-launch-privacy": "node scripts/test-native-first-launch-privacy.mjs",
     "test:tauri-release-mode": "node scripts/test-tauri-release-mode.mjs",
+    "test:tauri-runtime-bundle": "node scripts/test-tauri-runtime-bundle.mjs",
     "test:fleet-local": "node scripts/test-fleet-local-collector.mjs",
     "test:fleet-app-icons": "node scripts/test-fleet-app-icons.mjs",
     "test:e2e:real-fleet": "node scripts/e2e-real-fleet.mjs",

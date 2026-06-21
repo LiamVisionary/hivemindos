@@ -1118,7 +1118,8 @@ function HoldingsPanel() {
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 13, color: chg.color, fontFamily: "var(--f-mono)" }}>{chg.text} <span style={{ color: "var(--fg-4)" }}>· 24h</span></div>
-            <div style={{ fontSize: 11.5, color: "var(--fg-3)", marginTop: 4 }}>{tokens.length} tokens · {frWallets().length} wallets</div>
+            <div style={{ fontSize: 11.5, color: "var(--fg-3)", marginTop: 4 }}>{tokens.length} tokens · {frWallets().length} agent wallets</div>
+            <div style={{ fontSize: 11.5, color: "var(--fg-3)", marginTop: 4 }}>User wallets · {FR_MY_WALLETS.length} wallets · {frFmtUsdFull(frMyWalletsTotal())}</div>
           </div>
         </div>
         <span className="fw-alloc" aria-hidden style={{ height: 8 }}>
@@ -1437,7 +1438,7 @@ function WalletModeHeader({ panel, onPanel }) {
           <span style={{ fontSize: 12.5, color: "var(--fg-3)", whiteSpace: "nowrap" }}>{copy.subtitle}</span>
         </div>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 22 }}>
-          <WStat value={frFmtUsd(s.total)} label="treasury" sub={chg.text + " 24h"} />
+          <WStat value={frFmtUsd(s.total)} label="Agent Treasury" sub={chg.text + " 24h"} />
           <WStat value={s.wallets} label="wallets" />
           <WStat value={s.on} label="spending" live tone="var(--live)" />
           <WStat value={s.tend} label="to tend" tone={s.tend ? "var(--honey)" : undefined} />

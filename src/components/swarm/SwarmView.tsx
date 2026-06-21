@@ -328,11 +328,13 @@ function CenterStage({
   const wrap = (title: string, tone: string, children: React.ReactNode, badge?: React.ReactNode, minHeight = 600) => (
     <div className="relative"
       style={{
-        display: "flex", flexDirection: "column",
+        display: "grid", gridTemplateRows: "auto minmax(0, 1fr)",
         borderRadius: 14, border: "1px solid rgba(148,163,184,0.16)",
         background: `radial-gradient(ellipse at center, ${tone}, transparent 60%), var(--panel-bg)`,
-        padding: 18, minHeight: minHeight > 0 ? minHeight : undefined,
+        padding: 18, minHeight: minHeight > 0 ? minHeight : 0,
+        height: minHeight > 0 ? `clamp(${minHeight}px, calc(100dvh - 88px), 820px)` : undefined,
         alignItems: "stretch", gap: 18, minWidth: 0,
+        overflow: "hidden",
       }}>
       <div className="flex" style={{
         width: "100%", gap: 14, minWidth: 0,
@@ -350,7 +352,7 @@ function CenterStage({
         </div>
         <div className="flex items-center justify-end" style={{ gap: 6, minWidth: 0, flexWrap: "wrap" }}>{badge}</div>
       </div>
-      <div className="grid" style={{ width: "100%", minWidth: 0, justifyItems: "center" }}>
+      <div className={styles.resultViewport}>
         {children}
       </div>
     </div>
