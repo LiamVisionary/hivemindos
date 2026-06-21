@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { join } from "node:path";
 
 const workflowPath = ".github/workflows/tauri-cross-platform-release.yml";
 const tauriConfigPath = "src-tauri/tauri.conf.json";
@@ -15,6 +16,36 @@ const tauriConfig = JSON.parse(readFileSync(tauriConfigPath, "utf8"));
 const nativeDocs = readFileSync(nativeDocsPath, "utf8");
 const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
 const tauriBuild = readFileSync("scripts/tauri-build.mjs", "utf8");
+
+function findInstalledPackageDir(packageName) {
+  const segments = packageName.split("/");
+  const candidates = [
+    join(process.cwd(), "node_modules", ...segments),
+    join(process.cwd(), "node_modules", ".pnpm", "node_modules", ...segments),
+  ];
+  return candidates.find((candidate) => existsSync(candidate));
+}
+
+function collectPackageDependencyClosure(packageNames, seen = new Set()) {
+  for (const packageName of packageNames) {
+    if (seen.has(packageName)) {
+      continue;
+    }
+
+    seen.add(packageName);
+    const packageDir = findInstalledPackageDir(packageName);
+    if (!packageDir) {
+      fail(`Unable to resolve installed package ${packageName} while checking Tauri runtime dependency staging.`);
+      continue;
+    }
+
+    const packageJsonPath = join(realpathSync(packageDir), "package.json");
+    const installedPackageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+    collectPackageDependencyClosure(Object.keys(installedPackageJson.dependencies ?? {}), seen);
+  }
+
+  return seen;
+}
 
 if (!/^\s*HIVEMINDOS_TAURI_EMBEDDED_NEXT\s*:\s*"1"/m.test(workflow)) {
   fail(`${workflowPath} must enable the embedded Next server for release builds.`);
@@ -92,9 +123,36 @@ if (!nativeDocs.includes("static fallback still needs native bridge coverage")) 
   fail(`${nativeDocsPath} must describe the native bridge coverage requirement for the static fallback.`);
 }
 
-for (const packageName of ["@noble/curves", "@noble/hashes", "@scure/base", "@scure/bip32", "@scure/bip39"]) {
+for (const packageName of [
+  "@solana/kit",
+  "@solana/spl-token",
+  "@solana/web3.js",
+  "viem",
+  "@noble/curves",
+  "@noble/hashes",
+  "@scure/base",
+  "@scure/bip32",
+  "@scure/bip39",
+]) {
   if (!tauriBuild.includes(`"${packageName}"`)) {
-    fail(`scripts/tauri-build.mjs must stage ${packageName} for Solana-backed API routes in the embedded Next runtime.`);
+    fail(`scripts/tauri-build.mjs must stage ${packageName} for wallet-backed API routes in the embedded Next runtime.`);
+  }
+}
+
+if (!tauriBuild.includes("readRuntimePackageDependencies") || !tauriBuild.includes("copyRuntimePackageIntoNodeModules(dependencyName, targetNodeModulesDir")) {
+  fail("scripts/tauri-build.mjs must recursively stage package.json dependencies for embedded Next runtime packages.");
+}
+
+for (const expectedSnippet of ["packageNodeModulesDirForSource", "copyPackageLocalRuntimeDependencyIsland", "sourceNodeModulesDirs"]) {
+  if (!tauriBuild.includes(expectedSnippet)) {
+    fail("scripts/tauri-build.mjs must preserve package-local dependency resolution for pnpm-staged runtime packages.");
+  }
+}
+
+const walletRuntimeDependencyClosure = collectPackageDependencyClosure(["@solana/spl-token", "@solana/web3.js", "viem"]);
+for (const packageName of ["@solana/spl-token-metadata", "bn.js", "abitype"]) {
+  if (!walletRuntimeDependencyClosure.has(packageName)) {
+    fail(`${packageName} must stay covered by the embedded wallet runtime dependency closure.`);
   }
 }
 

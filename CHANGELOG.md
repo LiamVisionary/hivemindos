@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-21 07:13:04 +0700 - Recursively Stage Desktop Runtime Dependencies
+  - Status: Uncommitted
+  - Areas changed: Embedded Tauri Next packaging (`scripts/tauri-build.mjs`), release-mode regression check (`scripts/test-tauri-release-mode.mjs`), and changelog
+  - Summary: Production desktop builds now stage the wallet/runtime packages used by chat and agent status routes together with their package dependency closures. This covers the latest telemetry failures for missing `@solana/spl-token-metadata`, missing `bn.js` from `@solana/web3.js`, and missing `abitype` from `viem`, preventing the packaged chat route from crashing before it can stream a response.
+  - Verification: `node --check scripts/tauri-build.mjs` passed; `node --check scripts/test-tauri-release-mode.mjs` passed; `node scripts/test-tauri-release-mode.mjs` passed and now checks the wallet dependency closure; a clean `/private/tmp/hmos-runtime-smoke` runtime copied the staged package graph and imported `@solana/spl-token`, `@solana/web3.js`, and `viem` successfully with 113 package placements; focused `git diff --check` passed for the touched files.
+  - Intended commit message: `Recursively stage desktop runtime dependencies`
+
 - 2026-06-21 00:25 +07 - Contain Expanded Work History Rows
   - Status: Uncommitted
   - Areas changed: Work History row styling (`src/app/kanban-board.module.css`) and changelog

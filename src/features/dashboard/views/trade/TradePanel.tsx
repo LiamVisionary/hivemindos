@@ -70,8 +70,8 @@ export function TradePanel(props: TradePanelProps) {
 
   useEffect(() => {
     let ignore = false;
-    setPersonalBalancesLoading(true);
     void (async () => {
+      setPersonalBalancesLoading(true);
       const list = await fetchPersonalWalletRecords(vaultPath);
       if (ignore) return;
       setPersonalWallets(list);

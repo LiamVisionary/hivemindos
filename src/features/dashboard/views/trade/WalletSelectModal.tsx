@@ -59,6 +59,7 @@ export function WalletSelectModal({ pickables, getSurvivalSnapshot, currentId, o
               wallet={p.wallet}
               survival={getSurvivalSnapshot(p.wallet)}
               statusOverride={p.statusOverride}
+              pending={p.pending}
               selected={selectedId === p.id}
               onSelect={() => setSelectedId(p.id)}
             />
