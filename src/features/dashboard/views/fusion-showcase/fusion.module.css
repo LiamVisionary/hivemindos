@@ -66,11 +66,10 @@
 }
 
 .root[data-embedded="true"] {
-  height: 100%;
-  min-height: 0;
+  height: auto;
+  min-height: auto;
   overflow-x: clip;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow-y: visible;
 }
 
 .bgHoneycomb {

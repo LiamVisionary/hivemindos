@@ -111,6 +111,10 @@ if (packageJson.scripts?.["tauri:build:release"]?.includes("HIVEMINDOS_TAURI_SOU
   fail(`${packagePath} tauri:build:release must remain on the signed release updater channel.`);
 }
 
+if (packageJson.scripts?.["test:tauri-runtime-bundle"] !== "node scripts/test-tauri-runtime-bundle.mjs") {
+  fail(`${packagePath} must expose test:tauri-runtime-bundle for post-staging embedded runtime dependency checks.`);
+}
+
 if (!workflow.includes("run: pnpm tauri:build:release")) {
   fail(`${workflowPath} must use the explicit full release bundle script.`);
 }

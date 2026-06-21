@@ -5,6 +5,41 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-21 10:16:02 +0700 - Add AI UGC Production Pipeline Skill
+  - Status: Uncommitted
+  - Areas changed: Shared Obsidian skill shelf (`Skills/ai-ugc-production-pipeline/`), optional packaged skills catalog (`packaged-skills/optional/media/hivemindos/ai-ugc-production-pipeline/`), packaged skill docs, whole-brain shared-skill docs, and changelog
+  - Summary: Agents now have a reusable AI UGC production workflow that turns campaign research into visual anchors, six-shot Higgsfield/Seedance video prompts, batch short-form scripts, platform caption variants, and a metric-driven regeneration loop while keeping private assets, paid generation, publishing, and campaign claims behind explicit approval gates.
+  - Verification: Repo and shared-vault `SKILL.md` plus source metadata match byte-for-byte via `cmp`; Node frontmatter and JSON metadata checks passed; `rg` confirmed the shared skill index and packaged docs references; focused `git diff --check` passed for the touched skill/docs/changelog files; `wc -l` confirmed touched skill/docs files are under 1500 lines. `node scripts/test-vault-structure-contract.mjs` remains blocked by the pre-existing unrelated `KanbanPanel.tsx` assertion for `Projects&#10;Intake&#10;Memory`.
+  - Intended commit message: `Add AI UGC production pipeline skill`
+
+- 2026-06-21 10:15:39 +0700 - Guard Desktop Runtime Bundle Dependencies
+  - Status: Uncommitted
+  - Areas changed: Embedded Tauri runtime bundle smoke (`scripts/test-tauri-runtime-bundle.mjs`), package test scripts (`package.json`), release-mode regression guard (`scripts/test-tauri-release-mode.mjs`), and changelog
+  - Summary: Production desktop bundle checks now verify that the staged embedded Next runtime can actually import the wallet/runtime package islands used by AEON, chat, fleet status, and trading routes. This catches stale or partial bundles where root packages such as `viem`, `@solana/spl-token`, or `@solana/web3.js` were copied without their dependencies.
+  - Verification: `node --check scripts/test-tauri-runtime-bundle.mjs` passed; `node --check scripts/test-tauri-release-mode.mjs` passed; `node scripts/test-tauri-release-mode.mjs` passed; `node scripts/test-tauri-runtime-bundle.mjs` first failed against the stale ignored local bundle with missing `picocolors`, `base-x`, `@scure/base`, `@noble/curves`, `abitype`, `@solana/accounts`, `@solana/buffer-layout`, `bn.js`, and related runtime packages, then passed after staging the dependency closure into `src-tauri/resources/hivemindos-next/node_modules`; focused `git diff --check` passed; live packaged-server smoke on `127.0.0.1:5035` returned 200 for AEON status/skills/runs/outputs/analytics/memory/secrets/repo-sync, `agents/status`, and `fleet/snapshot`, with no missing-module logs.
+  - Intended commit message: `Guard desktop runtime bundle dependencies`
+
+- 2026-06-21 09:52:54 +0700 - Show User Wallet Reserve In Holdings
+  - Status: Uncommitted
+  - Areas changed: Wallets holdings view (`src/components/wallets-drop-in/WalletsView.tsx`), wallet panel copy (`src/components/wallets-drop-in/wallet-data.ts`), and changelog
+  - Summary: The Holdings section now keeps the Agent Treasury total front and center while also showing the total reserve across user wallets, so funding sources and agent-held balances are visible in the same place. The wallet header now names the treasury as Agent Treasury.
+  - Verification: `pnpm exec eslint src/components/wallets-drop-in/WalletsView.tsx src/components/wallets-drop-in/wallet-data.ts --max-warnings=0` passed; `git diff --check -- src/components/wallets-drop-in/WalletsView.tsx src/components/wallets-drop-in/wallet-data.ts CHANGELOG.md` passed; `wc -l src/components/wallets-drop-in/WalletsView.tsx src/components/wallets-drop-in/wallet-data.ts` confirmed the touched code files remain at or below the 1500-line limit.
+  - Intended commit message: `Show user wallet reserve in holdings`
+
+- 2026-06-21 09:53 +07 - Restore Hive Fusion Route Scrolling
+  - Status: Uncommitted
+  - Areas changed: Hive Fusion dashboard route layout (`src/features/dashboard/views/FusionPanel.tsx`, `src/features/dashboard/views/FusionPanel.module.css`), embedded fusion showcase scroll behavior (`src/features/dashboard/views/fusion-showcase/fusion.module.css`), and changelog
+  - Summary: The Hive Fusion dashboard route now owns its vertical scrolling, so the blind compare tool and the fusion showcase can both be reached when the content is taller than the window.
+  - Verification: `pnpm exec eslint src/features/dashboard/views/FusionPanel.tsx src/features/dashboard/views/fusion-showcase/FusionShowcase.tsx --max-warnings=0` passed; filtered `pnpm exec tsc --noEmit --pretty false --skipLibCheck` returned no diagnostics for the Fusion files; focused `git diff --check` passed; Playwright smoke on an isolated local dev server at `127.0.0.1:5021` confirmed the Hive Fusion route scroller has `overflow-y: auto`, content taller than the viewport, embedded showcase `overflow-y: visible`, and wheel scrolling moved the route `scrollTop` from `0` to `674`.
+  - Intended commit message: `Restore Hive Fusion route scrolling`
+
+- 2026-06-21 09:50 +07 - Contain Swarm Result Preview Cards
+  - Status: Uncommitted
+  - Areas changed: Swarm result stage layout (`src/components/swarm/SwarmView.tsx`), output preview cards (`src/components/swarm/output-views.tsx`), swarm layout tokens (`src/components/swarm/swarm-tokens.module.css`), and changelog
+  - Summary: Reddit, Polymarket, research, X-thread, and integration simulation results now render inside a bounded scrollable preview stage instead of spilling into the run-intelligence cards below. Polymarket market payload rows now stack labels above values and responsive sections collapse before they become too narrow, so long market questions stay readable instead of wrapping one word per line.
+  - Verification: `pnpm exec eslint src/components/swarm/SwarmView.tsx src/components/swarm/output-views.tsx --max-warnings=0` passed; filtered `pnpm exec tsc --noEmit --pretty false --skipLibCheck` returned no diagnostics for the touched swarm files; `git diff --check -- src/components/swarm/SwarmView.tsx src/components/swarm/output-views.tsx src/components/swarm/swarm-tokens.module.css CHANGELOG.md` passed; `wc -l` confirmed touched swarm files remain under 1500 lines; Playwright layout smoke on an isolated `127.0.0.1:5028` dev server with mocked saved Reddit and Polymarket runs confirmed both result stages are 820px tall, their preview viewports scroll internally, and Run Intelligence begins below the result wrapper with a 35px gap instead of overlap.
+  - Intended commit message: `Contain swarm result preview cards`
+
 - 2026-06-21 07:13:04 +0700 - Recursively Stage Desktop Runtime Dependencies
   - Status: Uncommitted
   - Areas changed: Embedded Tauri Next packaging (`scripts/tauri-build.mjs`), release-mode regression check (`scripts/test-tauri-release-mode.mjs`), and changelog

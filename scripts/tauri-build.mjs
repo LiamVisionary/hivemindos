@@ -936,7 +936,18 @@ function copyRuntimePackageIntoNodeModules(packageName, targetNodeModulesDir, se
 
   if (!existsSync(target)) {
     mkdirSync(dirname(target), { recursive: true });
-    cpSync(source, target, { dereference: true, recursive: true });
+    // Skip native addons (*.node) when staging the runtime closure. An UNSIGNED
+    // .node anywhere in the .app fails Apple notarization ("binary is not signed
+    // with a valid Developer ID certificate") and rejects the whole archive.
+    // The staged crypto packages fall back to pure JS when their native addon is
+    // absent (e.g. bigint-buffer: try require('bindings') -> catch -> JS path),
+    // so dropping the .node keeps the runtime working AND lets the app notarize.
+    // (If a future dep hard-requires its addon, codesign it here instead.)
+    cpSync(source, target, {
+      dereference: true,
+      recursive: true,
+      filter: (src) => !src.endsWith(".node"),
+    });
   }
 
   if (options.sourceStack?.includes(source)) {

@@ -73,7 +73,7 @@ export function frMachineState(m) {
 }
 export const FR_WALLET_PANELS = [
   { id: "agents",   label: "Agents",   title: "Agent wallets", subtitle: "every agent's purse, its runway, and what it may spend" },
-  { id: "holdings", label: "Holdings", title: "Treasury holdings", subtitle: "the whole fleet's balance, by token" },
+  { id: "holdings", label: "Holdings", title: "Agent Treasury holdings", subtitle: "the whole fleet's balance, by token" },
   { id: "activity", label: "Activity", title: "Payment activity", subtitle: "what the agents have been paying for" },
   { id: "usage",    label: "Usage",    title: "Runtime usage", subtitle: "tokens and compute spend, by agent and model" },
   { id: "honey",    label: "Honey",    title: "Honey ledger", subtitle: "rewards earned for useful work — and where they went" },

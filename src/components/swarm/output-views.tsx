@@ -46,7 +46,7 @@ export function XThreadView({ run }: { run: SwarmRun }) {
   if (!primary) return <OutputEmpty title="No X posts returned" body={run.summary} />;
   return (
     <div style={{
-      width: "min(650px, 100%)", maxHeight: 720, overflow: "auto", margin: "0 auto",
+      width: "min(650px, 100%)", margin: "0 auto",
       border: "1px solid rgb(207, 217, 222)", background: "#fff", color: "#0f1419",
       borderRadius: 18,
       fontFamily: "-apple-system, BlinkMacSystemFont, system-ui, sans-serif",
@@ -162,7 +162,6 @@ export function RedditView({ run }: { run: SwarmRun }) {
       background: "#1a1a1b", color: "#d7dadc",
       border: "1px solid #343536", borderRadius: 6,
       fontFamily: "-apple-system, system-ui, sans-serif",
-      maxHeight: 720, overflow: "auto",
     }}>
       <header className="flex items-center" style={{
         gap: 12, padding: "10px 14px", borderBottom: "1px solid #343536", background: "#272729",
@@ -282,16 +281,16 @@ function PolymarketPayloadCard({ item }: { item: SwarmEventItem }) {
     <article style={{
       padding: "10px 12px", borderRadius: 8,
       border: "1px solid rgba(148,163,184,0.14)", background: "var(--panel-bg-soft)",
-      minWidth: 0,
+      display: "grid", gap: 8, minWidth: 0,
     }}>
       <div className="flex flex-wrap justify-between" style={{ gap: 8 }}>
-        <strong style={{ fontFamily: "var(--f-display)", fontSize: 13 }}>{item.title}</strong>
+        <strong style={{ fontFamily: "var(--f-display)", fontSize: 13, minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word" }}>{item.title}</strong>
         {item.meta ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--muted)" }}>{item.meta}</span> : null}
       </div>
       {summaryRows.length ? (
-        <dl className="grid" style={{ gap: 5, margin: "8px 0 0" }}>
+        <dl className="grid" style={{ gap: 8, margin: 0, minWidth: 0 }}>
           {summaryRows.map(([label, value]) => (
-            <div key={label} className="grid" style={{ gridTemplateColumns: "88px minmax(0,1fr)", gap: 8 }}>
+            <div key={label} className="grid" style={{ gap: 2, minWidth: 0 }}>
               <dt className="uppercase" style={{ fontFamily: "var(--f-mono)", fontSize: 9, color: "var(--muted)", letterSpacing: 0.08 }}>
                 {label}
               </dt>
@@ -307,14 +306,14 @@ function PolymarketPayloadCard({ item }: { item: SwarmEventItem }) {
         </p>
       )}
       {parsed ? (
-        <details style={{ marginTop: 8 }}>
+        <details style={{ marginTop: 2, minWidth: 0 }}>
           <summary className="uppercase cursor-pointer" style={{
             fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--hex-active-border)", letterSpacing: 0.08,
           }}>
             raw payload
           </summary>
           <pre style={{
-            margin: "8px 0 0", maxHeight: 180, overflow: "auto", whiteSpace: "pre-wrap",
+            margin: "8px 0 0", maxWidth: "100%", maxHeight: 180, overflow: "auto", whiteSpace: "pre-wrap",
             overflowWrap: "anywhere", fontFamily: "var(--f-mono)", fontSize: 10.5,
             lineHeight: 1.45, color: "var(--muted)",
           }}>{JSON.stringify(parsed, null, 2)}</pre>
@@ -358,17 +357,17 @@ function IntegrationPayloadCard({ item }: { item: SwarmEventItem }) {
     <article style={{
       minWidth: 0, padding: "10px 12px", borderRadius: 8,
       border: `1px solid ${item.level === "warn" ? "rgba(255,212,90,0.22)" : "rgba(148,163,184,0.16)"}`,
-      background: "var(--panel-bg-soft)",
+      background: "var(--panel-bg-soft)", display: "grid", gap: 8,
     }}>
       <div className="uppercase" style={{
         fontFamily: "var(--f-mono)", fontSize: 10,
-        color: tone, letterSpacing: 0.08,
+        color: tone, letterSpacing: 0.08, overflowWrap: "anywhere", wordBreak: "break-word",
       }}>
         {item.meta ?? item.title}
       </div>
-      <strong style={{ display: "block", marginTop: 4, fontSize: 13, color: "var(--foreground)" }}>{item.title}</strong>
+      <strong style={{ display: "block", fontSize: 13, color: "var(--foreground)", overflowWrap: "anywhere", wordBreak: "break-word" }}>{item.title}</strong>
       {rows.length ? (
-        <dl className="grid" style={{ gap: 6, margin: "8px 0 0" }}>
+        <dl className="grid" style={{ gap: 6, margin: 0, minWidth: 0 }}>
           {rows.map(([label, value]) => (
             <div key={`${label}-${value.slice(0, 18)}`} className="grid" style={{ gap: 3 }}>
               <dt className="uppercase" style={{ fontFamily: "var(--f-mono)", fontSize: 9, color: "var(--muted)", letterSpacing: 0.08 }}>
@@ -386,14 +385,14 @@ function IntegrationPayloadCard({ item }: { item: SwarmEventItem }) {
         </p>
       )}
       {raw ? (
-        <details style={{ marginTop: 8 }}>
+        <details style={{ marginTop: 2, minWidth: 0 }}>
           <summary className="uppercase cursor-pointer" style={{
             fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--hex-active-border)", letterSpacing: 0.08,
           }}>
             raw payload
           </summary>
           <pre style={{
-            margin: "8px 0 0", maxHeight: 180, overflow: "auto", whiteSpace: "pre-wrap",
+            margin: "8px 0 0", maxWidth: "100%", maxHeight: 180, overflow: "auto", whiteSpace: "pre-wrap",
             overflowWrap: "anywhere", fontFamily: "var(--f-mono)", fontSize: 10.5,
             lineHeight: 1.45, color: "var(--muted)",
           }}>{JSON.stringify(raw, null, 2)}</pre>
@@ -435,15 +434,15 @@ export function PolymarketView({ run, market }: { run: SwarmRun; market: SwarmMa
   return (
     <div style={{
       width: "min(900px, 100%)", margin: "0 auto", color: "var(--foreground)",
-      display: "grid", gap: 14,
+      display: "grid", gap: 14, minWidth: 0,
     }}>
       <section style={{
         borderRadius: 10, border: "1px solid rgba(94,234,212,0.22)",
         background: "linear-gradient(180deg, rgba(94,234,212,0.08), var(--panel-bg))",
-        padding: 16,
+        padding: 16, minWidth: 0,
       }}>
         <div className="grid" style={{
-          gridTemplateColumns: "minmax(0, 1fr) minmax(180px, 220px)",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
           gap: 14, alignItems: "stretch",
         }}>
           <div style={{
@@ -488,7 +487,7 @@ export function PolymarketView({ run, market }: { run: SwarmRun; market: SwarmMa
           <div className="grid" style={{
             gap: 8, padding: 14, borderRadius: 8,
             border: "1px solid rgba(148,163,184,0.16)", background: "var(--code-bg)",
-            alignContent: "center",
+            alignContent: "center", minWidth: 0,
           }}>
             <span className="uppercase" style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--muted)", letterSpacing: 0.1 }}>
               latest yes odds
@@ -511,7 +510,7 @@ export function PolymarketView({ run, market }: { run: SwarmRun; market: SwarmMa
       </section>
 
       <section className="grid" style={{
-        gridTemplateColumns: "minmax(0, 1.1fr) minmax(260px, 0.9fr)",
+        gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
         gap: 14, alignItems: "start",
       }}>
         <div style={{
@@ -521,7 +520,7 @@ export function PolymarketView({ run, market }: { run: SwarmRun; market: SwarmMa
           <div className="uppercase" style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--muted)", letterSpacing: 0.1 }}>
             market payload
           </div>
-          <div className="grid" style={{ gap: 8, marginTop: 10, maxHeight: 390, overflow: "auto", paddingRight: 2 }}>
+          <div className="grid" style={{ gap: 8, marginTop: 10, maxHeight: 390, overflow: "auto", paddingRight: 2, minWidth: 0 }}>
             {items.length ? items.map((item) => (
               <PolymarketPayloadCard key={item.id} item={item} />
             )) : (
@@ -574,7 +573,7 @@ export function ResearchView({ run }: { run: SwarmRun }) {
       width: "min(720px, 100%)", margin: "0 auto", padding: "20px 28px",
       background: "var(--panel-bg)", color: "var(--foreground)",
       border: "1px solid rgba(148,163,184,0.16)", borderRadius: 10,
-      fontFamily: "Iowan Old Style, Georgia, serif", maxHeight: 720, overflow: "auto",
+      fontFamily: "Iowan Old Style, Georgia, serif",
     }}>
       <div className="uppercase" style={{
         fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--muted)", letterSpacing: 0.12,
@@ -685,7 +684,7 @@ export function MiroSharkIntegrationView({
           {isDraftOnly ? "Not published yet" : "Reports, exports, interviews, markets"}
         </h2>
       </header>
-      <div className="grid" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: 10 }}>
         {draftNotice ? (
           <article style={{
             gridColumn: "1 / -1", padding: "12px 14px", borderRadius: 8,

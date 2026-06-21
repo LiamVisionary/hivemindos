@@ -1,0 +1,19 @@
+{
+  "upstreamName": "AI UGC Production Pipeline",
+  "upstreamSlug": "ai-ugc-production-pipeline",
+  "hiveSlug": "ai-ugc-production-pipeline",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/media/hivemindos/ai-ugc-production-pipeline",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-06-21T03:16:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional media skills",
+  "sourcePath": "packaged-skills/optional/media/hivemindos/ai-ugc-production-pipeline",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Turns the supplied Claude plus Higgsfield MCP UGC factory notes into a reusable agent-neutral production workflow.",
+    "Splits the loop into current-signal research, visual anchors, six-shot video generation, batch scripting, and metric-driven regeneration.",
+    "References discovered media capabilities and existing Higgsfield skills instead of hard-coding one execution surface.",
+    "Adds approval gates for paid generation, private asset upload, publishing, scheduling, and unverified campaign claims."
+  ]
+}
