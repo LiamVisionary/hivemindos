@@ -21,7 +21,7 @@
     "tauri:phase2-required": "pnpm tauri:prepare",
     "check:tauri-acl": "node scripts/check-tauri-command-acl.mjs",
     "tauri:build": "HIVEMINDOS_TAURI_SOURCE_BUILD=1 HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 tauri build --bundles app --config '{\"bundle\":{\"createUpdaterArtifacts\":false}}'",
-    "tauri:build:release": "HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 tauri build",
+    "tauri:build:release": "tauri build",
     "tauri:build:static": "HIVEMINDOS_TAURI_SOURCE_BUILD=1 tauri build --bundles app --config '{\"bundle\":{\"createUpdaterArtifacts\":false}}'",
     "tauri:build:server": "HIVEMINDOS_TAURI_SOURCE_BUILD=1 HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 tauri build --bundles app --config '{\"bundle\":{\"createUpdaterArtifacts\":false}}'",
     "tauri:build:server:fast": "HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 tauri build --no-bundle",
