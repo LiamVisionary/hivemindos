@@ -57,6 +57,8 @@ export function StocksTradeView({
   const paper = tradeAgent?.paper ?? (wallet?.alpacaPaper !== false);
   const alpacaConfigured = readiness?.venues.alpaca.configured ?? false;
   const xstockTickers = readiness?.venues.xstocks.supportedTickers ?? [];
+  // Alpaca needs keys; xStocks is keyless (signs from the agent's Solana wallet).
+  const venueReady = venue === "alpaca" ? alpacaConfigured : true;
 
   const tickerOptions = venue === "xstocks" ? xstockTickers : COMMON_ALPACA_TICKERS;
   // Derive a valid selection rather than resetting state in an effect: if the
@@ -67,7 +69,7 @@ export function StocksTradeView({
   const ticker = effectiveTickerChoice === OTHER_TICKER ? customTicker.trim().toUpperCase() : effectiveTickerChoice;
 
   const notionalUsd = Number(amount) || 0;
-  const canAct = Boolean(venue) && Boolean(ticker) && notionalUsd > 0 && !busy;
+  const canAct = Boolean(venue) && venueReady && Boolean(ticker) && notionalUsd > 0 && !busy;
 
   const getQuote = useCallback(async () => {
     if (!canAct) return;
@@ -140,6 +142,13 @@ export function StocksTradeView({
             {venue === "alpaca" && !alpacaConfigured ? <span className={`${styles.badge} ${styles.badgeSetup}`}>Set ALPACA keys</span> : null}
           </div>
         </div>
+
+        {!venueReady ? (
+          <div className={styles.warnCard} style={{ marginTop: 8 }}>
+            Alpaca isn&apos;t set up. Add <span className={styles.mono}>ALPACA_API_KEY_ID</span> and <span className={styles.mono}>ALPACA_API_SECRET_KEY</span> to the shared env to enable brokerage orders. (On-chain xStocks needs no keys.)
+            {setActiveView ? <> <button type="button" className={styles.btn} style={{ marginLeft: 8, padding: "4px 10px" }} onClick={() => setActiveView("env")}>Open Env</button></> : null}
+          </div>
+        ) : null}
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="trade-ticker">Ticker</label>

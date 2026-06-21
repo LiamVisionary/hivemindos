@@ -189,6 +189,16 @@ export function CryptoTradeView({
     setSuccess(String((response as { message?: string }).message ?? "Action submitted."));
   }, [selected.id, amountUsd, token, prepared]);
 
+  // Personal (`user:`) wallets are manual-only: swap and receive here, send via
+  // the proven Wallets flow. The capability grid (x402/Veil/Bankr/MoneyClaw) is
+  // the agent/auto-spend surface and needs a persisted spend policy a personal
+  // wallet has no way to set, so it's omitted. The server also forces a fresh
+  // per-action confirmation for any `user:` wallet, so nothing can auto-spend —
+  // an explicit "send X from my wallet" still works, it just always confirms.
+  if (walletKind === "user") {
+    return <PersonalManualPanel agentId={agentId} agentName={agentName} wallet={wallet} setActiveView={setActiveView} />;
+  }
+
   if (loading) return <div className={styles.empty}>Checking crypto rails…</div>;
   if (!caps) return <div className={styles.empty}>Crypto capabilities are unavailable right now.</div>;
 
@@ -321,6 +331,50 @@ export function CryptoTradeView({
         ) : null}
         </>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Manual-only crypto surface for a personal (`user:`) wallet. Personal wallets
+ * can't set a spend policy, so the agent/auto-spend rails are omitted; what's
+ * left are the two rails that work with an explicit per-action confirmation:
+ * the local DEX swap (/api/trading/swap) and a read-only receive address. Send
+ * is the Wallets-route action, so it deep-links there rather than duplicating
+ * that money path here.
+ */
+function PersonalManualPanel({ agentId, agentName, wallet, setActiveView }: {
+  agentId: string;
+  agentName: string;
+  wallet: Record<string, unknown> | null;
+  setActiveView?: (view: DashboardView) => void;
+}) {
+  const [tab, setTab] = useState<"swap" | "receive">("swap");
+  const isSolana = String((wallet as { network?: string } | null)?.network || "").includes("solana");
+  const tokens = isSolana ? SWAP_TOKENS_SOLANA : SWAP_TOKENS_BASE;
+  const chainLabel = isSolana ? "Jupiter on Solana" : "0x on Base";
+  return (
+    <div className={styles.grid}>
+      <div className={styles.card}>
+        <div className={styles.segmented} role="tablist" aria-label="Action">
+          <button type="button" role="tab" aria-selected={tab === "swap"} data-active={tab === "swap" ? "" : undefined} onClick={() => setTab("swap")}>Swap</button>
+          <button type="button" role="tab" aria-selected={tab === "receive"} data-active={tab === "receive" ? "" : undefined} onClick={() => setTab("receive")}>Receive</button>
+        </div>
+        <p className={styles.note} style={{ marginTop: 12 }}>
+          This is a personal wallet, so it&apos;s <strong>manual-only</strong> — swap and receive here, and send from the Wallets screen. It can never auto-spend; every action needs your explicit confirmation. Agent rails (x402, Veil, Bankr automations) require an agent wallet.
+        </p>
+        {setActiveView ? (
+          <div className={styles.actions} style={{ marginTop: 10 }}>
+            <button type="button" className={styles.btn} onClick={() => setActiveView("wallet")}>Send from Wallets</button>
+          </div>
+        ) : null}
+      </div>
+      <div className={styles.card}>
+        <h3 className={styles.title} style={{ fontSize: 15 }}>{tab === "swap" ? `Swap via ${chainLabel}` : "Receive"}</h3>
+        {tab === "swap"
+          ? <DexSwapForm agentId={agentId} agentName={agentName} tokens={tokens} chainLabel={chainLabel} setActiveView={setActiveView} />
+          : <ReceiveCard address={walletAddress(wallet)} agentName={agentName} />}
       </div>
     </div>
   );

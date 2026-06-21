@@ -65,6 +65,26 @@ function extractTotalUsd(raw: unknown): number | null {
   const record = asRecord(raw);
   const direct = firstNumber(record, ["totalUsd", "totalValueUsd", "balanceUsd", "netWorthUsd", "portfolioValueUsd", "usdValue"]);
   if (direct !== null) return direct;
+  // Bankr's actual shape: balances is a map of network -> { nativeUsd, tokenBalances: [{ token: { balanceUSD } }] }.
+  const balances = record.balances;
+  if (balances && typeof balances === "object" && !Array.isArray(balances)) {
+    let total = 0;
+    let found = false;
+    for (const net of Object.values(balances as Record<string, unknown>)) {
+      const netRecord = asRecord(net);
+      const nativeUsd = Number(netRecord.nativeUsd);
+      if (Number.isFinite(nativeUsd)) { total += nativeUsd; found = true; }
+      const tokenBalances = netRecord.tokenBalances;
+      if (Array.isArray(tokenBalances)) {
+        for (const entry of tokenBalances) {
+          const token = asRecord(asRecord(entry).token);
+          const usd = Number(token.balanceUSD ?? token.balanceUsd);
+          if (Number.isFinite(usd)) { total += usd; found = true; }
+        }
+      }
+    }
+    if (found) return Math.round(total * 100) / 100;
+  }
   for (const key of ["tokens", "balances", "holdings", "assets", "positions"]) {
     const list = record[key];
     if (Array.isArray(list)) {

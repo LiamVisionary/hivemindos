@@ -5,6 +5,20 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-21 16:58:02 +0700 - Add Content Rewards Viral App Campaign Skill
+  - Status: Uncommitted
+  - Areas changed: Shared Obsidian skill shelf (`Skills/content-rewards-viral-app-campaign/`), optional packaged skills catalog (`packaged-skills/optional/media/hivemindos/content-rewards-viral-app-campaign/`), packaged skill docs, whole-brain shared-skill docs, and changelog
+  - Summary: Agents now have a reusable Content Rewards-style app growth playbook that turns a product's clippable aha moment into viral format cards, creator content banks, course-like campaign briefs, no-login influencer web version specs, Discord creator operations, reward rules, and weekly optimization loops while keeping current platform claims, contracts, spend, publishing, outreach, and payouts behind verification or approval gates.
+  - Verification: Repo and shared-vault `SKILL.md` plus source metadata match byte-for-byte via `cmp`; JSON provenance parsed with `python3 -m json.tool`; fallback frontmatter/TODO and optional `agents/openai.yaml` metadata checks passed; `rg` confirmed the shared skill index and packaged docs references; focused `git diff --check` passed; `wc -l` confirmed touched skill/docs files remain under 1500 lines. Official `quick_validate.py` could not run because the available Python environment is missing PyYAML.
+  - Intended commit message: `Add Content Rewards viral app campaign skill`
+
+- 2026-06-21 11:07:00 +0700 - Add Remote Capability Use Skill
+  - Status: Uncommitted
+  - Areas changed: Packaged auto-install skills (`packaged-skills/auto-install/hive-remote-capability-use/`), capability-search handoff guidance, packaged skill docs, whole-brain shared-skill docs, vault structure guard, shared Obsidian skill shelf, and changelog
+  - Summary: Agents now have a default playbook for running remote HivemindOS capabilities selected by capability search. The skill teaches fresh fleet/app discovery, Hivemind Link app-proxy routing, private file transfer for sensitive local inputs, remote app health/schema checks, artifact verification, side-effect gates, and receipt reporting without leaking raw Tailnet endpoints or secrets.
+  - Verification: Repo and shared-vault `hive-remote-capability-use` skill files match byte-for-byte via `cmp`; packaged and shared `hive-capability-search` mirrors match after adding the remote-capability handoff note; shared skill source metadata parsed with `python3 -m json.tool`; `rg` confirmed packaged docs, whole-brain docs, vault contract, and shared skill index references; `node --check scripts/test-vault-structure-contract.mjs` passed; focused `git diff --check` passed for touched skill/docs/changelog files; `wc -l` confirmed touched skill/docs files remain under 1500 lines. `node scripts/test-vault-structure-contract.mjs` remains blocked by the pre-existing unrelated `KanbanPanel.tsx` assertion for `Projects&#10;Intake&#10;Memory`.
+  - Intended commit message: `Add remote capability use skill`
+
 - 2026-06-21 10:16:02 +0700 - Add AI UGC Production Pipeline Skill
   - Status: Uncommitted
   - Areas changed: Shared Obsidian skill shelf (`Skills/ai-ugc-production-pipeline/`), optional packaged skills catalog (`packaged-skills/optional/media/hivemindos/ai-ugc-production-pipeline/`), packaged skill docs, whole-brain shared-skill docs, and changelog

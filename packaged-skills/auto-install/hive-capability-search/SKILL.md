@@ -60,6 +60,8 @@ Return a compact capability map:
 - `gaps`: missing, ambiguous, or unavailable components
 - `questions`: only the clarifications that are actually blocking or materially consequential
 
+If the selected component is a remote connected app, remote collector, Hivemind Link endpoint, or fleet machine capability, include enough handoff detail for `hive-remote-capability-use`: app or service name, machine identity, fresh catalog URL fields when available, required route/schema endpoints, transfer needs, verification expectations, and side-effect gates.
+
 ## Verification
 
 For fusion callers, include enough proof that the selected parts are reachable:
@@ -67,3 +69,4 @@ For fusion callers, include enough proof that the selected parts are reachable:
 - Retrieval hit, skill path, slash-command metadata, app catalog entry, route/tool schema, runtime capability, agent profile, or status endpoint.
 - For media generation capabilities, require later artifact verification before claiming success.
 - For external delivery capabilities, require later provider/tool receipts such as `success: true`, `message_id`, URL, transaction id, post id, or equivalent.
+- For remote connected apps or fleet capabilities, load `hive-remote-capability-use` before execution so the agent refreshes discovery, avoids stale Tailnet URLs, transfers sensitive local inputs privately, and verifies receipts.

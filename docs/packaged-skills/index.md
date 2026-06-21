@@ -41,7 +41,7 @@ They are catalog content until a user installs them. Optional skills must not be
 
 Grouped optional directories can appear as installable packs in the Skill Browser. Installing one of those packs copies every local packaged skill in the directory into the shared brain after audit; it does not run upstream installer commands.
 
-The optional media catalog includes Higgsfield generation helpers and HivemindOS-authored growth, production, and analysis helpers, such as `media/higgsfield/higgsfield-api-quirks` for model-specific Higgsfield payload workarounds, `media/hivemindos/ai-ugc-production-pipeline` for campaign-to-UGC video production loops, `media/hivemindos/instagram-reel-growth-workflow` for account-specific Reels workflows, and `media/hivemindos/video-shot-transcript` for local shot/angle breakdowns with transcript or visible-caption alignment.
+The optional media catalog includes Higgsfield generation helpers and HivemindOS-authored growth, production, and analysis helpers, such as `media/higgsfield/higgsfield-api-quirks` for model-specific Higgsfield payload workarounds, `media/hivemindos/ai-ugc-production-pipeline` for campaign-to-UGC video production loops, `media/hivemindos/content-rewards-viral-app-campaign` for app creator-rewards and clipping campaign design, `media/hivemindos/instagram-reel-growth-workflow` for account-specific Reels workflows, and `media/hivemindos/video-shot-transcript` for local shot/angle breakdowns with transcript or visible-caption alignment.
 
 ## Current Guides
 

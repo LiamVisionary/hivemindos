@@ -14,6 +14,7 @@ These skills are auto-installed into the shared brain because they are foundatio
 | `hive-assimilate` | Mandatory pre-build search across shared brain, user projects, local/private indexes, and public GitHub before software creation. |
 | `hive-pulse` | Built-in last-30-days signal briefs across Reddit, X, YouTube, TikTok, Hacker News, Polymarket, GitHub, and web sources, powered by a pinned MIT licensed `last30days` engine. |
 | `hive-capability-search` | Discovers available tools, skills, apps, agents, credentials by key name, and delivery channels such as slash commands, API routes, MCP tools, CLIs, and dashboard surfaces for a task. |
+| `hive-remote-capability-use` | Executes remote connected apps and fleet capabilities selected by capability search, including fresh discovery, Hivemind Link app-proxy routing, private file transfer, artifact verification, and side-effect gates. |
 | `hive-skill-fusion` | Turns a capability request into a reusable shared-brain skill. |
 | `hive-workflow-fusion` | Composes multi-step hive workflows from skills, apps, agents, and tools. |
 | `hive-aeon-fusion` | Converts reusable hive workflows into AEON-ready agent duties when appropriate. |
@@ -74,6 +75,11 @@ The repository source is:
 ```text
 packaged-skills/auto-install/hive-assimilate/SKILL.md
 packaged-skills/auto-install/hive-pulse/SKILL.md
+packaged-skills/auto-install/hive-capability-search/SKILL.md
+packaged-skills/auto-install/hive-remote-capability-use/SKILL.md
+packaged-skills/auto-install/hive-skill-fusion/SKILL.md
+packaged-skills/auto-install/hive-workflow-fusion/SKILL.md
+packaged-skills/auto-install/hive-aeon-fusion/SKILL.md
 packaged-skills/auto-install/hive-brain-memory/SKILL.md
 packaged-skills/auto-install/hive-brain-compiled-wiki/SKILL.md
 ```
@@ -83,6 +89,11 @@ Setup mirrors it into the shared brain at:
 ```text
 Skills/hive-assimilate/SKILL.md
 Skills/hive-pulse/SKILL.md
+Skills/hive-capability-search/SKILL.md
+Skills/hive-remote-capability-use/SKILL.md
+Skills/hive-skill-fusion/SKILL.md
+Skills/hive-workflow-fusion/SKILL.md
+Skills/hive-aeon-fusion/SKILL.md
 Skills/hive-brain-memory/SKILL.md
 Skills/hive-brain-compiled-wiki/SKILL.md
 ```

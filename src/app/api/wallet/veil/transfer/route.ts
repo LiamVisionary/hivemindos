@@ -50,7 +50,10 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({})) as VeilTransferBody;
     const persisted = body.agentId?.trim() ? await loadGovernanceWallet(body.agentId.trim()).catch(() => null) : null;
-    const validation = validateTransferBody(body, { autoSendAllowed: canAutoSendVeilTransfer(persisted?.wallet) });
+    // Personal (`user:`) wallets never auto-spend: explicit confirmation is always
+    // required for a private transfer, regardless of any persisted policy.
+    const isPersonalWallet = Boolean(body.agentId?.trim().startsWith("user:"));
+    const validation = validateTransferBody(body, { autoSendAllowed: !isPersonalWallet && canAutoSendVeilTransfer(persisted?.wallet) });
     if (validation) return validation;
 
     const asset = normalizeAsset(body.asset);

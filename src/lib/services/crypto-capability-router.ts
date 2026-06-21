@@ -201,6 +201,10 @@ export async function prepareCryptoAction(input: CryptoCapabilityRouterInput & {
   toAsset?: string;
 }): Promise<CryptoPreparedAction> {
   const intent = normalizeCryptoIntent(input.intent);
+  // Personal (`user:`) wallets never auto-spend. An explicit, per-action request
+  // ("send X from my wallet") still works — it just always requires a fresh
+  // human confirmation and never takes the no-human-in-the-loop auto path.
+  const isPersonalWallet = String(input.agentId || "").startsWith("user:");
   const capabilityMap = await getCryptoCapabilityMap(input);
   const selected = capabilityMap.selected;
   if (!selected) {
@@ -218,8 +222,10 @@ export async function prepareCryptoAction(input: CryptoCapabilityRouterInput & {
 
   const endpoint = selected.endpoints.find((item) => item.intent === intent) ?? selected.endpoints[0];
   const requestBody = requestBodyForIntent(selected.provider, intent, input);
-  const autoSendPrivateTransfer = intent === "private-transfer" && canAutoSendVeilTransfer(input.wallet);
-  const requiresApproval = (selected.requiresApproval && !autoSendPrivateTransfer) || bankrIntentRequiresApproval(intent, selected.provider);
+  // Personal wallets never take the auto-send/auto-pay bypass and always require
+  // a fresh per-action confirmation (mode stays "prepare", never "execute").
+  const autoSendPrivateTransfer = !isPersonalWallet && intent === "private-transfer" && canAutoSendVeilTransfer(input.wallet);
+  const requiresApproval = isPersonalWallet || (selected.requiresApproval && !autoSendPrivateTransfer) || bankrIntentRequiresApproval(intent, selected.provider);
   const confirmation = confirmationForIntent(intent, selected.provider, input.wallet);
   const crosschainPlan = isCrosschainPreparedIntent(intent)
     ? planCrosschainIntent({

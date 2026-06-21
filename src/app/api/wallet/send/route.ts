@@ -23,7 +23,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({})) as SendUsdcBody;
     const validation = validateSendBody(body);
     if (validation) return validation;
-    if (!body.autoPayEnabled && body.confirmation !== "SEND_USDC") {
+    // Personal (`user:`) wallets never auto-spend: ignore any auto-pay flag so an
+    // explicit SEND_USDC confirmation is always required. The user (or an agent
+    // they tell) can still send "from my wallet" — it just always confirms.
+    const isPersonalWallet = String(body.agentId || "").startsWith("user:");
+    const autoPayEnabled = Boolean(body.autoPayEnabled) && !isPersonalWallet;
+    if (!autoPayEnabled && body.confirmation !== "SEND_USDC") {
       return sendError("Wallet auto-use is off. Type SEND_USDC to confirm this transfer.");
     }
 
