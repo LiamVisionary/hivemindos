@@ -508,6 +508,10 @@ if (Ask-YesNo "Remove .env.local from this checkout?" $false) {
   Ok "Removed .env.local"
 }
 
+if (Ask-YesNo "Remove the HivemindOS MCP server from agent harness configs (Claude, Codex, Gemini, OpenClaw, Hermes, Aeon)?" $true) {
+  & node (Join-Path $Root "scripts\register-mcp-clients.mjs") --remove --targets all
+}
+
 if (Ask-YesNo "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, brain hook, and Hive Pulse commands from ~/.local/bin if they point to this checkout?" $true) {
   $binDir = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".local\bin"
   foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-pulse")) {

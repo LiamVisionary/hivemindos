@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendUsdc } from "@/lib/services/wallet/chain-wallet";
-import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { requireAuth } from "@/lib/utils/server-auth";
-import { evaluateSpend, resolveSpendGovernance } from "@/lib/services/wallet/spend-governance";
-import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
+import { executeGovernedUsdcSend } from "@/lib/services/wallet/governed-send";
 
 type SendUsdcBody = {
   agentId?: string;
@@ -32,59 +29,17 @@ export async function POST(request: NextRequest) {
       return sendError("Wallet auto-use is off. Type SEND_USDC to confirm this transfer.");
     }
 
-    const agentId = body.agentId!.trim();
-    const toAddress = body.toAddress!.trim();
-    const amountUsd = Number(body.amountUsd);
-    const stored = await getWalletSecret(agentId);
-    if (!stored) return NextResponse.json({ ok: false, error: "No local wallet exists for this agent." }, { status: 404 });
-
-    // Governance: company kill switch, cumulative budgets, and approval escalation.
-    // resolveSpendGovernance also covers company members that lack their own wallet
-    // config, so the company kill switch/budgets bind for them too.
-    const governance = await resolveSpendGovernance(agentId);
-    let grantId: string | undefined;
-    let companyId: string | undefined;
-    if (governance) {
-      const decision = await evaluateSpend({
-        wallet: governance.wallet,
-        agentName: governance.agentName,
-        kind: "send",
-        asset: "USDC",
-        amountUsd,
-        target: toAddress,
-        approvalToken: body.approvalToken,
-      });
-      if (decision.decision === "block") {
-        return NextResponse.json({ ok: false, status: "blocked", error: decision.reason }, { status: 403 });
-      }
-      if (decision.decision === "approve") {
-        return NextResponse.json(
-          { ok: false, status: "pending_approval", error: decision.reason, approval: decision.approval },
-          { status: 202 },
-        );
-      }
-      grantId = decision.grant?.id;
-      companyId = decision.companyId;
-    }
-
-    const result = await sendUsdc({
-      network: stored.info.network,
-      secret: stored.secret,
-      fromAddress: stored.info.address,
-      toAddress,
-      amountUsd,
+    const result = await executeGovernedUsdcSend({
+      agentId: body.agentId!.trim(),
+      toAddress: body.toAddress!.trim(),
+      amountUsd: Number(body.amountUsd),
+      approvalToken: body.approvalToken,
     });
-    await appendSpend({
-      agentId,
-      companyId,
-      kind: "send",
-      asset: "USDC",
-      amountUsd,
-      target: shortTarget(toAddress),
-      status: "executed",
-      approvalId: grantId,
-    }).catch(() => {});
-    return NextResponse.json({ ok: true, signature: result.signature, network: stored.info.network });
+    if (!result.ok) {
+      const status = result.status === "not_found" ? 404 : result.status === "blocked" ? 403 : result.status === "pending_approval" ? 202 : 400;
+      return NextResponse.json({ ok: false, status: result.status === "error" ? undefined : result.status, error: result.error, approval: result.approval }, { status });
+    }
+    return NextResponse.json({ ok: true, signature: result.signature, network: result.network });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Failed to send USDC" }, { status: 500 });
   }

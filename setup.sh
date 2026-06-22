@@ -1333,6 +1333,15 @@ configure_shared_skills() {
   targets="$(normalize_agent_list "${targets:-none}")"
   info "→ Syncing the shared skill shelf and installing agent hooks… (this can take a moment)"
   ./scripts/seed-shared-skills.sh --import-sources "$imports" --share-targets "$targets"
+  # Tools, not just skills: register the HivemindOS MCP server into each targeted
+  # harness so its agents get HivemindOS tools (fleet, brain, crypto read/prepare,
+  # and the governed send/swap/stock execute tools) regardless of runtime. The
+  # device token stays out of the harness config — the server reads it from the
+  # checkout via HIVE_ENV_PROJECT_ROOT. Only installed harnesses are touched.
+  if [[ "$targets" != "none" ]]; then
+    info "→ Registering the HivemindOS MCP tool server into installed agent harnesses…"
+    node "$ROOT/scripts/register-mcp-clients.mjs" --targets "$targets" || warn "MCP client registration reported issues; harness tools may need a manual re-run"
+  fi
 }
 
 tailnet_peer_collector_urls() {

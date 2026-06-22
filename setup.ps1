@@ -932,6 +932,13 @@ Seed-BundledSharedSkills -VaultPath $vaultPath
 @("codex", "claude", "hermes", "gemini", "openclaw", "aeon") | ForEach-Object {
   Sync-SharedSkillsToRuntime -Agent $_ -VaultPath $vaultPath
 }
+# Tools, not just skills: register the HivemindOS MCP server into installed
+# agent harnesses so their agents get HivemindOS tools (fleet, brain, crypto
+# read/prepare, and the governed send/swap/stock execute tools) regardless of
+# runtime. The device token stays out of harness configs (the server reads it
+# from the checkout via HIVE_ENV_PROJECT_ROOT).
+& node (Join-Path $Root "scripts\register-mcp-clients.mjs") --targets all
+if ($LASTEXITCODE -ne 0) { Warn "MCP client registration reported issues; harness tools may need a manual re-run" }
 Write-HivemindManagedBlock -Path (Join-Path $vaultPath "AGENTS.md") -VaultPath $vaultPath
 Get-AgentInstructionFiles | ForEach-Object { Write-HivemindManagedBlock -Path $_ -VaultPath $vaultPath }
 Install-ClaudeBrainHook

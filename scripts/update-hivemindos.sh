@@ -281,6 +281,15 @@ else
   ok "Dependencies installed"
 fi
 
+# Refresh the HivemindOS MCP tool registration in installed agent harnesses.
+# Re-running here self-heals the recorded `node` path (a Node upgrade changes it)
+# and picks up harnesses installed since the last run. No-op for harnesses that
+# aren't installed; never writes secrets (token comes from the checkout).
+if [[ "$COLLECTOR_ONLY" != "true" ]]; then
+  info "Refreshing HivemindOS MCP tool registration in installed agent harnesses"
+  node "$ROOT/scripts/register-mcp-clients.mjs" --targets all || warn "MCP client registration refresh reported issues"
+fi
+
 if [[ "$BUILD_DASHBOARD" == "true" ]]; then
   info "Building dashboard"
   pnpm_run build

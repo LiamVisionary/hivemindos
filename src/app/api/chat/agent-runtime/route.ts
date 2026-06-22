@@ -21,15 +21,34 @@ import { executeVeilPrivateTransfer, veilPrivateTransferErrorMessage } from "@/l
 import { getWalletBalance } from "@/lib/services/wallet/chain-wallet";
 import { executeX402Fetch, type X402FetchPolicy, type X402FetchResult } from "@/lib/services/wallet/x402-agent-fetch";
 import {
-  executeBuyStock,
-  discoverBuyStockQuote,
-  BUY_STOCK_CONFIRMATION,
+  executeStockTrade,
+  discoverStockTradeQuote,
+  stockTradeConfirmation,
+  type StockTradeSide,
   type BuyStockPolicy,
   type BuyStockResult,
 } from "@/lib/services/trading/buy-stock";
 import { resolveXStock, supportedXStockTickers } from "@/lib/config/xstocks-tokens";
 import type { AgentTradingVenue } from "@/lib/types/agent-wallet";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
+import { executeGovernedUsdcSend } from "@/lib/services/wallet/governed-send";
+import { SWAP_CONFIRMATION, MAX_SWAP_USD, quoteDexSwap, executeDexSwap } from "@/lib/services/trading/dex-swap";
+import {
+  SEND_CONFIRMATION,
+  parseSendRequest,
+  isSendDraftText,
+  parseSendDraft,
+  buildSendDraftMessage,
+  validateSend,
+  sendCapUsd,
+  networkChainLabel,
+  parseSwapRequest,
+  hasLocalSwapIntent,
+  isSwapDraftText,
+  parseSwapDraft,
+  buildSwapDraftMessage,
+} from "@/lib/services/chat/wallet-action-intents";
+import { resolveWalletSource } from "@/lib/services/chat/wallet-source-resolver";
 import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
 import { recordHoneyUsage } from "@/lib/services/wallet/honey-ledger";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
@@ -158,7 +177,7 @@ const execFileAsync = promisify(execFile);
 type PrivateTransferDraft = { asset: "USDC"; amount: string; recipient: string };
 type PrivateX402Draft = { url: string; method: "GET" | "POST"; maxPayment: string };
 type PublicX402Draft = { url: string; method: "GET" | "POST"; maxPayment: string };
-type BuyStockDraft = { venue: AgentTradingVenue; ticker: string; notionalUsd?: number; qty?: number };
+type BuyStockDraft = { venue: AgentTradingVenue; ticker: string; notionalUsd?: number; qty?: number; side?: StockTradeSide };
 type VeilMcpX402Quote = {
   requiresPayment?: boolean;
   supported?: boolean;
@@ -569,6 +588,222 @@ async function maybePrepareNaturalPublicX402(input: {
   return privateTransferSse(message);
 }
 
+// ---- Plain USDC send rail (/api/wallet/send, incl. personal wallets) --------
+
+function agentWalletFallback(profile: AgentProfile, wallet?: AgentWalletConfig) {
+  return wallet?.walletAddress
+    ? { agentId: profile.id, address: wallet.walletAddress, network: wallet.network }
+    : undefined;
+}
+
+function findSendDraft(messages: IncomingMessage[]) {
+  for (let index = messages.length - 2; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "assistant") continue;
+    const text = messageText(message);
+    if (!isSendDraftText(text)) continue;
+    return parseSendDraft(text);
+  }
+  return null;
+}
+
+async function maybePrepareNaturalSend(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const parsed = parseSendRequest(messageText(latestUserMessage(input.messages)));
+  if (!parsed) return null;
+
+  // USDC to a 0x recipient must come from an EVM wallet.
+  const resolved = await resolveWalletSource(parsed.source, agentWalletFallback(input.profile, input.wallet), "evm");
+  const error = "error" in resolved ? resolved.error : "";
+  const validation = error || validateSend(parsed.amountUsd, "error" in resolved ? 0 : (resolved.isPersonal ? 0 : sendCapUsd(input.wallet)));
+  const message = buildSendDraftMessage({
+    source: "error" in resolved ? undefined : resolved,
+    recipient: parsed.recipient,
+    amountUsd: parsed.amountUsd,
+    validation: validation || undefined,
+  });
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, validation ? "failed" : "completed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.wallet.send.draft", {
+    ...telemetryPayloadForProfile(input.profile),
+    amountUsd: parsed.amountUsd,
+    isPersonal: "error" in resolved ? null : resolved.isPersonal,
+    hasValidationError: Boolean(validation),
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
+async function maybeExecuteConfirmedSend(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const latestText = messageText(latestUserMessage(input.messages)).trim();
+  if (latestText.toUpperCase() !== SEND_CONFIRMATION) return null;
+  const draft = findSendDraft(input.messages);
+  if (!draft) return null;
+
+  // Re-resolve the source from the draft's own From address — never trust a
+  // client-supplied agentId. Personal wallets are gated to explicit confirmation
+  // here (this branch only runs on the SEND_USDC token) and never auto-send.
+  const resolved = await resolveWalletSource({ address: draft.sourceAddress }, agentWalletFallback(input.profile, input.wallet), "evm");
+  if ("error" in resolved) return privateTransferSse(`**Send failed**\n\n${resolved.error}`);
+
+  const result = await executeGovernedUsdcSend({ agentId: resolved.agentId, toAddress: draft.recipient, amountUsd: draft.amountUsd });
+  const message = result.ok
+    ? [
+        "**Send complete**",
+        "",
+        `Sent **$${draft.amountUsd.toFixed(2)} USDC** on **${networkChainLabel(resolved.network)}**`,
+        `To \`${draft.recipient}\``,
+        `From \`${resolved.address}\`${resolved.isPersonal ? " (personal)" : ""}`,
+        `Tx \`${result.signature}\``,
+      ].join("\n")
+    : result.status === "pending_approval"
+      ? `**Approval required**\n\n${result.error}`
+      : `**Send failed**\n\n${result.error}`;
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, result.ok ? "completed" : "failed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.wallet.send.execute", {
+    ...telemetryPayloadForProfile(input.profile),
+    ok: result.ok,
+    isPersonal: resolved.isPersonal,
+    amountUsd: draft.amountUsd,
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
+// ---- Local DEX swap rail (0x on Base / Jupiter on Solana) -------------------
+
+function findSwapDraft(messages: IncomingMessage[]) {
+  for (let index = messages.length - 2; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "assistant") continue;
+    const text = messageText(message);
+    if (!isSwapDraftText(text)) continue;
+    return parseSwapDraft(text);
+  }
+  return null;
+}
+
+async function maybePrepareNaturalSwap(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const text = messageText(latestUserMessage(input.messages));
+  const parsed = parseSwapRequest(text);
+  if (!parsed) return null;
+  // Only the local DEX rail is handled here; generic swaps fall through to Bankr.
+  if (!hasLocalSwapIntent(text, parsed.source)) return null;
+
+  const resolved = await resolveWalletSource(parsed.source, agentWalletFallback(input.profile, input.wallet), parsed.family);
+  let message: string;
+  let failed = true;
+  if ("error" in resolved) {
+    message = buildSwapDraftMessage({ sellToken: parsed.sellToken, buyToken: parsed.buyToken, amountHuman: parsed.amountHuman, maxUsd: MAX_SWAP_USD, validation: resolved.error });
+  } else {
+    const stored = await getWalletSecret(resolved.agentId);
+    if (!stored) {
+      message = buildSwapDraftMessage({ sellToken: parsed.sellToken, buyToken: parsed.buyToken, amountHuman: parsed.amountHuman, maxUsd: MAX_SWAP_USD, validation: "That wallet has no signing key available." });
+    } else {
+      let quoteLine = "";
+      let validation = "";
+      try {
+        const quote = await quoteDexSwap({ agentId: resolved.agentId, network: stored.info.network, fromAddress: stored.info.address, secret: stored.secret, sellToken: parsed.sellToken, buyToken: parsed.buyToken, amountHuman: parsed.amountHuman });
+        quoteLine = `You get ≈ **${quote.buyAmount.toPrecision(6)} ${quote.buy}** for ${quote.sellAmount} ${quote.sell} (≈ $${quote.valueUsd.toFixed(2)})`;
+      } catch (error) {
+        validation = error instanceof Error ? error.message : "Could not price this swap.";
+      }
+      failed = Boolean(validation);
+      message = buildSwapDraftMessage({ source: resolved, sellToken: parsed.sellToken, buyToken: parsed.buyToken, amountHuman: parsed.amountHuman, quoteLine, maxUsd: MAX_SWAP_USD, validation: validation || undefined });
+    }
+  }
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, failed ? "failed" : "completed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.wallet.swap.draft", {
+    ...telemetryPayloadForProfile(input.profile),
+    sellToken: parsed.sellToken,
+    buyToken: parsed.buyToken,
+    amountHuman: parsed.amountHuman,
+    isPersonal: "error" in resolved ? null : resolved.isPersonal,
+    failed,
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
+async function maybeExecuteConfirmedSwap(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const latestText = messageText(latestUserMessage(input.messages)).trim();
+  if (latestText.toUpperCase() !== SWAP_CONFIRMATION) return null;
+  const draft = findSwapDraft(input.messages);
+  if (!draft) return null;
+
+  const family = draft.sourceAddress.startsWith("0x") ? "evm" : "solana";
+  const resolved = await resolveWalletSource({ address: draft.sourceAddress }, agentWalletFallback(input.profile, input.wallet), family);
+  if ("error" in resolved) return privateTransferSse(`**Swap failed**\n\n${resolved.error}`);
+  const stored = await getWalletSecret(resolved.agentId);
+  if (!stored) return privateTransferSse("**Swap failed**\n\nNo signing key for that wallet.");
+
+  let message: string;
+  let ok = false;
+  try {
+    const result = await executeDexSwap({
+      agentId: resolved.agentId,
+      network: stored.info.network,
+      fromAddress: stored.info.address,
+      secret: stored.secret,
+      sellToken: draft.sellToken,
+      buyToken: draft.buyToken,
+      amountHuman: draft.amountHuman,
+      confirmation: SWAP_CONFIRMATION,
+    });
+    ok = true;
+    message = [
+      "**Swap complete**",
+      "",
+      result.detail,
+      `On **${networkChainLabel(result.network)}** from \`${resolved.address}\`${resolved.isPersonal ? " (personal)" : ""}`,
+      `Tx \`${result.reference}\``,
+    ].filter(Boolean).join("\n");
+  } catch (error) {
+    message = `**Swap failed**\n\n${error instanceof Error ? error.message : "Swap failed."}`;
+  }
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, ok ? "completed" : "failed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.wallet.swap.execute", {
+    ...telemetryPayloadForProfile(input.profile),
+    ok,
+    isPersonal: resolved.isPersonal,
+    sellToken: draft.sellToken,
+    buyToken: draft.buyToken,
+    amountHuman: draft.amountHuman,
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
 // ---- Buy-stock rail (unified Alpaca / xStocks tool) -------------------------
 
 function buyStockCapUsd(wallet?: AgentWalletConfig): number {
@@ -614,8 +849,9 @@ function scanBuyStockTicker(text: string): string | null {
 
 function parseBuyStockRequest(text: string, wallet?: AgentWalletConfig): BuyStockDraft | null {
   if (!text) return null;
-  if (/https?:\/\//i.test(text)) return null; // URL present -> x402 territory, not a stock buy.
-  if (!/\b(buy|purchase|invest|acquire|long)\b/i.test(text)) return null;
+  if (/https?:\/\//i.test(text)) return null; // URL present -> x402 territory, not a stock trade.
+  const isSell = /\b(sell|liquidate|offload|dump)\b/i.test(text);
+  if (!isSell && !/\b(buy|purchase|invest|acquire|long)\b/i.test(text)) return null;
   if (!/\b(stock|stocks|share|shares|equit|ticker|xstock|alpaca)\b/i.test(text) && !/\$\s*\d/.test(text)) return null;
 
   const venue = detectBuyStockVenue(text, wallet);
@@ -629,7 +865,7 @@ function parseBuyStockRequest(text: string, wallet?: AgentWalletConfig): BuyStoc
     ?? text.match(/(\d+(?:\.\d{1,2})?)\s*(?:usdc|usd|dollars?|bucks)\b/i)
     ?? text.match(/\b(?:for|worth)\s+\$?(\d+(?:\.\d{1,2})?)\b/i);
 
-  const draft: BuyStockDraft = { venue, ticker };
+  const draft: BuyStockDraft = { venue, ticker, side: isSell ? "sell" : "buy" };
   if (sharesMatch && venue === "alpaca") draft.qty = Number(sharesMatch[1]);
   if (amountMatch) draft.notionalUsd = Number(amountMatch[1]);
   if (draft.notionalUsd == null && draft.qty == null) return null;
@@ -637,17 +873,18 @@ function parseBuyStockRequest(text: string, wallet?: AgentWalletConfig): BuyStoc
 }
 
 function isBuyStockDraftText(text: string) {
-  return /\*{0,2}Buy stock ready\*{0,2}/i.test(text);
+  return /\*{0,2}(Buy|Sell) stock ready\*{0,2}/i.test(text);
 }
 
 function parseBuyStockDraft(text: string): BuyStockDraft | null {
   const venueMatch = text.match(/Venue\s+`?(alpaca|xstocks)`?/i);
   if (!venueMatch) return null;
   const venue = venueMatch[1].toLowerCase() as AgentTradingVenue;
-  const qtyForm = text.match(/Buy\s+\*\*(\d+(?:\.\d+)?)\*\*\s+shares?(?:\(s\))?\s+of\s+\*\*([A-Za-z][A-Za-z.]{0,9})\*\*/i);
-  if (qtyForm) return { venue, ticker: qtyForm[2].toUpperCase(), qty: Number(qtyForm[1]) };
-  const notionalForm = text.match(/Buy\s+\*\*([A-Za-z][A-Za-z.]{0,9})\*\*\s+for\s+~?\$(\d+(?:\.\d{1,2})?)/i);
-  if (notionalForm) return { venue, ticker: notionalForm[1].toUpperCase(), notionalUsd: Number(notionalForm[2]) };
+  const sideOf = (verb: string): StockTradeSide => (verb.toLowerCase() === "sell" ? "sell" : "buy");
+  const qtyForm = text.match(/(Buy|Sell)\s+\*\*(\d+(?:\.\d+)?)\*\*\s+shares?(?:\(s\))?\s+of\s+\*\*([A-Za-z][A-Za-z.]{0,9})\*\*/i);
+  if (qtyForm) return { venue, side: sideOf(qtyForm[1]), ticker: qtyForm[3].toUpperCase(), qty: Number(qtyForm[2]) };
+  const notionalForm = text.match(/(Buy|Sell)\s+\*\*([A-Za-z][A-Za-z.]{0,9})\*\*\s+for\s+~?\$(\d+(?:\.\d{1,2})?)/i);
+  if (notionalForm) return { venue, side: sideOf(notionalForm[1]), ticker: notionalForm[2].toUpperCase(), notionalUsd: Number(notionalForm[3]) };
   return null;
 }
 
@@ -667,54 +904,59 @@ function findBuyStockDraft(messages: IncomingMessage[]): BuyStockDraft | null {
 }
 
 function validateBuyStockDraft(wallet: AgentWalletConfig | undefined, draft: BuyStockDraft, executing: boolean): string {
+  const side = draft.side ?? "buy";
   if (!wallet) return "No wallet is configured for this agent.";
-  if (!wallet.tradingVenue) return "Stock buying is off. Set a trading venue (alpaca or xstocks) for this agent first.";
-  if (executing && !wallet.enabled) return "Wallet spending is off for this agent. Turn Spend on before buying.";
+  if (!wallet.tradingVenue) return "Stock trading is off. Set a trading venue (alpaca or xstocks) for this agent first.";
+  if (executing && !wallet.enabled) return "Wallet spending is off for this agent. Turn Spend on before trading.";
   const cap = buyStockCapUsd(wallet);
   if (draft.notionalUsd != null) {
     if (!(draft.notionalUsd > 0)) return "Trade amount must be a positive USD value.";
-    if (cap > 0 && draft.notionalUsd > cap) return `Trade exceeds this agent's per-trade cap ($${cap.toFixed(2)}).`;
+    // The per-trade cap bounds spend (buys); a sell increases USDC, so it isn't capped here.
+    if (side === "buy" && cap > 0 && draft.notionalUsd > cap) return `Trade exceeds this agent's per-trade cap ($${cap.toFixed(2)}).`;
   }
   if (draft.venue === "xstocks") {
     if (!resolveXStock(draft.ticker)) return `"${draft.ticker}" is not a verified xStock. Supported: ${supportedXStockTickers().join(", ")}.`;
     if (wallet.network !== "solana:mainnet") return "xStocks swaps require a Solana mainnet wallet.";
-    if (draft.qty != null && draft.notionalUsd == null) return "On-chain xStock buys are sized in USDC, not share count — give a $ amount.";
+    if (draft.qty != null && draft.notionalUsd == null) return "On-chain xStock trades are sized in USDC, not share count — give a $ amount.";
   }
-  if (draft.notionalUsd == null && draft.qty == null) return "Tell me how much to buy — a $ amount, or a share count for Alpaca.";
+  if (draft.notionalUsd == null && draft.qty == null) return `Tell me how much to ${side} — a $ amount, or a share count for Alpaca.`;
   return "";
 }
 
 function buyStockDraftMessage(draft: BuyStockDraft, wallet: AgentWalletConfig | undefined, quoteDetail: string, validation?: string) {
+  const side = draft.side ?? "buy";
+  const verb = side === "sell" ? "Sell" : "Buy";
   if (validation) {
-    return ["**Buy stock unavailable**", "", validation, "", "Fix this blocker, then ask again."].join("\n");
+    return [`**${verb} stock unavailable**`, "", validation, "", "Fix this blocker, then ask again."].join("\n");
   }
   const cap = buyStockCapUsd(wallet);
   const venueLabel = draft.venue === "alpaca"
     ? `\`alpaca\` ${wallet?.alpacaPaper === false ? "(LIVE)" : "(paper)"}`
     : "`xstocks` (on-chain)";
   const sizeLine = draft.qty != null
-    ? `Buy **${draft.qty}** shares of **${draft.ticker}**`
-    : `Buy **${draft.ticker}** for ~$${(draft.notionalUsd ?? 0).toFixed(2)}`;
+    ? `${verb} **${draft.qty}** shares of **${draft.ticker}**`
+    : `${verb} **${draft.ticker}** for ~$${(draft.notionalUsd ?? 0).toFixed(2)}`;
   return [
-    "**Buy stock ready**",
+    `**${verb} stock ready**`,
     "",
     `Venue ${venueLabel}`,
     sizeLine,
     quoteDetail,
-    cap > 0 ? `Per-trade cap **$${cap.toFixed(2)}**` : "",
+    side === "buy" && cap > 0 ? `Per-trade cap **$${cap.toFixed(2)}**` : "",
     "",
     wallet?.enabled
-      ? "Reply `confirm` to buy."
-      : "Wallet spending is off, so I prepared the draft only. Turn Spend on before buying.",
+      ? `Reply \`confirm\` to ${side}.`
+      : `Wallet spending is off, so I prepared the draft only. Turn Spend on before trading.`,
   ].filter(Boolean).join("\n");
 }
 
 function buyStockResultMessage(result: BuyStockResult, executionMs: number) {
+  const verb = result.side === "sell" ? "Sell" : "Buy";
   const head = result.venue === "alpaca"
     ? `${result.paper ? "paper" : "LIVE"} brokerage order`
     : "on-chain swap";
   return [
-    `**Buy stock complete** · ${head}`,
+    `**${verb} stock complete** · ${head}`,
     "",
     result.detail,
     result.priceImpactPct != null ? `Price impact \`${(result.priceImpactPct * 100).toFixed(2)}%\`` : "",
@@ -743,7 +985,8 @@ function buyStockExecutionSse(input: {
       };
       try {
         const { draft } = input;
-        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_START, "Preparing stock buy", `${draft.venue}:${draft.ticker}`);
+        const side = draft.side ?? "buy";
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_START, `Preparing stock ${side}`, `${draft.venue}:${draft.ticker}`);
         const wallet = input.wallet;
         const validation = validateBuyStockDraft(wallet, draft, true);
         if (validation) throw new Error(validation);
@@ -763,15 +1006,16 @@ function buyStockExecutionSse(input: {
           `Venue ${draft.venue}; cap ${formatMoney(buyStockCapUsd(wallet))} USD.`,
           "completed",
         );
-        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS, "Execute buy", "Submitting the order.", "running");
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS, `Execute ${side}`, "Submitting the order.", "running");
         const startedAt = Date.now();
-        const result = await executeBuyStock({
+        const result = await executeStockTrade({
           agentId: input.profile.id,
           policy: buyStockPolicy(wallet!),
           ticker: draft.ticker,
           notionalUsd: draft.notionalUsd ?? 0,
           qty: draft.qty,
-          confirmation: BUY_STOCK_CONFIRMATION,
+          side,
+          confirmation: stockTradeConfirmation(side),
           network,
           secret,
         });
@@ -784,22 +1028,24 @@ function buyStockExecutionSse(input: {
           paper: result.paper,
           elapsedMs: Date.now() - input.routeStartedAt,
         });
-        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE, "Buy finished", `Total ${formatDuration(Date.now() - input.routeStartedAt)}.`, "completed");
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE, `${side === "sell" ? "Sell" : "Buy"} finished`, `Total ${formatDuration(Date.now() - input.routeStartedAt)}.`, "completed");
         await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message, result).catch(() => undefined);
         await finishRuntimeChatSession(input.runtimeSessionId, "completed").catch(() => undefined);
         send({ choices: [{ delta: { content: message } }] });
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
-        const message = `Buy stock failed: ${detail}`;
+        const verb = (input.draft.side ?? "buy") === "sell" ? "Sell" : "Buy";
+        const message = `${verb} stock failed: ${detail}`;
         await recordRouteTelemetry(input.request, "agent_runtime.wallet.buy_stock.failed", {
           ...telemetryPayloadForProfile(input.profile),
           venue: input.draft.venue,
           ticker: input.draft.ticker,
+          side: input.draft.side ?? "buy",
           error: detail,
           elapsedMs: Date.now() - input.routeStartedAt,
         }).catch(() => undefined);
-        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE, "Buy failed", detail, "failed");
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE, `${verb} failed`, detail, "failed");
         await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
         await finishRuntimeChatSession(input.runtimeSessionId, "failed").catch(() => undefined);
         send({ choices: [{ delta: { content: message } }] });
@@ -828,7 +1074,7 @@ async function maybeExecuteConfirmedBuyStock(input: {
   runtimeSessionId: string;
 }): Promise<Response | null> {
   const latestText = messageText(latestUserMessage(input.messages)).trim();
-  if (!/^(confirm|confirmed|yes|yes,? confirm|go ahead|buy it|do it|execute)$/i.test(latestText)) return null;
+  if (!/^(confirm|confirmed|yes|yes,? confirm|go ahead|buy it|sell it|do it|execute)$/i.test(latestText)) return null;
   const draft = findBuyStockDraft(input.messages);
   if (!draft) return null;
   return buyStockExecutionSse({ ...input, draft });
@@ -849,7 +1095,8 @@ async function maybePrepareNaturalBuyStock(input: {
   let quoteDetail = "";
   if (!validation && input.wallet) {
     try {
-      const quote = await discoverBuyStockQuote({
+      const quote = await discoverStockTradeQuote({
+        side: draft.side ?? "buy",
         policy: buyStockPolicy(input.wallet),
         ticker: draft.ticker,
         notionalUsd: draft.notionalUsd ?? 0,
@@ -4760,6 +5007,42 @@ export async function POST(request: NextRequest) {
     runtimeSessionId,
   });
   if (confirmedBankrAction) return confirmedBankrAction;
+  const confirmedSend = await maybeExecuteConfirmedSend({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (confirmedSend) return confirmedSend;
+  const naturalSend = await maybePrepareNaturalSend({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (naturalSend) return naturalSend;
+  const confirmedSwap = await maybeExecuteConfirmedSwap({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (confirmedSwap) return confirmedSwap;
+  const naturalSwap = await maybePrepareNaturalSwap({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (naturalSwap) return naturalSwap;
   const naturalBankrAction = await maybeHandleNaturalBankrAction({
     request,
     routeStartedAt,

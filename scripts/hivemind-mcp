@@ -62,6 +62,21 @@ const TOOLS = [
     inputSchema: cryptoRiskSchema([]),
   },
   {
+    name: "send_usdc",
+    description: "EXECUTE an on-chain USDC transfer from a HivemindOS wallet (governed /api/wallet/send). Moves REAL funds. Requires confirmation \"SEND_USDC\". Personal (user:) wallets always require explicit confirmation and never auto-send; agent wallets honor their Spend policy/caps. Get the human's go-ahead before calling. Consider prepare_crypto_action first to preview.",
+    inputSchema: sendUsdcSchema(),
+  },
+  {
+    name: "dex_swap",
+    description: "EXECUTE a token swap on the local DEX rail (0x on Base / Jupiter on Solana) from a HivemindOS wallet (governed /api/trading/swap). Moves REAL funds, hard-capped at $10 per swap. Requires confirmation \"CONFIRM_SWAP\". Get the human's go-ahead before calling.",
+    inputSchema: dexSwapSchema(),
+  },
+  {
+    name: "stock_trade",
+    description: "EXECUTE a stock buy or sell from a HivemindOS wallet (governed /api/trading) — Alpaca brokerage or on-chain xStocks; the venue is resolved from the wallet, never client-supplied. Moves REAL funds unless the wallet is Alpaca paper. Requires confirmation \"CONFIRM_BUY\" for buys or \"CONFIRM_SELL\" for sells. Get the human's go-ahead before calling.",
+    inputSchema: stockTradeSchema(),
+  },
+  {
     name: "compile_brain_knowledge",
     description: "Compile source text into HivemindOS compiled-knowledge wiki pages with entities, concepts, summaries, frontmatter, and wikilinks.",
     inputSchema: knowledgeCompileSchema(),
@@ -300,6 +315,51 @@ function sharedContractSchema() {
   };
 }
 
+function sendUsdcSchema() {
+  return {
+    type: "object",
+    required: ["agentId", "toAddress", "amountUsd", "confirmation"],
+    properties: {
+      agentId: { type: "string", description: "Wallet/profile id to send FROM. A personal wallet id (user:…) sends from the user's own wallet; an agent id sends from that agent's wallet." },
+      toAddress: { type: "string", description: "Recipient address (0x… on Base/EVM)." },
+      amountUsd: { type: "number", description: "USD amount to send (USDC is 1:1 with USD)." },
+      confirmation: { type: "string", description: "Must be \"SEND_USDC\". Only supply with explicit human authorization; personal wallets never auto-send." },
+      approvalToken: { type: "string", description: "Governance approval token, only if a prior call returned pending_approval." },
+    },
+  };
+}
+
+function dexSwapSchema() {
+  return {
+    type: "object",
+    required: ["agentId", "sellToken", "buyToken", "amountHuman", "confirmation"],
+    properties: {
+      agentId: { type: "string", description: "Wallet/profile id to swap from (user:… for a personal wallet)." },
+      sellToken: { type: "string", description: "Token to sell — symbol (USDC, USDT, WETH, ETH, HIVE on Base; SOL, USDC, USDT on Solana) or a token address/mint." },
+      buyToken: { type: "string", description: "Token to buy." },
+      amountHuman: { type: "number", description: "Amount in sell-token units (e.g. 5 = 5 USDC). Capped at ~$10 of value." },
+      confirmation: { type: "string", description: "Must be \"CONFIRM_SWAP\"." },
+      approvalToken: { type: "string" },
+    },
+  };
+}
+
+function stockTradeSchema() {
+  return {
+    type: "object",
+    required: ["agentId", "side", "ticker", "confirmation"],
+    properties: {
+      agentId: { type: "string", description: "Wallet/profile id to trade from. The venue (Alpaca vs xStocks) is resolved from this wallet." },
+      side: { type: "string", enum: ["buy", "sell"], description: "Trade side." },
+      ticker: { type: "string", description: "Stock ticker (e.g. AAPL) or supported xStock symbol." },
+      notionalUsd: { type: "number", description: "USD notional to trade. Provide this or qty." },
+      qty: { type: "number", description: "Share count (Alpaca only). Provide this or notionalUsd." },
+      confirmation: { type: "string", description: "Must be \"CONFIRM_BUY\" for a buy or \"CONFIRM_SELL\" for a sell." },
+      approvalToken: { type: "string" },
+    },
+  };
+}
+
 function readEnvValue(filePath, key) {
   const raw = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : "";
   const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -307,9 +367,19 @@ function readEnvValue(filePath, key) {
   return match?.[1]?.trim().replace(/^['"]|['"]$/g, "") || "";
 }
 
+// The launcher (~/.local/bin/hivemind-mcp) execs this script with
+// HIVE_ENV_PROJECT_ROOT pointing at the checkout. When a harness (Claude Code,
+// Codex, Gemini, …) starts the MCP server its cwd is the user's project, not the
+// checkout, so token/URL discovery must use the repo root the launcher passes
+// rather than cwd. This keeps the device token OUT of each harness's MCP config.
+function projectRoot() {
+  return process.env.HIVE_ENV_PROJECT_ROOT || process.cwd();
+}
+
 function dashboardToken() {
   return process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
     || process.env.HIVE_E2E_DASHBOARD_TOKEN
+    || readEnvValue(path.join(projectRoot(), ".env.local"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN")
     || readEnvValue(path.join(process.cwd(), ".env.local"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN");
 }
 
@@ -319,6 +389,12 @@ function candidateApiBases() {
   if (process.env.NEXT_PUBLIC_APP_URL) values.push(process.env.NEXT_PUBLIC_APP_URL);
   if (process.env.DASHBOARD_URL) values.push(process.env.DASHBOARD_URL);
   if (process.env.PORT) values.push(`http://127.0.0.1:${process.env.PORT}`);
+  // Honor a custom URL/port persisted in the checkout's .env.local.
+  const rootEnv = path.join(projectRoot(), ".env.local");
+  const rootUrl = readEnvValue(rootEnv, "HIVEMINDOS_APP_URL") || readEnvValue(rootEnv, "NEXT_PUBLIC_APP_URL");
+  if (rootUrl) values.push(rootUrl);
+  const rootPort = readEnvValue(rootEnv, "PORT");
+  if (rootPort) values.push(`http://127.0.0.1:${rootPort}`);
   for (const port of [5020, 5021, 5022, 5023, 5024, 5025]) values.push(`http://127.0.0.1:${port}`);
   return [...new Set(values.map((value) => String(value).replace(/\/+$/, "")))];
 }
@@ -418,6 +494,38 @@ async function callTool(name, args = {}) {
   }
   if (name === "crypto_risk_monitor") {
     return callDashboard("/api/crypto/risk-monitor", "POST", cryptoRiskArgs(args));
+  }
+  if (name === "send_usdc") {
+    return callDashboard("/api/wallet/send", "POST", {
+      agentId: args.agentId,
+      toAddress: args.toAddress,
+      amountUsd: args.amountUsd,
+      confirmation: args.confirmation,
+      approvalToken: args.approvalToken,
+    });
+  }
+  if (name === "dex_swap") {
+    return callDashboard("/api/trading/swap", "POST", {
+      action: "execute",
+      agentId: args.agentId,
+      sellToken: args.sellToken,
+      buyToken: args.buyToken,
+      amountHuman: args.amountHuman,
+      confirmation: args.confirmation,
+      approvalToken: args.approvalToken,
+    });
+  }
+  if (name === "stock_trade") {
+    return callDashboard("/api/trading", "POST", {
+      action: "execute",
+      agentId: args.agentId,
+      side: args.side,
+      ticker: args.ticker,
+      notionalUsd: args.notionalUsd,
+      qty: args.qty,
+      confirmation: args.confirmation,
+      approvalToken: args.approvalToken,
+    });
   }
   if (name === "compile_brain_knowledge") {
     return callDashboard("/api/brain/knowledge", "POST", {

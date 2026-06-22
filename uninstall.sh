@@ -623,6 +623,10 @@ if ask "Remove .env.local from this checkout?" "no"; then
   ok "Removed .env.local"
 fi
 
+if ask "Remove the HivemindOS MCP server from agent harness configs (Claude, Codex, Gemini, OpenClaw, Hermes, Aeon)?" "yes"; then
+  node "$ROOT/scripts/register-mcp-clients.mjs" --remove --targets all || true
+fi
+
 if ask "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, brain hook, and Hive Pulse commands from ~/.local/bin if they point to this checkout?" "yes"; then
   for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-handoff hivemind-mcp hive-update hive-brain hive-brain-hook hive-pulse; do
     command_path="$HOME/.local/bin/$command_name"
