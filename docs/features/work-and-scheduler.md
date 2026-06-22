@@ -98,11 +98,13 @@ The API exposes this through `/api/kanban` actions:
 
 ### Zero-Human Company Learning Loops
 
+For the full company cockpit and launch flow, see [Zero Human Companies](zero-human-companies.html).
+
 Zero-human companies use the same loop contract as their private learning layer. When a company launches its apex goal, HivemindOS decomposes the goal into Work Board tasks and attaches an optimizer loop to each dispatched task.
 
 The default company loop is non-blocking at creation time: agents can finish useful work, while eval gates, evidence requirements, experiment candidates, and Pareto frontier metadata are preserved for later review. This gives the company a model-independent "company veteran" layer made of outcomes, artifacts, workflows, receipts, avoided failure modes, and private eval structure.
 
-The Zero Human Company cockpit summarizes that layer as token capital:
+The Zero Human Company cockpit summarizes that layer as capability capital:
 
 - learning assets from completed work, durable outputs, committed experiments, and anti-patterns
 - workflow assets from reusable task skills and committed loop branches

@@ -71,10 +71,33 @@ export type TradingReadiness = {
   ok: boolean;
   confirmations: { buy: string; sell: string };
   venues: {
-    alpaca: { configured: boolean; credentials: Array<{ key: string; present: boolean }> };
+    alpaca: {
+      configured: boolean;
+      paper: { configured: boolean; dedicated: boolean; keys: string[] };
+      live: { configured: boolean; keys: string[] };
+      credentials: Array<{ key: string; present: boolean }>;
+    };
     xstocks: { supportedTickers: string[] };
   };
-  agents: Array<{ agentId: string; agentName: string; venue?: StockVenue; paper: boolean; enabled: boolean }>;
+  agents: Array<{ agentId: string; agentName: string; venue?: StockVenue; paper: boolean; liveEnabled: boolean; enabled: boolean }>;
+};
+
+export type AlpacaPosition = {
+  symbol: string;
+  qty: number;
+  side: string;
+  marketValue: number;
+  costBasis: number;
+  avgEntryPrice: number;
+  currentPrice: number;
+  unrealizedPlUsd: number;
+  unrealizedPlPct: number;
+};
+
+export type AlpacaPortfolio = {
+  paper: boolean;
+  account: { status: string; currency: string; equity: number; cash: number; buyingPower: number; portfolioValue: number };
+  positions: AlpacaPosition[];
 };
 
 export type StockQuote = {
@@ -172,10 +195,14 @@ export async function fetchTradingReadiness(): Promise<TradingReadiness | null> 
   return data.ok ? (data as TradingReadiness) : null;
 }
 
-export async function quoteStockTrade(params: { agentId: string; side: "buy" | "sell"; ticker: string; notionalUsd: number }): Promise<{ ok: boolean; error?: string; quote?: StockQuote; confirmation?: string }> {
+export async function quoteStockTrade(params: { agentId: string; side: "buy" | "sell"; ticker: string; notionalUsd: number; paper: boolean }): Promise<{ ok: boolean; error?: string; quote?: StockQuote; confirmation?: string }> {
   return postJson("/api/trading", { action: "quote", ...params });
 }
 
-export async function executeStockTrade(params: { agentId: string; side: "buy" | "sell"; ticker: string; notionalUsd: number; confirmation: string }): Promise<{ ok: boolean; error?: string; result?: StockTradeResult }> {
+export async function executeStockTrade(params: { agentId: string; side: "buy" | "sell"; ticker: string; notionalUsd: number; confirmation: string; paper: boolean }): Promise<{ ok: boolean; error?: string; result?: StockTradeResult }> {
   return postJson("/api/trading", { action: "execute", ...params });
+}
+
+export async function fetchStockPortfolio(agentId: string, paper: boolean): Promise<{ ok: boolean; error?: string; portfolio?: AlpacaPortfolio | null; note?: string }> {
+  return postJson("/api/trading", { action: "portfolio", agentId, paper });
 }

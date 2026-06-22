@@ -87,6 +87,9 @@ type CollectorCapabilities = {
   skillInventory?: boolean;
   skillAutoSync?: boolean;
   runtimes?: string[];
+  runtimeState?: boolean;
+  runtimeStateRuntimes?: string[];
+  runtimeStateSync?: boolean;
   syncthing?: boolean;
   defaultSyncPath?: string;
 };

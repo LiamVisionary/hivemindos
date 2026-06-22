@@ -418,6 +418,9 @@ export interface AgentProfile {
     skillInventory?: boolean;
     skillAutoSync?: boolean;
     runtimes?: string[];
+    runtimeState?: boolean;
+    runtimeStateRuntimes?: string[];
+    runtimeStateSync?: boolean;
     syncthing?: boolean;
     defaultSyncPath?: string;
   };
@@ -464,6 +467,11 @@ export interface SharedVaultConfig {
   noteTaskImportFolders: string;
   noteTaskImportEnabled: boolean;
   tradingBrainEnabled: boolean;
+  // Off by default. When on, this machine pulls every same-owner peer's portable
+  // runtime state (skills, memories, non-secret config) and reconciles it into
+  // its own runtime dirs (backup-first, 3-way merge, conflict-copies). Provider
+  // keys travel via the shared hive env, never inside the synced state.
+  runtimeStateSyncEnabled: boolean;
   skillAutoSyncAll: boolean;
   skillAutoSync: Record<
     string,
@@ -586,6 +594,7 @@ export const DEFAULT_SHARED_VAULT: SharedVaultConfig = {
   noteTaskImportFolders: "Projects\nIntake\nMemory",
   noteTaskImportEnabled: false,
   tradingBrainEnabled: false,
+  runtimeStateSyncEnabled: false,
   skillAutoSyncAll: false,
   skillAutoSync: {},
   gbrain: {

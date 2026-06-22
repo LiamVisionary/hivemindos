@@ -35,8 +35,13 @@ description: Local-first agent fleet control room documentation.
 <div class="docGrid">
   <section class="docCard">
     <h3>Feature Guide</h3>
-    <p>Tour the product surface by domain: Fleet, agents, chat, work, scheduler, brain, env, files, notifications, MiroShark, wallets, token rails, Honey, HIVE, and x402.</p>
+    <p>Tour the product surface by domain: Fleet, agents, chat, Zero Human Companies, work, scheduler, brain, env, files, notifications, MiroShark, wallets, token rails, Honey, HIVE, and x402.</p>
     <a href="features/">Open features</a>
+  </section>
+  <section class="docCard">
+    <h3>Zero Human Companies</h3>
+    <p>See how agent-run company cockpits connect charters, crews, apex goals, approvals, budgets, Work Board dispatch, and private learning loops.</p>
+    <a href="features/zero-human-companies.html">Open company docs</a>
   </section>
   <section class="docCard">
     <h3>Diagrams And Maps</h3>

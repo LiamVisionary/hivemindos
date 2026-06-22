@@ -57,7 +57,7 @@ export interface Burn {
   runway: number;
 }
 
-export interface TokenCapital {
+export interface CapabilityCapital {
   score: number;
   learningAssets: number;
   workflowAssets: number;
@@ -126,7 +126,7 @@ export interface Colony {
   apex: ApexGoal;
   workBlock: WorkBlock;
   burn: Burn;
-  tokenCapital: TokenCapital;
+  capabilityCapital: CapabilityCapital;
   revenue?: Revenue;
   velocity: number[];
   approvals: Approval[];

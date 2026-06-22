@@ -46,12 +46,17 @@ The product starts with machines and agents. Fleet tells you what is online, whi
 
 ## Work Loop
 
-Work is where operator intent turns into agent execution. The board captures rough ideas, promotes ready tasks, tracks claimed work, stores comments and run records, and turns finished output into deliverables. Scheduler adds repeated background work. Chat can launch `/swarm [number]` agent-team passes for parallel role-specific analysis, or `/swarm-goal <build request>` to rewrite a loose build request and hand it to Queen Bee for parallel agent execution. Swarm and MiroShark handle rehearsal, `/swarm-sim` simulations, and heavier analysis workflows.
+Work is where operator intent turns into agent execution. The board captures rough ideas, promotes ready tasks, tracks claimed work, stores comments and run records, and turns finished output into deliverables. Zero Human Companies add a company cockpit around that loop: charters, crews, budgets, approvals, apex goals, and private learning loops. Scheduler adds repeated background work. Chat can launch `/swarm [number]` agent-team passes for parallel role-specific analysis, or `/swarm-goal <build request>` to rewrite a loose build request and hand it to Queen Bee for parallel agent execution. Swarm and MiroShark handle rehearsal, `/swarm-sim` simulations, and heavier analysis workflows.
 
 <div class="docGrid">
   <section class="docCard">
+    <h3>Zero Human Companies</h3>
+    <p>Agent-run company cockpits with charters, crews, apex goals, approvals, budgets, kill switches, Work Board dispatch, and capability-capital learning summaries.</p>
+    <a href="zero-human-companies.html">Open company docs</a>
+  </section>
+  <section class="docCard">
     <h3>Work Board And Scheduler</h3>
-    <p>Kanban tasks, zero-human company learning loops, project provenance, Code Proof badges, agent dispatch, deliverables, schedules, machine-aware folder picking, background jobs, and work history.</p>
+    <p>Kanban tasks, loop contracts, eval gates, project provenance, Code Proof badges, agent dispatch, deliverables, schedules, machine-aware folder picking, background jobs, and work history.</p>
     <a href="work-and-scheduler.html">Open work docs</a>
   </section>
   <section class="docCard">

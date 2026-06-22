@@ -423,6 +423,7 @@ function requestJson(base, route, method = "GET", body) {
         if (res.statusCode < 200 || res.statusCode >= 300 || parsed?.ok === false) {
           const error = new Error(parsed?.error || `${base} returned HTTP ${res.statusCode}`);
           error.payload = parsed;
+          error.statusCode = res.statusCode;
           reject(error);
           return;
         }
@@ -443,7 +444,14 @@ async function callDashboard(route, method, body) {
       return await requestJson(base, route, method, body);
     } catch (error) {
       lastError = error;
-      if (error?.payload?.needsUserInput) throw error;
+      // An explicit JSON {ok:false} from a reachable base is authoritative — the
+      // request reached the real dashboard and was rejected for a business reason
+      // (validation, governance, a broker rejection). Surface it immediately rather
+      // than sweeping to the next port and masking it with a connection error.
+      // Only 5xx / non-JSON / connection failures mean "wrong or sick base, try next".
+      const status = error?.statusCode;
+      const reachedRealApi = error?.payload?.ok === false && (status === undefined || status < 500);
+      if (error?.payload?.needsUserInput || reachedRealApi) throw error;
     }
   }
   throw lastError || new Error("No HivemindOS dashboard API could be reached.");

@@ -7,8 +7,8 @@
 import type {
   Company,
   CompanyMember,
+  CompanyCapabilityCapital,
   CompanySpendRollup,
-  CompanyTokenCapital,
 } from "@/lib/types/company";
 import type { KanbanDeliverable, KanbanLoopReceipt, KanbanLoopSpec } from "@/lib/types/kanban";
 import type {
@@ -357,12 +357,12 @@ function taskHasDurableOutput(task: KanbanTaskLite): boolean {
   );
 }
 
-function deriveTokenCapital(
+function deriveCapabilityCapital(
   company: Company,
   rollup: CompanySpendRollup,
   tasks: KanbanTaskLite[],
   agents: Agent[],
-): CompanyTokenCapital {
+): CompanyCapabilityCapital {
   const loops = tasks.map((task) => task.loop).filter(Boolean) as KanbanLoopSpec[];
   const done = tasks.filter((task) => task.status === "done");
   const now = Date.now();
@@ -454,7 +454,7 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
   const alignment = company.alignment ?? (hasWork ? clamp(Math.round((doneCount / totalCount) * 100)) : 0);
   const status = deriveStatus(company, agents, approvals, alignment, hasWork);
   const burn = deriveBurn(company, rollup, agents);
-  const tokenCapital = deriveTokenCapital(company, rollup, liveTasks, agents);
+  const capabilityCapital = deriveCapabilityCapital(company, rollup, liveTasks, agents);
 
   const unit = company.apexGoal?.unit;
   const apex = {
@@ -518,7 +518,7 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
     apex,
     workBlock,
     burn,
-    tokenCapital,
+    capabilityCapital,
     revenue,
     velocity: deriveVelocity(liveTasks),
     approvals: approvals.map((a) => mapApproval(a, company.dailyBudgetUsd)),

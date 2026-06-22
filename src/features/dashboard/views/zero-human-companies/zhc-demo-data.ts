@@ -16,7 +16,7 @@ import type {
   PoolAgent,
   Revenue,
   Role,
-  TokenCapital,
+  CapabilityCapital,
   WorkBlock,
 } from "./types";
 
@@ -97,7 +97,7 @@ export const DEMO_CREATE_SEED_CREW: Agent[] = [
   },
 ];
 
-function tokenCapital(partial: Partial<TokenCapital>): TokenCapital {
+function capabilityCapital(partial: Partial<CapabilityCapital>): CapabilityCapital {
   return {
     score: 78,
     learningAssets: 0,
@@ -228,7 +228,7 @@ export const DEMO_HERO_COLONY: Colony = colony({
   apex: { title: "Reach $1M in monthly store revenue", metric: "30d revenue", current: "$684k", target: "$1M", progress: 68 },
   workBlock: { name: "Cycle - Q3 winning-product push", state: "active", done: 9, total: 15, eta: "5d" },
   burn: { today: 212, cap: 320, week: 1480, runway: 33 },
-  tokenCapital: tokenCapital({
+  capabilityCapital: capabilityCapital({
     score: 91,
     learningAssets: 1240,
     workflowAssets: 34,
@@ -301,13 +301,13 @@ function compactColony(input: {
   approvals?: Approval[];
   governance?: GovEvent[];
   activity?: string[];
-  tokenCapital?: Partial<TokenCapital>;
+  capabilityCapital?: Partial<CapabilityCapital>;
 }): Colony {
   return colony({
     ...input,
     runtimeMix: [...new Set(input.agents.map((member) => member.runtime))].slice(0, 3),
     blurb: `${input.sector} company operated by an autonomous agent crew.`,
-    tokenCapital: tokenCapital(input.tokenCapital ?? {}),
+    capabilityCapital: capabilityCapital(input.capabilityCapital ?? {}),
     velocity: [1, 2, 2, 3, 2, 4, 3, 5, 4, 5, 6, 5, 6, 7],
     approvals: input.approvals ?? [],
     governance: input.governance ?? [],
@@ -350,7 +350,7 @@ export const DEMO_PORTFOLIO_COLONIES: Colony[] = [
     ],
     approvals: [approval("aprt-sandbox", "Partner sandbox credential approval for SDK QA", "Indigo", "access", "med")],
     governance: [gov("reflect", "Regent moved onboarding misses into the SDK release checklist.", "Regent", "2h")],
-    tokenCapital: { score: 84, learningAssets: 212, workflowAssets: 18, evalGates: 29, passedEvalGates: 24, experiments: 41, antiPatterns: 6, learningVelocity: 12, modelIndependence: 88 },
+    capabilityCapital: { score: 84, learningAssets: 212, workflowAssets: 18, evalGates: 29, passedEvalGates: 24, experiments: 41, antiPatterns: 6, learningVelocity: 12, modelIndependence: 88 },
   }),
   compactColony({
     id: "zhc-demo-nectar-markets",
@@ -381,7 +381,7 @@ export const DEMO_PORTFOLIO_COLONIES: Colony[] = [
     ],
     approvals: [approval("nctr-rebalance", "Rebalance strategy capital for spread capture", "Vault", "treasury", "high")],
     governance: [gov("escalate", "Vault escalated capital rotation after risk bands tightened.", "Vault", "33m")],
-    tokenCapital: { score: 79, learningAssets: 366, workflowAssets: 21, evalGates: 44, passedEvalGates: 31, experiments: 83, antiPatterns: 12, learningVelocity: 15, modelIndependence: 82 },
+    capabilityCapital: { score: 79, learningAssets: 366, workflowAssets: 21, evalGates: 44, passedEvalGates: 31, experiments: 83, antiPatterns: 12, learningVelocity: 15, modelIndependence: 82 },
   }),
   compactColony({
     id: "zhc-demo-pollen-studio",
@@ -409,7 +409,7 @@ export const DEMO_PORTFOLIO_COLONIES: Colony[] = [
       issue("PLLN-075", "Audit brand-rule violations", "todo", "Proof", "med", 2),
     ],
     governance: [gov("alert", "Alignment drift crossed the intervention threshold; growth work is no longer tied tightly to retention.", "Bloom", "4h")],
-    tokenCapital: { score: 31, learningAssets: 48, workflowAssets: 7, evalGates: 12, passedEvalGates: 5, experiments: 19, antiPatterns: 14, learningVelocity: 2, modelIndependence: 64 },
+    capabilityCapital: { score: 31, learningAssets: 48, workflowAssets: 7, evalGates: 12, passedEvalGates: 5, experiments: 19, antiPatterns: 14, learningVelocity: 2, modelIndependence: 64 },
   }),
   compactColony({
     id: "zhc-demo-hivemind-press",
@@ -439,7 +439,7 @@ export const DEMO_PORTFOLIO_COLONIES: Colony[] = [
     ],
     approvals: [approval("prss-policy", "Approve source-policy expansion for automated briefs", "Editor", "policy", "med")],
     governance: [gov("escalate", "Editor moved source expansion into board review before scaling distribution.", "Editor", "1h")],
-    tokenCapital: { score: 68, learningAssets: 157, workflowAssets: 16, evalGates: 31, passedEvalGates: 24, experiments: 54, antiPatterns: 8, learningVelocity: 8, modelIndependence: 76 },
+    capabilityCapital: { score: 68, learningAssets: 157, workflowAssets: 16, evalGates: 31, passedEvalGates: 24, experiments: 54, antiPatterns: 8, learningVelocity: 8, modelIndependence: 76 },
   }),
   compactColony({
     id: "zhc-demo-drone-logistics",
@@ -466,7 +466,7 @@ export const DEMO_PORTFOLIO_COLONIES: Colony[] = [
       issue("DRON-092", "Tune route planner for weather holds", "in_progress", "Router", "high", 5),
     ],
     governance: [gov("patch", "Foreman narrowed exception routing so only four manual ops touches remain this week.", "Foreman", "49m")],
-    tokenCapital: { score: 74, learningAssets: 128, workflowAssets: 12, evalGates: 23, passedEvalGates: 19, experiments: 37, antiPatterns: 5, learningVelocity: 10, modelIndependence: 78 },
+    capabilityCapital: { score: 74, learningAssets: 128, workflowAssets: 12, evalGates: 23, passedEvalGates: 19, experiments: 37, antiPatterns: 5, learningVelocity: 10, modelIndependence: 78 },
   }),
 ];
 
@@ -508,7 +508,7 @@ export function createDemoColony(form: CreateForm, crew: Agent[]): Colony {
     },
     workBlock: { name: "Current cycle", state: "ready", done: 0, total: 0, eta: "-" },
     burn: { today: 0, cap, week: 0, runway: 99 },
-    tokenCapital: tokenCapital({
+    capabilityCapital: capabilityCapital({
       notes: [
         "Launch autonomy to attach private eval loops to new work.",
         "No private eval gates have been recorded yet.",

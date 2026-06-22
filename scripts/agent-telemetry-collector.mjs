@@ -59,6 +59,18 @@ import {
 import { agentDid, signWorkReceipt } from "./agent-identity.mjs";
 import { createConfigureSyncthingFolder } from "./syncthing-configure.mjs";
 import { createSyncthingRepair } from "./syncthing-repair.mjs";
+import {
+  RUNTIME_PORTABLE_STATE,
+  portableStateManifest,
+  portableStateRuntimes,
+  packPortableState,
+  importPortableTar,
+  backupPortableState,
+  restorePortableState,
+  listBackups,
+  reconcilePortableState,
+  unpackTarToDir,
+} from "./lib/runtime-portable-state.mjs";
 import bonjourService from "bonjour-service";
 
 const { Bonjour } = bonjourService;
@@ -2494,6 +2506,65 @@ async function tailnetPeerHosts() {
   return hosts;
 }
 
+// The tailnet owner (LoginName) of THIS node, used to gate cross-machine runtime
+// state transfers to the node owner's own fleet. Cached; mirrors the trust model
+// of hivemind-linkd shell.go requireTailnetSelfUser.
+let selfTailnetOwnerCache = { value: "", checkedAt: 0 };
+async function selfTailnetOwner() {
+  const now = Date.now();
+  if (selfTailnetOwnerCache.value && now - selfTailnetOwnerCache.checkedAt < 300_000) {
+    return selfTailnetOwnerCache.value;
+  }
+  try {
+    const { stdout } = await execFileAsync("tailscale", ["status", "--json"], {
+      timeout: 5000,
+      maxBuffer: 1_500_000,
+    });
+    const status = JSON.parse(stdout);
+    const selfUserId = status?.Self?.UserID;
+    const login = String(status?.User?.[selfUserId]?.LoginName || "").trim();
+    if (login) selfTailnetOwnerCache = { value: login, checkedAt: now };
+    return login;
+  } catch {
+    return selfTailnetOwnerCache.value || "";
+  }
+}
+
+// Gate for cross-machine runtime-state transfers (the first authenticated
+// mutation endpoints on this collector). Trust model:
+//   - A request carrying x-hivemind-link-user / x-tailscale-user came through a
+//     hivemind-linkd / tailscale-serve front, which DELETES any inbound copy and
+//     re-stamps the value from a verified WhoIs — so the header is unforgeable.
+//     Allow only when it matches THIS node's own tailnet owner (same-user fleet).
+//   - A request with NO such header from loopback is the local app/script on
+//     this machine — trusted (same user, same box).
+//   - A request with NO such header from a non-loopback address is a raw tailnet
+//     dial that bypassed the identity front (e.g. collector bound 0.0.0.0 with no
+//     linkd). FAIL CLOSED — we cannot attribute it.
+async function requireLinkOwner(request) {
+  const user = String(
+    request.headers["x-hivemind-link-user"] || request.headers["x-tailscale-user"] || "",
+  ).trim();
+  if (user) {
+    const self = await selfTailnetOwner();
+    if (!self) {
+      return { ok: false, status: 503, error: "Runtime-state transfer unavailable: this node's tailnet owner is unknown." };
+    }
+    if (user.toLowerCase() !== self.toLowerCase()) {
+      return { ok: false, status: 403, error: "Runtime-state transfer is limited to this node's owner." };
+    }
+    return { ok: true, user, via: "linkd" };
+  }
+  if (isLoopbackRemote(request)) {
+    return { ok: true, user: "local", via: "loopback" };
+  }
+  return {
+    ok: false,
+    status: 403,
+    error: "Runtime-state transfer requires a hivemind-linkd-fronted tailnet identity.",
+  };
+}
+
 async function runReliabilitySync(reason) {
   if (reliabilitySyncRunning) return reliabilitySyncStatus;
   reliabilitySyncRunning = true;
@@ -2581,6 +2652,193 @@ function startReliabilitySync() {
   setInterval(() => {
     void runReliabilitySync("interval");
   }, reliabilitySyncIntervalMs);
+}
+
+// ---------------------------------------------------------------------------
+// Runtime-state sync (Mechanism C) — off by default. Pull-only: each machine
+// pulls every same-owner peer's portable runtime state and reconciles it into
+// its OWN runtime dirs (backup-first, 3-way merge, conflict-copies). No machine
+// writes another's disk; every transport is linkd-owner-gated (requireLinkOwner
+// on the peer's export endpoint). Mirrors runReliabilitySync's loop/gossip shape.
+// ---------------------------------------------------------------------------
+const runtimeStateSyncConfigPath = join(homedir(), ".hivemindos", "runtime-state-sync.json");
+const runtimeStateSyncIntervalMs = Number(
+  process.env.AGENT_TELEMETRY_RUNTIME_SYNC_INTERVAL_MS || 10 * 60_000,
+);
+const runtimeStatePeerPort = Number(process.env.AGENT_TELEMETRY_RUNTIME_SYNC_PEER_PORT || 0);
+let runtimeStateSyncConfig = null;
+let runtimeStateSyncRunning = false;
+let runtimeStateSyncTimer = null;
+let runtimeStateSyncStatus = {
+  enabled: false,
+  intervalMs: runtimeStateSyncIntervalMs,
+  lastRunAt: null,
+  lastReason: null,
+  lastSummary: null,
+  lastError: null,
+};
+
+function isRuntimeStateSyncEnabled() {
+  return runtimeStateSyncConfig?.enabled === true;
+}
+
+function syncableRuntimes(config = runtimeStateSyncConfig) {
+  const all = portableStateRuntimes();
+  const wanted = Array.isArray(config?.runtimes) && config.runtimes.length ? config.runtimes : all;
+  return all.filter((r) => wanted.includes(r));
+}
+
+async function readRuntimeStateSyncConfig() {
+  const raw = await readFile(runtimeStateSyncConfigPath, "utf-8").catch(() => "");
+  if (!raw.trim()) return { enabled: false, runtimes: [] };
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      enabled: parsed.enabled === true,
+      runtimes: Array.isArray(parsed.runtimes) ? parsed.runtimes.map(String) : [],
+    };
+  } catch {
+    return { enabled: false, runtimes: [] };
+  }
+}
+
+async function writeRuntimeStateSyncConfig(config) {
+  await mkdir(dirname(runtimeStateSyncConfigPath), { recursive: true, mode: 0o700 });
+  await writeFile(runtimeStateSyncConfigPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+}
+
+// Pull one peer's export for one runtime and reconcile it locally.
+async function reconcileRuntimeFromPeer(runtime, host, selfMachineId, seen) {
+  let response;
+  try {
+    response = await fetch(
+      `http://${host}:${runtimeStatePeerPort || port}/runtimes/${runtime}/export-runtime-state`,
+      { method: "POST", signal: AbortSignal.timeout(30_000) },
+    );
+  } catch {
+    return null; // peer offline / not reachable
+  }
+  if (!response.ok) return null; // 403/404/etc — not a same-owner runtime-state collector
+  const peerMachineId = String(response.headers.get("x-hivemind-machine-id") || "").trim();
+  if (peerMachineId) {
+    if (peerMachineId === selfMachineId || seen.has(peerMachineId)) return null;
+    seen.add(peerMachineId);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const tmpTar = join(
+    homedir(),
+    ".hivemindos",
+    "runtime-sync-tmp",
+    `${runtime}-${randomBytes(6).toString("hex")}.tar.gz`,
+  );
+  await mkdir(dirname(tmpTar), { recursive: true, mode: 0o700 });
+  await writeFile(tmpTar, buffer);
+  const snapDir = join(dirname(tmpTar), `snap-${randomBytes(6).toString("hex")}`);
+  try {
+    await unpackTarToDir(tmpTar, snapDir);
+    const result = await reconcilePortableState(runtime, snapDir, {
+      peerKey: peerMachineId || host,
+      peerLabel: String(host).split(".")[0] || host,
+      sharedVaultPath: defaultSyncPath,
+    });
+    return result;
+  } finally {
+    await rm(tmpTar, { force: true });
+    await rm(snapDir, { recursive: true, force: true });
+  }
+}
+
+async function runRuntimeStateSync(reason) {
+  if (runtimeStateSyncRunning) return runtimeStateSyncStatus;
+  runtimeStateSyncConfig = runtimeStateSyncConfig ?? (await readRuntimeStateSyncConfig());
+  if (!isRuntimeStateSyncEnabled()) return runtimeStateSyncStatus;
+  runtimeStateSyncRunning = true;
+  try {
+    const [selfMachineId, hosts] = await Promise.all([
+      stableMachineId().catch(() => ""),
+      tailnetPeerHosts().catch(() => []),
+    ]);
+    const runtimes = syncableRuntimes();
+    const seen = new Set();
+    let adopted = 0;
+    let deleted = 0;
+    let conflicts = 0;
+    let peersConsulted = 0;
+    for (const runtime of runtimes) {
+      const perRuntimeSeen = new Set(seen);
+      for (const host of hosts) {
+        const result = await reconcileRuntimeFromPeer(runtime, host, selfMachineId, perRuntimeSeen).catch(
+          () => null,
+        );
+        if (!result) continue;
+        peersConsulted += 1;
+        adopted += result.adopted.length;
+        deleted += result.deleted.length;
+        conflicts += result.conflicts.length;
+      }
+    }
+    runtimeStateSyncStatus = {
+      ...runtimeStateSyncStatus,
+      enabled: true,
+      lastRunAt: new Date().toISOString(),
+      lastReason: reason,
+      lastSummary: { runtimes, peersConsulted, adopted, deleted, conflicts },
+      lastError: null,
+    };
+    if (adopted || deleted || conflicts) {
+      console.log(
+        `runtime-state sync (${reason}): adopted ${adopted}, deleted ${deleted}, conflicts ${conflicts} across ${runtimes.length} runtime(s)`,
+      );
+    }
+  } catch (error) {
+    runtimeStateSyncStatus = {
+      ...runtimeStateSyncStatus,
+      lastRunAt: new Date().toISOString(),
+      lastReason: reason,
+      lastError: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    runtimeStateSyncRunning = false;
+  }
+  return runtimeStateSyncStatus;
+}
+
+function stopRuntimeStateSync() {
+  if (runtimeStateSyncTimer) clearInterval(runtimeStateSyncTimer);
+  runtimeStateSyncTimer = null;
+}
+
+function startRuntimeStateSync() {
+  stopRuntimeStateSync();
+  runtimeStateSyncStatus = { ...runtimeStateSyncStatus, enabled: isRuntimeStateSyncEnabled() };
+  if (!isRuntimeStateSyncEnabled()) return;
+  setTimeout(() => {
+    void runRuntimeStateSync("startup");
+  }, 60_000);
+  runtimeStateSyncTimer = setInterval(() => {
+    void runRuntimeStateSync("interval");
+  }, runtimeStateSyncIntervalMs);
+}
+
+async function configureRuntimeStateSync(input) {
+  runtimeStateSyncConfig = {
+    enabled: input.enabled === true,
+    runtimes: Array.isArray(input.runtimes) ? input.runtimes.map(String) : [],
+    updatedAt: new Date().toISOString(),
+  };
+  await writeRuntimeStateSyncConfig(runtimeStateSyncConfig);
+  startRuntimeStateSync();
+  return {
+    ok: true,
+    host: hostname(),
+    enabled: isRuntimeStateSyncEnabled(),
+    runtimes: syncableRuntimes(runtimeStateSyncConfig),
+  };
+}
+
+async function initializeRuntimeStateSync() {
+  runtimeStateSyncConfig = await readRuntimeStateSyncConfig();
+  startRuntimeStateSync();
 }
 
 function startSyncthingDetached() {
@@ -5521,6 +5779,9 @@ async function collectorHealthPayload() {
         skillAutoSync: true,
         fileTransfers: true,
         workReceipts: true,
+        runtimeState: true,
+        runtimeStateRuntimes: portableStateRuntimes(),
+        runtimeStateSync: isRuntimeStateSyncEnabled(),
         syncthing: syncthing.installed,
         defaultSyncPath,
       },
@@ -7081,6 +7342,152 @@ const telemetryServer = createServer(async (request, response) => {
     }
     return;
   }
+  const runtimeStateMatch = pathname.match(
+    /^\/runtimes\/([^/]+)\/(export-runtime-state|import-runtime-state|backup-runtime-state|restore-runtime-state|runtime-state-backups)$/,
+  );
+  if (runtimeStateMatch) {
+    const runtimeName = runtimeStateMatch[1];
+    const op = runtimeStateMatch[2];
+    const manifest = portableStateManifest(runtimeName);
+    if (!manifest) {
+      jsonResponse(response, 404, {
+        ok: false,
+        error: `${runtimeName} has no portable-state manifest.`,
+      });
+      return;
+    }
+    const auth = await requireLinkOwner(request);
+    if (!auth.ok) {
+      jsonResponse(response, auth.status || 403, { ok: false, error: auth.error });
+      return;
+    }
+    try {
+      if (op === "export-runtime-state" && request.method === "POST") {
+        // Pack the redacted portable subset and stream it back as a gzip tar.
+        const pack = await packPortableState(runtimeName, { sharedVaultPath: defaultSyncPath });
+        try {
+          const buffer = await readFile(pack.tarPath);
+          response.writeHead(200, {
+            "content-type": "application/gzip",
+            "content-length": buffer.length,
+            "x-hivemind-runtime": runtimeName,
+            "x-hivemind-machine-id": await stableMachineId().catch(() => ""),
+            "x-hivemind-file-count": String(pack.fileCount),
+            "x-hivemind-redactions": String(pack.redactions),
+          });
+          response.end(buffer);
+        } finally {
+          await rm(dirname(pack.tarPath), { recursive: true, force: true });
+        }
+        return;
+      }
+      if (op === "import-runtime-state" && request.method === "POST") {
+        // Overlay an incoming gzip-tar onto this machine's runtime home,
+        // backing up the current subset first. Used by clone-seeding.
+        const body = await readBodyBuffer(request);
+        if (!body || body.length === 0) {
+          jsonResponse(response, 400, { ok: false, error: "A gzip tar body is required." });
+          return;
+        }
+        const tmpPath = join(
+          homedir(),
+          ".hivemindos",
+          "runtime-import-tmp",
+          `${runtimeName}-${randomBytes(6).toString("hex")}.tar.gz`,
+        );
+        await mkdir(dirname(tmpPath), { recursive: true, mode: 0o700 });
+        await writeFile(tmpPath, body);
+        try {
+          const result = await importPortableTar(runtimeName, tmpPath, {
+            sharedVaultPath: defaultSyncPath,
+          });
+          jsonResponse(response, 200, { ...result, host: hostname() });
+        } finally {
+          await rm(tmpPath, { force: true });
+        }
+        return;
+      }
+      if (op === "backup-runtime-state" && request.method === "POST") {
+        const result = await backupPortableState(runtimeName, { sharedVaultPath: defaultSyncPath });
+        jsonResponse(response, 200, { ok: true, ...result, host: hostname() });
+        return;
+      }
+      if (op === "restore-runtime-state" && request.method === "POST") {
+        const rawBody = await readBody(request);
+        const body = rawBody ? JSON.parse(rawBody) : {};
+        const backups = await listBackups(runtimeName);
+        const name = String(body.backup || backups[backups.length - 1] || "");
+        if (!name || !backups.includes(name)) {
+          jsonResponse(response, 404, { ok: false, error: "No matching runtime-state backup found." });
+          return;
+        }
+        const backupPath = join(homedir(), ".hivemindos", "runtime-backups", runtimeName, name);
+        const result = await restorePortableState(runtimeName, backupPath);
+        jsonResponse(response, 200, { ...result, backup: name, host: hostname() });
+        return;
+      }
+      if (op === "runtime-state-backups" && request.method === "GET") {
+        jsonResponse(response, 200, {
+          ok: true,
+          host: hostname(),
+          runtime: runtimeName,
+          backups: await listBackups(runtimeName),
+        });
+        return;
+      }
+      jsonResponse(response, 405, { ok: false, error: "Method not allowed." });
+    } catch (error) {
+      jsonResponse(response, 500, {
+        ok: false,
+        error: error instanceof Error ? error.message : "Runtime-state operation failed.",
+      });
+    }
+    return;
+  }
+  if (pathname === "/runtimes/state-sync") {
+    const auth = await requireLinkOwner(request);
+    if (!auth.ok) {
+      jsonResponse(response, auth.status || 403, { ok: false, error: auth.error });
+      return;
+    }
+    runtimeStateSyncConfig = runtimeStateSyncConfig ?? (await readRuntimeStateSyncConfig());
+    if (request.method === "GET") {
+      jsonResponse(response, 200, {
+        ok: true,
+        host: hostname(),
+        enabled: isRuntimeStateSyncEnabled(),
+        runtimes: syncableRuntimes(),
+        status: runtimeStateSyncStatus,
+      });
+      return;
+    }
+    if (request.method === "POST") {
+      try {
+        const rawBody = await readBody(request);
+        const body = rawBody ? JSON.parse(rawBody) : {};
+        jsonResponse(response, 200, await configureRuntimeStateSync(body));
+      } catch (error) {
+        jsonResponse(response, 400, {
+          ok: false,
+          error: error instanceof Error ? error.message : "Could not configure runtime-state sync.",
+        });
+      }
+      return;
+    }
+    jsonResponse(response, 405, { ok: false, error: "Method not allowed." });
+    return;
+  }
+  if (pathname === "/runtimes/state-sync/run" && request.method === "POST") {
+    const auth = await requireLinkOwner(request);
+    if (!auth.ok) {
+      jsonResponse(response, auth.status || 403, { ok: false, error: auth.error });
+      return;
+    }
+    runtimeStateSyncConfig = runtimeStateSyncConfig ?? (await readRuntimeStateSyncConfig());
+    const status = await runRuntimeStateSync("manual");
+    jsonResponse(response, 200, { ok: true, host: hostname(), status });
+    return;
+  }
   const runtimeIntegrationMatch = pathname.match(
     /^\/runtimes\/([^/]+)\/integrations$/,
   );
@@ -7515,6 +7922,7 @@ telemetryServer.listen(port, host, () => {
   void installedRuntimes().catch(() => {});
   startEnvSyncMaintenance();
   startReliabilitySync();
+  void initializeRuntimeStateSync();
   startSelfReloadWatcher();
 });
 

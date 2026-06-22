@@ -222,6 +222,24 @@ export function BrainConfigPanel(props: any) {
           </label>
 
           <article className={configClass("card")}>
+            <label className={configClass("card", "toggle")} style={{ marginBottom: 6 }}>
+              <input
+                type="checkbox"
+                checked={sharedVault.runtimeStateSyncEnabled ?? false}
+                onChange={(event) => updateSharedVault({ runtimeStateSyncEnabled: event.target.checked })}
+              />
+              Sync agent runtimes across machines
+            </label>
+            <p style={{ margin: 0, fontSize: 12, opacity: 0.75 }}>
+              Off by default. When on, this machine keeps each runtime&apos;s skills, memories and
+              non-secret config reconciled with your other machines (last-writer-wins, with conflict
+              copies — never a silent overwrite). Provider API keys travel via the shared hive env, and
+              login tokens, session history and caches are never copied. Enable it on each machine you
+              want kept in sync.
+            </p>
+          </article>
+
+          <article className={configClass("card")}>
             <label className={configClass("label")}>
               Note task folders
               <textarea

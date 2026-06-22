@@ -34,13 +34,26 @@ import type { AgentTradingVenue, AgentWalletConfig } from "@/lib/types/agent-wal
  * rolling budgets (see executeStockTrade).
  */
 
+// Alpaca issues SEPARATE credentials for the live brokerage and the paper
+// (simulated) account — a live key 401s against paper-api and vice versa. So
+// paper resolves its own env names first and only falls back to the live names
+// for backward compat (the original single-key setups put paper keys here, since
+// the rail defaults to paper).
 const DEFAULT_ALPACA_KEY_ENV = "ALPACA_API_KEY_ID";
 const DEFAULT_ALPACA_SECRET_ENV = "ALPACA_API_SECRET_KEY";
+const DEFAULT_ALPACA_PAPER_KEY_ENV = "ALPACA_PAPER_API_KEY_ID";
+const DEFAULT_ALPACA_PAPER_SECRET_ENV = "ALPACA_PAPER_API_SECRET_KEY";
+const ALPACA_LIVE_BASE = "https://api.alpaca.markets";
+const ALPACA_PAPER_BASE = "https://paper-api.alpaca.markets";
 const JUPITER_BASE = process.env.JUPITER_API_BASE || "https://lite-api.jup.ag";
 const DEFAULT_SLIPPAGE_BPS = 100; // 1.0% — tokenized-equity pools are thinner than majors.
 
 export const BUY_STOCK_CONFIRMATION = "CONFIRM_BUY";
 export const SELL_STOCK_CONFIRMATION = "CONFIRM_SELL";
+
+/** Shared-hive env var names this rail reads, by Alpaca account mode. */
+export const ALPACA_LIVE_ENV_NAMES = [DEFAULT_ALPACA_KEY_ENV, DEFAULT_ALPACA_SECRET_ENV] as const;
+export const ALPACA_PAPER_ENV_NAMES = [DEFAULT_ALPACA_PAPER_KEY_ENV, DEFAULT_ALPACA_PAPER_SECRET_ENV] as const;
 
 /** Trade direction. A "sell" reduces an existing position back into USDC. */
 export type StockTradeSide = "buy" | "sell";
@@ -70,6 +83,13 @@ export type BuyStockInput = {
   ticker: string;
   /** USD value of the trade: the order notional (alpaca) or the USDC in/out leg (xstocks). */
   notionalUsd: number;
+  /**
+   * Per-trade Alpaca account override. Undefined falls back to the wallet's
+   * persisted alpacaPaper. The caller (route) only ever passes `true` to force
+   * paper, or `false` when the persisted policy already permits live — a client
+   * can never escalate a paper-only agent to the live brokerage.
+   */
+  paper?: boolean;
   /** Optional whole-share count for alpaca (overrides notional when present). */
   qty?: number;
   /** Must equal CONFIRM_BUY for a buy, or CONFIRM_SELL for a sell, to execute. */
@@ -155,17 +175,47 @@ function assertAmount(input: BuyStockInput, policy: BuyStockPolicy): number {
 
 // ---- Alpaca (real brokerage) ------------------------------------------------
 
+/** Effective paper/live for this trade: per-trade override, else persisted policy (defaults paper). */
+function resolveAlpacaPaper(input: Pick<BuyStockInput, "paper" | "policy">): boolean {
+  return typeof input.paper === "boolean" ? input.paper : input.policy.alpacaPaper !== false;
+}
+
+async function firstPresentEnv(names: Array<string | undefined>): Promise<{ name: string; value: string } | null> {
+  for (const name of names) {
+    const clean = name?.trim();
+    if (!clean) continue;
+    const value = await hiveEnvValue(clean);
+    if (value) return { name: clean, value };
+  }
+  return null;
+}
+
+/**
+ * Resolve the Alpaca key pair for the chosen account mode. Paper tries its own
+ * env names first, then falls back to the live/default names; live uses only the
+ * live names. Throws a message naming exactly which keys to set.
+ */
+async function resolveAlpacaCreds(policy: BuyStockPolicy, paper: boolean): Promise<{ apiKey: string; apiSecret: string }> {
+  const liveKey = policy.alpacaKeyEnvName?.trim() || DEFAULT_ALPACA_KEY_ENV;
+  const liveSecret = policy.alpacaSecretEnvName?.trim() || DEFAULT_ALPACA_SECRET_ENV;
+  const keyNames = paper ? [DEFAULT_ALPACA_PAPER_KEY_ENV, liveKey] : [liveKey];
+  const secretNames = paper ? [DEFAULT_ALPACA_PAPER_SECRET_ENV, liveSecret] : [liveSecret];
+  const [key, secret] = await Promise.all([firstPresentEnv(keyNames), firstPresentEnv(secretNames)]);
+  if (!key || !secret) {
+    const wanted = paper
+      ? `${DEFAULT_ALPACA_PAPER_KEY_ENV} / ${DEFAULT_ALPACA_PAPER_SECRET_ENV} (or ${liveKey} / ${liveSecret})`
+      : `${liveKey} / ${liveSecret}`;
+    throw new Error(`Alpaca ${paper ? "paper" : "live"} keys not found in shared hive env (${wanted}). Set them with hive-env first.`);
+  }
+  return { apiKey: key.value, apiSecret: secret.value };
+}
+
 async function executeAlpaca(input: BuyStockInput): Promise<BuyStockResult> {
   const side = input.side ?? "buy";
   const underlying = alpacaSymbol(input.ticker);
-  const keyName = input.policy.alpacaKeyEnvName?.trim() || DEFAULT_ALPACA_KEY_ENV;
-  const secretName = input.policy.alpacaSecretEnvName?.trim() || DEFAULT_ALPACA_SECRET_ENV;
-  const [apiKey, apiSecret] = await Promise.all([hiveEnvValue(keyName), hiveEnvValue(secretName)]);
-  if (!apiKey || !apiSecret) {
-    throw new Error(`Alpaca keys not found in shared hive env (${keyName} / ${secretName}). Set them with hive-env first.`);
-  }
-  const paper = input.policy.alpacaPaper !== false;
-  const base = paper ? "https://paper-api.alpaca.markets" : "https://api.alpaca.markets";
+  const paper = resolveAlpacaPaper(input);
+  const { apiKey, apiSecret } = await resolveAlpacaCreds(input.policy, paper);
+  const base = paper ? ALPACA_PAPER_BASE : ALPACA_LIVE_BASE;
   const order = input.qty && input.qty > 0
     ? { symbol: underlying, qty: String(input.qty), side, type: "market", time_in_force: "day" }
     : { symbol: underlying, notional: input.notionalUsd.toFixed(2), side, type: "market", time_in_force: "day" };
@@ -199,6 +249,79 @@ async function executeAlpaca(input: BuyStockInput): Promise<BuyStockResult> {
     acquired: Number.isFinite(filled) ? filled : undefined,
     status: json.status || "accepted",
     detail: `${paper ? "Paper" : "LIVE"} market ${side} of ${underlying} submitted (order ${json.id}, status ${json.status || "accepted"}).`,
+  };
+}
+
+// ---- Alpaca portfolio (read-only account + open positions) ------------------
+
+export type AlpacaPosition = {
+  symbol: string;
+  qty: number;
+  side: string;
+  marketValue: number;
+  costBasis: number;
+  avgEntryPrice: number;
+  currentPrice: number;
+  unrealizedPlUsd: number;
+  unrealizedPlPct: number;
+};
+
+export type AlpacaPortfolio = {
+  paper: boolean;
+  account: {
+    status: string;
+    currency: string;
+    equity: number;
+    cash: number;
+    buyingPower: number;
+    portfolioValue: number;
+  };
+  positions: AlpacaPosition[];
+};
+
+/**
+ * Read the Alpaca account summary + open positions for the chosen mode. Read-only
+ * (no order placed), so no governance gate — but it still uses the mode-correct
+ * credentials, so a paper view never touches the live account.
+ */
+export async function fetchAlpacaPortfolio(input: { policy: BuyStockPolicy; paper: boolean }): Promise<AlpacaPortfolio> {
+  const { apiKey, apiSecret } = await resolveAlpacaCreds(input.policy, input.paper);
+  const base = input.paper ? ALPACA_PAPER_BASE : ALPACA_LIVE_BASE;
+  const headers = { "APCA-API-KEY-ID": apiKey, "APCA-API-SECRET-KEY": apiSecret };
+  const [accountRes, positionsRes] = await Promise.all([
+    fetch(`${base}/v2/account`, { headers, signal: AbortSignal.timeout(20_000) }),
+    fetch(`${base}/v2/positions`, { headers, signal: AbortSignal.timeout(20_000) }),
+  ]);
+  if (!accountRes.ok) {
+    throw new Error(`Alpaca account fetch failed (HTTP ${accountRes.status}). Check the ${input.paper ? "paper" : "live"} keys.`);
+  }
+  const account = (await accountRes.json().catch(() => ({}))) as Record<string, unknown>;
+  const rawPositions = positionsRes.ok ? ((await positionsRes.json().catch(() => [])) as unknown) : [];
+  const positions: AlpacaPosition[] = (Array.isArray(rawPositions) ? rawPositions : []).map((raw) => {
+    const p = raw as Record<string, unknown>;
+    return {
+      symbol: String(p.symbol || ""),
+      qty: Number(p.qty) || 0,
+      side: String(p.side || "long"),
+      marketValue: Number(p.market_value) || 0,
+      costBasis: Number(p.cost_basis) || 0,
+      avgEntryPrice: Number(p.avg_entry_price) || 0,
+      currentPrice: Number(p.current_price) || 0,
+      unrealizedPlUsd: Number(p.unrealized_pl) || 0,
+      unrealizedPlPct: Number(p.unrealized_plpc) || 0,
+    };
+  });
+  return {
+    paper: input.paper,
+    account: {
+      status: String(account.status || "unknown"),
+      currency: String(account.currency || "USD"),
+      equity: Number(account.equity) || 0,
+      cash: Number(account.cash) || 0,
+      buyingPower: Number(account.buying_power) || 0,
+      portfolioValue: Number(account.portfolio_value) || 0,
+    },
+    positions,
   };
 }
 
@@ -316,23 +439,29 @@ export async function executeStockTrade(input: BuyStockInput): Promise<BuyStockR
     throw new Error(`Stock ${side}s need confirmation. Type ${expected} to approve up to $${maxTradeUsd(input.policy).toFixed(2)}.`);
   }
 
-  // Governance pre-flight. The company kill switch binds for BOTH directions, so
+  // A paper trade is simulated against the Alpaca paper account — no real money
+  // moves — so it must NOT debit real rolling budgets or trip approval
+  // escalation, exactly like a sell (an inflow). It's "non-spending" for
+  // governance: we still evaluate with amountUsd 0 so a frozen company kill
+  // switch hard-blocks it, but it never consumes the daily/monthly budget.
+  const isPaperTrade = venue === "alpaca" && resolveAlpacaPaper(input);
+  const nonSpending = side === "sell" || isPaperTrade;
+
+  // Governance pre-flight. The company kill switch binds for ALL trades, so
   // resolveSpendGovernance also covers company members without their own wallet
-  // config. A buy spends USDC -> run the full budget/approval evaluation. A sell
-  // is an inflow, so we evaluate with amountUsd 0: that still hard-blocks on a
-  // frozen company kill switch but never trips a rolling budget or escalation.
+  // config. A live buy spends USDC -> run the full budget/approval evaluation.
   const governance = await resolveSpendGovernance(input.agentId);
   let approvalGrantId: string | undefined;
   let companyId: string | undefined;
-  const spendForGovernance = side === "sell" ? 0 : notionalUsd;
-  if (governance && (side === "sell" || (await shouldEvaluateSpend(governance.wallet, maxTradeUsd(input.policy))))) {
+  const spendForGovernance = nonSpending ? 0 : notionalUsd;
+  if (governance && (nonSpending || (await shouldEvaluateSpend(governance.wallet, maxTradeUsd(input.policy))))) {
     const decision = await evaluateSpend({
       wallet: governance.wallet,
       agentName: governance.agentName,
       kind: "trade",
       asset: "USDC",
       amountUsd: spendForGovernance,
-      target: `${venue}:${input.ticker} ${side}`,
+      target: `${venue}:${input.ticker} ${side}${isPaperTrade ? " (paper)" : ""}`,
       approvalToken: input.approvalToken,
     });
     if (decision.decision !== "allow") throw new Error(decision.reason);
@@ -347,12 +476,12 @@ export async function executeStockTrade(input: BuyStockInput): Promise<BuyStockR
     companyId,
     kind: "trade",
     asset: "USDC",
-    // A sell credits USDC; record its USD value as assetAmount (not amountUsd) so
-    // it shows in activity without counting against the rolling spend budgets,
-    // which sum amountUsd across every kind.
+    // Non-spending trades (sells, paper) record their USD value as assetAmount
+    // (not amountUsd) so they show in activity without counting against the
+    // rolling spend budgets, which sum amountUsd across every kind.
     amountUsd: spendForGovernance,
-    assetAmount: side === "sell" ? notionalUsd : undefined,
-    target: shortTarget(`${venue}:${result.ticker} ${side}`),
+    assetAmount: nonSpending ? notionalUsd : undefined,
+    target: shortTarget(`${venue}:${result.ticker} ${side}${result.paper ? " (paper)" : ""}`),
     status: "executed",
     approvalId: approvalGrantId,
   }).catch(() => {});
@@ -371,17 +500,18 @@ export async function executeBuyStock(input: BuyStockInput): Promise<BuyStockRes
  * alpaca it echoes the notional (a live quote would burn an API call before
  * confirmation).
  */
-export async function discoverStockTradeQuote(input: Pick<BuyStockInput, "side" | "policy" | "ticker" | "notionalUsd" | "slippageBps">): Promise<BuyStockQuote> {
+export async function discoverStockTradeQuote(input: Pick<BuyStockInput, "side" | "policy" | "ticker" | "notionalUsd" | "slippageBps" | "paper">): Promise<BuyStockQuote> {
   const side = input.side ?? "buy";
   const venue = assertVenue(input.policy);
   const notionalUsd = assertAmount({ ...input, agentId: "", ticker: input.ticker, notionalUsd: input.notionalUsd }, input.policy);
   if (venue === "alpaca") {
     const underlying = alpacaSymbol(input.ticker);
+    const paper = resolveAlpacaPaper(input);
     return {
       venue,
       ticker: underlying,
       notionalUsd,
-      detail: `Market ${side} of ${underlying} for ~$${notionalUsd.toFixed(2)} via Alpaca ${input.policy.alpacaPaper === false ? "LIVE" : "paper"}.`,
+      detail: `Market ${side} of ${underlying} for ~$${notionalUsd.toFixed(2)} via Alpaca ${paper ? "paper" : "LIVE"}.`,
     };
   }
   const token = resolveXStock(input.ticker);

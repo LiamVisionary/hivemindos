@@ -48,6 +48,8 @@ sections:
             url: /features/calling.html
           - title: Work And Scheduler
             url: /features/work-and-scheduler.html
+          - title: Zero Human Companies
+            url: /features/zero-human-companies.html
           - title: Brain, Vault, And Skills
             url: /features/brain-vault-and-skills.html
           - title: Hivemind Sync

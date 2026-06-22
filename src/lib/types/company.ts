@@ -150,13 +150,13 @@ export interface CompanyMemberSpend {
 }
 
 /**
- * Derived "token capital" readout for a zero-human company. This is not money;
+ * Derived "capability capital" readout for a zero-human company. This is not money;
  * it is the reusable private learning layer the company accumulates through
  * completed work, eval gates, experiments, durable artifacts, and model/runtime
  * diversity. It is intentionally computed from task/loop state so the company
  * can swap models without losing its veteran layer.
  */
-export interface CompanyTokenCapital {
+export interface CompanyCapabilityCapital {
   score: number;
   learningAssets: number;
   workflowAssets: number;

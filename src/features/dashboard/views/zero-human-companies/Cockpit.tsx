@@ -238,25 +238,25 @@ function ActivityTicker({ colony }: { colony: Colony }) {
   );
 }
 
-function TokenCapitalPanel({ colony: c }: { colony: Colony }) {
-  const tc = c.tokenCapital;
-  const gatePct = tc.evalGates > 0 ? Math.round((tc.passedEvalGates / tc.evalGates) * 100) : 0;
+function CapabilityCapitalPanel({ colony: c }: { colony: Colony }) {
+  const cc = c.capabilityCapital;
+  const gatePct = cc.evalGates > 0 ? Math.round((cc.passedEvalGates / cc.evalGates) * 100) : 0;
   const stats = [
-    { label: "learning assets", value: tc.learningAssets },
-    { label: "workflows", value: tc.workflowAssets },
-    { label: "experiments", value: tc.experiments },
-    { label: "frontier", value: tc.frontierCandidates },
-    { label: "avoid", value: tc.antiPatterns },
-    { label: "distill", value: tc.distillationQueue },
+    { label: "learning assets", value: cc.learningAssets },
+    { label: "workflows", value: cc.workflowAssets },
+    { label: "experiments", value: cc.experiments },
+    { label: "frontier", value: cc.frontierCandidates },
+    { label: "avoid", value: cc.antiPatterns },
+    { label: "distill", value: cc.distillationQueue },
   ];
   return (
     <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(300px, 420px) minmax(0, 1fr)", alignItems: "start" }}>
       <Panel>
-        <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>company veteran layer</span>}>token capital</SectionLabel>
+        <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>company veteran layer</span>}>capability capital</SectionLabel>
         <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-          <Ring pct={tc.score} size={94} stroke={7} color={tc.score >= 70 ? "var(--cyan)" : tc.score >= 35 ? "var(--honey)" : "var(--fg-4)"}>
+          <Ring pct={cc.score} size={94} stroke={7} color={cc.score >= 70 ? "var(--cyan)" : cc.score >= 35 ? "var(--honey)" : "var(--fg-4)"}>
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: "var(--f-display)", fontSize: 26, fontWeight: 600, lineHeight: 1 }}>{tc.score}</div>
+              <div style={{ fontFamily: "var(--f-display)", fontSize: 26, fontWeight: 600, lineHeight: 1 }}>{cc.score}</div>
               <div style={{ fontFamily: "var(--f-mono)", fontSize: 8, color: "var(--fg-4)", letterSpacing: 0.08 }}>CAPITAL</div>
             </div>
           </Ring>
@@ -268,10 +268,10 @@ function TokenCapitalPanel({ colony: c }: { colony: Colony }) {
           </div>
         </div>
         <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(2, minmax(0, 1fr))", marginTop: 18 }}>
-          <MiniMetric label="model independence" value={`${tc.modelIndependence}%`} />
-          <MiniMetric label="14d learning velocity" value={String(tc.learningVelocity)} />
-          <MiniMetric label="eval pass rate" value={tc.evalGates ? `${gatePct}%` : "none"} />
-          <MiniMetric label="assets per $1" value={tc.spendEfficiency == null ? "n/a" : String(tc.spendEfficiency)} />
+          <MiniMetric label="model independence" value={`${cc.modelIndependence}%`} />
+          <MiniMetric label="14d learning velocity" value={String(cc.learningVelocity)} />
+          <MiniMetric label="eval pass rate" value={cc.evalGates ? `${gatePct}%` : "none"} />
+          <MiniMetric label="assets per $1" value={cc.spendEfficiency == null ? "n/a" : String(cc.spendEfficiency)} />
         </div>
       </Panel>
 
@@ -286,7 +286,7 @@ function TokenCapitalPanel({ colony: c }: { colony: Colony }) {
           ))}
         </div>
         <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-          {tc.notes.map((note) => (
+          {cc.notes.map((note) => (
             <div key={note} style={{ display: "flex", gap: 9, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-3)", lineHeight: 1.5 }}>
               <span style={{ color: note.includes("No ") || note.includes("Launch ") ? "var(--honey-2)" : "var(--cyan-2)" }}>•</span>
               <span>{note}</span>
@@ -416,7 +416,7 @@ export function Cockpit({
 
   const tabs: { key: string; label: string; badge?: number | null }[] = [
     { key: "board", label: "Board" },
-    { key: "learning", label: "Learning", badge: c.tokenCapital.distillationQueue || null },
+    { key: "learning", label: "Learning", badge: c.capabilityCapital.distillationQueue || null },
     { key: "team", label: "Team" },
     { key: "approvals", label: "Approvals", badge: c.approvals.length || null },
     { key: "governance", label: "Governance" },
@@ -571,7 +571,7 @@ export function Cockpit({
         </Panel>
       )}
 
-      {active === "learning" && <TokenCapitalPanel colony={c} />}
+      {active === "learning" && <CapabilityCapitalPanel colony={c} />}
 
       {active === "team" && (
         <Panel>

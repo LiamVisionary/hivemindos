@@ -220,20 +220,21 @@ The tab lives under `src/features/dashboard/views/trade/` and is reachable from 
 
 Agents and the Trade tab can buy and sell stocks through one unified trade rail with two venues:
 
-- `alpaca`: a real, regulated US brokerage. Market orders go through the Alpaca Trading API. It defaults to paper (simulated) trading, and live trading is reachable only when the wallet sets `alpacaPaper` to false. Alpaca keys load from the shared hive env by name (`ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY`) and are never stored in project files.
+- `alpaca`: a real, regulated US brokerage. Market orders go through the Alpaca Trading API. It defaults to paper (simulated) trading, and live trading is reachable only when the wallet sets `alpacaPaper` to false. Paper and live are SEPARATE Alpaca accounts with SEPARATE credentials, so they load from different shared-hive env names: paper reads `ALPACA_PAPER_API_KEY_ID` / `ALPACA_PAPER_API_SECRET_KEY` (falling back to the live names for backward compatibility), live reads `ALPACA_API_KEY_ID` / `ALPACA_API_SECRET_KEY`. Values are never stored in project files.
 - `xstocks`: on-chain tokenized equities issued by Backed Finance. A buy swaps USDC into the verified xStock SPL token through Jupiter; a sell sizes the position from the current USDC price and swaps the xStock back into USDC (both legs ExactIn, which routes reliably for thin tokenized-equity pools where exact-out often has no route). Both are signed by the agent's existing local Solana wallet and require a Solana mainnet wallet plus a little SOL for fees and token-2022 account rent.
 
 How it works:
 
 - The rail lives in `src/lib/services/trading/buy-stock.ts` (`executeStockTrade`/`discoverStockTradeQuote`, with `executeBuyStock` kept as a buy-side wrapper).
 - The verified mint allowlist lives in `src/lib/config/xstocks-tokens.ts`. xStock tickers resolve only through this allowlist, never live symbol search, because Solana carries many scam copycats reusing each `AAPLx`-style symbol. Every mint is Jupiter-verified and uses the official `Xs` vanity address prefix.
-- Two entry points: the chat runtime handles natural requests such as `buy $25 of AAPL on xstocks` as a draft, confirm, execute card; the Trade tab calls `POST /api/trading` (`action: 'quote' | 'execute'`, `side: 'buy' | 'sell'`). The route resolves the acting agent's wallet server-side and never trusts a client-supplied policy. `GET /api/trading` reports venue readiness and trade-ready agents.
+- Two entry points: the chat runtime handles natural requests such as `buy $25 of AAPL on xstocks` as a draft, confirm, execute card; the Trade tab calls `POST /api/trading` (`action: 'quote' | 'execute' | 'portfolio'`, `side: 'buy' | 'sell'`). The route resolves the acting agent's wallet server-side and never trusts a client-supplied policy. `GET /api/trading` reports per-mode venue readiness (separate `paper` and `live` Alpaca credential state) and trade-ready agents.
 - A buy requires `CONFIRM_BUY`, a sell requires `CONFIRM_SELL`. Every trade honors a per-trade USD cap (`maxTradeUsd`, falling back to the per-payment cap). A buy passes the full spend-governance chokepoint (company kill switch, rolling daily/monthly budgets, approval escalation); a sell is an inflow, so only the company kill switch binds and it never debits rolling budgets.
+- The Stocks screen has a **Paper-trading toggle** and a **portfolio panel**. The toggle flips the Alpaca account between paper (simulated) and live; paper orders run against `https://paper-api.alpaca.markets` and never buy the real stock. The portfolio panel reads `action: 'portfolio'` (Alpaca `/v2/account` + `/v2/positions`) for the selected mode and shows equity, cash, buying power, and open positions with unrealized P/L. The toggle can only force paper from the client — it can never escalate a paper-only agent to live: the server re-derives the effective mode from the persisted policy, so live is reachable only when the wallet opted in (`alpacaPaper:false`).
 - Venue and mode are configured per agent in the Wallets tab: venue (Off, Alpaca, or xStocks), Alpaca paper vs live, and max per trade.
 
 Safety:
 
-- Alpaca defaults to paper. Live is opt-in per wallet.
+- Alpaca defaults to paper. Live is opt-in per wallet, and the Stocks-screen toggle cannot move a paper-only agent to live.
 - xStock trades resolve only verified mints and require a Solana mainnet wallet.
 - `trade` activity is recorded in the spend ledger like every other rail.
 

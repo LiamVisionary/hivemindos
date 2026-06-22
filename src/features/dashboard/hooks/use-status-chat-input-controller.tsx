@@ -273,6 +273,70 @@ export function useStatusChatInputController(props: any) {
     sharedVault.vaultPath,
   ]);
 
+  // Runtime-state sync (Mechanism C). When the off-by-default toggle is on, turn
+  // on the runtime-state pull loop on THIS machine's collector and on each ready,
+  // same-owner peer that supports it (so flipping it on here syncs the fleet).
+  // When toggled off, turn the local loop back off. Deduped by collector key.
+  const runtimeStateSyncRef = useRef<Set<string>>(new Set());
+  const runtimeStateSyncPrevEnabledRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!hydrated || !sharedVault.enabled) return;
+    const enabled = sharedVault.runtimeStateSyncEnabled === true;
+    const configure = (body: Record<string, unknown>) =>
+      fetch("/api/runtimes/state-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+    if (!enabled) {
+      if (runtimeStateSyncPrevEnabledRef.current === true) {
+        void configure({ enabled: false }).catch(() => {});
+      }
+      runtimeStateSyncRef.current.clear();
+      runtimeStateSyncPrevEnabledRef.current = false;
+      return;
+    }
+
+    // Ensure the local collector loop is on (once per enable).
+    if (!runtimeStateSyncRef.current.has("__local__")) {
+      runtimeStateSyncRef.current.add("__local__");
+      void configure({ enabled: true })
+        .then((res) => {
+          if (!res.ok) runtimeStateSyncRef.current.delete("__local__");
+        })
+        .catch(() => runtimeStateSyncRef.current.delete("__local__"));
+    }
+
+    // Enable on each ready, capable peer.
+    const peers = discoveredMachines.filter(
+      (machine) =>
+        machine.collector === "ready" &&
+        machine.device.online &&
+        !machine.device.self &&
+        Boolean(machine.device.collectorUrl) &&
+        machine.capabilities?.runtimeState === true,
+    );
+    peers.forEach((machine) => {
+      const key = collectorKey(machine.device.collectorUrl);
+      if (!key || runtimeStateSyncRef.current.has(key)) return;
+      runtimeStateSyncRef.current.add(key);
+      void configure({ enabled: true, collectorUrl: machine.device.collectorUrl })
+        .then((res) => {
+          if (!res.ok) runtimeStateSyncRef.current.delete(key);
+        })
+        .catch(() => runtimeStateSyncRef.current.delete(key));
+    });
+
+    runtimeStateSyncPrevEnabledRef.current = true;
+  }, [
+    collectorKey,
+    discoveredMachines,
+    hydrated,
+    sharedVault.enabled,
+    sharedVault.runtimeStateSyncEnabled,
+  ]);
+
   async function inspectBrainNode(node: BrainGraphNode) {
     if (brainDragMovedRef.current) {
       brainDragMovedRef.current = false;

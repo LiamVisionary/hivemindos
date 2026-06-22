@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
+import { MachineProvisionPanel } from "./MachineProvisionPanel";
 import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
 import type { ComponentType, Dispatch, ElementType, FormEvent, SetStateAction } from "react";
 import type { SetupCellProps, SetupStep } from "@/components/cells/SetupCell";
@@ -218,6 +219,7 @@ export function DashboardModals(props: DashboardModalsProps) {
             ) : null}
 
             {machineInitView === "create" || machineInitStatus.result ? (
+            <>
             <form className={fleetClass("machineInitForm")} onSubmit={initializeMachineProject}>
               <label className={fleetClass("agentSettingsField")}>
                 <span>Machine name</span>
@@ -304,10 +306,20 @@ export function DashboardModals(props: DashboardModalsProps) {
                 ) : null}
                 <Button type="submit" disabled={machineInitStatus.busy}>
                   {machineInitStatus.busy ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Plus aria-hidden="true" />}
-                  {machineInitStatus.busy ? "Initializing" : "Initialize"}
+                  {machineInitStatus.busy ? "Initializing" : "Initialize (copy commands)"}
                 </Button>
               </div>
             </form>
+            {machineInitView === "create" && !machineInitStatus.result ? (
+              <MachineProvisionPanel
+                machineInitDraft={machineInitDraft}
+                fleetClass={fleetClass}
+                Button={Button}
+                LoaderCircle={LoaderCircle}
+                Plus={Plus}
+              />
+            ) : null}
+            </>
             ) : null}
 
             {machineInitStatus.error ? (
