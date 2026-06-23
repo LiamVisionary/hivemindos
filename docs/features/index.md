@@ -44,9 +44,9 @@ The product starts with machines and agents. Fleet tells you what is online, whi
   </section>
 </div>
 
-## Work Loop
+## Looped Work
 
-Work is where operator intent turns into agent execution. The board captures rough ideas, promotes ready tasks, tracks claimed work, stores comments and run records, and turns finished output into deliverables. Zero Human Companies add a company cockpit around that loop: charters, crews, budgets, approvals, apex goals, and private learning loops. Scheduler adds repeated background work. Chat can launch `/swarm [number]` agent-team passes for parallel role-specific analysis, or `/swarm-goal <build request>` to rewrite a loose build request and hand it to Queen Bee for parallel agent execution. Swarm and MiroShark handle rehearsal, `/swarm-sim` simulations, and heavier analysis workflows.
+Looped work is where operator intent turns into agent execution. A loop contract can start from chat, Scheduler, Queen Bee, Evo, a company launch, or the Work Board. The board remains one access path: it captures rough ideas, promotes ready tasks, tracks claimed work, stores comments and run records, and turns finished output into deliverables. Zero Human Companies add a company cockpit around the same generic loop layer: charters, crews, budgets, approvals, apex goals, and private learning loops. Scheduler adds repeated background work. Chat can launch `/swarm [number]` agent-team passes for parallel role-specific analysis, or `/swarm-goal <build request>` to rewrite a loose build request and hand it to Queen Bee for parallel agent execution. Swarm and MiroShark handle rehearsal, `/swarm-sim` simulations, and heavier analysis workflows.
 
 <div class="docGrid">
   <section class="docCard">
@@ -56,7 +56,7 @@ Work is where operator intent turns into agent execution. The board captures rou
   </section>
   <section class="docCard">
     <h3>Work Board And Scheduler</h3>
-    <p>Kanban tasks, loop contracts, eval gates, project provenance, Code Proof badges, agent dispatch, deliverables, schedules, machine-aware folder picking, background jobs, and work history.</p>
+    <p>Kanban tasks as one loop access path, generic loop contracts, templates, eval gates, project provenance, Code Proof badges, agent dispatch, deliverables, schedules, machine-aware folder picking, background jobs, and work history.</p>
     <a href="work-and-scheduler.html">Open work docs</a>
   </section>
   <section class="docCard">
@@ -101,6 +101,11 @@ The shared brain is a normal Obsidian vault, not a proprietary database. Hivemin
     <h3>Brain, Vault, And Skills</h3>
     <p>Obsidian vault routing, entity-linked memory, temporal recall, compiled wiki search, graph access, shared skills, QMD, Neo4j, GBrain, Syntho, Trading Brain, Synthesis, OKF export, and sync ownership.</p>
     <a href="brain-vault-and-skills.html">Open brain docs</a>
+  </section>
+  <section class="docCard">
+    <h3>Agent-Native Workflows</h3>
+    <p>Action metadata, dashboard pins, Shared Brain review proposals, Context X-Ray manifests, and visual plan/recap artifacts.</p>
+    <a href="agent-native-workflows.html">Open workflow docs</a>
   </section>
   <section class="docCard">
     <h3>Hive Fusion</h3>
@@ -192,11 +197,14 @@ flowchart TD
   Runtimes --> Chat["Chat"]
   Runtimes --> Phone["Phone calls"]
   Chat --> Work["Work board"]
+  Chat --> XRay["Context X-Ray"]
   Work --> Scheduler["Scheduler"]
+  Work --> VisualPlans["Visual plans and recaps"]
   Work --> Deliverables["Deliverables"]
   Work --> CodeProof["GitLawb Code Proof"]
   Work --> History["Work history"]
   Vault["Brain and vault"] --> Skills["Shared skills"]
+  Vault --> ReviewQueue["Review queue"]
   Vault --> GBrain["GBrain"]
   Vault --> Syntho["Syntho / Synthesis"]
   Vault --> Notifications["Notifications"]

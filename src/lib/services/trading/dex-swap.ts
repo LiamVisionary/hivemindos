@@ -9,6 +9,15 @@ import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { executeEvmZeroExSwap, readErc20Decimals, type ZeroExSwapQuote } from "@/lib/services/wallet/chain-wallet";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 import { evaluateSpend, resolveSpendGovernance, shouldEvaluateSpend } from "@/lib/services/wallet/spend-governance";
+import {
+  assertTradingPlatformFeeReady,
+  collectTradingPlatformFee,
+  platformFeeDetail,
+  platformFeeReceiptDetail,
+  quoteTradingPlatformFee,
+  type PlatformFeeCollection,
+  type PlatformFeeQuote,
+} from "@/lib/services/wallet/platform-fees";
 
 /**
  * Local DEX swap rail: trade FROM the user's own (imported/local) wallet by
@@ -71,6 +80,7 @@ export type DexSwapQuote = {
   sellAmount: number;
   buyAmount: number;
   valueUsd: number;
+  platformFee?: PlatformFeeQuote;
   detail: string;
 };
 
@@ -84,6 +94,7 @@ export type DexSwapResult = {
   valueUsd: number;
   reference: string;
   approvalReference?: string;
+  platformFee?: PlatformFeeCollection;
   detail: string;
 };
 
@@ -180,13 +191,15 @@ async function quoteBaseSwap(input: DexSwapInput): Promise<DexSwapQuote> {
   const price = await zeroExFetch(`/swap/permit2/price?chainId=${BASE_CHAIN_ID}&sellToken=${sell.address}&buyToken=${buy.address}&sellAmount=${sellAtomic.toString()}&slippageBps=${slippageBps}`);
   if (!(price as { liquidityAvailable?: boolean }).liquidityAvailable) throw new Error("No route/liquidity for this pair right now.");
   const buyAmount = Number((price as { buyAmount?: string }).buyAmount || "0") / 10 ** buy.decimals;
+  const platformFee = await quoteTradingPlatformFee({ source: "dex-swap", network: input.network, amountUsd: valueUsd });
   return {
     sell: sell.symbol,
     buy: buy.symbol,
     sellAmount: input.amountHuman,
     buyAmount,
     valueUsd,
-    detail: `Swap ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol} on Base via 0x (≤${(slippageBps / 100).toFixed(2)}% slippage).`,
+    platformFee,
+    detail: `Swap ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol} on Base via 0x (≤${(slippageBps / 100).toFixed(2)}% slippage).${platformFeeDetail(platformFee)}`,
   };
 }
 
@@ -196,6 +209,7 @@ async function executeBaseSwap(input: DexSwapInput): Promise<DexSwapResult> {
   const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareBaseLeg(input);
   const label = `dex:${sell.symbol}->${buy.symbol}`;
   const { companyId } = await swapGovernance(input.agentId, valueUsd, label, input.approvalToken);
+  await assertTradingPlatformFeeReady({ source: "dex-swap", network: input.network, amountUsd: valueUsd });
 
   const quote = await zeroExFetch(`/swap/permit2/quote?chainId=${BASE_CHAIN_ID}&sellToken=${sell.address}&buyToken=${buy.address}&sellAmount=${sellAtomic.toString()}&slippageBps=${slippageBps}&taker=${input.fromAddress}`);
   if (!(quote as { liquidityAvailable?: boolean }).liquidityAvailable || !(quote as { transaction?: unknown }).transaction) {
@@ -211,6 +225,15 @@ async function executeBaseSwap(input: DexSwapInput): Promise<DexSwapResult> {
   });
 
   const buyAmount = Number((quote as { buyAmount?: string }).buyAmount || "0") / 10 ** buy.decimals;
+  const platformFee = await collectTradingPlatformFee({
+    agentId: input.agentId,
+    network: input.network,
+    secret: input.secret,
+    fromAddress: input.fromAddress,
+    amountUsd: valueUsd,
+    source: "dex-swap",
+    companyId,
+  });
   await recordSwap(input, companyId, valueUsd, label);
   return {
     ok: true,
@@ -222,7 +245,8 @@ async function executeBaseSwap(input: DexSwapInput): Promise<DexSwapResult> {
     valueUsd,
     reference: swapHash,
     approvalReference: approvalHash,
-    detail: `Swapped ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol}. Tx ${swapHash}.`,
+    platformFee,
+    detail: `Swapped ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol}. Tx ${swapHash}.${platformFeeReceiptDetail(platformFee)}`,
   };
 }
 
@@ -273,13 +297,15 @@ async function quoteSolanaSwap(input: DexSwapInput): Promise<DexSwapQuote> {
   const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareSolanaLeg(input);
   const quote = await jupiterQuote(sell.mint, buy.mint, sellAtomic.toString(), slippageBps);
   const buyAmount = Number(quote.outAmount || "0") / 10 ** buy.decimals;
+  const platformFee = await quoteTradingPlatformFee({ source: "dex-swap", network: input.network, amountUsd: valueUsd });
   return {
     sell: sell.symbol,
     buy: buy.symbol,
     sellAmount: input.amountHuman,
     buyAmount,
     valueUsd,
-    detail: `Swap ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol} on Solana via Jupiter (≤${(slippageBps / 100).toFixed(2)}% slippage).`,
+    platformFee,
+    detail: `Swap ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol} on Solana via Jupiter (≤${(slippageBps / 100).toFixed(2)}% slippage).${platformFeeDetail(platformFee)}`,
   };
 }
 
@@ -289,6 +315,7 @@ async function executeSolanaSwap(input: DexSwapInput): Promise<DexSwapResult> {
   const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareSolanaLeg(input);
   const label = `dex:${sell.symbol}->${buy.symbol}`;
   const { companyId } = await swapGovernance(input.agentId, valueUsd, label, input.approvalToken);
+  await assertTradingPlatformFeeReady({ source: "dex-swap", network: input.network, amountUsd: valueUsd });
 
   const quote = await jupiterQuote(sell.mint, buy.mint, sellAtomic.toString(), slippageBps);
   const keypair = Keypair.fromSecretKey(base58.decode(input.secret));
@@ -321,6 +348,15 @@ async function executeSolanaSwap(input: DexSwapInput): Promise<DexSwapResult> {
   await connection.confirmTransaction({ signature, ...latest }, "confirmed");
 
   const buyAmount = Number(quote.outAmount || "0") / 10 ** buy.decimals;
+  const platformFee = await collectTradingPlatformFee({
+    agentId: input.agentId,
+    network: input.network,
+    secret: input.secret,
+    fromAddress: input.fromAddress,
+    amountUsd: valueUsd,
+    source: "dex-swap",
+    companyId,
+  });
   await recordSwap(input, companyId, valueUsd, label);
   return {
     ok: true,
@@ -331,7 +367,8 @@ async function executeSolanaSwap(input: DexSwapInput): Promise<DexSwapResult> {
     buyAmount,
     valueUsd,
     reference: signature,
-    detail: `Swapped ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol}. Tx ${signature}.`,
+    platformFee,
+    detail: `Swapped ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol}. Tx ${signature}.${platformFeeReceiptDetail(platformFee)}`,
   };
 }
 

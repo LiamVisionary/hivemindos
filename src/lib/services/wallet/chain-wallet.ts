@@ -4,7 +4,7 @@ import { createHmac } from "crypto";
 import type { BinaryLike } from "crypto";
 import { getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction, createTransferInstruction } from "@solana/spl-token";
 import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
-import { mnemonicToSeedSync, validateMnemonic } from "@scure/bip39";
+import { generateMnemonic, mnemonicToSeedSync, validateMnemonic } from "@scure/bip39";
 import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import bs58 from "bs58";
 import { concat, createPublicClient, createWalletClient, fallback, formatEther, formatUnits, http, maxUint256, numberToHex, parseUnits, size, webSocket } from "viem";
@@ -286,6 +286,10 @@ export function importRecoveryPhraseWallets(secretInput: string): RecoveryPhrase
       derivationPath: SOLANA_RECOVERY_PATH,
     },
   ];
+}
+
+export function generateRecoveryPhraseWallets(): RecoveryPhraseWalletSecret[] {
+  return importRecoveryPhraseWallets(generateMnemonic(englishWordlist));
 }
 
 export async function getWalletBalance(address: string, networkInput: string): Promise<AgentWalletBalance> {

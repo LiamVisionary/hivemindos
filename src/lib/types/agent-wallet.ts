@@ -101,6 +101,7 @@ export interface AgentWalletTokenBalance {
 
 export interface AgentWalletVaultInfo {
   agentId: string;
+  name?: string;
   address: string;
   network: string;
   custodyMode: "local";

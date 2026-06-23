@@ -1064,17 +1064,28 @@ export async function completeTask(
   const loopReceipts = mergeLoopReceipts(task.loopReceipts, input.loopReceipts);
   const gateBlock = loopCompletionBlock(task.loop, loopReceipts);
   if (gateBlock) {
-    const summary = `${input.summary ?? result ?? "Completion blocked."} Missing passing eval receipts: ${gateBlock.missingGateTitles.join(", ")}.`;
+    // Preserve the real worker output (and any artifacts/passed-gate progress) instead of
+    // overwriting it with the missing-receipts summary — a human needs to see what was
+    // actually produced before they can unblock it.
+    const blockNote = `⚠ Loop gate block — missing passing eval receipts: ${gateBlock.missingGateTitles.join(", ")}.`;
+    const preservedResult = result?.trim()
+      ? `${result.trim()}\n\n${blockNote}`
+      : `${input.summary?.trim() || "Completion blocked."} ${blockNote}`;
     finishActiveRun(board, taskId, "blocked", {
       ...input,
-      summary,
-      reason: summary,
+      summary: input.summary ?? result,
+      reason: blockNote,
     });
     const changed: KanbanTask = {
       ...task,
       status: "needs-human",
-      result: summary,
+      result: preservedResult,
+      loop: applyLoopReceipts(task.loop, loopReceipts),
       loopReceipts,
+      deliverables: mergeDeliverables(
+        task.deliverables,
+        extractTaskDeliverables(task, result, now),
+      ),
       claimLock: undefined,
       claimExpiresAt: undefined,
       currentRunId: undefined,

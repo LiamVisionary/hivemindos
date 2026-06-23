@@ -74,13 +74,13 @@ export function CryptoTradeView({
 
   useEffect(() => {
     let ignore = false;
-    void fetchCryptoCapabilities(agentId).then((data) => {
+    void fetchCryptoCapabilities(agentId, wallet).then((data) => {
       if (ignore) return;
       setCaps(data);
       setLoading(false);
     });
     return () => { ignore = true; };
-  }, [agentId]);
+  }, [agentId, wallet]);
 
   const selected = useMemo<CryptoIntentDef>(
     () => CRYPTO_INTENTS.find((intent) => intent.id === selectedId) ?? CRYPTO_INTENTS[0],
@@ -549,6 +549,16 @@ function PreparedReview({ prepared }: { prepared: CryptoPreparedAction }) {
       <div className={styles.reviewLine}><span className={styles.reviewKey}>Provider</span><span className={styles.reviewVal}>{prepared.provider}</span></div>
       {review.network ? <div className={styles.reviewLine}><span className={styles.reviewKey}>Network</span><span className={styles.reviewVal}>{review.network}</span></div> : null}
       {review.amountUsd != null ? <div className={styles.reviewLine}><span className={styles.reviewKey}>Amount</span><span className={styles.reviewVal}>${review.amountUsd.toFixed(2)}{review.asset ? ` ${review.asset}` : ""}</span></div> : null}
+      {prepared.platformFee?.enabled ? (
+        <div className={styles.reviewLine}>
+          <span className={styles.reviewKey}>Platform fee</span>
+          <span className={styles.reviewVal}>
+            {prepared.platformFee.configured
+              ? `$${prepared.platformFee.amountUsd.toFixed(6)} USDC`
+              : prepared.platformFee.reason ?? "Not configured"}
+          </span>
+        </div>
+      ) : null}
       {review.recipientAddress ? <div className={styles.reviewLine}><span className={styles.reviewKey}>Recipient</span><span className={`${styles.reviewVal} ${styles.mono}`}>{review.recipientAddress}</span></div> : null}
       {prepared.confirmation ? <div className={styles.reviewLine}><span className={styles.reviewKey}>Confirm token</span><span className={styles.reviewVal}>{prepared.confirmation}</span></div> : null}
       {(review.risks ?? []).map((risk, index) => (

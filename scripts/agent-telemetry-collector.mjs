@@ -5821,22 +5821,47 @@ async function sendHermesChat(body) {
     agent.localDataDir || body.localDataDir || defaultHermesDir,
   );
   const agentEnv = hermesContextEnv(safeAgentEnv(body.agentEnv), body.context);
-  const args = hermesCliArgs(agent, ["-z", text]);
-  const { stdout, stderr } = await execFileAsync(
-    await resolveHermesBin(),
-    args,
-    {
+  const bin = await resolveHermesBin();
+  const env = runtimeProcessEnv({
+    ...agentEnv,
+    ...hermesModelHostEnv(body, agent),
+    HERMES_HOME: hermesHome,
+    PAGER: "cat",
+  });
+  const runHermes = async (cliArgs) => {
+    const { stdout, stderr } = await execFileAsync(bin, cliArgs, {
       timeout: chatTimeoutMs,
       maxBuffer: 3_000_000,
-      env: runtimeProcessEnv({
-        ...agentEnv,
-        ...hermesModelHostEnv(body, agent),
-        HERMES_HOME: hermesHome,
-        PAGER: "cat",
-      }),
-    },
-  );
-  const content = stdout.trim() || stderr.trim();
+      env,
+    });
+    return (stdout.trim() || stderr.trim());
+  };
+
+  // `hermes -z` can exit 0 with NO stdout/stderr (a silent failure) when the agent's
+  // model/provider combo is invalid (e.g. an unsupported model id) or a tool loop ends
+  // without emitting final text. Treat empty output as a failure to recover from — first
+  // retry with the agent's DEFAULT config (no -m/--provider, which is the robust path), and
+  // only then report an honest error instead of returning ok:true with empty text.
+  const primaryArgs = hermesCliArgs(agent, ["-z", text]);
+  const fallbackArgs = ["-z", text];
+  let content = "";
+  try {
+    content = await runHermes(primaryArgs);
+  } catch (error) {
+    if (JSON.stringify(primaryArgs) === JSON.stringify(fallbackArgs)) throw error;
+  }
+  if (!content && JSON.stringify(primaryArgs) !== JSON.stringify(fallbackArgs)) {
+    content = await runHermes(fallbackArgs).catch(() => "");
+  }
+  if (!content) {
+    return {
+      ok: false,
+      status: 502,
+      error:
+        "Hermes produced no output (silent failure). Check the agent's model/provider config or simplify the prompt.",
+      host: hostname(),
+    };
+  }
   return {
     ok: true,
     text: content,

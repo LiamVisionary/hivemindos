@@ -1,147 +1,128 @@
 "use client";
 
-import type { Dispatch, ElementType, SetStateAction } from "react";
-import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
-import type { MiroSharkAnalysisMode } from "@/lib/services/miroshark/run-intelligence";
-import type { SwarmAgent, SwarmDecision, SwarmMarket, SwarmRun, SwarmSocialPost, SwarmTemplate, SwarmTemplateField, TemplateId } from "@/components/swarm/swarm-data";
-import type { DashboardView, MiroSharkRunResult } from "@/features/dashboard/dashboard-types";
-import { WorkSectionHeader } from "./WorkSectionHeader";
+/* SwarmPanel — the Work → Simulation route.
 
-type RuntimeModelSelection = {
-  provider: string;
-  model: string;
-  providers: Array<{ slug: string; name: string; models: Array<{ id: string; name?: string }> }>;
-};
+   Renders the redesigned Simulation UI (@/components/simulation) fed with REAL
+   MiroShark data: swarmRuns/currentRun/market/agents/decisions are adapted into
+   the UI's SimDataset, and the operational seams (select / launch / publish) are
+   wired to the live MiroShark controller handlers. No demo data. */
+
+import React from "react";
+import type { Dispatch, SetStateAction } from "react";
+import type { SwarmAgent, SwarmDecision, SwarmMarket, SwarmRun } from "@/components/swarm/swarm-data";
+import {
+  SimDataProvider, SimulationView, buildSimDataset, type Run, type SimDataset, type SimLaunchPayload,
+} from "@/components/simulation";
+import type { DashboardView, MiroSharkRunResult } from "@/features/dashboard/dashboard-types";
+
+type MiroSharkPlatform = MiroSharkRunResult["platform"];
 
 type SwarmPanelProps = {
-  SwarmView: ElementType;
-  activeView: DashboardView;
-  allMirosharkTemplates: SwarmTemplate[];
-  analyzeMirosharkRun: (run: SwarmRun, mode: MiroSharkAnalysisMode) => void | Promise<void>;
-  applyMirosharkTemplate: (template: SwarmTemplate) => void;
-  currentSwarmRun: SwarmRun | null;
-  displayAgents: AgentProfile[];
-  launchMirosharkSwarm: () => void | Promise<void>;
-  loadMirosharkArchivedRun: (runId: string) => void | Promise<void>;
-  mirosharkAnalysisAgentId: string;
-  mirosharkAnalysisPending: MiroSharkAnalysisMode | "";
-  mirosharkAnalysisResult: unknown;
-  mirosharkAnalysisStatus: string;
-  mirosharkArchiveLoading: boolean;
-  mirosharkArchiveStatus: string;
-  mirosharkExperimentPending: string;
-  mirosharkExperimentStatus: string;
-  mirosharkHelperPending: "ask" | "suggest" | "";
-  mirosharkHelperStatus: string;
-  mirosharkMissingTemplateFields: string[];
-  mirosharkPlatform: string;
-  mirosharkProgressLabel: string;
-  mirosharkRounds: number;
-  mirosharkRunPending: boolean;
-  mirosharkScenario: string;
-  mirosharkSelectedTemplate: SwarmTemplate | null;
-  mirosharkSelectedTemplateFields: SwarmTemplateField[];
-  mirosharkTemplateInputs: Record<string, string>;
-  runMirosharkExperiment: (action: string, runId: string) => void | Promise<void>;
-  runMirosharkScenarioHelper: (mode: "ask" | "suggest") => void | Promise<void>;
-  runtimeModelSelectionsByRuntime: Partial<Record<AgentRuntime, RuntimeModelSelection>>;
-  selectedAgent: AgentProfile | null;
-  selectedSwarmRunId: string;
   setActiveView: Dispatch<SetStateAction<DashboardView>>;
-  setMirosharkAnalysisAgentId: Dispatch<SetStateAction<string>>;
-  setMirosharkPlatform: Dispatch<SetStateAction<MiroSharkRunResult["platform"]>>;
-  setMirosharkRounds: Dispatch<SetStateAction<number>>;
-  setMirosharkScenario: Dispatch<SetStateAction<string>>;
-  startNewMirosharkSimulation: (templateId?: string) => void;
+  // live data
+  swarmRuns: SwarmRun[];
+  currentSwarmRun: SwarmRun | null;
+  swarmMarket: SwarmMarket;
   swarmAgents: SwarmAgent[];
   swarmDecisions: SwarmDecision[];
-  swarmMarket: SwarmMarket;
-  swarmRuns: SwarmRun[];
-  swarmSocialPosts: SwarmSocialPost[];
   swarmStatusLabel: string;
-  swarmTemplates: SwarmTemplate[];
-  updateMirosharkTemplateInput: (template: SwarmTemplate, key: string, value: string) => void;
+  selectedSwarmRunId: string;
+  // status / loading
+  mirosharkRunPending: boolean;
+  mirosharkProgressLabel: string;
+  mirosharkArchiveStatus: string;
+  // composer draft state (read back to know when a deferred launch is ready)
+  mirosharkScenario: string;
+  // handlers
+  loadMirosharkArchivedRun: (runId: string) => void | Promise<void>;
+  startNewMirosharkSimulation: (templateId?: string) => void;
+  launchMirosharkSwarm: () => void | Promise<void>;
+  setMirosharkScenario: Dispatch<SetStateAction<string>>;
+  setMirosharkRounds: Dispatch<SetStateAction<number>>;
+  setMirosharkPlatform: Dispatch<SetStateAction<MiroSharkPlatform>>;
+  runMirosharkExperiment: (action: "stop" | "inject" | "fork" | "branch" | "publish", runId: string) => void | Promise<void>;
 };
 
-export function SwarmPanel(props: SwarmPanelProps) {
-  const { SwarmView, activeView, allMirosharkTemplates, analyzeMirosharkRun, applyMirosharkTemplate, currentSwarmRun, displayAgents, launchMirosharkSwarm, loadMirosharkArchivedRun, mirosharkAnalysisAgentId, mirosharkAnalysisPending, mirosharkAnalysisResult, mirosharkAnalysisStatus, mirosharkArchiveLoading, mirosharkArchiveStatus, mirosharkExperimentPending, mirosharkExperimentStatus, mirosharkHelperPending, mirosharkHelperStatus, mirosharkMissingTemplateFields, mirosharkPlatform, mirosharkProgressLabel, mirosharkRounds, mirosharkRunPending, mirosharkScenario, mirosharkSelectedTemplate, mirosharkSelectedTemplateFields, mirosharkTemplateInputs, runMirosharkExperiment, runMirosharkScenarioHelper, runtimeModelSelectionsByRuntime, selectedAgent, selectedSwarmRunId, setActiveView, setMirosharkAnalysisAgentId, setMirosharkPlatform, setMirosharkRounds, setMirosharkScenario, startNewMirosharkSimulation, swarmAgents, swarmDecisions, swarmMarket, swarmRuns, swarmSocialPosts, swarmStatusLabel, swarmTemplates, updateMirosharkTemplateInput } = props;
-  const selectedRun = swarmRuns.find((run) => run.id === selectedSwarmRunId) ?? currentSwarmRun ?? swarmRuns[0];
-  return (<>
-      {activeView === "swarm" ? (
-      <section
-        className="grid min-h-0 overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[rgba(5,8,13,0.72)]"
-        style={{ height: "100%", gridTemplateRows: "auto minmax(0, 1fr)" }}
-      >
-        <WorkSectionHeader
-          activeView="swarm"
-          onSelect={setActiveView}
-          title="Simulation"
-          subtitle={mirosharkRunPending ? mirosharkProgressLabel || "MiroShark running" : swarmStatusLabel || "MiroShark theater"}
-          stats={[
-            { value: swarmRuns.filter((run) => run.state === "live").length, label: "live", tone: "cyan" },
-            { value: swarmAgents.length, label: "agents", tone: "honey" },
-            { value: selectedRun?.posts ?? 0, label: "posts" },
-            { value: selectedRun?.trades ?? 0, label: "events" },
-          ]}
-        />
-        <div className="min-h-0 overflow-hidden">
-        <SwarmView
-          runs={swarmRuns}
-          agents={swarmAgents}
-          decisions={swarmDecisions}
-          market={swarmMarket}
-          socialPosts={swarmSocialPosts}
-          templates={swarmTemplates}
-          statusLabel={swarmStatusLabel}
-          selectedRunId={selectedSwarmRunId}
-          archiveLoading={mirosharkArchiveLoading}
-          onSelectRun={(run: SwarmRun) => {
-            if (run.id !== currentSwarmRun?.id) void loadMirosharkArchivedRun(run.id);
-          }}
-          onLaunch={(templateId: TemplateId) => startNewMirosharkSimulation(templateId)}
-          onPickTemplate={(templateId: TemplateId) => {
-            const template = allMirosharkTemplates.find((item) => item.id === templateId);
-            if (template) applyMirosharkTemplate(template);
-          }}
-          draftScenario={mirosharkScenario}
-          draftRounds={mirosharkRounds}
-          draftPlatform={mirosharkPlatform}
-          templateFields={mirosharkSelectedTemplateFields}
-          templateInputs={mirosharkTemplateInputs}
-          missingTemplateFields={mirosharkMissingTemplateFields.length}
-          runPending={mirosharkRunPending}
-          onDraftScenarioChange={setMirosharkScenario}
-          onDraftRoundsChange={setMirosharkRounds}
-          onDraftPlatformChange={(platform: string) => {
-            if (platform === "twitter" || platform === "reddit" || platform === "parallel" || platform === "polymarket") {
-              setMirosharkPlatform(platform);
-            }
-          }}
-          onTemplateInputChange={(key: string, value: string) => {
-            if (mirosharkSelectedTemplate) updateMirosharkTemplateInput(mirosharkSelectedTemplate, key, value);
-          }}
-          onStartRun={() => void launchMirosharkSwarm()}
-          onAskScenario={() => void runMirosharkScenarioHelper("ask")}
-          onSuggestScenarios={() => void runMirosharkScenarioHelper("suggest")}
-          helperPending={mirosharkHelperPending}
-          helperStatus={mirosharkHelperStatus}
-          loading={mirosharkRunPending || mirosharkArchiveStatus === "Loading saved run..."}
-          loadingLabel={mirosharkArchiveStatus === "Loading saved run..." ? "Loading saved run" : mirosharkProgressLabel}
-          onPublishX={(run: SwarmRun) => void runMirosharkExperiment("publish", run.id)}
-          publishPending={mirosharkExperimentPending === "publish"}
-          publishStatus={mirosharkExperimentStatus}
-          analysisAgents={displayAgents}
-          analysisRuntimeModels={runtimeModelSelectionsByRuntime}
-          selectedAnalysisAgentId={mirosharkAnalysisAgentId || selectedAgent?.id}
-          analysisPending={mirosharkAnalysisPending}
-          analysisStatus={mirosharkAnalysisStatus}
-          analysisResult={mirosharkAnalysisResult}
-          onAnalysisAgentChange={setMirosharkAnalysisAgentId}
-          onAnalyzeRun={(run: SwarmRun, mode: MiroSharkAnalysisMode) => void analyzeMirosharkRun(run, mode)}
-        />
-        </div>
-      </section>
-      ) : null}
+function coercePlatform(value: string): MiroSharkPlatform {
+  return value === "twitter" || value === "reddit" || value === "parallel" || value === "polymarket"
+    ? value
+    : "parallel";
+}
 
-  </>);
+export function SwarmPanel({
+  setActiveView,
+  swarmRuns,
+  currentSwarmRun,
+  swarmMarket,
+  swarmAgents,
+  swarmDecisions,
+  swarmStatusLabel,
+  selectedSwarmRunId,
+  mirosharkRunPending,
+  mirosharkProgressLabel,
+  mirosharkArchiveStatus,
+  mirosharkScenario,
+  loadMirosharkArchivedRun,
+  startNewMirosharkSimulation,
+  launchMirosharkSwarm,
+  setMirosharkScenario,
+  setMirosharkRounds,
+  setMirosharkPlatform,
+  runMirosharkExperiment,
+}: SwarmPanelProps) {
+  // Deferred launch: launchMirosharkSwarm() reads the controller's scenario from
+  // its closure, so we stage the composer state, then fire the launch on the
+  // next render once mirosharkScenario reflects the requested scenario (and a
+  // fresh launchMirosharkSwarm closure exists). A ref avoids a setState-in-effect.
+  const pendingLaunchRef = React.useRef<SimLaunchPayload | null>(null);
+  React.useEffect(() => {
+    const pending = pendingLaunchRef.current;
+    if (pending && mirosharkScenario === pending.scenario) {
+      pendingLaunchRef.current = null;
+      void launchMirosharkSwarm();
+    }
+  }, [mirosharkScenario, launchMirosharkSwarm]);
+
+  const base = React.useMemo<Omit<SimDataset, "loading" | "loadingLabel" | "emptyLabel" | "onLaunch" | "onPublish" | "onSelectRun">>(
+    () => buildSimDataset({
+      runs: swarmRuns,
+      currentRun: currentSwarmRun,
+      market: swarmMarket,
+      agents: swarmAgents,
+      decisions: swarmDecisions,
+      statusLabel: swarmStatusLabel,
+    }),
+    [swarmRuns, currentSwarmRun, swarmMarket, swarmAgents, swarmDecisions, swarmStatusLabel],
+  );
+
+  const loading = mirosharkRunPending || mirosharkArchiveStatus === "Loading saved run...";
+
+  const dataset: SimDataset = {
+    ...base,
+    loading,
+    loadingLabel: mirosharkArchiveStatus === "Loading saved run..." ? "Loading saved run" : (mirosharkProgressLabel || "MiroShark running"),
+    emptyLabel: swarmStatusLabel ? `No swarm runs loaded · ${swarmStatusLabel}` : "No swarm runs loaded",
+    onSelectRun: (run: Run) => {
+      if (run.id !== currentSwarmRun?.id) void loadMirosharkArchivedRun(run.id);
+    },
+    onLaunch: (payload: SimLaunchPayload) => {
+      startNewMirosharkSimulation(payload.template);
+      setMirosharkPlatform(coercePlatform(payload.platform));
+      setMirosharkRounds(payload.rounds);
+      setMirosharkScenario(payload.scenario); // set last so it wins the batch
+      pendingLaunchRef.current = payload;
+    },
+    onPublish: (run: Run) => { void runMirosharkExperiment("publish", run.id); },
+  };
+
+  return (
+    <div style={{ height: "100%", overflow: "auto" }} aria-busy={loading || undefined}>
+      <SimDataProvider value={dataset}>
+        <SimulationView
+          initialRunId={selectedSwarmRunId || currentSwarmRun?.id || undefined}
+          onSelectMode={(mode) => setActiveView(mode as DashboardView)}
+        />
+      </SimDataProvider>
+    </div>
+  );
 }

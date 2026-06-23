@@ -291,6 +291,13 @@ fn personal_wallet_name(agent_id: &str, agent_name: &str, network: &str) -> Stri
     }
 }
 
+fn is_generic_personal_wallet_name(name: &str) -> bool {
+    matches!(
+        name.trim().to_ascii_lowercase().as_str(),
+        "my wallet" | "my wallet base" | "my wallet solana" | "my base wallet" | "my solana wallet"
+    )
+}
+
 fn wallet_account_key(wallet: &Value) -> Option<String> {
     let network = wallet.get("network")?.as_str()?.trim();
     let address = wallet.get("address")?.as_str()?.trim();
@@ -386,6 +393,7 @@ fn read_local_wallet_infos() -> Vec<Value> {
             }
             Some(json!({
                 "agentId": agent_id,
+                "name": record.get("name").and_then(Value::as_str).unwrap_or(""),
                 "address": address,
                 "network": network,
                 "custodyMode": record.get("custodyMode").and_then(Value::as_str).unwrap_or("local"),
@@ -403,6 +411,7 @@ fn read_local_wallet_infos() -> Vec<Value> {
 
 fn wallet_from_vault_info(wallet: &Value) -> Value {
     let agent_id = wallet.get("agentId").and_then(Value::as_str).unwrap_or("");
+    let name = wallet.get("name").and_then(Value::as_str).unwrap_or("");
     let network = wallet.get("network").and_then(Value::as_str).unwrap_or("eip155:8453");
     let custody_mode = wallet.get("custodyMode").and_then(Value::as_str).unwrap_or("local");
     let created_at = wallet
@@ -412,7 +421,7 @@ fn wallet_from_vault_info(wallet: &Value) -> Value {
     json!({
         "agentId": agent_id,
         "id": agent_id,
-        "name": personal_wallet_name(agent_id, "", network),
+        "name": personal_wallet_name(agent_id, name, network),
         "address": wallet.get("address").and_then(Value::as_str).unwrap_or(""),
         "network": network,
         "custodyMode": custody_mode,
@@ -532,7 +541,17 @@ fn ledger_wallet_with_signer_truth(
         .and_then(Value::as_str)
         .unwrap_or("local")
         .to_string();
+    let vault_name = vault_wallet
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
     if let Some(object) = wallet.as_object_mut() {
+        let existing_name = object.get("name").and_then(Value::as_str).unwrap_or_default();
+        if !vault_name.is_empty() && is_generic_personal_wallet_name(existing_name) {
+            object.insert("name".to_string(), Value::String(vault_name.clone()));
+        }
         object.insert("agentId".to_string(), Value::String(agent_id.clone()));
         object.insert("id".to_string(), Value::String(agent_id.clone()));
         object.insert("custodyMode".to_string(), Value::String(custody_mode.clone()));

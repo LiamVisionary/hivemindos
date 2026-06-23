@@ -1,14 +1,16 @@
 import "server-only";
 
 import { promises as fs } from "fs";
-import os from "os";
 import path from "path";
-import { wrapFetchWithPaymentFromConfig, type Network, type PaymentRequired, type PaymentRequirements } from "@x402/fetch";
+import { wrapFetchWithPayment, x402Client, type Network, type PaymentRequired, type PaymentRequirements } from "@x402/fetch";
 import { ExactEvmScheme } from "@x402/evm";
 import { ExactSvmScheme } from "@x402/svm";
+import { BuilderCodeClientExtension } from "@x402/extensions/builder-code";
 import { createKeyPairSignerFromBytes } from "@solana/kit";
+import { validateMnemonic } from "@scure/bip39";
+import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import { base58 } from "@scure/base";
-import { privateKeyToAccount } from "viem/accounts";
+import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { homedir } from "@/lib/home-dir";
 import {
@@ -17,6 +19,10 @@ import {
   shouldEvaluateSpend,
 } from "@/lib/services/wallet/spend-governance";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
+import {
+  X402_CLIENT_BUILDER_CODE_ENV_KEYS,
+  x402BuilderCodeFromEnvForNetwork,
+} from "@/lib/services/wallet/x402-builder-code";
 
 export type X402Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -64,6 +70,7 @@ export type X402FetchResult = {
   network: string;
   amountUsd: number;
   paid: boolean;
+  builderCode?: string;
   paymentResponse?: string;
   contentType: string;
   bodyPreview: string;
@@ -78,12 +85,14 @@ type X402SpendRecord = {
   amountUsd: number;
   status: number;
   paid: boolean;
+  builderCode?: string;
   createdAt: string;
 };
 
 const spendLogPath = path.join(homedir(), ".hivemindos", "x402-spend-log.json");
 const supportedEvmNetworks = new Set(["eip155:8453", "eip155:84532"]);
 const supportedSvmNetworks = new Set(["solana:mainnet", "solana:devnet"]);
+const EVM_RECOVERY_PATH = "m/44'/60'/0'/0/0";
 
 const x402SvmNetworkByWalletNetwork: Record<string, string> = {
   "solana:mainnet": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
@@ -139,6 +148,18 @@ export function x402Network(network: string): Network {
 function svmRpc(network: string) {
   if (network === "solana:devnet") return process.env.SOLANA_DEVNET_RPC_URL || "https://api.devnet.solana.com";
   return process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+}
+
+function evmAccountFromLocalSecret(secret: string) {
+  const compact = secret.trim();
+  const prefixed = compact.startsWith("0x") ? compact : `0x${compact}`;
+  if (/^0x[a-fA-F0-9]{64}$/.test(prefixed)) return privateKeyToAccount(prefixed as `0x${string}`);
+
+  const mnemonic = compact.toLowerCase().replace(/\s+/g, " ");
+  if (!validateMnemonic(mnemonic, englishWordlist)) {
+    throw new Error("Stored Base signer must be an EVM private key or recovery phrase.");
+  }
+  return mnemonicToAccount(mnemonic, { path: EVM_RECOVERY_PATH });
 }
 
 function selectRequirement(policy: X402FetchPolicy, confirmation?: string) {
@@ -273,24 +294,26 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
   let selectedAmountUsd = 0;
   let paid = false;
   const network = x402Network(input.network);
+  const builderCode = x402BuilderCodeFromEnvForNetwork(network, X402_CLIENT_BUILDER_CODE_ENV_KEYS);
   const scheme = supportedEvmNetworks.has(input.network)
-    ? new ExactEvmScheme(privateKeyToAccount(input.secret as `0x${string}`))
+    ? new ExactEvmScheme(evmAccountFromLocalSecret(input.secret))
     : new ExactSvmScheme(
       await createKeyPairSignerFromBytes(base58.decode(input.secret)),
       { rpcUrl: svmRpc(input.network) },
     );
+  const client = new x402Client((version: number, accepts: PaymentRequirements[]) => {
+    const selected = selectRequirement(input.policy, input.confirmation)(version, accepts);
+    selectedAmountUsd = amountFromRequirement(selected);
+    paid = true;
+    return selected;
+  }).register(network, scheme);
+  if (builderCode) {
+    client.registerExtension(new BuilderCodeClientExtension(builderCode));
+  }
 
   // Adapted from coinbase/x402's @x402/fetch wrapper: first request, parse 402
   // requirements, sign the selected payment, and retry with x402 payment headers.
-  const fetchWithPayment = wrapFetchWithPaymentFromConfig(fetch, {
-    schemes: [{ network, client: scheme }],
-    paymentRequirementsSelector: (version: number, accepts: PaymentRequirements[]) => {
-      const selected = selectRequirement(input.policy, input.confirmation)(version, accepts);
-      selectedAmountUsd = amountFromRequirement(selected);
-      paid = true;
-      return selected;
-    },
-  });
+  const fetchWithPayment = wrapFetchWithPayment(fetch, client);
 
   const response = await fetchWithPayment(input.url, {
     method,
@@ -310,6 +333,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
     network,
     amountUsd: selectedAmountUsd,
     paid,
+    builderCode,
     paymentResponse: response.headers.get("PAYMENT-RESPONSE") ?? response.headers.get("X-PAYMENT-RESPONSE") ?? undefined,
     ...preview,
   };
@@ -322,6 +346,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
       amountUsd: selectedAmountUsd,
       status: response.status,
       paid,
+      builderCode,
       createdAt: new Date().toISOString(),
     });
     await appendSpend({

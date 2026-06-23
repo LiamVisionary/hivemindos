@@ -10,6 +10,7 @@ import type { AgentEnvCardProps, EnvValueRowProps } from "@/features/env/env-com
 import type { MorePanelProps } from "@/features/dashboard/MorePanel";
 import type { NotificationGroup, NotificationsPanelProps } from "@/features/notifications/NotificationsPanel";
 import { MemoryTelemetryPanel } from "@/features/dashboard/views/MemoryTelemetryPanel";
+import { AgentNativeInsightsPanel } from "@/features/dashboard/views/AgentNativeInsightsPanel";
 import { MyAppsPanel } from "@/features/dashboard/views/MyAppsPanel";
 import { AgentToolsPanel } from "@/features/dashboard/views/AgentToolsPanel";
 import { MessagingChannelsPanel } from "@/features/dashboard/views/MessagingChannelsPanel";
@@ -724,6 +725,15 @@ export function UtilityPanels(props: UtilityPanelsProps) {
         memoryTelemetry={memoryTelemetry}
         memoryTelemetryLoading={memoryTelemetryLoading}
         refreshMemoryTelemetry={refreshMemoryTelemetry}
+        vaultClass={vaultClass}
+      />
+
+      <AgentNativeInsightsPanel
+        Button={Button}
+        active={activeView === "memory"}
+        fleetClass={fleetClass}
+        formatRelativeTime={formatRelativeTime}
+        sharedVault={sharedVault}
         vaultClass={vaultClass}
       />
 

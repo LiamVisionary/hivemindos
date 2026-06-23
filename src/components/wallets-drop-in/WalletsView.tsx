@@ -4,6 +4,7 @@
 import React from "react";
 import "./wallets.css";
 import * as D from "./wallet-data";
+import { CreateImportWalletModal } from "./CreateImportWalletModal";
 import { WalletRewardsActions } from "./WalletRewardsActions";
 const {
   FR_CCY, FR_MACHINES, frFmtAmount, frFmtUsd, frFmtUsdFull, frFmtChange, frTopBalances,
@@ -520,51 +521,6 @@ function FundAgentModal({ source, onClose, actions }) {
     </div>
   );
 }
-function ImportWalletModal({ wallet, onClose, actions }) {
-  const reimport = !!wallet;
-  const [name, setName] = React.useState(reimport ? wallet.name : "");
-  const [chain, setChain] = React.useState(reimport ? (wallet.addresses && wallet.addresses[0] ? wallet.addresses[0][0] : "Base") : "Base");
-  const [secret, setSecret] = React.useState("");
-  const [state, setState] = React.useState("idle");
-  const save = async () => { setState("checking"); try { if (!actions?.onImportWallet) throw new Error("Wallet import is not available in this build."); await actions.onImportWallet({ wallet, name, chain, secret }); setState("saved"); setTimeout(() => onClose && onClose(), 850); } catch (e) { setState(e instanceof Error ? e.message : "Import failed"); } };
-  React.useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose && onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <div className="fw-modal-back" onMouseDown={onClose}>
-      <section className="fw-modal" role="dialog" aria-modal="true" aria-label="Import wallet" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="fw-modal-head">
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span className="fb-tile" style={{ color: "var(--honey)" }}><BIcon name={reimport ? "refresh" : "plus"} size={19} /></span>
-            <div>
-              <span className="fb-eyebrow">{reimport ? "Reimport wallet" : "Add a wallet"}</span>
-              <h3>{reimport ? wallet.name : "Import wallet"}</h3>
-            </div>
-          </div>
-          <button type="button" className="fw-x" onClick={onClose} aria-label="Close" style={{ transform: "rotate(45deg)" }}><BIcon name="plus" size={14} sw={2} /></button>
-        </div>
-        <p className="fw-sheet-help">{reimport ? "Re-derive this wallet's addresses from its seed or key — balances and holdings refresh on import." : "Import an existing wallet by seed phrase or private key. Addresses are derived for every supported chain."}</p>
-        {!reimport ? <label className="fb-label">Wallet name<input className="fb-field" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Ops Treasury" /></label> : null}
-        <label className="fb-label">Primary chain
-          <select className="fb-select" value={chain} onChange={(e) => setChain(e.target.value)}>
-            {["Base", "Ethereum", "Arbitrum", "Solana"].map((c) => <option key={c}>{c}</option>)}
-          </select>
-        </label>
-        <label className="fb-label">Seed phrase or private key
-          <input className="fb-field fb-mono fw-secret" type="password" value={secret} onChange={(e) => { setSecret(e.target.value); if (state === "saved") setState("idle"); }} placeholder="•••• •••• •••• ••••" />
-        </label>
-        <button type="button" className="fw-save" data-state={state} disabled={state === "checking" || (!reimport && !name.trim()) || !secret.trim()} onClick={save}>
-          {state === "saved" ? <BIcon name="check" size={15} color="#06231d" /> : null}
-          {state === "checking" ? "Deriving addresses…" : state === "saved" ? "Imported" : reimport ? "Reimport" : "Import wallet"}
-        </button>
-        {state !== "idle" && state !== "checking" && state !== "saved" ? <p className="fw-sheet-help" style={{ color: "var(--danger)" }}>{state}</p> : null}
-        <div className="fw-term"><strong>Keys never leave this device</strong><code>Stored in the OS keychain · re-derived on demand</code></div>
-      </section>
-    </div>
-  );
-}
 const FW_FILTERS = [
   { id: "all",   label: "All wallets" },
   { id: "on",    label: "Spending on" },
@@ -1029,7 +985,7 @@ function MyWalletCard({ w, actions }) {
         <BBtn variant="ghost" sm onClick={() => toggleSheet("receive")}><BIcon name="download" size={14} /> Receive</BBtn>
       </div>
       {fund ? <FundAgentModal source={w} onClose={() => setFund(false)} actions={actions} /> : null}
-      {imp ? <ImportWalletModal wallet={w} onClose={() => setImport(false)} actions={actions} /> : null}
+      {imp ? <CreateImportWalletModal wallet={w} onClose={() => setImport(false)} actions={actions} /> : null}
     </div>
   );
 }
@@ -1055,11 +1011,11 @@ function MyWallets({ actions }) {
           {FR_MY_WALLETS.map((w) => <MyWalletCard key={w.id} w={w} actions={actions} />)}
           <button type="button" className="fw-addcard" onClick={() => setAdd(true)}>
             <span className="ring"><BIcon name="plus" size={18} /></span>
-            <span>Import wallet</span>
+            <span>Create or Import Wallet</span>
           </button>
         </div>
       ) : null}
-      {add ? <ImportWalletModal onClose={() => setAdd(false)} actions={actions} /> : null}
+      {add ? <CreateImportWalletModal onClose={() => setAdd(false)} actions={actions} /> : null}
     </div>
   );
 }

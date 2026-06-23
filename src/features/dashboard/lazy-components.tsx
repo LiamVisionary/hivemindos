@@ -19,7 +19,6 @@ export const MachineCell = dynamic(() => import("@/components/cells/MachineCell"
 export const MemoryCell = dynamic(() => import("@/components/cells/MemoryCell").then((mod) => mod.MemoryCell), { ssr: false });
 export const SchedulerView = dynamic(() => import("@/components/scheduler").then((mod) => mod.SchedulerView), { ssr: false });
 export const SetupCell = dynamic(() => import("@/components/cells/SetupCell").then((mod) => mod.SetupCell), { ssr: false });
-export const SwarmView = dynamic(() => import("@/components/swarm").then((mod) => mod.SwarmView), { ssr: false });
 export const TaskModal = dynamic(() => import("@/components/task-modal").then((mod) => mod.TaskModal), { ssr: false });
 
 function FleetViewLoadingFallback() {

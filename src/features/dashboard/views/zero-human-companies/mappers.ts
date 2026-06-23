@@ -11,6 +11,7 @@ import type {
   CompanySpendRollup,
 } from "@/lib/types/company";
 import type { KanbanDeliverable, KanbanLoopReceipt, KanbanLoopSpec } from "@/lib/types/kanban";
+import { computeLoopCapabilityCapital } from "@/lib/services/loops";
 import type {
   Agent,
   AgentState,
@@ -348,81 +349,20 @@ function deriveBurn(company: Company, rollup: CompanySpendRollup, agents: Agent[
   return { today, cap: Math.round(cap), week, runway };
 }
 
-function taskHasDurableOutput(task: KanbanTaskLite): boolean {
-  return Boolean(
-    task.result?.trim() ||
-      task.body?.includes("Deliverable:") ||
-      task.body?.includes("Result:") ||
-      (task.deliverables?.length ?? 0) > 0,
-  );
-}
-
 function deriveCapabilityCapital(
   company: Company,
   rollup: CompanySpendRollup,
   tasks: KanbanTaskLite[],
   agents: Agent[],
 ): CompanyCapabilityCapital {
-  const loops = tasks.map((task) => task.loop).filter(Boolean) as KanbanLoopSpec[];
-  const done = tasks.filter((task) => task.status === "done");
-  const now = Date.now();
-  const recentDone = done.filter((task) => task.completedAt && now - task.completedAt <= 14 * 24 * 60 * 60 * 1000);
-  const outputTasks = done.filter(taskHasDurableOutput);
-  const evalGates = loops.reduce((n, loop) => n + (loop.evalGates?.length ?? 0), 0);
-  const passedEvalGates = loops.reduce(
-    (n, loop) => n + (loop.evalGates?.filter((gate) => gate.status === "passed").length ?? 0),
-    0,
-  );
-  const experiments = loops.reduce((n, loop) => n + (loop.observation?.totalExperiments ?? loop.experiments?.length ?? 0), 0);
-  const committedExperiments = loops.reduce(
-    (n, loop) => n + (loop.observation?.committedExperiments ?? loop.experiments?.filter((item) => item.status === "committed").length ?? 0),
-    0,
-  );
-  const frontierCandidates = loops.reduce((n, loop) => n + (loop.observation?.frontier?.length ?? 0), 0);
-  const antiPatterns = loops.reduce((n, loop) => n + (loop.observation?.antiPatternCount ?? loop.antiPatterns?.length ?? 0), 0);
-  const workflowAssets = new Set(done.flatMap((task) => task.skills ?? []).filter((skill) => skill && skill !== "company-goal")).size + committedExperiments;
-  const learningAssets = outputTasks.length + committedExperiments + antiPatterns;
-  const distillationQueue = done.filter((task) => !task.loopReceipts?.some((receipt) => /distill|learn|memory/i.test(receipt.summary))).length;
-  const spendEfficiency = rollup.totalSpentUsd > 0 ? Math.round((learningAssets / rollup.totalSpentUsd) * 100) / 100 : null;
-  const runtimeCount = new Set(agents.map((agent) => agent.runtime).filter(Boolean)).size;
-  const hasEvo = agents.some((agent) => agent.runtime.toLowerCase() === "evo") || loops.some((loop) => loop.frontierStrategy?.kind === "pareto_per_task");
-  const modelIndependence = clamp((runtimeCount > 0 ? 35 : 0) + Math.min(runtimeCount, 3) * 15 + (hasEvo ? 15 : 0) + (evalGates > 0 ? 15 : 0));
-  const gateScore = evalGates > 0 ? Math.round((passedEvalGates / evalGates) * 100) : loops.length ? 35 : 0;
-  const score = clamp(
-    Math.round(
-      Math.min(35, learningAssets * 7) +
-        Math.min(20, workflowAssets * 4) +
-        Math.min(15, experiments * 2) +
-        Math.min(10, frontierCandidates * 2) +
-        Math.min(10, antiPatterns * 3) +
-        Math.min(10, Math.round(gateScore / 10)),
-    ),
-  );
-
-  const notes = [
-    loops.length ? `${loops.length} optimizer loop${loops.length === 1 ? "" : "s"} attached to company work.` : "Launch autonomy to attach private eval loops to new work.",
-    evalGates ? `${passedEvalGates}/${evalGates} eval gate${evalGates === 1 ? "" : "s"} passed or waiting for evidence.` : "No private eval gates have been recorded yet.",
-    distillationQueue ? `${distillationQueue} completed task${distillationQueue === 1 ? "" : "s"} ready for reviewed memory distillation.` : "Completed work is already reflected in receipts or no work is done yet.",
-  ];
-
-  if (company.autonomy) notes.push("Autonomy is on; idle crews keep receiving fresh work toward the apex goal.");
-
-  return {
-    score,
-    learningAssets,
-    workflowAssets,
-    evalGates,
-    passedEvalGates,
-    experiments,
-    committedExperiments,
-    frontierCandidates,
-    antiPatterns,
-    distillationQueue,
-    learningVelocity: recentDone.length,
-    spendEfficiency,
-    modelIndependence,
-    notes,
-  };
+  return computeLoopCapabilityCapital({
+    tasks,
+    agents,
+    totalSpentUsd: rollup.totalSpentUsd,
+    autonomyActive: company.autonomy,
+    emptyLoopNote: "Launch autonomy to attach private eval loops to new work.",
+    loopAttachmentNoun: "company work",
+  });
 }
 
 export interface BuildColonyInput {

@@ -4,7 +4,8 @@ import type { Company, CompanyProcess } from "@/lib/types/company";
 import { decomposePrdToTaskDrafts, type QueenBeePrdTaskDraft } from "@/lib/services/queen-bee/prd-decomposition";
 import { submitQueenBeeMessage, type QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import { llmDecomposeApexGoal } from "@/lib/services/companies-goal-planner";
-import type { KanbanEvalGate, KanbanLoopSpec } from "@/lib/types/kanban";
+import type { KanbanLoopSpec } from "@/lib/types/kanban";
+import { buildOperatingUnitLearningLoop } from "@/lib/services/loops";
 import type { FlowSpec } from "@/lib/types/agent-flow";
 import { flowFromSequence, getFlowTemplate } from "@/lib/services/queen-bee/flow-templates";
 import { startFlowRun } from "@/lib/services/queen-bee/flow-runner";
@@ -194,19 +195,6 @@ export async function dispatchCompanyFlow(
   };
 }
 
-function companyEvalGate(id: string, title: string, verifier: string, createdAt: number): KanbanEvalGate {
-  return {
-    id,
-    title,
-    kind: "receipt",
-    phase: "post",
-    required: false,
-    status: "pending",
-    verifier,
-    createdAt,
-  };
-}
-
 /**
  * Evo-style private optimization loop for every company-dispatched task. Gates
  * are intentionally non-blocking at creation time: agents can ship useful work
@@ -214,77 +202,17 @@ function companyEvalGate(id: string, title: string, verifier: string, createdAt:
  * eval/experiment structure that future distillers and Evo runs can strengthen.
  */
 function buildCompanyLearningLoop(company: Company, draft: QueenBeePrdTaskDraft, runId: string): KanbanLoopSpec {
-  const now = Date.now();
-  const metric = company.apexGoal?.metric?.trim() || "business outcome";
-  const target = company.apexGoal?.target?.trim();
-  const goal = company.apexGoal?.title?.trim() || company.name;
-  const gatePrefix = `company-${company.id}-${runId}-${draft.title}`.replace(/[^a-z0-9_-]+/gi, "-").slice(0, 80);
-
-  return {
-    mode: "optimizer",
-    goal: `${draft.title}: improve "${goal}" while preserving the company's charter, budget, and evidence trail.`,
-    successCriteria: [
-      target ? `${metric} moves toward ${target}.` : `${metric} has measurable evidence of improvement or a clear next measurement.`,
-      "The result includes reusable company learning: artifact, workflow, decision, customer signal, or anti-pattern.",
-      "Any spend or external action stays inside company governance.",
-    ],
-    evalGates: [
-      companyEvalGate(`${gatePrefix}-outcome`, `Outcome evidence for ${metric}`, "company-private-eval", now),
-      companyEvalGate(`${gatePrefix}-learning`, "Reviewed learning distillation candidate", "company-memory-distiller", now),
-      companyEvalGate(`${gatePrefix}-governance`, "Budget and policy constraints respected", "company-governance", now),
-    ],
-    benchmark: {
-      target: target ? `${metric} -> ${target}` : metric,
-      metricName: metric,
-      metricDirection: "max",
-      instrumentation: "manual",
-      discoveredAt: now,
-      notes: [
-        "Created from zero-human company dispatch.",
-        "Compatible with Evo-style branch scoring: task receipts can later become per-task benchmark scores.",
-      ],
-    },
-    frontierStrategy: {
-      kind: "pareto_per_task",
-      params: { k: 5, task_floor: 0 },
-      seed: now,
-    },
-    experiments: [
-      {
-        id: `exp_${runId}_${Math.abs(hashCode(draft.title)).toString(36)}`,
-        title: draft.title,
-        hypothesis: `This work item is a branch toward the company apex goal: ${goal}.`,
-        status: "candidate",
-        agent: draft.skills?.[0],
-        createdAt: now,
-        updatedAt: now,
-      },
-    ],
-    antiPatterns: [],
-    budget: {
-      maxAttempts: 3,
-      maxRuntimeMs: 60 * 60 * 1000,
-    },
-    retryPolicy: {
-      maxAttempts: 3,
-      onFailure: "needs-human",
-    },
-    handoffRules: [
-      "Prefer recording evidence and reusable learning over only marking the task done.",
-      "Escalate irreversible external actions or budget exceptions for human approval.",
-    ],
-    evidenceRequired: [
-      "Outcome evidence tied to the apex metric.",
-      "Reusable company learning or a clear reason none was found.",
-      "Artifacts, receipts, links, or test output when available.",
-    ],
-  };
-}
-
-function hashCode(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) | 0;
-  return hash;
+  return buildOperatingUnitLearningLoop({
+    unitId: company.id,
+    unitName: company.name,
+    workTitle: draft.title,
+    runId,
+    metricName: company.apexGoal?.metric?.trim() || "business outcome",
+    metricTarget: company.apexGoal?.target?.trim(),
+    strategicGoal: company.apexGoal?.title?.trim() || company.name,
+    branchAgent: draft.skills?.[0],
+    governanceLabel: "company governance",
+  });
 }
 
 export async function dispatchCompanyGoal(

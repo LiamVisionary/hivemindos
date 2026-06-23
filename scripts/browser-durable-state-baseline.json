@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "description": "Existing browser storage references present before the durable-state guard was introduced. New durable state should use /api/dashboard/state or a server-side store; disposable per-tab storage needs guard:allow-browser-storage with a reason.",
+  "entries": [
+    {
+      "file": "src/components/wallets-drop-in/WalletsView.tsx",
+      "line": "try { return localStorage.getItem(\"fr-mywallets-collapsed\") === \"1\"; } catch (e) { return false; }"
+    },
+    {
+      "file": "src/components/wallets-drop-in/WalletsView.tsx",
+      "line": "const toggle = () => setCollapsed((c) => { const n = !c; try { localStorage.setItem(\"fr-mywallets-collapsed\", n ? \"1\" : \"0\"); } catch (e) {} return n; });"
+    },
+    {
+      "file": "src/components/wallets-drop-in/WalletsView.tsx",
+      "line": "try { return localStorage.getItem(FW_DENSITY_KEY) || \"compact\"; } catch (e) { return \"compact\"; }"
+    },
+    {
+      "file": "src/components/wallets-drop-in/WalletsView.tsx",
+      "line": "const setD = (d) => { setDensity(d); setExpanded(null); try { localStorage.setItem(FW_DENSITY_KEY, d); } catch (e) {} };"
+    },
+    {
+      "file": "src/features/dashboard/DashboardApp.tsx",
+      "line": "setFleetAutoUpdatePaused(window.localStorage.getItem(FLEET_AUTO_UPDATE_PAUSED_STORAGE_KEY) === \"1\");"
+    },
+    {
+      "file": "src/features/dashboard/DashboardApp.tsx",
+      "line": "window.localStorage.setItem(FLEET_AUTO_UPDATE_PAUSED_STORAGE_KEY, next ? \"1\" : \"0\");"
+    },
+    {
+      "file": "src/features/dashboard/dashboard-storage.ts",
+      "line": "return parseChatMessagesValue(window.localStorage.getItem(PENDING_CHAT_SAVES_STORAGE_KEY));"
+    },
+    {
+      "file": "src/features/dashboard/dashboard-storage.ts",
+      "line": "window.localStorage.removeItem(PENDING_CHAT_SAVES_STORAGE_KEY);"
+    },
+    {
+      "file": "src/features/dashboard/dashboard-storage.ts",
+      "line": "window.localStorage.setItem(PENDING_CHAT_SAVES_STORAGE_KEY, JSON.stringify(pending));"
+    },
+    {
+      "file": "src/features/dashboard/hooks/use-fleet-auto-update.tsx",
+      "line": "const raw = window.localStorage.getItem(COMMIT_FIRST_SEEN_STORAGE_KEY);"
+    },
+    {
+      "file": "src/features/dashboard/hooks/use-fleet-auto-update.tsx",
+      "line": "window.localStorage.setItem(COMMIT_FIRST_SEEN_STORAGE_KEY, JSON.stringify(value));"
+    },
+    {
+      "file": "src/features/dashboard/hooks/use-tailnet-auto-cleanup.ts",
+      "line": "typeof window === \"undefined\" ? \"\" : window.localStorage.getItem(DISMISSED_PLAN_STORAGE_KEY) ?? \"\""
+    },
+    {
+      "file": "src/features/dashboard/hooks/use-tailnet-auto-cleanup.ts",
+      "line": "const lastSweepAt = Number(window.localStorage.getItem(LAST_SWEEP_STORAGE_KEY) ?? 0);"
+    },
+    {
+      "file": "src/features/dashboard/hooks/use-tailnet-auto-cleanup.ts",
+      "line": "window.localStorage.setItem(LAST_SWEEP_STORAGE_KEY, String(Date.now()));"
+    },
+    {
+      "file": "src/features/dashboard/hooks/use-tailnet-auto-cleanup.ts",
+      "line": "window.localStorage.setItem(DISMISSED_PLAN_STORAGE_KEY, currentFingerprint);"
+    },
+    {
+      "file": "src/features/dashboard/views/WalletPanel.tsx",
+      "line": "try { window.sessionStorage.setItem(\"hivemindos.walletDraftMessage\", text); } catch {}"
+    },
+    {
+      "file": "src/features/native/NativeFirstRunOnboarding.tsx",
+      "line": "return window.localStorage.getItem(DISMISS_KEY) === \"1\" || window.localStorage.getItem(DISMISS_FALLBACK_KEY) === \"1\";"
+    },
+    {
+      "file": "src/features/native/NativeFirstRunOnboarding.tsx",
+      "line": "window.localStorage.setItem(DISMISS_KEY, \"1\");"
+    },
+    {
+      "file": "src/features/native/NativeFirstRunOnboarding.tsx",
+      "line": "window.localStorage.setItem(DISMISS_FALLBACK_KEY, \"1\");"
+    },
+    {
+      "file": "src/features/native/NativeFirstRunOnboarding.tsx",
+      "line": "window.localStorage.removeItem(DISMISS_KEY);"
+    },
+    {
+      "file": "src/features/native/NativeFirstRunOnboarding.tsx",
+      "line": "window.localStorage.removeItem(DISMISS_FALLBACK_KEY);"
+    },
+    {
+      "file": "src/lib/native/dashboard-bootstrap.ts",
+      "line": "window.localStorage.setItem(NATIVE_PRIVATE_FILESYSTEM_CONSENT_KEY, \"1\");"
+    },
+    {
+      "file": "src/lib/native/dashboard-bootstrap.ts",
+      "line": "return window.localStorage.getItem(NATIVE_PRIVATE_FILESYSTEM_CONSENT_KEY) === \"1\";"
+    },
+    {
+      "file": "src/lib/utils/issue-reporter.ts",
+      "line": "const existing = window.localStorage.getItem(INSTALL_ID_KEY);"
+    },
+    {
+      "file": "src/lib/utils/issue-reporter.ts",
+      "line": "window.localStorage.setItem(INSTALL_ID_KEY, fresh);"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import { beeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import { searchContextIndex, type ContextConnectedApp, type ContextConnectedAppRoute, type ContextIndexItem } from "@/lib/services/context-index";
+import { createContextXrayManifestFromContextIndex } from "@/lib/services/context-xray";
 import { applyAppPreferences, readAppPreferences, usageNoteAffinity } from "@/lib/services/fleet/app-preferences";
 import { generationMetricsContext } from "@/lib/services/generation-metrics";
 import { untrustedContextMessage } from "@/lib/services/security/untrusted-context";
@@ -408,6 +409,10 @@ export async function buildTaskRetrievalContextResult(input: {
   sharedVault: SharedVaultConfig | null;
   runtime?: RuntimeCapabilityContext;
   agent?: AgentRetrievalProfile;
+  recordContextXray?: boolean;
+  runId?: string;
+  threadId?: string;
+  model?: string;
 }): Promise<TaskRetrievalContextResult> {
   const trimmed = input.query.trim();
   const baseTelemetry = {
@@ -453,6 +458,15 @@ export async function buildTaskRetrievalContextResult(input: {
     return true;
   });
   const hits = rankHitsForAgent(dedupedHits, input.agent).slice(0, 22);
+  if (input.recordContextXray && (input.runId || input.threadId)) {
+    void createContextXrayManifestFromContextIndex({
+      runId: input.runId,
+      threadId: input.threadId,
+      model: input.model ?? input.runtime?.runtime,
+      query: trimmed,
+      items: hits.map((hit) => hit.item),
+    }).catch(() => undefined);
+  }
   const telemetry: TaskRetrievalTelemetry = {
     queryCount: queries.length,
     hitCount: hits.length,

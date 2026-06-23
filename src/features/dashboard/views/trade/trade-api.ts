@@ -36,6 +36,14 @@ export type CryptoPreparedAction = {
   mode: "read" | "prepare" | "execute";
   endpoint?: { method?: string; route?: string; skill?: string };
   requestBody: Record<string, unknown>;
+  platformFee?: {
+    enabled: boolean;
+    configured: boolean;
+    amountUsd: number;
+    basisPoints: number;
+    recipient?: string;
+    reason?: string;
+  };
   requiresApproval: boolean;
   confirmation?: string;
   missing: string[];
@@ -105,6 +113,14 @@ export type StockQuote = {
   ticker: string;
   notionalUsd: number;
   priceImpactPct?: number;
+  platformFee?: {
+    enabled: boolean;
+    configured: boolean;
+    amountUsd: number;
+    basisPoints: number;
+    recipient?: string;
+    reason?: string;
+  };
   detail: string;
 };
 
@@ -117,6 +133,15 @@ export type StockTradeResult = {
   paper: boolean;
   acquired?: number;
   priceImpactPct?: number;
+  platformFee?: {
+    enabled: boolean;
+    configured: boolean;
+    amountUsd: number;
+    basisPoints: number;
+    recipient?: string;
+    signature?: string;
+    reason?: string;
+  };
   status: string;
   detail: string;
 };
@@ -138,11 +163,14 @@ async function postJson<T>(route: string, body: unknown): Promise<(T & { ok: boo
   return asJson<T>(response);
 }
 
-export async function fetchCryptoCapabilities(agentId: string): Promise<CryptoCapabilityMap | null> {
-  const query = agentId ? `?agentId=${encodeURIComponent(agentId)}` : "";
-  const response = await fetch(`/api/crypto/capabilities${query}`, { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
-  const data = await asJson<CryptoCapabilityMap>(response);
-  return data.ok && Array.isArray((data as CryptoCapabilityMap).providers) ? (data as CryptoCapabilityMap) : null;
+export async function fetchCryptoCapabilities(agentId: string, wallet?: Record<string, unknown> | null): Promise<CryptoCapabilityMap | null> {
+  // POST a status request WITH the wallet so the readiness badges reflect this
+  // wallet's actual spend policy. A bare GET (no wallet) can't evaluate per-wallet
+  // spend readiness, so wallet-native rails (send / x402 / Veil) would show
+  // "Setup" even when they're ready. This is a display hint only — execution
+  // always re-resolves the wallet server-side from the persisted ledger.
+  const result = await postJson<CryptoCapabilityMap>("/api/crypto/capabilities", { action: "status", agentId, wallet: wallet ?? undefined });
+  return result.ok && Array.isArray((result as CryptoCapabilityMap).providers) ? (result as CryptoCapabilityMap) : null;
 }
 
 export async function prepareCryptoAction(params: TradePrepareParams): Promise<{ ok: boolean; error?: string; prepared?: CryptoPreparedAction }> {
@@ -178,8 +206,18 @@ export const SWAP_MAX_USD = 10;
 export const SWAP_TOKENS_BASE = ["USDC", "ETH", "WETH", "USDT", "HIVE"];
 export const SWAP_TOKENS_SOLANA = ["USDC", "SOL", "USDT"];
 
-export type DexSwapQuote = { sell: string; buy: string; sellAmount: number; buyAmount: number; valueUsd: number; detail: string };
-export type DexSwapResult = { network: string; sell: string; buy: string; sellAmount: number; buyAmount: number; valueUsd: number; reference: string; approvalReference?: string; detail: string };
+export type TradePlatformFee = {
+  enabled: boolean;
+  configured: boolean;
+  amountUsd: number;
+  basisPoints: number;
+  recipient?: string;
+  signature?: string;
+  reason?: string;
+};
+
+export type DexSwapQuote = { sell: string; buy: string; sellAmount: number; buyAmount: number; valueUsd: number; platformFee?: TradePlatformFee; detail: string };
+export type DexSwapResult = { network: string; sell: string; buy: string; sellAmount: number; buyAmount: number; valueUsd: number; reference: string; approvalReference?: string; platformFee?: TradePlatformFee; detail: string };
 
 export async function quoteSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; slippageBps?: number }): Promise<{ ok: boolean; error?: string; quote?: DexSwapQuote; confirmation?: string }> {
   return postJson("/api/trading/swap", { action: "quote", ...params });

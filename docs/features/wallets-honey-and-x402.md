@@ -91,16 +91,30 @@ The official client route requires a public HTTPS base URL by default and forwar
 
 The fastest official hosting path is the Cloudflare Worker in `workers/paid-agent-gateway`. It exposes the same hosted seller route (`/api/paid-agents/<slug>/chat/completions`), verifies and settles x402 at the edge, writes D1 receipt metadata, and forwards paid OpenAI-compatible chat bodies to a trusted upstream runtime URL. The downloaded app should point `HIVEMINDOS_OFFICIAL_PAID_AGENT_BASE_URL` at that Worker URL.
 
+Base Builder Code attribution is optional for x402 calls on Base mainnet. Set a Builder Code only on the authoritative caller or seller infrastructure that should receive attribution:
+
+- `HIVEMINDOS_X402_CLIENT_BUILDER_CODE=<base-builder-code>` adds client-side `s` attribution to compatible `/api/wallet/x402` payments made from the local wallet on `eip155:8453`.
+- `HIVEMINDOS_PAID_AGENT_BUILDER_CODE=<base-builder-code>` adds seller-side `a` attribution to paid-agent 402 requirements on `eip155:8453`, including the hosted Worker.
+- `HIVEMINDOS_X402_BUILDER_CODE=<base-builder-code>` is a shared fallback for deployments that intentionally want one code for both roles.
+
+Builder Codes must be lowercase letters, digits, or underscores, 1-32 characters. They are public attribution identifiers, not secrets. The app ignores them on non-Base-mainnet networks.
+
+Mainnet paid-agent revenue also needs a mainnet-capable facilitator. Paid-agent gateways default to Base mainnet with the CDP facilitator at `https://api.cdp.coinbase.com/platform/v2/x402` and require `CDP_API_KEY_ID` plus `CDP_API_KEY_SECRET`. Testnet mode is disabled by default; set `HIVEMINDOS_PAID_AGENT_TESTNET_MODE=true` to opt into Base Sepolia with `https://x402.org/facilitator` for development. The CDP path uses `@coinbase/x402` to generate request-specific facilitator JWT auth headers.
+
 Production setup is fail-closed. For a hosted or self-hosted seller gateway, configure:
 
 - `HIVEMINDOS_PAID_AGENT_GATEWAY_ENABLED=true`
 - `HIVEMINDOS_PAID_AGENT_SELLER_MODE=self-hosted`
 - `HIVEMINDOS_PAID_AGENT_PAY_TO=<recipient-address>`
-- `HIVEMINDOS_PAID_AGENT_FACILITATOR_URL=<x402-facilitator-url>`
+- Optional: `HIVEMINDOS_PAID_AGENT_TESTNET_MODE=true` for Base Sepolia development; leave unset or `false` for production Base mainnet
+- Optional: `HIVEMINDOS_PAID_AGENT_FACILITATOR_URL=<x402-facilitator-url>` only when overriding the default CDP or testnet facilitator
+- `CDP_API_KEY_ID=<cdp-api-key-id>` and `CDP_API_KEY_SECRET=<cdp-api-key-secret>` for the CDP facilitator
+- `HIVEMINDOS_PAID_AGENT_FACILITATOR_BEARER=<facilitator-bearer>` for non-CDP facilitators that use a static bearer token
 - `HIVEMINDOS_PAID_AGENT_PRICE_USD=<price-per-call>`
+- Optional: `HIVEMINDOS_PAID_AGENT_BUILDER_CODE=<base-builder-code>`
 - `HIVEMINDOS_PAID_AGENT_PROFILE_JSON=<json>` or `HIVEMINDOS_PAID_AGENT_PROFILE_PATH=<path-to-exported-profile>`
 
-For multiple products, use `HIVEMINDOS_PAID_AGENT_CATALOG_JSON` or `HIVEMINDOS_PAID_AGENT_CATALOG_PATH` with entries containing `slug`, `description`, `priceUsd`, `payTo`, `facilitatorUrl`, and a curated `agent` profile. The route never exposes provider tokens or wallet secrets.
+For multiple products, use `HIVEMINDOS_PAID_AGENT_CATALOG_JSON` or `HIVEMINDOS_PAID_AGENT_CATALOG_PATH` with entries containing `slug`, `description`, `priceUsd`, `payTo`, `facilitatorUrl`, optional `builderCode`, and a curated `agent` profile. The route never exposes provider tokens or wallet secrets.
 
 Do not package an official `payTo` address into the downloadable app as the source of truth. A local app install is controlled by the user: they can edit env, config, app bundles, and local routes. If official revenue or feature access depends on the payment, the app must call a hosted HivemindOS resource server, or a HivemindOS backend must verify the x402 settlement against the expected official `payTo`, network, amount, and resource before granting server-side value. Local `self-hosted` seller mode is for operators who intentionally want to sell their own agent endpoint and receive payment to their own address.
 
@@ -111,6 +125,25 @@ Optional accounting:
 - `HIVEMINDOS_PAID_AGENT_REWARD_HONEY_ENABLED=true` lets the trusted runtime submit reward-Honey usage observations for the agent's response.
 - `HIVEMINDOS_PAID_AGENT_MIRROR_MANAGED_HONEY=true` mirrors each settled x402 call into managed HONEY as an equal credit/debit pair for operator reporting.
 - HIVE can fund Bankr LLM credits or managed HONEY through the managed-agent billing rail; x402 remains the external per-call charge.
+
+## Trading Platform Fees
+
+The downloadable app cannot be the authority for official HivemindOS revenue: users can edit local config, patch local routes, or rebuild the app. For the official build, local wallet rails read public fee policy from HivemindOS-hosted infrastructure by default:
+
+- `HIVEMINDOS_PLATFORM_FEE_POLICY_URL=https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/platform-fees/config`
+
+That hosted policy returns public terms such as fee basis points, minimum fee, supported rails, and recipient addresses. When a hosted policy has a recipient for the acting wallet network, local USDC sends, local DEX swaps, and xStocks trades quote the fee before confirmation, then collect it as a separate USDC transfer after the main action succeeds. The fee transfer is recorded in the spend ledger as `platform-fee` so it remains visible in wallet activity and budgets.
+
+Self-hosted operators can override the hosted policy for their own install by setting `HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED` or local recipient variables. Fee-rate defaults alone keep using the hosted official policy:
+
+- `HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED=true`
+- `HIVEMINDOS_TRADING_PLATFORM_FEE_BPS=100` for a 1% fee
+- `HIVEMINDOS_TRADING_PLATFORM_MIN_FEE_USD=0.01` for a minimum fee
+- Optional: `HIVEMINDOS_TRADING_PLATFORM_MAX_FEE_USD=<max-fee>`
+- `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM=<base-or-evm-address>` for Base wallet sends and Base DEX swaps
+- `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA=<solana-address>` for Solana DEX and xStocks swaps
+
+Some Trading tab capabilities are not safely fee-able from the local app alone. Bankr actions, MoneyClaw card payments, and Alpaca brokerage orders need a hosted/proxy fee path, provider-native partner fee support, or a contract-based settlement layer. Do not present local fee settings as official HivemindOS-wide revenue enforcement: a downloaded app is user-controlled and can be modified. Strong official enforcement must happen in hosted HivemindOS infrastructure or in a verifiable third-party settlement flow that checks recipient, network, amount, resource, and receipt server-side.
 
 Runtime policy:
 
@@ -199,6 +232,7 @@ The Wallets tab treats each agent wallet as a set of payment rails:
 - MoneyClaw keys can be saved per agent or shared across agents after the API key is validated.
 - UsePod agents show a prepaid rail with deposit address, last balance, last route, model count, and test status from the runtime metadata.
 - x402 requests use the local wallet policy, max-payment cap, and explicit confirmation text for risky sends.
+- When `HIVEMINDOS_X402_CLIENT_BUILDER_CODE` is set, compatible Base mainnet x402 endpoints can record the client Builder Code on settlement calldata.
 
 Token-facing surfaces:
 

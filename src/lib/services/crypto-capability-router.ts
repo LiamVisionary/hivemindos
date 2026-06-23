@@ -9,6 +9,7 @@ import { getWalletInfo } from "@/lib/services/wallet/local-wallet-vault";
 import { resolveVeilCliPath, resolveVeilMcpPath } from "@/lib/services/wallet/veil-cli";
 import { buildClearSigningReview, type ClearSigningReview } from "@/lib/services/crypto/clear-signing";
 import { isCrosschainCryptoIntent, planCrosschainIntent, type CrosschainIntentPlan } from "@/lib/services/crypto/crosschain-intents";
+import { quoteTradingPlatformFee, type PlatformFeeQuote } from "@/lib/services/wallet/platform-fees";
 
 export type CryptoCapabilityIntent =
   | "status"
@@ -83,6 +84,7 @@ export type CryptoPreparedAction = {
   guidance: string;
   review?: ClearSigningReview;
   crosschainPlan?: CrosschainIntentPlan;
+  platformFee?: PlatformFeeQuote;
 };
 
 export type CryptoCapabilityRouterInput = {
@@ -248,6 +250,7 @@ export async function prepareCryptoAction(input: CryptoCapabilityRouterInput & {
     requestBody,
     confirmation,
   });
+  const platformFee = await preparedPlatformFee(intent, input);
   return {
     intent,
     provider: selected.provider,
@@ -261,6 +264,7 @@ export async function prepareCryptoAction(input: CryptoCapabilityRouterInput & {
     guidance: guidanceForIntent(intent, selected),
     review,
     crosschainPlan,
+    platformFee,
   };
 }
 
@@ -620,6 +624,14 @@ function buildPreparedActionReview(input: {
     confirmation: input.confirmation,
     metadata: { requestBody: input.requestBody },
   });
+}
+
+async function preparedPlatformFee(inputIntent: CryptoCapabilityIntent, input: CryptoCapabilityRouterInput): Promise<PlatformFeeQuote | undefined> {
+  if (inputIntent !== "send") return undefined;
+  const network = input.wallet?.network;
+  const amountUsd = Number(input.amountUsd);
+  if (!network || !Number.isFinite(amountUsd) || amountUsd <= 0) return undefined;
+  return quoteTradingPlatformFee({ source: "wallet-send", network, amountUsd });
 }
 
 function reviewKindForIntent(intent: CryptoCapabilityIntent) {

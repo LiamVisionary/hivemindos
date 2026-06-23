@@ -10,6 +10,7 @@ import {
 import { getBrainSkillInventory, getSharedBrainSkillsCached } from "@/lib/services/obsidian/brain-skills";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { externalAgentProviderItems } from "@/lib/services/external-agent-providers";
+import { hiveActionContextIndexItems, listHiveActions } from "@/lib/services/hive-actions";
 import { HIVE_MCP_SERVER_CATALOG } from "@/lib/services/mcp/catalog";
 import {
   USEPOD_COMPATIBILITY_MATRIX,
@@ -678,6 +679,7 @@ function localCliToolItems(): ContextIndexItem[] {
         "GET /api/crypto/capabilities?intent=<status|portfolio|receive|send|private-transfer|paid-api|private-paid-api|trade|crosschain-swap|bridge|crosschain-payment|token-launch|polymarket|hyperliquid|automation|nft|agent-job|card-payment|fund-llm-credits>&agentId=<id> returns the capability map. POST { action: 'select', intent, agentId, wallet, preferredProvider? } selects a rail. POST { action: 'prepare', intent, agentId, wallet, url?, recipientAddress?, amountUsd?, asset?, fromChain?, toChain?, fromAsset?, toAsset? } returns the endpoint, draft body, missing readiness, approval requirement, confirmation token, clear-signing review, and crosschain plan when relevant.",
         "MCP path: run hivemind-mcp as a stdio MCP server. It exposes crypto_capabilities for readiness, select_crypto_rail for no-side-effect provider selection, prepare_crypto_action for provider endpoint/request-body drafts, review_crypto_action for clear-signing, agent_crypto_identity for local identity/listing records, and crypto_risk_monitor for DARC-style control checks.",
         "The router covers Bankr for wallet portfolio, swaps/trades, crosschain swaps/bridges/payments, token launches, Polymarket, Hyperliquid, recurring automations, NFT actions, Agent API jobs, and LLM credit funding; x402 for public paid API fetches and local-wallet USDC sends; Veil for private transfers and private x402; MoneyClaw for card/web payment readiness; and UsePod for prepaid provider-managed paid inference/paywalls.",
+        "Official trading platform fee policy is fetched from the hosted HivemindOS policy endpoint by default; local HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED or HIVEMINDOS_PLATFORM_FEE_RECIPIENT_* variables switch an install to self-hosted override policy, while fee-rate defaults alone keep using hosted policy. Locally signed USDC-capable rails such as /api/wallet/send, /api/trading/swap, and xStocks can quote and collect the policy fee as a separate USDC transfer. Bankr, MoneyClaw, and Alpaca brokerage revenue needs hosted/proxy or provider-native fee enforcement.",
         "Execution remains with hardened routes and gates: /api/bankr/actions, /api/bankr/llm-credits, /api/wallet/x402, /api/wallet/veil/x402, /api/wallet/veil/transfer, /api/wallet/send, /api/wallet/moneyclaw, /api/usepod/status, /api/usepod/deposit-transaction, /api/crypto/clear-signing, /api/crypto/agent-identity, and /api/crypto/risk-monitor.",
         "Side-effect policy: call status/select/prepare first; do not execute sends, swaps, trades, token launches, bets, leverage positions, NFT mutations, automations, paid API calls, card payments, private transfers, or LLM credit funding unless wallet Spend and caps allow it, the wallet's explicit auto-send/auto-use policy allows that action, or the user has explicitly confirmed the prepared draft. Never ask for, print, store, or summarize private keys, seed phrases, API keys, card details, or wallet secrets.",
       ].join(" "),
@@ -728,7 +730,7 @@ function localCliToolItems(): ContextIndexItem[] {
       kind: "tool-schema",
       title: "paid agent x402 gateway",
       summary: "OpenAI-compatible per-call paid agent endpoint that verifies x402 payment before calling a curated HivemindOS runtime profile.",
-      tags: ["paid agent", "x402", "chat completions", "openai compatible", "agent monetization", "honey", "hive", "bankr", "usepod", "venice", "openrouter", "runtime"],
+      tags: ["paid agent", "x402", "builder code", "chat completions", "openai compatible", "agent monetization", "honey", "hive", "bankr", "usepod", "venice", "openrouter", "runtime"],
       aliases: [
         "charge per agent call",
         "sell an agent",
@@ -742,7 +744,8 @@ function localCliToolItems(): ContextIndexItem[] {
         "Use /api/official-paid-agents/<slug>/chat/completions from downloaded apps when calling official HivemindOS monetized agents. This is a buyer/proxy path to HivemindOS-hosted infrastructure and must not package official payTo, facilitator credentials, provider keys, HONEY/HIVE entitlement logic, or quota authority.",
         "Use /api/paid-agents/<slug>/chat/completions only when exposing a self-hosted curated HivemindOS agent as an OpenAI-compatible seller endpoint that charges the caller's crypto wallet per request through x402.",
         "For the official hosted path, deploy workers/paid-agent-gateway as a Cloudflare Worker. The Worker verifies and settles x402, records D1 receipt metadata and idempotency keys, then forwards paid OpenAI-compatible chat bodies to HIVEMINDOS_PAID_AGENT_UPSTREAM_URL.",
-        "Production configuration is fail-closed: set HIVEMINDOS_PAID_AGENT_GATEWAY_ENABLED=true plus HIVEMINDOS_PAID_AGENT_SELLER_MODE=self-hosted, HIVEMINDOS_PAID_AGENT_PAY_TO, and HIVEMINDOS_PAID_AGENT_FACILITATOR_URL, then define either one default agent with HIVEMINDOS_PAID_AGENT_PROFILE_JSON/HIVEMINDOS_PAID_AGENT_PROFILE_PATH or a catalog with HIVEMINDOS_PAID_AGENT_CATALOG_JSON/HIVEMINDOS_PAID_AGENT_CATALOG_PATH.",
+        "Production configuration is fail-closed: set HIVEMINDOS_PAID_AGENT_GATEWAY_ENABLED=true plus HIVEMINDOS_PAID_AGENT_SELLER_MODE=self-hosted, HIVEMINDOS_PAID_AGENT_PAY_TO, CDP_API_KEY_ID, and CDP_API_KEY_SECRET, then define either one default agent with HIVEMINDOS_PAID_AGENT_PROFILE_JSON/HIVEMINDOS_PAID_AGENT_PROFILE_PATH or a catalog with HIVEMINDOS_PAID_AGENT_CATALOG_JSON/HIVEMINDOS_PAID_AGENT_CATALOG_PATH. The default paid-agent seller path is Base mainnet with the CDP facilitator; set HIVEMINDOS_PAID_AGENT_TESTNET_MODE=true only for Base Sepolia development with x402.org.",
+        "Optional Base Builder Code attribution is configured with HIVEMINDOS_X402_CLIENT_BUILDER_CODE for compatible local wallet x402 calls and HIVEMINDOS_PAID_AGENT_BUILDER_CODE or per-catalog builderCode for paid-agent seller routes on eip155:8453. Builder Codes are public identifiers, not secrets, and must never replace server-side payTo, amount, network, resource, or entitlement checks.",
         "Do not package an official payTo address into the downloadable app as authoritative. A downloaded app is user-controlled; official monetized agents should use a HivemindOS-hosted resource server or server-side receipt verification against the expected payTo, network, amount, and resource. Local self-hosted seller mode is only for operators selling their own endpoint.",
         "Recommended public runtimes are hivemind-os for local/OpenAI-compatible, Bankr, Venice, UsePod, OpenRouter, and Hive Fusion model routes; Hermes and OpenClaw can be exposed only through curated profiles; Codex, Claude Code, OpenCode, OpenHands, Aider, Aeon, and Evo should stay as managed HONEY jobs with explicit workspace/task scope by default.",
         "The route verifies x402 before invoking /api/chat/agent-runtime, settles after a successful answer, returns a PAYMENT-RESPONSE header, writes a local paid-agent receipt, and can mirror each settled call into managed HONEY credit/debit accounting when HIVEMINDOS_PAID_AGENT_MIRROR_MANAGED_HONEY=true.",
@@ -1348,7 +1351,7 @@ function scheduleFsSourceRefresh(state: FsIndexState, options: ContextIndexOptio
 
 function perRequestItems(options: ContextIndexOptions, wants: (kind: ContextIndexKind) => boolean): ContextIndexItem[] {
   return [
-    ...(wants("tool-schema") ? [...localCliToolItems(), ...externalAgentProviderItems(), ...mcpCatalogItems()] : []),
+    ...(wants("tool-schema") ? [...hiveActionContextIndexItems(listHiveActions()), ...localCliToolItems(), ...externalAgentProviderItems(), ...mcpCatalogItems()] : []),
     ...(wants("connected-app") || wants("app-endpoint") ? connectedAppItems(options.connectedApps) : []),
     ...(wants("runtime") ? runtimeItems() : []),
   ].filter((item) => wants(item.kind));

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { requireAuth } from "@/lib/utils/server-auth";
 import { executeGovernedUsdcSend } from "@/lib/services/wallet/governed-send";
 
 type SendUsdcBody = {
+  action?: string;
   agentId?: string;
   toAddress?: string;
   amountUsd?: number;
@@ -11,6 +13,17 @@ type SendUsdcBody = {
   confirmation?: string;
   approvalToken?: string;
 };
+
+type RouteSendApproval = {
+  agentId: string;
+  toAddress: string;
+  amountUsd: number;
+  maxPaymentUsd?: number;
+  expiresAtMs: number;
+};
+
+const SEND_APPROVAL_TTL_MS = 60_000;
+const routeSendApprovals = new Map<string, RouteSendApproval>();
 
 export async function POST(request: NextRequest) {
   const unauthorized = await requireAuth(request);
@@ -28,6 +41,19 @@ export async function POST(request: NextRequest) {
     if (!autoPayEnabled && body.confirmation !== "SEND_USDC") {
       return sendError("Wallet auto-use is off. Type SEND_USDC to confirm this transfer.");
     }
+    if (body.action && body.action !== "approve" && body.action !== "send") {
+      return sendError(`Unsupported wallet send action: ${body.action}`);
+    }
+    if (body.action === "approve") {
+      const approval = createRouteSendApproval(body);
+      return NextResponse.json({
+        ok: true,
+        approvalToken: approval.token,
+        expiresAt: new Date(approval.expiresAtMs).toISOString(),
+      });
+    }
+    const approvalError = consumeRouteSendApproval(body);
+    if (approvalError) return approvalError;
 
     const result = await executeGovernedUsdcSend({
       agentId: body.agentId!.trim(),
@@ -39,10 +65,60 @@ export async function POST(request: NextRequest) {
       const status = result.status === "not_found" ? 404 : result.status === "blocked" ? 403 : result.status === "pending_approval" ? 202 : 400;
       return NextResponse.json({ ok: false, status: result.status === "error" ? undefined : result.status, error: result.error, approval: result.approval }, { status });
     }
-    return NextResponse.json({ ok: true, signature: result.signature, network: result.network });
+    return NextResponse.json({ ok: true, signature: result.signature, network: result.network, platformFee: result.platformFee });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Failed to send USDC" }, { status: 500 });
   }
+}
+
+function createRouteSendApproval(body: SendUsdcBody) {
+  pruneRouteSendApprovals();
+  const token = randomUUID();
+  const expiresAtMs = Date.now() + SEND_APPROVAL_TTL_MS;
+  routeSendApprovals.set(token, {
+    agentId: body.agentId!.trim(),
+    toAddress: body.toAddress!.trim(),
+    amountUsd: Number(body.amountUsd),
+    maxPaymentUsd: body.maxPaymentUsd == null ? undefined : Number(body.maxPaymentUsd),
+    expiresAtMs,
+  });
+  return { token, expiresAtMs };
+}
+
+function consumeRouteSendApproval(body: SendUsdcBody) {
+  pruneRouteSendApprovals();
+  const token = body.approvalToken?.trim();
+  if (!token) return sendError("A fresh server approval is required before sending USDC.");
+  const approval = routeSendApprovals.get(token);
+  if (approval) routeSendApprovals.delete(token);
+  if (!approval || !matchesRouteSendApproval(approval, body)) {
+    return sendError("A fresh server approval is required before sending USDC.");
+  }
+  return null;
+}
+
+function pruneRouteSendApprovals() {
+  const now = Date.now();
+  for (const [token, approval] of routeSendApprovals) {
+    if (approval.expiresAtMs <= now) routeSendApprovals.delete(token);
+  }
+}
+
+function matchesRouteSendApproval(approval: RouteSendApproval, body: SendUsdcBody) {
+  return approval.agentId === body.agentId?.trim()
+    && approval.toAddress.toLowerCase() === body.toAddress?.trim().toLowerCase()
+    && sameUsd(approval.amountUsd, Number(body.amountUsd))
+    && sameOptionalUsd(approval.maxPaymentUsd, body.maxPaymentUsd == null ? undefined : Number(body.maxPaymentUsd));
+}
+
+function sameOptionalUsd(left: number | undefined, right: number | undefined) {
+  if (left == null && right == null) return true;
+  if (left == null || right == null) return false;
+  return sameUsd(left, right);
+}
+
+function sameUsd(left: number, right: number) {
+  return Number.isFinite(left) && Number.isFinite(right) && Math.abs(left - right) <= 0.0001;
 }
 
 function validateSendBody(body: SendUsdcBody) {

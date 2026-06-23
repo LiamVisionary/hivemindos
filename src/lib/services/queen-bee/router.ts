@@ -149,7 +149,27 @@ export function inferQueenBeeWorkerClass(task: QueenBeeTaskIntent): QueenBeeWork
 export type QueenBeeRouterOptions = {
   /** Recent per-agent completion/failure counts; adjusts scores by ±15 once an agent has enough history. */
   outcomes?: Record<string, { completed: number; failed: number }>;
+  /** In-flight (assigned, not-yet-done) task count per agent name/id; spreads bursts across equal agents. */
+  assignments?: Record<string, number>;
 };
+
+const LOAD_PENALTY_PER_TASK = 9;
+const LOAD_PENALTY_MAX = 45;
+
+function agentInFlight(agent: QueenBeeAgent, assignments?: Record<string, number>) {
+  if (!assignments) return 0;
+  for (const key of [agent.name, agent.id, agent.agentId]) {
+    if (key && assignments[key]) return assignments[key];
+  }
+  return 0;
+}
+
+function loadPenalty(agent: QueenBeeAgent, options: QueenBeeRouterOptions, reasons: string[]) {
+  const inFlight = agentInFlight(agent, options.assignments);
+  if (inFlight <= 0) return 0;
+  reasons.push(`busy with ${inFlight} in-flight task${inFlight === 1 ? "" : "s"}`);
+  return -Math.min(LOAD_PENALTY_MAX, inFlight * LOAD_PENALTY_PER_TASK);
+}
 
 export function chooseQueenBeeDelegate(task: QueenBeeTaskIntent, machines: QueenBeeMachine[] = [], options: QueenBeeRouterOptions = {}): QueenBeeDelegate {
   const workerClass = inferQueenBeeWorkerClass(task);
@@ -189,14 +209,27 @@ function candidateAgents(machine: QueenBeeMachine, workerClass: QueenBeeWorkerCl
 const OUTCOME_MIN_SAMPLES = 3;
 const OUTCOME_MAX_ADJUSTMENT = 15;
 
-function outcomeScore(agent: QueenBeeAgent, options: QueenBeeRouterOptions, reasons: string[]) {
-  const agentId = agent.id || agent.agentId;
-  const outcome = agentId ? options.outcomes?.[agentId] : undefined;
+function lookupOutcome(agent: QueenBeeAgent, outcomes?: Record<string, { completed: number; failed: number }>) {
+  if (!outcomes) return undefined;
+  // Local session stats are keyed by agent id; board-derived (cross-machine) stats are keyed
+  // by assignee name. Check both so routing learns from remote agents too.
+  for (const key of [agent.id, agent.agentId, agent.name]) {
+    if (key && outcomes[key]) return outcomes[key];
+  }
+  return undefined;
+}
+
+function outcomeScore(agent: QueenBeeAgent, options: QueenBeeRouterOptions, reasons: string[], classMatched: boolean) {
+  const outcome = lookupOutcome(agent, options.outcomes);
   if (!outcome) return 0;
   const total = outcome.completed + outcome.failed;
   if (total < OUTCOME_MIN_SAMPLES) return 0;
   const successRate = outcome.completed / total;
   const adjustment = Math.round((successRate - 0.5) * 2 * OUTCOME_MAX_ADJUSTMENT);
+  // Recency should only LIFT an agent for work it actually matches: a recently-busy
+  // off-class generalist must not outrank a fresh specialist on every task type. The
+  // penalty for a weak record still applies regardless of class.
+  if (adjustment > 0 && !classMatched) return 0;
   if (adjustment > 0) reasons.push(`strong recent completion rate (${outcome.completed}/${total})`);
   if (adjustment < 0) reasons.push(`weak recent completion rate (${outcome.completed}/${total})`);
   return adjustment;
@@ -208,12 +241,15 @@ function scoreCandidate(agent: QueenBeeAgent, machine: QueenBeeMachine, workerCl
   const rawAgentClass = String(agent.workerClass || "").toLowerCase().trim();
   const agentClass = normalizeWorkerClass(agent.workerClass) ?? "general";
   const isCustomClass = Boolean(rawAgentClass) && !WORKER_CLASSES.has(rawAgentClass as QueenBeeWorkerClass);
+  let classMatched = false;
   if (agentClass === workerClass) {
     score += 100;
+    classMatched = true;
     reasons.push(`exact ${workerClass} worker class`);
   } else if (isCustomClass && taskMentionsClass(task, rawAgentClass)) {
     // Custom, user-defined worker classes are first-class when the request names the specialty.
     score += 100;
+    classMatched = true;
     reasons.push(`custom "${rawAgentClass}" specialty matched the request`);
   } else if (agentClass === "general") {
     score += 35;
@@ -237,7 +273,8 @@ function scoreCandidate(agent: QueenBeeAgent, machine: QueenBeeMachine, workerCl
   const runtimeIndex = RUNTIME_PRIORITY.indexOf(String(agent.runtime || ""));
   if (runtimeIndex >= 0) score += Math.max(0, 12 - runtimeIndex * 2);
   score += taskAffinityScore(agent, machine, task, reasons);
-  score += outcomeScore(agent, options, reasons);
+  score += outcomeScore(agent, options, reasons, classMatched);
+  score += loadPenalty(agent, options, reasons); // spread bursts across equally-good agents
   if (machine.device?.self) score += 1; // tie-break only; do not prefer local over a better remote specialist.
   return { agent, machine, workerClass, score, reasons };
 }

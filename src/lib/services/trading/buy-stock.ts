@@ -10,6 +10,15 @@ import {
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 import {
+  assertTradingPlatformFeeReady,
+  collectTradingPlatformFee,
+  platformFeeDetail,
+  platformFeeReceiptDetail,
+  quoteTradingPlatformFee,
+  type PlatformFeeCollection,
+  type PlatformFeeQuote,
+} from "@/lib/services/wallet/platform-fees";
+import {
   evaluateSpend,
   resolveSpendGovernance,
   shouldEvaluateSpend,
@@ -118,6 +127,7 @@ export type BuyStockResult = {
   /** Best-effort acquired amount: filled shares (alpaca) or token units (xstocks). */
   acquired?: number;
   priceImpactPct?: number;
+  platformFee?: PlatformFeeCollection;
   status: string;
   detail: string;
 };
@@ -129,6 +139,7 @@ export type BuyStockQuote = {
   /** Estimated equity acquired in human units, when derivable. */
   estimatedUnits?: number;
   priceImpactPct?: number;
+  platformFee?: PlatformFeeQuote;
   detail: string;
 };
 
@@ -380,8 +391,10 @@ async function executeXStocksSwap(input: BuyStockInput): Promise<BuyStockResult>
   const slippageBps = input.slippageBps && input.slippageBps > 0 ? input.slippageBps : DEFAULT_SLIPPAGE_BPS;
   const amountAtomic = Math.round(input.notionalUsd * 1_000_000); // USDC has 6 decimals.
   const quote = await quoteXStocksLeg(token.mint, side, amountAtomic, slippageBps);
+  await assertTradingPlatformFeeReady({ source: "xstocks", network: input.network, amountUsd: input.notionalUsd });
 
   const keypair = Keypair.fromSecretKey(base58.decode(input.secret));
+  const fromAddress = keypair.publicKey.toBase58();
   const swapResponse = await fetch(`${JUPITER_BASE}/swap/v1/swap`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -412,6 +425,14 @@ async function executeXStocksSwap(input: BuyStockInput): Promise<BuyStockResult>
   const priceImpactPct = quote.priceImpactPct != null ? Number(quote.priceImpactPct) : undefined;
   // For a sell the swap's outAmount is the realized USDC (6 decimals).
   const realizedUsd = side === "sell" ? (Number(quote.outAmount) || 0) / 1_000_000 : input.notionalUsd;
+  const platformFee = await collectTradingPlatformFee({
+    agentId: input.agentId,
+    network: input.network,
+    secret: input.secret,
+    fromAddress,
+    amountUsd: input.notionalUsd,
+    source: "xstocks",
+  });
   return {
     ok: true,
     side,
@@ -421,10 +442,11 @@ async function executeXStocksSwap(input: BuyStockInput): Promise<BuyStockResult>
     reference: signature,
     paper: false,
     priceImpactPct,
+    platformFee,
     status: "confirmed",
     detail: side === "sell"
-      ? `Swapped ${token.symbol} (${token.name}) into ~$${realizedUsd.toFixed(2)} USDC. Tx ${signature}.`
-      : `Swapped ~$${input.notionalUsd.toFixed(2)} USDC into ${token.symbol} (${token.name}). Tx ${signature}.`,
+      ? `Swapped ${token.symbol} (${token.name}) into ~$${realizedUsd.toFixed(2)} USDC. Tx ${signature}.${platformFeeReceiptDetail(platformFee)}`
+      : `Swapped ~$${input.notionalUsd.toFixed(2)} USDC into ${token.symbol} (${token.name}). Tx ${signature}.${platformFeeReceiptDetail(platformFee)}`,
   };
 }
 
@@ -520,14 +542,16 @@ export async function discoverStockTradeQuote(input: Pick<BuyStockInput, "side" 
   const quote = await quoteXStocksLeg(token.mint, side, Math.round(notionalUsd * 1_000_000), slippageBps);
   const priceImpactPct = quote.priceImpactPct != null ? Number(quote.priceImpactPct) : undefined;
   const impactNote = priceImpactPct != null ? ` (price impact ${(priceImpactPct * 100).toFixed(2)}%)` : "";
+  const platformFee = await quoteTradingPlatformFee({ source: "xstocks", network: input.policy.network, amountUsd: notionalUsd });
   return {
     venue,
     ticker: token.symbol,
     notionalUsd,
     priceImpactPct,
+    platformFee,
     detail: side === "sell"
-      ? `Swap ${token.symbol} -> ~$${notionalUsd.toFixed(2)} USDC via Jupiter${impactNote}.`
-      : `Swap ~$${notionalUsd.toFixed(2)} USDC -> ${token.symbol} via Jupiter${impactNote}.`,
+      ? `Swap ${token.symbol} -> ~$${notionalUsd.toFixed(2)} USDC via Jupiter${impactNote}.${platformFeeDetail(platformFee)}`
+      : `Swap ~$${notionalUsd.toFixed(2)} USDC -> ${token.symbol} via Jupiter${impactNote}.${platformFeeDetail(platformFee)}`,
   };
 }
 

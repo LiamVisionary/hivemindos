@@ -1,3 +1,5 @@
+import type { LoopCapabilityCapital } from "@/lib/types/loops";
+
 /**
  * A Company groups agents into an accountable business unit: a shared charter, a
  * collective budget rollup, and a single kill switch (`frozen`) that halts spend
@@ -156,19 +158,4 @@ export interface CompanyMemberSpend {
  * diversity. It is intentionally computed from task/loop state so the company
  * can swap models without losing its veteran layer.
  */
-export interface CompanyCapabilityCapital {
-  score: number;
-  learningAssets: number;
-  workflowAssets: number;
-  evalGates: number;
-  passedEvalGates: number;
-  experiments: number;
-  committedExperiments: number;
-  frontierCandidates: number;
-  antiPatterns: number;
-  distillationQueue: number;
-  learningVelocity: number;
-  spendEfficiency: number | null;
-  modelIndependence: number;
-  notes: string[];
-}
+export type CompanyCapabilityCapital = LoopCapabilityCapital;

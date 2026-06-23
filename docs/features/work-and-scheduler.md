@@ -77,9 +77,11 @@ The command expands a short request into a more complete build brief, including:
 
 After rewriting the prompt, HivemindOS submits it to `/api/queen-bee`. Queen Bee records the request as a Work Board task, ranks online chat-capable fleet agents by worker class and routing context, writes the normal receipt trail, and can schedule autonomous pickup for act-mode tasks. Use ordinary Queen Bee or Work Board planning flows when you want to inspect routing without starting the build.
 
+Queen Bee also writes visual plan artifacts for accepted tasks and PRD decompositions. These artifacts link back to the Work Board task or PRD epic, include a route/dependency diagram, and show risk notes so a human reviewer can understand the plan without opening the full task body first. They are visible from the Memory review workbench and through `/api/visual-artifacts`.
+
 ### Loop Contracts And Eval Gates
 
-Loop-aware Work Board tasks can carry a `loop` contract. The contract records the mode (`closed`, `open`, or `optimizer`), goal, success criteria, retry/runtime budget, handoff rules, required evidence, and named eval gates.
+Loop contracts are a generic HivemindOS primitive. Work Board tasks can carry one, but the same contract can be started from chat, Scheduler, Queen Bee flows, company dispatch, or Evo-backed optimization. The shared `LoopSpec` records the mode (`closed`, `open`, or `optimizer`), goal, success criteria, retry/runtime budget, handoff rules, required evidence, and named eval gates. Work Board stores it on the task as `loop` for backward compatibility.
 
 Eval gates follow the Evo-style split between `pre` gates and `post` gates. A `pre` gate is intended for checks that can fail early before spend or external work. A `post` gate is intended for checks that need the worker result, benchmark output, artifact, or human review. Required gates must be satisfied by passing `loopReceipts` before `/api/kanban` will complete the task; missing gate receipts move the card to Needs You and leave a `loop.eval-blocked` event instead of silently marking work done.
 
@@ -91,16 +93,18 @@ Optimizer loops add five Evo-derived surfaces on top of the same task record:
 - Benchmark discovery: `loop.benchmark` records the target, command, metric direction, score floor, resource profile, instrumentation choice, and discovery notes.
 - Observability: `loop.observation` summarizes best score, running-best experiment ids, frontier candidates, pending gates, experiment totals, and anti-pattern count for dashboard cards and agents.
 
-The API exposes this through `/api/kanban` actions:
+The generic `/api/loops` facade lists reusable templates and verifier definitions, builds loop contracts from a natural goal, and can create a normal task with the generated loop attached. It does not store a second loop record. Work Board-specific loop updates still flow through `/api/kanban` actions:
 
 - `loop-discover`: attach or update benchmark discovery, gates, success criteria, and frontier strategy.
 - `loop-record`: append/update one experiment and optional anti-pattern records, then refresh the observation summary.
+
+Built-in templates include code-fix, app-build harness, research, content, daily brief, operating-unit learning, and Evo benchmark loops. Built-in verifiers include lint, typecheck, focused tests, Playwright smoke tests, artifact existence, independent judge review, human approval, evidence receipts, Evo score improvement, and governance policy checks.
 
 ### Zero-Human Company Learning Loops
 
 For the full company cockpit and launch flow, see [Zero Human Companies](zero-human-companies.html).
 
-Zero-human companies use the same loop contract as their private learning layer. When a company launches its apex goal, HivemindOS decomposes the goal into Work Board tasks and attaches an optimizer loop to each dispatched task.
+Zero-human companies use the same generic loop contract as their private learning layer. When a company launches its apex goal, HivemindOS decomposes the goal into Work Board tasks and attaches an operating-unit learning loop to each dispatched task.
 
 The default company loop is non-blocking at creation time: agents can finish useful work, while eval gates, evidence requirements, experiment candidates, and Pareto frontier metadata are preserved for later review. This gives the company a model-independent "company veteran" layer made of outcomes, artifacts, workflows, receipts, avoided failure modes, and private eval structure.
 

@@ -14,7 +14,7 @@ import type { AgentSpendCapAsset } from "@/lib/types/agent-wallet";
  * per-rail x402-spend-log.json is left intact for back-compat.
  */
 
-export type SpendKind = "x402" | "x402-private" | "send" | "veil-transfer" | "trade";
+export type SpendKind = "x402" | "x402-private" | "send" | "veil-transfer" | "trade" | "platform-fee";
 
 export type SpendLedgerRecord = {
   id: string;

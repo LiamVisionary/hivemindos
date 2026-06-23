@@ -7,6 +7,7 @@ import { readNativeRuntimeUsage } from "@/lib/native/runtime-usage";
 import { VEIL_CASH_DEFAULT_X402_URL } from "@/lib/config/veil-cash";
 import { assetSpendCapFor } from "@/lib/utils/agent-wallet";
 import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
+import { sendApprovedWalletUsdc } from "@/lib/services/wallet/send-usdc-client";
 import { agentMatchesSuppression, suppressionKeysForRemovedAgent, SUPPRESSED_DISCOVERED_AGENTS_STORAGE_KEY } from "@/features/fleet/fleet-identity";
 
 const AGENT_PROFILES_STORAGE_KEY = "hivemindos.agentProfiles.v1";
@@ -567,25 +568,15 @@ export function useWalletFilesController(props: any) {
       return;
     }
     updateWalletAction(agentId, { busy: true, error: "", message: "Sending USDC..." });
-    const response = await fetch("/api/wallet/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        agentId,
-        toAddress: action.sendTo,
-        amountUsd: amount,
-        maxPaymentUsd: wallet.maxPaymentUsd,
-        autoPayEnabled: wallet.autoPayEnabled,
-        confirmation: action.confirmation,
-      }),
-    }).catch(() => null);
-    const data = await response?.json().catch(() => null) as {
-      ok?: boolean;
-      signature?: string;
-      network?: string;
-      error?: string;
-    } | null;
-    if (!response?.ok || !data?.ok) {
+    const data = await sendApprovedWalletUsdc({
+      agentId,
+      toAddress: action.sendTo,
+      amountUsd: amount,
+      maxPaymentUsd: wallet.maxPaymentUsd,
+      autoPayEnabled: wallet.autoPayEnabled,
+      confirmation: action.confirmation,
+    });
+    if (!data?.ok) {
       updateWalletAction(agentId, { busy: false, error: data?.error ?? "Could not send USDC.", message: "" });
       return;
     }

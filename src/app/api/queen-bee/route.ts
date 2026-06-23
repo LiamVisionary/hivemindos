@@ -7,6 +7,11 @@ import {
 import { rememberActionAgentMemory } from "@/lib/services/obsidian/agent-memory";
 import { discoverQueenBeeFleetSnapshot } from "@/lib/services/queen-bee/fleet-snapshot";
 import { createQueenBeePrdTasks } from "@/lib/services/queen-bee/prd-decomposition";
+import {
+  createQueenBeePrdVisualPlan,
+  createQueenBeeVisualPlan,
+  visualPlanReceipt,
+} from "@/lib/services/visual-plan";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,7 +60,17 @@ export async function POST(request: NextRequest) {
           source: "Queen Bee PRD receipt",
         });
       }
-      return NextResponse.json({ ok: true, protocol: "hivemind-queen-bee", ...result });
+      const visualPlan = !body.preview && Array.isArray(result.tasks) && result.tasks.length
+        ? await createQueenBeePrdVisualPlan({
+          title: result.decomposition?.title ?? body.title ?? body.taskTitle,
+          source: result.decomposition?.source ?? body.source,
+          decomposition: result.decomposition,
+          epic: result.epic,
+          tasks: result.tasks,
+          vaultPath: options.vaultPath,
+        }).then(visualPlanReceipt, () => undefined)
+        : undefined;
+      return NextResponse.json({ ok: true, protocol: "hivemind-queen-bee", ...result, visualPlan });
     }
     const result = await submitQueenBeeMessage({
       ...options,
@@ -83,7 +98,20 @@ export async function POST(request: NextRequest) {
         source: "Queen Bee receipt",
       });
     }
-    return NextResponse.json({ ok: true, ...result });
+    const visualPlan = result.created
+      ? await createQueenBeeVisualPlan({
+        title: result.task?.title ?? body.taskTitle,
+        message: body.message,
+        source: body.source,
+        mode: body.mode,
+        fingerprint: result.fingerprint,
+        task: result.task,
+        route: result.route,
+        receipt: result.receipt,
+        vaultPath: options.vaultPath,
+      }).then(visualPlanReceipt, () => undefined)
+      : undefined;
+    return NextResponse.json({ ok: true, ...result, visualPlan });
   } catch (error) {
     return errorResponse(error);
   }

@@ -5,6 +5,7 @@ import { WalletsView } from "@/components/wallets-drop-in/WalletsView";
 import { fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import { switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
+import { sendApprovedWalletUsdc, type WalletSendUsdcRequest } from "@/lib/services/wallet/send-usdc-client";
 import { hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
 
 const RAIL_ENABLED_KEY_PREFIX = "hivemindos.walletRail.enabled.";
@@ -68,11 +69,13 @@ function buildAgentLookup(agents: any[]) {
 
 function activityTypeForKind(kind: string): string {
   if (kind === "trade") return "trade";
+  if (kind === "platform-fee") return "send";
   if (kind === "send" || kind === "veil-transfer") return "send";
   return "x402";
 }
 
 function activityLabelForKind(kind: string): string {
+  if (kind === "platform-fee") return "Platform fee";
   if (kind === "x402-private") return "Private x402";
   if (kind === "veil-transfer") return "Veil private transfer";
   if (kind === "send") return "Wallet transfer";
@@ -412,6 +415,14 @@ function personalWalletAccountKey(wallet: any): string {
   return network && address ? `${network}:${address}` : "";
 }
 
+function preferredPersonalWalletRecordName(base: any, next: any): string {
+  const baseName = String(base?.name || "").trim();
+  const nextName = String(next?.name || "").trim();
+  if (nextName && !isGenericPersonalWalletName(nextName)) return nextName;
+  if (baseName && !isGenericPersonalWalletName(baseName)) return baseName;
+  return nextName || baseName;
+}
+
 function mergePersonalWalletRecord(base: any, next: any): any {
   if (!base) return next;
   const baseUpdated = Number(base.updatedAt ?? base.lastOnchainSyncAt ?? 0) || 0;
@@ -422,7 +433,7 @@ function mergePersonalWalletRecord(base: any, next: any): any {
     ...next,
     id: base.id || next.id,
     agentId: base.agentId || next.agentId,
-    name: next.name || base.name,
+    name: preferredPersonalWalletRecordName(base, next),
     custodyMode: base.custodyMode === "local" || next.custodyMode === "local" ? "local" : "watch",
     importedFrom: base.importedFrom !== "watch" ? base.importedFrom : next.importedFrom,
     currentBalanceUsd: preferNextBalance && Number(next.currentBalanceUsd ?? 0) > 0 ? Number(next.currentBalanceUsd) : Number(base.currentBalanceUsd ?? 0) || Number(next.currentBalanceUsd ?? 0) || 0,
@@ -499,6 +510,15 @@ function recoveryPhraseWalletName(wallet: any, count: number): string {
     : name;
 }
 
+function isGenericPersonalWalletName(name: unknown): boolean {
+  const normalized = String(name || "").trim().toLowerCase();
+  return normalized === "my wallet"
+    || normalized === "my wallet base"
+    || normalized === "my wallet solana"
+    || normalized === "my base wallet"
+    || normalized === "my solana wallet";
+}
+
 function buildDropInPersonalWallets(wallets: any[] | null) {
   if (!Array.isArray(wallets)) return [];
   const groups = new Map<string, any[]>();
@@ -509,6 +529,7 @@ function buildDropInPersonalWallets(wallets: any[] | null) {
   return [...groups.entries()].map(([groupId, group], index) => {
     const sorted = [...group].sort((a, b) => personalWalletChainRank(a) - personalWalletChainRank(b));
     const primary = sorted[0] ?? {};
+    const nameWallet = sorted.find((wallet) => !isGenericPersonalWalletName(recoveryPhraseWalletName(wallet, sorted.length))) ?? primary;
     const addressRows = sorted
       .map((wallet) => [personalWalletNetworkLabel(String(wallet.network || "")), wallet.address || ""] as [string, string])
       .filter(([, address], rowIndex, rows) => address && rows.findIndex(([chain, existing]) => chain === rows[rowIndex][0] && existing === address) === rowIndex);
@@ -516,7 +537,7 @@ function buildDropInPersonalWallets(wallets: any[] | null) {
     return {
       id: groupId || primary.id || primary.agentId || `user-wallet-${index}`,
       spendId: spendWallet.id || spendWallet.agentId || groupId,
-      name: recoveryPhraseWalletName(primary, sorted.length),
+      name: recoveryPhraseWalletName(nameWallet, sorted.length),
       icon: sorted.some((wallet) => wallet.custodyMode === "local") ? "shield" : "eye",
       kind: sorted.some((wallet) => wallet.custodyMode === "local") ? "Local wallet" : "Watch wallet",
       canSpend: sorted.some((wallet) => wallet.custodyMode === "local"),
@@ -926,9 +947,15 @@ function WalletPanelComponent(props: any) {
       const body = endpoint === "/api/wallet/veil/transfer"
         ? { agentId: input.agentId, enabled: directEnabled, provider: "veil", network: VEIL_TRANSFER_NETWORK, asset, recipientAddress: recipient, amount: input.amount, amountUsd: asset === "USDC" ? amount : Number.isFinite(amountUsd) && amountUsd > 0 ? amountUsd : undefined, maxPaymentUsd: wallet.maxPaymentUsd, maxAssetAmount, confirmation: input.confirmation, autoSendEnabled: veilAutoSendEnabled, autoShield: true, duplicateGuardEnabled: wallet.duplicatePaymentGuardEnabled !== false, duplicateGuardSeconds: wallet.duplicatePaymentGuardSeconds }
         : { agentId: input.agentId, toAddress: recipient, amountUsd: amount, maxPaymentUsd: wallet.maxPaymentUsd, autoPayEnabled, confirmation: input.confirmation };
-      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
-      const data = await response?.json().catch(() => null) as { ok?: boolean; signature?: string; transfer?: { transactionHash?: string }; shield?: { transactionHash?: string }; status?: string; error?: string } | null;
-      if (!response?.ok || !data?.ok) {
+      let data: { ok?: boolean; signature?: string; transfer?: { transactionHash?: string }; shield?: { transactionHash?: string }; status?: string; error?: string } | null;
+      if (endpoint === "/api/wallet/send") {
+        data = await sendApprovedWalletUsdc(body as WalletSendUsdcRequest);
+      } else {
+        data = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+          .then((response) => response.json())
+          .catch(() => null) as { ok?: boolean; signature?: string; transfer?: { transactionHash?: string }; shield?: { transactionHash?: string }; status?: string; error?: string } | null;
+      }
+      if (!data?.ok) {
         props.updateWalletAction?.(input.agentId, { busy: false, error: data?.error ?? "Payment failed.", message: "" });
         throw new Error(data?.error || "Payment failed.");
       }
@@ -972,19 +999,24 @@ function WalletPanelComponent(props: any) {
       const wallet = props.walletsByAgent?.[input.agentId] || {};
       const toAddress = wallet.walletAddress || wallet.vaultAddress || wallet.address || "";
       if (!toAddress) throw new Error("That agent does not have a deposit address yet.");
-      const response = await fetch("/api/wallet/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: input.source?.spendId || input.source?.id, toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined }) }).catch(() => null);
-      const data = await response?.json().catch(() => null) as { ok?: boolean; signature?: string; error?: string } | null;
-      if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not fund agent.");
+      const data = await sendApprovedWalletUsdc({ agentId: input.source?.spendId || input.source?.id, toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined });
+      if (!data?.ok) throw new Error(data?.error || "Could not fund agent.");
       await Promise.all([loadPersonalWallets(), props.refreshWalletBalance?.(input.agentId), loadWalletActivity()]);
       return data;
     },
     onSendPersonalWallet: async (input: any) => {
       if (String(input.asset || "").toUpperCase() !== "USDC") throw new Error("Personal wallet send is wired for USDC transfers only.");
       if (input.source?.canSpend === false) throw new Error("This personal wallet is watch-only. Reimport it locally before sending.");
-      const response = await fetch("/api/wallet/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: input.source?.spendId || input.source?.id, toAddress: input.toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined }) }).catch(() => null);
-      const data = await response?.json().catch(() => null) as { ok?: boolean; signature?: string; error?: string } | null;
-      if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not send USDC.");
+      const data = await sendApprovedWalletUsdc({ agentId: input.source?.spendId || input.source?.id, toAddress: input.toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined });
+      if (!data?.ok) throw new Error(data?.error || "Could not send USDC.");
       await Promise.all([loadPersonalWallets(), loadWalletActivity()]);
+      return data;
+    },
+    onCreateWallet: async (input: any) => {
+      const response = await fetch("/api/wallet/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: `user:${globalThis.crypto?.randomUUID?.() || Date.now()}`, createKind: "multi-chain", name: input.name, vaultPath: vaultPath || undefined }) }).catch(() => null);
+      const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+      if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not create wallet.");
+      await loadPersonalWallets();
       return data;
     },
     onImportWallet: async (input: any) => {

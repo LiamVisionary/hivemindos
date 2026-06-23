@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import http from "node:http";
+import { register } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 
-const TOOLS = [
+register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
+
+const MANUAL_TOOLS = [
   {
     name: "list_hivemind_machines",
     description: "List connected HivemindOS machines and their available agents.",
@@ -117,6 +120,84 @@ const TOOLS = [
     inputSchema: sharedContractSchema(),
   },
 ];
+
+const TOOLS = mergeToolDescriptors(
+  MANUAL_TOOLS,
+  await loadHiveActionMcpTools(),
+);
+const HIVE_ACTION_MCP_TOOL_BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));
+const EXECUTION_TOOL_NAMES = new Set(["send_usdc", "dex_swap", "stock_trade"]);
+
+async function loadHiveActionMcpTools() {
+  try {
+    const { listHiveActions, listMcpHiveActions } = await import(
+      new URL("../src/lib/services/hive-actions/index.ts", import.meta.url).href
+    );
+    return listMcpHiveActions(listHiveActions());
+  } catch {
+    return [];
+  }
+}
+
+function mergeToolDescriptors(manualTools, hiveActionTools) {
+  const hiveActionByName = new Map(
+    hiveActionTools.map((tool) => [tool.name, tool]),
+  );
+  const manualNames = new Set(manualTools.map((tool) => tool.name));
+  return [
+    ...manualTools.map((tool) => hiveActionByName.get(tool.name) || tool),
+    ...hiveActionTools.filter((tool) => !manualNames.has(tool.name)),
+  ];
+}
+
+function requireHiveActionExecutionPreflight(name, args = {}) {
+  if (!EXECUTION_TOOL_NAMES.has(name)) return;
+  const tool = HIVE_ACTION_MCP_TOOL_BY_NAME.get(name);
+  const annotations = tool?.annotations || {};
+  const sideEffects = Array.isArray(annotations["hivemindos/sideEffects"])
+    ? annotations["hivemindos/sideEffects"]
+    : [];
+  const hasWalletPaymentMetadata = sideEffects.includes("wallet") && sideEffects.includes("payment");
+  const isCriticalDestructive =
+    annotations.destructiveHint === true && annotations["hivemindos/risk"] === "critical";
+  if (!tool || !hasWalletPaymentMetadata || !isCriticalDestructive) {
+    throw new Error(
+      `${name} is missing critical wallet/payment Hive action metadata; refusing MCP execution.`,
+    );
+  }
+
+  const expected = expectedConfirmationsForExecutionTool(name, args, annotations["hivemindos/confirmation"]);
+  const supplied = typeof args.confirmation === "string" ? args.confirmation.trim() : "";
+  if (!expected.includes(supplied)) {
+    throw new Error(
+      `${name} requires confirmation ${formatConfirmationTokens(expected)} before MCP execution.`,
+    );
+  }
+}
+
+function expectedConfirmationsForExecutionTool(name, args, confirmation) {
+  if (!confirmation || confirmation === true) {
+    throw new Error(`${name} is missing Hive action confirmation metadata; refusing MCP execution.`);
+  }
+  const tokens = [
+    typeof confirmation.token === "string" ? confirmation.token : null,
+    ...(Array.isArray(confirmation.tokens) ? confirmation.tokens : []),
+  ].filter((token) => typeof token === "string" && token.length > 0);
+  if (tokens.length === 0) {
+    throw new Error(`${name} has no valid Hive action confirmation token; refusing MCP execution.`);
+  }
+  if (name !== "stock_trade") return tokens;
+
+  const side = typeof args.side === "string" ? args.side.toLowerCase() : "";
+  if (side === "buy" && tokens.includes("CONFIRM_BUY")) return ["CONFIRM_BUY"];
+  if (side === "sell" && tokens.includes("CONFIRM_SELL")) return ["CONFIRM_SELL"];
+  return tokens;
+}
+
+function formatConfirmationTokens(tokens) {
+  if (tokens.length === 1) return `"${tokens[0]}"`;
+  return tokens.map((token) => `"${token}"`).join(" or ");
+}
 
 function handoffSchema(required) {
   return {
@@ -504,6 +585,7 @@ async function callTool(name, args = {}) {
     return callDashboard("/api/crypto/risk-monitor", "POST", cryptoRiskArgs(args));
   }
   if (name === "send_usdc") {
+    requireHiveActionExecutionPreflight(name, args);
     return callDashboard("/api/wallet/send", "POST", {
       agentId: args.agentId,
       toAddress: args.toAddress,
@@ -513,6 +595,7 @@ async function callTool(name, args = {}) {
     });
   }
   if (name === "dex_swap") {
+    requireHiveActionExecutionPreflight(name, args);
     return callDashboard("/api/trading/swap", "POST", {
       action: "execute",
       agentId: args.agentId,
@@ -524,6 +607,7 @@ async function callTool(name, args = {}) {
     });
   }
   if (name === "stock_trade") {
+    requireHiveActionExecutionPreflight(name, args);
     return callDashboard("/api/trading", "POST", {
       action: "execute",
       agentId: args.agentId,

@@ -71,3 +71,4 @@ __pycache__/
 
 # Evo optimization workspace (worktrees + experiment state)
 .evo/
+.e2e-loop-templates-*.json

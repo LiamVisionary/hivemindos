@@ -58,7 +58,7 @@ The same Work Board card can therefore answer both "what is the task?" and "whic
 
 ## Learning Loops
 
-Zero Human Companies use the Work Board loop contract as their private learning layer. Each launched task can carry an optimizer loop with success criteria, evidence requirements, eval gates, experiment candidates, and Pareto frontier metadata.
+Zero Human Companies use the generic HivemindOS loop contract as their private learning layer. Work Board is one place those loops are visible, but the loop contract itself is shared by chat-started work, Scheduler, Queen Bee flows, company dispatch, and Evo-compatible optimization. Each launched task can carry an optimizer loop with success criteria, evidence requirements, eval gates, experiment candidates, and Pareto frontier metadata.
 
 The default company loop is non-blocking at creation time. Agents can finish useful work while HivemindOS preserves the eval structure and evidence trail for later review.
 
@@ -78,7 +78,7 @@ Future workers can change, but the company keeps its charter, receipts, workflow
 
 ## Capability Capital
 
-Capability capital is the cockpit's summary of what the company has learned and produced. It is not a currency balance.
+Capability capital is the cockpit's summary of what the company has learned and produced. It is not a currency balance, and its underlying metric calculation is shared with generic loop reporting rather than owned by the company UI.
 
 It can include:
 

@@ -2,10 +2,24 @@ import { sendUsdc } from "@/lib/services/wallet/chain-wallet";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { evaluateSpend, resolveSpendGovernance } from "@/lib/services/wallet/spend-governance";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
+import {
+  assertTradingPlatformFeeReady,
+  collectTradingPlatformFee,
+  quoteTradingPlatformFee,
+  type PlatformFeeCollection,
+  type PlatformFeeQuote,
+} from "@/lib/services/wallet/platform-fees";
 
 export type GovernedUsdcSendResult =
-  | { ok: true; signature: string; network: string }
+  | { ok: true; signature: string; network: string; platformFee?: PlatformFeeCollection }
   | { ok: false; status: "not_found" | "blocked" | "pending_approval" | "error"; error: string; approval?: unknown };
+
+export async function quoteGovernedUsdcSendFee(input: {
+  network: string;
+  amountUsd: number;
+}): Promise<PlatformFeeQuote> {
+  return quoteTradingPlatformFee({ source: "wallet-send", network: input.network, amountUsd: input.amountUsd });
+}
 
 /**
  * Execute a governed on-chain USDC transfer. This is the single source of truth
@@ -52,12 +66,27 @@ export async function executeGovernedUsdcSend(input: {
     companyId = decision.companyId;
   }
 
+  await assertTradingPlatformFeeReady({
+    source: "wallet-send",
+    network: stored.info.network,
+    amountUsd,
+  });
+
   const result = await sendUsdc({
     network: stored.info.network,
     secret: stored.secret,
     fromAddress: stored.info.address,
     toAddress,
     amountUsd,
+  });
+  const platformFee = await collectTradingPlatformFee({
+    agentId,
+    network: stored.info.network,
+    secret: stored.secret,
+    fromAddress: stored.info.address,
+    amountUsd,
+    source: "wallet-send",
+    companyId,
   });
   await appendSpend({
     agentId,
@@ -69,5 +98,5 @@ export async function executeGovernedUsdcSend(input: {
     status: "executed",
     approvalId: grantId,
   }).catch(() => {});
-  return { ok: true, signature: result.signature, network: stored.info.network };
+  return { ok: true, signature: result.signature, network: stored.info.network, platformFee };
 }

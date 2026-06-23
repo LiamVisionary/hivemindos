@@ -125,9 +125,9 @@ export function MorePanel({
     {
       id: "memory" as const,
       icon: <Activity aria-hidden="true" />,
-      eyebrow: memoryRssMb ? `${Math.round(memoryRssMb)} MB RSS` : "RAM sampler",
-      title: "Memory",
-      body: memoryGrowthMb && memoryGrowthMb > 0 ? `Growing ${memoryGrowthMb.toFixed(1)} MB in the sample window.` : "Track process RSS growth and leak suspects.",
+      eyebrow: memoryRssMb ? `${Math.round(memoryRssMb)} MB RSS` : "Review queue",
+      title: "Memory & Review",
+      body: memoryGrowthMb && memoryGrowthMb > 0 ? `Growing ${memoryGrowthMb.toFixed(1)} MB in the sample window, with review and Context X-Ray tools below.` : "Review proposed brain writes, inspect Context X-Ray manifests, and track process RSS growth.",
     },
     {
       id: "files" as const,

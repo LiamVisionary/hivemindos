@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+import { createFacilitatorConfig } from "@coinbase/x402";
 import { x402ResourceServer, HTTPFacilitatorClient } from "@x402/core/server";
 import {
   x402HTTPResourceServer,
@@ -15,6 +16,11 @@ import {
 } from "@x402/core/http";
 import type { Network } from "@x402/core/types";
 import { registerExactEvmScheme } from "@x402/evm/exact/server";
+import {
+  BUILDER_CODE,
+  builderCodeResourceServerExtension,
+  declareBuilderCodeExtension,
+} from "@x402/extensions/builder-code";
 import type { NextRequest } from "next/server";
 
 import { homedir } from "@/lib/home-dir";
@@ -34,9 +40,18 @@ import {
   type ManagedAgentQuote,
 } from "@/lib/services/managed-agent-billing";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
+import {
+  normalizeX402BuilderCodeForNetwork,
+  X402_SELLER_BUILDER_CODE_ENV_KEYS,
+  x402BuilderCodeFromEnvForNetwork,
+} from "@/lib/services/wallet/x402-builder-code";
 
 const DEFAULT_SLUG = "default";
+const BASE_MAINNET_NETWORK = "eip155:8453";
+const BASE_SEPOLIA_NETWORK = "eip155:84532";
 const DEFAULT_NETWORK = "eip155:8453";
+const CDP_FACILITATOR_URL = "https://api.cdp.coinbase.com/platform/v2/x402";
+const TESTNET_FACILITATOR_URL = "https://x402.org/facilitator";
 const DEFAULT_PRICE_USD = 0.05;
 const DEFAULT_TIMEOUT_MS = 600_000;
 const DEFAULT_MAX_MESSAGES = 64;
@@ -162,6 +177,9 @@ type PaidAgentCatalogEntry = {
   payTo: string;
   facilitatorUrl: string;
   facilitatorBearer?: string;
+  cdpApiKeyId?: string;
+  cdpApiKeySecret?: string;
+  builderCode?: string;
   maxTimeoutSeconds: number;
   agent: AgentProfile;
   wallet?: AgentWalletConfig;
@@ -396,6 +414,8 @@ async function loadPaidAgentCatalog(): Promise<{
 
 async function defaultEntryFromEnv(): Promise<PaidAgentCatalogEntry> {
   const slug = normalizeSlug(process.env.HIVEMINDOS_PAID_AGENT_SLUG || DEFAULT_SLUG);
+  const testnetMode = paidAgentTestnetMode();
+  const network = networkEnv(process.env.HIVEMINDOS_PAID_AGENT_NETWORK || defaultPaidAgentNetwork(testnetMode));
   const agent = await loadAgentProfile(slug, {
     agent: await optionalJsonFromEnv("HIVEMINDOS_PAID_AGENT_PROFILE_JSON", "HIVEMINDOS_PAID_AGENT_PROFILE_PATH", "HIVE_AGENT_PROFILE_JSON"),
     runtime: process.env.HIVEMINDOS_PAID_AGENT_RUNTIME,
@@ -407,10 +427,13 @@ async function defaultEntryFromEnv(): Promise<PaidAgentCatalogEntry> {
     slug,
     description: process.env.HIVEMINDOS_PAID_AGENT_DESCRIPTION?.trim() || "Paid HivemindOS agent",
     priceUsd: positiveMoney(process.env.HIVEMINDOS_PAID_AGENT_PRICE_USD, DEFAULT_PRICE_USD),
-    network: networkEnv(process.env.HIVEMINDOS_PAID_AGENT_NETWORK),
+    network,
     payTo: process.env.HIVEMINDOS_PAID_AGENT_PAY_TO?.trim() || "",
-    facilitatorUrl: process.env.HIVEMINDOS_PAID_AGENT_FACILITATOR_URL?.trim() || "",
+    facilitatorUrl: process.env.HIVEMINDOS_PAID_AGENT_FACILITATOR_URL?.trim() || defaultFacilitatorUrl(testnetMode),
     facilitatorBearer: process.env.HIVEMINDOS_PAID_AGENT_FACILITATOR_BEARER?.trim() || undefined,
+    cdpApiKeyId: process.env.HIVEMINDOS_PAID_AGENT_CDP_API_KEY_ID?.trim() || process.env.CDP_API_KEY_ID?.trim() || undefined,
+    cdpApiKeySecret: process.env.HIVEMINDOS_PAID_AGENT_CDP_API_KEY_SECRET?.trim() || process.env.CDP_API_KEY_SECRET?.trim() || undefined,
+    builderCode: x402BuilderCodeFromEnvForNetwork(network, X402_SELLER_BUILDER_CODE_ENV_KEYS),
     maxTimeoutSeconds: positiveInteger(process.env.HIVEMINDOS_PAID_AGENT_MAX_TIMEOUT_SECONDS, 600),
     agent,
     wallet: objectFromUnknown<AgentWalletConfig>(await optionalJsonFromEnv("HIVEMINDOS_PAID_AGENT_WALLET_JSON")),
@@ -425,6 +448,10 @@ async function defaultEntryFromEnv(): Promise<PaidAgentCatalogEntry> {
 async function entryFromRaw(raw: unknown, index: number): Promise<PaidAgentCatalogEntry> {
   const record = isRecord(raw) ? raw : {};
   const slug = normalizeSlug(stringField(record.slug) || `${DEFAULT_SLUG}-${index + 1}`);
+  const testnetMode = paidAgentTestnetMode();
+  const network = networkEnv(stringField(record.network) || process.env.HIVEMINDOS_PAID_AGENT_NETWORK || defaultPaidAgentNetwork(testnetMode));
+  const configuredBuilderCode = normalizeX402BuilderCodeForNetwork(network, stringField(record.builderCode), `${slug}.builderCode`)
+    ?? x402BuilderCodeFromEnvForNetwork(network, X402_SELLER_BUILDER_CODE_ENV_KEYS);
   const agent = await loadAgentProfile(slug, {
     agent: record.agent,
     runtime: stringField(record.runtime),
@@ -436,10 +463,13 @@ async function entryFromRaw(raw: unknown, index: number): Promise<PaidAgentCatal
     slug,
     description: stringField(record.description) || `Paid HivemindOS agent ${index + 1}`,
     priceUsd: positiveMoney(record.priceUsd, DEFAULT_PRICE_USD),
-    network: networkEnv(stringField(record.network)),
+    network,
     payTo: stringField(record.payTo) || process.env.HIVEMINDOS_PAID_AGENT_PAY_TO?.trim() || "",
-    facilitatorUrl: stringField(record.facilitatorUrl) || process.env.HIVEMINDOS_PAID_AGENT_FACILITATOR_URL?.trim() || "",
+    facilitatorUrl: stringField(record.facilitatorUrl) || process.env.HIVEMINDOS_PAID_AGENT_FACILITATOR_URL?.trim() || defaultFacilitatorUrl(testnetMode),
     facilitatorBearer: stringField(record.facilitatorBearer) || process.env.HIVEMINDOS_PAID_AGENT_FACILITATOR_BEARER?.trim() || undefined,
+    cdpApiKeyId: stringField(record.cdpApiKeyId) || process.env.HIVEMINDOS_PAID_AGENT_CDP_API_KEY_ID?.trim() || process.env.CDP_API_KEY_ID?.trim() || undefined,
+    cdpApiKeySecret: stringField(record.cdpApiKeySecret) || process.env.HIVEMINDOS_PAID_AGENT_CDP_API_KEY_SECRET?.trim() || process.env.CDP_API_KEY_SECRET?.trim() || undefined,
+    builderCode: configuredBuilderCode,
     maxTimeoutSeconds: positiveInteger(record.maxTimeoutSeconds, 600),
     agent,
     wallet: objectFromUnknown<AgentWalletConfig>(record.wallet),
@@ -565,6 +595,7 @@ async function paidAgentX402Server(entry: PaidAgentCatalogEntry, path: string): 
     entry.priceUsd,
     entry.facilitatorUrl,
     entry.maxTimeoutSeconds,
+    entry.builderCode,
   ].join("|");
   if (serverCachePromise && serverCacheKey === key) return serverCachePromise;
   serverCacheKey = key;
@@ -573,19 +604,13 @@ async function paidAgentX402Server(entry: PaidAgentCatalogEntry, path: string): 
 }
 
 async function createPaidAgentX402Server(entry: PaidAgentCatalogEntry, path: string): Promise<x402HTTPResourceServer> {
-  const facilitator = new HTTPFacilitatorClient({
-    url: entry.facilitatorUrl,
-    ...(entry.facilitatorBearer ? {
-      createAuthHeaders: async () => ({
-        verify: { Authorization: `Bearer ${entry.facilitatorBearer}` },
-        settle: { Authorization: `Bearer ${entry.facilitatorBearer}` },
-        supported: { Authorization: `Bearer ${entry.facilitatorBearer}` },
-      }),
-    } : {}),
-  });
+  const facilitator = new HTTPFacilitatorClient(facilitatorConfigForEntry(entry));
   const resourceServer = registerExactEvmScheme(new x402ResourceServer(facilitator), {
     networks: [entry.network],
   });
+  if (entry.builderCode) {
+    resourceServer.registerExtension(builderCodeResourceServerExtension);
+  }
   const httpServer = new x402HTTPResourceServer(resourceServer, {
     [`POST ${path}`]: {
       accepts: {
@@ -598,6 +623,7 @@ async function createPaidAgentX402Server(entry: PaidAgentCatalogEntry, path: str
       resource: path,
       description: `${entry.description} (${entry.slug})`,
       mimeType: "application/json",
+      extensions: builderCodeRouteExtensions(entry.builderCode),
       unpaidResponseBody: () => ({
         contentType: "application/json",
         body: { ok: false, error: "Payment required.", agent: publicAgentInfo(entry) },
@@ -805,6 +831,7 @@ function openAICompletionPayload(input: {
         rail: "x402",
         priceUsd: input.entry.priceUsd,
         network: input.entry.network,
+        builderCode: input.entry.builderCode,
       },
     },
   };
@@ -880,6 +907,7 @@ function publicAgentInfo(entry: PaidAgentCatalogEntry) {
     description: entry.description,
     priceUsd: entry.priceUsd,
     network: entry.network,
+    testnet: entry.network !== BASE_MAINNET_NETWORK,
     runtime: entry.agent.runtime,
     provider: entry.agent.provider ?? "",
     model: entry.agent.model ?? "",
@@ -887,6 +915,8 @@ function publicAgentInfo(entry: PaidAgentCatalogEntry) {
     allowedModels: entry.allowedModels,
     honeyLedgerEnabled: entry.honeyLedgerEnabled,
     mirrorManagedHoney: entry.mirrorManagedHoney,
+    builderCode: entry.builderCode,
+    cdpFacilitatorConfigured: usesCdpFacilitator(entry) ? Boolean(entry.cdpApiKeyId && entry.cdpApiKeySecret) : undefined,
   };
 }
 
@@ -894,8 +924,50 @@ function missingPaymentConfig(entry: PaidAgentCatalogEntry) {
   const missing: string[] = [];
   if (!entry.payTo.trim()) missing.push("HIVEMINDOS_PAID_AGENT_PAY_TO");
   if (!entry.facilitatorUrl.trim()) missing.push("HIVEMINDOS_PAID_AGENT_FACILITATOR_URL");
+  if (usesCdpFacilitator(entry) && !entry.cdpApiKeyId) missing.push("CDP_API_KEY_ID");
+  if (usesCdpFacilitator(entry) && !entry.cdpApiKeySecret) missing.push("CDP_API_KEY_SECRET");
   if (entry.priceUsd <= 0) missing.push("HIVEMINDOS_PAID_AGENT_PRICE_USD");
   return missing;
+}
+
+function paidAgentTestnetMode() {
+  return booleanEnv("HIVEMINDOS_PAID_AGENT_TESTNET_MODE", false);
+}
+
+function defaultPaidAgentNetwork(testnetMode: boolean): Network {
+  return (testnetMode ? BASE_SEPOLIA_NETWORK : DEFAULT_NETWORK) as Network;
+}
+
+function defaultFacilitatorUrl(testnetMode: boolean) {
+  return testnetMode ? TESTNET_FACILITATOR_URL : CDP_FACILITATOR_URL;
+}
+
+function builderCodeRouteExtensions(builderCode?: string): Record<string, unknown> | undefined {
+  return builderCode ? { [BUILDER_CODE]: declareBuilderCodeExtension(builderCode) } : undefined;
+}
+
+function facilitatorConfigForEntry(entry: PaidAgentCatalogEntry) {
+  if (usesCdpFacilitator(entry)) {
+    return createFacilitatorConfig(entry.cdpApiKeyId, entry.cdpApiKeySecret);
+  }
+  return {
+    url: entry.facilitatorUrl,
+    ...(entry.facilitatorBearer ? {
+      createAuthHeaders: async () => ({
+        verify: { Authorization: `Bearer ${entry.facilitatorBearer}` },
+        settle: { Authorization: `Bearer ${entry.facilitatorBearer}` },
+        supported: { Authorization: `Bearer ${entry.facilitatorBearer}` },
+      }),
+    } : {}),
+  };
+}
+
+function usesCdpFacilitator(entry: Pick<PaidAgentCatalogEntry, "facilitatorUrl">) {
+  return normalizeUrl(entry.facilitatorUrl) === CDP_FACILITATOR_URL;
+}
+
+function normalizeUrl(value: string) {
+  return value.trim().replace(/\/+$/, "");
 }
 
 function devBypassAllowed(request: NextRequest, entry: PaidAgentCatalogEntry) {

@@ -1,0 +1,501 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10020;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  pointer-events: none;
+}
+
+.popup {
+  --reward-bg: rgba(9, 16, 22, 0.94);
+  --reward-bg-strong: rgba(14, 26, 34, 0.96);
+  --reward-line: rgba(119, 230, 210, 0.28);
+  --reward-line-strong: rgba(255, 212, 90, 0.42);
+  --reward-text: #f2fbf8;
+  --reward-muted: rgba(221, 238, 235, 0.72);
+  --reward-dim: rgba(221, 238, 235, 0.52);
+  --reward-accent: #5eead4;
+  --reward-honey: #ffd45a;
+  --reward-honey-soft: rgba(255, 212, 90, 0.14);
+  position: relative;
+  width: min(620px, calc(100vw - 28px));
+  max-height: min(780px, calc(100vh - 28px));
+  overflow: auto;
+  border: 1px solid var(--reward-line);
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, var(--reward-bg), var(--reward-bg-strong)),
+    var(--reward-bg);
+  color: var(--reward-text);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(255, 212, 90, 0.08) inset;
+  padding: 18px;
+  pointer-events: auto;
+  transform-origin: 50% 50%;
+  animation: rewardEnter 220ms ease-out;
+}
+
+:global([data-theme="hive-light"]) .popup {
+  --reward-bg: rgba(255, 250, 238, 0.97);
+  --reward-bg-strong: rgba(245, 238, 220, 0.98);
+  --reward-line: rgba(13, 142, 126, 0.26);
+  --reward-line-strong: rgba(140, 94, 10, 0.34);
+  --reward-text: #14211f;
+  --reward-muted: rgba(30, 49, 45, 0.72);
+  --reward-dim: rgba(30, 49, 45, 0.54);
+  --reward-accent: #0d8e7e;
+  --reward-honey: #8c5e0a;
+  --reward-honey-soft: rgba(140, 94, 10, 0.11);
+  box-shadow: 0 24px 60px rgba(64, 52, 32, 0.18), 0 0 0 1px rgba(13, 142, 126, 0.07) inset;
+}
+
+.closeButton {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--reward-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--reward-muted);
+  cursor: pointer;
+}
+
+.closeButton:hover,
+.closeButton:focus-visible {
+  color: var(--reward-text);
+  border-color: var(--reward-line-strong);
+  outline: none;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  padding-right: 34px;
+}
+
+.heroIcon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--reward-line-strong);
+  border-radius: 14px;
+  background: var(--reward-honey-soft);
+  color: var(--reward-honey);
+}
+
+.heroCopy {
+  min-width: 0;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: var(--reward-honey);
+  font: 600 11px/1.4 ui-monospace, "JetBrains Mono", monospace;
+  text-transform: uppercase;
+}
+
+.heroCopy h2 {
+  margin: 0;
+  color: var(--reward-text);
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(24px, 5vw, 36px);
+  line-height: 1.02;
+  letter-spacing: 0;
+}
+
+.heroCopy p:last-child {
+  margin: 8px 0 0;
+  color: var(--reward-muted);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.scoreRow {
+  display: grid;
+  grid-template-columns: minmax(132px, 0.52fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.scoreDial {
+  min-height: 132px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--reward-line-strong);
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--reward-honey-soft), rgba(94, 234, 212, 0.07));
+  text-align: center;
+  padding: 16px;
+}
+
+.scoreDial span {
+  color: var(--reward-honey);
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(32px, 9vw, 52px);
+  font-weight: 700;
+  line-height: 0.95;
+}
+
+.scoreDial small {
+  color: var(--reward-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metric {
+  min-height: 61px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "icon value"
+    "icon label";
+  column-gap: 9px;
+  align-items: center;
+  border: 1px solid var(--reward-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 10px;
+}
+
+.metricIcon {
+  grid-area: icon;
+  color: var(--reward-accent);
+}
+
+.metricValue {
+  grid-area: value;
+  color: var(--reward-text);
+  font: 700 17px/1.1 "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+}
+
+.metricLabel {
+  grid-area: label;
+  color: var(--reward-dim);
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.stakingPanel {
+  margin-top: 14px;
+  border: 1px solid var(--reward-line);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(255, 212, 90, 0.11), rgba(94, 234, 212, 0.06)),
+    rgba(255, 255, 255, 0.035);
+  padding: 12px;
+}
+
+.stakingHeader,
+.stakingFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.stakingHeader strong {
+  color: var(--reward-text);
+  font: 700 16px/1.2 "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  text-align: right;
+}
+
+.stakingBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--reward-honey);
+  font: 600 12px/1.4 ui-monospace, "JetBrains Mono", monospace;
+  text-transform: uppercase;
+}
+
+.stakingBody {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.stakingBody > div {
+  display: grid;
+  gap: 4px;
+  min-height: 58px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.12);
+  padding: 10px;
+}
+
+.stakingAmount {
+  color: var(--reward-text);
+  font: 700 19px/1.1 "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+}
+
+.stakingLabel {
+  color: var(--reward-dim);
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.stakingBar {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  margin-top: 11px;
+}
+
+.stakingBar span {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--reward-honey), var(--reward-accent));
+}
+
+.stakingFooter {
+  align-items: flex-start;
+  margin-top: 9px;
+  color: var(--reward-dim);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.stakingFooter span:last-child {
+  text-align: right;
+}
+
+.highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.highlights span {
+  border: 1px solid var(--reward-line);
+  border-radius: 999px;
+  background: rgba(94, 234, 212, 0.08);
+  color: var(--reward-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 6px 10px;
+}
+
+.leaderboard {
+  margin-top: 14px;
+  border: 1px solid var(--reward-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 12px;
+}
+
+.leaderboardTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--reward-honey);
+  font: 600 12px/1.4 ui-monospace, "JetBrains Mono", monospace;
+  text-transform: uppercase;
+}
+
+.leaderboardRows {
+  display: grid;
+  gap: 9px;
+  margin-top: 11px;
+}
+
+.leaderboardRow {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-areas:
+    "rank name"
+    "rank stats"
+    "rank bar";
+  gap: 4px 10px;
+  align-items: center;
+}
+
+.rank {
+  grid-area: rank;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: var(--reward-honey-soft);
+  color: var(--reward-honey);
+  font: 700 12px/1 ui-monospace, "JetBrains Mono", monospace;
+}
+
+.contributorName {
+  grid-area: name;
+  color: var(--reward-text);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.contributorStats {
+  grid-area: stats;
+  color: var(--reward-dim);
+  font-size: 11.5px;
+  line-height: 1.25;
+}
+
+.barTrack {
+  grid-area: bar;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.barTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--reward-accent), var(--reward-honey));
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 9px 12px;
+}
+
+.primaryAction {
+  border: 1px solid rgba(255, 212, 90, 0.56);
+  background: var(--reward-honey);
+  color: #15120a;
+}
+
+.secondaryAction {
+  border: 1px solid var(--reward-line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--reward-muted);
+}
+
+.primaryAction:hover,
+.primaryAction:focus-visible,
+.secondaryAction:hover,
+.secondaryAction:focus-visible {
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.secondaryAction:hover,
+.secondaryAction:focus-visible {
+  color: var(--reward-text);
+  border-color: var(--reward-line-strong);
+}
+
+@keyframes rewardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 560px) {
+  .backdrop {
+    padding: 10px;
+  }
+
+  .popup {
+    width: 100%;
+    border-radius: 14px;
+    padding: 15px;
+  }
+
+  .hero {
+    grid-template-columns: 1fr;
+    padding-right: 34px;
+  }
+
+  .heroIcon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .scoreRow {
+    grid-template-columns: 1fr;
+  }
+
+  .metricGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .stakingHeader,
+  .stakingFooter {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .stakingHeader strong,
+  .stakingFooter span:last-child {
+    text-align: left;
+  }
+
+  .stakingBody {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    justify-content: stretch;
+  }
+
+  .primaryAction,
+  .secondaryAction {
+    flex: 1 1 140px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popup {
+    animation: none;
+  }
+
+  .primaryAction:hover,
+  .primaryAction:focus-visible,
+  .secondaryAction:hover,
+  .secondaryAction:focus-visible {
+    transform: none;
+  }
+}

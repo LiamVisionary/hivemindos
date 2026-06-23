@@ -1,3 +1,4 @@
+import { createFacilitatorConfig } from "@coinbase/x402";
 import { HTTPFacilitatorClient, x402ResourceServer } from "@x402/core/server";
 import {
   x402HTTPResourceServer,
@@ -9,6 +10,12 @@ import {
 } from "@x402/core/http";
 import type { Network } from "@x402/core/types";
 import { registerExactEvmScheme } from "@x402/evm/exact/server";
+import {
+  BUILDER_CODE,
+  BUILDER_CODE_PATTERN,
+  builderCodeResourceServerExtension,
+  declareBuilderCodeExtension,
+} from "@x402/extensions/builder-code";
 
 type Env = {
   DB: D1Database;
@@ -17,14 +24,34 @@ type Env = {
   HIVEMINDOS_PAID_AGENT_SLUG?: string;
   HIVEMINDOS_PAID_AGENT_DESCRIPTION?: string;
   HIVEMINDOS_PAID_AGENT_PRICE_USD?: string;
+  HIVEMINDOS_PAID_AGENT_TESTNET_MODE?: string;
   HIVEMINDOS_PAID_AGENT_NETWORK?: string;
   HIVEMINDOS_PAID_AGENT_PAY_TO?: string;
   HIVEMINDOS_PAID_AGENT_FACILITATOR_URL?: string;
   HIVEMINDOS_PAID_AGENT_FACILITATOR_BEARER?: string;
+  HIVEMINDOS_PAID_AGENT_CDP_API_KEY_ID?: string;
+  HIVEMINDOS_PAID_AGENT_CDP_API_KEY_SECRET?: string;
+  CDP_API_KEY_ID?: string;
+  CDP_API_KEY_SECRET?: string;
+  HIVEMINDOS_PAID_AGENT_BUILDER_CODE?: string;
+  HIVEMINDOS_X402_SELLER_BUILDER_CODE?: string;
+  HIVEMINDOS_X402_BUILDER_CODE?: string;
   HIVEMINDOS_PAID_AGENT_UPSTREAM_URL?: string;
   HIVEMINDOS_PAID_AGENT_UPSTREAM_BEARER?: string;
   HIVEMINDOS_PAID_AGENT_UPSTREAM_TIMEOUT_MS?: string;
   HIVEMINDOS_PAID_AGENT_MAX_BODY_CHARS?: string;
+  HIVEMINDOS_PLATFORM_FEES_ENABLED?: string;
+  HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED?: string;
+  HIVEMINDOS_PLATFORM_FEE_BPS?: string;
+  HIVEMINDOS_TRADING_PLATFORM_FEE_BPS?: string;
+  HIVEMINDOS_PLATFORM_MIN_FEE_USD?: string;
+  HIVEMINDOS_TRADING_PLATFORM_MIN_FEE_USD?: string;
+  HIVEMINDOS_PLATFORM_MAX_FEE_USD?: string;
+  HIVEMINDOS_TRADING_PLATFORM_MAX_FEE_USD?: string;
+  HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM?: string;
+  HIVEMINDOS_PLATFORM_FEE_RECIPIENT?: string;
+  HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA?: string;
+  HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SVM?: string;
 };
 
 type OpenAIMessage = {
@@ -47,6 +74,9 @@ type PaidAgentEntry = {
   payTo: string;
   facilitatorUrl: string;
   facilitatorBearer?: string;
+  cdpApiKeyId?: string;
+  cdpApiKeySecret?: string;
+  builderCode?: string;
   upstreamUrl: string;
   upstreamBearer?: string;
   upstreamTimeoutMs: number;
@@ -73,9 +103,16 @@ type ReceiptRow = {
 
 const DEFAULT_SLUG = "default";
 const DEFAULT_PRICE_USD = 0.001;
-const DEFAULT_NETWORK = "eip155:84532";
+const BASE_MAINNET_NETWORK = "eip155:8453";
+const BASE_SEPOLIA_NETWORK = "eip155:84532";
+const CDP_FACILITATOR_URL = "https://api.cdp.coinbase.com/platform/v2/x402";
+const TESTNET_FACILITATOR_URL = "https://x402.org/facilitator";
+const DEFAULT_NETWORK = BASE_MAINNET_NETWORK;
 const DEFAULT_TIMEOUT_MS = 120_000;
 const DEFAULT_MAX_BODY_CHARS = 200_000;
+const DEFAULT_PLATFORM_FEE_BPS = 100;
+const DEFAULT_PLATFORM_MIN_FEE_USD = 0.01;
+const DEFAULT_PLATFORM_MAX_FEE_USD = 0;
 
 const serverCache = new Map<string, Promise<x402HTTPResourceServer>>();
 
@@ -86,6 +123,9 @@ const worker: ExportedHandler<Env> = {
 
     if (request.method === "GET" && url.pathname === "/health") {
       return json(env, { ok: true, service: "hivemindos-paid-agent-gateway", ...(statusPayload(env)) });
+    }
+    if (request.method === "GET" && url.pathname === "/api/platform-fees/config") {
+      return json(env, publicPlatformFeePolicy(env));
     }
 
     const paidAgent = paidAgentRoute(url.pathname);
@@ -174,7 +214,7 @@ async function verifyPayment(
   const result = await server.processHTTPRequest(context, {
     appName: "HivemindOS paid agent",
     currentUrl: request.url,
-    testnet: entry.network !== "eip155:8453",
+    testnet: entry.network !== BASE_MAINNET_NETWORK,
   });
   if (result.type === "payment-error") return { response: instructionsToResponse(result.response) };
   if (result.type === "no-payment-required") {
@@ -184,7 +224,7 @@ async function verifyPayment(
 }
 
 async function paidAgentX402Server(entry: PaidAgentEntry, path: string) {
-  const key = [entry.slug, path, entry.network, entry.payTo, entry.priceUsd, entry.facilitatorUrl].join("|");
+  const key = [entry.slug, path, entry.network, entry.payTo, entry.priceUsd, entry.facilitatorUrl, entry.builderCode].join("|");
   const cached = serverCache.get(key);
   if (cached) return cached;
   const next = createPaidAgentX402Server(entry, path);
@@ -193,19 +233,13 @@ async function paidAgentX402Server(entry: PaidAgentEntry, path: string) {
 }
 
 async function createPaidAgentX402Server(entry: PaidAgentEntry, path: string) {
-  const facilitator = new HTTPFacilitatorClient({
-    url: entry.facilitatorUrl,
-    ...(entry.facilitatorBearer ? {
-      createAuthHeaders: async () => ({
-        verify: { Authorization: `Bearer ${entry.facilitatorBearer}` },
-        settle: { Authorization: `Bearer ${entry.facilitatorBearer}` },
-        supported: { Authorization: `Bearer ${entry.facilitatorBearer}` },
-      }),
-    } : {}),
-  });
+  const facilitator = new HTTPFacilitatorClient(facilitatorConfigForEntry(entry));
   const resourceServer = registerExactEvmScheme(new x402ResourceServer(facilitator), {
     networks: [entry.network],
   });
+  if (entry.builderCode) {
+    resourceServer.registerExtension(builderCodeResourceServerExtension);
+  }
   const httpServer = new x402HTTPResourceServer(resourceServer, {
     [`POST ${path}`]: {
       accepts: {
@@ -217,6 +251,7 @@ async function createPaidAgentX402Server(entry: PaidAgentEntry, path: string) {
       resource: path,
       description: `${entry.description} (${entry.slug})`,
       mimeType: "application/json",
+      extensions: builderCodeRouteExtensions(entry.builderCode),
       unpaidResponseBody: () => ({
         contentType: "application/json",
         body: { ok: false, error: "Payment required.", agent: publicAgentInfo(entry) },
@@ -340,6 +375,30 @@ function statusPayload(env: Env) {
   return { agents };
 }
 
+function publicPlatformFeePolicy(env: Env) {
+  const enabled = booleanValue(env.HIVEMINDOS_PLATFORM_FEES_ENABLED ?? env.HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED, false);
+  const basisPoints = positiveNumber(env.HIVEMINDOS_PLATFORM_FEE_BPS ?? env.HIVEMINDOS_TRADING_PLATFORM_FEE_BPS, DEFAULT_PLATFORM_FEE_BPS);
+  const minFeeUsd = positiveNumber(env.HIVEMINDOS_PLATFORM_MIN_FEE_USD ?? env.HIVEMINDOS_TRADING_PLATFORM_MIN_FEE_USD, DEFAULT_PLATFORM_MIN_FEE_USD);
+  const maxFeeUsd = positiveNumber(env.HIVEMINDOS_PLATFORM_MAX_FEE_USD ?? env.HIVEMINDOS_TRADING_PLATFORM_MAX_FEE_USD, DEFAULT_PLATFORM_MAX_FEE_USD);
+  const evm = normalizeEvmAddress(env.HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM || env.HIVEMINDOS_PLATFORM_FEE_RECIPIENT || "");
+  const solana = normalizeSolanaAddress(env.HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA || env.HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SVM || "");
+  return {
+    ok: true,
+    service: "hivemindos-platform-fees",
+    official: true,
+    enabled,
+    basisPoints,
+    minFeeUsd,
+    maxFeeUsd: maxFeeUsd > 0 ? maxFeeUsd : undefined,
+    recipients: {
+      ...(evm ? { evm } : {}),
+      ...(solana ? { solana } : {}),
+    },
+    supportedSources: ["wallet-send", "dex-swap", "xstocks"],
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 function findEntry(env: Env, slug: string) {
   return entriesFromEnv(env).find((entry) => entry.slug === normalizeSlug(slug));
 }
@@ -353,14 +412,22 @@ function entriesFromEnv(env: Env): PaidAgentEntry[] {
 
 function entryFromRecord(env: Env, raw: Record<string, unknown>, index: number): PaidAgentEntry {
   const slug = normalizeSlug(stringField(raw.slug) || env.HIVEMINDOS_PAID_AGENT_SLUG || (index === 0 ? DEFAULT_SLUG : `${DEFAULT_SLUG}-${index + 1}`));
+  const testnetMode = paidAgentTestnetMode(env);
+  const network = (stringField(raw.network) || env.HIVEMINDOS_PAID_AGENT_NETWORK || defaultPaidAgentNetwork(testnetMode)) as Network;
+  const configuredBuilderCode = network === BASE_MAINNET_NETWORK
+    ? normalizeBuilderCode(stringField(raw.builderCode), `${slug}.builderCode`) ?? builderCodeFromEnv(env)
+    : undefined;
   return {
     slug,
     description: stringField(raw.description) || env.HIVEMINDOS_PAID_AGENT_DESCRIPTION || "Official HivemindOS paid agent",
     priceUsd: positiveMoney(raw.priceUsd ?? env.HIVEMINDOS_PAID_AGENT_PRICE_USD, DEFAULT_PRICE_USD),
-    network: (stringField(raw.network) || env.HIVEMINDOS_PAID_AGENT_NETWORK || DEFAULT_NETWORK) as Network,
+    network,
     payTo: stringField(raw.payTo) || env.HIVEMINDOS_PAID_AGENT_PAY_TO || "",
-    facilitatorUrl: stringField(raw.facilitatorUrl) || env.HIVEMINDOS_PAID_AGENT_FACILITATOR_URL || "",
+    facilitatorUrl: stringField(raw.facilitatorUrl) || env.HIVEMINDOS_PAID_AGENT_FACILITATOR_URL || defaultFacilitatorUrl(testnetMode),
     facilitatorBearer: stringField(raw.facilitatorBearer) || env.HIVEMINDOS_PAID_AGENT_FACILITATOR_BEARER || undefined,
+    cdpApiKeyId: stringField(raw.cdpApiKeyId) || env.HIVEMINDOS_PAID_AGENT_CDP_API_KEY_ID || env.CDP_API_KEY_ID || undefined,
+    cdpApiKeySecret: stringField(raw.cdpApiKeySecret) || env.HIVEMINDOS_PAID_AGENT_CDP_API_KEY_SECRET || env.CDP_API_KEY_SECRET || undefined,
+    builderCode: configuredBuilderCode,
     upstreamUrl: stringField(raw.upstreamUrl) || env.HIVEMINDOS_PAID_AGENT_UPSTREAM_URL || "",
     upstreamBearer: stringField(raw.upstreamBearer) || env.HIVEMINDOS_PAID_AGENT_UPSTREAM_BEARER || undefined,
     upstreamTimeoutMs: positiveInteger(raw.upstreamTimeoutMs ?? env.HIVEMINDOS_PAID_AGENT_UPSTREAM_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
@@ -373,6 +440,9 @@ function publicAgentInfo(entry: PaidAgentEntry) {
     description: entry.description,
     priceUsd: entry.priceUsd,
     network: entry.network,
+    testnet: entry.network !== BASE_MAINNET_NETWORK,
+    builderCode: entry.builderCode,
+    cdpFacilitatorConfigured: usesCdpFacilitator(entry) ? Boolean(entry.cdpApiKeyId && entry.cdpApiKeySecret) : undefined,
     upstreamConfigured: Boolean(entry.upstreamUrl),
   };
 }
@@ -381,8 +451,22 @@ function missingConfig(entry: PaidAgentEntry) {
   const missing: string[] = [];
   if (!entry.payTo) missing.push("HIVEMINDOS_PAID_AGENT_PAY_TO");
   if (!entry.facilitatorUrl) missing.push("HIVEMINDOS_PAID_AGENT_FACILITATOR_URL");
+  if (usesCdpFacilitator(entry) && !entry.cdpApiKeyId) missing.push("CDP_API_KEY_ID");
+  if (usesCdpFacilitator(entry) && !entry.cdpApiKeySecret) missing.push("CDP_API_KEY_SECRET");
   if (!entry.upstreamUrl) missing.push("HIVEMINDOS_PAID_AGENT_UPSTREAM_URL");
   return missing;
+}
+
+function paidAgentTestnetMode(env: Env) {
+  return booleanValue(env.HIVEMINDOS_PAID_AGENT_TESTNET_MODE, false);
+}
+
+function defaultPaidAgentNetwork(testnetMode: boolean): Network {
+  return (testnetMode ? BASE_SEPOLIA_NETWORK : DEFAULT_NETWORK) as Network;
+}
+
+function defaultFacilitatorUrl(testnetMode: boolean) {
+  return testnetMode ? TESTNET_FACILITATOR_URL : CDP_FACILITATOR_URL;
 }
 
 function rawCatalogEntries(value: unknown): Record<string, unknown>[] {
@@ -423,10 +507,64 @@ async function writeReceipt(
     idempotencyKey || null,
     await requestFingerprint(requestBody),
     JSON.stringify({
+      builderCode: entry.builderCode,
       errorReason: settlement.success ? undefined : settlement.errorReason,
       errorMessage: settlement.success ? undefined : settlement.errorMessage,
     }),
   ).run();
+}
+
+function builderCodeFromEnv(env: Env) {
+  return normalizeBuilderCode(env.HIVEMINDOS_PAID_AGENT_BUILDER_CODE, "HIVEMINDOS_PAID_AGENT_BUILDER_CODE")
+    ?? normalizeBuilderCode(env.HIVEMINDOS_X402_SELLER_BUILDER_CODE, "HIVEMINDOS_X402_SELLER_BUILDER_CODE")
+    ?? normalizeBuilderCode(env.HIVEMINDOS_X402_BUILDER_CODE, "HIVEMINDOS_X402_BUILDER_CODE");
+}
+
+function normalizeBuilderCode(value: unknown, source: string): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (!BUILDER_CODE_PATTERN.test(trimmed)) {
+    throw new Error(`${source} must be 1-32 lowercase letters, digits, or underscores.`);
+  }
+  return trimmed;
+}
+
+function builderCodeRouteExtensions(builderCode?: string): Record<string, unknown> | undefined {
+  return builderCode ? { [BUILDER_CODE]: declareBuilderCodeExtension(builderCode) } : undefined;
+}
+
+function facilitatorConfigForEntry(entry: PaidAgentEntry) {
+  if (usesCdpFacilitator(entry)) {
+    return createFacilitatorConfig(entry.cdpApiKeyId, entry.cdpApiKeySecret);
+  }
+  return {
+    url: entry.facilitatorUrl,
+    ...(entry.facilitatorBearer ? {
+      createAuthHeaders: async () => ({
+        verify: { Authorization: `Bearer ${entry.facilitatorBearer}` },
+        settle: { Authorization: `Bearer ${entry.facilitatorBearer}` },
+        supported: { Authorization: `Bearer ${entry.facilitatorBearer}` },
+      }),
+    } : {}),
+  };
+}
+
+function usesCdpFacilitator(entry: Pick<PaidAgentEntry, "facilitatorUrl">) {
+  return normalizeUrl(entry.facilitatorUrl) === CDP_FACILITATOR_URL;
+}
+
+function normalizeUrl(value: string) {
+  return value.trim().replace(/\/+$/, "");
+}
+
+function booleanValue(value: unknown, fallback: boolean) {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
 }
 
 async function findReceiptByIdempotencyKey(env: Env, slug: string, idempotencyKey: string): Promise<ReceiptRow | null> {
@@ -542,6 +680,21 @@ function positiveMoney(value: unknown, fallback: number) {
 function positiveInteger(value: unknown, fallback: number) {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? Math.round(numeric) : fallback;
+}
+
+function positiveNumber(value: unknown, fallback: number) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : fallback;
+}
+
+function normalizeEvmAddress(value: string) {
+  const trimmed = value.trim();
+  return /^0x[a-fA-F0-9]{40}$/.test(trimmed) ? trimmed : "";
+}
+
+function normalizeSolanaAddress(value: string) {
+  const trimmed = value.trim();
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed) ? trimmed : "";
 }
 
 function roundSix(value: number) {

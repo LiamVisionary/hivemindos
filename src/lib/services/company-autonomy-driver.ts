@@ -3,6 +3,7 @@ import "server-only";
 import { markCompanyDispatched, readCompanies } from "@/lib/services/companies-store";
 import { countDispatchableMembers, dispatchCompanyGoal, scopeFleetToMembers } from "@/lib/services/companies-orchestration";
 import type { QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
+import { redispatchReadyQueenBeeTasks } from "@/lib/services/queen-bee/control-plane";
 import { readBoard, reclaimStaleTasks } from "@/lib/services/kanban/local-kanban-store";
 
 /**
@@ -87,16 +88,19 @@ function memberIdentities(scoped: QueenBeeFleetMachine[]): Set<string> {
 }
 
 async function tickOnce(): Promise<void> {
+  // Board recovery runs EVERY tick, independent of whether any company is launched: reclaim
+  // tasks whose pickup timed out / agent went offline (back to "ready"), then re-dispatch any
+  // autonomous task left stranded "ready" (e.g. a server restart killed its in-process pickup).
+  // This is what makes autonomous loops survive a crash/restart instead of stalling forever.
+  await reclaimStaleTasks(null, {}, {});
+  const redispatched = await redispatchReadyQueenBeeTasks({});
+  if (redispatched > 0) console.log(`[company-autonomy-driver] re-dispatched ${redispatched} stranded ready task(s)`);
+
   const companies = await readCompanies();
   const eligible = companies.filter(
     (c) => c.autonomy && !c.frozen && Boolean(c.apexGoal?.title?.trim()) && (c.agentIds?.length ?? 0) > 0,
   );
   if (eligible.length === 0) return;
-
-  // Recover tasks whose pickup timed out / agent went offline so they re-enter
-  // "ready". Let failures bubble to the loop's try/catch (surfaced in lastError)
-  // and skip this tick's dispatch rather than acting on a broken board.
-  await reclaimStaleTasks(null, {}, {});
 
   const fleet = await fetchFleetSnapshot();
   // If the board can't be read we can't tell whether the crew is idle — a throw

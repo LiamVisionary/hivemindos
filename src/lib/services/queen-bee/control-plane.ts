@@ -9,7 +9,7 @@ import { chooseQueenBeeDelegate, type QueenBeeWorkerClass } from "@/lib/services
 import { readQueenBeeOutcomeStats } from "@/lib/services/queen-bee/outcome-stats";
 import { readProjectRegistry } from "@/lib/services/projects/project-registry";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
-import type { KanbanLoopSpec, KanbanPriority } from "@/lib/types/kanban";
+import type { KanbanLoopSpec, KanbanPriority, KanbanTask } from "@/lib/types/kanban";
 
 export const QUEEN_BEE_FOLDER_NAME = "Queen Bee";
 export const QUEEN_BEE_PROTOCOL = "hivemind-queen-bee";
@@ -196,6 +196,102 @@ export async function readQueenBeeState(options: QueenBeeOptions = {}) {
   }
 }
 
+const REDISPATCH_MIN_READY_AGE_MS = 120_000;
+
+/** Pure predicate: is this a stranded autonomous task safe to re-dispatch a pickup for? */
+export function isRedispatchableReadyTask(
+  task: Pick<KanbanTask, "status" | "assignee" | "targetMachine" | "loop" | "source" | "updatedAt">,
+  now: number,
+): boolean {
+  if (task.status !== "ready") return false;
+  const collectorUrl = task.targetMachine?.collectorUrl;
+  const assignee = task.assignee?.trim();
+  if (!collectorUrl || !assignee || assignee === "queen-bee") return false;
+  const source = task.source ?? "";
+  const autonomous = Boolean(task.loop) || source.startsWith("queen-bee") || source.startsWith("loop");
+  if (!autonomous) return false;
+  // Idle a beat so we never race the original setTimeout pickup of a just-submitted task.
+  return now - (task.updatedAt ?? 0) >= REDISPATCH_MIN_READY_AGE_MS;
+}
+
+/**
+ * Recovers autonomous Work Board tasks left "ready" with a delegated target but no live worker —
+ * e.g. when a server restart killed the in-process pickup, or `reclaimStaleTasks` returned a
+ * timed-out task to the queue. Re-schedules an autonomous pickup for each so a crashed/restarted
+ * dispatch self-heals instead of stranding. Only touches tasks idle a beat (so it never races a
+ * freshly-scheduled pickup) that carry a collector URL. Returns the number of pickups scheduled.
+ */
+export async function redispatchReadyQueenBeeTasks(options: QueenBeeOptions = {}): Promise<number> {
+  const board = await readBoard(null, { vaultPath: options.vaultPath, kanbanFolder: options.kanbanFolder }).catch(() => null);
+  if (!board) return 0;
+  const now = Date.now();
+  let scheduled = 0;
+  for (const task of board.tasks ?? []) {
+    if (!isRedispatchableReadyTask(task, now)) continue;
+    const ok = scheduleQueenBeeAutonomousPickup({
+      task,
+      delegation: {
+        status: "delegated",
+        agent: { name: task.assignee!.trim(), runtime: "hermes", runtimeCapabilities: { chat: true } },
+        machine: { key: task.targetMachine?.key, device: { name: task.targetMachine?.name, collectorUrl: task.targetMachine?.collectorUrl } },
+      },
+      vaultPath: options.vaultPath,
+      kanbanFolder: options.kanbanFolder,
+    });
+    if (ok) scheduled += 1;
+  }
+  return scheduled;
+}
+
+type QueenBeeBoardSignals = {
+  assignments: Record<string, number>;
+  boardOutcomes: Record<string, { completed: number; failed: number }>;
+};
+
+const BOARD_OUTCOME_WINDOW_MS = 14 * 24 * 60 * 60 * 1_000;
+
+// Reads the shared Work Board ONCE to derive two routing signals: in-flight load per agent
+// (to spread bursts) and per-agent completion/failure history (so routing learns from REMOTE
+// agents too — local chat-session stats only cover this machine's agents).
+async function readQueenBeeBoardSignals(input: QueenBeeMessageInput): Promise<QueenBeeBoardSignals> {
+  try {
+    const board = await readBoard(null, { vaultPath: input.vaultPath, kanbanFolder: input.kanbanFolder });
+    const assignments: Record<string, number> = {};
+    for (const task of board?.tasks ?? []) {
+      const assignee = task.assignee?.trim();
+      if (!assignee || assignee === "queen-bee") continue;
+      if (task.status === "working" || task.status === "ready") assignments[assignee] = (assignments[assignee] ?? 0) + 1;
+    }
+    const now = Date.now();
+    const boardOutcomes: Record<string, { completed: number; failed: number }> = {};
+    for (const run of board?.runs ?? []) {
+      const assignee = run.assignee?.trim();
+      if (!assignee || assignee === "queen-bee") continue;
+      if (run.endedAt && now - run.endedAt > BOARD_OUTCOME_WINDOW_MS) continue;
+      const outcome = run.outcome ?? run.status;
+      const bucket = boardOutcomes[assignee] ?? (boardOutcomes[assignee] = { completed: 0, failed: 0 });
+      if (outcome === "completed") bucket.completed += 1;
+      else if (outcome === "blocked" || outcome === "failed" || outcome === "reclaimed") bucket.failed += 1;
+    }
+    return { assignments, boardOutcomes };
+  } catch {
+    return { assignments: {}, boardOutcomes: {} };
+  }
+}
+
+function mergeQueenBeeOutcomes(
+  session: Record<string, { completed: number; failed: number }>,
+  board: Record<string, { completed: number; failed: number }>,
+): Record<string, { completed: number; failed: number }> {
+  const merged: Record<string, { completed: number; failed: number }> = { ...session };
+  for (const [key, value] of Object.entries(board)) {
+    merged[key] = merged[key]
+      ? { completed: merged[key].completed + value.completed, failed: merged[key].failed + value.failed }
+      : value;
+  }
+  return merged;
+}
+
 export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   const message = input.message?.trim();
   if (!message) throw new Error("Queen Bee message is required.");
@@ -208,8 +304,12 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   const title = input.taskTitle?.trim() || taskTitleFromMessage(message);
   const createdAt = new Date().toISOString();
   const projectRegistry = await readQueenBeeProjectRegistry(input.vaultPath);
-  const outcomes = await readQueenBeeOutcomeStats().catch(() => ({}));
-  const delegation = chooseQueenBeeDelegate({ title, body: message, skills: input.skills ?? [], projectRegistry }, input.fleetSnapshot ?? [], { outcomes });
+  const sessionOutcomes = await readQueenBeeOutcomeStats().catch(() => ({}));
+  // One board read yields BOTH in-flight load (spread bursts) and cross-machine completion
+  // history (so routing learns from remote agents, not just this machine's chat sessions).
+  const { assignments, boardOutcomes } = await readQueenBeeBoardSignals(input);
+  const outcomes = mergeQueenBeeOutcomes(sessionOutcomes, boardOutcomes);
+  const delegation = chooseQueenBeeDelegate({ title, body: message, skills: input.skills ?? [], projectRegistry }, input.fleetSnapshot ?? [], { outcomes, assignments });
   const selectedAgentName = delegation.agent?.name || delegation.agent?.id || delegation.agent?.agentId;
   const selectedMachineName = delegation.machine?.device?.name || delegation.machine?.key;
 

@@ -53,6 +53,15 @@ function personalWalletName(agentId: string, agentName: string, network: string)
     : `My ${network.startsWith("solana:") ? "Solana" : "Base"} wallet`;
 }
 
+function isGenericPersonalWalletName(name: unknown): boolean {
+  const normalized = String(name || "").trim().toLowerCase();
+  return normalized === "my wallet"
+    || normalized === "my wallet base"
+    || normalized === "my wallet solana"
+    || normalized === "my base wallet"
+    || normalized === "my solana wallet";
+}
+
 function personalWalletFromAgentWallet(agentId: string, agentName: string, wallet: AgentWalletConfig) {
   const address = wallet.walletAddress || wallet.vaultAddress || "";
   if (!address) return null;
@@ -84,7 +93,7 @@ function walletFromVaultInfo(wallet: AgentWalletVaultInfo): PersonalWalletRespon
   return {
     agentId: wallet.agentId,
     id: wallet.agentId,
-    name: personalWalletName(wallet.agentId, "", wallet.network),
+    name: personalWalletName(wallet.agentId, wallet.name ?? "", wallet.network),
     address: wallet.address,
     network: wallet.network,
     custodyMode: wallet.custodyMode,
@@ -112,6 +121,7 @@ function ledgerWalletWithSignerTruth(wallet: PersonalWalletResponse, vaultByAcco
     ...wallet,
     agentId: vaultWallet.agentId,
     id: vaultWallet.agentId,
+    name: vaultWallet.name && isGenericPersonalWalletName(wallet.name) ? vaultWallet.name : wallet.name,
     custodyMode: vaultWallet.custodyMode,
     importedFrom: personalWalletImportSource(vaultWallet.agentId, vaultWallet.custodyMode),
   };

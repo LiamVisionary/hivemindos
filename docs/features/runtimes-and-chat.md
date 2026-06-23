@@ -36,6 +36,7 @@ Known runtimes are defined in `src/lib/types/agent-runtime.ts`:
 - The collector bridges Hermes and other local runtime sessions when a remote machine owns the agent.
 - Chat history and folders are cached in browser storage and supported by `/api/chat/folders`.
 - Chat folder creation and linked directory context use the same machine-aware directory helper as Kanban and Scheduler: native local folder picker in Tauri, Hivemind Link/collector directory browsing for remote machines, and API fallback in the browser.
+- Capability-search preflight can record redacted Context X-Ray manifests for a runtime session. The Memory workbench uses those manifests to show which skills, tools, API routes, connected apps, runtimes, docs, or workspace files were visible to the agent.
 
 ### Chat Swarm Commands
 
