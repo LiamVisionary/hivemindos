@@ -1,6 +1,6 @@
 ---
 title: Monetization
-description: HivemindOS paid feature boundaries and premium service notes.
+description: HivemindOS paid feature boundaries, Honey and HIVE rewards, staking tiers, and premium service notes.
 ---
 
 # Monetization
@@ -9,7 +9,7 @@ HivemindOS should be useful before anyone pays for a cloud feature. Start here w
 
 The line is simple: local-first control room features stay available by default, and paid services cover infrastructure that costs real money to run or maintain for users.
 
-The ecosystem plan keeps that boundary explicit: HivemindOS remains free and open source, while optional premium services fund company operations, growth, treasury reserves, and revenue-backed HIVE buybacks.
+The ecosystem plan keeps that boundary explicit: HivemindOS remains free and open source, while optional premium services fund company operations, growth, treasury reserves, revenue-backed HIVE buybacks, and proposed seasonal HIVE reward buckets for stakers.
 
 ## Recommended Path
 
@@ -27,7 +27,7 @@ The ecosystem plan keeps that boundary explicit: HivemindOS remains free and ope
   <li>
     <span>3</span>
     <a href="hive-staking-and-community-tiers.html">HIVE Staking And Community Tiers</a>
-    <small>Stake-to-unlock, tier benefits, alpha rooms, bounties, governance, and review policy.</small>
+    <small>Stake-to-unlock, tier benefits, seasonal HIVE reward buckets, alpha rooms, bounties, governance, and review policy.</small>
   </li>
   <li>
     <span>4</span>
@@ -57,15 +57,39 @@ If a feature needs HivemindOS to provide hosted infrastructure, shared room orch
   </section>
   <section class="docCard">
     <h3>Honey, HIVE, And Treasury</h3>
-    <p>The contribution and ownership layers: Honey earning paths, HIVE claims, treasury strategy, buybacks, future burns, and staking.</p>
+    <p>The contribution and ownership layers: Honey earning paths, HIVE claims, treasury strategy, buybacks, future burns, staking, and seasonal reward buckets.</p>
     <a href="honey-hive-treasury.html">Open token model</a>
   </section>
   <section class="docCard">
     <h3>HIVE Staking And Community Tiers</h3>
-    <p>The stake-to-unlock model for holder identity, alpha rooms, bounties, marketplace curation, private opportunity rooms, governance signaling, Operator influence, and Visionary council access.</p>
+    <p>The stake-to-unlock model for holder identity, alpha rooms, bounties, marketplace curation, private opportunity rooms, seasonal HIVE rewards, Operator influence, and Visionary council access.</p>
     <a href="hive-staking-and-community-tiers.html">Open staking tiers</a>
   </section>
 </div>
+
+## Seasonal HIVE Reward Buckets
+
+The proposed staking reward message is simple:
+
+```text
+Stake higher. Earn from a bigger bucket.
+```
+
+Every reward season, eligible HivemindOS revenue can fund separate HIVE reward buckets for each staking tier. Each tier splits its own bucket, so higher-tier wallets do not dilute lower-tier wallets.
+
+For every `$1,000,000` in eligible HivemindOS revenue, the proposed display model is:
+
+| Tier      | Bucket rate | Per `$1,000,000` eligible revenue |
+| --------- | ----------: | --------------------------------: |
+| Holder    |     0.0625% |                    `$625` in HIVE |
+| Supporter |      0.125% |                  `$1,250` in HIVE |
+| Builder   |       0.25% |                  `$2,500` in HIVE |
+| Curator   |        0.5% |                  `$5,000` in HIVE |
+| Operator  |          1% |                 `$10,000` in HIVE |
+| Visionary |          2% |                 `$20,000` in HIVE |
+| **Total** |  **3.9375%** |          **`$39,375` in HIVE rewards** |
+
+This is a proposed reward policy until implemented through a reviewed rewards contract, claim service, treasury process, or other explicit payout mechanism. The current staking vault should not be described as paying HIVE rewards directly.
 
 ## Paid-Service Pages
 

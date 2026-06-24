@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-24 21:05:52 +0700 - Document HIVE Staking Reward Buckets
+  - Status: Pushed
+  - Areas changed: HIVE staking monetization docs, Honey/HIVE treasury docs, monetization GitHub Pages landing page, docs preview navigator, Shared Brain Memory staking decision
+  - Summary: HivemindOS now records the proposed seasonal HIVE reward bucket model for stakers: up to 3.9375% of eligible revenue can fund tier-specific buckets across Holder, Supporter, Builder, Curator, Operator, and Visionary tiers, displayed as `$39,375` in HIVE rewards per `$1M` of eligible revenue. The docs make the incentive ladder obvious while keeping lower tiers protected from higher-tier dilution, and they preserve the current stake-vault boundary by treating rewards as a proposed separate seasonal claim or treasury layer until implemented.
+  - Verification: `git diff --check -- CHANGELOG.md docs/monetization/index.md docs/monetization/hive-staking-and-community-tiers.md docs/monetization/honey-hive-treasury.md docs/preview.html` passed; `rg` confirmed the reward bucket framing, `3.9375%` total rate, `$39,375` per `$1M` display, current stake-vault boundary language, and direct staking page preview link across the GitHub Pages docs and Shared Brain note; `hive-brain answer "What did we decide for HIVE staking reward buckets?" --scope agent-memory --no-api` returned the new decision memory as the top result.
+  - Intended commit message: `Document HIVE staking reward buckets`
+
 - 2026-06-24 10:30:49 +0700 - Add B20 Issuer Proof Skill
   - Status: Uncommitted
   - Areas changed: optional B20 issuer proof packaged skill, B20 issuer proof service/API, AdaptiveAgent chat confirmation path, Hive action catalog, packaged-skill docs, shared-skill docs, vault structure guard, focused B20 proof regression test

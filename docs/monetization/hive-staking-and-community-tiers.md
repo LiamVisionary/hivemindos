@@ -97,7 +97,9 @@ HIVE staking is designed to be simple and easy to reason about.
 
 When a user stakes HIVE, the tokens move from their wallet into the staking contract. The contract records the wallet's active stake so HivemindOS can read the wallet's tier for badges, alpha access, discounts, governance signaling, bounty visibility, and marketplace reputation.
 
-The staking system is not a yield farm. It is not designed around rewards emissions, slashing, lock extensions, or complicated token mechanics. The value of staking comes from the product, community, marketplace, and reputation layers that read the staked balance.
+The v1 staking contract is not a yield farm. It is not designed around automatic rewards emissions, slashing, lock extensions, or complicated token mechanics. The base value of staking comes from the product, community, marketplace, and reputation layers that read the staked balance.
+
+If HivemindOS adds HIVE rewards for stakers, those rewards should be a separate seasonal claim layer funded by eligible revenue or treasury-approved reward budgets. The principal staking vault should stay simple: stake, read tier, request unstake, withdraw after cooldown.
 
 The user flow is:
 
@@ -160,6 +162,92 @@ The tier names are social titles, but each title should map to real privileges.
 These thresholds are fixed in HIVE at launch. They should not float minute-by-minute with price.
 
 Early believers take more risk while the ecosystem is smaller, so they may earn meaningful status earlier. If HIVE appreciates later, those early locked positions become harder to replicate, which is part of the alignment mechanic.
+
+## Proposed Seasonal HIVE Reward Buckets
+
+Staking should feel financially meaningful, not only like a badge system.
+
+The preferred reward framing is:
+
+```text
+Stake higher. Earn from a bigger bucket.
+```
+
+Every reward season, eligible HivemindOS revenue can fund HIVE reward buckets for stakers. Each tier gets its own bucket, and stakers inside that tier split it based on active stake.
+
+This keeps the reward ladder easy to understand:
+
+- Visionary stakers do not dilute Holders.
+- Holders split the Holder bucket.
+- Supporters split the Supporter bucket.
+- Builders split the Builder bucket.
+- Curators split the Curator bucket.
+- Operators split the Operator bucket.
+- Visionaries split the Visionary bucket.
+
+For every `$1,000,000` in eligible HivemindOS revenue, the proposed display model is:
+
+| Tier      | Stake      | Reward bucket       | Compared to Holder |
+| --------- | ---------: | ------------------: | -----------------: |
+| Holder    |    1m HIVE |   `$625` in HIVE    |                 1x |
+| Supporter |   10m HIVE | `$1,250` in HIVE    |                 2x |
+| Builder   |   50m HIVE | `$2,500` in HIVE    |                 4x |
+| Curator   |  100m HIVE | `$5,000` in HIVE    |                 8x |
+| Operator  |  250m HIVE | `$10,000` in HIVE   |                16x |
+| Visionary |    1b HIVE | `$20,000` in HIVE   |                32x |
+| **Total** |            | **`$39,375` in HIVE rewards** | |
+
+The same model as bucket rates:
+
+| Tier      | Reward bucket rate |
+| --------- | -----------------: |
+| Holder    |            0.0625% |
+| Supporter |             0.125% |
+| Builder   |              0.25% |
+| Curator   |               0.5% |
+| Operator  |                 1% |
+| Visionary |                 2% |
+| **Total** |          **3.9375%** |
+
+Each season should publish:
+
+- start date
+- end date
+- claim date
+- eligible revenue amount
+- HIVE reward amount
+- tier bucket rates
+- any per-wallet caps
+- any lock-duration bonuses
+
+The core formula is:
+
+```text
+tier reward bucket = eligible revenue * tier bucket rate
+```
+
+```text
+your reward = your active stake / total active stake in your tier * tier reward bucket
+```
+
+Example:
+
+```text
+Season revenue: $1,000,000
+Builder bucket: $2,500 in HIVE
+
+You stake: 5,000,000 HIVE
+Total Builder stake: 50,000,000 HIVE
+
+Your share: 10%
+Your reward: $250 in HIVE
+```
+
+Public copy should lead with the total pool and the 32x ladder, not tiny percentages. For example:
+
+> Every `$1M` in eligible HivemindOS revenue can send `$39,375` worth of HIVE into staker reward buckets. Visionary gets the largest bucket: 32x the Holder bucket. Each tier splits its own bucket, so lower tiers are not diluted by higher-tier wallets.
+
+This should be treated as a proposed reward policy until implemented through a reviewed rewards contract, claim service, treasury process, or other explicit payout mechanism. Do not describe the existing stake vault as paying these rewards until that reward layer exists.
 
 ## Managed Service Discounts
 
@@ -504,7 +592,7 @@ The staking layer should avoid creating unnecessary security or governance risk.
 - Make benefit changes public before they take effect.
 - Treat staking as an alignment mechanism, not a promise of financial return.
 - Keep staking non-custodial and contract-readable.
-- Do not add yield, emissions, slashing, or lock extensions until the simple staking layer is proven.
+- Do not bolt automatic yield, emissions, slashing, or lock extensions into the principal staking vault until the simple staking layer is proven. The seasonal HIVE reward bucket proposal should remain a separate claim or treasury reward layer unless a later design explicitly changes that boundary.
 - Do not deploy upgradeability unless the admin, timelock, and user notice model are explicit.
 
 ## Summary
