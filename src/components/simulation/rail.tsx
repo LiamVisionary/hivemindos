@@ -8,7 +8,7 @@ import { Sparkline } from "./charts";
 import { frTone } from "./primitives";
 import { SimStatus } from "./theater";
 import {
-  FR_STATE_TONE, FR_TEMPLATE_LABEL, SW_TEMPLATES, frRunShort, frRunTrend, type Run, type TemplateId,
+  FR_STATE_TONE, FR_TEMPLATE_LABEL, SW_TEMPLATES, frRunShort, type Run, type TemplateId,
 } from "./sim-data";
 
 export function SimRunRow({ run, selected, onClick }: { run: Run; selected?: boolean; onClick?: () => void }) {
@@ -36,7 +36,8 @@ export function SimRunRow({ run, selected, onClick }: { run: Run; selected?: boo
 export function SimRunCard({ run, selected, onClick }: { run: Run; selected?: boolean; onClick?: () => void }) {
   const tone = FR_STATE_TONE[run.state];
   const isPoly = run.template === "polymarket" && !!run.market;
-  const spark = React.useMemo(() => isPoly ? run.market!.history.map((h) => h.p) : run.sharpe != null ? frRunTrend(run) : null, [run.id]);
+  // Only a real series (prediction-market history) — never a synthetic trend.
+  const spark = React.useMemo(() => isPoly ? run.market!.history.map((h) => h.p) : null, [run.id]);
   return (
     <button type="button" className="sv-runrow" data-sel={selected ? "" : undefined} onClick={onClick} style={{ display: "flex", flexDirection: "column", gap: 11, alignItems: "stretch", padding: "13px 15px" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>

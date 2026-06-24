@@ -220,6 +220,41 @@ export const sendUsdcAction = defineHiveAction({
   },
 });
 
+export const b20IssuerProofAction = defineHiveAction({
+  id: "crypto.b20-issuer-proof",
+  title: "B20 issuer proof",
+  description:
+    "Prepare or execute a Base B20 token creation proof through the encrypted local agent wallet.",
+  schema: z.object({
+    action: z.enum(["draft", "create"]).optional(),
+    agentId: z.string().optional(),
+    messages: z.array(z.record(z.string(), z.unknown())).optional(),
+    details: z.record(z.string(), z.unknown()).optional(),
+    draft: z.record(z.string(), z.unknown()).optional(),
+    draftMessage: z.string().optional(),
+    confirmation: z.string().optional(),
+  }),
+  sideEffects: ["wallet", "network"],
+  risk: "critical",
+  tags: ["crypto", "wallet", "base", "b20", "token", "issuer", "execution"],
+  aliases: ["b20_issuer_proof", "create b20 token", "make b20 token", "issue b20"],
+  mcp: { expose: true, compact: true, toolName: "b20_issuer_proof" },
+  confirmation: {
+    token: "B20_CREATE",
+    reason:
+      "B20 creation deploys a token through the Base B20 factory and must show the deterministic proof before signing.",
+    when: "always",
+  },
+  contextIndex: {
+    summary:
+      "Prepare a deterministic B20 issuer proof and execute it on Base Sepolia only after confirmation.",
+    retrievalText:
+      "Use b20_issuer_proof when a user asks to create, deploy, make, or issue a B20 token. First call action draft or prepare a proof showing network, token details, predicted address, roles, init calls, salt, calldata hash, and gas readiness. Execute action create only after the user confirms the exact proof with B20_CREATE or the chat confirmation flow maps a plain confirm to B20_CREATE. Default to Base Sepolia while mainnet availability is uncertain.",
+    route: "/api/crypto/b20/issuer-proof",
+    methods: ["GET", "POST"],
+  },
+});
+
 export const dexSwapAction = defineHiveAction({
   id: "wallet.dex-swap",
   title: "DEX swap",
@@ -602,6 +637,7 @@ export const HIVE_ACTIONS = [
   reviewCryptoAction,
   prepareCryptoAction,
   sendUsdcAction,
+  b20IssuerProofAction,
   dexSwapAction,
   stockTradeAction,
   brainGraphOverviewAction,

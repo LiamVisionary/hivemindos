@@ -66,7 +66,7 @@ export function XThreadView({ run }: { run: Run }) {
                 <strong style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#0f1419", fontSize: 15, fontWeight: 700 }}>{display} {XIcon.verify}</strong>
                 <span style={{ color: "#536471", fontSize: 15 }}>@{handle}</span><span style={{ color: "#536471", fontSize: 15 }}>· {i + 1}m</span>
               </header>
-              <div style={{ color: "#536471", fontSize: 14, margin: "2px 0 4px" }}>Replying to <a href="#" style={{ color: "#1d9bf0", textDecoration: "none" }}>@{handle}</a></div>
+              <div style={{ color: "#536471", fontSize: 14, margin: "2px 0 4px" }}>Replying to <span style={{ color: "#1d9bf0" }}>@{handle}</span></div>
               <p style={{ color: "#0f1419", fontSize: 16, lineHeight: 1.35, margin: 0, whiteSpace: "pre-wrap" }}>{t.text}</p>
               <div style={{ ...xActions, maxWidth: 420, marginTop: 8 }}>
                 {([["reply", t.stats.reply], ["retweet", t.stats.retweet], ["like", t.stats.like], ["share", t.stats.view]] as [keyof typeof XIcon, number | undefined][]).map(([k, n]) => (
@@ -82,7 +82,9 @@ export function XThreadView({ run }: { run: Run }) {
 }
 
 // ── Reddit cascade ───────────────────────────────────────────────────────────
-const redditVote: React.CSSProperties = { width: 22, height: 22, padding: 0, border: 0, background: "transparent", color: "#818384", cursor: "pointer", fontSize: 14 };
+// Vote arrows are display-only chrome on simulated posts — there is nothing to
+// vote on, so they are non-interactive (no button, default cursor).
+const redditVote: React.CSSProperties = { width: 22, height: 22, padding: 0, color: "#818384", fontSize: 14, textAlign: "center" };
 function RedditComment({ c }: { c: RedditReply }) {
   const roleColor = c.role ? ({ MM: "#fde68a", TKR: "#fecdd3", INFO: "#99f6e4", OPS: "#cbd5e1" } as Record<string, string>)[c.role] : "#818384";
   return (
@@ -108,7 +110,7 @@ export function RedditView({ run }: { run: Run }) {
       </header>
       <article style={{ display: "grid", gridTemplateColumns: "44px 1fr", gap: 12, padding: "16px 14px", borderBottom: "1px solid #343536" }}>
         <div style={{ display: "grid", placeItems: "center", gap: 3, color: "#818384", fontFamily: "var(--f-mono)", fontSize: 11 }}>
-          <button style={redditVote}>▲</button><span style={{ color: "#ff8717", fontWeight: 800 }}>{post.score >= 1000 ? `${(post.score / 1000).toFixed(1)}k` : post.score}</span><button style={redditVote}>▼</button>
+          <span style={redditVote}>▲</span><span style={{ color: "#ff8717", fontWeight: 800 }}>{post.score >= 1000 ? `${(post.score / 1000).toFixed(1)}k` : post.score}</span><span style={redditVote}>▼</span>
         </div>
         <div style={{ minWidth: 0 }}>
           <h2 style={{ margin: "0 0 8px", fontSize: 18, lineHeight: 1.35, fontWeight: 600, color: "#fff" }}>{post.title}</h2>

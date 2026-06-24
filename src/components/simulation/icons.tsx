@@ -37,10 +37,11 @@ export function Icon({ name, size = 16, sw = 1.7, color = "currentColor" }: {
   );
 }
 
-export function Chevron({ dir = "left", size = 14 }: { dir?: "left" | "right"; size?: number }) {
+export function Chevron({ dir = "left", size = 14 }: { dir?: "left" | "right" | "down"; size?: number }) {
+  const d = dir === "left" ? "M15 6l-6 6 6 6" : dir === "down" ? "M6 9l6 6 6-6" : "M9 6l6 6-6 6";
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }} aria-hidden>
-      <path d={dir === "left" ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6"} />
+      <path d={d} />
     </svg>
   );
 }

@@ -21,7 +21,8 @@ import { SimDetail } from "./detail";
 import { SimRunRow, SimTemplatesRail } from "./rail";
 import { Composer } from "./Composer";
 import { Publish } from "./Publish";
-import { useSimData } from "./sim-context";
+import { useSimData, type SimLaunchMode, type SimLaunchModeStatus } from "./sim-context";
+import { SimViewProvider } from "./sim-view-context";
 import type { Run, TemplateId } from "./sim-data";
 
 const MODES = [
@@ -78,6 +79,97 @@ function LoadingDetail({ label }: { label: string }) {
   );
 }
 
+// One row in the launch-mode menu: a status dot + label + a sub-line that shows
+// the description when ready, or the blocking reason when not.
+function LaunchModeRow({ status, label, sub, onClick }: { status: SimLaunchModeStatus; label: string; sub: string; onClick: () => void }) {
+  const dot = status.ready ? "var(--live)" : status.needsWallet ? "var(--honey)" : "var(--danger)";
+  const clickable = status.ready || Boolean(status.needsWallet);
+  return (
+    <button type="button" onClick={onClick} disabled={!clickable}
+      style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", border: 0, background: "transparent",
+        color: "var(--fg)", cursor: clickable ? "pointer" : "default", borderRadius: "var(--radius-sm)" }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span className="fr-dot" style={{ color: dot, width: 7, height: 7 }} />
+        <span style={{ fontSize: 12.5, fontWeight: 500 }}>{label}</span>
+        {status.note && <span className="sv-mono" style={{ marginLeft: "auto", fontSize: 10, color: "var(--fg-4)" }}>{status.note}</span>}
+      </span>
+      <span style={{ display: "block", marginLeft: 15, marginTop: 3, fontSize: 11, color: status.ready ? "var(--fg-3)" : dot, lineHeight: 1.45 }}>
+        {status.ready ? sub : (status.reason || sub)}
+      </span>
+    </button>
+  );
+}
+
+// The launch control: a split button whose primary action starts a local
+// MiroShark run and whose caret menu lets the user pick the run kind — local
+// (your own/fleet MiroShark) or a paid x402 run on the hosted MiroShark. Each
+// mode shows its readiness; a not-ready mode explains why, and the paid mode
+// with no usable wallet offers to open the Wallets tab.
+function LaunchSplitButton({ modes, onPick, onOpenWallets }: {
+  modes: { local: SimLaunchModeStatus; x402: SimLaunchModeStatus };
+  onPick: (mode: SimLaunchMode) => void;
+  onOpenWallets?: () => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [view, setView] = React.useState<"menu" | "wallet">("menu");
+  const close = () => { setOpen(false); setView("menu"); };
+
+  const primary = () => {
+    if (modes.local.ready) { onPick("local"); close(); }
+    else { setView("menu"); setOpen(true); }
+  };
+  const pickMode = (mode: SimLaunchMode) => {
+    const status = modes[mode];
+    if (status.ready) { onPick(mode); close(); return; }
+    if (mode === "x402" && status.needsWallet) { setView("wallet"); return; }
+    // local not-ready (or x402 not-ready for another reason): leave the menu open
+    // so the inline reason stays visible.
+  };
+
+  return (
+    <div style={{ position: "relative", display: "inline-flex" }}>
+      <button type="button" className="fb-btn primary sm" onClick={primary}
+        style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0, display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <Icon name="plus" size={14} sw={2} /> New simulation
+      </button>
+      <button type="button" className="fb-btn primary sm" aria-label="Choose run kind" aria-haspopup="menu" aria-expanded={open}
+        onClick={() => { setView("menu"); setOpen((o) => !o); }}
+        style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0, marginLeft: 1, padding: "0 8px", display: "inline-flex", alignItems: "center" }}>
+        <Chevron dir="down" size={13} />
+      </button>
+      {open && (
+        <>
+          <div onClick={close} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+          <div role="menu" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 41, width: 300,
+            background: "var(--panel)", border: "1px solid var(--line-2)", borderRadius: "var(--radius)", boxShadow: "0 16px 40px rgba(0,0,0,0.35)", padding: 6 }}>
+            {view === "menu" ? (
+              <>
+                <LaunchModeRow status={modes.local} label="Local MiroShark" sub="Runs on your own or a connected fleet MiroShark. Free." onClick={() => pickMode("local")} />
+                <div style={{ height: 1, background: "var(--line)", margin: "4px 8px" }} />
+                <LaunchModeRow status={modes.x402} label="Paid run · x402" sub="Runs on the hosted MiroShark. Pays ~$1 USDC from a wallet." onClick={() => pickMode("x402")} />
+              </>
+            ) : (
+              <div style={{ padding: "12px 12px 10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <Icon name="alert" size={15} color="var(--honey)" />
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>No wallet for paid runs</span>
+                </div>
+                <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--fg-3)", lineHeight: 1.5 }}>
+                  A paid x402 run charges ~$1 USDC, so it needs a wallet. Open the Wallets tab to create or import one first?
+                </p>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <Button variant="ghost" sm onClick={() => setView("menu")}>Not now</Button>
+                  <Button variant="primary" sm onClick={() => { onOpenWallets?.(); close(); }}>Open Wallets</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function SimulationView({ theme = "dark", initialRunId, railCollapsed = false, onSelectRun, onNewSimulation, onPublish, onSelectMode }: SimulationViewProps) {
   const data = useSimData();
   const { runs, live, others, active, stats, getRun } = data;
@@ -87,8 +179,17 @@ export function SimulationView({ theme = "dark", initialRunId, railCollapsed = f
   // fall back to the live/first run). No selection-syncing effect needed.
   const [picked, setPicked] = React.useState<string | null>(initialRunId ?? null);
   const [open, setOpen] = React.useState(!railCollapsed);
-  const [composer, setComposer] = React.useState<TemplateId | null>(null);
+  const [composer, setComposer] = React.useState<{ tpl: TemplateId; mode: SimLaunchMode; scenario?: string } | null>(null);
   const [publish, setPublish] = React.useState<Run | null>(null);
+  const launchModes = data.launchModes ?? { local: { ready: true }, x402: { ready: true } };
+
+  // Re-run / Retry / Launch from a run card → open the composer pre-seeded with
+  // the run's scenario, so the user gets the SAME launch options (Local vs paid
+  // x402) as a fresh run rather than a silent relaunch.
+  const rerun = React.useCallback((run: Run) => {
+    setComposer({ tpl: "custom", mode: "local", scenario: (run.summary || run.title || "").trim() });
+  }, []);
+  const simViewActions = React.useMemo(() => ({ rerun }), [rerun]);
 
   const sel = picked && runs.some((r) => r.id === picked) ? picked : (active?.id || runs[0]?.id || "");
   const selected = sel ? getRun(sel) : null;
@@ -100,12 +201,13 @@ export function SimulationView({ theme = "dark", initialRunId, railCollapsed = f
     if (onSelectRun) onSelectRun(run);
     else data.onSelectRun?.(run);
   };
-  const openComposer = (t: TemplateId) => { if (onNewSimulation) onNewSimulation(t); else setComposer(t); };
+  const openComposer = (t: TemplateId, mode: SimLaunchMode = "local") => { if (onNewSimulation) onNewSimulation(t); else setComposer({ tpl: t, mode }); };
   // The in-component publish slide-over opens for review; its confirm fires the
   // live publish handler (data.onPublish). The onPublish prop fully overrides it.
   const openPublish = (run: Run) => { if (onPublish) onPublish(run); else setPublish(run); };
 
   return (
+    <SimViewProvider value={simViewActions}>
     <div className="sim-root" data-sim-theme={theme === "light" ? "light" : undefined} style={{ minHeight: "100%", fontFamily: "var(--f-body)", color: "var(--fg)" }}>
       <header style={{ padding: "20px 28px 14px", borderBottom: "1px solid var(--line)" }}>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
@@ -134,8 +236,8 @@ export function SimulationView({ theme = "dark", initialRunId, railCollapsed = f
             <p style={{ margin: "5px 0 0", fontSize: 12, color: "var(--fg-3)", maxWidth: "60ch", lineHeight: 1.5 }}>Every run on the shelf in one place — pick one to watch it live or read its result.</p>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <Button variant="ghost" sm><Icon name="download" size={14} /> Export</Button>
-            <Button variant="primary" sm onClick={() => openComposer("polymarket")}><Icon name="plus" size={14} sw={2} /> New simulation</Button>
+            <LaunchSplitButton modes={launchModes} onOpenWallets={data.onOpenWallets}
+              onPick={(mode) => openComposer("polymarket", mode)} />
           </div>
         </div>
 
@@ -172,8 +274,9 @@ export function SimulationView({ theme = "dark", initialRunId, railCollapsed = f
         </div>
       </div>
 
-      {composer && <Composer initialTemplate={composer} onClose={() => setComposer(null)} onLaunch={(payload) => { data.onLaunch?.(payload); setComposer(null); }} />}
+      {composer && <Composer initialTemplate={composer.tpl} initialMode={composer.mode} initialScenario={composer.scenario} onClose={() => setComposer(null)} onLaunch={(payload) => { data.onLaunch?.(payload); setComposer(null); }} />}
       {publish && <Publish run={publish} onClose={() => setPublish(null)} onPublished={() => data.onPublish?.(publish)} />}
     </div>
+    </SimViewProvider>
   );
 }

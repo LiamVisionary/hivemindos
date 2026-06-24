@@ -6,11 +6,12 @@
    rounds, platform }) so the panel can start a real MiroShark run. */
 
 import React from "react";
-import { Button } from "./primitives";
+import { Button, Toggle } from "./primitives";
 import { Icon, Chevron } from "./icons";
 import { SlideOver, FLbl, FInput, FArea, FPills, XEditor } from "./SlideOver";
 import { SW_TEMPLATES, type TemplateId } from "./sim-data";
-import type { SimLaunchPayload } from "./sim-context";
+import { useSimData } from "./sim-context";
+import type { SimLaunchMode, SimLaunchPayload } from "./sim-context";
 
 // Default round count + downstream platform per template (matches the live
 // MiroShark surface mapping in swarm-transformers.swarmTemplateIdFromSurface).
@@ -38,12 +39,14 @@ function PolyForm({ report }: FormProps) {
   const [gran, setGran] = React.useState("Bi-weekly");
   const [unit, setUnit] = React.useState("$");
   const [buckets, setBuckets] = React.useState(["< 100M", "100M – 200M", "> 200M"]);
+  const [agents, setAgents] = React.useState("48");
+  const [news, setNews] = React.useState("3");
   React.useEffect(() => {
     const detail = kind === "Binary" ? `binary market, opening YES ${yes}¢`
       : kind === "Dated" ? `dated market, ${gran.toLowerCase()} windows resolving by ${resolveBy}`
       : `bucketed market (${unit}) with ranges: ${buckets.join(", ")}`;
-    report(`Prediction market: ${q} — ${detail}.`);
-  }, [kind, q, yes, resolveBy, gran, unit, buckets, report]);
+    report(`Prediction market: ${q} — ${detail}. Simulate with ${agents} agents and ${news} news shocks.`);
+  }, [kind, q, yes, resolveBy, gran, unit, buckets, agents, news, report]);
   return (
     <>
       <div className="so-row"><FLbl>Question</FLbl><FArea value={q} onChange={setQ} rows={2} /></div>
@@ -100,23 +103,28 @@ function PolyForm({ report }: FormProps) {
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <div className="so-row"><FLbl>Agents</FLbl><FInput value="48" mono /></div>
-        <div className="so-row"><FLbl>News shocks</FLbl><FInput value="3" mono /></div>
+        <div className="so-row"><FLbl>Agents</FLbl><FInput value={agents} onChange={setAgents} mono /></div>
+        <div className="so-row"><FLbl>News shocks</FLbl><FInput value={news} onChange={setNews} mono /></div>
       </div>
     </>
   );
 }
 function MMForm({ report }: FormProps) {
   const [shock, setShock] = React.useState("CPI hot");
-  React.useEffect(() => { report(`Market-making theater on ZN1 (10Y T-Note futures), 12 MMs vs 8 takers, 1.5bp spread, ${shock} shock at 2.0σ.`); }, [shock, report]);
+  const [instrument, setInstrument] = React.useState("ZN1 (10Y T-Note futures)");
+  const [mm, setMm] = React.useState("12");
+  const [tkr, setTkr] = React.useState("8");
+  const [spread, setSpread] = React.useState("1.5");
+  const [sigma, setSigma] = React.useState("2.0");
+  React.useEffect(() => { report(`Market-making theater on ${instrument}, ${mm} MMs vs ${tkr} takers, ${spread}bp spread, ${shock} shock at ${sigma}σ.`); }, [instrument, mm, tkr, spread, sigma, shock, report]);
   return (
     <>
-      <div className="so-row"><FLbl>Instrument</FLbl><FInput value="ZN1 (10Y T-Note futures)" /></div>
+      <div className="so-row"><FLbl>Instrument</FLbl><FInput value={instrument} onChange={setInstrument} /></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <div className="so-row"><FLbl>MM count</FLbl><FInput value="12" mono /></div>
-        <div className="so-row"><FLbl>TKR count</FLbl><FInput value="8" mono /></div>
-        <div className="so-row"><FLbl>Spread (bp)</FLbl><FInput value="1.5" mono /></div>
-        <div className="so-row"><FLbl>Shock (σ)</FLbl><FInput value="2.0" mono /></div>
+        <div className="so-row"><FLbl>MM count</FLbl><FInput value={mm} onChange={setMm} mono /></div>
+        <div className="so-row"><FLbl>TKR count</FLbl><FInput value={tkr} onChange={setTkr} mono /></div>
+        <div className="so-row"><FLbl>Spread (bp)</FLbl><FInput value={spread} onChange={setSpread} mono /></div>
+        <div className="so-row"><FLbl>Shock (σ)</FLbl><FInput value={sigma} onChange={setSigma} mono /></div>
       </div>
       <div className="so-row"><FLbl>Shock</FLbl><FPills options={["CPI hot", "Fed dovish", "Geopolitical", "Liquidity drain"]} value={shock} onChange={setShock} /></div>
     </>
@@ -125,14 +133,16 @@ function MMForm({ report }: FormProps) {
 function RedditForm({ report }: FormProps) {
   const [seed, setSeed] = React.useState("just got 3000 shares of NVDA at $812, earnings tomorrow lfg 🚀");
   const [sub, setSub] = React.useState("r/wallstreetbets");
-  React.useEffect(() => { report(`Reddit narrative cascade in ${sub}. Seed comment: ${seed}`); }, [seed, sub, report]);
+  const [depth, setDepth] = React.useState("4");
+  const [replies, setReplies] = React.useState("6");
+  React.useEffect(() => { report(`Reddit narrative cascade in ${sub}, ${depth} levels deep with ${replies} replies per level. Seed comment: ${seed}`); }, [seed, sub, depth, replies, report]);
   return (
     <>
       <div className="so-row"><FLbl>Subreddit</FLbl><FInput value={sub} onChange={setSub} /></div>
       <div className="so-row"><FLbl>Seed comment</FLbl><FArea value={seed} onChange={setSeed} rows={3} /></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <div className="so-row"><FLbl>Cascade depth</FLbl><FInput value="4" mono /></div>
-        <div className="so-row"><FLbl>Replies / level</FLbl><FInput value="6" mono /></div>
+        <div className="so-row"><FLbl>Cascade depth</FLbl><FInput value={depth} onChange={setDepth} mono /></div>
+        <div className="so-row"><FLbl>Replies / level</FLbl><FInput value={replies} onChange={setReplies} mono /></div>
       </div>
     </>
   );
@@ -160,7 +170,9 @@ function ResearchForm({ report }: FormProps) {
 }
 function OpsForm({ report }: FormProps) {
   const [f, setF] = React.useState("vault conflict storm");
-  React.useEffect(() => { report(`Ops stress test: ${f}, intensity 2σ over 5 rounds.`); }, [f, report]);
+  const [intensity, setIntensity] = React.useState("2σ");
+  const [duration, setDuration] = React.useState("5 rounds");
+  React.useEffect(() => { report(`Ops stress test: ${f}, intensity ${intensity} over ${duration}.`); }, [f, intensity, duration, report]);
   return (
     <>
       <div className="so-row"><FLbl>Failure profile</FLbl>
@@ -173,14 +185,14 @@ function OpsForm({ report }: FormProps) {
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <div className="so-row"><FLbl>Intensity</FLbl><FInput value="2σ" mono /></div>
-        <div className="so-row"><FLbl>Duration</FLbl><FInput value="5 rounds" mono /></div>
+        <div className="so-row"><FLbl>Intensity</FLbl><FInput value={intensity} onChange={setIntensity} mono /></div>
+        <div className="so-row"><FLbl>Duration</FLbl><FInput value={duration} onChange={setDuration} mono /></div>
       </div>
     </>
   );
 }
-function CustomForm({ report }: FormProps) {
-  const [s, setS] = React.useState("");
+function CustomForm({ report, initial }: FormProps & { initial?: string }) {
+  const [s, setS] = React.useState(initial ?? "");
   React.useEffect(() => { report(s); }, [s, report]);
   return <div className="so-row"><FLbl>Scenario</FLbl><FArea value={s} onChange={setS} rows={8} placeholder="Describe an empty world. Anything goes." /></div>;
 }
@@ -190,30 +202,32 @@ const FORMS: Record<TemplateId, React.FC<FormProps> | null> = {
   "research-swarm": ResearchForm, "ops": OpsForm, "x-thread": null, "custom": CustomForm,
 };
 
-function UrlSection() {
+// Add a source URL to the run. The link is appended to the scenario string that
+// gets sent to MiroShark (no fake "reading" — MiroShark ingests it when it builds
+// the run's graph), so this is a real, honest input.
+function UrlSection({ onAdd }: { onAdd: (url: string) => void }) {
   const [open, setOpen] = React.useState(false);
   const [url, setUrl] = React.useState("");
-  const [building, setBuilding] = React.useState(false);
-  const [built, setBuilt] = React.useState(false);
-  const build = () => { setBuilding(true); setTimeout(() => { setBuilding(false); setBuilt(true); }, 900); };
+  const [added, setAdded] = React.useState("");
+  const add = () => { const u = url.trim(); if (!u) return; onAdd(u); setAdded(u); };
   return (
     <div style={{ border: "1px solid var(--line-2)", borderRadius: "var(--radius-sm)", background: "var(--panel-2)", overflow: "hidden" }}>
       <button type="button" onClick={() => setOpen((o) => !o)} style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", padding: "11px 13px", background: "transparent", border: 0, color: "var(--fg)", cursor: "pointer" }}>
         <Icon name="sparkles" size={14} color="var(--honey)" />
-        <span style={{ fontSize: 12.5, fontWeight: 500 }}>Run from a URL</span>
-        <span className="sv-mono" style={{ fontSize: 10, color: "var(--fg-4)" }}>let MiroShark fill this in</span>
+        <span style={{ fontSize: 12.5, fontWeight: 500 }}>Add a source URL</span>
+        <span className="sv-mono" style={{ fontSize: 10, color: added ? "var(--live)" : "var(--fg-4)" }}>{added ? "added" : "optional"}</span>
         <span style={{ marginLeft: "auto", color: "var(--fg-4)", display: "inline-flex", transform: open ? "rotate(90deg)" : "none", transition: "transform .18s" }}><Chevron dir="right" size={13} /></span>
       </button>
       {open && (
         <div style={{ padding: "0 13px 13px", display: "flex", flexDirection: "column", gap: 10 }}>
-          <p style={{ margin: 0, fontSize: 11.5, color: "var(--fg-3)", lineHeight: 1.5 }}>Paste a press release, news article, or market link. MiroShark reads it, writes the seed briefing, and pre-fills the form below — no manual setup.</p>
+          <p style={{ margin: 0, fontSize: 11.5, color: "var(--fg-3)", lineHeight: 1.5 }}>Paste a press release, news article, or market link. It is added to the scenario sent to MiroShark as a source to incorporate.</p>
           <div style={{ display: "flex", gap: 8 }}>
             <FInput value={url} onChange={setUrl} mono placeholder="https://…" />
-            <Button variant="primary" sm onClick={build} disabled={building}>{building ? "Reading…" : "Build"}</Button>
+            <Button variant="primary" sm onClick={add} disabled={!url.trim()}>Add</Button>
           </div>
-          {built && (
+          {added && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: "var(--live)" }}>
-              <Icon name="check" size={13} sw={2.2} color="var(--live)" /> Scenario drafted from the URL — fields below are pre-filled. Review and launch.
+              <Icon name="check" size={13} sw={2.2} color="var(--live)" /> Source added to the scenario: {added}
             </div>
           )}
         </div>
@@ -222,32 +236,80 @@ function UrlSection() {
   );
 }
 
-export function Composer({ initialTemplate = "polymarket", onClose, onLaunch }: {
-  initialTemplate?: TemplateId; onClose: () => void; onLaunch?: (payload: SimLaunchPayload) => void;
+export function Composer({ initialTemplate = "polymarket", initialMode = "local", initialScenario, onClose, onLaunch }: {
+  initialTemplate?: TemplateId; initialMode?: SimLaunchMode; initialScenario?: string;
+  onClose: () => void; onLaunch?: (payload: SimLaunchPayload) => void;
 }) {
+  const data = useSimData();
+  const launchModes = data.launchModes ?? { local: { ready: true }, x402: { ready: true } };
   const [tpl, setTpl] = React.useState<TemplateId>(initialTemplate);
+  const [mode, setMode] = React.useState<SimLaunchMode>(initialMode);
+  const [deepResearch, setDeepResearch] = React.useState(false);
+  const [sourceUrl, setSourceUrl] = React.useState("");
   const meta = SW_TEMPLATES.find((t) => t.id === tpl);
   const Form = FORMS[tpl];
-  const launchLabel = tpl === "x-thread" ? "Stage thread" : tpl === "ops" ? "Launch storm" : "Launch run";
+  const isPaid = mode === "x402";
+  const modeStatus = launchModes[mode];
+  const blocked = modeStatus.ready === false;
+  const launchLabel = isPaid ? "Pay $1 & run"
+    : tpl === "x-thread" ? "Stage thread" : tpl === "ops" ? "Launch storm" : "Launch run";
 
   // Each form reports a human-readable scenario via its own effect on mount and
   // on edit. We don't reset on template change here — the newly mounted form's
   // effect runs after this component's, so resetting would clobber its report.
-  const [scenario, setScenario] = React.useState(meta?.desc ?? "");
+  const [scenario, setScenario] = React.useState(initialScenario ?? meta?.desc ?? "");
   const report = React.useCallback((s: string) => setScenario(s), []);
 
   const launch = () => {
-    const text = scenario.trim() || meta?.desc || meta?.label || tpl;
-    onLaunch?.({ template: tpl, scenario: text, rounds: DEFAULT_ROUNDS[tpl] ?? 1, platform: TEMPLATE_PLATFORM[tpl] ?? "parallel" });
+    if (blocked) return;
+    const base = scenario.trim() || meta?.desc || meta?.label || tpl;
+    const text = sourceUrl ? `${base}\n\nSource URL to incorporate: ${sourceUrl}` : base;
+    onLaunch?.({
+      template: tpl, scenario: text, rounds: DEFAULT_ROUNDS[tpl] ?? 1,
+      platform: TEMPLATE_PLATFORM[tpl] ?? "parallel", mode, deepResearch: isPaid ? deepResearch : undefined,
+    });
   };
 
   return (
-    <SlideOver open onClose={onClose} title="New simulation" sub="Pick a scenario template, configure it, and spin up a fresh swarm."
+    <SlideOver open onClose={onClose}
+      title={isPaid ? "New paid simulation · x402" : "New simulation"}
+      sub={isPaid
+        ? "Compose a scenario, then pick a wallet and confirm the ~$1 charge. Runs on the hosted MiroShark — no local install needed."
+        : "Pick a scenario template, configure it, and spin up a fresh swarm."}
       footer={<>
-        <span className="sv-mono" style={{ fontSize: 11, color: "var(--fg-4)" }}>◇ {meta?.agents} agents · ~$1 · ~10 min</span>
-        <Button variant="primary" sm onClick={launch}><Icon name="plus" size={13} sw={2} /> {launchLabel}</Button>
+        <span className="sv-mono" style={{ fontSize: 11, color: "var(--fg-4)" }}>
+          {isPaid ? `◇ pays ~$1 USDC · pick a wallet & confirm next` : `◇ ${meta?.agents} agents · runs on your MiroShark · ~10 min`}
+        </span>
+        <Button variant="primary" sm onClick={launch} disabled={blocked} title={blocked ? modeStatus.reason : undefined}>
+          <Icon name={isPaid ? "trade" : "plus"} size={13} sw={2} /> {launchLabel}
+        </Button>
       </>}>
-      <UrlSection />
+      {/* Run kind — the same Local vs paid x402 choice the split button offers. */}
+      <div className="so-row"><FLbl>Run with</FLbl>
+        <div className="so-seg">
+          {([["local", "Local MiroShark"], ["x402", "Paid · $1"]] as const).map(([m, l]) => (
+            <button key={m} type="button" data-on={mode === m ? "" : undefined} onClick={() => setMode(m)}>{l}</button>
+          ))}
+        </div>
+        {blocked && modeStatus.reason && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, padding: "9px 11px", borderRadius: "var(--radius-sm)", border: "1px solid color-mix(in srgb, var(--danger) 38%, transparent)", background: "var(--danger-soft)", color: "var(--danger)", fontSize: 11.5, lineHeight: 1.45 }}>
+            <Icon name="warn" size={14} color="var(--danger)" /> <span style={{ flex: 1 }}>{modeStatus.reason}</span>
+            {isPaid && modeStatus.needsWallet && data.onOpenWallets && (
+              <Button variant="ghost" sm onClick={() => { data.onOpenWallets?.(); onClose(); }}>Open Wallets</Button>
+            )}
+          </div>
+        )}
+      </div>
+      {isPaid && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--line-2)", background: "var(--panel-2)" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 500 }}>Deep research</div>
+            <div style={{ fontSize: 11, color: "var(--fg-4)", lineHeight: 1.45 }}>Let MiroShark read sources before simulating. Slower, richer report.</div>
+          </div>
+          <Toggle on={deepResearch} onChange={() => setDeepResearch((v) => !v)} />
+        </div>
+      )}
+      <UrlSection onAdd={setSourceUrl} />
       <div className="so-row"><FLbl>Template</FLbl>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {SW_TEMPLATES.map((t) => <button key={t.id} type="button" className="so-pill" data-on={tpl === t.id ? "" : undefined} onClick={() => setTpl(t.id)}>{t.label}</button>)}
@@ -255,7 +317,9 @@ export function Composer({ initialTemplate = "polymarket", onClose, onLaunch }: 
         {meta && <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--fg-3)", lineHeight: 1.5 }}>{meta.desc}</p>}
       </div>
       <div style={{ height: 1, background: "var(--line)" }} />
-      {tpl === "x-thread" ? <XEditor report={report} /> : Form ? <Form report={report} /> : null}
+      {tpl === "x-thread" ? <XEditor report={report} />
+        : tpl === "custom" ? <CustomForm report={report} initial={initialScenario} />
+        : Form ? <Form report={report} /> : null}
     </SlideOver>
   );
 }

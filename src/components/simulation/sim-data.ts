@@ -312,27 +312,33 @@ export const SW_TEMPLATES: Template[] = [
 ];
 
 // ── derivations ──────────────────────────────────────────────────────────
+// Every tile shows a REAL field from the run payload \u2014 no hardcoded placeholders.
+// Fields MiroShark didn't emit (sharpe/pnl on a thin run) are dropped, not faked.
 export function frRunMetrics(run: Run): MetricTile[] {
   if (run.template === "polymarket" && run.market) {
-    const m = run.market, lead = m.outcomes[0];
+    const lead = run.market.outcomes[0];
     return [
-      { k: "swarm lean", v: lead.label, tone: m.lean.hit ? "live" : "honey" },
+      { k: "swarm lean", v: lead.label, tone: run.market.lean.hit ? "live" : "honey" },
       { k: "confidence", v: Math.round(lead.prob * 100) + "%", tone: "honey" },
       { k: "agents", v: run.agents },
-      { k: "volume", v: m.volume },
+      { k: "rounds", v: run.rounds },
     ];
   }
-  const sr: MetricTile | null = run.sharpe != null
-    ? { k: "sharpe", v: run.sharpe.toFixed(2), tone: run.state === "live" ? "live" : run.sharpe >= 1.5 ? "live" : "honey" }
+  const sharpe: MetricTile | null = run.sharpe != null
+    ? { k: "sharpe", v: run.sharpe.toFixed(2), tone: run.state === "live" || run.sharpe >= 1.5 ? "live" : "honey" }
     : null;
-  switch (run.template) {
-    case "market-maker": return [sr!, { k: "pnl \u0394 / round", v: run.pnl! }, { k: "position", v: "+1.4M" }, { k: "trades", v: run.trades.toLocaleString() }];
-    case "reddit-narrative": return [{ k: "posts", v: run.posts.toLocaleString() }, { k: "agents", v: run.agents }, { k: "rounds", v: run.rounds }, { k: "subreddit", v: "wsb" }];
-    case "research-swarm": return [{ k: "sources", v: run.news }, { k: "reading bees", v: run.agents }, { k: "brief", v: "1 draft", tone: "honey" }, { k: "ranked by", v: "memory" }];
-    case "x-thread": return [{ k: "tweets", v: run.posts }, { k: "author bee", v: run.agents }, { k: "status", v: "awaiting you", tone: "honey" }, { k: "channel", v: "@hivemind" }];
-    case "ops": return [{ k: "round", v: run.currentRound + " / " + run.rounds, tone: "danger" }, { k: "agents", v: run.agents }, { k: "retries", v: "6", tone: "danger" }, { k: "transport", v: "rsync/ssh" }];
-    default: return sr ? [sr] : [];
-  }
+  const statusLabel = run.state === "live" ? "running" : run.state === "ready" ? "awaiting you" : run.state === "failed" ? "failed" : "done";
+  const tiles: (MetricTile | null)[] = (() => {
+    switch (run.template) {
+      case "market-maker": return [sharpe, run.pnl ? { k: "pnl \u0394 / round", v: run.pnl } : null, { k: "trades", v: run.trades.toLocaleString() }, { k: "agents", v: run.agents }];
+      case "reddit-narrative": return [{ k: "posts", v: run.posts.toLocaleString() }, { k: "agents", v: run.agents }, { k: "rounds", v: run.rounds }];
+      case "research-swarm": return [{ k: "sources", v: run.news }, { k: "reading bees", v: run.agents }, { k: "rounds", v: run.rounds }];
+      case "x-thread": return [{ k: "tweets", v: run.posts }, { k: "author bees", v: run.agents }, { k: "status", v: statusLabel, tone: run.state === "ready" ? "honey" : undefined }];
+      case "ops": return [{ k: "round", v: run.currentRound + " / " + run.rounds, tone: "danger" }, { k: "agents", v: run.agents }, { k: "rounds", v: run.rounds }];
+      default: return [sharpe, { k: "agents", v: run.agents }, { k: "rounds", v: run.rounds }];
+    }
+  })();
+  return tiles.filter((t): t is MetricTile => t != null);
 }
 
 export function frRunVerdict(run: Run): { tone: Tone; head: string; why: string } {

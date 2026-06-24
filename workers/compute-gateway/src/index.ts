@@ -1,5 +1,9 @@
 type Env = {
   DB: D1Database;
+  // Service binding to the honey-ledger worker. Worker-to-worker calls over the public
+  // *.workers.dev URL are 404'd at the Cloudflare edge, so all ledger calls go through
+  // this binding; HONEY_LEDGER_URL remains only as a local-dev fallback.
+  HONEY_LEDGER?: Fetcher;
   BANKR_LLM_KEY?: string;
   BANKR_MANAGEMENT_KEY?: string;
   BANKR_LLM_BASE_URL?: string;
@@ -88,6 +92,28 @@ const worker: ExportedHandler<Env> = {
       return proxyModels(request, env);
     }
 
+    // Remote kill-switch for the official Honey economy. The app reads this (cached)
+    // and only adopts the official ledger + gateway earning/redemption when enabled.
+    // Defaults OFF; flip it with: wrangler d1 execute hivemindos_compute_gateway --remote
+    //   --command "INSERT OR REPLACE INTO gateway_config(key,value) VALUES('honey-economy-enabled','true')"
+    if (request.method === "GET" && url.pathname === "/honey/config") {
+      return handleHoneyConfig(env);
+    }
+
+    // Authenticated redemption: the app reaches the ledger's signed-command routes
+    // ONLY through here. The gateway authenticates the workspace by its Bankr LLM key
+    // (a real funded credential bound to the workspace at first mint), then signs the
+    // command server-side with HONEY_LEDGER_SECRET. The app never holds the secret.
+    if (request.method === "POST" && url.pathname === "/honey/exchange") {
+      return handleHoneyCommand(request, env, "exchange");
+    }
+    if (request.method === "POST" && url.pathname === "/honey/return") {
+      return handleHoneyCommand(request, env, "return-to-honey");
+    }
+    if (request.method === "POST" && url.pathname === "/honey/claim") {
+      return handleHoneyCommand(request, env, "claim-bankr-hive");
+    }
+
     return json(env, { ok: false, error: "Not found." }, 404);
   },
 };
@@ -113,12 +139,11 @@ async function handleChat(request: Request, env: Env) {
     return sse(env, { error: "Missing workspaceId, agentId, or messages." }, 400);
   }
 
-  const promptTokens = estimateTokens(JSON.stringify(messages));
   const cap = positiveInteger(env.DAILY_TOKEN_CAP, 50_000);
   const current = await readDailyUsage(env, workspaceId);
-  if (current + promptTokens > cap) {
-    return sse(env, { error: `Daily reward compute cap reached for this workspace (${cap.toLocaleString()} tokens).` }, 429);
-  }
+  // Cap limits rewards, not LLM access (see handleOpenAIChatCompletions). Bind the
+  // workspace to its funding key only when an explicit user key is supplied.
+  if (cleanSecret(body?.bankrLlmKey)) await bindWorkspaceOwner(env, workspaceId, bankrKey);
 
   const upstream = await fetch(env.BANKR_LLM_BASE_URL ?? "https://llm.bankr.bot/v1/chat/completions", {
     method: "POST",
@@ -140,30 +165,35 @@ async function handleChat(request: Request, env: Env) {
 
   const outputText = extractAssistantText(data);
   const usageTokens = extractUsageTokens(data) ?? estimateTokens(`${JSON.stringify(messages)}\n${outputText}`);
-  const acceptedTokens = Math.max(1, Math.min(usageTokens, Math.max(0, cap - current)));
-  await addDailyUsage(env, workspaceId, acceptedTokens);
-
-  const receipt = await signedReceipt(env, {
-    eventId: crypto.randomUUID(),
-    issuerId: "hivemindos-compute-gateway",
-    workspaceId,
-    agentId,
-    tokensUsed: acceptedTokens,
-    model,
-    source: "trusted-compute-gateway",
-    timestamp: new Date().toISOString(),
-  });
-  const submitted = await submitHoneyReceipt(env, receipt);
-  if (!submitted.ok) return sse(env, { error: submitted.error }, 502);
-  await env.DB.prepare(
-    "INSERT INTO compute_events (event_id, workspace_id, agent_id, model, tokens_used, honey_delta) VALUES (?, ?, ?, ?, ?, ?)",
-  ).bind(receipt.eventId, workspaceId, agentId, model, acceptedTokens, submitted.honeyDelta).run();
+  const rewardTokens = Math.min(Math.max(0, usageTokens), Math.max(0, cap - current));
+  const timestamp = new Date().toISOString();
+  let receiptId = crypto.randomUUID();
+  let honeyDelta = 0;
+  if (rewardTokens > 0) {
+    await addDailyUsage(env, workspaceId, rewardTokens);
+    const receipt = await signedReceipt(env, {
+      eventId: receiptId,
+      issuerId: "hivemindos-compute-gateway",
+      workspaceId,
+      agentId,
+      tokensUsed: rewardTokens,
+      model,
+      source: "trusted-compute-gateway",
+      timestamp,
+    });
+    const submitted = await submitHoneyReceipt(env, receipt);
+    if (!submitted.ok) return sse(env, { error: submitted.error }, 502);
+    honeyDelta = submitted.honeyDelta;
+    await env.DB.prepare(
+      "INSERT INTO compute_events (event_id, workspace_id, agent_id, model, tokens_used, honey_delta) VALUES (?, ?, ?, ?, ?, ?)",
+    ).bind(receiptId, workspaceId, agentId, model, rewardTokens, honeyDelta).run();
+  }
 
   return new Response(
     [
       `data: ${JSON.stringify({ choices: [{ delta: { content: outputText } }] })}`,
       "",
-      `data: ${JSON.stringify({ honey: { id: receipt.eventId, agentId, agentName: body?.agentName, kind: "usage", source: "chat", tokensUsed: acceptedTokens, honeyDelta: submitted.honeyDelta, hiveDelta: 0, createdAt: receipt.timestamp } })}`,
+      `data: ${JSON.stringify({ honey: { id: receiptId, agentId, agentName: body?.agentName, kind: "usage", source: "chat", tokensUsed: rewardTokens, honeyDelta, hiveDelta: 0, createdAt: timestamp } })}`,
       "",
       "data: [DONE]",
       "",
@@ -194,9 +224,12 @@ async function handleOpenAIChatCompletions(request: Request, env: Env) {
   const promptTokens = estimateTokens(JSON.stringify(messages));
   const cap = positiveInteger(env.DAILY_TOKEN_CAP, 50_000);
   const current = await readDailyUsage(env, auth.workspaceId);
-  if (current + promptTokens > cap) {
-    return openAIError(env, `Daily reward compute cap reached for this workspace (${cap.toLocaleString()} tokens).`, 429);
-  }
+  // The daily cap limits Honey REWARDS, not LLM access. Past the cap we still serve the
+  // completion (the caller pays Bankr for their own tokens) but mint zero Honey, so the
+  // gateway is safe to use as the LLM path without throttling chat.
+  // Bind the workspace to its funding key on first authenticated use (explicit user key
+  // only, never the shared managed key); redemption later verifies against this binding.
+  if (!auth.usesManagedHoney && auth.bankrKey) await bindWorkspaceOwner(env, auth.workspaceId, auth.bankrKey);
   const estimatedManagedQuote = quoteManagedHoney(env, Math.max(promptTokens, Number(body?.max_tokens ?? body?.max_completion_tokens ?? 0) || promptTokens));
   if (auth.usesManagedHoney) {
     const hasBudget = await hasManagedHoneyBudget(env, auth.workspaceId, auth.agentId, estimatedManagedQuote.honeyAmount);
@@ -222,50 +255,56 @@ async function handleOpenAIChatCompletions(request: Request, env: Env) {
 
   const outputText = extractAssistantText(data);
   const usageTokens = extractUsageTokens(data) ?? estimateTokens(`${JSON.stringify(messages)}\n${outputText}`);
-  const acceptedTokens = Math.max(1, Math.min(usageTokens, Math.max(0, cap - current)));
-  await addDailyUsage(env, auth.workspaceId, acceptedTokens);
+  const rewardTokens = Math.min(Math.max(0, usageTokens), Math.max(0, cap - current));
   const managedHoney = auth.usesManagedHoney
     ? await submitManagedHoneyDebit(env, {
       workspaceId: auth.workspaceId,
       agentId: auth.agentId,
-      tokensUsed: acceptedTokens,
+      tokensUsed: Math.max(1, usageTokens),
       model,
-      quote: quoteManagedHoney(env, acceptedTokens),
+      quote: quoteManagedHoney(env, Math.max(1, usageTokens)),
     })
     : null;
 
-  const receipt = await signedReceipt(env, {
-    eventId: crypto.randomUUID(),
-    issuerId: "hivemindos-reward-gateway",
-    workspaceId: auth.workspaceId,
-    agentId: auth.agentId,
-    tokensUsed: acceptedTokens,
-    model,
-    source: "verified-reward-gateway",
-    timestamp: new Date().toISOString(),
-  });
-  const submitted = await submitHoneyReceipt(env, receipt);
-  if (!submitted.ok) return openAIError(env, submitted.error ?? "Honey ledger rejected trusted receipt.", 502);
-  await env.DB.prepare(
-    "INSERT INTO compute_events (event_id, workspace_id, agent_id, model, tokens_used, honey_delta) VALUES (?, ?, ?, ?, ?, ?)",
-  ).bind(receipt.eventId, auth.workspaceId, auth.agentId, model, acceptedTokens, submitted.honeyDelta).run();
+  const timestamp = new Date().toISOString();
+  let receiptId = crypto.randomUUID();
+  let honeyDelta = 0;
+  if (rewardTokens > 0) {
+    await addDailyUsage(env, auth.workspaceId, rewardTokens);
+    const receipt = await signedReceipt(env, {
+      eventId: receiptId,
+      issuerId: "hivemindos-reward-gateway",
+      workspaceId: auth.workspaceId,
+      agentId: auth.agentId,
+      tokensUsed: rewardTokens,
+      model,
+      source: "verified-reward-gateway",
+      timestamp,
+    });
+    const submitted = await submitHoneyReceipt(env, receipt);
+    if (!submitted.ok) return openAIError(env, submitted.error ?? "Honey ledger rejected trusted receipt.", 502);
+    honeyDelta = submitted.honeyDelta;
+    await env.DB.prepare(
+      "INSERT INTO compute_events (event_id, workspace_id, agent_id, model, tokens_used, honey_delta) VALUES (?, ?, ?, ?, ?, ?)",
+    ).bind(receiptId, auth.workspaceId, auth.agentId, model, rewardTokens, honeyDelta).run();
+  }
 
   const responseBody = openAIChatResponse(data, {
-    id: receipt.eventId,
+    id: receiptId,
     model,
     outputText,
-    tokensUsed: acceptedTokens,
-    honeyDelta: submitted.honeyDelta,
+    tokensUsed: Math.max(1, usageTokens),
+    honeyDelta,
   });
 
   if (body?.stream === true) {
     return openAIStream(env, responseBody, {
-      id: receipt.eventId,
+      id: receiptId,
       agentId: auth.agentId,
       agentName: auth.agentName,
-      tokensUsed: acceptedTokens,
-      honeyDelta: submitted.honeyDelta,
-      createdAt: receipt.timestamp,
+      tokensUsed: rewardTokens,
+      honeyDelta,
+      createdAt: timestamp,
       managedHoney,
     });
   }
@@ -274,15 +313,15 @@ async function handleOpenAIChatCompletions(request: Request, env: Env) {
     ...responseBody,
     ...(managedHoney ? { managedHoney } : {}),
     honey: {
-      id: receipt.eventId,
+      id: receiptId,
       agentId: auth.agentId,
       agentName: auth.agentName,
       kind: "usage",
       source: "verified-reward-gateway",
-      tokensUsed: acceptedTokens,
-      honeyDelta: submitted.honeyDelta,
+      tokensUsed: rewardTokens,
+      honeyDelta,
       hiveDelta: 0,
-      createdAt: receipt.timestamp,
+      createdAt: timestamp,
     },
   });
 }
@@ -316,8 +355,17 @@ async function addDailyUsage(env: Env, workspaceId: string, tokens: number) {
   ).bind(workspaceId, today(), tokens).run();
 }
 
+// Worker-to-worker calls over the public *.workers.dev URL are 404'd at the Cloudflare
+// edge, so reach the ledger through the service binding. The public URL is only a
+// local-dev fallback; the request hostname is irrelevant when the binding routes it.
+function ledgerFetch(env: Env, path: string, init: RequestInit) {
+  if (env.HONEY_LEDGER) return env.HONEY_LEDGER.fetch(`https://honey-ledger.internal${path}`, init);
+  const base = (env.HONEY_LEDGER_URL ?? "").replace(/\/+$/, "");
+  return fetch(`${base}${path}`, init);
+}
+
 async function submitHoneyReceipt(env: Env, receipt: LedgerReceipt): Promise<LedgerSubmitResult> {
-  const response = await fetch(`${(env.HONEY_LEDGER_URL ?? "").replace(/\/+$/, "")}/receipts`, {
+  const response = await ledgerFetch(env, "/receipts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(receipt),
@@ -327,10 +375,109 @@ async function submitHoneyReceipt(env: Env, receipt: LedgerReceipt): Promise<Led
   return { ok: true, honeyDelta: Number(data?.honeyDelta ?? 0) || 0 };
 }
 
+type HoneyCommandAction = "exchange" | "return-to-honey" | "claim-bankr-hive";
+
+const HONEY_COMMAND_ROUTES: Record<HoneyCommandAction, string> = {
+  "exchange": "/exchange",
+  "return-to-honey": "/return-to-honey",
+  "claim-bankr-hive": "/claim-bankr-hive",
+};
+
+// Authenticated redemption. The caller proves control of the workspace by presenting the
+// Bankr LLM key that was bound to it at mint time; the gateway then signs the value-moving
+// command server-side and forwards it to the ledger, which trusts only this signature.
+async function handleHoneyConfig(env: Env) {
+  let enabled = false;
+  try {
+    const row = await env.DB.prepare("SELECT value FROM gateway_config WHERE key = 'honey-economy-enabled'")
+      .first<{ value: string }>();
+    const value = (row?.value ?? "").trim().toLowerCase();
+    enabled = value === "true" || value === "1" || value === "on" || value === "yes";
+  } catch {
+    enabled = false;
+  }
+  return json(env, { ok: true, enabled });
+}
+
+async function handleHoneyCommand(request: Request, env: Env, action: HoneyCommandAction) {
+  if (!env.HONEY_LEDGER_SECRET || (!env.HONEY_LEDGER && !env.HONEY_LEDGER_URL)) {
+    return json(env, { ok: false, error: "Honey redemption is not configured on the gateway." }, 500);
+  }
+  const body = await request.json().catch(() => null) as { agentId?: string; recipientAddress?: string } | null;
+  const auth = parseRewardAuth(request, body, env);
+  if (auth.usesManagedHoney || !auth.bankrKey) {
+    return json(env, { ok: false, error: "Honey redemption requires your own Bankr LLM key." }, 401);
+  }
+
+  const ownerHash = await lookupWorkspaceOwner(env, auth.workspaceId);
+  const presentedHash = await sha256Hex(auth.bankrKey);
+  if (!ownerHash || !timingSafeEqual(ownerHash, presentedHash)) {
+    return json(env, { ok: false, error: "This Bankr key does not own this workspace's Honey." }, 403);
+  }
+
+  const agentId = cleanId(body?.agentId ?? "");
+  const recipientAddress = action === "claim-bankr-hive" ? String(body?.recipientAddress ?? "").trim() : "";
+  if (action === "claim-bankr-hive" && !/^0x[a-fA-F0-9]{40}$/.test(recipientAddress)) {
+    return json(env, { ok: false, error: "Missing valid recipientAddress." }, 400);
+  }
+
+  const eventId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+  const canonical = [action, auth.workspaceId, agentId, recipientAddress, eventId, timestamp].join(".");
+  const signature = await signCommand(env.HONEY_LEDGER_SECRET, canonical);
+
+  const response = await ledgerFetch(env, HONEY_COMMAND_ROUTES[action], {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspaceId: auth.workspaceId, agentId, recipientAddress, eventId, timestamp, signature }),
+  }).catch(() => null);
+  const data = await response?.json().catch(() => null) as Record<string, unknown> | null;
+  if (!response || !data) return json(env, { ok: false, error: "Honey ledger did not respond." }, 502);
+  return json(env, data, response.status);
+}
+
+async function bindWorkspaceOwner(env: Env, workspaceId: string, bankrKey: string) {
+  const hash = await sha256Hex(bankrKey);
+  // INSERT OR IGNORE: the first funding key to use a workspace owns it; later calls with a
+  // different key do not silently re-bind. Never stores the raw key.
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO workspace_owners (workspace_id, bankr_key_hash) VALUES (?, ?)",
+  ).bind(workspaceId, hash).run();
+}
+
+async function lookupWorkspaceOwner(env: Env, workspaceId: string) {
+  const row = await env.DB.prepare("SELECT bankr_key_hash FROM workspace_owners WHERE workspace_id = ?")
+    .bind(workspaceId).first<{ bankr_key_hash: string }>();
+  return row?.bankr_key_hash ?? "";
+}
+
+async function sha256Hex(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function signCommand(secret: string, canonical: string) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(canonical));
+  return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function timingSafeEqual(left: string, right: string) {
+  if (left.length !== right.length) return false;
+  let result = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    result |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return result === 0;
+}
+
 async function hasManagedHoneyBudget(env: Env, workspaceId: string, agentId: string, requiredHoney: number) {
-  if (!env.HONEY_LEDGER_URL) return false;
-  const url = `${env.HONEY_LEDGER_URL.replace(/\/+$/, "")}/ledger?workspaceId=${encodeURIComponent(workspaceId)}&agentId=${encodeURIComponent(agentId)}`;
-  const response = await fetch(url, { headers: authHeaders(env.HONEY_LEDGER_READ_TOKEN) }).catch(() => null);
+  if (!env.HONEY_LEDGER && !env.HONEY_LEDGER_URL) return false;
+  const response = await ledgerFetch(
+    env,
+    `/ledger?workspaceId=${encodeURIComponent(workspaceId)}&agentId=${encodeURIComponent(agentId)}`,
+    { headers: authHeaders(env.HONEY_LEDGER_READ_TOKEN) },
+  ).catch(() => null);
   if (!response?.ok) return false;
   const data = await response.json().catch(() => null) as {
     ledger?: { balances?: Array<{ agentId?: string; managedHoneyBalance?: number }> };
@@ -347,7 +494,7 @@ async function submitManagedHoneyDebit(env: Env, input: {
   quote: ManagedHoneyQuote;
 }) {
   const secret = env.HONEY_BILLING_SECRET || env.HONEY_LEDGER_SECRET;
-  if (!env.HONEY_LEDGER_URL || !secret) {
+  if ((!env.HONEY_LEDGER && !env.HONEY_LEDGER_URL) || !secret) {
     throw new Error("Managed HONEY billing is not configured for shared-key compute.");
   }
   const timestamp = new Date().toISOString();
@@ -370,7 +517,7 @@ async function submitManagedHoneyDebit(env: Env, input: {
     metadataHash: shortHash(`${input.model}:${input.tokensUsed}:${input.quote.retailUsd}`),
   };
   const signature = await signManagedBillingEvent(event, secret);
-  const response = await fetch(`${env.HONEY_LEDGER_URL.replace(/\/+$/, "")}/managed-billing/events`, {
+  const response = await ledgerFetch(env, "/managed-billing/events", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...event, signature }),

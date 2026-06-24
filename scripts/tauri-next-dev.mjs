@@ -209,7 +209,7 @@ const devRecoveryScript = String.raw`
   var reloading = false;
   var lastReloadAt = 0;
   var reloadCooldownMs = 20000;
-  var routeLoadingTimeoutMs = 12000;
+  var routeLoadingTimeoutMs = 30000;
 
   function forceReload(reason, ignoreCooldown) {
     if (reloading || (!ignoreCooldown && Date.now() - lastReloadAt < reloadCooldownMs)) return;

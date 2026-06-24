@@ -2,20 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
-import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
+import type { SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent-wallet";
-import { createDefaultAgentWallet, hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
+import { createDefaultAgentWallet, hasConfiguredAgentWallet } from "@/lib/utils/agent-wallet";
 import { fetchPersonalWalletBalance, fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import styles from "./trade.module.css";
 import { fetchBankrWallet, type BankrWalletInfo } from "./trade-api";
 import { CryptoTradeView } from "./CryptoTradeView";
 import { StocksTradeView } from "./StocksTradeView";
 import { WalletSelectModal, type PickableWallet } from "./WalletSelectModal";
+import { agentPickable, personalPickable, type PickableAgent } from "./wallet-pickables";
 
 type TradeSegment = "crypto" | "stocks";
 
-// Panel prop bags are loosely typed across the dashboard; keep agents permissive.
-type TradeAgent = { id: string; name?: string; wallet?: unknown; provider?: unknown; usePod?: unknown; venice?: unknown };
+type TradeAgent = PickableAgent;
 
 type TradePanelProps = {
   displayAgents?: TradeAgent[];
@@ -27,36 +27,6 @@ type TradePanelProps = {
   sharedVault?: SharedVaultConfig;
   theme?: "light" | "dark";
 };
-
-function walletFor(agent: TradeAgent, walletsByAgent?: Record<string, unknown>): AgentWalletConfig {
-  return resolveAgentWallet(
-    agent as Parameters<typeof resolveAgentWallet>[0],
-    (walletsByAgent?.[agent.id] ?? agent.wallet) as Parameters<typeof resolveAgentWallet>[1],
-  );
-}
-
-/** Map a personal/user wallet record (from the Wallets route) to a pickable card. */
-function personalPickable(record: Record<string, unknown>): PickableWallet | null {
-  const id = String(record.id || record.agentId || "").trim();
-  const address = String(record.address || "").trim();
-  if (!id || !address) return null;
-  const custody = record.custodyMode === "local" ? "local" : "watch";
-  const wallet = {
-    ...createDefaultAgentWallet(id),
-    walletAddress: address,
-    network: String(record.network || "eip155:8453"),
-    custodyMode: custody,
-    enabled: custody === "local",
-    currentBalanceUsd: Number(record.currentBalanceUsd) || 0,
-  } as AgentWalletConfig;
-  return {
-    id,
-    name: String(record.name || "My wallet"),
-    kind: "user",
-    wallet,
-    statusOverride: custody === "local" ? { tone: "ok", text: "Local wallet" } : { tone: "muted", text: "Watch only" },
-  };
-}
 
 export function TradePanel(props: TradePanelProps) {
   const agents = useMemo(() => (Array.isArray(props.displayAgents) ? props.displayAgents : []), [props.displayAgents]);
@@ -123,7 +93,7 @@ export function TradePanel(props: TradePanelProps) {
       statusOverride: { tone: "ok", text: "Bankr-managed" },
     } : null;
     const agentPickables = agents
-      .map((agent): PickableWallet => ({ id: agent.id, name: agent.name || agent.id, kind: "agent", wallet: walletFor(agent, props.walletsByAgent), usePod: agent.usePod as AgentProfile["usePod"] }))
+      .map((agent): PickableWallet => agentPickable(agent, props.walletsByAgent))
       .filter((p) => hasConfiguredAgentWallet({ usePod: p.usePod } as Parameters<typeof hasConfiguredAgentWallet>[0], p.wallet) && !(p.wallet as { setupRequired?: boolean }).setupRequired);
     return [...user, ...(bankrPickable ? [bankrPickable] : []), ...agentPickables];
   }, [personalWallets, personalBalancesLoading, bankr, agents, props.walletsByAgent]);

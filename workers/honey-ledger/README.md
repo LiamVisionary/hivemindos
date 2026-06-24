@@ -39,6 +39,35 @@ Managed-agent credits use the same HONEY display unit, but they are a separate s
 
 Funding rails such as Stripe, x402, Bankr, agent wallets, or HIVE should credit managed Honey only after their settlement proof is verified server-side. Browser requests must never be allowed to mint official managed Honey directly.
 
+## Authentication & trust boundary
+
+The official ledger is for the managed HivemindOS app only. It does not trust the
+caller for identity — it trusts a server-side HMAC signature made with
+`HONEY_LEDGER_SECRET`, which lives only in the official Cloudflare workers (the
+compute gateway and this ledger) and is never shipped in the downloadable app.
+
+Every state-mutating route is gated:
+
+- `POST /receipts` — Honey minting. Requires a valid `HONEY_LEDGER_SECRET` HMAC
+  signature. Produced server-side by the compute gateway after it proxies the real,
+  Bankr-paid LLM call and reads the provider-returned token usage. Fails closed.
+- `POST /observations` — also requires a valid signature; the previous unauthenticated
+  form was a free-mint faucet and is closed. Minting now flows through `/receipts`.
+- `POST /exchange`, `POST /return-to-honey`, `POST /claim-bankr-hive` — require a
+  signed command. The signature binds `action`, `workspaceId`, `agentId`,
+  `recipientAddress` and a single-use `eventId` nonce over an HMAC of
+  `HONEY_LEDGER_SECRET`, with a 5-minute timestamp window. The nonce (table
+  `command_nonces`) makes the irreversible Bankr transfer replay-proof. The app
+  reaches these through the compute gateway's authenticated `/honey/*` endpoints; it
+  never holds the secret or calls the ledger mutation routes directly.
+- `POST /pool-events` — requires `HONEY_LEDGER_ADMIN_TOKEN` (operator only).
+- `POST /managed-billing/events` — requires a billing HMAC signature or the admin token.
+
+Bearer checks fail **closed**: if a route's expected secret is not configured on the
+deployed worker, the route is denied (503), never opened. `GET /ledger` is a read
+scoped to a caller-supplied `workspaceId` (a high-entropy local install secret); the
+read token, when set, is an additional optional gate.
+
 ## Free-tier setup
 
 ```bash
@@ -63,6 +92,7 @@ Existing deployments need the reward-pool migration once:
 ```bash
 pnpm d1:migrate:reward-pool:remote
 pnpm d1:migrate:managed-billing:remote
+pnpm d1:migrate:command-nonces:remote
 ```
 
 For local testing:
@@ -99,6 +129,6 @@ Never commit private values. Editing frontend Honey values does not affect conve
 
 Only the operator uses `HONEY_LEDGER_ADMIN_TOKEN`, and only to add reward-pool funding events. Clone users do not need it.
 
-Only the official worker should hold `HONEY_REWARD_BANKR_API_KEY`. It must be a funded Bankr treasury API key with Wallet API write access. Open-source clones claim Honey by sending their recipient Bankr wallet address to the official worker; they never receive or store the treasury key.
+Only the official worker should hold `HONEY_REWARD_BANKR_API_KEY`. It must be a funded Bankr treasury API key with Wallet API write access. The managed app claims Honey through the compute gateway, which authenticates the workspace by its Bankr LLM key, signs a claim command bound to the recipient address, and forwards it to this ledger; the app never receives or stores the treasury key or the signing secret.
 
-Forks that point `HONEY_LEDGER_REMOTE_URL` at a different backend are using a different economy. Their Honey is not official HivemindOS Honey unless it is stored in the official ledger.
+Forks that want their own Honey economy run their own copy of this worker with their own `HONEY_LEDGER_SECRET`. They cannot mint, exchange, or claim against the official ledger — it accepts only commands signed by the official gateway's secret.

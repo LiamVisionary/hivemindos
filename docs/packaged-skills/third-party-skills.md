@@ -34,6 +34,7 @@ Current optional catalog:
 
 | Skill | Purpose |
 | --- | --- |
+| `crypto/hivemindos/b20-issuer-proof` | HivemindOS-authored optional crypto skill for creating Base B20 token issuer proof cards, defaulting live tests to Base Sepolia, requiring explicit confirmation, and executing only through the encrypted local wallet route. |
 | `design/` UI Skills pack | 109 optional UI and design-engineering skills from the UI Skills directory, grouped as `design/<source>/<skill>/` so duplicate upstream names remain distinct, and installable together through the `Design Optional Skills Directory` pack. |
 | `design/nextlevelbuilder/ui-ux-pro-max` | UI/UX implementation guidance, design stack data, templates, and helper scripts for richer frontend work. |
 | `media/higgsfield/higgsfield-api-quirks` | Higgsfield API workaround skill for undocumented model-specific failures and payload requirements, including Seedance 2.0 audio placement, aspect-ratio enforcement, reference-slot limits, and Kling 3.0 matchcut caveats. |

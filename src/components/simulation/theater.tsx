@@ -8,6 +8,8 @@
 import React from "react";
 import { Badge, Button, Dot, Toggle, frTone } from "./primitives";
 import { Icon } from "./icons";
+import { useSimData } from "./sim-context";
+import { useSimView } from "./sim-view-context";
 import {
   FR_FACTION, FR_STATE_TONE, FR_TEMPLATE_LABEL, SW_DECISIONS, SW_MARKET, SW_ROUND_TABLE,
   type Decision, type Agent, type Faction, type MetricTile, type Run, type TemplateId,
@@ -145,44 +147,32 @@ export function SimRunTable({ rows = SW_ROUND_TABLE }: { rows?: typeof SW_ROUND_
   );
 }
 
-function SimSpeed() {
-  const [s, setS] = React.useState(1);
-  const steps = [0.5, 1, 2, 4];
-  const idx = steps.indexOf(s);
-  return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 2, border: "1px solid var(--line-2)", borderRadius: 99, padding: 2, background: "var(--panel-2)" }}>
-      <button type="button" onClick={() => setS(steps[Math.max(0, idx - 1)])} aria-label="Slower" style={{ width: 24, height: 24, borderRadius: 99, border: 0, background: "transparent", color: "var(--fg-3)", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>−</button>
-      <span className="sv-mono" style={{ fontSize: 11, color: "var(--fg-2)", minWidth: 26, textAlign: "center" }}>{s}×</span>
-      <button type="button" onClick={() => setS(steps[Math.min(steps.length - 1, idx + 1)])} aria-label="Faster" style={{ width: 24, height: 24, borderRadius: 99, border: 0, background: "transparent", color: "var(--fg-3)", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>+</button>
-    </div>
-  );
-}
-
 export function SimControls({ run }: { run: Run }) {
+  // Stop -> stop the live run; Re-run / Retry / Launch -> open the launch options
+  // (Local vs paid x402) seeded with this run's scenario via the SimView rerun;
+  // Logs / Export -> download the run payload (diagnostics / results).
+  const { onExport, onStop } = useSimData();
+  const view = useSimView();
   if (run.state === "live") return (
     <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
-      <Button variant="ghost" sm><Icon name="alert" size={13} /> Pause</Button>
-      <SimSpeed />
-      <Button variant="ghost" sm><Icon name="warn" size={13} /> Stop</Button>
+      <Button variant="ghost" sm onClick={() => onStop?.(run)}><Icon name="warn" size={13} /> Stop</Button>
     </div>
   );
   if (run.state === "ready") return (
     <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-      {run.template === "x-thread"
-        ? <Button variant="ghost" sm>Edit scenario</Button>
-        : <><Button variant="primary" sm><Icon name="check" size={13} sw={2.2} /> Launch run</Button><Button variant="ghost" sm>Edit scenario</Button></>}
+      <Button variant="primary" sm onClick={() => view?.rerun(run)}><Icon name="check" size={13} sw={2.2} /> Launch run</Button>
     </div>
   );
   if (run.state === "failed") return (
     <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-      <Button variant="ghost" sm><Icon name="repeat" size={13} /> Retry</Button>
-      <Button variant="ghost" sm><Icon name="doc" size={13} /> Logs</Button>
+      <Button variant="ghost" sm onClick={() => view?.rerun(run)}><Icon name="repeat" size={13} /> Retry</Button>
+      <Button variant="ghost" sm onClick={() => onExport?.(run)}><Icon name="doc" size={13} /> Logs</Button>
     </div>
   );
   return (
     <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-      <Button variant="ghost" sm><Icon name="repeat" size={13} /> Re-run</Button>
-      <Button variant="ghost" sm><Icon name="download" size={13} /> Export</Button>
+      <Button variant="ghost" sm onClick={() => view?.rerun(run)}><Icon name="repeat" size={13} /> Re-run</Button>
+      <Button variant="ghost" sm onClick={() => onExport?.(run)}><Icon name="download" size={13} /> Export</Button>
     </div>
   );
 }

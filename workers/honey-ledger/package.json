@@ -11,7 +11,9 @@
     "d1:migrate:remote": "wrangler d1 execute hivemindos_honey_ledger --remote --file=./schema.sql",
     "d1:migrate:reward-pool:remote": "wrangler d1 execute hivemindos_honey_ledger --remote --file=./migrations/0002_reward_pool.sql",
     "d1:migrate:managed-billing:remote": "wrangler d1 execute hivemindos_honey_ledger --remote --file=./migrations/0003_managed_billing.sql",
-    "typecheck": "tsc --noEmit"
+    "d1:migrate:command-nonces:remote": "wrangler d1 execute hivemindos_honey_ledger --remote --file=./migrations/0004_command_nonces.sql",
+    "typecheck": "tsc --noEmit",
+    "test": "node test/auth-matrix.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260521.0",

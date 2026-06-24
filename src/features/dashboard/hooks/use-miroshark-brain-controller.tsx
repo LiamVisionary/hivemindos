@@ -2,12 +2,11 @@
 // @ts-nocheck
 "use client";
 
-/* eslint-disable react-hooks/immutability, react-hooks/purity */
-
 import { useCallback, useEffect, useMemo } from "react";
-import { getNativeBrainGraph } from "@/lib/native/brain-graph";
 import { getNativeBrainSkillInventory } from "@/lib/native/brain-skills";
 import { listNativeLocalDirectories, openNativeDirectory } from "@/lib/native/filesystem";
+import { refreshBrainGraphFromSources } from "./brain-graph-refresh";
+import { normalizeBrainSkillInventory } from "./brain-skill-inventory";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
 
 function isLoopbackDirectoryCollector(collectorUrl?: string) {
@@ -40,26 +39,6 @@ function directoryCollectorUrl(collectorUrl?: string) {
 function directoryMachineTarget(machine: KanbanMachineTarget) {
   const collectorUrl = directoryCollectorUrl(machine.collectorUrl);
   return collectorUrl === machine.collectorUrl ? machine : { ...machine, collectorUrl };
-}
-
-function normalizeBrainSkillInventory(data: any) {
-  const providers = Array.isArray(data?.providers) ? data.providers : [];
-  const shared = Array.isArray(data?.shared) ? data.shared : [];
-  const providerSkills = providers.reduce((total, provider) => total + (Array.isArray(provider?.skills) ? provider.skills.length : 0), 0);
-  const importable = providers.reduce((total, provider) => (
-    total + (Array.isArray(provider?.skills) ? provider.skills.filter((skill) => !skill?.imported).length : 0)
-  ), 0);
-  return {
-    ...data,
-    providers,
-    shared,
-    totals: {
-      ...(data?.totals ?? {}),
-      shared: Number.isFinite(data?.totals?.shared) ? data.totals.shared : shared.length,
-      providerSkills: Number.isFinite(data?.totals?.providerSkills) ? data.totals.providerSkills : providerSkills,
-      importable: Number.isFinite(data?.totals?.importable) ? data.totals.importable : importable,
-    },
-  };
 }
 
 export function useMirosharkBrainController(props: any) {
@@ -367,64 +346,18 @@ export function useMirosharkBrainController(props: any) {
     }
   }, [sharedVault.enabled, sharedVault.vaultPath]);
 
-  const refreshBrainGraph = useCallback(async (force = false) => {
-    if (!sharedVault.enabled) {
-      setBrainGraph(null);
-      setBrainGraphStatus("Shared brain is off.");
-      brainGraphLoadedAtRef.current = 0;
-      brainGraphVaultPathRef.current = "";
-      return;
-    }
-    const requestedVaultPath = sharedVault.vaultPath.trim();
-    if (
-      !force
-      && brainGraph
-      && brainGraphVaultPathRef.current === requestedVaultPath
-      && Date.now() - brainGraphLoadedAtRef.current < BRAIN_GRAPH_CLIENT_CACHE_MS
-    ) return;
-    setBrainGraphLoading(true);
-    const nativeGraph = await getNativeBrainGraph({
-      vaultPath: requestedVaultPath || undefined,
-      force,
-    });
-    const nativeGraphIsEmpty = Boolean(nativeGraph && nativeGraph.nodes.length === 0 && nativeGraph.links.length === 0);
-    if (nativeGraph && !nativeGraphIsEmpty) {
-      setBrainGraphLoading(false);
-      setBrainGraph(nativeGraph);
-      brainGraphLoadedAtRef.current = Date.now();
-      brainGraphVaultPathRef.current = requestedVaultPath;
-      setSelectedBrainNodeId((current) => current || nativeGraph.nodes[0]?.id || "");
-      const noteCount = nativeGraph.nodes.filter((node) => !node.id.startsWith("unresolved:")).length;
-      setBrainGraphStatus(nativeGraph.truncated
-        ? `Loaded first ${noteCount} notes, ${nativeGraph.nodes.length} cells, and ${nativeGraph.links.length} links.`
-        : `Loaded ${noteCount} notes, ${nativeGraph.nodes.length} cells, and ${nativeGraph.links.length} links.`);
-      return;
-    }
-    const response = await fetch("/api/obsidian/graph", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ vaultPath: requestedVaultPath || undefined, force }),
-    }).catch(() => null);
-    const data = await response?.json().catch(() => null) as BrainGraphResponse | null;
-    setBrainGraphLoading(false);
-    if (!response?.ok || !data?.ok || !data.graph) {
-      if (nativeGraphIsEmpty && nativeGraph) {
-        setBrainGraph(nativeGraph);
-        setBrainGraphStatus(data?.error ?? "Native desktop graph returned 0 notes, and the API fallback is unavailable.");
-        return;
-      }
-      setBrainGraphStatus(data?.error ?? "Could not build brain graph.");
-      return;
-    }
-    setBrainGraph(data.graph);
-    brainGraphLoadedAtRef.current = Date.now();
-    brainGraphVaultPathRef.current = requestedVaultPath;
-    setSelectedBrainNodeId((current) => current || data.graph?.nodes[0]?.id || "");
-    const noteCount = data.graph.nodes.filter((node) => !node.id.startsWith("unresolved:")).length;
-    setBrainGraphStatus(data.graph.truncated
-      ? `Loaded first ${noteCount} notes, ${data.graph.nodes.length} cells, and ${data.graph.links.length} links.`
-      : `Loaded ${noteCount} notes, ${data.graph.nodes.length} cells, and ${data.graph.links.length} links.`);
-  }, [brainGraph, sharedVault.enabled, sharedVault.vaultPath]);
+  const refreshBrainGraph = useCallback((force = false) => refreshBrainGraphFromSources({
+    force,
+    sharedVault,
+    currentGraph: brainGraph,
+    clientCacheMs: BRAIN_GRAPH_CLIENT_CACHE_MS,
+    loadedAtRef: brainGraphLoadedAtRef,
+    vaultPathRef: brainGraphVaultPathRef,
+    setGraph: setBrainGraph,
+    setLoading: setBrainGraphLoading,
+    setStatus: setBrainGraphStatus,
+    setSelectedNodeId: setSelectedBrainNodeId,
+  }), [BRAIN_GRAPH_CLIENT_CACHE_MS, brainGraph, brainGraphLoadedAtRef, brainGraphVaultPathRef, setBrainGraph, setBrainGraphLoading, setBrainGraphStatus, setSelectedBrainNodeId, sharedVault]);
 
   const refreshRecentDirectories = useCallback(async () => {
     if (!sharedVault.enabled) {

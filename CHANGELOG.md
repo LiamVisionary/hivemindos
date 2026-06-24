@@ -5,6 +5,27 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-24 10:30:49 +0700 - Add B20 Issuer Proof Skill
+  - Status: Uncommitted
+  - Areas changed: optional B20 issuer proof packaged skill, B20 issuer proof service/API, AdaptiveAgent chat confirmation path, Hive action catalog, packaged-skill docs, shared-skill docs, vault structure guard, focused B20 proof regression test
+  - Summary: HivemindOS now includes an optional crypto skill for creating Base B20 tokens safely. Agents can turn a vague request like "make a b20 token" into a Base Sepolia setup prompt, produce a deterministic issuer proof card with predicted address, salt, params/init-call/calldata hashes, roles, supply cap, and gas readiness, then create the token only after the user confirms the reviewed proof. The signing path uses the encrypted local agent wallet vault and never asks for private keys.
+  - Verification: `node --check scripts/test-b20-issuer-proof.mjs` passed; `node --import tsx scripts/test-b20-issuer-proof.mjs` passed; focused ESLint passed for the B20 service, B20 API route, AdaptiveAgent chat route, Hive action catalog, and B20 proof test; `node scripts/guard-hive-action-route-drift.mjs --include-untracked` passed with 92 action-like routes and 13 registered Hive action routes; packaged skill helper `status` passed against an isolated dev server on `http://127.0.0.1:5021`; the optional skill installed into the shared vault at `Skills/b20-issuer-proof`; live AdaptiveAgent replay prompted for missing details, produced a Base Sepolia proof/confirmation card, and only attempted creation after `confirm`. The live create is blocked by the AdaptiveAgent deployer having 0 Base Sepolia ETH for gas; no local vault wallet had Base Sepolia or Ethereum Sepolia ETH, Bware was out of allocation, and the other checked faucets require login, wallet-connect, mainnet-balance, or CDP credentials. Full `pnpm exec tsc --noEmit --pretty false --skipLibCheck` and `node scripts/test-vault-structure-contract.mjs` remain blocked by unrelated existing diagnostics.
+  - Intended commit message: `Add B20 issuer proof skill`
+
+- 2026-06-23 17:46:40 +0700 - Limit Dashboard Pins To Dev Mode
+  - Status: Uncommitted
+  - Areas changed: dashboard pin overlay mount (`src/features/dashboard/DashboardApp.tsx`)
+  - Summary: The floating dashboard `Pin` control now renders only in development mode, keeping the annotation/debug overlay out of production dashboard builds while preserving it for local dogfooding.
+  - Verification: scoped `git diff --check` passed for `CHANGELOG.md` and `src/features/dashboard/DashboardApp.tsx`; `rg` confirmed the only `DashboardPinsOverlay` mount is behind `process.env.NODE_ENV === "development"`. Full ESLint on legacy `DashboardApp.tsx` remains blocked by pre-existing unused-symbol warnings and the existing React Compiler memoization diagnostic outside this change.
+  - Intended commit message: `Limit dashboard pins to dev mode`
+
+- 2026-06-23 15:20 +07 - Retry Brain Graph During Dev Proxy Restarts
+  - Status: Uncommitted
+  - Areas changed: Brain graph refresh controller, Tauri dev proxy recovery timeout, Brain skill inventory helper, Tauri dev resilience regression guard, optimization notes
+  - Summary: The Brain tab now treats temporary Tauri/Next dev proxy failures as recoverable while loading the shared brain graph. Instead of landing on a permanent "No notes match" screen when `/api/obsidian/graph` loses the backend during compilation or a restart, the dashboard keeps the graph in a retrying state and retries with short backoff. The dev shell also waits longer before force-reloading a cold route loader, reducing surprise reloads while the app is still settling.
+  - Verification: `pnpm test:tauri-dev-resilience` passed; `node --check scripts/tauri-next-dev.mjs` and `node --check scripts/test-tauri-dev-resilience.mjs` passed; focused ESLint passed for `brain-graph-refresh.ts` and `brain-skill-inventory.ts`; ESLint on the legacy `use-miroshark-brain-controller.tsx` reported no errors and its existing hook dependency warnings; filtered `pnpm exec tsc --noEmit --pretty false --skipLibCheck` reported no diagnostics for the touched Brain graph/helper files; focused `git diff --check` passed; `wc -l` confirmed `use-miroshark-brain-controller.tsx` is now 1494 lines; live `localhost:5021/api/obsidian/graph` returned 267 nodes and 11 links, taking ~15s during cold recompilation and ~280ms once warm. `node scripts/check-file-sizes.mjs` still reports unrelated existing oversized files elsewhere in the repo.
+  - Intended commit message: `Retry brain graph during dev proxy restarts`
+
 - 2026-06-23 14:23:24 +0700 - Wallet Send Route Approval Gate
   - Status: Uncommitted
   - Areas changed: `/api/wallet/send`, shared wallet-send client helper, wallet dashboard send callers

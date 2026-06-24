@@ -300,6 +300,8 @@ has("packaged-skills/auto-install/hive-brain-compiled-wiki/SKILL.md", "brain_sea
 assert.ok(existsSync(join(root, "packaged-skills/auto-install/hive-pulse/scripts/last30days.py")), "missing bundled Hive Pulse engine");
 assert.ok(existsSync(join(root, "packaged-skills/optional/design/0xdesign/design-lab/SKILL.md")), "missing UI Skills design-lab optional package");
 assert.ok(existsSync(join(root, "packaged-skills/optional/design/nextlevelbuilder/ui-ux-pro-max/SKILL.md")), "missing UI Skills ui-ux-pro-max optional package");
+assert.ok(existsSync(join(root, "packaged-skills/optional/crypto/hivemindos/b20-issuer-proof/SKILL.md")), "missing B20 issuer proof optional package");
+has("docs/whole-brain/shared-skills.md", "b20-issuer-proof");
 for (const path of [
   "docs/packaged-skills/index.md",
   "docs/packaged-skills/hive-skills.md",

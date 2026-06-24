@@ -30,7 +30,7 @@ import {
 } from "@/lib/services/trading/buy-stock";
 import { resolveXStock, supportedXStockTickers } from "@/lib/config/xstocks-tokens";
 import type { AgentTradingVenue } from "@/lib/types/agent-wallet";
-import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
+import { getWalletInfo, getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { executeGovernedUsdcSend } from "@/lib/services/wallet/governed-send";
 import { SWAP_CONFIRMATION, MAX_SWAP_USD, quoteDexSwap, executeDexSwap } from "@/lib/services/trading/dex-swap";
 import {
@@ -87,6 +87,15 @@ import {
   waitForMiroSharkCompletion,
   type MiroSharkChatRunDraft,
 } from "@/lib/services/miroshark/x402-chat-run";
+import {
+  B20_ISSUER_CONFIRMATION,
+  b20IssuerResultMessage,
+  executeB20IssuerDraft,
+  hasB20IssuerConversationContext,
+  hasB20IssuerIntent,
+  parseB20IssuerDraftMessage,
+  prepareB20IssuerProofFromMessages,
+} from "@/lib/services/crypto/b20-issuer-proof";
 import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS } from "@/lib/utils/agent-wallet";
 import { activeSharedVault, buildVaultContext } from "@/lib/services/chat/shared-vault-context";
 import { buildBankrCapabilityContext } from "@/lib/services/chat/bankr-capability-context";
@@ -586,6 +595,115 @@ async function maybePrepareNaturalPublicX402(input: {
     elapsedMs: Date.now() - input.routeStartedAt,
   });
   return privateTransferSse(message);
+}
+
+// ---- B20 issuer proof rail (Base Sepolia precompile) ------------------------
+
+async function maybePrepareNaturalB20Issuer(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const latestText = messageText(latestUserMessage(input.messages));
+  if (!hasB20IssuerIntent(latestText) && !hasB20IssuerConversationContext(chatMessagesForB20(input.messages))) return null;
+
+  const source = await resolveB20IssuerSource(input.profile, input.wallet);
+  let message: string;
+  if ("error" in source) {
+    message = source.error;
+  } else {
+    const prepared = await prepareB20IssuerProofFromMessages({
+      messages: chatMessagesForB20(input.messages),
+      agentId: source.agentId,
+      deployerAddress: source.address,
+    });
+    message = prepared.message;
+  }
+
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, "completed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.b20_issuer.draft", {
+    ...telemetryPayloadForProfile(input.profile),
+    hasWallet: !("error" in source),
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
+async function maybeExecuteConfirmedB20Issuer(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const latestText = messageText(latestUserMessage(input.messages)).trim();
+  if (!/^(confirm|confirmed|yes|yes,? confirm|go ahead|create it|deploy it|make it|execute)$/i.test(latestText)) return null;
+  const draft = findB20IssuerDraft(input.messages);
+  if (!draft) return null;
+
+  const signer = await getWalletSecret(draft.agentId);
+  if (!signer) {
+    const message = "**B20 creation failed**\n\nNo encrypted local signer exists for this agent wallet.";
+    await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+    await finishRuntimeChatSession(input.runtimeSessionId, "failed").catch(() => undefined);
+    return privateTransferSse(message);
+  }
+
+  let message: string;
+  let ok = false;
+  try {
+    const result = await executeB20IssuerDraft({
+      draft,
+      secret: signer.secret,
+      confirmation: B20_ISSUER_CONFIRMATION,
+    });
+    ok = result.ok;
+    message = b20IssuerResultMessage(result);
+  } catch (error) {
+    message = `**B20 creation failed**\n\n${error instanceof Error ? error.message : "Could not create the B20 token."}`;
+  }
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, ok ? "completed" : "failed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.b20_issuer.execute", {
+    ...telemetryPayloadForProfile(input.profile),
+    ok,
+    tokenAddress: draft.predictedAddress,
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
+function findB20IssuerDraft(messages: IncomingMessage[]) {
+  for (let index = messages.length - 2; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "assistant") continue;
+    const draft = parseB20IssuerDraftMessage(messageText(message));
+    if (draft) return draft;
+  }
+  return null;
+}
+
+async function resolveB20IssuerSource(profile: AgentProfile, wallet?: AgentWalletConfig): Promise<{ agentId: string; address: string } | { error: string }> {
+  const agentId = profile.id;
+  if (wallet?.walletAddress?.startsWith("0x")) {
+    return { agentId, address: wallet.walletAddress };
+  }
+  const stored = await getWalletInfo(agentId);
+  if (stored?.address?.startsWith("0x")) {
+    return { agentId: stored.agentId, address: stored.address };
+  }
+  return {
+    error: "**B20 issuer setup**\n\nThis agent needs an encrypted EVM wallet before it can create a B20 token. Create or import a Base wallet for this agent in Wallets, then ask again.",
+  };
+}
+
+function chatMessagesForB20(messages: IncomingMessage[]) {
+  return messages.map((message) => ({ role: message.role, content: messageText(message) }));
 }
 
 // ---- Plain USDC send rail (/api/wallet/send, incl. personal wallets) --------
@@ -5047,6 +5165,24 @@ export async function POST(request: NextRequest) {
     runtimeSessionId,
   });
   if (naturalSwap) return naturalSwap;
+  const confirmedB20Issuer = await maybeExecuteConfirmedB20Issuer({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (confirmedB20Issuer) return confirmedB20Issuer;
+  const naturalB20Issuer = await maybePrepareNaturalB20Issuer({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (naturalB20Issuer) return naturalB20Issuer;
   const naturalBankrAction = await maybeHandleNaturalBankrAction({
     request,
     routeStartedAt,

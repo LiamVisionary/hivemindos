@@ -57,6 +57,7 @@ Grouped optional directories can also expose a whole-directory pack in the Skill
 
 Current optional catalog:
 
+- `crypto/hivemindos/b20-issuer-proof`: optional HivemindOS crypto skill for preparing deterministic Base B20 issuer proof cards, requiring confirmation, and creating B20 tokens through the encrypted local wallet route on Base Sepolia.
 - `design/`: 109 optional UI and design-engineering skills imported from the UI Skills directory, preserving upstream source namespaces as `design/<source>/<skill>/` and available as the `Design Optional Skills Directory` pack.
 - `media/higgsfield/higgsfield-api-quirks`: optional Higgsfield API workaround skill for undocumented model-specific payload requirements, including Seedance 2.0 audio, aspect-ratio, and reference-slot constraints.
 - `media/higgsfield/higgsfield-generate`: optional Higgsfield media-generation skill for Cloud API and standard consumer Higgsfield CLI/dashboard workflows. It keeps API-key/env usage separate from dashboard login, and asks which surface to use when unspecified.

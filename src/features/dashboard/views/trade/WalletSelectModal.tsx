@@ -24,6 +24,10 @@ type WalletSelectModalProps = {
   currentId: string;
   onConfirm: (id: string) => void;
   onClose: () => void;
+  /** Optional copy overrides (default to the trade-picker wording). */
+  title?: string;
+  subtitle?: string;
+  confirmLabel?: string;
 };
 
 /**
@@ -33,7 +37,7 @@ type WalletSelectModalProps = {
  * configured agent wallets. Mounted only while open (parent conditionally
  * renders it), so the selection seeds from the current acting wallet on mount.
  */
-export function WalletSelectModal({ pickables, getSurvivalSnapshot, currentId, onConfirm, onClose }: WalletSelectModalProps) {
+export function WalletSelectModal({ pickables, getSurvivalSnapshot, currentId, onConfirm, onClose, title = "Select a wallet", subtitle = "Pick which wallet trades. Your own wallets come first, then configured agent wallets.", confirmLabel = "Use this wallet" }: WalletSelectModalProps) {
   const [selectedId, setSelectedId] = useState(() => (pickables.some((p) => p.id === currentId) ? currentId : ""));
 
   useEffect(() => {
@@ -74,8 +78,8 @@ export function WalletSelectModal({ pickables, getSurvivalSnapshot, currentId, o
       <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Select a wallet" onMouseDown={(event) => event.stopPropagation()}>
         <div className={styles.modalHead}>
           <div>
-            <h3 className={styles.title} style={{ fontSize: 15 }}>Select a wallet</h3>
-            <p className={styles.subtitle}>Pick which wallet trades. Your own wallets come first, then configured agent wallets.</p>
+            <h3 className={styles.title} style={{ fontSize: 15 }}>{title}</h3>
+            <p className={styles.subtitle}>{subtitle}</p>
           </div>
           <button type="button" className={styles.iconBtn} onClick={onClose} aria-label="Close">×</button>
         </div>
@@ -102,7 +106,7 @@ export function WalletSelectModal({ pickables, getSurvivalSnapshot, currentId, o
             disabled={!selectedId}
             onClick={() => { if (selectedId) { onConfirm(selectedId); onClose(); } }}
           >
-            Use this wallet
+            {confirmLabel}
           </button>
         </div>
       </div>

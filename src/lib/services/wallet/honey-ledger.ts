@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 
 import type { HoneyTreasuryConfig } from "@/lib/types/agent-wallet";
 import { calculateHoneyForTokens, createDefaultHoneyTreasuryConfig } from "@/lib/utils/agent-wallet";
+import { honeyComputeGatewayUrl, honeyLedgerUrl, isHoneyEconomyEnabled } from "@/lib/services/wallet/honey-economy-config";
 
 export type HoneyLedgerEvent = {
   id: string;
@@ -88,7 +89,7 @@ class HoneyClaimError extends Error {
 }
 
 export async function readHoneyLedger(): Promise<HoneyLedger> {
-  const remote = getRemoteLedgerConfig();
+  const remote = await getRemoteLedgerConfig();
   if (remote) {
     const remoteLedger = await readRemoteHoneyLedger(remote).catch(() => null);
     if (remoteLedger) return remoteLedger;
@@ -116,7 +117,7 @@ export async function recordHoneyUsage(input: {
   const ledger = await readHoneyLedger();
   if (tokensUsed <= 0) return { ledger, event: null };
 
-  const remote = getRemoteLedgerConfig();
+  const remote = await getRemoteLedgerConfig();
   if (remote) {
     const model = input.model ?? "hivemindos/private-runtime";
     const timestamp = new Date().toISOString();
@@ -190,7 +191,7 @@ export async function recordObservedHoneyUsage(input: {
   const ledger = await readHoneyLedger();
   if (!input.eventId.trim() || tokensUsed <= 0) return { ledger, event: null };
 
-  const remote = getRemoteLedgerConfig();
+  const remote = await getRemoteLedgerConfig();
   if (remote) {
     const remoteResult = await recordRemoteHoneyObservation(remote, {
       eventId: input.eventId,
@@ -244,7 +245,7 @@ export async function recordObservedHoneyUsage(input: {
 }
 
 export async function exchangeHoneyForHive(agentId?: string) {
-  const remote = getRemoteLedgerConfig();
+  const remote = await getRemoteLedgerConfig();
   if (remote) {
     const remoteResult = await exchangeRemoteHoneyForHive(remote, agentId).catch(() => null);
     if (remoteResult) return remoteResult;
@@ -286,7 +287,7 @@ export async function exchangeHoneyForHive(agentId?: string) {
 }
 
 export async function returnHiveToHoney(agentId?: string) {
-  const remote = getRemoteLedgerConfig();
+  const remote = await getRemoteLedgerConfig();
   if (remote) {
     const remoteResult = await returnRemoteHiveToHoney(remote, agentId).catch(() => null);
     if (remoteResult) return remoteResult;
@@ -343,7 +344,7 @@ export async function claimHoneyToBankrHive(input: { agentId?: string; recipient
   );
   if (!recipientAddress) throw new HoneyClaimError("Enter a Bankr EVM receiving address before claiming HIVE.", 400);
 
-  const remote = getRemoteLedgerConfig();
+  const remote = await getRemoteLedgerConfig();
   if (remote) return claimRemoteHoneyToBankrHive(remote, { agentId: input.agentId, recipientAddress });
 
   const tokenAddress = (process.env.HIVE_TOKEN_ADDRESS?.trim() || ledger.hiveTokenAddress?.trim() || "");
@@ -380,7 +381,7 @@ export async function recordManagedHoneyBillingEvent(input: Omit<ManagedHoneyBil
     timestamp: input.timestamp ?? new Date().toISOString(),
   });
 
-  const remote = getRemoteLedgerConfig();
+  const remote = await getRemoteLedgerConfig();
   if (remote) {
     const remoteResult = await recordRemoteManagedHoneyBillingEvent(remote, event).catch(() => null);
     if (remoteResult) return remoteResult;
@@ -462,6 +463,11 @@ type RemoteLedgerConfig = {
   billingSigningSecret?: string;
   readToken?: string;
   adminToken?: string;
+  // Value-moving operations (exchange / return / claim) are signed server-side by the
+  // compute gateway, which authenticates the workspace by its Bankr LLM key. The app
+  // never holds HONEY_LEDGER_SECRET, so it reaches those routes only through the gateway.
+  gatewayUrl?: string;
+  bankrKey?: string;
 };
 
 type RemoteUsageReceipt = {
@@ -476,17 +482,32 @@ type RemoteUsageReceipt = {
   signature?: string;
 };
 
-function getRemoteLedgerConfig(): RemoteLedgerConfig | null {
-  const url = process.env.HONEY_LEDGER_REMOTE_URL?.trim().replace(/\/+$/, "");
-  if (!url) return null;
+// Gated behind the remote Honey-economy kill-switch. When disabled (the default), this
+// returns null and every honey flow falls back to the local ledger — identical to the
+// pre-economy behavior. The official worker URLs are baked in (public, non-secret) so
+// the packaged app needs no env to reach them once the flag is flipped on.
+async function getRemoteLedgerConfig(): Promise<RemoteLedgerConfig | null> {
+  if (!(await isHoneyEconomyEnabled())) return null;
   return {
-    url,
+    url: honeyLedgerUrl(),
     signingSecret: process.env.HONEY_LEDGER_SIGNING_SECRET?.trim(),
     billingSigningSecret: process.env.HONEY_BILLING_SIGNING_SECRET?.trim() || process.env.HONEY_LEDGER_SIGNING_SECRET?.trim(),
     issuerId: process.env.HONEY_LEDGER_ISSUER_ID?.trim() || "hivemindos",
     readToken: process.env.HONEY_LEDGER_READ_TOKEN?.trim(),
     adminToken: process.env.HONEY_LEDGER_ADMIN_TOKEN?.trim(),
+    gatewayUrl: honeyComputeGatewayUrl(),
+    bankrKey: (process.env.BANKR_LLM_KEY || process.env.BANKR_API_KEY || process.env.BANKR_MANAGEMENT_KEY)?.trim(),
   };
+}
+
+// The reward key carries the workspace identity to the gateway, which extracts the
+// workspaceId and the Bankr key, then verifies the key owns that workspace before signing.
+function honeyRewardKey(remote: RemoteLedgerConfig, workspaceId: string) {
+  return remote.bankrKey ? `hive-v1.${workspaceId}.${remote.bankrKey}` : "";
+}
+
+function honeyGatewayConfigured(remote: RemoteLedgerConfig) {
+  return Boolean(remote.gatewayUrl && remote.bankrKey);
 }
 
 async function readRemoteHoneyLedger(remote: RemoteLedgerConfig): Promise<HoneyLedger | null> {
@@ -581,10 +602,12 @@ async function recordRemoteHoneyObservation(
 }
 
 async function exchangeRemoteHoneyForHive(remote: RemoteLedgerConfig, agentId?: string) {
-  const response = await fetch(`${remote.url}/exchange`, {
+  if (!honeyGatewayConfigured(remote)) return null;
+  const workspaceId = await getWorkspaceId();
+  const response = await fetch(`${remote.gatewayUrl}/honey/exchange`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workspaceId: await getWorkspaceId(), agentId }),
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${honeyRewardKey(remote, workspaceId)}` },
+    body: JSON.stringify({ agentId }),
     signal: AbortSignal.timeout(REMOTE_HONEY_TIMEOUT_MS),
   });
   if (!response.ok) return null;
@@ -598,10 +621,12 @@ async function exchangeRemoteHoneyForHive(remote: RemoteLedgerConfig, agentId?: 
 }
 
 async function returnRemoteHiveToHoney(remote: RemoteLedgerConfig, agentId?: string) {
-  const response = await fetch(`${remote.url}/return-to-honey`, {
+  if (!honeyGatewayConfigured(remote)) return null;
+  const workspaceId = await getWorkspaceId();
+  const response = await fetch(`${remote.gatewayUrl}/honey/return`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workspaceId: await getWorkspaceId(), agentId }),
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${honeyRewardKey(remote, workspaceId)}` },
+    body: JSON.stringify({ agentId }),
     signal: AbortSignal.timeout(REMOTE_HONEY_TIMEOUT_MS),
   });
   if (!response.ok) return null;
@@ -618,11 +643,14 @@ async function claimRemoteHoneyToBankrHive(
   remote: RemoteLedgerConfig,
   input: { agentId?: string; recipientAddress: string },
 ): Promise<BankrHoneyClaim> {
-  const response = await fetch(`${remote.url}/claim-bankr-hive`, {
+  if (!honeyGatewayConfigured(remote)) {
+    throw new HoneyClaimError("Official Honey claims require the HivemindOS compute gateway and a Bankr LLM key.", 400);
+  }
+  const workspaceId = await getWorkspaceId();
+  const response = await fetch(`${remote.gatewayUrl}/honey/claim`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${honeyRewardKey(remote, workspaceId)}` },
     body: JSON.stringify({
-      workspaceId: await getWorkspaceId(),
       agentId: input.agentId,
       recipientAddress: input.recipientAddress,
     }),

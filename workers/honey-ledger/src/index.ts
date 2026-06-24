@@ -25,6 +25,17 @@ type UsageReceipt = {
 
 type ObservedUsage = Omit<UsageReceipt, "issuerId" | "signature">;
 
+// A value-moving command (exchange / return-to-honey / claim) signed by a trusted
+// server-side HONEY_LEDGER_SECRET holder (the compute gateway).
+type SignedCommandBody = {
+  workspaceId?: string;
+  agentId?: string;
+  recipientAddress?: string;
+  eventId?: string;
+  timestamp?: string;
+  signature?: string;
+};
+
 type ManagedBillingKind = "credit" | "debit";
 
 type ManagedBillingEvent = {
@@ -191,9 +202,32 @@ async function handleReceipt(request: Request, env: Env) {
   return ok(env, { ok: true, duplicate: (inserted.meta.changes ?? 0) === 0, honeyDelta, balance, economics: toEconomics(env, updatedPool) });
 }
 
+const OBSERVED_ISSUER_ID = "hivemindos-runtime-observer";
+
 async function handleObservation(request: Request, env: Env) {
+  // Observed usage mints Honey, so it must be signed by a trusted server-side runtime
+  // (HONEY_LEDGER_SECRET), exactly like /receipts. The previous unauthenticated form
+  // was a free-mint faucet. Fails closed when the signer is not configured.
+  if (!env.HONEY_LEDGER_SECRET) return fail(env, "Observed usage requires a trusted signer.", 503);
   const observation = await request.json().catch(() => null);
   if (!isObservedUsage(observation)) return fail(env, "Invalid observed usage.", 400);
+  const signatureValue = (observation as unknown as { signature?: unknown }).signature;
+  const signature = typeof signatureValue === "string" ? signatureValue : "";
+  if (!signature) return fail(env, "Observed usage must be signed by a trusted runtime.", 401);
+  const expectedSignature = await signReceipt(
+    {
+      eventId: observation.eventId,
+      issuerId: OBSERVED_ISSUER_ID,
+      workspaceId: observation.workspaceId,
+      agentId: observation.agentId,
+      tokensUsed: observation.tokensUsed,
+      model: observation.model,
+      source: observation.source,
+      timestamp: observation.timestamp,
+    },
+    env.HONEY_LEDGER_SECRET,
+  );
+  if (!timingSafeEqual(signature, expectedSignature)) return fail(env, "Invalid observed-usage signature.", 401);
 
   await ensureRewardPoolState(env);
   const dailyCap = Math.max(0, Math.round(positiveNumber(env.OBSERVED_DAILY_TOKEN_CAP, 50_000)));
@@ -223,7 +257,7 @@ async function handleObservation(request: Request, env: Env) {
   )
     .bind(
       observation.eventId,
-      "hivemindos-runtime-observer",
+      OBSERVED_ISSUER_ID,
       observation.workspaceId,
       observation.agentId,
       acceptedTokens,
@@ -271,8 +305,8 @@ async function handleObservation(request: Request, env: Env) {
 }
 
 async function handleLedger(request: Request, env: Env, url: URL) {
-  const auth = requireBearer(request, env.HONEY_LEDGER_READ_TOKEN);
-  if (auth) return fail(env, auth, 401);
+  const denied = enforceOptionalReadToken(request, env);
+  if (denied) return denied;
 
   const workspaceId = cleanId(url.searchParams.get("workspaceId") ?? "");
   const agentId = cleanId(url.searchParams.get("agentId") ?? "");
@@ -289,11 +323,16 @@ async function handleLedger(request: Request, env: Env, url: URL) {
 }
 
 async function handleExchange(request: Request, env: Env) {
-  await ensureRewardPoolState(env);
-  const body = await request.json().catch(() => null) as { workspaceId?: string; agentId?: string } | null;
+  const body = await request.json().catch(() => null) as SignedCommandBody | null;
+  const denied = await verifySignedCommand(env, "exchange", body);
+  if (denied) return fail(env, denied.message, denied.status);
   const workspaceId = cleanId(body?.workspaceId ?? "");
   const agentId = cleanId(body?.agentId ?? "");
   if (!workspaceId) return fail(env, "Missing workspaceId.", 400);
+  if (!(await consumeCommandNonce(env, "exchange", cleanId(body?.eventId ?? ""), workspaceId))) {
+    return fail(env, "Duplicate command (already processed).", 409);
+  }
+  await ensureRewardPoolState(env);
 
   const balances = agentId
     ? await env.DB.prepare("SELECT * FROM agent_balances WHERE workspace_id = ? AND agent_id = ?").bind(workspaceId, agentId).all<AgentBalanceRow>()
@@ -339,11 +378,16 @@ async function handleExchange(request: Request, env: Env) {
 }
 
 async function handleReturnToHoney(request: Request, env: Env) {
-  await ensureRewardPoolState(env);
-  const body = await request.json().catch(() => null) as { workspaceId?: string; agentId?: string } | null;
+  const body = await request.json().catch(() => null) as SignedCommandBody | null;
+  const denied = await verifySignedCommand(env, "return-to-honey", body);
+  if (denied) return fail(env, denied.message, denied.status);
   const workspaceId = cleanId(body?.workspaceId ?? "");
   const agentId = cleanId(body?.agentId ?? "");
   if (!workspaceId) return fail(env, "Missing workspaceId.", 400);
+  if (!(await consumeCommandNonce(env, "return-to-honey", cleanId(body?.eventId ?? ""), workspaceId))) {
+    return fail(env, "Duplicate command (already processed).", 409);
+  }
+  await ensureRewardPoolState(env);
 
   const balances = agentId
     ? await env.DB.prepare("SELECT * FROM agent_balances WHERE workspace_id = ? AND agent_id = ?").bind(workspaceId, agentId).all<AgentBalanceRow>()
@@ -391,8 +435,11 @@ async function handleReturnToHoney(request: Request, env: Env) {
 }
 
 async function handleClaimBankrHive(request: Request, env: Env) {
-  await ensureRewardPoolState(env);
-  const body = await request.json().catch(() => null) as { workspaceId?: string; agentId?: string; recipientAddress?: string } | null;
+  const body = await request.json().catch(() => null) as SignedCommandBody | null;
+  // The signed command binds the recipientAddress, so a trusted signer cannot be
+  // tricked into (and a replay cannot redirect) a transfer to a different address.
+  const denied = await verifySignedCommand(env, "claim-bankr-hive", body);
+  if (denied) return fail(env, denied.message, denied.status);
   const workspaceId = cleanId(body?.workspaceId ?? "");
   const agentId = cleanId(body?.agentId ?? "");
   const recipientAddress = String(body?.recipientAddress ?? "").trim();
@@ -400,6 +447,12 @@ async function handleClaimBankrHive(request: Request, env: Env) {
   if (!/^0x[a-fA-F0-9]{40}$/.test(recipientAddress)) return fail(env, "Missing valid recipientAddress.", 400);
   if (!env.HIVE_TOKEN_ADDRESS?.trim()) return fail(env, "HIVE_TOKEN_ADDRESS is not configured.", 500);
   if (!env.HONEY_REWARD_BANKR_API_KEY?.trim()) return fail(env, "Honey reward treasury is not configured.", 500);
+  // Consume the single-use nonce BEFORE the irreversible Bankr transfer so a replayed
+  // signed claim cannot double-spend. A genuine retry uses a fresh signed command.
+  if (!(await consumeCommandNonce(env, "claim-bankr-hive", cleanId(body?.eventId ?? ""), workspaceId))) {
+    return fail(env, "Duplicate command (already processed).", 409);
+  }
+  await ensureRewardPoolState(env);
 
   const balances = agentId
     ? await env.DB.prepare("SELECT * FROM agent_balances WHERE workspace_id = ? AND agent_id = ?").bind(workspaceId, agentId).all<AgentBalanceRow>()
@@ -470,7 +523,7 @@ async function handleClaimBankrHive(request: Request, env: Env) {
 
 async function handlePoolEvent(request: Request, env: Env) {
   const auth = requireBearer(request, env.HONEY_LEDGER_ADMIN_TOKEN);
-  if (auth) return fail(env, auth, 401);
+  if (auth) return fail(env, auth.message, auth.status);
 
   await ensureRewardPoolState(env);
   const body = await request.json().catch(() => null) as {
@@ -836,10 +889,79 @@ function timingSafeEqual(left: string, right: string) {
   return result === 0;
 }
 
-function requireBearer(request: Request, token?: string) {
+type AuthError = { message: string; status: number };
+
+// Fail closed: a privileged route is denied unless its secret is BOTH configured
+// and presented. A missing secret is a deployment misconfiguration (503), never an
+// open door. Returns null only when the bearer matches the configured token.
+function requireBearer(request: Request, token?: string): AuthError | null {
+  if (!token) return { message: "This endpoint is not configured on the server.", status: 503 };
+  const header = request.headers.get("Authorization") ?? "";
+  if (!timingSafeEqual(header, `Bearer ${token}`)) return { message: "Unauthorized.", status: 401 };
+  return null;
+}
+
+// Capability reads (/ledger) are scoped to a caller-supplied workspaceId, which is a
+// high-entropy local install secret. The read token, when configured, is an OPTIONAL
+// additional gate. This is intentional and NOT the fail-open auth bug: a caller can
+// only read the balances of a workspace whose secret id it already holds.
+function enforceOptionalReadToken(request: Request, env: Env): Response | null {
+  const token = env.HONEY_LEDGER_READ_TOKEN;
   if (!token) return null;
   const header = request.headers.get("Authorization") ?? "";
-  return timingSafeEqual(header, `Bearer ${token}`) ? null : "Unauthorized.";
+  return timingSafeEqual(header, `Bearer ${token}`) ? null : fail(env, "Unauthorized.", 401);
+}
+
+const COMMAND_SKEW_MS = 5 * 60 * 1000;
+
+// Value-moving commands (exchange / return-to-honey / claim) are only honored when
+// signed by a trusted server-side holder of HONEY_LEDGER_SECRET (the compute gateway).
+// The signature binds the action, workspace, agent, recipient address and a single-use
+// nonce, so a body cannot be tampered or replayed. Fails closed when the secret is unset.
+async function verifySignedCommand(
+  env: Env,
+  action: string,
+  body: { workspaceId?: string; agentId?: string; recipientAddress?: string; eventId?: string; timestamp?: string; signature?: string } | null,
+): Promise<AuthError | null> {
+  if (!env.HONEY_LEDGER_SECRET) return { message: "Ledger command signer is not configured.", status: 503 };
+  const signature = typeof body?.signature === "string" ? body.signature : "";
+  const eventId = cleanId(body?.eventId ?? "");
+  const timestamp = typeof body?.timestamp === "string" ? body.timestamp.trim() : "";
+  const workspaceId = cleanId(body?.workspaceId ?? "");
+  const agentId = cleanId(body?.agentId ?? "");
+  const recipientAddress = String(body?.recipientAddress ?? "").trim();
+  if (!signature || !eventId || !timestamp || !workspaceId) {
+    return { message: "Signed command is missing required fields.", status: 401 };
+  }
+  const parsed = Date.parse(timestamp);
+  if (!Number.isFinite(parsed) || Math.abs(Date.now() - parsed) > COMMAND_SKEW_MS) {
+    return { message: "Signed command timestamp is outside the allowed window.", status: 401 };
+  }
+  const expected = await signCommand(env.HONEY_LEDGER_SECRET, canonicalCommand(action, { workspaceId, agentId, recipientAddress, eventId, timestamp }));
+  if (!timingSafeEqual(signature, expected)) return { message: "Invalid command signature.", status: 401 };
+  return null;
+}
+
+function canonicalCommand(
+  action: string,
+  fields: { workspaceId: string; agentId: string; recipientAddress: string; eventId: string; timestamp: string },
+) {
+  return [action, fields.workspaceId, fields.agentId, fields.recipientAddress, fields.eventId, fields.timestamp].join(".");
+}
+
+async function signCommand(secret: string, canonical: string) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(canonical));
+  return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+// Single-use nonce: returns true the first time an eventId is seen, false on replay.
+// Backed by the command_nonces table (migration 0004); UNIQUE event_id makes this atomic.
+async function consumeCommandNonce(env: Env, action: string, eventId: string, workspaceId: string) {
+  const inserted = await env.DB.prepare(
+    "INSERT OR IGNORE INTO command_nonces (event_id, action, workspace_id) VALUES (?, ?, ?)",
+  ).bind(eventId, action, workspaceId).run();
+  return (inserted.meta.changes ?? 0) > 0;
 }
 
 async function transferBankrHive(env: Env, input: { tokenAddress: string; recipientAddress: string; amount: number }) {

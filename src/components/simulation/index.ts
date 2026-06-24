@@ -28,7 +28,7 @@ export * from "./sim-data";
 // Live-data wiring (real MiroShark data → the UI)
 export { SimDataProvider, useSimData, mockDataset } from "./sim-context";
 export type {
-  SimDataset, SimStat, SimLaunchPayload, TapeData, RoundRow, ResearchContent, OpsEvent,
+  SimDataset, SimStat, SimLaunchPayload, SimLaunchMode, SimLaunchModeStatus, TapeData, RoundRow, ResearchContent, OpsEvent,
 } from "./sim-context";
 export { buildSimDataset } from "./adapt-miroshark";
 export type { MiroSharkSource } from "./adapt-miroshark";

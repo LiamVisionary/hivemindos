@@ -14,3 +14,9 @@ CORS_ORIGIN = "*"
 binding = "DB"
 database_name = "hivemindos_compute_gateway"
 database_id = "2f32373f-293d-41d8-84d3-60d91668388c"
+
+# Worker-to-worker calls to the ledger over its public *.workers.dev URL are 404'd at
+# the Cloudflare edge, so reach it through a direct service binding instead.
+[[services]]
+binding = "HONEY_LEDGER"
+service = "hivemindos-honey-ledger"

@@ -9,6 +9,10 @@
     "d1:create": "wrangler d1 create hivemindos_compute_gateway",
     "d1:migrate:local": "wrangler d1 execute hivemindos_compute_gateway --local --file=./schema.sql",
     "d1:migrate:remote": "wrangler d1 execute hivemindos_compute_gateway --remote --file=./schema.sql",
+    "d1:migrate:workspace-owners:remote": "wrangler d1 execute hivemindos_compute_gateway --remote --file=./migrations/0002_workspace_owners.sql",
+    "d1:migrate:gateway-config:remote": "wrangler d1 execute hivemindos_compute_gateway --remote --file=./migrations/0003_gateway_config.sql",
+    "honey-economy:enable": "wrangler d1 execute hivemindos_compute_gateway --remote --command \"INSERT OR REPLACE INTO gateway_config(key,value,updated_at) VALUES('honey-economy-enabled','true',datetime('now'))\"",
+    "honey-economy:disable": "wrangler d1 execute hivemindos_compute_gateway --remote --command \"INSERT OR REPLACE INTO gateway_config(key,value,updated_at) VALUES('honey-economy-enabled','false',datetime('now'))\"",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

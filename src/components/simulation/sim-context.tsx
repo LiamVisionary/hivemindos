@@ -16,7 +16,19 @@ import {
   type Agent, type Decision, type Intel, type RedditPost, type Run, type TemplateId, type XThread,
 } from "./sim-data";
 
-export interface SimLaunchPayload { template: TemplateId; scenario: string; rounds: number; platform: string }
+export type SimLaunchMode = "local" | "x402";
+/** Per-mode readiness for the split launch button — drives the menu + disabled reasons. */
+export interface SimLaunchModeStatus {
+  /** True if this mode can launch right now. */
+  ready: boolean;
+  /** Why it can't launch (shown to the user). */
+  reason?: string;
+  /** x402 only: no usable wallet exists at all → offer to open the Wallets tab. */
+  needsWallet?: boolean;
+  /** Optional extra hint (e.g. "connected via <machine>" / "~$1 USDC"). */
+  note?: string;
+}
+export interface SimLaunchPayload { template: TemplateId; scenario: string; rounds: number; platform: string; mode?: SimLaunchMode; deepResearch?: boolean }
 export interface SimStat { value: React.ReactNode; label: string; live?: boolean; tone?: string }
 export interface TapeData {
   symbol: string;
@@ -60,6 +72,13 @@ export interface SimDataset {
   onLaunch?: (payload: SimLaunchPayload) => void;
   onPublish?: (run: Run) => void;
   onSelectRun?: (run: Run) => void;
+  onExport?: (run: Run) => void;
+  /** Stop a live run. */
+  onStop?: (run: Run) => void;
+  /** Per-mode readiness for the split launch button (local MiroShark vs paid x402). */
+  launchModes?: { local: SimLaunchModeStatus; x402: SimLaunchModeStatus };
+  /** Deep-link to the Wallets tab (offered when a paid run has no usable wallet). */
+  onOpenWallets?: () => void;
 }
 
 // ── mock fallback (keeps the standalone example identical) ───────────────────
@@ -111,6 +130,8 @@ export function mockDataset(): SimDataset {
     researchFor: () => mockResearch(),
     opsFor: () => mockOps(),
     intelFor: (run) => SW_INTEL[run.id] ?? null,
+    // Standalone demo: both modes available so the split button is exercisable.
+    launchModes: { local: { ready: true }, x402: { ready: true, note: "~$1 USDC" } },
   };
 }
 

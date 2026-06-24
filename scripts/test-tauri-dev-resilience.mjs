@@ -23,6 +23,7 @@ function functionBody(content, name) {
 const tauriDev = source("scripts/tauri-next-dev.mjs");
 const devExitBody = functionBody(tauriDev, "handleDevServerExit");
 const stopBody = functionBody(tauriDev, "stopChildren");
+const brainGraphRefresh = source("src/features/dashboard/hooks/brain-graph-refresh.ts");
 
 assert.match(
   tauriDev,
@@ -46,6 +47,12 @@ assert.match(
   stopBody,
   /stopping = true;[\s\S]*child && !child\.killed[\s\S]*voiceWorker && !voiceWorker\.killed/,
   "Intentional shutdown should still stop both the dev-server child and voice worker.",
+);
+
+assert.match(
+  tauriDev,
+  /var routeLoadingTimeoutMs = 30000;/,
+  "Tauri dev route loading recovery should not hard-reload during ordinary cold route compilation.",
 );
 
 const nativeInvoke = source("src/lib/native/invoke.ts");
@@ -73,4 +80,22 @@ for (const path of [
   );
 }
 
-console.log("Tauri dev proxy respawns its backend and critical native reads no longer depend on late Tauri-core chunks.");
+assert.match(
+  brainGraphRefresh,
+  /const BRAIN_GRAPH_RETRY_DELAYS_MS = \[1_000, 2_000, 4_000\] as const;/,
+  "Brain graph loading should retry transient dev proxy outages with bounded backoff.",
+);
+
+assert.match(
+  brainGraphRefresh,
+  /code\.startsWith\("DEV_PROXY_"\)/,
+  "Brain graph loading should recognize structured dev proxy fallback errors as transient.",
+);
+
+assert.match(
+  brainGraphRefresh,
+  /await waitForBrainGraphRetry\(retryDelay\);/,
+  "Brain graph loading should keep the user in a retrying state before surfacing a transient outage.",
+);
+
+console.log("Tauri dev proxy respawns its backend, critical native reads avoid late Tauri-core chunks, and Brain graph loading retries transient proxy outages.");

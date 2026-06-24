@@ -13,9 +13,9 @@ import { Icon } from "./icons";
 import { PredictionMarketView } from "./PredictionMarket";
 import { XThreadView, RedditView, ResearchView, OpsView } from "./outputs";
 import { Intelligence } from "./Intelligence";
-import { SimMetricChart, SimProgressBar } from "./charts";
+import { SimProgressBar } from "./charts";
 import {
-  SimAgent, SimControls, SimDecisionLog, SimHeadlines, SimKnobs, SimMetric, SimRunTable,
+  SimAgent, SimControls, SimDecisionLog, SimHeadlines, SimMetric, SimRunTable,
   SimStatus, SimTags, SimTape, SimTemplateTag,
 } from "./theater";
 import { frRunMetrics, type Run } from "./sim-data";
@@ -61,10 +61,6 @@ export function SimLiveDetail({ run }: { run: Run }) {
       <SimProgressBar pct={pct} left={`round ${run.currentRound.toLocaleString()} / ${run.rounds.toLocaleString()}`} right={`${(pct * 100).toFixed(1)}%`} />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
         {frRunMetrics(run).map((m) => <SimMetric key={m.k} {...m} />)}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 16 }}>
-        <SimPanel><SimMetricChart run={run} /></SimPanel>
-        <SimPanel label="Controls"><SimKnobs /></SimPanel>
       </div>
       {tape.ticks.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16 }}>
